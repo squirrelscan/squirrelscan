@@ -32,6 +32,15 @@
 // split by crawl id — which is what makes consequence 2 structural rather than a
 // lookup that happens to be there. What this module keeps per rule is two counters,
 // never the pages or the findings behind them.
+//
+// (pub#497) The pages that cursor walks no longer have to include the UNTOUCHED
+// ones: pages this run did not crawl, did not see removed, and holds no fresh row
+// for. Every prior on such a page is carried unchanged, so what it contributes is a
+// function of the stored rows alone, and the store can compute it in one pass
+// ({@link UntouchedCarriedAggregate}). They still reach the report through a
+// bounded sample ({@link CompleteStoreTallyFold.retainUntouchedSample}), interleaved
+// with the touched pages in cursor order. {@link aggregateUntouchedCarried} is the
+// reference the store's twin is measured against.
 
 import type { CheckResult, PageFindingRecord } from "@squirrelscan/core-contracts";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
@@ -105,7 +114,112 @@ export type CompleteStoreFoldInput = Omit<
    * the whole-array driver still builds the union from the carried array itself.
    */
   retainCarriedChecks?: boolean;
+  /**
+   * (pub#497) Set when untouched pages arrive as a non-empty aggregate: a carried
+   * check outside {@link isAggregatableCarriedRow} then throws instead of folding,
+   * because the aggregate's subtotal is only exact beside integer terms.
+   */
+  requireAggregatableCarried?: boolean;
 };
+
+/**
+ * (pub#497) What the UNTOUCHED pages contribute, folded by the store instead of
+ * streamed: pages this run did not crawl, did not see removed, and holds no fresh
+ * row for. The merge carries every prior on such a page unchanged, so its share of
+ * the score and of the report depends on the stored rows alone.
+ *
+ * Every number here must equal what {@link CompleteStoreTallyFold.foldPage} would
+ * have accumulated from the same rows, carried. {@link aggregateUntouchedCarried}
+ * is that computation in JS; a store twin is correct exactly when it agrees with it.
+ * A store that cannot read some row exactly as `carriedFindingToCheck` does (a
+ * malformed payload, say) streams that row's page as touched instead, which is
+ * always allowed.
+ *
+ * EXACT ONLY IN INTEGER ARITHMETIC. The full fold adds each page into a running
+ * total; this adds the untouched pages' subtotal at the end. Those agree only while
+ * every term is an integer and no sum leaves the safe range, and that has to hold
+ * for the touched pages' carried rows too, since the subtotal lands among them.
+ * So when ANY carried row of the site is outside {@link isAggregatableCarriedRow},
+ * the store streams every page and sends an empty aggregate, which is the full fold
+ * itself. The merge refuses a non-empty aggregate beside such a row, and a class
+ * total past `Number.MAX_SAFE_INTEGER`.
+ */
+export interface UntouchedCarriedAggregate {
+  /** Open findings on untouched pages: each is a carry the merge would persist. */
+  findings: number;
+  /** Of those, the ones on pages no audit has rendered (no `site_pages` row). */
+  unrenderedFindings: number;
+  /** Per rule, page-scope or not: the fold drops the rules it cannot score. */
+  rules: readonly UntouchedRuleTotals[];
+  /** Per rule and report class, for the report sample's stamps. */
+  classes: readonly UntouchedClassTotals[];
+}
+
+/**
+ * One rule's untouched rows as `addChecksToTally` counts them, one call per
+ * (page, rule), with the advisory flag OFF: the fold drops the warn half for a
+ * severity "info" rule, as `addChecksToTally` would have.
+ */
+export interface UntouchedRuleTotals {
+  ruleId: string;
+  /** Rows whose replayed status is "fail" (the stored status is exactly "fail"). */
+  failed: number;
+  /**
+   * Per (checkName, page) over the fail rows: the sum of max(item count, 1), plus
+   * the largest positive `details.additional` floored, capped at
+   * `ISSUE_PENALTY_ITEM_CAP`. Summed over those buckets.
+   */
+  failUnits: number;
+  /** Rows replayed as "warn": every stored status other than "fail". */
+  warnings: number;
+  /** Distinct (checkName, page) holding a warn row. */
+  warnUnits: number;
+  /** Untouched pages whose `site_pages` row is ACTIVE and that hold a row for the rule. */
+  activePages: number;
+}
+
+/**
+ * One report class of a rule's untouched rows: the `foldGroupKey` parts of the
+ * replayed check, and the counters the report sample stamps from. Every counter is
+ * over ALL the class's untouched rows, sampled or not.
+ */
+export interface UntouchedClassTotals {
+  ruleId: string;
+  checkName: string;
+  /** The replayed status: "fail" when the stored status is "fail", else "warn". */
+  status: "fail" | "warn";
+  /** "unrendered" on a page with no `site_pages` row, else "carried". */
+  provenance: "carried" | "unrendered";
+  /** `details.foldKey` when it is a string, else "". */
+  foldKey: string;
+  /** Sum of each row's occurrence weight: `details.occurrences` floored when positive, else 1. */
+  occurrences: number;
+  /** Rows. */
+  members: number;
+  /** Distinct pages. */
+  pages: number;
+  /** Largest positive `details.pagesTruncated`, floored; 0 when none. */
+  pagesFloor: number;
+  /** Newest `lastSeenAt` (epoch ms) of a "carried" class; absent for "unrendered". */
+  lastSeenAt?: number;
+}
+
+/**
+ * (pub#497) An untouched page's REPORT-SAMPLE rows, open findings in cursor order.
+ *
+ * Per rule, the sample must hold AT LEAST the first
+ * {@link CARRIED_REPORT_SAMPLE_PER_RULE} rows across all untouched pages and each
+ * report class's first row. The full fold retains only checks from that set: the
+ * first checks of a rule, touched pages' included, and the first of each class.
+ * Any extra rows are fine, because retention only moves on a retained check, so a
+ * row the full fold would drop is dropped here too. The rows need not be counted:
+ * the aggregate counts them.
+ */
+export interface UntouchedSamplePage {
+  normalizedUrl: string;
+  untouched: true;
+  sample: readonly PageFindingRecord[];
+}
 
 /**
  * The fold as an accumulator (#1876), so the caller owns the page loop.
@@ -132,6 +246,23 @@ export interface CompleteStoreTallyFold {
     fresh: readonly PageFindingRecord[],
     carried: readonly CarriedFinding[]
   ): void;
+  /**
+   * (pub#497) Report-sample rows of ONE untouched page, the carried findings the
+   * caller picked for the report rather than every one the page holds. Call in
+   * cursor order relative to {@link foldPage}: the report keeps the first
+   * {@link CARRIED_REPORT_SAMPLE_PER_RULE} carried checks per rule in that order,
+   * whichever kind of page they came from.
+   *
+   * Scores nothing and counts nothing: the page's contribution arrives whole
+   * through {@link addUntouched}. It only claims the rule's tally slot and report
+   * class in the position the page would have, so map order matches the full fold.
+   */
+  retainUntouchedSample(normalizedUrl: string, carried: readonly CarriedFinding[]): void;
+  /**
+   * (pub#497) The untouched pages' contribution, computed by the store. Call ONCE,
+   * after the last page and sample, before {@link foldShellRules}.
+   */
+  addUntouched(aggregate: UntouchedCarriedAggregate): void;
   /**
    * Trailing pass over every rule the shell carries: site-scope checks verbatim,
    * page-scope clean-page counts. Call ONCE, after every page has been folded — it
@@ -178,6 +309,7 @@ export function createCompleteStoreTallyFold(
     ruleMetaIndex,
     removedUrls,
     retainCarriedChecks,
+    requireAggregatableCarried,
   } = input;
 
   const tallies = new Map<string, RuleTally>();
@@ -258,6 +390,9 @@ export function createCompleteStoreTallyFold(
       const freshChecks = isRemoved ? undefined : freshByRule?.get(ruleId);
       const carriedForRule = carriedByRule?.get(ruleId);
       const carriedChecks = carriedForRule?.map((f) => carriedFindingToCheck(f, normalizedUrl));
+      if (requireAggregatableCarried && carriedChecks) {
+        for (const check of carriedChecks) assertAggregatable(check, normalizedUrl);
+      }
       if (carriedReport && carriedChecks) retainCarried(carriedReport, ruleId, carriedChecks);
       const checks: CheckResult[] = carriedChecks
         ? [...(freshChecks ?? []), ...carriedChecks]
@@ -266,6 +401,96 @@ export function createCompleteStoreTallyFold(
       addChecksToTally(entryFor(ruleId, meta).tally, checks, advisory(meta), 0);
       if (freshChecks && freshChecks.length > 0 && isCrawled) {
         dirtyPagesByRule.set(ruleId, (dirtyPagesByRule.get(ruleId) ?? 0) + 1);
+      }
+    }
+  };
+
+  const retainUntouchedSample: CompleteStoreTallyFold["retainUntouchedSample"] = (
+    normalizedUrl,
+    carried
+  ) => {
+    // The same rule filter and grouping as `foldPage`, so the rules the page
+    // claims, and the order it claims them in, are the ones a full fold of the
+    // page would have.
+    const byRule = new Map<string, CarriedFinding[]>();
+    for (const f of carried) {
+      if (metaOf(f.ruleId)?.scope !== "page") continue;
+      const list = byRule.get(f.ruleId);
+      if (list) list.push(f);
+      else byRule.set(f.ruleId, [f]);
+    }
+    for (const [ruleId, findings] of byRule) {
+      carriedRuleIds.add(ruleId);
+      // Claims the tally's slot where the page's first carried check would have:
+      // the tally map's order is the order the scorer walks it in.
+      entryFor(ruleId, metaOf(ruleId)!);
+      const checks = findings.map((f) => carriedFindingToCheck(f, normalizedUrl));
+      for (const check of checks) assertAggregatable(check, normalizedUrl);
+      if (carriedReport) retainCarried(carriedReport, ruleId, checks, false);
+    }
+  };
+
+  const addUntouched: CompleteStoreTallyFold["addUntouched"] = (aggregate) => {
+    for (const r of aggregate.rules) {
+      const meta = metaOf(r.ruleId);
+      if (meta?.scope !== "page") continue;
+      carriedRuleIds.add(r.ruleId);
+      const { tally } = entryFor(r.ruleId, meta);
+      tally.failed += r.failed;
+      tally.failUnits += r.failUnits;
+      if (!advisory(meta)) {
+        tally.warnings += r.warnings;
+        tally.warnUnits += r.warnUnits;
+      }
+      if (r.activePages > 0) {
+        carriedDirtyPagesByRule.set(
+          r.ruleId,
+          (carriedDirtyPagesByRule.get(r.ruleId) ?? 0) + r.activePages
+        );
+      }
+    }
+    if (!carriedReport) return;
+    for (const c of aggregate.classes) {
+      if (metaOf(c.ruleId)?.scope !== "page") continue;
+      const key = foldGroupKey({
+        name: c.checkName,
+        status: c.status,
+        message: "",
+        provenance: c.provenance,
+        details: { foldKey: c.foldKey },
+      });
+      const counts = carriedReport.get(c.ruleId)?.classes.get(key);
+      // A class's first untouched row is always in the sample, so the class
+      // exists by now. Without it there is no check to stamp the counts on, and
+      // the class would leave the report while its findings stay open.
+      if (!counts) {
+        throw new Error(
+          `untouched carried class ${c.ruleId} ${c.checkName} (${c.status}, ${c.provenance}) has no sampled row`
+        );
+      }
+      // Every term is a non-negative integer, so the two orders of addition agree
+      // exactly while the total stays safe. Past that they need not, and nine
+      // million rows of one class would be the only way there.
+      if (counts.total + c.occurrences > Number.MAX_SAFE_INTEGER) {
+        throw new Error(`untouched carried class ${c.ruleId} ${c.checkName} totals past the safe integer range`);
+      }
+      counts.total += c.occurrences;
+      counts.members += c.members;
+      counts.pages += c.pages;
+      if (c.pagesFloor > counts.pagesFloor) counts.pagesFloor = c.pagesFloor;
+      if (c.provenance !== "carried") counts.allCarried = false;
+      if (c.provenance !== "unrendered") counts.allUnrendered = false;
+      if (c.lastSeenAt !== undefined) {
+        counts.lastSeenAt = Math.max(counts.lastSeenAt ?? 0, c.lastSeenAt);
+      }
+    }
+    // The reverse check: a sampled row the totals do not count would make its
+    // class look complete, so the stamp would be skipped and its dropped rows lost.
+    for (const [ruleId, entry] of carriedReport) {
+      for (const counts of entry.classes.values()) {
+        if (counts.members < counts.retainedMembers) {
+          throw new Error(`untouched carried totals for ${ruleId} miss rows the sample holds`);
+        }
       }
     }
   };
@@ -338,7 +563,7 @@ export function createCompleteStoreTallyFold(
     };
   };
 
-  return { foldPage, foldShellRules, finish, carriedUnion };
+  return { foldPage, retainUntouchedSample, addUntouched, foldShellRules, finish, carriedUnion };
 }
 
 const EMPTY_CHECKS: readonly CheckResult[] = [];
@@ -359,8 +584,11 @@ const EMPTY_CHECKS: readonly CheckResult[] = [];
  * equal: 500 per rule cost ~180 MiB, 100 cost ~123, 25 costs ~78, and retaining
  * nothing at all costs ~77. Past about 25 the sample buys report detail with
  * isolate the 128 MB budget does not have.
+ *
+ * (pub#497) Exported for the store's untouched-page sample read, which must take
+ * the same number of rows per rule.
  */
-const CARRIED_REPORT_SAMPLE_PER_RULE = 25;
+export const CARRIED_REPORT_SAMPLE_PER_RULE = 25;
 
 /**
  * Per-(name, status) issue class: what was seen versus what was kept.
@@ -419,11 +647,52 @@ interface CarriedRuleReport {
   classes: Map<string, CarriedClassCounts>;
 }
 
-/** One page's carried checks for one rule, retained up to the per-rule cap. */
+function emptyClassCounts(): CarriedClassCounts {
+  return {
+    total: 0,
+    retained: 0,
+    members: 0,
+    retainedMembers: 0,
+    pages: 0,
+    pagesFloor: 0,
+    allCarried: true,
+    allUnrendered: true,
+  };
+}
+
+/** Count one constituent into its class: `firstOnPage` when it is the first of
+ *  the class on its page, so `pages` counts pages rather than checks. */
+function countClassMember(
+  counts: CarriedClassCounts,
+  check: CheckResult,
+  firstOnPage: boolean
+): void {
+  counts.total += occurrencesOf(check);
+  counts.members += 1;
+  if (firstOnPage) counts.pages += 1;
+  const ownFloor = check.details?.pagesTruncated;
+  if (typeof ownFloor === "number" && Number.isFinite(ownFloor) && ownFloor > counts.pagesFloor) {
+    counts.pagesFloor = Math.floor(ownFloor);
+  }
+  if (check.provenance !== "carried") counts.allCarried = false;
+  if (check.provenance !== "unrendered") counts.allUnrendered = false;
+  if (check.lastSeenAt !== undefined) {
+    counts.lastSeenAt = Math.max(counts.lastSeenAt ?? 0, check.lastSeenAt);
+  }
+}
+
+/**
+ * One page's carried checks for one rule, retained up to the per-rule cap.
+ *
+ * (pub#497) `count` false for an untouched page's sample rows: their class
+ * counters arrive from the store through `addUntouched`, so only the retention
+ * itself happens here.
+ */
 function retainCarried(
   report: Map<string, CarriedRuleReport>,
   ruleId: string,
-  checks: readonly CheckResult[]
+  checks: readonly CheckResult[],
+  count = true
 ): void {
   let entry = report.get(ruleId);
   if (!entry) {
@@ -440,32 +709,12 @@ function retainCarried(
     const key = foldGroupKey(check);
     let counts = entry.classes.get(key);
     if (!counts) {
-      counts = {
-        total: 0,
-        retained: 0,
-        members: 0,
-        retainedMembers: 0,
-        pages: 0,
-        pagesFloor: 0,
-        allCarried: true,
-        allUnrendered: true,
-      };
+      counts = emptyClassCounts();
       entry.classes.set(key, counts);
     }
-    counts.total += occurrencesOf(check);
-    counts.members += 1;
-    if (!pageClasses.has(key)) {
-      counts.pages += 1;
+    if (count) {
+      countClassMember(counts, check, !pageClasses.has(key));
       pageClasses.add(key);
-    }
-    const ownFloor = check.details?.pagesTruncated;
-    if (typeof ownFloor === "number" && Number.isFinite(ownFloor) && ownFloor > counts.pagesFloor) {
-      counts.pagesFloor = Math.floor(ownFloor);
-    }
-    if (check.provenance !== "carried") counts.allCarried = false;
-    if (check.provenance !== "unrendered") counts.allUnrendered = false;
-    if (check.lastSeenAt !== undefined) {
-      counts.lastSeenAt = Math.max(counts.lastSeenAt ?? 0, check.lastSeenAt);
     }
     // The rule's budget never costs a class its EXISTENCE. A class first seen
     // after the budget is spent still keeps its first check, because that check is
@@ -672,4 +921,198 @@ function groupByPage(
     else byPage.set(f.normalizedUrl, [f]);
   }
   return byPage;
+}
+
+/**
+ * (pub#497) Largest `details.occurrences` an aggregated row may declare. Class
+ * totals are sums of these, and a sum taken in a different order than the full
+ * fold's is the same number only while it stays an exact integer: at this bound a
+ * class would need nine million rows to leave the safe range.
+ */
+export const UNTOUCHED_MAX_OCCURRENCES = 1e9;
+
+/**
+ * (pub#497) True when a carried row's contribution is an exact integer the
+ * aggregate can add in any order. Two payload shapes break that, both malformed:
+ *  - `items` an object but not an array: `addChecksToTally` counts it by its
+ *    `length` property, which can be fractional, negative or not a number;
+ *  - `details.occurrences` at or past {@link UNTOUCHED_MAX_OCCURRENCES}.
+ * Fresh rows need no such test: their items are rebuilt as a real array.
+ * One rejected carried row anywhere on the site, touched page or not, means no
+ * aggregate (see {@link UntouchedCarriedAggregate}). A store's own test may be
+ * stricter, never looser.
+ */
+export function isAggregatableCarriedRow(row: PageFindingRecord): boolean {
+  return aggregatableCheck(carriedFindingToCheck(untouchedCarriedFinding(row, false), row.normalizedUrl));
+}
+
+function aggregatableCheck(check: CheckResult): boolean {
+  const items: unknown = check.items;
+  if (typeof items === "object" && items !== null && !Array.isArray(items)) return false;
+  const occurrences = check.details?.occurrences;
+  return !(typeof occurrences === "number" && occurrences >= UNTOUCHED_MAX_OCCURRENCES);
+}
+
+function assertAggregatable(check: CheckResult, normalizedUrl: string): void {
+  if (!aggregatableCheck(check)) {
+    throw new Error(
+      `carried finding on ${normalizedUrl} is outside the untouched aggregate's exact domain; the store must stream every page`
+    );
+  }
+}
+
+/** (pub#497) One untouched page as {@link aggregateUntouchedCarried} reads it. */
+export interface UntouchedCarriedPage {
+  normalizedUrl: string;
+  /** The page's OPEN findings, every one from an earlier audit, in cursor order. */
+  rows: readonly PageFindingRecord[];
+  /** The page has a `site_pages` row: some audit rendered it. */
+  rendered: boolean;
+  /** That row's state is "active", so the page is in `carriedPageUrls`. */
+  active: boolean;
+}
+
+/** (pub#497) What a store hands the merge for its untouched pages. */
+export interface UntouchedCarriedReference {
+  aggregate: UntouchedCarriedAggregate;
+  /** The report-sample rows, page by page in cursor order. */
+  sample: UntouchedSamplePage[];
+}
+
+/**
+ * The carried finding the merge makes of an untouched page's row: every such prior
+ * is carried unchanged (`{ ...prior, provenance: "carried" }`), and a page with no
+ * `site_pages` row is one no audit has rendered (#1652).
+ */
+export function untouchedCarriedFinding(
+  row: PageFindingRecord,
+  neverRendered: boolean
+): CarriedFinding {
+  return {
+    normalizedUrl: row.normalizedUrl,
+    ruleId: row.ruleId,
+    checkName: row.checkName,
+    status: row.status,
+    message: row.message,
+    value: row.value,
+    expected: row.expected,
+    payload: row.payload,
+    neverRendered,
+    lastSeenAt: row.lastSeenAt,
+  };
+}
+
+/**
+ * (pub#497) The REFERENCE for a store's untouched-page aggregate: the totals and
+ * the report sample computed from the rows themselves, with the very functions the
+ * full fold uses (`carriedFindingToCheck`, `addChecksToTally` once per page and
+ * rule, the report's class counter). A store twin, such as a SQL `GROUP BY`, is
+ * correct exactly when it returns what this returns for the same rows.
+ *
+ * Pages in cursor order, each holding only rows from earlier audits. It knows no
+ * rule meta, so it covers every rule; the fold drops the ones it cannot score.
+ * Throws on a row outside {@link isAggregatableCarriedRow}.
+ */
+export function aggregateUntouchedCarried(
+  pages: Iterable<UntouchedCarriedPage>
+): UntouchedCarriedReference {
+  const rules = new Map<string, UntouchedRuleTotals>();
+  const classes = new Map<
+    string,
+    { totals: Omit<UntouchedClassTotals, "occurrences" | "members" | "pages" | "pagesFloor" | "lastSeenAt">; counts: CarriedClassCounts }
+  >();
+  /** Rows seen per rule so far: the sample takes the first CAP of them. */
+  const seenPerRule = new Map<string, number>();
+  const sample: UntouchedSamplePage[] = [];
+  let findings = 0;
+  let unrenderedFindings = 0;
+
+  for (const page of pages) {
+    const neverRendered = !page.rendered;
+    findings += page.rows.length;
+    if (neverRendered) unrenderedFindings += page.rows.length;
+
+    // Row indices per rule, in cursor order: one `addChecksToTally` call each.
+    const byRule = new Map<string, number[]>();
+    for (let i = 0; i < page.rows.length; i++) {
+      const ruleId = page.rows[i]!.ruleId;
+      const list = byRule.get(ruleId);
+      if (list) list.push(i);
+      else byRule.set(ruleId, [i]);
+    }
+
+    const sampled = new Set<number>();
+    for (const [ruleId, indices] of byRule) {
+      const checks = indices.map((i) =>
+        carriedFindingToCheck(untouchedCarriedFinding(page.rows[i]!, neverRendered), page.normalizedUrl)
+      );
+      for (const check of checks) assertAggregatable(check, page.normalizedUrl);
+
+      const tally = emptyTally();
+      addChecksToTally(tally, checks, false, 0);
+      let totals = rules.get(ruleId);
+      if (!totals) {
+        totals = { ruleId, failed: 0, failUnits: 0, warnings: 0, warnUnits: 0, activePages: 0 };
+        rules.set(ruleId, totals);
+      }
+      totals.failed += tally.failed;
+      totals.failUnits += tally.failUnits;
+      totals.warnings += tally.warnings;
+      totals.warnUnits += tally.warnUnits;
+      if (page.active) totals.activePages += 1;
+
+      const pageClasses = new Set<string>();
+      for (let k = 0; k < checks.length; k++) {
+        const check = checks[k]!;
+        const classId = `${ruleId}\u0000${foldGroupKey(check)}`;
+        let entry = classes.get(classId);
+        const firstOfClass = !entry;
+        if (!entry) {
+          const foldKey = check.details?.foldKey;
+          entry = {
+            totals: {
+              ruleId,
+              checkName: check.name,
+              status: check.status === "fail" ? "fail" : "warn",
+              provenance: check.provenance === "unrendered" ? "unrendered" : "carried",
+              foldKey: typeof foldKey === "string" ? foldKey : "",
+            },
+            counts: emptyClassCounts(),
+          };
+          classes.set(classId, entry);
+        }
+        countClassMember(entry.counts, check, !pageClasses.has(classId));
+        pageClasses.add(classId);
+
+        const seen = seenPerRule.get(ruleId) ?? 0;
+        seenPerRule.set(ruleId, seen + 1);
+        if (seen < CARRIED_REPORT_SAMPLE_PER_RULE || firstOfClass) sampled.add(indices[k]!);
+      }
+    }
+
+    if (sampled.size > 0) {
+      sample.push({
+        normalizedUrl: page.normalizedUrl,
+        untouched: true,
+        sample: page.rows.filter((_, i) => sampled.has(i)),
+      });
+    }
+  }
+
+  return {
+    aggregate: {
+      findings,
+      unrenderedFindings,
+      rules: [...rules.values()],
+      classes: Array.from(classes.values(), ({ totals, counts }) => ({
+        ...totals,
+        occurrences: counts.total,
+        members: counts.members,
+        pages: counts.pages,
+        pagesFloor: counts.pagesFloor,
+        ...(counts.lastSeenAt !== undefined ? { lastSeenAt: counts.lastSeenAt } : {}),
+      })),
+    },
+    sample,
+  };
 }

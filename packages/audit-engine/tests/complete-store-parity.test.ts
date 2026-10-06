@@ -27,11 +27,19 @@ import {
 } from "@squirrelscan/rules/fold";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 
-import type { FindingPageSource } from "../src/complete-store-fold";
+import {
+  aggregateUntouchedCarried,
+  CARRIED_REPORT_SAMPLE_PER_RULE,
+  isAggregatableCarriedRow,
+  type FindingPageSource,
+  type UntouchedCarriedPage,
+  type UntouchedSamplePage,
+} from "../src/complete-store-fold";
 import { findingKey, flattenChecks } from "../src/merge-core";
 import {
   runCloudSmartAudits,
   type CloudSmartAuditsResult,
+  type OpenFindingPage,
   type SmartAuditStore,
 } from "../src/merge-promise";
 import { reconstructCompleteResults } from "../src/reconstruct";
@@ -902,5 +910,700 @@ describe("(d) bounded fold == the materialized reconstruction (#1873)", () => {
     expect(tally.failed).toBe(4);
     expect(tally.passed).toBe(11);
     expect(bounded.coverage.carriedFindings).toBe(2);
+  });
+});
+
+// ── (e) THE pub#497 GATE: untouched carried pages as an aggregate ────────────
+// The cloud's complete-store merge used to read and fold every open finding the
+// site had, one row at a time, so a publish cost what the site's whole history
+// cost. Untouched pages (not crawled, not removed, no fresh row) now reach the
+// merge as the store's aggregate plus a bounded report sample, and only touched
+// pages stream. These pin that the split is the SAME audit as the full row fold:
+// tallies, score, coverage, union rule results and the rows left in the store,
+// compared as serialized bytes so map ORDER counts too.
+describe("(e) untouched carried pages as an aggregate == the full row fold (pub#497)", () => {
+  const SITE = "web_497";
+  const AUDIT = "audit_9";
+  const PRIOR = "audit_8";
+  const OLDER = "audit_7";
+  const T_PRIOR = 1_650_000_000_000;
+  const T_NOW = 1_700_000_000_000;
+
+  const ruleA = { ...pageMeta, id: "content/rule-a", name: "Rule A" };
+  // Advisory: its warns are recommendations, out of the tally entirely.
+  const ruleB = {
+    ...pageMeta,
+    id: "content/rule-b",
+    name: "Rule B",
+    severity: "info" as const,
+  };
+  // Holds the payloads whose `items` is truthy but not iterable (and not an
+  // object, which the aggregate cannot add exactly). Kept under the report's
+  // carried budget: folding such a check throws in `foldGroup`, on the full row
+  // fold as much as on the split, so a folded rule cannot hold one.
+  const ruleC = { ...pageMeta, id: "content/rule-c", name: "Rule C" };
+  // First seen on a touched page that sorts AFTER the backlog, so its tally slot
+  // comes after rule C's, which only untouched pages hold.
+  const ruleD = { ...pageMeta, id: "content/rule-d", name: "Rule D" };
+  const ruleSite = {
+    ...pageMeta,
+    id: "crawl/site-rule",
+    name: "Site rule",
+    scope: "site" as const,
+  };
+  const shell = {
+    [ruleA.id]: { meta: ruleA, checks: [] as CheckResult[] },
+    [ruleB.id]: { meta: ruleB, checks: [] as CheckResult[] },
+    [ruleC.id]: { meta: ruleC, checks: [] as CheckResult[] },
+    [ruleD.id]: { meta: ruleD, checks: [] as CheckResult[] },
+    [ruleSite.id]: {
+      meta: ruleSite,
+      checks: [{ name: "site-check", status: "warn", message: "site-wide" }] as CheckResult[],
+    },
+  };
+
+  const pad = (i: number) => String(i).padStart(3, "0");
+  const crawledPage = (i: number) => `https://x.test/a/${pad(i)}`;
+  const backlogPage = (i: number) => `https://x.test/b/${pad(i)}`;
+
+  function row(
+    normalizedUrl: string,
+    ruleId: string,
+    checkName: string,
+    locator: string,
+    auditId: string,
+    overrides: Partial<PageFindingRecord> = {},
+  ): PageFindingRecord {
+    const status = overrides.status ?? "fail";
+    const message = overrides.message ?? `${checkName}${locator ? `: ${locator}` : ""}`;
+    const t = auditId === AUDIT ? T_NOW : auditId === OLDER ? T_PRIOR - 50_000 : T_PRIOR;
+    return {
+      siteKey: SITE,
+      normalizedUrl,
+      ruleId,
+      checkName,
+      locator,
+      status,
+      severity: "warning",
+      message,
+      value: null,
+      expected: null,
+      payload: locator ? JSON.stringify({ items: [{ id: locator, label: locator }], i: 0 }) : null,
+      fingerprint: findingFingerprint(status, message, null, null),
+      firstSeenAt: t,
+      lastSeenCrawlId: auditId,
+      lastSeenAt: t,
+      provenance: "fresh",
+      state: "open",
+      ...overrides,
+    };
+  }
+
+  /** Payloads a store can hold, malformed ones included: the JS reads each its own way. */
+  const ODD_PAYLOADS: Array<string | null> = [
+    '{"items":[{"id":"x"}],"details":{"additional":7}}',
+    '{"items":[{"id":"x"},{"id":"y"}],"details":{"additional":30},"m":"page text","v":"3"}',
+    '{"details":{"occurrences":4,"pagesTruncated":90,"foldKey":"k1"}}',
+    '{"details":{"occurrences":0.5}}',
+    '{"details":{"occurrences":"9","pagesTruncated":"40","additional":"5"}}',
+    '{"details":{"additional":-3,"occurrences":-1,"pagesTruncated":-2}}',
+    '{"details":{"additional":2.9,"pagesTruncated":12.7}}',
+    '{"items":"abc"}',
+    '{"items":[]}',
+    '{"items":null,"details":null}',
+    '{"details":"not-an-object"}',
+    '{"details":[1,2,3]}',
+    "[1,2,3]",
+    "42",
+    '"a string"',
+    "null",
+    '{"items":[{"id":"x"}],"details":{"addi', // truncated by a store clamp
+    "",
+    null,
+  ];
+  /** `items` truthy and not iterable: counted as one unit. */
+  const NON_ITERABLE_ITEMS = ['{"items":5}', '{"items":true}'];
+
+  interface Fixture {
+    rows: PageFindingRecord[];
+    pages: SitePageRecord[];
+    crawled: string[];
+    statuses: Array<{ url: string; status: number }>;
+  }
+
+  function sitePage(normalizedUrl: string, state: "active" | "removed" = "active"): SitePageRecord {
+    return {
+      siteKey: SITE,
+      normalizedUrl,
+      lastStatus: state === "active" ? 200 : 404,
+      state,
+      lastSeenCrawlId: PRIOR,
+      lastSeenAt: T_PRIOR,
+    };
+  }
+
+  /**
+   * Every shape at once. The backlog is past the per-rule report sample for rule A,
+   * holds a class first seen after that budget is spent, an advisory rule, rows of
+   * a site rule and of a rule absent from the shell, never-rendered pages, pages an
+   * older audit saw removed, and every payload shape above. A touched page that is
+   * NOT crawled (it holds a fresh row) sits in the middle of the backlog, so its
+   * carried checks spend sample budget between untouched pages.
+   */
+  function everyShape(): Fixture {
+    const rows: PageFindingRecord[] = [];
+    const pages: SitePageRecord[] = [];
+    const late = "https://x.test/zz/late";
+    const crawled = [...Array.from({ length: 8 }, (_, i) => crawledPage(i)), late];
+    for (const u of crawled) pages.push(sitePage(u));
+    rows.push(row(late, ruleD.id, "check-d", "", AUDIT));
+
+    // This run's ingest on crawled pages: whole-check and multi-item rows, one
+    // bucket over ISSUE_PENALTY_ITEM_CAP.
+    rows.push(row(crawled[0]!, ruleA.id, "check-1", "", AUDIT));
+    for (let k = 0; k < 24; k++) {
+      rows.push(
+        row(crawled[1]!, ruleA.id, "check-1", `item-${pad(k)}`, AUDIT, {
+          payload: JSON.stringify({ items: [{ id: `item-${pad(k)}` }], details: { additional: 4 }, i: k }),
+        }),
+      );
+    }
+    rows.push(row(crawled[2]!, ruleB.id, "advice", "", AUDIT, { status: "warn" }));
+    // Reappearing: resolved once, back this run, keeping its old first-seen.
+    rows.push(row(crawled[3]!, ruleA.id, "check-1", "", AUDIT, { firstSeenAt: T_PRIOR - 1_000 }));
+    // Priors the run re-crawled and did not re-observe: resolve.
+    rows.push(row(crawled[4]!, ruleA.id, "check-1", "", PRIOR));
+    rows.push(row(crawled[5]!, ruleB.id, "advice", "", PRIOR, { status: "warn" }));
+
+    // Removed this run: its prior stales, and an ingested row on it leaves the score.
+    const removed = "https://x.test/a/gone";
+    pages.push(sitePage(removed));
+    rows.push(row(removed, ruleA.id, "check-1", "", PRIOR));
+    rows.push(row(removed, ruleA.id, "check-2", "", AUDIT));
+
+    // The backlog: 60 untouched pages.
+    for (let i = 0; i < 60; i++) {
+      const u = backlogPage(i);
+      // Every 7th page was never rendered (no site_pages row); every 11th was
+      // seen removed by an older audit (rendered, not active).
+      if (i % 7 !== 3) pages.push(sitePage(u, i % 11 === 5 ? "removed" : "active"));
+      const provenance = i % 2 === 0 ? "carried" : "fresh"; // steady and first carries
+      const auditId = i % 3 === 0 ? OLDER : PRIOR;
+      rows.push(row(u, ruleA.id, "check-1", "", auditId, { provenance }));
+      if (i % 4 === 0) {
+        // Multi-item rows sharing one bucket, summing past the item cap.
+        for (let k = 0; k < 3; k++) {
+          rows.push(
+            row(u, ruleA.id, "check-3", `it-${k}`, auditId, {
+              provenance,
+              payload: JSON.stringify({
+                items: [{ id: `it-${k}` }],
+                details: { additional: 9 + k },
+                i: k,
+                m: "3 things wrong",
+                v: "3",
+              }),
+            }),
+          );
+        }
+      }
+      rows.push(
+        row(u, ruleA.id, "check-odd", "", auditId, {
+          provenance,
+          status: i % 5 === 0 ? "warn" : "fail",
+          payload: ODD_PAYLOADS[i % ODD_PAYLOADS.length]!,
+        }),
+      );
+      if (i % 3 === 1) {
+        rows.push(row(u, ruleB.id, "advice", "", auditId, { status: i % 2 ? "warn" : "fail" }));
+      }
+      if (i % 10 === 2) rows.push(row(u, ruleSite.id, "site-check", "", auditId));
+      if (i % 12 === 6) {
+        rows.push(
+          row(u, ruleC.id, "odd-items", "", auditId, {
+            payload: NON_ITERABLE_ITEMS[(i / 12) % NON_ITERABLE_ITEMS.length | 0]!,
+          }),
+        );
+      }
+      if (i % 10 === 4) rows.push(row(u, "content/not-in-shell", "ghost", "", auditId));
+    }
+    // The class's newest sighting is on a row the report sample drops.
+    const newest = findingKey(backlogPage(57), ruleA.id, "check-1", "");
+    rows.forEach((r, i) => {
+      if (findingKey(r.normalizedUrl, r.ruleId, r.checkName, r.locator) === newest) {
+        rows[i] = { ...r, lastSeenAt: T_PRIOR + 1_234 };
+      }
+    });
+    // More distinct classes than the per-rule budget, early in the order.
+    for (let k = 0; k < 30; k++) {
+      rows.push(row(backlogPage(2), ruleA.id, `many-${pad(k)}`, "", PRIOR));
+    }
+    // A class first seen after rule A's sample budget is long spent.
+    rows.push(row(backlogPage(58), ruleA.id, "zz-late-class", "", PRIOR));
+    rows.push(row(backlogPage(59), ruleA.id, "zz-late-class", "", PRIOR));
+    // A touched page that is NOT crawled: a fresh row with priors beside it, in
+    // the middle of the backlog's order.
+    const overlap = `${backlogPage(30)}-overlap`;
+    pages.push(sitePage(overlap));
+    rows.push(row(overlap, ruleA.id, "check-1", "item-new", AUDIT));
+    rows.push(row(overlap, ruleA.id, "check-1", "item-old", PRIOR));
+    rows.push(row(overlap, ruleA.id, "check-odd", "", PRIOR));
+
+    return {
+      rows,
+      pages,
+      crawled,
+      statuses: [
+        ...crawled.map((url) => ({ url, status: 200 })),
+        { url: removed, status: 404 },
+      ],
+    };
+  }
+
+  function seed(fixture: Fixture): MemStore {
+    const store = new MemStore();
+    for (const r of fixture.rows) {
+      store.findings.set(findingKey(r.normalizedUrl, r.ruleId, r.checkName, r.locator), { ...r });
+    }
+    for (const p of fixture.pages) store.pages.set(p.normalizedUrl, { ...p });
+    return store;
+  }
+
+  /** The store's open findings, page by page in cursor (primary-key) order. */
+  function openPagesInOrder(store: MemStore): Array<[string, PageFindingRecord[]]> {
+    const byPage = new Map<string, PageFindingRecord[]>();
+    const sorted = [...store.findings.values()]
+      .filter((f) => f.state === "open")
+      .sort((a, b) => {
+        const ka = findingKey(a.normalizedUrl, a.ruleId, a.checkName, a.locator);
+        const kb = findingKey(b.normalizedUrl, b.ruleId, b.checkName, b.locator);
+        return ka < kb ? -1 : ka > kb ? 1 : 0;
+      });
+    for (const f of sorted) {
+      const list = byPage.get(f.normalizedUrl);
+      if (list) list.push(f);
+      else byPage.set(f.normalizedUrl, [f]);
+    }
+    return [...byPage];
+  }
+
+  function openPage(normalizedUrl: string, rows: PageFindingRecord[]): OpenFindingPage {
+    return {
+      normalizedUrl,
+      fresh: rows.filter((f) => f.lastSeenCrawlId === AUDIT),
+      prior: rows.filter((f) => f.lastSeenCrawlId !== AUDIT),
+    };
+  }
+
+  /** Today: every open page streams, row by row. */
+  async function runRowFold(fixture: Fixture) {
+    const store = seed(fixture);
+    const pages = openPagesInOrder(store);
+    async function* openPages() {
+      for (const [u, rows] of pages) yield openPage(u, rows);
+    }
+    const result = await runCloudSmartAudits({
+      store,
+      siteKey: SITE,
+      crawlId: AUDIT,
+      ruleResults: shell,
+      pageStatuses: fixture.statuses,
+      now: T_NOW + 5,
+      completeStore: { openPages: openPages(), crawledUrls: fixture.crawled },
+    });
+    return { result, store };
+  }
+
+  /**
+   * The split, built the way a store must build it: untouched pages through the
+   * reference aggregate, touched ones streamed, the two merged in cursor order,
+   * and the untouched rows' carry applied by the store itself. `streamAnyway`
+   * pages are untouched but streamed in full, which a store may always do.
+   */
+  /**
+   * `exact`: the reference's sample. `all`: every untouched row. `some`: the
+   * reference's sample plus every other remaining row, a superset in between.
+   */
+  type SampleMode = "exact" | "all" | "some";
+
+  async function runSplit(
+    fixture: Fixture,
+    streamAnyway: Set<string> = new Set(),
+    sampleMode: SampleMode = "exact",
+  ) {
+    const store = seed(fixture);
+    let sampleRows = 0;
+    let streamedRows = 0;
+    const result = await runCloudSmartAudits({
+      store,
+      siteKey: SITE,
+      crawlId: AUDIT,
+      ruleResults: shell,
+      pageStatuses: fixture.statuses,
+      now: T_NOW + 5,
+      completeStore: {
+        crawledUrls: fixture.crawled,
+        untouchedCarried: async (scope) => {
+          const pages = openPagesInOrder(store);
+          // One carried row the aggregate cannot add exactly, anywhere on the
+          // site, and every page streams: an empty aggregate is the full fold.
+          const exact = pages.every(
+            ([u, rows]) =>
+              scope.crawledUrls.has(u) ||
+              scope.removedUrls.has(u) ||
+              rows.every((r) => r.lastSeenCrawlId === AUDIT || isAggregatableCarriedRow(r)),
+          );
+          const isTouched = (u: string, rows: PageFindingRecord[]) =>
+            !exact ||
+            scope.crawledUrls.has(u) ||
+            scope.removedUrls.has(u) ||
+            rows.some((r) => r.lastSeenCrawlId === AUDIT) ||
+            streamAnyway.has(u);
+          const untouched: UntouchedCarriedPage[] = [];
+          for (const [u, rows] of pages) {
+            if (isTouched(u, rows)) continue;
+            const page = store.pages.get(u);
+            untouched.push({
+              normalizedUrl: u,
+              rows,
+              rendered: !!page,
+              active: page?.state === "active",
+            });
+          }
+          const { aggregate, sample } = aggregateUntouchedCarried(untouched);
+          const sampled = new Set(
+            sample.flatMap((p) =>
+              p.sample.map((r) => findingKey(r.normalizedUrl, r.ruleId, r.checkName, r.locator)),
+            ),
+          );
+          let extra = 0;
+          const sampleByUrl = new Map<string, UntouchedSamplePage>();
+          for (const p of untouched) {
+            const rows = p.rows.filter((r) => {
+              if (sampled.has(findingKey(r.normalizedUrl, r.ruleId, r.checkName, r.locator))) return true;
+              if (sampleMode === "all") return true;
+              return sampleMode === "some" && extra++ % 2 === 0;
+            });
+            if (rows.length > 0) {
+              sampleByUrl.set(p.normalizedUrl, { normalizedUrl: p.normalizedUrl, untouched: true, sample: rows });
+            }
+          }
+          // The store's own carry of the rows the merge will never see.
+          for (const p of untouched) {
+            for (const r of p.rows) {
+              const k = findingKey(r.normalizedUrl, r.ruleId, r.checkName, r.locator);
+              store.findings.set(k, { ...store.findings.get(k)!, provenance: "carried" });
+            }
+          }
+          async function* merged() {
+            for (const [u, rows] of pages) {
+              if (isTouched(u, rows)) {
+                streamedRows += rows.length;
+                yield openPage(u, rows);
+                continue;
+              }
+              const s = sampleByUrl.get(u);
+              if (s) {
+                sampleRows += s.sample.length;
+                yield s;
+              }
+            }
+          }
+          return { pages: merged(), aggregate };
+        },
+      },
+    });
+    return { result, store, sampleRows, streamedRows };
+  }
+
+  /** Every surface a caller reads, serialized: map order and key order count. */
+  function bytes(result: CloudSmartAuditsResult) {
+    return {
+      tallies: JSON.stringify([...result.scoringTallies!]),
+      score: JSON.stringify(
+        calculateHealthScoreFromTallies(result.scoringTallies!, result.unionRuleResults),
+      ),
+      coverage: JSON.stringify(result.coverage),
+      union: JSON.stringify([...result.unionRuleResults]),
+      persistedFindings: result.persistedFindings,
+      removedPages: result.removedPages,
+      carriedLastSeen: result.carriedLastSeen.size,
+    };
+  }
+
+  function storeBytes(store: MemStore) {
+    const rows = [...store.findings.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    // This MemStore stamps a removed page with the wall clock, so that one field
+    // differs between any two runs.
+    const pages = [...store.pages.entries()]
+      .map(([k, p]) => [k, p.state === "removed" && p.lastSeenCrawlId === AUDIT ? { ...p, lastSeenAt: 0 } : p])
+      .sort(([a], [b]) => (a! < b! ? -1 : a! > b! ? 1 : 0));
+    return JSON.stringify({ rows, pages });
+  }
+
+  test("tallies, score, coverage, union rule results and the store are byte-identical", async () => {
+    const fixture = everyShape();
+    const full = await runRowFold(fixture);
+    const split = await runSplit(fixture);
+
+    expect(bytes(split.result)).toEqual(bytes(full.result));
+    expect(storeBytes(split.store)).toEqual(storeBytes(full.store));
+
+    // The fixture really exercises what it claims: rule A is over the report's
+    // carried budget and folds to aggregates, the late class survives, the
+    // advisory rule has carried warns, and some carried findings are unrendered.
+    const a = full.result.unionRuleResults.get(ruleA.id)!.checks;
+    expect(a.some((c) => c.details?.aggregated === true)).toBe(true);
+    expect(a.some((c) => c.name === "zz-late-class")).toBe(true);
+    expect(full.result.coverage.unrenderedFindings).toBeGreaterThan(0);
+    expect(full.result.coverage.carriedFindings).toBeGreaterThan(CARRIED_REPORT_SAMPLE_PER_RULE);
+    expect(full.result.scoringTallies!.get(ruleB.id)!.tally.failed).toBeGreaterThan(0);
+    // A dropped row's newer sighting reaches its class's aggregate.
+    expect(
+      a.find((c) => c.name === "check-1" && c.provenance === "carried")!.lastSeenAt,
+    ).toBe(T_PRIOR + 1_234);
+    // Rule C, held only by untouched pages, takes its tally slot before rule D,
+    // whose first page is a touched one later in the order.
+    const order = [...full.result.scoringTallies!.keys()];
+    expect(order.indexOf(ruleC.id)).toBeLessThan(order.indexOf(ruleD.id));
+  });
+
+  test("only touched pages stream; the untouched ones send a bounded sample", async () => {
+    const fixture = everyShape();
+    const full = await runRowFold(fixture);
+    const split = await runSplit(fixture);
+    const carried = full.result.coverage.carriedFindings + (full.result.coverage.unrenderedFindings ?? 0);
+    // Rows of the touched pages only: 30 on crawled pages, 2 on the removed one,
+    // 3 on the uncrawled one holding a fresh row.
+    expect(split.streamedRows).toBe(30 + 2 + 3);
+    // Per rule: the first CARRIED_REPORT_SAMPLE_PER_RULE rows plus each later
+    // class's first row, across 5 rules in the store.
+    expect(split.sampleRows).toBeLessThan(5 * CARRIED_REPORT_SAMPLE_PER_RULE + 10);
+    expect(split.sampleRows).toBeLessThan(carried);
+  });
+
+  test("an untouched page streamed in full instead is still the same audit", async () => {
+    // A store streams a page whose rows its aggregate cannot read exactly. Pick
+    // pages early in the order, so their carried checks take sample budget.
+    const fixture = everyShape();
+    const full = await runRowFold(fixture);
+    const split = await runSplit(fixture, new Set([backlogPage(0), backlogPage(7), backlogPage(19)]));
+    expect(bytes(split.result)).toEqual(bytes(full.result));
+    expect(storeBytes(split.store)).toEqual(storeBytes(full.store));
+  });
+
+  test("a sample holding more than it must is still the same audit", async () => {
+    // Every untouched row as the sample: retention only moves on a retained
+    // check, so the extra rows are dropped exactly where the full fold drops them.
+    const fixture = everyShape();
+    const full = await runRowFold(fixture);
+    for (const mode of ["all", "some"] as const) {
+      const split = await runSplit(fixture, new Set(), mode);
+      expect(bytes(split.result)).toEqual(bytes(full.result));
+    }
+  });
+
+  test("a carried row the aggregate cannot add exactly means no aggregate at all", async () => {
+    // Two malformed shapes reassociate: an `items` object counted by a fractional
+    // `length`, and an occurrence weight past the safe range. Adding the untouched
+    // subtotal at the end moves the float result even when the odd row's own page
+    // streams, so one such row anywhere stops the split.
+    const fixture = everyShape();
+    // The middle fractional page streams, so its term lands between the others.
+    [1.1, 1.2, 1.3].forEach((length, k) => {
+      fixture.rows.push(
+        row(backlogPage(10 + 20 * k), ruleC.id, "odd-items", "x", PRIOR, {
+          payload: JSON.stringify({ items: { length } }),
+        }),
+      );
+    });
+    fixture.rows.push(
+      row(backlogPage(11), ruleA.id, "check-1", "x", PRIOR, {
+        payload: `{"details":{"occurrences":${Number.MAX_SAFE_INTEGER + 1}}}`,
+      }),
+    );
+    const streamed = new Set([backlogPage(30)]);
+    const oddRow = fixture.rows.at(-1)!;
+    expect(isAggregatableCarriedRow(oddRow)).toBe(false);
+    expect(() =>
+      aggregateUntouchedCarried([
+        { normalizedUrl: oddRow.normalizedUrl, rows: [oddRow], rendered: true, active: true },
+      ]),
+    ).toThrow(/exact domain/);
+
+    // The store streams everything instead, and that is the full fold.
+    const full = await runRowFold(fixture);
+    const split = await runSplit(fixture, streamed);
+    expect(split.sampleRows).toBe(0);
+    expect(bytes(split.result)).toEqual(bytes(full.result));
+    expect(storeBytes(split.store)).toEqual(storeBytes(full.store));
+
+    // A store that aggregates anyway is refused, not published off by an ulp.
+    const store = seed(fixture);
+    const pages = openPagesInOrder(store);
+    const u = backlogPage(1);
+    const untouchedRows = pages.find(([url]) => url === u)![1];
+    await expect(
+      runCloudSmartAudits({
+        store,
+        siteKey: SITE,
+        crawlId: AUDIT,
+        ruleResults: shell,
+        pageStatuses: fixture.statuses,
+        now: T_NOW + 5,
+        completeStore: {
+          crawledUrls: fixture.crawled,
+          untouchedCarried: async () => {
+            const { aggregate, sample } = aggregateUntouchedCarried([
+              { normalizedUrl: u, rows: untouchedRows, rendered: true, active: true },
+            ]);
+            async function* merged() {
+              for (const [url, rows] of pages) {
+                if (url === u) yield* sample;
+                else yield openPage(url, rows);
+              }
+            }
+            return { pages: merged(), aggregate };
+          },
+        },
+      }),
+    ).rejects.toThrow(/exact domain/);
+  });
+
+  test("under the report cap the split is byte-identical too", async () => {
+    const fixture = everyShape();
+    // Keep the backlog small: no rule over the budget, nothing folded.
+    fixture.rows = fixture.rows.filter(
+      (r) => !r.normalizedUrl.startsWith("https://x.test/b/") || r.normalizedUrl < backlogPage(6),
+    );
+    const full = await runRowFold(fixture);
+    const split = await runSplit(fixture);
+    expect(bytes(split.result)).toEqual(bytes(full.result));
+    expect(storeBytes(split.store)).toEqual(storeBytes(full.store));
+  });
+
+  test("a sample page the run crawled is refused, not scored as carried", async () => {
+    const fixture = everyShape();
+    const store = seed(fixture);
+    await expect(
+      runCloudSmartAudits({
+        store,
+        siteKey: SITE,
+        crawlId: AUDIT,
+        ruleResults: shell,
+        pageStatuses: fixture.statuses,
+        now: T_NOW + 5,
+        completeStore: {
+          crawledUrls: fixture.crawled,
+          untouchedCarried: async () => {
+            async function* pages(): AsyncGenerator<UntouchedSamplePage> {
+              yield {
+                normalizedUrl: crawledPage(4),
+                untouched: true,
+                sample: [row(crawledPage(4), ruleA.id, "check-1", "", PRIOR)],
+              };
+            }
+            return {
+              pages: pages(),
+              aggregate: { findings: 0, unrenderedFindings: 0, rules: [], classes: [] },
+            };
+          },
+        },
+      }),
+    ).rejects.toThrow(/crawled or removed/);
+  });
+
+  test("a sample row the aggregate cannot add exactly is refused", async () => {
+    const fixture = everyShape();
+    const store = seed(fixture);
+    const u = backlogPage(1);
+    const odd = row(u, ruleA.id, "check-1", "", PRIOR, { payload: '{"items":{"length":0.5}}' });
+    await expect(
+      runCloudSmartAudits({
+        store,
+        siteKey: SITE,
+        crawlId: AUDIT,
+        ruleResults: shell,
+        pageStatuses: fixture.statuses,
+        now: T_NOW + 5,
+        completeStore: {
+          crawledUrls: fixture.crawled,
+          untouchedCarried: async () => {
+            async function* pages(): AsyncGenerator<UntouchedSamplePage> {
+              yield { normalizedUrl: u, untouched: true, sample: [odd] };
+            }
+            return {
+              pages: pages(),
+              aggregate: { findings: 1, unrenderedFindings: 0, rules: [], classes: [] },
+            };
+          },
+        },
+      }),
+    ).rejects.toThrow(/exact domain/);
+  });
+
+  test("a class total past the safe integer range is refused", async () => {
+    // Reachable only with millions of rows in one class; the sum would then
+    // depend on the order of addition.
+    const fixture = everyShape();
+    const store = seed(fixture);
+    const u = backlogPage(1);
+    const sampled = row(u, ruleA.id, "check-1", "", PRIOR);
+    await expect(
+      runCloudSmartAudits({
+        store,
+        siteKey: SITE,
+        crawlId: AUDIT,
+        ruleResults: shell,
+        pageStatuses: fixture.statuses,
+        now: T_NOW + 5,
+        completeStore: {
+          crawledUrls: fixture.crawled,
+          untouchedCarried: async () => {
+            const { aggregate, sample } = aggregateUntouchedCarried([
+              { normalizedUrl: u, rows: [sampled], rendered: true, active: true },
+            ]);
+            async function* pages() {
+              yield* sample;
+            }
+            return {
+              pages: pages(),
+              aggregate: {
+                ...aggregate,
+                classes: aggregate.classes.map((c) => ({ ...c, occurrences: Number.MAX_SAFE_INTEGER + 1 })),
+              },
+            };
+          },
+        },
+      }),
+    ).rejects.toThrow(/safe integer range/);
+  });
+
+  test("totals that miss a sampled class are refused, not published short", async () => {
+    const fixture = everyShape();
+    const store = seed(fixture);
+    const u = backlogPage(1);
+    await expect(
+      runCloudSmartAudits({
+        store,
+        siteKey: SITE,
+        crawlId: AUDIT,
+        ruleResults: shell,
+        pageStatuses: fixture.statuses,
+        now: T_NOW + 5,
+        completeStore: {
+          crawledUrls: fixture.crawled,
+          untouchedCarried: async () => {
+            async function* pages(): AsyncGenerator<UntouchedSamplePage> {
+              yield { normalizedUrl: u, untouched: true, sample: [row(u, ruleA.id, "check-1", "", PRIOR)] };
+            }
+            return {
+              pages: pages(),
+              aggregate: { findings: 1, unrenderedFindings: 0, rules: [], classes: [] },
+            };
+          },
+        },
+      }),
+    ).rejects.toThrow(/miss rows the sample holds/);
   });
 });

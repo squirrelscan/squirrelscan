@@ -40,6 +40,9 @@ export type {
   OpenFindingPageSource,
   PriorFindingPageSource,
   SmartAuditStore,
+  // (pub#497) The untouched pages as an aggregate plus a bounded sample.
+  CompleteStoreScope,
+  UntouchedCarriedSplit,
 } from "./merge-promise";
 
 export {
@@ -67,12 +70,28 @@ export type {
 export { reconstructCompleteResults, reconstructPageRuleChecks } from "./reconstruct";
 export type { ReconstructCompleteInput } from "./reconstruct";
 
-export { createCompleteStoreTallyFold, foldCompleteStoreTallies } from "./complete-store-fold";
+export {
+  // (pub#497) The store's untouched-page aggregate: the sample size it reads, the
+  // JS reference its twin must agree with, and the carry it stands for.
+  aggregateUntouchedCarried,
+  CARRIED_REPORT_SAMPLE_PER_RULE,
+  createCompleteStoreTallyFold,
+  foldCompleteStoreTallies,
+  isAggregatableCarriedRow,
+  UNTOUCHED_MAX_OCCURRENCES,
+  untouchedCarriedFinding,
+} from "./complete-store-fold";
 export type {
   CompleteStoreFoldInput,
   CompleteStoreTallyFold,
   CompleteStoreTallyInput,
   FindingPageSource,
+  UntouchedCarriedAggregate,
+  UntouchedCarriedPage,
+  UntouchedCarriedReference,
+  UntouchedClassTotals,
+  UntouchedRuleTotals,
+  UntouchedSamplePage,
 } from "./complete-store-fold";
 
 export { buildStreamFindings, buildSkippedPassCounts } from "./stream-findings";
