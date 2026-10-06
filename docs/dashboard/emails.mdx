@@ -8,8 +8,10 @@ squirrelscan sends a small number of automatic emails. This page lists every one
 
 Most of them are per website and ride a single toggle. A few are account level and arrive whatever that toggle says, because they report something that affects your credits or a service switching itself off.
 
+On top of that, [**Settings → Email**](#email-settings-and-unsubscribing) has four account-wide switches: product news, tips and onboarding, scheduled audit digests, and account alerts. They belong to you rather than to a website or an organization, and they follow your account if your email address changes.
+
 <Note>
-  The per-website switch is **Website → Settings → Alerts → Audit completion notifications** in the dashboard.
+  The per-website switch is **Website → Settings → Alerts → Audit completion notifications** in the dashboard. The account-wide switches are under **Settings → Email**.
 </Note>
 
 ## Per-website emails
@@ -22,7 +24,7 @@ Arrives when an audit of the website finishes and its report reaches the cloud. 
 
 A scheduled run normally sends the [digest](#scheduled-audit-digest) instead, so you get one email about a run, not two.
 
-**How to stop it:** turn off **Settings → Alerts** for that website.
+**How to stop it:** turn off **Settings → Alerts** for that website, or **Account alerts** in **Settings → Email** for every website.
 
 ### Audit failed
 
@@ -30,7 +32,7 @@ Arrives when an audit run for the website ends in failure, with the reason and w
 
 The reason names the cause the crawl hit, and the email carries the next step for that cause. See [failed audits](/guides/failed-audits) for every reason and what to do about it.
 
-**How to stop it:** the same **Settings → Alerts** toggle.
+**How to stop it:** the same **Settings → Alerts** toggle, or **Account alerts** in **Settings → Email**.
 
 ### Scheduled-audit digest
 
@@ -46,7 +48,7 @@ Every variant carries the health score, a link to the full report, and a link th
 
 Two cases send the ordinary audit email instead. A scheduled run that fails sends the failure email, and a run whose comparison cannot be built falls back to the completion email rather than guessing at what changed.
 
-**How to stop it:** the pause link in the email, the **Settings → Alerts** toggle, or setting the website's schedule to **Disabled**.
+**How to stop it:** the pause link in the email, the **Settings → Alerts** toggle, setting the website's schedule to **Disabled**, or **Scheduled audit digests** in **Settings → Email**. With digests switched off there, a scheduled run sends no completion email in their place: the audits keep running and their results stay in the dashboard.
 
 ## Account-level emails
 
@@ -61,7 +63,7 @@ Sent when a website's schedule stops on its own. There are two reasons, and the 
 
 It goes to your account address, because a recurring service that spends credits switching itself off is account news. The email is throttled to roughly one per organization in any rolling 24 hours: if several sites pause around the same time, the rest still pause and still appear in the dashboard bell without each sending mail.
 
-**How to stop it:** it only arrives when a schedule pauses itself, so turning the website's schedule off means it never fires. The **Settings → Alerts** toggle does not suppress it.
+**How to stop it:** switch off **Account alerts** in **Settings → Email**. It also only arrives when a schedule pauses itself, so turning the website's schedule off means it never fires. The per-website **Settings → Alerts** toggle does not suppress it.
 
 ### Low credits
 
@@ -69,13 +71,13 @@ Sent when a charge takes the organization's balance down across the low-balance 
 
 It goes to one billing contact: the owner where there is one, otherwise another member who can bill, and failing both the person who created the organization.
 
-**How to stop it:** there is no toggle. Handing off the billing role is the practical way out, unless you created the organization, in which case you stay the fallback recipient. The [suppression list](#unsubscribing-and-the-suppression-list) stops it outright.
+**How to stop it:** switch off **Account alerts** in **Settings → Email**. Handing off the billing role also moves it to someone else, unless you created the organization, in which case you stay the fallback recipient.
 
 ### Welcome
 
 One email from Nik about an hour after you sign up. Replies go to a real inbox and open a support thread, so answering it reaches a person.
 
-**How to stop it:** an address already on the [suppression list](#unsubscribing-and-the-suppression-list) when the send comes due is skipped. Replying reaches a person but does not unsubscribe you on its own.
+**How to stop it:** switch off **Tips and onboarding** in **Settings → Email** before it comes due. Replying reaches a person but does not unsubscribe you on its own.
 
 ### Support ticket confirmation and replies
 
@@ -91,13 +93,24 @@ The low-credit warning and the pause notice are not on that counter. Each has it
 
 Several notification types never email at all and are in-app only, including issue comments, agent fix runs, and the scheduler's skip notices.
 
-## Unsubscribing and the suppression list
+## Email settings and unsubscribing
 
-Marketing and announcement emails carry an unsubscribe link. Clicking it adds your address to a global suppression list. A hard bounce or a spam complaint puts an address on the same list.
+**Settings → Email** in the dashboard has four switches, all on until you change them:
 
-Suppression stops marketing sends, the scheduled-audit digest, the low-credit warning and a queued welcome email, all of which check the list before sending. It does not currently stop the audit completion email, the audit failure email, the recurring-audits-paused notice or support replies, which go out on their own paths. Use the per-website **Settings → Alerts** toggle to turn audit mail off, and turn a website's schedule off to stop the pause notice.
+| Switch | What it covers |
+| --- | --- |
+| Product news | Announcements and new features |
+| Tips and onboarding | The welcome email and other getting-started emails |
+| Scheduled audit digests | The digest after each [scheduled audit](/cloud/scheduled-audits) |
+| Account alerts | Audit complete, audit failed, recurring audits paused, low credits, and credits added to your organization |
 
-If you have stopped receiving expected email and cannot see why, the suppression list is the first thing to check with [support](/dashboard/support).
+Billing emails, sign-in and security emails, and replies to your support requests are not on the list. They arrive whatever the switches say.
+
+Every product news email carries an unsubscribe link, which switches off **Product news** and nothing else. The link asks you to confirm first, because mail scanners open every link in an email and must not unsubscribe anyone by doing so. If you subscribed to updates without an account, the link takes your address off the mailing list instead.
+
+A hard bounce or a spam complaint stops all email to an address, whatever the switches say, and **Settings → Email** shows when that has happened. Once the mailbox works again, contact [support](/dashboard/support) and we will switch it back on.
+
+An unsubscribe from an announcement before October 2026 also switched off tips and digests, so **Settings → Email** shows those off too. Switch any of them back on there.
 
 ## Related
 
