@@ -2,10 +2,11 @@
 // is oversized (#464).
 //
 // It used to flag every image displayed at 100px or less without a srcset,
-// including a 168-byte PNG shown at its natural 64x64. The evidence it can have
-// is the file's byte size from the pre-rules resource check: a file heavier
-// than the raw RGBA bitmap of its displayed box at 2x density holds more pixels
-// than a screen draws there.
+// including a 168-byte PNG shown at its natural 64x64. The evidence is what the
+// pre-rules resource check measured: the natural pixel size read from the
+// image's header when it has one (#470), compared with the displayed box at 2x
+// density the way Lighthouse does, and otherwise the byte size, against the raw
+// RGBA bitmap of that box.
 
 import { describe, expect, test } from "bun:test";
 
@@ -58,6 +59,17 @@ function oversized(checks: CheckResult[]): CheckResult | undefined {
 
 // The budget for a 64x64 box: (64 * 2) * (64 * 2) * 4 bytes.
 const BUDGET_64 = 128 * 128 * 4;
+
+/** A measured image whose header was read: natural size and animation known. */
+function measured(
+  path: string,
+  sizeBytes: number,
+  naturalWidth: number,
+  naturalHeight: number,
+  animated = false
+): ResourceSizeData {
+  return { ...resource(path, sizeBytes), naturalWidth, naturalHeight, animated };
+}
 
 describe("images at their natural size are not reported", () => {
   test("the #464 repro: 64-150px PNGs of a few hundred bytes", () => {
@@ -196,5 +208,76 @@ describe("images the rule does not judge", () => {
     ["an image inside <noscript>", `<noscript><img src="a.jpg" width="64" height="64"></noscript>`, "a.jpg"],
   ])("%s", (_label, body, path) => {
     expect(oversized(run(body, heavy(path)))).toBeUndefined();
+  });
+});
+
+describe("with a natural size, the test is in pixels (#470)", () => {
+  test("a 1200x1200 JPEG of 20 KB shown at 64x64 is reported", () => {
+    // The byte budget alone passed it: 20 KB is far under 64 KB.
+    const check = oversized(
+      run(`<img src="/photos/full.jpg" width="64" height="64" alt="x">`, [
+        measured("/photos/full.jpg", 20_480, 1200, 1200),
+      ])
+    );
+    const wastedBytes = Math.round(20_480 * (1 - (128 * 128) / (1200 * 1200)));
+    expect(check?.items).toEqual([
+      {
+        id: "full.jpg (64x64, no srcset)",
+        label: "full.jpg (1200x1200 shown at 64x64, 20.0 KB, no srcset)",
+        meta: {
+          url: "https://example.com/photos/full.jpg",
+          sizeBytes: 20_480,
+          naturalWidth: 1200,
+          naturalHeight: 1200,
+          wastedBytes,
+        },
+      },
+    ]);
+  });
+
+  test("an animated WebP shown at its natural size is not reported", () => {
+    // 300 KB of frames is over the 160 KB byte budget of a 100x100 box, which
+    // is why the byte test reported it.
+    const img = `<img src="spin.webp" width="100" height="100">`;
+    expect(oversized(run(img, [resource("spin.webp", 300_000)]))?.status).toBe("warn");
+    const checks = run(img, [measured("spin.webp", 300_000, 100, 100, true)]);
+    expect(oversized(checks)).toBeUndefined();
+    expect(checks[0]).toMatchObject({ name: "responsive-size", status: "pass" });
+  });
+
+  test("an image at up to twice its displayed size wastes nothing, however heavy", () => {
+    const img = `<img src="a.png" width="64" height="64">`;
+    expect(oversized(run(img, [measured("a.png", 500_000, 128, 128)]))).toBeUndefined();
+    expect(oversized(run(img, [measured("a.png", 500_000, 64, 64)]))).toBeUndefined();
+  });
+
+  test("an animated image shown smaller than its frames is still reported", () => {
+    const check = oversized(
+      run(`<img src="spin.gif" width="40" height="40">`, [measured("spin.gif", 300_000, 400, 400, true)])
+    );
+    // GIFs were skipped by extension; a read header puts them in the pixel test.
+    expect(check?.items?.map((i) => i.id)).toEqual(["spin.gif (40x40, no srcset)"]);
+  });
+
+  test("Lighthouse's 4 KiB savings threshold is the line", () => {
+    // 256x256 natural at 64x64: a quarter of the pixels are drawn, so the
+    // waste is three quarters of the file.
+    const img = `<img src="a.png" width="64" height="64">`;
+    expect(oversized(run(img, [measured("a.png", 5_460, 256, 256)]))).toBeUndefined();
+    expect(oversized(run(img, [measured("a.png", 5_462, 256, 256)]))?.status).toBe("warn");
+  });
+
+  test("a size missing either side falls back to the byte budget", () => {
+    const img = `<img src="a.jpg" width="64" height="64">`;
+    const half = { ...resource("a.jpg", 20_480), naturalWidth: 1200, naturalHeight: null };
+    expect(oversized(run(img, [half]))).toBeUndefined();
+    const heavy = { ...resource("a.jpg", 400_000), naturalWidth: 1200, naturalHeight: null };
+    expect(oversized(run(img, [heavy]))?.items?.[0]?.meta).toMatchObject({ budgetBytes: BUDGET_64 });
+  });
+
+  test("an image known to be animated is never judged by its bytes", () => {
+    const img = `<img src="spin.webp" width="64" height="64">`;
+    const frames = { ...resource("spin.webp", 2_000_000), animated: true };
+    expect(oversized(run(img, [frames]))).toBeUndefined();
   });
 });

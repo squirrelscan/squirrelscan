@@ -1300,6 +1300,16 @@ export interface ResourceSizeData {
   vary?: string | null;
   /** Cache-hit reason if reused from a prior crawl; null on a real fetch. (#107) */
   cacheReason?: CacheHitReason | null;
+  /**
+   * Natural pixel size read from the image's first bytes by the image pool
+   * (#470). Null when unknown: not a PNG, GIF, WebP, AVIF or JPEG header the
+   * parser reads to its size (a JPEG's SOF can sit past the bytes read), or
+   * the read failed. Absent on CSS entries.
+   */
+  naturalWidth?: number | null;
+  naturalHeight?: number | null;
+  /** APNG, animated GIF/WebP or AVIF sequence; null when not settled. (#470) */
+  animated?: boolean | null;
 }
 
 export interface ScriptContentData {

@@ -833,7 +833,8 @@ export function fetchAssetsFromOccurrences(
       {
         // verifyCompression only on the two pools perf/asset-compression reads
         // (#9) — the pdf and sitemap checks below never report on compression,
-        // so they keep the cheap HEAD path and pay nothing for it.
+        // so they keep the cheap HEAD path and pay nothing for it. Only the
+        // image pool reads headers, for images/responsive-size (#470).
         css: checkResourceSizes(Array.from(resourceOccurrences.css.keys()), {
           ...resourceCheckOptions,
           verifyCompression: true,
@@ -841,6 +842,7 @@ export function fetchAssetsFromOccurrences(
         images: checkResourceSizes(Array.from(resourceOccurrences.images.keys()), {
           ...resourceCheckOptions,
           verifyCompression: true,
+          readImageHeader: true,
         }),
         scripts: fetchScriptContents(
           Array.from(resourceOccurrences.scripts.keys()),
@@ -929,6 +931,9 @@ export function fetchAssetsFromOccurrences(
           lastModified: check.lastModified,
           vary: check.vary,
           cacheReason: check.cacheReason,
+          naturalWidth: check.naturalWidth,
+          naturalHeight: check.naturalHeight,
+          animated: check.animated,
         })),
       },
       scripts: resourceResults.scripts.map((fetch) => ({

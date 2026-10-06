@@ -13,6 +13,10 @@ export const RESOURCE_SIZE_LIMITS = {
   CHECK_TIMEOUT_MS: 10000,
   RETRY_DELAY_MS: 1000,
   MAX_RETRIES: 2,
+  // #470: the image pool reads this much of each same-site image to parse its
+  // natural dimensions, in one ranged GET instead of a HEAD. 500 images x 32 KiB
+  // bounds the extra transfer at about 16 MB an audit.
+  IMAGE_HEADER_BYTES: 32 * 1024,
 } as const;
 
 // Sub-resource compression thresholds (#9). Compression helps from ~1KB up, but

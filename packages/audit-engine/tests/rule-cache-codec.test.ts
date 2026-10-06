@@ -248,6 +248,39 @@ describe("run context", () => {
     expect(await hashOf({ siteData: siteData(undefined) })).toBe(unknown);
   });
 
+  // pub#470: images/responsive-size measures an image in pixels once its header
+  // was read, so a new natural size or animation flag on the same bytes must
+  // not replay the old verdict. A transport field (`cacheReason`) still must not
+  // move the key, or every warm run would miss.
+  test("moves with an image's natural size and animation, not with how it was fetched", async () => {
+    const withImage = (fields: Record<string, unknown>) =>
+      ({
+        ...(base.siteData as object),
+        resourceSizes: {
+          css: [],
+          images: [
+            {
+              url: "http://x.test/a.jpg",
+              sizeBytes: 20_480,
+              naturalWidth: 1200,
+              naturalHeight: 1200,
+              animated: false,
+              cacheReason: null,
+              ...fields,
+            },
+          ],
+        },
+      }) as never;
+    const measured = await hashOf({ siteData: withImage({}) });
+    const moved = await Promise.all([
+      hashOf({ siteData: withImage({ naturalWidth: 64 }) }),
+      hashOf({ siteData: withImage({ naturalHeight: null }) }),
+      hashOf({ siteData: withImage({ animated: true }) }),
+    ]);
+    for (const hash of moved) expect(hash).not.toBe(measured);
+    expect(await hashOf({ siteData: withImage({ cacheReason: "304" }) })).toBe(measured);
+  });
+
   // Fail CLOSED: a run context holding something that is not plain data must not
   // hash to a value it shares with a different one.
   test("refuses to hash a live handle", async () => {
