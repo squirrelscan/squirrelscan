@@ -9,7 +9,7 @@ runtime dependency closure of `apps/cli`.
 | Package | License | Source |
 | --- | --- | --- |
 | `@hono/node-server@2.0.11` | MIT | [source](https://github.com/honojs/node-server) |
-| `@modelcontextprotocol/sdk@1.29.0` | MIT | [source](https://github.com/modelcontextprotocol/typescript-sdk) |
+| `@modelcontextprotocol/sdk@1.32.1` | MIT | [source](https://github.com/modelcontextprotocol/typescript-sdk) |
 | `@nodable/entities@3.0.0` | MIT | [source](https://github.com/nodable/val-parsers) |
 | `@sinclair/typebox@0.34.52` | MIT | [source](https://github.com/sinclairzx81/sinclair-typebox) |
 | `@standard-schema/spec@1.1.0` | MIT | [source](https://github.com/standard-schema/standard-schema) |
@@ -1807,7 +1807,7 @@ Packages: `bytes@3.1.2`
 
 ### LICENSE (8694aa57bec3)
 
-Packages: `@modelcontextprotocol/sdk@1.29.0`
+Packages: `@modelcontextprotocol/sdk@1.32.1`
 
     MIT License
 
