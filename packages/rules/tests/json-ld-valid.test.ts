@@ -77,9 +77,8 @@ describe("image accepts a URL, an ImageObject, or an array of either", () => {
         publisher: { "@type": "Organization", name: "P" },
       })
     );
-    // publisher.logo is a separate, genuine finding on the repro page.
-    expect(itemIds(check)).toEqual(["Article:publisher.logo"]);
-    expect(check.message).toBe("Schema.org validation errors detected");
+    // The page also lacks publisher.logo, which #469 stopped requiring.
+    expect(check.status).toBe("pass");
   });
 
   const accepted: Array<[string, unknown]> = [
@@ -287,13 +286,9 @@ describe("bare @id references resolve against the page's JSON-LD", () => {
         : node
     );
     const check = await run(html({ "@context": "https://schema.org", "@graph": graph }));
-    // Article.publisher points at the identity, which has neither a name nor a
-    // logo; the Organization node itself is missing its name.
-    expect(itemIds(check).sort()).toEqual([
-      "Article:publisher.logo",
-      "Article:publisher.name",
-      "Organization:name",
-    ]);
+    // Article.publisher points at the identity, which has no name; the
+    // Organization node itself is missing its name too.
+    expect(itemIds(check).sort()).toEqual(["Article:publisher.name", "Organization:name"]);
   });
 
   test("a reference to a node not on the page is checked as written", async () => {
@@ -303,31 +298,20 @@ describe("bare @id references resolve against the page's JSON-LD", () => {
         publisher: { "@id": "https://elsewhere.example/#org" },
       })
     );
-    expect(itemIds(check).sort()).toEqual(["Article:publisher.logo", "Article:publisher.name"]);
+    expect(itemIds(check)).toEqual(["Article:publisher.name"]);
   });
 
   test("every description of an @id counts, whatever the order", async () => {
-    const withLogo = {
-      "@id": "#org",
-      "@type": "Organization",
-      name: "P",
-      url: "https://example.com/",
-      logo: "https://example.com/logo.png",
-    };
-    const withoutLogo = {
-      "@id": "#org",
-      "@type": "Organization",
-      name: "P",
-      url: "https://example.com/",
-    };
+    const named = { "@id": "#a", "@type": "Person", name: "A" };
+    const unnamed = { "@id": "#a", "@type": "Person", url: "https://example.com/a" };
     const post = {
       ...article("https://example.com/a.png"),
       "@context": undefined,
-      publisher: { "@id": "#org" },
+      author: { "@id": "#a" },
     };
     for (const graph of [
-      [post, withLogo, withoutLogo],
-      [post, withoutLogo, withLogo],
+      [post, named, unnamed],
+      [post, unnamed, named],
     ]) {
       const check = await run(html({ "@context": "https://schema.org", "@graph": graph }));
       expect(check.status).toBe("pass");
@@ -467,5 +451,227 @@ describe("parsed data stored by an older release", () => {
       })
     );
     expect(rehydrated.checks[0]?.items?.map((i) => i.id)).toEqual(["Article:image"]);
+  });
+});
+
+// #469: single values where an array is usual, AggregateOffer, an optional
+// publisher, untyped @graph nodes, and the BreadcrumbList / FAQPage entry
+// checks that never ran.
+describe("the validator follows schema.org and Google, not a stricter reading (#469)", () => {
+  const recipe = (extra: Record<string, unknown>) => ({
+    "@context": "https://schema.org",
+    "@type": "Recipe",
+    name: "Soup",
+    image: "https://example.com/soup.png",
+    recipeIngredient: ["water"],
+    recipeInstructions: ["boil"],
+    ...extra,
+  });
+
+  const recipeAccepted: Array<[string, Record<string, unknown>]> = [
+    ["a single ingredient string", { recipeIngredient: "1 cup water" }],
+    ["a single instruction string", { recipeInstructions: "Boil the water." }],
+    ["one HowToStep", { recipeInstructions: { "@type": "HowToStep", text: "Boil." } }],
+    [
+      "a list of HowToSteps",
+      {
+        recipeInstructions: [
+          { "@type": "HowToStep", text: "Boil." },
+          { "@type": "HowToStep", text: "Serve." },
+        ],
+      },
+    ],
+  ];
+  for (const [label, extra] of recipeAccepted) {
+    test(`Recipe: ${label} passes`, async () => {
+      expect((await run(html(recipe(extra)))).status).toBe("pass");
+    });
+  }
+
+  test("Recipe: instructions given as a number are still invalid", async () => {
+    const check = await run(html(recipe({ recipeInstructions: 3 })));
+    expect(itemIds(check)).toEqual(["Recipe:recipeInstructions"]);
+    expect(check.items?.[0]?.meta?.message).toBe(
+      "Validation: Recipe.recipeInstructions must be text, an object, or an array of either"
+    );
+  });
+
+  const faq = (mainEntity: unknown) => ({
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity,
+  });
+  const question = (extra: Record<string, unknown> = {}) => ({
+    "@type": "Question",
+    name: "Does it ship abroad?",
+    acceptedAnswer: { "@type": "Answer", text: "Yes." },
+    ...extra,
+  });
+
+  test("FAQPage: a single Question passes", async () => {
+    expect((await run(html(faq(question())))).status).toBe("pass");
+  });
+
+  test("FAQPage: a Question without an answer is reported", async () => {
+    const check = await run(html(faq([question(), question({ acceptedAnswer: undefined })])));
+    expect(itemIds(check)).toEqual(["FAQPage:mainEntity.acceptedAnswer"]);
+  });
+
+  const crumb = (position: number, extra: Record<string, unknown> = {}) => ({
+    "@type": "ListItem",
+    position,
+    name: `Crumb ${position}`,
+    item: `https://example.com/${position}`,
+    ...extra,
+  });
+  const breadcrumbs = (itemListElement: unknown) => ({
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement,
+  });
+
+  test("BreadcrumbList: the last crumb needs no item", async () => {
+    const check = await run(html(breadcrumbs([crumb(1), crumb(2), crumb(3, { item: undefined })])));
+    expect(check.status).toBe("pass");
+  });
+
+  test("BreadcrumbList: a single crumb is the last one", async () => {
+    expect((await run(html(breadcrumbs(crumb(1, { item: undefined }))))).status).toBe("pass");
+  });
+
+  test("BreadcrumbList: the highest position is the last crumb, in any written order", async () => {
+    const check = await run(html(breadcrumbs([crumb(3, { item: undefined }), crumb(1), crumb(2)])));
+    expect(check.status).toBe("pass");
+  });
+
+  test("BreadcrumbList: written last is not last when positions say otherwise", async () => {
+    const check = await run(
+      html(breadcrumbs([crumb(2, { item: undefined }), crumb(1, { item: undefined })]))
+    );
+    // Position 1 is the first crumb, wherever it is written, so it needs an item.
+    expect(itemIds(check)).toEqual(["BreadcrumbList:itemListElement.item"]);
+  });
+
+  test("BreadcrumbList: crumbs given by @id reference take their position and name from the graph", async () => {
+    const check = await run(
+      html({
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "BreadcrumbList",
+            itemListElement: [{ "@id": "#second" }, { "@id": "#first" }],
+          },
+          { "@id": "#first", "@type": "ListItem", position: 1, item: { "@id": "#home" } },
+          { "@id": "#second", "@type": "ListItem", position: 2, name: "This page" },
+          { "@id": "#home", name: "Home" },
+        ],
+      })
+    );
+    expect(check.status).toBe("pass");
+  });
+
+  test("malformed values do not throw", async () => {
+    const odd = await run(
+      html(
+        breadcrumbs([
+          crumb(1, { position: { toString: "1" } }),
+          crumb(2, { position: "2" }),
+        ]),
+        product({ "@type": "constructor", price: "1", priceCurrency: "USD", availability: "x" })
+      )
+    );
+    expect(odd.status).toBe("pass");
+  });
+
+  test("BreadcrumbList: a crumb before the last without an item is reported", async () => {
+    const check = await run(html(breadcrumbs([crumb(1), crumb(2, { item: undefined }), crumb(3)])));
+    expect(itemIds(check)).toEqual(["BreadcrumbList:itemListElement.item"]);
+  });
+
+  test("BreadcrumbList: a crumb named on its item node passes, an unnamed one does not", async () => {
+    const onItem = crumb(1, {
+      name: undefined,
+      item: { "@id": "https://example.com/1", name: "Home" },
+    });
+    expect((await run(html(breadcrumbs([onItem, crumb(2)])))).status).toBe("pass");
+
+    const unnamed = crumb(1, { name: undefined });
+    const check = await run(html(breadcrumbs([unnamed, crumb(2)])));
+    expect(itemIds(check)).toEqual(["BreadcrumbList:itemListElement.name"]);
+  });
+
+  const product = (offers: unknown) => ({
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: "Widget",
+    image: "https://example.com/w.png",
+    offers,
+  });
+
+  test("Product: an AggregateOffer with lowPrice and priceCurrency passes", async () => {
+    const check = await run(
+      html(
+        product({ "@type": "AggregateOffer", lowPrice: "10", highPrice: "20", priceCurrency: "USD" })
+      )
+    );
+    expect(check.status).toBe("pass");
+  });
+
+  test("Product: an AggregateOffer without lowPrice, and an Offer without price, are reported", async () => {
+    const aggregate = await run(
+      html(product({ "@type": "AggregateOffer", highPrice: "20", priceCurrency: "USD" }))
+    );
+    expect(itemIds(aggregate)).toEqual(["Product:offers.lowPrice"]);
+
+    const offer = await run(
+      html(
+        product({
+          "@type": "Offer",
+          priceCurrency: "USD",
+          availability: "https://schema.org/InStock",
+        })
+      )
+    );
+    expect(itemIds(offer)).toEqual(["Product:offers.price"]);
+  });
+
+  test("Article: no publisher, or a Person publisher with no logo, passes", async () => {
+    const { publisher: _omitted, ...withoutPublisher } = article("https://example.com/a.png");
+    expect((await run(html(withoutPublisher))).status).toBe("pass");
+
+    const personPublisher = {
+      ...article("https://example.com/a.png"),
+      publisher: { "@type": "Person", name: "Jo Writer" },
+    };
+    expect((await run(html(personPublisher))).status).toBe("pass");
+  });
+
+  test("Article: a publisher given without a name is still reported", async () => {
+    const check = await run(
+      html({ ...article("https://example.com/a.png"), publisher: { "@type": "Organization" } })
+    );
+    expect(itemIds(check)).toEqual(["Article:publisher.name"]);
+  });
+
+  test("a reference to an untyped top-level @graph node resolves", async () => {
+    const post = {
+      ...article("https://example.com/a.png"),
+      "@context": undefined,
+      author: { "@id": "#p" },
+    };
+    const inGraph = await run(
+      html({ "@context": "https://schema.org", "@graph": [post, { "@id": "#p", name: "A" }] })
+    );
+    expect(inGraph.status).toBe("pass");
+
+    // The same node in its own script block.
+    const separate = await run(
+      html({ ...post, "@context": "https://schema.org" }, { "@id": "#p", name: "A" })
+    );
+    expect(separate.status).toBe("pass");
+
+    // Without the node, the reference is checked as written.
+    const missing = await run(html({ ...post, "@context": "https://schema.org" }));
+    expect(itemIds(missing)).toEqual(["Article:author.name"]);
   });
 });

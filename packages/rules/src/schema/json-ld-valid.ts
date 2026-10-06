@@ -54,7 +54,7 @@ export const jsonLdValidRule: Rule = {
     const parsedSchemas = Array.isArray(schemas.all) ? schemas.all : [];
     const validationIssues =
       parsedSchemas.length > 0
-        ? validateSchemas(parsedSchemas)
+        ? validateSchemas(parsedSchemas, schemas.untypedNodes ?? [])
         : (schemas.validationIssues ?? []);
     const parseErrors = (schema.errors ?? []).filter(
       (error) => !error.startsWith(VALIDATION_MESSAGE_PREFIX),

@@ -13,6 +13,7 @@ import { validateSchemas } from "./validator";
 export function parseSchemas(doc: Document): SchemaCollection {
   const scripts = doc.querySelectorAll('script[type="application/ld+json"]');
   const schemas: ParsedSchema[] = [];
+  const untypedNodes: Record<string, unknown>[] = [];
   const errors: string[] = [];
   const rawParts: string[] = [];
 
@@ -30,13 +31,13 @@ export function parseSchemas(doc: Document): SchemaCollection {
         .replace(/<!--[\s\S]*?-->/g, ""); // Remove HTML comments
 
       const json = JSON.parse(cleaned);
-      extractSchemas(json, schemas);
+      extractSchemas(json, schemas, untypedNodes);
     } catch (e) {
       errors.push(`Invalid JSON-LD: ${(e as Error).message}`);
     }
   }
 
-  const validationIssues = validateSchemas(schemas);
+  const validationIssues = validateSchemas(schemas, untypedNodes);
   const validationErrors = validationIssues.map((issue) => issue.message);
   const allErrors = [...errors, ...validationErrors];
 
@@ -44,7 +45,8 @@ export function parseSchemas(doc: Document): SchemaCollection {
     schemas,
     allErrors,
     rawParts.length > 0 ? rawParts.join("\n\n") : null,
-    validationIssues
+    validationIssues,
+    untypedNodes
   );
 }
 
@@ -52,18 +54,21 @@ export function parseSchemas(doc: Document): SchemaCollection {
  * Recursively extract schemas from parsed JSON
  * @param obj - The JSON object to extract schemas from
  * @param schemas - Array to collect extracted schemas
+ * @param untypedNodes - Top-level nodes with an `@id` but no `@type`, kept so a
+ *   reference to one resolves during validation (#469)
  * @param parentContext - @context from parent object (for @graph inheritance)
  */
 function extractSchemas(
   obj: unknown,
   schemas: ParsedSchema[],
+  untypedNodes: Record<string, unknown>[],
   parentContext?: unknown
 ): void {
   if (!obj || typeof obj !== "object") return;
 
   if (Array.isArray(obj)) {
     for (const item of obj) {
-      extractSchemas(item, schemas, parentContext);
+      extractSchemas(item, schemas, untypedNodes, parentContext);
     }
     return;
   }
@@ -74,7 +79,7 @@ function extractSchemas(
   if (record["@graph"] && Array.isArray(record["@graph"])) {
     const graphContext = record["@context"] ?? parentContext;
     for (const item of record["@graph"]) {
-      extractSchemas(item, schemas, graphContext);
+      extractSchemas(item, schemas, untypedNodes, graphContext);
     }
     return;
   }
@@ -85,6 +90,9 @@ function extractSchemas(
     if (normalized) {
       schemas.push(normalized);
     }
+  } else if (typeof record["@id"] === "string" && Object.keys(record).length > 1) {
+    // A bare `{"@id"}` describes nothing, so it is not kept.
+    untypedNodes.push(record);
   }
 }
 

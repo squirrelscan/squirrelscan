@@ -27,6 +27,7 @@ export class SchemaCollection {
   private _validationErrors: string[];
   private _validationIssues: SchemaValidationIssue[];
   private _raw: string | null;
+  private _untypedNodes: Record<string, unknown>[];
 
   // Cached typed schemas (lazy)
   private _article: ArticleSchema | null | undefined;
@@ -45,9 +46,11 @@ export class SchemaCollection {
     schemas: ParsedSchema[],
     errors: string[],
     raw: string | null,
-    validationIssues: SchemaValidationIssue[] = []
+    validationIssues: SchemaValidationIssue[] = [],
+    untypedNodes: Record<string, unknown>[] = []
   ) {
     this._schemas = schemas;
+    this._untypedNodes = untypedNodes;
     this._errors = errors;
     this._validationIssues = validationIssues;
     this._validationErrors = validationIssues.map((issue) => issue.message);
@@ -59,6 +62,14 @@ export class SchemaCollection {
    */
   get all(): ParsedSchema[] {
     return this._schemas;
+  }
+
+  /**
+   * Top-level JSON-LD nodes with an `@id` and no `@type` (#469). Not schemas, so
+   * not in {@link all}, but a `{"@id"}` reference elsewhere may point at one.
+   */
+  get untypedNodes(): Record<string, unknown>[] {
+    return this._untypedNodes;
   }
 
   /**
@@ -308,7 +319,9 @@ export function schemaCollectionFromJSON(data: unknown): SchemaCollection {
     (obj._raw ?? obj.raw ?? null) as string | null,
     (obj._validationIssues ??
       obj.validationIssues ??
-      []) as SchemaValidationIssue[]
+      []) as SchemaValidationIssue[],
+    // Absent on a page parsed before #469: such a page validates as it did.
+    (obj._untypedNodes ?? obj.untypedNodes ?? []) as Record<string, unknown>[]
   );
 }
 
