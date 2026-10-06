@@ -215,7 +215,7 @@ min_internal_links = 5  # Heavy cross-referencing
 density_threshold = 5  # Percent; technical terms repeat
 
 [rule_options."links/orphan-pages"]
-excludePatterns = ["/api/deprecated/**"]
+excludePatterns = ["/api/deprecated/"]
 ```
 
 **Why this works:**
@@ -846,7 +846,7 @@ poor_threshold = 1000
 excludePatterns = [
   "/404",
   "/500",
-  "/.well-known/**"
+  "/.well-known/"
 ]
 ```
 

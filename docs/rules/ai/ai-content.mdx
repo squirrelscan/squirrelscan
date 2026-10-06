@@ -17,7 +17,7 @@ Nothing. The rule is retired and hard-guarded so that it can never call a model.
 
 - `ai-content`, skipped with the message `AI content detection is retired` and the skip reason `Retired pending a metered opt-in endpoint`. This is the only result the rule can produce.
 
-The rule is also marked disabled in its metadata, so it does not run unless it is explicitly enabled, and enabling it produces the same skip. Re-enabling detection for real requires a metered server endpoint and an opt-in before any model call.
+The rule is also marked disabled in its metadata, and the rule loader drops it before any `enable` or `disable` setting is read, so in this release it does not run at all and no configuration turns it on. Re-enabling detection for real requires a metered server endpoint and an opt-in before any model call.
 
 ## How to fix it
 
@@ -32,23 +32,11 @@ If you want the checks that do read the content with a model, [ai/llm-parsabilit
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 2/10 |
-| **Default** | Disabled |
+| **Default** | Retired (never runs) |
 
 ## Enable / disable
 
-### Enable this rule
-
-```toml squirrel.toml
-[rules]
-enable = ["ai/ai-content"]
-```
-
-### Disable this rule
-
-```toml squirrel.toml
-[rules]
-disable = ["ai/ai-content"]
-```
+There is nothing to enable or disable: the rule never loads, so `enable` and `disable` entries for `ai/ai-content` do nothing and can be removed from your config.
 
 ### Enable all AI rules
 
@@ -61,7 +49,7 @@ enable = ["ai/*"]
 
 - [ai/llm-parsability](/rules/ai/llm-parsability): how well a model can extract the page's facts, which does run.
 - [ai/page-type-match](/rules/ai/page-type-match): the classified page type against the declared structured data.
-- [content/quality](/rules/content/quality): the content quality analysis that runs on a cloud audit.
+- [content/quality](/rules/content/quality): the LLM content quality score, also retired in this release.
 - [content/placeholder-text](/rules/content/placeholder-text): unedited template text, which is a defect a rule can establish from evidence.
 
 Agent experience findings ship in every audit next to the SEO, performance and security rules. See [Generative engine optimization](https://squirrelscan.com/learn/generative-engine-optimization) for how an agent works through a report.
