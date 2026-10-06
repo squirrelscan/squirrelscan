@@ -16,7 +16,7 @@
     "format:check": "oxfmt src/ tests/ --check"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "@sinclair/typebox": "^0.34.49",
     "@squirrelscan/api-client": "workspace:*",
     "@squirrelscan/audit-engine": "workspace:*",
