@@ -24,7 +24,7 @@ Arrives when an audit of the website finishes and its report reaches the cloud. 
 
 A scheduled run normally sends the [digest](#scheduled-audit-digest) instead, so you get one email about a run, not two.
 
-**How to stop it:** turn off **Settings → Alerts** for that website, or **Account alerts** in **Settings → Email** for every website.
+**How to stop it:** turn off **Settings → Alerts** for that website (the email's **Alert settings for this website** link opens it), or **Account alerts** in **Settings → Email** for every website (linked from the email's footer, and the email's [one-click unsubscribe](#email-settings-and-unsubscribing) does the same).
 
 ### Audit failed
 
@@ -32,7 +32,7 @@ Arrives when an audit run for the website ends in failure, with the reason and w
 
 The reason names the cause the crawl hit, and the email carries the next step for that cause. See [failed audits](/guides/failed-audits) for every reason and what to do about it.
 
-**How to stop it:** the same **Settings → Alerts** toggle, or **Account alerts** in **Settings → Email**.
+**How to stop it:** the same **Settings → Alerts** toggle, or **Account alerts** in **Settings → Email**, which the email's footer links to. Its [one-click unsubscribe](#email-settings-and-unsubscribing) switches off **Account alerts** too.
 
 ### Scheduled-audit digest
 
@@ -48,7 +48,7 @@ Every variant carries the health score, a link to the full report, and a link th
 
 Two cases send the ordinary audit email instead. A scheduled run that fails sends the failure email, and a run whose comparison cannot be built falls back to the completion email rather than guessing at what changed.
 
-**How to stop it:** the pause link in the email, the **Settings → Alerts** toggle, setting the website's schedule to **Disabled**, or **Scheduled audit digests** in **Settings → Email**. With digests switched off there, a scheduled run sends no completion email in their place: the audits keep running and their results stay in the dashboard.
+**How to stop it:** the pause link in the email, the **Settings → Alerts** toggle, setting the website's schedule to **Disabled**, or **Scheduled audit digests** in **Settings → Email**, which the email's [one-click unsubscribe](#email-settings-and-unsubscribing) switches off for you. With digests switched off there, a scheduled run sends no completion email in their place: the audits keep running and their results stay in the dashboard.
 
 ## Account-level emails
 
@@ -63,7 +63,7 @@ Sent when a website's schedule stops on its own. There are two reasons, and the 
 
 It goes to your account address, because a recurring service that spends credits switching itself off is account news. The email is throttled to roughly one per organization in any rolling 24 hours: if several sites pause around the same time, the rest still pause and still appear in the dashboard bell without each sending mail.
 
-**How to stop it:** switch off **Account alerts** in **Settings → Email**. It also only arrives when a schedule pauses itself, so turning the website's schedule off means it never fires. The per-website **Settings → Alerts** toggle does not suppress it.
+**How to stop it:** switch off **Account alerts** in **Settings → Email**, which the email's footer links to, or use its [one-click unsubscribe](#email-settings-and-unsubscribing). It also only arrives when a schedule pauses itself, so turning the website's schedule off means it never fires. The per-website **Settings → Alerts** toggle does not suppress it.
 
 ### Low credits
 
@@ -107,6 +107,10 @@ Several notification types never email at all and are in-app only, including iss
 Billing emails, sign-in and security emails, and replies to your support requests are not on the list. They arrive whatever the switches say.
 
 Every product news email carries an unsubscribe link, which switches off **Product news** and nothing else. The link asks you to confirm first, because mail scanners open every link in an email and must not unsubscribe anyone by doing so. If you subscribed to updates without an account, the link takes your address off the mailing list instead.
+
+Digest and alert emails carry a one-click unsubscribe as well, the **Unsubscribe** button your mail app shows next to the sender. It switches off only the switch that email belongs to: **Scheduled audit digests** for a digest, **Account alerts** for audit complete, audit failed, recurring audits paused, low credits and credits added. Product news and the other switches stay as they are, and you can turn it back on in **Settings → Email**. The audit and paused-schedule emails also link to **Settings → Email** from their footer.
+
+The one-click unsubscribe is only on mail sent to your account's own address. Mail that goes to a website's own alert address follows that website's **Settings → Alerts** toggle instead, so turn it off there.
 
 A hard bounce or a spam complaint stops all email to an address, whatever the switches say, and **Settings → Email** shows when that has happened. Once the mailbox works again, contact [support](/dashboard/support) and we will switch it back on.
 
