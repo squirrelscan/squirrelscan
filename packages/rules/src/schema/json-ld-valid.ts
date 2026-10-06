@@ -1,6 +1,12 @@
 // schema/json-ld-valid - Validates JSON-LD structured data
 
+import { validateSchemas } from "@squirrelscan/parser";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
+// `schema.errors` carries the validator's messages after the JSON parse
+// errors; they are reported once, as validation items.
+const VALIDATION_MESSAGE_PREFIX = "Validation:";
 
 export const jsonLdValidRule: Rule = {
   meta: {
@@ -40,14 +46,21 @@ export const jsonLdValidRule: Rule = {
       return { checks };
     }
 
-    const validationIssues = schemas.validationIssues ?? [];
-    const parseErrors = schema.errors ?? [];
+    // Validated here rather than read from `schemas.validationIssues`: those
+    // were computed when the page was crawled, and a page reused from the crawl
+    // cache (304, hash match) keeps the stored verdicts of the release that
+    // first fetched it. The stored issues are the fallback when the parsed
+    // schemas themselves were not kept (rehydration then yields an empty list).
+    const parsedSchemas = Array.isArray(schemas.all) ? schemas.all : [];
+    const validationIssues =
+      parsedSchemas.length > 0
+        ? validateSchemas(parsedSchemas)
+        : (schemas.validationIssues ?? []);
+    const parseErrors = (schema.errors ?? []).filter(
+      (error) => !error.startsWith(VALIDATION_MESSAGE_PREFIX),
+    );
 
-    if (
-      !schemas.valid ||
-      parseErrors.length > 0 ||
-      validationIssues.length > 0
-    ) {
+    if (parseErrors.length > 0 || validationIssues.length > 0) {
       const failureMessage =
         parseErrors.length > 0
           ? "Invalid JSON-LD syntax"
@@ -60,7 +73,10 @@ export const jsonLdValidRule: Rule = {
         })),
         ...validationIssues.map((issue) => ({
           id: `${issue.type}:${issue.property}`,
-          label: `${issue.type} missing ${issue.property}`,
+          label:
+            issue.severity === "invalid"
+              ? `${issue.type} has an invalid ${issue.property}`
+              : `${issue.type} missing ${issue.property}`,
           meta: {
             message: issue.message,
             severity: issue.severity,
