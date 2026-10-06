@@ -1,6 +1,12 @@
 // a11y/aria-dialog-name - Dialog elements have accessible names
 
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
+import { fieldSnippet } from "../shared/form-fields";
+
+// Classes kept in an id-less dialog's descriptor: enough to tell a page's
+// drawers and popups apart without echoing a utility-class soup.
+const MAX_DESCRIPTOR_CLASSES = 3;
 
 function hasAccessibleName(el: Element, doc: Document): boolean {
   if (el.getAttribute("aria-label")?.trim()) return true;
@@ -13,6 +19,54 @@ function hasAccessibleName(el: Element, doc: Document): boolean {
     }
   }
   return false;
+}
+
+/**
+ * A selector-like handle for an unnamed dialog, in the a11y rules' `tag#id` /
+ * `tag.class` style. `withId` is the form used when the element has an id
+ * (kept as it was, so those items read the same as before); `withoutId` is
+ * the base the classes are appended to.
+ */
+function describeDialog(el: Element, withId: string, withoutId: string): string {
+  const id = el.getAttribute("id");
+  if (id) return `${withId}#${id}`;
+  const classes = (el.getAttribute("class") || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, MAX_DESCRIPTOR_CLASSES);
+  return withoutId + classes.map((cls) => `.${cls}`).join("");
+}
+
+/**
+ * One item per unnamed dialog, with its start tag as the snippet. The item id
+ * is the finding's identity across rescans, so it depends only on the markup:
+ * a descriptor two dialogs share gets an ordinal from the second one on, in
+ * document order, counted over EVERY dialog of the kind, named or not. Naming
+ * one drawer then leaves the other drawers' ids alone. An ordinal that would
+ * repeat an id already given out is skipped.
+ */
+function unnamedDialogItems(
+  dialogs: Iterable<Element>,
+  describe: (el: Element) => string,
+  isNamed: (el: Element) => boolean
+): CheckItem[] {
+  const seen = new Map<string, number>();
+  const used = new Set<string>();
+  const items: CheckItem[] = [];
+  for (const el of dialogs) {
+    const descriptor = describe(el);
+    let count = seen.get(descriptor) ?? 0;
+    let id: string;
+    do {
+      count++;
+      id = count === 1 ? descriptor : `${descriptor} (${count})`;
+    } while (used.has(id));
+    seen.set(descriptor, count);
+    used.add(id);
+    if (!isNamed(el)) items.push({ id, snippet: fieldSnippet(el) });
+  }
+  return items;
 }
 
 export const ariaDialogNameRule: Rule = {
@@ -54,22 +108,24 @@ export const ariaDialogNameRule: Rule = {
       return { checks };
     }
 
+    const isNamed = (el: Element) => hasAccessibleName(el, doc);
+
     // Check ARIA dialogs — fail if unnamed
-    const unnamed: string[] = [];
-    for (const dialog of ariaDialogs) {
-      if (!hasAccessibleName(dialog, doc)) {
+    const unnamed = unnamedDialogItems(
+      ariaDialogs,
+      (dialog) => {
         const role = dialog.getAttribute("role") || "dialog";
-        const id = dialog.getAttribute("id");
-        unnamed.push(id ? `${role}#${id}` : role);
-      }
-    }
+        return describeDialog(dialog, role, `${dialog.tagName.toLowerCase()}[role="${role}"]`);
+      },
+      isNamed
+    );
 
     if (unnamed.length > 0) {
       checks.push({
         name: "aria-dialog-name",
         status: "fail",
         message: `${unnamed.length} ARIA dialog(s) without accessible names`,
-        items: unnamed.slice(0, 10).map((id) => ({ id })),
+        items: unnamed.slice(0, 10),
         details:
           unnamed.length > 10 ? { additional: unnamed.length - 10 } : undefined,
       });
@@ -83,20 +139,18 @@ export const ariaDialogNameRule: Rule = {
     }
 
     // Check native <dialog> — warn if unnamed (browser provides implicit role)
-    const unnamedNative: string[] = [];
-    for (const dialog of nativeDialogs) {
-      if (!hasAccessibleName(dialog, doc)) {
-        const id = dialog.getAttribute("id");
-        unnamedNative.push(id ? `dialog#${id}` : "dialog");
-      }
-    }
+    const unnamedNative = unnamedDialogItems(
+      nativeDialogs,
+      (dialog) => describeDialog(dialog, "dialog", "dialog"),
+      isNamed
+    );
 
     if (unnamedNative.length > 0) {
       checks.push({
         name: "dialog-name",
         status: "warn",
         message: `${unnamedNative.length} native <dialog>(s) without accessible names`,
-        items: unnamedNative.slice(0, 10).map((id) => ({ id })),
+        items: unnamedNative.slice(0, 10),
         details:
           unnamedNative.length > 10
             ? { additional: unnamedNative.length - 10 }
