@@ -63,7 +63,7 @@ Actionable asks whether an agent can go beyond reading and transact: call an API
   <Card title="Text to HTML ratio: the token cost of a page for an agent" icon="gauge" href="/rules/ax/token-weight">
     Visible text under 15% of the HTML, or a page over a 100,000-token budget. squirrel estimates both from the raw response.
   </Card>
-  <Card title="Accept: text/markdown: serving Markdown to AI agents" icon="markdown" href="/rules/ax/markdown-response">
+  <Card title="Accept: text/markdown: serving Markdown to AI agents" icon="file-code" href="/rules/ax/markdown-response">
     No Markdown representation of a page, through content negotiation, a .md variant, or a link rel=alternate header. squirrel probes all three.
   </Card>
   <Card title="AI crawlers in robots.txt: which bots you block, by class" icon="robot" href="/rules/ax/ai-crawlers">
@@ -87,7 +87,7 @@ Actionable asks whether an agent can go beyond reading and transact: call an API
   <Card title="noai and nosnippet: the AI opt-out tags squirrel reports" icon="eye-slash" href="/rules/ax/noai-signals">
     Which pages declare noai, noimageai, nosnippet or max-snippet:0, and where the directive came from. squirrel reports, and never penalises.
   </Card>
-  <Card title="robots.txt License: directive and RSL document validation" icon="file-contract" href="/rules/ax/rsl-license">
+  <Card title="robots.txt License: directive and RSL document validation" icon="file-signature" href="/rules/ax/rsl-license">
     A License: reference in robots.txt pointing at a document that does not resolve as valid RSL. squirrel fetches it and checks.
   </Card>
   <Card title="api-catalog and OpenAPI: how an agent finds your API" icon="diagram-project" href="/rules/ax/api-discovery">
