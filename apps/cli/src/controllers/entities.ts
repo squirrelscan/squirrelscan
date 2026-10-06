@@ -24,6 +24,7 @@ import { existsSync, readFileSync } from "node:fs";
 
 import type { CrawlMetadata } from "@/crawler/storage/types";
 
+import { entityMapSite } from "@/audit/entity-map";
 import { getProjectStoragePaths } from "@/controllers/report";
 import {
   type Result,
@@ -78,13 +79,13 @@ function compareStrings(a: string, b: string): number {
  *
  * The store is relational on purpose (#2091) so a query can ask "which pages
  * declare this entity" without parsing a blob, which means the document has to
- * be reassembled here. Three fields are approximations, and a caller that needs
+ * be reassembled here. Two fields are approximations, and a caller that needs
  * them exactly should read the audit's own `-f json` report rather than this:
  *
- * - An edge's `pages` and a page's `references` are not stored, because nothing
- *   queries them. They come back EMPTY rather than invented. Nothing in the
- *   diff reads them; it derives an edge's evidence from its source entity's
- *   declaring pages, which are stored in full.
+ * - A page's `references` are not stored, because nothing queries them. They
+ *   come back EMPTY rather than invented. (An edge's `pages` ARE stored since
+ *   #492, as the document's capped list; an edge written before that comes
+ *   back empty for the same reason.)
  * - A page's `entityCount` counts DECLARATIONS in the original document, and
  *   what survives the store is the set of distinct keys. The two differ only
  *   when one page declares the same entity twice, so this is a lower bound that
@@ -117,6 +118,8 @@ function reassembleMap(
       target: string;
       dangling: boolean;
       occurrences: number;
+      pages: string[] | null;
+      morePages: number;
     }>;
     occurrences: Array<{ key: string; normalizedUrl: string }>;
   },
@@ -173,10 +176,10 @@ function reassembleMap(
     target: row.target,
     dangling: row.dangling,
     occurrences: row.occurrences,
-    // Not stored: no query needs them, and an empty list is honest about this
-    // copy rather than a guess about the crawl.
-    pages: [],
-    morePages: 0,
+    // Null on a row written before the store kept them: empty is honest about
+    // this copy rather than a guess about the crawl.
+    pages: row.pages ?? [],
+    morePages: row.morePages,
   }));
 
   const pages: EntityMapPage[] = pageUrls.sort(compareStrings).map((url) => {
@@ -184,7 +187,7 @@ function reassembleMap(
     return {
       url,
       declares,
-      // Not stored, for the same reason as an edge's pages.
+      // Not stored: nothing queries them.
       references: [],
       // Distinct entities, not declarations: see the note above.
       entityCount: declares.length,
@@ -194,7 +197,10 @@ function reassembleMap(
   return {
     format: ENTITY_MAP_FORMAT,
     version: ENTITY_MAP_VERSION,
-    site: crawl.baseUrl,
+    // The URL the audit was run on, which is what the audit's own map carries.
+    // `baseUrl` is the crawl's origin, and a crawl written before the column
+    // existed has only that.
+    site: entityMapSite(crawl),
     // The crawl's own timestamp: the document's `generatedAt` is not stored, and
     // inventing `now` would make two reads of one crawl look like two maps.
     generatedAt: new Date(crawl.startedAt).toISOString(),

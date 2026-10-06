@@ -30,6 +30,8 @@ Entity names, `@id`s, types and property values are declared by the audited site
 }
 ```
 
+`site` is the URL the audit was run on, with the crawl's origin standing in for an audit stored before squirrelscan recorded that URL.
+
 `format` and `version` are the discriminator. Check both before reading the rest: `version` is bumped whenever a change would make an already-stored document invalid, and stored documents exist in the wild.
 
 ### `truncated`
@@ -175,6 +177,8 @@ One typed reference between two entities.
 ```
 
 `dangling: true` means no node in the map has `target` as its key: the site referenced an `@id` that nothing declares. That is the finding, not an error in the export.
+
+`pages` are the pages making the reference, capped at 50 with the rest in `morePages`, the same as a node's. A map the CLI reassembled from its store carries them too, except for an audit stored by squirrelscan 0.0.104 or earlier, which did not keep them: there `pages` is empty until the site is audited again or `squirrel analyze` re-runs over that audit.
 
 Only a fixed set of predicates produces edges:
 

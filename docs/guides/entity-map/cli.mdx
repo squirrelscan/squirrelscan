@@ -131,7 +131,7 @@ The map lives in the project database, `~/.squirrel/projects/<project>/project.d
 | Table | One row per | Notes |
 |---|---|---|
 | `entities` | Entity, per crawl | `key`, `entity_id`, `types` and `properties` as JSON, `occurrences`, `page_count`, `conflicts`, `dangling_refs`, `page_local`. |
-| `entity_edges` | Typed reference | `source`, `predicate`, `target`, `dangling`, `occurrences`. `target` is an `entities.key`; `dangling = 1` means no row has it. |
+| `entity_edges` | Typed reference | `source`, `predicate`, `target`, `dangling`, `occurrences`, and `pages` (JSON, the document's 50-page list) with `more_pages`. `target` is an `entities.key`; `dangling = 1` means no row has it. `pages` is NULL on a row stored before it was recorded. |
 | `entity_occurrences` | Entity × page | `key` and `normalized_url`. **Uncapped**, unlike the document's 50-page list. |
 
 `entity_occurrences` is the one worth knowing about. A node's `pages` array is capped at 50, so it cannot answer "every page that declares this Organization". This table can, and so can the document's own top-level `pages[].declares` index, which is not capped. What you cannot use is the node's page array.

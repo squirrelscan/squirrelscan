@@ -17,7 +17,7 @@ import {
   buildSiteContext,
   fetchResourceAssets,
 } from "@/audit/adapter";
-import { storeEntityMap } from "@/audit/entity-map";
+import { entityMapSite, storeEntityMap } from "@/audit/entity-map";
 import { loadConfig } from "@/config";
 import {
   type Result,
@@ -305,7 +305,7 @@ export async function runAnalyze(
     try {
       const collector = createEntityMapCollector();
       collector.absorb(siteContext);
-      entityMap = collector.build(baseUrl);
+      entityMap = collector.build(entityMapSite(crawl));
     } catch (error) {
       logger.warn(
         `Could not build the entity map: ${error instanceof Error ? error.message : String(error)}`

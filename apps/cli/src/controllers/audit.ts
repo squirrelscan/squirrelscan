@@ -55,7 +55,7 @@ import {
   type CloudTechDetectResult,
 } from "@/audit/cloud";
 import { gateStage1 } from "@/audit/cloud-gating";
-import { storeEntityMap } from "@/audit/entity-map";
+import { entityMapSite, storeEntityMap } from "@/audit/entity-map";
 import {
   RetentionReclaimError,
   auditMayRetire,
@@ -1655,7 +1655,12 @@ export async function runAudit(
       // the same claim as "this site declares nothing".
       let entityMap: EntityMap | undefined;
       try {
-        entityMap = entityMapCollector.build(url);
+        // The crawl's own audited URL, not this invocation's: a `--resume` of an
+        // audit started on another path of the site carries the first one, and
+        // `squirrel entities` reads the site from the crawl (#492).
+        entityMap = entityMapCollector.build(
+          crawlMeta ? entityMapSite(crawlMeta) : url
+        );
       } catch (error) {
         logger.warn(
           `Could not build the entity map: ${error instanceof Error ? error.message : String(error)}`

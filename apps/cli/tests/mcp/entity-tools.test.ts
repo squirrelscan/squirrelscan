@@ -124,6 +124,8 @@ async function fixture(name: string): Promise<EntityMap> {
 async function seed(options: {
   project: string;
   baseUrl: string;
+  /** The URL the audit was run on; the crawl records it as `originalUrl`. */
+  originalUrl?: string;
   startedAt: number;
   map: EntityMap;
   /** Overrides the map's own page list; use it to seed a narrower re-crawl. */
@@ -142,6 +144,7 @@ async function seed(options: {
     const crawlId = await Effect.runPromise(
       storage.createCrawl({
         baseUrl: options.baseUrl,
+        ...(options.originalUrl ? { originalUrl: options.originalUrl } : {}),
         startedAt: options.startedAt,
         status: "analyzed",
         config: {},
@@ -408,6 +411,62 @@ describe("the five tools are registered with the shared contract", () => {
         expect(Object.keys(properties)).not.toContain(cloudOnly);
       }
     }
+  });
+});
+
+// #492: the map `squirrel entities` reads back from the store dropped every
+// edge's pages, so the dangling-reference table's "Example page" column was
+// always blank, and named the crawl's origin as `site` where the audit's own map
+// names the URL the audit was run on.
+describe("a map read back from the store matches the audit's own (#492)", () => {
+  test("edges keep their pages, and site is the audited URL", async () => {
+    const { buildEntityMap } =
+      await import("@squirrelscan/audit-engine/entity-map");
+    const { loadEntityMap } = await import("@/controllers/entities");
+    const audited = "https://shop.test/blog/";
+    const page = "https://shop.test/blog/post";
+    const map = buildEntityMap(
+      [
+        {
+          url: page,
+          raw: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Article",
+            "@id": `${page}#article`,
+            headline: "Post",
+            publisher: { "@id": "https://shop.test/#organization" },
+          }),
+        },
+      ],
+      audited
+    );
+    const dangling = map.edges.find((edge) => edge.dangling);
+    expect(dangling?.pages).toEqual([page]);
+
+    await seed({
+      project: "shop",
+      baseUrl: "https://shop.test",
+      originalUrl: audited,
+      startedAt: 3_000_000,
+      map,
+    });
+    const loaded = await loadEntityMap();
+    if (!loaded.ok) throw new Error(loaded.error.message);
+    expect(loaded.data.map.site).toBe(audited);
+    expect(loaded.data.map.edges).toEqual(map.edges);
+  });
+
+  test("a crawl with no recorded audited URL falls back to its origin", async () => {
+    const { loadEntityMap } = await import("@/controllers/entities");
+    await seed({
+      project: "docs",
+      baseUrl: "https://docs.squirrelscan.com",
+      startedAt: 1_000_000,
+      map: await fixture("docs-after-jsonld"),
+    });
+    const loaded = await loadEntityMap();
+    if (!loaded.ok) throw new Error(loaded.error.message);
+    expect(loaded.data.map.site).toBe("https://docs.squirrelscan.com");
   });
 });
 
