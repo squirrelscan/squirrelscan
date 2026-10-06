@@ -37,7 +37,10 @@ import {
 import {
   createCompleteStoreTallyFold,
   foldCompleteStoreTallies,
+  untouchedCarriedFinding,
   type FindingPageSource,
+  type UntouchedCarriedAggregate,
+  type UntouchedSamplePage,
 } from "./complete-store-fold";
 import type { SkippedPassCounts } from "./stream-findings";
 import {
@@ -139,6 +142,41 @@ export interface OpenFindingPage {
 
 /** Pages in `normalizedUrl` order, each yielded exactly once and never split. */
 export type OpenFindingPageSource = AsyncIterable<OpenFindingPage>;
+
+/**
+ * (pub#497) The run's page scope as the merge settled it, which is what decides
+ * whether a page is touched: normalized, with the removed pages taken out of the
+ * crawled set. A store splitting its pages must use these sets, not its own.
+ */
+export interface CompleteStoreScope {
+  crawledUrls: ReadonlySet<string>;
+  removedUrls: ReadonlySet<string>;
+}
+
+/**
+ * (pub#497) The site's open findings split by whether this run touched the page.
+ *
+ * A page is UNTOUCHED when it is not in `crawledUrls`, not in `removedUrls`, and
+ * holds no row this audit wrote. The merge carries every prior on such a page
+ * unchanged, so `aggregate` stands in for its rows; only its report sample is read.
+ */
+export interface UntouchedCarriedSplit {
+  /**
+   * Every touched page as an {@link OpenFindingPage}, and the untouched pages'
+   * report sample as {@link UntouchedSamplePage}s, merged into ONE sequence in
+   * cursor order (the store's primary-key order, as `openPages`). Each page once.
+   *
+   * A store may stream an untouched page in full instead, as an
+   * `OpenFindingPage` (which is what `openPages` does for all of them) — for a
+   * row its aggregate cannot read exactly, for example. Such a page is then left
+   * out of `aggregate` and of the sample. Streaming every page with an empty
+   * aggregate is the full fold, and is what a store must do when any carried row
+   * of the site is outside `isAggregatableCarriedRow`.
+   */
+  pages: AsyncIterable<OpenFindingPage | UntouchedSamplePage>;
+  /** What the untouched pages contribute, computed over every row they hold. */
+  aggregate: UntouchedCarriedAggregate;
+}
 
 /** Prior findings a page at a time; a page must never be split across two items. */
 export type PriorFindingPageSource = AsyncIterable<readonly PageFindingRecord[]>;
@@ -286,6 +324,18 @@ export interface CloudSmartAuditsInput {
      * carried findings together, and the rows are dropped.
      */
     openPages?: OpenFindingPageSource;
+    /**
+     * (pub#497) The bounded replacement for `openPages`: called once, with the
+     * run's settled page scope, before any page is read. It returns the touched
+     * pages to stream and an aggregate for the rest, so the merge's work is
+     * bounded by the run instead of by the site's open history. When set,
+     * `openPages` is ignored.
+     *
+     * The merge does NOT persist the untouched rows it never sees. Their carry is
+     * `{ ...prior, provenance: "carried" }`, so the store applies it itself: set
+     * `provenance` to "carried" on the untouched rows that do not have it yet.
+     */
+    untouchedCarried?: (scope: CompleteStoreScope) => Promise<UntouchedCarriedSplit>;
     /** Full crawled-URL list (`resolutionSignal.crawledUrls`); normalized here. */
     crawledUrls: string[];
     /**
@@ -710,7 +760,12 @@ export async function runCloudSmartAudits(
   }
   replayedUrls.clear();
 
-  const streamedComplete = completeStore?.openPages;
+  // (pub#497) Asked for only once the page scope is settled: which pages are
+  // untouched depends on it.
+  const split = completeStore?.untouchedCarried
+    ? await completeStore.untouchedCarried({ crawledUrls, removedUrls })
+    : undefined;
+  const streamedComplete = split?.pages ?? completeStore?.openPages;
   // Writing as the merge streams is safe ONLY when the reader is a cursor that has
   // already passed the rows being written (it reads each page once, and the merge
   // only ever writes rows behind it). The materialized complete path reads its
@@ -753,7 +808,7 @@ export async function runCloudSmartAudits(
     const fold = createCompleteStoreTallyFold({
       ruleResults: shellResults ?? input.ruleResults,
       crawledUrls,
-      skippedPassCounts: completeStore.skippedPassCounts,
+      skippedPassCounts: completeStore?.skippedPassCounts,
       carriedPageUrls,
       ruleMetaIndex,
       // Same exclusion the union scoring applies below via `freshForUnion`: a
@@ -761,6 +816,8 @@ export async function runCloudSmartAudits(
       removedUrls,
       // The report body's carried side comes out of the same replay, bounded.
       retainCarriedChecks: true,
+      // (pub#497) The untouched subtotal is exact only beside integer terms.
+      requireAggregatableCarried: !!split && split.aggregate.findings > 0,
     });
     onActive = (finding) => {
       if (finding.provenance !== "carried") return;
@@ -772,7 +829,19 @@ export async function runCloudSmartAudits(
       // multiplies by the whole backlog.
       pageCarried.push(finding);
     };
+    // (pub#497) The render history the merge reads `neverRendered` from, for the
+    // untouched pages it does not run: none of them is rendered this run.
+    const everRendered = split ? new Set(priorPages.map((p) => p.normalizedUrl)) : undefined;
     for await (const page of streamedComplete) {
+      if ("untouched" in page) {
+        assertUntouched(page, crawlId, crawledUrls, removedUrls);
+        const neverRendered = !everRendered!.has(page.normalizedUrl);
+        fold.retainUntouchedSample(
+          page.normalizedUrl,
+          page.sample.map((row) => untouchedCarriedFinding(row, neverRendered)),
+        );
+        continue;
+      }
       pageCarried.length = 0;
       session.addPriorFindings(page.prior);
       fold.foldPage(page.normalizedUrl, page.fresh, pageCarried);
@@ -782,6 +851,13 @@ export async function runCloudSmartAudits(
     // so this is normally empty — driven anyway so the contract holds either way.
     for (const record of session.finish().persisted) onPersist(record);
     await flushWrites();
+    if (split) {
+      // Each untouched row is a carry the merge would have persisted and counted.
+      fold.addUntouched(split.aggregate);
+      carriedCount += split.aggregate.findings;
+      unrenderedCount += split.aggregate.unrenderedFindings;
+      persistedFindings += split.aggregate.findings;
+    }
     fold.foldShellRules();
     scoringTallies = fold.finish();
     carriedSource = fold.carriedUnion();
@@ -908,6 +984,29 @@ export async function runCloudSmartAudits(
     replayedUnknownPages,
     completeStore: !!completeStore,
   };
+}
+
+/**
+ * (pub#497) Refuse a sample page that is not untouched. Its rows are left out of
+ * the merge and stand in the aggregate as carried, so a crawled or removed page
+ * here would have its resolves or stales silently skipped, and a fresh row would
+ * be scored as carried. Only the run's own scope can say, so it is checked here.
+ */
+function assertUntouched(
+  page: UntouchedSamplePage,
+  crawlId: string,
+  crawledUrls: ReadonlySet<string>,
+  removedUrls: ReadonlySet<string>,
+): void {
+  const url = page.normalizedUrl;
+  if (crawledUrls.has(url) || removedUrls.has(url)) {
+    throw new Error(`untouched sample page ${url} is in this run's crawled or removed set`);
+  }
+  for (const row of page.sample) {
+    if (row.normalizedUrl !== url || row.lastSeenCrawlId === crawlId || row.state !== "open") {
+      throw new Error(`untouched sample page ${url} holds a row that is not an open prior on it`);
+    }
+  }
 }
 
 /** No fresh side at all — a complete-store caller that passed only priors. */
