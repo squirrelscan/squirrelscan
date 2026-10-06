@@ -13,9 +13,17 @@ The name comes from `aria-labelledby` pointing at the dialog's own heading, from
 
 Two checks, at rule severity error. Both accept the same three name sources: a non-empty `aria-label`, a non-empty `title`, or an `aria-labelledby` pointing at an element that has text.
 
-- `aria-dialog-name` covers elements with `role="dialog"` or `role="alertdialog"`. It fails with `N ARIA dialog(s) without accessible names`, listing each as `dialog#id` or bare role name, up to ten with a count of the rest. It passes with `All N ARIA dialog(s) have accessible names`.
-- `dialog-name` covers native `<dialog>` elements that carry no explicit dialog role. Browsers announce the native element's role on their own, so a missing name here warns rather than fails: `N native <dialog>(s) without accessible names`. It passes with `All N native <dialog>(s) have accessible names`.
+- `aria-dialog-name` covers elements with `role="dialog"` or `role="alertdialog"`. It fails with `N ARIA dialog(s) without accessible names`, up to ten items with a count of the rest. It passes with `All N ARIA dialog(s) have accessible names`.
+- `dialog-name` covers native `<dialog>` elements that carry no explicit dialog role. Browsers announce the native element's role on their own, so a missing name here warns rather than fails: `N native <dialog>(s) without accessible names`, listed the same way. It passes with `All N native <dialog>(s) have accessible names`.
 - When the page has neither kind, one info check reports `No dialog elements found`.
+
+Each unnamed dialog is listed by a selector-like handle, with its start tag (attributes only, capped at 200 characters) as the snippet:
+
+- with an `id`: `dialog#cart` for a native dialog, and `dialog#settings` or `alertdialog#confirm` (the role, then the id) for an ARIA one;
+- without one: the tag and up to three of its classes, such as `dialog.newsletter-popup`, or `div[role="dialog"].modal` for an ARIA dialog;
+- when two dialogs of the same kind on a page get the same handle, the second and later ones carry an ordinal in document order: `dialog.drawer (2)`. The ordinal counts named dialogs too, so naming one drawer does not renumber the others.
+
+The handle is the item's identity from one audit to the next, so it depends only on the markup. Renaming a dialog's id or classes, or reordering same-handle dialogs, gives it a new one.
 
 ## How to fix it
 
