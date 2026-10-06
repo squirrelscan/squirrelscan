@@ -7,6 +7,12 @@ description: "Every audit collapses your site's JSON-LD into one graph, so you c
 
 The entity map is the structured data on your whole site, collapsed into one graph. Every squirrelscan audit builds it, on your machine and in the cloud, with nothing to turn on. It answers a question no per-page validator can: does your site declare one organization, one website and one author, or a fresh copy of each on every page?
 
+<Frame caption="An example map on the dashboard's Entities page, for northwind.example, a fictional coffee roaster. The website, the journal, both authors, both products and two of the three articles all point at one Organization by its stable @id. The other Northwind Roasters is the same company declared on two pages without an @id: it has no links, and nothing ties it to the first. The red ring is the third article's publisher, an @id that no crawled page declares.">
+
+![The dashboard's Entities page for northwind.example. Summary cards read 33 entities, 9 types declared, 1 page without entities, a 97% stable @id share, 0 conflicts and 1 dangling reference. Below them, a graph of the 11 entities left after hiding 22 page-local ones. At its center, the Northwind Roasters organization is directly linked to the Northwind website, The Northwind Journal, two people, two products and two of three articles. A second Northwind Roasters node sits on its own with no links, and the third article, "Brewing guide: the V60", has a red line to a hollow red ring labelled https://northwind.example/#org.](/images/entity-map/example-entity-map.webp)
+
+</Frame>
+
 ## Why it matters
 
 Structured data validators check one page at a time. That is the wrong unit for most of what goes wrong with it.
