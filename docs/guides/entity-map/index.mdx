@@ -67,6 +67,63 @@ The map itself is informational and never changes the health score. What is wron
 
 Thirteen site-wide rules read the map and report what is wrong with it, from identity failures down to tidiness. They are listed under [Structured Data](/rules/schema), and every one of them links back to [fixing structured data identity](/guides/entity-map/fixing), which has the change to make in each generator.
 
+## Monitor with squirrelscan, fix with an agent
+
+Identity is not something you fix once. A new template, a plugin update or a block pasted into one page can declare the organization again, and the map drifts back. Every audit rebuilds the map and, by default, `squirrel entities --diff` compares a site's latest two audits that stored at least one entity, while in the cloud [scheduled audits](/cloud/scheduled-audits) feed the [history on the Entities page](/guides/entity-map/cloud#history). The fix is mechanical but spread across templates, which suits a coding agent: the [entity MCP tools](/guides/entity-map/mcp) give it the map, each finding with its fix and the change between two audits, and re-auditing the same pages shows whether the finding cleared.
+
+Here is that loop on a local copy of northwind.example, the site in the map above, served at `http://localhost:4321`. The prompt:
+
+```text
+Audit http://localhost:4321 with squirrelscan and fix the organization
+that is declared without an @id. Then re-audit and show me the entity diff.
+```
+
+The audit reports the pasted block on two pages:
+
+```text
+schema/entity-identity Entity Identity (error)
+  ✗ entity-identity: 1 entity is declared on several pages with no @id
+    → Northwind Roasters (Organization)
+      from /contact/
+      from /wholesale/
+```
+
+The fix is one line in that block, on both pages:
+
+```diff
+ {
+   "@context": "https://schema.org",
+   "@type": "Organization",
++  "@id": "https://northwind.example/#organization",
+   "name": "Northwind Roasters",
+```
+
+Then `squirrel audit http://localhost:4321 --refresh` and `squirrel entities --diff`, excerpted:
+
+```markdown
+## Removed (1)
+
+| Type | Name | @id | Occurrences |
+| --- | --- | --- | ---: |
+| Organization | Northwind Roasters | _none_ | 2 |
+
+## Occurrence changes (1)
+
+| Type | Name | Before | After | Change |
+| --- | --- | ---: | ---: | ---: |
+| Organization | Northwind Roasters | 9 | 11 | +2 |
+
+## Summary changes (3)
+
+| Metric | Before | After | Change |
+| --- | ---: | ---: | ---: |
+| nodeCount | 33 | 32 | -1 |
+| nodesWithoutIdCount | 1 | 0 | -1 |
+| stableIdShare | 0.970 | 1 | +0.03 |
+```
+
+Both pages that carried the anonymous organization were crawled again, so its removal is real rather than a coverage gap. The identified organization is now declared on 11 pages instead of 9, and `schema/entity-identity` no longer fires. The dangling `#org` publisher is still there: that is the next finding to hand over.
+
 ## Where to next
 
 <CardGroup cols={2}>
