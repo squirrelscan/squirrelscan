@@ -16,12 +16,13 @@ The rule runs on every crawled page and emits a single check named `dev-leakage`
 - Skipped when there is no parsed document. Message: `No document available`.
 - Skipped when the page URL cannot be parsed. Message: `Page URL could not be parsed`.
 - Skipped when the audited origin is itself a development host. Message: `Audited origin is itself a non-production host (localhost:3000), so its own URLs are not leakage`.
-- Pass when nothing was found. Message: `No development, private or preview hosts referenced`.
+- Skipped when a work cap cut the scan short and the part scanned held nothing. Message: `Page too large to scan in full; no development hosts in the part scanned`.
+- Pass when the whole page was scanned and nothing was found. Message: `No development, private or preview hosts referenced`.
 - Warn or fail otherwise. Message: `3 development host reference(s) on a production page (localhost, preview-host): example http://localhost:3000/api`.
 
 Five kinds are classified: `localhost` for a loopback host, `private-ip` for a private address range, `preview-host` for a deployment-preview domain, `dev-subdomain` for a development subdomain of the audited site, and `insecure-self-link` for an `http://` link back to your own host. Each hit also records whether it came from an attribute or from body copy, and whether the host is unmistakably this site's own.
 
-The scan has work caps: 50,000 elements, 2,000 `href` and `src` values, 1,000 attribute hits, the first 500,000 characters of copy, and a limit on matches per pattern in that copy. The finding's details carry `scanTruncated`, which is true when a cap cut the scan short, because a kind past the cap may be missing from its items.
+The scan has work caps: 50,000 elements, 2,000 `href` and `src` values, 1,000 attribute hits, the first 500,000 characters of copy, and a limit on matches per pattern in that copy. The finding's details carry `scanTruncated`, which is true when a cap cut the scan short, because a kind past the cap may be missing from its items. When a capped scan found nothing, the rule skips the page rather than passing it: a pass would say the page is clean, and on a re-audit it would close an earlier finding that may sit past the cap. The skip has `skipReason: "scan-truncated"`, the page counts as not evaluated, and its earlier findings stay open.
 
 The status is fail when a live `href` or `src` points at a host that is clearly this site's own development artifact, since that is a reference a visitor can follow into nothing. An `insecure-self-link` is treated as soft and warns instead, as does any mention in copy and any preview host that could belong to someone else. Severity for the rule is warning, weight 6. The rule is skipped on soft 404 pages.
 
