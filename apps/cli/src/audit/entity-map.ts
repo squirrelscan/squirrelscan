@@ -9,8 +9,23 @@ import type { EntityMap } from "@squirrelscan/audit-engine/entity-map";
 import { Effect } from "effect";
 
 import type { SQLiteStorage } from "@/crawler/storage/sqlite";
+import type { CrawlMetadata } from "@/crawler/storage/types";
 
 import { logger } from "@/utils/logger";
+
+/**
+ * The `site` an entity map of this crawl carries (#492): the URL the audit was
+ * run on, which `squirrel audit` builds its map with and the crawl records as
+ * `originalUrl`. `baseUrl` is the crawl's origin, so a map built from it, as
+ * `squirrel analyze` and the store reassembly did, named a different site than
+ * the audit's own report. A crawl written before `originalUrl` existed has only
+ * the origin.
+ */
+export function entityMapSite(
+  crawl: Pick<CrawlMetadata, "baseUrl" | "originalUrl">
+): string {
+  return crawl.originalUrl || crawl.baseUrl;
+}
 
 /**
  * Persist an already-built map for one crawl.

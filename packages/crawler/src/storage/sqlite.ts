@@ -72,7 +72,7 @@ export interface ContentStoreAdapter {
 // Schema version - increment when schema changes.
 // Exported so migration tests can assert "this DB reached the CURRENT version" rather than pinning a
 // literal, which turned every schema bump into two unrelated test failures.
-export const SCHEMA_VERSION = 30;
+export const SCHEMA_VERSION = 31;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -464,6 +464,16 @@ const MIGRATIONS: Record<number, string[]> = {
   // "this page has no captured scalars" and falls back to parsing it — which is
   // exactly what an audit stored before this version gets.
   30: [`ALTER TABLE page_features ADD COLUMN report_scalars TEXT`],
+  // Version 31: an edge's example pages (squirrelscan/squirrelscan#492). The
+  // map reassembled from the store had `pages: []` on every edge, so
+  // `squirrel entities` could say an @id dangles but not where the reference
+  // lives. The document's own capped list and remainder are stored as they
+  // are. ADDITIVE and nullable: a row written before this reads as "not
+  // recorded" (NULL), never as "referenced from nowhere". Local sqlite only.
+  31: [
+    `ALTER TABLE entity_edges ADD COLUMN pages TEXT`,
+    `ALTER TABLE entity_edges ADD COLUMN more_pages INTEGER`,
+  ],
 };
 
 // Every `pages` column but the two that hold a page's body, for
@@ -571,6 +581,15 @@ const CRAWLS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   // a database that skipped migration 27 would quietly put failed runs back in
   // the retention window instead of failing loudly.
   { name: "report_status", type: "TEXT" },
+];
+
+// Same guard for `entity_edges` (#492). Migration 31 added both columns, and
+// `saveEntityMap` writes them, so a DB stamped past 31 without them would fail
+// every entity map write. That write is caught and logged rather than failing
+// the audit, which would leave `squirrel entities` reading the previous map.
+const ENTITY_EDGES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
+  { name: "pages", type: "TEXT" },
+  { name: "more_pages", type: "INTEGER" },
 ];
 
 const SCHEMA = `
@@ -1043,6 +1062,11 @@ CREATE TABLE IF NOT EXISTS entity_edges (
   target TEXT NOT NULL,
   dangling INTEGER NOT NULL,
   occurrences INTEGER NOT NULL,
+  -- JSON array of the pages making the reference, capped as the document caps
+  -- it, with the remainder in more_pages. NULL on a row written before
+  -- migration 31: not recorded, which is not the same as no pages.
+  pages TEXT,
+  more_pages INTEGER,
   PRIMARY KEY (crawl_id, source, predicate, target),
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
@@ -1283,6 +1307,7 @@ export class SQLiteStorage implements CrawlStorage {
     this.reconcileColumns("links", LINKS_ALTER_COLUMNS);
     this.reconcileColumns("sitemap_url_statuses", SITEMAP_URL_STATUSES_ALTER_COLUMNS);
     this.reconcileColumns("crawls", CRAWLS_ALTER_COLUMNS);
+    this.reconcileColumns("entity_edges", ENTITY_EDGES_ALTER_COLUMNS);
     this.indexesAfterMigrations();
   }
 
@@ -1332,7 +1357,8 @@ export class SQLiteStorage implements CrawlStorage {
       | "robots_txt"
       | "links"
       | "sitemap_url_statuses"
-      | "crawls",
+      | "crawls"
+      | "entity_edges",
     columns: ReadonlyArray<{ name: string; type: string }>
   ): void {
     const db = this.getDb();
@@ -3587,6 +3613,8 @@ export class SQLiteStorage implements CrawlStorage {
         target: string;
         dangling: boolean;
         occurrences: number;
+        pages: readonly string[];
+        morePages: number;
       }>;
       occurrences: ReadonlyArray<{ key: string; normalizedUrl: string }>;
     }
@@ -3607,8 +3635,8 @@ export class SQLiteStorage implements CrawlStorage {
         `);
         const insertEdge = db.prepare(`
           INSERT OR REPLACE INTO entity_edges (
-            crawl_id, source, predicate, target, dangling, occurrences
-          ) VALUES (?, ?, ?, ?, ?, ?)
+            crawl_id, source, predicate, target, dangling, occurrences, pages, more_pages
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `);
         const insertOccurrence = db.prepare(`
           INSERT OR REPLACE INTO entity_occurrences (crawl_id, key, normalized_url)
@@ -3642,7 +3670,9 @@ export class SQLiteStorage implements CrawlStorage {
               edge.predicate,
               edge.target,
               edge.dangling ? 1 : 0,
-              edge.occurrences
+              edge.occurrences,
+              JSON.stringify(edge.pages),
+              edge.morePages
             );
           }
           for (const row of map.occurrences) {
@@ -3683,6 +3713,9 @@ export class SQLiteStorage implements CrawlStorage {
         target: string;
         dangling: boolean;
         occurrences: number;
+        /** Null when the row predates migration 31 and the pages were not recorded. */
+        pages: string[] | null;
+        morePages: number;
       }>;
       occurrences: Array<{ key: string; normalizedUrl: string }>;
     },
@@ -3712,7 +3745,7 @@ export class SQLiteStorage implements CrawlStorage {
         }>;
         const edgeRows = db
           .prepare(
-            `SELECT source, predicate, target, dangling, occurrences
+            `SELECT source, predicate, target, dangling, occurrences, pages, more_pages
              FROM entity_edges WHERE crawl_id = ? ORDER BY source, target, predicate`
           )
           .all(crawlId) as Array<{
@@ -3721,6 +3754,8 @@ export class SQLiteStorage implements CrawlStorage {
           target: string;
           dangling: number;
           occurrences: number;
+          pages: string | null;
+          more_pages: number | null;
         }>;
         const occurrenceRows = db
           .prepare(
@@ -3750,6 +3785,8 @@ export class SQLiteStorage implements CrawlStorage {
             target: row.target,
             dangling: row.dangling === 1,
             occurrences: row.occurrences,
+            pages: row.pages === null ? null : (JSON.parse(row.pages) as string[]),
+            morePages: row.more_pages ?? 0,
           })),
           occurrences: occurrenceRows.map((row) => ({
             key: row.key,

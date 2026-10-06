@@ -6,6 +6,7 @@
 // run's entities behind, and the retirement that keeps project.db from growing
 // a permanent copy of every audit's graph.
 
+import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -13,7 +14,7 @@ import { join } from "node:path";
 
 import { Effect } from "effect";
 
-import { SQLiteStorage } from "../src/storage/sqlite";
+import { SCHEMA_VERSION, SQLiteStorage } from "../src/storage/sqlite";
 import type { CrawlMetadata } from "../src/storage/types";
 
 const STATS = {
@@ -98,6 +99,8 @@ describe("entity map storage", () => {
               target: "id:http://x.test/#missing",
               dangling: true,
               occurrences: 3,
+              pages: ["http://x.test/a"],
+              morePages: 2,
             },
             {
               source: "id:http://x.test/#org",
@@ -105,6 +108,8 @@ describe("entity map storage", () => {
               target: "syn:BreadcrumbList|name:home",
               dangling: false,
               occurrences: 1,
+              pages: ["http://x.test/a"],
+              morePages: 0,
             },
           ],
           occurrences: [
@@ -143,6 +148,9 @@ describe("entity map storage", () => {
       expect(dangling.predicate).toBe("publisher");
       expect(dangling.target).toBe("id:http://x.test/#missing");
       expect(dangling.occurrences).toBe(3);
+      // #492: where the reference lives, as the document capped it.
+      expect(dangling.pages).toEqual(["http://x.test/a"]);
+      expect(dangling.morePages).toBe(2);
 
       expect(rows.occurrences).toHaveLength(4);
       expect(
@@ -165,6 +173,8 @@ describe("entity map storage", () => {
               target: CRUMB.key,
               dangling: false,
               occurrences: 1,
+              pages: ["http://x.test/a"],
+              morePages: 0,
             },
           ],
           occurrences: [{ key: ORG.key, normalizedUrl: "http://x.test/a" }],
@@ -227,6 +237,8 @@ describe("entity map storage", () => {
               target: "id:missing",
               dangling: true,
               occurrences: 1,
+              pages: ["http://x.test/a"],
+              morePages: 0,
             },
           ],
           occurrences: [{ key: ORG.key, normalizedUrl: "http://x.test/a" }],
@@ -241,4 +253,69 @@ describe("entity map storage", () => {
       expect(rows.occurrences).toHaveLength(0);
     });
   });
+});
+
+// #492: an edge's pages are stored, and a project.db written before that keeps
+// working. Both upgrade routes are covered: the migration (a DB at version 30)
+// and the reconcile (a DB stamped at the current version without the columns,
+// the version-collision case that has bitten five other tables).
+describe("entity edge pages across a schema upgrade (#492)", () => {
+  const EDGE = {
+    source: ORG.key,
+    predicate: "publisher",
+    target: "id:http://x.test/#missing",
+    dangling: true,
+    occurrences: 1,
+    pages: ["http://x.test/a"],
+    morePages: 0,
+  };
+
+  async function storeWithoutEdgePages(version: number): Promise<{ path: string; crawlId: string }> {
+    const path = join(mkdtempSync(join(tmpdir(), "squirrelscan-em-")), "store.sqlite");
+    const storage = new SQLiteStorage(path);
+    await run(storage.init());
+    const crawlId = await run(storage.createCrawl(crawlMeta(1_000)));
+    await run(storage.close());
+    // Rewind the table to its pre-#492 shape, with one row the old code wrote.
+    const db = new Database(path);
+    db.exec("ALTER TABLE entity_edges DROP COLUMN pages");
+    db.exec("ALTER TABLE entity_edges DROP COLUMN more_pages");
+    db.prepare(
+      "INSERT INTO entity_edges (crawl_id, source, predicate, target, dangling, occurrences) VALUES (?, ?, ?, ?, 1, 1)"
+    ).run(crawlId, EDGE.source, EDGE.predicate, EDGE.target);
+    db.exec("DELETE FROM schema_version");
+    db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(version);
+    db.close();
+    return { path, crawlId };
+  }
+
+  for (const [label, version] of [
+    ["migrated from version 30", 30],
+    ["stamped current without the columns", SCHEMA_VERSION],
+  ] as const) {
+    test(`${label}: the old row reads as not recorded, and a new map stores its pages`, async () => {
+      const { path, crawlId } = await storeWithoutEdgePages(version);
+      const storage = new SQLiteStorage(path);
+      try {
+        await run(storage.init());
+        const before = await run(storage.getEntityMapRows(crawlId));
+        expect(before.edges).toHaveLength(1);
+        expect(before.edges[0]!.pages).toBeNull();
+        expect(before.edges[0]!.morePages).toBe(0);
+
+        await run(
+          storage.saveEntityMap(crawlId, {
+            nodes: [ORG],
+            edges: [EDGE],
+            occurrences: [{ key: ORG.key, normalizedUrl: "http://x.test/a" }],
+          })
+        );
+        const after = await run(storage.getEntityMapRows(crawlId));
+        expect(after.edges[0]!.pages).toEqual(["http://x.test/a"]);
+      } finally {
+        await run(storage.close());
+        rmSync(join(path, ".."), { recursive: true, force: true });
+      }
+    });
+  }
 });
