@@ -157,6 +157,21 @@ export interface ComputeMergeInput {
    * pre-#1185.
    */
   resolution?: MergeResolutionInput;
+  /**
+   * (pub#474) Page checks whose fresh `items` this run are the page's COMPLETE
+   * item list, keyed by {@link pageCheckKey}. Consulted only where the
+   * {@link resolution} signal says the page still fails the check: a prior item
+   * finding there whose locator is not in this run's list is resolved instead of
+   * carried, because a complete list leaving it out is proof it is gone (fixed,
+   * or renamed by a rule change).
+   *
+   * Without it the signal branch carries every unmatched item on a still-failing
+   * page, since the signal is page-level. That carry is right when the list is a
+   * sample (a rule cap, a publish clip, an unfolded aggregate), which is why the
+   * caller lists only keys {@link itemListComplete} vouches for. Undefined →
+   * today's carry.
+   */
+  completeItemChecks?: Set<string>;
 }
 
 /** Pre-indexed form of the publish `ResolutionSignal` (#1185). */
@@ -195,6 +210,74 @@ export function findingKey(
   locator: string
 ): string {
   return [normalizedUrl, ruleId, checkName, locator].join(KEY_SEP);
+}
+
+/** Key for one check on one page (a {@link findingKey} without the locator). */
+export function pageCheckKey(normalizedUrl: string, ruleId: string, checkName: string): string {
+  return [normalizedUrl, ruleId, checkName].join(KEY_SEP);
+}
+
+/**
+ * (pub#474) Checks whose rule capped its items WITHOUT recording a remainder
+ * until pub#474, keyed `${ruleId}|${checkName}` → the cap. A publisher on an
+ * older release still sends those lists bare, so a list sitting exactly at the
+ * cap may be cut off. Current rules record `details.additional`, so a current
+ * list at the cap with no remainder carries once more than it needs to, which
+ * is the safe direction.
+ */
+export const LEGACY_SILENT_ITEM_CAPS: ReadonlyMap<string, number> = new Map([
+  ["a11y/identical-links-same-purpose|identical-links-same-purpose", 10],
+  ["a11y/label-content-name-mismatch|label-content-name-mismatch", 10],
+  ["a11y/link-in-text-block|link-in-text-block", 10],
+  ["a11y/tabindex|tabindex-very-high", 10],
+  ["a11y/tabindex|tabindex-positive", 10],
+  ["perf/animated-content|animated-gifs", 10],
+  ["perf/source-maps|source-maps-inline", 3],
+  ["schema/rating-scope|rating-visible", 10],
+  ["schema/rating-scope|rating-subject", 10],
+]);
+
+/**
+ * (pub#474) Checks whose rule stops at a work budget (elements walked, CSS or
+ * text read) and reports whether it did in `details.scanTruncated`. Only an
+ * explicit `false` proves the whole page was looked at: an older publisher
+ * sends neither value, and its list may stop short anywhere, not at a cap.
+ */
+export const SCAN_BUDGET_CHECKS: ReadonlySet<string> = new Set([
+  "content/hidden-text|hidden-text",
+  "content/dev-leakage|dev-leakage",
+]);
+
+/**
+ * (pub#474) True when a fail/warn check's `items` are its COMPLETE list, so an
+ * item missing from it is gone rather than cut off.
+ *
+ * Every cap that drops items records the remainder in `details.additional`: the
+ * rules' own caps, `clampCheckItemsOverflow`, the fold's item merge and the
+ * publish sampler. A rule that stops at a work budget before it has looked at
+ * the whole page sets `details.scanTruncated`. So a list with items and neither
+ * marker is complete, except a bare list at a cap an older release did not
+ * record ({@link LEGACY_SILENT_ITEM_CAPS}), or a budgeted check that does not
+ * say it finished ({@link SCAN_BUDGET_CHECKS}).
+ *
+ * The caller must also rule out what the check cannot show about itself: that
+ * it was rebuilt by `unfoldAggregateCheck`, or that another aggregate of the
+ * same rule and name holds more of this page's items (see `runCloudSmartAudits`).
+ * A check with no items is never "complete": it has no list to compare against.
+ */
+export function itemListComplete(ruleId: string, check: CheckResult): boolean {
+  const items = check.items;
+  if (!items || items.length === 0) return false;
+  const details = check.details;
+  if (details?.aggregated === true || details?.scanTruncated === true) return false;
+  // Any remainder that is not plainly zero counts, including a malformed one:
+  // reading a sample as complete resolves real findings, the reverse only carries.
+  const additional = details?.additional;
+  if (additional !== undefined && additional !== null && additional !== 0) return false;
+  const key = `${ruleId}${KEY_SEP}${check.name}`;
+  if (SCAN_BUDGET_CHECKS.has(key) && details?.scanTruncated !== false) return false;
+  const legacyCap = LEGACY_SILENT_ITEM_CAPS.get(key);
+  return legacyCap === undefined || items.length < legacyCap;
 }
 
 /**
@@ -580,6 +663,7 @@ export function createMergeSession(
     now,
     sampledCheckPages,
     resolution,
+    completeItemChecks,
   } = input;
 
   // Index fresh findings by key (latest wins on dup keys within a run).
@@ -764,6 +848,24 @@ export function createMergeSession(
       const failingSet = resolution?.failingByCheck.get(checkKey);
       if (failingSet) {
         if (hasAnyHash(failingSet, priorHashes)) {
+          // (pub#474) The page still fails the check, but this run's item list
+          // for it is complete and does not hold this locator (a fresh match
+          // returned above), so this item is gone: fixed, or renamed by a rule
+          // change. Carrying it would keep a ghost open for as long as the page
+          // fails the check for any other item.
+          if (
+            completeItemChecks?.has(
+              pageCheckKey(prior.normalizedUrl, prior.ruleId, prior.checkName)
+            )
+          ) {
+            sink.persist({
+              ...prior,
+              state: "resolved",
+              lastSeenCrawlId: crawlId,
+              lastSeenAt: now,
+            });
+            return;
+          }
           // Unlike the sample-guard carry below, this page WAS observed failing
           // this run — the signal is unsampled, so its presence is positive
           // evidence, not an absence we couldn't rule out. Refresh the

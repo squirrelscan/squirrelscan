@@ -66,6 +66,9 @@ export const identicalLinksSamePurposeRule: Rule = {
         items: inconsistentLinks.slice(0, 10).map((id) => ({ id })),
         details: {
           suggestion: "Make link text unique to differentiate destinations",
+          ...(inconsistentLinks.length > 10
+            ? { additional: inconsistentLinks.length - 10 }
+            : {}),
         },
       });
     } else if (links.length > 0) {

@@ -64,6 +64,9 @@ export const tabindexRule: Rule = {
         items: veryHighTabindex.slice(0, 10).map((id) => ({ id })),
         details: {
           issue: "Very high tabindex values indicate misuse",
+          ...(veryHighTabindex.length > 10
+            ? { additional: veryHighTabindex.length - 10 }
+            : {}),
         },
       });
     }
@@ -76,6 +79,9 @@ export const tabindexRule: Rule = {
         items: positiveTabindex.slice(0, 10).map((id) => ({ id })),
         details: {
           suggestion: "Use natural document order instead",
+          ...(positiveTabindex.length > 10
+            ? { additional: positiveTabindex.length - 10 }
+            : {}),
         },
       });
     }

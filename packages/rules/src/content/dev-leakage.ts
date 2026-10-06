@@ -415,20 +415,38 @@ const hasUrlContext = (m: UrlishMatch): boolean =>
  *   and `127.*` have no such reading and count bare.
  */
 export function findDevHostsInText(text: string, site: SiteOrigin): DevLeakageHit[] {
-  const scanned = text.length > MAX_SCANNED_CHARS ? text.slice(0, MAX_SCANNED_CHARS) : text;
+  return scanDevHostsInText(text, site).hits;
+}
+
+/**
+ * {@link findDevHostsInText}, plus whether a work cap cut the scan short. A cut
+ * scan may have missed a whole kind, so the check's item list is then a prefix
+ * rather than the page's complete list (pub#474).
+ */
+export function scanDevHostsInText(
+  text: string,
+  site: SiteOrigin,
+): { hits: DevLeakageHit[]; truncated: boolean } {
+  let truncated = text.length > MAX_SCANNED_CHARS;
+  const scanned = truncated ? text.slice(0, MAX_SCANNED_CHARS) : text;
   const hits: DevLeakageHit[] = [];
+  const scan = (re: RegExp, limit: number): UrlishMatch[] => {
+    const matches = scanUrlish(re, scanned, limit);
+    if (matches.length >= limit) truncated = true;
+    return matches;
+  };
 
   const add = (kind: DevLeakageKind, own: boolean, m: UrlishMatch): void => {
     hits.push({ kind, source: "text", host: m.host, sample: toSample(m.text), own });
   };
 
-  for (const m of scanUrlish(LOCALHOST_TEXT_RE, scanned, MAX_HITS_PER_KIND)) {
+  for (const m of scan(LOCALHOST_TEXT_RE, MAX_HITS_PER_KIND)) {
     const qualified = m.host !== "localhost";
     if (!qualified && !hasUrlContext(m)) continue;
     add("localhost", true, m);
   }
 
-  for (const m of scanUrlish(IPV4_TEXT_RE, scanned, MAX_HITS_PER_KIND * 2)) {
+  for (const m of scan(IPV4_TEXT_RE, MAX_HITS_PER_KIND * 2)) {
     if (isLoopbackHost(m.host)) {
       add("localhost", true, m);
       continue;
@@ -442,7 +460,7 @@ export function findDevHostsInText(text: string, site: SiteOrigin): DevLeakageHi
   // attribute path uses. The cap is generous because the scan matches ordinary
   // prose too — an abbreviation like "e.g" is host-shaped — and almost all of
   // those are discarded a line later.
-  for (const m of scanUrlish(NAMED_HOST_TEXT_RE, scanned, MAX_NAMED_HOST_MATCHES)) {
+  for (const m of scan(NAMED_HOST_TEXT_RE, MAX_NAMED_HOST_MATCHES)) {
     const classified = classifyHost(m.host, site);
     if (classified) {
       // A bare platform name is not a deployment: "we deploy to pages.dev" names
@@ -450,7 +468,10 @@ export function findDevHostsInText(text: string, site: SiteOrigin): DevLeakageHi
       // The attribute path has no such reading, so this lives here.
       if (classified.kind === "preview-host" && isPreviewSuffix(m.host)) continue;
       add(classified.kind, classified.own, m);
-      if (hits.length >= MAX_HITS_PER_KIND * 2) break;
+      if (hits.length >= MAX_HITS_PER_KIND * 2) {
+        truncated = true;
+        break;
+      }
       continue;
     }
     // Only on an HTTPS page, and only for the site's own domain: a printed
@@ -462,10 +483,13 @@ export function findDevHostsInText(text: string, site: SiteOrigin): DevLeakageHi
     if (m.scheme !== "http") continue;
     if (registrableDomain(m.host) !== site.apex) continue;
     add("insecure-self-link", true, m);
-    if (hits.length >= MAX_HITS_PER_KIND * 2) break;
+    if (hits.length >= MAX_HITS_PER_KIND * 2) {
+      truncated = true;
+      break;
+    }
   }
 
-  return hits;
+  return { hits, truncated };
 }
 
 // ---------------------------------------------------------------------------
@@ -483,20 +507,20 @@ const MAX_URL_ATTRIBUTES = 2_000;
  * patched DOM, and reading the list once is cheaper than two by-name lookups
  * per element, each of which walks that same list.
  */
-export function collectUrlAttributes(root: Element): string[] {
-  const out: string[] = [];
+export function collectUrlAttributes(root: Element): { values: string[]; truncated: boolean } {
+  const values: string[] = [];
   let seen = 0;
   for (const el of root.querySelectorAll("*")) {
-    if (++seen > MAX_ELEMENTS_SCANNED) break;
+    if (++seen > MAX_ELEMENTS_SCANNED) return { values, truncated: true };
     for (const attr of el.attributes) {
       const name = attr.name.toLowerCase();
       if (name !== "href" && name !== "src") continue;
       const value = attr.value?.trim();
-      if (value) out.push(value);
+      if (value) values.push(value);
     }
-    if (out.length >= MAX_URL_ATTRIBUTES) break;
+    if (values.length >= MAX_URL_ATTRIBUTES) return { values, truncated: true };
   }
-  return out;
+  return { values, truncated: false };
 }
 
 /**
@@ -646,16 +670,24 @@ export const devLeakageRule: Rule = {
     }
 
     const hits: DevLeakageHit[] = [];
+    // A work cap cut the scan short, so a kind past it may be missing from the
+    // items (pub#474).
+    let scanTruncated = false;
     // The WHOLE document, head included. A `<link rel="canonical">` at localhost
     // de-indexes the page and a `<script src>` or stylesheet at localhost breaks
     // it outright, so the head carries this rule's highest-impact findings and
     // scanning only the body would pass every one of them.
     const root = doc.documentElement ?? doc.querySelector("body");
     if (root) {
-      for (const raw of collectUrlAttributes(root)) {
+      const attributes = collectUrlAttributes(root);
+      scanTruncated = attributes.truncated;
+      for (const raw of attributes.values) {
         const hit = classifyUrlAttribute(raw, baseUrl, site);
         if (hit) hits.push(hit);
-        if (hits.length >= MAX_ATTRIBUTE_HITS) break;
+        if (hits.length >= MAX_ATTRIBUTE_HITS) {
+          scanTruncated = true;
+          break;
+        }
       }
     }
     // Prose only, and never the raw HTML. `getRenderedProseText` drops `<code>`,
@@ -663,7 +695,11 @@ export const devLeakageRule: Rule = {
     // tutorial print `http://localhost:3000` in a code sample and stay clean —
     // the single largest false-positive class this rule has.
     const body = doc.querySelector("body");
-    if (body) hits.push(...findDevHostsInText(getRenderedProseText(body), site));
+    if (body) {
+      const text = scanDevHostsInText(getRenderedProseText(body), site);
+      hits.push(...text.hits);
+      if (text.truncated) scanTruncated = true;
+    }
 
     if (hits.length === 0) {
       checks.push({
@@ -715,6 +751,9 @@ export const devLeakageRule: Rule = {
           count: r.count,
           inAttribute: r.inAttribute,
         })),
+        // Always present, so a reader can tell "scanned the whole page" from a
+        // publisher too old to say.
+        scanTruncated,
       },
     });
     return { checks };

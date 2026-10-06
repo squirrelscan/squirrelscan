@@ -21,6 +21,8 @@ The rule runs on every crawled page and emits a single check named `dev-leakage`
 
 Five kinds are classified: `localhost` for a loopback host, `private-ip` for a private address range, `preview-host` for a deployment-preview domain, `dev-subdomain` for a development subdomain of the audited site, and `insecure-self-link` for an `http://` link back to your own host. Each hit also records whether it came from an attribute or from body copy, and whether the host is unmistakably this site's own.
 
+The scan has work caps: 50,000 elements, 2,000 `href` and `src` values, 1,000 attribute hits, the first 500,000 characters of copy, and a limit on matches per pattern in that copy. The finding's details carry `scanTruncated`, which is true when a cap cut the scan short, because a kind past the cap may be missing from its items.
+
 The status is fail when a live `href` or `src` points at a host that is clearly this site's own development artifact, since that is a reference a visitor can follow into nothing. An `insecure-self-link` is treated as soft and warns instead, as does any mention in copy and any preview host that could belong to someone else. Severity for the rule is warning, weight 6. The rule is skipped on soft 404 pages.
 
 ## How to fix it

@@ -67,6 +67,9 @@ export const linkInTextBlockRule: Rule = {
           note: "Links need visual distinction beyond color",
           suggestion:
             "Ensure 3:1 contrast with surrounding text or add underlines",
+          ...(linksWithoutUnderline.length > 10
+            ? { additional: linksWithoutUnderline.length - 10 }
+            : {}),
         },
       });
     } else if (linksInText > 0) {

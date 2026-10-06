@@ -238,6 +238,11 @@ interface StyleIndex {
   ambiguousClasses: Set<string>;
   ambiguousIds: Set<string>;
   /**
+   * The stylesheet text or rule budget ran out, so rules past it were never
+   * read and an element they hide is not in the findings (pub#474).
+   */
+  truncated: boolean;
+  /**
    * Class tokens and ids named anywhere in a block that declares a transition or
    * animation. The fade-in idiom puts the resting `opacity:0` on the element's
    * own class and the transition on a compound selector (`.card.is-visible`), so
@@ -594,6 +599,7 @@ export function buildStyleIndex(styleTexts: string[]): StyleIndex {
     ambiguousIds: new Set(),
     animatedClasses: new Set(),
     animatedIds: new Set(),
+    truncated: false,
   };
 
   let budget = MAX_STYLE_CHARS;
@@ -639,6 +645,8 @@ export function buildStyleIndex(styleTexts: string[]): StyleIndex {
     }
   }
 
+  // Conservative at the boundary: a budget spent exactly to zero reads as cut.
+  index.truncated = budget <= 0 || ruleBudget <= 0;
   return index;
 }
 
@@ -1141,6 +1149,10 @@ export const hiddenTextRule: Rule = {
 
     const findings: HiddenFinding[] = [];
     let visited = 0;
+    // Set when the walk stops at MAX_ELEMENTS, or the style index stopped at its
+    // budget: what lies past either was never inspected, so the findings are a
+    // prefix of the page's, not the whole list (pub#474).
+    let scanTruncated = index.truncated;
     // Depth-first over elements, outermost first: once a subtree is hidden (or
     // allowlisted) nothing inside it is inspected, so one hidden block yields
     // one finding instead of one per descendant.
@@ -1150,7 +1162,10 @@ export const hiddenTextRule: Rule = {
 
     while (stack.length > 0) {
       const el = stack.pop() as Element;
-      if (visited++ > MAX_ELEMENTS) break;
+      if (visited++ > MAX_ELEMENTS) {
+        scanTruncated = true;
+        break;
+      }
       const tag = tagOf(el);
       if (SKIPPED_TAGS.has(tag)) continue;
 
@@ -1291,6 +1306,9 @@ export const hiddenTextRule: Rule = {
         hiddenLinks: totalLinks,
         hiddenChars: totalChars,
         ...(findings.length > MAX_ITEMS ? { additional: findings.length - MAX_ITEMS } : {}),
+        // Always present, so a reader can tell "walked the whole page" from a
+        // publisher too old to say.
+        scanTruncated,
       },
     });
 
