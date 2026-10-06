@@ -31,6 +31,10 @@ Pages kept out of search stop counting against title, description and heading ch
 - `a11y/aria-dialog-name` identifies an unnamed dialog with no id by its classes and start tag (`dialog.newsletter-popup`) instead of a bare `dialog`. Thanks to @deniskern for the report (#462).
 - Entity map findings link to the entity map guide at its new home, https://docs.squirrelscan.com/guides/entity-map/fixing.
 
+### Security
+
+- Dependencies are updated for published security advisories, including `smol-toml`, which reads `squirrel.toml`.
+
 ## v0.0.103 — 2026-10-05
 
 Two rule fixes from community bug reports: fewer false accessibility warnings on honeypot and hidden fields, and noindex set by a response header now shows up in the report.
