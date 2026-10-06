@@ -28,7 +28,7 @@ The generated config contains all available settings with sensible defaults:
 domains = []
 
 [crawler]
-max_pages = 500
+max_pages = 100
 delay_ms = 100
 timeout_ms = 30000
 user_agent = ""
@@ -36,18 +36,67 @@ follow_redirects = true
 concurrency = 5
 per_host_concurrency = 5
 per_host_delay_ms = 50
+max_backoff_ms = 300000
 include = []
 exclude = []
 allow_query_params = []
-drop_query_prefixes = ["utm_", "gclid", "fbclid"]
+drop_query_prefixes = [ "utm_", "gclid", "fbclid" ]
 respect_robots = false
+incremental = true
+breadth_first = true
+max_prefix_budget = 0.25
+use_cache_control = true
+max_staleness_seconds = 86400
 
+[crawler.headers]
 [rules]
-enable = ["*"]
-disable = ["ai/ai-content", "ai/llm-parsability", "content/quality"]
+enable = [ "*" ]
+disable = []
+
+[plugins]
+enabled = false
+items = []
+
+[external_links]
+enabled = true
+cache_ttl_days = 7
+timeout_ms = 10000
+concurrency = 5
 
 [output]
 format = "console"
+
+[storage]
+keep_audits = 3
+
+[cloud]
+enabled = true
+max_credits_per_audit = 1000
+confirm_threshold = 50
+batch_size = 20
+technologies = true
+editor_summary = true
+domain_stats = false
+render_concurrency = 6
+publish = true
+visibility = "unlisted"
+
+[intel]
+enabled = false
+feed_ttl_hours = 24
+
+[intel.providers]
+[integrity.cloaking_probe]
+enabled = false
+max_pages = 10
+recent_days = 14
+query_variation = true
+googlebot_user_agent = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+
+[integrity.soft404_confirm]
+enabled = true
+max_confirmations = 25
+budget_ms = 60000
 
 [rule_options]
 ```

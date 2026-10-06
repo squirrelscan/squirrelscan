@@ -1,11 +1,11 @@
 ---
 title: "LLM content quality score: what it measures"
-description: "An optional language-model read of the page copy, scored 0 to 100 with written feedback. Off by default and needs an OpenRouter key."
+description: "A language-model read of the page copy, scored 0 to 100 with written feedback. Retired in this release: it never runs."
 ---
 
-<Note>
-This rule requires `OPENROUTER_API_KEY` environment variable to be set.
-</Note>
+<Warning>
+**Retired rule** - this rule does not run in this release, whatever your config says. The rest of this page describes what it did when it ran.
+</Warning>
 
 ## What the quality score is
 
@@ -39,16 +39,11 @@ It costs one model call per page, so it suits a section you suspect rather than 
 | **Scope** | Per-page |
 | **Severity** | info |
 | **Weight** | 3/10 |
-| **Default** | Disabled |
+| **Default** | Retired (never runs) |
 
 ## Enable / disable
 
-### Disable this rule
-
-```toml squirrel.toml
-[rules]
-disable = ["content/quality"]
-```
+There is nothing to disable: the rule never loads, so a `disable` entry for `content/quality` does nothing and can be removed from your config.
 
 ### Disable all Content rules
 

@@ -11,7 +11,7 @@ The `[rules]` section controls which audit rules run during analysis.
 ```toml
 [rules]
 enable = ["*"]
-disable = ["ai/*", "content/quality"]
+disable = ["images/modern-format", "links/orphan-pages"]
 ```
 
 ## Options
@@ -54,7 +54,7 @@ enable = ["core/meta-title", "core/meta-description", "links/broken-links"]
 ### `disable`
 
 **Type:** `string[]`
-**Default:** `["ai/ai-content", "ai/llm-parsability", "content/quality"]`
+**Default:** `[]` (nothing disabled)
 
 Patterns of rules to disable. **Takes precedence over `enable`**.
 
@@ -62,16 +62,16 @@ If a rule matches both `enable` and `disable`, it's disabled.
 
 **Examples:**
 
-Disable AI rules (default):
+Disable the agent experience rules (`ai/*` also matches the `ax/*` category):
 ```toml
 [rules]
 disable = ["ai/*"]
 ```
 
-Disable slow rules:
+Disable a whole category:
 ```toml
 [rules]
-disable = ["ai/*", "content/quality", "perf/*"]
+disable = ["perf/*"]
 ```
 
 Disable specific rules:
@@ -505,8 +505,9 @@ disable = []  # Remove ai/* from disable list
 ```
 
 **Rules:**
-- `ai/ai-content` - AI-generated content detection
 - `ai/llm-parsability` - LLM-friendly structure
+
+`ai/ai-content` (AI-generated content detection) is retired: it never loads, so it needs no `disable` entry.
 
 **Note:** Requires `OPENROUTER_API_KEY` environment variable.
 
@@ -602,7 +603,7 @@ Exclude computationally expensive rules:
 ```toml
 [rules]
 enable = ["*"]
-disable = ["ai/*", "content/quality", "perf/cls-hints"]
+disable = ["ai/*", "perf/cls-hints"]
 ```
 
 ### CI/CD pipeline
@@ -619,11 +620,17 @@ disable = []
 
 ### Wildcards
 
+A `*` is only supported as the whole pattern (`*`) or as the whole rule name (`category/*`). A partial wildcard such as `core/og-*` matches no rule, so list the rules instead:
+
 ```toml
 [rules]
-enable = ["core/*"]      # All core rules
-disable = ["core/og-*"]  # Disable all OG rules
+enable = ["core/*", "social/*"]  # All core and social rules
+disable = ["core/og-tags", "social/og-image-size", "social/og-url-match"]  # Except the Open Graph ones
 ```
+
+### Retired rules
+
+`content/quality` and `ai/ai-content` are retired: they never load, whatever `enable` says, so a `disable` entry for either one does nothing and can be removed.
 
 ### Multiple patterns
 

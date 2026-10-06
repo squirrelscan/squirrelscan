@@ -20,8 +20,7 @@ min_words = 300
 warn_threshold = 500
 
 [rule_options."adblock/element-hiding"]
-maxMatchesToReport = 10
-lists = ["easylist", "easyprivacy"]
+maxMatchesToReport = 20
 ```
 
 ## How rule options work
@@ -36,21 +35,20 @@ option1 = value1
 option2 = value2
 ```
 
-- `<rule-id>` - Full rule ID (e.g., `core/meta-title`, `content/word-count`)
-- Options are rule-specific (each rule defines its own options)
+- `<rule-id>` - Full rule ID (e.g., `core/meta-title`, `content/word-count`). It must be the exact ID: a category pattern such as `core/*` configures nothing.
+- Option names are rule-specific and spelled exactly as the rule reads them. Most are `snake_case`, but some are `camelCase` (`excludePatterns`, `maxMatchesToReport`), so copy them from the rule's page.
 - All options have defaults (configuration is optional)
 
-### Validation
+### Where to find a rule's options
 
-Rule options are validated against each rule's schema:
+Each rule's page in the [Rules reference](/rules) has an **Options** table listing every option the rule reads, with its type and default. A rule with no Options table takes no options, for example `a11y/skip-link`: to stop one of those running, [disable it](/configuration/rules) instead.
 
-```toml
-[rule_options."core/meta-title"]
-min_length = "thirty"  # ❌ Error: expected number
-max_length = 60        # ✓ OK
-```
+### What happens to a mistake
 
-Run `squirrel config validate` to check for errors.
+Rule options are not checked by `squirrel config validate`, which reports `Config valid` for a misspelled rule ID, a misspelled option name or a value of the wrong type. A mistake shows up when the audit runs:
+
+- **An unknown rule ID or option name is ignored without a warning.** The rule runs on its defaults, so the configuration silently changes nothing.
+- **A value of the wrong type fails the audit.** For example `min_length = "thirty"` on `core/meta-title` stops the run with `✗ Audit failed:` and the validation error `Invalid input: expected number, received string` at path `min_length`. The message does not name the rule, so search your `[rule_options]` for the path it gives. The one rule on this page that does not check its option types is `crawl/all-noindex-pages`, so give its pattern lists as arrays of strings.
 
 ---
 
@@ -90,6 +88,8 @@ min_length = 20
 max_length = 70
 ```
 
+**Behavior:** a title shorter than `min_length` or longer than `max_length` → `warn`. A missing or empty title fails whatever the options say.
+
 **Why configure:**
 - Different industries have different conventions
 - Brand names may require more characters
@@ -128,6 +128,8 @@ Allow longer descriptions:
 min_length = 100
 max_length = 200
 ```
+
+**Behavior:** a description outside `min_length` to `max_length` → `warn`. A missing description fails whatever the options say.
 
 **Why configure:**
 - Google truncates ~160 characters
@@ -189,7 +191,7 @@ min_words = 300
 warn_threshold = 500
 ```
 
-- < 300 words → `fail` (thin content)
+- < 300 words → `warn` (thin content)
 - 300-499 words → `info` (could be longer)
 - ≥ 500 words → `pass` (good length)
 
@@ -203,26 +205,31 @@ Detect keyword over-optimization.
 
 ```toml
 [rule_options."content/keyword-stuffing"]
-density_threshold = 0.03   # Maximum keyword density (3%)
-min_word_count = 100       # Minimum words to check
+density_threshold = 3   # Maximum keyword density, in percent
+min_occurrences = 5     # A word must appear more often than this to be flagged
+whitelist = []          # Words never flagged, such as your brand name
 ```
 
 **Defaults:**
-- `density_threshold: 0.03` (3%)
-- `min_word_count: 100`
+- `density_threshold: 3` (3%)
+- `min_occurrences: 5`
+- `whitelist: []`
+
+`density_threshold` is a percentage: `3` means 3%. A fraction such as `0.03` means 0.03%, which flags nearly every word that appears more than `min_occurrences` times.
 
 **Examples:**
 
 Strict (avoid over-optimization):
 ```toml
 [rule_options."content/keyword-stuffing"]
-density_threshold = 0.02   # 2% max
+density_threshold = 2   # 2% max
 ```
 
-Lenient (allow more repetition):
+Lenient, and ignore your product name:
 ```toml
 [rule_options."content/keyword-stuffing"]
-density_threshold = 0.05   # 5% max
+density_threshold = 5   # 5% max
+whitelist = ["squirrelscan"]
 ```
 
 **Why configure:**
@@ -233,43 +240,59 @@ density_threshold = 0.05   # 5% max
 **How density is calculated:**
 
 ```text
-density = (keyword_occurrences / total_words)
+density = (keyword_occurrences / total_words) × 100
 ```
 
 Example:
-- "SEO" appears 30 times
+- "widget" appears 30 times
 - Page has 1000 words
-- Density = 30/1000 = 0.03 (3%)
+- Density = 30/1000 × 100 = 3%
+
+Words are counted from the page's body text (scripts and styles excluded) as runs of three or more letters `a` to `z`, in any case, so "SEO" counts and "AI" does not. Pages with fewer than 100 such words are not checked (`info`). Generic button and link labels such as "Learn more" and "Add to cart" are then taken out of both counts. A word is flagged when its density is above `density_threshold` **and** it appears more than `min_occurrences` times, and common words are never flagged.
 
 ---
 
 #### `content/article-links`
 
-Check for external citations in articles.
+Check that articles link to other pages and cite external sources, scaled to the article's length. It only runs on article pages (an article page type or Article structured data).
 
 **Options:**
 
 ```toml
 [rule_options."content/article-links"]
-min_external_links = 2   # Minimum external links
+short_max_words = 800     # Under this many words, an article is short
+long_min_words = 1500     # From this many words, an article is long (medium in between)
+
+short_min_internal = 1    # Minimum internal links, by length
+medium_min_internal = 2
+long_min_internal = 3
+
+short_min_external = 1    # Minimum external links, by length
+medium_min_external = 2
+long_min_external = 2
 ```
 
-**Default:**
-- `min_external_links: 2`
+**Defaults:** as shown above.
 
 **Examples:**
 
 Require more citations (journalism):
 ```toml
 [rule_options."content/article-links"]
-min_external_links = 5
+short_min_external = 3
+medium_min_external = 4
+long_min_external = 5
 ```
 
-No requirement:
+No external link requirement:
 ```toml
 [rule_options."content/article-links"]
-min_external_links = 0
+short_min_external = 0
+medium_min_external = 0
+long_min_external = 0
 ```
+
+**Behavior:** an article with fewer internal or external links than its length band requires → `warn`, one check each for internal and external links.
 
 **Why configure:**
 - Academic/news needs citations
@@ -280,32 +303,50 @@ min_external_links = 0
 
 ### Link rules
 
+#### URL patterns
+
+`links/orphan-pages`, `links/dead-end-pages` and `crawl/all-noindex-pages` take lists of URL patterns. There are three forms, and no `*` or `**` globs:
+
+- `"/thank-you"` matches any URL containing that text.
+- `"/blog/"` (starting and ending with `/`) matches the path `/blog` and everything under `/blog/`, but not `/blog-archive`.
+- `'regex:^/blog/\d{4}/'` matches the path against a regular expression. Add flags after a colon: `'regex:^/blog:i'`. Use single quotes (a TOML literal string), because TOML rejects `\d` inside double quotes.
+
+---
+
 #### `links/orphan-pages`
 
-Detect pages with no incoming internal links.
+Detect pages with too few incoming internal links.
 
 **Options:**
 
 ```toml
 [rule_options."links/orphan-pages"]
-exclude_patterns = ["/sitemap.xml", "/robots.txt"]
+minInboundLinks = 2                        # Pages with fewer incoming links are flagged
+excludePatterns = ["/404", "/.well-known/"]  # Pages never flagged
 ```
 
-**Default:**
-- `exclude_patterns: []`
+**Defaults:**
+- `minInboundLinks: 2`
+- `excludePatterns: []`
 
 **Examples:**
 
 Ignore utility pages:
 ```toml
 [rule_options."links/orphan-pages"]
-exclude_patterns = [
+excludePatterns = [
   "/sitemap.xml",
   "/robots.txt",
   "/404",
   "/500",
-  "/.well-known/*"
+  "/.well-known/"
 ]
+```
+
+Flag only pages nothing links to:
+```toml
+[rule_options."links/orphan-pages"]
+minInboundLinks = 1
 ```
 
 **Why configure:**
@@ -323,22 +364,30 @@ Find pages with no outgoing internal links.
 
 ```toml
 [rule_options."links/dead-end-pages"]
-exclude_patterns = ["/thank-you", "/confirmation"]
+excludePatterns = ["/thank-you", "/confirmation"]   # Pages allowed to be dead ends
+minLinks = 1               # Fewer outgoing internal links than this is a dead end
+countAnchorLinks = false   # Count #section links (useful for single-page apps)
 ```
 
-**Default:**
-- `exclude_patterns: []`
+**Defaults:**
+- `excludePatterns: ["/thank-you", "/confirmation", "/download", "/success", "/submitted"]`
+- `minLinks: 1`
+- `countAnchorLinks: false`
+
+Setting `excludePatterns` replaces the default list, so include the defaults you still want.
 
 **Examples:**
 
 Ignore conversion pages:
 ```toml
 [rule_options."links/dead-end-pages"]
-exclude_patterns = [
+excludePatterns = [
   "/thank-you",
   "/confirmation",
-  "/checkout/success",
-  "/download/complete"
+  "/download",
+  "/success",
+  "/submitted",
+  "/checkout/success"
 ]
 ```
 
@@ -357,11 +406,13 @@ Control internal linking recommendations.
 
 ```toml
 [rule_options."links/internal-links"]
-min_internal_links = 2   # Minimum internal links per page
+min_internal_links = 1     # Minimum internal links per page
+max_internal_links = 100   # Maximum internal links per page
 ```
 
-**Default:**
-- `min_internal_links: 2`
+**Defaults:**
+- `min_internal_links: 1`
+- `max_internal_links: 100`
 
 **Examples:**
 
@@ -371,11 +422,13 @@ Require more internal linking:
 min_internal_links = 5
 ```
 
-Minimal requirement:
+Allow large navigation menus:
 ```toml
 [rule_options."links/internal-links"]
-min_internal_links = 1
+max_internal_links = 250
 ```
+
+**Behavior:** fewer than `min_internal_links` or more than `max_internal_links` → `warn`.
 
 **Why configure:**
 - Landing pages may have fewer links
@@ -386,36 +439,36 @@ min_internal_links = 1
 
 ### Performance rules
 
-#### `performance/ttfb`
+#### `perf/ttfb`
 
 Time to First Byte threshold.
 
 **Options:**
 
 ```toml
-[rule_options."performance/ttfb"]
-warn_threshold = 600    # Warning threshold (ms)
-error_threshold = 1000  # Error threshold (ms)
+[rule_options."perf/ttfb"]
+good_threshold = 600   # Under this is good (ms)
+poor_threshold = 1000  # From this is poor (ms)
 ```
 
 **Defaults:**
-- `warn_threshold: 600`
-- `error_threshold: 1000`
+- `good_threshold: 600`
+- `poor_threshold: 1000`
 
 **Examples:**
 
 Strict performance (fast hosting):
 ```toml
-[rule_options."performance/ttfb"]
-warn_threshold = 300
-error_threshold = 600
+[rule_options."perf/ttfb"]
+good_threshold = 300
+poor_threshold = 600
 ```
 
 Lenient (slow hosting):
 ```toml
-[rule_options."performance/ttfb"]
-warn_threshold = 1000
-error_threshold = 2000
+[rule_options."perf/ttfb"]
+good_threshold = 1000
+poor_threshold = 2000
 ```
 
 **Why configure:**
@@ -426,8 +479,8 @@ error_threshold = 2000
 **Behavior:**
 
 ```toml
-warn_threshold = 600
-error_threshold = 1000
+good_threshold = 600
+poor_threshold = 1000
 ```
 
 - < 600ms → `pass`
@@ -436,37 +489,44 @@ error_threshold = 1000
 
 ---
 
-#### `performance/dom-size`
+#### `perf/dom-size`
 
-DOM element count limits.
+DOM size, depth and width limits.
 
 **Options:**
 
 ```toml
-[rule_options."performance/dom-size"]
+[rule_options."perf/dom-size"]
 warn_threshold = 1500   # Warning threshold (elements)
 error_threshold = 3000  # Error threshold (elements)
+max_depth = 32          # Deepest nesting before a warning
+max_children = 60       # Most children of one element before a warning
 ```
 
 **Defaults:**
 - `warn_threshold: 1500`
 - `error_threshold: 3000`
+- `max_depth: 32`
+- `max_children: 60`
 
 **Examples:**
 
 Simple sites:
 ```toml
-[rule_options."performance/dom-size"]
+[rule_options."perf/dom-size"]
 warn_threshold = 800
 error_threshold = 1500
 ```
 
 Complex apps:
 ```toml
-[rule_options."performance/dom-size"]
+[rule_options."perf/dom-size"]
 warn_threshold = 2000
 error_threshold = 4000
+max_depth = 40
 ```
+
+**Behavior:** fewer elements than `warn_threshold` → `pass`, fewer than `error_threshold` → `warn`, otherwise `fail`. Depth over `max_depth` and an element with more than `max_children` children each warn on their own.
 
 **Why configure:**
 - Simple pages have fewer elements
@@ -475,78 +535,33 @@ error_threshold = 4000
 
 ---
 
-### Accessibility rules
-
-#### `a11y/skip-link`
-
-Require skip navigation link.
-
-**Options:**
-
-```toml
-[rule_options."a11y/skip-link"]
-required = true   # Require skip link presence
-```
-
-**Default:**
-- `required: true`
-
-**Examples:**
-
-Optional skip link:
-```toml
-[rule_options."a11y/skip-link"]
-required = false
-```
-
-**Why configure:**
-- Simple sites may not need skip links
-- Complex sites benefit from skip links
-- WCAG AA compliance
-
----
-
 ### Security rules
 
 #### `security/http-to-https`
 
-Allow HTTP links from HTTPS pages.
+Probe whether the `http://` versions of your URLs redirect to HTTPS. The rule requests a sample of URLs over plain HTTP and lists the ones that redirect.
 
 **Options:**
 
 ```toml
 [rule_options."security/http-to-https"]
-allow_localhost = true   # Allow HTTP localhost links
-allow_patterns = []      # Whitelist patterns
+sampleLimit = 20   # Most URLs to probe (1 to 100)
 ```
 
-**Defaults:**
-- `allow_localhost: true`
-- `allow_patterns: []`
+**Default:**
+- `sampleLimit: 20`
 
 **Examples:**
 
-Allow specific domains:
+Probe more of a large site:
 ```toml
 [rule_options."security/http-to-https"]
-allow_localhost = true
-allow_patterns = [
-  "http://example.com/*",
-  "http://legacy.site.com/*"
-]
-```
-
-Strict (no HTTP allowed):
-```toml
-[rule_options."security/http-to-https"]
-allow_localhost = false
-allow_patterns = []
+sampleLimit = 100
 ```
 
 **Why configure:**
-- Legacy integrations may use HTTP
-- Development environments use HTTP
-- Some APIs don't support HTTPS
+- A larger sample covers more of a big site
+- A smaller one makes fewer live requests to your server
 
 ---
 
@@ -554,24 +569,26 @@ allow_patterns = []
 
 #### `crawl/all-noindex-pages`
 
-Check if all pages are noindexed.
+Count the pages blocked from indexing and list a sample, and raise the severity for sections that must stay indexable.
 
 **Options:**
 
 ```toml
 [rule_options."crawl/all-noindex-pages"]
-threshold = 0.9   # Percentage threshold (90%)
+errorOnPatterns = ["/products/"]   # A blocked page here fails
+warnOnPatterns = ["/blog/"]        # A blocked page here warns
 ```
 
-**Default:**
-- `threshold: 0.9` (90%)
+**Defaults:**
+- `errorOnPatterns: []`
+- `warnOnPatterns: []`
 
 **Examples:**
 
-Stricter check:
+Treat any blocked product or blog page as a release blocker:
 ```toml
 [rule_options."crawl/all-noindex-pages"]
-threshold = 0.5   # Warn if 50%+ noindexed
+errorOnPatterns = ["/products/", "/blog/"]
 ```
 
 **Why configure:**
@@ -579,13 +596,7 @@ threshold = 0.5   # Warn if 50%+ noindexed
 - Production sites shouldn't be noindexed
 - Detect misconfiguration
 
-**Behavior:**
-
-```toml
-threshold = 0.9
-```
-
-If 90%+ of crawled pages are noindexed → `warn` (possible misconfiguration)
+**Behavior:** pages blocked by a `noindex` meta tag or header, or by robots.txt, are reported as `info` with a count (the first ten listed). Blocked pages matching `warnOnPatterns` → `warn`, and ones matching `errorOnPatterns` → `fail`, each with a count and the first five listed. The patterns use the [URL pattern](#url-patterns) forms.
 
 ---
 
@@ -593,108 +604,41 @@ If 90%+ of crawled pages are noindexed → `warn` (possible misconfiguration)
 
 #### `adblock/element-hiding`
 
-Check for adblocker-hidden elements.
+Check for elements that ad blockers would hide. This is a [cloud rule](/cloud/rules): it needs `squirrel auth login`, and the cloud matches your selectors against the full EasyList cosmetic rules. The filter list is not configurable.
 
 **Options:**
 
 ```toml
 [rule_options."adblock/element-hiding"]
-maxMatchesToReport = 10   # Max elements to report
-lists = [                  # Filter lists to check
-  "easylist",
-  "easyprivacy",
-  "fanboy-annoyance"
-]
+maxMatchesToReport = 10   # Matching selectors to list in detail
 ```
 
-**Defaults:**
+**Default:**
 - `maxMatchesToReport: 10`
-- `lists: ["easylist", "easyprivacy", "fanboy-annoyance"]`
 
 **Examples:**
 
-Check more filter lists:
+List more matches:
 ```toml
 [rule_options."adblock/element-hiding"]
 maxMatchesToReport = 20
-lists = [
-  "easylist",
-  "easyprivacy",
-  "fanboy-annoyance",
-  "fanboy-social"
-]
 ```
-
-Only check main list:
-```toml
-[rule_options."adblock/element-hiding"]
-lists = ["easylist"]
-```
-
-**Available lists:**
-- `easylist` - Main adblock list
-- `easyprivacy` - Privacy protection
-- `fanboy-annoyance` - Annoyance elements
-- `fanboy-social` - Social media buttons
-
-**Why configure:**
-- Different lists have different strictness
-- Reduce false positives
-- Focus on specific concerns
 
 ---
 
 #### `adblock/blocked-links`
 
-Check for links to blocked tracking domains.
+Check for links and resources that ad blockers (EasyList) would block. Also a cloud rule, with no list choice.
 
 **Options:**
 
 ```toml
 [rule_options."adblock/blocked-links"]
-maxMatchesToReport = 10   # Max links to report
-lists = ["easyprivacy"]   # Filter lists
+maxMatchesToReport = 10   # Blocked links to list in detail
 ```
 
-**Defaults:**
+**Default:**
 - `maxMatchesToReport: 10`
-- `lists: ["easyprivacy"]`
-
----
-
-## Finding rule options
-
-### View rule schema
-
-Check which options a rule accepts:
-
-```bash
-squirrel rules show core/meta-title
-```
-
-Output:
-```text
-core/meta-title - Meta Title
-  Validates page title presence and length
-
-Options:
-  min_length: number (default: 30)
-  max_length: number (default: 75)
-```
-
-### List all rules with options
-
-```bash
-squirrel rules list --with-options
-```
-
-### View config with defaults
-
-```bash
-squirrel config show
-```
-
-Shows effective configuration including rule option defaults.
 
 ---
 
@@ -712,7 +656,9 @@ min_words = 500
 warn_threshold = 1000
 
 [rule_options."content/article-links"]
-min_external_links = 3
+short_min_external = 3
+medium_min_external = 3
+long_min_external = 3
 ```
 
 **Why:**
@@ -734,17 +680,13 @@ min_words = 150
 warn_threshold = 300  # Product pages are shorter
 
 [rule_options."links/dead-end-pages"]
-exclude_patterns = ["/thank-you", "/checkout/success"]
-
-[rule_options."content/article-links"]
-min_external_links = 0  # Products don't need citations
+excludePatterns = ["/thank-you", "/confirmation", "/checkout/success"]
 ```
 
 **Why:**
 - Product titles often shorter
 - Product descriptions concise
 - Conversion pages are dead-ends
-- Products link internally, not externally
 
 ---
 
@@ -759,7 +701,7 @@ warn_threshold = 400
 min_internal_links = 5  # Docs should cross-reference
 
 [rule_options."content/keyword-stuffing"]
-density_threshold = 0.05  # Technical terms repeat
+density_threshold = 5  # Percent; technical terms repeat
 ```
 
 **Why:**
@@ -780,7 +722,7 @@ warn_threshold = 200  # Conversion-focused
 min_internal_links = 1  # Focus on CTA
 
 [rule_options."links/dead-end-pages"]
-exclude_patterns = ["/lp/*"]  # Landing pages
+excludePatterns = ["/lp/"]  # Landing pages
 ```
 
 **Why:**
@@ -791,33 +733,39 @@ exclude_patterns = ["/lp/*"]  # Landing pages
 
 ---
 
-## Validation
+## Checking your options
 
-Check rule options are valid:
+`squirrel config show` prints the `[rule_options]` you have set (it does not list defaults), and `squirrel config validate` checks the rest of the file but not rule options, so check them against the rule's page:
 
 ```bash
-squirrel config validate
+squirrel config show
 ```
 
-**Valid config:**
+A wrong type is reported when the audit runs:
+
 ```text
-✓ Config valid: /path/to/squirrel.toml
+✗ Audit failed: [
+  {
+    "expected": "number",
+    "code": "invalid_type",
+    "path": [
+      "min_length"
+    ],
+    "message": "Invalid input: expected number, received string"
+  }
+]
 ```
 
-**Invalid config:**
-```text
-✗ Invalid config:
-  rule_options.core/meta-title.min_length: Expected number, received string
-```
-
-Fix and re-validate:
+Fix and run the audit again:
 
 ```toml
-# Before (invalid)
+# Before (fails the audit)
 [rule_options."core/meta-title"]
 min_length = "thirty"
+```
 
-# After (valid)
+```toml
+# After
 [rule_options."core/meta-title"]
 min_length = 30
 ```
@@ -851,14 +799,16 @@ min_words = 500
 warn_threshold = 1000
 
 [rule_options."content/article-links"]
-min_external_links = 2
+short_min_external = 2
+medium_min_external = 2
+long_min_external = 2
 
 [rule_options."links/orphan-pages"]
-exclude_patterns = ["/404", "/500", "/.well-known/*"]
+excludePatterns = ["/404", "/500", "/.well-known/"]
 
-[rule_options."performance/ttfb"]
-warn_threshold = 600
-error_threshold = 1000
+[rule_options."perf/ttfb"]
+good_threshold = 600
+poor_threshold = 1000
 ```
 
 This configuration:
