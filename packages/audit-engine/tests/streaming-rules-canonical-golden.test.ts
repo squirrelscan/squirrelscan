@@ -127,7 +127,11 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // of them dominating the schema category score. The harness supplies no
       // entity map, so all thirteen are `skipped` — which is also why the
       // pass/warn/fail tallies and healthScore.overall (48) are UNMOVED.
-      expect(v1.findings.length).toBe(99734);
+      // 99734 -> 100234: content/placeholder-contact (#1356) is page-scoped and
+      // always speaks, the same shape as content/placeholder-text, so it adds one
+      // check on each of the 500 pages with a document. All 500 pass: the synthetic
+      // site's contact details are real-looking, so healthScore.overall is UNMOVED.
+      expect(v1.findings.length).toBe(100234);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -144,15 +148,28 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // entity-id-format, entity-type-drift, entity-authors,
       // entity-publisher-mismatch, entity-local-business-per-page,
       // entity-website-missing, entity-organization-missing,
-      // entity-sameas-missing, entity-orphan); anything
+      // entity-sameas-missing, entity-orphan), 295 -> 296
+      // content/placeholder-contact; anything
       // else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(295);
+      expect(v1.perRuleTally.length).toBe(296);
       // Each +500 above is only "all passes" if nothing warned. healthScore
       // staying at 48 does not prove that — a handful of weight-5 warnings in a
       // 20-rule category would not move it — so pin the tally directly.
       const unrendered = v1.perRuleTally.find((t) => t.ruleId === "content/unrendered-markup");
       expect(unrendered).toEqual({
         ruleId: "content/unrendered-markup",
+        pass: 500,
+        warn: 0,
+        fail: 0,
+        info: 0,
+        skipped: 0,
+        total: 500,
+      });
+      const placeholderContact = v1.perRuleTally.find(
+        (t) => t.ruleId === "content/placeholder-contact",
+      );
+      expect(placeholderContact).toEqual({
+        ruleId: "content/placeholder-contact",
         pass: 500,
         warn: 0,
         fail: 0,
