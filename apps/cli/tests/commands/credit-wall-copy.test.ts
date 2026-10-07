@@ -88,6 +88,33 @@ describe("registerFailureLines", () => {
     expect(out).toContain(UPGRADE);
   });
 
+  // The API sends no offer to an org already on Pro (nothing higher to sell),
+  // so a paid account must get a top-up line, not the Pro pitch.
+  test("a paid account with no offer is pointed at a top-up, not pitched Pro", () => {
+    const out = text(registerFailureLines(insufficient, false, true));
+    expect(out).toContain("12 credits");
+    expect(out).toContain("Top up:");
+    expect(out).toContain(UPGRADE);
+    expect(out).not.toContain(`$${PRO.priceMonthUsd}`);
+    expect(out).not.toContain("Upgrade:");
+  });
+
+  test("a paid account that is sent an offer still gets its own link", () => {
+    const upgrade = {
+      url: "https://app.squirrelscan.com/upgrade?plan=pro&org=org_1",
+      plan: "pro" as const,
+      interval: "month" as const,
+      name: "Pro",
+      priceMonthUsd: PRO.priceMonthUsd as number,
+      priceYearUsd: PRO.priceYearUsd as number,
+      monthlyCredits: PRO.monthlyCredits,
+    };
+    const out = text(
+      registerFailureLines({ ...insufficient, upgrade }, false, true)
+    );
+    expect(out).toContain(upgrade.url);
+  });
+
   test("says the audit itself still ran, so the warning isn't read as a failure", () => {
     expect(text(registerFailureLines(insufficient)).toLowerCase()).toContain(
       "ran locally"
