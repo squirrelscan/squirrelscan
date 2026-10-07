@@ -700,6 +700,12 @@ export interface AuditStatusSignals {
   /** Host(s) that throttled the crawl, for the reason text. */
   rateLimitedHosts?: readonly string[];
   /**
+   * Pages whose response arrived but whose body could not be decoded (crawl
+   * stats `pagesUndecodable`). They are missing from the analysis, so content
+   * present with a non-zero count is `partial`, not `completed`.
+   */
+  undecodablePages?: number;
+  /**
    * Why the entry URL could not be audited, recorded by the crawler on
    * `CrawlStats.rootFailure` (#1822). Read ONLY in the no-content branches that
    * are neither blocked nor rate limited, so it can never change the status of
@@ -786,11 +792,20 @@ export function deriveAuditStatus(s: AuditStatusSignals): {
   // Content WAS gathered, but rate limiting shrank the audited set. The numbers
   // present are trustworthy; the coverage is not, and a multi-site operator has
   // to be able to tell those apart (#1829).
-  if (rateLimited > 0) {
-    return {
-      status: "partial",
-      reason: `${rateLimited} page${rateLimited === 1 ? "" : "s"} rate limited by ${hostText}`,
-    };
+  const undecodable = s.undecodablePages ?? 0;
+  if (rateLimited > 0 || undecodable > 0) {
+    const reasons: string[] = [];
+    if (rateLimited > 0) {
+      reasons.push(`${rateLimited} page${rateLimited === 1 ? "" : "s"} rate limited by ${hostText}`);
+    }
+    // A page whose body could not be decoded is absent from every rule, so a
+    // rule reporting an absence cannot tell it from a page that lacks the thing.
+    if (undecodable > 0) {
+      reasons.push(
+        `${undecodable} page${undecodable === 1 ? "" : "s"} could not be decoded (bad content-encoding)`,
+      );
+    }
+    return { status: "partial", reason: reasons.join("; ") };
   }
   return { status: "completed" };
 }
@@ -820,7 +835,8 @@ export function deriveAuditStatusFromPages(
     errors?: number;
     hosts?: readonly string[];
   } = {},
-  rootFailure?: AuditFailureDetail
+  rootFailure?: AuditFailureDetail,
+  undecodablePages = 0
 ): {
   status: AuditStatus;
   reason?: string;
@@ -837,6 +853,7 @@ export function deriveAuditStatusFromPages(
     rateLimitedErrors: rateLimit.errors ?? 0,
     rateLimitedPages,
     rateLimitedHosts: rateLimit.hosts,
+    undecodablePages,
     // #1822: the crawl stats are the source of truth. When they carry nothing —
     // a report reconstructed from pages alone, or a pre-#1822 crawl — fall back
     // to the stored statuses, which still name the class for an all-4xx site.

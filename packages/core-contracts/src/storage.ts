@@ -199,6 +199,15 @@ export interface CrawlStats {
    */
   pagesRateLimited?: number;
   /**
+   * Fetches whose response arrived but whose body could not be decoded: the
+   * server declared a `content-encoding` its bytes do not honour. A subset of
+   * `pagesFailed`, disjoint from `pagesBlocked` and `pagesRateLimited`. The page
+   * is missing from the analysis, so a report that scored what it did fetch is
+   * `partial`, not `completed`, and says how many pages it lost. Optional for
+   * backward compatibility with older persisted stats blobs.
+   */
+  pagesUndecodable?: number;
+  /**
    * Why the crawl's ENTRY url could not be audited, when it could not (#1822).
    * The crawler records the first failure it sees, preferring the seed over a
    * sitemap/discovered URL, across all three shapes a root failure takes: a
