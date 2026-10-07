@@ -136,3 +136,33 @@ export function getRenderedProseText(element: Element): string {
     isBlockElement,
   );
 }
+
+/** Tags `getSeparatedText` never reads: markup the browser does not render as text. */
+const isSeparatedTextSkipped = tagExcluder(
+  new Set<string>([...SCRIPT_LIKE_TAGS, ...NON_RENDERED_TAGS]),
+);
+
+/**
+ * `element`'s text with a space between EVERY pair of adjacent nodes, inline or
+ * block, plus a space where each skipped subtree was.
+ *
+ * `.textContent` joins siblings with nothing: `<span>Published</span><span>March
+ * 12, 2024</span>Read more` reads back as `PublishedMarch 12, 2024Read more`, so
+ * a pattern anchored on a word boundary (or one that wants a word on either side
+ * of a date) sees neither fragment. For rules that look for a short pattern in
+ * text that was laid out in separate elements. Collapse the whitespace yourself
+ * when the exact spacing matters.
+ *
+ * `skipTags` adds lowercase tag names to drop whole, on top of
+ * `<script>`/`<style>`/`<noscript>`/`<template>`; pass `new Set(["a"])` to read
+ * what a block says in its own voice, without the text of its links.
+ */
+export function getSeparatedText(element: Element, skipTags?: ReadonlySet<string>): string {
+  const isSkippedTag = skipTags && skipTags.size > 0 ? tagExcluder(skipTags) : null;
+  return collectTextExcluding(
+    element,
+    (el) => isSeparatedTextSkipped(el) || (isSkippedTag?.(el) ?? false),
+    " ",
+    () => true,
+  );
+}

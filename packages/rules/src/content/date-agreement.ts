@@ -52,6 +52,7 @@ import {
   schemaDateString,
   typeNames,
 } from "../shared/schema-document";
+import { getSeparatedText } from "./text-content";
 
 const BYLINE_CHECK = "byline-vs-schema-date";
 const VISIBLE_MISSING_CHECK = "visible-date-missing";
@@ -85,33 +86,92 @@ export const optionsSchema = z.object({
 // Date parsing
 // ============================================================================
 
-const MONTH_NAMES =
-  "jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t)?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?";
+/**
+ * Month names by language, lowercase. Written dates are read in English, French,
+ * German, Spanish, Italian, Portuguese and Dutch; everything below is a month
+ * name or a conventional abbreviation of one. A string that means two different
+ * months in two languages would make the reading a guess, so none is listed
+ * (the short forms that double as common words, such as "out", "set" and "ago",
+ * are left out for the same reason).
+ */
+const MONTHS_BY_INDEX: readonly (readonly string[])[] = [
+  ["january", "jan", "janvier", "janv", "januar", "jänner", "enero", "ene", "gennaio", "janeiro", "januari"],
+  ["february", "feb", "février", "févr", "fév", "februar", "febrero", "febbraio", "fevereiro", "fev", "februari"],
+  ["march", "mar", "mars", "märz", "mär", "mrz", "marzo", "março", "maart", "mrt"],
+  ["april", "apr", "avril", "avr", "abril", "aprile", "abr"],
+  ["may", "mai", "mayo", "maggio", "maio", "mei"],
+  ["june", "jun", "juin", "juni", "junio", "giugno", "giu", "junho"],
+  ["july", "jul", "juillet", "juil", "juli", "julio", "luglio", "lug", "julho"],
+  ["august", "aug", "août", "aout", "agosto", "augustus"],
+  ["september", "sep", "sept", "septembre", "septiembre", "setiembre", "settembre", "sett", "setembro"],
+  ["october", "oct", "octobre", "oktober", "okt", "octubre", "ottobre", "ott", "outubro"],
+  ["november", "nov", "novembre", "noviembre", "novembro"],
+  ["december", "dec", "décembre", "déc", "dezember", "dez", "diciembre", "dic", "dicembre", "dezembro"],
+];
 
-const MONTH_INDEX: Record<string, number> = {
-  jan: 0,
-  feb: 1,
-  mar: 2,
-  apr: 3,
-  may: 4,
-  jun: 5,
-  jul: 6,
-  aug: 7,
-  sep: 8,
-  oct: 9,
-  nov: 10,
-  dec: 11,
-};
+/** Lowercase and drop diacritics, so "Février", "FEVRIER" and "février" are one key. */
+function foldMonthName(name: string): string {
+  return name.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
+}
+
+const MONTH_INDEX = new Map<string, number>();
+for (const [index, names] of MONTHS_BY_INDEX.entries()) {
+  for (const name of names) MONTH_INDEX.set(foldMonthName(name), index);
+}
+
+// Longest first, so "mars" is not cut short to "mar" and "septembre" to "sep".
+const MONTH_NAMES = [
+  ...new Set(MONTHS_BY_INDEX.flat().flatMap((name) => [name, foldMonthName(name)])),
+]
+  .sort((a, b) => b.length - a.length)
+  .join("|");
+
+/** "8th", "1st", "8." (German), "1er" (French), "8º" — the day's ordinal marker. */
+const ORDINAL = "(?:\\s?(?:st|nd|rd|th|er|º|°)|\\.)?";
+/** "8 de enero de 2026", "8th of January 2026": the connective between parts. */
+const OF = "(?:de\\s+|del\\s+|of\\s+)?";
+
+// Boundaries are lookarounds, never `\b`: `\b` after the year needs a non-word
+// character next, and `textContent` hands over `March 12, 2024Read more`.
+const NOT_AFTER_LETTER_OR_DIGIT = "(?<![\\p{L}\\p{N}])";
+const NOT_BEFORE_DIGIT = "(?!\\d)";
 
 const ISO_DATE_RE = /(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)/;
+const YMD_SEPARATED_RE = /(?<![\d./-])(\d{4})([/.])(\d{1,2})\2(\d{1,2})(?![\d./-])/;
+const CJK_DATE_RE = /(?<!\d)(\d{4})\s*[年년]\s*(\d{1,2})\s*[月월]\s*(\d{1,2})\s*[日일]/;
 const MONTH_FIRST_RE = new RegExp(
-  `\\b(${MONTH_NAMES})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s+(\\d{4})\\b`,
-  "i",
+  `${NOT_AFTER_LETTER_OR_DIGIT}(${MONTH_NAMES})\\.?\\s+${OF}(\\d{1,2})${ORDINAL}\\s*,?\\s*${OF}(\\d{4})${NOT_BEFORE_DIGIT}`,
+  "iu",
 );
 const DAY_FIRST_RE = new RegExp(
-  `\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(${MONTH_NAMES})\\.?,?\\s+(\\d{4})\\b`,
-  "i",
+  `(?<!\\d)(\\d{1,2})${ORDINAL}\\s+${OF}(${MONTH_NAMES})\\.?\\s*,?\\s*${OF}(\\d{4})${NOT_BEFORE_DIGIT}`,
+  "iu",
 );
+const NUMERIC_DMY_RE = /(?<![\d./-])(\d{1,2})([/.-])(\d{1,2})\2(\d{4})(?![\d./-])/;
+
+/**
+ * A date-shaped string in ANY language, parsed or not: a day, a word and a year;
+ * a year, a word and a day; `d/m/yy`; `2026年1月`. Broader than `matchDate` on
+ * purpose. "This page shows the reader no date" is only worth saying when it is
+ * literally true, and a Polish "8 stycznia 2026" is a date this rule cannot read
+ * but a reader can. Silence is the correct failure mode for a date we cannot parse.
+ */
+const DATE_SHAPED_RES: readonly RegExp[] = [
+  new RegExp(
+    `(?<!\\d)\\d{1,2}${ORDINAL}\\s+${OF}\\p{L}{3,}\\.?\\s*,?\\s*${OF}(?:19|20)\\d{2}${NOT_BEFORE_DIGIT}`,
+    "iu",
+  ),
+  new RegExp(
+    `${NOT_AFTER_LETTER_OR_DIGIT}\\p{L}{3,}\\.?\\s+${OF}\\d{1,2}${ORDINAL}\\s*,?\\s*${OF}(?:19|20)\\d{2}${NOT_BEFORE_DIGIT}`,
+    "iu",
+  ),
+  new RegExp(
+    `(?<!\\d)(?:19|20)\\d{2}\\.?\\s+\\p{L}{3,}\\.?\\s+\\d{1,2}(?!\\d)`,
+    "iu",
+  ),
+  /(?<!\d)\d{4}\s*[年년]\s*\d{1,2}\s*[月월]/u,
+  /(?<![\d./-])\d{1,2}\/\d{1,2}\/\d{2}(?!\d)/,
+];
 
 /** A date signal, normalized to UTC midnight so two forms compare cleanly. */
 interface DateSignal {
@@ -119,6 +179,8 @@ interface DateSignal {
   value: string;
   /** UTC midnight of the calendar day the value names. */
   ms: number;
+  /** Other days the same text can mean (`08/01/2026` is the 8th of January or of August). */
+  alternatives?: number[];
   /** Where the value came from — reported so a fix targets the right markup. */
   source: string;
 }
@@ -127,7 +189,21 @@ function utcDay(year: number, month: number, day: number): number | null {
   if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
   if (year < MIN_YEAR || year > MAX_YEAR) return null;
   if (month < 0 || month > 11 || day < 1 || day > 31) return null;
-  return Date.UTC(year, month, day);
+  const ms = Date.UTC(year, month, day);
+  // `Date.UTC` rolls 31 April over to 1 May; a day that is not on the calendar
+  // is not a date, and reading it as the next month's would invent a gap.
+  return new Date(ms).getUTCMonth() === month ? ms : null;
+}
+
+function monthFromName(name: string | undefined): number | undefined {
+  return name === undefined ? undefined : MONTH_INDEX.get(foldMonthName(name));
+}
+
+interface DateMatch {
+  text: string;
+  ms: number;
+  /** Other readings of the same text, when it is ambiguous (see `DateSignal`). */
+  alternatives?: number[];
 }
 
 /**
@@ -136,17 +212,34 @@ function utcDay(year: number, month: number, day: number): number | null {
  * reads "March 12, 2024" as LOCAL midnight — enough to shift the calendar day
  * and turn an exact match into a one-day disagreement in half the world's
  * timezones.
+ *
+ * A numeric `08/01/2026` is the 8th of January in most of the world and the 1st
+ * of August in the US. It is read both ways when both are possible: the caller
+ * compares the closest reading, so a date that agrees with the schema either
+ * way is never reported, and one that agrees with neither is a real gap.
  */
-export function matchDate(text: string): { text: string; ms: number } | null {
+export function matchDate(text: string): DateMatch | null {
   const iso = ISO_DATE_RE.exec(text);
   if (iso) {
     const ms = utcDay(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
     if (ms !== null) return { text: iso[0], ms };
   }
 
+  const cjk = CJK_DATE_RE.exec(text);
+  if (cjk) {
+    const ms = utcDay(Number(cjk[1]), Number(cjk[2]) - 1, Number(cjk[3]));
+    if (ms !== null) return { text: cjk[0], ms };
+  }
+
+  const ymd = YMD_SEPARATED_RE.exec(text);
+  if (ymd) {
+    const ms = utcDay(Number(ymd[1]), Number(ymd[3]) - 1, Number(ymd[4]));
+    if (ms !== null) return { text: ymd[0], ms };
+  }
+
   const monthFirst = MONTH_FIRST_RE.exec(text);
   if (monthFirst) {
-    const month = MONTH_INDEX[monthFirst[1]!.slice(0, 3).toLowerCase()];
+    const month = monthFromName(monthFirst[1]);
     const ms =
       month === undefined ? null : utcDay(Number(monthFirst[3]), month, Number(monthFirst[2]));
     if (ms !== null) return { text: monthFirst[0], ms };
@@ -154,12 +247,31 @@ export function matchDate(text: string): { text: string; ms: number } | null {
 
   const dayFirst = DAY_FIRST_RE.exec(text);
   if (dayFirst) {
-    const month = MONTH_INDEX[dayFirst[2]!.slice(0, 3).toLowerCase()];
+    const month = monthFromName(dayFirst[2]);
     const ms = month === undefined ? null : utcDay(Number(dayFirst[3]), month, Number(dayFirst[1]));
     if (ms !== null) return { text: dayFirst[0], ms };
   }
 
+  const numeric = NUMERIC_DMY_RE.exec(text);
+  if (numeric) {
+    const [a, b, year] = [Number(numeric[1]), Number(numeric[3]), Number(numeric[4])];
+    const dayFirstReading = utcDay(year, b - 1, a);
+    const monthFirstReading = utcDay(year, a - 1, b);
+    const readings = [...new Set([dayFirstReading, monthFirstReading])].filter(
+      (ms): ms is number => ms !== null,
+    );
+    const [ms, ...alternatives] = readings;
+    if (ms !== undefined) {
+      return { text: numeric[0], ms, ...(alternatives.length > 0 ? { alternatives } : {}) };
+    }
+  }
+
   return null;
+}
+
+/** True when `text` contains something date-shaped, whether or not it can be read. */
+export function looksLikeDate(text: string): boolean {
+  return matchDate(text) !== null || DATE_SHAPED_RES.some((re) => re.test(text));
 }
 
 /**
@@ -173,13 +285,32 @@ function parseDateValue(raw: string | null | undefined, source: string): DateSig
   if (!value) return null;
 
   const matched = matchDate(value);
-  if (matched) return { value, ms: matched.ms, source };
+  if (matched) {
+    return {
+      value,
+      ms: matched.ms,
+      ...(matched.alternatives ? { alternatives: matched.alternatives } : {}),
+      source,
+    };
+  }
 
   const parsed = Date.parse(value);
   if (Number.isNaN(parsed)) return null;
   const date = new Date(parsed);
   const ms = utcDay(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
   return ms === null ? null : { value, ms, source };
+}
+
+/** Every calendar day `signal` can mean. */
+function readings(signal: DateSignal): number[] {
+  return [signal.ms, ...(signal.alternatives ?? [])];
+}
+
+/** Days between the closest readings of two signals. */
+function gapBetween(a: DateSignal, b: DateSignal): number {
+  let gap = Infinity;
+  for (const x of readings(a)) for (const y of readings(b)) gap = Math.min(gap, deltaDays(x, y));
+  return gap;
 }
 
 function deltaDays(a: number, b: number): number {
@@ -272,7 +403,7 @@ const BYLINE_CONTEXT_RE =
 
 /** Words a byline line legitimately opens with. */
 const BYLINE_PREFIX_RE =
-  /^(published|posted|updated|last\s+updated|last\s+modified|last\s+reviewed|written|reviewed|revised|date)\b/i;
+  /^(?:(?:published|posted|updated|last\s+updated|last\s+modified|last\s+reviewed|written|reviewed|revised|date|publi[ée]e?|mis\s+[àa]\s+jour|modifi[ée]e?|ver[öo]ffentlicht|aktualisiert|ge[äa]ndert|datum|publicad[oa]|actualizad[oa]|fecha|pubblicat[oa]|aggiornat[oa]|data|gepubliceerd|bijgewerkt)(?![\p{L}\p{N}])|公開日|投稿日|更新日|最終更新|发布|發佈|发表|更新|게시|작성|수정)/iu;
 
 /** Decorations that survive removing the date from a byline line. */
 const BYLINE_NOISE_RE =
@@ -285,24 +416,15 @@ function cleanText(value: string | null | undefined): string {
   return (value ?? "").replace(/\s+/g, " ").trim();
 }
 
+const ANCHOR_TAGS: ReadonlySet<string> = new Set(["a"]);
+
 /**
  * `el`'s text with every anchor's text removed. A date-shaped string that only
  * exists inside a link is a citation ("as measured on <a>March 12, 2024</a>"),
  * not this page's publication date.
  */
 function textWithoutAnchors(el: Element): string {
-  let text = "";
-  for (const node of el.childNodes) {
-    if (node.nodeType === 3) {
-      text += node.textContent ?? "";
-      continue;
-    }
-    if (node.nodeType !== 1) continue;
-    const child = node as unknown as Element;
-    if (child.tagName?.toLowerCase() === "a") continue;
-    text += textWithoutAnchors(child);
-  }
-  return text;
+  return getSeparatedText(el, ANCHOR_TAGS);
 }
 
 /** The region a byline can live in: the article body, else main, else the page. */
@@ -432,7 +554,12 @@ function findVisibleDates(doc: Document): DateSignal[] {
     if (!matched) continue;
     if (!hasBylineContext(el) && !isBylineLine(line, matched.text)) continue;
 
-    add({ value: matched.text, ms: matched.ms, source: "visible:byline" });
+    add({
+      value: matched.text,
+      ms: matched.ms,
+      ...(matched.alternatives ? { alternatives: matched.alternatives } : {}),
+      source: "visible:byline",
+    });
   }
 
   return found;
@@ -440,14 +567,15 @@ function findVisibleDates(doc: Document): DateSignal[] {
 
 /**
  * True when main content prints a date-shaped string ANYWHERE — byline-shaped or
- * not, citation or prose. "This page shows the reader no date" is only worth
- * saying when it is literally true: a date this rule declined to read as a
- * byline is still a date on the reader's screen, and accusing a page that shows
- * one is exactly the kind of finding that gets a rule switched off.
+ * not, citation or prose, in a language this rule can read or not. "This page
+ * shows the reader no date" is only worth saying when it is literally true: a
+ * date this rule declined to read as a byline is still a date on the reader's
+ * screen, and accusing a page that shows one is exactly the kind of finding that
+ * gets a rule switched off.
  */
 function showsAnyDate(doc: Document): boolean {
   const root = contentRoot(doc);
-  return root !== null && matchDate(cleanText(root.textContent)) !== null;
+  return root !== null && looksLikeDate(cleanText(getSeparatedText(root)));
 }
 
 // ============================================================================
@@ -461,6 +589,24 @@ function yearIn(text: string): number | null {
   if (!match) return null;
   const year = Number(match[0]);
   return year >= MIN_YEAR && year <= MAX_YEAR ? year : null;
+}
+
+/** A path segment that is a year on its own (`/2024/03/post`) or leads a dated slug. */
+const PATH_YEAR_RE = /^((?:19|20)\d{2})(?:$|-\d{1,2}(?:-\d{1,2})?(?:-|$))/;
+
+/**
+ * The year a URL path claims as its date. Only a year that is a path segment of
+ * its own (`/blog/2024/03/caching`) or opens a dated slug (`/2024-03-12-caching`)
+ * counts: a year inside a slug is far more often a model year, a product year or
+ * a "best of 2024" round-up (`/reviews/2024-honda-civic-review`) than the date the
+ * post was written, and a rule that argues with those teaches people to ignore it.
+ */
+function pathYearIn(pathname: string): number | null {
+  for (const segment of pathname.split("/")) {
+    const match = PATH_YEAR_RE.exec(segment);
+    if (match) return Number(match[1]);
+  }
+  return null;
 }
 
 // ============================================================================
@@ -555,9 +701,9 @@ export const dateAgreementRule: Rule = {
       const best = visibleDates
         .map((shown) => {
           const nearest = schemaDates.reduce((closest, candidate) =>
-            deltaDays(shown.ms, candidate.ms) < deltaDays(shown.ms, closest.ms) ? candidate : closest,
+            gapBetween(shown, candidate) < gapBetween(shown, closest) ? candidate : closest,
           );
-          return { shown, nearest, gap: deltaDays(shown.ms, nearest.ms) };
+          return { shown, nearest, gap: gapBetween(shown, nearest) };
         })
         .reduce((closest, candidate) => (candidate.gap < closest.gap ? candidate : closest));
 
@@ -602,7 +748,7 @@ export const dateAgreementRule: Rule = {
 
     // A year in the URL or the title is a date claim too, and it is the one
     // nobody updates when a post is re-dated.
-    const pathYear = yearIn(getPathname(ctx.page.url) || ctx.page.url);
+    const pathYear = pathYearIn(getPathname(ctx.page.url) || ctx.page.url);
     const titleYear = pathYear === null ? yearIn(ctx.parsed.meta?.title ?? "") : null;
     const claimedYear = pathYear ?? titleYear;
     if (claimedYear !== null) {
