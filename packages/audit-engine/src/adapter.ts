@@ -1395,6 +1395,8 @@ export function runRulesOnStorage(
         crawl?.originalUrl,
       ]),
       robotsTxt: robotsData,
+      // What the site refused, so a rule says "refused" not "absent".
+      refusedFetches: crawl?.stats?.refusedFetches,
       llmsTxt: llmsData,
       markdownResponse: markdownData,
       wellKnown: wellKnownData,
@@ -2096,6 +2098,8 @@ function buildStreamingSiteData(
         crawl?.originalUrl,
       ]),
       robotsTxt: robotsData,
+      // What the site refused, so a rule says "refused" not "absent".
+      refusedFetches: crawl?.stats?.refusedFetches,
       llmsTxt: llmsData,
       markdownResponse: markdownData,
       wellKnown: wellKnownData,

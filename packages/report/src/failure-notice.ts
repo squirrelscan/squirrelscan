@@ -5,7 +5,12 @@
 // squirrelscan outage. Plain strings only (no JSX) so it renders in any
 // consumer; pure so it can be unit-tested without rendering a page.
 
-import type { AuditFailureReasonCode, AuditStatus } from "@squirrelscan/core-contracts";
+import {
+  summarizeRefusedFetches,
+  type AuditFailureReasonCode,
+  type AuditStatus,
+  type RefusedFetch,
+} from "@squirrelscan/core-contracts";
 import {
   AUDIT_FAILURE_CAUSE,
   AUDIT_FAILURE_NEXT_STEP,
@@ -127,4 +132,14 @@ export function reportFailureReasonCode(report: {
   statusReasonCode?: AuditFailureReasonCode;
 }): AuditFailureReasonCode {
   return report.statusReasonCode ?? classifyAuditFailureReasonText(report.statusReason);
+}
+
+/**
+ * One line per root fetch the site refused, e.g.
+ * `/robots.txt: HTTP 403 (Cloudflare)`. Empty when nothing was refused. Shared
+ * so every renderer names the same refusals the same way; the caller escapes
+ * for its own format.
+ */
+export function refusedFetchLines(report: { refusedFetches?: readonly RefusedFetch[] }): string[] {
+  return summarizeRefusedFetches(report.refusedFetches ?? []);
 }

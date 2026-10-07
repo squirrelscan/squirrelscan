@@ -25,6 +25,7 @@ import { urlHostKey } from "@squirrelscan/utils/url";
 
 import { budgetRemainingMs, createPhaseBudget, withRequestDeadline } from "../deadline";
 import type { PhaseBudget, ProbeGate } from "../deadline";
+import { RefusalLog } from "../refusals";
 import {
   computeSitemapUrlCap,
   discoverSitemaps,
@@ -2529,7 +2530,12 @@ export function createCrawler(
         // caller's own work between the two sits inside the window, so a slow
         // local storage lookup could arrive here with the budget already spent
         // and silently skip every probe on a perfectly healthy origin.
-        const preamble = createPhaseBudget(preambleBudgetMs(config.timeoutMs));
+        //
+        // The log rides on the budget so every root probe can note a request the
+        // site refused; persisted below so the rules say "refused", not "absent"
+        //.
+        const refusals = new RefusalLog();
+        const preamble = createPhaseBudget(preambleBudgetMs(config.timeoutMs), Date.now(), refusals);
 
         // Follow redirects to get final URL (both HTTP and client-side)
         const rawFinalTargetUrl = yield* detectRedirects(targetUrl, preamble);
@@ -2719,8 +2725,20 @@ export function createCrawler(
             maxUrls: sitemapUrlCap,
             customHeaders: config.headers,
             walkWindowMs: sitemapWalkWindowMs(config.timeoutMs),
+            refusals,
           },
         );
+
+        // Every root probe has run (robots, llms, markdown, sitemaps). A site
+        // that refused any of them has not told us the file is missing.
+        const refusedFetches = refusals.list();
+        if (refusedFetches.length > 0) {
+          logger.warn(
+            "root fetches refused",
+            `${refusedFetches.length} root request(s) were refused; absence is unconfirmed`,
+          );
+          yield* storage.updateStats(crawlId, { refusedFetches });
+        }
 
         // The walk is bounded by its own progress window, NOT the preamble
         // budget: truncating it costs pages rather than AX metadata, and a site

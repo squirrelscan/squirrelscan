@@ -7,6 +7,8 @@ import { readBodyCapped } from "@squirrelscan/utils/response-body";
 
 import { BUDGET_EXHAUSTED_ERROR, budgetedTimeoutMs, safeFetchWithDeadline } from "./deadline";
 
+import { noteRefusal } from "./refusals";
+
 import type { PhaseBudget } from "./deadline";
 
 // Matches the limit Google documents for robots.txt; anything past it is
@@ -111,6 +113,9 @@ export function fetchRobotsEvaluator(
 
           if (!response.ok) {
             await response.body?.cancel().catch(() => {});
+            // A refusal is an unanswered request: the status stays in the
+            // recorded error, the log names who refused.
+            noteRefusal(budget?.refusals, robotsUrl, "robots.txt", response);
             return unreachableEvaluator(robotsUrl, `HTTP ${response.status}`);
           }
 

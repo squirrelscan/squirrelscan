@@ -98,6 +98,23 @@ export interface RunnerOptions extends RunnerScope {
 
 const DEFAULT_RULE_CONCURRENCY = 8;
 
+/** Site rules that report the absence of a root resource, beyond the discovery-probe readers. */
+const ROOT_RESOURCE_RULES: ReadonlySet<string> = new Set(["crawl/sitemap-exists"]);
+
+/** Whether a rule's findings are about root resources (a discovery probe or the sitemap). */
+function judgesRootResource(rule: Rule): boolean {
+  return (rule.meta.discoveryProbes?.length ?? 0) > 0 || ROOT_RESOURCE_RULES.has(rule.meta.id);
+}
+
+/**
+ * Whether the crawl fetched no page at all. Reads `crawlLimits`, which both
+ * engine paths set; undefined (a caller that never threaded it) reads as "pages
+ * were fetched", so nothing is skipped without evidence.
+ */
+function fetchedNoPages(site: SiteData | undefined): boolean {
+  return site?.crawlLimits?.pagesCrawled === 0;
+}
+
 export interface PageRunResult {
   checks: CheckResult[];
   parsed: ParsedPage;
@@ -307,6 +324,25 @@ export class RuleRunner {
           ],
         };
       }
+    }
+
+    // No-observation gate: a rule that judges a root resource (a discovery
+    // probe, the sitemap) reports an absence when it finds nothing, but a crawl
+    // that fetched no page of the site never saw the site answer at all: it is
+    // down or walled, and a 500 or a challenge on /sitemap.xml says nothing
+    // about whether a sitemap exists. Skipped, never a finding.
+    if (rule.meta.scope === "site" && judgesRootResource(rule) && fetchedNoPages(ctx.site)) {
+      return {
+        meta: rule.meta,
+        checks: [
+          {
+            name: rule.meta.id,
+            status: "skipped",
+            message: "Skipped: no page of the site was fetched, so its root files were not judged",
+            skipReason: "no-pages-fetched",
+          },
+        ],
+      };
     }
 
     // #1951: this rule already ran on a page sharing this one's template cluster

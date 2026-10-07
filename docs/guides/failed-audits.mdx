@@ -14,6 +14,18 @@ Every failed audit names the cause. The reason appears in the report, in the fai
 
 If your site actively refused the crawler with a 403 or 429, the audit is marked **blocked**, not failed. That is a separate state with its own guidance: let the squirrelscan crawler through your WAF or bot protection without switching the protection off (see [bot protection or WAF challenge](#waf-challenge) and [Firewall and WAF exceptions](/cloud/firewall)), or run the CLI from a trusted network.
 
+### What a blocked report says about your root files
+
+A site that refuses the crawler has not told us whether its `robots.txt`, sitemaps, `llms.txt` or Markdown responses exist. A blocked or failed audit therefore reports none of them as missing, scores no category, and lists the requests the site refused, with the bot protection vendor when the response names one:
+
+```text
+Refused by the site (not checked, so not reported as missing):
+  /robots.txt: HTTP 403 (Cloudflare)
+  sitemap, 8 requests (first /sitemap.xml): HTTP 403 (Cloudflare)
+```
+
+The JSON report carries the same list as `refusedFetches`, one entry per refused request with its `url`, `resource`, `status` and `provider`. The list is capped at 20 requests. A partly blocked audit that still read pages reports the refused root files as not checked, rather than missing, in the same way.
+
 ## The failure reasons
 
 | Code | What it means | What to do |

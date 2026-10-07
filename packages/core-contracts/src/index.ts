@@ -1,5 +1,6 @@
 // Re-export all storage types (CrawlStorage, PageRecord, etc.)
 export * from "./storage";
+export * from "./refused-fetch";
 
 // Cache-stats aggregation helper (#108).
 export * from "./cache-stats";
@@ -70,6 +71,7 @@ import type {
 import type { SiteMetadata } from "./site-metadata";
 import type { ResolutionSignal } from "./resolution";
 import type { AuditFailureReasonCode } from "./failure-reason";
+import type { RefusedFetch } from "./refused-fetch";
 import type { EntityMap } from "./entity-map";
 
 export interface CheckItem {
@@ -316,6 +318,13 @@ export interface AuditReport {
    * `classifyAuditFailureReasonText` recovers the class from the text.
    */
   statusReasonCode?: AuditFailureReasonCode;
+  /**
+   * Root fetches (robots.txt, sitemaps, llms.txt, the Markdown probe) the site
+   * refused with a 401/403/429 or a bot-challenge 503. A refusal is a coverage
+   * failure, not evidence the resource is absent, so the rules report these as
+   * not checked and the renderers list them. Absent when nothing was refused.
+   */
+  refusedFetches?: RefusedFetch[];
   healthScore?: HealthScore;
   ruleResults: Record<string, ReportRuleResult>;
   /**

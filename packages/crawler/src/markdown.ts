@@ -2,6 +2,8 @@ import { Effect } from "effect";
 
 import { budgetedTimeoutMs, safeFetchWithDeadline, ungated } from "./deadline";
 
+import { noteRefusal } from "./refusals";
+
 import type { PhaseBudget, ProbeGate } from "./deadline";
 import type { MarkdownProbeData } from "@squirrelscan/core-contracts";
 
@@ -48,7 +50,8 @@ const unreachableProbe = (): ProbeResult => ({
 });
 
 // Probe one URL for its status + headers only; never downloads the body.
-// null when there was no answer: skipped by the budget, or failed in flight.
+// null when there was no answer: skipped by the budget, failed in flight, or
+// refused by the site (401/403/429, a bot wall).
 async function probeOne(
   url: string,
   userAgent: string,
@@ -64,6 +67,10 @@ async function probeOne(
       { headers: { "User-Agent": userAgent, Accept: accept, ...customHeaders } },
       timeoutMs,
       async (res) => {
+        if (noteRefusal(budget?.refusals, url, "markdown", res)) {
+          await res.body?.cancel().catch(() => {});
+          return null;
+        }
         const contentType = res.headers.get("content-type");
         const result: ProbeResult = {
           ok: res.ok,

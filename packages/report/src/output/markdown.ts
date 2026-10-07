@@ -4,7 +4,7 @@ import type { ReportBranding } from "@squirrelscan/core-contracts";
 import type { AuditReport } from "../types";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
 import { cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
-import { reportFailureReasonCode } from "../failure-notice";
+import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
 import { getScoreGrade } from "../scoring";
 import { REPORT_SOURCE_PAGES_PREVIEW, REPORT_PAGES_HARD_CAP } from "../constants";
 import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
@@ -224,6 +224,15 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
         lines.push("");
       }
       lines.push(AUDIT_FAILURE_NEXT_STEP[code]);
+    }
+    // Name what was refused, so a missing robots.txt or sitemap reads as
+    // "the site would not say" and never as "the site has none".
+    const refused = refusedFetchLines(report);
+    if (refused.length > 0) {
+      lines.push("");
+      lines.push("Refused by the site (not checked, so not reported as missing):");
+      lines.push("");
+      for (const line of refused) lines.push(`- ${escapeMarkdownInline(line)}`);
     }
     lines.push("");
   } else if (report.healthScore) {
