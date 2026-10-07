@@ -150,6 +150,15 @@ describe("looksLikeDate", () => {
     expect(looksLikeDate("Order 20240312 shipped")).toBe(false);
     expect(looksLikeDate("Version 1.2.34 is out")).toBe(false);
   });
+
+  test("is false for a number, an ordinary word and a year", () => {
+    expect(looksLikeDate("3 million 2024")).toBe(false);
+    expect(looksLikeDate("5 sites in 2024")).toBe(false);
+    expect(looksLikeDate("Top 10 2024")).toBe(false);
+    expect(looksLikeDate("Chapter 3 2024")).toBe(false);
+    expect(looksLikeDate("2024 Honda 5")).toBe(false);
+    expect(looksLikeDate("Over 20 users 2024")).toBe(false);
+  });
 });
 
 describe("content/date-agreement — must not fire", () => {
@@ -179,6 +188,28 @@ describe("content/date-agreement — must not fire", () => {
 
     expect(checks.every((c) => c.status !== "warn")).toBe(true);
     expect(check(checks, "byline-vs-schema-date")?.value).toBe("February 10, 2026");
+  });
+
+  test("'Data' opening a sentence is not a byline prefix", () => {
+    const html = page(
+      article("2026-02-10"),
+      "<main><article><h1>Interaction to Next Paint</h1>" +
+        "<p>Data as of March 12, 2024 shows INP is the metric to watch.</p>" +
+        `${PROSE}</article></main>`,
+    );
+
+    expect(check(run(html), "byline-vs-schema-date")?.value).not.toBe("March 12, 2024");
+  });
+
+  test("'Data:' and 'Datum:' still open a byline", () => {
+    const html = page(
+      article("2026-02-10"),
+      "<main><article><h1>Interaction to Next Paint</h1>" +
+        "<p class=\"byline\">Data: February 10, 2026</p>" +
+        `${PROSE}</article></main>`,
+    );
+
+    expect(check(run(html), "byline-vs-schema-date")?.value).toBe("February 10, 2026");
   });
 
   test("prose without any byline at all is still not read as a byline", () => {

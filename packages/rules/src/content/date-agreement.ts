@@ -150,6 +150,24 @@ const DAY_FIRST_RE = new RegExp(
 const NUMERIC_DMY_RE = /(?<![\d./-])(\d{1,2})([/.-])(\d{1,2})\2(\d{4})(?![\d./-])/;
 
 /**
+ * English words that sit between a number and a year in prose ("3 million 2024",
+ * "Top 10 2024", "Chapter 3 2024") and must not pass for a month in a language
+ * we cannot read. The generic patterns below accept any other word, so this is
+ * the list of what we know is not a month.
+ */
+const NOT_A_MONTH_WORD = [
+  "million", "billion", "trillion", "thousand", "hundred", "percent", "chapter", "section",
+  "part", "page", "pages", "site", "sites", "user", "users", "people", "item", "items",
+  "result", "results", "review", "reviews", "comment", "comments", "post", "posts", "view",
+  "views", "time", "times", "year", "years", "day", "days", "month", "months", "week", "weeks",
+  "hour", "hours", "minute", "minutes", "step", "steps", "tip", "tips", "way", "ways", "top",
+  "best", "new", "honda", "toyota", "ford", "tools", "tool", "apps", "app", "ideas", "things",
+  "reasons", "facts", "stats", "points", "versions", "version", "edition", "model",
+  "series", "season", "episode", "volume", "issue", "round", "level", "rank", "ranked", "worth",
+].join("|");
+const NOT_A_MONTH = `(?!(?:${NOT_A_MONTH_WORD})(?![\\p{L}]))`;
+
+/**
  * A date-shaped string in ANY language, parsed or not: a day, a word and a year;
  * a year, a word and a day; `d/m/yy`; `2026年1月`. Broader than `matchDate` on
  * purpose. "This page shows the reader no date" is only worth saying when it is
@@ -158,15 +176,15 @@ const NUMERIC_DMY_RE = /(?<![\d./-])(\d{1,2})([/.-])(\d{1,2})\2(\d{4})(?![\d./-]
  */
 const DATE_SHAPED_RES: readonly RegExp[] = [
   new RegExp(
-    `(?<!\\d)\\d{1,2}${ORDINAL}\\s+${OF}\\p{L}{3,}\\.?\\s*,?\\s*${OF}(?:19|20)\\d{2}${NOT_BEFORE_DIGIT}`,
+    `(?<!\\d)\\d{1,2}${ORDINAL}\\s+${OF}${NOT_A_MONTH}\\p{L}{3,}\\.?\\s*,?\\s*${OF}(?:19|20)\\d{2}${NOT_BEFORE_DIGIT}`,
     "iu",
   ),
   new RegExp(
-    `${NOT_AFTER_LETTER_OR_DIGIT}\\p{L}{3,}\\.?\\s+${OF}\\d{1,2}${ORDINAL}\\s*,?\\s*${OF}(?:19|20)\\d{2}${NOT_BEFORE_DIGIT}`,
+    `${NOT_AFTER_LETTER_OR_DIGIT}${NOT_A_MONTH}\\p{L}{3,}\\.?\\s+${OF}\\d{1,2}${ORDINAL}\\s*,?\\s*${OF}(?:19|20)\\d{2}${NOT_BEFORE_DIGIT}`,
     "iu",
   ),
   new RegExp(
-    `(?<!\\d)(?:19|20)\\d{2}\\.?\\s+\\p{L}{3,}\\.?\\s+\\d{1,2}(?!\\d)`,
+    `(?<!\\d)(?:19|20)\\d{2}\\.?\\s+${NOT_A_MONTH}\\p{L}{3,}\\.?\\s+\\d{1,2}(?!\\d)`,
     "iu",
   ),
   /(?<!\d)\d{4}\s*[年년]\s*\d{1,2}\s*[月월]/u,
@@ -403,7 +421,7 @@ const BYLINE_CONTEXT_RE =
 
 /** Words a byline line legitimately opens with. */
 const BYLINE_PREFIX_RE =
-  /^(?:(?:published|posted|updated|last\s+updated|last\s+modified|last\s+reviewed|written|reviewed|revised|date|publi[ée]e?|mis\s+[àa]\s+jour|modifi[ée]e?|ver[öo]ffentlicht|aktualisiert|ge[äa]ndert|datum|publicad[oa]|actualizad[oa]|fecha|pubblicat[oa]|aggiornat[oa]|data|gepubliceerd|bijgewerkt)(?![\p{L}\p{N}])|公開日|投稿日|更新日|最終更新|发布|發佈|发表|更新|게시|작성|수정)/iu;
+  /^(?:(?:published|posted|updated|last\s+updated|last\s+modified|last\s+reviewed|written|reviewed|revised|date|publi[ée]e?|mis\s+[àa]\s+jour|modifi[ée]e?|ver[öo]ffentlicht|aktualisiert|ge[äa]ndert|datum(?=\s*[:：\d])|publicad[oa]|actualizad[oa]|fecha|pubblicat[oa]|aggiornat[oa]|data(?=\s*[:：\d])|gepubliceerd|bijgewerkt)(?![\p{L}\p{N}])|公開日|投稿日|更新日|最終更新|发布|發佈|发表|更新|게시|작성|수정)/iu;
 
 /** Decorations that survive removing the date from a byline line. */
 const BYLINE_NOISE_RE =
