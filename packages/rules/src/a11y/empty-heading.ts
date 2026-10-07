@@ -1,6 +1,34 @@
 // a11y/empty-heading - Headings have content
 
+import type { CheckItem } from "@squirrelscan/core-contracts";
+
+import { fieldSnippet } from "../shared/form-fields";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
+const HIDDEN_STYLE = /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden)\b/i;
+const DISPLAY_NONE_STYLE = /(?:^|;)\s*display\s*:\s*none\b/i;
+
+/** `hidden` removes the element from rendering, except `hidden="until-found"`. */
+function hasHiddenAttribute(el: Element): boolean {
+  const value = el.getAttribute("hidden");
+  return value !== null && value.trim().toLowerCase() !== "until-found";
+}
+
+/**
+ * True when the markup alone proves the heading is not in the accessibility
+ * tree: its own `hidden`, inline `display:none` or `visibility:hidden`, or an
+ * ancestor that is `hidden`, `aria-hidden="true"` or inline `display:none`.
+ * Hiding through CSS classes or stylesheets cannot be seen from the markup.
+ */
+function isHiddenFromMarkup(heading: Element): boolean {
+  if (HIDDEN_STYLE.test(heading.getAttribute("style") ?? "")) return true;
+  for (let el: Element | null = heading; el; el = el.parentElement) {
+    if (hasHiddenAttribute(el)) return true;
+    if (el.getAttribute("aria-hidden")?.trim().toLowerCase() === "true") return true;
+    if (el !== heading && DISPLAY_NONE_STYLE.test(el.getAttribute("style") ?? "")) return true;
+  }
+  return false;
+}
 
 export const emptyHeadingRule: Rule = {
   meta: {
@@ -22,16 +50,17 @@ export const emptyHeadingRule: Rule = {
     const checks: CheckResult[] = [];
 
     const headings = doc.querySelectorAll("h1, h2, h3, h4, h5, h6");
-    const emptyHeadings: string[] = [];
+    const emptyHeadings: CheckItem[] = [];
 
+    let position = 0;
     for (const heading of headings) {
+      position++;
       const text = heading.textContent?.trim();
       const ariaLabel = heading.getAttribute("aria-label")?.trim();
       const ariaLabelledby = heading.getAttribute("aria-labelledby");
-      const ariaHidden = heading.getAttribute("aria-hidden");
 
-      // Skip hidden headings
-      if (ariaHidden === "true") continue;
+      // Skip headings that are not rendered
+      if (isHiddenFromMarkup(heading)) continue;
 
       // Check if heading has any accessible content
       let hasContent = !!text || !!ariaLabel;
@@ -59,9 +88,11 @@ export const emptyHeadingRule: Rule = {
         const level = heading.tagName.toLowerCase();
         const id = heading.getAttribute("id");
         const cls = heading.getAttribute("class")?.split(" ")[0];
-        emptyHeadings.push(
-          id ? `${level}#${id}` : cls ? `${level}.${cls}` : level
-        );
+        emptyHeadings.push({
+          id: id ? `${level}#${id}` : cls ? `${level}.${cls}` : level,
+          label: `${level}, heading ${position} of ${headings.length} on the page`,
+          snippet: fieldSnippet(heading),
+        });
       }
     }
 
@@ -70,7 +101,7 @@ export const emptyHeadingRule: Rule = {
         name: "empty-heading",
         status: "warn",
         message: `${emptyHeadings.length} empty heading(s) found`,
-        items: emptyHeadings.slice(0, 10).map((id) => ({ id })),
+        items: emptyHeadings.slice(0, 10),
         details:
           emptyHeadings.length > 10
             ? { additional: emptyHeadings.length - 10 }
