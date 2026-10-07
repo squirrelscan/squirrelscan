@@ -131,7 +131,10 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // always speaks, the same shape as content/placeholder-text, so it adds one
       // check on each of the 500 pages with a document. All 500 pass: the synthetic
       // site's contact details are real-looking, so healthScore.overall is UNMOVED.
-      expect(v1.findings.length).toBe(100234);
+      // 100234 -> 100734: content/placeholder-media is page-scoped and always
+      // speaks, so it adds one check on each of the 500 pages with a document
+      // (the other 18 have none).
+      expect(v1.findings.length).toBe(100734);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -149,9 +152,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // entity-publisher-mismatch, entity-local-business-per-page,
       // entity-website-missing, entity-organization-missing,
       // entity-sameas-missing, entity-orphan), 295 -> 296
-      // content/placeholder-contact; anything
+      // content/placeholder-contact, 296 -> 297 content/placeholder-media; anything
       // else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(296);
+      expect(v1.perRuleTally.length).toBe(297);
       // Each +500 above is only "all passes" if nothing warned. healthScore
       // staying at 48 does not prove that — a handful of weight-5 warnings in a
       // 20-rule category would not move it — so pin the tally directly.

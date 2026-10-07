@@ -309,6 +309,14 @@ export interface AuditReport {
     pages: number;
     /** Host(s) that throttled the crawl. */
     hosts: string[];
+    /**
+     * URLs the crawl discovered but never fetched: the ones it gave up on
+     * because the host kept refusing, plus the ones still queued when it
+     * stopped. Disjoint from the pages the report grades, so `coverage` can add
+     * it to `auditedPages` to size the known site. Optional: reports built
+     * before it omit it.
+     */
+    unfetched?: number;
   };
   /**
    * Machine-readable class of the failure behind `statusReason` (#1822), so the

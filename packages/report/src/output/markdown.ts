@@ -21,6 +21,7 @@ import {
   scanScopeLine,
   seedRedirectLine,
   ruleCarriedRollupLine,
+  unfetchedNote,
 } from "../coverage";
 import {
   affectedPages,
@@ -131,7 +132,7 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   // #1829: the caveat on the page count above — coverage lost to throttling.
   if (report.rateLimited && report.rateLimited.pages > 0) {
     lines.push(
-      `**Rate limited:** ${report.rateLimited.pages} page(s) not verified (${formatRateLimitedHosts(report.rateLimited.hosts)})  `,
+      `**Rate limited:** ${report.rateLimited.pages} page(s) not verified (${formatRateLimitedHosts(report.rateLimited.hosts)})${unfetchedNote(report.rateLimited.unfetched)}  `,
     );
   }
   // #1418: the seed redirected off its own site and the crawler refused to

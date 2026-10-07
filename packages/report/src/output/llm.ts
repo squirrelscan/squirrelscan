@@ -133,12 +133,19 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   // "are these numbers the whole site?" applies to a completed run too.
   if (report.rateLimited && report.rateLimited.pages > 0) {
     const hosts = report.rateLimited.hosts.join(", ");
+    const unfetched = report.rateLimited.unfetched ?? 0;
+    const unfetchedAttr = unfetched > 0 ? ` unfetched="${unfetched}"` : "";
     lines.push(
-      `<rate-limited pages="${report.rateLimited.pages}" hosts="${escapeXml(hosts)}">`,
+      `<rate-limited pages="${report.rateLimited.pages}"${unfetchedAttr} hosts="${escapeXml(hosts)}">`,
     );
     lines.push(
       `${indent(1)}${report.rateLimited.pages} page(s) could not be verified because the host rate limited the crawler (429/430). Their status is UNKNOWN, not broken, and they were excluded from scoring. Do not report them as dead links.`,
     );
+    if (unfetched > 0) {
+      lines.push(
+        `${indent(1)}${unfetched} more URL(s) were discovered but never fetched. The pages above and these are missing from the audit, so the site is larger than the page count suggests.`,
+      );
+    }
     lines.push("</rate-limited>");
   }
 
