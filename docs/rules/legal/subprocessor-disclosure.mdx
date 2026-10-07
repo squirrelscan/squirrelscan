@@ -14,10 +14,13 @@ In practice it is a page listing each third party that touches customer data, wh
 The rule is site-wide and looks in two places, in order. First a crawled page whose URL path matches one of the sub-processor path patterns. Then, if none matched, a link on any crawled page whose text or href reads as a sub-processor or DPA reference. The first hit wins in crawl order. It emits a single check named `subprocessor-disclosure`:
 
 - Skipped when no pages were crawled. Message: `No pages available for analysis`.
+- Skipped when no disclosure is found and the site shows no commercial offer. Message: `No commercial offer found (pricing, plans, enterprise or trust page); sub-processor disclosure applies to data processors with customers`.
 - Pass when a disclosure is found. Message: `Sub-processor / data-processing disclosure found`, with the URL as the value.
-- Warn when none is found. Message: `No sub-processor / data-processing (DPA) disclosure found`, with `Publish a /subprocessors page + DPA (GDPR Art. 28)` as the value.
+- Warn when none is found on a site with a commercial offer. Message: `No sub-processor / data-processing (DPA) disclosure found`, with `Publish a /subprocessors page + DPA (GDPR Art. 28)` as the value.
 
 Severity info, weight 3. The rule only runs when the audit classified the site as SaaS, a web app or corporate, and, when a business category is known, as software and technology, fintech, banking or IT services. A classification below medium confidence, or an audit with no site metadata, runs it anyway.
+
+The site type alone does not make a site a processor with customers. A pre-launch product with a waitlist has nobody's data to process yet, so the rule only warns when the crawl shows a commercial offer: a crawled page at `/pricing`, `/plans`, `/enterprise` or `/trust`, or a link to one, or a link reading `Pricing`, `Plans`, `Enterprise`, `Contact sales`, `Talk to sales`, `Book a demo` or `Trust center`. Without one the check is skipped.
 
 ## How to fix it
 

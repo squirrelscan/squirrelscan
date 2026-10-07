@@ -6,6 +6,13 @@
 // This site-scope rule looks for a subprocessors / data-processing / DPA page or
 // link. It is gated (`appliesWhen`) to the site/business types where this duty is
 // relevant — for everyone else (and offline / no-metadata) it never runs.
+//
+// The site type alone is not enough: a pre-launch SaaS with a waitlist is
+// "saas" but has no customers whose data it processes, so it has no Art. 28
+// duty yet. A 196-site sample of new launches saw this rule fire on 85% of
+// them. The rule therefore also needs the crawl to show a commercial offer to
+// customers (a pricing / plans / enterprise / trust page, or a "contact sales"
+// / "book a demo" link) before it warns; without one it skips.
 
 import type { Rule, RuleContext, RuleResult, CheckResult, ParsedPage } from "../types";
 
@@ -28,6 +35,50 @@ const SUBPROCESSOR_TEXT_PATTERNS = [
   /data[-\s]?processing[-\s]?agreement/i,
   /\bdpa\b/i,
 ];
+
+// A commercial offer to customers: the evidence that the site is past launch
+// and plausibly processes customer data under contract.
+const COMMERCIAL_PATH_PATTERNS = [
+  /\/pricing\b/i,
+  /\/plans?\/?$/i,
+  /\/enterprise\b/i,
+  /\/trust(-center)?\/?$/i,
+];
+
+const COMMERCIAL_TEXT_PATTERNS = [
+  /^pricing$/i,
+  /^plans( (&|and) pricing)?$/i,
+  /^enterprise$/i,
+  /\b(contact|talk to) sales\b/i,
+  /\b(book|request|schedule|get) a demo\b/i,
+  /\btrust (center|centre)\b/i,
+];
+
+/** True when a page URL path is itself a pricing / plans / enterprise / trust page. */
+export function isCommercialPath(path: string): boolean {
+  return COMMERCIAL_PATH_PATTERNS.some((p) => p.test(path));
+}
+
+/**
+ * True when ONE page's live DOM links to a commercial offer (pricing, plans,
+ * enterprise, trust center, contact sales, book a demo). Shared by the page-time
+ * collector and the legacy fallback so both paths agree.
+ */
+export function hasCommercialOfferLink(doc: NonNullable<ParsedPage["document"]>): boolean {
+  for (const link of doc.querySelectorAll("a[href]")) {
+    const href = link.getAttribute("href") || "";
+    let path = href;
+    try {
+      path = new URL(href, "https://x.invalid").pathname;
+    } catch {
+      // keep the raw href
+    }
+    if (isCommercialPath(path)) return true;
+    const text = (link.textContent || "").trim().replace(/\s+/g, " ");
+    if (COMMERCIAL_TEXT_PATTERNS.some((p) => p.test(text))) return true;
+  }
+  return false;
+}
 
 /**
  * The first sub-processor / DPA link match on ONE page's live DOM (`href || url`),
@@ -119,6 +170,32 @@ export const subprocessorDisclosureRule: Rule = {
             break;
           }
         }
+      }
+    }
+
+    // 3) No disclosure: warn only when the site shows a commercial offer. A site
+    // with no pricing, plans, enterprise or trust surface (a pre-launch product,
+    // a waitlist page) has no customers whose data it processes yet.
+    if (!disclosureUrl) {
+      let commercial = pages.some((page) => isCommercialPath(getPathname(page.url)));
+      if (!commercial) {
+        if (ctx.collectedSignals) {
+          commercial = ctx.collectedSignals.pages.some((rec) => rec.commercialOffer);
+        } else {
+          commercial = pages.some(
+            (page) => !!page.parsed.document && hasCommercialOfferLink(page.parsed.document)
+          );
+        }
+      }
+      if (!commercial) {
+        checks.push({
+          name: "subprocessor-disclosure",
+          status: "skipped",
+          message:
+            "No commercial offer found (pricing, plans, enterprise or trust page); sub-processor disclosure applies to data processors with customers",
+          skipReason: "No commercial offer found",
+        });
+        return { checks };
       }
     }
 

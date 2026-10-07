@@ -207,7 +207,7 @@ Detect keyword over-optimization.
 [rule_options."content/keyword-stuffing"]
 density_threshold = 3   # Maximum keyword density, in percent
 min_occurrences = 5     # A word must appear more often than this to be flagged
-whitelist = []          # Words never flagged, such as your brand name
+whitelist = []          # Words never flagged, such as a product name your domain doesn't carry
 ```
 
 **Defaults:**
@@ -225,7 +225,7 @@ Strict (avoid over-optimization):
 density_threshold = 2   # 2% max
 ```
 
-Lenient, and ignore your product name:
+Lenient, and ignore a product name (the name in your domain is already ignored):
 ```toml
 [rule_options."content/keyword-stuffing"]
 density_threshold = 5   # 5% max

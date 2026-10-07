@@ -138,3 +138,50 @@ describe("content/keyword-stuffing false-positive fixes (#695)", () => {
     expect(checks[0].status).toBe("pass");
   });
 });
+
+describe("content/keyword-stuffing ignores the site's own brand name", () => {
+  function siteCtx(url: string, html: string): RuleContext {
+    const doc = parseHTML(html).document;
+    return {
+      page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
+      parsed: { document: doc } as unknown as ParsedPage,
+      options: {},
+    } as unknown as RuleContext;
+  }
+  const launchPage = (name: string, head = "") =>
+    `<html><head>${head}</head><body><h1>${name}</h1><p>${`${name} `.repeat(30)}${filler(90)}</p></body></html>`;
+
+  test("a landing page repeating its own domain name does not flag it", () => {
+    const { checks } = keywordStuffingRule.run(siteCtx("https://acme.com/", launchPage("Acme")));
+    expect(checks[0].status).toBe("pass");
+  });
+
+  test("a launch domain prefix or suffix still resolves to the product name", () => {
+    for (const url of ["https://getacme.com/", "https://acmehq.io/", "https://www.tryacme.co.uk/"]) {
+      const { checks } = keywordStuffingRule.run(siteCtx(url, launchPage("Acme")));
+      expect(checks[0].status).toBe("pass");
+    }
+  });
+
+  test("a multi-word og:site_name carried by the domain is exempt word by word", () => {
+    const head = `<meta property="og:site_name" content="Rocket Notes">`;
+    const html = `<html><head>${head}</head><body><p>${"rocket notes ".repeat(20)}${filler(90)}</p></body></html>`;
+    const { checks } = keywordStuffingRule.run(siteCtx("https://rocketnotes.app/", html));
+    expect(checks[0].status).toBe("pass");
+  });
+
+  test("true positive: a site name the domain does not carry is not a free pass", () => {
+    const head = `<meta property="og:site_name" content="Plumber">`;
+    const html = `<html><head>${head}</head><body><p>${"plumber ".repeat(30)}${filler(90)}</p></body></html>`;
+    const { checks } = keywordStuffingRule.run(siteCtx("https://acme.com/", html));
+    expect(checks[0].status).toBe("warn");
+    expect(checks[0].items?.some((i) => i.id === "plumber")).toBe(true);
+  });
+
+  test("true positive: other stuffed words on the brand's own page still flag", () => {
+    const html = `<html><body><p>${"acme ".repeat(30)}${"widget ".repeat(30)}${filler(90)}</p></body></html>`;
+    const { checks } = keywordStuffingRule.run(siteCtx("https://acme.com/", html));
+    expect(checks[0].status).toBe("warn");
+    expect(checks[0].items?.map((i) => i.id)).toEqual(["widget"]);
+  });
+});
