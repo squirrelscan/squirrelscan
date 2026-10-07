@@ -171,7 +171,11 @@ function lifecycleBase(): string {
 }
 
 /** Path for the lifecycle PATCH/progress on a specific run. */
-function runPath(runId: string, suffix = "", base = lifecycleBase()): string {
+export function runPath(
+  runId: string,
+  suffix = "",
+  base = lifecycleBase()
+): string {
   return `${base}/${encodeURIComponent(runId)}${suffix}`;
 }
 

@@ -52,7 +52,9 @@ const originalToken = process.env[API_TOKEN_ENV_VAR];
 const originalFetch = globalThis.fetch;
 let restoreSettingsPath: () => void = () => {};
 let calls: Array<{ method: string; path: string }>;
-let runResponse: () => Response;
+// Called once per run read: n=0 is the pre-POST snapshot, n=1 the recovery read.
+let runResponse: (n: number) => Response;
+let runReads: number;
 
 beforeAll(() => {
   const spy = spyOn(pathsModule, "getSettingsPath").mockImplementation(() =>
@@ -71,6 +73,7 @@ afterAll(() => {
 
 beforeEach(() => {
   calls = [];
+  runReads = 0;
   runResponse = () => Response.json({ id: "run_1", reportId: null });
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = new URL(String(input)).pathname;
@@ -81,7 +84,7 @@ beforeEach(() => {
         statusText: "Service Unavailable",
       });
     }
-    return runResponse();
+    return runResponse(runReads++);
   }) as unknown as typeof fetch;
 });
 
@@ -94,7 +97,8 @@ const posts = () =>
 
 describe("publishReport after a 5xx (#1340)", () => {
   test("a run with a linked reportId recovers as a published report", async () => {
-    runResponse = () => Response.json({ id: "run_1", reportId: "rep_9" });
+    runResponse = (n) =>
+      Response.json({ id: "run_1", reportId: n === 0 ? null : "rep_9" });
 
     const result = await publishReport(report(), {
       visibility: "unlisted",
@@ -106,7 +110,9 @@ describe("publishReport after a 5xx (#1340)", () => {
     expect(result.data.id).toBe("rep_9");
     expect(result.data.url).toBe("https://reports.squirrelscan.com/rep_9");
     expect(result.data.visibility).toBe("unlisted");
-    expect(calls.some((c) => c.path === "/v1/agent-runs/run_1")).toBe(true);
+    // sq_ API keys must use the org-scoped route (userId routes reject them).
+    expect(calls.some((c) => c.path === "/v1/agent-runs/org/run_1")).toBe(true);
+    expect(calls.some((c) => c.path === "/v1/agent-runs/run_1")).toBe(false);
   });
 
   test("a run with no linked reportId keeps PUBLISH_SERVER_ERROR", async () => {
@@ -141,8 +147,52 @@ describe("publishReport after a 5xx (#1340)", () => {
     expect(posts()).toHaveLength(1);
 
     calls = [];
-    runResponse = () => Response.json({ id: "run_1", reportId: "rep_9" });
+    runReads = 0;
+    runResponse = (n) =>
+      Response.json({ id: "run_1", reportId: n === 0 ? null : "rep_9" });
     await publishReport(report(), { runId: "run_1" });
     expect(posts()).toHaveLength(1);
+  });
+
+  test("a stale reportId from an earlier publish is not recovered", async () => {
+    runResponse = () => Response.json({ id: "run_1", reportId: "rep_old" });
+
+    const result = await publishReport(report(), { runId: "run_1" });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("PUBLISH_SERVER_ERROR");
+  });
+
+  test("an unreadable pre-publish run keeps PUBLISH_SERVER_ERROR", async () => {
+    runResponse = (n) =>
+      n === 0
+        ? new Response("nope", { status: 500 })
+        : Response.json({ id: "run_1", reportId: "rep_9" });
+
+    const result = await publishReport(report(), { runId: "run_1" });
+
+    expect(result.ok).toBe(false);
+  });
+
+  test("a recovery read that throws keeps PUBLISH_SERVER_ERROR", async () => {
+    const base = globalThis.fetch;
+    let reads = 0;
+    globalThis.fetch = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
+      const path = new URL(String(input)).pathname;
+      if (path.startsWith("/v1/agent-runs") && reads++ > 0) {
+        throw new Error("socket hang up");
+      }
+      return base(input, init);
+    }) as unknown as typeof fetch;
+
+    const result = await publishReport(report(), { runId: "run_1" });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("PUBLISH_SERVER_ERROR");
   });
 });

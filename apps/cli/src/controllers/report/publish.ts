@@ -35,6 +35,7 @@ import { getGlobalContentStore } from "@/crawler/storage/content-store";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
 import { cliApi } from "@/lib/api-client";
 import { teamPlanRequiredMessage } from "@/lib/plan-messages";
+import { runPath } from "@/lib/run-tracker";
 import { isScheduleSummary } from "@/lib/schedule-notice";
 import {
   API_TOKEN_ENV_VAR,
@@ -135,27 +136,45 @@ function stampFirstPublish(): void {
 }
 
 /**
- * After a publish 5xx, ask the server whether the report landed anyway. A 5xx
- * can be a worker kill AFTER the report was written and linked to the run
- * (`agent_runs.report_id`, set at publish), so the run's `reportId` is the
- * authoritative answer. Returns that id, or null when the run has no linked
- * report or cannot be read. Never re-POSTs: a retry would mint a second report
- * row and orphan its R2 objects.
+ * Read the `reportId` the server has linked to a run (`agent_runs.report_id`,
+ * set at publish). Returns undefined when the run cannot be read, null when it
+ * has no linked report. Uses the same base as the lifecycle calls: org API keys
+ * (`sq_`) are rejected on the userId-scoped route.
+ */
+async function readRunReportId(
+  runId: string,
+  token: string
+): Promise<string | null | undefined> {
+  try {
+    const run = await cliApi.request<{ reportId?: string | null }>(
+      runPath(runId),
+      { token, timeoutMs: RECOVERY_TIMEOUT_MS }
+    );
+    if (!run.ok) return undefined;
+    const reportId = run.data?.reportId;
+    return typeof reportId === "string" && reportId ? reportId : null;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * After a publish 5xx, decide whether the report landed anyway. A 5xx can be a
+ * worker kill AFTER the report was written and linked to the run, so a run
+ * whose `reportId` is set now is the answer, but only if it was NOT already set
+ * before this attempt: a re-publish on a run that already had a report would
+ * otherwise "recover" the OLD report. When the pre-publish state is unknown
+ * (`before === undefined`) we cannot tell, so we keep the failure. Never
+ * re-POSTs: a retry would mint a second report row and orphan its R2 objects.
  */
 async function findLinkedReportId(
   runId: string,
-  token: string
+  token: string,
+  before: string | null | undefined
 ): Promise<string | null> {
-  try {
-    const run = await cliApi.request<{ reportId?: string | null }>(
-      `/v1/agent-runs/${encodeURIComponent(runId)}`,
-      { token, timeoutMs: RECOVERY_TIMEOUT_MS }
-    );
-    const reportId = run.ok ? run.data?.reportId : null;
-    return typeof reportId === "string" && reportId ? reportId : null;
-  } catch {
-    return null;
-  }
+  if (before === undefined) return null;
+  const after = await readRunReportId(runId, token);
+  return after && after !== before ? after : null;
 }
 
 /**
@@ -252,6 +271,12 @@ export async function publishReport(
     }
   }
 
+  // Snapshot the run's linked report BEFORE the POST so a 5xx recovery can tell
+  // a report this attempt wrote from one a previous publish left behind.
+  const reportIdBefore = options.runId
+    ? await readRunReportId(options.runId, credential.token)
+    : null;
+
   try {
     // cliApi.fetch keeps publish's transport contract: a hard timeout + retry on
     // CONNECTION errors only (the POST isn't idempotent; HTTP errors never retry).
@@ -301,9 +326,16 @@ export async function publishReport(
         // #1340: the 5xx may have hit AFTER the report was written. Only runs
         // registered at start (runId) can be checked; others keep the failure.
         const recoveredId = options.runId
-          ? await findLinkedReportId(options.runId, credential.token)
+          ? await findLinkedReportId(
+              options.runId,
+              credential.token,
+              reportIdBefore
+            )
           : null;
         if (recoveredId) {
+          // Only the id is known: visibility is what we asked for, and the
+          // schedule notice / server-merged score are unavailable, so the caller
+          // keeps its local estimate (the run's own finalize handles refunds).
           stampFirstPublish();
           return ok({
             id: recoveredId,
