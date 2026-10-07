@@ -39,6 +39,11 @@ const LAZY_ATTRS = ["data-src", "data-lazy-src", "data-original", "data-srcset",
 /** `DSC_0001`, `IMG_1234`, `DSCN0042`, `DCIM0001`, `P1000123`, optionally with an extension. */
 const CAMERA_ALT = /^(?:dsc[nf]?|img|dcim|pict|mvc)[-_ ]?\d{3,}(?:\.(?:jpe?g|png|gif|webp|heic))?$/i;
 
+/** "placeholder" as a whole word of a filename: `placeholder.png`, `hero-placeholder_2x.jpg`. */
+const PLACEHOLDER_FILE = /(^|[-_.\s])placeholder([-_.\s]|$)/i;
+
+const basename = (path: string): string => path.split("/").pop() ?? "";
+
 function parseUrl(raw: string): URL | null {
   try {
     return new URL(raw, "https://placeholder.invalid/");
@@ -55,7 +60,7 @@ export function isPlaceholderSource(raw: string): boolean {
   const value = raw.trim();
   if (!value || value.startsWith("data:")) return false;
   const url = parseUrl(value);
-  if (!url) return /placeholder/i.test(value);
+  if (!url) return PLACEHOLDER_FILE.test(basename(value.split(/[?#]/)[0] ?? ""));
   const host = url.hostname.toLowerCase();
   if (PLACEHOLDER_HOSTS.test(host)) return true;
   if (isRandomUnsplash(host, url.pathname + url.search)) return true;
@@ -65,7 +70,8 @@ export function isPlaceholderSource(raw: string): boolean {
   } catch {
     // keep the raw path
   }
-  return /placeholder/i.test(path);
+  // Only the filename counts: "/blog/placeholder-text-guide/hero.jpg" is a real photo.
+  return PLACEHOLDER_FILE.test(basename(path));
 }
 
 /** Pixel size of a base64 GIF or PNG data URI, or null when it is neither or too short to say. */
@@ -115,9 +121,18 @@ export function findInImage(img: Element): PlaceholderMediaFinding[] {
   const lazy = LAZY_ATTRS.map((a) => img.getAttribute(a)?.trim() ?? "")
     .map((v) => (v.includes(",") || /\s\d+(\.\d+)?[wx]$/.test(v) ? firstSrcsetUrl(v) : v))
     .find((v) => v !== "" && !v.startsWith("data:"));
-  const candidates = lazy ? [lazy] : [src, srcset].filter(Boolean);
-
-  const bad = candidates.find(isPlaceholderSource);
+  // Where the browser actually looks when it has a srcset or <picture>: those win over `src`,
+  // so a stub `src` beside a real srcset is not a placeholder.
+  const pictureSources = img.parentElement?.tagName.toLowerCase() === "picture"
+    ? Array.from(img.parentElement.querySelectorAll("source"))
+        .map((el) => firstSrcsetUrl(el.getAttribute("srcset") ?? ""))
+        .filter(Boolean)
+    : [];
+  const alternates = [srcset, ...pictureSources].filter(Boolean);
+  let bad: string | undefined;
+  if (lazy) bad = isPlaceholderSource(lazy) ? lazy : undefined;
+  else if (alternates.length > 0) bad = alternates.every(isPlaceholderSource) ? alternates[0] : undefined;
+  else bad = isPlaceholderSource(src) ? src : undefined;
   if (bad) {
     found.push({ kind: "placeholder-source", sample: bad });
   } else if (!lazy && !srcset && isOnePixel(src) && !isMarkedDecorative(img)) {
@@ -127,7 +142,7 @@ export function findInImage(img: Element): PlaceholderMediaFinding[] {
   const alt = (img.getAttribute("alt") ?? "").trim();
   if (alt && CAMERA_ALT.test(alt)) {
     // An alt equal to the filename is image-redundant-alt's finding.
-    const file = (src.split("?")[0] ?? "").split("/").pop() ?? "";
+    const file = ((lazy || src).split("?")[0] ?? "").split("/").pop() ?? "";
     const norm = (s: string) => s.toLowerCase().replace(/\.[^.]+$/, "").replace(/[-_\s]+/g, "");
     if (!file || norm(file) !== norm(alt)) found.push({ kind: "camera-alt", sample: alt });
   }
@@ -149,7 +164,7 @@ export const placeholderMediaRule: Rule = {
     name: "Placeholder Media",
     description: "Detects placeholder images and camera-default alt text that shipped to production",
     solution:
-      "A placeholder image means the page was published before its real media was. Replace the image source with the real asset, and add the image field to whatever check gates publishing. A 1x1 inline image used as content is a stand-in that was never swapped: replace it, or if it is only a lazy-load stub, put the real URL in data-src. A camera-default alt such as DSC_0001 or IMG_1234 means the file was uploaded without being described: write alt text that says what the image shows, or use alt=\"\" when it is purely decorative. Plain junk alt like \"image\" or \"photo\" and alt text that repeats the filename are reported by a11y/image-redundant-alt.",
+      "A placeholder image means the page was published before its real media was. Replace the image source with the real asset, and add the image field to whatever check gates publishing. A 1x1 inline image used as content is a stand-in that was never swapped: replace it, or if it is only a lazy-load stub, put the real URL in data-src. A camera-default alt such as DSC_0001 or IMG_1234 means the file was uploaded without being described: write alt text that says what the image shows, or use alt=\"\" when it is purely decorative. A deliberate 1x1 spacer or tracking pixel is exempt when it carries alt=\"\" with role=\"presentation\" (or aria-hidden=\"true\"). Plain junk alt like \"image\" or \"photo\" and alt text that repeats the filename are reported by a11y/image-redundant-alt.",
     category: "content",
     scope: "page",
     verdictScope: "page",

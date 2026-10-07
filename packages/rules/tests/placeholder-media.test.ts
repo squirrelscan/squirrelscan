@@ -111,6 +111,33 @@ describe("placeholder-media outcomes", () => {
   });
 });
 
+describe("placeholder-media src vs srcset and legitimate paths", () => {
+  test("a placeholder src beside a real srcset is not flagged", () => {
+    const [c] = run('<img src="/img/placeholder.png" srcset="/img/hero-1x.jpg 1x, /img/hero-2x.jpg 2x" alt="Hero shot of the lobby">');
+    expect(c!.status).toBe("pass");
+  });
+
+  test("a placeholder src beside a real <picture> source is not flagged", () => {
+    const [c] = run('<picture><source srcset="/img/hero.webp" type="image/webp"><img src="/img/placeholder.png" alt="Hero shot of the lobby"></picture>');
+    expect(c!.status).toBe("pass");
+  });
+
+  test("a placeholder srcset is flagged even when src looks real", () => {
+    const [c] = run('<img src="/img/hero.jpg" srcset="/img/placeholder.png 1x" alt="Hero shot of the lobby">');
+    expect(c!.status).toBe("fail");
+  });
+
+  test.each([
+    "/blog/placeholder-text-guide/hero.jpg",
+    "/placeholder-images/real-photo.jpg",
+    "/img/placeholders-we-love.jpg",
+  ])("does not flag %s", (url) => expect(isPlaceholderSource(url)).toBe(false));
+
+  test("still flags placeholder as a filename word", () => {
+    expect(isPlaceholderSource("/img/hero-placeholder_2x.jpg")).toBe(true);
+  });
+});
+
 describe("placeholder-media no false positives", () => {
   test("a tracking pixel, a lazy-loaded hero and descriptive alt text stay clean", () => {
     const [c] = run(`
