@@ -178,10 +178,11 @@ export interface ComputeMergeInput {
 export interface MergeResolutionInput {
   /**
    * NORMALIZED URLs crawled this run per the unsampled signal. A superset of
-   * the sampled-payload-derived `crawledUrls` — used ONLY for the resolve
-   * decision, never for scoring denominators or site_pages (a clean page
-   * clipped from every sample must stay in `carriedPageUrls` so its synthetic
-   * pass keeps counting).
+   * the sampled-payload-derived `crawledUrls`, used for the resolve decision
+   * and (#2067) for `site_pages`: every page here gets an active row, so it
+   * counts as audited and is known to later runs. Never for this run's scoring
+   * denominator: a clean page clipped from every sample stays in
+   * `carriedPageUrls` exactly as before, so its synthetic pass keeps counting.
    */
   crawledUrls: Set<string>;
   /** `${ruleId}|${checkName}` → failing/warning page url-hash set (unsampled). */
@@ -691,15 +692,12 @@ export function createMergeSession(
   // the #1185 signal can mark a page crawled this run that never reached the
   // payload-derived crawled set, and such a page WAS rendered.
   //
-  // KNOWN BOUNDS — both err toward "unrendered", never toward inventing a prior
+  // KNOWN BOUND — errs toward "unrendered", never toward inventing a prior
   // audit, so the worst case is a missing "last seen" date rather than a false
-  // claim about an audit that did not happen:
-  //  - a page rendered ONLY per the #1185 signal gets no `site_pages` row (that
-  //    is deliberate — adding one would grow `carriedPageUrls` and with it the
-  //    synthetic-pass denominator, moving scores), so a later run that skips it
-  //    reads it as unrendered;
-  //  - a removed page whose `site_pages` row was pruned by retention and that is
-  //    later rediscovered loses its history the same way.
+  // claim about an audit that did not happen: a removed page whose `site_pages`
+  // row was pruned by retention and that is later rediscovered loses its
+  // history. (A page rendered ONLY per the #1185 signal used to lose it the same
+  // way; it gets a row since #2067, see step 3.)
   const everRenderedUrls = new Set<string>();
   for (const p of priorPages) everRenderedUrls.add(p.normalizedUrl);
   const neverRendered = (normalizedUrl: string, renderedThisRun: boolean): boolean =>
@@ -711,13 +709,22 @@ export function createMergeSession(
   // FINDINGS, so it can be settled before a single prior streams in. The caller
   // needs `activePageUrls` to derive `carriedPageUrls`, and the carried scoring
   // fold needs THAT before it can fold the first carried page.
+  //
+  // (#2067) "Crawled" here includes the pages only the #1185 signal saw. A page
+  // crawled clean whose every check was clipped from the publish sample (or that
+  // produced no page check at all) is in no check's `pageUrl`, so it is missing
+  // from the payload-derived `crawledUrls`; without its own row it was neither
+  // counted as audited nor known to a later run. The row does NOT make it crawled
+  // for the finding decisions below — those keep reading `crawledUrls` and the
+  // signal separately — and it does not move this run's score: `runCloudSmartAudits`
+  // derives `carriedPageUrls` from `priorPages`, not from `activePageUrls`.
   const sitePageMap = new Map<string, SitePageRecord>();
   for (const p of priorPages) {
     sitePageMap.set(p.normalizedUrl, p);
   }
   // Crawled this run (excluding removed) → active with the real HTTP status.
-  for (const url of crawledUrls) {
-    if (removedUrls.has(url)) continue;
+  const markCrawled = (url: string): void => {
+    if (removedUrls.has(url)) return;
     sitePageMap.set(url, {
       siteKey,
       normalizedUrl: url,
@@ -726,7 +733,9 @@ export function createMergeSession(
       lastSeenCrawlId: crawlId,
       lastSeenAt: now,
     });
-  }
+  };
+  for (const url of crawledUrls) markCrawled(url);
+  if (resolution) for (const url of resolution.crawledUrls) markCrawled(url);
   // Removed this run → removed, recording the real 404/410 status.
   for (const url of removedUrls) {
     const prior = sitePageMap.get(url);
