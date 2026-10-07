@@ -16,12 +16,13 @@ One check, `empty-heading`, at severity warning. It reads every `<h1>` through `
 - the heading has the `hidden` attribute, or an inline `style` with `display:none` or `visibility:hidden`
 - the heading, or an ancestor, has `aria-hidden="true"`
 - an ancestor has the `hidden` attribute or an inline `display:none`
+- an ancestor has an inline `visibility:hidden` that the heading does not override with its own inline `visibility`
 
 `hidden="until-found"` does not count as hidden, because the content stays findable, so an empty heading there still warns. Hiding through a CSS class or a stylesheet rule cannot be detected from the markup, so a heading hidden that way is still reported.
 
 Content is accepted from the heading's text, a non-empty `aria-label`, an `aria-labelledby` pointing at an element with text, or a nested `<img>` with non-empty `alt`.
 
-- Warn with `N empty heading(s) found`. Items read `h2#promo`, `h3.subtitle` or a bare tag name, carry the heading's opening tag as a snippet, and say which heading on the page they are (for example `h2, heading 5 of 12 on the page`), so two empty headings of the same level can be told apart. Up to ten are listed, with a count of the rest.
+- Warn with `N empty heading(s) found`. Items read `h2#promo`, `h3.subtitle` or a bare tag name, carry the heading's opening tag as a snippet, and say which rendered heading on the page they are (for example `h2, heading 5 of 12 on the page`), so two empty headings of the same level can be told apart. Up to ten are listed, with a count of the rest.
 - Pass with `All headings have content`.
 - Info with `No headings found`.
 
