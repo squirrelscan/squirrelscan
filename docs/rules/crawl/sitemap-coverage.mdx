@@ -11,7 +11,7 @@ A crawled, indexable page that is not in the sitemap relies on internal links to
 
 ## What squirrel checks
 
-The rule is site-wide. It uses the sitemap processor's precomputed missing and orphan lists, and falls back to computing the missing list itself when that is empty. Pages marked `noindex`, by robots meta tag or `X-Robots-Tag` header, are never listed as missing, because a noindex page should not be in the sitemap. This applies only when the site itself is indexable (the homepage is not noindex), so a staging host that is noindex everywhere is still reported; see [pages kept out of search](/rules/index#pages-kept-out-of-search). The fallback also skips pages whose status is not 200, then checks both the page URL and its final URL against the normalised sitemap URLs.
+The rule is site-wide. It uses the sitemap processor's precomputed missing and orphan lists, and falls back to computing the missing list itself when that is empty. Pages marked `noindex`, by robots meta tag or `X-Robots-Tag` header, are never listed as missing, because a noindex page should not be in the sitemap. This applies only when the site itself is indexable (the homepage is not noindex), so a staging host that is noindex everywhere is still reported from the sitemap processor's list (the fallback has always left meta-noindex pages out, and still does); see [pages kept out of search](/rules/index#pages-kept-out-of-search). The fallback also skips pages whose status is not 200, then checks both the page URL and its final URL against the normalised sitemap URLs.
 
 - Skipped when no sitemap was discovered. Message: `No sitemap to compare`.
 - Skipped when no pages were crawled. Message: `No pages to compare`.

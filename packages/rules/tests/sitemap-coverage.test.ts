@@ -200,6 +200,15 @@ describe("crawl/sitemap-coverage noindex pages (pub#488)", () => {
     expect(listed(ctx)).toEqual([]);
   });
 
+  test("precomputed path: a header-noindex page, matched through its trailing slash, is not listed", () => {
+    const ctx = noindexCtx({
+      pages: INDEXED,
+      missingPages: [`${BASE}/campaign-terms.html/`],
+      siteIndexable: true,
+    });
+    expect(listed(ctx)).toEqual([]);
+  });
+
   test("fallback path: a header-noindex page is not listed", () => {
     const ctx = noindexCtx({ pages: INDEXED, missingPages: [], siteIndexable: true });
     expect(coverage(ctx).status).toBe("pass");
