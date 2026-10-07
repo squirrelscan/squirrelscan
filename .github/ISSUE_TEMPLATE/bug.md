@@ -5,8 +5,8 @@ title: "bug: "
 labels: bug
 ---
 
-<!-- Security vulnerabilities do not belong here. Use the private process in SECURITY.md. -->
-<!-- Remove credentials, tokens and private site data before pasting anything. -->
+> **Security vulnerabilities do not belong here.** Report them privately using the process in SECURITY.md.
+> Remove credentials, tokens and private site data before pasting anything.
 
 ## squirrelscan version
 

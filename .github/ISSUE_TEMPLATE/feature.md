@@ -21,5 +21,5 @@ labels: enhancement
 
 <!-- Observable outcomes that mean this is done. One checkbox each, checkable by someone else. -->
 
-- [ ] A user can do X and sees Y
+- [ ] <!-- Replace with an outcome, e.g. "a user can do X and sees Y" -->
 - [ ] The new behavior is documented
