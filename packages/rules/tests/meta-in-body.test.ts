@@ -84,6 +84,11 @@ describe("content/meta-in-body", () => {
     expect(c.items).toHaveLength(1);
   });
 
+  test("passes: itemprop combined with property is exempt (triage: only name, http-equiv, charset block it)", () => {
+    const c = run(`<meta itemprop="name" property="name" content="Shirt">`);
+    expect(c.status).toBe("pass");
+  });
+
   test("passes: page with no body metas", () => {
     const c = run(`<h1>Shirt</h1>`);
     expect(c.status).toBe("pass");

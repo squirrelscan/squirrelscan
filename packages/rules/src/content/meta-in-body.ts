@@ -50,9 +50,11 @@ export const metaInBodyRule: Rule = {
       meta: Record<string, unknown>;
     }[] = [];
     for (const meta of bodyMetas) {
-      const name = meta.getAttribute("name") || meta.getAttribute("property") || "unknown";
+      const name =
+        meta.getAttribute("name") || meta.getAttribute("property") || "unknown";
       const content = meta.getAttribute("content") || "";
-      const truncated = content.length > 50 ? `${content.slice(0, 50)}...` : content;
+      const truncated =
+        content.length > 50 ? `${content.slice(0, 50)}...` : content;
       metaItems.push({
         id: name,
         label: `${name}="${truncated}"`,
