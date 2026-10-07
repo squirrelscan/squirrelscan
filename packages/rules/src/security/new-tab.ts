@@ -7,9 +7,9 @@ export const newTabRule: Rule = {
     id: "security/new-tab",
     name: "External Link Security",
     description:
-      "Checks external target=_blank links for noopener (security) and noreferrer (privacy)",
+      'Flags external target=_blank links that explicitly opt in to window.opener (rel="opener" without noopener or noreferrer), and notes missing noreferrer as a privacy choice',
     solution:
-      'External links with target="_blank" should include rel="noopener noreferrer". noopener prevents the opened page from accessing window.opener (tab-nabbing attacks). noreferrer prevents leaking the referrer URL to the destination site (privacy). Modern browsers default noopener for target="_blank", but explicit attributes ensure compatibility.',
+      'Modern browsers treat target="_blank" as rel="noopener" unless rel="opener" is set, and noreferrer implies noopener. Remove rel="opener" or add rel="noopener" so the opened page cannot reach window.opener. Add rel="noreferrer" as well if you do not want to send the referrer URL to the destination site (a privacy choice, not a security flaw).',
     category: "security",
     scope: "page",
     verdictScope: "page",
@@ -23,7 +23,7 @@ export const newTabRule: Rule = {
     if (!doc) return { checks: [] };
     const pageUrl = new URL(ctx.page.url);
 
-    const missingNoopener: string[] = [];
+    const exposedOpener: string[] = [];
     const missingNoreferrer: string[] = [];
     let externalBlankCount = 0;
 
@@ -40,12 +40,17 @@ export const newTabRule: Rule = {
 
         externalBlankCount++;
 
-        const rel = (link.getAttribute("rel") || "").toLowerCase();
-        const hasNoopener = rel.includes("noopener");
-        const hasNoreferrer = rel.includes("noreferrer");
+        // rel is a case-insensitive, whitespace-separated token list.
+        const tokens = new Set(
+          (link.getAttribute("rel") || "").toLowerCase().split(/\s+/).filter(Boolean),
+        );
+        const hasNoreferrer = tokens.has("noreferrer");
+        // target=_blank implies noopener unless rel=opener is set, and
+        // noreferrer implies noopener (HTML Standard, link types).
+        const isolated = hasNoreferrer || tokens.has("noopener") || !tokens.has("opener");
 
-        if (!hasNoopener) {
-          missingNoopener.push(href);
+        if (!isolated) {
+          exposedOpener.push(href);
         }
         if (!hasNoreferrer) {
           missingNoreferrer.push(href);
@@ -56,18 +61,18 @@ export const newTabRule: Rule = {
     }
 
     // noopener check (security)
-    if (missingNoopener.length > 0) {
+    if (exposedOpener.length > 0) {
       checks.push({
         name: "noopener",
         status: "warn",
-        message: `${missingNoopener.length} external link(s) missing rel="noopener"`,
-        items: missingNoopener.map((url) => ({ id: url })),
+        message: `${exposedOpener.length} external link(s) set rel="opener" without noopener or noreferrer, so the opened page can reach window.opener`,
+        items: exposedOpener.map((url) => ({ id: url })),
       });
     } else if (externalBlankCount > 0) {
       checks.push({
         name: "noopener",
         status: "pass",
-        message: `${externalBlankCount} external _blank link(s) have noopener`,
+        message: `${externalBlankCount} external _blank link(s) do not expose window.opener`,
       });
     }
 
@@ -76,7 +81,7 @@ export const newTabRule: Rule = {
       checks.push({
         name: "noreferrer",
         status: "info",
-        message: `${missingNoreferrer.length} external link(s) missing rel="noreferrer"`,
+        message: `${missingNoreferrer.length} external link(s) send the referrer (add rel="noreferrer" if that is not wanted)`,
         items: missingNoreferrer.map((url) => ({ id: url })),
       });
     } else if (externalBlankCount > 0) {

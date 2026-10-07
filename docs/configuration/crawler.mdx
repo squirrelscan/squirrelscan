@@ -350,6 +350,21 @@ engaged.
 
 ---
 
+## Responses that cannot be decoded
+
+If a server declares a `content-encoding` (`br`, `gzip`) that its response body
+does not honour, the body cannot be read. The crawl records that page as failed
+with a message naming the URL and the declared encoding, for example
+`Could not decode response body from https://example.com/a (content-encoding: br)`.
+The runtime also prints its own `Decompression error:` line, which carries no URL.
+
+The page is missing from the analysis, so a rule that reports an absence cannot
+tell it from a page that really lacks the thing. When any page is lost this way
+the report status is **partial** and its reason counts them, for example
+`2 pages could not be decoded (bad content-encoding)`. The pages that were read
+are scored normally. The fix is on the server: serve the body with the encoding
+it declares, or stop declaring one.
+
 ## URL filtering
 
 ### `include`

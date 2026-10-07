@@ -136,3 +136,16 @@ export function getRenderedProseText(element: Element): string {
     isBlockElement,
   );
 }
+
+/**
+ * Whether `element` sits inside a subtree `getRenderedProseText` would skip: a
+ * script, a code-like element, a `<template>` or a code-editor container. For
+ * rules that read an ATTRIBUTE (an `href`) next to the prose, so the attribute
+ * is judged by the same "is this a literal sample" test as the text around it.
+ */
+export function isInsideCodeOrUnrendered(element: Element): boolean {
+  for (let el: Element | null = element; el; el = el.parentElement as Element | null) {
+    if (isScriptCodeOrUnrendered(el)) return true;
+  }
+  return false;
+}

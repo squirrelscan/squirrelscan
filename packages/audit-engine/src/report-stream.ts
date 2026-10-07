@@ -683,6 +683,7 @@ export function buildV1Report(
       // cloud audit names DNS/TLS/connection/timeout/4xx/5xx/redirect/robots
       // instead of "No pages were crawled".
       crawl?.stats?.rootFailure,
+      crawl?.stats?.pagesUndecodable ?? 0,
     );
     if (runStatus.status !== "completed") {
       result.status = runStatus.status;
@@ -970,6 +971,7 @@ export function buildV2Report(
       // #1822: same signal as v1 above. The streamed path has no pages[] to
       // fall back on, so the crawl stats are its only source for the class.
       rootFailure: crawl?.stats?.rootFailure,
+      undecodablePages: crawl?.stats?.pagesUndecodable ?? 0,
     });
     if (runStatus.status !== "completed") {
       result.status = runStatus.status;

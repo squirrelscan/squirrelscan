@@ -384,6 +384,8 @@ A page replays only when every input its rules read is unchanged:
 - the page's exact HTML, byte for byte
 - its status, headers, redirect chain and response timings
 - the version of squirrel that produced the results
+- the rules' own code, so a rule fix that ships without a version change (or one
+  you make in a source checkout) still re-runs the rules on unchanged pages
 - which rules are enabled, and the options they run with
 
 Change any of them and that page is audited again. Rules that read the whole site

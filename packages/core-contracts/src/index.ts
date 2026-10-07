@@ -537,6 +537,15 @@ export interface ScanScope {
   pagesCrawled: number;
   /** The page cap was the binding constraint — the site likely has more pages. */
   capped: boolean;
+  /**
+   * Why the crawl ended before it ran out of pages, when the page cap was not
+   * the reason. `"time"` = the crawl time budget fired with pages already
+   * collected, so the report is an audit of the pages reached in time, not of
+   * the whole site. Absent on every run that finished or hit the page cap, so a
+   * caller detects a time stop by its presence. REPORT-ONLY — never feeds
+   * `healthScore`.
+   */
+  stopReason?: "time";
 }
 
 /** Locked-rules audience for a report — anonymous/local vs signed-in tier (#368). */
