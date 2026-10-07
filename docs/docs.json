@@ -271,6 +271,7 @@
                   "rules/content/mime-type",
                   "rules/content/placeholder-contact",
                   "rules/content/placeholder-text",
+                  "rules/content/placeholder-media",
                   "rules/content/article-links",
                   "rules/content/quality",
                   "rules/content/stale-copyright",
