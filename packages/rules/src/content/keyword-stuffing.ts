@@ -1,15 +1,72 @@
 // content/keyword-stuffing - Excessive keyword repetition detection
 
+import { getDomainWithoutSuffix } from "tldts";
 import { z } from "zod";
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+import type { Rule, RuleContext, RuleResult, CheckResult, ParsedPage } from "../types";
 import { getTextExcludingScripts } from "./text-content";
 
 export const optionsSchema = z.object({
   density_threshold: z.number().default(3).describe("Keyword density percentage threshold"),
   min_occurrences: z.number().default(5).describe("Minimum word occurrences to flag"),
-  whitelist: z.array(z.string()).default([]).describe("Words to ignore (e.g., brand name)"),
+  whitelist: z
+    .array(z.string())
+    .default([])
+    .describe("Words to ignore; the site's own brand name is already ignored"),
 });
+
+// Prefixes and suffixes launch domains wrap around a product name
+// (getacme.com, acmehq.com, tryacme.app).
+const DOMAIN_PREFIXES = ["get", "try", "use", "join", "hey", "with", "go"];
+const DOMAIN_SUFFIXES = ["hq", "app", "labs", "lab", "ai", "io", "inc"];
+
+/**
+ * The site's own brand / product name as lowercase word tokens, from the page's
+ * registrable domain label plus any `og:site_name` / `application-name` token
+ * that also appears in that label. A one-product landing page repeats its own
+ * name because that is what the page is for, so these never count as stuffing.
+ *
+ * Anchored on the domain on purpose: a site name is page-controlled text, and a
+ * spam page could set it to the keyword it stuffs. A name token only counts when
+ * the site's own domain carries it too.
+ */
+export function brandTerms(
+  pageUrl: string,
+  doc: NonNullable<ParsedPage["document"]>
+): Set<string> {
+  const terms = new Set<string>();
+  let label = "";
+  try {
+    label = (getDomainWithoutSuffix(new URL(pageUrl).hostname) || "").toLowerCase();
+  } catch {
+    return terms;
+  }
+  // Only a single-word label is a brand token: "cheap-plumber-london" names
+  // keywords, not a brand, and never matched one [a-z]{3,} token anyway.
+  if (!/^[a-z]{3,}$/.test(label)) return terms;
+  terms.add(label);
+  for (const prefix of DOMAIN_PREFIXES) {
+    if (label.startsWith(prefix) && label.length - prefix.length >= 3) {
+      terms.add(label.slice(prefix.length));
+    }
+  }
+  for (const suffix of DOMAIN_SUFFIXES) {
+    if (label.endsWith(suffix) && label.length - suffix.length >= 3) {
+      terms.add(label.slice(0, -suffix.length));
+    }
+  }
+
+  const names = [
+    doc.querySelector('meta[property="og:site_name"]')?.getAttribute("content"),
+    doc.querySelector('meta[name="application-name"]')?.getAttribute("content"),
+  ];
+  for (const name of names) {
+    for (const word of name?.toLowerCase().match(/[a-z]{3,}/g) || []) {
+      if (label.includes(word)) terms.add(word);
+    }
+  }
+  return terms;
+}
 
 export const keywordStuffingRule: Rule = {
   meta: {
@@ -190,6 +247,8 @@ export const keywordStuffingRule: Rule = {
 
     // User-configured whitelist (lowercase for matching)
     const whitelist = new Set(opts.whitelist.map((w) => w.toLowerCase()));
+    // The site's own brand / product name is not a keyword it is stuffing.
+    for (const term of brandTerms(ctx.page.url, doc)) whitelist.add(term);
 
     if (organicTotal > 0) {
       for (const [word, rawCount] of wordCounts) {

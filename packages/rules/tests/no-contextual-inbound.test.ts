@@ -193,3 +193,24 @@ describe("links/no-contextual-inbound — scoping", () => {
     expect(result.value).toBe("/c0\n/c1\n/c2\n/c3\n/c4\n+2 more");
   });
 });
+
+describe("links/no-contextual-inbound — a capped crawl", () => {
+  function capped(pagesCrawled: number, maxPages: number): RuleContext {
+    const c = ctx(FOOTER_ONLY);
+    c.site!.crawlLimits = { pagesCrawled, maxPages };
+    return c;
+  }
+
+  test("skips when the crawl stopped at its page cap", () => {
+    const result = check(noContextualInboundRule, capped(4, 4));
+    expect(result.status).toBe("skipped");
+    expect(result.skipReason).toBe("Crawl capped before the frontier was exhausted");
+    expect(result.items).toBeUndefined();
+  });
+
+  test("still warns when the crawl finished under its cap", () => {
+    const result = check(noContextualInboundRule, capped(4, 10));
+    expect(result.status).toBe("warn");
+    expect(ids(result)).toEqual(["https://example.com/legal"]);
+  });
+});

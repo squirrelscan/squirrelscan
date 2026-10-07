@@ -24,6 +24,12 @@
 //     chrome, every one of its pages genuinely lacks contextual support. The
 //     `value` sample is capped so the finding stays readable; `details.total`
 //     and `items` carry the full picture, exactly as orphan-pages does.
+//   * A CAPPED CRAWL. The evidence here is the ABSENCE of a link, and a crawl
+//     that stopped at its page cap has not seen every page that could carry
+//     one: the contextual link may sit on page 11 of a 10-page run. So when
+//     `crawlLimits` shows the cap was hit, the rule skips rather than guess.
+//     Same `pagesCrawled >= maxPages` reading sitemap-coverage and
+//     template-discontinuity use; undefined limits are treated as not capped.
 //   * OLD CRAWLS. `isChrome` is optional on `LinkData` (crawls stored before
 //     #109 omit it). `undefined` counts as contextual on BOTH paths, so an old DB
 //     produces contextual == raw and this rule simply passes — never a site-wide
@@ -154,6 +160,18 @@ export const noContextualInboundRule: Rule = {
     const options = ctx.options;
     const minInboundLinks = options.minInboundLinks as number;
     const excludePatterns = options.excludePatterns as string[];
+
+    // A capped crawl cannot prove a link is absent: skip before counting.
+    const limits = ctx.site?.crawlLimits;
+    if (limits && limits.pagesCrawled >= limits.maxPages) {
+      checks.push({
+        name: "no-contextual-inbound",
+        status: "skipped",
+        message: `Crawl stopped at its ${limits.maxPages}-page cap, so a contextual link may sit on a page not crawled`,
+        skipReason: "Crawl capped before the frontier was exhausted",
+      });
+      return { checks };
+    }
 
     // Streaming path — read the pre-materialized counts. Both maps are built by
     // one pass over the same links with the same key/order, so zipping them by

@@ -162,10 +162,56 @@ describe("Batch 1 — legal/subprocessor-disclosure (new rule)", () => {
     expect(c?.status).toBe("pass");
   });
 
-  test("disclosure absent → warn", async () => {
+  test("disclosure absent on a site with a pricing link → warn", async () => {
     const ctx = siteCtx([{ url: "https://saas.example.com/", html: "<a href='/pricing'>Pricing</a>" }]);
     const c = check(await run(subprocessorDisclosureRule, ctx), "subprocessor-disclosure");
     expect(c?.status).toBe("warn");
+  });
+
+  test("disclosure absent on a site with a crawled /enterprise page → warn", async () => {
+    const ctx = siteCtx([
+      { url: "https://saas.example.com/", html: "<a href='/about'>About</a>" },
+      { url: "https://saas.example.com/enterprise", html: "<h1>For teams</h1>" },
+    ]);
+    const c = check(await run(subprocessorDisclosureRule, ctx), "subprocessor-disclosure");
+    expect(c?.status).toBe("warn");
+  });
+
+  test("disclosure absent on a site with a 'Book a demo' link → warn", async () => {
+    const ctx = siteCtx([
+      { url: "https://saas.example.com/", html: "<a href='/meet'>Book a demo</a>" },
+    ]);
+    const c = check(await run(subprocessorDisclosureRule, ctx), "subprocessor-disclosure");
+    expect(c?.status).toBe("warn");
+  });
+
+  test("pre-launch site with no commercial offer (waitlist only) → skipped, not warn", async () => {
+    const ctx = siteCtx([
+      {
+        url: "https://launch.example.com/",
+        html: "<h1>Coming soon</h1><a href='/waitlist'>Join the waitlist</a><a href='/privacy'>Privacy</a>",
+      },
+    ]);
+    const c = check(await run(subprocessorDisclosureRule, ctx), "subprocessor-disclosure");
+    expect(c?.status).toBe("skipped");
+    expect(c?.skipReason).toBe("No commercial offer found");
+  });
+
+  test("collected-signal path agrees with the legacy DOM path", async () => {
+    const { buildCollectedPageSignal } = await import("../src/collected-signals");
+    const pages = [
+      { url: "https://saas.example.com/", html: "<a href='/meet'>Talk to sales</a>" },
+      { url: "https://launch.example.com/", html: "<a href='/waitlist'>Join the waitlist</a>" },
+    ];
+    for (const p of pages) {
+      const ctx = siteCtx([p]);
+      ctx.collectedSignals = {
+        pages: [buildCollectedPageSignal({ url: p.url, parsed: ctx.site!.pages[0]!.parsed })],
+      };
+      const collected = check(await run(subprocessorDisclosureRule, ctx), "subprocessor-disclosure");
+      const legacy = check(await run(subprocessorDisclosureRule, siteCtx([p])), "subprocessor-disclosure");
+      expect(collected?.status).toBe(legacy?.status);
+    }
   });
 });
 

@@ -20,6 +20,8 @@ The rule runs on every crawled page over the body text with scripts, styles and 
 
 A word is flagged when its density is above `density_threshold`, 3% by default, and its count is above `min_occurrences`, 5 by default. Two subtractions come first. A list of roughly fifty function words and generic verbs is excluded outright, covering articles, pronouns, auxiliaries and words like `get` and `here` that read as high density on any page. Then generic call-to-action labels on `<a>` and `<button>` elements are counted, and their words are subtracted from both the word's own count and the denominator, so a page of "Learn more" buttons is measured on its prose. Nested controls are counted once, from the outermost element.
 
+The site's own brand or product name is never flagged: a one-product landing page repeats its name because that is what the page is for. The name is read from the page's domain (`acme.com`, and launch-style variants such as `getacme.com` or `acmehq.io` resolve to `acme`), plus any word of `og:site_name` or `application-name` that the domain also carries. A site name the domain does not carry is not exempt, so a page cannot excuse a stuffed keyword by naming itself after it. Add other brand or product names to `whitelist`.
+
 ## How to fix it
 
 Rewrite the passage. Use synonyms and related terms where the exact phrase is not needed, and write the sentence you would write if nobody were counting.

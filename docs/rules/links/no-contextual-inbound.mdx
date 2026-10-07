@@ -14,6 +14,7 @@ Counting the two together hides a real problem. A page reachable only through th
 The rule is site-wide. For each crawled page it counts internal, resolvable, dofollow inbound links twice: all of them, and only those whose anchor sat outside a `nav`, `header`, `footer` or `aside` landmark. It emits a single check named `no-contextual-inbound`:
 
 - Skipped when there are too few pages. Message: `Insufficient pages for contextual inbound link analysis`.
+- Skipped when the crawl stopped at its page cap. Message: `Crawl stopped at its 10-page cap, so a contextual link may sit on a page not crawled`. The finding rests on a link being absent, and a capped crawl has not seen every page that could carry one. Raise `max_pages` or use a deeper coverage profile to get a verdict.
 - Warn for pages with zero contextual inbound links. Message: `9 page(s) are linked only from sitewide chrome`. The value lists up to five paths with a `+N more` suffix, and every URL is listed as an item. Severity warning, weight 4.
 - Pass otherwise. Message: `All pages have at least one contextual inbound link`.
 

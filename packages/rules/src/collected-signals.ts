@@ -23,7 +23,7 @@ import { logger, profileRules } from "./logger";
 import { detectPageSignals } from "./integrity/signals";
 import { extractPageByteSignal } from "./performance/total-byte-weight";
 import { fingerprintPage } from "./integrity/fingerprint";
-import { matchSubprocessorLink } from "./legal/subprocessor-disclosure";
+import { hasCommercialOfferLink, matchSubprocessorLink } from "./legal/subprocessor-disclosure";
 import { pageScriptSrcs } from "./adblock/blocked-links";
 import { scanPageForSecrets } from "./security/leaked-secrets";
 
@@ -54,6 +54,9 @@ export interface CollectedPageSignal {
   /** subprocessor-disclosure: the first sub-processor/DPA link match on this page
    *  (`href || url`), or null — mirrors the legacy break-on-first-match. */
   subprocessorMatch: string | null;
+  /** subprocessor-disclosure: whether this page links to a commercial offer
+   *  (pricing, plans, enterprise, trust center, contact sales, book a demo). */
+  commercialOffer: boolean;
 }
 
 /** The collected per-page signals for one crawl, in page-stream (crawl) order. */
@@ -96,6 +99,7 @@ export function buildCollectedPageSignal(input: {
       signals: [],
       scriptSrcs: [],
       subprocessorMatch: null,
+      commercialOffer: false,
     };
   }
 
@@ -151,5 +155,6 @@ export function buildCollectedPageSignal(input: {
     subprocessorMatch: timed("legal/subprocessor-disclosure", () =>
       matchSubprocessorLink(doc, url)
     ),
+    commercialOffer: timed("legal/subprocessor-disclosure", () => hasCommercialOfferLink(doc)),
   };
 }
