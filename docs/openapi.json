@@ -146,7 +146,7 @@
       "get": {
         "tags": ["Audits"],
         "summary": "Get an audit run",
-        "description": "Fetch full detail for a single audit run owned by the authenticated user. While `status` is `pending`/`running`, `progress` carries the latest phase/page-count event streamed by the run, when one has been recorded. `notice` carries a `page_limit_clamped` signal when the run's requested page count was clamped down to the org's plan ceiling at dispatch time (never a hard error — the run itself still completed normally).",
+        "description": "Fetch full detail for a single audit run owned by the authenticated user. While `status` is `pending`/`running`, `progress` carries the latest phase/page-count event streamed by the run, when one has been recorded. `notice` carries a `page_limit_clamped` signal when the run's requested page count was clamped down to the org's plan ceiling at dispatch time (never a hard error — the run itself still completed normally). `renderFallback` carries a `render_fallback` signal, with the page count, when pages that asked for rendering were audited from their unrendered source instead.",
         "operationId": "getAuditRun",
         "parameters": [{ "$ref": "#/components/parameters/RunId" }],
         "responses": {
@@ -942,6 +942,16 @@
           "upgradeHint": { "type": "string", "description": "Human-readable upgrade suggestion, always including a pricing URL." }
         }
       },
+      "RenderFallbackNotice": {
+        "type": "object",
+        "description": "Present only when pages the run asked to render could not be rendered and were audited from their unrendered source instead. The audit still completes and publishes; content added by JavaScript was not seen on those pages. Absent when every render succeeded or the run never asked for rendering.",
+        "required": ["type", "pages", "message"],
+        "properties": {
+          "type": { "type": "string", "const": "render_fallback" },
+          "pages": { "type": "integer", "description": "Pages that fell back to plain fetch." },
+          "message": { "type": "string", "description": "Human-readable explanation, suitable to show to the audit's owner." }
+        }
+      },
       "AuditRun": {
         "description": "Full audit run record (the single-run GET). A caller can only fetch their own runs, so the owner identifiers below are always the caller's own. Composed as `AuditRunListItem` plus the owner identifiers `userId`/`orgId` via `allOf`, so the shared fields are defined once and cannot drift between the two.",
         "allOf": [
@@ -967,7 +977,8 @@
                   "updatedAt": { "type": "string", "format": "date-time" }
                 }
               },
-              "notice": { "$ref": "#/components/schemas/PageLimitClampNotice" }
+              "notice": { "$ref": "#/components/schemas/PageLimitClampNotice" },
+              "renderFallback": { "$ref": "#/components/schemas/RenderFallbackNotice" }
             },
             "additionalProperties": true
           }
