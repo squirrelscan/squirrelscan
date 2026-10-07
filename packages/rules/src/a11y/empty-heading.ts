@@ -22,13 +22,16 @@ function inlineStyle(el: Element, property: string): string | null {
   return value;
 }
 
+/** `display` values that are `none` or defer to the cascade, so `hidden` still applies. */
+const NO_OVERRIDE_DISPLAY = new Set(["none", "inherit", "initial", "unset", "revert", "revert-layer"]);
+
 /** `hidden` removes the element from rendering, except `hidden="until-found"`. */
 function hasHiddenAttribute(el: Element): boolean {
   const value = el.getAttribute("hidden");
   if (value === null || value.trim().toLowerCase() === "until-found") return false;
   // An author `display` other than none beats the user-agent `[hidden]` rule.
   const display = inlineStyle(el, "display");
-  return display === null || display === "none";
+  return !display || !/^[a-z-]+$/.test(display) || NO_OVERRIDE_DISPLAY.has(display);
 }
 
 /**
@@ -70,9 +73,7 @@ export const emptyHeadingRule: Rule = {
     if (!doc) return { checks: [] };
     const checks: CheckResult[] = [];
 
-    const allHeadings = doc.querySelectorAll("h1, h2, h3, h4, h5, h6");
-    // Headings that are not rendered are skipped before any content work.
-    const headings = [...allHeadings].filter((h) => !isHiddenFromMarkup(h));
+    const headings = doc.querySelectorAll("h1, h2, h3, h4, h5, h6");
     const emptyHeadings: CheckItem[] = [];
 
     let position = 0;
@@ -104,7 +105,8 @@ export const emptyHeadingRule: Rule = {
         }
       }
 
-      if (!hasContent) {
+      // Only an empty heading needs the (costlier) hidden check.
+      if (!hasContent && !isHiddenFromMarkup(heading)) {
         const level = heading.tagName.toLowerCase();
         const id = heading.getAttribute("id");
         const cls = heading.getAttribute("class")?.split(" ")[0];
@@ -127,7 +129,7 @@ export const emptyHeadingRule: Rule = {
             ? { additional: emptyHeadings.length - 10 }
             : undefined,
       });
-    } else if (allHeadings.length > 0) {
+    } else if (headings.length > 0) {
       checks.push({
         name: "empty-heading",
         status: "pass",

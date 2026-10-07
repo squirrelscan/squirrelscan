@@ -85,9 +85,9 @@ describe("a11y/empty-heading hidden headings", () => {
     expect(result?.status).toBe("pass");
   });
 
-  test("the position label counts rendered headings only", () => {
+  test("the position label is the heading's position in the document", () => {
     const result = run(`<h2 hidden></h2><h2 hidden></h2><h1>Shop</h1><h2></h2>`);
-    expect(result?.items?.[0]?.label).toBe("h2, heading 2 of 2 on the page");
+    expect(result?.items?.[0]?.label).toBe("h2, heading 4 of 4 on the page");
   });
 
   test("a CSS class that hides a heading cannot be seen from the markup: warns", () => {
