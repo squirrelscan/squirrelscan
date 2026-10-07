@@ -1,0 +1,281 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    # No review while a PR is a draft: the lane is still iterating and every
+    # synchronize would burn a 25-minute review. ready_for_review runs the
+    # first one; later pushes on a ready PR run again.
+    types: [opened, synchronize, ready_for_review]
+
+# No concurrency group on purpose: cancelling a superseded round would recreate
+# exactly the failure mode this workflow exists to avoid: a PR with no review
+# and nothing in the log explaining why.
+
+jobs:
+  claude-review:
+    # Same-repo PRs only. A fork PR gets no secrets (so the review could not
+    # run anyway) and its diff is the least trusted input there is: maintainers
+    # review those by hand.
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    # Backstop only. The review step carries its own (shorter) timeout so that a
+    # hung session fails THAT step and still runs the post-mortem below; a
+    # job-level timeout would kill the whole job and report nothing.
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      # write: this job posts its own "too large" / "review died" comments. The
+      # review itself is posted by the action under its own app token.
+      pull-requests: write
+      issues: read
+      id-token: write
+
+    # NOTE: no token at job level. The review step runs a model on an untrusted
+    # diff, and anything in the job env reaches its shell (`bun -e` can read
+    # process.env and call the API directly). Each step that needs GITHUB_TOKEN
+    # declares it; the review step gets only the action's own app token.
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          # Do not leave the job's token in .git/config: the reviewer has `git`
+          # and `cat` and would be able to read a PR-write credential out of the
+          # checkout. The action installs its own credentials for what it needs.
+          persist-credentials: false
+
+      # Bun runs the two gate scripts only; they have no dependencies, so no
+      # install step.
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.0
+
+      # This workflow file is tamper-protected (Claude's own workflow validation
+      # refuses to run when it differs from the default branch), but the scripts
+      # it calls are NOT: they would otherwise execute from the PR head, so a PR
+      # could neuter its own gate by editing them (too_large=true, or
+      # should_fail=false). Take both from the default branch instead.
+      - name: Materialize the gate scripts from the default branch
+        id: gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          dir="${RUNNER_TEMP}/claude-review-gate"
+          mkdir -p "${dir}"
+          for script in claude-review-size.ts claude-review-postmortem.ts; do
+            if gh api "repos/${GITHUB_REPOSITORY}/contents/scripts/${script}?ref=${DEFAULT_BRANCH}" \
+                 -H "Accept: application/vnd.github.raw" > "${dir}/${script}"; then
+              echo "${script}: taken from ${DEFAULT_BRANCH}"
+            else
+              # Bootstrap: the script is not on the default branch yet, which is
+              # true exactly once - on the PR that introduces it.
+              cp "scripts/${script}" "${dir}/${script}"
+              echo "::warning::${script} is not on ${DEFAULT_BRANCH} yet; running this PR's own copy of the gate"
+            fi
+          done
+          echo "dir=${dir}" >> "${GITHUB_OUTPUT}"
+
+      # #1612: a review costs turns proportional to the diff, and past some size
+      # the session dies mid-flight and posts nothing at all. Measure first and
+      # decline loudly instead of paying for a review that never arrives.
+      # Generated files (lockfiles, build output, binaries) do not count.
+      - name: Measure the diff
+        id: size
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAX_REVIEW_FILES: "80"
+          MAX_REVIEW_LINES: "6000"
+        run: bun "${{ steps.gate.outputs.dir }}/claude-review-size.ts"
+
+      - name: Decline to auto-review an oversized PR
+        if: steps.size.outputs.too_large == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SIZE_SUMMARY: ${{ steps.size.outputs.summary }}
+          SIZE_REASON: ${{ steps.size.outputs.reason }}
+        run: |
+          set -euo pipefail
+          marker="<!-- claude-auto-review:too-large:${HEAD_SHA} -->"
+          # Only OUR comments count as "already said": anyone can paste the
+          # marker into a comment and suppress the explanation otherwise.
+          existing="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
+            --jq '.[] | select(.user.login == "github-actions[bot]") | .body' || true)"
+          case "${existing}" in
+            *"${marker}"*)
+              echo "Already declined this head; not commenting again."
+              exit 0
+              ;;
+          esac
+          body_file="${RUNNER_TEMP}/claude-review-too-large.md"
+          {
+            echo "${marker}"
+            echo "### PR too large for auto-review"
+            echo
+            echo "This PR is ${SIZE_REASON}, so the automated reviewer was skipped: past that size it runs out of turns mid-session and posts nothing, which is worse than saying so."
+            echo
+            echo "**Run it manually** (\`/review\`, or a focused review per area) before merging, or split the PR."
+            echo
+            echo "Diff measured: ${SIZE_SUMMARY}."
+          } > "${body_file}"
+          gh pr comment "${PR_NUMBER}" --repo "${GITHUB_REPOSITORY}" --body-file "${body_file}"
+          echo "::warning::PR too large for auto-review (${SIZE_REASON}); review manually"
+
+      # Stamped before the review so the failure path can tell "died with nothing
+      # posted" from "posted its review, then errored on the way out".
+      - name: Stamp review start time
+        id: start
+        if: steps.size.outputs.too_large != 'true'
+        run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${GITHUB_OUTPUT}"
+
+      - name: Run Claude Code Review
+        id: claude-review
+        if: steps.size.outputs.too_large != 'true'
+        # The post-mortem step below must run even when the review dies, so the
+        # failure is recorded here and re-raised by the last step in this job.
+        continue-on-error: true
+        # Defense in depth: the SDK-iterator hang that used to leave this step
+        # running until the job timeout is fixed in v1 (the action now breaks
+        # explicitly on the result message), but a hang here must never be able
+        # to swallow the post-mortem. A STEP timeout fails just this step.
+        timeout-minutes: 25
+        uses: anthropics/claude-code-action@58985842b834ed26087302ba27d07bc24ca8697a # v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Please review this pull request and provide feedback on:
+            - Code quality and best practices
+            - Potential bugs or issues
+            - Performance considerations
+            - Security concerns
+            - Test coverage
+
+            This is the public, MIT-licensed squirrelscan repo: the `squirrel` CLI, the
+            audit engine, the rules and the docs. Use CONTRIBUTING.md for conventions.
+            Be constructive and helpful in your feedback.
+
+            REQUIRED FORMAT. Every individual finding MUST start with a severity tag in
+            parentheses, one of: (critical) (high) (medium) (low) (nit)
+
+              - (high) `foo.ts:42` unbounded retry loop can spin forever on a 5xx
+              - (nit) prefer `const` here
+
+            This is not cosmetic. An automated merge gate greps your comment for
+            `(high)` and `(critical)` to decide whether the PR may auto-merge, and it
+            cannot read severity out of prose. An untagged finding is invisible to it,
+            so a real problem you describe without a tag will merge anyway. Tag every
+            finding, including ones inside a numbered list, and use the tag that
+            matches the actual risk rather than inflating it. If you have no findings,
+            say so plainly and use no tags at all.
+
+            Use `gh pr comment` with your Bash tool to leave your review as a comment on the PR.
+
+            TOOLS. You have Read/Glob/Grep plus a read-only shell: git, `gh pr
+            view|diff|list|checks|comment`, `gh issue view|list`, `gh search`, `gh run
+            view|list`, and the usual text utilities (grep, rg, find, sed, awk, jq, wc,
+            sort, diff, ...). There is no `gh api`, no Edit and no Write: you must not
+            change any file, push a commit, or merge/close/edit the PR itself. If a tool
+            call is denied, do not retry it in another form: pick a different approach or
+            say in your review that you could not check that thing. Retrying denied calls
+            is how past runs burned their whole turn budget and posted nothing.
+
+            BUDGET. You have a hard cap of 80 turns. Read the diff first
+            (`gh pr diff`), spend your turns on the code that changed, and POST YOUR
+            COMMENT BEFORE YOU RUN OUT. A posted partial review beats a perfect one that
+            never lands.
+
+          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
+          # or https://code.claude.com/docs/en/cli-reference for available options
+          #
+          # #1612: the old allowlist covered only bun/make/git/gh/ls/cat/head/tail,
+          # so every grep, find, sed, jq or `cd` the reviewer reached for on a large
+          # diff was denied (8-12 denials per run) and the retries ate the session.
+          # This list adds the text utilities a code review actually needs.
+          #
+          # This list is NOT a security boundary, and must not be described as
+          # one. The diff under review is untrusted input, and several entries
+          # are shell-exec primitives: `bun -e`, `awk 'BEGIN{system()}'`,
+          # `find -exec`, `git -c alias.x='!cmd' x`. `jq -n env` dumps the whole
+          # environment, including the action's own tokens, and the model's shell
+          # necessarily holds the token its `gh pr comment` posts with. So an
+          # injected instruction that gets that far can reach the GitHub API
+          # regardless of which `gh` subcommands are enumerated here.
+          # What the list does: raise the bar against casual/accidental misuse
+          # and keep the obvious mutating paths off the shelf. The actual
+          # containment is the ephemeral runner plus the scopes of the app token
+          # the action mints - not this string.
+          claude_args: >-
+            --max-turns 80
+            --allowed-tools
+            "Read,Glob,Grep,Bash(git:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh pr checks:*),Bash(gh pr comment:*),Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh search:*),Bash(gh run view:*),Bash(gh run list:*),Bash(bun:*),Bash(make:*),Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(cd:*),Bash(pwd:*),Bash(echo:*),Bash(printf:*),Bash(grep:*),Bash(rg:*),Bash(find:*),Bash(fd:*),Bash(wc:*),Bash(sort:*),Bash(uniq:*),Bash(cut:*),Bash(tr:*),Bash(sed:*),Bash(awk:*),Bash(jq:*),Bash(diff:*),Bash(comm:*),Bash(basename:*),Bash(dirname:*),Bash(realpath:*),Bash(stat:*),Bash(file:*),Bash(nl:*),Bash(test:*),Bash(true:*)"
+
+      # The action hides the tool stream, so a dead review used to leave nothing
+      # but `permission_denials_count: N`. This reads the raw SDK log the action
+      # writes and prints what was denied (tool + input), recovers whatever
+      # findings the session produced before it died, and - the other half of
+      # #1612 - checks whether a review comment actually landed on the PR at all.
+      - name: Post-mortem the review session
+        id: postmortem
+        if: steps.claude-review.outcome != 'skipped'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXECUTION_FILE: ${{ steps.claude-review.outputs.execution_file }}
+          REVIEW_OUTCOME: ${{ steps.claude-review.outcome }}
+          REVIEW_STARTED_AT: ${{ steps.start.outputs.at }}
+          # The only benign reason for the action to skip without running.
+          REVIEW_WORKFLOW_CHANGED: ${{ steps.size.outputs.review_workflow_changed }}
+          # Who the review is expected to come from; matched exactly, so if the
+          # action ever posts under a different account this goes red loudly
+          # rather than quietly accepting some other bot's comment as a review.
+          REVIEWER_LOGIN: claude[bot]
+          COMMENT_BODY_FILE: ${{ runner.temp }}/claude-review-failed.md
+          COMMENT_MARKER: <!-- claude-auto-review:failed:${{ github.event.pull_request.head.sha }} -->
+        run: bun "${{ steps.gate.outputs.dir }}/claude-review-postmortem.ts"
+
+      - name: Report that no review landed
+        if: steps.postmortem.outputs.has_comment == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          marker="<!-- claude-auto-review:failed:${HEAD_SHA} -->"
+          # Ours only - see the note in the oversized-PR step above.
+          existing="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
+            --jq '.[] | select(.user.login == "github-actions[bot]") | .body' || true)"
+          case "${existing}" in
+            *"${marker}"*)
+              echo "Already reported a failed review for this head."
+              exit 0
+              ;;
+          esac
+          gh pr comment "${PR_NUMBER}" --repo "${GITHUB_REPOSITORY}" \
+            --body-file "${RUNNER_TEMP}/claude-review-failed.md"
+
+      # Re-raise the failure that `continue-on-error` swallowed. `should_fail`
+      # is true when the action errored, or when the model ran and posted no
+      # review at all; either way the check goes red instead of silently
+      # missing. It is false when the action never started the model - Claude's
+      # workflow validation refuses to run while this file differs from `main`,
+      # which is expected on PRs that edit it and is reported by comment, not
+      # by a red check nobody can clear.
+      - name: Fail if no review landed
+        if: steps.postmortem.outputs.should_fail == 'true'
+        env:
+          REVIEW_OUTCOME: ${{ steps.claude-review.outcome }}
+          # Written by the post-mortem, which knows WHICH failure this was.
+          FAIL_REASON: ${{ steps.postmortem.outputs.fail_reason }}
+        run: |
+          echo "::error::claude-review: ${FAIL_REASON:-did not produce a review} (step outcome: ${REVIEW_OUTCOME}). See the post-mortem above (${RUN_URL})."
+          exit 1
