@@ -16,6 +16,7 @@ import { keywordStuffingRule } from "./keyword-stuffing";
 import { metaInBodyRule } from "./meta-in-body";
 import { mojibakeRule } from "./mojibake";
 import { mimeTypeRule } from "./mime-type";
+import { placeholderContactRule } from "./placeholder-contact";
 import { placeholderTextRule } from "./placeholder-text";
 import { contentQualityRule } from "./quality";
 import { readingLevelRule } from "./reading-level";
@@ -48,6 +49,7 @@ export const rules: Rule[] = [
   placeholderTextRule,
   unrenderedMarkupRule,
   devLeakageRule,
+  placeholderContactRule,
 ];
 
 export {
@@ -66,6 +68,7 @@ export {
   metaInBodyRule,
   mimeTypeRule,
   mojibakeRule,
+  placeholderContactRule,
   placeholderTextRule,
   readingLevelRule,
   staleCopyrightRule,
