@@ -2411,6 +2411,11 @@ export function runStreamingRules(
        * binary invalidates every entry even when no rule id or option changed.
        */
       engineVersion: string;
+      /**
+       * A hash of the rule code, also part of the key, so a rule change that
+       * ships without a version bump still invalidates every entry.
+       */
+      rulesVersion: string;
     };
     /**
      * Take ownership of each page's rule output as it is produced (#2343), so it
@@ -2489,6 +2494,7 @@ export function runStreamingRules(
         const ctxHash = yield* Effect.promise(() =>
           computeRunContextHash({
             engineVersion: ruleCacheOpts.engineVersion,
+            rulesVersion: ruleCacheOpts.rulesVersion,
             pageRules: runner.pageRuleSignature(),
             siteData: siteDataForPageRules,
             siteMetadata: effectiveScope?.siteMetadata,
