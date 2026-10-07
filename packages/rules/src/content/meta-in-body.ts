@@ -21,8 +21,18 @@ export const metaInBodyRule: Rule = {
     const checks: CheckResult[] = [];
     if (!document) return { checks: [] };
 
-    // Query all meta tags in body
-    const bodyMetas = document.querySelectorAll("body meta");
+    // Microdata `<meta itemprop>` is valid flow content in the body. Only an
+    // itemprop meta without name/http-equiv/charset is exempt: the HTML spec
+    // forbids combining itemprop with those. RDFa `<meta property>` stays flagged.
+    const bodyMetas = Array.from(document.querySelectorAll("body meta")).filter(
+      (meta) =>
+        !(
+          meta.hasAttribute("itemprop") &&
+          !meta.hasAttribute("name") &&
+          !meta.hasAttribute("http-equiv") &&
+          !meta.hasAttribute("charset")
+        ),
+    );
 
     if (bodyMetas.length === 0) {
       checks.push({
@@ -39,12 +49,10 @@ export const metaInBodyRule: Rule = {
       label: string;
       meta: Record<string, unknown>;
     }[] = [];
-    for (const meta of Array.from(bodyMetas)) {
-      const name =
-        meta.getAttribute("name") || meta.getAttribute("property") || "unknown";
+    for (const meta of bodyMetas) {
+      const name = meta.getAttribute("name") || meta.getAttribute("property") || "unknown";
       const content = meta.getAttribute("content") || "";
-      const truncated =
-        content.length > 50 ? `${content.slice(0, 50)}...` : content;
+      const truncated = content.length > 50 ? `${content.slice(0, 50)}...` : content;
       metaItems.push({
         id: name,
         label: `${name}="${truncated}"`,
