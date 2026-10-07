@@ -56,6 +56,85 @@ describe("scanScopeLine (#1180)", () => {
   });
 });
 
+describe("time-stopped scans", () => {
+  const timeStopped = baseReport({
+    scanScope: {
+      origin: "cloud",
+      maxPages: 250,
+      pagesCrawled: 87,
+      capped: false,
+      stopReason: "time",
+    },
+  });
+
+  test("scan line says it stopped early on time, not that the limit was reached", () => {
+    expect(scanScopeLine(timeStopped)).toBe(
+      "Scan: 87 pages crawled from squirrelscan cloud (page limit 250, stopped early on time).",
+    );
+  });
+
+  test("scan line keeps the clamp wording and adds the time stop", () => {
+    const report = baseReport({
+      scanScope: {
+        origin: "cloud",
+        maxPages: 100,
+        requestedMaxPages: 500,
+        pagesCrawled: 40,
+        capped: false,
+        stopReason: "time",
+      },
+    });
+    expect(scanScopeLine(report)).toBe(
+      "Scan: 40 pages crawled from squirrelscan cloud (page limit 100 of 500 requested, stopped early on time).",
+    );
+  });
+
+  test("hint is worded for a time stop and does not tell the reader to raise the limit", () => {
+    const hint = fullScanHint(timeStopped);
+    expect(hint).toContain("Partial scan: the crawl ran out of time");
+    expect(hint).not.toContain("page limit");
+    expect(hint).not.toContain("--max-pages");
+  });
+
+  test("a page-limit stop renders exactly as before when stopReason is absent", () => {
+    const report = baseReport({
+      scanScope: { origin: "cloud", maxPages: 250, pagesCrawled: 250, capped: true },
+    });
+    expect(scanScopeLine(report)).toBe(
+      "Scan: 250 pages crawled from squirrelscan cloud (page limit 250 reached).",
+    );
+    expect(fullScanHint(report)).toContain("the page limit stopped the crawl");
+  });
+
+  test("capped wins when both are set", () => {
+    const report = baseReport({
+      scanScope: {
+        origin: "cloud",
+        maxPages: 250,
+        pagesCrawled: 250,
+        capped: true,
+        stopReason: "time",
+      },
+    });
+    expect(scanScopeLine(report)).toContain("page limit 250 reached)");
+    expect(fullScanHint(report)).toContain("the page limit stopped the crawl");
+  });
+
+  test("renderers carry the note; llm output names the stop reason", () => {
+    expect(renderText(timeStopped)).toContain("stopped early on time");
+    expect(renderMarkdown(timeStopped)).toContain("Partial scan: the crawl ran out of time");
+    expect(renderHtml(timeStopped, { reportId: "TESTID" })).toContain("stopped early on time");
+    expect(renderLlm(timeStopped)).toContain('stop-reason="time"');
+  });
+
+  test("llm output omits stop-reason on an ordinary run", () => {
+    const report = baseReport({
+      scanScope: { origin: "cloud", maxPages: 250, pagesCrawled: 30, capped: false },
+    });
+    expect(renderLlm(report)).not.toContain("stop-reason");
+  });
+});
+
 describe("fullScanHint (#1180)", () => {
   test("null on a complete scan", () => {
     expect(fullScanHint(baseReport())).toBeNull();
