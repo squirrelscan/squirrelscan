@@ -93,7 +93,7 @@ describe("per-rule time budget", () => {
       expect(err).toBeDefined();
       expect(err!.status).toBe("fail");
       expect(err!.message).toContain(`exceeded its ${RULE_TIME_BUDGET_MS} ms time budget`);
-      expect(err!.details).toEqual({ timedOut: true, budgetMs: RULE_TIME_BUDGET_MS });
+      expect(err!.details).toEqual({ timedOut: true, budgetMs: RULE_TIME_BUDGET_MS, pages: 1 });
       expect(byName(pageResult.checks, "test/redos")).toBeUndefined();
       expect(pageResult.ruleResults.get("test/redos")?.checks).toEqual([err!]);
 
@@ -123,7 +123,7 @@ describe("per-rule time budget", () => {
     );
     const { checks } = await runner.runPageRules(redosPage());
     expect(checks.map((c) => c.name)).toEqual(["test/swallow-error"]);
-    expect(checks[0].details).toEqual({ timedOut: true, budgetMs: 100 });
+    expect(checks[0].details).toEqual({ timedOut: true, budgetMs: 100, pages: 1 });
   }, 30_000);
 
   test("a site rule's budget scales with the site's page count", async () => {
@@ -156,6 +156,45 @@ describe("per-rule time budget", () => {
     );
     expect(runWithinBudget(() => "ok", 1000)).toBe("ok");
   });
+
+  test("the outer budget survives a nested call that returned", () => {
+    // If the inner call cleared the shared slot or the active flag, the outer
+    // spin below would run unbounded or the outer call would lose its function.
+    expect(() =>
+      runWithinBudget(() => {
+        expect(runWithinBudget(() => "inner", 1000)).toBe("inner");
+        const until = performance.now() + 500;
+        while (performance.now() < until) {
+          // spin past the outer 50 ms budget
+        }
+        return "outer finished";
+      }, 50)
+    ).toThrow(RuleTimeoutError);
+    // And the slot is free again afterwards.
+    expect(runWithinBudget(() => "next", 1000)).toBe("next");
+  });
+
+  test("a rule that times out on many pages is one fail, then skipped checks", async () => {
+    const slow = rule("test/slow-page", "page", () => {
+      const until = performance.now() + 150;
+      while (performance.now() < until) {
+        // spin
+      }
+      return pass("test/slow-page");
+    });
+    const runner = makeRunner([slow], 50);
+    const results = [];
+    for (const i of [1, 2, 3]) {
+      results.push(
+        (await runner.runPageRules({ ...redosPage(), url: `https://example.com/p${i}` }, siteData())).checks
+      );
+    }
+    const all = results.flat();
+    expect(all.map((c) => c.status)).toEqual(["fail", "skipped", "skipped"]);
+    expect(all.every((c) => c.name === "test/slow-page-error" && c.details?.["timedOut"] === true)).toBe(true);
+    // The one fail carries the running count of pages.
+    expect(all[0].details?.["pages"]).toBe(3);
+  }, 30_000);
 
   test("thrown errors and fast rules are unchanged", async () => {
     const runner = makeRunner([
@@ -222,12 +261,25 @@ describe("page-time collectors run under the budget", () => {
         status: "fail",
         message: "Rule error: exceeded its 1000 ms time budget and was abandoned",
         pageUrl: "https://example.com/b",
-        details: { timedOut: true, budgetMs: 1000 },
+        details: { timedOut: true, budgetMs: 1000, pages: 1 },
       },
     ]);
     expect(ruleResults.get("test/other")?.checks).toHaveLength(1);
     expect(ruleResults.get("test/gated")?.checks).toHaveLength(1);
     expect(checks).toHaveLength(4);
+  });
+
+  test("a collector timing out on many pages is one check per rule with a page count", async () => {
+    const timedOut = { budgetMs: 1000, ruleIds: ["test/collected"] };
+    const collected: CollectedSiteSignals = {
+      pages: ["a", "b", "c"].map((p) => ({ ...emptySignal(`https://example.com/${p}`), timedOut })),
+    };
+    const runner = makeRunner([rule("test/collected", "site", () => pass("test/collected"))]);
+    const { ruleResults } = await runner.runSiteRules(siteData(3), undefined, collected);
+    const errors = ruleResults.get("test/collected")!.checks.filter((c) => c.name === "test/collected-error");
+    expect(errors).toHaveLength(1);
+    expect(errors[0].pageUrl).toBe("https://example.com/a");
+    expect(errors[0].details).toEqual({ timedOut: true, budgetMs: 1000, pages: 3 });
   });
 
   test("buildCollectedPageSignal yields empty values and lists the rules past the budget", () => {

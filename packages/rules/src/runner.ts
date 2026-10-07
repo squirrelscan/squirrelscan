@@ -190,6 +190,11 @@ export class RuleRunner {
   // Only affects site rules — page rules are sync CPU and run sequentially (#379)
   private ruleConcurrency: number;
   private readonly ruleTimeBudgetMs: number;
+  // Page rules that have already timed out in this run, with the live `details`
+  // of the one fail check that reported it. A slow pattern times out on every page
+  // that triggers it, so only the first page is a fail and later ones are skipped
+  // (and counted), not one fail per page flooding the report and the score.
+  private readonly timedOutPageRules = new Map<string, { pages: number }>();
   // Per-run state — captured once at construction, immutable for the
   // lifetime of this runner instance. Each audit gets its own RuleRunner, so
   // concurrent audits never share these.
@@ -374,14 +379,26 @@ export class RuleRunner {
           ...(scopeForLog ? { scope: scopeForLog } : { pageUrl: ctx.page.url }),
           budgetMs: e.budgetMs,
         });
-        return [
-          {
-            name: `${rule.meta.id}-error`,
-            status: "fail",
-            message: `Rule error: ${e.message}`,
-            details: { timedOut: true, budgetMs: e.budgetMs },
-          },
-        ];
+        const name = `${rule.meta.id}-error`;
+        const earlier = scopeForLog ? undefined : this.timedOutPageRules.get(rule.meta.id);
+        if (earlier) {
+          earlier.pages++;
+          return [
+            {
+              name,
+              status: "skipped",
+              message: `Rule error: ${e.message} (already reported for this audit)`,
+              skipReason: "rule-timed-out",
+              details: { timedOut: true, budgetMs: e.budgetMs },
+            },
+          ];
+        }
+        // `pages` is updated in place as later pages time out too.
+        const details = { timedOut: true, budgetMs: e.budgetMs, pages: 1 };
+        if (!scopeForLog) {
+          this.timedOutPageRules.set(rule.meta.id, details);
+        }
+        return [{ name, status: "fail", message: `Rule error: ${e.message}`, details }];
       }
       return [
         {
@@ -600,7 +617,8 @@ export class RuleRunner {
 }
 
 /** `ruleId -> error checks` for the page-time extractors that ran past their
- *  budget, one check per (rule, page), in page order. */
+ *  budget: one check per rule (against the first page that timed out, with the
+ *  count of pages in `details.pages`), not one per page. */
 function collectedTimeoutChecks(
   collected: CollectedSiteSignals | undefined
 ): Map<string, CheckResult[]> {
@@ -609,15 +627,20 @@ function collectedTimeoutChecks(
     if (!page.timedOut) continue;
     const { budgetMs, ruleIds } = page.timedOut;
     for (const ruleId of ruleIds) {
-      let list = byRule.get(ruleId);
-      if (!list) byRule.set(ruleId, (list = []));
-      list.push({
-        name: `${ruleId}-error`,
-        status: "fail",
-        message: `Rule error: ${new RuleTimeoutError(budgetMs).message}`,
-        pageUrl: page.url,
-        details: { timedOut: true, budgetMs },
-      });
+      const existing = byRule.get(ruleId)?.[0];
+      if (existing) {
+        (existing.details as { pages: number }).pages++;
+        continue;
+      }
+      byRule.set(ruleId, [
+        {
+          name: `${ruleId}-error`,
+          status: "fail",
+          message: `Rule error: ${new RuleTimeoutError(budgetMs).message}`,
+          pageUrl: page.url,
+          details: { timedOut: true, budgetMs, pages: 1 },
+        },
+      ]);
     }
   }
   return byRule;
