@@ -34,9 +34,10 @@
 //  4. **The run context** — {@link computeRunContextHash}: the engine build (the
 //     CLI's release version, because the `@squirrelscan/rules` package version
 //     never moves), the rules version (a hash of the rule code itself, because a
-//     rule fix inside one release keeps the release version), the enabled page rules IN ORDER with their resolved options,
-//     the Stage-0 site metadata, the prefetched cloud results, and the four
-//     `SiteData` fields the page-rule pass actually reads.
+//     rule fix inside one release keeps the release version), the enabled page
+//     rules IN ORDER with their resolved options, the Stage-0 site metadata, the
+//     prefetched cloud results, and the four `SiteData` fields the page-rule pass
+//     actually reads.
 //
 // WHAT IS GATED OUT RATHER THAN APPROXIMATED. Two run-level inputs cannot be
 // reduced to a hash, so their presence turns the cache OFF for the whole run

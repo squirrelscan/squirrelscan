@@ -56,7 +56,9 @@ export function fingerprintRuleSources(
       const code = (err as NodeJS.ErrnoException).code;
       if (code !== "EISDIR") {
         if (strict) {
-          throw new Error(`rules fingerprint: source not found: ${path}`);
+          throw new Error(`rules fingerprint: source not found: ${path}`, {
+            cause: err,
+          });
         }
         continue;
       }
