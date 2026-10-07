@@ -498,9 +498,16 @@ function hasBylineContext(el: Element): boolean {
   return BYLINE_CONTEXT_RE.test(marker);
 }
 
-/** True when the line says nothing beyond the date and byline decorations. */
+/** A purely numeric `d/m/yyyy`, which version strings and references also look like. */
+const NUMERIC_ONLY_RE = /^\d{1,2}([/.-])\d{1,2}\1\d{4}$/;
+
+/**
+ * True when the line says nothing beyond the date and byline decorations. A
+ * numeric-only date gets no credit for a "Published" opener: `Published: ref
+ * 3.4.2019` is a reference number, so the rest of the line must be bare too.
+ */
 function isBylineLine(line: string, dateText: string): boolean {
-  if (BYLINE_PREFIX_RE.test(line)) return true;
+  if (!NUMERIC_ONLY_RE.test(dateText) && BYLINE_PREFIX_RE.test(line)) return true;
   const residue = line.replace(dateText, " ").replace(BYLINE_NOISE_RE, " ");
   return BYLINE_RESIDUE_RE.test(cleanText(residue));
 }

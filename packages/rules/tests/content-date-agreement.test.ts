@@ -409,6 +409,16 @@ describe("content/date-agreement — disagreements", () => {
     expect(warn?.details?.["gapDays"]).toBe(65);
   });
 
+  test("a reference number after a Published opener is not read as a byline date", () => {
+    const html = page(
+      article("2026-03-20"),
+      '<main><article><p>Published: ref 3.4.2019 for the archive</p>' +
+        `${PROSE}</article></main>`,
+    );
+
+    expect(check(run(html), "byline-vs-schema-date")).toBeUndefined();
+  });
+
   test("a numeric byline that matches neither reading of the schema date warns", () => {
     const html = page(
       article("2026-03-20"),
