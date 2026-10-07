@@ -11,7 +11,7 @@
 // the hash of the tree it was built from and reads no source at runtime, while
 // `bun run` from a checkout re-hashes the tree it is running.
 
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -32,19 +32,31 @@ export const RULES_FINGERPRINT_SOURCES = [
 
 /**
  * SHA-256 over every file under `sources`, path and bytes, in sorted path order.
- * A source that does not exist contributes its name and nothing else, so the
- * result is deterministic whatever the tree holds.
+ * Test files are skipped: they never reach a rule's output, and editing one must
+ * not cost a cold run. A source that does not exist contributes its name and
+ * nothing else, so the result is deterministic whatever the tree holds, unless
+ * `strict` is set, which throws instead: a build that cannot see a source would
+ * ship a hash that no longer tracks code changes.
  */
 export function fingerprintRuleSources(
   root: string,
-  sources: readonly string[] = RULES_FINGERPRINT_SOURCES
+  sources: readonly string[] = RULES_FINGERPRINT_SOURCES,
+  { strict = false }: { strict?: boolean } = {}
 ): string {
   const hasher = new Bun.CryptoHasher("sha256");
   for (const source of sources) {
     hasher.update(`source\0${source}\0`);
     const path = join(root, source);
-    if (!existsSync(path)) continue;
-    if (statSync(path).isFile()) {
+    let isFile: boolean;
+    try {
+      isFile = statSync(path).isFile();
+    } catch {
+      if (strict) {
+        throw new Error(`rules fingerprint: source not found: ${path}`);
+      }
+      continue;
+    }
+    if (isFile) {
       hasher.update(readFileSync(path));
       continue;
     }
@@ -52,6 +64,7 @@ export function fingerprintRuleSources(
       ...new Bun.Glob("**/*").scanSync({ cwd: path, onlyFiles: true }),
     ]
       .map((rel) => rel.split("\\").join("/"))
+      .filter((rel) => !/\.(test|spec)\.[cm]?[jt]sx?$/.test(rel))
       .sort();
     for (const rel of files) {
       hasher.update(`file\0${rel}\0`);
@@ -64,5 +77,9 @@ export function fingerprintRuleSources(
 
 /** Macro entry point: the fingerprint of the repo this file sits in. */
 export function rulesSourceFingerprint(): string {
-  return fingerprintRuleSources(join(import.meta.dir, "../../../.."));
+  return fingerprintRuleSources(
+    join(import.meta.dir, "../../../.."),
+    RULES_FINGERPRINT_SOURCES,
+    { strict: true }
+  );
 }

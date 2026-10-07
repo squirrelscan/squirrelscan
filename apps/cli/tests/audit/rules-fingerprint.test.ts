@@ -59,6 +59,25 @@ describe("rules version", () => {
     expect(after).not.toBe(before);
   });
 
+  test("ignores test files under a source", () => {
+    const root = tree("export const x = 1;");
+    const before = fingerprintRuleSources(root, SOURCES);
+    writeFileSync(join(root, "packages/rules/src/content/rule.test.ts"), "x");
+    expect(fingerprintRuleSources(root, SOURCES)).toBe(before);
+  });
+
+  test("strict mode throws on a missing source", () => {
+    const root = tree("export const x = 1;");
+    expect(() =>
+      fingerprintRuleSources(root, [...SOURCES, "packages/parser/src"], {
+        strict: true,
+      })
+    ).toThrow(/source not found/);
+    expect(() =>
+      fingerprintRuleSources(root, SOURCES, { strict: true })
+    ).not.toThrow();
+  });
+
   test("is inlined as a sha-256 of this checkout", () => {
     expect(RULES_VERSION).toMatch(/^[0-9a-f]{64}$/);
     expect(RULES_VERSION).toBe(
