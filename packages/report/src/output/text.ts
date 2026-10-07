@@ -30,6 +30,7 @@ import {
   seedRedirectLine,
 } from "../coverage";
 import { wrapText } from "../utils";
+import { unfetchedNote } from "../coverage";
 import { lockedRulesMessage } from "../locked-rules";
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 
@@ -119,7 +120,7 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
   // to be able to see at a glance whether the total is the whole site.
   if (report.rateLimited && report.rateLimited.pages > 0) {
     write(
-      `Rate limited: ${report.rateLimited.pages} page(s) not verified (${formatRateLimitedHosts(report.rateLimited.hosts)})`,
+      `Rate limited: ${report.rateLimited.pages} page(s) not verified (${formatRateLimitedHosts(report.rateLimited.hosts)})${unfetchedNote(report.rateLimited.unfetched)}`,
     );
   }
   // #1418: the seed redirected off its own site and was not followed, so the
