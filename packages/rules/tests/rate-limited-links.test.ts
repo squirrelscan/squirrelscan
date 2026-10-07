@@ -264,4 +264,27 @@ describe("links/redirects — a chain ending in a rate limit (#1829)", () => {
     expect(check(checks, "redirect-to-error")!.status).toBe("fail");
     expect(check(checks, "redirect-rate-limited")).toBeUndefined();
   });
+
+  test("the status is written so a report merge never widens it (#2244)", () => {
+    // `(404)` alone in parentheses reads as a count, so pages ending in 404 and
+    // 500 would merge into `(404 to 500)`.
+    const message = (statusCode: number) =>
+      check(
+        validateRedirectChain(
+          chain({
+            endsInError: true,
+            hops: [
+              { url: `${BASE}/a`, statusCode: 301, type: "http" as const },
+              { url: `${BASE}/b`, statusCode, type: "http" as const },
+            ],
+          }),
+        ),
+        "redirect-to-error",
+      )!.message;
+    expect(message(404)).toBe("Redirect chain ends in error (HTTP 404)");
+    expect(message(500)).toBe("Redirect chain ends in error (HTTP 500)");
+    expect(
+      check(validateRedirectChain(chain({ endsRateLimited: true })), "redirect-rate-limited")!.message,
+    ).toContain("(HTTP 429)");
+  });
 });

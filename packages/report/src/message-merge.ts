@@ -34,8 +34,9 @@ const DIGIT_RUN_RE = /\d+/g;
 
 // A character that makes the digits beside it part of something else: a word
 // (`H1`, `4KB`), a decimal or version (`4.3`), a date or a negative (`2024-01`,
-// `-5`), a time (`05:30`), a ratio (`10/10`), a grouped number (`1,024`).
-const GLUED_RE = /[A-Za-z0-9._:/,-]/;
+// `-5`), a time (`05:30`), a ratio (`10/10`), a grouped number (`1,024`), an
+// ordinal or identifier (`#1`).
+const GLUED_RE = /[A-Za-z0-9._:/,#-]/;
 
 // Beyond this many digits a value does not survive a round trip through
 // `Number`, so it is never treated as a count.
@@ -56,6 +57,8 @@ const SAFE_DIGITS = 15;
  *
  * A count is a standalone integer that either counts the noun after it
  * (`3 image(s)`) or stands alone in parentheses (`Multiple H1 tags found (3)`).
+ * So a value that is not a count, such as an HTTP status, must never be
+ * written alone in parentheses: `(HTTP 404)`, not `(404)`.
  */
 export function isCountToken(message: string, start: number, end: number): boolean {
   const text = message.slice(start, end);
