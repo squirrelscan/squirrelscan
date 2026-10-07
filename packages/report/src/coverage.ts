@@ -101,6 +101,12 @@ export function fullScanHint(report: AuditReport): string | null {
   // Deliberately neutral about what to do instead — the answer differs by
   // surface, and this renderer is shared by the CLI and the hosted report.
   const clamped = s ? clampedPageLimit(s) : null;
+  // A throttled run's gap is pages the host would not serve, and its
+  // score carries nothing for them. The carried-forward sentence below would
+  // tell a first-run reader the opposite, so it is not used here.
+  if (partialUnion && c && (report.rateLimited?.unfetched ?? 0) > 0) {
+    return `Partial scan: ${c.auditedPages} of ${c.knownPages} known pages were audited this run; the host rate limited the crawl, so the rest were never fetched. Re-run later, or crawl more slowly, for a full-site score.`;
+  }
   if (partialUnion && c) {
     const target = c.knownPages > (s?.maxPages ?? 0) ? String(c.knownPages) : null;
     const remedy = clamped

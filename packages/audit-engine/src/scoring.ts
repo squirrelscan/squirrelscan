@@ -700,6 +700,12 @@ export interface AuditStatusSignals {
   /** Host(s) that throttled the crawl, for the reason text. */
   rateLimitedHosts?: readonly string[];
   /**
+   * URLs the crawl discovered but never fetched when rate limiting stopped it. Named
+   * in the `partial` reason beside the failed count, so the summary says how
+   * much of the site is missing and not only how many fetches were refused.
+   */
+  rateLimitedUnfetched?: number;
+  /**
    * Why the entry URL could not be audited, recorded by the crawler on
    * `CrawlStats.rootFailure` (#1822). Read ONLY in the no-content branches that
    * are neither blocked nor rate limited, so it can never change the status of
@@ -729,6 +735,7 @@ export function deriveAuditStatus(s: AuditStatusSignals): {
   const blocked = s.blockedPages + (s.blockedErrors ?? 0);
   const rateLimited = (s.rateLimitedErrors ?? 0) + (s.rateLimitedPages ?? 0);
   const hostText = formatRateLimitedHosts(s.rateLimitedHosts);
+  const unfetched = s.rateLimitedUnfetched ?? 0;
 
   // #1829: rate limiting gets its OWN blocked reason. It reads as "blocked"
   // because nothing was auditable, but the remedy is to slow the crawl down,
@@ -789,7 +796,9 @@ export function deriveAuditStatus(s: AuditStatusSignals): {
   if (rateLimited > 0) {
     return {
       status: "partial",
-      reason: `${rateLimited} page${rateLimited === 1 ? "" : "s"} rate limited by ${hostText}`,
+      reason:
+        `${rateLimited} page${rateLimited === 1 ? "" : "s"} rate limited by ${hostText}` +
+        (unfetched > 0 ? `; ${unfetched} more discovered but not fetched` : ""),
     };
   }
   return { status: "completed" };
@@ -819,6 +828,7 @@ export function deriveAuditStatusFromPages(
   rateLimit: {
     errors?: number;
     hosts?: readonly string[];
+    unfetched?: number;
   } = {},
   rootFailure?: AuditFailureDetail
 ): {
@@ -837,6 +847,7 @@ export function deriveAuditStatusFromPages(
     rateLimitedErrors: rateLimit.errors ?? 0,
     rateLimitedPages,
     rateLimitedHosts: rateLimit.hosts,
+    rateLimitedUnfetched: rateLimit.unfetched,
     // #1822: the crawl stats are the source of truth. When they carry nothing —
     // a report reconstructed from pages alone, or a pre-#1822 crawl — fall back
     // to the stored statuses, which still name the class for an all-4xx site.

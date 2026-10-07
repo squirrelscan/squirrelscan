@@ -99,6 +99,11 @@ function formatRateLimitedHosts(hosts: string[]): string {
   return `${hosts.slice(0, 2).join(", ")} and ${hosts.length - 2} other host(s)`;
 }
 
+/** Trailing note for the rate-limit line; empty when nothing is unfetched. */
+function unfetchedNote(unfetched: number | undefined): string {
+  return unfetched && unfetched > 0 ? `; ${unfetched} more discovered but not fetched` : "";
+}
+
 export function renderText(report: AuditReport, options?: TextRenderOptions): string {
   const lines: string[] = [];
   const version = options?.version ?? "";
@@ -119,7 +124,7 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
   // to be able to see at a glance whether the total is the whole site.
   if (report.rateLimited && report.rateLimited.pages > 0) {
     write(
-      `Rate limited: ${report.rateLimited.pages} page(s) not verified (${formatRateLimitedHosts(report.rateLimited.hosts)})`,
+      `Rate limited: ${report.rateLimited.pages} page(s) not verified (${formatRateLimitedHosts(report.rateLimited.hosts)})${unfetchedNote(report.rateLimited.unfetched)}`,
     );
   }
   // #1418: the seed redirected off its own site and was not followed, so the

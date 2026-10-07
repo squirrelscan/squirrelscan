@@ -224,6 +224,11 @@ fetched, and the crawl finishes with the other hosts. Rate-limited URLs are neve
 reported as broken links or 4xx pages: their status is unknown, so they are
 listed in an informational finding and excluded from scoring.
 
+The report also says how much of the site the crawl never reached: the status is
+**partial**, and the summary names the pages the host refused and the URLs that
+were discovered but never fetched. When a site's known pages are counted, those
+unfetched URLs are included, so a throttled run never reads as full coverage.
+
 **Examples:**
 
 Give a slow host longer to recover:
