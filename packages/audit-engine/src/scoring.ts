@@ -700,6 +700,12 @@ export interface AuditStatusSignals {
   /** Host(s) that throttled the crawl, for the reason text. */
   rateLimitedHosts?: readonly string[];
   /**
+   * URLs the crawl discovered but never fetched when rate limiting stopped it. Named
+   * in the `partial` reason beside the failed count, so the summary says how
+   * much of the site is missing and not only how many fetches were refused.
+   */
+  rateLimitedUnfetched?: number;
+  /**
    * Pages whose response arrived but whose body could not be decoded (crawl
    * stats `pagesUndecodable`). They are missing from the analysis, so content
    * present with a non-zero count is `partial`, not `completed`.
@@ -735,6 +741,7 @@ export function deriveAuditStatus(s: AuditStatusSignals): {
   const blocked = s.blockedPages + (s.blockedErrors ?? 0);
   const rateLimited = (s.rateLimitedErrors ?? 0) + (s.rateLimitedPages ?? 0);
   const hostText = formatRateLimitedHosts(s.rateLimitedHosts);
+  const unfetched = s.rateLimitedUnfetched ?? 0;
 
   // #1829: rate limiting gets its OWN blocked reason. It reads as "blocked"
   // because nothing was auditable, but the remedy is to slow the crawl down,
@@ -796,7 +803,10 @@ export function deriveAuditStatus(s: AuditStatusSignals): {
   if (rateLimited > 0 || undecodable > 0) {
     const reasons: string[] = [];
     if (rateLimited > 0) {
-      reasons.push(`${rateLimited} page${rateLimited === 1 ? "" : "s"} rate limited by ${hostText}`);
+      reasons.push(
+        `${rateLimited} page${rateLimited === 1 ? "" : "s"} rate limited by ${hostText}` +
+          (unfetched > 0 ? `; ${unfetched} more discovered but not fetched` : ""),
+      );
     }
     // A page whose body could not be decoded is absent from every rule, so a
     // rule reporting an absence cannot tell it from a page that lacks the thing.
@@ -834,6 +844,7 @@ export function deriveAuditStatusFromPages(
   rateLimit: {
     errors?: number;
     hosts?: readonly string[];
+    unfetched?: number;
   } = {},
   rootFailure?: AuditFailureDetail,
   undecodablePages = 0
@@ -853,6 +864,7 @@ export function deriveAuditStatusFromPages(
     rateLimitedErrors: rateLimit.errors ?? 0,
     rateLimitedPages,
     rateLimitedHosts: rateLimit.hosts,
+    rateLimitedUnfetched: rateLimit.unfetched,
     undecodablePages,
     // #1822: the crawl stats are the source of truth. When they carry nothing —
     // a report reconstructed from pages alone, or a pre-#1822 crawl — fall back

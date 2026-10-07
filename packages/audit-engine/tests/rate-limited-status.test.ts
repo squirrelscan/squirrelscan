@@ -147,6 +147,33 @@ describe("deriveAuditStatus: undecodable pages", () => {
     expect(out.reason).toContain("1 page could not be decoded");
   });
 
+  test("combines the unfetched tail and the undecodable count in one reason", () => {
+    const out = deriveAuditStatus({
+      ...base,
+      rateLimitedErrors: 3,
+      rateLimitedHosts: ["shop.example.com"],
+      rateLimitedUnfetched: 40,
+      undecodablePages: 2,
+    });
+    expect(out.status).toBe("partial");
+    expect(out.reason).toBe(
+      "3 pages rate limited by shop.example.com; 40 more discovered but not fetched; 2 pages could not be decoded (bad content-encoding)",
+    );
+  });
+
+  test("deriveAuditStatusFromPages threads both unfetched and undecodable", () => {
+    const out = deriveAuditStatusFromPages(
+      [{ status: 200 }],
+      0,
+      { errors: 1, hosts: ["a.example.com"], unfetched: 5 },
+      undefined,
+      1,
+    );
+    expect(out.reason).toBe(
+      "1 page rate limited by a.example.com; 5 more discovered but not fetched; 1 page could not be decoded (bad content-encoding)",
+    );
+  });
+
   test("no undecodable pages stays completed", () => {
     expect(deriveAuditStatus({ ...base, undecodablePages: 0 }).status).toBe("completed");
     expect(deriveAuditStatus(base).status).toBe("completed");
