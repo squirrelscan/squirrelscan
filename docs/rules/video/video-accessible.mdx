@@ -20,7 +20,7 @@ The rule runs on every crawled page over every `<video>` element that is not dec
 
 ### Decorative videos
 
-A video is skipped when it is `aria-hidden="true"`, or when it is `muted`, has no `controls`, and has `autoplay` or `loop`. That is the markup of a background or hero loop, which has no audio to caption. The counts in the messages above exclude skipped videos, and the check's details record `videosChecked` and `decorativeSkipped`. A video with `controls`, that is not `muted`, or that is `muted` with neither `autoplay` nor `loop`, is still checked. [a11y/video-captions](/rules/a11y/video-captions) uses the same check, so the two rules agree.
+A video is skipped when it is `aria-hidden="true"`, or when it is `muted`, has no `controls`, and has `autoplay` or `loop`. That is the markup of a background or hero loop, which has no audio to caption. The counts in the messages above exclude skipped videos, and the check's details record `videosChecked` (videos that needed captions) and `decorativeSkipped`. A video with `controls`, that is not `muted`, or that is `muted` with neither `autoplay` nor `loop`, is still checked. [a11y/video-captions](/rules/a11y/video-captions) uses the same check, so the two rules agree.
 
 Only HTML `<video>` elements are checked. A YouTube or Vimeo embed carries its own captions inside the iframe, which this rule cannot see, so a page whose video is entirely embedded reports `No HTML5 video elements found`.
 

@@ -36,7 +36,7 @@ export const videoAccessibleRule: Rule = {
     // Decorative videos (muted, no controls, autoplay/loop, or aria-hidden) have
     // no audio to caption and are not counted (#486).
     const { checked, decorativeSkipped } = partitionDecorativeVideos(videos);
-    const details = { videosChecked: videos.length, decorativeSkipped };
+    const details = { videosChecked: checked.length, decorativeSkipped };
 
     if (checked.length === 0) {
       checks.push({

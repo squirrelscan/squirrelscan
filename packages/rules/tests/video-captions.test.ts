@@ -36,16 +36,29 @@ describe("decorative video exemption", () => {
   test("reporter repro passes in both rules and records the skip", () => {
     const c = captions(REPRO);
     expect(c.status).toBe("pass");
-    expect(c.details).toEqual({ videosChecked: 1, decorativeSkipped: 1 });
+    expect(c.details).toEqual({ videosChecked: 0, decorativeSkipped: 1 });
     const a = accessible(REPRO);
     expect(a.status).toBe("pass");
-    expect(a.details).toEqual({ videosChecked: 1, decorativeSkipped: 1 });
+    expect(a.details).toEqual({ videosChecked: 0, decorativeSkipped: 1 });
   });
 
   test("muted aria-hidden video passes in both rules", () => {
     const body = `<video src="/v.mp4" muted aria-hidden="true"></video>`;
     expect(captions(body).status).toBe("pass");
     expect(accessible(body).status).toBe("pass");
+  });
+
+  test("aria-hidden is matched case-insensitively and trimmed", () => {
+    const body = `<video src="/v.mp4" aria-hidden=" TRUE "></video>`;
+    expect(captions(body).status).toBe("pass");
+    expect(accessible(body).status).toBe("pass");
+  });
+
+  test("a source-only decorative video is skipped, an embed alongside is still reported", () => {
+    const body = `<video muted loop><source src="/v.webm"></video>
+      <iframe src="https://www.youtube.com/embed/x"></iframe>`;
+    expect(captions(body).status).toBe("pass");
+    expect(run(videoCaptionsRule, body, "video-embeds").status).toBe("info");
   });
 
   test.each([
@@ -66,7 +79,7 @@ describe("decorative video exemption", () => {
     expect(c.message).toBe("1 video(s) without caption tracks");
     expect(c.items).toHaveLength(1);
     expect(c.items?.[0]?.id).toBe("/talk.mp4");
-    expect(c.details).toEqual({ videosChecked: 2, decorativeSkipped: 1 });
+    expect(c.details).toEqual({ videosChecked: 1, decorativeSkipped: 1 });
     expect(accessible(body).status).toBe("warn");
   });
 
