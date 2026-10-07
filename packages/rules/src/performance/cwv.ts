@@ -4,13 +4,22 @@ import type { Document, Element } from "linkedom";
 
 import { parseHTML } from "@squirrelscan/parser/dom";
 
-import type { CheckResult, CWVHints } from "@squirrelscan/core-contracts";
+import type { CWVHints } from "@squirrelscan/core-contracts";
+
+import {
+  collectImagePreloadKeys,
+  findLcpCandidates,
+  isImagePreloaded,
+} from "../shared/lcp-candidate";
 
 import {
   getHostname,
   querySelectorAllOutsideNoscript,
   stripNoscriptMarkup,
 } from "@squirrelscan/utils";
+
+// perf/lcp-hints counts at most this many eligible LCP candidates.
+const MAX_LCP_CANDIDATES = 3;
 
 // Known CDN domains that should have preconnect
 const COMMON_CDNS = [
@@ -312,32 +321,13 @@ function analyzeCWVHints(
     }
   }
 
-  // Check for large images that might be LCP candidates without preload
-  const largeImages = querySelectorAllOutsideNoscript(
-    doc,
-    'img:not([loading="lazy"]), img[fetchpriority="high"]'
-  );
-  const preloadedImages = new Set(
-    hints.preloadTags.filter(
-      (url) =>
-        url.endsWith(".jpg") ||
-        url.endsWith(".jpeg") ||
-        url.endsWith(".png") ||
-        url.endsWith(".webp") ||
-        url.endsWith(".avif")
-    )
-  );
-
-  // First few images are likely LCP candidates
-  let imageIndex = 0;
-  for (const img of largeImages) {
-    if (imageIndex >= 3) break; // Only check first 3
-
-    const src = img.getAttribute("src");
-    if (src && !preloadedImages.has(src) && !src.startsWith("data:")) {
-      hints.largeImagesWithoutPreload.push(src);
+  // Likely-LCP images without a matching preload. Candidates come from the shared
+  // finder perf/lcp-fetchpriority uses; the first few eligible images count.
+  const preloadKeys = collectImagePreloadKeys(doc, pageUrl);
+  for (const img of findLcpCandidates(doc, MAX_LCP_CANDIDATES)) {
+    if (!isImagePreloaded(img, preloadKeys, pageUrl)) {
+      hints.largeImagesWithoutPreload.push(img.getAttribute("src") ?? "");
     }
-    imageIndex++;
   }
 
   return hints;
@@ -402,103 +392,4 @@ export function getCWVHints(
   const hints = freezeHints(analyzeCWVHints(doc, html, pageUrl));
   cwvHintsCache.set(doc, hints);
   return hints;
-}
-
-export function validateCWVHints(hints: CWVHints): CheckResult[] {
-  const checks: CheckResult[] = [];
-
-  // LCP: Large images without preload — report the count, not an image dump
-  // (keep in sync with lcp-hints.ts; squirrelscan/squirrelscan#16)
-  if (hints.largeImagesWithoutPreload.length > 0) {
-    const n = hints.largeImagesWithoutPreload.length;
-    checks.push({
-      name: "cwv-lcp-preload",
-      status: "warn",
-      message: `${n} likely-LCP image${n === 1 ? "" : "s"} loaded without preload`,
-      value: n,
-    });
-  }
-
-  // LCP: Render-blocking resources
-  if (hints.renderBlockingResources.length > 3) {
-    checks.push({
-      name: "cwv-render-blocking",
-      status: "warn",
-      message: `${hints.renderBlockingResources.length} render-blocking resources`,
-      items: hints.renderBlockingResources.map((url) => ({ id: url })),
-    });
-  }
-
-  // LCP: Fonts without font-display
-  if (hints.fontsWithoutSwap.length > 0) {
-    checks.push({
-      name: "cwv-font-display",
-      status: "warn",
-      message: `${hints.fontsWithoutSwap.length} font(s) without font-display: swap`,
-      items: hints.fontsWithoutSwap.map((url) => ({ id: url })),
-    });
-  }
-
-  // LCP: Missing preconnect
-  if (hints.missingPreconnect.length > 0) {
-    checks.push({
-      name: "cwv-preconnect",
-      status: "warn",
-      message: `Missing preconnect for ${hints.missingPreconnect.length} CDN(s)`,
-      items: hints.missingPreconnect.map((url) => ({ id: url })),
-    });
-  }
-
-  // CLS: Images without dimensions
-  if (hints.imagesWithoutDimensions.length > 0) {
-    const severity = hints.imagesWithoutDimensions.length > 5 ? "fail" : "warn";
-    checks.push({
-      name: "cwv-cls-images",
-      status: severity,
-      message: `${hints.imagesWithoutDimensions.length} image(s) without width/height (CLS risk)`,
-      items: hints.imagesWithoutDimensions.map((url) => ({ id: url })),
-    });
-  }
-
-  // CLS: Iframes without dimensions
-  if (hints.iframesWithoutDimensions.length > 0) {
-    checks.push({
-      name: "cwv-cls-iframes",
-      status: "warn",
-      message: `${hints.iframesWithoutDimensions.length} iframe(s) without dimensions`,
-      items: hints.iframesWithoutDimensions.map((url) => ({ id: url })),
-    });
-  }
-
-  // INP: Third-party scripts
-  if (hints.thirdPartyScripts.length > 5) {
-    checks.push({
-      name: "cwv-third-party",
-      status: "warn",
-      message: `${hints.thirdPartyScripts.length} third-party scripts (may impact INP)`,
-      items: hints.thirdPartyScripts.map((url) => ({ id: url })),
-    });
-  }
-
-  // Script loading analysis
-  if (hints.blockingScripts > 3) {
-    checks.push({
-      name: "cwv-blocking-scripts",
-      status: "warn",
-      message: `${hints.blockingScripts} blocking scripts (consider async/defer)`,
-      value: `${hints.asyncScripts} async, ${hints.deferScripts} defer, ${hints.blockingScripts} blocking`,
-    });
-  }
-
-  // Resource hints usage
-  if (hints.preloadTags.length > 0 || hints.preconnectTags.length > 0) {
-    checks.push({
-      name: "cwv-resource-hints",
-      status: "pass",
-      message: "Resource hints in use",
-      value: `${hints.preloadTags.length} preload, ${hints.preconnectTags.length} preconnect`,
-    });
-  }
-
-  return checks;
 }
