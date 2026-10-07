@@ -18,6 +18,11 @@
 // a rule repeating a slow match across many elements or pages, which without it
 // is unbounded.
 //
+// An abandoned rule stops at an arbitrary point, so a rule must not leave
+// shared state half-written when it throws or is stopped: build results locally
+// and publish them last. Today's rules keep per-page work in locals; the only
+// state that outlives a call is the runner's own, which a timeout never touches.
+//
 // Only the synchronous part of `run()` is budgeted. An async rule's awaits are
 // network I/O with their own per-request timeouts, and its code after an await
 // runs outside the call.
@@ -63,8 +68,9 @@ export class RuleTimeoutError extends Error {
 }
 
 // One context and one compiled script for the process: the call just swaps the
-// function in. Calls never nest (`fn` is sync and returns before the next call),
-// so a single slot is safe.
+// function in. A call made while another is active (nesting) runs directly
+// under the outer call's budget, so the single slot is never clobbered.
+let active = false;
 const slot: { fn?: () => unknown } = {};
 const context = vm.createContext(slot);
 const callSlot = new vm.Script("fn()");
@@ -76,6 +82,8 @@ const callSlot = new vm.Script("fn()");
  */
 export function runWithinBudget<T>(fn: () => T, budgetMs: number): T {
   if (!(budgetMs > 0) || !Number.isFinite(budgetMs)) return fn();
+  if (active) return fn();
+  active = true;
   slot.fn = fn;
   try {
     return callSlot.runInContext(context, { timeout: Math.ceil(budgetMs) }) as T;
@@ -86,5 +94,6 @@ export function runWithinBudget<T>(fn: () => T, budgetMs: number): T {
     throw e;
   } finally {
     slot.fn = undefined;
+    active = false;
   }
 }

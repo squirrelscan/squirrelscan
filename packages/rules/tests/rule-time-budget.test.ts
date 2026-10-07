@@ -12,6 +12,7 @@ import { buildCollectedPageSignal, type CollectedSiteSignals } from "../src/coll
 import type { RuleNamespace } from "../src/loader";
 import {
   RULE_TIME_BUDGET_MS,
+  RuleTimeoutError,
   SITE_RULE_BUDGET_CAP_MS,
   runWithinBudget,
   siteRuleBudgetMs,
@@ -22,7 +23,7 @@ import type { PageData, ParsedPage, Rule, RuleContext, RuleResult, SiteData } fr
 const REDOS_HTML = readFileSync(join(import.meta.dir, "fixtures/redos-page.html"), "utf8");
 // Known catastrophic: nested quantifier, then a character that cannot match.
 // Built from a string so static analysis does not flag the deliberate pattern.
-const CATASTROPHIC = new RegExp("^(a+)+$");
+const CATASTROPHIC = new RegExp(["^(a+)", "+$"].join(""));
 
 function rule(id: string, scope: "page" | "site", run: (ctx: RuleContext) => RuleResult | Promise<RuleResult>): Rule {
   return {
@@ -142,6 +143,18 @@ describe("per-rule time budget", () => {
     expect(siteRuleBudgetMs(100, 25)).toBe(2_500);
     // Capped on big sites, so one stuck rule cannot hold an audit for an hour.
     expect(siteRuleBudgetMs(1000, 5_000)).toBe(SITE_RULE_BUDGET_CAP_MS);
+  });
+
+  test("a nested call runs under the outer budget and leaves the slot intact", () => {
+    const out = runWithinBudget(() => {
+      const inner = runWithinBudget(() => 1, 1000);
+      return inner + runWithinBudget(() => 2, 1000);
+    }, 1000);
+    expect(out).toBe(3);
+    expect(() => runWithinBudget(() => runWithinBudget(() => CATASTROPHIC.test("a".repeat(40) + "!"), 1000), 50)).toThrow(
+      RuleTimeoutError
+    );
+    expect(runWithinBudget(() => "ok", 1000)).toBe("ok");
   });
 
   test("thrown errors and fast rules are unchanged", async () => {

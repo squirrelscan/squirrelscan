@@ -37,6 +37,9 @@ describe("leaked-secrets patterns stay linear", () => {
     // Still found after a base64url character, e.g. URL-encoded `Bearer%20eyJ…`.
     expect("Authorization: Bearer%20" + jwt).toMatch(re);
     expect(`token="${jwt}"`.match(re)?.[0]).toBe(jwt);
+    // Junk `eyJ` glued to the front of a real token does not hide it: the match
+    // starts at the first `eyJ` of the run and still ends with the token.
+    expect(`eyJjunk${jwt}`.match(re)?.[0]?.endsWith(jwt)).toBe(true);
     // A later `eyJ` in the same run is the same failure the first one was.
     expect(`eyJ${"a".repeat(20)}eyJ${"b".repeat(20)}`.match(re)).toBeNull();
   });
