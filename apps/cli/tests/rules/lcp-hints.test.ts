@@ -152,4 +152,3 @@ describe("perf/lcp-hints and perf/lcp-fetchpriority share the hero candidate", (
     expect(fp.items[0].id).toBe("/hero.png");
   });
 });
-

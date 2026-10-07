@@ -326,7 +326,8 @@ function analyzeCWVHints(
   const preloadKeys = collectImagePreloadKeys(doc, pageUrl);
   for (const img of findLcpCandidates(doc, MAX_LCP_CANDIDATES)) {
     if (!isImagePreloaded(img, preloadKeys, pageUrl)) {
-      hints.largeImagesWithoutPreload.push(img.getAttribute("src") ?? "");
+      // Candidates always have a src (findLcpCandidates skips images without one).
+      hints.largeImagesWithoutPreload.push(img.getAttribute("src") as string);
     }
   }
 

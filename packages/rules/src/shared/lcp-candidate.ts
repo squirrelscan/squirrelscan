@@ -23,7 +23,9 @@ function isSmallDeclared(width: string | null, height: string | null): boolean {
 
 // Comparison key for src/preload matching: absolute URL without query or hash, so
 // a relative src, an absolute preload and a cache-busting query all match. Null
-// when unparseable.
+// when unparseable. Trade-off: images that differ only by query (an image proxy's
+// `?id=1` and `?id=2`) share a key, so a preload for one clears the other. That
+// errs toward not warning, which suits a heuristic rule.
 function urlKey(value: string, base: string): string | null {
   try {
     const url = new URL(value, base);
