@@ -6,9 +6,9 @@ import {
   buildLabelIndex,
   fieldSelector,
   fieldSnippet,
-  type LabelIndex,
   inferFieldPurpose,
   isDataField,
+  type LabelIndex,
   parseAutocomplete,
   segmentsOf,
 } from "../shared/form-fields";
