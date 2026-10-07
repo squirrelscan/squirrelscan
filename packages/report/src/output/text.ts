@@ -30,6 +30,7 @@ import {
   seedRedirectLine,
 } from "../coverage";
 import { wrapText } from "../utils";
+import { unfetchedNote } from "../coverage";
 import { lockedRulesMessage } from "../locked-rules";
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 
@@ -97,11 +98,6 @@ function formatRateLimitedHosts(hosts: string[]): string {
   if (hosts.length === 0) return "the host";
   if (hosts.length <= 2) return hosts.join(" and ");
   return `${hosts.slice(0, 2).join(", ")} and ${hosts.length - 2} other host(s)`;
-}
-
-/** Trailing note for the rate-limit line; empty when nothing is unfetched. */
-function unfetchedNote(unfetched: number | undefined): string {
-  return unfetched && unfetched > 0 ? `; ${unfetched} more discovered but not fetched` : "";
 }
 
 export function renderText(report: AuditReport, options?: TextRenderOptions): string {

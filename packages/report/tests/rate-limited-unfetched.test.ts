@@ -1,6 +1,6 @@
 // The rate-limit line is the caveat on the page count, so it has to say how
-// much of the site the crawl never reached, not only how many fetches failed
-//. Absent `unfetched` (older reports) must print exactly what it did.
+// much of the site the crawl never reached, not only how many fetches failed.
+// Absent `unfetched` (older reports) must print exactly what it did.
 
 import { describe, expect, test } from "bun:test";
 

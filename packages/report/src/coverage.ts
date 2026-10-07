@@ -457,3 +457,8 @@ export function ruleMixedProvenanceNote(
   const pending = carriedIssuePages.size;
   return `Fixed on all ${trulyClean} page${trulyClean === 1 ? "" : "s"} checked this run; ${pending} page${pending === 1 ? "" : "s"} pending re-check.`;
 }
+
+/** Trailing note for the rate-limit line; empty when nothing is unfetched. */
+export function unfetchedNote(unfetched: number | undefined): string {
+  return unfetched && unfetched > 0 ? `; ${unfetched} more discovered but not fetched` : "";
+}

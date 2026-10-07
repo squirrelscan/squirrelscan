@@ -21,6 +21,7 @@ import {
   scanScopeLine,
   seedRedirectLine,
   ruleCarriedRollupLine,
+  unfetchedNote,
 } from "../coverage";
 import {
   affectedPages,
@@ -110,11 +111,6 @@ function formatRateLimitedHosts(hosts: string[]): string {
   if (hosts.length === 0) return "the host";
   if (hosts.length <= 2) return hosts.join(" and ");
   return `${hosts.slice(0, 2).join(", ")} and ${hosts.length - 2} other host(s)`;
-}
-
-/** Trailing note for the rate-limit line; empty when nothing is unfetched. */
-function unfetchedNote(unfetched: number | undefined): string {
-  return unfetched && unfetched > 0 ? `; ${unfetched} more discovered but not fetched` : "";
 }
 
 export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOptions): string {
