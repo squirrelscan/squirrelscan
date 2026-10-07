@@ -199,6 +199,26 @@ describe("#2231 a token that is not a count never widens", () => {
   });
 });
 
+// #2244: values that are not counts but sit where a count could.
+describe("#2244 status codes and #-prefixed numbers are not counts", () => {
+  test("redirect chains ending in different statuses stay separate groups", () => {
+    const a = "Redirect chain ends in error (HTTP 404)";
+    const b = "Redirect chain ends in error (HTTP 500)";
+    expect(split([a, b])).toEqual([a, b]);
+  });
+
+  test("a number after # is an identifier, not a count", () => {
+    expect(split(["Element #1 has no label", "Element #2 has no label"])).toEqual([
+      "Element #1 has no label",
+      "Element #2 has no label",
+    ]);
+    expect(split(["Duplicate id (#1)", "Duplicate id (#2)"])).toEqual([
+      "Duplicate id (#1)",
+      "Duplicate id (#2)",
+    ]);
+  });
+});
+
 describe("#2231 the merged message is accompanied by its page count", () => {
   test("a merged check reports how many pages contributed", () => {
     const checks = grouped([
@@ -312,6 +332,15 @@ describe("#2231 guard: every rule's message templates survive a merge", () => {
     expect(offenders).toEqual([]);
   });
 
+  test("no template writes a status code alone in parentheses", () => {
+    // `(${status})` is count-shaped, so pages reporting 404 and 500 would merge
+    // into `(404 to 500)` (#2244). Write `(HTTP ${status})` instead.
+    const offenders = templates
+      .filter(({ template }) => /\(\$\{[^}]*(status|code)[^}]*\}\)/i.test(template))
+      .map(({ file, template }) => `${file}: ${template}`);
+    expect(offenders).toEqual([]);
+  });
+
   test("no merged message invents a range in a token that is not a count", () => {
     // Every token of the output must be either a token one of the inputs
     // actually wrote, or a `<int> to <int>` range standing where a bare integer
@@ -323,7 +352,7 @@ describe("#2231 guard: every rule's message templates survive a merge", () => {
       const b = fill(template, 17);
       for (const message of grouped([a, b]).map((c) => c.message)) {
         if (message === a || message === b) continue;
-        const rebuilt = message.replace(/(?<![A-Za-z0-9._:/,-])(\d+) to (\d+)(?![A-Za-z0-9._:/,-])/g, "3");
+        const rebuilt = message.replace(/(?<![A-Za-z0-9._:/,#-])(\d+) to (\d+)(?![A-Za-z0-9._:/,#-])/g, "3");
         if (rebuilt !== a) offenders.push(`${file}\n  in : ${a}\n  out: ${message}`);
       }
     }

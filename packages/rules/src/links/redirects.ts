@@ -197,7 +197,7 @@ export function validateRedirectChain(chain: RedirectChain): CheckResult[] {
     checks.push({
       name: "redirect-to-error",
       status: "fail",
-      message: `Redirect chain ends in error (${finalStatus})`,
+      message: `Redirect chain ends in error (HTTP ${finalStatus})`,
       value: chain.finalUrl,
     });
   } else if (chain.endsRateLimited) {
@@ -208,7 +208,7 @@ export function validateRedirectChain(chain: RedirectChain): CheckResult[] {
     checks.push({
       name: "redirect-rate-limited",
       status: "info",
-      message: `Redirect chain ends in a rate-limited response (${finalStatus}); destination status unverifiable`,
+      message: `Redirect chain ends in a rate-limited response (HTTP ${finalStatus}); destination status unverifiable`,
       value: chain.finalUrl,
     });
   }
@@ -243,7 +243,7 @@ export function validateRedirectChain(chain: RedirectChain): CheckResult[] {
       checks.push({
         name: "redirect-temporary",
         status: "warn",
-        message: `Temporary redirect (${hop.statusCode}) used at ${hop.url}`,
+        message: `Temporary redirect (HTTP ${hop.statusCode}) used at ${hop.url}`,
         value: hop.statusCode,
       });
     }
