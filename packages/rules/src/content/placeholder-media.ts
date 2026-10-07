@@ -76,7 +76,7 @@ export function isPlaceholderSource(raw: string): boolean {
 
 /** Pixel size of a base64 GIF or PNG data URI, or null when it is neither or too short to say. */
 export function dataUriDimensions(raw: string): { width: number; height: number } | null {
-  const m = /^data:image\/(gif|png);base64,([A-Za-z0-9+/=\s]+)$/i.exec(raw.trim());
+  const m = /^data:image\/(gif|png);base64,([A-Za-z0-9+/=\s]+)$/i.exec(raw.slice(0, 200).trim());
   if (!m) return null;
   // The header is in the first 24 bytes, which is 32 base64 characters.
   const head = m[2]!.replace(/\s+/g, "").slice(0, 32);
@@ -99,6 +99,13 @@ const isOnePixel = (raw: string): boolean => {
   const d = dataUriDimensions(raw);
   return d !== null && d.width === 1 && d.height === 1;
 };
+
+/** Lazy-loaders beyond LAZY_ATTRS (`data-lazy`, `data-echo`, `data-img`, ...) hold the real URL in some data-* attribute. */
+function hasUnknownLazyUrl(img: Element): boolean {
+  return Array.from(img.attributes).some(
+    (a) => a.name.startsWith("data-") && /^\s*(?:https?:)?\/|^\s*[\w-]+\/[\w./-]+\.(?:jpe?g|png|gif|webp|avif|svg)/i.test(a.value) && !a.value.trim().startsWith("data:"),
+  );
+}
 
 /** A spacer or tracking image says so: hidden, presentational, or sized to a pixel. */
 function isMarkedDecorative(img: Element): boolean {
@@ -135,7 +142,7 @@ export function findInImage(img: Element): PlaceholderMediaFinding[] {
   else bad = isPlaceholderSource(src) ? src : undefined;
   if (bad) {
     found.push({ kind: "placeholder-source", sample: bad });
-  } else if (!lazy && !srcset && isOnePixel(src) && !isMarkedDecorative(img)) {
+  } else if (!lazy && !srcset && !hasUnknownLazyUrl(img) && isOnePixel(src) && !isMarkedDecorative(img)) {
     found.push({ kind: "blank-pixel", sample: "1x1 inline image" });
   }
 
@@ -164,7 +171,7 @@ export const placeholderMediaRule: Rule = {
     name: "Placeholder Media",
     description: "Detects placeholder images and camera-default alt text that shipped to production",
     solution:
-      "A placeholder image means the page was published before its real media was. Replace the image source with the real asset, and add the image field to whatever check gates publishing. A 1x1 inline image used as content is a stand-in that was never swapped: replace it, or if it is only a lazy-load stub, put the real URL in data-src. A camera-default alt such as DSC_0001 or IMG_1234 means the file was uploaded without being described: write alt text that says what the image shows, or use alt=\"\" when it is purely decorative. A deliberate 1x1 spacer or tracking pixel is exempt when it carries alt=\"\" with role=\"presentation\" (or aria-hidden=\"true\"). Plain junk alt like \"image\" or \"photo\" and alt text that repeats the filename are reported by a11y/image-redundant-alt.",
+      "A placeholder image means the page was published before its real media was. Replace the image source with the real asset, and add the image field to whatever check gates publishing. A 1x1 inline image used as content is a stand-in that was never swapped: replace it, or if it is only a lazy-load stub, put the real URL in data-src. A camera-default alt such as DSC_0001 or IMG_1234 means the file was uploaded without being described: write alt text that says what the image shows, or use alt=\"\" when it is purely decorative. A deliberate 1x1 spacer or tracking pixel is exempt when it carries role=\"presentation\", aria-hidden=\"true\", or a width or height of 1 or less. Plain junk alt like \"image\" or \"photo\" and alt text that repeats the filename are reported by a11y/image-redundant-alt.",
     category: "content",
     scope: "page",
     verdictScope: "page",

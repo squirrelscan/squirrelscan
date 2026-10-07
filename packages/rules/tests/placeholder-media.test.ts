@@ -138,6 +138,26 @@ describe("placeholder-media src vs srcset and legitimate paths", () => {
   });
 });
 
+describe("placeholder-media other lazy-loaders and edge sources", () => {
+  test("a 1x1 stub with the real URL in an unrecognised data-* attribute is not flagged", () => {
+    const [c] = run(`<img src="${GIF_1X1}" data-echo="/img/team.jpg" alt="The team at work">`);
+    expect(c!.status).toBe("pass");
+  });
+
+  test("protocol-relative placeholder host is flagged", () => {
+    expect(isPlaceholderSource("//via.placeholder.com/600x400")).toBe(true);
+  });
+
+  test("a <picture> where every source is a placeholder is flagged", () => {
+    const [c] = run('<picture><source srcset="/img/placeholder.webp"><img src="/img/placeholder.png" alt="Hero shot"></picture>');
+    expect(c!.status).toBe("fail");
+  });
+
+  test("a malformed data URI has no dimensions", () => {
+    expect(dataUriDimensions("data:image/gif;base64,@@@")).toBeNull();
+  });
+});
+
 describe("placeholder-media no false positives", () => {
   test("a tracking pixel, a lazy-loaded hero and descriptive alt text stay clean", () => {
     const [c] = run(`
