@@ -45,6 +45,19 @@ export function upgradeUrl(src: "cli" | "cli-audit" | "cli-credits"): string {
   return `${UPGRADE_BASE}?src=${src}`;
 }
 
+const PRICING_BASE = "https://squirrelscan.com/pricing";
+
+/**
+ * The plan comparison page, for someone who hit the wall and is not ready to
+ * buy. `src` is the same attribution value as {@link upgradeUrl}, and is what
+ * the site reads to recognise a credit-wall arrival. It is offered next to the
+ * upgrade link, never instead of it: the upgrade link can name the org that hit
+ * the wall, and the pricing page cannot.
+ */
+export function pricingUrl(src: "cli" | "cli-audit" | "cli-credits"): string {
+  return `${PRICING_BASE}?src=${src}`;
+}
+
 const n = (value: number) => value.toLocaleString("en-US");
 
 /** One line naming the price and the grant. Safe to embed anywhere. */
@@ -61,6 +74,7 @@ export function proPitchLines(
     `  ${fmt.bold(PRO_HEADLINE)}`,
     `  ${fmt.dim(`Also unlocks daily audits on every site, faster crawls, and up to ${n(PRO.maxPagesPerAudit)} pages per audit.`)}`,
     `  Upgrade: ${fmt.cyan(upgradeUrl(src))}`,
+    `  Compare plans: ${fmt.cyan(pricingUrl(src))}`,
   ];
 }
 
@@ -92,6 +106,7 @@ export function offerPitchLines(
     )}`,
     `  ${fmt.dim(`Also unlocks daily audits on every site, faster crawls, and up to ${n(PRO.maxPagesPerAudit)} pages per audit.`)}`,
     `  Upgrade: ${fmt.cyan(offer.url)}`,
+    `  Compare plans: ${fmt.cyan(pricingUrl(fallbackSrc))}`,
   ];
 }
 

@@ -22,6 +22,7 @@ import {
   MIN_AUDIT_CREDITS,
   offerPitchLines,
   PRO_HEADLINE,
+  pricingUrl,
   proPitchLines,
   resetDateLabel,
   upgradeUrl,
@@ -221,11 +222,29 @@ describe("the server's offer", () => {
     expect(pitch).not.toContain(UPGRADE);
   });
 
+  test("the pricing link sits beside the org checkout link, not in place of it", () => {
+    const pitch = text(offerPitchLines(OFFER, "cli-audit"));
+    expect(pitch).toContain("org=01TEST0000000000000000000A");
+    expect(pitch).toContain(
+      "Compare plans: https://squirrelscan.com/pricing?src=cli-audit"
+    );
+  });
+
   test("the price comes from the offer, so a binary cannot quote a stale one", () => {
     const pitch = text(
       offerPitchLines({ ...OFFER, priceMonthUsd: 29 }, "cli-audit")
     );
     expect(pitch).toContain("$29");
+  });
+
+  test("the pricing link carries the src of the surface that printed it", () => {
+    expect(pricingUrl("cli")).toBe("https://squirrelscan.com/pricing?src=cli");
+    expect(pricingUrl("cli-credits")).toBe(
+      "https://squirrelscan.com/pricing?src=cli-credits"
+    );
+    expect(text(proPitchLines("cli-credits"))).toContain(
+      "https://squirrelscan.com/pricing?src=cli-credits"
+    );
   });
 
   test("falls back to the static pitch when the server sent no offer", () => {
