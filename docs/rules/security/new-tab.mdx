@@ -1,23 +1,23 @@
 ---
 title: "rel=noopener: external target=_blank links and tabnabbing"
-description: "An external link with target=_blank and no rel gives the opened page a handle on yours. squirrel lists every one, per page."
+description: "An external link with target=_blank and an explicit rel=opener gives the opened page a handle on yours. squirrel lists every one, per page."
 ---
 
 ## What rel="noopener" is
 
-`rel="noopener"` on a link tells the browser not to give the newly opened document a `window.opener` reference back to the page that opened it. Without it, the destination can call `window.opener.location = "..."` and silently replace the tab the user came from with a copy of your login page. That attack is called tabnabbing.
+`rel="noopener"` on a link tells the browser not to give the newly opened document a `window.opener` reference back to the page that opened it. Without it (and with an explicit `rel="opener"`), the destination can call `window.opener.location = "..."` and silently replace the tab the user came from with a copy of your login page. That attack is called tabnabbing.
 
-`rel="noreferrer"` is the privacy half: it stops the `Referer` header and `window.opener` both, so the destination never learns which page sent the user. Browsers have applied `noopener` implicitly to `target="_blank"` since 2021, which makes the attribute a compatibility measure rather than the only defence. `noreferrer` has no such default.
+`rel="noreferrer"` is the privacy half: it stops the `Referer` header and `window.opener` both, so the destination never learns which page sent the user. Browsers have applied `noopener` implicitly to `target="_blank"` since 2021, and `noreferrer` implies `noopener`, so a plain `target="_blank"` link is already isolated. `noreferrer` as a referrer control has no such default.
 
 ## What squirrel checks
 
 The rule runs on every crawled page over every `a[href][target="_blank"]` whose resolved hostname differs from the page hostname, and emits up to three checks:
 
-- `noopener` warns when at least one such link has a `rel` that does not contain `noopener`. Message: `4 external link(s) missing rel="noopener"`, with each href listed. It passes instead when every external `_blank` link has it, with message `4 external _blank link(s) have noopener`.
-- `noreferrer` reports info on the same basis for `noreferrer`. Message: `4 external link(s) missing rel="noreferrer"`. The pass message is `4 external _blank link(s) have noreferrer`.
+- `noopener` warns when at least one such link sets `rel="opener"` without `noopener` or `noreferrer`. Links with no `rel`, with `noopener`, or with `noreferrer` are isolated and do not warn. Each href is listed. It passes instead when no external `_blank` link exposes `window.opener`.
+- `noreferrer` reports info when a link does not carry the `noreferrer` token. This is a privacy note about the `Referer` header, not a security finding, and does not imply compromise. The pass message is `4 external _blank link(s) have noreferrer`.
 - `new-tab-security` reports info when the page has no external `_blank` links at all. Message: `No external target="_blank" links found`.
 
-The `rel` value is lowercased and matched as a substring, and hrefs that do not parse as URLs are skipped. Severity for the rule is warning.
+The `rel` value is read as a case-insensitive, whitespace-separated token list (so `noopenerx` is not `noopener`), and hrefs that do not parse as URLs are skipped. Severity for the rule is warning.
 
 ## How to fix it
 
@@ -25,7 +25,7 @@ The `rel` value is lowercased and matched as a substring, and hrefs that do not 
 <a href="https://example.org/docs" target="_blank" rel="noopener noreferrer">Docs</a>
 ```
 
-Add both tokens in the template or the component that renders external links, not link by link. If the site uses a Markdown renderer, most support a config option that adds the attributes to every external link.
+Remove any `rel="opener"` from external links, or add `noopener` next to it. Adding `noopener noreferrer` explicitly is still harmless and keeps older browsers covered. Do it in the template or the component that renders external links, not link by link.
 
 Dropping `noreferrer` is a legitimate choice when an affiliate or partner needs the referrer for attribution. Keep `noopener` in that case.
 
