@@ -119,3 +119,43 @@ describe("deriveAuditStatusFromPages — stored 429/430 pages (#1829)", () => {
     expect(out.status).toBe("completed");
   });
 });
+
+describe("deriveAuditStatus: undecodable pages", () => {
+  const base = { pagesCrawled: 9, contentPages: 9, blockedPages: 0 };
+
+  test("content gathered but pages lost to a bad content-encoding is partial, naming the count", () => {
+    const out = deriveAuditStatus({ ...base, undecodablePages: 2 });
+    expect(out.status).toBe("partial");
+    expect(out.reason).toBe("2 pages could not be decoded (bad content-encoding)");
+  });
+
+  test("singular wording for one page", () => {
+    expect(deriveAuditStatus({ ...base, undecodablePages: 1 }).reason).toBe(
+      "1 page could not be decoded (bad content-encoding)",
+    );
+  });
+
+  test("shares the partial reason with rate limiting instead of hiding either", () => {
+    const out = deriveAuditStatus({
+      ...base,
+      rateLimitedErrors: 3,
+      rateLimitedHosts: ["shop.example.com"],
+      undecodablePages: 1,
+    });
+    expect(out.status).toBe("partial");
+    expect(out.reason).toContain("3 pages rate limited by shop.example.com");
+    expect(out.reason).toContain("1 page could not be decoded");
+  });
+
+  test("no undecodable pages stays completed", () => {
+    expect(deriveAuditStatus({ ...base, undecodablePages: 0 }).status).toBe("completed");
+    expect(deriveAuditStatus(base).status).toBe("completed");
+  });
+
+  test("deriveAuditStatusFromPages threads the count through", () => {
+    const pages = [{ status: 200 }, { status: 200 }];
+    const out = deriveAuditStatusFromPages(pages, 0, {}, undefined, 4);
+    expect(out.status).toBe("partial");
+    expect(out.reason).toContain("4 pages could not be decoded");
+  });
+});

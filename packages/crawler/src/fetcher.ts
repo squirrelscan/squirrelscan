@@ -30,7 +30,14 @@ import {
 } from "@squirrelscan/utils/rate-limit";
 import { detectWafChallengePage } from "@squirrelscan/utils/waf";
 
-export type CrawlErrorType = "timeout" | "network" | "parse" | "blocked" | "rate_limit" | "tls";
+export type CrawlErrorType =
+  | "timeout"
+  | "network"
+  | "parse"
+  | "decode"
+  | "blocked"
+  | "rate_limit"
+  | "tls";
 
 /** The generic timeout sentence; a `timeout` error carrying anything else is naming its deadline. */
 const TIMEOUT_MESSAGE = "Crawl request timed out";
@@ -87,6 +94,21 @@ export class CrawlError extends Error {
 
   static parse(url: string, message: string): CrawlError {
     return new CrawlError(url, "parse", message);
+  }
+
+  /**
+   * The response arrived but its body could not be decoded: the server declared
+   * a `content-encoding` the bytes do not honour (or truncated the stream).
+   * Names the URL and the encoding because the runtime's own report of this is
+   * the bare "Decompression error: ZlibError" and nothing else.
+   */
+  static decode(url: string, contentEncoding: string | null, cause: string): CrawlError {
+    const encoding = contentEncoding?.trim() || "none declared";
+    return new CrawlError(
+      url,
+      "decode",
+      `Could not decode response body from ${url} (content-encoding: ${encoding}): ${cause}`,
+    );
   }
 
   static blocked(url: string, message = "Request blocked by server", status = 403): CrawlError {
@@ -203,6 +225,7 @@ export function crawlErrorToFailureDetail(
       });
     }
     case "parse":
+    case "decode":
       return auditFailureDetail({ ...base, code: "unknown", detail: message });
   }
 }
@@ -302,6 +325,18 @@ const defaultRetryPolicy: RetryPolicy = {
  * host-wide pause the crawler injects. Adding it back here would give it two
  * competing retry budgets that multiply.
  */
+/**
+ * Bun throws "BrotliDecompressionError" / "ZlibError" when a server lies about
+ * (or truncates) its `content-encoding`. Matched on the message because the
+ * runtime gives these no stable code.
+ */
+export function isDecompressionError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.message.includes("DecompressionError") || error.message.includes("ZlibError"))
+  );
+}
+
 function isRetryable(error: CrawlError): boolean {
   return error.type === "timeout" || error.type === "network" || error.type === "tls";
 }
@@ -1012,6 +1047,16 @@ function fetchPageStandardOnce(
         // response — report it as the same class as a headers-phase timeout so
         // it is not miscounted as a parse failure.
         if ((error as Error).name === "AbortError") return CrawlError.timeout(url);
+        // A body the runtime could not decompress is not a malformed response
+        // we can say nothing about: it is attributable to the declared
+        // encoding, and the crawl counts it so the report can say so.
+        if (isDecompressionError(error)) {
+          return CrawlError.decode(
+            url,
+            finalResponse.headers.get("content-encoding"),
+            (error as Error).message,
+          );
+        }
         return CrawlError.parse(url, `Failed to read response: ${(error as Error).message}`);
       },
     });

@@ -1362,6 +1362,10 @@ export function createCrawler(
             // (subset of pagesFailed) so status derivation can say `blocked`
             // instead of a generic empty crawl (#792).
             const blockedFetch = error.type === "blocked";
+            // A body the runtime could not decode is a page the audit never
+            // saw. Counted (subset of pagesFailed) so the report can say its
+            // coverage was short instead of scoring the rest as complete.
+            const undecodableFetch = error.type === "decode";
             yield* storage.updateFrontierStatus(
               crawlId,
               entry.normalizedUrl,
@@ -1379,6 +1383,7 @@ export function createCrawler(
             yield* updateStats(crawlId, {
               pagesFailed: 1,
               ...(blockedFetch ? { pagesBlocked: 1 } : {}),
+              ...(undecodableFetch ? { pagesUndecodable: 1 } : {}),
               // #1822: the fetcher knows WHY (DNS, TLS, socket, timeout, 5xx).
               // Without this the reason is discarded here and a zero-page audit
               // can only say "No pages were crawled".
@@ -1846,6 +1851,7 @@ export function createCrawler(
           pagesFailed: current.pagesFailed + (updates.pagesFailed ?? 0),
           pagesBlocked: (current.pagesBlocked ?? 0) + (updates.pagesBlocked ?? 0),
           pagesRateLimited: (current.pagesRateLimited ?? 0) + (updates.pagesRateLimited ?? 0),
+          pagesUndecodable: (current.pagesUndecodable ?? 0) + (updates.pagesUndecodable ?? 0),
           pagesSkipped: current.pagesSkipped + (updates.pagesSkipped ?? 0),
           pagesUnchanged: current.pagesUnchanged + (updates.pagesUnchanged ?? 0),
           pagesCacheFresh: (current.pagesCacheFresh ?? 0) + (updates.pagesCacheFresh ?? 0),

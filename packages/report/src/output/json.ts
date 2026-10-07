@@ -48,6 +48,11 @@ interface SlimJsonReport {
      * site produce identical reports.
      */
     requestedMaxPages?: number;
+    /**
+     * `"time"` when the crawl time budget ended a cloud crawl early. Absent on a
+     * run that finished or hit the page cap.
+     */
+    stopReason?: "time";
     /** Smart audits (#110): present only when `smart_audits` ran. */
     coverage?: {
       auditedPages: number;
@@ -210,6 +215,9 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
         : {}),
       ...(report.scanScope?.requestedMaxPages !== undefined
         ? { requestedMaxPages: report.scanScope.requestedMaxPages }
+        : {}),
+      ...(report.scanScope?.stopReason !== undefined
+        ? { stopReason: report.scanScope.stopReason }
         : {}),
       ...(report.coverage ? { coverage: report.coverage } : {}),
       // #1990: how much of this audit's rules phase was replayed from a previous

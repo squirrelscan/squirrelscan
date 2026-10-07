@@ -165,14 +165,25 @@ interface RunOutcome {
 async function runOnce(
   dbPath: string,
   crawlId: string,
-  opts: { store?: RuleCacheStore; engineVersion?: string; config?: Config } = {},
+  opts: {
+    store?: RuleCacheStore;
+    engineVersion?: string;
+    rulesVersion?: string;
+    config?: Config;
+  } = {},
 ): Promise<RunOutcome> {
   return withStorage(dbPath, async (storage) => {
     const config = opts.config ?? getGoldenBaselineConfig();
     const results = await run(
       runStreamingRules(storage, crawlId, config, emptyAssets(), undefined, {
         ...(opts.store
-          ? { ruleCache: { store: opts.store, engineVersion: opts.engineVersion ?? "test-1" } }
+          ? {
+              ruleCache: {
+                store: opts.store,
+                engineVersion: opts.engineVersion ?? "test-1",
+                rulesVersion: opts.rulesVersion ?? "rules-1",
+              },
+            }
           : {}),
       }),
     );
@@ -382,6 +393,22 @@ describe("per-page rule-result cache — replay parity", () => {
     const upgraded = await runOnce(dbPath, crawlId, { store: cache.store, engineVersion: "0.0.92" });
     expect(upgraded.replayedPages).toBe(0);
     expect(upgraded.freshPages).toBe(first.freshPages);
+  }, 120_000);
+
+  // The same pages, the same release version, the same rule list and options: only
+  // the rule CODE changed, as in a checkout or a build before the version bump.
+  // Without the rules version in the key this replayed the pre-change findings.
+  test("a changed rules version invalidates every entry", async () => {
+    const { dbPath, crawlId } = await buildCrawl("invalidate-rules-version");
+    const cache = memoryCacheStore();
+    const first = await runOnce(dbPath, crawlId, { store: cache.store, rulesVersion: "a" });
+    const changed = await runOnce(dbPath, crawlId, { store: cache.store, rulesVersion: "b" });
+    expect(changed.replayedPages).toBe(0);
+    expect(changed.freshPages).toBe(first.freshPages);
+    // And an unchanged rules version still replays, so the fast path is kept.
+    const again = await runOnce(dbPath, crawlId, { store: cache.store, rulesVersion: "b" });
+    expect(again.replayedPages).toBe(first.freshPages);
+    expect(again.freshPages).toBe(0);
   }, 120_000);
 
   test("a changed rule selection invalidates every entry", async () => {
