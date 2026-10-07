@@ -2538,8 +2538,7 @@ export function createCrawler(
         // and silently skip every probe on a perfectly healthy origin.
         //
         // The log rides on the budget so every root probe can note a request the
-        // site refused; persisted below so the rules say "refused", not "absent"
-        //.
+        // site refused; persisted below so the rules say "refused", not "absent".
         const refusals = new RefusalLog();
         const preamble = createPhaseBudget(preambleBudgetMs(config.timeoutMs), Date.now(), refusals);
 

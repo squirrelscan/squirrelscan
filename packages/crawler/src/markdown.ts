@@ -1,7 +1,6 @@
 import { Effect } from "effect";
 
 import { budgetedTimeoutMs, safeFetchWithDeadline, ungated } from "./deadline";
-
 import { noteRefusal } from "./refusals";
 
 import type { PhaseBudget, ProbeGate } from "./deadline";

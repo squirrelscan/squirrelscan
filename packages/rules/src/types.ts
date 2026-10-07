@@ -321,8 +321,7 @@ export interface SiteData {
   robotsTxt: RobotsTxtData | null;
   sitemaps: SitemapDiscovery | null;
   // Root requests the site refused (401/403/429, a bot wall): the crawler could
-  // not observe those resources, so a rule must not report them as absent
-  //. Undefined reads as "nothing was refused".
+  // not observe those resources, so a rule must not report them as absent. Undefined reads as "nothing was refused".
   refusedFetches?: RefusedFetch[];
   // Root llms.txt + llms-full.txt fetch; optional like the other extras.
   llmsTxt?: LlmsTxtData | null;
