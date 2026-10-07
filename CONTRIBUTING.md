@@ -25,6 +25,8 @@ configuration changes.
 
 ## Pull requests
 
+Every issue carries a `## Acceptance Criteria` checklist: the observable outcomes that mean it is done. The issue templates include the section. If a report arrives without one, maintainers add it at triage.
+
 Open an issue before large architectural changes. Pull requests should explain the behavior change and list the commands used to verify it.
 
 Every commit must include a Developer Certificate of Origin sign-off:
