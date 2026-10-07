@@ -303,7 +303,14 @@ export function registerFailureLines(
    * honestly instead of pitching Pro at someone on a contracted plan, which is
    * both wrong and leaks an internal plan's existence into a sales pitch.
    */
-  unlimited = false
+  unlimited = false,
+  /**
+   * The account is already on a paid plan, so there is no plan to sell it. An
+   * absent offer from an OLD server still gets the Pro pitch (a free account
+   * is the likely case), but a paid account is pointed at a top-up instead of
+   * being pitched the plan it pays for.
+   */
+  paidPlan = false
 ): string[] {
   if (failure.code !== "INSUFFICIENT_CREDITS") {
     return [`⚠ Run not tracked in your dashboard: ${failure.message}`];
@@ -343,7 +350,9 @@ export function registerFailureLines(
     // The server's own offer when it sent one: its link already names the org
     // that hit the wall, so the upgrade is one click rather than a login, an
     // org switch and a hunt for billing.
-    ...offerPitchLines(failure.upgrade, "cli-audit"),
+    ...(paidPlan && !failure.upgrade
+      ? [`  Top up: ${fmt.cyan(upgradeUrl("cli-audit"))}`]
+      : offerPitchLines(failure.upgrade, "cli-audit")),
   ];
 }
 
@@ -1219,7 +1228,7 @@ export const audit = defineCommand({
             // never collects the 402 that carries the same offer.
             kv(
               "Account",
-              `${accountLabel} · ${fmt.yellow(`${balance.total.toLocaleString("en-US")} credits — below the ${MIN_AUDIT_CREDITS} a one-page audit needs, running local-only`)} · upgrade: ${fmt.cyan(upgrade?.url ?? upgradeUrl("cli-audit"))}`
+              `${accountLabel} · ${fmt.yellow(`${balance.total.toLocaleString("en-US")} credits — below the ${MIN_AUDIT_CREDITS} a one-page audit needs, running local-only`)} · ${accountPlan === "paid" && !upgrade ? "top up" : "upgrade"}: ${fmt.cyan(upgrade?.url ?? upgradeUrl("cli-audit"))}`
             );
           } else {
             signedIn = true;
@@ -2035,7 +2044,8 @@ export const audit = defineCommand({
       if (registerWarning && !registeredRun) {
         for (const line of registerFailureLines(
           registerWarning,
-          unlimitedCredits
+          unlimitedCredits,
+          accountPlan === "paid"
         ))
           log(line);
       }
