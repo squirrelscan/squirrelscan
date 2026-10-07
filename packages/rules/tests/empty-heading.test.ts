@@ -63,6 +63,18 @@ describe("a11y/empty-heading hidden headings", () => {
     expect(result?.status).toBe("warn");
   });
 
+  test("visibility:inherit on the heading defers to the hidden ancestor: passes", () => {
+    const result = run(
+      `<h1>Shop</h1><div style="visibility:hidden"><h2 style="visibility:inherit"></h2></div>`,
+    );
+    expect(result?.status).toBe("pass");
+  });
+
+  test("an inline display other than none overrides the hidden attribute: warns", () => {
+    const result = run(`<h1>Shop</h1><h2 hidden style="display:block"></h2>`);
+    expect(result?.status).toBe("warn");
+  });
+
   test("a later display declaration wins over an earlier display:none: warns", () => {
     const result = run(`<h1>Shop</h1><h2 style="display:none;display:block"></h2>`);
     expect(result?.status).toBe("warn");

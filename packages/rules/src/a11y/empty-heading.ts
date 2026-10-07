@@ -25,7 +25,10 @@ function inlineStyle(el: Element, property: string): string | null {
 /** `hidden` removes the element from rendering, except `hidden="until-found"`. */
 function hasHiddenAttribute(el: Element): boolean {
   const value = el.getAttribute("hidden");
-  return value !== null && value.trim().toLowerCase() !== "until-found";
+  if (value === null || value.trim().toLowerCase() === "until-found") return false;
+  // An author `display` other than none beats the user-agent `[hidden]` rule.
+  const display = inlineStyle(el, "display");
+  return display === null || display === "none";
 }
 
 /**
@@ -42,7 +45,8 @@ function isHiddenFromMarkup(heading: Element): boolean {
     if (el.getAttribute("aria-hidden")?.trim().toLowerCase() === "true") return true;
     if (inlineStyle(el, "display") === "none") return true;
     // visibility inherits: the nearest declaration decides.
-    visibility ??= inlineStyle(el, "visibility");
+    const own = inlineStyle(el, "visibility");
+    if (visibility === null && own !== null && own !== "inherit") visibility = own;
   }
   return visibility === "hidden" || visibility === "collapse";
 }
@@ -128,7 +132,7 @@ export const emptyHeadingRule: Rule = {
         name: "empty-heading",
         status: "pass",
         message: "All headings have content",
-        details: { headingsChecked: allHeadings.length },
+        details: { headingsChecked: headings.length },
       });
     } else {
       checks.push({

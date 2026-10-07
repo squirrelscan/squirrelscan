@@ -18,7 +18,7 @@ One check, `empty-heading`, at severity warning. It reads every `<h1>` through `
 - an ancestor has the `hidden` attribute or an inline `display:none`
 - an ancestor has an inline `visibility:hidden` that the heading does not override with its own inline `visibility`
 
-`hidden="until-found"` does not count as hidden, because the content stays findable, so an empty heading there still warns. Hiding through a CSS class or a stylesheet rule cannot be detected from the markup, so a heading hidden that way is still reported.
+An inline `display` other than `none` on the same element overrides `hidden`, so that heading is treated as rendered. `hidden="until-found"` does not count as hidden, because the content stays findable, so an empty heading there still warns. Hiding through a CSS class or a stylesheet rule cannot be detected from the markup, so a heading hidden that way is still reported.
 
 Content is accepted from the heading's text, a non-empty `aria-label`, an `aria-labelledby` pointing at an element with text, or a nested `<img>` with non-empty `alt`.
 
