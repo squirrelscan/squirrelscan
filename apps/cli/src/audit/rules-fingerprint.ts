@@ -11,7 +11,7 @@
 // the hash of the tree it was built from and reads no source at runtime, while
 // `bun run` from a checkout re-hashes the tree it is running.
 
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -47,18 +47,19 @@ export function fingerprintRuleSources(
   for (const source of sources) {
     hasher.update(`source\0${source}\0`);
     const path = join(root, source);
-    let isFile: boolean;
+    // Read first and classify by the error, so there is no check-then-use gap:
+    // a file reads, a directory fails EISDIR, a missing source fails ENOENT.
     try {
-      isFile = statSync(path).isFile();
-    } catch {
-      if (strict) {
-        throw new Error(`rules fingerprint: source not found: ${path}`);
-      }
-      continue;
-    }
-    if (isFile) {
       hasher.update(readFileSync(path));
       continue;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== "EISDIR") {
+        if (strict) {
+          throw new Error(`rules fingerprint: source not found: ${path}`);
+        }
+        continue;
+      }
     }
     const files = [
       ...new Bun.Glob("**/*").scanSync({ cwd: path, onlyFiles: true }),
