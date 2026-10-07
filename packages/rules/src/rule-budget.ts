@@ -11,6 +11,12 @@
 // exception that the rule's own try/catch cannot swallow. The rule function is
 // still called with its own realm's globals; the context only hosts the call.
 //
+// Verified on Bun 1.3.14: `runInContext` with a `timeout` interrupts a catastrophic
+// regex run by a main-realm function called from inside the context (a 200 ms
+// budget threw ERR_SCRIPT_EXECUTION_TIMEOUT after about 430 ms; a spin loop after
+// about 110 ms). tests/rule-time-budget.test.ts pins it through RuleRunner on the
+// ReDoS fixture; re-check it when the Bun version changes.
+//
 // Granularity: the watchdog is checked between operations, not inside one regex
 // match. JavaScriptCore already gives up on a single runaway match after a
 // bounded amount of backtracking (the match reports no match), so the worst

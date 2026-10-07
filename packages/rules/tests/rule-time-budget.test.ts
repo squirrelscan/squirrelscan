@@ -105,6 +105,35 @@ describe("per-rule time budget", () => {
     30_000
   );
 
+  test("a real backtracking rule on the ReDoS fixture times out through RuleRunner and the audit completes", async () => {
+    // Mirrors how real rules run a regex: a module-level helper (main realm)
+    // called from the rule, looped over elements of the parsed fixture page.
+    const backtrack = (text: string) => /^(a+)+$/.test(text);
+    const runner = makeRunner(
+      [
+        rule("test/backtrack", "page", (ctx) => {
+          let hits = 0;
+          for (const p of ctx.parsed.document?.querySelectorAll("p.evil") ?? []) {
+            if (backtrack(p.textContent ?? "")) hits++;
+          }
+          return pass(`test/backtrack-${hits}`);
+        }),
+        rule("test/after-backtrack", "page", () => pass("test/after-backtrack")),
+      ],
+      200
+    );
+    const started = performance.now();
+    const { checks } = await runner.runPageRules(redosPage(), siteData());
+    const elapsedMs = performance.now() - started;
+
+    const timeout = byName(checks, "test/backtrack-error");
+    expect(timeout?.status).toBe("fail");
+    expect(timeout?.details).toMatchObject({ timedOut: true, budgetMs: 200 });
+    expect(byName(checks, "test/after-backtrack")?.status).toBe("pass");
+    // Unbounded this is 20+ s; bounded it is the budget plus about one runaway match.
+    expect(elapsedMs).toBeLessThan(200 + 2_000);
+  }, 30_000);
+
   test("a rule's own try/catch cannot swallow the timeout", async () => {
     const runner = makeRunner(
       [

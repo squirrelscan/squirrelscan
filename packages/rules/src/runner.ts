@@ -215,6 +215,10 @@ export class RuleRunner {
   // Only affects site rules — page rules are sync CPU and run sequentially (#379)
   private ruleConcurrency: number;
   private readonly ruleTimeBudgetMs: number;
+  // Safe only because page rules run sequentially (see the note on `ruleConcurrency`):
+  // the check-then-set on this map and the in-place `details.pages++` here and in
+  // `collectedTimeoutChecks` assume no two page rules interleave. Parallelising page
+  // rules would need an atomic per-rule counter instead.
   // Page rules that have already timed out in this run, with the live `details`
   // of the one fail check that reported it. A slow pattern times out on every page
   // that triggers it, so only the first page is a fail and later ones are skipped
