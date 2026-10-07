@@ -135,12 +135,15 @@ describe("matchDate", () => {
 });
 
 describe("looksLikeDate", () => {
-  test("is true for dates it can read and for dates it cannot", () => {
+  test("is true for dates it can read and for date-shaped text it cannot fully parse", () => {
     expect(looksLikeDate("March 12, 2024")).toBe(true);
-    // Not parseable here, but a reader sees a date.
-    expect(looksLikeDate("8 stycznia 2026")).toBe(true);
-    expect(looksLikeDate("8 января 2026 г.")).toBe(true);
-    expect(looksLikeDate("2026. január 8.")).toBe(true);
+    // A known month name, but not a calendar day or not in a parseable order.
+    expect(looksLikeDate("31 April 2024")).toBe(true);
+    expect(looksLikeDate("2024 March 12")).toBe(true);
+    expect(looksLikeDate("2026 Januar 8")).toBe(true);
+    // The bare-dot ordinal ("8. Januar") is a documented trade-off: it also
+    // reads a number, a dot and a month as a date.
+    expect(looksLikeDate("Version 3. March 2024")).toBe(true);
     expect(looksLikeDate("8/1/26")).toBe(true);
     expect(looksLikeDate("令和8年1月8日 2026年1月")).toBe(true);
   });
@@ -158,6 +161,12 @@ describe("looksLikeDate", () => {
     expect(looksLikeDate("Chapter 3 2024")).toBe(false);
     expect(looksLikeDate("2024 Honda 5")).toBe(false);
     expect(looksLikeDate("Over 20 users 2024")).toBe(false);
+    // Unseen brands and nouns: negative by construction, not by a denylist.
+    expect(looksLikeDate("7 Tesla 2024")).toBe(false);
+    expect(looksLikeDate("2024 Samsung 9")).toBe(false);
+    expect(looksLikeDate("Top 5 laptops 2024")).toBe(false);
+    expect(looksLikeDate("12 gadgets 2025")).toBe(false);
+    expect(looksLikeDate("8. tammikuuta 2026")).toBe(false);
   });
 });
 
@@ -314,9 +323,8 @@ describe("content/date-agreement — must not fire", () => {
     expect(check(run(html), "byline-vs-schema-date")?.status).toBe("pass");
   });
 
-  test("a date in a locale it cannot read stays silent rather than warning", () => {
-    // "8 stycznia 2026" (Polish) is a date to the reader but not to the parser.
-    // Saying the page shows no date would be false, so say nothing.
+  test("a Polish date is read, not reported as missing", () => {
+    // "8 stycznia 2026" is in the month table, so the byline is found and agrees.
     const html = page(
       article("2026-01-08"),
       `<main><article><h1>Cache</h1><p>Opublikowano 8 stycznia 2026</p>${PROSE}</article></main>`,

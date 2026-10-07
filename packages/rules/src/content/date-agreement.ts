@@ -88,25 +88,25 @@ export const optionsSchema = z.object({
 
 /**
  * Month names by language, lowercase. Written dates are read in English, French,
- * German, Spanish, Italian, Portuguese and Dutch; everything below is a month
+ * German, Spanish, Italian, Portuguese, Dutch and Polish (genitive, as dates are written); everything below is a month
  * name or a conventional abbreviation of one. A string that means two different
  * months in two languages would make the reading a guess, so none is listed
  * (the short forms that double as common words, such as "out", "set" and "ago",
  * are left out for the same reason).
  */
 const MONTHS_BY_INDEX: readonly (readonly string[])[] = [
-  ["january", "jan", "janvier", "janv", "januar", "jänner", "enero", "ene", "gennaio", "janeiro", "januari"],
-  ["february", "feb", "février", "févr", "fév", "februar", "febrero", "febbraio", "fevereiro", "fev", "februari"],
-  ["march", "mar", "mars", "märz", "mär", "mrz", "marzo", "março", "maart", "mrt"],
-  ["april", "apr", "avril", "avr", "abril", "aprile", "abr"],
-  ["may", "mai", "mayo", "maggio", "maio", "mei"],
-  ["june", "jun", "juin", "juni", "junio", "giugno", "giu", "junho"],
-  ["july", "jul", "juillet", "juil", "juli", "julio", "luglio", "lug", "julho"],
-  ["august", "aug", "août", "aout", "agosto", "augustus"],
-  ["september", "sep", "sept", "septembre", "septiembre", "setiembre", "settembre", "sett", "setembro"],
-  ["october", "oct", "octobre", "oktober", "okt", "octubre", "ottobre", "ott", "outubro"],
-  ["november", "nov", "novembre", "noviembre", "novembro"],
-  ["december", "dec", "décembre", "déc", "dezember", "dez", "diciembre", "dic", "dicembre", "dezembro"],
+  ["january", "jan", "janvier", "janv", "januar", "jänner", "enero", "ene", "gennaio", "janeiro", "januari", "stycznia"],
+  ["february", "feb", "février", "févr", "fév", "februar", "febrero", "febbraio", "fevereiro", "fev", "februari", "lutego"],
+  ["march", "mar", "mars", "märz", "mär", "mrz", "marzo", "março", "maart", "mrt", "marca"],
+  ["april", "apr", "avril", "avr", "abril", "aprile", "abr", "kwietnia"],
+  ["may", "mai", "mayo", "maggio", "maio", "mei", "maja"],
+  ["june", "jun", "juin", "juni", "junio", "giugno", "giu", "junho", "czerwca"],
+  ["july", "jul", "juillet", "juil", "juli", "julio", "luglio", "lug", "julho", "lipca"],
+  ["august", "aug", "août", "aout", "agosto", "augustus", "sierpnia"],
+  ["september", "sep", "sept", "septembre", "septiembre", "setiembre", "settembre", "sett", "setembro", "wrzesnia", "września"],
+  ["october", "oct", "octobre", "oktober", "okt", "octubre", "ottobre", "ott", "outubro", "pazdziernika", "października"],
+  ["november", "nov", "novembre", "noviembre", "novembro", "listopada"],
+  ["december", "dec", "décembre", "déc", "dezember", "dez", "diciembre", "dic", "dicembre", "dezembro", "grudnia"],
 ];
 
 /** Lowercase and drop diacritics, so "Février", "FEVRIER" and "février" are one key. */
@@ -150,41 +150,36 @@ const DAY_FIRST_RE = new RegExp(
 const NUMERIC_DMY_RE = /(?<![\d./-])(\d{1,2})([/.-])(\d{1,2})\2(\d{4})(?![\d./-])/;
 
 /**
- * English words that sit between a number and a year in prose ("3 million 2024",
- * "Top 10 2024", "Chapter 3 2024") and must not pass for a month in a language
- * we cannot read. The generic patterns below accept any other word, so this is
- * the list of what we know is not a month.
- */
-const NOT_A_MONTH_WORD = [
-  "million", "billion", "trillion", "thousand", "hundred", "percent", "chapter", "section",
-  "part", "page", "pages", "site", "sites", "user", "users", "people", "item", "items",
-  "result", "results", "review", "reviews", "comment", "comments", "post", "posts", "view",
-  "views", "time", "times", "year", "years", "day", "days", "month", "months", "week", "weeks",
-  "hour", "hours", "minute", "minutes", "step", "steps", "tip", "tips", "way", "ways", "top",
-  "best", "new", "honda", "toyota", "ford", "tools", "tool", "apps", "app", "ideas", "things",
-  "reasons", "facts", "stats", "points", "versions", "version", "edition", "model",
-  "series", "season", "episode", "volume", "issue", "round", "level", "rank", "ranked", "worth",
-].join("|");
-const NOT_A_MONTH = `(?!(?:${NOT_A_MONTH_WORD})(?![\\p{L}]))`;
-
-/**
- * A date-shaped string in ANY language, parsed or not: a day, a word and a year;
- * a year, a word and a day; `d/m/yy`; `2026年1月`. Broader than `matchDate` on
- * purpose. "This page shows the reader no date" is only worth saying when it is
- * literally true, and a Polish "8 stycznia 2026" is a date this rule cannot read
- * but a reader can. Silence is the correct failure mode for a date we cannot parse.
+ * A date-shaped string that `matchDate` may refuse: a day, a month name and a
+ * year; a year, a month name and a day; `d/m/yy`; `2026年1月`. Broader than
+ * `matchDate` on purpose: it accepts a day that is not on the calendar (31 April)
+ * and the looser year-first order. "This page shows the reader no date" is only
+ * worth saying when it is literally true, so silence is the correct failure mode
+ * for a date we cannot fully parse.
+ *
+ * The word is an allowlist: it counts only when it is a month name or
+ * abbreviation in {@link MONTHS_BY_INDEX}. An open-ended "any word" match turned
+ * "3 million 2024", "Top 10 2024" and "Over 20 users 2024" into dates, and no
+ * denylist of such words can be complete. A date in a language the table lacks
+ * (a Finnish "8. tammikuuta 2026") is therefore not recognised here, and a page that
+ * shows only such a date can still get `visible-date-missing`. Add the language's
+ * months to the table to cover it.
+ *
+ * Trade-off: `ORDINAL` accepts a bare dot as the day marker (German "8. Januar
+ * 2026"), so "Version 3. March 2024" reads as a date. Rare, and the effect is
+ * only the same suppression.
  */
 const DATE_SHAPED_RES: readonly RegExp[] = [
   new RegExp(
-    `(?<!\\d)\\d{1,2}${ORDINAL}\\s+${OF}${NOT_A_MONTH}\\p{L}{3,}\\.?\\s*,?\\s*${OF}(?:19|20)\\d{2}${NOT_BEFORE_DIGIT}`,
+    `(?<!\\d)\\d{1,2}${ORDINAL}\\s+${OF}(?:${MONTH_NAMES})\\.?\\s*,?\\s*${OF}(?:19|20)\\d{2}${NOT_BEFORE_DIGIT}`,
     "iu",
   ),
   new RegExp(
-    `${NOT_AFTER_LETTER_OR_DIGIT}${NOT_A_MONTH}\\p{L}{3,}\\.?\\s+${OF}\\d{1,2}${ORDINAL}\\s*,?\\s*${OF}(?:19|20)\\d{2}${NOT_BEFORE_DIGIT}`,
+    `${NOT_AFTER_LETTER_OR_DIGIT}(?:${MONTH_NAMES})\\.?\\s+${OF}\\d{1,2}${ORDINAL}\\s*,?\\s*${OF}(?:19|20)\\d{2}${NOT_BEFORE_DIGIT}`,
     "iu",
   ),
   new RegExp(
-    `(?<!\\d)(?:19|20)\\d{2}\\.?\\s+${NOT_A_MONTH}\\p{L}{3,}\\.?\\s+\\d{1,2}(?!\\d)`,
+    `(?<!\\d)(?:19|20)\\d{2}\\.?\\s+(?:${MONTH_NAMES})\\.?\\s+\\d{1,2}(?!\\d)`,
     "iu",
   ),
   /(?<!\d)\d{4}\s*[年년]\s*\d{1,2}\s*[月월]/u,
