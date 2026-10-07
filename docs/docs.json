@@ -270,6 +270,7 @@
                   "rules/content/meta-in-body",
                   "rules/content/mime-type",
                   "rules/content/placeholder-text",
+                  "rules/content/placeholder-media",
                   "rules/content/article-links",
                   "rules/content/quality",
                   "rules/content/stale-copyright",
