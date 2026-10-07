@@ -105,7 +105,7 @@ GET /v1/reports/{id}/entities
 | `format` | `json`, `jsonld`, `html`, `markdown`, `csv`, `dot`, `graphml`, `mermaid`. Default `json`. |
 | `type` | Keep only entities carrying this `@type`, matched against every type an entity declares. Case-insensitive. |
 | `exclude_type` | Drop entities whose **primary** `@type` is exactly this one. Repeat it to exclude several. Case-sensitive. |
-| `page` | Keep only entities declared on this page URL, or one starting with it. |
+| `page` | Keep only entities declared on a matching page. An absolute `http(s)` URL or a value starting with `/` is a prefix (of the URL, or of the page path and query), anything else is a substring. Case-sensitive. The same rule as `squirrel entities --page` and the MCP tools. |
 | `problem` | `no-id`, `conflict`, `dangling`, `single-page`, `split-identity`. |
 | `q` | Free-text match over name, `@id`, key and types. |
 | `include_page_local` | Include per-page types. Off by default. |

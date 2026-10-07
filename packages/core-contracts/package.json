@@ -20,7 +20,8 @@
     "./resolution": "./src/resolution.ts",
     "./entity-map": "./src/entity-map.ts",
     "./entity-map-project": "./src/entity-map-project.ts",
-    "./entity-mcp": "./src/entity-mcp.ts"
+    "./entity-mcp": "./src/entity-mcp.ts",
+    "./entity-page-match": "./src/entity-page-match.ts"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.49",

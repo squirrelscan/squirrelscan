@@ -501,6 +501,24 @@ describe("against the docs snapshots as a seeded store", () => {
     expect(data.hasMore).toBe(true);
   });
 
+  test("list_entities keeps the summary site-wide and reports the filtered counts", async () => {
+    const all = await call("list_entities", { limit: 1 });
+    const some = await call("list_entities", {
+      limit: 1,
+      problem: ["no-id"],
+    });
+    // The same invariant as `squirrel entities -f json` and the REST
+    // endpoint: `summary` describes the audit, `filtered` what survived.
+    expect(some.data.summary).toEqual(all.data.summary);
+    const total = some.data.total as number;
+    expect(total).toBeLessThan(
+      (all.data.summary as { nodeCount: number }).nodeCount
+    );
+    expect(
+      (some.data.filtered as { nodes: number; edges: number }).nodes
+    ).toBeGreaterThanOrEqual(total);
+  });
+
   test("list_entities hides page-local entities unless asked", async () => {
     const without = await call("list_entities", { limit: 100 });
     const withThem = await call("list_entities", {
