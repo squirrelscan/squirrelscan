@@ -73,25 +73,31 @@ export function scanScopeLine(report: AuditReport): string | null {
   // The UNCLAMPED wording is byte-for-byte what it has always been — a comma
   // only appears where the sentence now has two clauses to separate.
   const clamped = clampedPageLimit(s);
+  // A time stop is its own clause: the page limit was NOT what ended the crawl,
+  // so "reached" would be false and a bare "page limit N" would read as a
+  // complete audit of fewer pages.
+  const timeStop = s.stopReason === "time" && !s.capped ? ", stopped early on time" : "";
   const limit = clamped
-    ? `page limit ${clamped.effective} of ${clamped.requested} requested${s.capped ? ", reached" : ""}`
-    : `page limit ${s.maxPages}${s.capped ? " reached" : ""}`;
+    ? `page limit ${clamped.effective} of ${clamped.requested} requested${s.capped ? ", reached" : ""}${timeStop}`
+    : `page limit ${s.maxPages}${s.capped ? " reached" : ""}${timeStop}`;
   const cap = s.maxPages !== undefined ? ` (${limit})` : "";
   return `Scan: ${s.pagesCrawled} page${s.pagesCrawled === 1 ? "" : "s"} crawled from ${origin}${version}${cap}.`;
 }
 
 /**
  * Full-scan hint (#1180): shown when the score does not rest on a full fresh
- * crawl — either the page limit stopped the crawl (`scanScope.capped`) or the
- * smart-audit union carried pages not re-checked this run. Returns null when
- * the scan was complete.
+ * crawl — the page limit stopped the crawl (`scanScope.capped`), the crawl time
+ * budget ran out (`scanScope.stopReason === "time"`), or the smart-audit union
+ * carried pages not re-checked this run. Returns null when the scan was
+ * complete.
  */
 export function fullScanHint(report: AuditReport): string | null {
   const s = report.scanScope;
   const c = report.coverage;
   const capped = s?.capped ?? false;
+  const timeStopped = s?.stopReason === "time";
   const partialUnion = c ? c.auditedPages < c.knownPages : false;
-  if (!capped && !partialUnion) return null;
+  if (!capped && !timeStopped && !partialUnion) return null;
   // Remediation copy branches by origin: --max-pages is a CLI flag; a cloud
   // audit's page budget lives in the website settings / audit trigger.
   const cloud = s?.origin === "cloud";
@@ -110,6 +116,11 @@ export function fullScanHint(report: AuditReport): string | null {
         : `Re-run with ${target ? `--max-pages ${target}` : "a higher --max-pages"}`;
     const tail = clamped ? "." : " for a fully fresh full-site score.";
     return `Partial scan: ${c.auditedPages} of ${c.knownPages} known pages were re-checked this run; the score carries earlier results for the rest. ${remedy}${tail}`;
+  }
+  // A page-limit stop keeps its own wording below: raising the limit is the fix
+  // there, and it is not the fix for a crawl that ran out of time.
+  if (timeStopped && !capped) {
+    return "Partial scan: the crawl ran out of time before reaching every page, so the site may have more pages than this score covers.";
   }
   if (clamped) {
     return `Partial scan: the page limit stopped the crawl, so the site may have more pages than this score covers. This run was limited to ${clamped.effective} of the ${clamped.requested} pages requested, so raising the limit alone will not extend it.`;
