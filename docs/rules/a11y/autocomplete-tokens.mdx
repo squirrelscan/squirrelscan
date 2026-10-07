@@ -18,6 +18,14 @@ The rule infers each field's purpose from its `name`, `id`, associated `<label>`
 - Pass with `N identified field(s) carry the correct autocomplete token`.
 - Skipped with `No name, email, phone, address or payment fields found` when no field on the page has an identifiable purpose.
 
+A country field is not always personal data. A locale or market switcher (for example a Shopify `/localization` form with `country_code` and `locale_code` selects) only changes the shop's preferences, so a country field with no token is skipped when it is the only personal-data field in its `<form>`. A field counts as personal data when it has a recognised name, email, phone, street address, city, state, postal code or payment purpose, a field named plain `name`, or a personal `autocomplete` token. A country field is still reported when:
+
+- its form also holds one of those fields, for example an address form or a shipping estimator with a postal code
+- it has no `<form>` ancestor
+- it carries an `autocomplete` token that is not valid or not a country token
+
+A country field with a valid `country` or `country-name` token passes in every form. Hidden inputs and disabled fields never count. A form that collects only a country, such as a first checkout step, is not reported.
+
 Each finding names the field with a CSS selector, quotes its opening tag and states the expected token, for example `email field is tagged autocomplete="name" (expected "email")`.
 
 ## How to fix it
