@@ -107,12 +107,20 @@ function judgesRootResource(rule: Rule): boolean {
 }
 
 /**
- * Whether the crawl fetched no page at all. Reads `crawlLimits`, which both
- * engine paths set; undefined (a caller that never threaded it) reads as "pages
- * were fetched", so nothing is skipped without evidence.
+ * Whether the crawl never saw the site answer: it fetched no page AND a root
+ * request recorded a refusal or a failed fetch. Zero pages alone is not enough:
+ * a start URL excluded by config or robots.txt, or a `maxPages` of 0, also
+ * yields zero pages while the root files answered normally, and a missing
+ * sitemap is a real finding there. Reads `crawlLimits`, which both engine paths
+ * set; undefined (a caller that never threaded it) reads as "pages were
+ * fetched", so nothing is skipped without evidence.
  */
 function fetchedNoPages(site: SiteData | undefined): boolean {
-  return site?.crawlLimits?.pagesCrawled === 0;
+  const limits = site?.crawlLimits;
+  if (!site || !limits || limits.pagesCrawled !== 0 || limits.maxPages <= 0) return false;
+  const robots = site.robotsTxt;
+  const failedFetch = robots !== null && robots !== undefined && !robots.exists && robots.errors.length > 0;
+  return (site.refusedFetches?.length ?? 0) > 0 || failedFetch;
 }
 
 export interface PageRunResult {

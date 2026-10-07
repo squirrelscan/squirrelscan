@@ -194,19 +194,53 @@ describe("the runner skips root-resource rules when no page was fetched", () => 
     });
   }
 
-  async function statusesFor(crawlLimits: SiteData["crawlLimits"]) {
-    const result = await runner().runSiteRules(site({ sitemaps: NO_SITEMAPS, crawlLimits }));
+  async function statusesFor(crawlLimits: SiteData["crawlLimits"], over: Partial<SiteData> = {}) {
+    const result = await runner().runSiteRules(site({ sitemaps: NO_SITEMAPS, crawlLimits, ...over }));
     return Object.fromEntries(
       [...result.ruleResults].map(([id, r]) => [id, r.checks.map((c) => c.status)]),
     );
   }
 
-  test("zero pages fetched: probe readers and the sitemap rule are skipped, others still run", async () => {
-    const statuses = await statusesFor({ pagesCrawled: 0, maxPages: 100 });
+  const ANSWERED_ROBOTS: RobotsTxtData = { ...UNREACHABLE_ROBOTS, exists: true, content: "User-agent: *", errors: [] };
+
+  test("zero pages and a refused root request: probe readers and the sitemap rule are skipped, others still run", async () => {
+    const statuses = await statusesFor(
+      { pagesCrawled: 0, maxPages: 100 },
+      { refusedFetches: [WALL("robots.txt", "/robots.txt")] },
+    );
 
     expect(statuses["test/probe-reader"]).toEqual(["skipped"]);
     expect(statuses["crawl/sitemap-exists"]).toEqual(["skipped"]);
     expect(statuses["test/plain-site"]).toEqual(["warn"]);
+  });
+
+  test("zero pages and a failed robots.txt fetch (origin down): skipped", async () => {
+    const statuses = await statusesFor({ pagesCrawled: 0, maxPages: 100 }, { robotsTxt: UNREACHABLE_ROBOTS });
+
+    expect(statuses["test/probe-reader"]).toEqual(["skipped"]);
+    expect(statuses["crawl/sitemap-exists"]).toEqual(["skipped"]);
+  });
+
+  test("zero pages because the start URL was excluded, root files answered: still reports", async () => {
+    const statuses = await statusesFor({ pagesCrawled: 0, maxPages: 100 }, { robotsTxt: ANSWERED_ROBOTS });
+
+    expect(statuses["test/probe-reader"]).toEqual(["warn"]);
+    expect(statuses["crawl/sitemap-exists"]).toEqual(["fail"]);
+  });
+
+  test("maxPages 0 reports even with a refusal recorded", async () => {
+    const statuses = await statusesFor(
+      { pagesCrawled: 0, maxPages: 0 },
+      { refusedFetches: [WALL("sitemap", "/sitemap.xml")] },
+    );
+
+    expect(statuses["crawl/sitemap-exists"]).not.toEqual(["skipped"]);
+  });
+
+  test("zero pages with no evidence either way: not skipped", async () => {
+    const statuses = await statusesFor({ pagesCrawled: 0, maxPages: 100 });
+
+    expect(statuses["test/probe-reader"]).toEqual(["warn"]);
   });
 
   test("pages were fetched: nothing is skipped (the control)", async () => {
