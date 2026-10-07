@@ -86,7 +86,7 @@ Legacy fetch-mode toggle, kept for back-compat. Maps onto `render`: `"http"` →
 
 How many cloud browser-render jobs run at once during a rendered crawl. Render jobs run in squirrelscan's cloud, so the usual per-host politeness delay doesn't apply to job submission - but the render workers do fetch your site, hence the cap. Raise it to speed up large rendered audits; lower it if your origin is sensitive to parallel traffic.
 
-Your plan also caps this value: **Free runs 1 render at a time, Pro runs 5, Team runs 10**. The CLI checks your plan at the start of each rendered crawl and uses the lower of the two - a config value above your plan limit isn't an error, it just gets clamped.
+Your plan also caps this value: **Free renders 1 page at once, Pro 5, Team 10, per audit**. Cloud audits are held to the same numbers. The CLI checks your plan at the start of each rendered crawl and uses the lower of the two - a config value above your plan limit isn't an error, it just gets clamped.
 
 ### `publish`
 

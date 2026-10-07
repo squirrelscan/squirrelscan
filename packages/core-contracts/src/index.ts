@@ -1553,9 +1553,11 @@ export interface PlanDefinition {
   maxWebsites: number;
   maxMembers: number;
   /**
-   * Max concurrent in-flight cloud render jobs per audit. Clamps the CLI's
-   * `[cloud].render_concurrency` (schema max 10) — enforced client-side; the
-   * binary fetches it from `GET /v1/credits` at crawl start.
+   * Max cloud renders in flight per audit. The hosted runner holds a cloud
+   * audit's renders to it, and an all-rendered crawl also runs exactly that
+   * wide (squirrelscan/repo#2480). It also clamps the CLI's
+   * `[cloud].render_concurrency` (schema max 10), client-side: the binary
+   * fetches it from `GET /v1/credits` at crawl start.
    */
   renderConcurrency: number;
   /**

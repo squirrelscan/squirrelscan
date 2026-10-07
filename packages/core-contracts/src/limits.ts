@@ -340,6 +340,8 @@ export const CRAWLER_WORKER = {
   // Pages rendered concurrently per browser per consumer invocation. 3→4 (#992):
   // conservative bump for throughput; Browser Rendering session limits still
   // apply account-wide, so the pool caps total concurrency regardless.
+  // No longer read by the hosted renderer: squirrelscan/repo#2480 replaced it
+  // with a measured pool shape of its own. Kept for anything pinned to it.
   queueConcurrency: 4,
   batchDelayMs: 1_000,
   fallbackAlarmMs: 30_000,

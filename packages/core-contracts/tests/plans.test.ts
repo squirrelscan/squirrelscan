@@ -46,7 +46,8 @@ describe("plan definitions", () => {
     const plan = PLANS.enterprise;
     expect(plan.maxWebsites).toBe(-1);
     expect(plan.maxMembers).toBe(-1);
-    expect(plan.renderConcurrency).toBe(10);
+    // Like the page ceiling below: never narrower than the tier under it.
+    expect(plan.renderConcurrency).toBeGreaterThanOrEqual(PLANS.team.renderConcurrency);
     expect(plan.scheduledCrawls).toBe(true);
     expect(plan.customHeaders).toBe(true);
     expect(plan.maxPagesPerAudit).toBe(10000);

@@ -5,6 +5,7 @@
 import type { DocumentFetcher } from "@squirrelscan/fetchers";
 
 import { CloudConfigSchema, getDefaultConfig } from "@squirrelscan/config";
+import { PLANS } from "@squirrelscan/core-contracts/plans";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -254,13 +255,13 @@ describe("deriveUserSetConcurrency", () => {
 describe("renderConcurrencyUpsellHint", () => {
   test("free plan hints at Pro's concurrency", () => {
     expect(renderConcurrencyUpsellHint("free")).toBe(
-      " — upgrade to Pro for 5 concurrent renders"
+      ` — upgrade to Pro for ${PLANS.starter.renderConcurrency} concurrent renders`
     );
   });
 
   test('pro plan (planId "starter") hints at Team\'s concurrency', () => {
     expect(renderConcurrencyUpsellHint("starter")).toBe(
-      " — upgrade to Team for 10 concurrent renders"
+      ` — upgrade to Team for ${PLANS.team.renderConcurrency} concurrent renders`
     );
   });
 
