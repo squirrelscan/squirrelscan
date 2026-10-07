@@ -150,6 +150,32 @@ scrub_for_report() {
   fi
 }
 
+# Detect libc (glibc vs musl)
+detect_libc() {
+  # Method 1: Check for musl loader (most reliable)
+  if ls /lib/ld-musl-*.so.1 >/dev/null 2>&1; then
+    echo "-musl"
+    return
+  fi
+
+  # Method 2: Check Alpine release file
+  if [ -f /etc/alpine-release ]; then
+    echo "-musl"
+    return
+  fi
+
+  # Method 3: ldd version string
+  if command -v ldd >/dev/null 2>&1; then
+    if ldd --version 2>&1 | grep -qi musl; then
+      echo "-musl"
+      return
+    fi
+  fi
+
+  # Default: glibc (no suffix)
+  echo ""
+}
+
 report_error() {
   local step="$1" code="$2" line="${3:-}" output="${4:-}"
   # Presence disables reporting, including an explicitly empty value.
@@ -1008,32 +1034,6 @@ download_failure_guidance() {
     echo "  release is published. Allowlist github.com or install.squirrelscan.com,"
     echo "  or install from a network that already reaches one of them."
   fi
-}
-
-# Detect libc (glibc vs musl)
-detect_libc() {
-  # Method 1: Check for musl loader (most reliable)
-  if ls /lib/ld-musl-*.so.1 >/dev/null 2>&1; then
-    echo "-musl"
-    return
-  fi
-
-  # Method 2: Check Alpine release file
-  if [ -f /etc/alpine-release ]; then
-    echo "-musl"
-    return
-  fi
-
-  # Method 3: ldd version string
-  if command -v ldd >/dev/null 2>&1; then
-    if ldd --version 2>&1 | grep -qi musl; then
-      echo "-musl"
-      return
-    fi
-  fi
-
-  # Default: glibc (no suffix)
-  echo ""
 }
 
 # Detect platform and architecture

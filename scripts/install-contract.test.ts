@@ -721,6 +721,29 @@ describe("install.sh report_error payload", () => {
     }
   }, 15_000);
 
+  // detect_libc must be defined in the preamble, ahead of report_error's first
+  // call: a missing function would silently report "glibc" for everyone.
+  test("detect_libc is defined before the exit trap", () => {
+    expect(INSTALLER_PREAMBLE).toContain("detect_libc() {");
+  });
+
+  test.skipIf(process.platform !== "linux")(
+    "reports musl exactly when detect_libc says musl",
+    async () => {
+      const run = async (stub: string) => {
+        const { calls } = await runWithCurlShim(
+          `${stub}; report_error download_binary 1 "x" ""; sleep 1`,
+          { cut: "preamble", env: { NO_TELEMETRY: undefined }, settleMs: 5000 },
+        );
+        expect(calls).toHaveLength(1);
+        return (JSON.parse(curlDataArg(calls[0])) as Record<string, unknown>).libc;
+      };
+      expect(await run('detect_libc() { echo "-musl"; }')).toBe("musl");
+      expect(await run('detect_libc() { echo ""; }')).toBe("glibc");
+    },
+    30_000,
+  );
+
   test("omits version while it is not yet known", async () => {
     const { calls } = await runWithCurlShim('report_error check_deps 1 "x" ""; sleep 1', {
       cut: "preamble",
