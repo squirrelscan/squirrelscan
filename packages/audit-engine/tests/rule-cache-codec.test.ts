@@ -190,6 +190,7 @@ describe("cache payload codec", () => {
 describe("run context", () => {
   const base = {
     engineVersion: "0.0.91",
+    rulesVersion: "rules-a",
     pageRules: [{ id: "core/meta-title", options: { max_length: 75 } }],
     siteData: { baseUrl: "http://x.test", pages: [], robotsTxt: null, sitemaps: null } as never,
     siteMetadata: undefined,
@@ -225,6 +226,11 @@ describe("run context", () => {
   // different zone.
   test("moves with the runtime time zone", async () => {
     expect(await hashOf({ timeZone: "Australia/Sydney" })).not.toBe(await hashOf({}));
+  });
+
+  // A rule fixed without a version bump changes nothing but its code.
+  test("moves with the rules version", async () => {
+    expect(await hashOf({ rulesVersion: "rules-b" })).not.toBe(await hashOf({}));
   });
 
   test("moves with the build, the rule list and a rule's options", async () => {

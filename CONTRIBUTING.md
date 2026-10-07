@@ -23,6 +23,10 @@ Documentation source lives in `docs/`. Run `bun run docs:check` after editing li
 navigation, or MDX content, and `bun run docs:build` before submitting structural or
 configuration changes.
 
+## Issues
+
+Every issue carries a `## Acceptance Criteria` checklist: the observable outcomes that mean it is done. The issue templates include the section. If a report arrives without one, maintainers add it at triage.
+
 ## Pull requests
 
 Open an issue before large architectural changes. Pull requests should explain the behavior change and list the commands used to verify it.

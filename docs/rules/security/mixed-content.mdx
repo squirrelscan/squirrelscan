@@ -11,13 +11,32 @@ Browsers treat the two halves differently. Active content, meaning scripts, styl
 
 ## What squirrel checks
 
-The rule runs on every crawled page and emits a single check named `mixed-content`:
+The rule runs on every crawled page and emits a check named `mixed-content`:
 
 - Info when the page URL does not start with `https://`, since the concept does not apply. Message: `Mixed content check not applicable - page not HTTPS`.
-- Fail when the HTML contains any element whose `src`, `href` or `data` attribute literally starts with `http://`. Message: `3 HTTP resource(s) on HTTPS page`, with each URL listed. Severity error.
+- Fail when the HTML has a resource element whose `src`, `href` or `data` attribute literally starts with `http://`. Message: `3 HTTP resource(s) on HTTPS page (2 potentially blocked, 1 potentially upgraded; from markup, not observed loads)`. Severity error.
 - Pass when none do. Message: `No mixed content detected`.
 
+Each listed URL keeps the tag, attribute and `rel` it came from, so you can see whether it is a `<script src>`, a `<link rel="stylesheet" href>` or an `<img src>`.
+
 The selectors are `img[src]`, `script[src]`, `link[href]`, `iframe[src]`, `video[src]`, `audio[src]`, `source[src]`, `embed[src]` and `object[data]`. The match is on the literal `http://` prefix in the markup, so protocol-relative URLs such as `//cdn.example.com/x.js` are not flagged, and neither are HTTP URLs that only appear in inline scripts or CSS.
+
+### Only elements that fetch a resource count
+
+A `<link>` is reported only when its `rel` makes the browser fetch something: `stylesheet`, `modulepreload`, `preload`, `prefetch`, `manifest` and the icon relations. `<link rel="canonical">`, `rel="alternate"` (hreflang and feed links) and other metadata links are not fetched, so an `http://` URL there is not mixed content. Fix those for other reasons, such as [canonical](/rules/core/canonical) hygiene.
+
+### Potentially blocked or potentially upgraded
+
+Findings come from the markup, not from a browser, so they are labelled by what a browser would do:
+
+- **Potentially blocked:** scripts, stylesheets, frames, `embed`, `object`, fonts and other preloads, and anything on an IP-literal host.
+- **Potentially upgraded:** images, audio, video and icons, which browsers rewrite to HTTPS and block only when the upgrade fails.
+
+Each item carries `meta.kind` (`potentially-blocked` or `potentially-upgraded`) and `meta.evidence: "static-markup"`. squirrel does not report an insecure load that a browser observed.
+
+### Loopback URLs
+
+`localhost`, `*.localhost`, `127.0.0.0/8` and `[::1]` are potentially trustworthy origins, and browsers do not treat them as mixed content. They are left out of the `mixed-content` check. A separate `local-development-url` warning lists them, because a URL like `http://localhost:3000/app.js` left in production markup only works on the developer's own machine.
 
 Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
 

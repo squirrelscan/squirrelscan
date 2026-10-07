@@ -269,6 +269,7 @@
                   "rules/content/author-info",
                   "rules/content/meta-in-body",
                   "rules/content/mime-type",
+                  "rules/content/placeholder-contact",
                   "rules/content/placeholder-text",
                   "rules/content/article-links",
                   "rules/content/quality",

@@ -66,6 +66,7 @@ import {
   ruleCacheEnabled,
 } from "@/audit/rule-cache-store";
 import { resolveRulesConfig } from "@/audit/rule-filter";
+import { RULES_VERSION } from "@/audit/rules-version";
 import {
   runSmartAudits,
   REMOVED_STATUSES as SMART_REMOVED_STATUSES,
@@ -1642,8 +1643,9 @@ export async function runAudit(
       // since a previous audit skips its parse AND its rules; `--refresh` is the
       // documented way to force everything to run, so it turns the cache off
       // rather than merely forcing a re-fetch. `cliVersion` is in the key, so a
-      // `squirrel self update` invalidates every entry — rule CODE can change
-      // without any rule id or option changing.
+      // `squirrel self update` invalidates every entry, and so is `RULES_VERSION`,
+      // a hash of the rule code, so a rule change without a version bump does too:
+      // rule CODE can change without any rule id or option changing.
       const ruleCacheStore =
         options.refresh || !ruleCacheEnabled()
           ? undefined
@@ -1765,7 +1767,11 @@ export async function runAudit(
           retainPageResults: false,
           ...(ruleCacheStore
             ? {
-                ruleCache: { store: ruleCacheStore, engineVersion: cliVersion },
+                ruleCache: {
+                  store: ruleCacheStore,
+                  engineVersion: cliVersion,
+                  rulesVersion: RULES_VERSION,
+                },
               }
             : {}),
         }
