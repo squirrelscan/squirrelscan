@@ -296,10 +296,10 @@ describe("PowerShell installer transport security", () => {
 // made a real Windows break undiagnosable (#1538). Both installers now capture
 // the command's own output and carry a bounded, scrubbed tail of it.
 describe("self install failure reporting", () => {
-  test("both installers send error_output at report version 2", () => {
-    expect(shellInstaller).toContain('INSTALLER_REPORT_VERSION="2"');
+  test("both installers send error_output at report version 3", () => {
+    expect(shellInstaller).toContain('INSTALLER_REPORT_VERSION="3"');
     expect(shellInstaller).toContain('"error_output":"%s"');
-    expect(powershellInstaller).toContain('$InstallerReportVersion = "2"');
+    expect(powershellInstaller).toContain('$InstallerReportVersion = "3"');
     expect(powershellInstaller).toContain("error_output   = $scrubbedOutput");
   });
 
@@ -698,13 +698,45 @@ describe("install.sh report_error payload", () => {
     expect(calls).toHaveLength(1);
     const report = JSON.parse(curlDataArg(calls[0])) as Record<string, unknown>;
     expect(report.step).toBe("self_install");
-    expect(report.script_version).toBe("2");
+    expect(report.script_version).toBe("3");
     const errorOutput = report.error_output as string;
     expect(errorOutput.length).toBe(1000); // bounded
     // Tail kept: the failure is at the END of a command's output.
     expect(errorOutput).toEndWith("~/.local/bin/squirrel");
     if (home) expect(errorOutput).not.toContain(home);
   }, 15_000);
+
+  test("carries the release version bare, and libc on Linux", async () => {
+    const { calls } = await runWithCurlShim(
+      'INSTALLER_RELEASE_VERSION="v1.2.3"; report_error download_binary 1 "x" ""; sleep 1',
+      { cut: "preamble", env: { NO_TELEMETRY: undefined }, settleMs: 5000 },
+    );
+    expect(calls).toHaveLength(1);
+    const report = JSON.parse(curlDataArg(calls[0])) as Record<string, unknown>;
+    expect(report.version).toBe("1.2.3");
+    if (process.platform === "linux") {
+      expect(["musl", "glibc"]).toContain(report.libc as string);
+    } else {
+      expect(report).not.toHaveProperty("libc");
+    }
+  }, 15_000);
+
+  test("omits version while it is not yet known", async () => {
+    const { calls } = await runWithCurlShim('report_error check_deps 1 "x" ""; sleep 1', {
+      cut: "preamble",
+      env: { NO_TELEMETRY: undefined },
+      settleMs: 5000,
+    });
+    expect(calls).toHaveLength(1);
+    const report = JSON.parse(curlDataArg(calls[0])) as Record<string, unknown>;
+    expect(report).not.toHaveProperty("version");
+  }, 15_000);
+
+  test("main records the pinned and the resolved version, in both installers", () => {
+    expect(shellInstaller.split('INSTALLER_RELEASE_VERSION="${version#v}"')).toHaveLength(3);
+    expect(powershellInstaller.split("$script:ReleaseVersion = $version -replace '^v', ''")).toHaveLength(3);
+    expect(powershellInstaller).toContain('$payload["version"] = $script:ReleaseVersion');
+  });
 });
 
 // curl follows a redirect from https to plain http by default and negotiates

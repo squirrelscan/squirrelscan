@@ -94,7 +94,11 @@ info() { echo -e "${BLUE}::${NC} $1" >&2; }
 # forget (never blocks or fails the install), and carries only coarse context
 # (os/arch/step/exit code) — never paths, env, hostname, or secrets. #1013
 # v2 adds `error_output` — the tail of the failing command's own output (#1538).
-INSTALLER_REPORT_VERSION="2"
+# v3 adds `version` (the release being installed) and, on Linux, `libc`.
+INSTALLER_REPORT_VERSION="3"
+# The release being installed, bare ("0.0.73"), set as soon as it is known
+# (pinned or resolved). Empty before that, and then the report omits the field.
+INSTALLER_RELEASE_VERSION=""
 ERROR_ENDPOINT="${SQUIRREL_ERROR_ENDPOINT:-https://install.squirrelscan.com/error}"
 # Release metadata (latest version per channel) — R2-backed, no rate limits.
 RELEASES_ENDPOINT="${SQUIRREL_RELEASES_ENDPOINT:-https://install.squirrelscan.com/releases}"
@@ -152,9 +156,21 @@ report_error() {
   [ "${NO_TELEMETRY+x}" = x ] && return 0
   command -v curl >/dev/null 2>&1 || return 0
 
-  local os arch scrubbed="" scrubbed_output=""
+  local os arch scrubbed="" scrubbed_output="" version_field="" libc_field=""
   os=$(uname -s 2>/dev/null | tr '[:upper:]' '[:lower:]')
   arch=$(uname -m 2>/dev/null)
+
+  if [ -n "$INSTALLER_RELEASE_VERSION" ]; then
+    version_field=$(printf ',"version":"%s"' "$(json_escape "${INSTALLER_RELEASE_VERSION#v}")")
+  fi
+  # A fact, not a guess: the worker would otherwise resolve a musl report to the
+  # glibc platform. Same detection the installer itself uses to pick the asset.
+  if [ "$os" = linux ]; then
+    case "$(detect_libc)" in
+      -musl) libc_field=',"libc":"musl"' ;;
+      *) libc_field=',"libc":"glibc"' ;;
+    esac
+  fi
 
   scrubbed=$(scrub_for_report "$line" "$ERROR_LINE_MAX")
   # The failing command's own stdout/stderr: without it a self_install failure
@@ -162,11 +178,13 @@ report_error() {
   scrubbed_output=$(scrub_for_report "$output" "$ERROR_OUTPUT_MAX" tail)
 
   local payload
-  payload=$(printf '{"script":"sh","script_version":"%s","channel":"%s","os":"%s","arch":"%s","step":"%s","exit_code":%s,"error_line":"%s","error_output":"%s"}' \
+  payload=$(printf '{"script":"sh","script_version":"%s","channel":"%s","os":"%s","arch":"%s"%s%s,"step":"%s","exit_code":%s,"error_line":"%s","error_output":"%s"}' \
     "$(json_escape "$INSTALLER_REPORT_VERSION")" \
     "$(json_escape "${SQUIRREL_CHANNEL:-stable}")" \
     "$(json_escape "$os")" \
     "$(json_escape "$arch")" \
+    "$libc_field" \
+    "$version_field" \
     "$(json_escape "$step")" \
     "${code:-1}" \
     "$(json_escape "$scrubbed")" \
@@ -1498,6 +1516,7 @@ main() {
   # Version: pinned or latest
   if [ -n "${SQUIRREL_VERSION:-}" ]; then
     version="$SQUIRREL_VERSION"
+    INSTALLER_RELEASE_VERSION="${version#v}"
     log "Installing pinned version: $version"
   else
     CURRENT_STEP="fetch_releases"
@@ -1509,6 +1528,7 @@ main() {
         error "No releases found for channel '$channel'\n  Check: https://github.com/${REPO}/releases"
       fi
     fi
+    INSTALLER_RELEASE_VERSION="${version#v}"
     log "Latest version: $version (channel: $channel)"
   fi
 

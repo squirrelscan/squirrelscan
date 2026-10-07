@@ -38,7 +38,10 @@ function Write-Err {
 # Fire-and-forget: never blocks or fails the install; carries only coarse
 # context (os/arch/step/exit code), never paths/env/hostname/secrets. #1013
 # v2 adds `error_output` — the tail of the failing command's own output (#1538).
-$InstallerReportVersion = "2"
+# v3 adds `version` (the release being installed).
+$InstallerReportVersion = "3"
+# The release being installed, bare ("0.0.73"); set once known, empty before.
+$script:ReleaseVersion = ""
 $ErrorEndpoint = if ($env:SQUIRREL_ERROR_ENDPOINT) { $env:SQUIRREL_ERROR_ENDPOINT } else { "https://install.squirrelscan.com/error" }
 # Release metadata (latest version per channel) — R2-backed, no rate limits.
 $ReleasesEndpoint = if ($env:SQUIRREL_RELEASES_ENDPOINT) { $env:SQUIRREL_RELEASES_ENDPOINT } else { "https://install.squirrelscan.com/releases" }
@@ -138,7 +141,11 @@ function Send-ErrorReport {
             exit_code      = $ExitCode
             error_line     = $scrubbed
             error_output   = $scrubbedOutput
-        } | ConvertTo-Json -Compress
+        }
+        # Omitted rather than empty when the failure came before a version was
+        # known; the worker treats an absent field as "unknown".
+        if ($script:ReleaseVersion) { $payload["version"] = $script:ReleaseVersion }
+        $payload = $payload | ConvertTo-Json -Compress
         # Fire-and-forget: run the POST in a background job so it never blocks
         # the installer. Not awaited; the 3s timeout inside is the backstop and
         # failures are swallowed.
@@ -578,6 +585,7 @@ function Main {
     # Get version
     if ($env:SQUIRREL_VERSION) {
         $version = $env:SQUIRREL_VERSION
+        $script:ReleaseVersion = $version -replace '^v', ''
         Write-Log "Installing pinned version: $version"
     } else {
         $version = Get-LatestVersion -Channel $channel
@@ -588,6 +596,7 @@ function Main {
                 Write-Err "No releases found for channel '$channel'"
             }
         }
+        $script:ReleaseVersion = $version -replace '^v', ''
         Write-Log "Latest version: $version (channel: $channel)"
     }
 
