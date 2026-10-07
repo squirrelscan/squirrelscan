@@ -28,6 +28,12 @@ import type { CollectedSiteSignals } from "./collected-signals";
 import { ruleApplies } from "./applicability";
 import { filterRules } from "./filter";
 import { loadAllRules, type RuleNamespace } from "./loader";
+import {
+  RULE_TIME_BUDGET_MS,
+  RuleTimeoutError,
+  runWithinBudget,
+  siteRuleBudgetMs,
+} from "./rule-budget";
 import { noindexSource, skipsNoindexPages } from "./shared/noindex";
 
 // Minimal config interface — CLI's full Config satisfies this
@@ -94,6 +100,13 @@ export interface RunnerOptions extends RunnerScope {
    * force fully sequential execution.
    */
   ruleConcurrency?: number;
+  /**
+   * Wall-clock budget (ms) for one page-rule evaluation on one page; site rules
+   * get this much per page of the site. A rule that runs past it is abandoned
+   * and recorded as a rule error. Defaults to {@link RULE_TIME_BUDGET_MS};
+   * `0` turns the budget off.
+   */
+  ruleTimeBudgetMs?: number;
 }
 
 const DEFAULT_RULE_CONCURRENCY = 8;
@@ -176,6 +189,7 @@ export class RuleRunner {
   private config: RulesConfig;
   // Only affects site rules — page rules are sync CPU and run sequentially (#379)
   private ruleConcurrency: number;
+  private readonly ruleTimeBudgetMs: number;
   // Per-run state — captured once at construction, immutable for the
   // lifetime of this runner instance. Each audit gets its own RuleRunner, so
   // concurrent audits never share these.
@@ -194,6 +208,7 @@ export class RuleRunner {
       1,
       options.ruleConcurrency ?? DEFAULT_RULE_CONCURRENCY
     );
+    this.ruleTimeBudgetMs = options.ruleTimeBudgetMs ?? RULE_TIME_BUDGET_MS;
 
     // Load all rules (plus any caller-supplied namespaces — plugins / tests)
     this.rules = loadAllRules({ additionalNamespaces: options.additionalNamespaces });
@@ -252,11 +267,16 @@ export class RuleRunner {
    * run-constant, but the soft-404 and noindex gates are not, so a member that
    * serves 404 content or is noindex must take its own skip rather than a
    * sibling's real verdict.
+   *
+   * `budgetMs` bounds the synchronous part of `run()` (see rule-budget.ts). A rule
+   * that runs past it is abandoned and recorded as a `<id>-error` fail check, the
+   * same shape as a thrown error, so the rest of the audit carries on.
    */
   private runOneRule(
     rule: Rule,
     ctx: RuleContext,
     siteMetadata: SiteMetadata | undefined,
+    budgetMs: number,
     scopeForLog?: "site",
     fanned?: CheckResult[]
   ): RuleRunResult | Promise<RuleRunResult> {
@@ -348,6 +368,21 @@ export class RuleRunner {
 
     const errorChecks = (e: unknown): CheckResult[] => {
       ruleError = e;
+      if (e instanceof RuleTimeoutError) {
+        logger.warn("rule timed out", {
+          ruleId: rule.meta.id,
+          ...(scopeForLog ? { scope: scopeForLog } : { pageUrl: ctx.page.url }),
+          budgetMs: e.budgetMs,
+        });
+        return [
+          {
+            name: `${rule.meta.id}-error`,
+            status: "fail",
+            message: `Rule error: ${e.message}`,
+            details: { timedOut: true, budgetMs: e.budgetMs },
+          },
+        ];
+      }
       return [
         {
           name: `${rule.meta.id}-error`,
@@ -364,7 +399,7 @@ export class RuleRunner {
       () => {
         let outcome: ReturnType<Rule["run"]>;
         try {
-          outcome = rule.run(ctx);
+          outcome = runWithinBudget(() => rule.run(ctx), budgetMs);
         } catch (e) {
           return finalize(errorChecks(e));
         }
@@ -449,6 +484,7 @@ export class RuleRunner {
             rule,
             ctx,
             siteMetadata,
+            this.ruleTimeBudgetMs,
             undefined,
             fannedChecks?.get(rule.meta.id)
           );
@@ -507,6 +543,14 @@ export class RuleRunner {
             };
         const siteParsed = firstPage?.parsed ?? ({} as ParsedPage);
 
+        // Site rules' work grows with the site, so their budget does too. The
+        // streaming path carries no `siteData.pages`; its page count is on the
+        // query handle.
+        const budgetMs = siteRuleBudgetMs(
+          this.ruleTimeBudgetMs,
+          Math.max(siteData.pages.length, siteQuery?.pageCount() ?? 0)
+        );
+
         // Run rules with bounded concurrency; assemble in deterministic order.
         // runOneRule may return sync; Promise.resolve normalizes for the pool.
         const results = await mapWithConcurrency(
@@ -523,15 +567,27 @@ export class RuleRunner {
               entityMap,
               options: getRuleOptions(rule, this.config),
             };
-            return Promise.resolve(this.runOneRule(rule, ctx, siteMetadata, "site"));
+            return Promise.resolve(
+              this.runOneRule(rule, ctx, siteMetadata, budgetMs, "site")
+            );
           }),
           this.ruleConcurrency
         );
 
+        // A site rule's page-time extractor that timed out on a page (streaming
+        // path, collected-signals.ts) is recorded against that rule and page here,
+        // the same shape as a timeout in the runner itself.
+        const collectedTimeouts = collectedTimeoutChecks(collectedSignals);
+
         const allChecks: CheckResult[] = [];
         const ruleResults = new Map<string, RuleRunResult>();
         for (let i = 0; i < siteRules.length; i++) {
-          const result = results[i];
+          let result = results[i];
+          const timeouts = collectedTimeouts.get(siteRules[i].meta.id);
+          // Not onto a rule that was gated off: it did not run, whatever the collector did.
+          if (timeouts && !result.checks.every((c) => c.status === "skipped")) {
+            result = { ...result, checks: [...result.checks, ...timeouts] };
+          }
           ruleResults.set(siteRules[i].meta.id, result);
           allChecks.push(...result.checks);
         }
@@ -541,6 +597,30 @@ export class RuleRunner {
       () => ({})
     );
   }
+}
+
+/** `ruleId -> error checks` for the page-time extractors that ran past their
+ *  budget, one check per (rule, page), in page order. */
+function collectedTimeoutChecks(
+  collected: CollectedSiteSignals | undefined
+): Map<string, CheckResult[]> {
+  const byRule = new Map<string, CheckResult[]>();
+  for (const page of collected?.pages ?? []) {
+    if (!page.timedOut) continue;
+    const { budgetMs, ruleIds } = page.timedOut;
+    for (const ruleId of ruleIds) {
+      let list = byRule.get(ruleId);
+      if (!list) byRule.set(ruleId, (list = []));
+      list.push({
+        name: `${ruleId}-error`,
+        status: "fail",
+        message: `Rule error: ${new RuleTimeoutError(budgetMs).message}`,
+        pageUrl: page.url,
+        details: { timedOut: true, budgetMs },
+      });
+    }
+  }
+  return byRule;
 }
 
 // Convenience function to create runner with defaults. `scope` threads the

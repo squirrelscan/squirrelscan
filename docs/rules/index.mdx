@@ -141,6 +141,14 @@ A site-wide `noindex` usually means the audit is checking a site before launch, 
 
 **Everything else still runs.** Accessibility, security and performance rules, and every link rule other than orphan pages, check noindex pages as usual, and so do [core/robots-meta](/rules/core/robots-meta), [crawl/indexability](/rules/crawl/indexability) and [crawl/all-noindex-pages](/rules/crawl/all-noindex-pages), which report the noindex pages themselves.
 
+## Rule time budget
+
+Rules read content the audited site controls, so a page can be built to make a pattern match very slowly. Every rule runs under a time budget: one second per page for a page rule, and one second per page of the site for a site rule. A rule that runs past it is stopped for that page, and the audit carries on with the next rule.
+
+The report records it as a failed check named after the rule with `-error` on the end, such as `content/hidden-text-error`, against the page where it happened (or the whole site, for a site rule), with the message `Rule error: exceeded its 1000 ms time budget and was abandoned`. Its details carry `timedOut: true`. That rule's own result for that page is not in the report.
+
+Ordinary pages never come close: the slowest rule takes a few milliseconds per page. If you see this on a page that looks normal, [open an issue](https://github.com/squirrelscan/squirrelscan/issues) with the page URL.
+
 ## Configuration
 
 ### Enable/Disable rules

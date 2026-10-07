@@ -180,8 +180,13 @@ export const FAST_PATTERNS: FastPattern[] = [
     // from the decoded claims (secrets/confidence.ts, #361): a Supabase anon
     // key reports as public, a service_role key as high, an expired one or a
     // first-party session token as info, anything else medium.
+    //
+    // The look-behind lets only the first `eyJ` of a base64url run start a
+    // match. A later one in the same run reads to the same run end and meets
+    // the same `.`, so it can only fail where the first did, and without the
+    // look-behind each of them re-reads the run: `eyJeyJeyJ…` was quadratic.
     name: "JSON Web Token",
-    pattern: /eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}={0,2}/g,
+    pattern: /eyJ(?<!eyJ[A-Za-z0-9_-]*?eyJ)[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}={0,2}/g,
     keywords: ["eyj"],
     confidence: "medium",
   },
@@ -306,9 +311,11 @@ export const FAST_PATTERNS: FastPattern[] = [
     publicByDesign: true,
   },
   {
-    // OAuth client IDs are public identifiers, not secrets
+    // OAuth client IDs are public identifiers, not secrets. A digit run is
+    // matched from its start only (a start inside it can only fail where the
+    // run's start did): a long run of digits was quadratic.
     name: "Google OAuth Client ID",
-    pattern: /[0-9]+-[0-9A-Za-z_]{32}\.apps\.googleusercontent\.com/g,
+    pattern: /(?<![0-9])[0-9]+-[0-9A-Za-z_]{32}\.apps\.googleusercontent\.com/g,
     keywords: [".apps.googleusercontent.com"],
     confidence: "high",
     publicByDesign: true,
@@ -1136,15 +1143,19 @@ export function lookBehind(text: string, index: number): string {
 
 // The key an assignment puts immediately in front of a value:
 // `sha256:"`, `api_key = "`, `"x-api-key":`, `apiKey:`, `SECRET_KEY || "`
+//
+// These three end in `\s*(?:["'`]\s*)?$`, not the equivalent `\s*["'`]?\s*$`:
+// with no quote, two adjacent `\s*` split a whitespace run every possible way,
+// which made this one cubic in the look-back window.
 const PRECEDING_KEY_RE =
-  /["'`]?([A-Za-z_$][A-Za-z0-9_$.-]*)(?:["'`]\s*\]|["'`]?)\s*(?:[:=]|\|\|=?|\?\?=?)\s*["'`]?\s*$/;
+  /["'`]?([A-Za-z_$][A-Za-z0-9_$.-]*)(?:["'`]\s*\]|["'`]?)\s*(?:[:=]|\|\|=?|\?\?=?)\s*(?:["'`]\s*)?$/;
 
 // The same, written as a bracket access: `cfg["apiKey"] = "`, `cfg['sha256'] =`
 const BRACKET_KEY_RE =
-  /\[\s*["'`]([^"'`\]]{1,64})["'`]\s*\]\s*(?:[:=]|\|\|=?|\?\?=?)\s*["'`]?\s*$/;
+  /\[\s*["'`]([^"'`\]]{1,64})["'`]\s*\]\s*(?:[:=]|\|\|=?|\?\?=?)\s*(?:["'`]\s*)?$/;
 
 // Anything at all in value position, whatever the key turned out to be
-const ASSIGNMENT_RE = /[:=]\s*["'`]?\s*$/;
+const ASSIGNMENT_RE = /[:=]\s*(?:["'`]\s*)?$/;
 
 // SRI and prefixed-digest values: integrity="sha384-…", `sha256-…`, `md5:…`
 const DIGEST_PREFIX_RE = /(?:sha-?(?:1|256|384|512)|md5)\s*[-:]\s*[\w+/=-]*$/i;
@@ -2120,9 +2131,13 @@ export function scanContent(
     if (scriptBlocks) return scriptBlocks;
     scriptBlocks = [];
     if (content.includes("<script") || content.includes("<SCRIPT")) {
+      // Every open tag ends at a `>`, so none starts past the last one. Each
+      // `<script` there would re-read the rest of the content looking for a
+      // `>` that is not coming: thousands of them were quadratic.
+      const head = content.slice(0, content.lastIndexOf(">") + 1);
       SCRIPT_OPEN_RE.lastIndex = 0;
       let open: RegExpExecArray | null;
-      while ((open = SCRIPT_OPEN_RE.exec(content)) !== null) {
+      while ((open = SCRIPT_OPEN_RE.exec(head)) !== null) {
         // The same rule the context pass applies: the keyword has to sit in
         // a NAMING attribute (`id="shopify-features"`), not in a `src`.
         const tagText = open[0];

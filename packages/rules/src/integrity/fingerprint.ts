@@ -42,7 +42,10 @@ export interface PageFingerprint {
   stylesheetHrefs: Set<string>;
 }
 
-const CSS_VAR_RE = /--[a-z0-9-]+\s*:/gi;
+// The look-behind lets only the first `--` of a run of name characters start a
+// match: a later one reads to the same run end and the same `:`, so it can only
+// fail where the first did. Without it `--0--0--0…` in a <style> was quadratic.
+const CSS_VAR_RE = /--(?<!--[a-z0-9-]*?--)[a-z0-9-]+\s*:/gi;
 
 /**
  * DOM walks performed by `fingerprintPage` in this process.

@@ -25,6 +25,7 @@ import { extractPageByteSignal } from "./performance/total-byte-weight";
 import { fingerprintPage } from "./integrity/fingerprint";
 import { hasCommercialOfferLink, matchSubprocessorLink } from "./legal/subprocessor-disclosure";
 import { pageScriptSrcs } from "./adblock/blocked-links";
+import { RULE_TIME_BUDGET_MS, RuleTimeoutError, runWithinBudget } from "./rule-budget";
 import { scanPageForSecrets } from "./security/leaked-secrets";
 
 /**
@@ -57,6 +58,12 @@ export interface CollectedPageSignal {
   /** subprocessor-disclosure: whether this page links to a commercial offer
    *  (pricing, plans, enterprise, trust center, contact sales, book a demo). */
   commercialOffer: boolean;
+  /**
+   * Rules whose page-time extractor ran past its time budget on this page and was
+   * abandoned (its field holds the empty value). The site pass records each as a
+   * rule error for this page. Absent when nothing timed out.
+   */
+  timedOut?: { budgetMs: number; ruleIds: string[] };
 }
 
 /** The collected per-page signals for one crawl, in page-stream (crawl) order. */
@@ -82,6 +89,8 @@ export function buildCollectedPageSignal(input: {
    * `undefined` (or omitting it) computes it here, as before.
    */
   fingerprint?: PageFingerprint | null;
+  /** Time budget (ms) per extractor; defaults to {@link RULE_TIME_BUDGET_MS}. */
+  budgetMs?: number;
 }): CollectedPageSignal {
   const { url, finalUrl, parsed } = input;
   const doc = parsed.document;
@@ -114,12 +123,26 @@ export function buildCollectedPageSignal(input: {
   // scan stopped showing up anywhere (#1864). Time each extractor under
   // SQUIRREL_RULE_PROFILE and report it against the rule that owns it, so the
   // profile still accounts for the page's whole rules-phase cost.
-  const timed = profileRules
-    ? <T>(ruleId: string, fn: () => T): T => {
-        const started = performance.now();
-        const out = fn();
-        const elapsedMs = performance.now() - started;
-        logger.debug("rule", {
+  //
+  // Each extractor is a rule's per-page work over untrusted content, so it runs
+  // under the same per-rule time budget the runner applies (rule-budget.ts). One
+  // that runs past it yields its empty value and is listed in `timedOut`.
+  const budgetMs = input.budgetMs ?? RULE_TIME_BUDGET_MS;
+  const timedOutRuleIds: string[] = [];
+  const timed = <T>(ruleId: string, fallback: T, fn: () => T): T => {
+    const started = profileRules ? performance.now() : 0;
+    let out: T;
+    try {
+      out = runWithinBudget(fn, budgetMs);
+    } catch (e) {
+      if (!(e instanceof RuleTimeoutError)) throw e;
+      logger.warn("rule timed out", { ruleId, scope: "collect", pageUrl: url, budgetMs });
+      if (!timedOutRuleIds.includes(ruleId)) timedOutRuleIds.push(ruleId);
+      out = fallback;
+    }
+    if (profileRules) {
+      const elapsedMs = performance.now() - started;
+      logger.debug("rule", {
           ruleId,
           scope: "collect",
           pageUrl: url,
@@ -129,16 +152,20 @@ export function buildCollectedPageSignal(input: {
           warned: 0,
           durationMs: Math.round(elapsedMs),
           durationUs: Math.round(elapsedMs * 1000),
-        });
-        return out;
-      }
-    : <T>(_ruleId: string, fn: () => T): T => fn();
+      });
+    }
+    return out;
+  };
 
-  const byteSignal = timed("perf/total-byte-weight", () => extractPageByteSignal(doc));
+  const byteSignal = timed(
+    "perf/total-byte-weight",
+    { inlineCssLen: 0, inlineJsLen: 0, externalCssCount: 0, externalJsCount: 0, imageCount: 0 },
+    () => extractPageByteSignal(doc)
+  );
 
-  return {
+  const signal: CollectedPageSignal = {
     url,
-    secrets: timed("security/leaked-secrets", () => scanPageForSecrets(doc, url)),
+    secrets: timed("security/leaked-secrets", [], () => scanPageForSecrets(doc, url)),
     inlineCssLen: byteSignal.inlineCssLen,
     inlineJsLen: byteSignal.inlineJsLen,
     externalCssCount: byteSignal.externalCssCount,
@@ -149,12 +176,16 @@ export function buildCollectedPageSignal(input: {
     fingerprint:
       input.fingerprint !== undefined
         ? input.fingerprint
-        : timed("integrity/template-discontinuity", () => fingerprintPage(parsed, url)),
-    signals: timed("integrity/orphan-page", () => [...detectPageSignals(signalCtx)]),
-    scriptSrcs: timed("adblock/blocked-links", () => pageScriptSrcs(doc)),
-    subprocessorMatch: timed("legal/subprocessor-disclosure", () =>
+        : timed("integrity/template-discontinuity", null, () => fingerprintPage(parsed, url)),
+    signals: timed("integrity/orphan-page", [], () => [...detectPageSignals(signalCtx)]),
+    scriptSrcs: timed("adblock/blocked-links", [], () => pageScriptSrcs(doc)),
+    subprocessorMatch: timed("legal/subprocessor-disclosure", null, () =>
       matchSubprocessorLink(doc, url)
     ),
-    commercialOffer: timed("legal/subprocessor-disclosure", () => hasCommercialOfferLink(doc)),
+    commercialOffer: timed("legal/subprocessor-disclosure", false, () =>
+      hasCommercialOfferLink(doc)
+    ),
   };
+  if (timedOutRuleIds.length > 0) signal.timedOut = { budgetMs, ruleIds: timedOutRuleIds };
+  return signal;
 }
