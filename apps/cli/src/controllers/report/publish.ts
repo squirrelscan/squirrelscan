@@ -37,6 +37,7 @@ import { cliApi } from "@/lib/api-client";
 import { teamPlanRequiredMessage } from "@/lib/plan-messages";
 import { runPath } from "@/lib/run-tracker";
 import { isScheduleSummary } from "@/lib/schedule-notice";
+import { DEFAULT_API_URL, getApiUrl } from "@/self/api";
 import {
   API_TOKEN_ENV_VAR,
   envTokenRejectedMessage,
@@ -333,13 +334,17 @@ export async function publishReport(
       if (response.status >= 500) {
         // #1340: the 5xx may have hit AFTER the report was written. Only runs
         // registered at start (runId) can be checked; others keep the failure.
-        const recoveredId = options.runId
-          ? await findLinkedReportId(
-              options.runId,
-              credential.token,
-              reportIdBefore
-            )
-          : null;
+        // Only the production API is recoverable: the link is built from the
+        // production reports host, and a staging or self-hosted API serves its
+        // reports from its own base, which the CLI cannot discover.
+        const recoveredId =
+          options.runId && getApiUrl() === DEFAULT_API_URL
+            ? await findLinkedReportId(
+                options.runId,
+                credential.token,
+                reportIdBefore
+              )
+            : null;
         if (recoveredId) {
           // Only the id is known: visibility is what we asked for, and the
           // schedule notice / server-merged score are unavailable, so the caller

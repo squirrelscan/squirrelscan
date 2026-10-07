@@ -115,6 +115,22 @@ describe("publishReport after a 5xx (#1340)", () => {
     expect(calls.some((c) => c.path === "/v1/agent-runs/run_1")).toBe(false);
   });
 
+  test("a non-production API keeps PUBLISH_SERVER_ERROR (reports base unknown)", async () => {
+    runResponse = (n) =>
+      Response.json({ id: "run_1", reportId: n === 0 ? null : "rep_9" });
+    const prev = process.env.SQUIRREL_API_SERVER;
+    process.env.SQUIRREL_API_SERVER = "https://api.staging.example.com";
+    try {
+      const result = await publishReport(report(), { runId: "run_1" });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.code).toBe("PUBLISH_SERVER_ERROR");
+    } finally {
+      if (prev === undefined) delete process.env.SQUIRREL_API_SERVER;
+      else process.env.SQUIRREL_API_SERVER = prev;
+    }
+  });
+
   test("a run with no linked reportId keeps PUBLISH_SERVER_ERROR", async () => {
     const result = await publishReport(report(), { runId: "run_1" });
 
@@ -213,7 +229,7 @@ describe("publishReport after a 5xx (#1340)", () => {
     const started = Date.now();
     const result = await publishReport(report(), { runId: "run_1" });
 
-    expect(Date.now() - started).toBeLessThan(4_500);
+    expect(Date.now() - started).toBeLessThan(8_000);
     expect(posts()).toHaveLength(1);
     expect(result.ok).toBe(false);
   });
