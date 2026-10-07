@@ -29,12 +29,15 @@ import { join } from "node:path";
 import type { AuditReport, CheckResult } from "@/types";
 
 import { hasEverPublished } from "@/cli/publish-nudge";
+import { REPORTS_BASE_URL } from "@/constants";
 import { type Result, ok, err, commandError } from "@/controllers/types";
 import { getGlobalContentStore } from "@/crawler/storage/content-store";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
 import { cliApi } from "@/lib/api-client";
 import { teamPlanRequiredMessage } from "@/lib/plan-messages";
+import { runPath } from "@/lib/run-tracker";
 import { isScheduleSummary } from "@/lib/schedule-notice";
+import { DEFAULT_API_URL, getApiUrl } from "@/self/api";
 import {
   API_TOKEN_ENV_VAR,
   envTokenRejectedMessage,
@@ -120,6 +123,64 @@ interface ApiSuccessResponse {
 
 const PUBLISH_TIMEOUT_MS = 30_000;
 const PUBLISH_MAX_ATTEMPTS = 3;
+const RECOVERY_TIMEOUT_MS = 10_000;
+// The pre-POST snapshot runs on every publish, so it is bounded tightly: an
+// unreadable snapshot only disables recovery (fails closed), never the publish.
+const SNAPSHOT_TIMEOUT_MS = 3_000;
+
+/**
+ * Stamp the FIRST publish (#2182). Non-fatal by construction: the report IS
+ * published, and a failed settings write must not turn it into an error.
+ */
+function stampFirstPublish(): void {
+  const settings = loadUserSettings();
+  if (settings.ok && !hasEverPublished(settings.data)) {
+    updateSettings({ first_publish_at: new Date().toISOString() });
+  }
+}
+
+/**
+ * Read the `reportId` the server has linked to a run (`agent_runs.report_id`,
+ * set at publish). Returns undefined when the run cannot be read, null when it
+ * has no linked report. Uses the same base as the lifecycle calls: org API keys
+ * (`sq_`) are rejected on the userId-scoped route.
+ */
+async function readRunReportId(
+  runId: string,
+  token: string,
+  timeoutMs: number = RECOVERY_TIMEOUT_MS
+): Promise<string | null | undefined> {
+  try {
+    const run = await cliApi.request<{ reportId?: string | null }>(
+      runPath(runId),
+      { token, timeoutMs }
+    );
+    if (!run.ok) return undefined;
+    const reportId = run.data?.reportId;
+    return typeof reportId === "string" && reportId ? reportId : null;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * After a publish 5xx, decide whether the report landed anyway. A 5xx can be a
+ * worker kill AFTER the report was written and linked to the run, so a run
+ * whose `reportId` is set now is the answer, but only if it was NOT already set
+ * before this attempt: a re-publish on a run that already had a report would
+ * otherwise "recover" the OLD report. When the pre-publish state is unknown
+ * (`before === undefined`) we cannot tell, so we keep the failure. Never
+ * re-POSTs: a retry would mint a second report row and orphan its R2 objects.
+ */
+async function findLinkedReportId(
+  runId: string,
+  token: string,
+  before: string | null | undefined
+): Promise<string | null> {
+  if (before === undefined) return null;
+  const after = await readRunReportId(runId, token);
+  return after && after !== before ? after : null;
+}
 
 /**
  * Publish an audit report to the API
@@ -142,6 +203,14 @@ export async function publishReport(
   }
 
   const visibility = options.visibility ?? "public";
+
+  // Snapshot the run's linked report BEFORE the POST so a 5xx recovery can tell
+  // a report this attempt wrote from one a previous publish left behind. Started
+  // now so the round trip overlaps payload building; awaited just before the POST.
+  const reportIdBeforePromise: Promise<string | null | undefined> =
+    options.runId
+      ? readRunReportId(options.runId, credential.token, SNAPSHOT_TIMEOUT_MS)
+      : Promise.resolve(null);
 
   const maxMB = REPORT_LIMITS.maxPayloadBytes / 1024 / 1024;
   const linkage = {
@@ -215,6 +284,8 @@ export async function publishReport(
     }
   }
 
+  const reportIdBefore = await reportIdBeforePromise;
+
   try {
     // cliApi.fetch keeps publish's transport contract: a hard timeout + retry on
     // CONNECTION errors only (the POST isn't idempotent; HTTP errors never retry).
@@ -261,6 +332,31 @@ export async function publishReport(
       // (e.g. PUBLISH_FAILED) that isn't in the refundable allowlist, so status
       // must win over the body for the refund classification.
       if (response.status >= 500) {
+        // #1340: the 5xx may have hit AFTER the report was written. Only runs
+        // registered at start (runId) can be checked; others keep the failure.
+        // Only the production API is recoverable: the link is built from the
+        // production reports host, and a staging or self-hosted API serves its
+        // reports from its own base, which the CLI cannot discover.
+        const recoveredId =
+          options.runId && getApiUrl() === DEFAULT_API_URL
+            ? await findLinkedReportId(
+                options.runId,
+                credential.token,
+                reportIdBefore
+              )
+            : null;
+        if (recoveredId) {
+          // Only the id is known: visibility is what we asked for, and the
+          // schedule notice / server-merged score are unavailable, so the caller
+          // keeps its local estimate (the run's own finalize handles refunds).
+          stampFirstPublish();
+          return ok({
+            id: recoveredId,
+            url: `${REPORTS_BASE_URL}/${recoveredId}`,
+            visibility,
+            createdAt: new Date().toISOString(),
+          });
+        }
         return err(
           commandError(
             "PUBLISH_SERVER_ERROR",
@@ -354,10 +450,7 @@ export async function publishReport(
     // Non-fatal by construction: the report IS published, and a settings write
     // that fails must not turn a successful publish into an error. The worst
     // case is one extra nudge line on a later run.
-    const settings = loadUserSettings();
-    if (settings.ok && !hasEverPublished(settings.data)) {
-      updateSettings({ first_publish_at: new Date().toISOString() });
-    }
+    stampFirstPublish();
 
     return ok({
       id: data.id,

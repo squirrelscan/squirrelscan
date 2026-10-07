@@ -841,7 +841,11 @@ export function runStreamingRules(
     batchSize?: number;
     onPhase?: (phase: StreamingRulePhase, boundary: "start" | "end") => void;
     /** Per-page rule-result cache (#1990); omitted → every page runs. */
-    ruleCache?: { store: RuleCacheStore; engineVersion: string };
+    ruleCache?: {
+      store: RuleCacheStore;
+      engineVersion: string;
+      rulesVersion: string;
+    };
     /** Where each page's checks go as they are produced (#2343). */
     pageSink?: PageResultSink;
     /** False → the O(pages × page bytes) result maps are never built (#2343). */

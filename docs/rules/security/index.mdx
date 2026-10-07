@@ -32,7 +32,7 @@ HTTPS, headers, and safe link practices (16 rules).
     SameSite=None without Secure is rejected outright, and a session cookie without HttpOnly is readable by any script. squirrel parses every Set-Cookie.
   </Card>
   <Card title="rel=noopener: external target=_blank links and tabnabbing" icon="triangle-exclamation" href="/rules/security/new-tab">
-    An external link with target=_blank and no rel gives the opened page a handle on yours. squirrel lists every one, per page.
+    An external link with target=_blank and an explicit rel=opener gives the opened page a handle on yours. squirrel lists every one, per page.
   </Card>
   <Card title="Public forms without CAPTCHA: what counts as public" icon="triangle-exclamation" href="/rules/security/form-captcha">
     A contact or newsletter form with no bot protection collects spam within days. squirrel classifies forms and flags the unprotected public ones.

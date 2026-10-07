@@ -1,0 +1,79 @@
+---
+title: "Fake phone numbers and example.com emails in production"
+description: "A 555-01xx phone number or an address at example.com means a theme's contact block shipped unedited. squirrel flags template-default contact details and fails them on contact and checkout pages."
+---
+
+## What placeholder contact details are
+
+Placeholder contact details are the values a theme or template ships so the contact block has something in it: `info@example.com`, `(212) 555-0123`, `123 Main St`, `@yourhandle`. They are meant to be replaced, and when nobody does, the page tells visitors to call a number that cannot ring and write to a mailbox that cannot exist.
+
+That is a conversion bug, because nobody can reach the business, and a trust signal, because the page looks abandoned. It matters most on a contact page or a checkout, where the visitor is about to act on what the page says.
+
+## What squirrel checks
+
+The rule runs on every crawled page over the visible prose in `<body>` and the `href` of every link outside a code sample, so `<a href="mailto:info@example.com">Email us</a>` is caught even though the link text looks fine. It emits a single check named `placeholder-contact`:
+
+- Skipped when there is no parsed document. Message: `No document available`.
+- Skipped when there is no `<body>`. Message: `No body element to read visible text from`.
+- Skipped on documentation pages (a path under `/docs`, `/developers`, `/api`, `/reference`, `/guides`, `/tutorials`, `/learn`, `/sdk` or `/examples`), where these values are samples. Skip reason: `documentation-page`.
+- Pass when nothing matched. Message: `No placeholder contact details in visible text or links`.
+- Fail when something matched on a contact or checkout page. Message: `2 placeholder contact detail(s) on a contact or checkout page: placeholder phone number ((212) 555-0123), placeholder email address (info@example.com)`.
+- Warn when something matched on any other page.
+
+Four families are detected, each listed as an item with its own count and samples:
+
+| Family | Matches |
+|---|---|
+| `placeholder email address` | Addresses at `example.com`, `example.org`, `example.net`, `test.com` and `yourdomain.com` (subdomains included), and `email@email.com`. `user@example.com.au` is a real domain and is not matched. |
+| `placeholder phone number` | The fictional US range `555-0100` to `555-0199`, the UK Ofcom drama range `07700 900000` to `900999` (also as `+44 7700 900xxx`), and `0000000000` or `000-000-0000`. |
+| `placeholder postal address` | `123 Main St`, `1234 Street Address` and `City, State 12345`. |
+| `placeholder social handle` | `@yourhandle`, `@username`, and profile URLs such as `facebook.com/yourpage` or `linkedin.com/company/yourcompany`. |
+
+A contact page is a page whose URL matches a contact pattern (in any of the languages squirrel recognises) or whose type is detected as a contact page. A checkout page has `checkout`, `cart`, `basket`, `payment`, `billing` or `order` as its last path segment.
+
+Text inside `<pre>`, `<code>`, `<samp>`, `<kbd>`, a `<template>` and syntax-highlighted code containers is never judged, on any page. A developer page that shows `user@example.com` in a code block stays clean, even on a contact page. Plain prose that mentions `@username` on an ordinary page does warn, so keep sample values in a code block.
+
+Severity for the rule is warning, weight 5. The rule is skipped on soft 404 pages.
+
+### How it relates to other rules
+
+This rule only reports a placeholder that is on the page. A missing contact page, phone number or address is still reported by [eeat/contact-page](/rules/eeat/contact-page) and [eeat/physical-address](/rules/eeat/physical-address), and this rule never emits an absence finding, so one missing real address is not reported twice.
+
+## How to fix it
+
+Replace each value with a real one, or remove the block. Check the footer, the contact page, structured data, and every `mailto:` and `tel:` link, because themes repeat the same default in all of them.
+
+If the page is documentation that shows these values as samples, put them in a code block.
+
+| | |
+|---|---|
+| **Rule ID** | `content/placeholder-contact` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/placeholder-contact"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/placeholder-contact"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.

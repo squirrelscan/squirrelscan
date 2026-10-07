@@ -33,9 +33,11 @@
 //     run.
 //  4. **The run context** — {@link computeRunContextHash}: the engine build (the
 //     CLI's release version, because the `@squirrelscan/rules` package version
-//     never moves), the enabled page rules IN ORDER with their resolved options,
-//     the Stage-0 site metadata, the prefetched cloud results, and the four
-//     `SiteData` fields the page-rule pass actually reads.
+//     never moves), the rules version (a hash of the rule code itself, because a
+//     rule fix inside one release keeps the release version), the enabled page
+//     rules IN ORDER with their resolved options, the Stage-0 site metadata, the
+//     prefetched cloud results, and the four `SiteData` fields the page-rule pass
+//     actually reads.
 //
 // WHAT IS GATED OUT RATHER THAN APPROXIMATED. Two run-level inputs cannot be
 // reduced to a hash, so their presence turns the cache OFF for the whole run
@@ -75,7 +77,7 @@ import type { CheckResult, PageFeatureRow, PageRecord } from "@squirrelscan/core
 import type { ParsedPage, RuleMeta, SiteData } from "@squirrelscan/rules";
 
 /** Bumped when the payload shape or the key's ingredients change; old rows then miss. */
-export const RULE_CACHE_FORMAT = "prc-1";
+export const RULE_CACHE_FORMAT = "prc-2";
 
 /**
  * The `SiteData` keys page-scope rules read, and therefore the only ones the run
@@ -297,6 +299,13 @@ export interface RunContextInput {
    * passes its release version, which is what actually moves.
    */
   readonly engineVersion: string;
+  /**
+   * A hash of the rule CODE. The release version only moves on a release, so a
+   * rule fixed in a checkout, or in any build before the version bump, would
+   * otherwise replay the findings from before the fix on every unchanged page.
+   * The CLI passes a hash of the rules source taken when it was built.
+   */
+  readonly rulesVersion: string;
   /** The enabled PAGE rules, in execution order, with their resolved options. */
   readonly pageRules: ReadonlyArray<{ id: string; options: unknown }>;
   /** The site data handed to page rules; only {@link PAGE_RULE_SITE_FIELDS} is read. */
@@ -351,6 +360,7 @@ export async function computeRunContextHash(
     const canonical = canonicalJson([
       RULE_CACHE_FORMAT,
       input.engineVersion,
+      input.rulesVersion,
       input.pageRules.map((r) => [r.id, r.options]),
       projection,
       input.siteMetadata ?? null,
@@ -368,6 +378,7 @@ export async function computeRunContextHash(
     if (process.env.SQUIRREL_RULE_CACHE_DEBUG === "1") {
       const parts: Array<[string, unknown]> = [
         ["engineVersion", input.engineVersion],
+        ["rulesVersion", input.rulesVersion],
         ["pageRules", input.pageRules.map((r) => [r.id, r.options])],
         ["baseUrl", projection.baseUrl],
         ["siteIndexable", projection.siteIndexable],
