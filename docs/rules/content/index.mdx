@@ -53,6 +53,9 @@ Content rules read the words a visitor actually sees. Some of them catch pipelin
   <Card title="Wrong Content-Type: header and extension disagree" icon="triangle-exclamation" href="/rules/content/mime-type">
     A stylesheet served as text/html is refused by the browser under nosniff. squirrel compares the response type against the URL extension.
   </Card>
+  <Card title="Fake phone numbers and example.com emails in production" icon="triangle-exclamation" href="/rules/content/placeholder-contact">
+    A 555-01xx phone number or an address at example.com means a theme's contact block shipped unedited. squirrel flags template-default contact details and fails them on contact and checkout pages.
+  </Card>
   <Card title="Lorem ipsum in production: placeholders and leftovers" icon="triangle-exclamation" href="/rules/content/placeholder-text">
     Filler copy, unrendered template syntax and a visible undefined all mean something shipped unfinished. squirrel names the family and shows a sample.
   </Card>

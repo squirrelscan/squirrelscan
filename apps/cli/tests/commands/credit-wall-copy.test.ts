@@ -22,6 +22,7 @@ import {
   MIN_AUDIT_CREDITS,
   offerPitchLines,
   PRO_HEADLINE,
+  pricingUrl,
   proPitchLines,
   resetDateLabel,
   upgradeUrl,
@@ -85,6 +86,33 @@ describe("registerFailureLines", () => {
     expect(out).toContain(String(AUDIT_BASE_CREDITS));
     expect(out).toContain(`$${PRO.priceMonthUsd}`);
     expect(out).toContain(UPGRADE);
+  });
+
+  // The API sends no offer to an org already on Pro (nothing higher to sell),
+  // so a paid account must get a top-up line, not the Pro pitch.
+  test("a paid account with no offer is pointed at a top-up, not pitched Pro", () => {
+    const out = text(registerFailureLines(insufficient, false, true));
+    expect(out).toContain("12 credits");
+    expect(out).toContain("Top up:");
+    expect(out).toContain(UPGRADE);
+    expect(out).not.toContain(`$${PRO.priceMonthUsd}`);
+    expect(out).not.toContain("Upgrade:");
+  });
+
+  test("a paid account that is sent an offer still gets its own link", () => {
+    const upgrade = {
+      url: "https://app.squirrelscan.com/upgrade?plan=pro&org=org_1",
+      plan: "pro" as const,
+      interval: "month" as const,
+      name: "Pro",
+      priceMonthUsd: PRO.priceMonthUsd as number,
+      priceYearUsd: PRO.priceYearUsd as number,
+      monthlyCredits: PRO.monthlyCredits,
+    };
+    const out = text(
+      registerFailureLines({ ...insufficient, upgrade }, false, true)
+    );
+    expect(out).toContain(upgrade.url);
   });
 
   test("says the audit itself still ran, so the warning isn't read as a failure", () => {
@@ -221,11 +249,29 @@ describe("the server's offer", () => {
     expect(pitch).not.toContain(UPGRADE);
   });
 
+  test("the pricing link sits beside the org checkout link, not in place of it", () => {
+    const pitch = text(offerPitchLines(OFFER, "cli-audit"));
+    expect(pitch).toContain("org=01TEST0000000000000000000A");
+    expect(pitch).toContain(
+      "Compare plans: https://squirrelscan.com/pricing?src=cli-audit"
+    );
+  });
+
   test("the price comes from the offer, so a binary cannot quote a stale one", () => {
     const pitch = text(
       offerPitchLines({ ...OFFER, priceMonthUsd: 29 }, "cli-audit")
     );
     expect(pitch).toContain("$29");
+  });
+
+  test("the pricing link carries the src of the surface that printed it", () => {
+    expect(pricingUrl("cli")).toBe("https://squirrelscan.com/pricing?src=cli");
+    expect(pricingUrl("cli-credits")).toBe(
+      "https://squirrelscan.com/pricing?src=cli-credits"
+    );
+    expect(text(proPitchLines("cli-credits"))).toContain(
+      "https://squirrelscan.com/pricing?src=cli-credits"
+    );
   });
 
   test("falls back to the static pitch when the server sent no offer", () => {

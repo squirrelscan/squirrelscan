@@ -784,7 +784,8 @@ export function reconstructReport(
       // #1822: the CLI forks the engine's report path, so the crawler's root
       // failure has to be threaded here too or `squirrel audit` keeps printing
       // the generic reason the cloud no longer prints.
-      crawl.stats?.rootFailure
+      crawl.stats?.rootFailure,
+      crawl.stats?.pagesUndecodable ?? 0
     );
 
     // Smart re-audits reflect carried prior state, so keep "completed" when
@@ -799,7 +800,8 @@ export function reconstructReport(
     const auditStatus =
       smartMerge &&
       smartMerge.coverage.knownPages > smartMerge.coverage.auditedPages &&
-      rateLimitedCount === 0
+      rateLimitedCount === 0 &&
+      (crawl.stats?.pagesUndecodable ?? 0) === 0
         ? {
             status: "completed" as const,
             reason: undefined,
