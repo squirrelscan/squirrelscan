@@ -3,6 +3,7 @@ import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
 
 import { budgetedTimeoutMs, safeFetchWithDeadline, ungated } from "./deadline";
+import { noteRefusal } from "./refusals";
 
 import type { PhaseBudget, ProbeGate } from "./deadline";
 import type { LlmsTxtData, LlmsTxtFile } from "@squirrelscan/core-contracts";
@@ -17,7 +18,8 @@ function emptyFile(url: string): LlmsTxtFile {
 
 // Fetch one well-known file; a 404/error-status/oversize file is "absent", never
 // a throw. null when there was no answer at all: the budget was spent before the
-// request went out, or it failed or timed out in flight. Nothing learned (#409).
+// request went out, it failed or timed out in flight, or the site refused it
+// (401/403/429, a bot wall). Nothing learned (#409).
 async function fetchOne(
   url: string,
   userAgent: string,
@@ -32,6 +34,10 @@ async function fetchOne(
       { headers: { "User-Agent": userAgent, Accept: "text/plain, text/markdown, */*", ...customHeaders } },
       timeoutMs,
       async (response) => {
+        if (noteRefusal(budget?.refusals, url, "llms.txt", response)) {
+          await response.body?.cancel().catch(() => {});
+          return null;
+        }
         if (response.status === 404 || !response.ok) {
           await response.body?.cancel().catch(() => {});
           return emptyFile(url);
