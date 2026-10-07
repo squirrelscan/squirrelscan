@@ -123,6 +123,9 @@ interface ApiSuccessResponse {
 const PUBLISH_TIMEOUT_MS = 30_000;
 const PUBLISH_MAX_ATTEMPTS = 3;
 const RECOVERY_TIMEOUT_MS = 10_000;
+// The pre-POST snapshot runs on every publish, so it is bounded tightly: an
+// unreadable snapshot only disables recovery (fails closed), never the publish.
+const SNAPSHOT_TIMEOUT_MS = 3_000;
 
 /**
  * Stamp the FIRST publish (#2182). Non-fatal by construction: the report IS
@@ -143,12 +146,13 @@ function stampFirstPublish(): void {
  */
 async function readRunReportId(
   runId: string,
-  token: string
+  token: string,
+  timeoutMs: number = RECOVERY_TIMEOUT_MS
 ): Promise<string | null | undefined> {
   try {
     const run = await cliApi.request<{ reportId?: string | null }>(
       runPath(runId),
-      { token, timeoutMs: RECOVERY_TIMEOUT_MS }
+      { token, timeoutMs }
     );
     if (!run.ok) return undefined;
     const reportId = run.data?.reportId;
@@ -198,6 +202,14 @@ export async function publishReport(
   }
 
   const visibility = options.visibility ?? "public";
+
+  // Snapshot the run's linked report BEFORE the POST so a 5xx recovery can tell
+  // a report this attempt wrote from one a previous publish left behind. Started
+  // now so the round trip overlaps payload building; awaited just before the POST.
+  const reportIdBeforePromise: Promise<string | null | undefined> =
+    options.runId
+      ? readRunReportId(options.runId, credential.token, SNAPSHOT_TIMEOUT_MS)
+      : Promise.resolve(null);
 
   const maxMB = REPORT_LIMITS.maxPayloadBytes / 1024 / 1024;
   const linkage = {
@@ -271,11 +283,7 @@ export async function publishReport(
     }
   }
 
-  // Snapshot the run's linked report BEFORE the POST so a 5xx recovery can tell
-  // a report this attempt wrote from one a previous publish left behind.
-  const reportIdBefore = options.runId
-    ? await readRunReportId(options.runId, credential.token)
-    : null;
+  const reportIdBefore = await reportIdBeforePromise;
 
   try {
     // cliApi.fetch keeps publish's transport contract: a hard timeout + retry on

@@ -195,4 +195,26 @@ describe("publishReport after a 5xx (#1340)", () => {
     if (result.ok) return;
     expect(result.error.code).toBe("PUBLISH_SERVER_ERROR");
   });
+
+  test("a hung pre-publish snapshot is bounded and still POSTs", async () => {
+    const base = globalThis.fetch;
+    globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = new URL(String(input)).pathname;
+      if (path.startsWith("/v1/agent-runs")) {
+        return new Promise<Response>((_, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(new Error("aborted"))
+          );
+        });
+      }
+      return base(input, init);
+    }) as unknown as typeof fetch;
+
+    const started = Date.now();
+    const result = await publishReport(report(), { runId: "run_1" });
+
+    expect(Date.now() - started).toBeLessThan(4_500);
+    expect(posts()).toHaveLength(1);
+    expect(result.ok).toBe(false);
+  });
 });
