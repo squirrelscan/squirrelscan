@@ -3,6 +3,7 @@ export {
   calculateHealthScore,
   deriveAuditStatus,
   deriveAuditStatusFromPages,
+  withoutUnobservedScores,
   getScoreGrade,
   getScoreColor,
   formatHealthScore,

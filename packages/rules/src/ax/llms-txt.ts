@@ -4,6 +4,8 @@ import type { WellKnownPath, WellKnownProbe } from "@squirrelscan/core-contracts
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { refusedCheck, refusedFor } from "../refused";
+
 import { includesPath, notCheckedCheck } from "./discovery-probe-state";
 
 // Alt paths some sites use instead of the root — probed by the crawler's
@@ -87,7 +89,13 @@ export const llmsTxtRule: Rule = {
           message: `Found llms.txt at ${altHit.path} (/llms.txt at the root was not checked)`,
         });
       } else {
-        checks.push(notCheckedCheck("llms-txt", "/llms.txt", undefined, "no-result"));
+        // A refused request is not a missing file.
+        const refused = refusedFor(ctx.site, "llms.txt");
+        checks.push(
+          refused.length > 0
+            ? refusedCheck("llms-txt", "/llms.txt", refused)
+            : notCheckedCheck("llms-txt", "/llms.txt", undefined, "no-result"),
+        );
       }
       return { checks };
     }
