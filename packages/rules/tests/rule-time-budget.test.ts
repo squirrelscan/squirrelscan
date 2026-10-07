@@ -12,6 +12,7 @@ import { buildCollectedPageSignal, type CollectedSiteSignals } from "../src/coll
 import type { RuleNamespace } from "../src/loader";
 import {
   RULE_TIME_BUDGET_MS,
+  SITE_RULE_BUDGET_CAP_MS,
   runWithinBudget,
   siteRuleBudgetMs,
 } from "../src/rule-budget";
@@ -20,7 +21,8 @@ import type { PageData, ParsedPage, Rule, RuleContext, RuleResult, SiteData } fr
 
 const REDOS_HTML = readFileSync(join(import.meta.dir, "fixtures/redos-page.html"), "utf8");
 // Known catastrophic: nested quantifier, then a character that cannot match.
-const CATASTROPHIC = /^(a+)+$/;
+// Built from a string so static analysis does not flag the deliberate pattern.
+const CATASTROPHIC = new RegExp("^(a+)+$");
 
 function rule(id: string, scope: "page" | "site", run: (ctx: RuleContext) => RuleResult | Promise<RuleResult>): Rule {
   return {
@@ -138,6 +140,8 @@ describe("per-rule time budget", () => {
     expect(three.checks.map((c) => c.name)).toEqual(["test/slow-site"]);
     expect(siteRuleBudgetMs(100, 0)).toBe(100);
     expect(siteRuleBudgetMs(100, 25)).toBe(2_500);
+    // Capped on big sites, so one stuck rule cannot hold an audit for an hour.
+    expect(siteRuleBudgetMs(1000, 5_000)).toBe(SITE_RULE_BUDGET_CAP_MS);
   });
 
   test("thrown errors and fast rules are unchanged", async () => {

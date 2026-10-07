@@ -33,7 +33,7 @@ describe("leaked-secrets patterns stay linear", () => {
     const re = fastPattern("JSON Web Token");
     expect(timed(() => ("eyJ".repeat(333_333) + "\x00").match(re))).toBeLessThan(LINEAR_MS);
 
-    const jwt = `eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.${"s".repeat(43)}`;
+    const jwt = `eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.${"s".repeat(43)}`; // pragma: allowlist secret
     // Still found after a base64url character, e.g. URL-encoded `Bearer%20eyJ…`.
     expect("Authorization: Bearer%20" + jwt).toMatch(re);
     expect(`token="${jwt}"`.match(re)?.[0]).toBe(jwt);
@@ -65,7 +65,7 @@ describe("leaked-secrets patterns stay linear", () => {
   });
 
   test("`<script` open tags with no `>` after them", () => {
-    const token = "0123456789abcdef0123456789abcdef";
+    const token = "0123456789abcdef0123456789abcdef"; // pragma: allowlist secret
     const page =
       `<script id="shopify-features" type="application/json">{"accessToken":"${token}"}</script>` +
       "<script".repeat(30_000);

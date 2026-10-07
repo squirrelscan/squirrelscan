@@ -143,15 +143,15 @@ export function buildCollectedPageSignal(input: {
     if (profileRules) {
       const elapsedMs = performance.now() - started;
       logger.debug("rule", {
-          ruleId,
-          scope: "collect",
-          pageUrl: url,
-          checks: 0,
-          passed: 0,
-          failed: 0,
-          warned: 0,
-          durationMs: Math.round(elapsedMs),
-          durationUs: Math.round(elapsedMs * 1000),
+        ruleId,
+        scope: "collect",
+        pageUrl: url,
+        checks: 0,
+        passed: 0,
+        failed: 0,
+        warned: 0,
+        durationMs: Math.round(elapsedMs),
+        durationUs: Math.round(elapsedMs * 1000),
       });
     }
     return out;
