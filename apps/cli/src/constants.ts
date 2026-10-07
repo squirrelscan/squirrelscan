@@ -62,6 +62,9 @@ export const TELEMETRY_TIMEOUT_MS = _TEL.timeoutMs;
 // Web dashboard — linked from account/credit lines
 export const DASHBOARD_URL = "https://app.squirrelscan.com";
 
+/** Where published reports are served; a report lives at `${REPORTS_BASE_URL}/<id>`. */
+export const REPORTS_BASE_URL = "https://reports.squirrelscan.com";
+
 // Public pricing page — linked from Team-plan upsell messaging (#739)
 export const PRICING_URL = "https://squirrelscan.com/pricing";
 

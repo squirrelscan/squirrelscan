@@ -29,6 +29,7 @@ import { join } from "node:path";
 import type { AuditReport, CheckResult } from "@/types";
 
 import { hasEverPublished } from "@/cli/publish-nudge";
+import { REPORTS_BASE_URL } from "@/constants";
 import { type Result, ok, err, commandError } from "@/controllers/types";
 import { getGlobalContentStore } from "@/crawler/storage/content-store";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
@@ -120,6 +121,42 @@ interface ApiSuccessResponse {
 
 const PUBLISH_TIMEOUT_MS = 30_000;
 const PUBLISH_MAX_ATTEMPTS = 3;
+const RECOVERY_TIMEOUT_MS = 10_000;
+
+/**
+ * Stamp the FIRST publish (#2182). Non-fatal by construction: the report IS
+ * published, and a failed settings write must not turn it into an error.
+ */
+function stampFirstPublish(): void {
+  const settings = loadUserSettings();
+  if (settings.ok && !hasEverPublished(settings.data)) {
+    updateSettings({ first_publish_at: new Date().toISOString() });
+  }
+}
+
+/**
+ * After a publish 5xx, ask the server whether the report landed anyway. A 5xx
+ * can be a worker kill AFTER the report was written and linked to the run
+ * (`agent_runs.report_id`, set at publish), so the run's `reportId` is the
+ * authoritative answer. Returns that id, or null when the run has no linked
+ * report or cannot be read. Never re-POSTs: a retry would mint a second report
+ * row and orphan its R2 objects.
+ */
+async function findLinkedReportId(
+  runId: string,
+  token: string
+): Promise<string | null> {
+  try {
+    const run = await cliApi.request<{ reportId?: string | null }>(
+      `/v1/agent-runs/${encodeURIComponent(runId)}`,
+      { token, timeoutMs: RECOVERY_TIMEOUT_MS }
+    );
+    const reportId = run.ok ? run.data?.reportId : null;
+    return typeof reportId === "string" && reportId ? reportId : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Publish an audit report to the API
@@ -261,6 +298,20 @@ export async function publishReport(
       // (e.g. PUBLISH_FAILED) that isn't in the refundable allowlist, so status
       // must win over the body for the refund classification.
       if (response.status >= 500) {
+        // #1340: the 5xx may have hit AFTER the report was written. Only runs
+        // registered at start (runId) can be checked; others keep the failure.
+        const recoveredId = options.runId
+          ? await findLinkedReportId(options.runId, credential.token)
+          : null;
+        if (recoveredId) {
+          stampFirstPublish();
+          return ok({
+            id: recoveredId,
+            url: `${REPORTS_BASE_URL}/${recoveredId}`,
+            visibility,
+            createdAt: new Date().toISOString(),
+          });
+        }
         return err(
           commandError(
             "PUBLISH_SERVER_ERROR",
@@ -354,10 +405,7 @@ export async function publishReport(
     // Non-fatal by construction: the report IS published, and a settings write
     // that fails must not turn a successful publish into an error. The worst
     // case is one extra nudge line on a later run.
-    const settings = loadUserSettings();
-    if (settings.ok && !hasEverPublished(settings.data)) {
-      updateSettings({ first_publish_at: new Date().toISOString() });
-    }
+    stampFirstPublish();
 
     return ok({
       id: data.id,
