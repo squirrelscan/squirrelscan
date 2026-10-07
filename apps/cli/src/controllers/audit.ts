@@ -772,12 +772,16 @@ export function resolveCrawlConcurrency(
  * a clamped Team plan (or any unknown planId) gets no hint.
  * Exported for tests.
  */
+function pagesAtOnce(n: number): string {
+  return `${n} ${n === 1 ? "page" : "pages"}`;
+}
+
 export function renderConcurrencyUpsellHint(planId: string): string {
   if (planId === "free") {
-    return ` — upgrade to Pro for ${PLANS.starter.renderConcurrency} concurrent renders`;
+    return ` — upgrade to Pro for ${pagesAtOnce(PLANS.starter.renderConcurrency)} rendered at once, per audit`;
   }
   if (planId === "starter") {
-    return ` — upgrade to Team for ${PLANS.team.renderConcurrency} concurrent renders`;
+    return ` — upgrade to Team for ${pagesAtOnce(PLANS.team.renderConcurrency)} rendered at once, per audit`;
   }
   return "";
 }
@@ -801,7 +805,7 @@ async function fetchPlanRenderConcurrency(
     if (typeof plan?.renderConcurrency !== "number") return undefined;
     if (plan.renderConcurrency < config.cloud.render_concurrency) {
       logger.warn(
-        `Render concurrency limited to ${plan.renderConcurrency} on the ${plan.name} plan` +
+        `The ${plan.name} plan renders ${pagesAtOnce(plan.renderConcurrency)} at once` +
           renderConcurrencyUpsellHint(plan.id)
       );
     }

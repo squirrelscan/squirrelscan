@@ -7,11 +7,15 @@
 // Concurrent `fetch()` calls (one per crawler worker) are buffered for a short
 // window, submitted as ONE job, and polled by a SINGLE shared loop — collapsing
 // N submit+poll cycles into ceil(N/batch). Server-side parallelism is unchanged
-// (each url still renders separately), so the plan render-concurrency gate is
-// respected: a batch never holds more urls than the crawler had in flight, which
-// is itself capped at the plan limit. Results are demuxed back to per-page
-// responses BY URL — the server reorders (cache misses before hits) and dedupes,
-// so index-matching is wrong.
+// (each url still renders separately), and a batch never holds more urls than
+// the crawler had in flight, so the crawl's width is what bounds the renders in
+// flight. This fetcher enforces no plan limit itself: the CLI clamps its crawl
+// width to the plan's `renderConcurrency` (from GET /v1/credits), and the
+// hosted runner holds its renders to the run's plan (squirrelscan/repo#2480;
+// before that, hosted audits rendered at the crawler's default width whatever
+// the plan). Results are demuxed back to
+// per-page responses BY URL — the server reorders (cache misses before hits)
+// and dedupes, so index-matching is wrong.
 //
 // NEVER-FAIL INVARIANT: the audit must not die mid-crawl because of cloud
 // trouble. On a terminal cloud condition (out of credits, auth expired, or

@@ -36,6 +36,10 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     maxOrgs: 1,
     maxWebsites: 100,
     maxMembers: 1,
+    // Most pages one audit renders at once. The hosted runner holds a cloud
+    // audit to it (squirrelscan/repo#2480) and the CLI clamps to it. Before
+    // #2480 the cloud ignored it: rendered crawls ran at the crawler's default
+    // width (5, or 8 under the authorised profile) on every plan.
     renderConcurrency: 1,
     // #1704: scheduling is no longer the paid line. A weekly audit of one site
     // burns roughly 250-300 of the 500 monthly credits above, so the free grant
@@ -155,6 +159,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     // abuse cap is a hosted-tier guard; a contracted org is not that risk.
     maxWebsites: -1,
     maxMembers: -1,
+    // At least Team's, like maxPagesPerAudit below.
     renderConcurrency: 10,
     scheduledCrawls: true,
     maxScheduledWebsites: -1,
