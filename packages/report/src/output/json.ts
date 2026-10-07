@@ -76,7 +76,7 @@ interface SlimJsonReport {
    * the crawl, so an integration can answer "is this page count the whole
    * site?" without parsing `statusReason` prose.
    */
-  rateLimited?: { pages: number; hosts: string[] };
+  rateLimited?: { pages: number; hosts: string[]; unfetched?: number };
   /** Machine-readable class behind `statusReason` (#1822); absent pre-#1822. */
   statusReasonCode?: AuditFailureReasonCode;
   score: {

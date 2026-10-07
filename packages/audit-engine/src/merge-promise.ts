@@ -348,6 +348,14 @@ export interface CloudSmartAuditsInput {
   };
   /** Epoch ms; defaults to Date.now(). */
   now?: number;
+  /**
+   * URLs this run discovered but never fetched because the host was
+   * rate limiting it (`report.rateLimited.unfetched`). They are known to the
+   * site without being pages it audited, so they widen `coverage.knownPages`
+   * and nothing else: never a `site_pages` row, a carried finding or a score
+   * input, because no audit has seen them.
+   */
+  unfetchedPages?: number;
 }
 
 export interface CloudSmartAuditsResult {
@@ -998,7 +1006,11 @@ export async function runCloudSmartAudits(
       // Each such page got an active `site_pages` row above, so `knownPages`
       // stays at least this.
       auditedPages: auditedUrls.size,
-      knownPages: session.activePageUrls.size,
+      knownPages: knownPageCount(
+        session.activePageUrls.size,
+        auditedUrls.size,
+        input.unfetchedPages,
+      ),
       carriedFindings: carriedCount - unrenderedCount,
       ...(unrenderedCount > 0 ? { unrenderedFindings: unrenderedCount } : {}),
     },
@@ -1009,6 +1021,21 @@ export async function runCloudSmartAudits(
     replayedUnknownPages,
     completeStore: !!completeStore,
   };
+}
+
+/**
+ * The known-site size for the coverage line.
+ *
+ * A throttled run leaves URLs it found but never fetched. They are not in the
+ * active set (nothing audited them, so they carry no `site_pages` row), which
+ * made a run that lost most of its crawl read "audited 320 of 320 known pages".
+ * Audited and unfetched are disjoint, so their sum is a lower bound on the
+ * site; the active set is another, and the larger of the two is the honest
+ * floor. A max rather than a sum with the active set: a carried page the
+ * frontier also queued would otherwise be counted twice.
+ */
+function knownPageCount(active: number, audited: number, unfetched = 0): number {
+  return Math.max(active, audited + Math.max(0, unfetched));
 }
 
 /**
