@@ -1,5 +1,6 @@
 // video/video-accessible - Video accessibility check
 
+import { hasCaptionTrack, partitionDecorativeVideos } from "../shared/decorative-video";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const videoAccessibleRule: Rule = {
@@ -32,28 +33,36 @@ export const videoAccessibleRule: Rule = {
       return { checks };
     }
 
-    let videosWithCaptions = 0;
+    // Decorative videos (muted, no controls, autoplay/loop, or aria-hidden) have
+    // no audio to caption and are not counted (#486).
+    const { checked, decorativeSkipped } = partitionDecorativeVideos(videos);
+    const details = { videosChecked: videos.length, decorativeSkipped };
 
-    for (const video of videos) {
-      const tracks = video.querySelectorAll(
-        'track[kind="captions"], track[kind="subtitles"]'
-      );
-      if (tracks.length > 0) {
-        videosWithCaptions++;
-      }
-    }
-
-    if (videosWithCaptions === videos.length) {
+    if (checked.length === 0) {
       checks.push({
         name: "video-accessible",
         status: "pass",
-        message: `All ${videos.length} video(s) have caption tracks`,
+        message: `No videos need captions (${decorativeSkipped} decorative skipped)`,
+        details,
+      });
+      return { checks };
+    }
+
+    const videosWithCaptions = checked.filter(hasCaptionTrack).length;
+
+    if (videosWithCaptions === checked.length) {
+      checks.push({
+        name: "video-accessible",
+        status: "pass",
+        message: `All ${checked.length} video(s) have caption tracks`,
+        details,
       });
     } else if (videosWithCaptions > 0) {
       checks.push({
         name: "video-accessible",
         status: "info",
-        message: `${videosWithCaptions}/${videos.length} video(s) have caption tracks`,
+        message: `${videosWithCaptions}/${checked.length} video(s) have caption tracks`,
+        details,
       });
     } else {
       checks.push({
@@ -61,6 +70,7 @@ export const videoAccessibleRule: Rule = {
         status: "warn",
         message: `No videos have caption tracks`,
         value: "Add <track> elements for accessibility",
+        details,
       });
     }
 

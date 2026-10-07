@@ -1,5 +1,6 @@
 // a11y/video-captions - Videos have captions/transcripts
 
+import { hasCaptionTrack, partitionDecorativeVideos } from "../shared/decorative-video";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const videoCaptionsRule: Rule = {
@@ -25,23 +26,22 @@ export const videoCaptionsRule: Rule = {
     const videos = doc.querySelectorAll("video");
     const videosWithoutCaptions: string[] = [];
 
-    for (const video of videos) {
-      const tracks = video.querySelectorAll(
-        "track[kind='captions'], track[kind='subtitles']"
-      );
-      const src =
-        video.getAttribute("src") ||
-        video.querySelector("source")?.getAttribute("src") ||
-        "";
+    // Muted, control-less autoplay/loop videos and aria-hidden videos are
+    // decorative: no audio to caption (#486).
+    const { checked, decorativeSkipped } = partitionDecorativeVideos(videos);
 
-      if (tracks.length === 0) {
+    for (const video of checked) {
+      const src =
+        video.getAttribute("src") || video.querySelector("source")?.getAttribute("src") || "";
+
+      if (!hasCaptionTrack(video)) {
         videosWithoutCaptions.push(src.substring(0, 50) || "inline video");
       }
     }
 
     // Check for embedded videos (iframes)
     const videoEmbeds = doc.querySelectorAll(
-      'iframe[src*="youtube"], iframe[src*="vimeo"], iframe[src*="wistia"]'
+      'iframe[src*="youtube"], iframe[src*="vimeo"], iframe[src*="wistia"]',
     );
 
     if (videos.length > 0) {
@@ -51,13 +51,17 @@ export const videoCaptionsRule: Rule = {
           status: "warn",
           message: `${videosWithoutCaptions.length} video(s) without caption tracks`,
           items: videosWithoutCaptions.map((src) => ({ id: src })),
+          details: { videosChecked: videos.length, decorativeSkipped },
         });
       } else {
         checks.push({
           name: "video-captions",
           status: "pass",
-          message: "All videos have caption tracks",
-          details: { videosChecked: videos.length },
+          message:
+            checked.length === 0
+              ? `No videos need captions (${decorativeSkipped} decorative skipped)`
+              : "All videos have caption tracks",
+          details: { videosChecked: videos.length, decorativeSkipped },
         });
       }
     }
