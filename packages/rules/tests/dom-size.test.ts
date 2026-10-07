@@ -55,6 +55,10 @@ describe("perf/dom-size dom-max-children", () => {
       ...makeCtx("<html></html>"),
       parsed: { document: doc } as unknown as ParsedPage,
     };
-    expect(() => domSizeRule.run(ctx)).not.toThrow();
+    const result = domSizeRule.run(ctx);
+    if (result instanceof Promise) throw new Error("unexpected async rule");
+    const check = result.checks.find((c) => c.name === "dom-max-children");
+    expect(check?.status).toBe("pass");
+    expect(check?.value).toBe(0);
   });
 });
