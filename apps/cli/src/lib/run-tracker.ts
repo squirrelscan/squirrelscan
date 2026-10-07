@@ -170,8 +170,15 @@ function lifecycleBase(): string {
   return cred && isApiKey(cred.token) ? "/v1/agent-runs/org" : "/v1/agent-runs";
 }
 
-/** Path for the lifecycle PATCH/progress on a specific run. */
-function runPath(runId: string, suffix = "", base = lifecycleBase()): string {
+/**
+ * Path for a specific run. Shared by the lifecycle PATCH/progress calls here and
+ * the publish 5xx recovery read of the run's linked reportId.
+ */
+export function runPath(
+  runId: string,
+  suffix = "",
+  base = lifecycleBase()
+): string {
   return `${base}/${encodeURIComponent(runId)}${suffix}`;
 }
 
