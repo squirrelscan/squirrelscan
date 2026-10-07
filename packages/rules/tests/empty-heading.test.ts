@@ -70,6 +70,21 @@ describe("a11y/empty-heading hidden headings", () => {
     expect(result?.status).toBe("pass");
   });
 
+  test("visibility:unset on the heading inherits the hidden ancestor: passes", () => {
+    const result = run(
+      `<h1>Shop</h1><div style="visibility:hidden"><h2 style="visibility:unset"></h2></div>`,
+    );
+    expect(result?.status).toBe("pass");
+  });
+
+  test.each(["block", "inherit", "inline flow-root"])(
+    "hidden with inline display:%s is rendered: warns",
+    (display) => {
+      const result = run(`<h1>Shop</h1><h2 hidden style="display:${display}"></h2>`);
+      expect(result?.status).toBe("warn");
+    },
+  );
+
   test("an inline display other than none overrides the hidden attribute: warns", () => {
     const result = run(`<h1>Shop</h1><h2 hidden style="display:block"></h2>`);
     expect(result?.status).toBe("warn");

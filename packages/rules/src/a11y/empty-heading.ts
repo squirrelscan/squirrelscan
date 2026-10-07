@@ -22,8 +22,11 @@ function inlineStyle(el: Element, property: string): string | null {
   return value;
 }
 
-/** `display` values that are `none` or defer to the cascade, so `hidden` still applies. */
-const NO_OVERRIDE_DISPLAY = new Set(["none", "inherit", "initial", "unset", "revert", "revert-layer"]);
+/** `display` values that leave the user-agent `[hidden]` rule in force. */
+const NO_OVERRIDE_DISPLAY = new Set(["none", "revert", "revert-layer"]);
+
+/** `visibility` values that take the parent's value (it is an inherited property). */
+const INHERITED_VISIBILITY = new Set(["inherit", "unset", "revert", "revert-layer"]);
 
 /** `hidden` removes the element from rendering, except `hidden="until-found"`. */
 function hasHiddenAttribute(el: Element): boolean {
@@ -31,7 +34,7 @@ function hasHiddenAttribute(el: Element): boolean {
   if (value === null || value.trim().toLowerCase() === "until-found") return false;
   // An author `display` other than none beats the user-agent `[hidden]` rule.
   const display = inlineStyle(el, "display");
-  return !display || !/^[a-z-]+$/.test(display) || NO_OVERRIDE_DISPLAY.has(display);
+  return !display || NO_OVERRIDE_DISPLAY.has(display);
 }
 
 /**
@@ -49,7 +52,7 @@ function isHiddenFromMarkup(heading: Element): boolean {
     if (inlineStyle(el, "display") === "none") return true;
     // visibility inherits: the nearest declaration decides.
     const own = inlineStyle(el, "visibility");
-    if (visibility === null && own !== null && own !== "inherit") visibility = own;
+    if (visibility === null && own !== null && !INHERITED_VISIBILITY.has(own)) visibility = own;
   }
   return visibility === "hidden" || visibility === "collapse";
 }
