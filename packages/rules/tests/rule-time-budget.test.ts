@@ -22,8 +22,8 @@ import type { PageData, ParsedPage, Rule, RuleContext, RuleResult, SiteData } fr
 
 const REDOS_HTML = readFileSync(join(import.meta.dir, "fixtures/redos-page.html"), "utf8");
 // Known catastrophic: nested quantifier, then a character that cannot match.
-// Built from a string so static analysis does not flag the deliberate pattern.
-const CATASTROPHIC = new RegExp(["^(a+)", "+$"].join(""));
+// Deliberate catastrophic-backtracking test fixture (CodeQL flags it on purpose).
+const CATASTROPHIC = new RegExp("^(a+)+$");
 
 function rule(id: string, scope: "page" | "site", run: (ctx: RuleContext) => RuleResult | Promise<RuleResult>): Rule {
   return {
