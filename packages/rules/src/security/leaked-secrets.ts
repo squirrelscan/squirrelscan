@@ -77,6 +77,14 @@ type FastPattern = {
    * this floor is a table, a digit run or a repeated nibble (#2218).
    */
   minTailEntropy?: number;
+  /**
+   * The prefix is a convention other vendors copy: `sk_live_` is Stripe's,
+   * and it is also what a widget vendor names its own secret keys. A token
+   * that runs on past the provider's format (`sk_live_…_acmewidget`) is
+   * still reported, under this prefix with the provider left unknown,
+   * rather than under the provider's name. See continuedTokenEnd.
+   */
+  sharedPrefix?: string;
 };
 
 // Type for context patterns (generic patterns, only run if keyword present)
@@ -256,12 +264,14 @@ export const FAST_PATTERNS: FastPattern[] = [
     pattern: /sk_live_[0-9a-zA-Z]{24,}/g,
     keywords: ["sk_live_"],
     confidence: "high",
+    sharedPrefix: "sk_live_",
   },
   {
     name: "Stripe Test Key",
     pattern: /sk_test_[0-9a-zA-Z]{24,}/g,
     keywords: ["sk_test_"],
     confidence: "high",
+    sharedPrefix: "sk_test_",
   },
   {
     // pk_live_/pk_test_ are public by design (Stripe docs)
@@ -529,6 +539,7 @@ export const FAST_PATTERNS: FastPattern[] = [
     pattern: /sk_live_[a-zA-Z0-9]{40,}/g,
     keywords: ["sk_live_"],
     confidence: "high",
+    sharedPrefix: "sk_live_",
   },
 
   // Maps/Location
@@ -1507,9 +1518,114 @@ function isDottedIdentifier(body: string): boolean {
   return segments.length > 1 && segments.every((segment) => DOTTED_SEGMENT_RE.test(segment));
 }
 
+// The word "password" in the languages a locale file most often carries it
+// in, folded to lowercase ASCII letters. A locale catalogue writes
+// `password: "Passwort"` and `"auth.password": "Contraseña"`, and both are // pragma: allowlist secret
+// the field's label in another language, never its value.
+const PASSWORD_TRANSLATIONS = new Set([
+  "passwort",
+  "kennwort",
+  "wachtwoord",
+  "wagwoord",
+  "parool",
+  "adgangskode",
+  "kodeord",
+  "passord",
+  "losenord",
+  "salasana",
+  "contrasena",
+  "contrasenya",
+  "contrasinal",
+  "pasahitza",
+  "motdepasse",
+  "palavrapasse",
+  "senha",
+  "parola",
+  "haslo",
+  "heslo",
+  "geslo",
+  "jelszo",
+  "lozinka",
+  "zaporka",
+  "sifre",
+  "katasandi",
+  "matkhau",
+]);
+
+// A word in a language that is not English: letters only, at least one of
+// them outside ASCII, joined at most by a hyphen or an apostrophe.
+const NON_ASCII_WORD_RE = /^\p{L}+(?:['’-]\p{L}+)*$/u;
+const HAS_NON_ASCII_RE = /[^\x00-\x7f]/;
+
+/**
+ * A translated label: `password: "Passwort"`, `password: "Contraseña"`. // pragma: allowlist secret
+ * The share test in isNonAsciiText cannot see a Latin-script word with one
+ * accented letter, and a word in a table of translations is not random
+ * whatever its entropy. A value with a digit or a symbol in it is never
+ * read as a word here.
+ */
+function isTranslatedLabel(body: string): boolean {
+  if (NON_ASCII_WORD_RE.test(body) && HAS_NON_ASCII_RE.test(body)) return true;
+  const folded = body
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+  if (/[^a-z'’ -]/.test(folded)) return false;
+  return PASSWORD_TRANSLATIONS.has(folded.replace(/[^a-z]/g, ""));
+}
+
+// A template or JSX expression standing where a value will be filled in:
+// `{form.password}`, `{{ user.password }}`, `${cfg.password}`, `<%= pwd %>`.
+// The interior is a member chain or a call; a bare name qualifies only when
+// it has no digit in it, so a brace-wrapped random string stays a value.
+const TEMPLATE_EXPRESSION_RE =
+  /^(?:\{\{?|\$\{|<%=?|\[\[)\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*|\[[\w'"]*\]|\(\))*)\s*(?:\}\}?|%>|\]\])$/;
+
+function isTemplateExpression(body: string): boolean {
+  const inner = TEMPLATE_EXPRESSION_RE.exec(body)?.[1];
+  if (inner === undefined) return false;
+  return /[.[(]/.test(inner) || !/[0-9]/.test(inner);
+}
+
 /** Could this body be a credential at all? */
 function isNotACredentialValue(body: string): boolean {
-  return isNonAsciiText(body) || isLocationValue(body) || isDottedIdentifier(body);
+  return (
+    isNonAsciiText(body) ||
+    isLocationValue(body) ||
+    isDottedIdentifier(body) ||
+    isTranslatedLabel(body) ||
+    isTemplateExpression(body)
+  );
+}
+
+// How far left a key may sit inside the string literal that holds it.
+const LABEL_SCAN_LIMIT = 64;
+const LABEL_CHAR_RE = /[\p{L}\p{N} _.'’-]/u;
+
+/**
+ * Is the credential word this match opens with the text of a string
+ * literal, with the "value" opened by that literal's own closing quote?
+ *
+ * Compiled JSX writes a label as `children:"Password:"` and then goes on
+ * with code, so `Password:"}),(0,r.jsx)("` is an assignment character for
+ * character: the key, a `:`, a quote, eight characters that are not quotes
+ * and a quote. What gives it away is that the key is followed straight by
+ * the `:` (a quoted key closes first) while the walk to its left, over label
+ * text only, meets an opening quote of the same kind as the one the "value"
+ * opens with. A key in code is preceded by `{`, `,`, `;`, a line start or an
+ * operator, never by a quote with only words between.
+ */
+function keyInsideStringLiteral(text: string, index: number, match: string): boolean {
+  // A label ends `Password:`; an HTML attribute (`a="b" password="…"`)
+  // sits after a closing quote too, and is read as the assignment it is.
+  const key = keyOf(match);
+  const label = /^\s*:(['"])/.exec(match.slice(key.length));
+  if (!label) return false;
+  const valueQuote = label[1]!;
+  const floor = Math.max(0, index - LABEL_SCAN_LIMIT);
+  let at = index;
+  while (at > floor && LABEL_CHAR_RE.test(text[at - 1] ?? "")) at--;
+  return at > 0 && text[at - 1] === valueQuote;
 }
 
 // How far back a quoted key's own opening quote may sit.
@@ -1625,6 +1741,38 @@ function isWordCharAt(text: string, index: number): boolean {
   return (
     (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95
   );
+}
+
+// How far a continued token is read past its match before it is cut.
+const CONTINUED_TOKEN_MAX = 256;
+
+/**
+ * Where the token a match sits at the start of really ends, or `end` itself
+ * when the match is the whole token.
+ *
+ * The left-boundary guard makes a prefix count only at the start of a token;
+ * this is the same question asked on the right. A provider format has a
+ * fixed length or a fixed alphabet, so `ghp_` + 36, `AKIA` + 16 or `key-` +
+ * 32 followed by more letters and digits (or by `_`, or `-` and more) is a
+ * substring of some longer value that happens to open like a credential. It
+ * is not an independently delimited provider token and is not reported as
+ * one. A token the match does not stop short of ends on a quote, a space or
+ * punctuation, and this returns `end`.
+ */
+function continuedTokenEnd(text: string, end: number): number {
+  let at = end;
+  const limit = Math.min(text.length, end + CONTINUED_TOKEN_MAX);
+  while (at < limit) {
+    if (isWordCharAt(text, at)) at++;
+    else if (text.charCodeAt(at) === 45 && isWordCharAt(text, at + 1)) at++; // -
+    else break;
+  }
+  return at;
+}
+
+/** The finding type for a secret-prefixed token no provider can be named for. */
+export function unattributedKeyType(prefix: string): string {
+  return `Secret Key (${prefix} prefix, provider unknown)`;
 }
 
 // One window's worth of characters. Every pattern in this file matches more
@@ -2170,10 +2318,12 @@ export function scanContent(
     confidence: Confidence,
     publicByDesign: boolean,
     before: () => string,
-    after: () => string
+    after: () => string,
+    known?: FindingExtra
   ): LeakedSecret | null => {
     const refined = refineFinding(name, value, Date.now(), { before, after });
     if (refined?.drop) return null;
+    const extra = known || refined?.extra ? { ...known, ...refined?.extra } : undefined;
     return {
       type: refined?.type ?? name,
       value,
@@ -2181,7 +2331,7 @@ export function scanContent(
       publicByDesign: refined?.publicByDesign ?? publicByDesign,
       location,
       sourceUrl,
-      ...(refined?.extra ? { extra: refined.extra } : {}),
+      ...(extra ? { extra } : {}),
     };
   };
 
@@ -2285,15 +2435,25 @@ export function scanContent(
   // regex (#1864) and by the keywords each pattern declares (#357). Both
   // gates read the gram index, so a body the index rules out costs nothing.
   for (const entry of PREFILTERED_FAST_PATTERNS) {
-    const { name, pattern, confidence, publicByDesign, keyAnchored, generic, valuePosition, minTailEntropy, literals } =
-      entry;
+    const {
+      name,
+      pattern,
+      confidence,
+      publicByDesign,
+      keyAnchored,
+      generic,
+      valuePosition,
+      minTailEntropy,
+      sharedPrefix,
+      literals,
+    } = entry;
     if (!mayMatch(gramIndex, literals)) continue;
     if (!fastPatternMayFire(entry, gramIndex)) continue;
 
     pattern.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(content)) !== null) {
-      const value = match[0];
+      let value = match[0];
 
       // A prefix is a prefix only at the start of a token. `re_` inside
       // `_Care_Dry…`, `[0-9]{8,10}:` on the tail of a UUID and `fooghp_…`
@@ -2309,6 +2469,23 @@ export function scanContent(
         continue;
       }
 
+      // …and a provider's format ends where the token does. A match that
+      // stops short of the end of its token is a substring of a longer
+      // value and not that provider's token. A shared prefix keeps the
+      // whole token reviewable, under the prefix and no provider's name.
+      let unattributed: string | undefined;
+      if (!keyAnchored && !generic) {
+        const matchEnd = match.index + value.length;
+        // A match that ends on its own delimiter (Azure's `;`) is whole.
+        const tokenEnd = isWordCharAt(content, matchEnd - 1) ? continuedTokenEnd(content, matchEnd) : matchEnd;
+        if (tokenEnd !== matchEnd) {
+          if (sharedPrefix === undefined || !value.startsWith(sharedPrefix)) continue;
+          unattributed = sharedPrefix;
+          value = content.slice(match.index, tokenEnd);
+          pattern.lastIndex = tokenEnd;
+        }
+      }
+
       // A generic assignment can start part-way through a longer key, so the
       // words to its left decide too: `cache-api-key` is a cache key.
       if (keyAnchored && startsInsideDigestKey(content, match.index)) {
@@ -2317,6 +2494,15 @@ export function scanContent(
 
       // …and a credential word inside a ternary's branch is not a key at all.
       if (keyAnchored && startsInTernaryBranch(content, match.index)) {
+        continue;
+      }
+
+      // …nor is the text of a label whose closing quote the match took for
+      // the opening quote of a value (`children:"Password:"}),(0,r.jsx)(`).
+      // The span it took may hold a real assignment, so the scan resumes
+      // right after the label's key rather than after the whole span.
+      if (keyAnchored && keyInsideStringLiteral(content, match.index, value)) {
+        pattern.lastIndex = match.index + keyOf(value).length;
         continue;
       }
 
@@ -2415,14 +2601,25 @@ export function scanContent(
         }
       }
 
+      // A token that only opens like the provider's: reviewable, at medium,
+      // with the attribution saying what is and is not known.
+      let reportConfidence: Confidence = confidence;
+      let known: FindingExtra | undefined;
+      if (unattributed !== undefined) {
+        reportType = unattributedKeyType(unattributed);
+        reportConfidence = "medium";
+        known = { prefix: unattributed, provider: "unknown", resembles: name };
+      }
+
       seenValues.add(value);
       const finding = build(
         reportType,
         value,
-        confidence,
+        reportConfidence,
         reportPublic,
         () => readKeyLookBack(content, match!.index).before,
-        () => content.slice(match!.index + value.length, match!.index + value.length + FORWARD_REACH)
+        () => content.slice(match!.index + value.length, match!.index + value.length + FORWARD_REACH),
+        known
       );
       if (finding) found.push(finding);
     }
