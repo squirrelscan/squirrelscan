@@ -17,6 +17,14 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- `security/csp-blocks-own-resources` flags a Content-Security-Policy that blocks what the page itself loads. It matches each page's own policy (the header and any `<meta http-equiv>` policy) against the page's scripts, preloaded modules, stylesheets, frames and images using real source matching, so `*.example.com` allows `cdn.example.com` but not `example.com`. It also looks inside the same-site chunks a page loads for third-party script URLs, and checks the hosts a detected vendor needs at runtime (Google Analytics 4 and Google Ads endpoints, Google Tag Manager, PostHog, Stripe, Cloudflare Turnstile, reCAPTCHA), which the HTML never names. A blocked analytics, ads, payments, captcha, form or booking host fails and any other host warns, naming the directive and the host to add. A page with no enforced policy passes, because a missing CSP stays with `security/csp`. See the [rule page](https://docs.squirrelscan.com/rules/security/csp-blocks-own-resources). That makes 298 rules, 17 of them in Security.
+
+### Changed
+
+- The audit also fetches the same-site script chunks a page preloads with `<link rel="modulepreload">` or `<link rel="preload" as="script">`, so `security/csp-blocks-own-resources` can read the third-party script URLs inside them. They are kept apart from the scripts every other rule reads, so no other rule's result changes, and they are fetched only when a crawled page enforces a CSP, capped at 20 extra fetches per audit. The rule cache format changed, so the first audit of each site after the upgrade runs every rule fresh, once.
+
 ### Fixed
 
 - A site that sends response headers and then stalls its body can no longer hang the CLI. The shared request helper used by the reachability check, the robots.txt fetch and the update check disarmed its timeout as soon as the headers arrived, so the body read had no time limit. The timeout now covers the body too, and a stalled body fails like any other timeout.

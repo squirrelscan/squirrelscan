@@ -2,6 +2,7 @@
 
 export * from "./types";
 export * from "./collected-signals";
+export * from "./endpoint-surface";
 export * from "./categories";
 export * from "./filter";
 export * from "./runner";

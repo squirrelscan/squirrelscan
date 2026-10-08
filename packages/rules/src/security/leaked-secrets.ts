@@ -1982,6 +1982,98 @@ function insideUrlValue(text: string, index: number): boolean {
   return false;
 }
 
+/**
+ * A vendor's public identifier carried in the query string of a script or
+ * link URL (#574): `<script src="https://cdn.mida.so/js/optimize.js?key=…">`.
+ * The vendor's own install snippet puts it there for every visitor, so a
+ * secret-shaped value in that exact parameter is the vendor's client
+ * identifier, not a leak, and is neither reported nor listed as public.
+ *
+ * Add a row only when the vendor's documentation says the identifier is
+ * public and shows it in a URL. A row names the exact hostnames, the exact
+ * path and the query parameters; nothing is matched by substring, and the
+ * same parameter on any other host or path is still read as a credential.
+ */
+export interface PublicUrlIdentifier {
+  vendor: string;
+  /** Exact hostnames, lowercase. A port, userinfo or subdomain does not match. */
+  hosts: readonly string[];
+  /** Exact URL paths the snippet loads. */
+  paths: readonly string[];
+  /** Query parameters whose value is the public identifier. */
+  params: readonly string[];
+}
+
+export const PUBLIC_URL_IDENTIFIERS: readonly PublicUrlIdentifier[] = [
+  // Mida A/B testing: the project key in the optimize.js install snippet.
+  { vendor: "Mida", hosts: ["cdn.mida.so", "cdn-eu.mida.so"], paths: ["/js/optimize.js"], params: ["key"] },
+  // Klaviyo: `company_id` is the public API key (site ID); its API docs
+  // call the six-character value public and for client-side use.
+  { vendor: "Klaviyo", hosts: ["static.klaviyo.com"], paths: ["/onsite/js/klaviyo.js"], params: ["company_id"] },
+  // Google reCAPTCHA v3 / Enterprise: `render` carries the site key, the
+  // half of the key pair that goes in the page; the secret stays on the server.
+  {
+    vendor: "Google reCAPTCHA",
+    hosts: ["www.google.com", "www.recaptcha.net"],
+    paths: ["/recaptcha/api.js", "/recaptcha/enterprise.js"],
+    params: ["render"],
+  },
+];
+
+const PUBLIC_URL_HOSTS: ReadonlyArray<readonly [host: string, entry: PublicUrlIdentifier]> =
+  PUBLIC_URL_IDENTIFIERS.flatMap((entry) => entry.hosts.map((host) => [host, entry] as const));
+const PUBLIC_URL_MAX_PER_HOST = 64;
+const PUBLIC_URL_MAX_LENGTH = 2048;
+const URL_TOKEN_END_RE = /[\s"'<>\\)]/;
+
+/**
+ * The `[start, end)` spans of every vendor identifier value in `content`.
+ * Positional on purpose: a finding is dropped only when it lies wholly inside
+ * one, so the same value elsewhere on the page, or a longer secret that
+ * merely contains it, is still read on its own terms.
+ */
+export function publicUrlIdentifierSpans(content: string): Array<[start: number, end: number]> {
+  const spans: Array<[number, number]> = [];
+  for (const [host, entry] of PUBLIC_URL_HOSTS) {
+    let from = 0;
+    let seen = 0;
+    let at: number;
+    while ((at = content.indexOf(host, from)) !== -1 && seen++ < PUBLIC_URL_MAX_PER_HOST) {
+      from = at + host.length;
+      // The host must open a URL: `//host` after a scheme colon, a quote,
+      // `=`, `(`, `,` or whitespace; never `https://other.test//host`.
+      if (at < 2 || content.charCodeAt(at - 1) !== 47 || content.charCodeAt(at - 2) !== 47) continue;
+      const lead = at >= 3 ? content[at - 3]! : "";
+      if (lead !== "" && !/[:\s"'(=,]/.test(lead)) continue;
+
+      let end = from;
+      const limit = Math.min(content.length, at + PUBLIC_URL_MAX_LENGTH);
+      while (end < limit && !URL_TOKEN_END_RE.test(content[end]!)) end++;
+      const rest = content.slice(from, end);
+      // `rest` starts right after the host: it must be the path start, not
+      // more host (`cdn.mida.so.evil.test`, `cdn.mida.so:8080`, `@evil`).
+      if (rest[0] !== "/") continue;
+      const q = rest.indexOf("?");
+      if (q === -1) continue;
+      if (!entry.paths.includes(rest.slice(0, q))) continue;
+      let queryEnd = rest.indexOf("#", q);
+      if (queryEnd === -1) queryEnd = rest.length;
+
+      let segStart = q + 1;
+      while (segStart <= queryEnd) {
+        let segEnd = rest.indexOf("&", segStart);
+        if (segEnd === -1 || segEnd > queryEnd) segEnd = queryEnd;
+        const eq = rest.indexOf("=", segStart);
+        if (eq !== -1 && eq < segEnd && entry.params.includes(rest.slice(segStart, eq)) && segEnd > eq + 1) {
+          spans.push([from + eq + 1, from + segEnd]);
+        }
+        segStart = segEnd + 1;
+      }
+    }
+  }
+  return spans;
+}
+
 // The generic keys a public brand may claim: an API key or an access token
 // is the SDK's client credential, a password, secret or auth token is not,
 // whatever object it sits in (`sentry:{authToken:"sntrys_…"}` is a server
@@ -2098,6 +2190,12 @@ export function scanContent(
   // AIza key the public-by-design tier reported — is a duplicate, not a new
   // finding. Specific patterns run first, so first classification wins.
   const seenValues = createSeenValues(content.length);
+
+  // Vendor identifiers in a script or link URL (#574): a match lying wholly
+  // inside one is the vendor's public client identifier and is skipped.
+  const publicSpans = publicUrlIdentifierSpans(content);
+  const insidePublicIdentifier = (start: number, length: number): boolean =>
+    publicSpans.some(([from, to]) => start >= from && start + length <= to);
 
   // One pass over the content that lets both passes below skip every pattern
   // whose mandatory literals it does not contain (#1864). Null on short content,
@@ -2293,6 +2391,8 @@ export function scanContent(
         continue;
       }
 
+      if (insidePublicIdentifier(match.index, value.length)) continue;
+
       // A generic assignment under a public brand, or Shopify's own
       // accessToken on a Shopify page, is a public client key: reported
       // under the brand's name at the informational tier.
@@ -2384,6 +2484,8 @@ export function scanContent(
         ) {
           continue;
         }
+
+        if (insidePublicIdentifier(at, value.length)) continue;
 
         // The key-context helpers read a bounded stretch either side.
         const lo = Math.max(0, at - CONTEXT_LOCAL_REACH);

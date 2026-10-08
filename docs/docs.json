@@ -573,6 +573,7 @@
                   "rules/security/http-to-https",
                   "rules/security/hsts",
                   "rules/security/csp",
+                  "rules/security/csp-blocks-own-resources",
                   "rules/security/x-frame-options",
                   "rules/security/x-content-type",
                   "rules/security/referrer-policy",

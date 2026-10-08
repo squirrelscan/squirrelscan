@@ -4,6 +4,7 @@ import type { Rule } from "../types";
 
 import { cookieFlagsRule } from "./cookie-flags";
 import { cspRule } from "./csp";
+import { cspBlocksOwnResourcesRule } from "./csp-blocks-own-resources";
 import { formCaptchaRule } from "./form-captcha";
 import { formHttpsRule } from "./form-https";
 import { hstsRule } from "./hsts";
@@ -24,6 +25,7 @@ export const rules: Rule[] = [
   httpToHttpsRule,
   hstsRule,
   cspRule,
+  cspBlocksOwnResourcesRule,
   xFrameOptionsRule,
   xContentTypeRule,
   referrerPolicyRule,
@@ -40,6 +42,7 @@ export const rules: Rule[] = [
 
 export {
   cookieFlagsRule,
+  cspBlocksOwnResourcesRule,
   cspRule,
   formCaptchaRule,
   formHttpsRule,
