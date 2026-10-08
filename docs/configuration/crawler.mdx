@@ -523,36 +523,46 @@ back out.
 ### `allow_query_params`
 
 **Type:** `string[]`
-**Default:** `[]` (empty = drop all query params for deduplication)
+**Default:** `[]` (empty list keeps every query parameter except known tracking parameters)
 
 Query parameters to preserve during URL deduplication.
 
 **Why this matters:**
 
-URLs are deduplicated before crawling:
-- `/page?id=1&utm_source=google` → `/page?id=1` (utm dropped)
-
-Without configuration, all query params are dropped except those in `allow_query_params`.
+The crawler deduplicates URLs before the crawl. The empty list keeps non-tracking parameters and drops known tracking parameters:
+- `/page?id=1&utm_source=google` → `/page?id=1` (`id` is kept, `utm_source` is a tracking prefix)
+- `https://example.com/products?category=shoes` stays `https://example.com/products?category=shoes`
+- `https://example.com/products?category=shoes&utm_source=google` becomes `https://example.com/products?category=shoes`
+- `https://example.com/products?fbclid=abc` becomes `https://example.com/products` with no query
 
 **Examples:**
 
-Preserve pagination:
+Keep `page` in any case:
 ```toml
 [crawler]
 allow_query_params = ["page"]
 ```
 
-Preserve filters:
+This keeps `page` in any case. It drops other non-tracking names such as `category`. The crawler still drops tracking names.
+
+- `?page=2&category=shoes` becomes `?page=2`
+- `?Page=2` is kept with its original spelling
+
+Keep these exact names:
 ```toml
 [crawler]
 allow_query_params = ["category", "sort", "filter", "q"]
 ```
 
-Preserve all query params:
+This keeps `category`, `sort`, `filter`, and `q`. It drops every other non-tracking name, including `page`.
+
+`*` is a literal name:
 ```toml
 [crawler]
 allow_query_params = ["*"]
 ```
+
+A non-empty list is an exact-name allow list. `*` matches only a parameter named `*`. `*` does not mean all parameters. The empty default keeps non-tracking parameters.
 
 **Use case:**
 
@@ -567,8 +577,12 @@ This preserves:
 - `/products?category=shoes&page=2` ✓
 
 This drops:
+- `/products?color=red` ✗ (`color` is outside the list)
 - `/products?utm_source=google` ✗ (becomes `/products`)
 - `/products?gclid=abc123` ✗ (becomes `/products`)
+- `/products?page=2&utm_source=google` becomes `/products?page=2`, even if `utm_source` is added to the allow list
+
+A name outside that list, such as `color`, is dropped. A tracking name is dropped even when the allow list includes it.
 
 ---
 
@@ -577,30 +591,16 @@ This drops:
 **Type:** `string[]`
 **Default:** `["utm_", "gclid", "fbclid"]`
 
-Query parameter prefixes to always drop, even if in `allow_query_params`.
+URL normalization ignores this list and always strips the built-in tracking set, including when the list is empty.
 
-**Default tracking params dropped:**
-- `utm_*` - Google Analytics (utm_source, utm_medium, etc.)
+The built-in tracking set is larger than the schema default. It includes:
+- `utm_` - names such as `utm_source` and `utm_medium`
 - `gclid` - Google Ads
 - `fbclid` - Facebook Ads
 
-**Examples:**
+**Example:**
 
-Drop more tracking params:
-```toml
-[crawler]
-drop_query_prefixes = [
-  "utm_",
-  "gclid",
-  "fbclid",
-  "mc_",       # Mailchimp
-  "_ga",       # Google Analytics
-  "ref",       # Referrer
-  "source"     # Generic source tracking
-]
-```
-
-Drop nothing:
+An empty list still strips the built-in tracking set:
 ```toml
 [crawler]
 drop_query_prefixes = []

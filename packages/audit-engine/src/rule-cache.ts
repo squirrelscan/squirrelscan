@@ -78,11 +78,12 @@ import type { ParsedPage, RuleMeta, SiteData } from "@squirrelscan/rules";
 
 /**
  * Bumped when the payload shape or the key's ingredients change; old rows then miss.
+ * prc-4: `preloadedScripts` joins the run context (security/csp-blocks-own-resources).
  * prc-3: `features.hreflangAlternates` (#489). A prc-2 row would replay features
  * without it, which the store reads as "no alternates" and exempts nothing, so
  * the bump is about getting the new field filled, not about safety.
  */
-export const RULE_CACHE_FORMAT = "prc-3";
+export const RULE_CACHE_FORMAT = "prc-4";
 
 /**
  * The `SiteData` keys page-scope rules read, and therefore the only ones the run
@@ -100,6 +101,7 @@ export const RULE_CACHE_FORMAT = "prc-3";
 export const PAGE_RULE_SITE_FIELDS = [
   "baseUrl",
   "scripts",
+  "preloadedScripts",
   "resourceSizes",
   "siteIndexable",
 ] as const;
@@ -173,6 +175,7 @@ export function pageRuleSiteContext(siteData: SiteData): Record<string, unknown>
     // distinct so the key says exactly what the run saw.
     siteIndexable: siteData.siteIndexable ?? null,
     scripts: projectEntries(siteData.scripts, PAGE_RULE_SCRIPT_FIELDS),
+    preloadedScripts: projectEntries(siteData.preloadedScripts, PAGE_RULE_SCRIPT_FIELDS),
     resourceSizes: resourceSizes
       ? {
           css: projectEntries(resourceSizes.css, PAGE_RULE_RESOURCE_FIELDS),
@@ -388,6 +391,7 @@ export async function computeRunContextHash(
         ["baseUrl", projection.baseUrl],
         ["siteIndexable", projection.siteIndexable],
         ["scripts", projection.scripts],
+        ["preloadedScripts", projection.preloadedScripts],
         ["resourceSizes", projection.resourceSizes],
         ["siteMetadata", input.siteMetadata ?? null],
         ["cloudResults", input.cloudResults ?? null],
