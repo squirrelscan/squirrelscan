@@ -2222,6 +2222,64 @@ export function publicUrlIdentifierSpans(content: string): Array<[start: number,
   return spans;
 }
 
+/**
+ * Providers whose key kind is written in the key's own prefix, so a value
+ * under a generic credential key can be classified rather than labelled
+ * generically. A row applies only when the provider's name sits within
+ * PROVIDER_CONTEXT_GAP characters before the key (a parent object, an init
+ * call, an env var name). Without it, a `secret`-kind prefix is reported
+ * under the prefix with the provider left unknown, and a `client`-kind
+ * prefix is left to the generic assignment as before.
+ *
+ * Add a row only when the provider's documentation states which prefix is
+ * confidential and which is meant for public applications.
+ */
+export interface ProviderKeyPrefix {
+  provider: string;
+  /** Lowercase word that names the provider in the text before the key. */
+  keyword: string;
+  /** The whole value, prefix included. */
+  shape: RegExp;
+  prefix: string;
+  kind: "server-secret" | "client-sdk";
+  type: string;
+}
+
+export const PROVIDER_KEY_PREFIXES: readonly ProviderKeyPrefix[] = [
+  // Statsig: server secret keys are confidential, client SDK keys are meant
+  // for public applications (docs.statsig.com/access-management/api-keys).
+  {
+    provider: "Statsig",
+    keyword: "statsig",
+    shape: /^secret-[A-Za-z0-9]{32,64}$/,
+    prefix: "secret-",
+    kind: "server-secret",
+    type: "Statsig Server Secret Key",
+  },
+  {
+    provider: "Statsig",
+    keyword: "statsig",
+    shape: /^client-[A-Za-z0-9]{32,64}$/,
+    prefix: "client-",
+    kind: "client-sdk",
+    type: "Statsig Client SDK Key",
+  },
+];
+
+// From the end of the provider's name to the start of the whole key: wide
+// enough for a config object holding a server key and then a client key
+// (`statsig: {serverSideApiKey: "secret-…", clientSideApiKey:`), not for an // pragma: allowlist secret
+// import at the top of a bundle. The value must already have the row's exact
+// prefixed shape, so the name only has to say whose key it is.
+const PROVIDER_CONTEXT_GAP = 120;
+
+// What an offline read of a page can and cannot establish about a key.
+const EXPOSURE_ONLY: FindingExtra = {
+  exposure: "present in content served to the browser",
+  validity: "not tested",
+  scope: "not tested",
+};
+
 // The generic keys a public brand may claim: an API key or an access token
 // is the SDK's client credential, a password, secret or auth token is not,
 // whatever object it sits in (`sentry:{authToken:"sntrys_…"}` is a server
@@ -2428,6 +2486,27 @@ export function scanContent(
     return undefined;
   };
 
+  // The provider-prefix row a generic assignment's value belongs to, and
+  // whether the provider is named in front of its key.
+  const providerKeyOf = (matchAt: number, body: string) => {
+    const rows = PROVIDER_KEY_PREFIXES.filter((row) => row.shape.test(body));
+    if (rows.length === 0) return undefined;
+    // The match can open part-way through its key (`ApiKey` of
+    // `clientSideApiKey`); the distance is measured from the key's start.
+    let keyAt = matchAt;
+    while (keyAt > 0 && matchAt - keyAt < 64 && IDENT_CHAR_RE.test(content[keyAt - 1] ?? "")) keyAt--;
+    // The name may also sit inside the key itself (`STATSIG_SERVER_SECRET`).
+    const from = Math.max(0, keyAt - PROVIDER_CONTEXT_GAP - Math.max(...rows.map((r) => r.keyword.length)));
+    const window = content.slice(from, matchAt).toLowerCase();
+    for (const row of rows) {
+      const at = window.lastIndexOf(row.keyword);
+      if (at !== -1 && from + at + row.keyword.length >= keyAt - PROVIDER_CONTEXT_GAP) {
+        return { row, named: true };
+      }
+    }
+    return { row: rows[0]!, named: false };
+  };
+
   let shopifyPage: boolean | null = null;
   const isShopifyPage = () => (shopifyPage ??= pageLoadsFrom(content, SHOPIFY_CDN_HOST));
 
@@ -2584,7 +2663,22 @@ export function scanContent(
       // under the brand's name at the informational tier.
       let reportType = name;
       let reportPublic = publicByDesign ?? false;
-      if (generic) {
+      let reportConfidence: Confidence = confidence;
+      let known: FindingExtra | undefined;
+      // A provider that writes the key's kind into its prefix: a server
+      // secret is a leak at high, a client SDK key is public. The same
+      // secret prefix with no provider named stays reviewable, unattributed.
+      const providerKey = generic && keyOf(value) !== "" ? providerKeyOf(match.index, body) : undefined;
+      if (providerKey?.named) {
+        const { row } = providerKey;
+        reportType = row.type;
+        reportPublic = row.kind === "client-sdk";
+        reportConfidence = row.kind === "server-secret" ? "high" : "medium";
+        known = { provider: row.provider, keyKind: row.kind, prefix: row.prefix, ...EXPOSURE_ONLY };
+      } else if (providerKey?.row.kind === "server-secret") {
+        reportType = unattributedKeyType(providerKey.row.prefix);
+        known = { prefix: providerKey.row.prefix, provider: "unknown", ...EXPOSURE_ONLY };
+      } else if (generic) {
         const brand = BRAND_CLAIMABLE_KEY_RE.test(keyOf(value)) ? publicBrandNear(match.index) : undefined;
         if (brand) {
           reportType = brand;
@@ -2603,8 +2697,6 @@ export function scanContent(
 
       // A token that only opens like the provider's: reviewable, at medium,
       // with the attribution saying what is and is not known.
-      let reportConfidence: Confidence = confidence;
-      let known: FindingExtra | undefined;
       if (unattributed !== undefined) {
         reportType = unattributedKeyType(unattributed);
         reportConfidence = "medium";

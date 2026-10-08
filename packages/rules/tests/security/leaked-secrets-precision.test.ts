@@ -10,7 +10,12 @@ import { describe, expect, test } from "bun:test";
 
 import { parsePage } from "@squirrelscan/parser";
 
-import { leakedSecretsRule, scanContent, unattributedKeyType } from "../../src/security/leaked-secrets";
+import {
+  leakedSecretsRule,
+  PROVIDER_KEY_PREFIXES,
+  scanContent,
+  unattributedKeyType,
+} from "../../src/security/leaked-secrets";
 import type { RuleContext } from "../../src/types";
 import { awsKeySuffix, mixedRun, runOf, seededRng } from "./leaked-secrets/generators";
 
@@ -177,5 +182,74 @@ describe("provider attribution: an sk_live_ prefix alone does not make a key Str
 
   test("positive control: a delimited sk_live_ key is still Stripe's, at high", () => {
     expect(reported(script(`var s={stripeKey:"${stripeShape}"};`))).toEqual([["leaked-secrets-high", "Stripe Live Key"]]);
+  });
+});
+
+describe("Statsig keys: a server secret is separated from a client SDK key", () => {
+  const r = seededRng(5401);
+  // Synthetic bodies in the documented prefix shapes, never production values.
+  const serverKey = "secret-" + mixedRun(r, 43); // pragma: allowlist secret
+  const clientKey = "client-" + mixedRun(r, 43); // pragma: allowlist secret
+
+  test("server and client configuration side by side: the server key leaks, the client key is public", () => {
+    const html = script(
+      `var statsigConfig={statsig:{serverSideApiKey:"${serverKey}",clientSideApiKey:"${clientKey}"}};`
+    );
+    expect(reported(html).sort()).toEqual([
+      ["leaked-secrets-high", "Statsig Server Secret Key"],
+      ["leaked-secrets-public", "Statsig Client SDK Key"],
+    ]);
+  });
+
+  test("the client key alone does not fail the rule", () => {
+    const result = leakedSecretsRule.run(ctx(script(`Statsig.config={statsig:{clientSideApiKey:"${clientKey}"}};`)));
+    expect(result.checks.map((c) => c.name).sort()).toEqual(["leaked-secrets", "leaked-secrets-public"]);
+  });
+
+  test("an env-style server secret names its provider in the variable", () => {
+    const raw = scanContent(`window.__ENV={STATSIG_SERVER_SECRET:"${serverKey}"};`, "inline-script");
+    expect(raw.map((f) => [f.type, f.confidence, f.publicByDesign])).toEqual([
+      ["Statsig Server Secret Key", "high", false],
+    ]);
+  });
+
+  test("output separates exposure from untested validity and scope", () => {
+    const raw = scanContent(`var c={statsig:{serverSideApiKey:"${serverKey}"}};`, "inline-script");
+    expect(raw[0]?.extra).toEqual({
+      provider: "Statsig",
+      keyKind: "server-secret",
+      prefix: "secret-",
+      exposure: "present in content served to the browser",
+      validity: "not tested",
+      scope: "not tested",
+    });
+    const result = leakedSecretsRule.run(ctx(script(`var c={statsig:{serverSideApiKey:"${serverKey}"}};`)));
+    const high = result.checks.find((c) => c.name === "leaked-secrets-high");
+    expect(high?.items?.[0]?.meta).toMatchObject({ validity: "not tested", scope: "not tested" });
+  });
+
+  test("a secret- prefix without Statsig named in front of the key keeps a qualified, unknown-provider label", () => {
+    const unknown = unattributedKeyType("secret-");
+    const far = `/* statsig */${"x".repeat(150)};var c={serverSideApiKey:"${serverKey}"};`;
+    const pages = [`var c={apiKey:"${serverKey}"};`, far, `var c={apiKey:"${serverKey}"}; /* statsig */`];
+    for (const js of pages) {
+      const raw = scanContent(js, "inline-script");
+      expect(raw.map((f) => [f.type, f.confidence, f.publicByDesign])).toEqual([[unknown, "medium", false]]);
+      expect(raw[0]?.extra).toMatchObject({ prefix: "secret-", provider: "unknown", validity: "not tested" });
+    }
+  });
+
+  test("a client- prefix without Statsig named is left to the generic assignment, unchanged", () => {
+    const raw = scanContent(`var c={apiKey:"${clientKey}"};`, "inline-script");
+    expect(raw.map((f) => [f.type, f.confidence, f.publicByDesign])).toEqual([
+      ["Generic API Key Assignment", "medium", false],
+    ]);
+  });
+
+  test("every row's shape is anchored and names its prefix", () => {
+    for (const row of PROVIDER_KEY_PREFIXES) {
+      expect(row.shape.source.startsWith(`^${row.prefix}`)).toBe(true);
+      expect(row.shape.source.endsWith("$")).toBe(true);
+    }
   });
 });
