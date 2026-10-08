@@ -13,9 +13,14 @@ For a native `<video>` they come from a `<track>` element pointing at a WebVTT f
 
 Two check names, at rule severity warning.
 
-- `video-captions` runs when the page has at least one `<video>`. It warns with `N video(s) without caption tracks` for any `<video>` with no `track[kind="captions"]` and no `track[kind="subtitles"]`, listing each by the first 50 characters of its `src`, or of its first `<source>`'s `src`, or as `inline video` when neither exists. With every video covered it passes as `All videos have caption tracks`.
+- `video-captions` runs when the page has at least one `<video>`. It warns with `N video(s) without caption tracks` for any `<video>` with no `track[kind="captions"]` and no `track[kind="subtitles"]`, listing each by the first 50 characters of its `src`, or of its first `<source>`'s `src`, or as `inline video` when neither exists. With every video covered it passes as `All videos have caption tracks`, and the check's details record `videosChecked` (videos that needed captions) and `decorativeSkipped`.
+  - Decorative videos are skipped, see below. When every video is decorative the check passes as `No videos need captions (N decorative skipped)`.
 - `video-embeds` returns info with `N embedded video(s) detected` and the value `Verify captions are enabled in embed settings` when the page has an `<iframe>` whose `src` contains `youtube`, `vimeo` or `wistia`.
 - With neither native video nor a recognized embed, one info check reports `No videos detected`.
+
+### Decorative videos
+
+A video is treated as decorative, and skipped, when it is `aria-hidden="true"`, or when it is `muted`, has no `controls`, and has `autoplay` or `loop`. That is the markup of a background or hero loop, which has no audio for the viewer to caption (WCAG 1.2.2 covers synchronized media with audio). A video with `controls`, or that is not `muted`, or that is `muted` with neither `autoplay` nor `loop`, is still checked. This is a heuristic: `muted` does not prove there is no audio track, so a video that a script unmutes should carry captions or be left out of the exemption by adding `controls`. [video/video-accessible](/rules/video/video-accessible) uses the same check.
 
 squirrel cannot see inside a third-party player, so the embed check is a prompt rather than a verdict. Confirm captions in the platform's own settings.
 

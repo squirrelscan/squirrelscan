@@ -500,7 +500,7 @@ DOM size, depth and width limits.
 warn_threshold = 1500   # Warning threshold (elements)
 error_threshold = 3000  # Error threshold (elements)
 max_depth = 32          # Deepest nesting before a warning
-max_children = 60       # Most children of one element before a warning
+max_children = 60       # Most children of one <body> element before a warning
 ```
 
 **Defaults:**
@@ -526,7 +526,7 @@ error_threshold = 4000
 max_depth = 40
 ```
 
-**Behavior:** fewer elements than `warn_threshold` → `pass`, fewer than `error_threshold` → `warn`, otherwise `fail`. Depth over `max_depth` and an element with more than `max_children` children each warn on their own.
+**Behavior:** fewer elements than `warn_threshold` → `pass`, fewer than `error_threshold` → `warn`, otherwise `fail`. Depth over `max_depth` and an element inside `<body>` with more than `max_children` children each warn on their own. `<head>` children are not counted for `max_children`.
 
 **Why configure:**
 - Simple pages have fewer elements

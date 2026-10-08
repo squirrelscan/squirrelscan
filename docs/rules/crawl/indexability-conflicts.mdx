@@ -1,26 +1,27 @@
 ---
-title: "robots.txt vs noindex: the two conflicts explained"
-description: "A page blocked in robots.txt can never be read for its noindex tag. squirrel compares the crawl rules against the page directives, both ways."
+title: "robots.txt blocked pages without noindex"
+description: "Allow plus noindex is the correct way to deindex a page. squirrel only reports pages robots.txt blocks that carry no noindex, at info level."
 ---
 
 ## What an indexability conflict is
 
-robots.txt controls crawling and a robots meta tag controls indexing. They are different mechanisms applied at different moments, and combining them wrongly produces two distinct situations.
+robots.txt controls crawling and a robots meta tag controls indexing. They are different mechanisms applied at different moments.
 
-The first is a page robots.txt allows that then carries `noindex`. That is the combination that works, and it is how you keep a page out of the index: the crawler has to fetch the page to read the directive. It is reported here so you can confirm the exclusion was deliberate.
+A page robots.txt allows that carries `noindex` is not a conflict. It is the correct way to keep a page out of the index: the crawler has to fetch the page to read the directive, so the crawl must be allowed. squirrel does not report it, including when the directive comes from an `X-Robots-Tag` header.
 
-The second is a page robots.txt blocks that carries no `noindex` at all. The crawler never fetches it, so nothing on the page can influence indexing either way, and the URL can still be listed from links elsewhere with no description. Adding a `noindex` to such a page would not help, which is the point of the informational status.
+A page robots.txt blocks that carries no `noindex` is reported. The crawler never fetches it, so nothing on the page can influence indexing, and the URL can still be listed from links elsewhere with no description.
+
+A page robots.txt blocks that also carries `noindex` is a real conflict, because the directive is never seen. That case is reported only by [crawl/robots-meta-conflict](/rules/crawl/robots-meta-conflict), so nothing is reported twice.
 
 ## What squirrel checks
 
-The rule is site-wide. For each crawled page it tests robots.txt against the URL and runs the shared indexability test over the page's head and headers, then sorts the disagreements into two buckets.
+The rule is site-wide. For each crawled page it tests robots.txt against the URL and runs the shared indexability test over the page's head and headers.
 
 - Skipped when there is no robots.txt or no pages. Message: `Insufficient data (no robots.txt or pages)`.
-- `robots-allow-but-noindex` warns for pages robots.txt allows that are not indexable by meta or header. Message: `6 page(s) allowed in robots.txt but have noindex`, with up to three paths in the value and a `+N more` suffix.
-- `robots-block-without-noindex` reports info for pages robots.txt blocks that are otherwise indexable. Message: `12 page(s) blocked by robots.txt (noindex meta not needed)`.
-- `conflicts` passes when neither bucket has an entry. Message: `No indexability conflicts detected`.
+- `robots-block-without-noindex` reports info for pages robots.txt blocks that are otherwise indexable. Message: `12 page(s) blocked by robots.txt without noindex`. The affected URLs are listed on the finding.
+- `conflicts` passes when no page is blocked without noindex. Message: `No indexability conflicts detected`.
 
-Severity is warning and the weight is 4.
+Severity is warning and the weight is 4, but the only check this rule reports is informational.
 
 ## How to fix it
 
@@ -30,9 +31,13 @@ User-agent: *
 Allow: /private-preview/
 ```
 
-When you are relying on `noindex`, allow the crawl. The directive only works if the page is fetched, so a `Disallow` on the same path defeats it.
+```html
+<meta name="robots" content="noindex">
+```
 
-When the goal is saving crawl budget on pages nobody should fetch, `Disallow` alone is the right tool, and the URL can still be listed without a description. Pick based on which of the two you want: `noindex` removes a page from results, `Disallow` stops the fetch.
+To remove a page from results, allow the crawl and add `noindex`. A `Disallow` on the same path defeats the directive.
+
+When the goal is only saving crawl budget on pages nobody should fetch, `Disallow` alone is the right tool, and the URL can still be listed without a description. Pick based on which of the two you want: `noindex` removes a page from results, `Disallow` stops the fetch.
 
 | | |
 |---|---|
@@ -69,7 +74,7 @@ enable = ["crawl/indexability-conflicts"]
 
 ## Related rules
 
-- [crawl/robots-meta-conflict](/rules/crawl/robots-meta-conflict): the same blocked-plus-noindex case, reported on its own.
+- [crawl/robots-meta-conflict](/rules/crawl/robots-meta-conflict): the blocked-plus-noindex case, which is reported only there.
 - [crawl/all-noindex-pages](/rules/crawl/all-noindex-pages): the full list of blocked pages with their reasons.
 - [crawl/robots-txt](/rules/crawl/robots-txt): the syntax and rules of the file being compared.
 - [crawl/indexability](/rules/crawl/indexability): the per-page verdict for one URL.

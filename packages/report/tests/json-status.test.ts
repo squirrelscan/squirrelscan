@@ -55,5 +55,7 @@ describe("renderJson failed/blocked status (#801)", () => {
     expect("statusReason" in parsed).toBe(false);
     // Additive: the pre-#801 top-level keys are all still present.
     expect(Object.keys(parsed)).toEqual(["meta", "status", "score", "summary", "issues"]);
+    // #518: `summary` gains `skipped` (0 with no skips); the rest keep their names.
+    expect(parsed.summary).toEqual({ passed: 10, warnings: 0, failed: 0, skipped: 0 });
   });
 });
