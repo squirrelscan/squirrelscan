@@ -1521,16 +1521,15 @@ function isDottedIdentifier(body: string): boolean {
 // The word "password" in the languages a locale file most often carries it
 // in, folded to lowercase ASCII letters. A locale catalogue writes
 // `password: "Passwort"` and `"auth.password": "Contraseña"`, and both are // pragma: allowlist secret
-// the field's label in another language, never its value.
+// the field's label in another language, never its value. Words under eight
+// letters (`senha`, `parola`) are absent: the generic pattern never matches
+// a value that short, so listing them would only read as a blind spot.
 const PASSWORD_TRANSLATIONS = new Set([
   "passwort",
   "kennwort",
   "wachtwoord",
   "wagwoord",
-  "parool",
   "adgangskode",
-  "kodeord",
-  "passord",
   "losenord",
   "salasana",
   "contrasena",
@@ -1539,17 +1538,7 @@ const PASSWORD_TRANSLATIONS = new Set([
   "pasahitza",
   "motdepasse",
   "palavrapasse",
-  "senha",
-  "parola",
-  "haslo",
-  "heslo",
-  "geslo",
-  "jelszo",
-  "lozinka",
-  "zaporka",
-  "sifre",
   "katasandi",
-  "matkhau",
 ]);
 
 // A word in a language that is not English: letters only, at least one of
@@ -1625,7 +1614,9 @@ function keyInsideStringLiteral(text: string, index: number, match: string): boo
   const floor = Math.max(0, index - LABEL_SCAN_LIMIT);
   let at = index;
   while (at > floor && LABEL_CHAR_RE.test(text[at - 1] ?? "")) at--;
-  return at > 0 && text[at - 1] === valueQuote;
+  // A label opens on its first word; a quote followed by a space is the
+  // close of an earlier string (`name: "bob" password: "…"`).
+  return at > 0 && text[at - 1] === valueQuote && !isSpaceAt(text, at);
 }
 
 // How far back a quoted key's own opening quote may sit.
@@ -1771,8 +1762,8 @@ function continuedTokenEnd(text: string, end: number): number {
 }
 
 /** The finding type for a secret-prefixed token no provider can be named for. */
-export function unattributedKeyType(prefix: string): string {
-  return `Secret Key (${prefix} prefix, provider unknown)`;
+export function unattributedKeyType(prefix?: string): string {
+  return prefix === undefined ? "Secret Key (provider unknown)" : `Secret Key (${prefix} prefix, provider unknown)`;
 }
 
 // One window's worth of characters. Every pattern in this file matches more
@@ -2272,6 +2263,7 @@ export const PROVIDER_KEY_PREFIXES: readonly ProviderKeyPrefix[] = [
 // import at the top of a bundle. The value must already have the row's exact
 // prefixed shape, so the name only has to say whose key it is.
 const PROVIDER_CONTEXT_GAP = 120;
+const PROVIDER_KEYWORD_MAX = Math.max(...PROVIDER_KEY_PREFIXES.map((row) => row.keyword.length));
 
 // What an offline read of a page can and cannot establish about a key.
 const EXPOSURE_ONLY: FindingExtra = {
@@ -2496,7 +2488,7 @@ export function scanContent(
     let keyAt = matchAt;
     while (keyAt > 0 && matchAt - keyAt < 64 && IDENT_CHAR_RE.test(content[keyAt - 1] ?? "")) keyAt--;
     // The name may also sit inside the key itself (`STATSIG_SERVER_SECRET`).
-    const from = Math.max(0, keyAt - PROVIDER_CONTEXT_GAP - Math.max(...rows.map((r) => r.keyword.length)));
+    const from = Math.max(0, keyAt - PROVIDER_CONTEXT_GAP - PROVIDER_KEYWORD_MAX);
     const window = content.slice(from, matchAt).toLowerCase();
     for (const row of rows) {
       const at = window.lastIndexOf(row.keyword);
@@ -2549,17 +2541,22 @@ export function scanContent(
       }
 
       // …and a provider's format ends where the token does. A match that
-      // stops short of the end of its token is a substring of a longer
-      // value and not that provider's token. A shared prefix keeps the
-      // whole token reviewable, under the prefix and no provider's name.
-      let unattributed: string | undefined;
+      // stops short of the end of its token is not that provider's token.
+      // Run on into more letters and digits, it is a slice of some longer
+      // random value and is dropped. Glued to a `_` or `-` suffix
+      // (`AKIA…_PROD`, `sk_live_…_acmewidget`), it may still be someone's
+      // credential, so the whole token stays reviewable at medium with the
+      // provider left unknown: under the shared prefix when the pattern has
+      // one, otherwise under the pattern it resembles.
+      let unattributed: string | null | undefined;
       if (!keyAnchored && !generic) {
         const matchEnd = match.index + value.length;
         // A match that ends on its own delimiter (Azure's `;`) is whole.
         const tokenEnd = isWordCharAt(content, matchEnd - 1) ? continuedTokenEnd(content, matchEnd) : matchEnd;
         if (tokenEnd !== matchEnd) {
-          if (sharedPrefix === undefined || !value.startsWith(sharedPrefix)) continue;
-          unattributed = sharedPrefix;
+          if (sharedPrefix !== undefined && value.startsWith(sharedPrefix)) unattributed = sharedPrefix;
+          else if (!isWordCharAt(content, matchEnd) || content[matchEnd] === "_") unattributed = null;
+          else continue;
           value = content.slice(match.index, tokenEnd);
           pattern.lastIndex = tokenEnd;
         }
@@ -2698,9 +2695,9 @@ export function scanContent(
       // A token that only opens like the provider's: reviewable, at medium,
       // with the attribution saying what is and is not known.
       if (unattributed !== undefined) {
-        reportType = unattributedKeyType(unattributed);
+        reportType = unattributedKeyType(unattributed ?? undefined);
         reportConfidence = "medium";
-        known = { prefix: unattributed, provider: "unknown", resembles: name };
+        known = { ...(unattributed !== null ? { prefix: unattributed } : {}), provider: "unknown", resembles: name };
       }
 
       seenValues.add(value);

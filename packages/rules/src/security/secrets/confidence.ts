@@ -140,10 +140,13 @@ function foldPlaceholder(part: string): string {
   return part.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-/** `password`, `<password>`, `${DB_PASSWORD}`, `****`, `xxxx`: no credential. */
+/**
+ * `password`, `<password>`, `${DB_PASSWORD}`, `****`, `xxxx`: no credential.
+ * A mask is a run of `*`, `•` or `.`; other symbol-only passwords are kept.
+ */
 function isPlaceholderSecret(part: string): boolean {
   const folded = foldPlaceholder(part);
-  return folded === "" || /^x+$/.test(folded) || PLACEHOLDER_SECRET_RE.test(folded);
+  return /^[*•.]+$/.test(part) || /^x+$/.test(folded) || PLACEHOLDER_SECRET_RE.test(folded);
 }
 
 /**

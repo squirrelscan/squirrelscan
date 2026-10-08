@@ -92,6 +92,8 @@ describe("generic assignments: labels and expressions are not values", () => {
       script(`a.jsx("label",{children:"Password:"});var c={password:"${PASSWORD}"};`),
       // One accented letter among digits and symbols is still a password.
       script(`var c={password:"Kä8#mZ2!qX"};`), // pragma: allowlist secret
+      // A quote followed by a space closes an earlier string, not a label.
+      script(`var c={name: "bob" password: "${PASSWORD}"};`),
     ];
     for (const html of pages) {
       const found = reported(html);
@@ -125,6 +127,10 @@ describe("connection strings: documentation placeholders are not credentials", (
 
   test("positive controls: a deployed connection string stays high", () => {
     const secret = mixedRun(seededRng(5103), 18);
+    // A symbol-only password is not a mask.
+    expect(reported(body(`<pre>postgres://app:!!!!----@db.internal.acme.test:5432/app</pre>`))).toEqual([ // pragma: allowlist secret
+      ["leaked-secrets-high", "PostgreSQL Connection String"],
+    ]);
     expect(reported(body(`<pre>DATABASE_URL=postgres://app:${secret}@db.internal.acme.test:5432/app</pre>`))).toEqual([
       ["leaked-secrets-high", "PostgreSQL Connection String"],
     ]);
@@ -146,9 +152,20 @@ describe("provider tokens: a substring of a longer value is not the provider's t
       script(`var asset={id:"key-${mailgunBody}${mixedRun(r, 12)}"};`),
       script(`var asset={id:"AC${twilioBody}${runOf(r, HEX, 16)}"};`),
       script(`var build={ref:"${awsKey}QRSTUV"};`),
-      script(`var css={cls:"key-${mailgunBody}-active"};`),
     ];
     for (const html of negatives) expect(reported(html)).toEqual([]);
+  });
+
+  test("a provider shape glued to a _ or - suffix stays reviewable, unattributed, at medium", () => {
+    const unknown = unattributedKeyType();
+    for (const [js, resembles] of [
+      [`var env={id:"${awsKey}_PROD"};`, "AWS Access Key ID"],
+      [`var css={cls:"key-${mailgunBody}-active"};`, "Mailgun API Key"],
+    ] as const) {
+      expect(reported(script(js))).toEqual([["leaked-secrets-medium", unknown]]);
+      const raw = scanContent(js, "inline-script");
+      expect(raw[0]?.extra).toEqual({ provider: "unknown", resembles });
+    }
   });
 
   test("positive controls: the same shapes delimited on both sides still report", () => {
