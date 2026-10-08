@@ -1414,13 +1414,35 @@ each get a verdict from running the rule on their own page instead of inheriting
 one, pinned by `template-fanout-equivalence-golden.test.ts`, which fails on the
 old key and passes on the new one.
 
-Not yet measured: the cluster count and the number of pages that still inherit a
-verdict on gymshark.com and openelectricity.org.au under this key. The crawls are
-not available to the environment this change was made in, so no figure is
-recorded here and none should be inferred from the 13 and 12 clusters above,
-which are for the chrome key. The cost of the tighter key is fan-out coverage
-only, never output. Run `apps/cli/scripts/template-fanout-bench.ts --verify`
-against both crawls and record the cluster and inherited-page counts here.
+Real-crawl counts (gymshark.com, openelectricity.org.au) are still not
+recorded: those crawls were not available where this was built. In their place,
+four synthetic estates of 360 pages and 6 chrome templates were run through
+`streamPageRules` with fan-out on, on `origin/main` and on this branch, each in
+its own process. They mimic the one thing the tighter key changes, the script
+list. Wall and CPU time were within 10% between the arms and between main and
+the branch (about 2.5 to 2.9 s wall per run), so they are not a result at this
+size; the counts below are.
+
+| estate | main: clusters / inherited | main: fanned equals reference | branch: clusters / inherited | branch: fanned equals reference |
+| --- | --- | --- | --- | --- |
+| stable bundles (2 per template) | 6 / 354 | yes | 6 / 354 | yes |
+| per-route hashed chunks (5 routes per template, each chunk shared by its route's pages) | 6 / 354 | no, 36 pages differ | 30 / 330 | yes |
+| hashed chunk on every third page only | 6 / 354 | no, 120 pages differ | 126 / 234 | yes |
+| worst case, a unique hashed chunk name on every page | 6 / 354 | no, 2 pages differ | 360 / 0 | yes |
+
+Reading it: the chrome-only key inherits the most pages and is wrong on every
+estate where pages of one chrome load different bundles (in the unique-name case
+the differing rule is `js-libraries-detected`, which reads the script url). The
+tighter key gives coverage up only where the inputs genuinely differ, and is
+byte-identical to running every rule everywhere on all four. A stable-bundle
+site loses nothing, and a realistic per-route estate keeps 330 of 354. Only the
+unique-name-per-page worst case falls to zero, and a real route does not produce
+it, because the pages of a route share its chunk.
+
+Normalising hash tokens out of the script name was tried to win that worst case
+back (354 inherited again) and rejected: it reproduced the same 2 differing
+pages as `main`, because a rule can match inside a hash. Byte-identity is the
+claim this feature rests on, so the key keeps the full script name.
 
 ### Byte-identity
 

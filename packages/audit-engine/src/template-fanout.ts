@@ -187,7 +187,6 @@ export function fanoutInputSignature(
         : null,
     ]
       .filter((v): v is string => v !== null)
-      .map((v) => v.toLowerCase())
       .join("|"),
   );
   const mains = doc.querySelectorAll('main, [role="main"]').length;
