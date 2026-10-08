@@ -25,6 +25,7 @@ import type {
 
 import type { CloudResultStore } from "./cloud";
 import type { CollectedSiteSignals } from "./collected-signals";
+import type { EndpointSurface } from "./endpoint-surface";
 import { ruleApplies } from "./applicability";
 import { filterRules } from "./filter";
 import { loadAllRules, type RuleNamespace } from "./loader";
@@ -516,7 +517,8 @@ export class RuleRunner {
   async runSiteRules(
     siteData: SiteData,
     siteQuery?: SiteQuery,
-    collectedSignals?: CollectedSiteSignals
+    collectedSignals?: CollectedSiteSignals,
+    endpointSurface?: EndpointSurface
   ): Promise<SiteRunResult> {
     return logger.withTraceAsync(
       "runSiteRules:exec",
@@ -562,6 +564,7 @@ export class RuleRunner {
               site: siteData,
               siteQuery,
               collectedSignals,
+              endpointSurface,
               siteMetadata,
               cloudResults,
               intel,

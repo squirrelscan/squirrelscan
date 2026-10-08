@@ -56,6 +56,7 @@ import type {
 import type {
   CollectedPageSignal,
   CollectedSiteSignals,
+  EndpointSurface,
   ParsedPage,
   RuleRunResult,
   SiteData,
@@ -84,6 +85,7 @@ import {
   foldRuleResultIntoTallies,
   type RuleTally,
 } from "./scoring";
+import { createEndpointCollector } from "./endpoint-discovery";
 import { localIntelContext } from "./intel";
 import { logger } from "./adapter-logger";
 // Report assembly extracted to ./report-stream (#1021, PR-F). adapter references
@@ -1510,7 +1512,20 @@ export function runRulesOnStorage(
 
     // Step 4: Run site rules
     const siteRulesSpan = logger.traceStart("runSiteRules");
-    const siteResult = yield* Effect.promise(() => runner.runSiteRules(siteDataForPageRules));
+    // Endpoint discovery: same collector the streaming path registers, fed from the
+    // parsed pages v1 already holds. Passive; no request is made.
+    const endpointCollector = createEndpointCollector({ headersOf: buildHeadersMap });
+    for (const [, { page, parsed }] of pageDataMap) {
+      endpointCollector.collect(page, parsed);
+    }
+    const siteResult = yield* Effect.promise(() =>
+      runner.runSiteRules(
+        siteDataForPageRules,
+        undefined,
+        undefined,
+        endpointCollector.finish(siteDataForPageRules),
+      ),
+    );
 
     // Build site rule results map for storage
     const siteRuleResults = new Map<string, CheckResult[]>();
@@ -2188,6 +2203,7 @@ function runSitePass(
   rateLimitedPages: ReadonlyArray<{ url: string; status: number }>,
   collectedSignals: CollectedSiteSignals,
   siteQuery: SiteQuery,
+  endpointSurface: EndpointSurface,
 ): Effect.Effect<
   {
     siteResults: CheckResult[];
@@ -2204,7 +2220,7 @@ function runSitePass(
     // identical to v1: identical scalar universe, collectors reproduce the per-page
     // DOM signal, and siteQuery's universe is reconciled to v1's site.pages.
     const siteResult = yield* Effect.promise(() =>
-      runner.runSiteRules(siteData, siteQuery, collectedSignals),
+      runner.runSiteRules(siteData, siteQuery, collectedSignals, endpointSurface),
     );
 
     const siteRuleResults = new Map<string, CheckResult[]>();
@@ -2582,11 +2598,12 @@ export function runStreamingRules(
         collectedPages.push(snapshot as CollectedPageSignal);
       },
     };
+    const endpointCollector = createEndpointCollector({ headersOf: buildHeadersMap });
     const streamed = yield* phase("page-rules", () =>
       streamPageRules(storage, crawlId, runner, siteDataForPageRules, {
       batchSize,
       soft404Confirmations: soft404Map,
-      collectors: [signalCollector],
+      collectors: [signalCollector, endpointCollector],
       hooks: opts?.hooks,
       signal: opts?.signal,
       // v1's page-rule universe verbatim (its `pageDataMap` keys), so the streamed
@@ -2628,6 +2645,7 @@ export function runStreamingRules(
         rateLimitedPages,
         collectedSignals,
         siteQuery,
+        endpointCollector.finish(siteDataForPageRules),
       ),
     );
 
