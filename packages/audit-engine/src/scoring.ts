@@ -874,6 +874,19 @@ export function deriveAuditStatusFromPages(
 }
 
 /**
+ * A health score for a run that observed nothing.
+ *
+ * A `failed`/`blocked` audit has no auditable content, so a per-category or
+ * per-group score is computed off findings it could not have observed: a
+ * blocked site once scored Crawlability 0 off a sitemap and a robots.txt it was
+ * never allowed to fetch. Blanking `overall` alone (#586) left those standing,
+ * so every score goes. The counts stay: they describe the checks that ran.
+ */
+export function withoutUnobservedScores(healthScore: HealthScore): HealthScore {
+  return { ...healthScore, overall: null, categories: [], groups: [] };
+}
+
+/**
  * Last-resort root failure built from stored page statuses (#1822), for reports
  * whose crawl stats predate `rootFailure`. Only meaningful when NO page
  * returned content, which is the only situation `deriveAuditStatus` consults

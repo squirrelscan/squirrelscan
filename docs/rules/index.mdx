@@ -119,10 +119,12 @@ Same-domain scripts, stylesheets and images that appear only inside `<noscript>`
 
 ## Pages kept out of search
 
-A page marked `noindex` will not show up in search results, so findings about how it would look there are noise. Seven rules leave these pages alone:
+A page marked `noindex` will not show up in search results, so findings about how it would look there are noise. Nine rules leave these pages alone:
 
 - [core/meta-title](/rules/core/meta-title), [core/meta-description](/rules/core/meta-description) and [core/h1](/rules/core/h1) skip the page. Each records one skipped check, such as `Skipped: page is set to noindex via robots meta tag` (or `via X-Robots-Tag header`), in place of its usual result.
 - [core/title-unique](/rules/core/title-unique), [content/duplicate-title](/rules/content/duplicate-title) and [content/duplicate-description](/rules/content/duplicate-description) leave the page out when they group pages by title or description.
+- [crawl/sitemap-coverage](/rules/crawl/sitemap-coverage) never lists the page as missing from the sitemap, since a noindex page should not be in it.
+- [content/title-pattern-outlier](/rules/content/title-pattern-outlier) leaves the page out when it learns the site's title template, and never reports it as an outlier.
 - [links/orphan-pages](/rules/links/orphan-pages) never reports the page as an orphan. Its own links still count toward the pages they point to.
 
 **What counts as noindex.** The page's `<meta name="robots">` content or its `X-Robots-Tag` response header contains `noindex`. This is the same test [crawl/indexability](/rules/crawl/indexability) uses, so a header scoped to one crawler, such as `X-Robots-Tag: googlebot: noindex`, counts too. A URL blocked by robots.txt is not a noindex, and crawler-specific meta tags such as `<meta name="googlebot">` are not read.
