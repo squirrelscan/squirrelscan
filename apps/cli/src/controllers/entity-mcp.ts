@@ -159,11 +159,11 @@ export function applyToolFilters(
 }
 
 /**
- * Keep the nodes a predicate accepts, carrying edges and counts with them.
+ * Keep the nodes a predicate accepts, carrying edges with them.
  *
  * Mirrors `filterEntityMap`'s contract: edges follow their endpoints, a
- * dangling edge follows its source, and the summary counts describe what
- * survived rather than the whole site.
+ * dangling edge follows its source, and `summary` stays site-wide. What
+ * survived is `filteredCounts(map)`.
  */
 function narrow(
   map: EntityMap,
@@ -175,40 +175,7 @@ function narrow(
   const edges = map.edges.filter(
     (edge) => keys.has(edge.source) && (edge.dangling || keys.has(edge.target))
   );
-
-  const withId = nodes.filter((node) => node.id !== null).length;
-  // EVERY derived counter, not the four that were easy. A `nodeCount: 0` beside
-  // `nodesWithoutIdCount: 1` and a non-empty `countsByType` is a summary that
-  // contradicts its own node list, and an agent reading the summary rather
-  // than counting the array gets a number for a site it cannot see.
-  const typeCounts = new Map<string, number>();
-  let nodesWithoutIdCount = 0;
-  for (const node of nodes) {
-    if (node.id === null && pageTotal(node) > 1) nodesWithoutIdCount += 1;
-    for (const type of node.types) {
-      typeCounts.set(type, (typeCounts.get(type) ?? 0) + node.occurrences);
-    }
-  }
-
-  return {
-    ...map,
-    summary: {
-      ...map.summary,
-      nodeCount: nodes.length,
-      edgeCount: edges.length,
-      danglingCount: edges.filter((edge) => edge.dangling).length,
-      nodesWithStableId: withId,
-      stableIdShare: nodes.length === 0 ? 0 : withId / nodes.length,
-      pageLocalCount: nodes.filter((node) => node.pageLocal).length,
-      conflictCount: nodes.filter((node) => node.conflicts.length > 0).length,
-      nodesWithoutIdCount,
-      countsByType: Object.fromEntries(
-        [...typeCounts.entries()].sort((a, b) => compareStrings(a[0], b[0]))
-      ),
-    },
-    nodes,
-    edges,
-  };
+  return { ...map, nodes, edges };
 }
 
 /** One page of `list_entities`, widest reach first. */
@@ -420,7 +387,12 @@ function renderMarkdown(map: EntityMap): {
   const lines = [
     `# Entities on ${map.site}`,
     "",
-    `${map.summary.nodeCount} entities, ${map.summary.edgeCount} references, ${Math.round(map.summary.stableIdShare * 100)}% with a stable @id, across ${map.summary.pagesTotal} pages.`,
+    // `summary` is site-wide, so a filtered map has to say how many of those it
+    // holds rather than present the site total as the table's size.
+    map.nodes.length === map.summary.nodeCount &&
+    map.edges.length === map.summary.edgeCount
+      ? `${map.summary.nodeCount} entities, ${map.summary.edgeCount} references, ${Math.round(map.summary.stableIdShare * 100)}% with a stable @id, across ${map.summary.pagesTotal} pages.`
+      : `${map.nodes.length} of the site's ${map.summary.nodeCount} entities and ${map.edges.length} of its ${map.summary.edgeCount} references match the filters. Site-wide: ${Math.round(map.summary.stableIdShare * 100)}% with a stable @id, across ${map.summary.pagesTotal} pages.`,
     "",
     "| Type | Name | @id | Pages | Conflicts |",
     "| --- | --- | --- | ---: | ---: |",
