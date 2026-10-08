@@ -12,15 +12,18 @@ import type {
   EntityMapNode,
 } from "@squirrelscan/audit-engine/entity-map";
 
+import { ENTITY_PAGE_MATCH_CASES } from "@squirrelscan/core-contracts/entity-page-match";
 import { describe, expect, test } from "bun:test";
 
 import {
   ENTITY_PROBLEMS,
+  filteredCounts,
   filterEntityMap,
   findEntity,
   hasEntityFilters,
   isEntityProblem,
   splitListFlag,
+  withRecomputedSummary,
 } from "@/entities/filters";
 
 function node(overrides: Partial<EntityMapNode> = {}): EntityMapNode {
@@ -289,14 +292,58 @@ describe("filterEntityMap", () => {
     ).toHaveLength(0);
   });
 
-  test("the summary describes what survived, not the whole site", () => {
+  test("the summary stays site-wide and filteredCounts says what survived", () => {
     const out = filterEntityMap(MAP, { problems: ["conflict"] });
+    // `summary` describes the audit and the arrays are a projection of it, the
+    // same invariant the hosted API keeps, so a script reading
+    // `summary.nodeCount` gets one number on every surface.
+    expect(out.summary).toEqual(MAP.summary);
+    expect(filteredCounts(out)).toEqual({ nodes: 1, edges: 0 });
+    const dangly = filterEntityMap(MAP, { types: ["Article"] });
+    expect(filteredCounts(dangly)).toEqual({ nodes: 1, edges: 1 });
+  });
+
+  test("withRecomputedSummary describes what survived, for --diff", () => {
+    const out = withRecomputedSummary(
+      filterEntityMap(MAP, { problems: ["conflict"] })
+    );
     expect(out.summary.nodeCount).toBe(1);
     expect(out.summary.conflictCount).toBe(1);
     expect(out.summary.danglingCount).toBe(0);
     // `pages` describes the crawl, not the selection, so it is left whole.
     expect(out.summary.pagesTotal).toBe(4);
   });
+
+  test.each([...ENTITY_PAGE_MATCH_CASES])(
+    "--page $pattern against $url matches: $matches",
+    ({ pattern, url, matches }) => {
+      // Both records a page filter reads: the node's own list, and the page
+      // index with an empty node list, so neither path can drift on its own.
+      const own: EntityMap = {
+        ...MAP,
+        pages: [],
+        nodes: [node({ pages: [url], morePages: 0 })],
+        edges: [],
+      };
+      const indexed: EntityMap = {
+        ...own,
+        nodes: [node({ pages: [], morePages: 0 })],
+        pages: [
+          {
+            url,
+            declares: [own.nodes[0]!.key],
+            references: [],
+            entityCount: 1,
+          },
+        ],
+      };
+      for (const map of [own, indexed]) {
+        expect(filterEntityMap(map, { pages: [pattern] }).nodes).toHaveLength(
+          matches ? 1 : 0
+        );
+      }
+    }
+  );
 
   test("edges follow their endpoints, and a dangling edge follows its source", () => {
     expect(
