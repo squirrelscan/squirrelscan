@@ -1,5 +1,6 @@
 // Re-export all storage types (CrawlStorage, PageRecord, etc.)
 export * from "./storage";
+export * from "./refused-fetch";
 
 // Cache-stats aggregation helper (#108).
 export * from "./cache-stats";
@@ -63,6 +64,7 @@ import type {
   CacheHitReason,
   CacheStats,
   CheckProvenance,
+  HreflangAlternate,
   RslLicenseDoc,
   SecurityHeaders,
   WellKnownProbe,
@@ -70,6 +72,7 @@ import type {
 import type { SiteMetadata } from "./site-metadata";
 import type { ResolutionSignal } from "./resolution";
 import type { AuditFailureReasonCode } from "./failure-reason";
+import type { RefusedFetch } from "./refused-fetch";
 import type { EntityMap } from "./entity-map";
 
 export interface CheckItem {
@@ -307,6 +310,14 @@ export interface AuditReport {
     pages: number;
     /** Host(s) that throttled the crawl. */
     hosts: string[];
+    /**
+     * URLs the crawl discovered but never fetched: the ones it gave up on
+     * because the host kept refusing, plus the ones still queued when it
+     * stopped. Disjoint from the pages the report grades, so `coverage` can add
+     * it to `auditedPages` to size the known site. Optional: reports built
+     * before it omit it.
+     */
+    unfetched?: number;
   };
   /**
    * Machine-readable class of the failure behind `statusReason` (#1822), so the
@@ -316,6 +327,13 @@ export interface AuditReport {
    * `classifyAuditFailureReasonText` recovers the class from the text.
    */
   statusReasonCode?: AuditFailureReasonCode;
+  /**
+   * Root fetches (robots.txt, sitemaps, llms.txt, the Markdown probe) the site
+   * refused with a 401/403/429 or a bot-challenge 503. A refusal is a coverage
+   * failure, not evidence the resource is absent, so the rules report these as
+   * not checked and the renderers list them. Absent when nothing was refused.
+   */
+  refusedFetches?: RefusedFetch[];
   healthScore?: HealthScore;
   ruleResults: Record<string, ReportRuleResult>;
   /**
@@ -529,6 +547,15 @@ export interface ScanScope {
   pagesCrawled: number;
   /** The page cap was the binding constraint — the site likely has more pages. */
   capped: boolean;
+  /**
+   * Why the crawl ended before it ran out of pages, when the page cap was not
+   * the reason. `"time"` = the crawl time budget fired with pages already
+   * collected, so the report is an audit of the pages reached in time, not of
+   * the whole site. Absent on every run that finished or hit the page cap, so a
+   * caller detects a time stop by its presence. REPORT-ONLY — never feeds
+   * `healthScore`.
+   */
+  stopReason?: "time";
 }
 
 /** Locked-rules audience for a report — anonymous/local vs signed-in tier (#368). */
@@ -864,7 +891,13 @@ export type CrawlWarningCode =
    * (squirrelscan/repo#1699). Their records carry the not-attempted marker,
    * never a confirmed absence.
    */
-  | "preamble-budget-exhausted";
+  | "preamble-budget-exhausted"
+  /**
+   * An absolute-URL `include` pattern matched a URL whose host `allowedDomains`
+   * does not list, so the URL was refused. `allowedDomains` is a hard
+   * allowlist; the message names the include pattern and the host.
+   */
+  | "include-vetoed-by-allowed-domains";
 
 export interface AuditLifecycleEvent {
   type:
@@ -1451,6 +1484,13 @@ export interface ParsedPage {
   visibleAuthor?: string | null;
   visibleDatePublished?: string | null;
   visibleDateModified?: string | null;
+  /**
+   * `<link rel="alternate" hreflang>` annotations from the page markup, hrefs
+   * resolved against the page URL, deduplicated and capped (#489). Optional so
+   * parsed records serialized before this field existed stay valid; readers
+   * must treat absent as "not extracted", which exempts nothing.
+   */
+  hreflangAlternates?: HreflangAlternate[];
 }
 
 export type CoverageMode = "quick" | "surface" | "full";

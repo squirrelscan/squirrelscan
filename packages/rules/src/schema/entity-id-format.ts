@@ -2,6 +2,8 @@
 
 import type { Rule, RuleContext, RuleResult } from "../types";
 
+import { isUnstableIdNode } from "@squirrelscan/core-contracts/entity-map-findings";
+
 import {
   ENTITY_FIX_DOCS,
   byReach,
@@ -39,7 +41,7 @@ export const entityIdFormatRule: Rule = {
     // absolute is an `@id` that could not be resolved at all — a bare word, a
     // urn, a mailto — plus blank nodes the site wrote itself.
     const offenders = map.nodes
-      .filter((node) => node.id !== null && !isStableIdentifier(node.id))
+      .filter(isUnstableIdNode)
       .sort(byReach);
 
     if (offenders.length === 0) {
@@ -73,37 +75,3 @@ export const entityIdFormatRule: Rule = {
     };
   },
 };
-
-/**
- * Schemes that identify a thing globally without being a web address.
- *
- * A library's `urn:isbn:9780140328721` and a dataset's `doi:` are proper
- * identifiers: unique, stable and the same on every page. They are not what
- * this rule is about, which is an identifier that silently means something
- * different on each page.
- */
-const GLOBAL_ID_SCHEMES = new Set(["urn:", "doi:", "info:", "tag:", "isbn:"]);
-
-/**
- * True when an `@id` identifies the same thing wherever it appears.
- *
- * An http(s) URL with a host does. So does a URN or a DOI. What does not is a
- * bare fragment, a relative path, or anything that does not parse as a URI at
- * all — those resolve against the page and quietly differ on each one, which
- * is the defect.
- *
- * `mailto:` is excluded deliberately. It parses as absolute and is stable, and
- * an email address is a way of contacting a thing rather than a name for it.
- */
-function isStableIdentifier(value: string): boolean {
-  let parsed: URL;
-  try {
-    parsed = new URL(value);
-  } catch {
-    return false;
-  }
-  if (parsed.protocol === "https:" || parsed.protocol === "http:") {
-    return parsed.host !== "";
-  }
-  return GLOBAL_ID_SCHEMES.has(parsed.protocol);
-}

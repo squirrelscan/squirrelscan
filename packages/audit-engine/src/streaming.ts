@@ -583,8 +583,13 @@ export function streamPageRules(
           else signals[c.id] = snapshot;
         }
         ruleCacheStats.freshPages++;
+        // A rule that ran past its time budget (rules/rule-budget.ts) says how
+        // busy this machine was, not what the page is: never replay it.
+        const timedOut = entries.some(([, checks]) =>
+          checks.some((c) => c.details?.timedOut === true),
+        );
         const cacheKey = keyByUrl.get(pageUrl);
-        if (ruleCache && cacheKey && signalsCacheable) {
+        if (ruleCache && cacheKey && signalsCacheable && !timedOut) {
           // The checks stored are the ones whose `pageUrl` was just stamped, so a
           // replay's own stamping loop is a no-op and the two paths agree. They
           // are the SAME objects the run already retains, so recording them here

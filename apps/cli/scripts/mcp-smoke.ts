@@ -1,6 +1,17 @@
 // Smoke test: spawn `squirrel mcp`, list tools, call free local tools. Not part of CI.
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+// Usage: bun scripts/mcp-smoke.ts [url] [--protocol legacy|2026-07-28]
+//   legacy (default): the 2025-era `initialize` handshake.
+//   2026-07-28: pinned, no `initialize`; capabilities come from `server/discover`.
+import { Client } from "@modelcontextprotocol/client";
+import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
+
+const args = process.argv.slice(2);
+const protocolFlag = args.indexOf("--protocol");
+const protocol = protocolFlag >= 0 ? args.splice(protocolFlag, 2)[1] : "legacy";
+if (protocol !== "legacy" && protocol !== "2026-07-28") {
+  console.error(`unknown --protocol ${protocol} (legacy | 2026-07-28)`);
+  process.exit(2);
+}
 
 // Set SQUIRREL_BIN to exercise a standalone binary; defaults to running the source via bun.
 const bin = process.env.SQUIRREL_BIN;
@@ -9,8 +20,17 @@ const transport = new StdioClientTransport({
   args: bin ? ["mcp"] : ["src/cli.ts", "mcp"],
   stderr: "inherit",
 });
-const client = new Client({ name: "smoke", version: "0.0.0" });
+const client = new Client(
+  { name: "smoke", version: "0.0.0" },
+  {
+    versionNegotiation:
+      protocol === "legacy"
+        ? { mode: "legacy" }
+        : { mode: { pin: "2026-07-28" } },
+  }
+);
 await client.connect(transport);
+console.error(`PROTOCOL ${protocol}: era=${client.getProtocolEra()}`);
 
 const { tools } = await client.listTools();
 console.error(
@@ -21,7 +41,7 @@ const rules = await client.callTool({ name: "list_rules", arguments: {} });
 const ruleText = (rules.content as Array<{ text?: string }>)[0]?.text ?? "";
 console.error(`list_rules count: ${JSON.parse(ruleText).count}`);
 
-const target = process.argv[2] ?? "https://example.com";
+const target = args[0] ?? "https://example.com";
 console.error(`quick_check ${target} ...`);
 const qc = await client.callTool({
   name: "quick_check",

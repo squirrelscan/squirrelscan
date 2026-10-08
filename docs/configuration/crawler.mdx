@@ -224,6 +224,13 @@ fetched, and the crawl finishes with the other hosts. Rate-limited URLs are neve
 reported as broken links or 4xx pages: their status is unknown, so they are
 listed in an informational finding and excluded from scoring.
 
+The report also says how much of the site the crawl never reached: the status is
+**partial**, and the summary names the pages the host refused and the URLs that
+were discovered but never fetched. When a site's known pages are counted, those
+unfetched URLs are included, so a throttled run never reads as full coverage.
+
+In the JSON report this is the `rateLimited` object: `pages` (refused fetches), `hosts`, and `unfetched` (URLs abandoned or still queued when the crawl stopped). `unfetched` is absent unless the run was throttled.
+
 **Examples:**
 
 Give a slow host longer to recover:
@@ -343,6 +350,21 @@ engaged.
 
 ---
 
+## Responses that cannot be decoded
+
+If a server declares a `content-encoding` (`br`, `gzip`) that its response body
+does not honour, the body cannot be read. The crawl records that page as failed
+with a message naming the URL and the declared encoding, for example
+`Could not decode response body from https://example.com/a (content-encoding: br)`.
+The runtime also prints its own `Decompression error:` line, which carries no URL.
+
+The page is missing from the analysis, so a rule that reports an absence cannot
+tell it from a page that really lacks the thing. When any page is lost this way
+the report status is **partial** and its reason counts them, for example
+`2 pages could not be decoded (bad content-encoding)`. The pages that were read
+are scored normally. The fix is on the server: serve the body with the encoding
+it declares, or stop declaring one.
+
 ## URL filtering
 
 ### `include`
@@ -350,7 +372,7 @@ engaged.
 **Type:** `string[]`
 **Default:** `[]` (empty = include all URLs from seed domain)
 
-URL patterns to include. If set, **only** matching URLs are crawled.
+URL patterns to include. If set, **only** matching URLs are crawled, and only within the crawl's host scope unless a pattern is absolute (see **Scope** below).
 
 **Pattern Syntax:**
 
@@ -394,7 +416,27 @@ Specific file types:
 include = ["*.html", "*.htm"]
 ```
 
-**Important:** When `include` is set, it **overrides** the `domains` setting in `[project]`.
+**Scope:** A path-only pattern narrows the crawl **within** its host scope: a URL
+must match the pattern and also be on the seed's host (or on a host allowed by
+`domains` in `[project]`). So `include = ["/blog/*"]` means the blog section of
+your site, and a third-party URL whose path starts `/blog/` is not crawled.
+Setting `domains` alongside `include` is honoured the same way.
+
+An absolute pattern (one that starts with `http://` or `https://`) names its host,
+so a URL that matches it is crawled even when that host is outside the scope. That
+is the way to reach another host on purpose:
+
+```toml
+[crawler]
+include = ["/blog/*", "https://docs.example.org/*"]
+```
+
+The exception is an explicit `domains` list in `[project]`, which is a hard
+allowlist. If `domains` is set and does not list the host an absolute pattern
+names, that URL is not crawled, and the crawl warns once for each include and host
+(`include "https://docs.example.org/*" matches docs.example.org, which allowedDomains
+does not list`). Add the host to `domains`, or remove `domains`, to let the include
+reach it.
 
 <Note>
   Cloud audits don't read this file. The same two lists live on the dashboard at

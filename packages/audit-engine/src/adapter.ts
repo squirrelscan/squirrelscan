@@ -6,6 +6,8 @@ import {
   detectPageType,
   extractContactLinks,
   extractContent,
+  extractFontUrls,
+  hasErrorShellMarker,
   extractHeadings,
   extractImages,
   extractLinks,
@@ -268,6 +270,10 @@ export function buildSiteContext(
             document: doc,
             ...stored,
             schemas: schemaCollectionFromJSON(stored.schemas),
+            // A parse stored before the marker was captured has no value, but
+            // the DOM is live right here, so read it now rather than losing it.
+            errorShell:
+              typeof stored.errorShell === "boolean" ? stored.errorShell : hasErrorShellMarker(doc),
           };
         } catch (e) {
           logger.error(`Failed to deserialize parsedData for ${page.url}:`, e);
@@ -386,6 +392,9 @@ export function parseHtmlForRules(html: string, baseUrl: string): ParsedPage {
       width: i.width,
       height: i.height,
     })),
+    // Captured now, while the DOM is live: the streamed audit releases it before
+    // soft-404 candidates are picked (#235).
+    errorShell: hasErrorShellMarker(doc),
     // New schema data
     schemas,
     author,
@@ -508,6 +517,10 @@ export interface PreFetchedAssets {
   resourceSizes: {
     css: ResourceSizeData[];
     images: ResourceSizeData[];
+    /** Font files the pages reference directly (preload, inline `@font-face`).
+     * Optional: sizes are HEAD-checked at audit time and never persisted, so
+     * anything that builds this by hand simply has no fonts. */
+    fonts?: ResourceSizeData[];
   };
   scripts: ScriptContentData[];
   pdfSizes: ResourceSizeData[];
@@ -539,6 +552,7 @@ export interface SiteAssetOccurrences {
   images: Map<string, Set<string>>;
   scripts: Map<string, Set<string>>;
   pdfs: Map<string, Set<string>>;
+  fonts: Map<string, Set<string>>;
   /** Scalars for the sitemap-coverage pass — v1's non-WAF parsed-page list. */
   coveragePages: Array<{ url: string; finalUrl?: string; statusCode: number }>;
   /** Every page absorbed, WAF and non-HTML included — v1's `siteContext.length`,
@@ -552,6 +566,7 @@ function emptySiteAssetOccurrences(): SiteAssetOccurrences {
     images: new Map(),
     scripts: new Map(),
     pdfs: new Map(),
+    fonts: new Map(),
     coveragePages: [],
     pageCount: 0,
   };
@@ -844,6 +859,12 @@ export function fetchAssetsFromOccurrences(
           verifyCompression: true,
           readImageHeader: true,
         }),
+        // Same cheap HEAD path as the sitemap and pdf pools: a font's size is
+        // all total-byte-weight reads.
+        fonts: checkResourceSizes(
+          Array.from(resourceOccurrences.fonts.keys()),
+          resourceCheckOptions,
+        ),
         scripts: fetchScriptContents(
           Array.from(resourceOccurrences.scripts.keys()),
           scriptFetchOptions,
@@ -883,6 +904,7 @@ export function fetchAssetsFromOccurrences(
             return Effect.succeed({
               css: [] as ResourceCheckResult[],
               images: [] as ResourceCheckResult[],
+              fonts: [] as ResourceCheckResult[],
               scripts: [] as ScriptFetchResult[],
               pdfs: [] as ResourceCheckResult[],
               sitemap: [] as ResourceCheckResult[],
@@ -894,6 +916,7 @@ export function fetchAssetsFromOccurrences(
     logger.trace("resource checks", {
       css: resourceResults.css.length,
       images: resourceResults.images.length,
+      fonts: resourceResults.fonts.length,
       scripts: resourceResults.scripts.length,
       pdfs: resourceResults.pdfs.length,
       sitemap: resourceResults.sitemap.length,
@@ -934,6 +957,14 @@ export function fetchAssetsFromOccurrences(
           naturalWidth: check.naturalWidth,
           naturalHeight: check.naturalHeight,
           animated: check.animated,
+        })),
+        fonts: resourceResults.fonts.map((check) => ({
+          url: check.url,
+          status: check.status,
+          error: check.error,
+          contentType: check.contentType,
+          sizeBytes: check.sizeBytes,
+          sourcePages: Array.from(resourceOccurrences.fonts.get(check.url) ?? []),
         })),
       },
       scripts: resourceResults.scripts.map((fetch) => ({
@@ -1075,6 +1106,7 @@ export function runRulesOnStorage(
       parsed: ParsedPage;
       headers?: Record<string, string>;
       redirectChain?: RedirectChain;
+      sizeBytes?: number | null;
     }> = [];
     const wafBlockedPages: Array<{
       url: string;
@@ -1136,6 +1168,7 @@ export function runRulesOnStorage(
         parsed,
         headers,
         redirectChain: page.redirectChain,
+        sizeBytes: page.sizeBytes,
       });
       pageDataMap.set(page.normalizedUrl, { page, parsed, headers });
     }
@@ -1395,6 +1428,8 @@ export function runRulesOnStorage(
         crawl?.originalUrl,
       ]),
       robotsTxt: robotsData,
+      // What the site refused, so a rule says "refused" not "absent".
+      refusedFetches: crawl?.stats?.refusedFetches,
       llmsTxt: llmsData,
       markdownResponse: markdownData,
       wellKnown: wellKnownData,
@@ -1683,6 +1718,7 @@ type StreamParsedPage = {
   parsed: ParsedPage;
   headers?: Record<string, string>;
   redirectChain?: RedirectChain;
+  sizeBytes?: number | null;
 };
 
 /**
@@ -2096,6 +2132,8 @@ function buildStreamingSiteData(
         crawl?.originalUrl,
       ]),
       robotsTxt: robotsData,
+      // What the site refused, so a rule says "refused" not "absent".
+      refusedFetches: crawl?.stats?.refusedFetches,
       llmsTxt: llmsData,
       markdownResponse: markdownData,
       wellKnown: wellKnownData,
@@ -2411,6 +2449,11 @@ export function runStreamingRules(
        * binary invalidates every entry even when no rule id or option changed.
        */
       engineVersion: string;
+      /**
+       * A hash of the rule code, also part of the key, so a rule change that
+       * ships without a version bump still invalidates every entry.
+       */
+      rulesVersion: string;
     };
     /**
      * Take ownership of each page's rule output as it is produced (#2343), so it
@@ -2489,6 +2532,7 @@ export function runStreamingRules(
         const ctxHash = yield* Effect.promise(() =>
           computeRunContextHash({
             engineVersion: ruleCacheOpts.engineVersion,
+            rulesVersion: ruleCacheOpts.rulesVersion,
             pageRules: runner.pageRuleSignature(),
             siteData: siteDataForPageRules,
             siteMetadata: effectiveScope?.siteMetadata,
@@ -2522,13 +2566,16 @@ export function runStreamingRules(
             finalUrl: page.finalUrl,
             parsed,
             fingerprint: shared.fingerprint,
+            htmlBytes: page.sizeBytes,
           }),
           "collected-signal",
         );
         collectedPages.push(signal);
         // The value the rule cache stores for this page. It is already detached
-        // and holds no DOM, so it is exactly what a replay needs (#1990).
-        return signal;
+        // and holds no DOM, so it is exactly what a replay needs (#1990). An
+        // extractor that ran past its time budget left a hole, which must not be
+        // replayed: `undefined` keeps the page out of the cache.
+        return signal.timedOut ? undefined : signal;
       },
       // A replayed page contributes at the same point in the stream, so
       // `collectedPages` stays in crawl order whether a page ran or replayed —
@@ -2886,6 +2933,7 @@ interface ResourceOccurrenceMap {
   css: Map<string, Set<string>>;
   images: Map<string, Set<string>>;
   scripts: Map<string, Set<string>>;
+  fonts: Map<string, Set<string>>;
 }
 
 function isSameDomainResource(url: string, baseHost: string): boolean {
@@ -2907,6 +2955,7 @@ function collectResourceOccurrences(
     css: new Map<string, Set<string>>(),
     images: new Map<string, Set<string>>(),
     scripts: new Map<string, Set<string>>(),
+    fonts: new Map<string, Set<string>>(),
   };
   absorbResourceOccurrences(target, pages, baseUrl);
   return target;
@@ -2925,7 +2974,7 @@ function absorbResourceOccurrences(
   baseUrl: string,
 ): void {
   const baseHost = getHostname(baseUrl).toLowerCase();
-  const { css, images, scripts } = target;
+  const { css, images, scripts, fonts } = target;
 
   for (const page of pages) {
     const pageUrl = page.finalUrl ?? page.url;
@@ -2953,6 +3002,13 @@ function absorbResourceOccurrences(
       const sources = images.get(resolved) ?? new Set<string>();
       sources.add(page.url);
       images.set(resolved, sources);
+    }
+
+    for (const fontUrl of extractFontUrls(doc, pageUrl)) {
+      if (!isSameDomainResource(fontUrl, baseHost)) continue;
+      const sources = fonts.get(fontUrl) ?? new Set<string>();
+      sources.add(page.url);
+      fonts.set(fontUrl, sources);
     }
 
     // Extract external script URLs

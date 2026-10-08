@@ -130,7 +130,8 @@
                 ]
               },
               "developers/mcp",
-              "developers/mcp-clients"
+              "developers/mcp-clients",
+              "developers/channel"
             ]
           },
           {
@@ -269,7 +270,9 @@
                   "rules/content/author-info",
                   "rules/content/meta-in-body",
                   "rules/content/mime-type",
+                  "rules/content/placeholder-contact",
                   "rules/content/placeholder-text",
+                  "rules/content/placeholder-media",
                   "rules/content/article-links",
                   "rules/content/quality",
                   "rules/content/stale-copyright",
@@ -655,6 +658,7 @@
               "cli/keys",
               "cli/credits",
               "cli/mcp",
+              "cli/channel",
               "cli/self",
               "cli/skills",
               "cli/debug"

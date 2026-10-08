@@ -136,6 +136,12 @@ export const ENTITY_MAP_PUBLISH_LIMITS = {
    * the body on one BreadcrumbList per page buys a reader nothing.
    */
   maxPageLocalShare: 0.1,
+  /**
+   * Ceiling on the slice reserved for nodes that carry a reported finding, so a
+   * finding keeps its evidence in the hosted graph without a pathological site
+   * spending the body on it.
+   */
+  maxProblemShare: 0.2,
 } as const;
 
 /**
@@ -164,6 +170,8 @@ export const ENTITY_MAP_VIEWER_LIMITS = {
   maxBytes: 4_000_000,
   /** Looser than publish: the viewer has a toggle that reveals these. */
   maxPageLocalShare: 0.25,
+  /** Same reservation as the publish copy: the viewer must not lose a finding's evidence either. */
+  maxProblemShare: 0.2,
 } as const;
 
 /**
@@ -187,10 +195,26 @@ export interface EntityMapLimits {
    * falls back to {@link ENTITY_MAP_DEFAULT_PAGE_LOCAL_SHARE}.
    */
   readonly maxPageLocalShare?: number;
+  /**
+   * Share of the node budget set aside for nodes that carry a finding the
+   * `schema/entity-*` rules report (conflicts, dangling references, a missing
+   * `@id`, split identity), 0 to 1. A ceiling, not a target: a healthy site has
+   * none and spends nothing. At least one node per problem class present is
+   * always reserved while the budget allows, so a pathological site cannot use
+   * the whole budget on one class. Absent falls back to
+   * {@link ENTITY_MAP_DEFAULT_PROBLEM_SHARE}.
+   */
+  readonly maxProblemShare?: number;
 }
 
 /** Page-local share used when a limit set does not name one. */
 export const ENTITY_MAP_DEFAULT_PAGE_LOCAL_SHARE = 0.1;
+
+/**
+ * Problem-node share used when a limit set does not name one (see
+ * {@link EntityMapLimits.maxProblemShare}).
+ */
+export const ENTITY_MAP_DEFAULT_PROBLEM_SHARE = 0.2;
 
 // ── Node properties ────────────────────────────────────────────────
 

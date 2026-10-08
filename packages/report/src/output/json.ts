@@ -1,6 +1,6 @@
 // JSON report output
 
-import type { AuditFailureReasonCode } from "@squirrelscan/core-contracts";
+import type { AuditFailureReasonCode, RefusedFetch } from "@squirrelscan/core-contracts";
 import type { AuditReport, AuditStatus, CheckItem, EntityMap } from "../types";
 import { reportFailureReasonCode } from "../failure-notice";
 import { getScoreGrade } from "../scoring";
@@ -11,6 +11,7 @@ import { techIconUrl } from "../technologies";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import { seedRedirect } from "../coverage";
+import { collectSkippedChecks, type SkippedCheck } from "../skipped";
 
 export interface JsonRenderOptions {
   version?: string;
@@ -48,6 +49,11 @@ interface SlimJsonReport {
      * site produce identical reports.
      */
     requestedMaxPages?: number;
+    /**
+     * `"time"` when the crawl time budget ended a cloud crawl early. Absent on a
+     * run that finished or hit the page cap.
+     */
+    stopReason?: "time";
     /** Smart audits (#110): present only when `smart_audits` ran. */
     coverage?: {
       auditedPages: number;
@@ -71,9 +77,15 @@ interface SlimJsonReport {
    * the crawl, so an integration can answer "is this page count the whole
    * site?" without parsing `statusReason` prose.
    */
-  rateLimited?: { pages: number; hosts: string[] };
+  rateLimited?: { pages: number; hosts: string[]; unfetched?: number };
   /** Machine-readable class behind `statusReason` (#1822); absent pre-#1822. */
   statusReasonCode?: AuditFailureReasonCode;
+  /**
+   * Root fetches (robots.txt, sitemaps, llms.txt, Markdown) the site refused
+   *. Their absence is unknown, not confirmed. Present only when
+   * something was refused.
+   */
+  refusedFetches?: RefusedFetch[];
   score: {
     overall: number | null; // null ⇒ N/A (failed/0-page audit, #586)
     grade: string;
@@ -94,6 +106,12 @@ interface SlimJsonReport {
     passed: number;
     warnings: number;
     failed: number;
+    /**
+     * Pages a check skipped because it could not finish evaluating (#518): the
+     * sum of `pagesCount` over `skippedChecks`. Not part of `passed`,
+     * `warnings` or `failed`, and never scored.
+     */
+    skipped: number;
   };
   issues: Array<{
     ruleId: string;
@@ -123,6 +141,12 @@ interface SlimJsonReport {
       legacyValue?: string;
     }>;
   }>;
+  /**
+   * Evaluation gaps (#518): checks a rule skipped because a scan limit was hit,
+   * so "no issue" on those pages is not a clean result. Deliberately outside
+   * `issues`, which consumers treat as findings. Present only when non-empty.
+   */
+  skippedChecks?: SkippedCheck[];
   // Report-only — never part of the score. Present when the Pro cloud
   // editor-summary call ran (exec-email-shaped narrative + big-ticket items).
   editorSummary?: {
@@ -182,6 +206,7 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
   const categoryIssues = groupIssuesByCategory(report.ruleResults);
   const es = editorSummaryView(report.editorSummary);
   const refusedSeedRedirect = seedRedirect(report);
+  const skippedChecks = collectSkippedChecks(report.ruleResults);
   return {
     meta: {
       version,
@@ -205,6 +230,9 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
       ...(report.scanScope?.requestedMaxPages !== undefined
         ? { requestedMaxPages: report.scanScope.requestedMaxPages }
         : {}),
+      ...(report.scanScope?.stopReason !== undefined
+        ? { stopReason: report.scanScope.stopReason }
+        : {}),
       ...(report.coverage ? { coverage: report.coverage } : {}),
       // #1990: how much of this audit's rules phase was replayed from a previous
       // audit rather than evaluated now. A replay and a fresh evaluation produce
@@ -223,6 +251,7 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
     ...(report.rateLimited && report.rateLimited.pages > 0
       ? { rateLimited: report.rateLimited }
       : {}),
+    ...(report.refusedFetches?.length ? { refusedFetches: report.refusedFetches } : {}),
     score: {
       // null ⇒ N/A (failed/0-page audit); preserved through save/reload (#586).
       overall: report.healthScore?.overall ?? null,
@@ -246,6 +275,7 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
       passed: report.passed,
       warnings: report.warnings,
       failed: report.failed,
+      skipped: skippedChecks.reduce((sum, s) => sum + s.pagesCount, 0),
     },
     // Same guard as every other format, validated rather than just cast: the
     // declared shape promises string fields, so a malformed stored summary omits
@@ -301,6 +331,7 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
           };
       }),
     })),
+    ...(skippedChecks.length > 0 ? { skippedChecks } : {}),
     ...(report.technologies && report.technologies.items.length > 0
       ? {
           technologies: {

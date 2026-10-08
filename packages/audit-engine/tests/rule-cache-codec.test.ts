@@ -7,6 +7,10 @@
 // fingerprint every replayed page contributes to `template-discontinuity`.
 
 import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
+
+import { SQLiteStorage } from "@squirrelscan/crawler";
+import type { PageFeatureRow } from "@squirrelscan/core-contracts";
 
 import {
   canonicalJson,
@@ -187,9 +191,90 @@ describe("cache payload codec", () => {
   });
 });
 
+// #489: a replayed page's features are what the duplicate title and description
+// rules read its hreflang alternates from. Replay is decode then upsert, so the
+// alternates have to survive both, and a payload stored before the field existed
+// has to upsert as "no alternates" rather than throw.
+describe("hreflang alternates through a replay", () => {
+  const run = <A>(eff: Effect.Effect<A, unknown, never>): Promise<A> =>
+    Effect.runPromise(eff as Effect.Effect<A, never, never>);
+
+  const alternates = [
+    { hreflang: "en-gb", href: "http://127.0.0.1:8791/en-gb/shirt.html" },
+    { hreflang: "en-us", href: "http://127.0.0.1:8791/en-us/shirt.html" },
+    { hreflang: "x-default", href: "http://127.0.0.1:8791/en-gb/shirt.html" },
+  ];
+
+  function features(extra: Partial<PageFeatureRow>): PageFeatureRow {
+    return {
+      normalizedUrl: "http://127.0.0.1:8791/en-gb/shirt.html",
+      status: 200,
+      depth: 1,
+      title: "Organic cotton shirt",
+      titleHash: "t",
+      description: null,
+      descHash: null,
+      contentHash: null,
+      wordCount: null,
+      pageType: null,
+      schemaTypes: [],
+      robotsNoindex: false,
+      canonical: "http://127.0.0.1:8791/en-gb/shirt.html",
+      visibleAuthor: false,
+      visibleDate: false,
+      transferBytes: null,
+      templateFp: null,
+      secretHits: null,
+      metaNoindex: false,
+      indexableReasons: [],
+      richResultTypes: [],
+      napName: null,
+      napPhones: [],
+      napPhoneFormats: [],
+      napAddress: null,
+      napAddressFormat: null,
+      napTelLink: false,
+      napMailtoLink: false,
+      faviconHref: null,
+      themeColor: null,
+      ogImage: null,
+      reportScalars: null,
+      hreflangAlternates: null,
+      ...extra,
+    };
+  }
+
+  async function replay(row: PageFeatureRow): Promise<PageFeatureRow | null> {
+    const back = decodePageRuleCacheEntry(
+      encodePageRuleCacheEntry({ ruleResults: [], features: row, signals: {} }),
+    );
+    expect(back).not.toBeNull();
+    const store = new SQLiteStorage(":memory:");
+    await run(store.init());
+    await run(store.upsertPageFeatures("crawl-1", back!.features));
+    const stored = await run(store.getPageFeatures("crawl-1", row.normalizedUrl));
+    await run(store.close());
+    return stored;
+  }
+
+  test("a replayed entry keeps the alternates through decode and the store", async () => {
+    const stored = await replay(features({ hreflangAlternates: alternates }));
+    expect(stored?.hreflangAlternates).toEqual(alternates);
+  });
+
+  test("a payload from before the field existed replays as no alternates", async () => {
+    const legacy = features({});
+    delete (legacy as Partial<PageFeatureRow>).hreflangAlternates;
+    const stored = await replay(legacy);
+    expect(stored?.hreflangAlternates).toBeNull();
+    expect(stored?.title).toBe("Organic cotton shirt");
+  });
+});
+
 describe("run context", () => {
   const base = {
     engineVersion: "0.0.91",
+    rulesVersion: "rules-a",
     pageRules: [{ id: "core/meta-title", options: { max_length: 75 } }],
     siteData: { baseUrl: "http://x.test", pages: [], robotsTxt: null, sitemaps: null } as never,
     siteMetadata: undefined,
@@ -225,6 +310,11 @@ describe("run context", () => {
   // different zone.
   test("moves with the runtime time zone", async () => {
     expect(await hashOf({ timeZone: "Australia/Sydney" })).not.toBe(await hashOf({}));
+  });
+
+  // A rule fixed without a version bump changes nothing but its code.
+  test("moves with the rules version", async () => {
+    expect(await hashOf({ rulesVersion: "rules-b" })).not.toBe(await hashOf({}));
   });
 
   test("moves with the build, the rule list and a rule's options", async () => {

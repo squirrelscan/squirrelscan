@@ -25,6 +25,7 @@ import { urlHostKey } from "@squirrelscan/utils/url";
 
 import { budgetRemainingMs, createPhaseBudget, withRequestDeadline } from "../deadline";
 import type { PhaseBudget, ProbeGate } from "../deadline";
+import { RefusalLog } from "../refusals";
 import {
   computeSitemapUrlCap,
   discoverSitemaps,
@@ -728,6 +729,27 @@ export function createCrawler(
       return { normalized, decision };
     };
 
+    // An absolute include that allowedDomains refused is almost certainly a
+    // config the user expected to work, so say so once per include and host.
+    const vetoWarned = new Set<string>();
+    const warnIncludeVetoed = (include: string, host: string) =>
+      Effect.gen(function* () {
+        const key = `${include}\n${host}`;
+        if (vetoWarned.has(key)) return;
+        vetoWarned.add(key);
+        const message =
+          `include "${include}" matches ${host}, which allowedDomains does not list, so it was ` +
+          `not crawled. allowedDomains (the project \`domains\` setting) is a hard allowlist: add ` +
+          `${host} to it, or remove it to let the include reach that host`;
+        logger.warn("include vetoed by allowedDomains", message);
+        yield* emit({
+          type: "warning",
+          code: "include-vetoed-by-allowed-domains",
+          message,
+          timestamp: Date.now(),
+        });
+      });
+
     // ----------------------------------------
     // Enqueue URL
     // ----------------------------------------
@@ -780,6 +802,9 @@ export function createCrawler(
 
         // Check scope
         if (!decision.allowed) {
+          if (decision.vetoedInclude) {
+            yield* warnIncludeVetoed(decision.vetoedInclude, new URL(normalized).host);
+          }
           logger.debug("url skipped (scope)", `${normalized} — ${decision.reason}`);
           yield* storage.upsertFrontier(crawlId, {
             normalizedUrl: normalized,
@@ -941,6 +966,14 @@ export function createCrawler(
     // ----------------------------------------
     // Reuse a cached page (304 / hash-match / origin-fresh / SWR)
     // ----------------------------------------
+    // Whether a processed page's outlinks may be followed. Quick/sitemap-only
+    // crawls (disableLinkDiscovery) fall back to discovery only when the sitemap
+    // yielded nothing to crawl. Read at call time: the pending count changes as
+    // the crawl runs. Shared by the fetch path and reuseCachedPage so the two
+    // can never disagree about it (#354).
+    const linkDiscoveryAllowed = (): boolean =>
+      !config.disableLinkDiscovery || config.sitemapPendingCount === 0;
+
     // Shared by every "no real fetch needed" path: copy the cached page +
     // links + images into the current crawl for reporting, re-discover links to
     // keep the frontier draining, mark done, emit an unchanged event, and bump
@@ -972,10 +1005,11 @@ export function createCrawler(
           yield* storage.upsertImage(crawlId, img);
         }
 
-        // Re-discover URLs from cached data to keep crawling. Fast path: use
-        // pre-parsed link data; fall back to re-parsing cached HTML.
+        // Re-discover URLs from cached data to keep crawling, unless link
+        // discovery is gated off (#354). Fast path: use pre-parsed link data;
+        // fall back to re-parsing cached HTML.
         let crawlableUrls: string[] = [];
-        if (cachedPage.parsedData) {
+        if (linkDiscoveryAllowed() && cachedPage.parsedData) {
           try {
             const parsed = JSON.parse(cachedPage.parsedData) as {
               links?: LinkData[];
@@ -999,6 +1033,7 @@ export function createCrawler(
           }
         }
         if (
+          linkDiscoveryAllowed() &&
           crawlableUrls.length === 0 &&
           cachedPage.html &&
           (isHtmlContentType(cachedPage.contentType) ||
@@ -1361,6 +1396,10 @@ export function createCrawler(
             // (subset of pagesFailed) so status derivation can say `blocked`
             // instead of a generic empty crawl (#792).
             const blockedFetch = error.type === "blocked";
+            // A body the runtime could not decode is a page the audit never
+            // saw. Counted (subset of pagesFailed) so the report can say its
+            // coverage was short instead of scoring the rest as complete.
+            const undecodableFetch = error.type === "decode";
             yield* storage.updateFrontierStatus(
               crawlId,
               entry.normalizedUrl,
@@ -1378,6 +1417,7 @@ export function createCrawler(
             yield* updateStats(crawlId, {
               pagesFailed: 1,
               ...(blockedFetch ? { pagesBlocked: 1 } : {}),
+              ...(undecodableFetch ? { pagesUndecodable: 1 } : {}),
               // #1822: the fetcher knows WHY (DNS, TLS, socket, timeout, 5xx).
               // Without this the reason is discarded here and a zero-page audit
               // can only say "No pages were crawled".
@@ -1734,9 +1774,7 @@ export function createCrawler(
             // Reuse document for URL extraction (no second parse)
             // Note: document can be null for error pages (4xx/5xx)
             // Skip link discovery in quick mode unless no sitemap URLs found
-            const shouldDiscoverLinks =
-              !config.disableLinkDiscovery || config.sitemapPendingCount === 0;
-            if (parsed.document && shouldDiscoverLinks) {
+            if (parsed.document && linkDiscoveryAllowed()) {
               const crawlableUrls = extractCrawlableUrls(parsed.document, result.finalUrl);
 
               for (const url of crawlableUrls) {
@@ -1845,6 +1883,7 @@ export function createCrawler(
           pagesFailed: current.pagesFailed + (updates.pagesFailed ?? 0),
           pagesBlocked: (current.pagesBlocked ?? 0) + (updates.pagesBlocked ?? 0),
           pagesRateLimited: (current.pagesRateLimited ?? 0) + (updates.pagesRateLimited ?? 0),
+          pagesUndecodable: (current.pagesUndecodable ?? 0) + (updates.pagesUndecodable ?? 0),
           pagesSkipped: current.pagesSkipped + (updates.pagesSkipped ?? 0),
           pagesUnchanged: current.pagesUnchanged + (updates.pagesUnchanged ?? 0),
           pagesCacheFresh: (current.pagesCacheFresh ?? 0) + (updates.pagesCacheFresh ?? 0),
@@ -2529,7 +2568,11 @@ export function createCrawler(
         // caller's own work between the two sits inside the window, so a slow
         // local storage lookup could arrive here with the budget already spent
         // and silently skip every probe on a perfectly healthy origin.
-        const preamble = createPhaseBudget(preambleBudgetMs(config.timeoutMs));
+        //
+        // The log rides on the budget so every root probe can note a request the
+        // site refused; persisted below so the rules say "refused", not "absent".
+        const refusals = new RefusalLog();
+        const preamble = createPhaseBudget(preambleBudgetMs(config.timeoutMs), Date.now(), refusals);
 
         // Follow redirects to get final URL (both HTTP and client-side)
         const rawFinalTargetUrl = yield* detectRedirects(targetUrl, preamble);
@@ -2719,8 +2762,20 @@ export function createCrawler(
             maxUrls: sitemapUrlCap,
             customHeaders: config.headers,
             walkWindowMs: sitemapWalkWindowMs(config.timeoutMs),
+            refusals,
           },
         );
+
+        // Every root probe has run (robots, llms, markdown, sitemaps). A site
+        // that refused any of them has not told us the file is missing.
+        const refusedFetches = refusals.list();
+        if (refusedFetches.length > 0) {
+          logger.warn(
+            "root fetches refused",
+            `${refusedFetches.length} root request(s) were refused; absence is unconfirmed`,
+          );
+          yield* storage.updateStats(crawlId, { refusedFetches });
+        }
 
         // The walk is bounded by its own progress window, NOT the preamble
         // budget: truncating it costs pages rather than AX metadata, and a site

@@ -80,6 +80,8 @@ squirrel audit https://example.com
 # ⚠ Reached max pages (100). Raise with --max-pages <N> or [crawler] max_pages (cap 10000); use -C full for full coverage.
 ```
 
+A cloud audit can also stop early because its crawl time budget ran out before it reached the page limit. The report then says so: the scan line reads `stopped early on time` and a partial scan note replaces the "page limit reached" one. Raising the page limit does not help in that case; a slower site needs a plan that renders pages faster, or a narrower crawl with include patterns.
+
 To scan a larger site, raise the limit or switch to `full` coverage:
 
 ```bash
@@ -112,6 +114,10 @@ SquirrelScan automatically follows **both HTTP and client-side redirects** when 
 - **HTTP redirects** (301, 302, 303, 307, 308) - handled by native fetch
 - **Meta refresh** - `<meta http-equiv="refresh" content="0;url=...">`
 - **JavaScript redirects** - `window.location`, `window.location.href`, `location.href`
+
+Client-side redirects inside `<noscript>` are ignored. A browser with scripting on
+treats that content as text, so a meta refresh there never fires, and the audit
+starts at the URL you gave it rather than the no-JS fallback.
 
 ### How it works
 
@@ -198,6 +204,12 @@ When re-fetching a URL, the crawler walks three levels, cheapest first:
 This makes re-crawling fast: fresh pages are instant (zero requests), and
 changed pages are still detected correctly. **Caching never changes audit
 results**: a fresh-cache run produces the same health score as a full re-fetch.
+
+A page reused from the cache follows the same link rules as a freshly fetched
+one. In `quick` mode (no link discovery), a reused page does not add its links to
+the crawl, so only the seed and sitemap URLs are audited. If the sitemap yields no
+crawlable URLs, links are discovered from reused pages just as they are from
+fetched ones.
 
 ```bash
 # First crawl: fetches all pages fresh

@@ -29,6 +29,7 @@ import {
   calculateHealthScoreFromTallies,
   deriveAuditStatus,
   deriveAuditStatusFromPages,
+  withoutUnobservedScores,
   type RuleTally,
 } from "./scoring";
 
@@ -83,6 +84,34 @@ function rateLimitedHostsFor(baseUrl: string, rateLimitedCount: number): string[
   } catch {
     return [];
   }
+}
+
+/**
+ * URLs the crawl found but never fetched: the ones it abandoned because
+ * the host kept answering 429/430, plus the ones still queued when it stopped.
+ *
+ * Zero unless the run was rate limited. A crawl that simply ran out of page
+ * budget leaves URLs queued too, but that case is already told by
+ * `scanScope.capped`, and counting it here would hang a throttling claim on a
+ * run nothing throttled. The two parts are disjoint (an abandoned URL is
+ * `failed`, never `pending`), and neither is a page the report grades, which is
+ * what lets `coverage` add this to `auditedPages`.
+ *
+ * Pending rows are read only for a throttled run and a failed read counts as
+ * none: a coverage caveat must never fail the report it annotates.
+ */
+function unfetchedUrlCount(
+  storage: CrawlStorage,
+  crawlId: string,
+  crawl: { stats?: { pagesRateLimited?: number } } | null | undefined,
+  rateLimitedCount: number,
+): Effect.Effect<number, never, never> {
+  if (rateLimitedCount <= 0) return Effect.succeed(0);
+  const abandoned = crawl?.stats?.pagesRateLimited ?? 0;
+  return storage.getPendingCount(crawlId).pipe(
+    Effect.catchAll(() => Effect.succeed(0)),
+    Effect.map((pending) => abandoned + pending),
+  );
 }
 
 /**
@@ -635,8 +664,18 @@ export function buildV1Report(
       (crawl?.stats?.pagesRateLimited ?? 0) +
       pageStatuses.filter((page) => isRateLimitStatus(page.status)).length;
     const rateLimitedHosts = rateLimitedHostsFor(result.baseUrl, rateLimitedCount);
+    const unfetched = yield* unfetchedUrlCount(storage, crawlId, crawl, rateLimitedCount);
     if (rateLimitedCount > 0) {
-      result.rateLimited = { pages: rateLimitedCount, hosts: rateLimitedHosts };
+      result.rateLimited = {
+        pages: rateLimitedCount,
+        hosts: rateLimitedHosts,
+        unfetched,
+      };
+    }
+    // The root fetches the site refused, so the report says "refused" for
+    // them instead of leaving the reader to infer it from missing findings.
+    if (crawl?.stats?.refusedFetches?.length) {
+      result.refusedFetches = crawl.stats.refusedFetches;
     }
     const runStatus = deriveAuditStatusFromPages(
       pageStatuses,
@@ -644,11 +683,13 @@ export function buildV1Report(
       {
         errors: crawl?.stats?.pagesRateLimited ?? 0,
         hosts: rateLimitedHosts,
+        unfetched,
       },
       // #1822: the crawler's record of WHY the entry URL failed, so a zero-page
       // cloud audit names DNS/TLS/connection/timeout/4xx/5xx/redirect/robots
       // instead of "No pages were crawled".
       crawl?.stats?.rootFailure,
+      crawl?.stats?.pagesUndecodable ?? 0,
     );
     if (runStatus.status !== "completed") {
       result.status = runStatus.status;
@@ -660,7 +701,7 @@ export function buildV1Report(
       // of a site and lost a few pages to throttling has a real score, and
       // nulling it would hide the whole report over a coverage gap.
       if (isScorelessStatus(runStatus.status) && result.healthScore) {
-        result.healthScore.overall = null;
+        result.healthScore = withoutUnobservedScores(result.healthScore);
       }
     }
 
@@ -916,8 +957,18 @@ export function buildV2Report(
     // fed from the streamed counts so no pages[] is needed.
     const rateLimitedCount = (crawl?.stats?.pagesRateLimited ?? 0) + rateLimitedPages;
     const rateLimitedHosts = rateLimitedHostsFor(result.baseUrl, rateLimitedCount);
+    const unfetched = yield* unfetchedUrlCount(storage, crawlId, crawl, rateLimitedCount);
     if (rateLimitedCount > 0) {
-      result.rateLimited = { pages: rateLimitedCount, hosts: rateLimitedHosts };
+      result.rateLimited = {
+        pages: rateLimitedCount,
+        hosts: rateLimitedHosts,
+        unfetched,
+      };
+    }
+    // The root fetches the site refused, so the report says "refused" for
+    // them instead of leaving the reader to infer it from missing findings.
+    if (crawl?.stats?.refusedFetches?.length) {
+      result.refusedFetches = crawl.stats.refusedFetches;
     }
     const runStatus = deriveAuditStatus({
       pagesCrawled,
@@ -927,16 +978,18 @@ export function buildV2Report(
       rateLimitedErrors: crawl?.stats?.pagesRateLimited ?? 0,
       rateLimitedPages,
       rateLimitedHosts,
+      rateLimitedUnfetched: unfetched,
       // #1822: same signal as v1 above. The streamed path has no pages[] to
       // fall back on, so the crawl stats are its only source for the class.
       rootFailure: crawl?.stats?.rootFailure,
+      undecodablePages: crawl?.stats?.pagesUndecodable ?? 0,
     });
     if (runStatus.status !== "completed") {
       result.status = runStatus.status;
       result.statusReason = runStatus.reason;
       result.statusReasonCode = runStatus.reasonCode;
       if (isScorelessStatus(runStatus.status) && result.healthScore) {
-        result.healthScore.overall = null;
+        result.healthScore = withoutUnobservedScores(result.healthScore);
       }
     }
 

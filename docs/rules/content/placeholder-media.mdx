@@ -1,0 +1,88 @@
+---
+title: "Placeholder images and camera-default alt text"
+description: "A placeholder service image, a 1x1 stand-in or an alt of DSC_0001 means the media was never finished. squirrel names the image and why it was flagged."
+---
+
+## What placeholder media is
+
+Placeholder media is an image that was never replaced with real content. Placeholder media is a stronger "unfinished site" signal than placeholder text, because a visitor sees a grey box or a stock stand-in where the product photo should be, and nothing else in an audit looks for it.
+
+## What squirrel checks
+
+The rule runs on every crawled page over the `<img>` elements outside `<noscript>`. It emits a single check named `placeholder-media`:
+
+- Skipped when there is no parsed document, or when the page has no images.
+- Pass when nothing matched. Message: `No placeholder images or camera-default alt text found`.
+- Fail when an image source is a placeholder. Warn when only an alt is a camera-default name.
+
+Three things are detected:
+
+- **Placeholder source.** `via.placeholder.com`, `placehold.it`, `placehold.co`, `dummyimage.com`, `lorempixel.com`, the random endpoints of `source.unsplash.com`, or the word `placeholder` in the image path or filename.
+- **Blank 1x1 inline image used as content.** A base64 GIF or PNG that is one pixel square, with no real `data-src` or `srcset` behind it. A tracking pixel, a spacer sized to one pixel, an image marked `aria-hidden`, `role="presentation"` or `alt=""` with a one-pixel size, and a lazy-load stub that carries a real `data-src` all stay clean.
+- **Camera-default alt text.** `DSC_0001`, `IMG_1234`, `DSCN0042` and similar, optionally with a file extension.
+
+A lazy-loaded image is judged on its real source (`data-src`, `data-lazy-src`, `data-original`), not on the stub in `src`. A stub named `placeholder.gif` in front of a real `data-src` is the normal lazy-load pattern and is not reported.
+
+### Overlap with the alt text rule
+
+Plain junk alt text (`image`, `photo`, `picture`, `img`) and an alt that repeats the filename are reported by [a11y/image-redundant-alt](/rules/a11y/image-redundant-alt). This rule leaves them alone so a page is not penalized twice for one cause. The only alt text it adds is the camera-default names, and only when the alt is not already the filename.
+
+Severity for the rule is warning, weight 5. The rule is skipped on soft 404 pages.
+
+## How to fix it
+
+Replace the image source with the real asset, and add the image field to whatever check gates publishing. If a 1x1 image is only a lazy-load stub, put the real URL in `data-src`. For camera-default alt text, write a short description of what the image shows, or use `alt=""` when it is purely decorative.
+
+| | |
+|---|---|
+| **Rule ID** | `content/placeholder-media` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/placeholder-media"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/placeholder-media"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [content/placeholder-text](/rules/content/placeholder-text): the same unfinished-page signal in visible copy.
+- [a11y/image-redundant-alt](/rules/a11y/image-redundant-alt): junk alt words and alt text that repeats the filename.
+- [images/filename-quality](/rules/images/filename-quality): generic image filenames.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each page is listed with the placeholder images found. Local audits are free.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

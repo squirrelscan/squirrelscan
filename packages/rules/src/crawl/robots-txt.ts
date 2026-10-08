@@ -2,6 +2,10 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { describeRefusedFetch } from "@squirrelscan/core-contracts";
+
+import { refusalReason, refusedFor } from "../refused";
+
 export const robotsTxtRule: Rule = {
   meta: {
     id: "crawl/robots-txt",
@@ -33,6 +37,19 @@ export const robotsTxtRule: Rule = {
     // short. Absence was not established, so this reports what is unknown
     // instead of a definite missing-file finding (squirrelscan/repo#1733).
     if (!robotsTxt.exists && robotsTxt.errors.length > 0) {
+      // A refusal is the one no-answer cause worth naming: it is the site, not
+      // the network, that withheld the file.
+      const refused = refusedFor(ctx.site, "robots.txt");
+      if (refused.length > 0) {
+        checks.push({
+          name: "robots-txt-exists",
+          status: "info",
+          message: "robots.txt could not be checked",
+          value: `The site refused the request (${refusalReason(refused)}), so this is unknown, not missing`,
+          details: { refused: refused.map(describeRefusedFetch) },
+        });
+        return { checks };
+      }
       checks.push({
         name: "robots-txt-exists",
         status: "info",

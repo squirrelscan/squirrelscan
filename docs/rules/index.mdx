@@ -1,9 +1,9 @@
 ---
 title: "Rules reference"
-description: "All 295 audit rules organized by score group and category"
+description: "All 297 audit rules organized by score group and category"
 ---
 
-squirrelscan includes **295 rules** across **21 categories**, plus opt-in cloud gap analysis. Every category rolls up into one of four score groups: **SEO**, **Performance**, **Security**, and **Agents**. These are the four scores you see on reports and in the dashboard, alongside the overall health score.
+squirrelscan includes **297 rules** across **21 categories**, plus opt-in cloud gap analysis. Every category rolls up into one of four score groups: **SEO**, **Performance**, **Security**, and **Agents**. These are the four scores you see on reports and in the dashboard, alongside the overall health score.
 
 Most rules run locally for free. A handful of [cloud rules](/cloud/rules) use AI analysis, full filter lists, or live search data - they require login and are skipped when you're not logged in. Cloud rules carry a notice banner on their doc pages.
 
@@ -23,7 +23,7 @@ Search visibility: crawling, indexing, content, markup, and accessibility.
     Internal and external link health and structure (15 rules)
   </Card>
   <Card title="Content" icon="folder" href="/rules/content">
-    Text quality, readability, and content structure (21 rules)
+    Text quality, readability, and content structure (23 rules)
   </Card>
   <Card title="Structured Data" icon="folder" href="/rules/schema">
     Structured data and rich snippet eligibility (25 rules)
@@ -119,10 +119,12 @@ Same-domain scripts, stylesheets and images that appear only inside `<noscript>`
 
 ## Pages kept out of search
 
-A page marked `noindex` will not show up in search results, so findings about how it would look there are noise. Seven rules leave these pages alone:
+A page marked `noindex` will not show up in search results, so findings about how it would look there are noise. Nine rules leave these pages alone:
 
 - [core/meta-title](/rules/core/meta-title), [core/meta-description](/rules/core/meta-description) and [core/h1](/rules/core/h1) skip the page. Each records one skipped check, such as `Skipped: page is set to noindex via robots meta tag` (or `via X-Robots-Tag header`), in place of its usual result.
 - [core/title-unique](/rules/core/title-unique), [content/duplicate-title](/rules/content/duplicate-title) and [content/duplicate-description](/rules/content/duplicate-description) leave the page out when they group pages by title or description.
+- [crawl/sitemap-coverage](/rules/crawl/sitemap-coverage) never lists the page as missing from the sitemap, since a noindex page should not be in it.
+- [content/title-pattern-outlier](/rules/content/title-pattern-outlier) leaves the page out when it learns the site's title template, and never reports it as an outlier.
 - [links/orphan-pages](/rules/links/orphan-pages) never reports the page as an orphan. Its own links still count toward the pages they point to.
 
 **What counts as noindex.** The page's `<meta name="robots">` content or its `X-Robots-Tag` response header contains `noindex`. This is the same test [crawl/indexability](/rules/crawl/indexability) uses, so a header scoped to one crawler, such as `X-Robots-Tag: googlebot: noindex`, counts too. A URL blocked by robots.txt is not a noindex, and crawler-specific meta tags such as `<meta name="googlebot">` are not read.
@@ -140,6 +142,16 @@ A site-wide `noindex` usually means the audit is checking a site before launch, 
 **In reports and scores.** A skipped check is not an issue. It does not appear in the issue list in any report format, it is not counted as passed, warning or failed, and the [health score](/reports#health-score) leaves it out. A page left out of a site rule's grouping simply is not in it.
 
 **Everything else still runs.** Accessibility, security and performance rules, and every link rule other than orphan pages, check noindex pages as usual, and so do [core/robots-meta](/rules/core/robots-meta), [crawl/indexability](/rules/crawl/indexability) and [crawl/all-noindex-pages](/rules/crawl/all-noindex-pages), which report the noindex pages themselves.
+
+## Rule time budget
+
+Rules read content the audited site controls, so a page can be built to make a pattern match very slowly. Every rule runs under a time budget: one second per page for a page rule, and one second per page of the site for a site rule, capped at 60 seconds. A rule that runs past it is stopped for that page, and the audit carries on with the next rule.
+
+The report records it as a failed check named after the rule with `-error` on the end, such as `content/hidden-text-error`, against the first page where it happened (or the whole site, for a site rule), with the message `Rule error: exceeded its 1000 ms time budget and was abandoned`. Its details carry `timedOut: true` and `pages`, the number of pages it timed out on. A rule that times out is reported once per audit, not once per page: later pages show a skipped check, so one slow pattern cannot flood the report or lower the score. The audit also gets one info check named after the rule with `-timeouts` on the end, such as `content/hidden-text-timeouts`, whose details carry `pagesNotChecked`: the final count of pages that rule did not check. That rule's own result for those pages is not in the report.
+
+A timed-out rule did not check those pages. For a security rule, such as `security/leaked-secrets`, that means no finding on those pages is not a clean result: the pages were not scanned, so treat them as unchecked and look at them yourself.
+
+Ordinary pages never come close: the slowest rule takes a few milliseconds per page. If you see this on a page that looks normal, [open an issue](https://github.com/squirrelscan/squirrelscan/issues) with the page URL.
 
 ## Configuration
 

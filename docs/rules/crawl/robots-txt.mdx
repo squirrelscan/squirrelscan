@@ -14,6 +14,7 @@ It controls crawling, not indexing. A URL blocked in robots.txt can still be ind
 The rule is site-wide and reads the robots.txt the crawl fetched. It emits up to five checks:
 
 - `robots-txt-exists` reports info when no robots.txt data is available at all. Message: `robots.txt data not available`.
+- `robots-txt-exists` reports info when the site refused the request (a 401, 403 or 429, or a bot challenge). Message: `robots.txt could not be checked`, with `The site refused the request (HTTP 403 (Cloudflare)), so this is unknown, not missing` as the value.
 - `robots-txt-exists` reports info when the probe recorded an error, so absence was never established. Message: `robots.txt could not be checked`, with `The request did not complete, so this is unknown, not missing` as the value.
 - `robots-txt-exists` fails when the file is confirmed absent. Message: `No robots.txt found`, with `Search engines will crawl all accessible pages` as the value. Severity error, weight 8.
 - `robots-txt-exists` passes when the file exists. Message: `robots.txt exists`, with the file URL.

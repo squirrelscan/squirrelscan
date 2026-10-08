@@ -4,7 +4,7 @@ import type { ReportBranding } from "@squirrelscan/core-contracts";
 import type { AuditReport } from "../types";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
 import { cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
-import { reportFailureReasonCode } from "../failure-notice";
+import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
 import { getScoreGrade } from "../scoring";
 import { REPORT_TEXT_WRAP_WIDTH } from "../constants";
 import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
@@ -30,6 +30,7 @@ import {
   seedRedirectLine,
 } from "../coverage";
 import { wrapText } from "../utils";
+import { unfetchedNote } from "../coverage";
 import { lockedRulesMessage } from "../locked-rules";
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 
@@ -119,7 +120,7 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
   // to be able to see at a glance whether the total is the whole site.
   if (report.rateLimited && report.rateLimited.pages > 0) {
     write(
-      `Rate limited: ${report.rateLimited.pages} page(s) not verified (${formatRateLimitedHosts(report.rateLimited.hosts)})`,
+      `Rate limited: ${report.rateLimited.pages} page(s) not verified (${formatRateLimitedHosts(report.rateLimited.hosts)})${unfetchedNote(report.rateLimited.unfetched)}`,
     );
   }
   // #1418: the seed redirected off its own site and was not followed, so the
@@ -194,6 +195,14 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
       const code = reportFailureReasonCode(report);
       if (report.statusReason) write(report.statusReason);
       write(AUDIT_FAILURE_NEXT_STEP[code]);
+    }
+    // Name what was refused, so a missing robots.txt or sitemap reads as
+    // "the site would not say" and never as "the site has none".
+    const refused = refusedFetchLines(report);
+    if (refused.length > 0) {
+      write("");
+      write("Refused by the site (not checked, so not reported as missing):");
+      for (const line of refused) write(`  ${line}`);
     }
     write("");
   } else if (report.healthScore) {

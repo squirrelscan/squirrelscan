@@ -171,18 +171,18 @@ function feat(s: Spec): PageFeatureRow {
   };
 }
 
-async function seededStore(): Promise<SQLiteStorage> {
+async function seededStore(fixture: Spec[] = FIXTURE): Promise<SQLiteStorage> {
   const store = new SQLiteStorage(":memory:");
   await run(store.init());
-  for (const s of FIXTURE) await run(store.upsertPage(CRAWL, pageRow(s)));
-  await run(store.upsertPageFeaturesBatch(CRAWL, FIXTURE.map(feat)));
+  for (const s of fixture) await run(store.upsertPage(CRAWL, pageRow(s)));
+  await run(store.upsertPageFeaturesBatch(CRAWL, fixture.map(feat)));
   return store;
 }
 
 // The legacy site.pages entry, shaped as the engine builds it (headers from
 // buildHeadersMap: lowercase `x-robots-tag`).
-function legacyPages() {
-  return FIXTURE.map((s) => ({
+function legacyPages(fixture: Spec[] = FIXTURE) {
+  return fixture.map((s) => ({
     url: s.normalizedUrl,
     statusCode: 200,
     parsed: {
@@ -198,6 +198,7 @@ async function runBothWays(
   rule: Rule,
   siteIndexable: boolean | undefined,
   options: Record<string, unknown> = {},
+  fixture: Spec[] = FIXTURE,
 ) {
   const base = {
     page: { url: BASE, html: "", statusCode: 200, loadTime: 0, headers: {} },
@@ -206,7 +207,7 @@ async function runBothWays(
   };
   const legacyCtx: RuleContext = {
     ...base,
-    site: { baseUrl: BASE, pages: legacyPages(), robotsTxt: null, sitemaps: null, siteIndexable },
+    site: { baseUrl: BASE, pages: legacyPages(fixture), robotsTxt: null, sitemaps: null, siteIndexable },
   };
   const legacy = (await Promise.resolve(rule.run(legacyCtx))).checks;
 
@@ -270,4 +271,53 @@ describe("noindex pages are left out of the site rules, identically on both path
       await run(store.close());
     });
   }
+});
+
+// content/title-pattern-outlier (pub#488): 12 catalogue pages share one template and
+// two noindex pages (one meta, one X-Robots-Tag header) carry short titles.
+const OUTLIER_FIXTURE: Spec[] = [
+  ...Array.from({ length: 12 }, (_, i): Spec => ({
+    normalizedUrl: `https://example.com/p${String(i + 1).padStart(2, "0")}.html`,
+    title: `Product number ${i + 1} in our catalogue | Brand`,
+    description: `Product ${i + 1}`,
+    robots: null,
+    xRobotsTag: null,
+    links: [],
+  })),
+  {
+    normalizedUrl: "https://example.com/campaign-terms.html",
+    title: "Terms",
+    description: "Terms",
+    robots: null,
+    xRobotsTag: "noindex",
+    links: [],
+  },
+  {
+    normalizedUrl: "https://example.com/campaign.html",
+    title: "Campaign",
+    description: "Campaign",
+    robots: "noindex,follow",
+    xRobotsTag: null,
+    links: [],
+  },
+].sort((a, b) => (a.normalizedUrl < b.normalizedUrl ? -1 : 1));
+
+describe("content/title-pattern-outlier leaves noindex pages out, identically on both paths", () => {
+  test("excluded on an indexed site, judged otherwise", async () => {
+    const store = await seededStore(OUTLIER_FIXTURE);
+    const rule = rules.get("content/title-pattern-outlier")!;
+
+    const skipped = await runBothWays(store, rule, true, {}, OUTLIER_FIXTURE);
+    expect(skipped.streamed).toEqual(skipped.legacy);
+    expect(skipped.legacy[0]?.status).toBe("pass");
+
+    for (const siteIndexable of [false, undefined]) {
+      const counted = await runBothWays(store, rule, siteIndexable, {}, OUTLIER_FIXTURE);
+      expect(counted.streamed).toEqual(counted.legacy);
+      expect(counted.legacy[0]?.status).toBe("warn");
+      expect(counted.legacy[0]?.items?.[0]?.id).toBe("brand-missing:");
+    }
+
+    await run(store.close());
+  });
 });

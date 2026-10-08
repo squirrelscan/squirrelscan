@@ -16,6 +16,7 @@ import type {
   CheckResult,
   CloakingProbeData,
   ContactLinkData,
+  HreflangAlternate,
   ContentAnalysis,
   DiscoveryProbe,
   EntityMap,
@@ -33,6 +34,7 @@ import type {
   MetaData,
   OpenGraphData,
   RedirectChain,
+  RefusedFetch,
   RobotsTxtData,
   ResourceSizeData,
   SchemaData,
@@ -268,6 +270,13 @@ export interface ParsedPage {
   visibleDateModified?: string | null;
 
   /**
+   * `<link rel="alternate" hreflang>` annotations, resolved, deduplicated and
+   * capped by the parser (#489). Absent on parsed records stored before the
+   * field existed; readers treat that as "none declared".
+   */
+  hreflangAlternates?: HreflangAlternate[];
+
+  /**
    * True when this 2xx page serves 404/error content (see `detectSoft404`).
    * Computed per-run by the runner (needs the page's status code), so it is
    * absent on parsed records read straight from storage until the runner sets
@@ -283,6 +292,8 @@ export interface ParsedPage {
    * the rule then treats it as unconfirmed (warns, annotated), never drops.
    */
   soft404Confirmation?: Soft404Confirmation;
+  /** Error-shell marker captured while the DOM was live; see the parser's `ParsedPage.errorShell` (#235). */
+  errorShell?: boolean;
 
   // DEPRECATED: Use schemas.types, schemas.valid, etc. instead
   schema: SchemaData;
@@ -316,9 +327,14 @@ export interface SiteData {
     parsed: ParsedPage;
     headers?: Record<string, string>;
     redirectChain?: RedirectChain;
+    /** Bytes of the stored HTML response, when the crawler recorded them. */
+    sizeBytes?: number | null;
   }>;
   robotsTxt: RobotsTxtData | null;
   sitemaps: SitemapDiscovery | null;
+  // Root requests the site refused (401/403/429, a bot wall): the crawler could
+  // not observe those resources, so a rule must not report them as absent. Undefined reads as "nothing was refused".
+  refusedFetches?: RefusedFetch[];
   // Root llms.txt + llms-full.txt fetch; optional like the other extras.
   llmsTxt?: LlmsTxtData | null;
   // Homepage markdown content-negotiation + .md variant probe.
@@ -333,6 +349,9 @@ export interface SiteData {
   resourceSizes?: {
     css: ResourceSizeData[];
     images: ResourceSizeData[];
+    /** Font files pages reference directly, HEAD-sized at audit time. Absent
+     * when nothing measured fonts (hand-built contexts, older callers). */
+    fonts?: ResourceSizeData[];
   };
   scripts?: ScriptContentData[];
   pdfSizes?: ResourceSizeData[];

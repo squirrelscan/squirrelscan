@@ -245,6 +245,7 @@ export type { AffectedPages, RuleAffectedRollup } from "./affected-pages";
 // the static HTML report's FailureNotice and the dashboard's report-detail notice.
 export {
   getAuditFailureNotice,
+  refusedFetchLines,
   reportFailureReasonCode,
   type AuditFailureNotice,
 } from "./failure-notice";

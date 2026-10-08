@@ -4,6 +4,7 @@
 import type { Effect } from "effect";
 
 import type { AuditFailureDetail } from "./failure-reason";
+import type { RefusedFetch } from "./refused-fetch";
 
 // ============================================
 // SHARED DOMAIN TYPES (used by storage + report)
@@ -199,6 +200,15 @@ export interface CrawlStats {
    */
   pagesRateLimited?: number;
   /**
+   * Fetches whose response arrived but whose body could not be decoded: the
+   * server declared a `content-encoding` its bytes do not honour. A subset of
+   * `pagesFailed`, disjoint from `pagesBlocked` and `pagesRateLimited`. The page
+   * is missing from the analysis, so a report that scored what it did fetch is
+   * `partial`, not `completed`, and says how many pages it lost. Optional for
+   * backward compatibility with older persisted stats blobs.
+   */
+  pagesUndecodable?: number;
+  /**
    * Why the crawl's ENTRY url could not be audited, when it could not (#1822).
    * The crawler records the first failure it sees, preferring the seed over a
    * sitemap/discovered URL, across all three shapes a root failure takes: a
@@ -228,6 +238,15 @@ export interface CrawlStats {
    * persisted stats blobs; absent reads as "the walk completed".
    */
   sitemapDiscoveryTruncated?: boolean;
+  /**
+   * Root fetches (robots.txt, sitemaps, llms.txt, the Markdown probe) the site
+   * REFUSED with a 401/403/429 or a bot-challenge 503, capped at
+   * `MAX_REFUSED_FETCHES`. A refusal is a coverage failure, not an observation
+   * that the file is absent, so the rules read this to say "refused" instead of
+   * "not found". Optional for backward compatibility with older persisted
+   * stats blobs; absent reads as "nothing was refused".
+   */
+  refusedFetches?: RefusedFetch[];
   /**
    * Per-reason cache-hit counts across pages AND sub-resources (#107/#108).
    * Drives the hits-by-reason breakdown. Optional for backward compatibility.
@@ -697,6 +716,14 @@ export interface PageReportScalars {
   thinContent: boolean;
 }
 
+/** One `<link rel="alternate" hreflang>` annotation, as the parser extracts it. */
+export interface HreflangAlternate {
+  /** The hreflang value, lowercased (`en-gb`, `de`, `x-default`). */
+  hreflang: string;
+  /** Absolute URL, resolved against the page URL. */
+  href: string;
+}
+
 /**
  * One accumulated page-features row (keyed by crawlId + normalizedUrl in the
  * table; `crawlId` is a method parameter, mirroring {@link PageRecord}). Hashes
@@ -792,6 +819,14 @@ export interface PageFeatureRow {
   themeColor: string | null;
   /** Absolute URL of the page's `og:image` (the default/fallback one), or null. */
   ogImage: string | null;
+  /**
+   * The page's hreflang alternates (#489), as `parsePage` extracted them
+   * (bounded there). The duplicate title and description rules read these to
+   * leave reciprocal same-language region variants out of their groups. Null
+   * when the page declares none, and on a row or replayed payload written before
+   * the field existed, which exempts nothing: the rules then behave as before.
+   */
+  hreflangAlternates: HreflangAlternate[] | null;
   /**
    * Report-only per-page scalars (#2343). Null on a row written before schema
    * v30, which is what makes the report's fallback parse reachable rather than

@@ -1,27 +1,39 @@
 ---
 title: "Total page weight: the 1600 KB and 5000 KB thresholds"
-description: "Everything the crawl measured, summed: CSS, JavaScript and images. squirrel warns at 1600 KB and fails at 5000 KB."
+description: "Each page scored on its own weight: its HTML, CSS, JavaScript, images and fonts. squirrel warns at 1600 KB and fails at 5000 KB."
 ---
 
 ## What total page weight is
 
-Total page weight is the sum of the sub-resources a visitor downloads. It matters most on a metered or slow connection, where it converts directly into waiting, and it is the number that best predicts how a site behaves on a phone in a place with poor coverage.
+Total page weight is the sum of the documents and sub-resources one page load downloads. It matters most on a metered or slow connection, where it converts directly into waiting, and it is the number that best predicts how a page behaves on a phone in a place with poor coverage.
 
 Images are usually the largest share and the easiest to cut, through a modern format and a size that matches the layout rather than the original upload. JavaScript is the next largest and the hardest, because cutting it means removing a dependency rather than re-encoding a file.
 
 ## What squirrel checks
 
-The rule runs once per crawl and sums what it measured: inline CSS and inline JavaScript across every page, plus the external CSS, script and image resources the crawl collected, each counted once by URL. It emits one check named `total-byte-weight`:
+The rule scores each crawled page on its own weight and reports the heaviest one. A page's weight is its HTML document, its inline CSS and inline JavaScript, and the external CSS, script, image and font files it loads. The 1,600 KB and 5,000 KB thresholds describe one page load, so nothing is summed across the site and the result does not depend on how many pages were crawled.
 
-- Passing with the message `Total tracked resources: NKB` under 1,600 KB.
-- Warning with the message `Total tracked resources: NKB (heavy page)` from 1,600 KB up to but not including 5,000 KB.
-- Failing with the message `Total tracked resources: NKB (very heavy)` at 5,000 KB or above.
+A resource shared by several pages counts toward every page that loads it, and counts once within a page, by URL. The rule emits one check named `total-byte-weight`, scored on the heaviest page:
 
-The threshold comparison uses the unrounded total, while the message prints it rounded, so a total of 1,599.6 KB warns and displays as `1600KB`.
+- Passing when every page is under 1,600 KB.
+- Warning when the heaviest page is from 1,600 KB up to but not including 5,000 KB, with `(heavy page)` after the message.
+- Failing when the heaviest page is 5,000 KB or above, with `(very heavy)` after the message.
 
-When the crawl produced no resource-size record and no script record at all, the rule estimates instead, from the first page's counts at 30 KB per stylesheet, 50 KB per script and 100 KB per image. An empty record still counts as present, so a crawl that collected the containers but measured nothing reports 0 KB rather than an estimate. In that case the message opens `Estimated total:` rather than `Total tracked resources:` and the details record that it is an estimate.
+The message names the heaviest page and its weight, and how many pages are over each threshold: `Heaviest page: https://example.com/gallery 5510KB (2 over 1600KB, 1 over 5000KB)`. A page over 5,000 KB is also counted as over 1,600 KB. The threshold comparison uses the unrounded weight, while the message prints it rounded.
 
-The details carry the breakdown: CSS, JavaScript and image totals, the inline against external split where both are present, and the number of distinct files in each pool. Inline JavaScript excludes any `<script>` whose type mentions `json` or `template`, so JSON-LD is not counted as code. The HTML and font buckets exist in the sum but nothing ever writes to them, so the documents themselves and every font file are missing from the total.
+When the crawl produced no resource-size record and no script record at all, the rule estimates the first page instead, at 30 KB per stylesheet, 50 KB per script and 100 KB per image. An empty record still counts as present, so a crawl that collected the containers but measured nothing reports each page by its HTML and inline code only. In that case the message opens `Estimated heaviest page:` and the details record that it is an estimate.
+
+The details carry the heaviest page's URL and weight, the number of pages analyzed, the number over each threshold, and that page's breakdown: HTML, CSS, JavaScript, image and font totals. A bucket with nothing in it is left out. Inline JavaScript excludes any `<script>` whose type mentions `json` or `template`, so JSON-LD is not counted as code.
+
+### Size basis
+
+The HTML size is the response size the crawler recorded for the page: the `Content-Length` the server sent, which is the transfer size, or the decoded body length when it sent none. It is applied the same way on the streaming and resident engines. Error pages, pages blocked by a bot challenge and non-HTML responses are not scored. A page with no recorded size contributes no HTML weight. Inline CSS and JavaScript are measured by text length. External resources use the size from a HEAD request, or the fetched body for scripts.
+
+### Limits
+
+If a resource cannot be sized, for example a HEAD response with no `Content-Length`, it adds nothing to the page's weight and the rule says so: the message ends with the number of resources that could not be sized, and the details carry `unsizedResources`. Treat the weight as a lower bound in that case.
+
+Fonts are the woff, woff2, ttf, otf and eot files a page names directly: a `<link rel="preload" as="font">`, or a `url()` source in an `@font-face` rule inside an inline `<style>`. Only same-site files are sized, so a font, stylesheet or image served from another host, such as a CDN, is not counted. A font that only an external stylesheet declares is not found, because stylesheet files are not read, so a site that loads all its fonts from a `.css` file adds nothing for fonts. Resource checks run under a time budget, so on a very large crawl some resources may go unmeasured.
 
 Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
 
@@ -39,13 +51,13 @@ Start with images, since they are usually most of the number:
 
 Then serve dimensions that match the layout rather than the original file, and lazy-load everything below the fold. For JavaScript, the lever is which dependencies ship rather than how they are bundled.
 
-The common false positive follows from what is summed. The total covers every distinct resource the crawl found across the whole site, not the weight of one page load, so a large site with many unique images reports a large number even when each page is light.
+The common false positive is a page that loads large files only once the visitor acts, such as a video or a gallery image, but names them in the markup. The rule counts every file the page references, whether or not it downloads on first load.
 
 | | |
 |---|---|
 | **Rule ID** | `perf/total-byte-weight` |
 | **Category** | [Performance](/rules/perf) |
-| **Scope** | Site-wide |
+| **Scope** | Site-wide, scored per page |
 | **Severity** | warning |
 | **Weight** | 6/10 |
 
@@ -105,7 +117,7 @@ Performance findings ship in every audit next to the SEO, security and agent exp
 
 ## Check your site
 
-Run `squirrel audit https://example.com` and open the Performance section of the report. The report shows the total with a breakdown by resource type. Local audits are free.
+Run `squirrel audit https://example.com` and open the Performance section of the report. The report names the heaviest page with a breakdown by resource type. Local audits are free.
 
 <CardGroup cols={2}>
   <Card title="Install squirrel" icon="terminal" href="/quickstart">
