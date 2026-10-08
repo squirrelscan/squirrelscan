@@ -1,6 +1,6 @@
 // MCP CallToolResult helpers — keep tool handlers terse + consistent.
 
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 
 export function textResult(text: string): CallToolResult {
   return { content: [{ type: "text", text }] };

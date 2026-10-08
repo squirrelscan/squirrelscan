@@ -2,8 +2,7 @@
 // Settings are spied (never the real ~/.squirrel) and fetch is swapped, so the
 // real submit path runs without reaching the API.
 
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import {
   afterAll,
   afterEach,

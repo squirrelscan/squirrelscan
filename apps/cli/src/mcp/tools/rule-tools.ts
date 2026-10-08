@@ -1,6 +1,6 @@
 // Rule registry tools — deterministic, free, no auth.
 
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 
 import { type Rule, getDocsUrl, loadAllRules } from "@squirrelscan/rules";
 import { z } from "zod";
@@ -48,7 +48,7 @@ export function registerRuleTools(server: McpServer): void {
       title: "List audit rules",
       description:
         "List every built-in audit rule (id, name, category, severity, scope). Deterministic and free; no login required.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async () => {
       const rules = [...getRules().values()].map((rule) => {
@@ -65,9 +65,9 @@ export function registerRuleTools(server: McpServer): void {
       title: "Get an audit rule",
       description:
         "Fetch the full definition of one audit rule by id (e.g. core/meta-title): description, solution, category, severity, weight, docs URL. Deterministic and free.",
-      inputSchema: {
+      inputSchema: z.object({
         id: z.string().describe("The rule id (e.g. core/meta-title)"),
-      },
+      }),
     },
     async ({ id }) => {
       const rule = getRules().get(id);
