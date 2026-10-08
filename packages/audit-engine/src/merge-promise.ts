@@ -48,6 +48,7 @@ import {
   buildScoringResultsFromMerged,
   type CarriedFinding,
   type CarriedUnionSource,
+  type PageUrlSet,
   type RuleTally,
 } from "./scoring";
 
@@ -762,15 +763,11 @@ export async function runCloudSmartAudits(
   // derivation produced: a prior active page this run neither crawled per the
   // payload nor removed, the LAST row winning for a url listed twice, as in the
   // session's own page map.
-  const priorState = new Map<string, SitePageRecord["state"]>();
-  for (const p of priorPages) priorState.set(p.normalizedUrl, p.state);
-  const carriedPageUrls = new Set<string>();
-  for (const [url, state] of priorState) {
-    if (state === "active" && !crawledUrls.has(url) && !removedUrls.has(url)) {
-      carriedPageUrls.add(url);
-    }
-  }
-  priorState.clear();
+  //
+  // (#497) A view over the session's prior pages rather than a copy of them: on a
+  // site with a long history these outnumber the run's pages many times over, and
+  // the streaming fold only asks it for its size and for the touched pages.
+  const carriedPageUrls = session.carriedPageUrls;
   // (#2067) Every page this run crawled, which is what the coverage line (and
   // with it the page charge) counts: the payload's evidence plus the pages only
   // the unsampled signal saw, less the removed ones. The session gave all of them
@@ -789,7 +786,7 @@ export async function runCloudSmartAudits(
   // at all. The set is dropped straight after.
   let replayedUnknownPages = 0;
   for (const url of replayedUrls) {
-    if (!session.activePageUrls.has(url)) replayedUnknownPages += 1;
+    if (!session.isActivePage(url)) replayedUnknownPages += 1;
   }
   replayedUrls.clear();
 
@@ -862,13 +859,12 @@ export async function runCloudSmartAudits(
       // multiplies by the whole backlog.
       pageCarried.push(finding);
     };
-    // (pub#497) The render history the merge reads `neverRendered` from, for the
-    // untouched pages it does not run: none of them is rendered this run.
-    const everRendered = split ? new Set(priorPages.map((p) => p.normalizedUrl)) : undefined;
     for await (const page of streamedComplete) {
       if ("untouched" in page) {
         assertUntouched(page, crawlId, crawledUrls, removedUrls);
-        const neverRendered = !everRendered!.has(page.normalizedUrl);
+        // (pub#497) The render history the merge reads `neverRendered` from, for
+        // the untouched pages it does not run: none of them is rendered this run.
+        const neverRendered = !session.everRendered(page.normalizedUrl);
         fold.retainUntouchedSample(
           page.normalizedUrl,
           page.sample.map((row) => untouchedCarriedFinding(row, neverRendered)),
@@ -948,8 +944,11 @@ export async function runCloudSmartAudits(
     lastStatus: statusByUrl.get(url) ?? 404,
   }));
   await store.markPagesRemoved(siteKey, removedPages, crawlId);
+  // (#497) Only the rows this run changed. The rest are the prior pages exactly
+  // as `getSitePages` returned them, and rewriting them made every publish pay
+  // for the site's whole page history.
   await store.upsertSitePages(
-    session.sitePages.filter((p) => !removedUrls.has(p.normalizedUrl)),
+    session.changedSitePages.filter((p) => !removedUrls.has(p.normalizedUrl)),
   );
   // Best-effort hygiene — only ever prunes terminal rows, never open/carried, so
   // it can't affect the merged report. NEVER fail the audit on a prune error.
@@ -1007,7 +1006,7 @@ export async function runCloudSmartAudits(
       // stays at least this.
       auditedPages: auditedUrls.size,
       knownPages: knownPageCount(
-        session.activePageUrls.size,
+        session.activePageCount,
         auditedUrls.size,
         input.unfetchedPages,
       ),
@@ -1084,10 +1083,10 @@ function assertUntouched(
  * one lookup each.
  */
 function withoutUnscorablePages(
-  carriedPageUrls: Set<string>,
+  carriedPageUrls: PageUrlSet,
   resolution: MergeResolutionInput,
   carriedFindings: readonly CarriedFinding[],
-): Set<string> {
+): PageUrlSet {
   const candidates = new Set<string>();
   const byHash = new Map<string, string[]>();
   for (const url of carriedPageUrls) {
