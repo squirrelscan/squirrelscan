@@ -209,12 +209,16 @@ _squirrel_completions() {
           COMPREPLY=( $(compgen -W "off auto all" -- "\${cur}") )
           return 0
           ;;
+        --probe|-P)
+          COMPREPLY=( $(compgen -W "passive active aggressive" -- "\${cur}") )
+          return 0
+          ;;
         --format|-f)
           COMPREPLY=( $(compgen -W "${formatValues}" -- "\${cur}") )
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --coverage -C --format -f --output -o --refresh -r --fresh-ua --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --visibility --yes -y --render --render-mode --http --offline --fail-on --header -H --rule-include --rule-exclude --disable-discovery-probes --summary --help" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --coverage -C --format -f --output -o --refresh -r --fresh-ua --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --visibility --yes -y --render --render-mode --http --offline --fail-on --header -H --rule-include --rule-exclude --disable-discovery-probes --probe -P --passive --aggressive --probe-budget --pentest --summary --help" -- "\${cur}") )
       return 0
       ;;
     entities)
@@ -541,6 +545,11 @@ _squirrel() {
             '*--rule-include[Only run these rule categories or rules]:pattern' \\
             '*--rule-exclude[Skip these rule categories or rules]:pattern' \\
             '--disable-discovery-probes[Skip the pre-crawl discovery probes (llms.txt, well-known files, swagger.json)]' \\
+            '(-P --probe)'{-P,--probe}'[Probing intensity]:level:(passive active aggressive)' \\
+            '--passive[Probing intensity passive: no requests beyond the crawl]' \\
+            '--aggressive[Probing intensity aggressive: loud probes, can trip a WAF]' \\
+            '--probe-budget[Wall-clock cap for all probing (e.g. 30s)]:duration' \\
+            '--pentest[Shorthand for --coverage full --probe aggressive]' \\
             '--summary[Print score, category breakdown, and issue counts only]'
           ;;
         entities)
@@ -784,6 +793,11 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -s H -l header -d "C
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-include -d "Only run these rule categories or rules"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-exclude -d "Skip these rule categories or rules"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l disable-discovery-probes -d "Skip the pre-crawl discovery probes (llms.txt, well-known files, swagger.json)"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -s P -l probe -a "passive active aggressive" -d "Probing intensity"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l passive -d "Probing intensity passive: no requests beyond the crawl"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l aggressive -d "Probing intensity aggressive: loud probes, can trip a WAF"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l probe-budget -d "Wall-clock cap for all probing (e.g. 30s)"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l pentest -d "Shorthand for --coverage full --probe aggressive"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l summary -d "Print score, category breakdown, and issue counts only"
 
 # Entities options

@@ -677,6 +677,7 @@
               "configuration/output",
               "configuration/storage",
               "configuration/cloud",
+              "configuration/security",
               "configuration/rule-options",
               "configuration/examples"
             ]

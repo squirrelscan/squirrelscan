@@ -2,6 +2,7 @@
 // citty doesn't auto-generate completions, so completion.ts is a manual sync —
 // this test fails when a flag or format list drifts.
 
+import { PROBE_LEVELS } from "@squirrelscan/config";
 import { describe, expect, test } from "bun:test";
 
 import { audit } from "@/cli/commands/audit";
@@ -204,6 +205,22 @@ describe.each(shells)("%s completion", (shell) => {
     test("format list matches OUTPUT_FORMATS exactly", () => {
       expect(formatListIn(shell, block)).toEqual([...OUTPUT_FORMATS]);
     });
+  });
+
+  test("audit --probe completes the three levels from PROBE_LEVELS", () => {
+    const block = commandBlock(shell, text, "audit");
+    const levels = PROBE_LEVELS.join(" ");
+    if (shell === "fish") {
+      expect(block).toContain(`-s P -l probe -a "${levels}"`);
+    } else if (shell === "zsh") {
+      expect(block).toContain(
+        `{-P,--probe}'[Probing intensity]:level:(${levels})`
+      );
+    } else {
+      expect(block).toContain(
+        `--probe|-P)\n          COMPREPLY=( $(compgen -W "${levels}"`
+      );
+    }
   });
 
   // credits had NO bash or zsh arm at all before #1604 — `squirrel credits
