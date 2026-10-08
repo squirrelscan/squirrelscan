@@ -83,7 +83,7 @@ describe("squirrel channel over stdio", () => {
         HOME: home,
         USERPROFILE: home,
         SQUIRREL_API_SERVER: `http://localhost:${api.port}`,
-        SQUIRRELSCAN_API_KEY: "sq_test_key",
+        SQUIRRELSCAN_API_KEY: "sq_test_key", // pragma: allowlist secret
       },
       stderr: "ignore",
     });
