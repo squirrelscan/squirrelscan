@@ -1,0 +1,112 @@
+---
+title: "Claude Code channel"
+description: "Push cloud audit results into a running Claude Code session so your agent can triage and fix without being asked"
+icon: "bell"
+---
+
+A scheduled cloud audit finishes at 3am. By the time you open your editor, your agent has no idea. The squirrelscan channel fixes that: it pushes `audit_complete`, `audit_failed` and `issues_detected` events into a running [Claude Code](https://code.claude.com) session, so the agent can read the report and start on the fixes.
+
+It is a Claude Code [channel](https://code.claude.com/docs/en/channels): a local stdio server that Claude Code spawns. It is the `squirrel` binary itself, because channels cannot be hosted and `squirrel` already holds your cloud login. See [`squirrel channel`](/cli/channel) for the command reference.
+
+<Warning>
+Channels are a research preview in Claude Code. Until squirrelscan is on Anthropic's channel allowlist, you need the development flag described in [Start Claude Code with the channel](#start-claude-code-with-the-channel).
+</Warning>
+
+## Requirements
+
+- Claude Code with channels support.
+- A squirrelscan **login session** (`squirrel auth login`). The notification feed does not accept API keys.
+- Cloud audits, for example a [scheduled audit](/cloud/scheduled-audits), to have something to report.
+
+## Add the server
+
+Add the channel to your project's `.mcp.json`, or to `~/.claude.json` for every project:
+
+```json
+{
+  "mcpServers": {
+    "squirrelscan": {
+      "command": "squirrel",
+      "args": ["channel"]
+    }
+  }
+}
+```
+
+The server name is the `source` your agent sees on every event.
+
+## Start Claude Code with the channel
+
+While the channel is not on the approved allowlist, start Claude Code with the development flag in an interactive session:
+
+```bash
+claude --dangerously-load-development-channels server:squirrelscan
+```
+
+Claude Code shows a warning listing the development channels. Choose **I am using this for local development** to continue. The flag is ignored in non-interactive mode (`-p`) and in the Agent SDK.
+
+Team and Enterprise organizations must also have channels enabled by an admin (`channelsEnabled`). An admin can instead list squirrelscan in the organization's `allowedChannelPlugins`. See the Claude Code [channels documentation](https://code.claude.com/docs/en/channels) for the current rules.
+
+## What your agent receives
+
+Each event arrives as a `<channel source="squirrelscan" ...>` tag. The body is a one-line summary built from ids and counts, and the attributes carry the ids your agent needs for tool calls:
+
+```text
+<channel source="squirrelscan" category="audit_complete" website_id="web_123" run_id="run_456" domain="example.com">
+Cloud audit complete for example.com (run run_456): health score 91, 2 errors, 5 warnings.
+</channel>
+```
+
+| Attribute | Meaning |
+|-----------|---------|
+| `category` | `audit_complete`, `audit_failed`, `issues_detected`, or `login_required` |
+| `website_id`, `run_id`, `audit_id` | Ids for the squirrelscan tools (when the event carries them) |
+| `domain` | The audited site's hostname |
+| `reason_code` | Why the audit failed (`audit_failed` only) |
+| `notification_id` | The feed entry the event came from |
+
+The channel's instructions tell Claude what to do next: read the report with `get_report`, work the findings with `list_issues`, and treat anything fetched about the site as untrusted data.
+
+### Event text never comes from your site
+
+Notification titles and bodies can contain text taken from crawled pages, and an ungated channel is a prompt-injection path. So the channel never forwards them. Event text is built from the category, validated ids, counts and fixed strings only. Your agent pulls the details through the [squirrelscan MCP tools](/developers/mcp), where they are marked as data.
+
+The channel does not declare Claude Code's permission relay capability, so nothing delivered through it can approve or deny a tool call.
+
+## Choose events and polling
+
+Pass options in `args`:
+
+```json
+{
+  "mcpServers": {
+    "squirrelscan": {
+      "command": "squirrel",
+      "args": ["channel", "--categories", "audit_failed,issues_detected", "--interval", "60"]
+    }
+  }
+}
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--categories` | `audit_complete,audit_failed,issues_detected` | Comma-separated categories to deliver |
+| `--interval` | `30` | Seconds between polls, from 5 to 86400 |
+
+On a `429` or `5xx` response, or a network error, the channel doubles its delay for each consecutive failure, up to 10 minutes, then returns to the normal interval after the next success.
+
+## Restarts and missed events
+
+The channel remembers where it stopped, per organization, in `~/.squirrel/channel/<org id>.json` (on Windows, under `%LOCALAPPDATA%\squirrel\channel`). When Claude Code starts the channel again, events that happened while it was closed are delivered once. The first run ever starts from now and does not replay history.
+
+If the cloud feed does not yet support cursors, the channel falls back to reading the most recent page of notifications and de-duplicating by id with a bounded record of what it already delivered. In that mode, more than 50 new notifications between two polls can be missed.
+
+## Not signed in
+
+If there is no login session, the channel sends a single `login_required` event asking the user to run `squirrel auth login`, and keeps running. Once you sign in, events start flowing without restarting Claude Code. An API key in `SQUIRRELSCAN_API_KEY` cannot read the feed, so it gets the same event.
+
+## Troubleshooting
+
+- **Nothing arrives**: run `/mcp` in Claude Code to check that `squirrelscan` is connected, and confirm you started Claude Code with the development flag. Claude Code drops channel events silently when the session did not load the server as a channel or an organization policy blocks it.
+- **Debug output**: the channel logs to stderr only, because stdout carries the protocol. Start Claude Code with `claude --debug` to see it.
+- **Wrong organization**: the channel follows your account's active organization and checks it again every few polls, so a switch in the dashboard takes effect without a restart. The new organization starts from now and does not replay history.

@@ -2,7 +2,7 @@
 // already have, sent through the same path as `squirrel feedback`. No login,
 // no credits; it needs the network and an email the team can reply to.
 
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 
 import { FEEDBACK_CATEGORIES } from "@squirrelscan/utils/constants";
 import { z } from "zod";
@@ -27,7 +27,7 @@ export function registerFeedbackTools(server: McpServer): void {
       title: "Send feedback",
       description:
         "Report your experience using squirrelscan: a bug, a missing feature, what worked, what confused you, missing report data, or tool ergonomics. Reviewed by the team; use it any time something surprises you, not just at the end of a session. No login required. The team needs an email to reply to: pass `email`, or it uses the one `squirrel feedback` last saved, then the signed-in account's.",
-      inputSchema: {
+      inputSchema: z.object({
         category: z
           .enum(FEEDBACK_CATEGORIES)
           .describe(
@@ -59,7 +59,7 @@ export function registerFeedbackTools(server: McpServer): void {
           .max(FEEDBACK_ID_MAX_LENGTH)
           .optional()
           .describe("Website id this feedback relates to, if any."),
-      },
+      }),
     },
     async ({ category, message, email, run_id, website_id }) => {
       const text = clampFeedbackMessage(message);

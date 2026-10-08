@@ -40,6 +40,19 @@ The server runs in the foreground and speaks JSON-RPC on stdin/stdout. You rarel
 
 The five entity tools read the local project store, so they need no account and spend no credits. They answer questions about audits you have already run: see [the entity map for agents](/guides/entity-map/mcp) for the fix-and-verify loop they are built around.
 
+## Supported protocol versions
+
+One `squirrel mcp` process serves both MCP protocol eras, and picks the era from the client's first message:
+
+| Protocol version | How a client connects | Capabilities come from |
+|------------------|-----------------------|------------------------|
+| `2026-07-28` | No `initialize` handshake. The client sends its protocol version and capabilities on each request. | `server/discover` |
+| `2025-11-25` and earlier | The `initialize` handshake. | The `initialize` result |
+
+You don't configure anything. Claude Code and other clients on the 2026-07-28 revision connect without a handshake, and older clients keep working with the same binary and the same tools. The tool names, descriptions and input schemas are identical in both eras.
+
+The HTTP-only parts of the 2026-07-28 revision (the `Mcp-Method` and `Mcp-Name` headers, no session id) don't apply to a stdio server.
+
 ## Authentication for agent/CI use
 
 Tools marked "Login" above need a credential to reach the squirrelscan API. The local server reuses the same [token resolution](/developers/authentication) as the rest of the CLI: it checks `SQUIRRELSCAN_API_KEY` (or the older `SQUIRREL_API_TOKEN` alias) first, then falls back to a `squirrel auth login` session.

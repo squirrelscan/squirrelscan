@@ -1,6 +1,6 @@
 // Cloud report tools (authed): fetch a published report, list active runs.
 
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 
 import { z } from "zod";
 
@@ -66,11 +66,11 @@ export function registerReportTools(
       description:
         "Fetch a rendered audit report by its audit/run id. Returns the report's issues, scores, and metadata as JSON." +
         authNote(TOOL_AUTH.get_report),
-      inputSchema: {
+      inputSchema: z.object({
         auditId: z
           .string()
           .describe("The audit/run id to fetch the report for"),
-      },
+      }),
     },
     async ({ auditId }) => {
       const denied = requireLoginError(resolveLogin);
@@ -90,7 +90,7 @@ export function registerReportTools(
       description:
         "List your organization's currently running or pending audits. Returns each run's url, status, and trigger as JSON." +
         authNote(TOOL_AUTH.list_audits),
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async () => {
       const denied = requireLoginError(resolveLogin);
