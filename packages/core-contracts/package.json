@@ -22,7 +22,8 @@
     "./entity-map-project": "./src/entity-map-project.ts",
     "./entity-map-findings": "./src/entity-map-findings.ts",
     "./entity-mcp": "./src/entity-mcp.ts",
-    "./entity-page-match": "./src/entity-page-match.ts"
+    "./entity-page-match": "./src/entity-page-match.ts",
+    "./audit-levels": "./src/audit-levels.ts"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.49",
