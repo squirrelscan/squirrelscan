@@ -18,6 +18,7 @@ import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
 
 import { findingFingerprint } from "./fingerprint";
+import type { PageUrlSet } from "./scoring";
 
 const EMPTY_HASHES: readonly string[] = [];
 
@@ -535,6 +536,27 @@ export interface MergeSession {
   readonly sitePages: SitePageRecord[];
   readonly activePageUrls: Set<string>;
   /**
+   * (#497) What the streaming caller asks of the site's pages, answered without
+   * copying them: `sitePages` and `activePageUrls` are built on first read, and
+   * these are not. A site's pages are bounded by its history, not by the run.
+   */
+  readonly activePageCount: number;
+  /**
+   * The `sitePages` rows this run wrote: the pages it crawled or saw removed.
+   * Every other row is a prior page passed through unchanged, so a store that
+   * already holds `priorPages` reaches the same rows by upserting only these.
+   */
+  readonly changedSitePages: SitePageRecord[];
+  isActivePage(normalizedUrl: string): boolean;
+  /** A page some audit rendered: it has a prior `site_pages` row (#1652). */
+  everRendered(normalizedUrl: string): boolean;
+  /**
+   * Prior pages whose row is active and that this run neither crawled nor saw
+   * removed, in the prior pages' order (the last row winning for a url listed
+   * twice). The union scorer's carried pages; a view, not a copy.
+   */
+  readonly carriedPageUrls: PageUrlSet;
+  /**
    * Decide one batch of prior OPEN findings, pushing the results to the sink.
    * The decision is per row and never depends on how the priors are batched, so
    * any batching (one array, one page, one row) yields the same records in the
@@ -698,10 +720,11 @@ export function createMergeSession(
   // row was pruned by retention and that is later rediscovered loses its
   // history. (A page rendered ONLY per the #1185 signal used to lose it the same
   // way; it gets a row since #2067, see step 3.)
-  const everRenderedUrls = new Set<string>();
-  for (const p of priorPages) everRenderedUrls.add(p.normalizedUrl);
+  //
+  // (#497) Read off the prior pages' index below rather than a set of its own:
+  // its keys are exactly the prior pages.
   const neverRendered = (normalizedUrl: string, renderedThisRun: boolean): boolean =>
-    !renderedThisRun && !everRenderedUrls.has(normalizedUrl);
+    !renderedThisRun && !known.index.has(normalizedUrl);
 
   // 3) Site pages — active set (crawled non-removed) ∪ prior actives minus removed.
   //
@@ -718,14 +741,24 @@ export function createMergeSession(
   // for the finding decisions below — those keep reading `crawledUrls` and the
   // signal separately — and it does not move this run's score: `runCloudSmartAudits`
   // derives `carriedPageUrls` from `priorPages`, not from `activePageUrls`.
-  const sitePageMap = new Map<string, SitePageRecord>();
-  for (const p of priorPages) {
-    sitePageMap.set(p.normalizedUrl, p);
-  }
+  //
+  // (#497) Kept as the prior pages (the last row winning for a url listed twice)
+  // plus this run's changes, never as one merged copy: a site's pages outnumber a
+  // run's by orders of magnitude, so the counts the callers need are derived from
+  // the run's pages, and the merged list is built only when it is read.
+  const known = indexPriorPages(priorPages);
+  const priorOf = (url: string): SitePageRecord | undefined => {
+    const i = known.index.get(url);
+    return i === undefined ? undefined : known.pages[i];
+  };
+  const priorActive = (url: string): boolean => priorOf(url)?.state === "active";
+  /** Pages this run crawled or saw removed. Bounded by the run. */
+  const thisRun = new Map<string, SitePageRecord>();
+  const pageOf = (url: string): SitePageRecord | undefined => thisRun.get(url) ?? priorOf(url);
   // Crawled this run (excluding removed) → active with the real HTTP status.
   const markCrawled = (url: string): void => {
     if (removedUrls.has(url)) return;
-    sitePageMap.set(url, {
+    thisRun.set(url, {
       siteKey,
       normalizedUrl: url,
       lastStatus: statusByUrl.get(url) ?? 200,
@@ -738,8 +771,8 @@ export function createMergeSession(
   if (resolution) for (const url of resolution.crawledUrls) markCrawled(url);
   // Removed this run → removed, recording the real 404/410 status.
   for (const url of removedUrls) {
-    const prior = sitePageMap.get(url);
-    sitePageMap.set(url, {
+    const prior = pageOf(url);
+    thisRun.set(url, {
       siteKey,
       normalizedUrl: url,
       lastStatus: statusByUrl.get(url) ?? prior?.lastStatus ?? 404,
@@ -749,10 +782,43 @@ export function createMergeSession(
     });
   }
 
-  const sitePages = Array.from(sitePageMap.values());
-  const activePageUrls = new Set<string>(
-    sitePages.filter((p) => p.state === "active").map((p) => p.normalizedUrl)
-  );
+  // Active afterwards: the prior actives, corrected page by page for the run's own.
+  let activePageCount = known.active;
+  for (const [url, p] of thisRun) {
+    if (priorActive(url)) activePageCount -= 1;
+    if (p.state === "active") activePageCount += 1;
+  }
+  // Carried: the prior actives this run neither crawled nor saw removed.
+  let carriedPageCount = known.active;
+  for (const url of crawledUrls) if (priorActive(url)) carriedPageCount -= 1;
+  for (const url of removedUrls) {
+    if (!crawledUrls.has(url) && priorActive(url)) carriedPageCount -= 1;
+  }
+  const carriesPage = (url: string, p: SitePageRecord): boolean =>
+    p.state === "active" && !crawledUrls.has(url) && !removedUrls.has(url);
+  const carriedPageUrls: PageUrlSet = {
+    size: carriedPageCount,
+    has: (url) => {
+      const p = priorOf(url);
+      return p !== undefined && carriesPage(url, p);
+    },
+    *[Symbol.iterator]() {
+      for (const p of known.pages) if (carriesPage(p.normalizedUrl, p)) yield p.normalizedUrl;
+    },
+  };
+
+  /** The merged pages, in the order one map written prior-first would hold them. */
+  const buildSitePages = (): SitePageRecord[] => {
+    const pages = known.pages.slice();
+    for (const [url, p] of thisRun) {
+      const i = known.index.get(url);
+      if (i === undefined) pages.push(p);
+      else pages[i] = p;
+    }
+    return pages;
+  };
+  let sitePages: SitePageRecord[] | undefined;
+  let activePageUrls: Set<string> | undefined;
 
   /** This run's FRESH records — emitted by `finish()`, once every prior has had
    *  its chance to leave a `firstSeenAt` behind. */
@@ -942,13 +1008,62 @@ export function createMergeSession(
   };
 
   return {
-    sitePages,
-    activePageUrls,
+    get sitePages() {
+      return (sitePages ??= buildSitePages());
+    },
+    get activePageUrls() {
+      if (!activePageUrls) {
+        activePageUrls = new Set<string>();
+        for (const p of (sitePages ??= buildSitePages())) {
+          if (p.state === "active") activePageUrls.add(p.normalizedUrl);
+        }
+      }
+      return activePageUrls;
+    },
+    // Taken once: `thisRun` is complete by now and nothing writes it later.
+    changedSitePages: Array.from(thisRun.values()),
+    activePageCount,
+    isActivePage: (url) => pageOf(url)?.state === "active",
+    everRendered: (url) => known.index.has(url),
+    carriedPageUrls,
     addPriorFindings: (priors) => {
       for (const prior of priors) addPrior(prior);
     },
     finish: emitFresh,
   };
+}
+
+/**
+ * (#497) The prior pages, one per url: at its FIRST position, holding its LAST
+ * row, which is what one `Map.set` per row keeps. `active` counts their active
+ * rows. A store's rows are unique by url, so the slower pass for a repeat is
+ * there for hand-built inputs only.
+ */
+function indexPriorPages(priorPages: readonly SitePageRecord[]): {
+  index: Map<string, number>;
+  pages: readonly SitePageRecord[];
+  active: number;
+} {
+  const index = new Map<string, number>();
+  for (let i = 0; i < priorPages.length; i++) index.set(priorPages[i]!.normalizedUrl, i);
+  let pages = priorPages;
+  if (index.size !== priorPages.length) {
+    index.clear();
+    const deduped: SitePageRecord[] = [];
+    for (const p of priorPages) {
+      const i = index.get(p.normalizedUrl);
+      if (i === undefined) {
+        index.set(p.normalizedUrl, deduped.length);
+        deduped.push(p);
+      } else {
+        deduped[i] = p;
+      }
+    }
+    pages = deduped;
+  }
+  let active = 0;
+  for (const p of pages) if (p.state === "active") active += 1;
+  return { index, pages, active };
 }
 
 function toMerged(

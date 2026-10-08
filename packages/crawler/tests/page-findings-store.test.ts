@@ -5,6 +5,8 @@ import { Effect } from "effect";
 
 import type { PageFindingRecord, SitePageRecord } from "../src/storage/types";
 import { SQLiteStorage } from "../src/storage/sqlite";
+// The contract suite lives with the store interface it pins, in audit-engine.
+import { describeSitePagesContract } from "../../audit-engine/tests/helpers/site-pages-contract";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
   return Effect.runPromise(eff as Effect.Effect<A, never, never>);
@@ -306,3 +308,20 @@ describe("compactFindings (#197 churny-site hygiene)", () => {
     await run(store.close());
   });
 });
+
+// The `upsertSitePages` keyed-upsert contract the cloud merge relies on (#497):
+// the same cases every in-repo `SmartAuditStore` runs.
+describeSitePagesContract(
+  "SQLiteStorage",
+  async () => {
+    const store = await freshStore();
+    return {
+      store,
+      getSitePages: (siteKey: string) => run(store.getSitePages(siteKey)),
+      upsertSitePages: (pages: SitePageRecord[]) => run(store.upsertSitePages(pages)),
+    };
+  },
+  async ({ store }) => {
+    await run(store.close());
+  },
+);

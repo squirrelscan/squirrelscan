@@ -50,6 +50,7 @@ import {
 } from "../src/scoring";
 import { findingFingerprint } from "../src/fingerprint";
 import { buildSkippedPassCounts, buildStreamFindings } from "../src/stream-findings";
+import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 class MemStore implements SmartAuditStore {
   findings = new Map<string, PageFindingRecord>();
@@ -1607,3 +1608,5 @@ describe("(e) untouched carried pages as an aggregate == the full row fold (pub#
     ).rejects.toThrow(/miss rows the sample holds/);
   });
 });
+
+describeSitePagesContract("complete-store-parity.test.ts MemStore", () => new MemStore());
