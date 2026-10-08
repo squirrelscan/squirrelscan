@@ -243,7 +243,7 @@ export const ROUND_3: Case[] = [
     // The connection string is claimed first and CONTAINS the token, so the
     // token's own finding is the overlap dedup's duplicate: what must hold is
     // that the database URL reports.
-    [inl("inline-script", "PostgreSQL Connection String", "high")]),
+    [inl("inline-script", "PostgreSQL Connection String", "critical")]),
   rw("brand-far-from-the-key-stays-generic", (r) =>
     page("", `<script>/* raygun */ var a=1,b=2,c=3,d=4,e=5,f=6,g=7,h=8,i=9,j=10;window.__cfg={apiKey:"${runOf(r, DIGIT, 1)}${runOf(r, ALNUM, 27)}"};</script>`),
     [inl("inline-script", "Generic API Key Assignment")]),
@@ -372,7 +372,7 @@ export const ROUND_5: Case[] = [
     []),
   rw("digitalocean-spaces-key-still-fires", (r) =>
     page("", `<script>window.__ENV={DO_SPACES_KEY:"DO${runOf(r, UPPER + DIGIT, 22)}"};</script>`),
-    [inl("inline-script", "DigitalOcean Spaces Key")]),
+    [inl("inline-script", "DigitalOcean Spaces Key", "critical")]),
 
   // 6. The key id in a presigned S3 URL is the public half of the signature,
   // which means the signature and the expiry have to be there beside it.
@@ -395,7 +395,7 @@ export const ROUND_5: Case[] = [
     [inl("inline-script", "Supabase Publishable Key", "public")]),
   rw("supabase-secret-key-is-a-leak", (r) =>
     page("", `<script>const h={apikey:"${["sb", "_sec", "ret_"].join("")}${runOf(r, ALNUM + "-_", 28)}"};</script>`),
-    [inl("inline-script", "Supabase Secret Key", "high")]),
+    [inl("inline-script", "Supabase Secret Key", "critical")]),
 
   // 8. A `data-*` credential attribute on a `<script src>` is that loader's
   // own configuration, read out of the DOM by the vendor's script.
@@ -412,7 +412,7 @@ export const ROUND_5: Case[] = [
     []),
   rw("connection-string-with-a-password-still-reports", (r) =>
     page("", `<script>const url="mysql://app_user:${runOf(r, ALNUM, 18)}@db.internal:3306/prod";</script>`),
-    [inl("inline-script", "MySQL Connection String", "high")]),
+    [inl("inline-script", "MySQL Connection String", "critical")]),
 
   // Round 5, second pass: the shapes the first version of two of these guards
   // silenced. A guard that looks in one place and concludes "no credential"
@@ -422,13 +422,13 @@ export const ROUND_5: Case[] = [
   // the authority, and a userinfo colon can be percent-encoded.
   rw("connection-string-with-the-password-in-the-query-still-reports", (r) =>
     page("", `<script>const url="postgresql://app@db.internal:5432/prod?sslmode=require&password=${runOf(r, ALNUM, 20)}";</script>`),
-    [inl("inline-script", "PostgreSQL Connection String", "high")]),
+    [inl("inline-script", "PostgreSQL Connection String", "critical")]),
   rw("jdbc-connection-string-with-the-password-in-the-query-still-reports", (r) =>
     page("", `<script>const url="jdbc:mysql://db.internal:3306/prod?user=app&password=${runOf(r, ALNUM, 20)}";</script>`),
-    [inl("inline-script", "MySQL Connection String", "high")]),
+    [inl("inline-script", "MySQL Connection String", "critical")]),
   rw("connection-string-with-a-percent-encoded-userinfo-colon-still-reports", (r) =>
     page("", `<script>const url="mongodb://app%3A${runOf(r, ALNUM, 18)}@cluster0.${runOf(r, LOWER, 5)}.mongodb.test/prod";</script>`),
-    [inl("inline-script", "MongoDB Connection String", "high")]),
+    [inl("inline-script", "MongoDB Connection String", "critical")]),
 
   // 2. An absolute URL under a credential key is often the credential itself:
   // a webhook endpoint is a bearer token in URL form.

@@ -15,6 +15,12 @@ How it works:
 - A `## [Unreleased]` section collects merged changes that have not been cut into
   a release yet; rename it to the version when the release goes out.
 
+## [Unreleased]
+
+### Changed
+
+- `security/leaked-secrets` reports a server-only secret that sits in a browser-served script (an external file or an inline `<script>`) in a new `leaked-secrets-critical` check, with the message "shipped to every visitor". Database connection strings, Supabase service-role and secret keys, Stripe `sk_live_` keys, Clerk secret keys, AWS secret access keys, Azure storage keys and DigitalOcean keys move there from `leaked-secrets-high` or `leaked-secrets-medium`. The same class found only in page HTML, and publishable or anon keys, report as before. The finding is the same hit, not a second one.
+
 ## v0.0.105 — 2026-10-07
 
 `images/responsive-size` measures thumbnails in pixels, `schema/json-ld-valid` follows schema.org and Google more closely and now checks the fields of each breadcrumb and FAQ question, and `squirrel entities` shows the page each dangling reference comes from.

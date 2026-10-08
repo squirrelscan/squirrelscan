@@ -1428,6 +1428,40 @@ export interface LeakedSecret {
   extra?: FindingExtra;
 }
 
+/**
+ * Pattern names whose value only ever belongs on a server: database
+ * connection strings, service-role and secret keys, live secret keys, AWS
+ * secret keys and other cloud provider secrets. Keyed by `LeakedSecret.type`
+ * because the pattern tiers carry no class field. Publishable and anon keys
+ * (Stripe pk_live, Supabase anon and publishable) are `publicByDesign` and
+ * never reach this test.
+ */
+const SERVER_ONLY_TYPES: ReadonlySet<string> = new Set([
+  "MongoDB Connection String",
+  "PostgreSQL Connection String",
+  "MySQL Connection String",
+  "Redis Connection String",
+  "Supabase Service Role Key",
+  "Supabase Secret Key",
+  "Supabase Service Role JWT",
+  "Stripe Live Key",
+  "Clerk Secret Key",
+  "AWS Secret Access Key",
+  "Azure Storage Key",
+  "DigitalOcean Token",
+  "DigitalOcean Spaces Key",
+]);
+
+/** An inline or external script is shipped to every visitor's browser. */
+function isBrowserServed(location: ReportedLocation): boolean {
+  return location.startsWith("inline-script") || location.startsWith("external-script");
+}
+
+/** A server-only secret read from a browser-served script: critical. */
+export function isShippedServerSecret(s: LeakedSecret): boolean {
+  return !s.publicByDesign && SERVER_ONLY_TYPES.has(s.type) && isBrowserServed(s.location);
+}
+
 function isLikelyFalsePositive(value: string): boolean {
   return endsInRepeatedChar(value) || FALSE_POSITIVE_PATTERNS.some((pattern) => pattern.test(value));
 }
@@ -2534,6 +2568,9 @@ export const leakedSecretsRule: Rule = {
     for (const s of leakedSecrets) {
       const prior = byValue.get(s.value);
       if (prior?.publicByDesign && !s.publicByDesign) continue;
+      // A later page's plain HTML hit must not hide the script hit that makes
+      // a server-only secret critical.
+      if (prior && isShippedServerSecret(prior) && !isShippedServerSecret(s) && !s.publicByDesign) continue;
       byValue.set(s.value, s);
     }
     // A generic assignment's value carries its key (`accessToken":"…"`), so
@@ -2562,10 +2599,12 @@ export const leakedSecretsRule: Rule = {
     );
 
     // Separate by confidence
-    const highConfidence = realSecrets.filter((s) => s.confidence === "high");
-    const mediumConfidence = realSecrets.filter(
-      (s) => s.confidence === "medium"
-    );
+    // Server-only secrets read from a browser-served script move out of the
+    // high and medium checks into their own: same hit, higher severity.
+    const critical = realSecrets.filter(isShippedServerSecret);
+    const rest = realSecrets.filter((s) => !isShippedServerSecret(s));
+    const highConfidence = rest.filter((s) => s.confidence === "high");
+    const mediumConfidence = rest.filter((s) => s.confidence === "medium");
 
     // One item per finding: the pattern and masked value as the id, where it
     // was read as the label, and whatever its structure decoded to (#361) as
@@ -2575,6 +2614,16 @@ export const leakedSecretsRule: Rule = {
       label: `Found in ${s.location}${s.sourceUrl ? ` (${s.sourceUrl})` : ""}`,
       ...(s.extra ? { meta: s.extra } : {}),
     });
+
+    if (critical.length > 0) {
+      checks.push({
+        name: "leaked-secrets-critical",
+        status: "fail",
+        message: `${critical.length} server-only secret(s) shipped to every visitor in browser-served scripts (rotate now)`,
+        details: { severity: "critical" },
+        items: critical.map(item),
+      });
+    }
 
     if (highConfidence.length > 0) {
       checks.push({

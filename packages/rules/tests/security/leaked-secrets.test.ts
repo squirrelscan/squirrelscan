@@ -59,6 +59,7 @@ function ctxFor(c: Case): RuleContext {
 }
 
 const CHECK_NAMES: Record<Check, string> = {
+  critical: "leaked-secrets-critical",
   high: "leaked-secrets-high",
   medium: "leaked-secrets-medium",
   public: "leaked-secrets-public",
