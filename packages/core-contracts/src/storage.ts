@@ -706,6 +706,14 @@ export interface PageReportScalars {
   thinContent: boolean;
 }
 
+/** One `<link rel="alternate" hreflang>` annotation, as the parser extracts it. */
+export interface HreflangAlternate {
+  /** The hreflang value, lowercased (`en-gb`, `de`, `x-default`). */
+  hreflang: string;
+  /** Absolute URL, resolved against the page URL. */
+  href: string;
+}
+
 /**
  * One accumulated page-features row (keyed by crawlId + normalizedUrl in the
  * table; `crawlId` is a method parameter, mirroring {@link PageRecord}). Hashes
@@ -801,6 +809,14 @@ export interface PageFeatureRow {
   themeColor: string | null;
   /** Absolute URL of the page's `og:image` (the default/fallback one), or null. */
   ogImage: string | null;
+  /**
+   * The page's hreflang alternates (#489), as `parsePage` extracted them
+   * (bounded there). The duplicate title and description rules read these to
+   * leave reciprocal same-language region variants out of their groups. Null
+   * when the page declares none, and on a row or replayed payload written before
+   * the field existed, which exempts nothing: the rules then behave as before.
+   */
+  hreflangAlternates: HreflangAlternate[] | null;
   /**
    * Report-only per-page scalars (#2343). Null on a row written before schema
    * v30, which is what makes the report's fallback parse reachable rather than

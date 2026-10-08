@@ -16,6 +16,7 @@ import type {
   CheckResult,
   CloakingProbeData,
   ContactLinkData,
+  HreflangAlternate,
   ContentAnalysis,
   DiscoveryProbe,
   EntityMap,
@@ -266,6 +267,13 @@ export interface ParsedPage {
   visibleAuthor?: string | null;
   visibleDatePublished?: string | null;
   visibleDateModified?: string | null;
+
+  /**
+   * `<link rel="alternate" hreflang>` annotations, resolved, deduplicated and
+   * capped by the parser (#489). Absent on parsed records stored before the
+   * field existed; readers treat that as "none declared".
+   */
+  hreflangAlternates?: HreflangAlternate[];
 
   /**
    * True when this 2xx page serves 404/error content (see `detectSoft404`).

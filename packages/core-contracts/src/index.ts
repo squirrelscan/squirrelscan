@@ -63,6 +63,7 @@ import type {
   CacheHitReason,
   CacheStats,
   CheckProvenance,
+  HreflangAlternate,
   RslLicenseDoc,
   SecurityHeaders,
   WellKnownProbe,
@@ -1468,6 +1469,13 @@ export interface ParsedPage {
   visibleAuthor?: string | null;
   visibleDatePublished?: string | null;
   visibleDateModified?: string | null;
+  /**
+   * `<link rel="alternate" hreflang>` annotations from the page markup, hrefs
+   * resolved against the page URL, deduplicated and capped (#489). Optional so
+   * parsed records serialized before this field existed stay valid; readers
+   * must treat absent as "not extracted", which exempts nothing.
+   */
+  hreflangAlternates?: HreflangAlternate[];
 }
 
 export type CoverageMode = "quick" | "surface" | "full";

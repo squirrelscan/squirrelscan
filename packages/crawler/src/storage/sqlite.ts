@@ -43,6 +43,7 @@ import type {
   CompactFindingsOptions,
   PageFeatureRow,
   PageReportScalars,
+  HreflangAlternate,
   PageLinkRow,
   PageFeatureDuplicateField,
   DuplicateGroup,
@@ -72,7 +73,7 @@ export interface ContentStoreAdapter {
 // Schema version - increment when schema changes.
 // Exported so migration tests can assert "this DB reached the CURRENT version" rather than pinning a
 // literal, which turned every schema bump into two unrelated test failures.
-export const SCHEMA_VERSION = 32;
+export const SCHEMA_VERSION = 33;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -486,6 +487,12 @@ const MIGRATIONS: Record<number, string[]> = {
     `ALTER TABLE resource_sizes ADD COLUMN natural_height INTEGER`,
     `ALTER TABLE resource_sizes ADD COLUMN animated INTEGER`,
   ],
+  // Version 33: a page's hreflang alternates (squirrelscan/squirrelscan#489),
+  // so the streaming duplicate title and description rules can leave
+  // reciprocal same-language region variants out of their groups. ADDITIVE and
+  // nullable: a row written before this reads as "no alternates", which
+  // exempts nothing and is the behaviour before #489. Local sqlite only.
+  33: [`ALTER TABLE page_features ADD COLUMN hreflang_alternates TEXT`],
 };
 
 // Every `pages` column but the two that hold a page's body, for
@@ -611,6 +618,13 @@ const RESOURCE_SIZES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }
   { name: "natural_width", type: "INTEGER" },
   { name: "natural_height", type: "INTEGER" },
   { name: "animated", type: "INTEGER" },
+];
+
+// Same guard for `page_features` (#489). Migration 33 added
+// `hreflang_alternates` and every page-features write names it, so a DB stamped
+// past 33 without it would fail the streamed rule loop's first upsert.
+const PAGE_FEATURES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
+  { name: "hreflang_alternates", type: "TEXT" },
 ];
 
 const SCHEMA = `
@@ -1020,6 +1034,7 @@ CREATE TABLE IF NOT EXISTS page_features (
   theme_color TEXT,
   og_image TEXT,
   report_scalars TEXT,
+  hreflang_alternates TEXT,
   PRIMARY KEY (crawl_id, normalized_url),
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
@@ -1333,6 +1348,7 @@ export class SQLiteStorage implements CrawlStorage {
     this.reconcileColumns("crawls", CRAWLS_ALTER_COLUMNS);
     this.reconcileColumns("entity_edges", ENTITY_EDGES_ALTER_COLUMNS);
     this.reconcileColumns("resource_sizes", RESOURCE_SIZES_ALTER_COLUMNS);
+    this.reconcileColumns("page_features", PAGE_FEATURES_ALTER_COLUMNS);
     this.indexesAfterMigrations();
   }
 
@@ -1384,7 +1400,8 @@ export class SQLiteStorage implements CrawlStorage {
       | "sitemap_url_statuses"
       | "crawls"
       | "entity_edges"
-      | "resource_sizes",
+      | "resource_sizes"
+      | "page_features",
     columns: ReadonlyArray<{ name: string; type: string }>
   ): void {
     const db = this.getDb();
@@ -5136,8 +5153,8 @@ export class SQLiteStorage implements CrawlStorage {
       meta_noindex, indexable_reasons, rich_result_types,
       nap_name, nap_phones, nap_phone_formats, nap_address, nap_address_format,
       nap_tel_link, nap_mailto_link,
-      favicon_href, theme_color, og_image, report_scalars
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      favicon_href, theme_color, og_image, report_scalars, hreflang_alternates
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   private pageFeatureParams(
@@ -5178,6 +5195,9 @@ export class SQLiteStorage implements CrawlStorage {
       row.themeColor,
       row.ogImage,
       row.reportScalars ? JSON.stringify(row.reportScalars) : null,
+      // Optional-chained: a rule-cache payload stored before #489 replays a
+      // features object without the field, and stores as "no alternates".
+      row.hreflangAlternates?.length ? JSON.stringify(row.hreflangAlternates) : null,
     ];
   }
 
@@ -5541,6 +5561,9 @@ export class SQLiteStorage implements CrawlStorage {
       ogImage: (row.og_image as string | null) ?? null,
       reportScalars: row.report_scalars
         ? this.safeJsonParse(row.report_scalars as string, null as PageReportScalars | null)
+        : null,
+      hreflangAlternates: row.hreflang_alternates
+        ? this.safeJsonParse(row.hreflang_alternates as string, null as HreflangAlternate[] | null)
         : null,
     };
   }
