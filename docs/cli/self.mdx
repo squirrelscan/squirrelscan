@@ -15,7 +15,7 @@ The `self` command provides subcommands for managing the squirrel CLI itself: in
 - [disk](#disk) - Report what `~/.squirrel` is using
 - [version](#version) - Show version information
 - [settings](#settings) - Manage CLI settings
-- [uninstall](#uninstall) - Remove squirrel from system
+- [uninstall](#uninstall) - Remove squirrel from the system
 
 ---
 
@@ -630,7 +630,7 @@ NO_TELEMETRY=1 squirrel audit https://example.com
 
 ## uninstall
 
-Remove squirrel from your system.
+Remove the managed install: the `squirrel` link, the release binaries, and with `--purge` your settings and data too.
 
 ### Usage
 
@@ -642,8 +642,9 @@ squirrel self uninstall [options]
 
 | Option | Description |
 |--------|-------------|
-| `--purge` | Also remove user settings |
-| `--force` | Skip confirmation prompt |
+| `--purge` | Also remove `~/.squirrel` (settings, credentials, audit data) and the cache directory |
+| `--yes` | Skip the confirmation prompt |
+| `--force` | Same as `--yes`, kept for older scripts |
 
 ### Examples
 
@@ -653,44 +654,59 @@ squirrel self uninstall [options]
 squirrel self uninstall
 ```
 
-Output:
 ```text
 This will remove:
-  - Symlink at ~/.local/bin/squirrel
-  - Cached releases at ~/.local/share/squirrel
+  - ~/.local/bin/squirrel
+  - ~/.squirrel/releases
 
-User settings at ~/.squirrel/settings.json will be preserved.
-Use --purge to also remove settings.
+Settings and credentials in ~/.squirrel are kept. Use --purge to remove them too.
 
 Continue? [y/N]
 ```
 
-#### Uninstall with settings
+#### Remove everything
 
 ```bash
 squirrel self uninstall --purge
 ```
 
-This removes:
-- Binary symlink
-- Cached releases
-- User settings
-
-#### Force uninstall (no prompt)
+#### Without a prompt
 
 ```bash
-squirrel self uninstall --force
+squirrel self uninstall --yes
 ```
+
+Without a terminal to ask in (a script, CI, a package manager hook), the command refuses to delete anything unless you pass `--yes`.
 
 ### What gets removed
 
-| Item | Default | With --purge |
-|------|---------|--------------|
-| Binary symlink (`~/.local/bin/squirrel`) | ✓ | ✓ |
-| Cached releases (`~/.local/share/squirrel/`) | ✓ | ✓ |
-| User settings (`~/.squirrel/`) | ✗ | ✓ |
-| Project configs (`squirrel.toml`) | ✗ | ✗ |
-| Audit database (`~/.local/share/squirrel/audits.db`) | ✓ | ✓ |
+| Item | Default | With `--purge` |
+|------|---------|----------------|
+| The `squirrel` link (`~/.local/bin/squirrel`, or the directory you passed to `self install --bin-dir`) | Removed | Removed |
+| Release binaries (`~/.squirrel/releases`) | Removed | Removed |
+| Settings and credentials (`~/.squirrel/settings.json`) | Kept | Removed |
+| Audit data and logs (`~/.squirrel/projects`, `~/.squirrel/logs`) | Kept | Removed |
+| Cache (`~/Library/Caches/squirrel` on macOS, `~/.cache/squirrel` on Linux) | Kept | Removed |
+| Project configs (`squirrel.toml`) in your repositories | Kept | Kept |
+
+On Windows the same layout lives under `%LOCALAPPDATA%\squirrel`, and the command removes the `squirrel.exe` in its `bin` folder. Windows locks a running exe. If it cannot be deleted, the command renames it aside and prints the path to delete afterwards.
+
+Running it again after a successful uninstall finds nothing to remove and exits 0.
+
+### Shell completions
+
+`self install` and `self completion` never write completion files. `self completion` prints a script, and your shell config runs it. If you added a line such as `eval "$(squirrel self completion zsh)"`, remove it yourself. The command reminds you when it finishes.
+
+### Safety
+
+`self uninstall` only deletes what a squirrelscan install put there:
+
+- Every path is resolved with `realpath` and must lie inside the managed directories.
+- A `squirrel` link that points anywhere other than `~/.squirrel/releases` is reported and left alone. So is a plain file at that path.
+- It never follows a symlink out of a managed directory. A symlinked `~/.squirrel` or `~/.squirrel/releases` is reported and left for you to remove.
+- A symlink inside the releases is removed as a link. What it points to is not touched.
+- It refuses to run from a binary that is not the managed install, such as one you placed by hand. Run `~/.local/bin/squirrel self uninstall` instead.
+- Each path is checked again right before it is deleted, and skipped if it changed since the plan was printed.
 
 <Info>
 Project configs (`squirrel.toml`) in your repositories are never removed.

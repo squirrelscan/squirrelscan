@@ -796,82 +796,90 @@ const selfUninstall = defineCommand({
   args: {
     purge: {
       type: "boolean",
-      description: "Also remove user settings",
+      description:
+        "Also remove settings, credentials, audit data and the cache (~/.squirrel)",
+    },
+    yes: {
+      type: "boolean",
+      description: "Skip the confirmation prompt",
     },
     force: {
       type: "boolean",
-      description: "Skip confirmation prompt",
+      // The flag's name before #23, kept so existing scripts keep working.
+      description: "Same as --yes",
     },
   },
   async run({ args }) {
-    const { getSquirrelPaths, getSymlinkPath } = await import("@/self/paths");
-    const { runSelfUninstall } = await import("@/controllers/self/uninstall");
-    const { createInterface } = await import("node:readline");
+    const { COMPLETION_NOTE, runSelfUninstall } =
+      await import("@/controllers/self/uninstall");
+    type Plan = import("@/controllers/self/uninstall").UninstallPlan;
 
-    const paths = getSquirrelPaths();
-    const symlinkPath = getSymlinkPath();
-
-    // Show what will be removed
-    console.log("This will remove:");
-    console.log(`  - Symlink at ${symlinkPath}`);
-    console.log(`  - Cached releases at ${paths.releases}`);
-
-    if (args.purge) {
-      console.log(`  - User settings at ${paths.config}`);
-    } else {
-      console.log(`\nUser settings at ${paths.config} will be preserved.`);
-      console.log("Use --purge to also remove settings.");
-    }
-
-    // Confirmation prompt unless --force
-    if (!args.force) {
-      const rl = createInterface({
-        input: process.stdin,
-        output: process.stdout,
-      });
-
-      const answer = await new Promise<string>((resolve) => {
-        rl.question("\nContinue? [y/N] ", resolve);
-      });
-      rl.close();
-
-      if (answer.toLowerCase() !== "y") {
-        console.log("Cancelled.");
-        return;
+    const printSkipped = (plan: Plan) => {
+      for (const s of plan.skipped) {
+        console.warn(`Warning: left ${s.path} alone: it ${s.reason}.`);
       }
-    }
+      for (const note of plan.notes) console.warn(`Warning: ${note}`);
+    };
 
-    const result = await runSelfUninstall({
-      purge: args.purge ?? false,
-      force: args.force ?? false,
-    });
+    const printPlan = (plan: Plan) => {
+      console.log("This will remove:");
+      for (const t of plan.targets) console.log(`  - ${t.path}`);
+      if (plan.kept) {
+        console.log(
+          `\nSettings and credentials in ${plan.kept} are kept. Use --purge to remove them too.`
+        );
+      }
+    };
+
+    const result = await runSelfUninstall(
+      { purge: args.purge ?? false, yes: Boolean(args.yes || args.force) },
+      {
+        confirm: async (plan) => {
+          printPlan(plan);
+          const { promptForInput } = await import("@/cli/prompt");
+          const answer = await promptForInput("\nContinue? [y/N] ");
+          return answer.toLowerCase() === "y";
+        },
+      }
+    );
 
     if (!result.ok) {
+      const plan = result.error.details as Plan | undefined;
+      if (plan) {
+        printSkipped(plan);
+        if (result.error.code === "CONFIRMATION_REQUIRED") printPlan(plan);
+      }
       console.error(`Error: ${result.error.message}`);
       process.exit(1);
     }
 
     const data = result.data;
+    printSkipped(data.plan);
 
-    if (data.symlink_removed) {
-      console.log("✓ Removed symlink");
+    if (data.status === "nothing-to-remove") {
+      console.log("Nothing to remove: no managed squirrel install was found.");
+      return;
+    }
+    if (data.status === "cancelled") {
+      console.log("Cancelled.");
+      return;
     }
 
-    if (data.releases_removed) {
-      const sizeMB = (data.releases_size_bytes / 1024 / 1024).toFixed(1);
+    for (const path of data.removed) console.log(`✓ Removed ${path}`);
+    for (const path of data.leftover) {
       console.log(
-        `✓ Removed cached releases (${data.releases_count} versions, ${sizeMB}MB)`
+        `Delete ${path} once this command exits (Windows keeps a running exe locked).`
       );
     }
-
-    if (data.settings_removed) {
-      console.log("✓ Removed user settings");
+    for (const f of data.failed) {
+      console.error(`Error: could not remove ${f.path}: ${f.reason}`);
     }
-
-    console.log("✓ Uninstall complete");
-    console.log(
-      '\nNote: If you added shell completions, remove from your shell config:\n  eval "$(squirrel self completion <shell>)"'
-    );
+    const { existsSync } = await import("node:fs");
+    if (data.plan.kept && existsSync(data.plan.kept)) {
+      console.log(`Kept settings and credentials in ${data.plan.kept}.`);
+    }
+    console.log(`\n${COMPLETION_NOTE}`);
+    if (data.failed.length > 0) process.exit(1);
   },
 });
 
