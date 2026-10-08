@@ -2572,8 +2572,10 @@ export function runStreamingRules(
         );
         collectedPages.push(signal);
         // The value the rule cache stores for this page. It is already detached
-        // and holds no DOM, so it is exactly what a replay needs (#1990).
-        return signal;
+        // and holds no DOM, so it is exactly what a replay needs (#1990). An
+        // extractor that ran past its time budget left a hole, which must not be
+        // replayed: `undefined` keeps the page out of the cache.
+        return signal.timedOut ? undefined : signal;
       },
       // A replayed page contributes at the same point in the stream, so
       // `collectedPages` stays in crawl order whether a page ran or replayed —
