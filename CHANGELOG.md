@@ -15,6 +15,12 @@ How it works:
 - A `## [Unreleased]` section collects merged changes that have not been cut into
   a release yet; rename it to the version when the release goes out.
 
+## [Unreleased]
+
+### Fixed
+
+- A cloud audit whose cloud analysis step hits its time limit now keeps the results that had already come back, instead of discarding all of them. Rules use those results, the audit's spend lists exactly the calls that were charged (each once, including a render batch the cloud accepted but had not finished), and rules still waiting report `skipped` with reason `service-unavailable`. No new cloud call starts after the limit. An audit that finishes its cloud analysis in time is unchanged. See [credits](https://docs.squirrelscan.com/cloud/credits#when-credits-run-out).
+
 ## v0.0.106 (2026-10-08)
 
 `squirrel mcp` speaks the new MCP 2026-07-28 protocol, `squirrel channel` gives your Claude Code session a heads-up the moment a cloud audit lands, every rule now runs against the clock to keep booby-trapped pages from stalling an audit, and two new content rules catch the `info@example.com` and `placehold.co` your theme shipped with. Plus a big pile of false positives, swept out of the nest.
