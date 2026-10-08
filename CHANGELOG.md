@@ -19,6 +19,7 @@ How it works:
 
 ### Fixed
 
+- A site that sends response headers and then stalls its body can no longer hang the CLI. The shared request helper used by the reachability check, the robots.txt fetch and the update check disarmed its timeout as soon as the headers arrived, so the body read had no time limit. The timeout now covers the body too, and a stalled body fails like any other timeout.
 - A cloud audit whose cloud analysis step hits its time limit now keeps the results that had already come back, instead of discarding all of them. Rules use those results, the audit's spend lists each call it knows was charged, once (every call that came back, plus a render batch the cloud accepted but had not finished; a call still running at the limit is not listed, so your balance stays the authoritative figure), and rules still waiting report `skipped` with reason `service-unavailable`. No new cloud call starts after the limit. An audit that finishes its cloud analysis in time is unchanged. See [credits](https://docs.squirrelscan.com/cloud/credits#when-credits-run-out).
 
 ## v0.0.106 (2026-10-08)
