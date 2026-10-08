@@ -87,8 +87,12 @@ describe("matchDate", () => {
     expect(matchDate("Publié le 1er janvier 2026")?.ms).toBe(Date.UTC(2026, 0, 1));
     expect(matchDate("le 8 février 2026")?.ms).toBe(Date.UTC(2026, 1, 8));
     expect(matchDate("8 févr. 2026")?.ms).toBe(Date.UTC(2026, 1, 8));
-    expect(matchDate("Veröffentlicht am 8. Januar 2026")?.ms).toBe(jan8);
-    expect(matchDate("15. März 2026")?.ms).toBe(Date.UTC(2026, 2, 15));
+    expect(matchDate("Veröffentlicht am 8 Januar 2026")?.ms).toBe(jan8);
+    expect(matchDate("15 März 2026")?.ms).toBe(Date.UTC(2026, 2, 15));
+    // A bare dot after the day is not read by matchDate (it follows version and
+    // chapter numbers too); it is date-shaped only, see looksLikeDate below.
+    expect(matchDate("Veröffentlicht am 8. Januar 2026")).toBeNull();
+    expect(matchDate("Version 3. March 2024")).toBeNull();
     expect(matchDate("8 de enero de 2026")?.ms).toBe(jan8);
     expect(matchDate("8 gennaio 2026")?.ms).toBe(jan8);
     expect(matchDate("8 de janeiro de 2026")?.ms).toBe(jan8);
@@ -219,6 +223,22 @@ describe("content/date-agreement — must not fire", () => {
     );
 
     expect(check(run(html), "byline-vs-schema-date")?.value).toBe("February 10, 2026");
+  });
+
+  test("'Version 3. March 2024' never produces a byline-vs-schema-date finding", () => {
+    for (const markup of [
+      '<p class="byline">Version 3. March 2024</p>',
+      "<p>Published: Version 3. March 2024</p>",
+    ]) {
+      const html = page(
+        article("2026-02-10"),
+        `<main><article><h1>Release notes</h1>${markup}${PROSE}</article></main>`,
+      );
+      const checks = run(html);
+
+      expect(check(checks, "byline-vs-schema-date")).toBeUndefined();
+      expect(checks.every((c) => c.status !== "warn")).toBe(true);
+    }
   });
 
   test("prose without any byline at all is still not read as a byline", () => {

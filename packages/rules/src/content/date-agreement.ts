@@ -127,7 +127,13 @@ const MONTH_NAMES = [
   .join("|");
 
 /** "8th", "1st", "8." (German), "1er" (French), "8º" — the day's ordinal marker. */
-const ORDINAL = "(?:\\s?(?:st|nd|rd|th|er|º|°)|\\.)?";
+const ORDINAL = "(?:\\s?(?:st|nd|rd|th|er|º|°))?";
+/**
+ * `ORDINAL` plus a bare dot ("8. Januar"). Only the suppression-only patterns use
+ * it: a bare dot also follows version and chapter numbers ("Version 3. March
+ * 2024"), which must never become a date `matchDate` compares to the schema.
+ */
+const ORDINAL_OR_DOT = "(?:\\s?(?:st|nd|rd|th|er|º|°)|\\.)?";
 /** "8 de enero de 2026", "8th of January 2026": the connective between parts. */
 const OF = "(?:de\\s+|del\\s+|of\\s+)?";
 
@@ -165,17 +171,18 @@ const NUMERIC_DMY_RE = /(?<![\d./-])(\d{1,2})([/.-])(\d{1,2})\2(\d{4})(?![\d./-]
  * shows only such a date can still get `visible-date-missing`. Add the language's
  * months to the table to cover it.
  *
- * Trade-off: `ORDINAL` accepts a bare dot as the day marker (German "8. Januar
- * 2026"), so "Version 3. March 2024" reads as a date. Rare, and the effect is
- * only the same suppression.
+ * Trade-off: these patterns accept a bare dot as the day marker (German "8. Januar
+ * 2026"), so "Version 3. March 2024" reads as date-shaped. Rare, and the effect is
+ * only the same suppression: `matchDate` does not take the bare dot, so such text
+ * is never compared to the schema.
  */
 const DATE_SHAPED_RES: readonly RegExp[] = [
   new RegExp(
-    `(?<!\\d)\\d{1,2}${ORDINAL}\\s+${OF}(?:${MONTH_NAMES})\\.?\\s*,?\\s*${OF}(?:19|20)\\d{2}${NOT_BEFORE_DIGIT}`,
+    `(?<!\\d)\\d{1,2}${ORDINAL_OR_DOT}\\s+${OF}(?:${MONTH_NAMES})\\.?\\s*,?\\s*${OF}(?:19|20)\\d{2}${NOT_BEFORE_DIGIT}`,
     "iu",
   ),
   new RegExp(
-    `${NOT_AFTER_LETTER_OR_DIGIT}(?:${MONTH_NAMES})\\.?\\s+${OF}\\d{1,2}${ORDINAL}\\s*,?\\s*${OF}(?:19|20)\\d{2}${NOT_BEFORE_DIGIT}`,
+    `${NOT_AFTER_LETTER_OR_DIGIT}(?:${MONTH_NAMES})\\.?\\s+${OF}\\d{1,2}${ORDINAL_OR_DOT}\\s*,?\\s*${OF}(?:19|20)\\d{2}${NOT_BEFORE_DIGIT}`,
     "iu",
   ),
   new RegExp(
