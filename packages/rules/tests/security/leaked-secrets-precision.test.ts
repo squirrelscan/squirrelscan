@@ -17,7 +17,7 @@ import {
   unattributedKeyType,
 } from "../../src/security/leaked-secrets";
 import type { RuleContext } from "../../src/types";
-import { awsKeySuffix, mixedRun, runOf, seededRng } from "./leaked-secrets/generators";
+import { awsKeySuffix, githubToken, mixedRun, runOf, seededRng } from "./leaked-secrets/generators";
 
 const PAGE_URL = "https://app.acme.test/";
 const HEX = "0123456789abcdef";
@@ -146,32 +146,51 @@ describe("provider tokens: a substring of a longer value is not the provider's t
   const mailgunBody = mixedRun(r, 32);
   const twilioBody = runOf(r, HEX, 32);
   const awsKey = "AKIA" + awsKeySuffix(r); // pragma: allowlist secret
+  const github = githubToken(r, "ghp_");
+  const unknown = unattributedKeyType();
 
-  test("a provider shape continued by more token characters is not reported", () => {
-    const negatives = [
-      script(`var asset={id:"key-${mailgunBody}${mixedRun(r, 12)}"};`),
-      script(`var asset={id:"AC${twilioBody}${runOf(r, HEX, 16)}"};`),
-      script(`var build={ref:"${awsKey}QRSTUV"};`),
-    ];
-    for (const html of negatives) expect(reported(html)).toEqual([]);
+  // [js, the pattern the matched part resembles]
+  const CONTINUED: ReadonlyArray<readonly [string, string]> = [
+    // A real-format token run straight into the next word, as text with its
+    // markup stripped writes it, and into digits.
+    [`var t={text:"${awsKey}Welcome"};`, "AWS Access Key ID"],
+    [`var t={text:"${awsKey}2024"};`, "AWS Access Key ID"],
+    [`var t={text:"${github}Dashboard"};`, "GitHub Personal Access Token"],
+    [`var t={text:"${github}42"};`, "GitHub Personal Access Token"],
+    // A fixed-length shape grown by more of its own alphabet.
+    [`var asset={id:"key-${mailgunBody}${mixedRun(r, 12)}"};`, "Mailgun API Key"],
+    [`var asset={id:"AC${twilioBody}${runOf(r, HEX, 16)}"};`, "Twilio Account SID"],
+    // Glued to a `_` or `-` suffix.
+    [`var env={id:"${awsKey}_PROD"};`, "AWS Access Key ID"],
+    [`var css={cls:"key-${mailgunBody}-active"};`, "Mailgun API Key"],
+  ];
+
+  test("negatives: a provider shape that runs on past its token is never reported under the provider's name", () => {
+    const providers = new Set(CONTINUED.map(([, resembles]) => resembles));
+    for (const [js] of CONTINUED) {
+      for (const [, type] of reported(script(js))) expect(providers.has(type)).toBe(false);
+    }
   });
 
-  test("a provider shape glued to a _ or - suffix stays reviewable, unattributed, at medium", () => {
-    const unknown = unattributedKeyType();
-    for (const [js, resembles] of [
-      [`var env={id:"${awsKey}_PROD"};`, "AWS Access Key ID"],
-      [`var css={cls:"key-${mailgunBody}-active"};`, "Mailgun API Key"],
-    ] as const) {
+  test("positive controls: the whole continued token stays reviewable at medium, provider unknown", () => {
+    for (const [js, resembles] of CONTINUED) {
       expect(reported(script(js))).toEqual([["leaked-secrets-medium", unknown]]);
       const raw = scanContent(js, "inline-script");
       expect(raw[0]?.extra).toEqual({ provider: "unknown", resembles });
     }
   });
 
-  test("positive controls: the same shapes delimited on both sides still report", () => {
+  test("negative: a continued shape its provider's own structure rules out is dropped", () => {
+    // `ghp_` + 36 random characters fails GitHub's CRC32 checksum, so the
+    // matched part is not a GitHub token however the run continues.
+    expect(reported(script(`var asset={id:"ghp_${mixedRun(r, 36)}${mixedRun(r, 12)}"};`))).toEqual([]);
+  });
+
+  test("positive controls: the same shapes delimited on both sides keep the provider's name", () => {
     expect(reported(script(`var c={k:"key-${mailgunBody}"};`))).toEqual([["leaked-secrets-high", "Mailgun API Key"]]);
     expect(reported(script(`var c={sid:"AC${twilioBody}"};`))).toEqual([["leaked-secrets-high", "Twilio Account SID"]]);
     expect(reported(script(`var c={id:"${awsKey}"};`))).toEqual([["leaked-secrets-high", "AWS Access Key ID"]]);
+    expect(reported(script(`var c={t:"${github}"};`))).toEqual([["leaked-secrets-high", "GitHub Personal Access Token"]]);
   });
 });
 

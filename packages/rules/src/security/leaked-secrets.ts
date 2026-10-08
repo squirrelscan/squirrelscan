@@ -1745,10 +1745,11 @@ const CONTINUED_TOKEN_MAX = 256;
  * this is the same question asked on the right. A provider format has a
  * fixed length or a fixed alphabet, so `ghp_` + 36, `AKIA` + 16 or `key-` +
  * 32 followed by more letters and digits (or by `_`, or `-` and more) is a
- * substring of some longer value that happens to open like a credential. It
- * is not an independently delimited provider token and is not reported as
- * one. A token the match does not stop short of ends on a quote, a space or
- * punctuation, and this returns `end`.
+ * longer token that happens to open like a credential. It is not an
+ * independently delimited provider token and is not reported as one; the
+ * caller reports the whole token with the provider left unknown. A token the
+ * match does not stop short of ends on a quote, a space or punctuation, and
+ * this returns `end`.
  */
 function continuedTokenEnd(text: string, end: number): number {
   let at = end;
@@ -2541,22 +2542,22 @@ export function scanContent(
       }
 
       // …and a provider's format ends where the token does. A match that
-      // stops short of the end of its token is not that provider's token.
-      // Run on into more letters and digits, it is a slice of some longer
-      // random value and is dropped. Glued to a `_` or `-` suffix
-      // (`AKIA…_PROD`, `sk_live_…_acmewidget`), it may still be someone's
-      // credential, so the whole token stays reviewable at medium with the
-      // provider left unknown: under the shared prefix when the pattern has
-      // one, otherwise under the pattern it resembles.
+      // stops short of the end of its token is not reported as that
+      // provider's token, but it may still be a credential: fixed-length
+      // formats grow, a key gets a `_PROD` suffix, and text with its markup
+      // stripped runs a token into the next word. So the whole token stays
+      // reviewable at medium with the provider left unknown, under the
+      // shared prefix when the pattern has one, otherwise under the pattern
+      // it resembles. Only the provider's own structure can rule it out: a
+      // matched part that fails its decoder (a GitHub checksum) is dropped.
       let unattributed: string | null | undefined;
       if (!keyAnchored && !generic) {
         const matchEnd = match.index + value.length;
         // A match that ends on its own delimiter (Azure's `;`) is whole.
         const tokenEnd = isWordCharAt(content, matchEnd - 1) ? continuedTokenEnd(content, matchEnd) : matchEnd;
         if (tokenEnd !== matchEnd) {
-          if (sharedPrefix !== undefined && value.startsWith(sharedPrefix)) unattributed = sharedPrefix;
-          else if (!isWordCharAt(content, matchEnd) || content[matchEnd] === "_") unattributed = null;
-          else continue;
+          if (refineFinding(name, value)?.drop) continue;
+          unattributed = sharedPrefix !== undefined && value.startsWith(sharedPrefix) ? sharedPrefix : null;
           value = content.slice(match.index, tokenEnd);
           pattern.lastIndex = tokenEnd;
         }
