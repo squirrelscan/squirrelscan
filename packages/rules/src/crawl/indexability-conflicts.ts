@@ -10,41 +10,32 @@ const SKIP_CHECK: CheckResult = {
   message: "Insufficient data (no robots.txt or pages)",
 };
 
-// Shared output builder — identical CheckResult[] given the same type1/type2 lists.
-function buildChecks(type1: string[], type2: string[]): CheckResult[] {
-  const checks: CheckResult[] = [];
-
-  if (type1.length > 0) {
-    checks.push({
-      name: "robots-allow-but-noindex",
-      status: "warn",
-      message: `${type1.length} page(s) allowed in robots.txt but have noindex`,
-      value:
-        type1.slice(0, 3).map(getPathname).join("\n") +
-        (type1.length > 3 ? `\n+${type1.length - 3} more` : ""),
-    });
+// Shared output builder, identical CheckResult[] given the same blocked list.
+// robots.txt Allow plus noindex is the supported way to deindex a page (the
+// crawler has to fetch it to read the directive), so it is not reported. Disallow
+// plus noindex belongs to crawl/robots-meta-conflict.
+function buildChecks(blockedWithoutNoindex: string[]): CheckResult[] {
+  if (blockedWithoutNoindex.length === 0) {
+    return [
+      {
+        name: "conflicts",
+        status: "pass",
+        message: "No indexability conflicts detected",
+      },
+    ];
   }
 
-  if (type2.length > 0) {
-    checks.push({
+  return [
+    {
       name: "robots-block-without-noindex",
       status: "info",
-      message: `${type2.length} page(s) blocked by robots.txt (noindex meta not needed)`,
+      message: `${blockedWithoutNoindex.length} page(s) blocked by robots.txt without noindex`,
       value:
-        type2.slice(0, 3).map(getPathname).join("\n") +
-        (type2.length > 3 ? `\n+${type2.length - 3} more` : ""),
-    });
-  }
-
-  if (checks.length === 0) {
-    checks.push({
-      name: "conflicts",
-      status: "pass",
-      message: "No indexability conflicts detected",
-    });
-  }
-
-  return checks;
+        blockedWithoutNoindex.slice(0, 3).map(getPathname).join("\n") +
+        (blockedWithoutNoindex.length > 3 ? `\n+${blockedWithoutNoindex.length - 3} more` : ""),
+      pages: blockedWithoutNoindex,
+    },
+  ];
 }
 
 // Streaming path (#1022): the meta/header indexability verdict is the pre-extracted
@@ -54,18 +45,14 @@ async function runViaSiteQuery(
   siteQuery: SiteQuery,
   robotsTxt: RobotsTxtData
 ): Promise<RuleResult> {
-  const type1: string[] = [];
-  const type2: string[] = [];
+  const blocked: string[] = [];
   for await (const row of siteQuery.pagesMatching(() => true)) {
-    const robotsBlocked = isRobotsTxtDisallowed(row.normalizedUrl, robotsTxt);
     const metaIndexable = row.indexableReasons.length === 0;
-    if (!robotsBlocked && !metaIndexable) {
-      type1.push(row.normalizedUrl);
-    } else if (robotsBlocked && metaIndexable) {
-      type2.push(row.normalizedUrl);
+    if (metaIndexable && isRobotsTxtDisallowed(row.normalizedUrl, robotsTxt)) {
+      blocked.push(row.normalizedUrl);
     }
   }
-  return { checks: buildChecks(type1, type2) };
+  return { checks: buildChecks(blocked) };
 }
 
 export const indexabilityConflicts: Rule = {
@@ -73,9 +60,9 @@ export const indexabilityConflicts: Rule = {
     id: "crawl/indexability-conflicts",
     name: "Indexability Conflicts",
     description:
-      "Detects conflicting signals between robots.txt and meta/headers",
+      "Detects pages blocked by robots.txt that carry no noindex",
     solution:
-      "Conflicting signals confuse search engines and indicate configuration errors. Type 1 conflict: robots.txt allows BUT meta/header has noindex (works but confusing - choose one method). Type 2 conflict: robots.txt disallows BUT page crawlable (search engines can't crawl to see noindex anyway - remove unnecessary noindex or allow in robots.txt).",
+      "Allowing a page in robots.txt and marking it noindex is the correct way to keep it out of search results, and is not reported. A page blocked in robots.txt without noindex is never fetched, so the URL can still be listed from links elsewhere. To remove it from results, allow the crawl and add noindex; to only save crawl budget, the Disallow alone is fine.",
     category: "crawl",
     scope: "site",
     severity: "warning",
@@ -98,20 +85,15 @@ export const indexabilityConflicts: Rule = {
       return { checks: [SKIP_CHECK] };
     }
 
-    const type1: string[] = []; // robots.txt allows, but meta/header noindex
-    const type2: string[] = []; // robots.txt blocks, no noindex needed
+    const blocked: string[] = [];
 
     for (const page of pages) {
-      const robotsBlocked = isRobotsTxtDisallowed(page.url, robotsTxt);
       const metaCheck = isPageIndexable(page.parsed, page.headers);
-
-      if (!robotsBlocked && !metaCheck.isIndexable) {
-        type1.push(page.url);
-      } else if (robotsBlocked && metaCheck.isIndexable) {
-        type2.push(page.url);
+      if (metaCheck.isIndexable && isRobotsTxtDisallowed(page.url, robotsTxt)) {
+        blocked.push(page.url);
       }
     }
 
-    return { checks: buildChecks(type1, type2) };
+    return { checks: buildChecks(blocked) };
   },
 };

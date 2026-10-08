@@ -130,9 +130,13 @@ const SITEMAPS: SitemapDiscovery = {
   ],
 } as unknown as SitemapDiscovery;
 
-async function seedAndRun(rule: Rule, options: Record<string, unknown> = {}) {
+async function seedAndRun(
+  rule: Rule,
+  options: Record<string, unknown> = {},
+  fixture: Spec[] = FIXTURE
+) {
   const store = await freshStore();
-  const built = FIXTURE.map(mkPage);
+  const built = fixture.map(mkPage);
 
   // Streaming: extract features from each parsed page and store them.
   for (const { page, parsed } of built) {
@@ -199,10 +203,28 @@ describe("PR-D dual-path golden — noindex family (extractor → siteQuery)", (
   test("crawl/indexability-conflicts", async () => {
     const { legacy, streamed } = await seedAndRun(indexabilityConflicts);
     expect(streamed).toEqual(legacy);
-    // /a (meta noindex, not blocked) + /z (header noindex, not blocked) → type1.
-    expect(legacy.find((c) => c.name === "robots-allow-but-noindex")?.message).toBe(
-      "2 page(s) allowed in robots.txt but have noindex"
-    );
+    // /a (meta noindex) and /z (header noindex) are allowed by robots.txt: Allow plus
+    // noindex is the supported deindexing setup, so it is no longer reported (pub#487).
+    // /private/x is blocked AND noindex, which robots-meta-conflict owns.
+    expect(legacy).toEqual([
+      {
+        name: "conflicts",
+        status: "pass",
+        message: "No indexability conflicts detected",
+      },
+    ]);
+  });
+
+  test("crawl/indexability-conflicts: blocked page without noindex lists pages on both paths", async () => {
+    const { legacy, streamed } = await seedAndRun(indexabilityConflicts, {}, [
+      { normalizedUrl: "https://example.com/c", robots: null, xRobotsTag: null, schemaTypes: [] },
+      { normalizedUrl: "https://example.com/private/y", robots: null, xRobotsTag: null, schemaTypes: [] },
+    ]);
+    expect(streamed).toEqual(legacy);
+    expect(legacy).toHaveLength(1);
+    expect(legacy[0]!.name).toBe("robots-block-without-noindex");
+    expect(legacy[0]!.status).toBe("info");
+    expect(legacy[0]!.pages).toEqual(["https://example.com/private/y"]);
   });
 
   test("crawl/all-noindex-pages", async () => {
