@@ -40,7 +40,7 @@ interface EndpointSurface {
 
 - **Same origin is the probe boundary, and it is strict.** Scheme, host and port must all match the audited base URL, so `www.example.com` against `example.com` counts as cross-origin. That fails closed: a rule never probes a host the audit did not start from. A cross-origin endpoint (a vendor API, a Supabase project host) is recorded so a rule can report it. It has `probeEligible: false`. A rule must not send a request to it.
 - **Deduped** on method plus URL. A method-less record (a bare string literal, a link) is dropped when the same URL has a record with a method.
-- **Capped** at `MAX_ENDPOINT_CANDIDATES` (200), of which at most `MAX_CROSS_ORIGIN_CANDIDATES` (50) are cross-origin. The order is stable: convention paths, then served JS, then page HTML, each sorted by URL. The input order never decides what the cap keeps.
+- **Capped** at `MAX_ENDPOINT_CANDIDATES` (200), of which at most `MAX_CROSS_ORIGIN_CANDIDATES` (50) are cross-origin. The order is stable: convention paths, then served JS, then page HTML, each sorted by URL. For a given crawl the result is deterministic. One limit: the collector retains at most `MAX_RETAINED_REFS` (2000) distinct refs in crawl order, of which at most `MAX_RETAINED_CROSS_ORIGIN_REFS` (300) are cross-origin to their page, so on a crawl with more distinct refs than that, crawl order decides which survive to the final 200.
 - **No shared probe budget exists yet.** The list is capped and shaped so a future budget can consume it. Do not build probe limits into a rule on the assumption that this list is small enough.
 
 ## Sources
@@ -55,9 +55,13 @@ interface EndpointSurface {
 - `packages/audit-engine/src/endpoint-discovery.ts` holds the page collector. It runs while each page DOM is live, like the `collected-signals` collector, and its per-page record is stored in the rule cache and replayed. A cached page from before this collector existed has no record, so it is re-run once.
 - `runStreamingRules` registers the collector in the page loop. `runRulesOnStorage` (v1) feeds the same collector from the parsed pages it holds. Both hand the folded surface to `runner.runSiteRules`.
 
+## Confidence
+
+A candidate with `discoveredVia: "string-literal"` is a quoted string that looks like an API route. It can be an i18n string or a documentation link, so treat it as lower confidence than a call site (`fetch`, `axios.*`, `xhr.open`, `$.ajax`) or a form action. A convention candidate is a guess from the detected stack. Whichever rule probes a candidate must check `probeEligible` first, including convention paths such as `/metrics` and `/graphql`.
+
 ## Constraints
 
 - Every regex is linear or bounded polynomial (options-object bodies allow one nested brace level inside a 300-repeat cap), and every input is length-capped before it is scanned (512 KiB per script, 1 MiB of inline script per page). The page content is attacker-controlled, so keep it that way when you add a pattern.
-- The collector retains at most `MAX_RETAINED_REFS` (2000) distinct refs across the crawl, so memory stays flat on a large crawl.
+- The collector retains at most `MAX_RETAINED_REFS` (2000) distinct refs across the crawl, so memory stays flat on a large crawl. Cross-origin refs have their own smaller cap so they cannot crowd out same-origin ones.
 - The pass makes no network request. `endpoint-discovery.test.ts` stubs `fetch` to throw while it runs the collector, technology detection and the fold, which is the whole pass.
 - Technology ids are unioned across all page records, so the convention paths do not depend on which page the collector saw first.

@@ -11,6 +11,7 @@ import type { PageRecord } from "@squirrelscan/core-contracts";
 import { buildHeadersMap, parseHtmlForRules } from "../src/adapter";
 import {
   createEndpointCollector,
+  MAX_RETAINED_CROSS_ORIGIN_REFS,
   MAX_RETAINED_REFS,
 } from "../src/endpoint-discovery";
 
@@ -142,6 +143,16 @@ describe("endpoint discovery collector", () => {
     collect(c, pageOf("/p", `<html><body><script>var y = "/api/a";</script></body></html>`));
     const kept = c.pages.flatMap((p) => p.refs.map((r) => `${r.method ?? "-"} ${r.url}`));
     expect(kept).toEqual(["GET https://example.com/api/a"]);
+  });
+
+  test("cross-origin refs cannot fill the retained set and push out later same-origin refs", () => {
+    const c = createEndpointCollector({ headersOf: buildHeadersMap });
+    const vendor = Array.from({ length: 500 }, (_, i) => `fetch("https://api.vendor.io/v1/r${i}");`).join("");
+    collect(c, pageOf("/", `<html><body><script>${vendor}</script></body></html>`));
+    collect(c, pageOf("/late", `<html><body><script>fetch("/api/late")</script></body></html>`));
+    const kept = c.pages.flatMap((p) => p.refs.map((r) => r.url));
+    expect(kept.filter((u) => u.includes("vendor.io")).length).toBeLessThanOrEqual(MAX_RETAINED_CROSS_ORIGIN_REFS);
+    expect(kept).toContain("https://example.com/api/late");
   });
 
   test("retained refs are capped across the crawl", () => {

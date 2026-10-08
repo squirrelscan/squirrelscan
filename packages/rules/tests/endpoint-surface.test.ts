@@ -82,12 +82,18 @@ describe("endpoint extraction from served JS", () => {
     );
   });
 
+  test("a relative URL without a leading slash is not a candidate (its base depends on the page path)", () => {
+    const refs = extractEndpointRefsFromScript(`fetch("api/users"); axios.get("v1/items")`, "https://example.com/app.js");
+    expect(refs).toEqual([]);
+  });
+
   test("a literal inside a runaway script is bounded: quote-dense input stays linear", () => {
     const hostiles = [
       `'a`.repeat(300_000) + `fetch("/api/ok")`,
       `fetch("/a",{{{x}}}`.repeat(25_000),
       `$.ajax({url:"/a",` + "{a}".repeat(150_000),
       "$.ajax({".repeat(60_000),
+      `$.ajax({url:"/a",{x}{x}`.repeat(20_000),
     ];
     for (const hostile of hostiles) {
       const t0 = performance.now();

@@ -25,6 +25,13 @@ import type { PageSignalCollector } from "./streaming";
  */
 export const MAX_RETAINED_REFS = 2000;
 
+/**
+ * Of those, how many may be cross-origin to the page that referenced them. The
+ * final list keeps at most 50 cross-origin candidates, so they must not be able to
+ * fill the retained set and push out same-origin refs from later pages.
+ */
+export const MAX_RETAINED_CROSS_ORIGIN_REFS = 300;
+
 /** Collector id. The rule cache keys a page's stored snapshot by it. */
 export const ENDPOINT_COLLECTOR_ID = "endpoint-refs";
 
@@ -73,12 +80,19 @@ export function createEndpointCollector(opts: {
   // URLs already retained with a method. A method-less ref to one of them is
   // dropped by the fold anyway, so it must not spend the retained cap.
   const withMethod = new Set<string>();
+  let crossOriginRetained = 0;
 
   // Keep a page's refs that are new to the crawl, up to the retained cap. The
   // snapshot handed to the rule cache stays whole, so a replay admits the same
   // refs a fresh run would.
   const admit = (record: PageEndpointRefs): void => {
     const refs = [];
+    let pageOrigin: string | null = null;
+    try {
+      pageOrigin = new URL(record.pageUrl).origin;
+    } catch {
+      // An unparsable page URL leaves every ref counted as same-origin.
+    }
     // Method-carrying refs first, so a bare literal never crowds one out.
     const ordered = [...record.refs].sort((a, b) => Number(!!b.method) - Number(!!a.method));
     for (const ref of ordered) {
@@ -86,6 +100,18 @@ export function createEndpointCollector(opts: {
       if (!ref.method && withMethod.has(ref.url)) continue;
       const key = `${ref.method ?? ""} ${ref.url}`;
       if (seen.has(key)) continue;
+      if (pageOrigin) {
+        let refOrigin = pageOrigin;
+        try {
+          refOrigin = new URL(ref.url).origin;
+        } catch {
+          // Refs are absolute by construction; keep a malformed one as same-origin.
+        }
+        if (refOrigin !== pageOrigin) {
+          if (crossOriginRetained >= MAX_RETAINED_CROSS_ORIGIN_REFS) continue;
+          crossOriginRetained++;
+        }
+      }
       seen.add(key);
       if (ref.method) withMethod.add(ref.url);
       refs.push(ref);
