@@ -154,6 +154,10 @@ export function extractPageFeatures(
     faviconHref: chrome.faviconHref,
     themeColor: chrome.themeColor,
     ogImage: chrome.ogImage,
+    // #489: bounded at parse time. Absent on parsed data stored before the
+    // field existed (crawl reuse replays the old record), which stores as null
+    // and exempts nothing, so the duplicate rules fall back to their old answer.
+    hreflangAlternates: parsed.hreflangAlternates?.length ? parsed.hreflangAlternates : null,
     // #2343: the report's own per-page scalars, taken here because this is the
     // one pass that holds the DOM. Recovering them later meant re-parsing every
     // stored page a second time.

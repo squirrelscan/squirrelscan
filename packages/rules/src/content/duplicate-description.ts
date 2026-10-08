@@ -4,6 +4,7 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import type { SiteQuery } from "@squirrelscan/core-contracts";
 
 import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
+import { RegionVariantIndex } from "../shared/region-variants";
 
 const SKIP_CHECK: CheckResult = {
   name: "duplicate-description",
@@ -59,6 +60,8 @@ function buildCheck(duplicates: { desc: string; urls: string[] }[]): CheckResult
 // the async cursor, in normalized_url order (== the legacy site.pages order),
 // re-deriving the lowercase/trim key exactly as the legacy path does. Noindex
 // pages are left out of both paths (pub#457): their description is never shown.
+// Reciprocal same-language hreflang variants count as one page on both paths
+// (#489), read from the same parser-extracted alternates.
 async function runViaSiteQuery(siteQuery: SiteQuery, skipNoindex: boolean): Promise<RuleResult> {
   const checks: CheckResult[] = [];
   if (siteQuery.pageCount() < 2) {
@@ -77,7 +80,12 @@ async function runViaSiteQuery(siteQuery: SiteQuery, skipNoindex: boolean): Prom
     descToUrls.set(desc, urls);
   }
 
-  checks.push(buildCheck(findDuplicates(descToUrls)));
+  const duplicates = findDuplicates(descToUrls);
+  const variants = await RegionVariantIndex.fromSiteQuery(
+    siteQuery,
+    duplicates.flatMap((d) => d.urls),
+  );
+  checks.push(buildCheck(variants.withoutVariantOnlyGroups(duplicates, (d) => d.urls)));
   return { checks };
 }
 
@@ -120,7 +128,9 @@ export const duplicateDescriptionRule: Rule = {
       descToUrls.set(desc, urls);
     }
 
-    checks.push(buildCheck(findDuplicates(descToUrls)));
+    const duplicates = findDuplicates(descToUrls);
+    const variants = RegionVariantIndex.fromPages(pages, duplicates.flatMap((d) => d.urls));
+    checks.push(buildCheck(variants.withoutVariantOnlyGroups(duplicates, (d) => d.urls)));
     return { checks };
   },
 };

@@ -18,6 +18,7 @@ import type {
   ContactLinkData,
   ContentAnalysis,
   HeadingData,
+  HreflangAlternate,
   HeadingHierarchy,
   ImageData,
   LinkData,
@@ -71,6 +72,48 @@ export function extractMeta(doc: Document): MetaData {
     canonical: doc.querySelector('link[rel="canonical"]')?.getAttribute("href") ?? null,
     robots: doc.querySelector('meta[name="robots"]')?.getAttribute("content") ?? null,
   };
+}
+
+/** Most hreflang alternates kept per page (#489). Large sets list ~60 locales. */
+export const HREFLANG_ALTERNATES_MAX = 100;
+/** Longest href kept; a longer one is dropped rather than truncated. */
+const HREFLANG_HREF_MAX_CHARS = 2048;
+/** Longest hreflang value kept (a BCP 47 tag is well under this). */
+const HREFLANG_VALUE_MAX_CHARS = 35;
+
+/**
+ * `<link rel="alternate" hreflang>` annotations, for the duplicate title and
+ * description rules (#489). The value is lowercased and the href resolved
+ * against the page URL; entries with an empty value, an unresolvable href or an
+ * oversize field are dropped, an exact (value, href) repeat is kept once, and
+ * the list stops at {@link HREFLANG_ALTERNATES_MAX} in document order, so a page
+ * cannot grow the stored record without bound. Markup only: Link headers and
+ * sitemap annotations are not read here.
+ */
+export function extractHreflangAlternates(doc: Document, pageUrl: string): HreflangAlternate[] {
+  const out: HreflangAlternate[] = [];
+  const seen = new Set<string>();
+  for (const node of doc.querySelectorAll("link[hreflang]")) {
+    const el = node as Element;
+    const rel = (el.getAttribute("rel") ?? "").toLowerCase().split(/\s+/);
+    if (!rel.includes("alternate")) continue;
+    const hreflang = (el.getAttribute("hreflang") ?? "").trim().toLowerCase();
+    const rawHref = (el.getAttribute("href") ?? "").trim();
+    if (!hreflang || !rawHref || hreflang.length > HREFLANG_VALUE_MAX_CHARS) continue;
+    let href: string;
+    try {
+      href = new URL(rawHref, pageUrl).toString();
+    } catch {
+      continue;
+    }
+    if (href.length > HREFLANG_HREF_MAX_CHARS) continue;
+    const key = `${hreflang} ${href}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ hreflang, href });
+    if (out.length >= HREFLANG_ALTERNATES_MAX) break;
+  }
+  return out;
 }
 
 // Extract H1 tags from parsed document
@@ -429,6 +472,8 @@ export function parsePage(html: string, url: string): ParsedPage {
     visibleAuthor: visibleMeta.visibleAuthor,
     visibleDatePublished: visibleMeta.visibleDatePublished,
     visibleDateModified: visibleMeta.visibleDateModified,
+
+    hreflangAlternates: extractHreflangAlternates(doc, url),
 
     // Legacy (deprecated)
     schema,
