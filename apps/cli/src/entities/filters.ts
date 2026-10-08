@@ -9,6 +9,9 @@ import type {
   EntityMap,
   EntityMapNode,
 } from "@squirrelscan/audit-engine/entity-map";
+import type { EntityFilteredCounts } from "@squirrelscan/core-contracts/entity-map";
+
+import { matchesEntityPage } from "@squirrelscan/core-contracts/entity-page-match";
 
 /** The problem classes `--problem` accepts. */
 export const ENTITY_PROBLEMS = [
@@ -24,7 +27,11 @@ export type EntityProblem = (typeof ENTITY_PROBLEMS)[number];
 export interface EntityFilters {
   /** `@type` values; a node matches if it carries ANY of them. */
   types?: string[];
-  /** Page URLs or prefixes; a node matches if ANY declaring page matches. */
+  /**
+   * Page filter values; a node matches if ANY declaring page matches ANY value.
+   * Matched by `matchesEntityPage`, the one rule shared with the API and both
+   * MCP servers: a prefix for an absolute URL or a `/path`, a substring else.
+   */
   pages?: string[];
   /** Problem classes; a node matches if it has ANY of them. */
   problems?: EntityProblem[];
@@ -89,11 +96,7 @@ function splitIdentityKeys(map: EntityMap): Set<string> {
 function keysOnMatchingPages(map: EntityMap, patterns: string[]): Set<string> {
   const keys = new Set<string>();
   for (const page of map.pages) {
-    if (
-      !patterns.some(
-        (pattern) => page.url === pattern || page.url.includes(pattern)
-      )
-    ) {
+    if (!patterns.some((pattern) => matchesEntityPage(page.url, pattern))) {
       continue;
     }
     for (const key of page.declares) keys.add(key);
@@ -103,7 +106,7 @@ function keysOnMatchingPages(map: EntityMap, patterns: string[]): Set<string> {
 
 function matchesOwnPages(node: EntityMapNode, patterns: string[]): boolean {
   return node.pages.some((page) =>
-    patterns.some((pattern) => page === pattern || page.includes(pattern))
+    patterns.some((pattern) => matchesEntityPage(page, pattern))
   );
 }
 
@@ -138,13 +141,14 @@ function matchesProblem(
 /**
  * Apply the filters, returning a map containing only the matching entities.
  *
- * Edges follow their endpoints, and the summary is RECOMPUTED over what
- * survived — a filtered view that kept the whole site's counts would be
- * actively misleading, since the first thing a reader does with
- * `--problem conflict` is look at the conflict count.
+ * Edges follow their endpoints. `summary` is deliberately NOT recomputed: it
+ * describes the audit and the arrays are a projection of it, the same
+ * invariant the hosted API keeps. What survived is {@link filteredCounts}, which
+ * equals the API's `meta.counts` for the same filter on the same map. A script
+ * that reads `summary.nodeCount` gets the site total on every surface.
  *
- * `pages` is left whole: it describes the crawl, not the selection, and
- * `pagesWithoutEntities` means nothing once entities have been filtered out.
+ * `pages` is left whole for the same reason: it describes the crawl, not the
+ * selection.
  */
 export function filterEntityMap(
   map: EntityMap,
@@ -189,6 +193,23 @@ export function filterEntityMap(
     (edge) => keys.has(edge.source) && (edge.dangling || keys.has(edge.target))
   );
 
+  return { ...map, nodes, edges };
+}
+
+/** Node and edge counts of a filtered map: the `filtered` block of every output. */
+export function filteredCounts(map: EntityMap): EntityFilteredCounts {
+  return { nodes: map.nodes.length, edges: map.edges.length };
+}
+
+/**
+ * The map with `summary` recomputed over its own nodes and edges.
+ *
+ * Only `--diff` wants this: it compares two summaries, and a diff of two
+ * filtered maps has to compare what each filter kept. Everything that shows ONE
+ * map keeps the site-wide summary instead (see {@link filterEntityMap}).
+ */
+export function withRecomputedSummary(map: EntityMap): EntityMap {
+  const { nodes, edges } = map;
   const typeCounts = new Map<string, number>();
   let nodesWithStableId = 0;
   let pageLocalCount = 0;
@@ -221,8 +242,6 @@ export function filterEntityMap(
         [...typeCounts.entries()].sort((a, b) => compareStrings(a[0], b[0]))
       ),
     },
-    nodes,
-    edges,
   };
 }
 

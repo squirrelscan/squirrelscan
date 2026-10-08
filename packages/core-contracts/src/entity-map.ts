@@ -354,6 +354,22 @@ export const EntityMapPageSchema = Type.Object({
 
 export type EntityMapPage = Static<typeof EntityMapPageSchema>;
 
+// ── Filtered counts ────────────────────────────────────────────────
+
+/**
+ * What survived a filter, beside a `summary` that stays site-wide.
+ *
+ * Equal to the hosted API's `meta.counts` for the same filter on the same map,
+ * on every surface that filters: `squirrel entities`, both MCP servers'
+ * `list_entities`, and the REST endpoint.
+ */
+export const EntityFilteredCountsSchema = Type.Object({
+  nodes: Type.Integer({ minimum: 0 }),
+  edges: Type.Integer({ minimum: 0 }),
+});
+
+export type EntityFilteredCounts = Static<typeof EntityFilteredCountsSchema>;
+
 // ── Summary ────────────────────────────────────────────────────────
 
 export const EntityMapSummarySchema = Type.Object({
