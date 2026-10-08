@@ -11,11 +11,11 @@ An `httpOnly` cookie is not readable from script, so the same bug cannot copy it
 
 ## What squirrel checks
 
-The rule is passive. It reads the inline `<script>` blocks of each crawled page and the external JavaScript files the crawl already fetched. It makes no extra request. A script shared by many pages is judged once, on the first page (in URL order) that loads it. It emits a single check named `token-storage`:
+The rule is passive. It reads the inline `<script>` blocks of each crawled page and the external JavaScript files the crawl already fetched. It makes no extra request. Each page reports the inline writes in its own scripts and the writes in every external script it loads. A shared script gives the same check on each page that loads it, so the report groups those into one issue. The rule emits checks named `token-storage`:
 
 - Skipped when there is no parsed document. Message: `No document available`.
 - Pass when no write was found. Message: `No auth tokens written to localStorage or sessionStorage`.
-- Warn when a write was found. Message: `1 auth token write(s) to web storage: localStorage["access_token"] in https://example.com/static/app.js`. Each item names the script, the storage and the key.
+- Warn when a write was found, one check for the page's inline scripts and one for each external script. Message: `1 auth token write(s) to web storage: localStorage["access_token"] in https://example.com/static/app.js`. Each item names the script, the storage, the key and the reason.
 
 Two things count as a token write:
 

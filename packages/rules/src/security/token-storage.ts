@@ -7,8 +7,9 @@
 //
 // Passive: the rule only reads script text the crawl already fetched, the inline
 // `<script>` blocks of the page and the external files in `ctx.site.scripts`. It
-// makes no request. Each external script is judged once, on the lowest-sorted page
-// that loads it, so a shared bundle is not repeated on every page.
+// makes no request. An external script is scanned once per run and reported on every
+// page that loads it, with a check that depends on the script alone, so the copies
+// fold into one issue and no finding hangs on one page being evaluated.
 //
 // A finding names the script, the storage and the key, and NEVER the value: the
 // value is a live credential on a real site, and a report is shared and stored.
@@ -156,8 +157,9 @@ export function isTokenKey(key: string): boolean {
 /* -------------------------------------------------------------------------- */
 
 /** Three base64url parts, header and payload starting `eyJ` (`{"`): a JWT. */
-const JWT_SHAPE = /^eyJ[\w-]{8,}\.eyJ[\w-]{8,}\.[\w-]*$/;
-const JWT_AT_START = /^\s*(['"`])(eyJ[\w-]{8,}\.eyJ[\w-]{8,}\.[\w-]*)\1/;
+const JWT_BODY = "eyJ[\\w-]{8,}\\.eyJ[\\w-]{8,}\\.[\\w-]*";
+const JWT_SHAPE = new RegExp(`^${JWT_BODY}$`);
+const JWT_AT_START = new RegExp(`^\\s*(['"\`])${JWT_BODY}\\1`);
 
 export const isJwtShaped = (value: string): boolean => JWT_SHAPE.test(value);
 
@@ -312,6 +314,50 @@ const MAX_ITEMS = 20;
 /** The `type` of an inline script the browser runs as code; JSON data blocks and templates are not. */
 const EXECUTABLE_SCRIPT_TYPE = /^(?:text|application)\/(?:javascript|ecmascript)$|^module$/;
 
+/** One check for the writes found in one script (or in a page's inline scripts). */
+function findingCheck(found: Located[]): CheckResult {
+  const items: CheckItem[] = found.slice(0, MAX_ITEMS).map((w) => ({
+    id: `${w.script}: ${describe(w)} (${w.reason})`,
+    label: `${REASON_LABEL[w.reason]} written in ${w.location === "inline-script" ? "an inline script" : "script"} ${w.script}`,
+    meta: {
+      storage: w.storage,
+      key: w.key,
+      reason: w.reason,
+      location: w.location,
+      script: w.script,
+    },
+  }));
+  const first = found[0]!;
+  return {
+    name: "token-storage",
+    status: "warn",
+    message: `${found.length} auth token write(s) to web storage: ${describe(first)} in ${first.script}${
+      found.length > 1 ? `, and ${found.length - 1} more` : ""
+    }`,
+    value: found.length,
+    items,
+    details: {
+      note: "Token values are never reported.",
+      ...(first.location === "external-script"
+        ? { foldKey: `security/token-storage:${first.script}` }
+        : {}),
+      ...(found.length > MAX_ITEMS ? { additional: found.length - MAX_ITEMS } : {}),
+    },
+  };
+}
+
+/** A shared bundle is scanned once per run, not once per page that loads it. */
+const externalWritesCache = new WeakMap<object, TokenStorageWrite[]>();
+
+function externalWrites(script: { content: string | null }): TokenStorageWrite[] {
+  let writes = externalWritesCache.get(script);
+  if (!writes) {
+    writes = findTokenStorageWrites(script.content ?? "");
+    externalWritesCache.set(script, writes);
+  }
+  return writes;
+}
+
 export const tokenStorageRule: Rule = {
   meta: {
     id: "security/token-storage",
@@ -340,73 +386,46 @@ export const tokenStorageRule: Rule = {
       return { checks };
     }
 
-    const found: Located[] = [];
-    const seen = new Set<string>();
-    const record = (
-      writes: TokenStorageWrite[],
-      location: Located["location"],
-      script: string,
-    ): void => {
-      for (const w of writes) {
-        const id = `${script}\u0000${w.storage}\u0000${w.key ?? ""}\u0000${w.reason}`;
-        if (seen.has(id)) continue;
-        seen.add(id);
-        found.push({ ...w, location, script });
-      }
-    };
-
+    // Inline scripts belong to this page alone: one check for them.
+    const inline: Located[] = [];
+    const seenInline = new Set<string>();
     for (const el of doc.querySelectorAll("script:not([src])")) {
       const type = (el.getAttribute("type") ?? "").trim().toLowerCase();
       // JSON data blocks and templates are not executed code.
       if (type && !EXECUTABLE_SCRIPT_TYPE.test(type)) continue;
       const text = el.textContent || "";
-      if (text) record(findTokenStorageWrites(text), "inline-script", ctx.page.url);
+      if (!text) continue;
+      for (const w of findTokenStorageWrites(text)) {
+        const id = `${w.storage}\u0000${w.key ?? ""}\u0000${w.reason}`;
+        if (seenInline.has(id)) continue;
+        seenInline.add(id);
+        inline.push({ ...w, location: "inline-script", script: ctx.page.url });
+      }
     }
+    if (inline.length > 0) checks.push(findingCheck(inline));
 
+    // An external script is judged on EVERY page that loads it, by a check that
+    // depends on the script alone, so the copies are identical and report grouping
+    // folds them into one issue. Judging it on one owner page would lose the
+    // finding whenever that page is skipped (soft 404, filtered out of the run).
     for (const script of ctx.site?.scripts ?? []) {
-      if (!script.content || script.sourcePages.length === 0) continue;
-      // One verdict per script: the page that sorts first among those loading it.
-      let owner = script.sourcePages[0]!;
-      for (const p of script.sourcePages) if (p < owner) owner = p;
-      if (owner !== ctx.page.url) continue;
-      record(findTokenStorageWrites(script.content), "external-script", script.url);
+      if (!script.content || !script.sourcePages.includes(ctx.page.url)) continue;
+      const writes = externalWrites(script);
+      if (writes.length === 0) continue;
+      checks.push(
+        findingCheck(
+          writes.map((w) => ({ ...w, location: "external-script" as const, script: script.url })),
+        ),
+      );
     }
 
-    if (found.length === 0) {
+    if (checks.length === 0) {
       checks.push({
         name: "token-storage",
         status: "pass",
         message: "No auth tokens written to localStorage or sessionStorage",
       });
-      return { checks };
     }
-
-    const items: CheckItem[] = found.slice(0, MAX_ITEMS).map((w) => ({
-      id: `${w.script}: ${describe(w)}`,
-      label: `${REASON_LABEL[w.reason]} written in ${w.location === "inline-script" ? "an inline script" : "script"} ${w.script}`,
-      meta: {
-        storage: w.storage,
-        key: w.key,
-        reason: w.reason,
-        location: w.location,
-        script: w.script,
-      },
-    }));
-
-    const first = found[0]!;
-    checks.push({
-      name: "token-storage",
-      status: "warn",
-      message: `${found.length} auth token write(s) to web storage: ${describe(first)} in ${first.script}${
-        found.length > 1 ? `, and ${found.length - 1} more` : ""
-      }`,
-      value: found.length,
-      items,
-      details: {
-        note: "Token values are never reported.",
-        ...(found.length > MAX_ITEMS ? { additional: found.length - MAX_ITEMS } : {}),
-      },
-    });
     return { checks };
   },
 };

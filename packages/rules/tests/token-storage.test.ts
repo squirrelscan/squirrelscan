@@ -79,11 +79,11 @@ describe("jwt-and-auth-keys-flagged", () => {
     const checks = run('localStorage.setItem("token", t)', [
       { url: "https://shop.test/app.js", content: 'sessionStorage.setItem("jwt", j)', sourcePages: [PAGE] },
     ]);
-    expect(checks).toHaveLength(1);
-    expect(checks[0]!.status).toBe("warn");
-    expect(checks[0]!.items!.map((i) => i.id)).toEqual([
-      `${PAGE}: localStorage["token"]`,
-      'https://shop.test/app.js: sessionStorage["jwt"]',
+    expect(checks).toHaveLength(2);
+    expect(checks.every((c) => c.status === "warn")).toBe(true);
+    expect(checks.map((c) => c.items!.map((i) => i.id))).toEqual([
+      [`${PAGE}: localStorage["token"] (key-name)`],
+      ['https://shop.test/app.js: sessionStorage["jwt"] (key-name)'],
     ]);
   });
 
@@ -209,13 +209,43 @@ describe("write cap", () => {
 
 describe("shared bundles", () => {
   const bundle = { url: "https://shop.test/b.js", content: 'localStorage.setItem("token", t)' };
+  const pages = ["https://shop.test/a", "https://shop.test/b"];
 
-  test("a shared script is reported once, on the lowest-sorted page", () => {
-    const pages = ["https://shop.test/b", "https://shop.test/a"];
-    const onA = run("", [{ ...bundle, sourcePages: pages }], "https://shop.test/a");
-    const onB = run("", [{ ...bundle, sourcePages: pages }], "https://shop.test/b");
+  test("every page that loads a script reports it, with an identical check", () => {
+    const onA = run("", [{ ...bundle, sourcePages: pages }], pages[0]);
+    const onB = run("", [{ ...bundle, sourcePages: pages }], pages[1]);
     expect(onA[0]!.status).toBe("warn");
-    expect(onB[0]!.status).toBe("pass");
+    expect(onB).toEqual(onA);
+    expect(onA[0]!.details!.foldKey).toBe("security/token-storage:https://shop.test/b.js");
+  });
+
+  test("a skipped first page does not hide the script from the others", () => {
+    // Only page b runs; page a (the lowest-sorted loader) is, say, a soft 404.
+    const onB = run("", [{ ...bundle, sourcePages: pages }], pages[1]);
+    expect(onB[0]!.status).toBe("warn");
+  });
+
+  test("a page that does not load the script does not report it", () => {
+    const other = run("", [{ ...bundle, sourcePages: pages }], "https://shop.test/c");
+    expect(other[0]!.status).toBe("pass");
+  });
+});
+
+describe("minified forms", () => {
+  test.each([
+    ["localStorage.token=e", "localStorage:token:key-name"],
+    ['localStorage.setItem("token",e)', "localStorage:token:key-name"],
+    ['sessionStorage["jwt"]=e.jwt', "sessionStorage:jwt:key-name"],
+    ['window.localStorage?.setItem("id_token",e)', "localStorage:id_token:key-name"],
+  ])("%s", (code, expected) => {
+    expect(keys(code)).toEqual([expected]);
+  });
+
+  test("a large bundle of unrelated storage writes stays fast", () => {
+    const code = Array.from({ length: 50_000 }, (_, i) => `localStorage.x${i}=${i};`).join("");
+    const t0 = performance.now();
+    expect(findTokenStorageWrites(code)).toEqual([]);
+    expect(performance.now() - t0).toBeLessThan(2000);
   });
 });
 
