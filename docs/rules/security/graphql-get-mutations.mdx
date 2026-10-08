@@ -1,0 +1,95 @@
+---
+title: "GraphQL mutations over GET: why they open the door to CSRF"
+description: "A server that runs a mutation sent as a GET lets any site fire it with your visitors' cookies. squirrel sends a no-op mutation that cannot write and checks the answer."
+---
+
+## Why a mutation over GET is a problem
+
+A `GET` is a simple cross-site request. An image tag, a link prefetch or a plain link on any other website sends it to your server with the visitor's cookies, and no CORS preflight stops it. If your GraphQL server executes a mutation that arrives as a `GET`, every mutation is one URL away from a cross-site request forgery (CSRF): another site can change a password, place an order or delete data as the signed-in visitor.
+
+It also breaks the rule that `GET` is safe and idempotent. Browsers, crawlers, link previews and caches send and repeat `GET` requests freely, so a state-changing `GET` can run when nobody meant it to.
+
+The [GraphQL-over-HTTP spec](https://graphql.github.io/graphql-over-http/draft/) says a server must reject a mutation over `GET` with `405 Method Not Allowed`.
+
+## What squirrel checks
+
+This is a probing rule. It sends requests beyond the crawl, so it runs only when [probing intensity](/configuration/security) is `active` or `aggressive`. On a `passive` run it sends nothing and records one skipped check.
+
+### Which endpoints are probed
+
+The same endpoints as [security/graphql-introspection](/rules/security/graphql-introspection), chosen by the same shared code:
+
+- GraphQL endpoints the audit found in your pages and scripts: a URL with a `graphql` or `gql` path segment. Finding them sends no request.
+- The conventional paths `/graphql` and `/api/graphql`.
+
+Every endpoint must have the same origin as the audited URL. An endpoint whose path names a state-changing action, such as `logout`, `delete`, `update` or `reset`, is never probed, and neither is a call site that declares `PUT`, `PATCH` or `DELETE`. Below `aggressive`, a path that `robots.txt` disallows is skipped. At most five endpoints are probed.
+
+### What is sent
+
+One request per endpoint, and only this one:
+
+```text
+GET /graphql?query=mutation{__typename}
+```
+
+`mutation{__typename}` is a no-op. It selects only `__typename`, which the GraphQL executor answers without running any of your resolvers, and it names no field of your schema, so nothing can be written. The rule never sends a schema-specific mutation and never sends a `POST`, at any probing level. The request carries no cookies and does not follow redirects, and at most 64 KB of the answer is read.
+
+### Results
+
+The rule emits checks named `graphql-get-mutations`:
+
+- Skipped when probing is passive. Message: `Probing is passive, so no GraphQL endpoint was probed. Run with --probe active to check whether mutations run over GET.`
+- Skipped when the shared probe budget ran out before the first request.
+- Fail, one check per endpoint, when the answer is a 2xx GraphQL response whose `data.__typename` is the mutation root type (`Mutation`, `mutation_root` in Hasura, `RootMutationType` in Absinthe and similar). Message: `https://example.com/graphql executes GraphQL mutations sent over GET: any site can trigger a state-changing operation with your visitors' cookies (CSRF), and GET is no longer safe and idempotent. Reject non-query operations over GET and require POST with a non-simple Content-Type or a CSRF token.`
+- Pass when no endpoint executed the mutation. Message: `No GraphQL endpoint executed a mutation sent over GET (2 endpoint(s) probed, 1 answered as GraphQL)`.
+
+### What is not flagged
+
+- A `405`, or any other non-2xx answer.
+- An error such as `Can only perform a mutation operation from a POST request`, an introspection error, or a schema with no mutation type.
+- An answer of `Query`, which means the operation ran as a query, not as a mutation.
+- An HTML page, a catch-all route or a JSON body that is not GraphQL-shaped. The status alone never decides it: the answer must be a JSON object with only `data`, `errors` and `extensions` keys.
+- An answer larger than 64 KB, which is not read.
+
+### Limits
+
+The rule proves that the server executes a mutation sent as a `GET`. It does not check how your API authenticates: the CSRF risk is real when it trusts cookies, and smaller when every request needs an `Authorization` header that a cross-site request cannot set. Either way, a `GET` should not change state.
+
+## How to fix it
+
+Reject every operation other than a `query` when the request is a `GET`, with a `405`. Accept mutations only over `POST`, and require a non-simple `Content-Type` such as `application/json`, which a cross-site form or image cannot send without a CORS preflight, or a CSRF token.
+
+Apollo Server, graphql-http and express-graphql already refuse a mutation over `GET`, so a finding usually points at a custom HTTP handler that passes `GET` query strings straight to the executor. Check the operation type before you execute it.
+
+| | |
+|---|---|
+| **Rule ID** | `security/graphql-get-mutations` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/graphql-get-mutations"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/graphql-get-mutations"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.

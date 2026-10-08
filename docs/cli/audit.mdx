@@ -102,6 +102,9 @@ are. An unknown level or budget fails before the crawl starts.
 `--probe-budget` caps the wall-clock time of **all** probing together, not each
 probe. Once it runs out, no new probe starts.
 
+The rules that probe, and exactly what each one sends, are listed in
+[Security configuration](/configuration/security#rules-that-probe).
+
 `--disable-discovery-probes` (or `[crawler] disable_discovery_probes = true`)
 keeps probing passive, and no probe sends a request.
 
