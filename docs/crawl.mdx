@@ -205,6 +205,12 @@ This makes re-crawling fast: fresh pages are instant (zero requests), and
 changed pages are still detected correctly. **Caching never changes audit
 results**: a fresh-cache run produces the same health score as a full re-fetch.
 
+A page reused from the cache follows the same link rules as a freshly fetched
+one. In `quick` mode (no link discovery), a reused page does not add its links to
+the crawl, so only the seed and sitemap URLs are audited. If the sitemap yields no
+crawlable URLs, links are discovered from reused pages just as they are from
+fetched ones.
+
 ```bash
 # First crawl: fetches all pages fresh
 squirrel audit https://example.com -m 50
