@@ -42,6 +42,7 @@ interface Reference {
   kind: CspFetchKind;
   origin: Origin;
   nonce?: string;
+  integrity?: boolean;
   category?: VendorCategory;
   vendor?: string;
 }
@@ -79,7 +80,7 @@ function enforcedPolicies(ctx: RuleContext, doc: Document): CspPolicy[] {
   for (const meta of querySelectorAllOutsideNoscript(doc, "meta[http-equiv]")) {
     if (meta.getAttribute("http-equiv")?.trim().toLowerCase() !== "content-security-policy") continue;
     const content = meta.getAttribute("content");
-    if (content) policies.push(...parseCspPolicies(content));
+    if (content) policies.push(...parseCspPolicies(content, false));
   }
   return policies;
 }
@@ -108,18 +109,26 @@ function linkKind(rel: string, as: string): CspFetchKind | undefined {
 /** What the page's markup asks the browser to fetch, resolved against the document base. */
 function htmlReferences(doc: Document, base: string): Reference[] {
   const refs: Reference[] = [];
-  const add = (raw: string | null, kind: CspFetchKind, nonce?: string | null) => {
+  const add = (raw: string | null, kind: CspFetchKind, el?: Element) => {
     if (!raw) return;
     const url = parseUrl(raw.trim(), base);
-    if (url) refs.push({ url, kind, origin: "html", nonce: nonce || undefined });
+    if (url) {
+      refs.push({
+        url,
+        kind,
+        origin: "html",
+        nonce: el?.getAttribute("nonce") || undefined,
+        integrity: !!el?.getAttribute("integrity"),
+      });
+    }
   };
 
   for (const el of querySelectorAllOutsideNoscript(doc, "script[src]")) {
-    add(el.getAttribute("src"), "script", el.getAttribute("nonce"));
+    add(el.getAttribute("src"), "script", el);
   }
   for (const el of querySelectorAllOutsideNoscript(doc, "link[rel][href]")) {
     const kind = linkKind(el.getAttribute("rel") ?? "", el.getAttribute("as") ?? "");
-    if (kind) add(el.getAttribute("href"), kind, el.getAttribute("nonce"));
+    if (kind) add(el.getAttribute("href"), kind, el);
   }
   for (const el of querySelectorAllOutsideNoscript(doc, "iframe[src]")) {
     add(el.getAttribute("src"), "frame");
@@ -216,12 +225,12 @@ export const cspBlocksOwnResourcesRule: Rule = {
     const references = [
       ...htmlReferences(doc, base),
       ...chunkReferences(ctx, pageUrls, pageUrl.hostname),
-      ...vendorReferences(ctx.page.html ?? ""),
+      ...vendorReferences((ctx.page.html ?? "").replace(/<!--[\s\S]*?-->/g, "")),
     ];
 
     const blocked = new Map<string, Blocked>();
     for (const ref of references) {
-      const verdict = policiesAllow(policies, ref.url, ref.kind, pageUrl, { nonce: ref.nonce });
+      const verdict = policiesAllow(policies, ref.url, ref.kind, pageUrl, { nonce: ref.nonce, integrity: ref.integrity });
       if (verdict.allowed !== false || !verdict.directive) continue;
       const key = `${verdict.directive}\u0000${ref.url.hostname}`;
       const seen = blocked.get(key);

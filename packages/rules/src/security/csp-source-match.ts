@@ -23,9 +23,10 @@ export type CspPolicy = Map<string, string[]>;
  * several policies joined arrive comma-separated, and every one of them has to
  * allow a resource. The first occurrence of a directive wins, as in a browser.
  */
-export function parseCspPolicies(header: string): CspPolicy[] {
+export function parseCspPolicies(header: string, commaSeparated = true): CspPolicy[] {
   const policies: CspPolicy[] = [];
-  for (const raw of header.split(",")) {
+  // A meta tag holds exactly one policy, so only a header is split on commas.
+  for (const raw of commaSeparated ? header.split(",") : [header]) {
     const policy: CspPolicy = new Map();
     for (const part of raw.split(";")) {
       const tokens = part.trim().split(/[\t\n\f\r ]+/).filter(Boolean);
@@ -119,6 +120,8 @@ function sourceMatches(token: string, resource: URL, ctx: ResourceContext): bool
   const got = resource.hostname.toLowerCase().replace(/\.$/, "");
   if (wanted !== "*") {
     if (wanted.startsWith("*.")) {
+      // `*.example.com` needs a label before the dot, so `example.com` itself is
+      // intentionally not matched (CSP3 host-part matching).
       if (!got.endsWith(wanted.slice(1))) return false;
     } else if (wanted !== got) {
       return false;
@@ -139,6 +142,8 @@ function sourceMatches(token: string, resource: URL, ctx: ResourceContext): bool
 export interface MatchOptions {
   /** The element's `nonce` attribute, which a `'nonce-...'` source can match. */
   nonce?: string;
+  /** The element carries `integrity`, which a hash source can allow (CSP3). */
+  integrity?: boolean;
 }
 
 /**
@@ -155,6 +160,9 @@ export function sourceListAllows(
 ): boolean | undefined {
   const lowered = sources.map((s) => s.toLowerCase());
   if (kind === "script" && lowered.includes("'strict-dynamic'")) return undefined;
+  // A hash source can allow an external file whose `integrity` matches; the
+  // hash is not checked here, so the verdict is undecidable rather than a block.
+  if (opts.integrity && lowered.some((s) => /^'sha(?:256|384|512)-/.test(s))) return undefined;
   if (lowered.length === 0 || (lowered.length === 1 && lowered[0] === "'none'")) return false;
 
   if (opts.nonce) {

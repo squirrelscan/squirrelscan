@@ -37,7 +37,7 @@ A directive the policy does not set allows everything. Elements inside `<noscrip
 
 ### Third-party scripts inside your own chunks
 
-A bundler's lazy chunk can name a third-party script that no HTML tag mentions. squirrel fetches the same-site scripts and the chunks a page preloads, and looks in each for a quoted `https://` URL ending in `.js` or `.mjs` with script-loading code beside it (`createElement("script")`, `.src =`, `import()`, `importScripts`). If that host is not allowed by `script-src`, it is reported. URLs in comments or links that nothing loads are ignored, and chunks are scanned up to 2 MB each.
+A bundler's lazy chunk can name a third-party script that no HTML tag mentions. squirrel fetches the same-site scripts and the chunks a page preloads, and looks in each for a quoted `https://` URL ending in `.js` or `.mjs` with script-loading code beside it (`createElement("script")`, `.src =`, `import()`, `importScripts`). If that host is not allowed by `script-src`, it is reported. URLs in comments or links that nothing loads are ignored, and chunks are scanned up to 2 MB each. This is a best-effort heuristic: a URL in a minified config object next to unrelated script-loading code can be reported, which is why a chunk finding warns unless the host is a known vendor.
 
 ### Vendor hosts the HTML never names
 
@@ -53,7 +53,7 @@ Some hosts are only contacted at runtime, so the HTML never lists them. When the
 | Cloudflare Turnstile | `script-src`, `frame-src` | `challenges.cloudflare.com` |
 | Google reCAPTCHA | `script-src`, `frame-src` | `www.google.com`, `www.gstatic.com` (or `www.recaptcha.net`) |
 
-Vendor hosts change. The table is data in the rule, and every entry records the date it was last checked against the vendor's own guidance. The current entries were last verified on 2026-10-08.
+Vendors are detected from the page's HTML with comments removed. Vendor hosts change. The table is data in the rule, and every entry records the date it was last checked against the vendor's own guidance. The current entries were last verified on 2026-10-08.
 
 ### How sources are matched
 
@@ -63,7 +63,7 @@ Matching follows the CSP specification rather than a substring test:
 - A source with no port allows only the default port for its scheme, `:*` allows any port, and `'self'` needs the same scheme (or an https upgrade), host and port.
 - A source path ending in `/` is a prefix, and any other path must match exactly.
 - `https:` allows any https URL, and a source with no scheme follows the page's scheme.
-- A matching `'nonce-...'` on the element allows it.
+- A matching `'nonce-...'` on the element allows it, and a hash source (`'sha256-...'`) on a list that allows an element with an `integrity` attribute is treated as undecidable, so nothing is reported.
 - `'none'` or an empty list blocks everything.
 - A `script-src` with `'strict-dynamic'` makes the browser ignore host sources, so squirrel cannot decide statically and reports nothing for scripts.
 

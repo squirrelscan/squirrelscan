@@ -187,6 +187,19 @@ describe("no false positives", () => {
     ok(`<script src="https://cdn.x.test/a.js"></script>`, "script-src 'nonce-abc' 'strict-dynamic'");
   });
 
+  test("a hash source with an integrity attribute is undecidable, not a block", () => {
+    ok(`<script src="https://cdn.x.test/a.js" integrity="sha384-abc"></script>`, "script-src 'sha384-abc'");
+    expect(run(`<script src="https://cdn.x.test/a.js"></script>`, "script-src 'sha384-abc'").status).toBe("warn");
+  });
+
+  test("a commented-out vendor snippet does not count as use", () => {
+    ok(`<!-- <script src="https://js.stripe.com/v3/"></script> -->`, "default-src 'self'");
+  });
+
+  test("a comma inside a meta policy does not split it", () => {
+    ok(`<meta http-equiv="Content-Security-Policy" content="script-src 'self' https://a.test, https://b.test"><script src="https://b.test/a.js"></script>`, "");
+  });
+
   test("a noscript fallback and a data: image are not judged", () => {
     ok(`<img src="data:image/gif;base64,R0lGOD"><noscript><img src="https://px.x.test/p.gif"></noscript>`, "img-src 'self'");
   });
