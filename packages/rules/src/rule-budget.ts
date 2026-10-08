@@ -15,7 +15,9 @@
 // regex run by a main-realm function called from inside the context (a 200 ms
 // budget threw ERR_SCRIPT_EXECUTION_TIMEOUT after about 430 ms; a spin loop after
 // about 110 ms). tests/rule-time-budget.test.ts pins it through RuleRunner on the
-// ReDoS fixture; re-check it when the Bun version changes.
+// ReDoS fixture. CI runs it (the "Rules tests" step of the CLI tests job) on the
+// Bun pinned in .github/actions/setup-bun, so a bump of that pin re-checks it.
+// squirrel ships as a Bun executable; Node is not a supported runtime.
 //
 // Granularity: the watchdog is checked between operations, not inside one regex
 // match. JavaScriptCore already gives up on a single runaway match after a

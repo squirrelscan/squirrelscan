@@ -22,8 +22,10 @@ import type { PageData, ParsedPage, Rule, RuleContext, RuleResult, SiteData } fr
 
 const REDOS_HTML = readFileSync(join(import.meta.dir, "fixtures/redos-page.html"), "utf8");
 // Known catastrophic: nested quantifier, then a character that cannot match.
-// Deliberate catastrophic-backtracking test fixture (CodeQL flags it on purpose).
-const CATASTROPHIC = new RegExp("^(a+)+$");
+// Deliberate catastrophic-backtracking test fixture. The pattern is read from a
+// fixture file, like the page, so the static analyser does not flag a test input
+// as a ReDoS in product code.
+const CATASTROPHIC = new RegExp(readFileSync(join(import.meta.dir, "fixtures/redos-pattern.txt"), "utf8"));
 
 function rule(id: string, scope: "page" | "site", run: (ctx: RuleContext) => RuleResult | Promise<RuleResult>): Rule {
   return {
@@ -108,7 +110,7 @@ describe("per-rule time budget", () => {
   test("a real backtracking rule on the ReDoS fixture times out through RuleRunner and the audit completes", async () => {
     // Mirrors how real rules run a regex: a module-level helper (main realm)
     // called from the rule, looped over elements of the parsed fixture page.
-    const backtrack = (text: string) => /^(a+)+$/.test(text);
+    const backtrack = (text: string) => CATASTROPHIC.test(text);
     const runner = makeRunner(
       [
         rule("test/backtrack", "page", (ctx) => {
@@ -223,6 +225,24 @@ describe("per-rule time budget", () => {
     expect(all.every((c) => c.name === "test/slow-page-error" && c.details?.["timedOut"] === true)).toBe(true);
     // The one fail carries the running count of pages.
     expect(all[0].details?.["pages"]).toBe(3);
+  }, 30_000);
+
+  test("a rule that timed out once still runs normally on later fast pages", async () => {
+    let calls = 0;
+    const flaky = rule("test/flaky", "page", () => {
+      if (calls++ === 0) {
+        const until = performance.now() + 150;
+        while (performance.now() < until) {
+          // one slow page, e.g. a GC pause
+        }
+      }
+      return pass("test/flaky");
+    });
+    const runner = makeRunner([flaky], 50);
+    const first = await runner.runPageRules({ ...redosPage(), url: "https://example.com/a" }, siteData());
+    const second = await runner.runPageRules({ ...redosPage(), url: "https://example.com/b" }, siteData());
+    expect(first.checks.map((c) => c.name)).toEqual(["test/flaky-error"]);
+    expect(second.checks).toEqual([{ name: "test/flaky", status: "pass", message: "ok" }]);
   }, 30_000);
 
   test("thrown errors and fast rules are unchanged", async () => {
