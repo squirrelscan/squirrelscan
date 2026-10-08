@@ -450,6 +450,7 @@ export class RuleRunner {
         const soft404 = detectSoft404({
           statusCode: page.statusCode,
           document: parsed.document,
+          errorShell: parsed.errorShell,
           title: parsed.meta?.title,
           h1Texts: parsed.h1?.texts,
           robotsMeta: parsed.meta?.robots,

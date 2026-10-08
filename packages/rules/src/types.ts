@@ -16,6 +16,7 @@ import type {
   CheckResult,
   CloakingProbeData,
   ContactLinkData,
+  HreflangAlternate,
   ContentAnalysis,
   DiscoveryProbe,
   EntityMap,
@@ -269,6 +270,13 @@ export interface ParsedPage {
   visibleDateModified?: string | null;
 
   /**
+   * `<link rel="alternate" hreflang>` annotations, resolved, deduplicated and
+   * capped by the parser (#489). Absent on parsed records stored before the
+   * field existed; readers treat that as "none declared".
+   */
+  hreflangAlternates?: HreflangAlternate[];
+
+  /**
    * True when this 2xx page serves 404/error content (see `detectSoft404`).
    * Computed per-run by the runner (needs the page's status code), so it is
    * absent on parsed records read straight from storage until the runner sets
@@ -284,6 +292,8 @@ export interface ParsedPage {
    * the rule then treats it as unconfirmed (warns, annotated), never drops.
    */
   soft404Confirmation?: Soft404Confirmation;
+  /** Error-shell marker captured while the DOM was live; see the parser's `ParsedPage.errorShell` (#235). */
+  errorShell?: boolean;
 
   // DEPRECATED: Use schemas.types, schemas.valid, etc. instead
   schema: SchemaData;

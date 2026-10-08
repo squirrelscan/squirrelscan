@@ -147,7 +147,14 @@ interface SlimJsonReport {
     passed: number;
     warnings: number;
     failed: number;
+    /** Skipped-page count (#518); absent in slim JSON written before it. */
+    skipped?: number;
   };
+  /**
+   * Evaluation gaps (#518). Not read back: skipped checks are not findings, so
+   * they are never rebuilt into `ruleResults`.
+   */
+  skippedChecks?: unknown[];
   issues: Array<{
     ruleId: string;
     name: string;

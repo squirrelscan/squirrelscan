@@ -521,7 +521,7 @@ max_length = 500
 
 - name: Check Score
   run: |
-    SCORE=$(cat reports/audit.json | jq '.health.score')
+    SCORE=$(cat reports/audit.json | jq '.score.overall')
     if [ "$SCORE" -lt 80 ]; then
       exit 1
     fi
