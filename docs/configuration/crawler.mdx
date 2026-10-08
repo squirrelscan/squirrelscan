@@ -372,7 +372,7 @@ it declares, or stop declaring one.
 **Type:** `string[]`
 **Default:** `[]` (empty = include all URLs from seed domain)
 
-URL patterns to include. If set, **only** matching URLs are crawled.
+URL patterns to include. If set, **only** matching URLs are crawled, and only within the crawl's host scope unless a pattern is absolute (see **Scope** below).
 
 **Pattern Syntax:**
 
@@ -416,7 +416,27 @@ Specific file types:
 include = ["*.html", "*.htm"]
 ```
 
-**Important:** When `include` is set, it **overrides** the `domains` setting in `[project]`.
+**Scope:** A path-only pattern narrows the crawl **within** its host scope: a URL
+must match the pattern and also be on the seed's host (or on a host allowed by
+`domains` in `[project]`). So `include = ["/blog/*"]` means the blog section of
+your site, and a third-party URL whose path starts `/blog/` is not crawled.
+Setting `domains` alongside `include` is honoured the same way.
+
+An absolute pattern (one that starts with `http://` or `https://`) names its host,
+so a URL that matches it is crawled even when that host is outside the scope. That
+is the way to reach another host on purpose:
+
+```toml
+[crawler]
+include = ["/blog/*", "https://docs.example.org/*"]
+```
+
+The exception is an explicit `domains` list in `[project]`, which is a hard
+allowlist. If `domains` is set and does not list the host an absolute pattern
+names, that URL is not crawled, and the crawl warns once for each include and host
+(`include "https://docs.example.org/*" matches docs.example.org, which allowedDomains
+does not list`). Add the host to `domains`, or remove `domains`, to let the include
+reach it.
 
 <Note>
   Cloud audits don't read this file. The same two lists live on the dashboard at

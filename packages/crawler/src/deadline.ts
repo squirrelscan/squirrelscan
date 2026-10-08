@@ -4,6 +4,8 @@
 import { PROBE_NOT_ATTEMPTED_ERROR } from "@squirrelscan/core-contracts/storage";
 import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 
+import type { RefusalLog } from "./refusals";
+
 /**
  * Run a request under a deadline that stays armed until its body has been read.
  *
@@ -82,6 +84,12 @@ export const ungated: ProbeGate = (_url, send) => send();
 export interface PhaseBudget {
   /** Epoch ms past which no further request in the phase may start. */
   readonly deadlineAt: number;
+  /**
+   * Where the phase's probes note requests the site refused. Carried on
+   * the budget because it already reaches every root probe; absent outside a
+   * crawl, where a refusal is still treated as unanswered but not recorded.
+   */
+  readonly refusals?: RefusalLog;
 }
 
 /**
@@ -92,8 +100,12 @@ export interface PhaseBudget {
  */
 export const BUDGET_EXHAUSTED_ERROR = PROBE_NOT_ATTEMPTED_ERROR;
 
-export function createPhaseBudget(totalMs: number, startedAt: number = Date.now()): PhaseBudget {
-  return { deadlineAt: startedAt + Math.max(0, totalMs) };
+export function createPhaseBudget(
+  totalMs: number,
+  startedAt: number = Date.now(),
+  refusals?: RefusalLog,
+): PhaseBudget {
+  return { deadlineAt: startedAt + Math.max(0, totalMs), ...(refusals ? { refusals } : {}) };
 }
 
 /** Milliseconds left on the budget, floored at 0. `Infinity` when unbudgeted. */

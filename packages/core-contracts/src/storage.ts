@@ -4,6 +4,7 @@
 import type { Effect } from "effect";
 
 import type { AuditFailureDetail } from "./failure-reason";
+import type { RefusedFetch } from "./refused-fetch";
 
 // ============================================
 // SHARED DOMAIN TYPES (used by storage + report)
@@ -237,6 +238,15 @@ export interface CrawlStats {
    * persisted stats blobs; absent reads as "the walk completed".
    */
   sitemapDiscoveryTruncated?: boolean;
+  /**
+   * Root fetches (robots.txt, sitemaps, llms.txt, the Markdown probe) the site
+   * REFUSED with a 401/403/429 or a bot-challenge 503, capped at
+   * `MAX_REFUSED_FETCHES`. A refusal is a coverage failure, not an observation
+   * that the file is absent, so the rules read this to say "refused" instead of
+   * "not found". Optional for backward compatibility with older persisted
+   * stats blobs; absent reads as "nothing was refused".
+   */
+  refusedFetches?: RefusedFetch[];
   /**
    * Per-reason cache-hit counts across pages AND sub-resources (#107/#108).
    * Drives the hits-by-reason breakdown. Optional for backward compatibility.

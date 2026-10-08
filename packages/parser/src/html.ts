@@ -35,6 +35,7 @@ import type { AuthorInfo } from "./schema";
 import type { PageType } from "./page-type";
 import type { SchemaCollection } from "./schema/collection";
 import type { Soft404Confirmation, Soft404Signal } from "./soft404";
+import { hasErrorShellMarker } from "./soft404";
 
 // Full ParsedPage with DOM reference (extends core-contracts version)
 export interface ParsedPage extends BaseParsedPage {
@@ -49,6 +50,11 @@ export interface ParsedPage extends BaseParsedPage {
   // Verdict of the end-of-crawl confirmation re-fetch (#1177); absent until the
   // audit-engine confirm pass runs (e.g. runner-only paths / storage reads).
   soft404Confirmation?: Soft404Confirmation;
+  // Framework error-shell marker on the document root (`hasErrorShellMarker`),
+  // captured at parse time so soft-404 candidate selection still sees it after
+  // the DOM is released (#235). Absent on a parse stored before it existed,
+  // which reads as the old DOM-only behaviour.
+  errorShell?: boolean;
 }
 
 // Crawl-time ParsedPage keyed by normalizedUrl, so an audit reuses the DOM (#267)
@@ -455,6 +461,7 @@ export function parsePage(html: string, url: string): ParsedPage {
     images: extractImages(doc, url),
     headings: extractHeadings(doc),
     content: extractContent(doc, html),
+    errorShell: hasErrorShellMarker(doc),
 
     // New schema data
     schemas,

@@ -34,6 +34,7 @@ import type {
   MetaData,
   OpenGraphData,
   RedirectChain,
+  RefusedFetch,
   RobotsTxtData,
   ResourceSizeData,
   SchemaData,
@@ -291,6 +292,8 @@ export interface ParsedPage {
    * the rule then treats it as unconfirmed (warns, annotated), never drops.
    */
   soft404Confirmation?: Soft404Confirmation;
+  /** Error-shell marker captured while the DOM was live; see the parser's `ParsedPage.errorShell` (#235). */
+  errorShell?: boolean;
 
   // DEPRECATED: Use schemas.types, schemas.valid, etc. instead
   schema: SchemaData;
@@ -327,6 +330,9 @@ export interface SiteData {
   }>;
   robotsTxt: RobotsTxtData | null;
   sitemaps: SitemapDiscovery | null;
+  // Root requests the site refused (401/403/429, a bot wall): the crawler could
+  // not observe those resources, so a rule must not report them as absent. Undefined reads as "nothing was refused".
+  refusedFetches?: RefusedFetch[];
   // Root llms.txt + llms-full.txt fetch; optional like the other extras.
   llmsTxt?: LlmsTxtData | null;
   // Homepage markdown content-negotiation + .md variant probe.
