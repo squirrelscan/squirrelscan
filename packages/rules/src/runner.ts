@@ -32,6 +32,7 @@ import {
   RULE_TIME_BUDGET_MS,
   RuleTimeoutError,
   runWithinBudget,
+  SITE_RULE_BUDGET_CAP_MS,
   siteRuleBudgetMs,
 } from "./rule-budget";
 import { noindexSource, skipsNoindexPages } from "./shared/noindex";
@@ -107,6 +108,11 @@ export interface RunnerOptions extends RunnerScope {
    * `0` turns the budget off.
    */
   ruleTimeBudgetMs?: number;
+  /**
+   * Ceiling (ms) on one site-rule evaluation, whatever the page count. Defaults to
+   * `SITE_RULE_BUDGET_CAP_MS`.
+   */
+  siteRuleBudgetCapMs?: number;
 }
 
 const DEFAULT_RULE_CONCURRENCY = 8;
@@ -215,6 +221,7 @@ export class RuleRunner {
   // Only affects site rules — page rules are sync CPU and run sequentially (#379)
   private ruleConcurrency: number;
   private readonly ruleTimeBudgetMs: number;
+  private readonly siteRuleBudgetCapMs: number;
   // Safe only because page rules run sequentially (see the note on `ruleConcurrency`):
   // the check-then-set on this map and the in-place `details.pages++` here and in
   // `collectedTimeoutChecks` assume no two page rules interleave. Parallelising page
@@ -254,6 +261,7 @@ export class RuleRunner {
       options.ruleConcurrency ?? DEFAULT_RULE_CONCURRENCY
     );
     this.ruleTimeBudgetMs = options.ruleTimeBudgetMs ?? RULE_TIME_BUDGET_MS;
+    this.siteRuleBudgetCapMs = options.siteRuleBudgetCapMs ?? SITE_RULE_BUDGET_CAP_MS;
 
     // Load all rules (plus any caller-supplied namespaces — plugins / tests)
     this.rules = loadAllRules({ additionalNamespaces: options.additionalNamespaces });
@@ -630,7 +638,8 @@ export class RuleRunner {
         // query handle.
         const budgetMs = siteRuleBudgetMs(
           this.ruleTimeBudgetMs,
-          Math.max(siteData.pages.length, siteQuery?.pageCount() ?? 0)
+          Math.max(siteData.pages.length, siteQuery?.pageCount() ?? 0),
+          this.siteRuleBudgetCapMs
         );
 
         // Run rules with bounded concurrency; assemble in deterministic order.

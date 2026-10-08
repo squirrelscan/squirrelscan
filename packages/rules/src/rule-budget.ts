@@ -70,8 +70,12 @@ export const SITE_RULE_BUDGET_CAP_MS = 60_000;
  * Budget for one site-rule evaluation: {@link RULE_TIME_BUDGET_MS} per page,
  * capped at {@link SITE_RULE_BUDGET_CAP_MS} (never below the per-page budget).
  */
-export function siteRuleBudgetMs(budgetMs: number, pageCount: number): number {
-  return Math.min(budgetMs * Math.max(1, pageCount), Math.max(SITE_RULE_BUDGET_CAP_MS, budgetMs));
+export function siteRuleBudgetMs(
+  budgetMs: number,
+  pageCount: number,
+  capMs: number = SITE_RULE_BUDGET_CAP_MS
+): number {
+  return Math.min(budgetMs * Math.max(1, pageCount), Math.max(capMs, budgetMs));
 }
 
 /** Thrown when a rule's synchronous work runs past its budget. */

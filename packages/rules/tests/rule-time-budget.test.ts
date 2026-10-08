@@ -71,6 +71,58 @@ function siteData(pageCount = 1): SiteData {
 
 const byName = (checks: CheckResult[], name: string) => checks.find((c) => c.name === name);
 
+// Canary for the whole mechanism. The budget relies on Bun's vm `timeout`
+// interrupting a main-realm function (see rule-budget.ts). If a Bun upgrade turns
+// that into a no-op, this must FAIL (an assertion, never a skip), and the
+// message names the Bun version so the cause is obvious in CI.
+describe("canary: the vm watchdog still fires", () => {
+  const bunVersion = typeof Bun === "undefined" ? "unknown" : Bun.version;
+
+  function mustTimeOut(label: string, fn: () => unknown, budgetMs: number): void {
+    const started = performance.now();
+    let error: unknown;
+    try {
+      runWithinBudget(fn, budgetMs);
+    } catch (e) {
+      error = e;
+    }
+    const elapsedMs = performance.now() - started;
+    if (!(error instanceof RuleTimeoutError)) {
+      throw new Error(
+        `vm watchdog did NOT interrupt ${label} on Bun ${bunVersion} (ran ${Math.round(elapsedMs)} ms against a ${budgetMs} ms budget): the per-rule time budget is a no-op`
+      );
+    }
+    expect(error.budgetMs).toBe(budgetMs);
+    expect(elapsedMs).toBeLessThan(budgetMs + 2_000);
+  }
+
+  test("canary: vm timeout interrupts a main-realm spin loop", () => {
+    mustTimeOut(
+      "a spin loop",
+      () => {
+        const until = performance.now() + 1_500;
+        while (performance.now() < until) {
+          // spin
+        }
+      },
+      100
+    );
+  });
+
+  test("canary: vm timeout interrupts the ReDoS fixture's catastrophic regex", () => {
+    const html = readFileSync(join(import.meta.dir, "fixtures/redos-page.html"), "utf8");
+    const texts = [...html.matchAll(/<p class="evil">([^<]*)<\/p>/g)].map((m) => m[1]!);
+    expect(texts.length).toBeGreaterThan(10);
+    mustTimeOut(
+      "a catastrophic regex over the fixture",
+      () => {
+        for (const text of texts) CATASTROPHIC.test(text);
+      },
+      200
+    );
+  }, 30_000);
+});
+
 describe("per-rule time budget", () => {
   test(
     "a catastrophic regex on a crafted page is abandoned within the budget and the audit carries on",
@@ -175,6 +227,25 @@ describe("per-rule time budget", () => {
     // Capped on big sites, so one stuck rule cannot hold an audit for an hour.
     expect(siteRuleBudgetMs(1000, 5_000)).toBe(SITE_RULE_BUDGET_CAP_MS);
   });
+
+  test("the site-rule ceiling is a runner option", async () => {
+    const slow = rule("test/slow-cap", "site", () => {
+      const until = performance.now() + 200;
+      while (performance.now() < until) {
+        // spin
+      }
+      return pass("test/slow-cap");
+    });
+    expect(siteRuleBudgetMs(100, 50, 1_000)).toBe(1_000);
+    expect(siteRuleBudgetMs(100, 50)).toBe(5_000);
+    const config: RulesConfig = { rule_options: {}, rules: { enable: ["test/slow-cap"] } };
+    const ns: RuleNamespace = { name: "test", rules: [slow] };
+    // 100 ms per page x 50 pages would allow it; the 100 ms ceiling does not.
+    const capped = new RuleRunner({ config, additionalNamespaces: [ns], ruleTimeBudgetMs: 100, siteRuleBudgetCapMs: 100 });
+    expect((await capped.runSiteRules(siteData(50))).checks.map((c) => c.name)).toEqual(["test/slow-cap-error"]);
+    const open = new RuleRunner({ config, additionalNamespaces: [ns], ruleTimeBudgetMs: 100 });
+    expect((await open.runSiteRules(siteData(50))).checks.map((c) => c.name)).toEqual(["test/slow-cap"]);
+  }, 30_000);
 
   test("a nested call runs under the outer budget and leaves the slot intact", () => {
     const out = runWithinBudget(() => {
