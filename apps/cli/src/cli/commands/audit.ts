@@ -1165,7 +1165,9 @@ export const audit = defineCommand({
     const probeFlagCheck = resolveProbeIntensity({
       flags: probeFlags,
       context: { surface: "local", signedIn: false },
-      coverage: args.coverage,
+      // citty hands a repeated -C over as an array; coverage validation
+      // reads it with toString, so read it the same way here.
+      coverage: args.coverage === undefined ? undefined : String(args.coverage),
     });
     if (!probeFlagCheck.ok) {
       console.error(`${fmt.red("Error:")} ${probeFlagCheck.error}`);
@@ -1438,7 +1440,10 @@ export const audit = defineCommand({
         config,
         signedIn: coverageAccountPlan !== "anonymous",
         disableDiscoveryProbes,
-        coverage: args.coverage,
+        // citty hands a repeated -C over as an array; coverage validation
+        // reads it with toString, so read it the same way here.
+        coverage:
+          args.coverage === undefined ? undefined : String(args.coverage),
       });
       if (!probeResolution.ok) {
         console.error(`${fmt.red("Error:")} ${probeResolution.error}`);

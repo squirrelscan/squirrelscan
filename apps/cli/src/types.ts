@@ -1,5 +1,7 @@
 // Type definitions for SEO audit
 
+import type { ProbeLevel } from "@squirrelscan/config";
+
 export interface AuditResult {
   url: string;
   status: "pass" | "warn" | "fail";
@@ -621,8 +623,7 @@ export interface AuditReport {
 }
 
 export type CoverageMode = "quick" | "surface" | "full";
-export type { ProbeLevel } from "@squirrelscan/config";
-import type { ProbeLevel } from "@squirrelscan/config";
+export type { ProbeLevel };
 
 export interface AuditOptions {
   url: string;

@@ -268,6 +268,17 @@ describe("squirrel audit probing intensity", () => {
     expect(probes).toEqual([]);
   });
 
+  test("--pentest with a repeated -C is refused, not a crash", async () => {
+    await runAudit(["--pentest"], "", ["-C", "full", "-C", "full"]);
+    expect(process.exitCode).toBe(1);
+    expect(
+      output.some((l) =>
+        l.includes("--pentest cannot be combined with --coverage full,full")
+      )
+    ).toBe(true);
+    expect(requested).toEqual([]);
+  });
+
   test("an invalid [security] budget fails config loading", async () => {
     await runAudit([], '[security]\nbudget = "forever"\n');
     expect(

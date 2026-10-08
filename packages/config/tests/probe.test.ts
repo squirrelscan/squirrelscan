@@ -66,6 +66,12 @@ describe("parseProbeBudget", () => {
     }
   });
 
+  test("a value that rounds to 0 ms is refused, never a zero budget", () => {
+    expect(parseProbeBudget("0.4ms")).toBeNull();
+    expect(parseProbeBudget(0.0001)).toBeNull();
+    expect(parseProbeBudget("0.6ms")).toBe(1);
+  });
+
   test("refuses more than an hour", () => {
     expect(parseProbeBudget("61m")).toBeNull();
     expect(parseProbeBudget("2h")).toBeNull();
@@ -186,6 +192,13 @@ describe("budget precedence: --probe-budget > [security] budget > level default"
         context: LOCAL_ANON,
       }).budgetMs,
     ).toBe(5_000);
+  });
+
+  test("--probe-budget on a passive run says it has no effect", () => {
+    const value = resolved({ flags: { probeBudget: "30s" }, context: LOCAL_ANON });
+    expect(value.level).toBe("passive");
+    expect(value.notices).toEqual(["--probe-budget has no effect: probing is passive, so no probe runs."]);
+    expect(resolved({ flags: { probe: "active", probeBudget: "30s" }, context: LOCAL_ANON }).notices).toEqual([]);
   });
 
   test("passive has no budget, whatever was asked for", () => {

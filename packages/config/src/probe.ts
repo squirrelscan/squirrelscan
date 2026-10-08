@@ -53,8 +53,10 @@ export function parseProbeBudget(raw: string | number): number | null {
     const unit = (match[2]?.toLowerCase() ?? "s") as keyof typeof DURATION_UNIT_MS;
     ms = Number(match[1]) * DURATION_UNIT_MS[unit];
   }
-  if (!Number.isFinite(ms) || ms <= 0 || ms > MAX_PROBE_BUDGET_MS) return null;
-  return Math.round(ms);
+  // Round first: "0.4ms" would otherwise pass as positive and become 0.
+  const rounded = Math.round(ms);
+  if (!Number.isFinite(rounded) || rounded <= 0 || rounded > MAX_PROBE_BUDGET_MS) return null;
+  return rounded;
 }
 
 /** A budget in ms as the shortest readable duration: "500ms", "30s", "2m", "1m30s". */
@@ -252,6 +254,10 @@ export function resolveProbeIntensity(input: {
       );
     }
     return { ok: true, value: { level: "passive", budgetMs: 0, source, locked, notices } };
+  }
+
+  if (level === "passive" && flags.probeBudget !== undefined) {
+    notices.push("--probe-budget has no effect: probing is passive, so no probe runs.");
   }
 
   // The schema already refused an invalid [security] budget; null here means
