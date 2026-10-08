@@ -120,6 +120,22 @@ describe("endpoint discovery collector", () => {
     expect(c.finish(site).candidates.map((x) => x.discoveredVia)).toContain("convention:nextjs");
   });
 
+  test("when the entry page replays without a stack result, the next fresh page runs detection", () => {
+    const next = `<html><head><script id="__NEXT_DATA__" type="application/json">{}</script></head><body></body></html>`;
+    const c = createEndpointCollector({ headersOf: buildHeadersMap });
+    // A snapshot from an older run: it never ran detection, so techIds is absent.
+    c.replay!(pageOf("/", next), { pageUrl: `${ORIGIN}/`, refs: [] });
+    collect(c, pageOf("/blog", next));
+    const site = { baseUrl: `${ORIGIN}/`, scripts: [] };
+    expect(c.finish(site).candidates.map((x) => x.discoveredVia)).toContain("convention:nextjs");
+  });
+
+  test("a detection that found nothing is recorded as empty and is not run again", () => {
+    const c = createEndpointCollector({ headersOf: buildHeadersMap });
+    expect(collect(c, pageOf("/", "<html></html>")).techIds).toEqual([]);
+    expect(collect(c, pageOf("/b", "<html></html>")).techIds).toBeUndefined();
+  });
+
   test("a bare literal does not spend the retained cap once its URL has a method", () => {
     const c = createEndpointCollector({ headersOf: buildHeadersMap });
     collect(c, pageOf("/", `<html><body><script>fetch("/api/a"); var x = "/api/a";</script></body></html>`));

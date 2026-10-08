@@ -58,11 +58,12 @@ function scriptUrls(parsed: ParsedPage, pageUrl: string): { url: string }[] {
  * map technology detection reads (the adapter's `buildHeadersMap`); it is passed
  * in so this module does not import the adapter.
  *
- * Technology detection runs once per run, on the first page the collector sees
- * (the entry page in crawl order), which is where a stack announces itself. Its
- * ids ride on that page's snapshot, so a replayed run (rule cache) restores them
- * without the html. `finish` unions the ids across all snapshots, so the result
- * does not depend on which page happened to be first.
+ * Technology detection runs once per run, on the first page collected fresh
+ * unless a replayed snapshot already carries a result. The entry page is first in
+ * crawl order, and that is where a stack announces itself. The ids ride on the
+ * page's snapshot, so a replayed run (rule cache) restores them without the html.
+ * `finish` unions the ids across all snapshots, so the result does not depend on
+ * which page happened to be first.
  */
 export function createEndpointCollector(opts: {
   headersOf: (page: PageRecord) => Record<string, string>;
@@ -103,7 +104,11 @@ export function createEndpointCollector(opts: {
         pageUrl: page.normalizedUrl,
         refs: parsed.document ? extractEndpointRefsFromDocument(parsed.document, pageUrl) : [],
       };
-      if (pages.length === 0) {
+      // Detect until some page, fresh or replayed, carries a detection result. An
+      // explicit empty array means "ran, found nothing", which differs from a
+      // snapshot that never ran (`undefined`). If the entry page replays from a
+      // run where it was not first, the next fresh page runs detection instead.
+      if (!pages.some((p) => p.techIds !== undefined)) {
         record.techIds = detectTechnologies({
           url: pageUrl,
           headers: opts.headersOf(page),

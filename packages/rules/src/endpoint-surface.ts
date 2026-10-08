@@ -13,10 +13,10 @@
 //   - `buildEndpointSurface` folds the per-page records, the served scripts and the
 //     convention paths for the detected stack into one deduped, capped list.
 //
-// Every regex here is linear or bounded polynomial (the options-object bodies
-// allow one nested brace level inside a 300-repeat cap): bounded character
-// classes, no unbounded nesting, and every input is length-capped before it is scanned (see rule-budget work for
-// why: these run over content the audited site controls).
+// The scanned content is controlled by the audited site, so every regex here is
+// linear or bounded polynomial: the options-object bodies allow one nested brace
+// level inside a 300-repeat cap, character classes are bounded, and every input is
+// length-capped before it is scanned.
 
 /** Where a candidate came from. */
 export type EndpointSource = "static-js" | "static-html" | "convention" | "render";

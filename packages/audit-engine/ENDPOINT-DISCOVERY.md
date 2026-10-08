@@ -38,7 +38,7 @@ interface EndpointSurface {
 
 ## Rules the pass follows
 
-- **Same origin is the probe boundary.** A cross-origin endpoint (a vendor API, a Supabase project host) is recorded so a rule can report it. It has `probeEligible: false`. A rule must not send a request to it.
+- **Same origin is the probe boundary, and it is strict.** Scheme, host and port must all match the audited base URL, so `www.example.com` against `example.com` counts as cross-origin. That fails closed: a rule never probes a host the audit did not start from. A cross-origin endpoint (a vendor API, a Supabase project host) is recorded so a rule can report it. It has `probeEligible: false`. A rule must not send a request to it.
 - **Deduped** on method plus URL. A method-less record (a bare string literal, a link) is dropped when the same URL has a record with a method.
 - **Capped** at `MAX_ENDPOINT_CANDIDATES` (200), of which at most `MAX_CROSS_ORIGIN_CANDIDATES` (50) are cross-origin. The order is stable: convention paths, then served JS, then page HTML, each sorted by URL. The input order never decides what the cap keeps.
 - **No shared probe budget exists yet.** The list is capped and shaped so a future budget can consume it. Do not build probe limits into a rule on the assumption that this list is small enough.
