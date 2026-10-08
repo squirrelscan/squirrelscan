@@ -49,7 +49,14 @@ export interface EndpointSurface {
   candidates: EndpointCandidate[];
   /** Distinct candidates before the cap. `total > candidates.length` means truncated. */
   total: number;
+  /**
+   * True when the fold dropped candidates: the final cap was hit, or the script
+   * scan budget skipped scripts (see `scriptsSkipped`). Refs dropped earlier, by
+   * the per-page, per-script and retained caps, are not reported here.
+   */
   truncated: boolean;
+  /** Same-origin scripts with content that the scan budget did not read. */
+  scriptsSkipped: number;
 }
 
 /** A page-time reference, already resolved to an absolute URL. DOM-free. */
@@ -79,6 +86,10 @@ export const MAX_REFS_PER_SCRIPT = 200;
 const MAX_SCAN_CHARS = 512 * 1024;
 /** Bytes of inline script scanned across one page. */
 const MAX_PAGE_INLINE_CHARS = 1024 * 1024;
+/** Same-origin scripts scanned per surface build. */
+export const MAX_SCRIPTS_SCANNED = 100;
+/** Total script characters scanned per surface build, across all scripts. */
+export const MAX_SCRIPT_SCAN_CHARS = 4 * 1024 * 1024;
 /** Longest URL kept. */
 const MAX_URL_CHARS = 512;
 
@@ -379,15 +390,31 @@ export function buildEndpointSurface(input: EndpointSurfaceInput): EndpointSurfa
   }
 
   // Served JS. Third-party scripts are skipped: a root-relative literal in a
-  // vendor bundle names the vendor's API, not this website's.
+  // vendor bundle names the vendor's API, not this website's. The scan is bounded
+  // so a site with many large bundles cannot hold the site pass: scripts are read
+  // in URL order (so the choice does not depend on fetch order) until either
+  // MAX_SCRIPTS_SCANNED scripts or MAX_SCRIPT_SCAN_CHARS characters are spent; the
+  // rest are counted in `scriptsSkipped`.
+  const sameOriginScripts: { url: string; content: string }[] = [];
   for (const script of input.scripts ?? []) {
     if (!script.content) continue;
     const url = script.finalUrl ?? script.url;
     if (siteOrigin === null || originOf(url) !== siteOrigin) continue;
-    for (const ref of extractEndpointRefsFromScript(script.content, url)) {
+    sameOriginScripts.push({ url, content: script.content });
+  }
+  sameOriginScripts.sort((a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0));
+  let scanned = 0;
+  let charsLeft = MAX_SCRIPT_SCAN_CHARS;
+  for (const script of sameOriginScripts) {
+    if (scanned >= MAX_SCRIPTS_SCANNED || charsLeft <= 0) break;
+    const text = script.content.slice(0, Math.min(MAX_SCAN_CHARS, charsLeft));
+    charsLeft -= text.length;
+    scanned++;
+    for (const ref of extractEndpointRefsFromScript(text, script.url)) {
       add(ref.url, "static-js", ref.discoveredVia, ref.method);
     }
   }
+  const scriptsSkipped = sameOriginScripts.length - scanned;
 
   for (const page of input.pages) {
     for (const ref of page.refs) add(ref.url, "static-html", ref.discoveredVia, ref.method);
@@ -421,5 +448,10 @@ export function buildEndpointSurface(input: EndpointSurfaceInput): EndpointSurfa
     }
     candidates.push(c);
   }
-  return { candidates, total: deduped.length, truncated: candidates.length < deduped.length };
+  return {
+    candidates,
+    total: deduped.length,
+    truncated: candidates.length < deduped.length || scriptsSkipped > 0,
+    scriptsSkipped,
+  };
 }

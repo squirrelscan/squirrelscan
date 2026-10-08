@@ -32,7 +32,8 @@ interface EndpointCandidate {
 interface EndpointSurface {
   candidates: EndpointCandidate[]; // deduped, capped, stable order
   total: number; // distinct candidates before the cap
-  truncated: boolean;
+  truncated: boolean; // the final cap or the script scan budget dropped candidates
+  scriptsSkipped: number; // same-origin scripts the scan budget did not read
 }
 ```
 
@@ -40,7 +41,7 @@ interface EndpointSurface {
 
 - **Same origin is the probe boundary, and it is strict.** Scheme, host and port must all match the audited base URL, so `www.example.com` against `example.com` counts as cross-origin. That fails closed: a rule never probes a host the audit did not start from. A cross-origin endpoint (a vendor API, a Supabase project host) is recorded so a rule can report it. It has `probeEligible: false`. A rule must not send a request to it.
 - **Deduped** on method plus URL. A method-less record (a bare string literal, a link) is dropped when the same URL has a record with a method.
-- **Capped** at `MAX_ENDPOINT_CANDIDATES` (200), of which at most `MAX_CROSS_ORIGIN_CANDIDATES` (50) are cross-origin. The order is stable: convention paths, then served JS, then page HTML, each sorted by URL. The result does not depend on crawl order: the collector retains the smallest keys under a stable order (method-carrying refs first, then URL, then method), at most `MAX_RETAINED_REFS` (2000) in total and `MAX_RETAINED_CROSS_ORIGIN_REFS` (300) of those cross-origin to the page that referenced them, so any permutation of the pages, or any split between fresh and cached pages, keeps the same refs. When a crawl has more distinct refs than the caps, the ones past them in that stable order are dropped, and `truncated` does not report that: it covers only the final cap.
+- **Capped** at `MAX_ENDPOINT_CANDIDATES` (200), of which at most `MAX_CROSS_ORIGIN_CANDIDATES` (50) are cross-origin. The order is stable: convention paths, then served JS, then page HTML, each sorted by URL. The result does not depend on crawl order: the collector retains the smallest keys under a stable order (method-carrying refs first, then URL, then method), at most `MAX_RETAINED_REFS` (2000) in total and `MAX_RETAINED_CROSS_ORIGIN_REFS` (300) of those cross-origin to the page that referenced them, so any permutation of the pages, or any split between fresh and cached pages, keeps the same refs. When a crawl has more distinct refs than the caps, the ones past them in that stable order are dropped, and `truncated` does not report that: it covers only the final cap and the script scan budget.
 - **No shared probe budget exists yet.** The list is capped and shaped so a future budget can consume it. Do not build probe limits into a rule on the assumption that this list is small enough.
 
 ## Sources
@@ -48,6 +49,10 @@ interface EndpointSurface {
 1. **Static, from served JS and page HTML.** `fetch(...)`, `axios.*`, `XMLHttpRequest.open`, `$.ajax`, `$.get`, `$.post`, `$.getJSON`, and string literals that look like an API route: `/api/...`, `/graphql`, `/rest/v1/...` (Supabase), `/_next/data/...`, `/api/trpc/...`, `/wp-json/...`, `/actuator`, and URLs on `api.`, `graphql.`, `gql.` or `gateway.` hosts. Form `action` attributes and `link href` / `script src` URLs on an API host or route count too. Only same-origin scripts are scanned: a root-relative literal in a vendor bundle names the vendor's API.
 2. **Convention paths per detected stack.** `CONVENTION_PATHS` in `endpoint-surface.ts` maps a technology id from `@squirrelscan/tech-detect` to a short list (for example `nextjs` gets `/api/health` and `/api/graphql`). Detection runs once, on the entry page. A website with no recognised stack gets none.
 3. **Render-time XHR and fetch URLs: not fed today.** The browser render result carries the final html, status, headers and timings, not the requests the page issued. `buildEndpointSurface` accepts `renderedRequests` and tags them `source: "render"`, so wiring them in is one argument once the render phase returns them.
+
+## Script scan budget
+
+The fold runs in the site pass, so the script scan is bounded. At most `MAX_SCRIPTS_SCANNED` (100) same-origin scripts and `MAX_SCRIPT_SCAN_CHARS` (4 MiB) of script text are read per run, and no single script is read past 512 KiB. Scripts are read in URL order, so the choice does not depend on fetch order. Scripts past either limit are not read: `scriptsSkipped` counts them and `truncated` is `true`. A script cut short by the byte budget or the 512 KiB cap still counts as scanned and does not set `truncated`. Eight real 512 KiB bundles take about 20 ms to scan.
 
 ## Where it runs
 

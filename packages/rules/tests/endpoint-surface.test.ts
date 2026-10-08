@@ -12,6 +12,8 @@ import {
   extractEndpointRefsFromScript,
   MAX_CROSS_ORIGIN_CANDIDATES,
   MAX_ENDPOINT_CANDIDATES,
+  MAX_SCRIPT_SCAN_CHARS,
+  MAX_SCRIPTS_SCANNED,
   type PageEndpointRefs,
 } from "../src/endpoint-surface";
 import { RuleRunner } from "../src/runner";
@@ -245,6 +247,53 @@ describe("endpoint surface fold", () => {
     expect(surface.candidates).toMatchObject([
       { url: "https://example.com/api/live", method: "POST", source: "render" },
     ]);
+  });
+});
+
+describe("script scan budget", () => {
+  const filler = "var x=1;".repeat(Math.ceil((512 * 1024) / 8));
+  const bundle = (i: number) => ({
+    url: `https://example.com/static/b${String(i).padStart(3, "0")}.js`,
+    content: `fetch("/api/b${String(i).padStart(3, "0")}");${filler}`.slice(0, 512 * 1024),
+  });
+
+  test("many large bundles are bounded by the total-bytes budget, in URL order, and the skip is reported", () => {
+    const scripts = Array.from({ length: 300 }, (_, i) => bundle(i)); // 150 MiB offered
+    const t0 = performance.now();
+    const surface = buildEndpointSurface({ baseUrl: BASE, pages: [], scripts });
+    const elapsed = performance.now() - t0;
+
+    const scanned = Math.floor(MAX_SCRIPT_SCAN_CHARS / (512 * 1024));
+    expect(surface.candidates.length).toBe(scanned);
+    expect(surface.candidates.map((c) => c.url)).toEqual(
+      Array.from({ length: scanned }, (_, i) => `https://example.com/api/b${String(i).padStart(3, "0")}`)
+    );
+    expect(surface.scriptsSkipped).toBe(300 - scanned);
+    expect(surface.truncated).toBe(true);
+    // 4 MiB scanned, not 150: the bound shows up as time, not just as a count.
+    expect(elapsed).toBeLessThan(2000);
+  });
+
+  test("many small scripts are bounded by the scripts-scanned cap", () => {
+    const scripts = Array.from({ length: 500 }, (_, i) => ({
+      url: `https://example.com/s/${String(i).padStart(3, "0")}.js`,
+      content: `fetch("/api/t${String(i).padStart(3, "0")}")`,
+    }));
+    const surface = buildEndpointSurface({ baseUrl: BASE, pages: [], scripts });
+    expect(surface.candidates.length).toBe(MAX_SCRIPTS_SCANNED);
+    expect(surface.scriptsSkipped).toBe(500 - MAX_SCRIPTS_SCANNED);
+    expect(surface.truncated).toBe(true);
+  });
+
+  test("which scripts are read does not depend on the order they arrive in, and a small site is not truncated", () => {
+    const scripts = Array.from({ length: 300 }, (_, i) => bundle(i));
+    const a = buildEndpointSurface({ baseUrl: BASE, pages: [], scripts });
+    const b = buildEndpointSurface({ baseUrl: BASE, pages: [], scripts: [...scripts].reverse() });
+    expect(b).toEqual(a);
+
+    const small = buildEndpointSurface({ baseUrl: BASE, pages: [], scripts: scripts.slice(0, 3) });
+    expect(small.scriptsSkipped).toBe(0);
+    expect(small.truncated).toBe(false);
   });
 });
 
