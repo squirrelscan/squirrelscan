@@ -10,6 +10,7 @@ import type { AuthorInfo, SchemaCollection } from "@squirrelscan/parser";
 import type { RuleCategory } from "./categories";
 import type { CollectedSiteSignals } from "./collected-signals";
 import type { EndpointSurface } from "./endpoint-surface";
+import type { ProbeBudget } from "./probe-budget";
 import type { CloudResultStore, RuleCloudSpec } from "./cloud";
 import type {
   BusinessCategory,
@@ -417,6 +418,12 @@ export interface RuleContext {
   // pass; undefined otherwise, which a rule must read as "no candidates known",
   // not "no endpoints". A cross-origin candidate has `probeEligible: false`.
   endpointSurface?: EndpointSurface;
+
+  // The run's shared probing budget (see probe-budget.ts): the intensity level
+  // and one wall-clock cap for ALL probing rules together. A probing rule asks
+  // `ctx.probe.allows("quiet" | "loud")` before each request. Undefined must be
+  // read as passive: no probe sends a request.
+  probe?: ProbeBudget;
 
   // Resolved Stage-0 site profile (cloud). Undefined offline / free / no-credits
   // / no-consent — rules must treat undefined as "run as today" (no gating).

@@ -621,6 +621,8 @@ export interface AuditReport {
 }
 
 export type CoverageMode = "quick" | "surface" | "full";
+export type { ProbeLevel } from "@squirrelscan/config";
+import type { ProbeLevel } from "@squirrelscan/config";
 
 export interface AuditOptions {
   url: string;
@@ -675,6 +677,10 @@ export interface AuditOptions {
   // disable_discovery_probes for this run, either way (`=false` turns the
   // probes back on). Undefined → config decides.
   disableDiscoveryProbes?: boolean;
+  // Probing intensity, resolved by the command (resolveProbeIntensity): the
+  // level and the wall-clock cap for ALL probing rules together. The controller
+  // turns it into the shared `ctx.probe` budget. Undefined → passive.
+  probe?: { level: ProbeLevel; budgetMs: number };
 }
 
 // ============================================
