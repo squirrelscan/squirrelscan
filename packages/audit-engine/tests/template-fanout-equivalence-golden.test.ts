@@ -61,7 +61,12 @@ import { isAuditablePage } from "../src/page-features";
 import { foldRuleResultIntoTallies, type RuleTally } from "../src/scoring";
 import { streamPageRules } from "../src/streaming";
 import { buildStreamFindings } from "../src/stream-findings";
-import { fanoutClusterKey, fanoutInputSignature, templateFanoutEnabled } from "../src/template-fanout";
+import {
+  CONTENT_READ_METAS,
+  fanoutClusterKey,
+  fanoutInputSignature,
+  templateFanoutEnabled,
+} from "../src/template-fanout";
 import { checkAffectedPages } from "@squirrelscan/report";
 import { CORPUS, ORIGIN, mkPage } from "./helpers/template-corpus";
 
@@ -588,6 +593,18 @@ describe("a verdict is never copied across origins", () => {
       b: sameChrome(`${VIEWPORT}<meta http-equiv="refresh" content="0;url=/y">`),
     },
     {
+      name: "a script that gains an integrity attribute",
+      ruleId: "security/sri",
+      a: sameChrome(`${VIEWPORT}<script src="https://cdn.other.test/a.js"></script>`),
+      b: sameChrome(`${VIEWPORT}<script src="https://cdn.other.test/a.js" integrity="sha384-abc" crossorigin="anonymous"></script>`),
+    },
+    {
+      name: "a cross-origin stylesheet that gains an integrity attribute",
+      ruleId: "security/sri",
+      a: sameChrome(`${VIEWPORT}<link rel="stylesheet" href="https://cdn.other.test/a.css">`),
+      b: sameChrome(`${VIEWPORT}<link rel="stylesheet" href="https://cdn.other.test/a.css" integrity="sha384-abc">`),
+    },
+    {
       name: "a second main landmark",
       ruleId: "a11y/landmark-one-main",
       a: sameChrome(VIEWPORT),
@@ -645,6 +662,14 @@ describe("a verdict is never copied across origins", () => {
     expect(sig(sameChrome(VIEWPORT))).toBe(sig(sameChrome(VIEWPORT, "<main><p>other</p></main>")));
     expect(fanoutClusterKey("abc123", "https://shop.test/a", base)).toBe(
       fanoutClusterKey("abc123", "https://shop.test/b", base),
+    );
+    // Duplicates count, and `name` is not `property`.
+    expect(sig(sameChrome(`${VIEWPORT}${VIEWPORT}`))).not.toBe(base);
+    expect(sig(sameChrome(`${VIEWPORT}<script src="/a.js"></script><script src="/a.js"></script>`))).not.toBe(
+      sig(sameChrome(`${VIEWPORT}<script src="/a.js"></script>`)),
+    );
+    expect(sig(sameChrome(`${VIEWPORT}<meta name="x" content="1">`))).not.toBe(
+      sig(sameChrome(`${VIEWPORT}<meta property="x" content="1">`)),
     );
     expect(fanoutInputSignature(null)).toBeNull();
     expect(fanoutClusterKey("abc123", "https://shop.test/a", null)).toBeNull();
@@ -711,5 +736,24 @@ describe("SQUIRREL_TEMPLATE_FANOUT", () => {
     for (const off of ["0", "false", "FALSE", "off", "no", " 0 "]) {
       expect(templateFanoutEnabled({ SQUIRREL_TEMPLATE_FANOUT: off })).toBe(false);
     }
+  });
+});
+
+// Keeps CONTENT_READ_METAS honest: a declared template rule that selects a named
+// meta must have that meta's content in the signature, or two pages differing only
+// in that value would share a verdict.
+describe("CONTENT_READ_METAS covers the metas declared rules select by name", () => {
+  test("every meta[name=...] in a template-scoped rule is listed", async () => {
+    const root = new URL("../../rules/src/", import.meta.url).pathname;
+    const missing: string[] = [];
+    for await (const file of new Bun.Glob("**/*.ts").scan({ cwd: root })) {
+      const src = await Bun.file(root + file).text();
+      if (!/verdictScope:\s*"template"/.test(src)) continue;
+      for (const m of src.matchAll(/meta\[name=["']([^"']+)["']\]/g)) {
+        const name = m[1]!.toLowerCase();
+        if (!CONTENT_READ_METAS.has(name)) missing.push(`${file}: ${name}`);
+      }
+    }
+    expect(missing).toEqual([]);
   });
 });

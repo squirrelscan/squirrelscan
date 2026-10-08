@@ -137,7 +137,7 @@ export interface TemplateFanoutStats {
 }
 
 /** Metas whose `content` a declared template rule reads (not just their presence). */
-const CONTENT_READ_METAS: ReadonlySet<string> = new Set([
+export const CONTENT_READ_METAS: ReadonlySet<string> = new Set([
   "viewport",
   "geo.region",
   "geo.placename",
@@ -149,7 +149,8 @@ const CONTENT_READ_METAS: ReadonlySet<string> = new Set([
  * The rule-input signature (#275): the markup inputs the chrome key does not
  * reach but a declared rule reads, reduced to 16 hex chars.
  *
- *  - the `<script src>` list, sorted: `security/sri` reports the resource url, so
+ *  - the `<script src>` list (with whether each has `integrity`) and the same for
+ *    stylesheet links, sorted and not de-duplicated: `security/sri` reports the resource url, so
  *    two pages whose bundles differ in PATH on one host (per-route hashed
  *    bundles) must not share a verdict;
  *  - the set of `<meta>` names (`name`, `property`, `http-equiv`, `charset`):
@@ -171,29 +172,41 @@ export function fanoutInputSignature(
   } | null,
 ): string | null {
   if (!doc) return null;
-  const scripts = Array.from(doc.querySelectorAll("script[src]"), (el) => el.getAttribute("src") ?? "");
-  const metas = Array.from(doc.querySelectorAll("meta"), (el) =>
-    [
-      el.getAttribute("name"),
-      el.getAttribute("property"),
-      el.getAttribute("http-equiv"),
-      el.getAttribute("charset") !== null ? "charset" : null,
-      // The metas a declared rule reads the VALUE of, not just the presence:
-      // `mobile/viewport`, `a11y/zoom-disabled`, `mobile/viewport-zoom`,
-      // `local/geo-meta` and `a11y/meta-refresh`.
-      CONTENT_READ_METAS.has((el.getAttribute("name") ?? "").toLowerCase()) ||
-      (el.getAttribute("http-equiv") ?? "").toLowerCase() === "refresh"
-        ? `content=${el.getAttribute("content") ?? ""}`
-        : null,
-    ]
-      .filter((v): v is string => v !== null)
-      .join("|"),
+  // `security/sri` reads whether each cross-origin script and stylesheet carries an
+  // `integrity`, so presence is part of the entry. Duplicates are kept: a rule that
+  // counts them must not inherit a verdict from a page with fewer.
+  const scripts = Array.from(
+    doc.querySelectorAll("script[src]"),
+    (el) => `${el.getAttribute("src") ?? ""}|${el.getAttribute("integrity") ? "sri" : ""}`,
   );
+  const stylesheets = Array.from(
+    doc.querySelectorAll('link[rel~="stylesheet"][href]'),
+    (el) => `${el.getAttribute("href") ?? ""}|${el.getAttribute("integrity") ? "sri" : ""}`,
+  );
+  const metas = Array.from(doc.querySelectorAll("meta"), (el) => {
+    const name = el.getAttribute("name");
+    const httpEquiv = el.getAttribute("http-equiv");
+    // Each part is prefixed with its attribute, so `name="x"` and `property="x"`
+    // differ. `content` is included only for the metas a declared rule reads the
+    // VALUE of: `mobile/viewport`, `a11y/zoom-disabled`, `mobile/viewport-zoom`,
+    // `local/geo-meta` and `a11y/meta-refresh` (kept honest by a test).
+    const readsContent =
+      CONTENT_READ_METAS.has((name ?? "").toLowerCase()) ||
+      (httpEquiv ?? "").toLowerCase() === "refresh";
+    return JSON.stringify([
+      name,
+      el.getAttribute("property"),
+      httpEquiv,
+      el.getAttribute("charset") !== null,
+      readsContent ? (el.getAttribute("content") ?? "") : null,
+    ]);
+  });
   const mains = doc.querySelectorAll('main, [role="main"]').length;
   // JSON, not a join, so a value containing a delimiter cannot forge a boundary.
   const canonical = JSON.stringify([
-    [...new Set(scripts)].sort(),
-    [...new Set(metas)].sort(),
+    scripts.sort(),
+    stylesheets.sort(),
+    metas.sort(),
     mains,
   ]);
   return fnv1a64(new TextEncoder().encode(canonical), 0n);
