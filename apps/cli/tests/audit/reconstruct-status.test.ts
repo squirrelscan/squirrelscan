@@ -2,7 +2,7 @@
 // re-audit reflects carried state when it fetched nothing fresh, but a FIRST
 // smart run with no carried data + 0 pages must not pose as "completed".
 
-import type { PageRecord } from "@squirrelscan/core-contracts";
+import type { CrawlStats, PageRecord } from "@squirrelscan/core-contracts";
 import type { RuleRunResult } from "@squirrelscan/rules";
 
 import { describe, expect, test } from "bun:test";
@@ -21,7 +21,10 @@ function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
   return Effect.runPromise(Effect.orDie(eff));
 }
 
-async function freshCrawl(pages: PageRecord[]): Promise<{
+async function freshCrawl(
+  pages: PageRecord[],
+  extraStats: Partial<CrawlStats> = {}
+): Promise<{
   store: SQLiteStorage;
   crawlId: string;
 }> {
@@ -61,6 +64,7 @@ async function freshCrawl(pages: PageRecord[]): Promise<{
         imagesTotal: 0,
         bytesTotal: 0,
         avgLoadTimeMs: 0,
+        ...extraStats,
       },
     })
   );
@@ -226,6 +230,44 @@ describe("reconstructReport audit status (#510)", () => {
     const report = await run(reconstructReport(store, crawlId, undefined));
     expect(report.status).toBe("failed");
     expect(report.statusReason).toBeTruthy();
+    await run(store.close());
+  });
+});
+
+// A site that refuses the crawler has not said which root files it serves, so
+// the blocked report carries no per-category score off findings it could not
+// observe, and names what was refused.
+describe("reconstructReport on a blocked crawl", () => {
+  test("blanks every score and surfaces the refused fetches", async () => {
+    const refused = [
+      {
+        url: `${SITE}/robots.txt`,
+        resource: "robots.txt" as const,
+        status: 403,
+        provider: "Cloudflare",
+      },
+    ];
+    const { store, crawlId } = await freshCrawl([], {
+      pagesFailed: 1,
+      pagesBlocked: 1,
+      refusedFetches: refused,
+    });
+    const report = await run(reconstructReport(store, crawlId));
+
+    expect(report.status).toBe("blocked");
+    expect(report.healthScore?.overall).toBeNull();
+    expect(report.healthScore?.categories).toEqual([]);
+    expect(report.healthScore?.groups ?? []).toEqual([]);
+    expect(report.refusedFetches).toEqual(refused);
+    await run(store.close());
+  });
+
+  test("a crawl that refused nothing carries no refusedFetches", async () => {
+    const { store, crawlId } = await freshCrawl([page(403)]);
+    const report = await run(reconstructReport(store, crawlId));
+
+    expect(report.status).toBe("blocked");
+    expect("refusedFetches" in report).toBe(false);
     await run(store.close());
   });
 });
