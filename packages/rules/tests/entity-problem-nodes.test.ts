@@ -271,4 +271,24 @@ describe("entityProblemNodes agrees with the rules", () => {
     });
     expect(entityProblemNodes(map).conflict?.length).toBe(1);
   });
+
+  test("a node in several classes is listed under each", () => {
+    const multi = quietOrg({
+      danglingRefs: 1,
+      conflicts: [
+        { property: "name", values: [{ value: "A", pages: [A], morePages: 0 }, { value: "B", pages: [B], morePages: 0 }] },
+      ],
+    });
+    const found = entityProblemNodes(entityMap({ nodes: [multi] }));
+    expect(found.conflict).toEqual([multi]);
+    expect(found.dangling).toEqual([multi]);
+  });
+
+  test("a sameAs array of empty strings still counts as identified for authors, as the rule always judged it", async () => {
+    const map = entityMap({
+      nodes: [quietOrg(), person({ properties: { name: "Ada", sameAs: [""] } })],
+    });
+    expect((await oneCheck(entityAuthorsRule, map)).status).toBe("pass");
+    expect(entityProblemNodes(map).authors ?? []).toEqual([]);
+  });
 });

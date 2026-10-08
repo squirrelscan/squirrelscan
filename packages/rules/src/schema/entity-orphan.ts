@@ -18,7 +18,6 @@ import {
 
 const CHECK = "entity-orphan";
 
-
 export const entityOrphanRule: Rule = {
   meta: {
     id: "schema/entity-orphan",

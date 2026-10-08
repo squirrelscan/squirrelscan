@@ -332,6 +332,10 @@ export function projectEntityMap(
     // Reserved first: at least one node per class present, never more than the
     // share, and never more than the pools hold. Still inside `budget`, so the
     // byte shrink below applies to these nodes like any other.
+    // The class count is a floor that can exceed the share on a tiny budget (after
+    // heavy byte shrinking): "at least one per class while the budget allows" wins
+    // over the ceiling, and `budget` still caps it. A node in several classes
+    // spends one slot, so it may use up one class's first pick; that is intended.
     const problemBudget = Math.min(
       problemCount,
       budget,

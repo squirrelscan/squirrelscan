@@ -588,6 +588,8 @@ describe("publish sample tiers", () => {
 // Every case builds a map whose problem entity has the LOWEST reach among far more
 // nodes than the budget, so reach and type alone would drop it, and pairs it with a
 // negative control: the same map with the problem removed drops that node.
+const ENTITY_PUBLISH_TINY = { ...ENTITY_MAP_PUBLISH_LIMITS, maxNodes: 3 };
+
 describe("problem nodes survive the publish sample", () => {
   const conflict = {
     property: "name",
@@ -802,5 +804,17 @@ describe("problem nodes survive the publish sample", () => {
       nodes: input.nodes.length - slim.nodes.length,
     });
     expect(slim.truncated!.nodes).toBeGreaterThan(0);
+  });
+
+  test("a tiny budget is never exceeded by the one-per-class floor", () => {
+    const classes = [
+      node("id:c", 1, { conflicts: [conflict] }),
+      node("id:d", 1, { danglingRefs: 1 }),
+      node("anon:n", 2, { types: ["Organization"], pages: ["https://example.com/a", "https://example.com/b"] }),
+      node("id:e", 1, { id: "#relative", types: ["Offer"], pages: ["https://example.com/a", "https://example.com/b"] }),
+    ];
+    const slim = projectEntityMap(map(classes, []), ENTITY_PUBLISH_TINY, "publish");
+    expect(slim.nodes.length).toBeLessThanOrEqual(3);
+    expect(slim.truncated!.nodes).toBe(classes.length - slim.nodes.length);
   });
 });

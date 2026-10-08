@@ -394,11 +394,18 @@ export function sameAsProfiles(node: EntityMapNode): string[] {
       : [];
 }
 
-/** A Person needs a `url` or `sameAs` to be more than a string. */
+/**
+ * A Person needs a `url` or `sameAs` to be more than a string. Deliberately looser
+ * than {@link sameAsProfiles}: any non-empty `sameAs` array counts, as the
+ * `schema/entity-authors` rule has always judged it.
+ */
 export function isIdentifiedEntity(node: EntityMapNode): boolean {
   const properties = node.properties as Record<string, unknown>;
+  const hasSameAs = Array.isArray(properties.sameAs)
+    ? properties.sameAs.length > 0
+    : typeof properties.sameAs === "string" && properties.sameAs.length > 0;
   const hasUrl = typeof properties.url === "string" && properties.url.length > 0;
-  return sameAsProfiles(node).length > 0 || hasUrl;
+  return hasSameAs || hasUrl;
 }
 
 /**
