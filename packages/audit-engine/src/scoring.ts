@@ -122,7 +122,9 @@ export interface CarriedUnionSource {
 /**
  * (#497) A set of normalized page URLs as the union scorers read one: its size,
  * membership, and a walk in order. A `Set<string>` is one; the streaming merge
- * passes a view over the site's prior pages instead of copying them.
+ * passes a view over the site's prior pages instead of copying them, so `has`
+ * answers for that view's members only (a page known only from this run is not
+ * carried, and is not in it).
  */
 export interface PageUrlSet extends Iterable<string> {
   readonly size: number;

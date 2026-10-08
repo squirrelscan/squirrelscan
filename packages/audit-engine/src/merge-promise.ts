@@ -206,6 +206,13 @@ export interface SmartAuditStore {
   ): PriorFindingPageSource;
   getSitePages(siteKey: string): Promise<SitePageRecord[]>;
   upsertFindings(findings: PageFindingRecord[]): Promise<void>;
+  /**
+   * Insert or replace these rows by `normalizedUrl`, leaving every other row as
+   * it is. (#497) A DELTA, not a snapshot: `runCloudSmartAudits` passes only the
+   * pages this run crawled (removed ones go through {@link markPagesRemoved}).
+   * Every other page keeps the row {@link getSitePages} returned, which the merge
+   * would only have written back unchanged.
+   */
   upsertSitePages(pages: SitePageRecord[]): Promise<void>;
   /** Page→removed + its findings→stale in ONE transaction. */
   markPageRemoved(

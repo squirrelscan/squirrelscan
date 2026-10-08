@@ -1020,6 +1020,7 @@ export function createMergeSession(
       }
       return activePageUrls;
     },
+    // Taken once: `thisRun` is complete by now and nothing writes it later.
     changedSitePages: Array.from(thisRun.values()),
     activePageCount,
     isActivePage: (url) => pageOf(url)?.state === "active",
@@ -1040,27 +1041,25 @@ export function createMergeSession(
  */
 function indexPriorPages(priorPages: readonly SitePageRecord[]): {
   index: Map<string, number>;
-  pages: SitePageRecord[];
+  pages: readonly SitePageRecord[];
   active: number;
 } {
   const index = new Map<string, number>();
-  const pages: SitePageRecord[] = [];
-  for (const p of priorPages) {
-    index.set(p.normalizedUrl, pages.length);
-    pages.push(p);
-  }
-  if (index.size !== pages.length) {
+  for (let i = 0; i < priorPages.length; i++) index.set(priorPages[i]!.normalizedUrl, i);
+  let pages = priorPages;
+  if (index.size !== priorPages.length) {
     index.clear();
-    pages.length = 0;
+    const deduped: SitePageRecord[] = [];
     for (const p of priorPages) {
       const i = index.get(p.normalizedUrl);
       if (i === undefined) {
-        index.set(p.normalizedUrl, pages.length);
-        pages.push(p);
+        index.set(p.normalizedUrl, deduped.length);
+        deduped.push(p);
       } else {
-        pages[i] = p;
+        deduped[i] = p;
       }
     }
+    pages = deduped;
   }
   let active = 0;
   for (const p of pages) if (p.state === "active") active += 1;
