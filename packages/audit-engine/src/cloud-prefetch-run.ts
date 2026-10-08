@@ -26,6 +26,9 @@ import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils/dom";
 
 import {
   prefetchCloudData,
+  prefetchCloudDataWithDeadline,
+  type CloudPrefetchAccumulator,
+  type CloudPrefetchInput,
   type CloudPrefetchResult,
   type CloudSitePayloads,
 } from "./cloud-prefetch";
@@ -609,6 +612,19 @@ export interface ContainerPrefetchInput {
    * (`renderMode`), NOT `config.cloud.rendering` (unset on the container path).
    */
   crawlRendered: boolean;
+  /**
+   * Wall-clock bound on the prefetch phase, in ms (#280). When it fires, the
+   * result is what had already returned (rules use those results, spend covers
+   * exactly the calls known to be charged), never a rejection that discards
+   * them. Absent → unbounded, exactly as before.
+   */
+  deadlineMs?: number;
+  /**
+   * For a caller that enforces its own deadline: pass an accumulator, and call
+   * its `abandon()` when the deadline fires to get the same partial result.
+   * Ignored when `deadlineMs` is set (that path owns its accumulator).
+   */
+  accumulator?: CloudPrefetchAccumulator;
 }
 
 /**
@@ -641,6 +657,8 @@ export async function runContainerCloudPrefetch(
       auditId: input.auditId,
       remainingBudget: input.remainingBudget,
       crawlRendered: input.crawlRendered,
+      deadlineMs: input.deadlineMs,
+      accumulator: input.accumulator,
     },
     payloads,
   );
@@ -671,7 +689,7 @@ export async function runContainerCloudPrefetchFromPayloads(
     ? Math.max(0, Math.floor(input.remainingBudget))
     : 0;
 
-  return prefetchCloudData({
+  const prefetchInput: Omit<CloudPrefetchInput, "accumulator"> = {
     client: input.client,
     config: { ...input.config.cloud, max_credits_per_audit: cap },
     rules,
@@ -689,7 +707,11 @@ export async function runContainerCloudPrefetchFromPayloads(
     // "auto" hybrid crawl doesn't pay to re-render its upgraded pages.
     renderedPageUrls: payloads.renderedPageUrls,
     // No `confirm` — the dashboard spendAck already consented; the cap bounds spend.
-  });
+  };
+  if (input.deadlineMs !== undefined) {
+    return prefetchCloudDataWithDeadline(prefetchInput, input.deadlineMs);
+  }
+  return prefetchCloudData({ ...prefetchInput, accumulator: input.accumulator });
 }
 
 /**
