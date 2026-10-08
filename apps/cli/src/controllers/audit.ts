@@ -31,7 +31,7 @@ import {
   createConditionalRenderDocumentFetcher,
   createFetchDocumentFetcher,
 } from "@squirrelscan/fetchers";
-import { selectDiscoveryProbes } from "@squirrelscan/rules";
+import { createProbeBudget, selectDiscoveryProbes } from "@squirrelscan/rules";
 
 import type { RetentionOutcome } from "@/audit/retention";
 import type { PreflightBalance } from "@/lib/balance";
@@ -1747,6 +1747,15 @@ export async function runAudit(
         },
       };
 
+      // One probing budget for the whole rules phase, shared by every probing
+      // rule through ctx.probe. Passive (or no resolved level) allows nothing,
+      // and so do disabled discovery probes, whatever level was passed in.
+      const probeBudget = createProbeBudget(
+        options.probe && mergedConfig.crawler.disable_discovery_probes !== true
+          ? options.probe
+          : { level: "passive", budgetMs: 0 }
+      );
+
       // Thread cloud results + the resolved Stage-0 profile into the rules phase
       // per audit run — no process-global singleton. The metadata drives
       // `appliesWhen` rule gating; undefined = run as today.
@@ -1759,6 +1768,7 @@ export async function runAudit(
           cloudResults: cloudResult?.store,
           siteMetadata: cloudResult?.siteMetadata ?? undefined,
           ...(entityMap ? { entityMap } : {}),
+          probe: probeBudget,
         },
         {
           batchSize: streamBatchSize,
