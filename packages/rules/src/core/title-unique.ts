@@ -4,6 +4,7 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import type { SiteQuery } from "@squirrelscan/core-contracts";
 
 import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
+import { RegionVariantIndex } from "../shared/region-variants";
 
 const SKIP_CHECK: CheckResult = {
   name: "title-unique",
@@ -65,6 +66,8 @@ function buildCheck(
 // scalars via the async cursor, in normalized_url order (== the legacy
 // site.pages order), re-deriving the key exactly as the legacy path does. Noindex
 // pages are left out of both paths (pub#457): their titles never meet in search.
+// Reciprocal same-language hreflang variants count as one page on both paths
+// (#489), read from the same parser-extracted alternates.
 async function runViaSiteQuery(siteQuery: SiteQuery, skipNoindex: boolean): Promise<RuleResult> {
   const checks: CheckResult[] = [];
   if (siteQuery.pageCount() < 2) {
@@ -85,7 +88,12 @@ async function runViaSiteQuery(siteQuery: SiteQuery, skipNoindex: boolean): Prom
     titleMap.get(normalizedTitle)!.push(row.normalizedUrl);
   }
 
-  checks.push(buildCheck(findDuplicates(titleMap)));
+  const duplicates = findDuplicates(titleMap);
+  const variants = await RegionVariantIndex.fromSiteQuery(
+    siteQuery,
+    duplicates.flatMap((d) => d.urls),
+  );
+  checks.push(buildCheck(variants.withoutVariantOnlyGroups(duplicates, (d) => d.urls)));
   return { checks };
 }
 
@@ -131,7 +139,12 @@ export const titleUniqueRule: Rule = {
       titleMap.get(normalizedTitle)!.push(page.url);
     }
 
-    checks.push(buildCheck(findDuplicates(titleMap)));
+    const duplicates = findDuplicates(titleMap);
+    const variants = RegionVariantIndex.fromPages(
+      ctx.site.pages,
+      duplicates.flatMap((d) => d.urls),
+    );
+    checks.push(buildCheck(variants.withoutVariantOnlyGroups(duplicates, (d) => d.urls)));
     return { checks };
   },
 };

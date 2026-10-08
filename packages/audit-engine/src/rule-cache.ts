@@ -76,8 +76,13 @@
 import type { CheckResult, PageFeatureRow, PageRecord } from "@squirrelscan/core-contracts";
 import type { ParsedPage, RuleMeta, SiteData } from "@squirrelscan/rules";
 
-/** Bumped when the payload shape or the key's ingredients change; old rows then miss. */
-export const RULE_CACHE_FORMAT = "prc-2";
+/**
+ * Bumped when the payload shape or the key's ingredients change; old rows then miss.
+ * prc-3: `features.hreflangAlternates` (#489). A prc-2 row would replay features
+ * without it, which the store reads as "no alternates" and exempts nothing, so
+ * the bump is about getting the new field filled, not about safety.
+ */
+export const RULE_CACHE_FORMAT = "prc-3";
 
 /**
  * The `SiteData` keys page-scope rules read, and therefore the only ones the run

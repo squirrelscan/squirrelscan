@@ -76,6 +76,7 @@ function feat(over: Partial<PageFeatureRow> = {}): PageFeatureRow {
     themeColor: null,
     ogImage: null,
     reportScalars: null,
+    hreflangAlternates: null,
     ...over,
   };
 }
@@ -729,5 +730,75 @@ describe("page_features migration (v17 → current)", () => {
     };
     expect(version.version).toBe(SCHEMA_VERSION);
     check.close();
+  });
+});
+
+// #489: the hreflang alternates the duplicate title and description rules read on
+// the streaming path. A row written before the column existed reads as null,
+// which the rules treat as "no alternates", the behaviour before #489.
+describe("page_features store: hreflang_alternates (v33)", () => {
+  const alternates = [
+    { hreflang: "en-gb", href: "https://example.com/en-gb/a" },
+    { hreflang: "en-us", href: "https://example.com/en-us/a" },
+  ];
+
+  test("round-trips the alternates, and stores none as null", async () => {
+    const store = await freshStore();
+    await run(store.upsertPageFeatures(CRAWL, feat({ hreflangAlternates: alternates })));
+    await run(
+      store.upsertPageFeatures(CRAWL, feat({ normalizedUrl: "https://example.com/b" }))
+    );
+    expect(
+      (await run(store.getPageFeatures(CRAWL, "https://example.com/a")))?.hreflangAlternates
+    ).toEqual(alternates);
+    expect(
+      (await run(store.getPageFeatures(CRAWL, "https://example.com/b")))?.hreflangAlternates
+    ).toBeNull();
+    await run(store.close());
+  });
+
+  test("a DB at v32 gains the column and its old rows read back as null", async () => {
+    const path = tmpDbPath();
+    const seed = new SQLiteStorage(path);
+    await run(seed.init());
+    await run(seed.upsertPageFeatures("c1", feat({ normalizedUrl: "https://example.com/legacy" })));
+    await run(seed.close());
+
+    const downgrade = new Database(path);
+    downgrade.exec("ALTER TABLE page_features DROP COLUMN hreflang_alternates");
+    downgrade.exec("UPDATE schema_version SET version = 32");
+    downgrade.close();
+
+    const store = new SQLiteStorage(path);
+    await run(store.init());
+    const legacy = await run(store.getPageFeatures("c1", "https://example.com/legacy"));
+    expect(legacy?.title).toBe("Title A");
+    expect(legacy?.hreflangAlternates).toBeNull();
+    await run(store.upsertPageFeatures("c1", feat({ hreflangAlternates: alternates })));
+    expect(
+      (await run(store.getPageFeatures("c1", "https://example.com/a")))?.hreflangAlternates
+    ).toEqual(alternates);
+    await run(store.close());
+  });
+
+  // A DB stamped at the current version without the column (a migration
+  // numbering collision) would otherwise fail every page-features write.
+  test("a DB stamped current but missing the column is repaired on open", async () => {
+    const path = tmpDbPath();
+    const seed = new SQLiteStorage(path);
+    await run(seed.init());
+    await run(seed.close());
+
+    const broken = new Database(path);
+    broken.exec("ALTER TABLE page_features DROP COLUMN hreflang_alternates");
+    broken.close();
+
+    const store = new SQLiteStorage(path);
+    await run(store.init());
+    await run(store.upsertPageFeatures("c1", feat({ hreflangAlternates: alternates })));
+    expect(
+      (await run(store.getPageFeatures("c1", "https://example.com/a")))?.hreflangAlternates
+    ).toEqual(alternates);
+    await run(store.close());
   });
 });

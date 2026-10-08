@@ -64,6 +64,7 @@ import type {
   CacheHitReason,
   CacheStats,
   CheckProvenance,
+  HreflangAlternate,
   RslLicenseDoc,
   SecurityHeaders,
   WellKnownProbe,
@@ -890,7 +891,13 @@ export type CrawlWarningCode =
    * (squirrelscan/repo#1699). Their records carry the not-attempted marker,
    * never a confirmed absence.
    */
-  | "preamble-budget-exhausted";
+  | "preamble-budget-exhausted"
+  /**
+   * An absolute-URL `include` pattern matched a URL whose host `allowedDomains`
+   * does not list, so the URL was refused. `allowedDomains` is a hard
+   * allowlist; the message names the include pattern and the host.
+   */
+  | "include-vetoed-by-allowed-domains";
 
 export interface AuditLifecycleEvent {
   type:
@@ -1477,6 +1484,13 @@ export interface ParsedPage {
   visibleAuthor?: string | null;
   visibleDatePublished?: string | null;
   visibleDateModified?: string | null;
+  /**
+   * `<link rel="alternate" hreflang>` annotations from the page markup, hrefs
+   * resolved against the page URL, deduplicated and capped (#489). Optional so
+   * parsed records serialized before this field existed stay valid; readers
+   * must treat absent as "not extracted", which exempts nothing.
+   */
+  hreflangAlternates?: HreflangAlternate[];
 }
 
 export type CoverageMode = "quick" | "surface" | "full";

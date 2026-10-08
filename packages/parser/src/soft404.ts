@@ -59,6 +59,13 @@ export interface Soft404Input {
   statusCode: number;
   /** Parsed DOM (null for pages with no document) — used for the error-shell marker. */
   document?: Document | null;
+  /**
+   * The error-shell marker, captured while the document was live (see
+   * `hasErrorShellMarker`). A caller whose `document` has been released, as in
+   * the streamed audit, passes this instead; the signal fires when either the
+   * document or this says so. Absent reads as "not known", never as "no marker".
+   */
+  errorShell?: boolean;
   /** <title> text. */
   title?: string | null;
   /** All <h1> texts on the page. */
@@ -127,7 +134,7 @@ export function detectSoft404(input: Soft404Input): Soft404Detection {
   const signals: Soft404Signal[] = [];
 
   // STRONG: framework error-shell marker.
-  if (hasErrorShellMarker(input.document)) {
+  if (input.errorShell === true || hasErrorShellMarker(input.document)) {
     signals.push({
       name: "error-shell",
       strong: true,

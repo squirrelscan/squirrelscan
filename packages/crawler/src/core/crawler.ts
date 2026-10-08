@@ -729,6 +729,27 @@ export function createCrawler(
       return { normalized, decision };
     };
 
+    // An absolute include that allowedDomains refused is almost certainly a
+    // config the user expected to work, so say so once per include and host.
+    const vetoWarned = new Set<string>();
+    const warnIncludeVetoed = (include: string, host: string) =>
+      Effect.gen(function* () {
+        const key = `${include}\n${host}`;
+        if (vetoWarned.has(key)) return;
+        vetoWarned.add(key);
+        const message =
+          `include "${include}" matches ${host}, which allowedDomains does not list, so it was ` +
+          `not crawled. allowedDomains (the project \`domains\` setting) is a hard allowlist: add ` +
+          `${host} to it, or remove it to let the include reach that host`;
+        logger.warn("include vetoed by allowedDomains", message);
+        yield* emit({
+          type: "warning",
+          code: "include-vetoed-by-allowed-domains",
+          message,
+          timestamp: Date.now(),
+        });
+      });
+
     // ----------------------------------------
     // Enqueue URL
     // ----------------------------------------
@@ -781,6 +802,9 @@ export function createCrawler(
 
         // Check scope
         if (!decision.allowed) {
+          if (decision.vetoedInclude) {
+            yield* warnIncludeVetoed(decision.vetoedInclude, new URL(normalized).host);
+          }
           logger.debug("url skipped (scope)", `${normalized} — ${decision.reason}`);
           yield* storage.upsertFrontier(crawlId, {
             normalizedUrl: normalized,

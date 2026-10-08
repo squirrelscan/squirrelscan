@@ -96,49 +96,65 @@ Machine-readable JSON output for automation and integrations.
 
 **Features:**
 
-- Complete crawl data
-- All rule results
-- Structured error information
-- Health score calculation
-- Timestamps and metadata
+- Health score with group and category scores
+- Pass, warning, fail and skipped counts
+- Findings grouped by rule, with affected pages
+- Checks skipped because a scan limit was hit, listed apart from findings
+- Audit status and metadata
 
 **Example structure:**
 
 ```json
 {
-  "project": {
-    "name": "example.com",
-    "seedUrl": "https://example.com",
-    "timestamp": "2026-01-17T10:30:00.000Z"
+  "meta": {
+    "version": "0.0.105",
+    "baseUrl": "https://example.com",
+    "timestamp": "2026-01-17T10:30:00.000Z",
+    "totalPages": 100
   },
-  "stats": {
-    "totalPages": 100,
-    "totalLinks": 456,
-    "totalImages": 234,
-    "crawlDurationMs": 12345
+  "status": "completed",
+  "score": {
+    "overall": 78,
+    "grade": "C",
+    "groups": [],
+    "categories": [{ "name": "Core SEO", "score": 82 }]
   },
-  "health": {
-    "score": 78,
-    "grade": "Good",
-    "issues": {
-      "error": 8,
-      "warning": 15,
-      "info": 12
-    }
-  },
-  "pages": [
+  "summary": { "passed": 1204, "warnings": 15, "failed": 8, "skipped": 2 },
+  "issues": [
     {
-      "url": "https://example.com/about",
-      "status": 200,
-      "title": "About Us",
-      "checks": [...]
+      "ruleId": "core/meta-title",
+      "name": "Meta title",
+      "description": "...",
+      "category": "Core SEO",
+      "group": "seo",
+      "severity": "error",
+      "checks": [
+        {
+          "name": "meta-title",
+          "status": "fail",
+          "message": "Missing page title",
+          "affectedPages": ["https://example.com/about"],
+          "affectedPagesCount": 1,
+          "affectedPagesHasMore": false
+        }
+      ]
     }
   ],
-  "rules": [...],
-  "links": [...],
-  "images": [...]
+  "skippedChecks": [
+    {
+      "ruleId": "content/hidden-text",
+      "name": "Hidden text",
+      "check": "hidden-text",
+      "reason": "scan-truncated",
+      "pages": ["https://example.com/huge-page"],
+      "pagesCount": 1,
+      "pagesHasMore": false
+    }
+  ]
 }
 ```
+
+See the [JSON output schema](#json-output-schema) for every key.
 
 **Configuration:**
 
@@ -166,7 +182,7 @@ squirrel audit https://example.com --format json
 squirrel audit https://example.com --format json --output report.json
 
 # Pipe to jq for filtering
-squirrel audit https://example.com --format json | jq '.health.score'
+squirrel audit https://example.com --format json | jq '.score.overall'
 ```
 
 ---
@@ -479,7 +495,7 @@ path = "reports/audit.json"
 Then in CI:
 ```bash
 squirrel audit https://staging.example.com
-cat reports/audit.json | jq '.health.score'
+cat reports/audit.json | jq '.score.overall'
 ```
 
 ---
@@ -564,59 +580,97 @@ squirrel audit https://example.com --format json --output custom.json
 
 ### JSON output schema
 
-Full JSON output structure:
+Top-level keys. Keys marked optional are omitted when they do not apply.
 
 ```json
 {
-  "project": {
-    "name": "string",
-    "seedUrl": "string",
+  "meta": {
+    "version": "string",
+    "baseUrl": "string",
     "timestamp": "ISO 8601 date",
-    "config": {
-      "maxPages": 500,
-      "rules": {...}
-    }
-  },
-  "stats": {
     "totalPages": 0,
-    "totalLinks": 0,
-    "totalImages": 0,
-    "crawlDurationMs": 0,
-    "externalLinksChecked": 0
+    "maxPages": 0,
+    "requestedMaxPages": 0,
+    "stopReason": "time",
+    "seedRedirect": {},
+    "coverage": {},
+    "rulesCache": {}
   },
-  "health": {
-    "score": 0,
-    "grade": "Excellent|Good|Fair|Poor|Critical",
-    "issues": {
-      "error": 0,
-      "warning": 0,
-      "info": 0
-    }
+  "status": "completed|failed|blocked",
+  "statusReason": "string",
+  "statusReasonCode": "string",
+  "rateLimited": { "pages": 0, "hosts": [] },
+  "refusedFetches": [],
+  "score": {
+    "overall": 0,
+    "grade": "A|B|C|D|F|N/A",
+    "groups": [
+      { "group": "seo", "name": "string", "score": 0, "passed": 0, "warnings": 0, "failed": 0, "total": 0 }
+    ],
+    "categories": [{ "name": "string", "score": 0 }]
   },
-  "pages": [
+  "summary": { "passed": 0, "warnings": 0, "failed": 0, "skipped": 0 },
+  "issues": [
     {
-      "url": "string",
-      "status": 200,
-      "title": "string",
+      "ruleId": "core/meta-title",
+      "name": "string",
       "description": "string",
-      "wordCount": 0,
+      "solution": "string",
+      "category": "string",
+      "group": "string",
+      "subcategory": "string",
+      "severity": "error|warning|info",
       "checks": [
         {
-          "ruleId": "core/meta-title",
-          "name": "meta-title",
-          "status": "pass|warn|fail|info|skipped",
+          "name": "string",
+          "status": "fail|warn",
           "message": "string",
-          "value": "any",
-          "expected": "any"
+          "affectedPages": ["string"],
+          "affectedPagesCount": 0,
+          "affectedPagesHasMore": false,
+          "items": [],
+          "details": {}
         }
       ]
     }
   ],
-  "ruleResults": [...],
-  "links": [...],
-  "images": [...]
+  "skippedChecks": [
+    {
+      "ruleId": "content/hidden-text",
+      "name": "string",
+      "check": "hidden-text",
+      "reason": "scan-truncated",
+      "pages": ["string"],
+      "pagesCount": 0,
+      "pagesHasMore": false
+    }
+  ],
+  "editorSummary": {},
+  "technologies": {},
+  "entities": {},
+  "siteProfile": {}
 }
 ```
+
+**Always present:** `meta`, `status`, `score`, `summary`, `issues`. The rest are optional. `statusReason` and `statusReasonCode` appear when `status` is `failed` or `blocked`. `meta.maxPages`, `meta.requestedMaxPages`, `meta.stopReason`, `meta.seedRedirect`, `meta.coverage` and `meta.rulesCache` appear when they apply. `rateLimited`, `refusedFetches`, `editorSummary`, `technologies`, `entities` and `siteProfile` appear when the audit produced that data.
+
+**Issues:** `issues` holds findings only. Every check in it has status `fail` or `warn`. `affectedPages` is a sample, and `affectedPagesCount` is the true total, so compare the two (or read `affectedPagesHasMore`) before treating the list as complete.
+
+**Skipped checks:** `skippedChecks` lists checks a rule could not finish evaluating, so an absence of issues on those pages does not mean they are clean. It appears only when at least one check was skipped. Skipped checks are never part of `issues`, and do not count toward `passed`, `warnings`, `failed` or the score.
+
+| Field | Meaning |
+|-------|---------|
+| `ruleId` | Rule that skipped, e.g. `content/hidden-text` |
+| `name` | Rule display name |
+| `check` | Check name within the rule |
+| `reason` | Why it was skipped. Currently only `scan-truncated`: the page hit the rule's scan limit and was only partly scanned (`content/hidden-text`, `content/dev-leakage`). More reasons may be added, so treat unknown values as a skip |
+| `pages` | Skipped page URLs. A sample when `pagesHasMore` is true |
+| `pagesCount` | True number of skipped pages |
+| `pagesHasMore` | `pagesCount` is larger than `pages.length` |
+
+`summary.skipped` is the sum of `pagesCount` across `skippedChecks`, and is 0 when none were skipped.
+
+A consumer that closes a finding when a rule stops reporting it should leave the pages in `skippedChecks` for that rule open, because the rule did not finish looking at them.
 
 **Use for:**
 - Automated analysis
@@ -680,7 +734,7 @@ Extract health score in CI:
 
 - name: Check Score
   run: |
-    SCORE=$(cat audit.json | jq '.health.score')
+    SCORE=$(cat audit.json | jq '.score.overall')
     if [ "$SCORE" -lt 70 ]; then
       echo "Health score too low: $SCORE"
       exit 1
@@ -703,8 +757,8 @@ squirrel audit https://example.com --format json --output before.json
 squirrel audit https://example.com --format json --output after.json
 
 # Compare scores
-echo "Before: $(cat before.json | jq '.health.score')"
-echo "After:  $(cat after.json | jq '.health.score')"
+echo "Before: $(cat before.json | jq '.score.overall')"
+echo "After:  $(cat after.json | jq '.score.overall')"
 ```
 
 ---
@@ -751,11 +805,11 @@ xdg-open report.html  # Linux
 **Solution:** Use console format or filter JSON:
 
 ```bash
-# Get only health score
-squirrel audit https://example.com --format json | jq '.health'
+# Get only the score block
+squirrel audit https://example.com --format json | jq '.score'
 
-# Get only errors
-squirrel audit https://example.com --format json | jq '.pages[].checks[] | select(.status == "fail")'
+# Get only error-severity issues
+squirrel audit https://example.com --format json | jq '.issues[] | select(.severity == "error")'
 ```
 
 ---
