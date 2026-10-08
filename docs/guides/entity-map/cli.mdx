@@ -56,7 +56,7 @@ Full reference, with worked output for each: [`squirrel entities`](/cli/entities
 | `--list`, `-l` | List stored audits and their entity counts instead of reading one. |
 | `--crawl <id>` | Read a specific audit. Accepts an 8-character prefix. Defaults to the latest that has a map. |
 | `--type <t>` | Keep only these `@type` values. Repeatable or comma-separated. |
-| `--page <url>` | Keep only entities declared on a matching page. Repeatable. |
+| `--page <url>` | Keep only entities declared on a matching page, by the page match rule below. Repeatable. |
 | `--problem <p>` | Keep only entities with these problems. Repeatable or comma-separated. |
 | `--format <f>`, `-f` | Output format. Defaults to a console summary, or markdown when piped. |
 | `--output <path>`, `-o` | Write to a file instead of stdout. |
@@ -77,9 +77,21 @@ Full reference, with worked output for each: [`squirrel entities`](/cli/entities
 
 Different filters combine as an AND. `--type Organization --problem no-id` keeps organizations that also have that problem.
 
-<Warning>
-`--page` matches a **substring** of the page URL, not a prefix and not a glob, so `--page /blog` matches `https://site/blog/post` and `https://site/tag/blog` alike. The hosted API's `page` filter is a prefix match instead. If you are comparing local output against the dashboard, that difference will show.
+<Note>
+`--page` follows one rule, shared with the hosted API's `page` filter and the MCP tools' `page` input, so the same value keeps the same entities on every surface:
 
+- An absolute `http(s)` URL is a **prefix** of the page URL: `--page https://site/blog` matches `https://site/blog/post`.
+- A value starting with `/` is a **prefix** of the page's path and query: `--page /blog` matches `https://site/blog/post` but not `https://site/tag/blog`.
+- Anything else is a **substring** of the page URL: `--page blog` matches both.
+
+Matching is case-sensitive, and not a glob.
+</Note>
+
+<Note>
+`summary` describes the whole audit and does not change with filters. With `-f json` the document gains a `filtered` block, `{ "nodes": 3, "edges": 1 }`, holding the counts that survived the filters. It equals `meta.counts` from the hosted API for the same filter on the same map. The `markdown` output and the console summary say it in a sentence, and the row-oriented formats (`csv`, `dot`, `graphml`, `mermaid`, `jsonld`) simply contain the matching rows. `--diff` is the exception: it compares what each side's filter kept, so its summary deltas are over the filtered entities.
+</Note>
+
+<Warning>
 A map loaded from the local store carries a complete page index, and the filter uses it, so the 50-page cap on a node's own list does not limit matching. A map read with `--input` from an export that has no page index falls back to that capped list, and can then miss an entity that really is declared on the page you asked for.
 </Warning>
 
