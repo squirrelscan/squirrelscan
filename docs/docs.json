@@ -583,6 +583,7 @@
                   "rules/security/form-captcha",
                   "rules/security/new-tab",
                   "rules/security/leaked-secrets",
+                  "rules/security/token-storage",
                   "rules/security/third-party-cookies",
                   "rules/security/sri",
                   "rules/security/cookie-flags"
