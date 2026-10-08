@@ -19,7 +19,7 @@ How it works:
 
 ### Changed
 
-- `security/leaked-secrets` reports a server-only secret that sits in a browser-served script (an external file or an inline `<script>`) in a new `leaked-secrets-critical` check, with the message "shipped to every visitor". Database connection strings, Supabase service-role and secret keys, Stripe `sk_live_` keys, Clerk secret keys, AWS secret access keys, Azure storage keys and DigitalOcean keys move there from `leaked-secrets-high` or `leaked-secrets-medium`. The same class found only in page HTML, and publishable or anon keys, report as before. The finding is the same hit, not a second one.
+- `security/leaked-secrets` reports a server-only secret found in a browser-served script (database connection strings, service-role and `sk_live_` keys, AWS secret keys and similar) in a new `leaked-secrets-critical` check, "shipped to every visitor". Publishable keys and hits only in page HTML are unchanged.
 
 ## v0.0.105 — 2026-10-07
 

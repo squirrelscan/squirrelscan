@@ -49,6 +49,7 @@ describe("leaked-secrets critical escalation", () => {
     expect(crit.status).toBe("fail");
     expect(crit.details.severity).toBe("critical");
     expect(crit.message).toContain("shipped to every visitor");
+    expect(crit.message).toContain("critical");
     expect(crit.items[0].label).toContain("external-script");
     expect(byName(checks, "leaked-secrets-high")).toBeUndefined();
   });
@@ -89,5 +90,15 @@ describe("leaked-secrets critical escalation", () => {
     const all = checks.filter((c) => c.items).flatMap((c) => c.items.map((i: any) => i.id));
     expect(all.filter((id: string) => id.includes("sk_liv")).length).toBe(1);
     expect(ids(byName(checks, "leaked-secrets-critical"))).toContain("sk_liv");
+  });
+
+  test("a script hit is kept over a plain HTML hit of the same value, in either page order", () => {
+    const script = `<script>var k="${STRIPE_LIVE}";</script>`;
+    const text = `<p>${STRIPE_LIVE}</p>`;
+    for (const html of [`<html><body>${script}${text}</body></html>`, `<html><body>${text}${script}</body></html>`]) {
+      const checks = run(html);
+      expect(byName(checks, "leaked-secrets-critical").items.length).toBe(1);
+      expect(byName(checks, "leaked-secrets-high")).toBeUndefined();
+    }
   });
 });

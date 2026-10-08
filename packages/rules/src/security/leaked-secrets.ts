@@ -2619,7 +2619,7 @@ export const leakedSecretsRule: Rule = {
       checks.push({
         name: "leaked-secrets-critical",
         status: "fail",
-        message: `${critical.length} server-only secret(s) shipped to every visitor in browser-served scripts (rotate now)`,
+        message: `${critical.length} critical server-only secret(s) shipped to every visitor in browser-served scripts (rotate now)`,
         details: { severity: "critical" },
         items: critical.map(item),
       });
