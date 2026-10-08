@@ -215,6 +215,11 @@ describe("no false positives", () => {
     ok(`<!-- <script src="https://js.stripe.com/v3/"></script> -->`, "default-src 'self'");
   });
 
+  test("comments that rebuild each other or never close hide a vendor snippet", () => {
+    ok(`<!<!-- x -->-- see https://js.stripe.com/v3/ -->`, "default-src 'self'");
+    ok(`<!-- see https://js.stripe.com/v3/`, "default-src 'self'");
+  });
+
   test("a comma inside a meta policy does not split it", () => {
     ok(`<meta http-equiv="Content-Security-Policy" content="script-src 'self' https://a.test, https://b.test"><script src="https://b.test/a.js"></script>`, "");
   });

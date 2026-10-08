@@ -170,9 +170,35 @@ function chunkReferences(ctx: RuleContext, pageUrls: Set<string>, pageHost: stri
 const URL_LITERAL_RE = /(?:https?:)?\/\/[^\s"'`<>)\\]{3,300}/g;
 const MAX_SIGNAL_URLS = 2000;
 
+/**
+ * `html` without comments. Removing one comment can join the text around it into
+ * a new `<!--`, so it repeats until none is left, and an unterminated comment
+ * runs to the end of the document as a browser reads it.
+ */
+function stripHtmlComments(html: string): string {
+  let text = html;
+  for (let guard = 0; guard < 8 && text.includes("<!--"); guard++) {
+    let out = "";
+    let at = 0;
+    for (;;) {
+      const open = text.indexOf("<!--", at);
+      if (open === -1) {
+        out += text.slice(at);
+        break;
+      }
+      out += text.slice(at, open);
+      const close = text.indexOf("-->", open + 4);
+      if (close === -1) break;
+      at = close + 3;
+    }
+    text = out;
+  }
+  return text.includes("<!--") ? "" : text;
+}
+
 /** What the page's HTML shows, with comments removed so a disabled snippet is not use. */
 function pageSignals(html: string, base: string): PageSignals {
-  const code = html.replace(/<!--[\s\S]*?-->/g, "");
+  const code = stripHtmlComments(html);
   const urls: URL[] = [];
   for (const m of code.matchAll(URL_LITERAL_RE)) {
     const url = parseUrl(m[0], base);
