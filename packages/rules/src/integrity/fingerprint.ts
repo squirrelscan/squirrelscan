@@ -42,7 +42,23 @@ export interface PageFingerprint {
   stylesheetHrefs: Set<string>;
 }
 
-const CSS_VAR_RE = /--[a-z0-9-]+\s*:/gi;
+// A custom property declaration is a run of name characters that starts with
+// `--` somewhere inside it and ends at a `:`. The run is found by anchoring on a
+// non-name character before it, so each run is scanned once (an earlier version
+// let every `--` inside `--0--0--0…` start its own scan, which was quadratic),
+// and the `--` is then located with indexOf. Linear in the input.
+const CSS_NAME_RUN_RE = /(?<![a-z0-9-])[a-z0-9-]+\s*:/gi;
+
+/** The custom property names (`--brand-color`, lowercased) declared in a CSS string. */
+export function cssVarNames(css: string): string[] {
+  const names: string[] = [];
+  for (const m of css.matchAll(CSS_NAME_RUN_RE)) {
+    const run = m[0].replace(/\s*:$/, "");
+    const at = run.indexOf("--");
+    if (at >= 0 && run.length - at >= 3) names.push(run.slice(at).toLowerCase());
+  }
+  return names;
+}
 
 /**
  * DOM walks performed by `fingerprintPage` in this process.
@@ -127,16 +143,12 @@ export function fingerprintPage(
   const cssVars = new Set<string>();
   for (const style of querySelectorAllOutsideNoscript(doc, "style")) {
     const css = style.textContent ?? "";
-    for (const m of css.matchAll(CSS_VAR_RE)) {
-      cssVars.add(m[0].replace(/\s*:$/, "").toLowerCase());
-    }
+    for (const name of cssVarNames(css)) cssVars.add(name);
   }
   // Inline style on <html>/<body> sometimes carries theme tokens too.
   for (const el of [doc.documentElement, body]) {
     const inline = el?.getAttribute?.("style") ?? "";
-    for (const m of inline.matchAll(CSS_VAR_RE)) {
-      cssVars.add(m[0].replace(/\s*:$/, "").toLowerCase());
-    }
+    for (const name of cssVarNames(inline)) cssVars.add(name);
   }
 
   return {
