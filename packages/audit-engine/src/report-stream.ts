@@ -29,6 +29,7 @@ import {
   calculateHealthScoreFromTallies,
   deriveAuditStatus,
   deriveAuditStatusFromPages,
+  withoutUnobservedScores,
   type RuleTally,
 } from "./scoring";
 
@@ -671,6 +672,11 @@ export function buildV1Report(
         unfetched,
       };
     }
+    // The root fetches the site refused, so the report says "refused" for
+    // them instead of leaving the reader to infer it from missing findings.
+    if (crawl?.stats?.refusedFetches?.length) {
+      result.refusedFetches = crawl.stats.refusedFetches;
+    }
     const runStatus = deriveAuditStatusFromPages(
       pageStatuses,
       crawl?.stats?.pagesBlocked ?? 0,
@@ -695,7 +701,7 @@ export function buildV1Report(
       // of a site and lost a few pages to throttling has a real score, and
       // nulling it would hide the whole report over a coverage gap.
       if (isScorelessStatus(runStatus.status) && result.healthScore) {
-        result.healthScore.overall = null;
+        result.healthScore = withoutUnobservedScores(result.healthScore);
       }
     }
 
@@ -959,6 +965,11 @@ export function buildV2Report(
         unfetched,
       };
     }
+    // The root fetches the site refused, so the report says "refused" for
+    // them instead of leaving the reader to infer it from missing findings.
+    if (crawl?.stats?.refusedFetches?.length) {
+      result.refusedFetches = crawl.stats.refusedFetches;
+    }
     const runStatus = deriveAuditStatus({
       pagesCrawled,
       contentPages,
@@ -978,7 +989,7 @@ export function buildV2Report(
       result.statusReason = runStatus.reason;
       result.statusReasonCode = runStatus.reasonCode;
       if (isScorelessStatus(runStatus.status) && result.healthScore) {
-        result.healthScore.overall = null;
+        result.healthScore = withoutUnobservedScores(result.healthScore);
       }
     }
 

@@ -2,6 +2,8 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { refusedCheck, refusedFor } from "../refused";
+
 export const sitemapExistsRule: Rule = {
   meta: {
     id: "crawl/sitemap-exists",
@@ -26,6 +28,15 @@ export const sitemapExistsRule: Rule = {
         status: "info",
         message: "Sitemap data not available",
       });
+      return { checks };
+    }
+
+    // The site refused the sitemap requests (a bot wall, auth, throttling), so
+    // it never said whether a sitemap exists. "No XML sitemap found" would be a
+    // false statement about the site.
+    const refused = refusedFor(ctx.site, "sitemap");
+    if (sitemaps.discovered.length === 0 && refused.length > 0) {
+      checks.push(refusedCheck("sitemap-exists", "XML sitemap", refused));
       return { checks };
     }
 

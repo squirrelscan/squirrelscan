@@ -1,6 +1,6 @@
 // JSON report output
 
-import type { AuditFailureReasonCode } from "@squirrelscan/core-contracts";
+import type { AuditFailureReasonCode, RefusedFetch } from "@squirrelscan/core-contracts";
 import type { AuditReport, AuditStatus, CheckItem, EntityMap } from "../types";
 import { reportFailureReasonCode } from "../failure-notice";
 import { getScoreGrade } from "../scoring";
@@ -79,6 +79,12 @@ interface SlimJsonReport {
   rateLimited?: { pages: number; hosts: string[]; unfetched?: number };
   /** Machine-readable class behind `statusReason` (#1822); absent pre-#1822. */
   statusReasonCode?: AuditFailureReasonCode;
+  /**
+   * Root fetches (robots.txt, sitemaps, llms.txt, Markdown) the site refused
+   *. Their absence is unknown, not confirmed. Present only when
+   * something was refused.
+   */
+  refusedFetches?: RefusedFetch[];
   score: {
     overall: number | null; // null ⇒ N/A (failed/0-page audit, #586)
     grade: string;
@@ -231,6 +237,7 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
     ...(report.rateLimited && report.rateLimited.pages > 0
       ? { rateLimited: report.rateLimited }
       : {}),
+    ...(report.refusedFetches?.length ? { refusedFetches: report.refusedFetches } : {}),
     score: {
       // null ⇒ N/A (failed/0-page audit); preserved through save/reload (#586).
       overall: report.healthScore?.overall ?? null,

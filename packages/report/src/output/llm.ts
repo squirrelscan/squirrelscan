@@ -25,7 +25,7 @@ import { seedRedirect } from "../coverage";
 import { LLM_REPORT } from "@squirrelscan/core-contracts/limits";
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 import { AUDIT_FAILURE_NEXT_STEP_THIRD } from "@squirrelscan/core-contracts/failure-reason";
-import { reportFailureReasonCode } from "../failure-notice";
+import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
 
 export interface LlmRenderOptions {
   version?: string;
@@ -186,6 +186,18 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
       );
     }
     lines.push("</status>");
+  }
+
+  // Root fetches the site refused. Their absence is UNKNOWN, so an agent
+  // must not turn them into "add a robots.txt" or "add a sitemap" fixes.
+  const refused = refusedFetchLines(report);
+  if (refused.length > 0) {
+    lines.push("<refused-fetches>");
+    lines.push(
+      `${indent(1)}The site refused these requests, so whether the resources exist is UNKNOWN. Do not report them as missing.`,
+    );
+    for (const line of refused) lines.push(`${indent(1)}<fetch>${escapeXml(line)}</fetch>`);
+    lines.push("</refused-fetches>");
   }
 
   // null ⇒ N/A (failed/0-page audit) — never coerce to 0/"F" (#586).
