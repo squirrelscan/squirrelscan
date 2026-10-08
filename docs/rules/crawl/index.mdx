@@ -23,8 +23,8 @@ Crawlability rules cover the layer before ranking: whether a search engine can r
   <Card title="Page is blocked from indexing: finding the directive" icon="circle-info" href="/rules/crawl/indexability">
     A page can be excluded from search by a robots meta tag or an X-Robots-Tag header. squirrel reports which one, per page.
   </Card>
-  <Card title="robots.txt vs noindex: the two conflicts explained" icon="triangle-exclamation" href="/rules/crawl/indexability-conflicts">
-    A page blocked in robots.txt can never be read for its noindex tag. squirrel compares the crawl rules against the page directives, both ways.
+  <Card title="robots.txt blocked pages without noindex" icon="triangle-exclamation" href="/rules/crawl/indexability-conflicts">
+    Allow plus noindex is the correct way to deindex a page. squirrel reports pages robots.txt blocks that carry no noindex, at info level.
   </Card>
   <Card title="Noindexed page in sitemap: why it is a contradiction" icon="triangle-exclamation" href="/rules/crawl/noindex-in-sitemap">
     A sitemap says crawl this, noindex says do not index it. squirrel cross-references every crawled page's robots meta against your sitemap URLs.
