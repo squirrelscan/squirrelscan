@@ -272,6 +272,16 @@ describe("entityProblemNodes agrees with the rules", () => {
     expect(entityProblemNodes(map).conflict?.length).toBe(1);
   });
 
+  test("a balanced 5/5 publisher split is described by the rule and reserves nothing", async () => {
+    const map = publishers(5, 5);
+    // The rule still speaks (info, not a warning)...
+    expect((await oneCheck(entityPublisherMismatchRule, map)).status).toBe("info");
+    // ...but a site that genuinely has two publishers has no finding to evidence.
+    expect(entityProblemNodes(map)["publisher-mismatch"] ?? []).toEqual([]);
+    // Control: a lopsided 9/1 split of the same shape does reserve the outlier.
+    expect(entityProblemNodes(publishers(9, 1))["publisher-mismatch"]?.length).toBe(1);
+  });
+
   test("a node in several classes is listed under each", () => {
     const multi = quietOrg({
       danglingRefs: 1,

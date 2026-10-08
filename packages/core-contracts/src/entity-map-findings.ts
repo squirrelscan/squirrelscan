@@ -454,9 +454,13 @@ export function publisherWeights(
 // ── Problem classes ────────────────────────────────────────────────
 
 /**
- * Every class of node a `schema/entity-*` rule reports. Findings about something
- * ABSENT (`entity-organization-missing`, `entity-website-missing`) have no node
- * to keep and are deliberately not here.
+ * Every class of node a `schema/entity-*` rule reports. A NEW entity rule that
+ * reports on a node must add its class here and to `entityProblemNodes`, or its
+ * findings lose their evidence in the published map; `entity-problem-nodes.test.ts`
+ * needs a case for it too.
+ *
+ * Findings about something ABSENT (`entity-organization-missing`,
+ * `entity-website-missing`) have no node to keep and are deliberately not here.
  */
 export const ENTITY_PROBLEM_CLASSES = [
   "conflict",
@@ -514,8 +518,13 @@ export function entityProblemNodes(
 
   const publishers = publisherWeights(map);
   if (publishers) {
+    // Only a lopsided split is a finding (`looksLikeDrift`, the rule's warn case).
+    // A balanced one is a site that genuinely has several publishers, which the
+    // rule describes without accusing, and which reserves nothing here.
     if (publishers.outliers.length > 0) {
-      for (const [key] of publishers.outliers) add("publisher-mismatch", byKey.get(key));
+      if (publishers.looksLikeDrift) {
+        for (const [key] of publishers.outliers) add("publisher-mismatch", byKey.get(key));
+      }
     } else if (primary && publishers.canonical !== primary.key) {
       add("publisher-mismatch", byKey.get(publishers.canonical));
     }

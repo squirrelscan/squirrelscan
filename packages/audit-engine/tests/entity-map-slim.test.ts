@@ -730,6 +730,28 @@ describe("problem nodes survive the publish sample", () => {
     expect(kept(noStray)).not.toContain("id:pub-stray");
   });
 
+  test("a balanced publisher split reserves nothing", () => {
+    const publisherEdge = (source: string, target: string, occurrences: number): EntityMapEdge => ({
+      ...edge(source, target),
+      predicate: "publisher",
+      occurrences,
+    });
+    const sameAs = { sameAs: ["https://x.com/a"] };
+    const main = node("id:pub-main", 1, { types: ["Organization"], properties: sameAs });
+    const other = node("id:pub-other", 1, { types: ["Organization"], properties: sameAs });
+    const balanced = map([...crowd(), main, other], [
+      publisherEdge("id:crowd-0000", "id:pub-main", 5),
+      publisherEdge("id:crowd-0001", "id:pub-other", 5),
+    ]);
+    expect(kept(balanced)).not.toContain("id:pub-other");
+    // Control: the same two publishers at 9/1 reserve the outlier.
+    const lopsided = map([...crowd(), main, other], [
+      publisherEdge("id:crowd-0000", "id:pub-main", 9),
+      publisherEdge("id:crowd-0001", "id:pub-other", 1),
+    ]);
+    expect(kept(lopsided)).toContain("id:pub-other");
+  });
+
   test("a Person with no url or sameAs survives, an identified one does not", () => {
     const person = (properties: EntityMapNode["properties"]) =>
       node("id:person", 1, { types: ["Person"], properties });
@@ -816,5 +838,24 @@ describe("problem nodes survive the publish sample", () => {
     const slim = projectEntityMap(map(classes, []), ENTITY_PUBLISH_TINY, "publish");
     expect(slim.nodes.length).toBeLessThanOrEqual(3);
     expect(slim.truncated!.nodes).toBe(classes.length - slim.nodes.length);
+  });
+
+  test("the viewer projection classifies the full map, not a pre-slimmed one", () => {
+    // 2,500 shared nodes overflow the viewer's 2,000-node budget, and the only
+    // evidence for the finding (a one-off Person with no url or sameAs) has the
+    // lowest reach. It survives only if the viewer gets the whole map.
+    const many = Array.from({ length: 2_500 }, (_, i) =>
+      node(`id:crowd-${String(i).padStart(4, "0")}`, 500 + i, { types: ["Product"] }),
+    );
+    const lone = node("id:person", 1, { types: ["Person"], properties: {} });
+    const full = map([...many, lone], []);
+    const viewer = slimEntityMapForViewer(full);
+    expect(viewer.nodes.length).toBeLessThanOrEqual(ENTITY_MAP_VIEWER_LIMITS.maxNodes);
+    expect(viewer.nodes.map((n) => n.key)).toContain("id:person");
+
+    // Negative control: classified from a map that was already clipped to the
+    // viewer budget, the finding's node is gone before the projection can see it.
+    const clipped = map(many.slice(-ENTITY_MAP_VIEWER_LIMITS.maxNodes), []);
+    expect(slimEntityMapForViewer(clipped).nodes.map((n) => n.key)).not.toContain("id:person");
   });
 });
