@@ -15,6 +15,7 @@ The rule is passive. It reads the inline `<script>` blocks of each crawled page 
 
 - Skipped when there is no parsed document. Message: `No document available`.
 - Pass when no write was found. Message: `No auth tokens written to localStorage or sessionStorage`.
+- Info, as a separate check named `token-storage-truncated`, when a script that mentions web storage is longer than 6 MB and was read only up to that length. Message: `Script https://example.com/static/big.js is longer than 6 MB: only the first 6 MB were scanned for token writes`. It never counts as a finding, so a page with only this note still passes.
 - Warn when a write was found, one check for the page's inline scripts and one for each external script. Message: `1 auth token write(s) to web storage: localStorage["access_token"] in https://example.com/static/app.js`. Each item names the script, the storage, the key and the reason.
 
 Two things count as a token write:
@@ -52,7 +53,7 @@ A token in a report is a token that leaks again. The report names the script and
 
 ### Limits
 
-The rule reads script text, so it sees what a script writes and not what the browser holds. A script with no captured content (the fetch failed or it was too large) is not scanned, and one longer than 6 MB is read only up to that length, with no note in the report. A token written through a variable key, a wrapper library or a minified alias is not found unless its value is a literal JWT. A finding is a prompt to check where the token goes, not proof that a live token is exposed.
+The rule reads script text, so it sees what a script writes and not what the browser holds. A script with no captured content (the fetch failed or it was too large) is not scanned. A script longer than 6 MB that mentions `localStorage` or `sessionStorage` is read only up to that length, and the report says so (see the `token-storage-truncated` check above), so a pass on it is not a full scan. A token written through a variable key, a wrapper library or a minified alias is not found unless its value is a literal JWT. A finding is a prompt to check where the token goes, not proof that a live token is exposed.
 
 ## How to fix it
 

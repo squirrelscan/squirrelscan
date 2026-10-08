@@ -14,7 +14,7 @@
 // A finding names the script, the storage and the key, and NEVER the value: the
 // value is a live credential on a real site, and a report is shared and stored.
 
-import type { CheckItem } from "@squirrelscan/core-contracts";
+import type { CheckItem, ScriptContentData } from "@squirrelscan/core-contracts";
 import { getDomain } from "tldts";
 
 import { sharedRegex } from "../shared-regex";
@@ -225,9 +225,12 @@ const STORAGE_API = new Set([
 /** How far after the key a value is read from. A JWT is far shorter than this. */
 const VALUE_WINDOW = 1200;
 
-/** Hard cap on one script, so a pathological bundle cannot dominate a page's time. */
-const MAX_SCAN_CHARS = 6_000_000;
-// A script longer than this is read only up to the cap, without a note in the report.
+/**
+ * Hard cap on one script, so a pathological bundle cannot dominate a page's time.
+ * A script longer than this is read only up to the cap, and the report says so
+ * (see {@link truncationCheck}) so a pass is never mistaken for a full scan.
+ */
+export const MAX_SCAN_CHARS = 6_000_000;
 
 const MAX_WRITES_PER_SCRIPT = 25;
 
@@ -235,13 +238,31 @@ function valueAfter(text: string, from: number): string {
   return text.slice(from, from + VALUE_WINDOW);
 }
 
-/**
- * Every web-storage write in `text` that stores a credential. Pure, and cheap on
- * text that never mentions web storage: it returns before running a pattern.
- */
+export interface TokenStorageScan {
+  writes: TokenStorageWrite[];
+  /**
+   * The text mentions web storage but is longer than {@link MAX_SCAN_CHARS}, so
+   * only its first MAX_SCAN_CHARS characters were read. Text that never mentions
+   * web storage is not truncated in any way that matters and reports false.
+   */
+  truncated: boolean;
+}
+
+/** Every web-storage write in `text` that stores a credential, plus whether it was cut short. */
 export function findTokenStorageWrites(text: string): TokenStorageWrite[] {
-  if (!text.includes("localStorage") && !text.includes("sessionStorage")) return [];
-  const scan = text.length > MAX_SCAN_CHARS ? text.slice(0, MAX_SCAN_CHARS) : text;
+  return scanTokenStorage(text).writes;
+}
+
+/**
+ * Pure, and cheap on text that never mentions web storage: it returns before
+ * running a pattern.
+ */
+export function scanTokenStorage(text: string): TokenStorageScan {
+  if (!text.includes("localStorage") && !text.includes("sessionStorage")) {
+    return { writes: [], truncated: false };
+  }
+  const truncated = text.length > MAX_SCAN_CHARS;
+  const scan = truncated ? text.slice(0, MAX_SCAN_CHARS) : text;
 
   const out = new Map<string, TokenStorageWrite>();
   const add = (storage: StorageKind, key: string | null, reason: TokenStorageReason): void => {
@@ -298,7 +319,7 @@ export function findTokenStorageWrites(text: string): TokenStorageWrite[] {
     judge(p[1] as StorageKind, p[2]!, PROPERTY_ASSIGN.lastIndex);
   }
 
-  return [...out.values()];
+  return { writes: [...out.values()], truncated };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -385,15 +406,57 @@ function findingCheck(found: Located[]): CheckResult {
 }
 
 /** A shared bundle is scanned once per run, not once per page that loads it. */
-const externalWritesCache = new WeakMap<object, TokenStorageWrite[]>();
+const externalScanCache = new WeakMap<object, TokenStorageScan>();
 
-function externalWrites(script: { content: string | null }): TokenStorageWrite[] {
-  let writes = externalWritesCache.get(script);
-  if (!writes) {
-    writes = findTokenStorageWrites(script.content ?? "");
-    externalWritesCache.set(script, writes);
+function externalScan(script: { content: string | null }): TokenStorageScan {
+  let result = externalScanCache.get(script);
+  if (!result) {
+    result = scanTokenStorage(script.content ?? "");
+    externalScanCache.set(script, result);
   }
-  return writes;
+  return result;
+}
+
+/**
+ * Page URL -> the scripts that page loads, built once per run from the script
+ * inventory. A site-wide bundle lists every page in `sourcePages`, so testing
+ * `sourcePages.includes(page)` per script on every page is quadratic in pages.
+ */
+const scriptsByPageCache = new WeakMap<readonly ScriptContentData[], Map<string, ScriptContentData[]>>();
+
+function scriptsLoadedBy(
+  scripts: readonly ScriptContentData[],
+  pageUrl: string,
+): readonly ScriptContentData[] {
+  let index = scriptsByPageCache.get(scripts);
+  if (!index) {
+    index = new Map();
+    for (const script of scripts) {
+      if (!script.content) continue;
+      for (const page of script.sourcePages) {
+        const list = index.get(page);
+        if (!list) index.set(page, [script]);
+        // A page listed twice for one script must not report it twice.
+        else if (list[list.length - 1] !== script) list.push(script);
+      }
+    }
+    scriptsByPageCache.set(scripts, index);
+  }
+  return index.get(pageUrl) ?? [];
+}
+
+/**
+ * An info check for a script that mentions web storage but was read only up to
+ * the cap. It depends on the script alone, so the copies fold across pages.
+ */
+function truncationCheck(script: string): CheckResult {
+  const mb = MAX_SCAN_CHARS / 1_000_000;
+  return {
+    name: "token-storage-truncated",
+    status: "info",
+    message: `Script ${script} is longer than ${mb} MB: only the first ${mb} MB were scanned for token writes`,
+    details: { foldKey: `security/token-storage:truncated:${script}`, scanLimit: MAX_SCAN_CHARS },
+  };
 }
 
 export const tokenStorageRule: Rule = {
@@ -427,13 +490,16 @@ export const tokenStorageRule: Rule = {
     // Inline scripts belong to this page alone: one check for them.
     const inline: Located[] = [];
     const seenInline = new Set<string>();
+    let inlineTruncated = false;
     for (const el of doc.querySelectorAll("script:not([src])")) {
       const type = (el.getAttribute("type") ?? "").trim().toLowerCase();
       // JSON data blocks and templates are not executed code.
       if (type && !EXECUTABLE_SCRIPT_TYPE.test(type)) continue;
       const text = el.textContent || "";
       if (!text) continue;
-      for (const w of findTokenStorageWrites(text)) {
+      const scanned = scanTokenStorage(text);
+      if (scanned.truncated) inlineTruncated = true;
+      for (const w of scanned.writes) {
         const id = `${w.storage}\u0000${w.key ?? ""}\u0000${w.reason}`;
         if (seenInline.has(id)) continue;
         seenInline.add(id);
@@ -441,14 +507,15 @@ export const tokenStorageRule: Rule = {
       }
     }
     if (inline.length > 0) checks.push(findingCheck(inline));
+    if (inlineTruncated) checks.push(truncationCheck(ctx.page.url));
 
     // An external script is judged on EVERY page that loads it, by a check that
     // depends on the script alone, so the copies are identical and report grouping
     // folds them into one issue. Judging it on one owner page would lose the
     // finding whenever that page is skipped (soft 404, filtered out of the run).
-    for (const script of ctx.site?.scripts ?? []) {
-      if (!script.content || !script.sourcePages.includes(ctx.page.url)) continue;
-      const writes = externalWrites(script);
+    for (const script of scriptsLoadedBy(ctx.site?.scripts ?? [], ctx.page.url)) {
+      const { writes, truncated } = externalScan(script);
+      if (truncated) checks.push(truncationCheck(script.url));
       if (writes.length === 0) continue;
       checks.push(
         findingCheck(
@@ -462,7 +529,8 @@ export const tokenStorageRule: Rule = {
       );
     }
 
-    if (checks.length === 0) {
+    // Truncation notes are info, not findings: a page with only those still passes.
+    if (!checks.some((c) => c.name === "token-storage")) {
       checks.push({
         name: "token-storage",
         status: "pass",
