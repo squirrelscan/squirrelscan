@@ -285,14 +285,14 @@ URLs are normalized before crawling to avoid duplicates:
 
 ### Query parameter handling
 
-By default, query parameters are stripped except those in your allowlist:
+The empty default keeps non-tracking parameters. A non-empty allow list keeps only those exact names. The built-in set strips tracking parameters in both cases.
 
 ```toml
 [crawler]
 # Keep these query params (e.g., for pagination)
 allow_query_params = ["page", "sort"]
 
-# Drop tracking params (default)
+# Normalization ignores this list and strips the built-in tracking set.
 drop_query_prefixes = ["utm_", "gclid", "fbclid"]
 ```
 
