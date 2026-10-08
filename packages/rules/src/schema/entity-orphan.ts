@@ -2,6 +2,8 @@
 
 import type { Rule, RuleContext, RuleResult } from "../types";
 
+import { isOrphanNode } from "@squirrelscan/core-contracts/entity-map-findings";
+
 import {
   ENTITY_FIX_DOCS,
   cappedItems,
@@ -10,71 +12,11 @@ import {
   entityLabel,
   isMapResolved,
   moreSuffix,
-  pageTotal,
   referencedKeys,
   requireMap,
 } from "./entity-shared";
 
 const CHECK = "entity-orphan";
-
-/**
- * Types that describe or ARE the page they sit on, and are correctly
- * unreferenced.
- *
- * Two groups, and the second is the one that matters. A `WebPage`, its
- * `BreadcrumbList`, its `FAQPage` describe the page: nothing else on the site
- * should point at them. An `Article` is the page's own subject: it is what the
- * page is, and expecting some other node to reference it is backwards.
- *
- * Without the second group this rule fires on every blog post on the web.
- * Measured against a real 40-page crawl of kinsta.com, 73 of the 79 entities it
- * would otherwise report were breadcrumbs and articles — noise that would have
- * buried the six findings worth reading.
- */
-const PAGE_SUBJECT_TYPES = [
-  // Describe the page.
-  "WebPage",
-  "ItemPage",
-  "CollectionPage",
-  "AboutPage",
-  "ContactPage",
-  "CheckoutPage",
-  "SearchResultsPage",
-  "ProfilePage",
-  "BreadcrumbList",
-  "FAQPage",
-  "Question",
-  "Answer",
-  "SiteNavigationElement",
-  "WPHeader",
-  "WPFooter",
-  "WPSideBar",
-  "MedicalWebPage",
-  "QAPage",
-  "RealEstateListing",
-  // Are the page. A product detail page IS the product, a recipe page IS the
-  // recipe: expecting some other node to reference them is backwards, and the
-  // finding would be the site's page count rather than anything actionable.
-  "Article",
-  "NewsArticle",
-  "BlogPosting",
-  "TechArticle",
-  "ScholarlyArticle",
-  "Report",
-  "LiveBlogPosting",
-  "Recipe",
-  "HowTo",
-  "Product",
-  "ProductGroup",
-  "Event",
-  "Course",
-  "JobPosting",
-  "SoftwareApplication",
-  "Book",
-  "Movie",
-  "Dataset",
-  "VideoObject",
-];
 
 export const entityOrphanRule: Rule = {
   meta: {
@@ -96,17 +38,7 @@ export const entityOrphanRule: Rule = {
 
     const referenced = referencedKeys(map);
     const orphans = map.nodes
-      .filter(
-        (node) =>
-          node.id !== null &&
-          !referenced.has(node.key) &&
-          pageTotal(node) === 1 &&
-          // The builder's own verdict on "this describes one page", plus a type
-          // list for the shapes it does not catch. Both, because a site can
-          // name its WebPage node and defeat the heuristic.
-          !node.pageLocal &&
-          !node.types.some((type) => PAGE_SUBJECT_TYPES.includes(type))
-      )
+      .filter((node) => isOrphanNode(node, referenced))
       .sort((a, b) => compareStrings(a.key, b.key));
 
     if (orphans.length === 0) {

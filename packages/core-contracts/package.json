@@ -20,6 +20,7 @@
     "./resolution": "./src/resolution.ts",
     "./entity-map": "./src/entity-map.ts",
     "./entity-map-project": "./src/entity-map-project.ts",
+    "./entity-map-findings": "./src/entity-map-findings.ts",
     "./entity-mcp": "./src/entity-mcp.ts"
   },
   "dependencies": {
