@@ -15,6 +15,7 @@
 
 import type { CheckItem } from "@squirrelscan/core-contracts";
 
+import { sharedRegex } from "../shared-regex";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export type StorageKind = "localStorage" | "sessionStorage";
@@ -160,7 +161,10 @@ const JWT_AT_START = /^\s*(['"`])(eyJ[\w-]{8,}\.eyJ[\w-]{8,}\.[\w-]*)\1/;
 
 export const isJwtShaped = (value: string): boolean => JWT_SHAPE.test(value);
 
-/** A value written to clear or reset a key (`setItem("token", "")`) holds no credential. */
+/**
+ * A value that holds no credential: a write that clears a key (`setItem("token", "")`,
+ * `null`, `undefined`) or stores a flag (`"true"`, `"false"`, `"0"`, `"1"`).
+ */
 const EMPTY_VALUE = /^\s*(?:(['"`])(?:|null|undefined|false|true|0|1)\1|null\b|undefined\b|void 0|!?[01]\b|!0|!1)/;
 
 /* -------------------------------------------------------------------------- */
@@ -171,22 +175,30 @@ const STORAGE = "(?<![\\w$])(?:window\\s*\\.\\s*|self\\s*\\.\\s*|globalThis\\s*\
 
 // `setItem("key", value)` with a string-literal key. The value is read from the
 // text after the comma by VALUE_WINDOW.
-const SET_ITEM_LITERAL = new RegExp(
-  `${STORAGE}\\s*(?:\\?\\.|\\.)\\s*setItem\\s*\\(\\s*(['"\`])((?:\\\\.|(?!\\2)[^\\\\\\n\\r]){1,${MAX_KEY_CHARS}})\\2\\s*,`,
-  "g",
+const SET_ITEM_LITERAL = sharedRegex(
+  new RegExp(
+    `${STORAGE}\\s*(?:\\?\\.|\\.)\\s*setItem\\s*\\(\\s*(['"\`])((?:\\\\.|(?!\\2)[^\\\\\\n\\r]){1,${MAX_KEY_CHARS}})\\2\\s*,`,
+    "g",
+  ),
 );
 // `setItem(computed, value)`: no literal key, only the value can be judged.
-const SET_ITEM_DYNAMIC = new RegExp(
-  `${STORAGE}\\s*(?:\\?\\.|\\.)\\s*setItem\\s*\\(\\s*(?!['"\`])`,
-  "g",
+const SET_ITEM_DYNAMIC = sharedRegex(
+  new RegExp(
+    `${STORAGE}\\s*(?:\\?\\.|\\.)\\s*setItem\\s*\\(\\s*(?!['"\`])`,
+    "g",
+  ),
 );
 // `localStorage["key"] = value`
-const BRACKET_ASSIGN = new RegExp(
-  `${STORAGE}\\s*\\[\\s*(['"\`])((?:\\\\.|(?!\\2)[^\\\\\\n\\r]){1,${MAX_KEY_CHARS}})\\2\\s*\\]\\s*=(?![=>])`,
-  "g",
+const BRACKET_ASSIGN = sharedRegex(
+  new RegExp(
+    `${STORAGE}\\s*\\[\\s*(['"\`])((?:\\\\.|(?!\\2)[^\\\\\\n\\r]){1,${MAX_KEY_CHARS}})\\2\\s*\\]\\s*=(?![=>])`,
+    "g",
+  ),
 );
 // `localStorage.key = value`
-const PROPERTY_ASSIGN = new RegExp(`${STORAGE}\\s*\\.\\s*([A-Za-z_$][\\w$]*)\\s*=(?![=>])`, "g");
+const PROPERTY_ASSIGN = sharedRegex(
+  new RegExp(`${STORAGE}\\s*\\.\\s*([A-Za-z_$][\\w$]*)\\s*=(?![=>])`, "g"),
+);
 
 const STORAGE_API = new Set([
   "setItem",
@@ -242,14 +254,14 @@ export function findTokenStorageWrites(text: string): TokenStorageWrite[] {
   for (const re of [SET_ITEM_LITERAL, BRACKET_ASSIGN]) {
     re.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = re.exec(scan)) !== null) {
+    while (out.size < MAX_WRITES_PER_SCRIPT && (m = re.exec(scan)) !== null) {
       judge(m[1] as StorageKind, m[3] ?? null, re.lastIndex);
     }
   }
 
   SET_ITEM_DYNAMIC.lastIndex = 0;
   let d: RegExpExecArray | null;
-  while ((d = SET_ITEM_DYNAMIC.exec(scan)) !== null) {
+  while (out.size < MAX_WRITES_PER_SCRIPT && (d = SET_ITEM_DYNAMIC.exec(scan)) !== null) {
     // Skip to the comma that ends the first argument, at depth zero.
     const argText = valueAfter(scan, SET_ITEM_DYNAMIC.lastIndex);
     let depth = 0;
@@ -270,7 +282,7 @@ export function findTokenStorageWrites(text: string): TokenStorageWrite[] {
 
   PROPERTY_ASSIGN.lastIndex = 0;
   let p: RegExpExecArray | null;
-  while ((p = PROPERTY_ASSIGN.exec(scan)) !== null) {
+  while (out.size < MAX_WRITES_PER_SCRIPT && (p = PROPERTY_ASSIGN.exec(scan)) !== null) {
     if (STORAGE_API.has(p[2]!)) continue;
     judge(p[1] as StorageKind, p[2]!, PROPERTY_ASSIGN.lastIndex);
   }
@@ -296,6 +308,9 @@ const describe = (w: Located): string =>
   `${w.storage}${w.key !== null ? `["${w.key}"]` : " (computed key)"}`;
 
 const MAX_ITEMS = 20;
+
+/** The `type` of an inline script the browser runs as code; JSON data blocks and templates are not. */
+const EXECUTABLE_SCRIPT_TYPE = /^(?:text|application)\/(?:javascript|ecmascript)$|^module$/;
 
 export const tokenStorageRule: Rule = {
   meta: {
@@ -343,7 +358,7 @@ export const tokenStorageRule: Rule = {
     for (const el of doc.querySelectorAll("script:not([src])")) {
       const type = (el.getAttribute("type") ?? "").trim().toLowerCase();
       // JSON data blocks and templates are not executed code.
-      if (type && !/^(?:text|application)\/(?:javascript|ecmascript)$|^module$/.test(type)) continue;
+      if (type && !EXECUTABLE_SCRIPT_TYPE.test(type)) continue;
       const text = el.textContent || "";
       if (text) record(findTokenStorageWrites(text), "inline-script", ctx.page.url);
     }

@@ -157,9 +157,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // entity-publisher-mismatch, entity-local-business-per-page,
       // entity-website-missing, entity-organization-missing,
       // entity-sameas-missing, entity-orphan), 295 -> 296
-      // content/placeholder-contact, 296 -> 297 content/placeholder-media, 297 -> 298
-      // security/token-storage; anything
-      // else means a rule id leaked in, so fix that rather than this number.
+      // content/placeholder-contact, 296 -> 297 content/placeholder-media,
+      // 297 -> 298 security/token-storage; anything else means a rule id leaked
+      // in, so fix that rather than this number.
       expect(v1.perRuleTally.length).toBe(298);
       // Each +500 above is only "all passes" if nothing warned. healthScore
       // staying at 48 does not prove that — a handful of weight-5 warnings in a

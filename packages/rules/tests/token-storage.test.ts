@@ -200,6 +200,13 @@ describe("finding-redacts-value", () => {
   });
 });
 
+describe("write cap", () => {
+  test("a script with thousands of token writes yields a bounded list", () => {
+    const code = Array.from({ length: 3000 }, (_, i) => `localStorage.setItem("k${i}_token", v);`).join("\n");
+    expect(findTokenStorageWrites(code)).toHaveLength(25);
+  });
+});
+
 describe("shared bundles", () => {
   const bundle = { url: "https://shop.test/b.js", content: 'localStorage.setItem("token", t)' };
 
