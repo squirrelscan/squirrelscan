@@ -117,6 +117,16 @@ function snapshot(dir: string): string[] {
   return out.sort();
 }
 
+/** A file's text, or "dir". One read per path, no check-then-use. */
+function contentOf(path: string): string {
+  try {
+    return readFileSync(path, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EISDIR") return "dir";
+    throw error;
+  }
+}
+
 beforeEach(() => {
   root = realpathSync(
     mkdtempSync(join(realOs.tmpdir(), "squirrel-uninstall-test-"))
@@ -342,9 +352,7 @@ describe("safety", () => {
     symlinkSync(join(outside, "precious"), join(l.data, "linked-out"));
     symlinkSync(join(outside, "precious"), join(l.cache, "linked-out"));
     const before = snapshot(outside);
-    const contents = before.map((p) =>
-      lstatSync(p).isFile() ? readFileSync(p, "utf8") : "dir"
-    );
+    const contents = before.map(contentOf);
 
     const result = await runSelfUninstall(
       { purge: true, yes: true },
@@ -353,11 +361,7 @@ describe("safety", () => {
 
     expect(result.ok).toBe(true);
     expect(snapshot(outside)).toEqual(before);
-    expect(
-      before.map((p) =>
-        lstatSync(p).isFile() ? readFileSync(p, "utf8") : "dir"
-      )
-    ).toEqual(contents);
+    expect(before.map(contentOf)).toEqual(contents);
     // Inside HOME only the managed paths went; the shared bin dir stays.
     expect(existsSync(l.data)).toBe(false);
     expect(existsSync(l.cache)).toBe(false);
