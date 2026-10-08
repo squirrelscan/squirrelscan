@@ -15,7 +15,11 @@ import {
 } from "@squirrelscan/core-contracts/entity-map";
 
 import { createEntityMapBuilder } from "../src/entity-map/build";
-import { slimEntityMapForPublish, slimEntityMapForViewer } from "../src/entity-map";
+import {
+  projectEntityMap,
+  slimEntityMapForPublish,
+  slimEntityMapForViewer,
+} from "../src/entity-map";
 
 function node(
   key: string,
@@ -577,5 +581,134 @@ describe("publish sample tiers", () => {
     const slim = slimEntityMapForPublish(map(nodes, [edge("hub", referenced)]));
     expect(slim.nodes.map((n) => n.key)).toContain(referenced);
     expect(slim.edges).toHaveLength(1);
+  });
+});
+
+// A finding the rules report must keep its evidence in the published map (pub#406).
+// Every case builds a map whose problem entity has the LOWEST reach among far more
+// nodes than the budget, so reach and type alone would drop it, and pairs it with a
+// negative control: the same map with the problem removed drops that node.
+describe("problem nodes survive the publish sample", () => {
+  const conflict = {
+    property: "name",
+    values: [
+      { value: "Acme", pages: ["https://example.com/a"], morePages: 0 },
+      { value: "ACME Inc", pages: ["https://example.com/b"], morePages: 0 },
+    ],
+  };
+
+  /** 1,000 well-reached, healthy shared nodes: more than the 750 budget. */
+  // Same primary type as the entity under test: type stratification would
+  // otherwise keep a lone Organization on its own merits and prove nothing.
+  const crowd = (type = "Product") =>
+    Array.from({ length: 1_000 }, (_, i) =>
+      node(`id:crowd-${String(i).padStart(4, "0")}`, 500 + i, { types: [type] }),
+    );
+
+  const keysOf = (nodes: EntityMapNode[]) => map(nodes, []);
+  const kept = (m: EntityMap) => slimEntityMapForPublish(m).nodes.map((n) => n.key);
+
+  test("the only conflicted entity, with the lowest reach, survives", () => {
+    const lone = node("id:lone", 2, { types: ["Product"], conflicts: [conflict] });
+    expect(kept(keysOf([...crowd(), lone]))).toContain("id:lone");
+
+    // Negative control: without the conflict the same node is sampled out.
+    const healthy = node("id:lone", 2, { types: ["Product"] });
+    expect(kept(keysOf([...crowd(), healthy]))).not.toContain("id:lone");
+  });
+
+  test("an entity with dangling references survives", () => {
+    const lone = node("id:dangler", 2, { types: ["Product"], danglingRefs: 1 });
+    expect(kept(keysOf([...crowd(), lone]))).toContain("id:dangler");
+
+    const healthy = node("id:dangler", 2, { types: ["Product"] });
+    expect(kept(keysOf([...crowd(), healthy]))).not.toContain("id:dangler");
+  });
+
+  test("a multi-page identity entity with no @id survives", () => {
+    const noId = (pages: number) =>
+      node("anon:org", 2, {
+        types: ["Organization"],
+        name: "Acme",
+        pages: ["https://example.com/a", "https://example.com/b"].slice(0, pages),
+      });
+    expect(kept(keysOf([...crowd("Organization"), noId(2)]))).toContain("anon:org");
+
+    // Negative control: one declaring page is ordinary, not a finding.
+    expect(kept(keysOf([...crowd("Organization"), noId(1)]))).not.toContain("anon:org");
+  });
+
+  test("split-identity twins that share a page survive", () => {
+    const twin = (id: string, pages: string[]) =>
+      node(`id:${id}`, 1, { id, types: ["Organization"], name: "Acme", pages });
+    const together = [
+      twin("https://example.com/#org", ["https://example.com/"]),
+      twin("https://data.example.org/acme", ["https://example.com/"]),
+    ];
+    const keys = kept(keysOf([...crowd("Organization"), ...together]));
+    expect(keys).toContain("id:https://example.com/#org");
+    expect(keys).toContain("id:https://data.example.org/acme");
+
+    // Negative control: same name and type but never declared together is two
+    // different things, not a split (what the rule itself concludes).
+    const apart = [
+      twin("https://example.com/#org", ["https://example.com/a"]),
+      twin("https://data.example.org/acme", ["https://example.com/b"]),
+    ];
+    const apartKeys = kept(keysOf([...crowd("Organization"), ...apart]));
+    expect(apartKeys).not.toContain("id:https://example.com/#org");
+    expect(apartKeys).not.toContain("id:https://data.example.org/acme");
+  });
+
+  test("a dangling edge of a kept problem node is kept with it", () => {
+    const lone = node("id:dangler", 2, { types: ["Product"], danglingRefs: 1 });
+    const slim = slimEntityMapForPublish(
+      map([...crowd(), lone], [edge("id:dangler", "id:missing", true)]),
+    );
+    expect(slim.edges.map((e) => e.target)).toContain("id:missing");
+  });
+
+  test("the reservation is bounded and every class present still gets a node", () => {
+    const flood = Array.from({ length: 2_000 }, (_, i) =>
+      node(`id:flood-${String(i).padStart(4, "0")}`, 1, {
+        types: ["Product"],
+        conflicts: [conflict],
+      }),
+    );
+    const dangler = node("id:one-dangler", 1, { types: ["Product"], danglingRefs: 2 });
+    const slim = slimEntityMapForPublish(map([...crowd(), ...flood, dangler], []));
+
+    const problems = slim.nodes.filter((n) => n.conflicts.length > 0 || n.danglingRefs > 0);
+    const share = ENTITY_MAP_PUBLISH_LIMITS.maxProblemShare;
+    expect(problems.length).toBeLessThanOrEqual(
+      Math.ceil(ENTITY_MAP_PUBLISH_LIMITS.maxNodes * share),
+    );
+    // The healthy majority of the budget is still spent on the rest of the site.
+    expect(slim.nodes.length - problems.length).toBeGreaterThan(400);
+    // One class flooding did not crowd out the other.
+    expect(slim.nodes.map((n) => n.key)).toContain("id:one-dangler");
+  });
+
+  test("reserved nodes still answer to the byte budget and truncated counts every drop", () => {
+    const fat = Array.from({ length: 300 }, (_, i) =>
+      node(`id:fat-${String(i).padStart(3, "0")}`, 1, {
+        conflicts: [
+          {
+            property: "name",
+            values: [{ value: "v".repeat(400), pages: ["https://example.com/a"], morePages: 0 }],
+          },
+        ],
+      }),
+    );
+    const input = map([...crowd(), ...fat], []);
+    const limits = { ...ENTITY_MAP_PUBLISH_LIMITS, maxBytes: 60_000 };
+    const slim = projectEntityMap(input, limits, "publish");
+
+    expect(JSON.stringify(slim).length).toBeLessThanOrEqual(limits.maxBytes);
+    expect(slim.truncated).toMatchObject({
+      reason: "publish",
+      nodes: input.nodes.length - slim.nodes.length,
+    });
+    expect(slim.truncated!.nodes).toBeGreaterThan(0);
   });
 });

@@ -26,6 +26,7 @@
 
 import {
   ENTITY_MAP_DEFAULT_PAGE_LOCAL_SHARE,
+  ENTITY_MAP_DEFAULT_PROBLEM_SHARE,
   ENTITY_MAP_PUBLISH_LIMITS,
   ENTITY_MAP_VIEWER_LIMITS,
   type EntityMap,
@@ -197,6 +198,117 @@ function takeStratified(buckets: EntityMapNode[][], budget: number): EntityMapNo
   return taken;
 }
 
+// ── Problem nodes ──────────────────────────────────────────────────
+//
+// Reach and type say nothing about which nodes carry the site's problems, so an
+// entity that is the sole reason a `schema/entity-*` rule failed can fall out of
+// the sample and leave a report stating a finding the reader cannot open (the
+// verdicts themselves stay right: rules run on the full map before slimming).
+// A slice of the budget is therefore set aside for them first.
+//
+// The classes mirror what those rules read off a node. They are restated here
+// rather than imported because the rules depend on this package, never the
+// reverse; `entity-map-slim.test.ts` pins the correspondence.
+
+type ProblemClass = "conflict" | "dangling" | "no-id" | "split-identity";
+
+/** Types the `schema/entity-identity` rule expects an `@id` on. */
+const IDENTITY_TYPES = ["Organization", "LocalBusiness", "Person", "WebSite"];
+
+function pageTotal(node: EntityMapNode): number {
+  return node.pages.length + node.morePages;
+}
+
+/** Same signature `schema/entity-split-identity` groups by: sorted types plus normalised name. */
+function identitySignature(node: EntityMapNode): string | null {
+  if (!node.name) return null;
+  const types = [...new Set(node.types)].sort(compareKeys);
+  return JSON.stringify([types, node.name.trim().replace(/\s+/g, " ").toLowerCase()]);
+}
+
+/** Keys of nodes in a group of two or more distinct `@id`s that share a declaring page. */
+function splitIdentityKeys(nodes: EntityMapNode[]): Set<string> {
+  const groups = new Map<string, EntityMapNode[]>();
+  for (const node of nodes) {
+    const signature = identitySignature(node);
+    if (signature === null) continue;
+    const group = groups.get(signature);
+    if (group) group.push(node);
+    else groups.set(signature, [node]);
+  }
+  const out = new Set<string>();
+  for (const group of groups.values()) {
+    if (new Set(group.flatMap((node) => (node.id === null ? [] : [node.id]))).size < 2) continue;
+    const seen = new Map<string, string>();
+    let together = false;
+    for (const node of group) {
+      for (const page of node.pages) {
+        const other = seen.get(page);
+        if (other !== undefined && other !== node.key) together = true;
+        seen.set(page, node.key);
+      }
+    }
+    if (together) for (const node of group) out.add(node.key);
+  }
+  return out;
+}
+
+/** Nodes per problem class, each in `compare` order. A node may sit in several. */
+function problemBuckets(nodes: EntityMapNode[], compare: NodeCompare): EntityMapNode[][] {
+  const split = splitIdentityKeys(nodes);
+  const byClass = new Map<ProblemClass, EntityMapNode[]>();
+  const add = (cls: ProblemClass, node: EntityMapNode): void => {
+    const bucket = byClass.get(cls);
+    if (bucket) bucket.push(node);
+    else byClass.set(cls, [node]);
+  };
+  for (const node of nodes) {
+    if (node.conflicts.length > 0) add("conflict", node);
+    if (node.danglingRefs > 0) add("dangling", node);
+    if (
+      node.id === null &&
+      node.name !== null &&
+      pageTotal(node) > 1 &&
+      node.types.some((type) => IDENTITY_TYPES.includes(type))
+    ) {
+      add("no-id", node);
+    }
+    if (split.has(node.key)) add("split-identity", node);
+  }
+  const order: ProblemClass[] = ["conflict", "dangling", "no-id", "split-identity"];
+  return order.flatMap((cls) => {
+    const bucket = byClass.get(cls);
+    if (!bucket) return [];
+    bucket.sort(compare);
+    return [bucket];
+  });
+}
+
+/**
+ * Round-robin across the problem classes, skipping a node already taken through
+ * another class, so every class present gets its first node before any gets a
+ * second.
+ */
+function takeProblems(buckets: EntityMapNode[][], budget: number): EntityMapNode[] {
+  const taken: EntityMapNode[] = [];
+  const seen = new Set<string>();
+  const cursors = buckets.map(() => 0);
+  for (let progressed = true; progressed && taken.length < budget;) {
+    progressed = false;
+    for (const [i, bucket] of buckets.entries()) {
+      if (taken.length >= budget) break;
+      let node = bucket[cursors[i]!];
+      while (node !== undefined && seen.has(node.key)) node = bucket[++cursors[i]!];
+      if (node === undefined) continue;
+      cursors[i]! += 1;
+      seen.add(node.key);
+      taken.push(node);
+      progressed = true;
+    }
+  }
+  return taken;
+}
+
 /** Keep only edges whose source survived; a dangling edge keeps regardless. */
 function edgesFor(
   edges: EntityMapEdge[],
@@ -211,9 +323,14 @@ function edgesFor(
 /**
  * Cap an entity map for a copy that travels.
  *
- * The surviving nodes are a SAMPLE of the map, not its head. Three tiers, in
+ * The surviving nodes are a SAMPLE of the map, not its head. Four tiers, in
  * order:
  *
+ *   0. problem nodes — entities carrying a finding the `schema/entity-*` rules
+ *      report: conflicts, dangling references, a missing `@id` on a multi-page
+ *      identity entity, split identity. At least one per class present, up to
+ *      `maxProblemShare` of the budget, so a finding is never published without
+ *      its evidence and a pathological site cannot spend the map on one class.
  *   1. shared subjects — entities declared on more than one page. The
  *      Organization, the WebSite, the Brand every product points at: the things
  *      the map exists to show, ranked by occurrences then by degree.
@@ -260,22 +377,47 @@ export function projectEntityMap(
   }
 
   // Ranked once; only the budget moves between attempts.
+  const problemPool = problemBuckets(map.nodes, byReach);
+  const problemCount = new Set(problemPool.flat().map((node) => node.key)).size;
   const sharedBuckets = bucketsByType(shared, byReach);
   const oneOffBuckets = bucketsByType(oneOff, byDegree);
   const pageLocalBuckets = bucketsByType(pageLocal, byReach);
   const pageLocalShare = limits.maxPageLocalShare ?? ENTITY_MAP_DEFAULT_PAGE_LOCAL_SHARE;
+  const problemShare = limits.maxProblemShare ?? ENTITY_MAP_DEFAULT_PROBLEM_SHARE;
+
+  const without = (buckets: EntityMapNode[][], keys: Set<string>): EntityMapNode[][] =>
+    keys.size === 0
+      ? buckets
+      : buckets.map((bucket) => bucket.filter((node) => !keys.has(node.key)));
 
   const select = (budget: number): EntityMapNode[] => {
+    // Reserved first: at least one node per class present, never more than the
+    // share, and never more than the pools hold. Still inside `budget`, so the
+    // byte shrink below applies to these nodes like any other.
+    const problemBudget = Math.min(
+      problemCount,
+      budget,
+      Math.max(Math.floor(budget * problemShare), problemPool.length),
+    );
+    const problems = takeProblems(problemPool, problemBudget);
+    const taken = new Set(problems.map((node) => node.key));
+    const room = budget - problems.length;
+
     // Reserved, not merely capped: the page-local slice is set aside first so
     // tier 3 still gets its share, and held to what the pool actually holds so
     // a site with none of them spends the whole budget on subjects.
-    const localBudget = Math.min(pageLocal.length, Math.floor(budget * pageLocalShare));
-    const subjects = takeStratified(sharedBuckets, budget - localBudget);
-    const rest = takeStratified(oneOffBuckets, budget - localBudget - subjects.length);
+    const localPool = without(pageLocalBuckets, taken);
+    const localAvailable = localPool.reduce((n, bucket) => n + bucket.length, 0);
+    const localBudget = Math.min(localAvailable, Math.floor(budget * pageLocalShare), room);
+    const subjects = takeStratified(without(sharedBuckets, taken), room - localBudget);
+    const rest = takeStratified(
+      without(oneOffBuckets, taken),
+      room - localBudget - subjects.length,
+    );
     // Whatever tiers 1 and 2 could not fill falls back here rather than going
     // unspent, so a page-local-heavy map still publishes a full budget.
-    const locals = takeStratified(pageLocalBuckets, budget - subjects.length - rest.length);
-    return [...subjects, ...rest, ...locals];
+    const locals = takeStratified(localPool, room - subjects.length - rest.length);
+    return [...problems, ...subjects, ...rest, ...locals];
   };
 
   let budget = Math.min(map.nodes.length, limits.maxNodes);
