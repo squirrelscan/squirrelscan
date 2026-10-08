@@ -9,6 +9,7 @@ export * from "./meta";
 export * from "./links";
 export * from "./chrome";
 export * from "./images";
+export * from "./fonts";
 export * from "./stylesheets";
 export * from "./scripts";
 export * from "./schema";
