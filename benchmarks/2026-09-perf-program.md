@@ -638,6 +638,45 @@ runtime grows to under this path's churn, so the price is a multiple of their ow
 size. And the read and write batches were quartered (1,000 to 250 rows, 500 to 200)
 for ~15 MiB, because a batch's cost is the graph the driver builds around it, not
 the rows.
+
+### The site's page history, after the findings stopped costing
+
+[#503](https://github.com/squirrelscan/squirrelscan/pull/503) let the store hand
+the merge the untouched pages' findings as an aggregate plus a bounded report
+sample ([#497](https://github.com/squirrelscan/squirrelscan/issues/497)). The
+merge was still 2.3x slower on a site holding 250,000 carried findings than on one
+holding none. The findings were no longer the reason. The site's pages were: the
+merge session copied `site_pages` into a merged map, a merged array, an active set
+and a render-history set, the cloud merge built two more (its carried pages and
+the sample's render history), and then every page row went back to
+`upsertSitePages` whether this run had changed it or not.
+
+Now the session keeps the prior pages once, indexed, and this run's changes beside
+them. The active and carried counts are corrected from the run's own pages. The
+carried pages are a view (`PageUrlSet`) rather than a copy, and only the rows the
+run changed are upserted. The rows a store ends up holding are the same.
+
+One `runCloudSmartAudits` publish in complete-store mode with the untouched split,
+in-memory store, store aggregate computed before the clock starts: 2,000 fresh
+findings on 200 crawled pages, 40 page-scope rules, carried findings 10 per
+untouched page. One arm per process; base (`origin/main` at `ccf9c1f`) and head
+run alternately from the same script; minimum of five. 4 vCPU Xeon 2.1 GHz, Bun
+1.4.2. Harness: `packages/audit-engine/scripts/bench-untouched-carried.ts`.
+
+| | carried 0 | carried 250,000 (25,200 site pages) | ratio |
+|---|---|---|---|
+| base CPU | 41.4 ms | 122.3 ms | 2.95x |
+| head CPU | 42.5 ms | 67.4 ms | 1.59x |
+| base wall | 21.9 ms | 67.1 ms | 3.06x |
+| head wall | 20.4 ms | 35.1 ms | 1.72x |
+| base page rows upserted | 200 | 25,200 | |
+| head page rows upserted | 200 | 200 | |
+
+Store calls are 5 in every arm. The tallies, score, coverage, persisted count and
+serialized union hash identically on base and head in both arms. At 100 carried
+findings per page (2,700 site pages) base and head were already 1.46x and 1.43x
+on CPU: there the remaining excess is the report's carried sample, 25 checks per
+rule, which is the same at 2,500 carried findings as at 250,000.
 ## Disk: a project keeps every audit it has ever run
 
 Re-auditing writes a new crawl and retires nothing, so `project.db` grows by

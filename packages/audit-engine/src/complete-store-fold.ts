@@ -54,6 +54,7 @@ import {
   emptyTally,
   type CarriedFinding,
   type CarriedUnionSource,
+  type PageUrlSet,
   type RuleTally,
 } from "./scoring";
 import type { SkippedPassCounts } from "./stream-findings";
@@ -96,7 +97,7 @@ export interface CompleteStoreTallyInput {
   /** Issues on un-crawled, still-active pages carried forward by the merge. */
   carriedFindings: readonly CarriedFinding[];
   /** Normalized URLs of pages carried forward (un-crawled but still active). */
-  carriedPageUrls: Set<string>;
+  carriedPageUrls: PageUrlSet;
   /** ruleId -> meta for rules absent from `ruleResults` (carried-only rules). */
   ruleMetaIndex: Map<string, RuleRunResult["meta"]>;
 }

@@ -24,6 +24,7 @@ import { buildResolutionSignal } from "@squirrelscan/rules/resolution";
 import { findingKey } from "../src/merge-core";
 import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
 import { calculateHealthScore } from "../src/scoring";
+import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 class MemStore implements SmartAuditStore {
   findings = new Map<string, PageFindingRecord>();
@@ -419,3 +420,5 @@ describe("query pages: a query-blind hash speaks only for an uncrawled spelling 
     expect(r.unionRuleResults.get("meta-description")!.syntheticPassCount).toBeUndefined();
   });
 });
+
+describeSitePagesContract("sampled-audited-pages.test.ts MemStore", () => new MemStore());
