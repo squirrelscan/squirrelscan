@@ -138,6 +138,57 @@ jobs:
             squirrel self doctor
           "
 
+      # Network check (#423): a build whose every fetch fails would otherwise
+      # pass --version, self version and self doctor. This audits one page of a
+      # throwaway site served from 127.0.0.1 by the runner, so it exercises the
+      # installed binary's real fetch path (DNS-free, TLS-free) and cannot be
+      # broken by an outside host. The audit runs as the install user, in a
+      # scratch HOME, and the fixture server's own access log proves the binary
+      # actually asked for the page.
+      - name: Audit a local fixture site
+        run: |
+          set -u
+          work=$(mktemp -d /tmp/squirrel-audit.XXXXXX)
+          chmod 777 "$work"
+          mkdir "$work/site"
+          cat > "$work/site/index.html" <<'HTML'
+          <!doctype html>
+          <html lang="en"><head><meta charset="utf-8"><title>Install test fixture</title></head>
+          <body><h1>Install test fixture</h1><p>One page, served locally.</p></body></html>
+          HTML
+          python3 -u -m http.server 18765 --bind 127.0.0.1 --directory "$work/site" > "$work/server.log" 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+
+          ready=""
+          for _ in $(seq 1 30); do
+            if curl -s -o /dev/null http://127.0.0.1:18765/ready; then ready=1; break; fi
+            sleep 1
+          done
+          if [ -z "$ready" ]; then
+            echo "::error::fixture server did not start"
+            cat "$work/server.log"
+            exit 1
+          fi
+
+          fail() {
+            echo "::error::$1"
+            echo "--- squirrel output ---"; cat "$work/audit.log" 2>/dev/null || true
+            echo "--- audit json ---"; cat "$work/audit.json" 2>/dev/null || true
+            echo "--- fixture server log ---"; cat "$work/server.log"
+            exit 1
+          }
+
+          sudo -u testuser env HOME="$work/home" SQUIRREL_NO_UPDATE=1 NO_TELEMETRY=1 \
+            bash -c 'mkdir -p "$HOME" && exec /home/testuser/.local/bin/squirrel audit http://127.0.0.1:18765/ -m 1 --disable-discovery-probes --no-publish --format json --output "$0" >"$1" 2>&1' \
+            "$work/audit.json" "$work/audit.log" || fail "squirrel audit exited non-zero"
+
+          jq -e '.status == "completed" and .meta.totalPages == 1' "$work/audit.json" > /dev/null \
+            || fail "audit did not complete with exactly one crawled page"
+          grep -q '"GET / ' "$work/server.log" \
+            || fail "the fixture server never saw the audit's request"
+          echo "Audit crawled 1 page from the local fixture"
+
   test-install-linux-musl:
     name: Linux (musl/Alpine)
     runs-on: ubuntu-latest
@@ -157,7 +208,7 @@ jobs:
           # libstdc++ is the runtime the musl binary links against (#163) —
           # a real Alpine box needs it; install.sh auto-adds it as root, but the
           # test installs as a non-root user, so provision it here.
-          apk add --no-cache curl bash sudo shadow jq libstdc++
+          apk add --no-cache curl bash sudo shadow jq libstdc++ python3
 
       - name: Create test user
         run: |
@@ -208,6 +259,57 @@ jobs:
             export PATH=/home/testuser/.local/bin:\$PATH
             squirrel self doctor
           "
+
+      # Network check (#423): a build whose every fetch fails would otherwise
+      # pass --version, self version and self doctor. This audits one page of a
+      # throwaway site served from 127.0.0.1 by the runner, so it exercises the
+      # installed binary's real fetch path (DNS-free, TLS-free) and cannot be
+      # broken by an outside host. The audit runs as the install user, in a
+      # scratch HOME, and the fixture server's own access log proves the binary
+      # actually asked for the page.
+      - name: Audit a local fixture site (musl)
+        run: |
+          set -u
+          work=$(mktemp -d /tmp/squirrel-audit.XXXXXX)
+          chmod 777 "$work"
+          mkdir "$work/site"
+          cat > "$work/site/index.html" <<'HTML'
+          <!doctype html>
+          <html lang="en"><head><meta charset="utf-8"><title>Install test fixture</title></head>
+          <body><h1>Install test fixture</h1><p>One page, served locally.</p></body></html>
+          HTML
+          python3 -u -m http.server 18765 --bind 127.0.0.1 --directory "$work/site" > "$work/server.log" 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+
+          ready=""
+          for _ in $(seq 1 30); do
+            if curl -s -o /dev/null http://127.0.0.1:18765/ready; then ready=1; break; fi
+            sleep 1
+          done
+          if [ -z "$ready" ]; then
+            echo "::error::fixture server did not start"
+            cat "$work/server.log"
+            exit 1
+          fi
+
+          fail() {
+            echo "::error::$1"
+            echo "--- squirrel output ---"; cat "$work/audit.log" 2>/dev/null || true
+            echo "--- audit json ---"; cat "$work/audit.json" 2>/dev/null || true
+            echo "--- fixture server log ---"; cat "$work/server.log"
+            exit 1
+          }
+
+          sudo -u testuser env HOME="$work/home" SQUIRREL_NO_UPDATE=1 NO_TELEMETRY=1 \
+            bash -c 'mkdir -p "$HOME" && exec /home/testuser/.local/bin/squirrel audit http://127.0.0.1:18765/ -m 1 --disable-discovery-probes --no-publish --format json --output "$0" >"$1" 2>&1' \
+            "$work/audit.json" "$work/audit.log" || fail "squirrel audit exited non-zero"
+
+          jq -e '.status == "completed" and .meta.totalPages == 1' "$work/audit.json" > /dev/null \
+            || fail "audit did not complete with exactly one crawled page"
+          grep -q '"GET / ' "$work/server.log" \
+            || fail "the fixture server never saw the audit's request"
+          echo "Audit crawled 1 page from the local fixture"
 
   test-install-macos-arm64:
     name: macOS (arm64)
@@ -328,6 +430,57 @@ jobs:
             squirrel self doctor
           "
 
+      # Network check (#423): a build whose every fetch fails would otherwise
+      # pass --version, self version and self doctor. This audits one page of a
+      # throwaway site served from 127.0.0.1 by the runner, so it exercises the
+      # installed binary's real fetch path (DNS-free, TLS-free) and cannot be
+      # broken by an outside host. The audit runs as the install user, in a
+      # scratch HOME, and the fixture server's own access log proves the binary
+      # actually asked for the page.
+      - name: Audit a local fixture site
+        run: |
+          set -u
+          work=$(mktemp -d /tmp/squirrel-audit.XXXXXX)
+          chmod 777 "$work"
+          mkdir "$work/site"
+          cat > "$work/site/index.html" <<'HTML'
+          <!doctype html>
+          <html lang="en"><head><meta charset="utf-8"><title>Install test fixture</title></head>
+          <body><h1>Install test fixture</h1><p>One page, served locally.</p></body></html>
+          HTML
+          python3 -u -m http.server 18765 --bind 127.0.0.1 --directory "$work/site" > "$work/server.log" 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+
+          ready=""
+          for _ in $(seq 1 30); do
+            if curl -s -o /dev/null http://127.0.0.1:18765/ready; then ready=1; break; fi
+            sleep 1
+          done
+          if [ -z "$ready" ]; then
+            echo "::error::fixture server did not start"
+            cat "$work/server.log"
+            exit 1
+          fi
+
+          fail() {
+            echo "::error::$1"
+            echo "--- squirrel output ---"; cat "$work/audit.log" 2>/dev/null || true
+            echo "--- audit json ---"; cat "$work/audit.json" 2>/dev/null || true
+            echo "--- fixture server log ---"; cat "$work/server.log"
+            exit 1
+          }
+
+          sudo -u testuser env HOME="$work/home" SQUIRREL_NO_UPDATE=1 NO_TELEMETRY=1 \
+            bash -c 'mkdir -p "$HOME" && exec /Users/testuser/.local/bin/squirrel audit http://127.0.0.1:18765/ -m 1 --disable-discovery-probes --no-publish --format json --output "$0" >"$1" 2>&1' \
+            "$work/audit.json" "$work/audit.log" || fail "squirrel audit exited non-zero"
+
+          jq -e '.status == "completed" and .meta.totalPages == 1' "$work/audit.json" > /dev/null \
+            || fail "audit did not complete with exactly one crawled page"
+          grep -q '"GET / ' "$work/server.log" \
+            || fail "the fixture server never saw the audit's request"
+          echo "Audit crawled 1 page from the local fixture"
+
   test-install-macos-x64:
     name: macOS (x64)
     runs-on: macos-15-intel  # x64 runner
@@ -439,6 +592,57 @@ jobs:
             export PATH=/Users/testuser/.local/bin:\$PATH
             squirrel self doctor
           "
+
+      # Network check (#423): a build whose every fetch fails would otherwise
+      # pass --version, self version and self doctor. This audits one page of a
+      # throwaway site served from 127.0.0.1 by the runner, so it exercises the
+      # installed binary's real fetch path (DNS-free, TLS-free) and cannot be
+      # broken by an outside host. The audit runs as the install user, in a
+      # scratch HOME, and the fixture server's own access log proves the binary
+      # actually asked for the page.
+      - name: Audit a local fixture site
+        run: |
+          set -u
+          work=$(mktemp -d /tmp/squirrel-audit.XXXXXX)
+          chmod 777 "$work"
+          mkdir "$work/site"
+          cat > "$work/site/index.html" <<'HTML'
+          <!doctype html>
+          <html lang="en"><head><meta charset="utf-8"><title>Install test fixture</title></head>
+          <body><h1>Install test fixture</h1><p>One page, served locally.</p></body></html>
+          HTML
+          python3 -u -m http.server 18765 --bind 127.0.0.1 --directory "$work/site" > "$work/server.log" 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+
+          ready=""
+          for _ in $(seq 1 30); do
+            if curl -s -o /dev/null http://127.0.0.1:18765/ready; then ready=1; break; fi
+            sleep 1
+          done
+          if [ -z "$ready" ]; then
+            echo "::error::fixture server did not start"
+            cat "$work/server.log"
+            exit 1
+          fi
+
+          fail() {
+            echo "::error::$1"
+            echo "--- squirrel output ---"; cat "$work/audit.log" 2>/dev/null || true
+            echo "--- audit json ---"; cat "$work/audit.json" 2>/dev/null || true
+            echo "--- fixture server log ---"; cat "$work/server.log"
+            exit 1
+          }
+
+          sudo -u testuser env HOME="$work/home" SQUIRREL_NO_UPDATE=1 NO_TELEMETRY=1 \
+            bash -c 'mkdir -p "$HOME" && exec /Users/testuser/.local/bin/squirrel audit http://127.0.0.1:18765/ -m 1 --disable-discovery-probes --no-publish --format json --output "$0" >"$1" 2>&1' \
+            "$work/audit.json" "$work/audit.log" || fail "squirrel audit exited non-zero"
+
+          jq -e '.status == "completed" and .meta.totalPages == 1' "$work/audit.json" > /dev/null \
+            || fail "audit did not complete with exactly one crawled page"
+          grep -q '"GET / ' "$work/server.log" \
+            || fail "the fixture server never saw the audit's request"
+          echo "Audit crawled 1 page from the local fixture"
 
   test-install-windows:
     name: Windows (PowerShell)
@@ -556,6 +760,64 @@ jobs:
           $env:LOCALAPPDATA = "C:\Users\testuser\AppData\Local"
           $binPath = "C:\Users\testuser\AppData\Local\squirrel\bin\squirrel.exe"
           & $binPath self doctor
+
+      # Network check (#423); see the Linux (glibc) job for the reasoning.
+      - name: Audit a local fixture site
+        shell: pwsh
+        run: |
+          $work = Join-Path $env:RUNNER_TEMP "squirrel-audit"
+          New-Item -ItemType Directory -Path "$work\site", "$work\home" -Force | Out-Null
+          @'
+          <!doctype html>
+          <html lang="en"><head><meta charset="utf-8"><title>Install test fixture</title></head>
+          <body><h1>Install test fixture</h1><p>One page, served locally.</p></body></html>
+          '@ | Set-Content -Path "$work\site\index.html" -Encoding UTF8
+
+          $server = Start-Process python -ArgumentList @("-u", "-m", "http.server", "18765", "--bind", "127.0.0.1", "--directory", "$work\site") `
+            -RedirectStandardError "$work\server.log" -RedirectStandardOutput "$work\server.out" -PassThru -WindowStyle Hidden
+
+          function Fail($message) {
+            Write-Host "::error::$message"
+            foreach ($f in "audit.log", "audit.err", "audit.json", "server.log") {
+              Write-Host "--- $f ---"
+              if (Test-Path "$work\$f") { Get-Content "$work\$f" }
+            }
+            exit 1
+          }
+
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 30; $i++) {
+              try { Invoke-WebRequest -Uri "http://127.0.0.1:18765/ready" -UseBasicParsing -ErrorAction Stop | Out-Null } catch { }
+              if ((Test-Path "$work\server.log") -and (Select-String -Path "$work\server.log" -Pattern 'GET /ready' -Quiet -ErrorAction SilentlyContinue)) { $ready = $true; break }
+              Start-Sleep -Seconds 1
+            }
+            if (-not $ready) { Fail "fixture server did not start" }
+
+            $env:USERPROFILE = "$work\home"
+            $env:HOME = "$work\home"
+            $env:LOCALAPPDATA = "$work\home\AppData\Local"
+            $env:APPDATA = "$work\home\AppData\Roaming"
+            $env:SQUIRREL_NO_UPDATE = "1"
+            $env:NO_TELEMETRY = "1"
+            $bin = "C:\Users\testuser\AppData\Local\squirrel\bin\squirrel.exe"
+
+            $proc = Start-Process $bin -Wait -PassThru -NoNewWindow `
+              -ArgumentList @("audit", "http://127.0.0.1:18765/", "-m", "1", "--disable-discovery-probes", "--no-publish", "--format", "json", "--output", "$work\audit.json") `
+              -RedirectStandardOutput "$work\audit.log" -RedirectStandardError "$work\audit.err"
+            if ($proc.ExitCode -ne 0) { Fail "squirrel audit exited $($proc.ExitCode)" }
+
+            $audit = Get-Content "$work\audit.json" -Raw | ConvertFrom-Json
+            if ($audit.status -ne "completed" -or $audit.meta.totalPages -ne 1) {
+              Fail "audit did not complete with exactly one crawled page"
+            }
+            if (-not (Select-String -Path "$work\server.log" -Pattern 'GET / ' -Quiet)) {
+              Fail "the fixture server never saw the audit's request"
+            }
+            Write-Host "Audit crawled 1 page from the local fixture"
+          } finally {
+            Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
+          }
 
   summary:
     name: Test Summary
