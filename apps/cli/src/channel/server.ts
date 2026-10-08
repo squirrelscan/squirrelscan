@@ -24,7 +24,6 @@ import {
 import {
   type FetchPage,
   type PollResult,
-  FEED_PAGE_SIZE,
   parseFeedPage,
   pollOnce,
 } from "./poller";
@@ -227,5 +226,3 @@ export async function runChannelServer(
     abort.signal.addEventListener("abort", () => resolve())
   );
 }
-
-export { FEED_PAGE_SIZE };

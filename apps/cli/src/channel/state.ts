@@ -82,7 +82,7 @@ export function createFileStateStore(
     },
     save(state) {
       try {
-        mkdirSync(join(path, ".."), { recursive: true });
+        mkdirSync(join(path, ".."), { recursive: true, mode: 0o700 });
         const tmp = `${path}.${process.pid}.tmp`;
         writeFileSync(tmp, JSON.stringify(state), { mode: 0o600 });
         renameSync(tmp, path);

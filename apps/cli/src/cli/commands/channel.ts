@@ -9,6 +9,9 @@ import {
   isChannelCategory,
 } from "@/channel/events";
 
+// One day: far below the ~24.8 day setTimeout limit, past which a timer fires immediately.
+const MAX_INTERVAL_SECONDS = 86_400;
+
 export function parseCategories(
   raw: string | undefined
 ): ChannelCategory[] | string {
@@ -34,7 +37,7 @@ export const channel = defineCommand({
     interval: {
       type: "string",
       description:
-        "Seconds between polls of the cloud feed (default 30, min 5)",
+        "Seconds between polls of the cloud feed (default 30, min 5, max 86400)",
     },
     categories: {
       type: "string",
@@ -50,8 +53,14 @@ export const channel = defineCommand({
     let intervalSeconds: number | undefined;
     if (args.interval !== undefined) {
       intervalSeconds = Number(args.interval);
-      if (!Number.isFinite(intervalSeconds) || intervalSeconds <= 0) {
-        console.error("--interval must be a positive number of seconds.");
+      if (
+        !Number.isFinite(intervalSeconds) ||
+        intervalSeconds <= 0 ||
+        intervalSeconds > MAX_INTERVAL_SECONDS
+      ) {
+        console.error(
+          `--interval must be between 1 and ${MAX_INTERVAL_SECONDS} seconds.`
+        );
         process.exit(1);
       }
     }

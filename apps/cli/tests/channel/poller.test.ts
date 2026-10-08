@@ -178,6 +178,47 @@ describe("cursor feed", () => {
   });
 });
 
+describe("emit failures", () => {
+  test("a throwing emit keeps the cursor and retries without repeating earlier rows", async () => {
+    const store = memoryStore({
+      ...emptyState(),
+      bootstrapped: true,
+      cursor: "c1",
+    });
+    const rows = [notification("a"), notification("b"), notification("c")];
+    const delivered: string[] = [];
+    let failOnB = true;
+    const deps = {
+      store,
+      categories: CATEGORIES,
+      emit: async (event: ChannelEvent) => {
+        if (event.meta.notification_id === "b" && failOnB)
+          throw new Error("pipe closed");
+        delivered.push(event.meta.notification_id ?? "");
+      },
+      fetchPage: async () => page(rows, "c2"),
+    };
+    await expect(pollOnce(deps)).rejects.toThrow("pipe closed");
+    expect(store.current.cursor).toBe("c1");
+    failOnB = false;
+    await pollOnce(deps);
+    expect(delivered).toEqual(["a", "b", "c"]);
+    expect(store.current.cursor).toBe("c2");
+  });
+
+  test("an unchanged cursor on a full page does not refetch", async () => {
+    const full = Array.from({ length: 50 }, (_, i) => notification(`n${i}`));
+    const store = memoryStore({
+      ...emptyState(),
+      bootstrapped: true,
+      cursor: "c1",
+    });
+    const h = harness([page(full, "c1"), page(full, "c1")], store);
+    await pollOnce(h.deps);
+    expect(h.queries).toHaveLength(1);
+  });
+});
+
 describe("legacy feed without next_cursor", () => {
   test("first run baselines the current page and delivers nothing", async () => {
     const h = harness([page([notification("b"), notification("a")])]);

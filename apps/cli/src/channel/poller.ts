@@ -71,6 +71,7 @@ function dedupeKeys(row: FeedRow): string[] {
   return keys;
 }
 
+// A row counts as delivered only once its emit resolves, and state is saved per row. If an emit throws, the rest of the page (and the cursor) stay put, so the next poll retries from that row without repeating earlier ones.
 async function deliver(
   rows: FeedRow[],
   state: ChannelState,
@@ -78,16 +79,12 @@ async function deliver(
 ): Promise<void> {
   for (const row of rows) {
     const keys = dedupeKeys(row);
-    const duplicate = keys.some((key) => state.seen.includes(key));
-    if (duplicate) {
-      rememberSeen(state, keys);
-      continue;
-    }
-    // Out-of-scope categories are marked seen so they stay skipped.
-    rememberSeen(state, keys);
-    if (!deps.categories.has(row.category)) continue;
-    const event = buildEvent(row);
+    if (keys.some((key) => state.seen.includes(key))) continue;
+    const event = deps.categories.has(row.category) ? buildEvent(row) : null;
+    // Out-of-scope categories and rows without an event are marked seen so they stay skipped.
     if (event) await deps.emit(event);
+    rememberSeen(state, keys);
+    deps.store.save(state);
   }
 }
 
@@ -100,7 +97,7 @@ export async function pollOnce(deps: PollDeps): Promise<PollResult> {
     // First run ever: start from "now". Nothing is delivered; the cursor (or, on a legacy feed, the current page) becomes the baseline.
     if (first.page.cursorSupported) {
       state.cursor = first.page.nextCursor;
-      // No cursor handed out yet: stay unbootstrapped, a later poll retries.
+      // No cursor handed out yet: stay unbootstrapped and retry next poll. Anything created before the first poll that does return a cursor counts as history.
       state.bootstrapped = state.cursor !== null;
     } else {
       rememberSeen(state, first.page.rows.flatMap(dedupeKeys));
@@ -124,10 +121,12 @@ export async function pollOnce(deps: PollDeps): Promise<PollResult> {
         return pollLegacy(deps, state);
       }
       await deliver(result.page.rows, state, deps);
-      if (result.page.nextCursor !== null)
-        state.cursor = result.page.nextCursor;
+      const { nextCursor, rows } = result.page;
+      const advanced = nextCursor !== null && nextCursor !== state.cursor;
+      if (nextCursor !== null) state.cursor = nextCursor;
       deps.store.save(state);
-      if (result.page.rows.length < FEED_PAGE_SIZE) break;
+      // A short page is the end of the feed; an unchanged cursor would only refetch the same page.
+      if (rows.length < FEED_PAGE_SIZE || !advanced) break;
     }
     return { ok: true };
   }
