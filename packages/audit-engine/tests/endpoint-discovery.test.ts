@@ -11,6 +11,7 @@ import type { PageRecord } from "@squirrelscan/core-contracts";
 import { buildHeadersMap, parseHtmlForRules } from "../src/adapter";
 import {
   createEndpointCollector,
+  entryFirst,
   MAX_DETECTION_ATTEMPTS,
   MAX_RETAINED_CROSS_ORIGIN_REFS,
   MAX_RETAINED_REFS,
@@ -130,6 +131,34 @@ describe("endpoint discovery collector", () => {
     collect(c, pageOf("/", next));
     const site = { baseUrl: `${ORIGIN}/`, scripts: [] };
     expect(c.finish(site).candidates.map((x) => x.discoveredVia)).toContain("convention:nextjs");
+  });
+
+  test("the entry page is chosen by URL: a reversed page map still detects the stack, and no match keeps the order", () => {
+    const next = `<html><head><script id="__NEXT_DATA__" type="application/json">{}</script></head><body></body></html>`;
+    // More non-entry pages than the fallback window, with the entry page LAST.
+    const others = Array.from({ length: MAX_DETECTION_ATTEMPTS + 4 }, (_, i) => ({
+      page: pageOf(`/p${i}`, "<html></html>"),
+      parsed: parseHtmlForRules("<html></html>", `${ORIGIN}/p${i}`),
+    }));
+    const entry = { page: pageOf("/", next), parsed: parseHtmlForRules(next, `${ORIGIN}/`) };
+    const reversedMap = new Map([...others, entry].map((e) => [e.page.normalizedUrl, e]));
+
+    // Without the entry URL, the fallback window never reaches the entry page.
+    const blind = createEndpointCollector({ headersOf: buildHeadersMap });
+    for (const { page, parsed } of reversedMap.values()) blind.collect(page, parsed);
+    const site = { baseUrl: `${ORIGIN}/`, scripts: [] };
+    expect(blind.finish(site).candidates.map((x) => x.discoveredVia)).not.toContain("convention:nextjs");
+
+    // With it, the entry page is collected first and detected wherever it sits.
+    const ordered = entryFirst(reversedMap.values(), `${ORIGIN}`);
+    expect(ordered[0].page.normalizedUrl).toBe(`${ORIGIN}/`);
+    const c = createEndpointCollector({ headersOf: buildHeadersMap, entryUrl: `${ORIGIN}` });
+    for (const { page, parsed } of reversedMap.values()) c.collect(page, parsed);
+    expect(c.finish(site).candidates.map((x) => x.discoveredVia)).toContain("convention:nextjs");
+
+    // No page matches the entry URL: order unchanged, first page stands in.
+    const none = entryFirst(reversedMap.values(), "https://elsewhere.example/");
+    expect(none.map((e) => e.page.normalizedUrl)).toEqual([...reversedMap.keys()]);
   });
 
   test("detection stops after MAX_DETECTION_ATTEMPTS pages with no stack, so a large crawl pays for at most that many", () => {

@@ -47,7 +47,7 @@ interface EndpointSurface {
 ## Sources
 
 1. **Static, from served JS and page HTML.** `fetch(...)`, `axios.*`, `XMLHttpRequest.open`, `$.ajax`, `$.get`, `$.post`, `$.getJSON`, and string literals that look like an API route: `/api/...`, `/graphql`, `/rest/v1/...` (Supabase), `/_next/data/...`, `/api/trpc/...`, `/wp-json/...`, `/actuator`, and URLs on `api.`, `graphql.`, `gql.` or `gateway.` hosts. Form `action` attributes and `link href` / `script src` URLs on an API host or route count too. Only same-origin scripts are scanned: a root-relative literal in a vendor bundle names the vendor's API.
-2. **Convention paths per detected stack.** `CONVENTION_PATHS` in `endpoint-surface.ts` maps a technology id from `@squirrelscan/tech-detect` to a short list (for example `nextjs` gets `/api/health` and `/api/graphql`). Detection runs once, on the entry page. A website with no recognised stack gets none.
+2. **Convention paths per detected stack.** `CONVENTION_PATHS` in `endpoint-surface.ts` maps a technology id from `@squirrelscan/tech-detect` to a short list (for example `nextjs` gets `/api/health` and `/api/graphql`). Detection always runs on the entry page (the page whose URL is the audit's start URL, wherever it arrives), and on up to three other pages while no stack has been found, as a fallback. The v1 path collects the entry page first by URL, not by map order. A website with no recognised stack gets none.
 3. **Render-time XHR and fetch URLs: not fed today.** The browser render result carries the final html, status, headers and timings, not the requests the page issued. `buildEndpointSurface` accepts `renderedRequests` and tags them `source: "render"`, so wiring them in is one argument once the render phase returns them.
 
 ## Script scan budget

@@ -85,7 +85,7 @@ import {
   foldRuleResultIntoTallies,
   type RuleTally,
 } from "./scoring";
-import { createEndpointCollector } from "./endpoint-discovery";
+import { createEndpointCollector, entryFirst } from "./endpoint-discovery";
 import { localIntelContext } from "./intel";
 import { logger } from "./adapter-logger";
 // Report assembly extracted to ./report-stream (#1021, PR-F). adapter references
@@ -1513,10 +1513,13 @@ export function runRulesOnStorage(
     // Step 4: Run site rules
     const siteRulesSpan = logger.traceStart("runSiteRules");
     // Endpoint discovery: same collector the streaming path registers, fed from the
-    // parsed pages v1 already holds. Passive; no request is made. It relies on
-    // `pageDataMap` insertion order matching crawl order, so the entry page is first.
-    const endpointCollector = createEndpointCollector({ headersOf: buildHeadersMap });
-    for (const [, { page, parsed }] of pageDataMap) {
+    // parsed pages v1 already holds. Passive; no request is made. The entry page
+    // is chosen by URL and collected first, not by map insertion order.
+    const endpointCollector = createEndpointCollector({
+      headersOf: buildHeadersMap,
+      entryUrl: siteDataForPageRules.baseUrl,
+    });
+    for (const { page, parsed } of entryFirst(pageDataMap.values(), siteDataForPageRules.baseUrl)) {
       endpointCollector.collect(page, parsed);
     }
     const siteResult = yield* Effect.promise(() =>
@@ -2601,7 +2604,10 @@ export function runStreamingRules(
         collectedPages.push(snapshot as CollectedPageSignal);
       },
     };
-    const endpointCollector = createEndpointCollector({ headersOf: buildHeadersMap });
+    const endpointCollector = createEndpointCollector({
+      headersOf: buildHeadersMap,
+      entryUrl: siteDataForPageRules.baseUrl,
+    });
     const streamed = yield* phase("page-rules", () =>
       streamPageRules(storage, crawlId, runner, siteDataForPageRules, {
       batchSize,

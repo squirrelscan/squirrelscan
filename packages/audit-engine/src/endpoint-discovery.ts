@@ -45,6 +45,36 @@ export const MAX_RETAINED_CROSS_ORIGIN_REFS = 300;
 /** Pages technology detection may run on while no stack has been found. */
 export const MAX_DETECTION_ATTEMPTS = 3;
 
+/** True when `a` and `b` name the same page: same origin and path, ignoring a trailing slash, query and fragment. */
+export function isSamePage(a: string, b: string): boolean {
+  try {
+    const x = new URL(a);
+    const y = new URL(b);
+    const path = (u: URL) => u.pathname.replace(/\/+$/, "");
+    return x.origin === y.origin && path(x) === path(y);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Order stored pages so the audit's entry page comes first: the page whose stored
+ * or final URL is the entry URL. With no match the order is unchanged, so the first
+ * page stands in for the entry page. Used by the v1 path, which holds every page up
+ * front and must not depend on map insertion order.
+ */
+export function entryFirst<T extends { page: PageRecord }>(
+  pages: Iterable<T>,
+  entryUrl: string,
+): T[] {
+  const all = [...pages];
+  const at = all.findIndex(
+    ({ page }) => isSamePage(page.normalizedUrl, entryUrl) || isSamePage(page.finalUrl, entryUrl),
+  );
+  if (at <= 0) return all;
+  return [all[at], ...all.slice(0, at), ...all.slice(at + 1)];
+}
+
 /** Collector id. The rule cache keys a page's stored snapshot by it. */
 export const ENDPOINT_COLLECTOR_ID = "endpoint-refs";
 
@@ -130,6 +160,12 @@ class SmallestKeys {
  */
 export function createEndpointCollector(opts: {
   headersOf: (page: PageRecord) => Record<string, string>;
+  /**
+   * The audit's start URL. A page that is this URL always gets technology
+   * detection, wherever it arrives in the stream. Pages that are not run it only
+   * inside the attempt window, as a fallback when no entry page is collected.
+   */
+  entryUrl?: string;
 }): EndpointCollector {
   const same = new SmallestKeys(MAX_RETAINED_REFS);
   const cross = new SmallestKeys(MAX_RETAINED_CROSS_ORIGIN_REFS);
@@ -139,6 +175,7 @@ export function createEndpointCollector(opts: {
   // result, so an entry page that is not first (a redirect hop, a differently
   // ordered store) does not lose the convention paths.
   let detectionAttempts = 0;
+  let entryDetected = false;
 
   // Keep a page's refs under the stable admission order. The snapshot handed to
   // the rule cache stays whole, so a replay offers the same refs a fresh run would.
@@ -184,7 +221,14 @@ export function createEndpointCollector(opts: {
       // empty array means "ran, found nothing", which differs from a snapshot that
       // never ran (`undefined`). If the entry page replays from a run where it was
       // not first, the next fresh page runs detection instead.
-      if (techIds.size === 0 && detectionAttempts < MAX_DETECTION_ATTEMPTS) {
+      const isEntry =
+        opts.entryUrl !== undefined &&
+        (isSamePage(page.normalizedUrl, opts.entryUrl) || isSamePage(pageUrl, opts.entryUrl));
+      if (
+        (isEntry && !entryDetected) ||
+        (techIds.size === 0 && detectionAttempts < MAX_DETECTION_ATTEMPTS)
+      ) {
+        if (isEntry) entryDetected = true;
         record.techIds = detectTechnologies({
           url: pageUrl,
           headers: opts.headersOf(page),
