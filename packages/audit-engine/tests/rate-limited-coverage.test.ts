@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
 import { SQLiteStorage } from "@squirrelscan/crawler";
-import type { PageRecord } from "@squirrelscan/core-contracts";
+import type { PageRecord, SitePageRecord } from "@squirrelscan/core-contracts";
 
 import { generateReportFromStorage } from "../src/adapter";
 import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
@@ -15,6 +15,7 @@ import {
   emptyRuleExecutionResult,
   type StreamingReportInput,
 } from "../src/report-stream";
+import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 const BASE = "https://shop.example.com";
 
@@ -147,15 +148,19 @@ describe("rate-limited crawl summary", () => {
   });
 });
 
+/** No findings; its site pages are a keyed upsert, as the store contract requires. */
 class EmptyStore implements SmartAuditStore {
+  private readonly pages = new Map<string, SitePageRecord>();
   async getFindings() {
     return [];
   }
   async getSitePages() {
-    return [];
+    return [...this.pages.values()];
   }
   async upsertFindings() {}
-  async upsertSitePages() {}
+  async upsertSitePages(pages: SitePageRecord[]) {
+    for (const p of pages) this.pages.set(p.normalizedUrl, { ...p });
+  }
   async markPageRemoved() {}
   async markPagesRemoved() {}
   async compactFindings() {
@@ -189,3 +194,5 @@ describe("coverage of a rate-limited run", () => {
     }
   });
 });
+
+describeSitePagesContract("rate-limited-coverage.test.ts EmptyStore", () => new EmptyStore());

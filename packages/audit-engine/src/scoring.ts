@@ -119,6 +119,18 @@ export interface CarriedUnionSource {
   dirtyCarriedPageCount(ruleId: string): number;
 }
 
+/**
+ * (#497) A set of normalized page URLs as the union scorers read one: its size,
+ * membership, and a walk in order. A `Set<string>` is one; the streaming merge
+ * passes a view over the site's prior pages instead of copying them, so `has`
+ * answers for that view's members only (a page known only from this run is not
+ * carried, and is not in it).
+ */
+export interface PageUrlSet extends Iterable<string> {
+  readonly size: number;
+  has(normalizedUrl: string): boolean;
+}
+
 /** Minimal rule meta the union scorer needs. */
 export interface UnionRuleMeta {
   meta: RuleRunResult["meta"];
@@ -130,7 +142,7 @@ export interface MergedScoringInput {
   /** Issues on un-crawled, still-active pages carried forward from the store. */
   carriedFindings: CarriedFinding[];
   /** Normalized URLs of pages carried forward (un-crawled but still active). */
-  carriedPageUrls: Set<string>;
+  carriedPageUrls: PageUrlSet;
   /** ruleId -> meta for rules absent from `freshResults` (carried-only rules). */
   ruleMetaIndex: Map<string, RuleRunResult["meta"]>;
   /** (#1876) Bounded pre-indexed carried side. When present it REPLACES

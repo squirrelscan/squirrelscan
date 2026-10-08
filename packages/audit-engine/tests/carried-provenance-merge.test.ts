@@ -28,6 +28,7 @@ import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
 import { buildSkippedPassCounts, buildStreamFindings } from "../src/stream-findings";
 import { calculateHealthScore } from "../src/scoring";
+import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 class MemStore implements SmartAuditStore {
   findings = new Map<string, PageFindingRecord>();
@@ -806,3 +807,5 @@ describe("#2072 — a mixed group over the fold cap cannot launder its carried h
     for (const f of persisted) expect(REPLAYED).not.toContain(f.normalizedUrl);
   });
 });
+
+describeSitePagesContract("carried-provenance-merge.test.ts MemStore", () => new MemStore());
