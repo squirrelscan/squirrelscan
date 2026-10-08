@@ -93,6 +93,7 @@ function assetShape(occ: SiteAssetOccurrences) {
     images: flat(occ.images),
     scripts: flat(occ.scripts),
     pdfs: flat(occ.pdfs),
+    fonts: flat(occ.fonts),
     coveragePages: occ.coveragePages,
     pageCount: occ.pageCount,
   };
@@ -151,6 +152,7 @@ describe("streamed pre-rules collectors — batched === resident (#1860)", () =>
     expect(resident.occurrences.images.size).toBeGreaterThan(0);
     expect(resident.occurrences.scripts.size).toBeGreaterThan(0);
     expect(resident.occurrences.pdfs.size).toBeGreaterThan(0);
+    expect(resident.occurrences.fonts.size).toBeGreaterThan(0);
     expect(resident.occurrences.coveragePages.length).toBeGreaterThan(0);
     // pageCount counts EVERY stored page (the model's redirect hops included),
     // matching v1's siteContext.length.
@@ -403,6 +405,7 @@ async function injectRichPages(
     const html =
       `<!doctype html><html lang="en"><head><title>rich ${i}</title>` +
       `<link rel="stylesheet" href="${SITE_URL}/assets/site-${i % 3}.css">` +
+      `<link rel="preload" as="font" type="font/woff2" crossorigin href="${SITE_URL}/fonts/face-${i % 2}.woff2">` +
       `<script src="${SITE_URL}/assets/app-${i % 4}.js"></script>` +
       `</head><body><h1>rich ${i}</h1>` +
       `<img src="${SITE_URL}/img/hero-${i % 5}.png" alt="hero ${i}">` +

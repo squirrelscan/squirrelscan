@@ -42,6 +42,9 @@ export interface CollectedPageSignal {
   /** total-byte-weight: summed inline `<style>` / inline `<script>` text lengths. */
   inlineCssLen: number;
   inlineJsLen: number;
+  /** total-byte-weight: the stored HTML response size. Absent on a snapshot
+   *  cached before it was collected, which reads as 0 bytes. */
+  htmlBytes?: number;
   /** total-byte-weight estimate branch (used only for the first collected page). */
   externalCssCount: number;
   externalJsCount: number;
@@ -91,8 +94,11 @@ export function buildCollectedPageSignal(input: {
   fingerprint?: PageFingerprint | null;
   /** Time budget (ms) per extractor; defaults to {@link RULE_TIME_BUDGET_MS}. */
   budgetMs?: number;
+  /** The page's stored HTML response size in bytes, when the crawler recorded it. */
+  htmlBytes?: number | null;
 }): CollectedPageSignal {
   const { url, finalUrl, parsed } = input;
+  const htmlBytes = input.htmlBytes ?? 0;
   const doc = parsed.document;
 
   if (!doc) {
@@ -101,6 +107,7 @@ export function buildCollectedPageSignal(input: {
       secrets: [],
       inlineCssLen: 0,
       inlineJsLen: 0,
+      htmlBytes,
       externalCssCount: 0,
       externalJsCount: 0,
       imageCount: 0,
@@ -168,6 +175,7 @@ export function buildCollectedPageSignal(input: {
     secrets: timed("security/leaked-secrets", [], () => scanPageForSecrets(doc, url)),
     inlineCssLen: byteSignal.inlineCssLen,
     inlineJsLen: byteSignal.inlineJsLen,
+    htmlBytes,
     externalCssCount: byteSignal.externalCssCount,
     externalJsCount: byteSignal.externalJsCount,
     imageCount: byteSignal.imageCount,
