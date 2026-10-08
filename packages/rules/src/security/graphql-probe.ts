@@ -309,18 +309,26 @@ async function readCapped(
   const chunks: Uint8Array[] = [];
   let total = 0;
   let truncated = false;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (total + value.byteLength > maxBytes) {
-      chunks.push(value.subarray(0, maxBytes - total));
-      total = maxBytes;
-      truncated = true;
-      await reader.cancel().catch(() => {});
-      break;
+  let finished = false;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        finished = true;
+        break;
+      }
+      if (total + value.byteLength > maxBytes) {
+        chunks.push(value.subarray(0, maxBytes - total));
+        total = maxBytes;
+        truncated = true;
+        break;
+      }
+      chunks.push(value);
+      total += value.byteLength;
     }
-    chunks.push(value);
-    total += value.byteLength;
+  } finally {
+    // Release the connection on a cap, an abort or a read error alike.
+    if (!finished) await reader.cancel().catch(() => {});
   }
   const buf = new Uint8Array(total);
   let offset = 0;

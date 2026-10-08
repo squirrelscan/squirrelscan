@@ -241,6 +241,23 @@ describe("sendGraphqlProbe: the probe budget gate", () => {
     }
   });
 
+  test("a body read that fails partway is reported as an error, not thrown", async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(new TextEncoder().encode(`{"data":`));
+        controller.error(new Error("aborted"));
+      },
+    });
+    const stub = stubFetch({
+      [`${BASE}/graphql`]: () => new Response(stream, { headers: { "content-type": "application/json" } }),
+    });
+    restore = stub.restore;
+    const probe = createProbeBudget({ level: "active", budgetMs: 60_000 });
+    const out = await sendGraphqlProbe(probe, `${BASE}/graphql`, { op: "introspection", method: "GET" });
+    expect(out.sent).toBe(true);
+    expect("error" in out).toBe(true);
+  });
+
   test("a network error is reported, not thrown", async () => {
     const stub = stubFetch({
       [`${BASE}/graphql`]: () => {

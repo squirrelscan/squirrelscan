@@ -240,6 +240,22 @@ describe("security/graphql-introspection", () => {
     expect(paths.map((u) => u.pathname)).toEqual(["/graphql", "/api/graphql"]);
   });
 
+  test("a budget that runs out mid-run skips instead of passing", async () => {
+    let t = 0;
+    const stub = stubFetch({
+      [GQL]: () => {
+        t = 100; // the first request spends the whole budget
+        return html();
+      },
+    });
+    restore = stub.restore;
+    const { checks } = await graphqlIntrospectionRule.run(ruleCtx({ budgetMs: 50, now: () => t }));
+    expect(stub.sent.map((r) => new URL(r.url).pathname)).toEqual(["/graphql"]);
+    expect(checks).toEqual([expect.objectContaining({ status: "skipped", skipReason: "probe-budget" })]);
+    expect(checks[0]!.message).toContain("after 1 of 2 GraphQL endpoint(s)");
+    expect(checks[0]!.message).toContain("the rest were not checked");
+  });
+
   test("a spent budget skips the rule without sending", async () => {
     let t = 0;
     const stub = stubFetch({});

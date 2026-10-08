@@ -226,7 +226,17 @@ export const graphqlIntrospectionRule: Rule = {
       });
     }
 
-    if (exposed.length === 0) {
+    // A run the budget cut short is not a clean result: the endpoints it never
+    // reached could be open.
+    if (exposed.length === 0 && budgetStopped) {
+      checks.push({
+        name: CHECK,
+        status: "skipped",
+        skipReason: "probe-budget",
+        message: `The probe budget ran out after ${probed} of ${selection.candidates.length} GraphQL endpoint(s). None of those probed returned its schema, but the rest were not checked`,
+        details: { ...details, probed, graphqlAnswers, errored, budgetStopped },
+      });
+    } else if (exposed.length === 0) {
       checks.push({
         name: CHECK,
         status: "pass",
