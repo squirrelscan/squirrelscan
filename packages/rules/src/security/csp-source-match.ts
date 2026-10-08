@@ -49,6 +49,8 @@ export interface ResourceContext {
   page: URL;
   /** `upgrade-insecure-requests` rewrites an http subresource to https. */
   upgradeInsecure: boolean;
+  /** Judge the host only: a vendor's real request path is unknown. */
+  hostOnly?: boolean;
 }
 
 function defaultPort(protocol: string): string {
@@ -136,7 +138,7 @@ function sourceMatches(token: string, resource: URL, ctx: ResourceContext): bool
     return false;
   }
 
-  return pathMatches(path, resource.pathname);
+  return ctx.hostOnly || pathMatches(path, resource.pathname);
 }
 
 export interface MatchOptions {
@@ -144,6 +146,10 @@ export interface MatchOptions {
   nonce?: string;
   /** The element carries `integrity`, which a hash source can allow (CSP3). */
   integrity?: boolean;
+  /** A script a chunk injects may copy the page's nonce, so a nonce policy cannot judge it. */
+  mayCarryNonce?: boolean;
+  /** See {@link ResourceContext.hostOnly}. */
+  hostOnly?: boolean;
 }
 
 /**
@@ -173,7 +179,11 @@ export function sourceListAllows(
   const target = ctx.upgradeInsecure && url.protocol === "http:" && ctx.page.protocol === "https:"
     ? new URL(url.href.replace(/^http:/, "https:"))
     : url;
-  return sources.some((token) => sourceMatches(token, target, ctx));
+  if (sources.some((token) => sourceMatches(token, target, { ...ctx, hostOnly: opts.hostOnly }))) {
+    return true;
+  }
+  if (opts.mayCarryNonce && lowered.some((s) => s.startsWith("'nonce-"))) return undefined;
+  return false;
 }
 
 /**

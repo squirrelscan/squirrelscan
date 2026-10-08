@@ -618,6 +618,7 @@ export function createSiteAssetCollector(baseUrl: string): {
         finalUrl?: string;
         statusCode: number;
         parsed: ParsedPage;
+        hasCsp: boolean;
       }> = [];
 
       for (const { page, parsed } of siteContext) {
@@ -638,6 +639,7 @@ export function createSiteAssetCollector(baseUrl: string): {
           finalUrl: page.finalUrl,
           statusCode: page.status,
           parsed,
+          hasCsp: !!page.securityHeaders.csp || hasMetaCsp(parsed.document),
         });
       }
 
@@ -2980,6 +2982,15 @@ interface ResourceOccurrenceMap {
   fonts: Map<string, Set<string>>;
 }
 
+/** A `<meta http-equiv="Content-Security-Policy">` is an enforced policy too. */
+function hasMetaCsp(doc: Document | null): boolean {
+  if (!doc) return false;
+  for (const meta of doc.querySelectorAll("meta[http-equiv]")) {
+    if (meta.getAttribute("http-equiv")?.trim().toLowerCase() === "content-security-policy") return true;
+  }
+  return false;
+}
+
 function isSameDomainResource(url: string, baseHost: string): boolean {
   const host = getHostname(url).toLowerCase();
   if (!host || !baseHost) return false;
@@ -3015,6 +3026,8 @@ function absorbResourceOccurrences(
     url: string;
     finalUrl?: string;
     parsed: ParsedPage;
+    /** The page enforces a CSP (header or meta); only then are its preloads wanted. */
+    hasCsp?: boolean;
   }>,
   baseUrl: string,
 ): void {
@@ -3067,8 +3080,9 @@ function absorbResourceOccurrences(
     }
 
     // Preloaded chunks name the lazy third-party scripts a page loads. They go in
-    // their own map so no script rule's input changes.
-    for (const src of extractPreloadedScriptUrls(doc, pageUrl)) {
+    // their own map so no script rule's input changes, and only pages that
+    // enforce a CSP are read, since nothing else needs them.
+    for (const src of page.hasCsp ? extractPreloadedScriptUrls(doc, pageUrl) : []) {
       if (!isSameDomainScript(src, baseHost)) continue;
       const sources = preloads.get(src) ?? new Set<string>();
       sources.add(page.url);

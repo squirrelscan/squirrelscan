@@ -33,11 +33,13 @@ Policies come from the `Content-Security-Policy` response header and from `<meta
 | `<link rel="preload" as="font">` | `font-src`, then `default-src` |
 | `<link rel="preload" as="fetch">` | `connect-src`, then `default-src` |
 
+Not checked: `srcset`, `<source>`, `<object>`, `<embed>`, `<form action>` and CSS `@import`. The rule only reports what it can see, so these are missed rather than guessed.
+
 A directive the policy does not set allows everything. Elements inside `<noscript>` are skipped (see [content inside noscript](/rules#content-inside-noscript)), and so are `data:` and `blob:` URLs.
 
 ### Third-party scripts inside your own chunks
 
-A bundler's lazy chunk can name a third-party script that no HTML tag mentions. squirrel fetches the same-site scripts and the chunks a page preloads, and looks in each for a quoted `https://` URL ending in `.js` or `.mjs` with script-loading code beside it (`createElement("script")`, `.src =`, `import()`, `importScripts`). If that host is not allowed by `script-src`, it is reported. URLs in comments or links that nothing loads are ignored, and chunks are scanned up to 2 MB each. This is a best-effort heuristic: a URL in a minified config object next to unrelated script-loading code can be reported, which is why a chunk finding warns unless the host is a known vendor.
+The audit fetches a page's preloaded chunks only when a crawled page enforces a CSP, at most 20 extra per audit, and no other rule reads them. A bundler's lazy chunk can name a third-party script that no HTML tag mentions. squirrel fetches the same-site scripts and the chunks a page preloads, and looks in each for a quoted `https://` URL ending in `.js` or `.mjs` with script-loading code beside it (`createElement("script")`, `.src =`, `import()`, `importScripts`). If that host is not allowed by `script-src`, it is reported. URLs in comments or links that nothing loads are ignored, a script a chunk injects is not reported when the policy uses nonces (the chunk may copy the page's nonce onto it), and chunks are scanned up to 2 MB each. This is a best-effort heuristic: a URL in a minified config object next to unrelated script-loading code can be reported, which is why a chunk finding warns unless the host is a known vendor.
 
 ### Vendor hosts the HTML never names
 

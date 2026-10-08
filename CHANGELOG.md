@@ -23,7 +23,7 @@ How it works:
 
 ### Changed
 
-- The audit also fetches the same-site script chunks a page preloads with `<link rel="modulepreload">` or `<link rel="preload" as="script">`, so `security/csp-blocks-own-resources` can read the third-party script URLs inside them. They are kept apart from the scripts every other rule reads, so no other rule's result changes, and they are capped at 20 extra fetches per audit. The rule cache format changed, so the first audit of each site after the upgrade runs every rule fresh, once.
+- The audit also fetches the same-site script chunks a page preloads with `<link rel="modulepreload">` or `<link rel="preload" as="script">`, so `security/csp-blocks-own-resources` can read the third-party script URLs inside them. They are kept apart from the scripts every other rule reads, so no other rule's result changes, and they are fetched only when a crawled page enforces a CSP, capped at 20 extra fetches per audit. The rule cache format changed, so the first audit of each site after the upgrade runs every rule fresh, once.
 
 ### Fixed
 

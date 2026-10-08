@@ -231,6 +231,19 @@ describe("no false positives", () => {
     );
   });
 
+  test("a chunk-injected script under a nonce policy is undecidable, a plain tag is not", () => {
+    const chunk = { url: "https://shop.test/c.js", content: `s.src="https://widget.x.test/w.js";document.head.appendChild(s)` };
+    ok(`<link rel="modulepreload" href="/c.js">`, "script-src 'self' 'nonce-abc'", { preloaded: [chunk] });
+    expect(run(`<script src="https://widget.x.test/w.js"></script>`, "script-src 'self' 'nonce-abc'").status).toBe("warn");
+  });
+
+  test("a path-scoped source still allows a vendor host", () => {
+    ok(
+      `<script>gtag('config','G-ABC123DEF4')</script>`,
+      "default-src 'self'; connect-src https://www.google-analytics.com/g/collect https://analytics.google.com/g/collect",
+    );
+  });
+
   test("a chunk URL on the page's own host or already allowed is not a finding", () => {
     ok(
       `<link rel="modulepreload" href="/c.js">`,

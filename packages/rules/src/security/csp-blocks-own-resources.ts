@@ -256,7 +256,12 @@ export const cspBlocksOwnResourcesRule: Rule = {
 
     const blocked = new Map<string, Blocked>();
     for (const ref of references) {
-      const verdict = policiesAllow(policies, ref.url, ref.kind, pageUrl, { nonce: ref.nonce, integrity: ref.integrity });
+      const verdict = policiesAllow(policies, ref.url, ref.kind, pageUrl, {
+        nonce: ref.nonce,
+        integrity: ref.integrity,
+        mayCarryNonce: ref.origin === "chunk",
+        hostOnly: ref.origin === "vendor",
+      });
       if (verdict.allowed !== false || !verdict.directive) continue;
       const key = `${verdict.directive}\u0000${ref.url.hostname}`;
       const seen = blocked.get(key);
@@ -293,7 +298,7 @@ export const cspBlocksOwnResourcesRule: Rule = {
     }
 
     const all = [...blocked.values()];
-    const hasError = all.some((b) => b.category !== undefined);
+    const hasKnownVendor = all.some((b) => b.category !== undefined);
     const byDirective = new Map<string, string[]>();
     for (const b of all) byDirective.set(b.directive, [...(byDirective.get(b.directive) ?? []), b.host]);
     const summary = [...byDirective]
@@ -317,7 +322,7 @@ export const cspBlocksOwnResourcesRule: Rule = {
       checks: [
         {
           name: "csp-blocks-own-resources",
-          status: hasError ? "fail" : "warn",
+          status: hasKnownVendor ? "fail" : "warn",
           message: `The page's CSP blocks ${all.length} host${all.length === 1 ? "" : "s"} it depends on (${summary})`,
           items,
         },
