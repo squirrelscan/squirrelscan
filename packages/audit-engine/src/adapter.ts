@@ -13,6 +13,7 @@ import {
   extractLinks,
   extractMeta,
   extractOG,
+  extractPreloadedScriptUrls,
   extractScripts,
   extractStylesheets,
   extractTwitter,
@@ -3019,6 +3020,15 @@ function absorbResourceOccurrences(
       const sources = scripts.get(script.src) ?? new Set<string>();
       sources.add(page.url);
       scripts.set(script.src, sources);
+    }
+
+    // Preloaded chunks are fetched like scripts: their bodies name the lazy
+    // third-party scripts the page loads (security/csp-blocks-own-resources).
+    for (const src of extractPreloadedScriptUrls(doc, pageUrl)) {
+      if (!isSameDomainScript(src, baseHost)) continue;
+      const sources = scripts.get(src) ?? new Set<string>();
+      sources.add(page.url);
+      scripts.set(src, sources);
     }
   }
 }

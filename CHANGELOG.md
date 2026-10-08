@@ -15,6 +15,16 @@ How it works:
 - A `## [Unreleased]` section collects merged changes that have not been cut into
   a release yet; rename it to the version when the release goes out.
 
+## [Unreleased]
+
+### Added
+
+- `security/csp-blocks-own-resources` flags a Content-Security-Policy that blocks what the page itself loads. It matches each page's own policy (the header and any `<meta http-equiv>` policy) against the page's scripts, preloaded modules, stylesheets, frames and images using real source matching, so `*.example.com` allows `cdn.example.com` but not `example.com`. It also looks inside the same-site chunks a page loads for third-party script URLs, and checks the hosts a detected vendor needs at runtime (Google Analytics 4 and Google Ads endpoints, Google Tag Manager, PostHog, Stripe, Cloudflare Turnstile, reCAPTCHA), which the HTML never names. A blocked analytics, ads, payments, captcha, form or booking host fails and any other host warns, naming the directive and the host to add. A page with no enforced policy passes, because a missing CSP stays with `security/csp`. See the [rule page](https://docs.squirrelscan.com/rules/security/csp-blocks-own-resources). That makes 298 rules, 17 of them in Security.
+
+### Changed
+
+- Scripts a page preloads with `<link rel="modulepreload">` or `<link rel="preload" as="script">` are fetched like its `<script src>` files, so script rules see lazy chunks too.
+
 ## v0.0.106 (2026-10-08)
 
 `squirrel mcp` speaks the new MCP 2026-07-28 protocol, `squirrel channel` gives your Claude Code session a heads-up the moment a cloud audit lands, every rule now runs against the clock to keep booby-trapped pages from stalling an audit, and two new content rules catch the `info@example.com` and `placehold.co` your theme shipped with. Plus a big pile of false positives, swept out of the nest.

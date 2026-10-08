@@ -1,0 +1,115 @@
+---
+title: "CSP blocks your own scripts, frames and analytics endpoints"
+description: "A Content-Security-Policy that leaves out a host your page depends on breaks a widget or a tracker silently. squirrel matches each page's policy against what the page loads."
+---
+
+## What this rule catches
+
+A Content-Security-Policy (CSP) lists the hosts a page may load scripts, frames, styles, images and network requests from. When the list leaves out a host the site depends on, the browser blocks that resource and the page still renders. A booking widget disappears, a payment frame stays empty, and analytics hits never arrive. Nothing in the HTML looks wrong, and nothing in a normal audit reports it.
+
+[security/csp](/rules/security/csp) judges how strict a policy is. This rule asks a different question: does the policy the page was served with allow what the page itself loads?
+
+## What squirrel checks
+
+The rule runs on every crawled page and reads that page's own policy, so a route with a different header is judged by its own header. It emits a single check named `csp-blocks-own-resources`:
+
+- Pass when the page has no enforced policy. Message: `No enforced Content-Security-Policy to check (security/csp covers a missing policy)`. A missing CSP stays with [security/csp](/rules/security/csp), and a `Content-Security-Policy-Report-Only` header blocks nothing, so it is not checked.
+- Pass when every resource is allowed. Message: `The page's CSP allows the resources it references and the vendor hosts it uses`.
+- Fail when a blocked host belongs to a vendor category the table knows: analytics, ads, payments, captcha, form or booking.
+- Warn when the blocked hosts are all something else.
+
+The message names the directive and the hosts to add, for example `The page's CSP blocks 3 hosts it depends on (connect-src: add analytics.google.com, www.google.com, stats.g.doubleclick.net)`. Each blocked host is listed as an item with the directive, the host, and where it was found (`html`, `chunk` or `vendor`).
+
+Policies come from the `Content-Security-Policy` response header and from `<meta http-equiv="Content-Security-Policy">` tags. When a header carries several comma-separated policies, every one of them has to allow the resource.
+
+### What the page references
+
+| Source | Directive checked |
+|---|---|
+| `<script src>`, `<link rel="modulepreload">`, `<link rel="preload" as="script">` | `script-src-elem`, then `script-src`, then `default-src` |
+| `<link rel="stylesheet">`, `<link rel="preload" as="style">` | `style-src-elem`, then `style-src`, then `default-src` |
+| `<iframe src>` | `frame-src`, then `child-src`, then `default-src` |
+| `<img src>`, `<link rel="preload" as="image">` | `img-src`, then `default-src` |
+| `<link rel="preload" as="font">` | `font-src`, then `default-src` |
+| `<link rel="preload" as="fetch">` | `connect-src`, then `default-src` |
+
+A directive the policy does not set allows everything. Elements inside `<noscript>` are skipped (see [content inside noscript](/rules#content-inside-noscript)), and so are `data:` and `blob:` URLs.
+
+### Third-party scripts inside your own chunks
+
+A bundler's lazy chunk can name a third-party script that no HTML tag mentions. squirrel fetches the same-site scripts and the chunks a page preloads, and looks in each for a quoted `https://` URL ending in `.js` or `.mjs` with script-loading code beside it (`createElement("script")`, `.src =`, `import()`, `importScripts`). If that host is not allowed by `script-src`, it is reported. URLs in comments or links that nothing loads are ignored, and chunks are scanned up to 2 MB each.
+
+### Vendor hosts the HTML never names
+
+Some hosts are only contacted at runtime, so the HTML never lists them. When the page shows a vendor in use, squirrel checks the hosts that vendor needs:
+
+| Vendor | Directive | Hosts |
+|---|---|---|
+| Google Analytics 4 | `connect-src` | `www.google-analytics.com`, `analytics.google.com`. With an Ads link (`AW-` id), also `www.google.com`, `stats.g.doubleclick.net` |
+| Google Ads | `script-src`, `frame-src` | `googleads.g.doubleclick.net`, `www.googleadservices.com`, `www.google.com`; frame `td.doubleclick.net` |
+| Google Tag Manager | `script-src`, `frame-src` | `www.googletagmanager.com` |
+| PostHog | `script-src`, `connect-src` | `us-assets.i.posthog.com` or `eu-assets.i.posthog.com`, `us.i.posthog.com` or `eu.i.posthog.com`, by the region the page names. A first-party `api_host` is not checked |
+| Stripe | `script-src`, `connect-src`, `frame-src` | `js.stripe.com`, `api.stripe.com`, `hooks.stripe.com` |
+| Cloudflare Turnstile | `script-src`, `frame-src` | `challenges.cloudflare.com` |
+| Google reCAPTCHA | `script-src`, `frame-src` | `www.google.com`, `www.gstatic.com` (or `www.recaptcha.net`) |
+
+Vendor hosts change. The table is data in the rule, and every entry records the date it was last checked against the vendor's own guidance. The current entries were last verified on 2026-10-08.
+
+### How sources are matched
+
+Matching follows the CSP specification rather than a substring test:
+
+- A wildcard host such as `*.example.com` matches `cdn.example.com` and `a.b.example.com`, but **not** `example.com`. Allow both when you need both.
+- A source with no port allows only the default port for its scheme, `:*` allows any port, and `'self'` needs the same scheme (or an https upgrade), host and port.
+- A source path ending in `/` is a prefix, and any other path must match exactly.
+- `https:` allows any https URL, and a source with no scheme follows the page's scheme.
+- A matching `'nonce-...'` on the element allows it.
+- `'none'` or an empty list blocks everything.
+- A `script-src` with `'strict-dynamic'` makes the browser ignore host sources, so squirrel cannot decide statically and reports nothing for scripts.
+
+The rule is skipped on pages with no parsed document, such as error pages. Severity for the rule is warning, weight 6.
+
+## How to fix it
+
+Add each reported host to the directive the finding names, then reload the page with the browser console open and confirm no CSP violation remains.
+
+```http
+Content-Security-Policy: default-src 'self';
+  script-src 'self' https://www.googletagmanager.com;
+  connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://stats.g.doubleclick.net https://www.google.com
+```
+
+Test a change in `Content-Security-Policy-Report-Only` first if the site is busy. If a blocked host is something you no longer use, remove the tag that loads it instead.
+
+| | |
+|---|---|
+| **Rule ID** | `security/csp-blocks-own-resources` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 6/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/csp-blocks-own-resources"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/csp-blocks-own-resources"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
