@@ -455,6 +455,36 @@ describe("page-time collectors run under the budget", () => {
     expect(errors[0].details).toEqual({ timedOut: true, budgetMs: 1000, pages: 3 });
   });
 
+  test("security/leaked-secrets: an unscanned page is never reported as clean", async () => {
+    const collected: CollectedSiteSignals = {
+      pages: [
+        emptySignal("https://example.com/a"),
+        { ...emptySignal("https://example.com/b"), timedOut: { budgetMs: 1000, ruleIds: ["security/leaked-secrets"] } },
+      ],
+    };
+    const config: RulesConfig = { rule_options: {}, rules: { enable: ["security/leaked-secrets"] } };
+    const { checks } = await new RuleRunner({ config }).runSiteRules(siteData(2), undefined, collected);
+
+    // No "pass / No leaked API keys or secrets detected" for a run that skipped a page.
+    expect(checks.some((c) => c.status === "pass")).toBe(false);
+    expect(checks.some((c) => c.message.includes("No leaked"))).toBe(false);
+    // The timeout is a failed check against the page (what scoring and the summary count)...
+    const error = byName(checks, "security/leaked-secrets-error");
+    expect(error?.status).toBe("fail");
+    expect(error?.pageUrl).toBe("https://example.com/b");
+    expect(error?.details).toMatchObject({ timedOut: true });
+    // ...and the rule itself says the page was not scanned.
+    const unscanned = byName(checks, "leaked-secrets-unscanned");
+    expect(unscanned?.status).toBe("info");
+    expect(unscanned?.items?.map((i) => i.id)).toEqual(["https://example.com/b"]);
+
+    // Control: with nothing timed out the same rule still passes.
+    const clean = await new RuleRunner({ config }).runSiteRules(siteData(2), undefined, {
+      pages: [emptySignal("https://example.com/a")],
+    });
+    expect(byName(clean.checks, "leaked-secrets")?.status).toBe("pass");
+  });
+
   test("buildCollectedPageSignal yields empty values and lists the rules past the budget", () => {
     // ~4 MB of inline script: far past a 1 ms budget for the secrets scan.
     const body = `<script>${"var token = 'abcdefghijklmnopqrstuvwxyz0123456789';\n".repeat(80_000)}</script>`;

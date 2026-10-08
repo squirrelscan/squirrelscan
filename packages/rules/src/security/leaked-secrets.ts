@@ -2627,7 +2627,23 @@ export const leakedSecretsRule: Rule = {
       });
     }
 
-    if (realSecrets.length === 0) {
+    // Pages whose page-time scan ran past the rule time budget were not scanned:
+    // their empty secret list is "unknown", never "clean". The runner records the
+    // timeout itself as a `-error` check; this keeps the rule from also saying
+    // nothing was found.
+    const unscanned = (ctx.collectedSignals?.pages ?? []).filter((p) =>
+      p.timedOut?.ruleIds.includes("security/leaked-secrets")
+    );
+    if (unscanned.length > 0) {
+      checks.push({
+        name: "leaked-secrets-unscanned",
+        status: "info",
+        message: `${unscanned.length} page(s) were not scanned for secrets because the scan exceeded its time budget, so no finding on them is not a clean result`,
+        items: unscanned.slice(0, 20).map((p) => ({ id: p.url, label: "Not scanned" })),
+      });
+    }
+
+    if (realSecrets.length === 0 && unscanned.length === 0) {
       checks.push({
         name: "leaked-secrets",
         status: "pass",

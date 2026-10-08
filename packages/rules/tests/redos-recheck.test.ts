@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
 
 import { splitTitle } from "../src/content/title-pattern-outlier";
-import { fingerprintPage } from "../src/integrity/fingerprint";
+import { cssVarNames, fingerprintPage } from "../src/integrity/fingerprint";
 import { classifyKeyContext, FAST_PATTERNS, scanContent } from "../src/security/leaked-secrets";
 import { heldAsCredential } from "../src/security/secrets/confidence";
 
@@ -91,6 +91,20 @@ describe("other rechecked rules stay linear", () => {
       url
     );
     expect([...(fingerprintPage(real, url)?.cssVars ?? [])].toSorted()).toEqual(["--brand-color", "--gap", "--x-y"]);
+  });
+
+  test("css vars: a 1 MB --0-- run in a <style> is scanned in linear time", () => {
+    // The previous look-behind form re-scanned the run from every `--` inside it.
+    for (const attack of ["--0".repeat(350_000), "--0--".repeat(200_000), "-".repeat(1_000_000), "a" + " ".repeat(1_000_000)]) {
+      expect(timed(() => cssVarNames(attack))).toBeLessThan(LINEAR_MS);
+    }
+    // Real declarations, including one that starts mid-run and an uppercase name.
+    expect(cssVarNames(":root{--Brand-Color: #fff;--gap:4px; a--b:1; --x-y :2; --:3; a--:4}")).toEqual([
+      "--brand-color",
+      "--gap",
+      "--b",
+      "--x-y",
+    ]);
   });
 
   test("title separators: a long run of whitespace", () => {
