@@ -47,6 +47,7 @@ import { templateFingerprintKey } from "./template-key";
 import {
   createTemplateFanout,
   fanoutClusterKey,
+  fanoutInputSignature,
   templateFanoutEnabled,
   type TemplateFanoutStats,
 } from "./template-fanout";
@@ -475,7 +476,11 @@ export function streamPageRules(
         // decides "cross-origin" by comparing it), so a crawl spanning http:// and
         // https:// must not copy a verdict across that boundary.
         const clusterKey = fanout
-          ? fanoutClusterKey(templateFingerprintKey(shared.fingerprint), pageUrl)
+          ? fanoutClusterKey(
+              templateFingerprintKey(shared.fingerprint),
+              pageUrl,
+              fanoutInputSignature(parsed.document),
+            )
           : null;
         const fanned = fanout?.take(clusterKey);
 

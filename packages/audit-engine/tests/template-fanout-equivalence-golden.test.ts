@@ -47,6 +47,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
+import { parseDocument } from "@squirrelscan/parser";
 
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { RuleRunner, createRunner } from "@squirrelscan/rules";
@@ -60,7 +61,7 @@ import { isAuditablePage } from "../src/page-features";
 import { foldRuleResultIntoTallies, type RuleTally } from "../src/scoring";
 import { streamPageRules } from "../src/streaming";
 import { buildStreamFindings } from "../src/stream-findings";
-import { fanoutClusterKey, templateFanoutEnabled } from "../src/template-fanout";
+import { fanoutClusterKey, fanoutInputSignature, templateFanoutEnabled } from "../src/template-fanout";
 import { checkAffectedPages } from "@squirrelscan/report";
 import { CORPUS, ORIGIN, mkPage } from "./helpers/template-corpus";
 
@@ -555,6 +556,78 @@ describe("a verdict is never copied across origins", () => {
     expect(sriOn(secure).map((c) => c.status)).not.toEqual(sriOn(insecure).map((c) => c.status));
 
     await run(store.close());
+  });
+
+  // #275: pages that share the chrome key but differ in an input a declared rule
+  // reads. Under the chrome-only grouping key each pair collapsed into one group
+  // and the second page inherited the first one's verdict.
+  const sameChrome = (head: string, main = "<main><h1>Same</h1></main>") =>
+    `<!DOCTYPE html><html lang="en"><head><title>Same chrome</title><meta charset="utf-8">` +
+    `<link rel="stylesheet" href="/assets/site.css">${head}` +
+    `<style>:root{--brand:#101010}</style></head><body class="tpl-x">` +
+    `<nav><a href="/">Home</a></nav>${main}<footer>f</footer></body></html>`;
+  const VIEWPORT = `<meta name="viewport" content="width=device-width, initial-scale=1">`;
+  const counterexamples: Array<{ name: string; ruleId: string; a: string; b: string }> = [
+    {
+      name: "a missing viewport meta",
+      ruleId: "mobile/viewport",
+      a: sameChrome(VIEWPORT),
+      b: sameChrome(""),
+    },
+    {
+      name: "a second main landmark",
+      ruleId: "a11y/landmark-one-main",
+      a: sameChrome(VIEWPORT),
+      b: sameChrome(VIEWPORT, "<main>one</main><main>two</main>"),
+    },
+    {
+      name: "a script path that differs on the same host",
+      ruleId: "security/sri",
+      a: sameChrome(`${VIEWPORT}<script src="https://cdn.other.test/assets/a.js"></script>`),
+      b: sameChrome(`${VIEWPORT}<script src="https://cdn.other.test/assets/b.js"></script>`),
+    },
+  ];
+
+  for (const { name, ruleId, a, b } of counterexamples) {
+    test(`pages sharing a chrome key but differing in ${name} do not share a verdict`, async () => {
+      const urlA = "https://shop.test/a";
+      const urlB = "https://shop.test/b";
+      const store = new SQLiteStorage(":memory:");
+      await run(store.init());
+      await run(store.upsertPage(CRAWL, mkPage(urlA, a) as PageRecord));
+      await run(store.upsertPage(CRAWL, mkPage(urlB, b) as PageRecord));
+
+      const reference = await residentPageRules(store, createRunner(CONFIG));
+      const result = await run(
+        streamPageRules(store, CRAWL, createRunner(CONFIG), SITE_DATA, { templateFanout: true }),
+      );
+
+      // The premise: the rule really does see these two pages differently, and the
+      // old chrome-only key really would have grouped them.
+      const ref = (url: string) => reference.pageRuleResults.get(url)?.get(ruleId);
+      expect(ref(urlA)).not.toEqual(ref(urlB));
+
+      // Nothing was inherited, and each page carries the verdict of running on it.
+      expect(result.templateFanout.fannedPages).toBe(0);
+      for (const url of [urlA, urlB]) {
+        expect(result.pageRuleResults.get(url)?.get(ruleId)).toEqual(ref(url) as never);
+      }
+
+      await run(store.close());
+    });
+  }
+
+  test("fanoutInputSignature separates script paths, meta names and main counts", () => {
+    const sig = (html: string) => fanoutInputSignature(parseDocument(html));
+    const base = sig(sameChrome(VIEWPORT));
+    expect(sig(sameChrome(VIEWPORT))).toBe(base);
+    expect(sig(sameChrome(""))).not.toBe(base);
+    expect(sig(sameChrome(VIEWPORT, "<main>1</main><main>2</main>"))).not.toBe(base);
+    expect(sig(sameChrome(`${VIEWPORT}<script src="/a.js"></script>`))).not.toBe(
+      sig(sameChrome(`${VIEWPORT}<script src="/b.js"></script>`)),
+    );
+    expect(fanoutInputSignature(null)).toBeNull();
+    expect(fanoutClusterKey("abc123", "https://shop.test/a", null)).toBeNull();
   });
 
   test("fanoutClusterKey separates origins and survives an unparseable url", () => {

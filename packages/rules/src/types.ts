@@ -97,16 +97,21 @@ export type RuleSeverity = "error" | "warning" | "info";
  * and for `integrity/*` and `security/*` that is the expensive direction to be
  * wrong in.
  *
- * WHAT THE CLUSTER KEY DOES NOT CHECK FOR YOU. The key is chrome only — asset
- * hosts, body classes, CSS custom properties, stylesheet hrefs, nav/footer
+ * WHAT THE CLUSTER KEY DOES NOT CHECK FOR YOU. The stored key is chrome only —
+ * asset hosts, body classes, CSS custom properties, stylesheet hrefs, nav/footer
  * presence — so two pages can share it and still differ in markup it never looked
- * at: a missing viewport `<meta>`, a second `<main>`, a script whose PATH differs
- * on the same host (per-route hashed bundles do this). A declaration is therefore
- * a claim about how the site's templates are BUILT, not something the key
- * enforces, and it is why "constant on two crawls" is evidence rather than proof.
- * Tracked as squirrelscan/squirrelscan#275. Two things are not left to the
- * declaration: the fan-out groups by page ORIGIN as well as by template, and a
- * rule reading a response header is disqualified outright (see `core/charset`).
+ * at. The fan-out therefore groups on a tighter key than the stored one: the
+ * chrome key plus the page ORIGIN plus a rule-input signature (the `<script src>`
+ * list, the set of `<meta>` names and the `<main>` landmark count; see
+ * `fanoutInputSignature`). That closes the three counterexamples tracked as
+ * squirrelscan/squirrelscan#275 (a missing viewport `<meta>`, a second `<main>`,
+ * a script path that differs on one host). It does NOT make a declaration
+ * checkable: any OTHER markup input a rule reads (a `<link>` rel, a heading, an
+ * attribute on a chrome element) is still not in the key, so a declaration is a
+ * claim about how the site's templates are BUILT, and "constant on two crawls" is
+ * evidence rather than proof. If your rule reads an input the signature omits,
+ * either extend `fanoutInputSignature` or keep the rule page-scoped. A rule
+ * reading a response header is disqualified outright (see `core/charset`).
  *
  * A declaration is a claim, not a proof, and it has two falsifiers.
  * `template-fanout-parity-golden.test.ts` runs in CI over an authored corpus with

@@ -1402,6 +1402,26 @@ rule's inputs. Two things are not left to the declaration — the fan-out groups
 page ORIGIN as well as by template (`security/sri` compares it), and a rule
 reading a response header is disqualified outright.
 
+### Decision on #275: tighten the fan-out grouping key
+
+Option 1 ships, narrowly. The fan-out groups on the chrome key, the page origin
+and a rule-input signature: the sorted `<script src>` list, the set of `<meta>`
+names and the `<main>` landmark count (`fanoutInputSignature`). The stored
+`template_fp` is unchanged, so `templateClusters()` and the parity gate are
+defined over the same key as before. The three constructed counterexamples (a
+missing viewport meta, a second `<main>`, a script path that differs on one host)
+each get a verdict from running the rule on their own page instead of inheriting
+one, pinned by `template-fanout-equivalence-golden.test.ts`, which fails on the
+old key and passes on the new one.
+
+Not yet measured: the cluster count and the number of pages that still inherit a
+verdict on gymshark.com and openelectricity.org.au under this key. The crawls are
+not available to the environment this change was made in, so no figure is
+recorded here and none should be inferred from the 13 and 12 clusters above,
+which are for the chrome key. The cost of the tighter key is fan-out coverage
+only, never output. Run `apps/cli/scripts/template-fanout-bench.ts --verify`
+against both crawls and record the cluster and inherited-page counts here.
+
 ### Byte-identity
 
 The claim is that the output is indistinguishable from running every rule on every

@@ -64,7 +64,9 @@
 // That is #1950's premise and it is empirical: a rule constant on two real crawls
 // can vary on a third.
 //
-// Two things are NOT left to that, because they are properties of the PAGE rather
+// #275 tightened the GROUPING key past the stored one (see `fanoutInputSignature`):
+// script srcs, meta names and the <main> count. Besides that, two things are NOT
+// left to the declaration, because they are properties of the PAGE rather
 // than claims about a rule's markup inputs, and because a corpus of one origin can
 // never exhibit them:
 //
@@ -86,6 +88,7 @@
 // and their pages run the ordinary path. The cap changes cost, never output.
 
 import { detachFromPage } from "./detach";
+import { fnv1a64 } from "./fingerprint";
 
 import type { CheckResult } from "@squirrelscan/core-contracts";
 import type { RuleRunResult, RuleRunner } from "@squirrelscan/rules";
@@ -134,7 +137,54 @@ export interface TemplateFanoutStats {
 }
 
 /**
- * The grouping key: the template cluster AND the page's origin.
+ * The rule-input signature (#275): the markup inputs the chrome key does not
+ * reach but a declared rule reads, reduced to 16 hex chars.
+ *
+ *  - the `<script src>` list, sorted: `security/sri` reports the resource url, so
+ *    two pages whose bundles differ in PATH on one host (per-route hashed
+ *    bundles) must not share a verdict;
+ *  - the set of `<meta>` names (`name`, `property`, `http-equiv`, `charset`):
+ *    `mobile/viewport` and friends pass or fail on one being present;
+ *  - the number of `<main>` / `role="main"` landmarks: `a11y/landmark-one-main`.
+ *
+ * It is part of the FANOUT grouping key only. The stored `template_fp` stays the
+ * chrome key `templateClusters()` and #1950's gate are defined over. A tighter
+ * production grouping than the one the parity gate proves constancy over is
+ * strictly safer; the cost is fan-out coverage, never output.
+ *
+ * `null` for a page with no document, which then never groups.
+ */
+export function fanoutInputSignature(
+  doc: {
+    querySelectorAll(selector: string): ArrayLike<{ getAttribute(name: string): string | null }>;
+  } | null,
+): string | null {
+  if (!doc) return null;
+  const scripts = Array.from(doc.querySelectorAll("script[src]"), (el) => el.getAttribute("src") ?? "");
+  const metas = Array.from(doc.querySelectorAll("meta"), (el) =>
+    [
+      el.getAttribute("name"),
+      el.getAttribute("property"),
+      el.getAttribute("http-equiv"),
+      el.getAttribute("charset") !== null ? "charset" : null,
+    ]
+      .filter((v): v is string => v !== null)
+      .map((v) => v.toLowerCase())
+      .join("|"),
+  );
+  const mains = doc.querySelectorAll('main, [role="main"]').length;
+  // JSON, not a join, so a value containing a delimiter cannot forge a boundary.
+  const canonical = JSON.stringify([
+    [...new Set(scripts)].sort(),
+    [...new Set(metas)].sort(),
+    mains,
+  ]);
+  return fnv1a64(new TextEncoder().encode(canonical), 0n);
+}
+
+/**
+ * The grouping key: the template cluster, the page's origin AND (#275) its
+ * rule-input signature.
  *
  * Origin is here rather than in `page_features.template_fp` deliberately —
  * `template_fp` answers "same template?" for `SiteQuery.templateClusters()` and
@@ -145,8 +195,13 @@ export interface TemplateFanoutStats {
  * A url that will not parse gets its whole string as the origin, so it can only
  * ever share a group with a byte-identical url — the conservative answer.
  */
-export function fanoutClusterKey(templateKey: string | null, pageUrl: string): string | null {
-  if (!templateKey) return null;
+export function fanoutClusterKey(
+  templateKey: string | null,
+  pageUrl: string,
+  inputSignature: string | null = "",
+): string | null {
+  // A page whose inputs could not be read never groups, rather than grouping on "".
+  if (!templateKey || inputSignature === null) return null;
   let origin: string;
   try {
     origin = new URL(pageUrl).origin;
@@ -154,7 +209,7 @@ export function fanoutClusterKey(templateKey: string | null, pageUrl: string): s
     origin = pageUrl;
   }
   // NUL cannot appear in an origin or in a 16-hex key, so the join is injective.
-  return `${origin}\u0000${templateKey}`;
+  return `${origin}\u0000${templateKey}\u0000${inputSignature}`;
 }
 
 export interface TemplateFanout {
