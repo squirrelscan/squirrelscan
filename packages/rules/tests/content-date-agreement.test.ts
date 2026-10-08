@@ -16,7 +16,7 @@ import type { CheckResult } from "@squirrelscan/core-contracts";
 
 import { parsePage } from "@squirrelscan/parser";
 
-import { dateAgreementRule, matchDate } from "../src/content/date-agreement";
+import { dateAgreementRule, looksLikeDate, matchDate } from "../src/content/date-agreement";
 import type { ParsedPage, RuleContext } from "../src/types";
 
 function run(
@@ -81,9 +81,96 @@ describe("matchDate", () => {
     expect(matchDate("March 12, 2024")?.ms).toBe(matchDate("2024-03-12")?.ms);
   });
 
+  test("reads written dates in other languages", () => {
+    const jan8 = Date.UTC(2026, 0, 8);
+    expect(matchDate("Publié le 8 janvier 2026")?.ms).toBe(jan8);
+    expect(matchDate("Publié le 1er janvier 2026")?.ms).toBe(Date.UTC(2026, 0, 1));
+    expect(matchDate("le 8 février 2026")?.ms).toBe(Date.UTC(2026, 1, 8));
+    expect(matchDate("8 févr. 2026")?.ms).toBe(Date.UTC(2026, 1, 8));
+    expect(matchDate("Veröffentlicht am 8 Januar 2026")?.ms).toBe(jan8);
+    expect(matchDate("15 März 2026")?.ms).toBe(Date.UTC(2026, 2, 15));
+    // A bare dot after the day is not read by matchDate (it follows version and
+    // chapter numbers too); it is date-shaped only, see looksLikeDate below.
+    expect(matchDate("Veröffentlicht am 8. Januar 2026")).toBeNull();
+    expect(matchDate("Version 3. March 2024")).toBeNull();
+    expect(matchDate("8 de enero de 2026")?.ms).toBe(jan8);
+    expect(matchDate("8 gennaio 2026")?.ms).toBe(jan8);
+    expect(matchDate("8 de janeiro de 2026")?.ms).toBe(jan8);
+    expect(matchDate("8 januari 2026")?.ms).toBe(jan8);
+    expect(matchDate("2026年1月8日")?.ms).toBe(jan8);
+    expect(matchDate("2026년 1월 8일")?.ms).toBe(jan8);
+    expect(matchDate("2026/01/08")?.ms).toBe(jan8);
+  });
+
+  test("a numeric date is read both ways when both are possible", () => {
+    // 08/01/2026 is the 8th of January or the 1st of August: both readings are
+    // kept so the caller can compare whichever agrees with the schema.
+    const ambiguous = matchDate("08/01/2026");
+    expect(ambiguous?.ms).toBe(Date.UTC(2026, 0, 8));
+    expect(ambiguous?.alternatives).toEqual([Date.UTC(2026, 7, 1)]);
+
+    // Only one reading is a real date once a part is above 12 or above the month's length.
+    expect(matchDate("25/12/2026")).toEqual({ text: "25/12/2026", ms: Date.UTC(2026, 11, 25) });
+    expect(matchDate("12/25/2026")).toEqual({ text: "12/25/2026", ms: Date.UTC(2026, 11, 25) });
+    expect(matchDate("8.1.2026")?.ms).toBe(Date.UTC(2026, 0, 8));
+    expect(matchDate("31/04/2026")).toBeNull();
+  });
+
+  test("no trailing word boundary is needed: sibling text can run straight on", () => {
+    // `textContent` joins sibling elements with nothing, so a date is often
+    // followed directly by the next element's first letter.
+    expect(matchDate("Published March 12, 2024Read more")?.text).toBe("March 12, 2024");
+    expect(matchDate("Published March 12, 2024Read more")?.ms).toBe(Date.UTC(2024, 2, 12));
+    expect(matchDate("INPPublished March 12, 2024Caching.")?.ms).toBe(Date.UTC(2024, 2, 12));
+    expect(matchDate("12 March 2024Read more")?.ms).toBe(Date.UTC(2024, 2, 12));
+    // Still not a date when the year is the start of a longer number.
+    expect(matchDate("March 12, 20245")).toBeNull();
+  });
+
+  test("a date that is not on the calendar is not one", () => {
+    expect(matchDate("February 31, 2026")).toBeNull();
+    expect(matchDate("31 avril 2026")).toBeNull();
+  });
+
   test("a run of digits that is not a date is not one", () => {
     expect(matchDate("Order 20240312 shipped")).toBeNull();
     expect(matchDate("no dates here")).toBeNull();
+  });
+});
+
+describe("looksLikeDate", () => {
+  test("is true for dates it can read and for date-shaped text it cannot fully parse", () => {
+    expect(looksLikeDate("March 12, 2024")).toBe(true);
+    // A known month name, but not a calendar day or not in a parseable order.
+    expect(looksLikeDate("31 April 2024")).toBe(true);
+    expect(looksLikeDate("2024 March 12")).toBe(true);
+    expect(looksLikeDate("2026 Januar 8")).toBe(true);
+    // The bare-dot ordinal ("8. Januar") is a documented trade-off: it also
+    // reads a number, a dot and a month as a date.
+    expect(looksLikeDate("Version 3. March 2024")).toBe(true);
+    expect(looksLikeDate("8/1/26")).toBe(true);
+    expect(looksLikeDate("令和8年1月8日 2026年1月")).toBe(true);
+  });
+
+  test("is false for prose and numbers that are not dates", () => {
+    expect(looksLikeDate("Caching is the cheapest performance win available.")).toBe(false);
+    expect(looksLikeDate("Order 20240312 shipped")).toBe(false);
+    expect(looksLikeDate("Version 1.2.34 is out")).toBe(false);
+  });
+
+  test("is false for a number, an ordinary word and a year", () => {
+    expect(looksLikeDate("3 million 2024")).toBe(false);
+    expect(looksLikeDate("5 sites in 2024")).toBe(false);
+    expect(looksLikeDate("Top 10 2024")).toBe(false);
+    expect(looksLikeDate("Chapter 3 2024")).toBe(false);
+    expect(looksLikeDate("2024 Honda 5")).toBe(false);
+    expect(looksLikeDate("Over 20 users 2024")).toBe(false);
+    // Unseen brands and nouns: negative by construction, not by a denylist.
+    expect(looksLikeDate("7 Tesla 2024")).toBe(false);
+    expect(looksLikeDate("2024 Samsung 9")).toBe(false);
+    expect(looksLikeDate("Top 5 laptops 2024")).toBe(false);
+    expect(looksLikeDate("12 gadgets 2025")).toBe(false);
+    expect(looksLikeDate("8. tammikuuta 2026")).toBe(false);
   });
 });
 
@@ -116,6 +203,44 @@ describe("content/date-agreement — must not fire", () => {
     expect(check(checks, "byline-vs-schema-date")?.value).toBe("February 10, 2026");
   });
 
+  test("'Data' opening a sentence is not a byline prefix", () => {
+    const html = page(
+      article("2026-02-10"),
+      "<main><article><h1>Interaction to Next Paint</h1>" +
+        "<p>Data as of March 12, 2024 shows INP is the metric to watch.</p>" +
+        `${PROSE}</article></main>`,
+    );
+
+    expect(check(run(html), "byline-vs-schema-date")?.value).not.toBe("March 12, 2024");
+  });
+
+  test("'Data:' and 'Datum:' still open a byline", () => {
+    const html = page(
+      article("2026-02-10"),
+      "<main><article><h1>Interaction to Next Paint</h1>" +
+        "<p class=\"byline\">Data: February 10, 2026</p>" +
+        `${PROSE}</article></main>`,
+    );
+
+    expect(check(run(html), "byline-vs-schema-date")?.value).toBe("February 10, 2026");
+  });
+
+  test("'Version 3. March 2024' never produces a byline-vs-schema-date finding", () => {
+    for (const markup of [
+      '<p class="byline">Version 3. March 2024</p>',
+      "<p>Published: Version 3. March 2024</p>",
+    ]) {
+      const html = page(
+        article("2026-02-10"),
+        `<main><article><h1>Release notes</h1>${markup}${PROSE}</article></main>`,
+      );
+      const checks = run(html);
+
+      expect(check(checks, "byline-vs-schema-date")).toBeUndefined();
+      expect(checks.every((c) => c.status !== "warn")).toBe(true);
+    }
+  });
+
   test("prose without any byline at all is still not read as a byline", () => {
     // Same prose, no byline markup anywhere: the sentence must not become the
     // page's visible date and produce a 2024-vs-2026 disagreement.
@@ -144,6 +269,112 @@ describe("content/date-agreement — must not fire", () => {
     expect(checks.every((c) => c.status !== "warn")).toBe(true);
     expect(check(checks, "byline-vs-schema-date")).toBeUndefined();
     expect(check(checks, "visible-date-missing")).toBeUndefined();
+  });
+
+  test("a citation link is not the byline: reverting to textContent would flip this", () => {
+    // Differential fixture. "Published" opens a byline-shaped line, so the date
+    // inside the anchor WOULD be taken as this page's byline (2024 against a 2026
+    // schema date) if the anchor's text were not removed first. The older
+    // "Announced <a>" fixture is not byline-shaped either way and could not tell.
+    const html = page(
+      article("2026-02-10"),
+      "<main><article><h1>Interaction to Next Paint</h1>" +
+        '<p>Published <a href="https://web.dev/">March 12, 2024</a></p>' +
+        `${PROSE}</article></main>`,
+    );
+    const checks = run(html);
+
+    expect(checks.every((c) => c.status !== "warn")).toBe(true);
+    expect(check(checks, "byline-vs-schema-date")).toBeUndefined();
+    // The page does print a date, so "shows no date at all" would be wrong too.
+    expect(check(checks, "visible-date-missing")).toBeUndefined();
+  });
+
+  test("a citation with no space or punctuation before the next element still counts as a date", () => {
+    // `textContent` reads this as "Announced March 12, 2024Caching." and the old
+    // trailing \b hid the date; deleting the trap fixture's period used to flip
+    // it from clean to a visible-date-missing warning.
+    const html = page(
+      article("2026-02-10"),
+      "<main><article><h1>Interaction to Next Paint</h1>" +
+        '<p>Announced <a href="https://web.dev/blog/inp-cwv">March 12, 2024</a></p>' +
+        `<p>Caching.</p></article></main>`,
+    );
+
+    expect(run(html).every((c) => c.status !== "warn")).toBe(true);
+  });
+
+  test("a date followed straight by a sibling element is still the visible date", () => {
+    const html = page(
+      article("2026-01-08"),
+      '<main><article><p class="byline"><span>Published</span><span>January 8, 2026</span></p>' +
+        `<a href="/more">Read more</a>${PROSE}</article></main>`,
+    );
+
+    expect(check(run(html), "byline-vs-schema-date")?.status).toBe("pass");
+  });
+
+  test.each([
+    ["French", "Publié le 8 janvier 2026"],
+    ["German", "Veröffentlicht am 8. Januar 2026"],
+    ["Spanish", "Publicado el 8 de enero de 2026"],
+    ["Japanese", "2026年1月8日"],
+    ["Korean", "2026년 1월 8일"],
+    ["numeric, day first", "Published on 08/01/2026"],
+    ["numeric, month first", "Published on 01/08/2026"],
+    ["numeric with dots", "8.1.2026"],
+  ])("a %s byline that agrees with the schema date is not reported as missing", (_name, text) => {
+    const html = page(
+      article("2026-01-08"),
+      `<main><article><p class="byline">${text}</p>${PROSE}</article></main>`,
+    );
+    const checks = run(html);
+
+    expect(checks.every((c) => c.status !== "warn")).toBe(true);
+    expect(check(checks, "visible-date-missing")).toBeUndefined();
+  });
+
+  test("a non-English byline without byline markup is read from its opening word", () => {
+    const html = page(
+      article("2026-01-08"),
+      `<main><article><h1>Cache</h1><p>Publié le 8 janvier 2026</p>${PROSE}</article></main>`,
+    );
+
+    expect(check(run(html), "byline-vs-schema-date")?.status).toBe("pass");
+  });
+
+  test("a Polish date is read, not reported as missing", () => {
+    // "8 stycznia 2026" is in the month table, so the byline is found and agrees.
+    const html = page(
+      article("2026-01-08"),
+      `<main><article><h1>Cache</h1><p>Opublikowano 8 stycznia 2026</p>${PROSE}</article></main>`,
+    );
+
+    expect(run(html).length).toBe(0);
+  });
+
+  test("a year in a URL slug that is not a publication date is not reported", () => {
+    const html = page(
+      article("2026-01-08"),
+      '<main><article><p class="byline">Published on January 8, 2026</p>' +
+        `${PROSE}</article></main>`,
+      "Honda Civic review",
+    );
+
+    for (const slug of [
+      "/reviews/2024-honda-civic-review",
+      "/guides/best-caching-headers-of-2024",
+      "/posts/web-vitals-2024-edition",
+      // Round-up titles that open with a year and a number: not a month.
+      "/2024-10-best-tools",
+      "/2024-5-things",
+      "/2024-13-02-not-a-month",
+      "/2024-12-45-not-a-day",
+    ]) {
+      const checks = run(html, `https://example.com${slug}`);
+      expect(check(checks, "url-title-year")).toBeUndefined();
+      expect(checks.every((c) => c.status !== "warn")).toBe(true);
+    }
   });
 
   test("a long nav above the content does not push the byline out of the zone", () => {
@@ -227,6 +458,56 @@ describe("content/date-agreement — disagreements", () => {
     expect(warn?.value).toBe("November 4, 2025");
     expect(warn?.expected).toBe("2026-01-08");
     expect(warn?.details?.["gapDays"]).toBe(65);
+  });
+
+  test("a non-English byline that disagrees with the schema date warns", () => {
+    const html = page(
+      article("2026-01-08"),
+      '<main><article><p class="byline">Publié le 4 novembre 2025</p>' +
+        `${PROSE}</article></main>`,
+    );
+    const warn = check(run(html), "byline-vs-schema-date");
+
+    expect(warn?.status).toBe("warn");
+    expect(warn?.value).toBe("4 novembre 2025");
+    expect(warn?.details?.["gapDays"]).toBe(65);
+  });
+
+  test("a reference number after a Published opener is not read as a byline date", () => {
+    const html = page(
+      article("2026-03-20"),
+      '<main><article><p>Published: ref 3.4.2019 for the archive</p>' +
+        `${PROSE}</article></main>`,
+    );
+
+    expect(check(run(html), "byline-vs-schema-date")).toBeUndefined();
+  });
+
+  test("a numeric byline that matches neither reading of the schema date warns", () => {
+    const html = page(
+      article("2026-03-20"),
+      '<main><article><p class="byline">Published on 08/01/2026</p>' +
+        `${PROSE}</article></main>`,
+    );
+
+    expect(check(run(html), "byline-vs-schema-date")?.status).toBe("warn");
+  });
+
+  test("a dated URL segment and a dated slug still count as the URL's year", () => {
+    const html = page(
+      article("2026-01-08"),
+      '<main><article><p class="byline">Published on January 8, 2026</p>' +
+        `${PROSE}</article></main>`,
+    );
+
+    for (const path of [
+      "/blog/2024/caching",
+      "/blog/2024-03-12-caching",
+      "/blog/2024-03",
+      "/2024/03/caching",
+    ]) {
+      expect(check(run(html, `https://example.com${path}`), "url-title-year")?.status).toBe("warn");
+    }
   });
 
   test("a one-day difference is inside tolerance; two days is not", () => {

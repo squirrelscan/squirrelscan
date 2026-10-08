@@ -6,6 +6,7 @@ import {
   detectPageType,
   extractContactLinks,
   extractContent,
+  extractFontUrls,
   hasErrorShellMarker,
   extractHeadings,
   extractImages,
@@ -516,6 +517,10 @@ export interface PreFetchedAssets {
   resourceSizes: {
     css: ResourceSizeData[];
     images: ResourceSizeData[];
+    /** Font files the pages reference directly (preload, inline `@font-face`).
+     * Optional: sizes are HEAD-checked at audit time and never persisted, so
+     * anything that builds this by hand simply has no fonts. */
+    fonts?: ResourceSizeData[];
   };
   scripts: ScriptContentData[];
   pdfSizes: ResourceSizeData[];
@@ -547,6 +552,7 @@ export interface SiteAssetOccurrences {
   images: Map<string, Set<string>>;
   scripts: Map<string, Set<string>>;
   pdfs: Map<string, Set<string>>;
+  fonts: Map<string, Set<string>>;
   /** Scalars for the sitemap-coverage pass — v1's non-WAF parsed-page list. */
   coveragePages: Array<{ url: string; finalUrl?: string; statusCode: number }>;
   /** Every page absorbed, WAF and non-HTML included — v1's `siteContext.length`,
@@ -560,6 +566,7 @@ function emptySiteAssetOccurrences(): SiteAssetOccurrences {
     images: new Map(),
     scripts: new Map(),
     pdfs: new Map(),
+    fonts: new Map(),
     coveragePages: [],
     pageCount: 0,
   };
@@ -852,6 +859,12 @@ export function fetchAssetsFromOccurrences(
           verifyCompression: true,
           readImageHeader: true,
         }),
+        // Same cheap HEAD path as the sitemap and pdf pools: a font's size is
+        // all total-byte-weight reads.
+        fonts: checkResourceSizes(
+          Array.from(resourceOccurrences.fonts.keys()),
+          resourceCheckOptions,
+        ),
         scripts: fetchScriptContents(
           Array.from(resourceOccurrences.scripts.keys()),
           scriptFetchOptions,
@@ -891,6 +904,7 @@ export function fetchAssetsFromOccurrences(
             return Effect.succeed({
               css: [] as ResourceCheckResult[],
               images: [] as ResourceCheckResult[],
+              fonts: [] as ResourceCheckResult[],
               scripts: [] as ScriptFetchResult[],
               pdfs: [] as ResourceCheckResult[],
               sitemap: [] as ResourceCheckResult[],
@@ -902,6 +916,7 @@ export function fetchAssetsFromOccurrences(
     logger.trace("resource checks", {
       css: resourceResults.css.length,
       images: resourceResults.images.length,
+      fonts: resourceResults.fonts.length,
       scripts: resourceResults.scripts.length,
       pdfs: resourceResults.pdfs.length,
       sitemap: resourceResults.sitemap.length,
@@ -942,6 +957,14 @@ export function fetchAssetsFromOccurrences(
           naturalWidth: check.naturalWidth,
           naturalHeight: check.naturalHeight,
           animated: check.animated,
+        })),
+        fonts: resourceResults.fonts.map((check) => ({
+          url: check.url,
+          status: check.status,
+          error: check.error,
+          contentType: check.contentType,
+          sizeBytes: check.sizeBytes,
+          sourcePages: Array.from(resourceOccurrences.fonts.get(check.url) ?? []),
         })),
       },
       scripts: resourceResults.scripts.map((fetch) => ({
@@ -1083,6 +1106,7 @@ export function runRulesOnStorage(
       parsed: ParsedPage;
       headers?: Record<string, string>;
       redirectChain?: RedirectChain;
+      sizeBytes?: number | null;
     }> = [];
     const wafBlockedPages: Array<{
       url: string;
@@ -1144,6 +1168,7 @@ export function runRulesOnStorage(
         parsed,
         headers,
         redirectChain: page.redirectChain,
+        sizeBytes: page.sizeBytes,
       });
       pageDataMap.set(page.normalizedUrl, { page, parsed, headers });
     }
@@ -1693,6 +1718,7 @@ type StreamParsedPage = {
   parsed: ParsedPage;
   headers?: Record<string, string>;
   redirectChain?: RedirectChain;
+  sizeBytes?: number | null;
 };
 
 /**
@@ -2540,6 +2566,7 @@ export function runStreamingRules(
             finalUrl: page.finalUrl,
             parsed,
             fingerprint: shared.fingerprint,
+            htmlBytes: page.sizeBytes,
           }),
           "collected-signal",
         );
@@ -2904,6 +2931,7 @@ interface ResourceOccurrenceMap {
   css: Map<string, Set<string>>;
   images: Map<string, Set<string>>;
   scripts: Map<string, Set<string>>;
+  fonts: Map<string, Set<string>>;
 }
 
 function isSameDomainResource(url: string, baseHost: string): boolean {
@@ -2925,6 +2953,7 @@ function collectResourceOccurrences(
     css: new Map<string, Set<string>>(),
     images: new Map<string, Set<string>>(),
     scripts: new Map<string, Set<string>>(),
+    fonts: new Map<string, Set<string>>(),
   };
   absorbResourceOccurrences(target, pages, baseUrl);
   return target;
@@ -2943,7 +2972,7 @@ function absorbResourceOccurrences(
   baseUrl: string,
 ): void {
   const baseHost = getHostname(baseUrl).toLowerCase();
-  const { css, images, scripts } = target;
+  const { css, images, scripts, fonts } = target;
 
   for (const page of pages) {
     const pageUrl = page.finalUrl ?? page.url;
@@ -2971,6 +3000,13 @@ function absorbResourceOccurrences(
       const sources = images.get(resolved) ?? new Set<string>();
       sources.add(page.url);
       images.set(resolved, sources);
+    }
+
+    for (const fontUrl of extractFontUrls(doc, pageUrl)) {
+      if (!isSameDomainResource(fontUrl, baseHost)) continue;
+      const sources = fonts.get(fontUrl) ?? new Set<string>();
+      sources.add(page.url);
+      fonts.set(fontUrl, sources);
     }
 
     // Extract external script URLs
