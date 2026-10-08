@@ -284,6 +284,8 @@ export interface ParsedPage {
    * the rule then treats it as unconfirmed (warns, annotated), never drops.
    */
   soft404Confirmation?: Soft404Confirmation;
+  /** Error-shell marker captured while the DOM was live; see the parser's `ParsedPage.errorShell` (#235). */
+  errorShell?: boolean;
 
   // DEPRECATED: Use schemas.types, schemas.valid, etc. instead
   schema: SchemaData;

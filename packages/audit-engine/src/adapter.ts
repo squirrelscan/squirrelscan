@@ -6,6 +6,7 @@ import {
   detectPageType,
   extractContactLinks,
   extractContent,
+  hasErrorShellMarker,
   extractHeadings,
   extractImages,
   extractLinks,
@@ -268,6 +269,10 @@ export function buildSiteContext(
             document: doc,
             ...stored,
             schemas: schemaCollectionFromJSON(stored.schemas),
+            // A parse stored before the marker was captured has no value, but
+            // the DOM is live right here, so read it now rather than losing it.
+            errorShell:
+              typeof stored.errorShell === "boolean" ? stored.errorShell : hasErrorShellMarker(doc),
           };
         } catch (e) {
           logger.error(`Failed to deserialize parsedData for ${page.url}:`, e);
@@ -386,6 +391,9 @@ export function parseHtmlForRules(html: string, baseUrl: string): ParsedPage {
       width: i.width,
       height: i.height,
     })),
+    // Captured now, while the DOM is live: the streamed audit releases it before
+    // soft-404 candidates are picked (#235).
+    errorShell: hasErrorShellMarker(doc),
     // New schema data
     schemas,
     author,
