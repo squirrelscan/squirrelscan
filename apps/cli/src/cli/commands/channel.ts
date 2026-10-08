@@ -11,6 +11,7 @@ import {
 
 // One day: far below the ~24.8 day setTimeout limit, past which a timer fires immediately.
 const MAX_INTERVAL_SECONDS = 86_400;
+const MIN_POLL_INTERVAL_SECONDS = 5;
 
 export function parseCategories(
   raw: string | undefined
@@ -55,11 +56,11 @@ export const channel = defineCommand({
       intervalSeconds = Number(args.interval);
       if (
         !Number.isFinite(intervalSeconds) ||
-        intervalSeconds <= 0 ||
+        intervalSeconds < MIN_POLL_INTERVAL_SECONDS ||
         intervalSeconds > MAX_INTERVAL_SECONDS
       ) {
         console.error(
-          `--interval must be between 1 and ${MAX_INTERVAL_SECONDS} seconds.`
+          `--interval must be between ${MIN_POLL_INTERVAL_SECONDS} and ${MAX_INTERVAL_SECONDS} seconds.`
         );
         process.exit(1);
       }

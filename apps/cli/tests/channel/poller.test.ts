@@ -294,6 +294,30 @@ describe("legacy feed without next_cursor", () => {
 });
 
 describe("file state store", () => {
+  test("keeps only the newest seen keys when a saved file is oversized", () => {
+    const dir = mkdtempSync(join(tmpdir(), "channel-state-"));
+    try {
+      const keys = Array.from(
+        { length: MAX_SEEN_KEYS + 20 },
+        (_, i) => `id:${i}`
+      );
+      Bun.write(
+        join(dir, "org_big.json"),
+        JSON.stringify({
+          version: 1,
+          cursor: null,
+          bootstrapped: true,
+          seen: keys,
+        })
+      );
+      const loaded = createFileStateStore("org_big", dir).load();
+      expect(loaded.seen).toHaveLength(MAX_SEEN_KEYS);
+      expect(loaded.seen.at(-1)).toBe(keys.at(-1));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("round-trips per org and tolerates a corrupt file", () => {
     const dir = mkdtempSync(join(tmpdir(), "channel-state-"));
     try {

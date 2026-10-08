@@ -152,6 +152,82 @@ describe("runPollLoop", () => {
   });
 });
 
+describe("runPollLoop org and recovery", () => {
+  function run(opts: {
+    orgs: Array<string | null>;
+    statuses: Array<number | "ok">;
+    ticks: number;
+  }) {
+    const stores: string[] = [];
+    const polledOrgs: string[] = [];
+    const events: ChannelEvent[] = [];
+    const abort = new AbortController();
+    let tick = 0;
+    let orgCalls = 0;
+    let currentOrg = "";
+    const statuses = [...opts.statuses];
+    const deps: LoopDeps = {
+      resolveLogin: () => ({}),
+      resolveOrgId: async () =>
+        opts.orgs[Math.min(orgCalls++, opts.orgs.length - 1)] ?? null,
+      fetchPage: async () => {
+        polledOrgs.push(currentOrg);
+        const next = statuses.shift() ?? "ok";
+        return next === "ok"
+          ? {
+              ok: true,
+              page: { rows: [], cursorSupported: true, nextCursor: "c" },
+            }
+          : { ok: false, status: next };
+      },
+      createStore: (orgId) => {
+        stores.push(orgId);
+        currentOrg = orgId;
+        return { load: () => emptyState(), save: () => {} };
+      },
+      emit: async (event) => void events.push(event),
+      sleep: async () => {
+        tick += 1;
+        if (tick >= opts.ticks) abort.abort();
+      },
+    };
+    const done = runPollLoop(
+      { intervalSeconds: 30, categories: ["audit_complete"] },
+      deps,
+      abort.signal
+    );
+    return { done, stores, polledOrgs, events };
+  }
+
+  test("a changed active org gets its own state after the periodic recheck", async () => {
+    const h = run({
+      orgs: ["org_a", "org_a", "org_b"],
+      statuses: [],
+      ticks: 25,
+    });
+    await h.done;
+    expect(h.stores).toEqual(["org_a", "org_b"]);
+    expect(h.polledOrgs.at(-1)).toBe("org_b");
+  });
+
+  test("a failed org lookup keeps the current org", async () => {
+    const h = run({ orgs: ["org_a", null], statuses: [], ticks: 15 });
+    await h.done;
+    expect(h.stores).toEqual(["org_a"]);
+  });
+
+  test("recovers after a 401 without a restart and announces login once", async () => {
+    const h = run({
+      orgs: ["org_a"],
+      statuses: [401, 401, "ok", "ok"],
+      ticks: 4,
+    });
+    await h.done;
+    expect(h.events).toEqual([LOGIN_REQUIRED_EVENT]);
+    expect(h.stores.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
 describe("parseCategories", () => {
   test("defaults, custom lists and unknown names", () => {
     expect(parseCategories(undefined)).toEqual([

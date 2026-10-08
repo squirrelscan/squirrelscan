@@ -18,7 +18,7 @@ squirrel channel [--interval <seconds>] [--categories <list>]
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--interval` | `30` | Seconds between polls of the cloud feed. Minimum 5. Backs off on `429` and `5xx`. |
+| `--interval` | `30` | Seconds between polls of the cloud feed. From 5 to 86400. Backs off on `429` and `5xx`. |
 | `--categories` | `audit_complete,audit_failed,issues_detected` | Comma-separated categories to deliver. |
 
 ## Authentication

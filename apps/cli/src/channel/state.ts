@@ -3,7 +3,7 @@
 // still never repeats an event.
 
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { getSquirrelPaths } from "@/self/paths";
 import { logger } from "@/utils/logger";
@@ -82,7 +82,7 @@ export function createFileStateStore(
     },
     save(state) {
       try {
-        mkdirSync(join(path, ".."), { recursive: true, mode: 0o700 });
+        mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
         const tmp = `${path}.${process.pid}.tmp`;
         writeFileSync(tmp, JSON.stringify(state), { mode: 0o600 });
         renameSync(tmp, path);

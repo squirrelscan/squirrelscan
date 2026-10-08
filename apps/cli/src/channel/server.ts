@@ -33,6 +33,8 @@ export const DEFAULT_POLL_INTERVAL_SECONDS = 30;
 export const MIN_POLL_INTERVAL_SECONDS = 5;
 const MAX_BACKOFF_MS = 10 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 15_000;
+// The active org can change while a session stays open (dashboard switch), so re-resolve it every this many polls.
+const ORG_RECHECK_POLLS = 10;
 
 export interface ChannelOptions {
   intervalSeconds?: number;
@@ -103,6 +105,7 @@ export async function runPollLoop(
   let announcedLogin = false;
   let orgId: string | null = null;
   let store: StateStore | null = null;
+  let pollsSinceOrgCheck = 0;
 
   while (!signal.aborted) {
     let delay = nextDelayMs(intervalMs, failures);
@@ -119,6 +122,15 @@ export async function runPollLoop(
         if (!store) {
           orgId = await deps.resolveOrgId();
           if (orgId) store = deps.createStore(orgId);
+          pollsSinceOrgCheck = 0;
+        } else if (++pollsSinceOrgCheck >= ORG_RECHECK_POLLS) {
+          pollsSinceOrgCheck = 0;
+          // A failed lookup keeps the current org; a different org gets its own state and starts from "now".
+          const current = await deps.resolveOrgId();
+          if (current && current !== orgId) {
+            orgId = current;
+            store = deps.createStore(current);
+          }
         }
         const result: PollResult = store
           ? await pollOnce({

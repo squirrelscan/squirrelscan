@@ -6,6 +6,8 @@
 //  - legacy feed (no `next_cursor` in the response): newest-first page only, so
 //    delivery relies on the bounded seen-set.
 
+import { logger } from "@/utils/logger";
+
 import { type ChannelEvent, type FeedRow, buildEvent } from "./events";
 import { type ChannelState, type StateStore, rememberSeen } from "./state";
 
@@ -144,6 +146,10 @@ async function pollLegacy(
   const fresh = result.page.rows.filter(
     (row) => !dedupeKeys(row).some((key) => state.seen.includes(key))
   );
+  if (fresh.length >= FEED_PAGE_SIZE) {
+    // Every row on a full page is new: older ones may have fallen off the page unseen.
+    logger.debug("channel: full page of unseen rows, some may be missed");
+  }
   await deliver(fresh.reverse(), state, deps);
   if (result.page.nextCursor !== null) state.cursor = result.page.nextCursor;
   deps.store.save(state);

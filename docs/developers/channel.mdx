@@ -91,7 +91,7 @@ Pass options in `args`:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--categories` | `audit_complete,audit_failed,issues_detected` | Comma-separated categories to deliver |
-| `--interval` | `30` | Seconds between polls, minimum 5 |
+| `--interval` | `30` | Seconds between polls, from 5 to 86400 |
 
 On a `429` or `5xx` response, or a network error, the channel doubles its delay for each consecutive failure, up to 10 minutes, then returns to the normal interval after the next success.
 
@@ -109,4 +109,4 @@ If there is no login session, the channel sends a single `login_required` event 
 
 - **Nothing arrives**: run `/mcp` in Claude Code to check that `squirrelscan` is connected, and confirm you started Claude Code with the development flag. Claude Code drops channel events silently when the session did not load the server as a channel or an organization policy blocks it.
 - **Debug output**: the channel logs to stderr only, because stdout carries the protocol. Start Claude Code with `claude --debug` to see it.
-- **Wrong organization**: the channel follows your account's active organization. Switch it in the dashboard and restart the channel.
+- **Wrong organization**: the channel follows your account's active organization and checks it again every few polls, so a switch in the dashboard takes effect without a restart. The new organization starts from now and does not replay history.
