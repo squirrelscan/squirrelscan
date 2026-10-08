@@ -45,6 +45,8 @@ import { ErrorCodes } from "@/controllers/types";
 import {
   ENTITY_PROBLEMS,
   filterEntityMap,
+  filteredCounts,
+  withRecomputedSummary,
   findEntity,
   hasEntityFilters,
   isEntityProblem,
@@ -84,16 +86,24 @@ const DIFF_FORMATS = ["markdown", "json"] as const;
  * Every format receives the FILTERED map, so `--type Organization -f graphml`
  * hands Gephi the filtered graph rather than the whole one.
  */
-function renderMap(map: EntityMap, format: EntityFormat): string {
+function renderMap(
+  map: EntityMap,
+  format: EntityFormat,
+  site: EntityMap
+): string {
+  const counts = filteredCounts(map);
   switch (format) {
     case "json":
-      return `${JSON.stringify(map, null, 2)}\n`;
+      // `summary` is the site-wide one, and `filtered` is what survived the
+      // filters: the same pair the hosted API returns as `summary` and
+      // `meta.counts`, so a script reads one number on every surface.
+      return `${JSON.stringify({ ...map, filtered: counts }, null, 2)}\n`;
     case "jsonld":
       return `${JSON.stringify(toJsonLd(map), null, 2)}\n`;
     case "html":
       return renderEntityMapHtml(map);
     case "markdown":
-      return renderEntityMapMarkdown(map);
+      return withFilteredNote(renderEntityMapMarkdown(map), map, site);
     case "csv":
       return renderEntitiesCsv(map);
     case "dot":
@@ -103,6 +113,23 @@ function renderMap(map: EntityMap, format: EntityFormat): string {
     case "mermaid":
       return renderEntitiesMermaid(map);
   }
+}
+
+/** One line saying how much of the site a filtered map holds. */
+function filteredLine(map: EntityMap, site: EntityMap): string {
+  const counts = filteredCounts(map);
+  return `Filtered: ${counts.nodes} of ${site.summary.nodeCount} entities and ${counts.edges} of ${site.summary.edgeCount} references match. The summary describes the whole site.`;
+}
+
+/** Add {@link filteredLine} under the heading of a markdown document. */
+function withFilteredNote(
+  markdown: string,
+  map: EntityMap,
+  site: EntityMap
+): string {
+  if (map === site) return markdown;
+  const [heading = "", ...rest] = markdown.split("\n");
+  return [heading, "", `> ${filteredLine(map, site)}`, ...rest].join("\n");
 }
 
 /** The default summary view: what a reader sees with no flags at all. */
@@ -562,10 +589,13 @@ export const entities = defineCommand({
         newer = second.map;
       }
 
-      const diff = diffEntityMaps(
-        filterEntityMap(older, filters),
-        filterEntityMap(newer, filters)
-      );
+      // A diff compares summaries, so each side's is recomputed over what its
+      // filter kept. Every other output keeps the site-wide summary.
+      const scoped = (map: EntityMap): EntityMap =>
+        hasEntityFilters(filters)
+          ? withRecomputedSummary(filterEntityMap(map, filters))
+          : map;
+      const diff = diffEntityMaps(scoped(older), scoped(newer));
       emit(
         diffFormat === "json"
           ? `${JSON.stringify(diff, null, 2)}\n`
@@ -640,7 +670,7 @@ export const entities = defineCommand({
         );
         return safeExit(1);
       }
-      emit(renderMap(filtered, args.format), args.output);
+      emit(renderMap(filtered, args.format, map), args.output);
       return;
     }
 
@@ -648,18 +678,17 @@ export const entities = defineCommand({
     // agent running `squirrel entities | …` gets something parseable without
     // having to know the flag.
     if (args.output || !process.stdout.isTTY) {
-      emit(renderEntityMapMarkdown(filtered), args.output);
+      emit(
+        withFilteredNote(renderEntityMapMarkdown(filtered), filtered, map),
+        args.output
+      );
       return;
     }
 
     printSummary(filtered, crawlLabel);
     if (hasEntityFilters(filters)) {
       console.log("");
-      console.log(
-        fmt.dim(
-          `Filtered: ${filtered.summary.nodeCount} of ${map.summary.nodeCount} entities match.`
-        )
-      );
+      console.log(fmt.dim(filteredLine(filtered, map)));
     }
   },
 });
