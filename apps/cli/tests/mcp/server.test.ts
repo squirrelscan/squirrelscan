@@ -97,6 +97,8 @@ describe("createMcpServer tool registration", () => {
       "get_entity_graph",
       "compare_entities",
       "get_entity_findings",
+      // No login and no credits: it only needs the network.
+      "send_feedback",
     ]);
     const { tools } = await client.listTools();
     for (const tool of tools) {
