@@ -60,9 +60,9 @@ The fold runs in the site pass, so the script scan is bounded. At most `MAX_SCRI
 - `packages/audit-engine/src/endpoint-discovery.ts` holds the page collector. It runs while each page DOM is live, like the `collected-signals` collector, and its per-page record is stored in the rule cache and replayed. A cached page from before this collector existed has no record, so it is re-run once.
 - `runStreamingRules` registers the collector in the page loop. `runRulesOnStorage` (v1) feeds the same collector from the parsed pages it holds. Both hand the folded surface to `runner.runSiteRules`.
 
-## Confidence
+## Confidence and safety
 
-A candidate with `discoveredVia: "string-literal"` is a quoted string that looks like an API route. It can be an i18n string or a documentation link, so treat it as lower confidence than a call site (`fetch`, `axios.*`, `xhr.open`, `$.ajax`) or a form action. A convention candidate is a guess from the detected stack. Whichever rule probes a candidate must check `probeEligible` first, including convention paths such as `/metrics` and `/graphql`.
+A candidate with `discoveredVia: "string-literal"` is a quoted string that looks like an API route. It can be an i18n string or a documentation link, so treat it as lower confidence than a call site (`fetch`, `axios.*`, `xhr.open`, `$.ajax`) or a form action. A convention candidate is a guess from the detected stack. Convention paths such as `/api/health`, `/metrics` and `/graphql` are guesses from the stack, not verified routes. A call-site candidate can name any same-origin path that is not a static asset, including a state-changing one such as `/logout` or `/admin/delete`. A rule that probes a candidate must check `probeEligible` first, and must send only idempotent, read-only requests (GET, HEAD, OPTIONS, or a read-only POST such as a GraphQL introspection query). Use `method` and `discoveredVia` to decide. Relative URLs without a leading slash (`fetch("api/users")`) are skipped on purpose, because their base depends on the page path.
 
 ## Constraints
 

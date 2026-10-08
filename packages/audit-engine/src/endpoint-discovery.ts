@@ -134,7 +134,9 @@ export function createEndpointCollector(opts: {
   // Keep a page's refs under the stable admission order. The snapshot handed to
   // the rule cache stays whole, so a replay offers the same refs a fresh run would.
   // A ref's class is "same-origin" if ANY page that carries it shares its origin,
-  // so the class does not depend on which page was offered first.
+  // so the class does not depend on which page was offered first. The class only
+  // steers the retained caps. `buildEndpointSurface` recomputes `sameOrigin` and
+  // `probeEligible` against the site base URL and is authoritative.
   const admit = (record: PageEndpointRefs): void => {
     if (record.techIds !== undefined) {
       detectionSeen = true;

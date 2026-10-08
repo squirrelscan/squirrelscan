@@ -118,7 +118,7 @@ const HTTP_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "
 // A path that reads as an API route. Anchored at the start of the literal.
 const API_PATH_RE =
   /^\/(?:api(?:[/?]|$)|graphql(?:[/?]|$)|rest\/v1\/|_next\/data\/|trpc\/|wp-json(?:[/?]|$)|actuator(?:[/?]|$)|openapi\.json)/i;
-const API_HOST_RE = /^(?:api|graphql|gql|gateway)[.-]/i;
+const API_HOST_RE = /^(?:api|graphql|gql|gateway)\./i;
 const STATIC_ASSET_RE = /\.(?:js|mjs|css|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|eot|mp4|webm|pdf)(?:[?#]|$)/i;
 // Characters that mean the literal is a template, a pattern or prose, not a URL.
 const NOT_A_URL_RE = /[{}<>()*^$|\\]/;

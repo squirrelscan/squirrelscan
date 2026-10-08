@@ -181,7 +181,7 @@ describe("endpoint discovery collector", () => {
     const site = { baseUrl: `${ORIGIN}/`, scripts: [] };
     const baseRefs = base.retained();
     const baseSurface = base.finish(site);
-    expect(baseRefs.filter((r) => r.url.includes("vendor.io")).length).toBe(MAX_RETAINED_CROSS_ORIGIN_REFS);
+    expect(baseRefs.filter((r) => new URL(r.url).hostname === "api.vendor.io").length).toBe(MAX_RETAINED_CROSS_ORIGIN_REFS);
     expect(baseRefs.length).toBe(MAX_RETAINED_REFS + MAX_RETAINED_CROSS_ORIGIN_REFS);
 
     for (const order of [reversed, shuffled]) {

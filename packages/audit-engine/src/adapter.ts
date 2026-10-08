@@ -1513,7 +1513,8 @@ export function runRulesOnStorage(
     // Step 4: Run site rules
     const siteRulesSpan = logger.traceStart("runSiteRules");
     // Endpoint discovery: same collector the streaming path registers, fed from the
-    // parsed pages v1 already holds. Passive; no request is made.
+    // parsed pages v1 already holds. Passive; no request is made. It relies on
+    // `pageDataMap` insertion order matching crawl order, so the entry page is first.
     const endpointCollector = createEndpointCollector({ headersOf: buildHeadersMap });
     for (const [, { page, parsed }] of pageDataMap) {
       endpointCollector.collect(page, parsed);
