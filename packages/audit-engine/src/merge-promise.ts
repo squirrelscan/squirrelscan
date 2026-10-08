@@ -207,11 +207,16 @@ export interface SmartAuditStore {
   getSitePages(siteKey: string): Promise<SitePageRecord[]>;
   upsertFindings(findings: PageFindingRecord[]): Promise<void>;
   /**
-   * Insert or replace these rows by `normalizedUrl`, leaving every other row as
-   * it is. (#497) A DELTA, not a snapshot: `runCloudSmartAudits` passes only the
-   * pages this run crawled (removed ones go through {@link markPagesRemoved}).
+   * A KEYED UPSERT, never a snapshot replace (#497). For each row, insert it or
+   * replace the stored row with the same (`siteKey`, `normalizedUrl`); every row
+   * not passed stays exactly as it is. An implementation must never delete or
+   * reset a page because the call left it out.
+   *
+   * Callers may pass only the rows that changed, and `runCloudSmartAudits` does:
+   * the pages this run crawled (removed ones go through {@link markPagesRemoved}).
    * Every other page keeps the row {@link getSitePages} returned, which the merge
-   * would only have written back unchanged.
+   * would only have written back unchanged, so a keyed upsert of the changed rows
+   * leaves the same rows as one of every page.
    */
   upsertSitePages(pages: SitePageRecord[]): Promise<void>;
   /** Page→removed + its findings→stale in ONE transaction. */

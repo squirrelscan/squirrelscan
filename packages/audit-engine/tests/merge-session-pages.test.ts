@@ -232,3 +232,119 @@ describe("a publish writes the run's pages, not the site's (#497)", () => {
     expect(result.coverage.auditedPages).toBe(20);
   });
 });
+
+/**
+ * The contract `SmartAuditStore.upsertSitePages` documents, and nothing more: a
+ * keyed upsert on (site, url) that never touches a row it was not handed. Rows of
+ * another site sit beside the measured one to show that too.
+ */
+class KeyedUpsertStore implements SmartAuditStore {
+  rows = new Map<string, SitePageRecord>();
+  upserted = 0;
+
+  private key(siteKey: string, normalizedUrl: string) {
+    return `${siteKey}\u0000${normalizedUrl}`;
+  }
+  seed(pages: readonly SitePageRecord[]) {
+    for (const p of pages) this.rows.set(this.key(p.siteKey, p.normalizedUrl), p);
+  }
+  async getFindings() {
+    return [];
+  }
+  async getSitePages(siteKey: string) {
+    return [...this.rows.values()].filter((p) => p.siteKey === siteKey);
+  }
+  async upsertFindings() {}
+  async upsertSitePages(pages: SitePageRecord[]) {
+    this.upserted += pages.length;
+    for (const p of pages) this.rows.set(this.key(p.siteKey, p.normalizedUrl), { ...p });
+  }
+  async markPageRemoved(siteKey: string, normalizedUrl: string, crawlId: string, lastStatus: number) {
+    await this.markPagesRemoved(siteKey, [{ normalizedUrl, lastStatus }], crawlId);
+  }
+  async markPagesRemoved(
+    siteKey: string,
+    pages: Array<{ normalizedUrl: string; lastStatus: number }>,
+    crawlId: string,
+  ) {
+    for (const { normalizedUrl, lastStatus } of pages) {
+      this.rows.set(this.key(siteKey, normalizedUrl), {
+        siteKey,
+        normalizedUrl,
+        lastStatus,
+        state: "removed",
+        lastSeenCrawlId: crawlId,
+        lastSeenAt: NOW,
+      });
+    }
+  }
+  async compactFindings() {
+    return 0;
+  }
+  /** Every row, in key order, so two stores compare by content alone. */
+  snapshot() {
+    return [...this.rows.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  }
+}
+
+describe("upsertSitePages as a keyed upsert: changed rows only == every row (#497)", () => {
+  for (const seed of [1, 2, 3, 4, 5, 6]) {
+    test(`seed ${seed}`, async () => {
+      const input = fixture(seed, false);
+      const otherSite = input.priorPages
+        .slice(0, 40)
+        .map((p) => ({ ...p, siteKey: "web_other", lastSeenCrawlId: "audit_other" }));
+      const crawled = [...input.crawledUrls];
+      const removed = [...input.removedUrls];
+      const pageStatuses = [
+        ...crawled.map((u) => ({ url: u, status: 200 })),
+        ...removed.map((u) => ({ url: u, status: 404 })),
+      ];
+
+      // Today: the publish hands over only the rows it changed.
+      const delta = new KeyedUpsertStore();
+      delta.seed(input.priorPages);
+      delta.seed(otherSite);
+      await runCloudSmartAudits({
+        store: delta,
+        siteKey: SITE,
+        crawlId: CRAWL,
+        ruleResults: {},
+        pageStatuses,
+        now: NOW,
+        completeStore: { crawledUrls: crawled, openPages: (async function* () {})() },
+      });
+
+      // Before #497: the same scope, every merged page written back. These are the
+      // sets `runCloudSmartAudits` settles (removed pages leave the crawled set),
+      // and the writes in the order it made them.
+      const full = new KeyedUpsertStore();
+      full.seed(input.priorPages);
+      full.seed(otherSite);
+      const removedUrls = new Set(removed);
+      const statusByUrl = new Map<string, number>();
+      for (const { url: u, status } of pageStatuses) statusByUrl.set(u, status);
+      const session = createMergeSession(
+        {
+          ...input,
+          crawledUrls: new Set(crawled.filter((u) => !removedUrls.has(u))),
+          removedUrls,
+          statusByUrl,
+          priorPages: await full.getSitePages(SITE),
+        },
+        { persist: () => {}, active: () => {} },
+      );
+      await full.markPagesRemoved(
+        SITE,
+        removed.map((u) => ({ normalizedUrl: u, lastStatus: statusByUrl.get(u) ?? 404 })),
+        CRAWL,
+      );
+      await full.upsertSitePages(session.sitePages.filter((p) => !removedUrls.has(p.normalizedUrl)));
+
+      expect(delta.snapshot()).toEqual(full.snapshot());
+      // And it got there writing the run's pages, not the site's.
+      expect(delta.upserted).toBeLessThan(full.upserted);
+      expect(delta.upserted).toBeLessThanOrEqual(crawled.length);
+    });
+  }
+});
