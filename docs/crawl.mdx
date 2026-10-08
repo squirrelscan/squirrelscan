@@ -115,6 +115,10 @@ SquirrelScan automatically follows **both HTTP and client-side redirects** when 
 - **Meta refresh** - `<meta http-equiv="refresh" content="0;url=...">`
 - **JavaScript redirects** - `window.location`, `window.location.href`, `location.href`
 
+Client-side redirects inside `<noscript>` are ignored. A browser with scripting on
+treats that content as text, so a meta refresh there never fires, and the audit
+starts at the URL you gave it rather than the no-JS fallback.
+
 ### How it works
 
 Before crawling begins, SquirrelScan:
