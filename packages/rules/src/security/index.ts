@@ -16,6 +16,7 @@ import { permissionsPolicyRule } from "./permissions-policy";
 import { referrerPolicyRule } from "./referrer-policy";
 import { sriRule } from "./sri";
 import { thirdPartyCookiesRule } from "./third-party-cookies";
+import { tokenStorageRule } from "./token-storage";
 import { xContentTypeRule } from "./x-content-type";
 import { xFrameOptionsRule } from "./x-frame-options";
 
@@ -33,6 +34,7 @@ export const rules: Rule[] = [
   formCaptchaRule,
   newTabRule,
   leakedSecretsRule,
+  tokenStorageRule,
   thirdPartyCookiesRule,
   sriRule,
   cookieFlagsRule,
@@ -53,6 +55,7 @@ export {
   referrerPolicyRule,
   sriRule,
   thirdPartyCookiesRule,
+  tokenStorageRule,
   xContentTypeRule,
   xFrameOptionsRule,
 };

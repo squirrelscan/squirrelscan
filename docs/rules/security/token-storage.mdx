@@ -1,0 +1,88 @@
+---
+title: "Auth tokens in localStorage: why a stored JWT is exposed"
+description: "A JWT or session token in localStorage or sessionStorage is readable by any script on the page. squirrel finds the writes in your scripts and names the key."
+---
+
+## What a token in web storage is
+
+`localStorage` and `sessionStorage` are readable by every script that runs on the page. That includes your own bundle, every third-party tag and any code an attacker injects through a cross-site scripting (XSS) bug. A JWT, a session token or an access token kept there is one XSS bug away from an account takeover, and the attacker can use it from their own machine.
+
+An `httpOnly` cookie is not readable from script, so the same bug cannot copy it. That is why the safer pattern is a cookie the server sets with `HttpOnly`, `Secure` and `SameSite`.
+
+## What squirrel checks
+
+The rule is passive. It reads the inline `<script>` blocks of each crawled page and the external JavaScript files the crawl already fetched. It makes no extra request. A script shared by many pages is judged once, on the first page (in URL order) that loads it. It emits a single check named `token-storage`:
+
+- Skipped when there is no parsed document. Message: `No document available`.
+- Pass when no write was found. Message: `No auth tokens written to localStorage or sessionStorage`.
+- Warn when a write was found. Message: `1 auth token write(s) to web storage: localStorage["access_token"] in https://example.com/static/app.js`. Each item names the script, the storage and the key.
+
+Two things count as a token write:
+
+| Reason | Matches |
+|---|---|
+| `key-name` | A write whose literal key names a credential: `token`, `jwt`, `bearer`, `access_token`, `idToken`, `refreshToken`, `authToken`, or `auth` and `session` on their own or beside `id`, `key`, `data`, `user` and similar (`session_id`, `authUser`). |
+| `jwt-value` | A write whose literal value has the shape of a JWT (`eyJ...` header, `eyJ...` payload and a signature), under any key. |
+
+These write forms are read: `localStorage.setItem("k", v)`, `sessionStorage.setItem("k", v)`, `localStorage["k"] = v` and `localStorage.k = v`, with an optional `window.` prefix. A key that is computed at runtime is only judged by its value.
+
+### What is not flagged
+
+Keys are split into words at punctuation and camelCase, and whole words decide, not substrings. These stay clean:
+
+- UI and app state: `theme`, `cart`, `lang`, `ui_state`, `session_theme`, `auth_banner_dismissed`, `cookie_consent`.
+- Other kinds of token: `csrf_token`, `push_token`, `next_page_token`.
+- Timestamps and counters: `token_expires_at`, `session_start_time`.
+- Words that only contain a keyword, such as `authority` and `tokenizer`.
+- A write that clears a key, such as `setItem("token", "")` or `setItem("token", null)`.
+- Reads, removals and comparisons, such as `getItem("token")` and `localStorage.token == null`.
+- Script blocks that are not JavaScript, such as `type="application/json"`.
+
+When a key has a namespace such as `app:auth` or `app.session`, only the last part is judged.
+
+### The value is never printed
+
+A token in a report is a token that leaks again. The report names the script and the key, and nothing else about the value. A key that is itself JWT-shaped is dropped from the report.
+
+### Limits
+
+The rule reads script text, so it sees what a script writes and not what the browser holds. A token written through a variable key, a wrapper library or a minified alias is not found unless its value is a literal JWT. A finding is a prompt to check where the token goes, not proof that a live token is exposed.
+
+## How to fix it
+
+Move the credential into an `httpOnly` cookie that the server sets, and let the browser send it. If a token has to stay in script, hold it in memory for the life of the page, give it a short lifetime and rotate refresh tokens. Add a strict [Content-Security-Policy](/rules/security/csp) to limit what can run on the page.
+
+If the key is not a credential, rename it so it says what it holds, for example `theme` in place of `session`.
+
+| | |
+|---|---|
+| **Rule ID** | `security/token-storage` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 6/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/token-storage"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/token-storage"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
