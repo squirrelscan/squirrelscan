@@ -11,12 +11,16 @@ WCAG success criterion 1.2.2 requires captions for prerecorded audio in synchron
 
 ## What squirrel checks
 
-The rule runs on every crawled page over every `<video>` element, looking for a child `track[kind="captions"]` or `track[kind="subtitles"]`. It emits a single check named `video-accessible`:
+The rule runs on every crawled page over every `<video>` element that is not decorative, looking for a child `track[kind="captions"]` or `track[kind="subtitles"]`. It emits a single check named `video-accessible`:
 
 - Info when the page has no `<video>` element. Message: `No HTML5 video elements found`.
-- Pass when every video has a caption or subtitle track. Message: `All 3 video(s) have caption tracks`.
+- Pass when every video that needs captions has a caption or subtitle track, or when every video is decorative (`No videos need captions (N decorative skipped)`). Message: `All 3 video(s) have caption tracks`.
 - Info when some do. Message: `2/3 video(s) have caption tracks`.
 - Warn when none do. Message: `No videos have caption tracks`, with `Add <track> elements for accessibility` as the value. Severity warning, weight 4.
+
+### Decorative videos
+
+A video is skipped when it is `aria-hidden="true"`, or when it is `muted`, has no `controls`, and has `autoplay` or `loop`. That is the markup of a background or hero loop, which has no audio to caption. The counts in the messages above exclude skipped videos, and the check's details record `videosChecked` (videos that needed captions) and `decorativeSkipped`. A video with `controls`, that is not `muted`, or that is `muted` with neither `autoplay` nor `loop`, is still checked. [a11y/video-captions](/rules/a11y/video-captions) uses the same check, so the two rules agree.
 
 Only HTML `<video>` elements are checked. A YouTube or Vimeo embed carries its own captions inside the iframe, which this rule cannot see, so a page whose video is entirely embedded reports `No HTML5 video elements found`.
 
