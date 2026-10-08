@@ -1,7 +1,6 @@
 // Local deterministic audit tools — free, no auth; cloud enrichment when authed.
 
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult, McpServer } from "@modelcontextprotocol/server";
 
 import { renderLlm } from "@squirrelscan/report";
 import {
@@ -48,7 +47,7 @@ export function registerAuditTools(server: McpServer): void {
       title: "Audit a website",
       description:
         "Run a full deterministic website audit (performance, security, accessibility, content, structured data, and more) on a URL and return an LLM-optimized report. Free + local; adds cloud enrichment automatically when logged in (charges credits per your plan). Pass offline:true to force local-only.",
-      inputSchema: {
+      inputSchema: z.object({
         url: z.string().describe("The URL to audit (e.g. https://example.com)"),
         coverage: z
           .enum(["quick", "surface", "full"])
@@ -86,7 +85,7 @@ export function registerAuditTools(server: McpServer): void {
           .describe(
             'Custom HTTP request headers attached to every crawl request (pages, assets, robots, sitemap). Map of name → value, e.g. {"Signature-Agent": "\\"https://shopify.com\\""}. Use for authorized-crawler schemes (Shopify/Cloudflare Web Bot Auth). Values are secrets — never echoed back.'
           ),
-      },
+      }),
     },
     async ({ url, coverage, maxPages, offline, headers }) => {
       const coverageMode: CoverageMode = coverage ?? "surface";
@@ -111,9 +110,9 @@ export function registerAuditTools(server: McpServer): void {
       title: "Quick single-pass check",
       description:
         "Fast, local-only audit (quick coverage): a single-page pass with no crawl discovery or cloud enrichment. Free and works offline. Use for a rapid health snapshot of one URL.",
-      inputSchema: {
+      inputSchema: z.object({
         url: z.string().describe("The URL to check (e.g. https://example.com)"),
-      },
+      }),
     },
     async ({ url }) =>
       runLocalAudit({
