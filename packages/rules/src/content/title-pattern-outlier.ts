@@ -37,6 +37,11 @@
 // layout and is one decision for the whole site. What is exempted is a template whose
 // pages agree with the rest of the site, not one that is merely internally uniform.
 //
+// Noindex pages (meta or X-Robots-Tag) are left out of the vote and never judged,
+// but only when the site itself is indexable (pub#488, the #457 gate): campaign and
+// terms pages kept out of search usually carry a short title on purpose. They still
+// count toward the site floor.
+//
 // Precedence over core/meta-title (#1361): that rule owns missing/empty titles, so a
 // page with no title never votes and is never a deviant here. Above that, meta-title
 // only judges length, which is a different finding from template drift.
@@ -49,6 +54,8 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import type { CheckItem, SiteQuery } from "@squirrelscan/core-contracts";
+
+import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
 
 /** Crawl-wide page floor: below this there is no site norm to judge against. */
 export const TITLE_NORM_MIN_PAGES = 10;
@@ -96,6 +103,8 @@ interface TitlePageRecord {
   url: string;
   status: number;
   title: string | null;
+  /** Left out of the template vote (noindex page on an indexable site, pub#488). */
+  excluded?: boolean;
 }
 
 /** A titled page the rule can judge. */
@@ -204,8 +213,10 @@ function splitTitle(title: string): { segments: string[]; seps: string[] } {
  * so this rule cannot accuse a page that one already owns.
  */
 function accumulatePage(rollup: TitleRollup, record: TitlePageRecord): void {
+  // The site floor counts every page; a noindex page only sits out of the vote.
   rollup.pageCount += 1;
 
+  if (record.excluded) return;
   if (record.status < 200 || record.status >= 300) return;
   const title = collapse(record.title ?? "");
   if (title.length === 0) return;
@@ -556,13 +567,14 @@ function buildChecks(rollup: TitleRollup, sitePageCount: number): CheckResult[] 
  * That is a property of this seam shared with every site rule on it (see
  * content/duplicate-title), not something specific to this rule.
  */
-async function runViaSiteQuery(siteQuery: SiteQuery): Promise<RuleResult> {
+async function runViaSiteQuery(siteQuery: SiteQuery, skipNoindex: boolean): Promise<RuleResult> {
   const rollup = emptyRollup();
   for await (const row of siteQuery.pagesMatching(() => true)) {
     accumulatePage(rollup, {
       url: row.normalizedUrl,
       status: row.status,
       title: row.title,
+      excluded: skipNoindex && row.robotsNoindex,
     });
   }
 
@@ -586,7 +598,7 @@ export const titlePatternOutlierRule: Rule = {
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {
     if (ctx.siteQuery) {
-      return runViaSiteQuery(ctx.siteQuery);
+      return runViaSiteQuery(ctx.siteQuery, skipsNoindexPages(ctx.site));
     }
 
     const pages = ctx.site?.pages;
@@ -600,6 +612,7 @@ export const titlePatternOutlierRule: Rule = {
         url: page.url,
         status: page.statusCode,
         title: page.parsed?.meta?.title ?? null,
+        excluded: excludesNoindexPage(ctx.site, page.parsed, page.headers),
       });
     }
 

@@ -11,11 +11,11 @@ Three numbers describe the shape of the problem. Total node count is the size of
 
 ## What squirrel checks
 
-The rule runs on every crawled page, counting element nodes only, starting from the root `<html>` element and including it. It emits three checks:
+The rule runs on every crawled page, counting element nodes only, starting from the root `<html>` element and including it. Total nodes and depth include `<head>`; the widest-element check does not. It emits three checks:
 
 - `dom-total-nodes`: passes with the message `DOM size OK (N nodes)` under 1,500 nodes, warns with `Large DOM (N nodes)` from 1,500 to 2,999, and fails with `Excessive DOM size (N nodes)` at 3,000 or more.
 - `dom-depth`: passes with the message `DOM depth OK (N levels)` at 32 levels or fewer, and warns with `DOM depth excessive (N levels)` above that. The root element counts as level 1.
-- `dom-max-children`: passes with the message `Max children per element OK (N)` when no element has more than 60 direct children, and warns with `Element with N children found` above that, naming the largest count on the page.
+- `dom-max-children`: passes with the message `Max children per element OK (N)` when no element has more than 60 direct children, and warns with `Element with N children found` above that, naming the largest count on the page. Only `<body>` and its descendants are counted. `<head>` is skipped, so hreflang alternates and preload hints do not trigger it, and a document with no `<body>` reports 0.
 
 Instead of all three, a single `dom-total-nodes` check is emitted as skipped with the message `No document root found` when the parse produced no root element. A page with no parsed document emits nothing at all.
 
