@@ -30,6 +30,7 @@ How it works:
 ### Fixed
 
 - A site that sends response headers and then stalls its body can no longer hang the CLI. The shared request helper used by the reachability check, the robots.txt fetch and the update check disarmed its timeout as soon as the headers arrived, so the body read had no time limit. The timeout now covers the body too, and a stalled body fails like any other timeout.
+- The audit engine can keep the cloud results it has already paid for when its caller stops the cloud analysis step at a deadline, instead of discarding all of them. A caller turns this on with the new `deadlineMs` option on the container prefetch (or by passing its own accumulator and calling `abandon()`). Results that came back are used by the rules, rules still waiting report `skipped` with reason `service-unavailable`, and no new cloud call starts after the deadline. The spend lists each call known to be charged, once: every call that came back, plus a render batch the cloud accepted but had not finished. A call still running at the deadline is not listed and may yet be charged, so the estimated balance after the run is marked approximate (`balanceAfterApproximate`). Nothing in the CLI sets a deadline, so CLI audits are unchanged, and a prefetch that finishes in time returns exactly what it did before. See [credits](https://docs.squirrelscan.com/cloud/credits#when-credits-run-out).
 
 ## v0.0.106 (2026-10-08)
 
