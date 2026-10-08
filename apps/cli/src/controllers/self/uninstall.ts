@@ -9,7 +9,7 @@ import {
   unlinkSync,
   type Stats,
 } from "node:fs";
-import { homedir, platform } from "node:os";
+import { homedir, platform, tmpdir } from "node:os";
 import {
   basename,
   dirname,
@@ -80,6 +80,8 @@ export interface UninstallPlan {
   notes: string[];
   /** The running binary is managed, or is the managed link itself. */
   runningIsManaged: boolean;
+  /** realpath of the running binary, for the Windows move-aside. */
+  runningExe: string | null;
 }
 
 export interface UninstallOptions {
@@ -101,6 +103,14 @@ export interface UninstallDeps {
   /** Ask the user to go ahead with `plan`. Required when interactive. */
   confirm?: (plan: UninstallPlan) => Promise<boolean>;
   pid?: number;
+  /**
+   * Windows: where the locked, running exe is moved so the directory holding
+   * it can be deleted. Defaults to os.tmpdir(), on the same volume as
+   * %LOCALAPPDATA% in a standard profile.
+   */
+  asideDir?: string;
+  /** Test seam: deletes the moved-aside exe (a lock makes this throw). */
+  unlinkAside?: (path: string) => void;
 }
 
 export type UninstallStatus = "removed" | "nothing-to-remove" | "cancelled";
@@ -225,7 +235,11 @@ export function planUninstall(
       } else {
         // Dangling (its release was pruned): judge the link text, lexically.
         const target = resolve(dirname(link), readlinkSync(link));
-        inside = isInside(target, paths.releases, isWindows);
+        // HOME reached through a symlink leaves the text unresolved, so
+        // accept either spelling of the releases dir.
+        inside =
+          isInside(target, paths.releases, isWindows) ||
+          (releasesReal !== null && isInside(target, releasesReal, isWindows));
       }
       if (!inside) {
         skipped.push({
@@ -355,30 +369,85 @@ export function planUninstall(
     kept: !options.purge && dataStat ? paths.data : null,
     notes,
     runningIsManaged,
+    runningExe: execReal,
   };
+}
+
+/**
+ * Windows refuses to delete a loaded exe but lets it be renamed, across
+ * directories on the same volume too. Move it out of the tree being deleted
+ * (into `asideDir`, falling back to a sibling `.old-<pid>` name the way
+ * updater.ts does), then try to delete it; if it is still locked, report it.
+ */
+function moveRunningExeAside(
+  path: string,
+  pid: number,
+  asideDir: string,
+  leftover: string[],
+  unlinkAside: (path: string) => void
+): void {
+  const candidates = [
+    join(asideDir, `squirrel-uninstalled-${pid}-${basename(path)}`),
+    `${path}.old-${pid}`,
+  ];
+  let aside: string | null = null;
+  let lastError: Error = new Error(`Could not move ${path} aside`);
+  for (const candidate of candidates) {
+    try {
+      renameSync(path, candidate);
+      aside = candidate;
+      break;
+    } catch (error) {
+      lastError = error as Error;
+    }
+  }
+  if (aside === null) throw lastError;
+  try {
+    unlinkAside(aside);
+  } catch {
+    leftover.push(aside);
+  }
 }
 
 function removeTarget(
   target: UninstallTarget,
+  plan: UninstallPlan,
   isWindows: boolean,
   pid: number,
-  leftover: string[]
+  asideDir: string,
+  leftover: string[],
+  unlinkAside: (path: string) => void
 ): void {
   if (target.kind === "link" || target.kind === "replaced-binary") {
     if (isWindows && target.running) {
-      // Windows refuses to delete a loaded exe but lets it be renamed. Move it
-      // aside the way updater.ts does and try to delete the renamed file.
-      const aside = `${target.path}.old-${pid}`;
-      renameSync(target.path, aside);
-      try {
-        unlinkSync(aside);
-      } catch {
-        leftover.push(aside);
-      }
+      moveRunningExeAside(target.path, pid, asideDir, leftover, unlinkAside);
       return;
     }
     unlinkSync(target.path);
     return;
+  }
+  // The running exe can sit inside a directory being deleted: under releases
+  // when Windows made a real symlink, or under the data dir's bin folder with
+  // --purge. Move it out first, or the recursive delete fails on it.
+  if (isWindows && plan.runningExe) {
+    const real = tryRealpath(target.path);
+    if (
+      real !== null &&
+      isInside(plan.runningExe, real, true) &&
+      tryLstat(plan.runningExe)?.isFile()
+    ) {
+      try {
+        moveRunningExeAside(
+          plan.runningExe,
+          pid,
+          asideDir,
+          leftover,
+          unlinkAside
+        );
+      } catch {
+        // Still in place: the delete below reports the failure.
+      }
+    }
   }
   rmSync(target.path, { recursive: true, force: true });
 }
@@ -390,10 +459,15 @@ function removeTarget(
  */
 export function executeUninstall(
   plan: UninstallPlan,
-  deps: Pick<UninstallDeps, "isWindows" | "pid"> = {}
+  deps: Pick<
+    UninstallDeps,
+    "isWindows" | "pid" | "asideDir" | "unlinkAside"
+  > = {}
 ): Pick<UninstallResult, "removed" | "failed" | "leftover"> {
   const isWindows = deps.isWindows ?? platform() === "win32";
   const pid = deps.pid ?? process.pid;
+  const asideDir = deps.asideDir ?? tmpdir();
+  const unlinkAside = deps.unlinkAside ?? unlinkSync;
   const removed: string[] = [];
   const failed: SkippedPath[] = [];
   const leftover: string[] = [];
@@ -423,7 +497,15 @@ export function executeUninstall(
       continue;
     }
     try {
-      removeTarget(target, isWindows, pid, leftover);
+      removeTarget(
+        target,
+        plan,
+        isWindows,
+        pid,
+        asideDir,
+        leftover,
+        unlinkAside
+      );
       removed.push(target.path);
     } catch (error) {
       failed.push({ path: target.path, reason: (error as Error).message });

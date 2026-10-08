@@ -689,7 +689,7 @@ Without a terminal to ask in (a script, CI, a package manager hook), the command
 | Cache (`~/Library/Caches/squirrel` on macOS, `~/.cache/squirrel` on Linux) | Kept | Removed |
 | Project configs (`squirrel.toml`) in your repositories | Kept | Kept |
 
-On Windows the same layout lives under `%LOCALAPPDATA%\squirrel`, and the command removes the `squirrel.exe` in its `bin` folder. Windows locks a running exe. If it cannot be deleted, the command renames it aside and prints the path to delete afterwards.
+On Windows the same layout lives under `%LOCALAPPDATA%\squirrel`, and the command removes the `squirrel.exe` in its `bin` folder. Windows locks a running exe, so the command first moves it to your temp folder. If it still cannot be deleted there, the command prints its path to delete afterwards.
 
 Running it again after a successful uninstall finds nothing to remove and exits 0.
 

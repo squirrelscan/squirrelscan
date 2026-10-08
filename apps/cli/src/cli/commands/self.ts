@@ -868,7 +868,7 @@ const selfUninstall = defineCommand({
     for (const path of data.removed) console.log(`✓ Removed ${path}`);
     for (const path of data.leftover) {
       console.log(
-        `Delete ${path} once this command exits (Windows keeps a running exe locked).`
+        `Left ${path} for cleanup: Windows keeps a running exe locked. Delete it after this command exits.`
       );
     }
     for (const f of data.failed) {

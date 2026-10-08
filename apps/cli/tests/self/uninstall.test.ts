@@ -54,6 +54,9 @@ const { planUninstall, runSelfUninstall, isInside } =
 // ever be deleted.
 let root: string;
 let outside: string;
+/** Where Windows-mode tests park the running exe: inside the scratch root. */
+let aside: string;
+const windows = () => ({ isWindows: true, asideDir: aside }) as const;
 const originalEnv = { ...process.env };
 
 interface Layout {
@@ -137,6 +140,8 @@ beforeEach(() => {
   mkdirSync(join(outside, "precious"), { recursive: true });
   writeFileSync(join(outside, "precious", "keep.txt"), "do not delete");
   writeFileSync(join(outside, "squirrel"), "someone else's binary");
+  aside = join(root, "aside");
+  mkdirSync(aside);
   process.env = { ...originalEnv, HOME: home };
   delete process.env.XDG_CACHE_HOME;
 
@@ -405,7 +410,7 @@ describe("the running binary must be the managed install", () => {
 
     const result = await runSelfUninstall(
       { purge: false, yes: true },
-      { ...noPrompt, execPath: l.link, isWindows: true, pid: 999 }
+      { ...noPrompt, ...windows(), execPath: l.link, pid: 999 }
     );
 
     expect(result.ok).toBe(true);
@@ -414,6 +419,71 @@ describe("the running binary must be the managed install", () => {
     expect(existsSync(l.link)).toBe(false);
     expect(existsSync(`${l.link}.old-123`)).toBe(false);
     expect(existsSync(`${l.link}.old-999`)).toBe(false);
+    expect(readdirSync(aside)).toEqual([]);
+  });
+
+  // A locked exe cannot be deleted, so it must be moved OUT of the tree
+  // before that tree is deleted. The injected unlink plays the lock.
+  const locked = (path: string) => {
+    if (path.startsWith(aside)) {
+      throw Object.assign(new Error("EBUSY: resource busy or locked"), {
+        code: "EBUSY",
+      });
+    }
+    rmSync(path);
+  };
+
+  test("Windows: a running exe under releases (a real symlink) is moved out before releases goes", async () => {
+    const l = install(["1.0.0"]);
+
+    const result = await runSelfUninstall(
+      { purge: false, yes: true },
+      {
+        ...noPrompt,
+        ...windows(),
+        execPath: managedExec(l),
+        pid: 7,
+        unlinkAside: locked,
+      }
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.failed).toEqual([]);
+    expect(existsSync(l.releases)).toBe(false);
+    const parked = join(aside, "squirrel-uninstalled-7-squirrel");
+    expect(result.data.leftover).toEqual([parked]);
+    expect(readFileSync(parked, "utf8")).toBe("binary-1.0.0");
+  });
+
+  test("Windows --purge: the running copy in the data dir's bin is moved out before the data dir goes", async () => {
+    const l = install(["1.0.0"]);
+    // Windows' default bin dir is %LOCALAPPDATA%\squirrel\bin, inside the
+    // data dir; the recorded bin dir reproduces that layout here.
+    const dataBin = join(l.data, "bin");
+    mkdirSync(dataBin);
+    const copy = join(dataBin, "squirrel");
+    writeFileSync(copy, "binary-1.0.0");
+
+    const result = await runSelfUninstall(
+      { purge: true, yes: true },
+      {
+        ...windows(),
+        isInteractive: false,
+        recordedBinDir: dataBin,
+        execPath: copy,
+        pid: 8,
+        unlinkAside: locked,
+      }
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.failed).toEqual([]);
+    expect(existsSync(l.data)).toBe(false);
+    expect(result.data.leftover).toEqual([
+      join(aside, "squirrel-uninstalled-8-squirrel"),
+    ]);
   });
 
   test("Windows: a copy that is not the running exe and lies outside the data dir is left alone", async () => {
