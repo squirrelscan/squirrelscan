@@ -7,6 +7,13 @@ import {
   type UpgradeOffer,
 } from "@squirrelscan/cloud-client";
 import {
+  formatProbeBudget,
+  type ProbeFlags,
+  type ProbeResolution,
+  type ProbeRunContext,
+  resolveProbeIntensity,
+} from "@squirrelscan/config";
+import {
   auditStatusToLifecycle,
   clampAuditPages,
   computeCost,
@@ -753,6 +760,81 @@ export function lastFlagValue(
 }
 
 /**
+ * The probing flags as citty delivered them. Booleans repeat into arrays (the
+ * last wins, like --disable-discovery-probes); a repeated `--probe` arrives as
+ * an array of strings, and the last one wins too.
+ */
+export function probeFlagsFromArgs(args: Record<string, unknown>): ProbeFlags {
+  const lastString = (value: unknown): string | undefined =>
+    Array.isArray(value)
+      ? (value.at(-1) as string | undefined)
+      : typeof value === "string"
+        ? value
+        : undefined;
+  return {
+    probe: lastString(args.probe),
+    passive: lastFlagValue(args.passive as boolean | boolean[] | undefined),
+    aggressive: lastFlagValue(
+      args.aggressive as boolean | boolean[] | undefined
+    ),
+    pentest: lastFlagValue(args.pentest as boolean | boolean[] | undefined),
+    probeBudget: lastString(args["probe-budget"]),
+  };
+}
+
+/**
+ * Resolve probing intensity for a local CLI run (see resolveProbeIntensity in
+ * @squirrelscan/config, which the hosted runner shares). Mirrors
+ * resolveExplicitRenderMode: flags > config > context default. A local run
+ * is never locked; the cloud inputs are the hosted caller's to supply.
+ */
+export function resolveLocalProbeIntensity(opts: {
+  flags: ProbeFlags;
+  config: {
+    crawler: { disable_discovery_probes?: boolean };
+    security?: {
+      probe?: "passive" | "active" | "aggressive";
+      budget?: string | number;
+    };
+  };
+  /** An account is behind the run (any plan, or signed in with the API unreachable). */
+  signedIn: boolean;
+  /** --disable-discovery-probes[=false]; undefined → config decides. */
+  disableDiscoveryProbes?: boolean;
+  coverage?: string;
+}): ProbeResolution {
+  const context: ProbeRunContext = {
+    surface: "local",
+    signedIn: opts.signedIn,
+    discoveryProbesDisabled:
+      opts.disableDiscoveryProbes ??
+      opts.config.crawler.disable_discovery_probes === true,
+  };
+  return resolveProbeIntensity({
+    flags: opts.flags,
+    config: opts.config.security,
+    context,
+    coverage: opts.coverage,
+  });
+}
+
+/** The run-banner line and notes for a resolved probing level. */
+export function probeBannerLines(probe: {
+  level: "passive" | "active" | "aggressive";
+  budgetMs: number;
+}): { value: string; note?: string } {
+  if (probe.level === "passive") {
+    return { value: "passive · no requests beyond the crawl" };
+  }
+  const value = `${probe.level} · budget ${formatProbeBudget(probe.budgetMs)}`;
+  if (probe.level !== "aggressive") return { value };
+  return {
+    value,
+    note: "Aggressive probing requests robots-disallowed paths on purpose and sends many requests that return 404, which can trip a WAF. Only run it against sites you own or are authorized to test.",
+  };
+}
+
+/**
  * Validate mutually-exclusive audit flags. Returns a human-readable error to
  * print (then exit 1), or null when the combination is valid.
  */
@@ -964,6 +1046,29 @@ export const audit = defineCommand({
       description:
         "Skip the pre-crawl discovery probes (llms.txt, /.well-known/*, /swagger.json, ...) for this run; overrides [crawler] disable_discovery_probes (=false sends them)",
     },
+    probe: {
+      type: "string",
+      alias: "P",
+      description:
+        "Probing intensity: passive (no requests beyond the crawl) | active (quiet probes that look like normal traffic) | aggressive (loud probes, can trip a WAF). Default: active if signed in, passive if not. Overrides [security] probe",
+    },
+    passive: {
+      type: "boolean",
+      description: "Shortcut for --probe passive",
+    },
+    aggressive: {
+      type: "boolean",
+      description: "Shortcut for --probe aggressive",
+    },
+    "probe-budget": {
+      type: "string",
+      description:
+        "Wall-clock cap for all probing in this run, e.g. 30s, 2m (default: 30s active, 2m aggressive; max 1h). Overrides [security] budget",
+    },
+    pentest: {
+      type: "boolean",
+      description: "Shortcut for --coverage full --probe aggressive",
+    },
     summary: {
       type: "boolean",
       description:
@@ -1051,6 +1156,24 @@ export const audit = defineCommand({
     const disableDiscoveryProbes = lastFlagValue(
       args["disable-discovery-probes"] as boolean | boolean[] | undefined
     );
+
+    // Probing flags: refuse an unknown level, a bad budget or contradicting
+    // shortcuts before any network work. The level itself resolves below, once
+    // the account status (which picks the default) is known; this context is
+    // only for validation and cannot fail on its own.
+    const probeFlags = probeFlagsFromArgs(args);
+    const probeFlagCheck = resolveProbeIntensity({
+      flags: probeFlags,
+      context: { surface: "local", signedIn: false },
+      // citty hands a repeated -C over as an array; coverage validation
+      // reads it with toString, so read it the same way here.
+      coverage: args.coverage === undefined ? undefined : String(args.coverage),
+    });
+    if (!probeFlagCheck.ok) {
+      console.error(`${fmt.red("Error:")} ${probeFlagCheck.error}`);
+      process.exitCode = 1;
+      return;
+    }
 
     // --summary is console-only (#1067) — a machine format has no per-issue
     // detail to trim, so a non-console format + --summary is a user error.
@@ -1289,6 +1412,7 @@ export const audit = defineCommand({
         cloudOutage === "unreachable" ? "paid" : accountPlan;
       const coverageInput = (
         args.coverage ??
+        (probeFlags.pentest ? "full" : undefined) ??
         config.crawler.coverage ??
         defaultCoverageMode(coverageAccountPlan)
       ).toString();
@@ -1306,6 +1430,28 @@ export const audit = defineCommand({
       // lives in defaultSmartAudits (coverage.ts) with its own tests.
       const smartAudits =
         config.smart_audits ?? defaultSmartAudits(accountPlan, cloudOutage);
+
+      // Probing intensity: --probe > --passive/--aggressive/--pentest >
+      // [security] probe > context default (signed in → active, anonymous →
+      // passive). Disabled discovery probes force passive. Same account
+      // evidence as coverage: any plan, or a signed-in user whose API is down.
+      const probeResolution = resolveLocalProbeIntensity({
+        flags: probeFlags,
+        config,
+        signedIn: coverageAccountPlan !== "anonymous",
+        disableDiscoveryProbes,
+        // citty hands a repeated -C over as an array; coverage validation
+        // reads it with toString, so read it the same way here.
+        coverage:
+          args.coverage === undefined ? undefined : String(args.coverage),
+      });
+      if (!probeResolution.ok) {
+        console.error(`${fmt.red("Error:")} ${probeResolution.error}`);
+        process.exitCode = 1;
+        return;
+      }
+      const probing = probeResolution.value;
+      for (const notice of probing.notices) console.error(fmt.yellow(notice));
 
       // Validate --render-mode early (before any cloud work).
       const renderModeArg =
@@ -1448,12 +1594,16 @@ export const audit = defineCommand({
         ...(disableDiscoveryProbes !== undefined
           ? { disableDiscoveryProbes }
           : {}),
+        probe: { level: probing.level, budgetMs: probing.budgetMs },
       };
 
       // Preamble — aligned key/value block (Account, and Dashboard when online,
       // already printed above during status resolution; kv defined there).
       kv("Auditing", fmt.bold(options.url));
       kv("Coverage", `${coverageMode} ${fmt.dim(`· max ${maxPages} pages`)}`);
+      const probeBanner = probeBannerLines(probing);
+      kv("Probing", probeBanner.value);
+      if (probeBanner.note) log(fmt.yellow(probeBanner.note));
       // loadConfig falls back to defaults when the path doesn't exist — the
       // label must say so rather than print a missing (e.g. mistyped) path.
       kv(

@@ -4,6 +4,7 @@ import type { Rule } from "../types";
 
 import { cookieFlagsRule } from "./cookie-flags";
 import { cspRule } from "./csp";
+import { cspBlocksOwnResourcesRule } from "./csp-blocks-own-resources";
 import { formCaptchaRule } from "./form-captcha";
 import { formHttpsRule } from "./form-https";
 import { hstsRule } from "./hsts";
@@ -16,6 +17,7 @@ import { permissionsPolicyRule } from "./permissions-policy";
 import { referrerPolicyRule } from "./referrer-policy";
 import { sriRule } from "./sri";
 import { thirdPartyCookiesRule } from "./third-party-cookies";
+import { tokenStorageRule } from "./token-storage";
 import { xContentTypeRule } from "./x-content-type";
 import { xFrameOptionsRule } from "./x-frame-options";
 
@@ -24,6 +26,7 @@ export const rules: Rule[] = [
   httpToHttpsRule,
   hstsRule,
   cspRule,
+  cspBlocksOwnResourcesRule,
   xFrameOptionsRule,
   xContentTypeRule,
   referrerPolicyRule,
@@ -33,6 +36,7 @@ export const rules: Rule[] = [
   formCaptchaRule,
   newTabRule,
   leakedSecretsRule,
+  tokenStorageRule,
   thirdPartyCookiesRule,
   sriRule,
   cookieFlagsRule,
@@ -40,6 +44,7 @@ export const rules: Rule[] = [
 
 export {
   cookieFlagsRule,
+  cspBlocksOwnResourcesRule,
   cspRule,
   formCaptchaRule,
   formHttpsRule,
@@ -53,6 +58,7 @@ export {
   referrerPolicyRule,
   sriRule,
   thirdPartyCookiesRule,
+  tokenStorageRule,
   xContentTypeRule,
   xFrameOptionsRule,
 };

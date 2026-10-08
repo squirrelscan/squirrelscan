@@ -6,6 +6,7 @@ import { isValidHeaderName, isValidHeaderValue } from "@squirrelscan/utils/heade
 import { z } from "zod";
 
 import { parseByteSize } from "./byte-size";
+import { PROBE_LEVELS, parseProbeBudget } from "./probe";
 
 // ============================================
 // SUB-SCHEMAS
@@ -350,6 +351,28 @@ export const IntegrityConfigSchema = z.object({
   ),
 });
 
+// Probing intensity (see probe.ts): how hard each page is poked beyond what
+// the crawl fetched. Both keys are optional: unset `probe` means the context
+// default (signed-in local runs are active, anonymous ones passive), and unset
+// `budget` means the level's default. `--probe`, `--passive`/`--aggressive`
+// and `--probe-budget` override them for one run.
+export const SecurityConfigSchema = z.object({
+  probe: z.enum(PROBE_LEVELS).optional(),
+  /**
+   * Wall-clock cap for ALL probing in a run: "30s", "2m", or a number of
+   * seconds. Validated here but kept as written (parse with parseProbeBudget),
+   * so re-parsing an already-parsed config cannot reread milliseconds as
+   * seconds.
+   */
+  budget: z
+    .union([z.number(), z.string()])
+    .refine((value) => parseProbeBudget(value) !== null, {
+      message:
+        'budget must be a positive duration of at most 1h, such as "30s", "500ms" or "2m"',
+    })
+    .optional(),
+});
+
 // Pre-compute defaults once at module load
 const defaultProject = ProjectConfigSchema.parse({});
 const defaultCrawler = CrawlerConfigSchema.parse({});
@@ -380,6 +403,10 @@ export const ConfigSchema = z.object({
   intel: IntelConfigSchema.default(defaultIntel),
   // Site-integrity feature (#115) — holds the opt-in cloaking probe (#118).
   integrity: IntegrityConfigSchema.default(defaultIntegrity),
+  // Probing intensity: [security] probe and budget. Optional, like
+  // disable_discovery_probes: unset means the context default, and code that
+  // builds a Config by hand does not have to learn it.
+  security: SecurityConfigSchema.optional(),
   rule_options: z.record(z.string(), z.record(z.string(), z.unknown())).default({}),
   /**
    * Smart audits (#110): persist per-page finding state across audits and score
@@ -411,6 +438,7 @@ export type StorageConfig = z.infer<typeof StorageConfigSchema>;
 export type CloudConfig = z.infer<typeof CloudConfigSchema>;
 export type CloakingProbeConfig = z.infer<typeof CloakingProbeConfigSchema>;
 export type IntegrityConfig = z.infer<typeof IntegrityConfigSchema>;
+export type SecurityConfig = z.infer<typeof SecurityConfigSchema>;
 
 // ============================================
 // DEFAULTS

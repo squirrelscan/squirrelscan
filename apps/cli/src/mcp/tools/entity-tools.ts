@@ -35,6 +35,7 @@ import {
   resolveMap,
   type EntityToolFilters,
 } from "@/controllers/entity-mcp";
+import { filteredCounts } from "@/entities/filters";
 
 import { errorResult, jsonResult } from "../result";
 
@@ -119,7 +120,9 @@ export function registerEntityTools(server: McpServer): void {
         site: loaded.data.map.site,
         runId: loaded.data.crawl.id,
         auditedAt: new Date(loaded.data.crawl.startedAt).toISOString(),
-        summary: filtered.summary,
+        // Site-wide, unchanged by the filters; `filtered` is what survived.
+        summary: loaded.data.map.summary,
+        filtered: filteredCounts(filtered),
         entities: rows,
         total,
         hasMore,

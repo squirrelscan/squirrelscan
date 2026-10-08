@@ -22,11 +22,14 @@ Security is one of the four score groups on every report. This page covers trans
 
 ## Security rules
 
-HTTPS, headers, and safe link practices (16 rules).
+HTTPS, headers, and safe link practices (18 rules).
 
 <CardGroup cols={2}>
   <Card title="Content-Security-Policy: what to set and how to check it" icon="triangle-exclamation" href="/rules/security/csp">
     A missing CSP, a report-only policy or an unsafe-inline script-src leaves XSS unmitigated. squirrel parses the header and names each gap.
+  </Card>
+  <Card title="CSP blocks your own scripts, frames and analytics endpoints" icon="triangle-exclamation" href="/rules/security/csp-blocks-own-resources">
+    A policy that leaves out a host your page depends on breaks a widget or a tracker silently. squirrel matches each page's policy against what the page loads.
   </Card>
   <Card title="Cookie flags: Secure, HttpOnly and SameSite on Set-Cookie" icon="triangle-exclamation" href="/rules/security/cookie-flags">
     SameSite=None without Secure is rejected outright, and a session cookie without HttpOnly is readable by any script. squirrel parses every Set-Cookie.
@@ -66,6 +69,9 @@ HTTPS, headers, and safe link practices (16 rules).
   </Card>
   <Card title="Third-party cookies: which external domains a page loads" icon="circle-info" href="/rules/security/third-party-cookies">
     Trackers and 1x1 pixels set cookies from domains you do not control. squirrel inventories the third-party scripts, iframes and pixels per page.
+  </Card>
+  <Card title="Auth tokens in localStorage: why a stored JWT is exposed" icon="triangle-exclamation" href="/rules/security/token-storage">
+    A JWT or session token in localStorage or sessionStorage is readable by any script on the page. squirrel finds the writes in your scripts and names the key.
   </Card>
   <Card title="X-Content-Type-Options: nosniff and why it matters" icon="circle-info" href="/rules/security/x-content-type">
     Without nosniff a browser may execute an uploaded file as script because the bytes look like one. squirrel reads the header once per site.

@@ -25,6 +25,8 @@ import type {
 
 import type { CloudResultStore } from "./cloud";
 import type { CollectedSiteSignals } from "./collected-signals";
+import type { EndpointSurface } from "./endpoint-surface";
+import type { ProbeBudget } from "./probe-budget";
 import { ruleApplies } from "./applicability";
 import { filterRules } from "./filter";
 import { loadAllRules, type RuleNamespace } from "./loader";
@@ -85,6 +87,12 @@ export interface RunnerScope {
    * Undefined = not built; the `schema/entity-*` rules skip.
    */
   entityMap?: EntityMap;
+  /**
+   * The shared probing budget for THIS run, threaded into `ctx.probe` on every
+   * page and site rule (the same object, so the cap is shared). Undefined =
+   * passive: probing rules send nothing.
+   */
+  probe?: ProbeBudget;
 }
 
 export interface RunnerOptions extends RunnerScope {
@@ -249,6 +257,7 @@ export class RuleRunner {
   private readonly cloudResults: CloudResultStore | undefined;
   private readonly intel: IntelContext | undefined;
   private readonly entityMap: EntityMap | undefined;
+  private readonly probe: ProbeBudget | undefined;
 
   constructor(options: RunnerOptions) {
     this.config = options.config;
@@ -256,6 +265,7 @@ export class RuleRunner {
     this.cloudResults = options.cloudResults;
     this.intel = options.intel;
     this.entityMap = options.entityMap;
+    this.probe = options.probe;
     this.ruleConcurrency = Math.max(
       1,
       options.ruleConcurrency ?? DEFAULT_RULE_CONCURRENCY
@@ -550,6 +560,7 @@ export class RuleRunner {
         const siteMetadata = this.siteMetadata;
         const cloudResults = this.cloudResults;
         const intel = this.intel;
+        const probe = this.probe;
 
         // Sequential + sync fast-path: only the few async page rules pay a
         // microtask; sync rules run straight through, no Promise overhead (#521).
@@ -564,6 +575,7 @@ export class RuleRunner {
             siteMetadata,
             cloudResults,
             intel,
+            probe,
             options: getRuleOptions(rule, this.config),
           };
           // The substitution happens INSIDE this loop rather than by splicing
@@ -597,7 +609,8 @@ export class RuleRunner {
   async runSiteRules(
     siteData: SiteData,
     siteQuery?: SiteQuery,
-    collectedSignals?: CollectedSiteSignals
+    collectedSignals?: CollectedSiteSignals,
+    endpointSurface?: EndpointSurface
   ): Promise<SiteRunResult> {
     return logger.withTraceAsync(
       "runSiteRules:exec",
@@ -612,6 +625,7 @@ export class RuleRunner {
         const cloudResults = this.cloudResults;
         const intel = this.intel;
         const entityMap = this.entityMap;
+        const probe = this.probe;
 
         // For site-scope rules, we need to provide page context: use the first
         // page or a dummy if no pages. Built once and shared (read-only).
@@ -652,10 +666,12 @@ export class RuleRunner {
               site: siteData,
               siteQuery,
               collectedSignals,
+              endpointSurface,
               siteMetadata,
               cloudResults,
               intel,
               entityMap,
+              probe,
               options: getRuleOptions(rule, this.config),
             };
             return Promise.resolve(
