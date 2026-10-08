@@ -611,8 +611,13 @@ function yearIn(text: string): number | null {
   return year >= MIN_YEAR && year <= MAX_YEAR ? year : null;
 }
 
-/** A path segment that is a year on its own (`/2024/03/post`) or leads a dated slug. */
-const PATH_YEAR_RE = /^((?:19|20)\d{2})(?:$|-\d{1,2}(?:-\d{1,2})?(?:-|$))/;
+/**
+ * A path segment that is a year on its own (`/2024/03/post`) or leads a dated
+ * slug: a two-digit month 01-12 that ends the segment or is followed by a day 01-31.
+ * `/2024-10-best-tools` and `/2024-5-things` are round-up titles, not dates.
+ */
+const PATH_YEAR_RE =
+  /^((?:19|20)\d{2})(?:$|-(?:0[1-9]|1[0-2])(?:$|-(?:0[1-9]|[12]\d|3[01])(?:-|$)))/;
 
 /**
  * The year a URL path claims as its date. Only a year that is a path segment of

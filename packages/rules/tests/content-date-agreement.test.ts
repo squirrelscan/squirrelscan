@@ -345,6 +345,11 @@ describe("content/date-agreement — must not fire", () => {
       "/reviews/2024-honda-civic-review",
       "/guides/best-caching-headers-of-2024",
       "/posts/web-vitals-2024-edition",
+      // Round-up titles that open with a year and a number: not a month.
+      "/2024-10-best-tools",
+      "/2024-5-things",
+      "/2024-13-02-not-a-month",
+      "/2024-12-45-not-a-day",
     ]) {
       const checks = run(html, `https://example.com${slug}`);
       expect(check(checks, "url-title-year")).toBeUndefined();
@@ -475,7 +480,12 @@ describe("content/date-agreement — disagreements", () => {
         `${PROSE}</article></main>`,
     );
 
-    for (const path of ["/blog/2024/caching", "/blog/2024-03-12-caching", "/2024/03/caching"]) {
+    for (const path of [
+      "/blog/2024/caching",
+      "/blog/2024-03-12-caching",
+      "/blog/2024-03",
+      "/2024/03/caching",
+    ]) {
       expect(check(run(html, `https://example.com${path}`), "url-title-year")?.status).toBe("warn");
     }
   });
