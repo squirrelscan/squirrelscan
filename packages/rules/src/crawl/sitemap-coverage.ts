@@ -4,7 +4,16 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { normalizeUrl } from "@squirrelscan/utils";
 
+import { excludesNoindexPage, noindexSource, skipsNoindexPages } from "../shared/noindex";
 import { sampleUrlItems } from "../shared/sample-items";
+
+function normalizedOrNull(url: string): string | null {
+  try {
+    return normalizeUrl(url);
+  } catch {
+    return null;
+  }
+}
 
 export const sitemapCoverageRule: Rule = {
   meta: {
@@ -59,6 +68,13 @@ export const sitemapCoverageRule: Rule = {
       }
     }
 
+    // Noindex pages (meta or X-Robots-Tag) must stay out of the sitemap, so telling
+    // the owner to add them contradicts the page's own directive (pub#488). Only
+    // applied when the site itself is indexable (the #457 gate), so a staging host
+    // that is noindex everywhere still reports. The filter lives here, not in the
+    // engine: sitemap-valid reads the unfiltered coverage list.
+    const skipNoindex = skipsNoindexPages(ctx.site);
+
     // Fallback logic explanation:
     // - precomputedMissing is populated by the sitemap processor during crawl
     // - If empty array: either no issues found OR computation not yet run
@@ -67,23 +83,35 @@ export const sitemapCoverageRule: Rule = {
     //   2. Edge cases where processor didn't run
     // - This duplicates work when precomputed is truly empty (no issues) but ensures correctness
     // - Cost is acceptable since sitemap comparison is fast relative to crawl time
-    const missingFromSitemap: string[] =
-      precomputedMissing.length > 0 ? precomputedMissing.slice() : [];
+    // The path is chosen on the unfiltered list: a precomputed list that is empty
+    // only after dropping noindex pages must not trigger the fallback.
+    const missingFromSitemap: string[] = [];
 
-    if (missingFromSitemap.length === 0) {
+    if (precomputedMissing.length > 0) {
+      const noindexUrls = new Set<string>();
+      if (skipNoindex) {
+        for (const page of pages) {
+          if (!excludesNoindexPage(ctx.site, page.parsed, page.headers)) continue;
+          for (const candidate of [page.url, page.finalUrl]) {
+            const normalized = candidate ? normalizedOrNull(candidate) : null;
+            if (normalized) noindexUrls.add(normalized);
+          }
+        }
+      }
+      for (const url of precomputedMissing) {
+        if (noindexUrls.size > 0 && noindexUrls.has(normalizedOrNull(url) ?? url)) continue;
+        missingFromSitemap.push(url);
+      }
+    } else {
       for (const page of pages) {
         // Skip non-200 pages
         if (page.statusCode !== 200) continue;
 
-        // Check for noindex
-        const robotsMeta = page.parsed.meta.robots;
-        const hasNoindex = robotsMeta
-          ?.toLowerCase()
-          .split(",")
-          .map((d) => d.trim())
-          .includes("noindex");
-
-        if (hasNoindex) continue;
+        // Unchanged where the gate is closed: the fallback has always left out
+        // meta-noindex pages, and still does (header noindex is only read when
+        // the site is known to be indexable).
+        const source = noindexSource(page.parsed, page.headers);
+        if (skipNoindex ? source !== null : source === "robots meta tag") continue;
 
         // Check if page (or final URL) is in sitemap
         const candidates = [page.url, page.finalUrl].filter(
@@ -91,14 +119,10 @@ export const sitemapCoverageRule: Rule = {
         );
         let inSitemap = false;
         for (const candidate of candidates) {
-          try {
-            const normalizedPageUrl = normalizeUrl(candidate);
-            if (sitemapUrls.has(normalizedPageUrl)) {
-              inSitemap = true;
-              break;
-            }
-          } catch {
-            // Skip malformed URLs
+          const normalizedPageUrl = normalizedOrNull(candidate);
+          if (normalizedPageUrl && sitemapUrls.has(normalizedPageUrl)) {
+            inSitemap = true;
+            break;
           }
         }
         if (!inSitemap) {

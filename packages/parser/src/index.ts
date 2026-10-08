@@ -14,6 +14,8 @@ export {
   extractSchema,
   extractHeadings,
   extractContent,
+  extractHreflangAlternates,
+  HREFLANG_ALTERNATES_MAX,
   type ParsedPage,
   type ParsedPageCache,
 } from "./html";

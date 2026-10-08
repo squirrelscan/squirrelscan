@@ -199,6 +199,157 @@ describe("a11y/autocomplete-tokens", () => {
   });
 });
 
+describe("a11y/autocomplete-tokens: lone country fields", () => {
+  const run = (html: string) =>
+    check(autocompleteTokensRule.run(ctx(page(html))).checks, "autocomplete-tokens");
+  const countryItems = (result: CheckResult | undefined) =>
+    (result?.items ?? []).filter((i) => i.meta?.purpose === "country");
+
+  test("reporter's localization form: no item", () => {
+    const result = run(`<form action="/localization" method="post">
+      <label for="cc">Country</label><select id="cc" name="country_code"><option value="DE">Germany</option><option value="AT">Austria</option></select>
+      <label for="lc">Language</label><select id="lc" name="locale_code"><option value="de">Deutsch</option><option value="en">English</option></select>
+      <button type="submit">Update</button>
+    </form>`);
+    expect(result?.items).toBeUndefined();
+    expect(result?.status).not.toBe("warn");
+    expect(result?.status).not.toBe("fail");
+  });
+
+  const NAMES = [
+    "country",
+    "country_code",
+    "countryCode",
+    "country-selector",
+    "ship_country",
+    "billing_country",
+    "country_region",
+  ];
+
+  test.each(NAMES)("%s alone in a non-personal form: not reported", (name) => {
+    const result = run(
+      `<form action="/prefs"><select id="c" name="${name}"><option>DE</option></select></form>`,
+    );
+    expect(result?.items).toBeUndefined();
+  });
+
+  test.each(NAMES)("%s next to a name field: reported", (name) => {
+    const result = run(`<form action="/prefs">
+      <select id="c" name="${name}"><option>DE</option></select>
+      <label for="n">Full name</label><input id="n" name="fullName">
+    </form>`);
+    expect(itemIds(result)).toContain("select#c");
+  });
+
+  test.each(NAMES)("%s next to an email field: reported", (name) => {
+    const result = run(`<form action="/prefs">
+      <select id="c" name="${name}"><option>DE</option></select>
+      <label for="e">Email</label><input id="e" name="email" type="email">
+    </form>`);
+    expect(itemIds(result)).toContain("select#c");
+  });
+
+  test("email plus country without a token: country item reported", () => {
+    const result = run(`<form action="/signup">
+      <label for="e">Email</label><input id="e" name="email" type="email" autocomplete="email">
+      <label for="c">Country</label><select id="c" name="country"><option>US</option></select>
+    </form>`);
+    expect(itemIds(result)).toEqual(["select#c"]);
+    expect(countryItems(result)).toHaveLength(1);
+  });
+
+  test("street, postal code and country without a token: country item reported", () => {
+    const result = run(`<form action="/address">
+      <label for="s">Street</label><input id="s" name="street" autocomplete="address-line1">
+      <label for="z">Postal code</label><input id="z" name="postalCode" autocomplete="postal-code">
+      <label for="c">Country</label><select id="c" name="country"><option>US</option></select>
+    </form>`);
+    expect(itemIds(result)).toEqual(["select#c"]);
+  });
+
+  test("shipping estimator with country, province and postal code and no tokens: reported", () => {
+    const result = run(`<form action="/cart/shipping_rates">
+      <label for="c">Country</label><select id="c" name="shipping_address[country]"><option>US</option></select>
+      <label for="p">Province</label><select id="p" name="shipping_address[province]"><option>CA</option></select>
+      <label for="z">Zip</label><input id="z" name="shipping_address[zip]">
+    </form>`);
+    expect(itemIds(result)).toEqual(["select#c", "select#p", "input#z"]);
+  });
+
+  test("country plus language and currency selects in a header preferences form: no item", () => {
+    const result = run(`<form action="/prefs" class="header-prefs">
+      <label for="c">Country</label><select id="c" name="country"><option>DE</option></select>
+      <label for="l">Language</label><select id="l" name="language"><option>de</option></select>
+      <label for="cur">Currency</label><select id="cur" name="currency"><option>EUR</option></select>
+    </form>`);
+    expect(result?.items).toBeUndefined();
+  });
+
+  test.each(["country", "country-name", "shipping country"])(
+    'autocomplete="%s" inside an address form: passes',
+    (token) => {
+      const result = run(`<form action="/address">
+        <label for="s">Street</label><input id="s" name="street" autocomplete="address-line1">
+        <label for="c">Country</label><select id="c" name="country" autocomplete="${token}"><option>US</option></select>
+      </form>`);
+      expect(result?.status).toBe("pass");
+    },
+  );
+
+  test.each(["country", "country-name"])(
+    'autocomplete="%s" on a lone country in a preferences form: passes',
+    (token) => {
+      const result = run(
+        `<form action="/prefs"><select id="c" name="country_code" autocomplete="${token}"><option>DE</option></select></form>`,
+      );
+      expect(result?.status).toBe("pass");
+    },
+  );
+
+  test("a lone country with an invalid token is still validated", () => {
+    const result = run(
+      `<form action="/prefs"><select id="c" name="country_code" autocomplete="contry"><option>DE</option></select></form>`,
+    );
+    expect(result?.status).toBe("fail");
+    expect(itemIds(result)).toEqual(["select#c"]);
+  });
+
+  test("a country select with no form ancestor: reported", () => {
+    const result = run(
+      `<label for="c">Country</label><select id="c" name="country_code"><option>DE</option></select>`,
+    );
+    expect(result?.status).toBe("warn");
+    expect(itemIds(result)).toEqual(["select#c"]);
+  });
+
+  test.each([
+    ["name", `<input id="n" name="name" type="text">`],
+    ["email", `<input id="n" name="email" type="text">`],
+  ])("a country-only form with a visible text input named %s: reported", (_label, input) => {
+    const result = run(`<form action="/prefs">
+      <select id="c" name="country_code"><option>DE</option></select>${input}
+    </form>`);
+    expect(itemIds(result)).toContain("select#c");
+  });
+
+  test("a hidden country input in an address form: not reported", () => {
+    const result = run(`<form action="/address">
+      <input type="hidden" name="country" value="US">
+      <label for="s">Street</label><input id="s" name="street" autocomplete="address-line1">
+    </form>`);
+    expect(result?.status).toBe("pass");
+    expect(result?.items).toBeUndefined();
+  });
+
+  test("a hidden name input does not make a locale form personal", () => {
+    const result = run(`<form action="/localization">
+      <input type="hidden" name="name" value="x">
+      <select id="c" name="country_code"><option>DE</option></select>
+    </form>`);
+    expect(result?.items).toBeUndefined();
+  });
+});
+
 describe("a11y/input-types — the right type", () => {
   test("warn: type=text where email, tel, url and number are correct", () => {
     const html = page(`<form action="/x">

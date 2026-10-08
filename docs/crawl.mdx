@@ -115,6 +115,10 @@ SquirrelScan automatically follows **both HTTP and client-side redirects** when 
 - **Meta refresh** - `<meta http-equiv="refresh" content="0;url=...">`
 - **JavaScript redirects** - `window.location`, `window.location.href`, `location.href`
 
+Client-side redirects inside `<noscript>` are ignored. A browser with scripting on
+treats that content as text, so a meta refresh there never fires, and the audit
+starts at the URL you gave it rather than the no-JS fallback.
+
 ### How it works
 
 Before crawling begins, SquirrelScan:
@@ -200,6 +204,12 @@ When re-fetching a URL, the crawler walks three levels, cheapest first:
 This makes re-crawling fast: fresh pages are instant (zero requests), and
 changed pages are still detected correctly. **Caching never changes audit
 results**: a fresh-cache run produces the same health score as a full re-fetch.
+
+A page reused from the cache follows the same link rules as a freshly fetched
+one. In `quick` mode (no link discovery), a reused page does not add its links to
+the crawl, so only the seed and sitemap URLs are audited. If the sitemap yields no
+crawlable URLs, links are discovered from reused pages just as they are from
+fetched ones.
 
 ```bash
 # First crawl: fetches all pages fresh

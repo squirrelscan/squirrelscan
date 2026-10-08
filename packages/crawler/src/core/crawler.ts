@@ -729,6 +729,27 @@ export function createCrawler(
       return { normalized, decision };
     };
 
+    // An absolute include that allowedDomains refused is almost certainly a
+    // config the user expected to work, so say so once per include and host.
+    const vetoWarned = new Set<string>();
+    const warnIncludeVetoed = (include: string, host: string) =>
+      Effect.gen(function* () {
+        const key = `${include}\n${host}`;
+        if (vetoWarned.has(key)) return;
+        vetoWarned.add(key);
+        const message =
+          `include "${include}" matches ${host}, which allowedDomains does not list, so it was ` +
+          `not crawled. allowedDomains (the project \`domains\` setting) is a hard allowlist: add ` +
+          `${host} to it, or remove it to let the include reach that host`;
+        logger.warn("include vetoed by allowedDomains", message);
+        yield* emit({
+          type: "warning",
+          code: "include-vetoed-by-allowed-domains",
+          message,
+          timestamp: Date.now(),
+        });
+      });
+
     // ----------------------------------------
     // Enqueue URL
     // ----------------------------------------
@@ -781,6 +802,9 @@ export function createCrawler(
 
         // Check scope
         if (!decision.allowed) {
+          if (decision.vetoedInclude) {
+            yield* warnIncludeVetoed(decision.vetoedInclude, new URL(normalized).host);
+          }
           logger.debug("url skipped (scope)", `${normalized} — ${decision.reason}`);
           yield* storage.upsertFrontier(crawlId, {
             normalizedUrl: normalized,
@@ -942,6 +966,14 @@ export function createCrawler(
     // ----------------------------------------
     // Reuse a cached page (304 / hash-match / origin-fresh / SWR)
     // ----------------------------------------
+    // Whether a processed page's outlinks may be followed. Quick/sitemap-only
+    // crawls (disableLinkDiscovery) fall back to discovery only when the sitemap
+    // yielded nothing to crawl. Read at call time: the pending count changes as
+    // the crawl runs. Shared by the fetch path and reuseCachedPage so the two
+    // can never disagree about it (#354).
+    const linkDiscoveryAllowed = (): boolean =>
+      !config.disableLinkDiscovery || config.sitemapPendingCount === 0;
+
     // Shared by every "no real fetch needed" path: copy the cached page +
     // links + images into the current crawl for reporting, re-discover links to
     // keep the frontier draining, mark done, emit an unchanged event, and bump
@@ -973,10 +1005,11 @@ export function createCrawler(
           yield* storage.upsertImage(crawlId, img);
         }
 
-        // Re-discover URLs from cached data to keep crawling. Fast path: use
-        // pre-parsed link data; fall back to re-parsing cached HTML.
+        // Re-discover URLs from cached data to keep crawling, unless link
+        // discovery is gated off (#354). Fast path: use pre-parsed link data;
+        // fall back to re-parsing cached HTML.
         let crawlableUrls: string[] = [];
-        if (cachedPage.parsedData) {
+        if (linkDiscoveryAllowed() && cachedPage.parsedData) {
           try {
             const parsed = JSON.parse(cachedPage.parsedData) as {
               links?: LinkData[];
@@ -1000,6 +1033,7 @@ export function createCrawler(
           }
         }
         if (
+          linkDiscoveryAllowed() &&
           crawlableUrls.length === 0 &&
           cachedPage.html &&
           (isHtmlContentType(cachedPage.contentType) ||
@@ -1740,9 +1774,7 @@ export function createCrawler(
             // Reuse document for URL extraction (no second parse)
             // Note: document can be null for error pages (4xx/5xx)
             // Skip link discovery in quick mode unless no sitemap URLs found
-            const shouldDiscoverLinks =
-              !config.disableLinkDiscovery || config.sitemapPendingCount === 0;
-            if (parsed.document && shouldDiscoverLinks) {
+            if (parsed.document && linkDiscoveryAllowed()) {
               const crawlableUrls = extractCrawlableUrls(parsed.document, result.finalUrl);
 
               for (const url of crawlableUrls) {
