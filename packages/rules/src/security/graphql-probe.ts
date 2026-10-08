@@ -298,15 +298,12 @@ export function buildGraphqlProbe(
   };
 }
 
+// The per-chunk cap is the guard; `content-length` is not trusted. A stalled
+// body is bounded by the request signal, which also aborts `reader.read()`.
 async function readCapped(
   res: Response,
   maxBytes: number
 ): Promise<{ text: string; truncated: boolean }> {
-  const declared = Number(res.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > maxBytes) {
-    await res.body?.cancel().catch(() => {});
-    return { text: "", truncated: true };
-  }
   if (!res.body) return { text: "", truncated: false };
   const reader = res.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -348,6 +345,7 @@ export async function sendGraphqlProbe(
   if (!probe || !probe.allows(kind)) return { sent: false, reason: "not-allowed" };
   const { url, init } = buildGraphqlProbe(endpointUrl, request);
   const signal = AbortSignal.any([probe.signal(), AbortSignal.timeout(GRAPHQL_PROBE_TIMEOUT_MS)]);
+  // Counted before the request leaves, so a request that fails still uses budget.
   probe.record();
   try {
     const res = await globalThis.fetch(url, { ...init, signal });
@@ -426,6 +424,23 @@ export function parseGraphqlBody(response: GraphqlProbeResponse): GraphqlBody | 
   // `data: null` with no errors says nothing about GraphQL.
   if (!hasErrors && data === null) return null;
   return { data, errors };
+}
+
+const TRUNCATED_SCHEMA_PREFIX_RE = /^\s*\{\s*"data"\s*:\s*\{\s*"__schema"\s*:\s*\{\s*"types"\s*:\s*\[/;
+
+/**
+ * Type names from the first bytes of an introspection answer that was longer
+ * than the cap, or null. The prefix must open exactly as an introspection
+ * answer does (`{"data":{"__schema":{"types":[`), so a large page that is not
+ * GraphQL is never read as a schema. Only complete `"name":"..."` pairs count,
+ * so the result is a lower bound.
+ */
+export function truncatedSchemaTypeNames(response: GraphqlProbeResponse): string[] | null {
+  if (!response.truncated || response.contentType.includes("html")) return null;
+  if (!TRUNCATED_SCHEMA_PREFIX_RE.test(response.body)) return null;
+  const names: string[] = [];
+  for (const m of response.body.matchAll(/"name"\s*:\s*"([^"\\]{1,200})"/g)) names.push(m[1]!);
+  return names.length > 0 ? names : null;
 }
 
 /** True for a 2xx status. */

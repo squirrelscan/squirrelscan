@@ -171,6 +171,42 @@ describe("security/graphql-introspection", () => {
     }
   });
 
+  test("a schema answer over the 1 MB cap is still flagged, with lower-bound counts", async () => {
+    const types = Array.from({ length: 60_000 }, (_, i) => ({ name: `Type${i}` }));
+    types.push({ name: "__Schema" }, { name: "String" });
+    const big = () => json({ data: { __schema: { types } } });
+    const { checks } = await run({ [GQL]: big });
+    const warn = checks.find((c) => c.status === "warn");
+    expect(warn?.message).toContain(GQL);
+    expect(warn?.message).toContain("at least");
+    expect(warn?.message).toContain("first 1 MB");
+    expect(warn?.items?.[0]?.meta?.truncated).toBe(true);
+    expect(Number(warn?.items?.[0]?.meta?.types)).toBeGreaterThan(10_000);
+  });
+
+  test("a large answer that does not open as a schema is not flagged", async () => {
+    const pad = "x".repeat(1100 * 1024);
+    for (const route of [
+      () => json({ items: [{ name: "a" }], pad }),
+      () => json({ data: { search: [{ name: "a" }] }, pad }),
+      () => html(`{"data":{"__schema":{"types":[{"name":"Query"}]}}${pad}`, 200),
+    ]) {
+      const { checks } = await run({ [GQL]: route });
+      expect(checks.every((c) => c.status === "pass")).toBe(true);
+      restore?.();
+    }
+  });
+
+  test("when every probe fails with a network error the rule skips, it does not pass", async () => {
+    const fail = () => {
+      throw new TypeError("connection reset");
+    };
+    const { checks } = await run({ [GQL]: fail, [`${BASE}/api/graphql`]: fail });
+    expect(checks).toEqual([
+      expect.objectContaining({ status: "skipped", skipReason: "probe-errors" }),
+    ]);
+  });
+
   test("state-changing and cross-origin candidates are never requested", async () => {
     const { sent } = await run(
       {},

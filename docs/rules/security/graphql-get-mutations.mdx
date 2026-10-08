@@ -40,6 +40,7 @@ The rule emits checks named `graphql-get-mutations`:
 
 - Skipped when probing is passive. Message: `Probing is passive, so no GraphQL endpoint was probed. Run with --probe active to check whether mutations run over GET.`
 - Skipped when the shared probe budget ran out before the first request.
+- Skipped, with reason `probe-errors`, when every probe failed with a network error or timeout, so a failed run never reads as clean.
 - Fail, one check per endpoint, when the answer is a 2xx GraphQL response whose `data.__typename` is the mutation root type (`Mutation`, `mutation_root` in Hasura, `RootMutationType` in Absinthe and similar). Message: `https://example.com/graphql executes GraphQL mutations sent over GET: any site can trigger a state-changing operation with your visitors' cookies (CSRF), and GET is no longer safe and idempotent. Reject non-query operations over GET and require POST with a non-simple Content-Type or a CSRF token.`
 - Pass when no endpoint executed the mutation. Message: `No GraphQL endpoint executed a mutation sent over GET (2 endpoint(s) probed, 1 answered as GraphQL)`.
 

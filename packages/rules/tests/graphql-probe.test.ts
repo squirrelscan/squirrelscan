@@ -17,6 +17,7 @@ import {
   parseGraphqlBody,
   selectGraphqlCandidates,
   sendGraphqlProbe,
+  truncatedSchemaTypeNames,
   type GraphqlProbeResponse,
 } from "../src/security/graphql-probe";
 import {
@@ -251,6 +252,30 @@ describe("sendGraphqlProbe: the probe budget gate", () => {
     const out = await sendGraphqlProbe(probe, `${BASE}/graphql`, { op: "introspection", method: "GET" });
     expect(out.sent).toBe(true);
     expect("error" in out).toBe(true);
+  });
+});
+
+describe("truncatedSchemaTypeNames", () => {
+  const cut = (body: string, contentType = "application/json"): GraphqlProbeResponse => ({
+    status: 200,
+    contentType,
+    body,
+    truncated: true,
+  });
+
+  test("reads complete type names from the prefix of a cut introspection answer", () => {
+    expect(
+      truncatedSchemaTypeNames(cut(`{"data":{"__schema":{"types":[{"name":"Query"},{"name":"User"},{"na`))
+    ).toEqual(["Query", "User"]);
+  });
+
+  test("anything else is null", () => {
+    expect(truncatedSchemaTypeNames(cut(`{"items":[{"name":"a"}]`))).toBeNull();
+    expect(truncatedSchemaTypeNames(cut(`{"data":{"__schema":{"types":[{"name":"Q"}]`, "text/html"))).toBeNull();
+    expect(truncatedSchemaTypeNames(cut(`{"data":{"__schema":{"types":[`))).toBeNull();
+    expect(
+      truncatedSchemaTypeNames({ ...cut(`{"data":{"__schema":{"types":[{"name":"Q"}]}}}`), truncated: false })
+    ).toBeNull();
   });
 });
 

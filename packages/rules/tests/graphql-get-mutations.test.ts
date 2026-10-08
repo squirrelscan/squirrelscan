@@ -154,6 +154,17 @@ describe("security/graphql-get-mutations", () => {
     expect(checks).toEqual([expect.objectContaining({ status: "pass" })]);
   });
 
+  test("when every probe fails with a network error the rule skips, it does not pass", async () => {
+    const fail = () => {
+      throw new TypeError("timed out");
+    };
+    const { checks, sent } = await run({ [GQL]: fail, [`${BASE}/api/graphql`]: fail });
+    expect(sent).toHaveLength(2);
+    expect(checks).toEqual([
+      expect.objectContaining({ status: "skipped", skipReason: "probe-errors" }),
+    ]);
+  });
+
   test("robots.txt disallowed endpoints are not probed below aggressive", async () => {
     const { sent } = await run({}, { robotsTxt: robots(["/graphql", "/api/"]) });
     expect(sent).toHaveLength(0);

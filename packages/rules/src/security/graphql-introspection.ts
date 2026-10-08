@@ -21,6 +21,7 @@ import {
   parseGraphqlBody,
   selectGraphqlCandidates,
   sendGraphqlProbe,
+  truncatedSchemaTypeNames,
 } from "./graphql-probe";
 
 const CHECK = "graphql-introspection";
@@ -33,6 +34,15 @@ export interface SchemaSummary {
   types: number;
   /** Types the API defines itself: not `__*` introspection types or built-in scalars. */
   apiTypes: number;
+  /**
+   * The answer was longer than the read cap, so the counts come from its first
+   * bytes and are lower bounds.
+   */
+  truncated?: true;
+}
+
+function isApiType(name: string): boolean {
+  return !name.startsWith("__") && !BUILT_IN_SCALARS.has(name);
 }
 
 /**
@@ -49,7 +59,7 @@ export function readSchema(body: GraphqlBody | null): SchemaSummary | null {
     if (typeof t !== "object" || t === null) return null;
     const name = (t as Record<string, unknown>).name;
     if (typeof name !== "string") return null;
-    if (!name.startsWith("__") && !BUILT_IN_SCALARS.has(name)) apiTypes++;
+    if (isApiType(name)) apiTypes++;
   }
   return { types: types.length, apiTypes };
 }
@@ -63,23 +73,31 @@ type EndpointVerdict =
   | { kind: "exposed"; method: "GET" | "POST"; schema: SchemaSummary }
   | { kind: "graphql"; errors: string[] }
   | { kind: "not-graphql" }
+  | { kind: "errored" }
   | { kind: "not-sent" };
 
-function outcomeBody(outcome: GraphqlProbeOutcome): {
-  body: GraphqlBody | null;
-  ok: boolean;
-} {
-  if (!outcome.sent || "error" in outcome) return { body: null, ok: false };
-  return { body: parseGraphqlBody(outcome.response), ok: isSuccessStatus(outcome.response.status) };
+/**
+ * The schema in a 2xx answer: parsed in full, or, when the answer was longer
+ * than the read cap, counted from its first bytes (lower bounds).
+ */
+function schemaFrom(outcome: GraphqlProbeOutcome): SchemaSummary | null {
+  if (!outcome.sent || "error" in outcome) return null;
+  if (!isSuccessStatus(outcome.response.status)) return null;
+  const full = readSchema(parseGraphqlBody(outcome.response));
+  if (full) return full;
+  const names = truncatedSchemaTypeNames(outcome.response);
+  if (!names) return null;
+  return { types: names.length, apiTypes: names.filter(isApiType).length, truncated: true };
 }
 
 async function probeEndpoint(ctx: RuleContext, candidate: GraphqlCandidate): Promise<EndpointVerdict> {
   const get = await sendGraphqlProbe(ctx.probe, candidate.url, { op: "introspection", method: "GET" });
   if (!get.sent) return { kind: "not-sent" };
-  const { body, ok } = outcomeBody(get);
-  if (!body) return { kind: "not-graphql" };
-  const schema = ok ? readSchema(body) : null;
+  if ("error" in get) return { kind: "errored" };
+  const schema = schemaFrom(get);
   if (schema) return { kind: "exposed", method: "GET", schema };
+  const body = parseGraphqlBody(get.response);
+  if (!body) return { kind: "not-graphql" };
 
   // GraphQL answered without a schema. One POST, only when aggressive, and not
   // when the server already said introspection is off.
@@ -88,8 +106,7 @@ async function probeEndpoint(ctx: RuleContext, candidate: GraphqlCandidate): Pro
       op: "introspection",
       method: "POST",
     });
-    const viaPost = outcomeBody(post);
-    const postSchema = viaPost.ok ? readSchema(viaPost.body) : null;
+    const postSchema = schemaFrom(post);
     if (postSchema) return { kind: "exposed", method: "POST", schema: postSchema };
   }
   return { kind: "graphql", errors: errorSummary(body) };
@@ -141,6 +158,7 @@ export const graphqlIntrospectionRule: Rule = {
 
     let probed = 0;
     let graphqlAnswers = 0;
+    let errored = 0;
     let budgetStopped = false;
     const exposed: Array<{ candidate: GraphqlCandidate; method: "GET" | "POST"; schema: SchemaSummary }> = [];
     for (const candidate of selection.candidates) {
@@ -150,6 +168,7 @@ export const graphqlIntrospectionRule: Rule = {
         break;
       }
       probed++;
+      if (verdict.kind === "errored") errored++;
       if (verdict.kind === "exposed") exposed.push({ candidate, ...verdict });
       if (verdict.kind === "exposed" || verdict.kind === "graphql") graphqlAnswers++;
     }
@@ -165,19 +184,33 @@ export const graphqlIntrospectionRule: Rule = {
       return { checks };
     }
 
+    if (errored === probed) {
+      checks.push({
+        name: CHECK,
+        status: "skipped",
+        skipReason: "probe-errors",
+        message: `Every GraphQL probe failed with a network error or timeout (${probed} endpoint(s)), so introspection was not checked`,
+        details: { ...details, probed, errored },
+      });
+      return { checks };
+    }
+
     for (const { candidate, method, schema } of exposed) {
+      const atLeast = schema.truncated ? "at least " : "";
+      const note = schema.truncated ? ", counted from the first 1 MB of a longer answer" : "";
       checks.push({
         name: CHECK,
         status: "warn",
-        message: `GraphQL introspection is open at ${candidate.url}: the schema lists ${schema.types} types, ${schema.apiTypes} of them defined by the API (answered over ${method})`,
+        message: `GraphQL introspection is open at ${candidate.url}: the schema lists ${atLeast}${schema.types} types, ${atLeast}${schema.apiTypes} of them defined by the API (answered over ${method}${note})`,
         items: [
           {
             id: candidate.url,
-            label: `${candidate.url} (${method}): ${schema.types} types, ${schema.apiTypes} API-defined`,
+            label: `${candidate.url} (${method}): ${atLeast}${schema.types} types, ${atLeast}${schema.apiTypes} API-defined`,
             meta: {
               method,
               types: schema.types,
               apiTypes: schema.apiTypes,
+              ...(schema.truncated ? { truncated: true } : {}),
               source: candidate.source,
               discoveredVia: candidate.discoveredVia,
             },
@@ -192,7 +225,7 @@ export const graphqlIntrospectionRule: Rule = {
         name: CHECK,
         status: "pass",
         message: `No GraphQL endpoint returned its schema (${probed} endpoint(s) probed, ${graphqlAnswers} answered as GraphQL)`,
-        details: { ...details, probed, graphqlAnswers, budgetStopped },
+        details: { ...details, probed, graphqlAnswers, errored, budgetStopped },
       });
     }
     return { checks };

@@ -86,6 +86,7 @@ export const graphqlGetMutationsRule: Rule = {
 
     let probed = 0;
     let graphqlAnswers = 0;
+    let errored = 0;
     let budgetStopped = false;
     const executed: Array<{ candidate: GraphqlCandidate; typename: string }> = [];
     for (const candidate of selection.candidates) {
@@ -98,7 +99,10 @@ export const graphqlGetMutationsRule: Rule = {
         break;
       }
       probed++;
-      if ("error" in outcome) continue;
+      if ("error" in outcome) {
+        errored++;
+        continue;
+      }
       const body = parseGraphqlBody(outcome.response);
       if (!body) continue;
       graphqlAnswers++;
@@ -113,6 +117,17 @@ export const graphqlGetMutationsRule: Rule = {
         skipReason: "probe-budget",
         message: "The probe budget ran out before any GraphQL endpoint was probed",
         details,
+      });
+      return { checks };
+    }
+
+    if (errored === probed) {
+      checks.push({
+        name: CHECK,
+        status: "skipped",
+        skipReason: "probe-errors",
+        message: `Every GraphQL probe failed with a network error or timeout (${probed} endpoint(s)), so mutations over GET were not checked`,
+        details: { ...details, probed, errored },
       });
       return { checks };
     }
@@ -142,7 +157,7 @@ export const graphqlGetMutationsRule: Rule = {
         name: CHECK,
         status: "pass",
         message: `No GraphQL endpoint executed a mutation sent over GET (${probed} endpoint(s) probed, ${graphqlAnswers} answered as GraphQL)`,
-        details: { ...details, probed, graphqlAnswers, budgetStopped },
+        details: { ...details, probed, graphqlAnswers, errored, budgetStopped },
       });
     }
     return { checks };
