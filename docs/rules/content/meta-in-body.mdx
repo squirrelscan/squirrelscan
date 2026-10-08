@@ -11,10 +11,14 @@ It usually means the head was closed earlier than intended, or that a component 
 
 ## What squirrel checks
 
-The rule runs on every crawled page over the selector `body meta`. It emits a single check named `meta-in-body`:
+The rule runs on every crawled page over the selector `body meta`, skipping microdata. It emits a single check named `meta-in-body`:
 
 - Pass when there are none. Message: `All meta tags correctly placed in <head>`.
 - Fail otherwise. Message: `Found 3 meta tags in <body>`, or `Found 1 meta tag in <body>` for one. Each item is identified by its `name`, its `property`, or `unknown`, labelled with its content truncated to 50 characters. Severity error, weight 8.
+
+### Microdata exemption
+
+A `<meta>` with an `itemprop` attribute is schema.org microdata, which the HTML Standard allows anywhere in the body, and ecommerce themes emit it inside product markup. These are not reported. The exemption is exact: a meta that has `itemprop` together with `name`, `http-equiv` or `charset` is still reported, because the standard does not allow that combination. RDFa `<meta property>` tags in the body are also still reported, even under an RDFa ancestor.
 
 The selector reads the parsed DOM, so it reflects where the browser's own parser placed the element, not where it appeared in the source. A meta element written inside the head but pushed into the body by a parse error is reported here, which is the correct result: that is where it ends up.
 

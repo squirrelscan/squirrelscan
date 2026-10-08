@@ -11,6 +11,7 @@ import { techIconUrl } from "../technologies";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import { seedRedirect } from "../coverage";
+import { collectSkippedChecks, type SkippedCheck } from "../skipped";
 
 export interface JsonRenderOptions {
   version?: string;
@@ -105,6 +106,12 @@ interface SlimJsonReport {
     passed: number;
     warnings: number;
     failed: number;
+    /**
+     * Pages a check skipped because it could not finish evaluating (#518): the
+     * sum of `pagesCount` over `skippedChecks`. Not part of `passed`,
+     * `warnings` or `failed`, and never scored.
+     */
+    skipped: number;
   };
   issues: Array<{
     ruleId: string;
@@ -134,6 +141,12 @@ interface SlimJsonReport {
       legacyValue?: string;
     }>;
   }>;
+  /**
+   * Evaluation gaps (#518): checks a rule skipped because a scan limit was hit,
+   * so "no issue" on those pages is not a clean result. Deliberately outside
+   * `issues`, which consumers treat as findings. Present only when non-empty.
+   */
+  skippedChecks?: SkippedCheck[];
   // Report-only — never part of the score. Present when the Pro cloud
   // editor-summary call ran (exec-email-shaped narrative + big-ticket items).
   editorSummary?: {
@@ -193,6 +206,7 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
   const categoryIssues = groupIssuesByCategory(report.ruleResults);
   const es = editorSummaryView(report.editorSummary);
   const refusedSeedRedirect = seedRedirect(report);
+  const skippedChecks = collectSkippedChecks(report.ruleResults);
   return {
     meta: {
       version,
@@ -261,6 +275,7 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
       passed: report.passed,
       warnings: report.warnings,
       failed: report.failed,
+      skipped: skippedChecks.reduce((sum, s) => sum + s.pagesCount, 0),
     },
     // Same guard as every other format, validated rather than just cast: the
     // declared shape promises string fields, so a malformed stored summary omits
@@ -316,6 +331,7 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
           };
       }),
     })),
+    ...(skippedChecks.length > 0 ? { skippedChecks } : {}),
     ...(report.technologies && report.technologies.items.length > 0
       ? {
           technologies: {

@@ -1,6 +1,6 @@
 ---
 title: "LCP image not preloaded: what squirrel counts as a hero"
-description: "Likely Largest Contentful Paint images loaded with no preload. squirrel checks the first three candidate images on every page."
+description: "Likely Largest Contentful Paint images loaded with no preload. squirrel checks the first three eligible candidate images on every page."
 ---
 
 ## What LCP preloading is
@@ -16,7 +16,14 @@ The rule runs on every crawled page and emits one check:
 - `lcp-preload`, warning with the message `N likely-LCP images loaded without preload`, or `1 likely-LCP image loaded without preload` in the singular. The value is the count. There are no items: the count is per page rather than a list of every image across the site.
 - `lcp-preload`, passing with the message `LCP images appear to be optimized`.
 
-A candidate is one of the first three elements matching `img:not([loading="lazy"])` or `img[fetchpriority="high"]` in document order, so a lazily loaded image with a high fetch priority qualifies. It counts as unpreloaded when it has a `src` that is not a `data:` URI and that `src` does not appear among the page's `link[rel="preload"]` hrefs ending in `.jpg`, `.jpeg`, `.png`, `.webp` or `.avif`. A candidate with no `src` uses up one of the three slots without being reported.
+A candidate is one of the first three eligible images in document order. This is the same eligibility [perf/lcp-fetchpriority](/rules/perf/lcp-fetchpriority) uses, from one shared finder, so the two rules pick the same hero image. An image is eligible when it has a `src` that is not a `data:` URI, and it:
+
+- is not lazy (`loading="lazy"`);
+- is not an SVG or ICO, and not a tracking pixel or spacer (`pixel`, `spacer`, `blank`, `1x1` or `tracking` in the `src`);
+- is not inside a `<header>` or `<nav>`, where logos live;
+- is not declared small: when both `width` and `height` are declared, the larger must be at least 300. An image with no declared dimensions stays eligible.
+
+A candidate counts as unpreloaded when no `link[rel~="preload"][as="image"]` on the page matches it. A preload matches when its `href` or any `imagesrcset` URL equals the image's `src` or any of its own `srcset` URLs. URLs are compared as absolute URLs without the query string or fragment, so a relative `src`, an absolute preload `href` and a cache-busting `?v=2` all match. A preload for some other image is no evidence about this one. The count is not capped at one: two eligible images that are both unpreloaded report `2 likely-LCP images`.
 
 The candidates come from a shared analysis of the page that six performance rules read, computed once per page.
 
@@ -30,7 +37,7 @@ Elements inside `<noscript>` are skipped: a browser with scripting enabled reads
 
 Put it in `<head>`, for one image, and only when that image really is the largest element in the viewport.
 
-The common false positive is a URL written two different ways. The match compares the `src` attribute against the preload `href` as written, so `/hero.jpg` in the tag and `https://example.com/hero.jpg` in the preload do not match and the image is still counted. Writing both the same way clears it. A second cause is a page whose LCP element is text or a CSS background, neither of which this rule can see.
+The common false positives are a page whose LCP element is text or a CSS background, neither of which this rule can see, and a hero whose preload names a different file than the `src` and `srcset` it renders. A preload written relative or absolute, with or without a query string, or through `imagesrcset`, matches.
 
 | | |
 |---|---|

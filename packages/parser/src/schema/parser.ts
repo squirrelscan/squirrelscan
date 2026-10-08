@@ -78,6 +78,15 @@ function extractSchemas(
   // Handle @graph - propagate parent @context to children
   if (record["@graph"] && Array.isArray(record["@graph"])) {
     const graphContext = record["@context"] ?? parentContext;
+    // A typeless wrapper (Yoast) contributes only its children. A wrapper with
+    // its own @type is a node too, kept ahead of its children to match
+    // flattenJsonLdNodes (#341). Its @graph is dropped from the stored copy:
+    // the children are extracted below, and nesting them would validate twice.
+    if (record["@type"]) {
+      const { "@graph": _graph, ...own } = record;
+      const normalized = normalizeSchema(own, parentContext);
+      if (normalized) schemas.push(normalized);
+    }
     for (const item of record["@graph"]) {
       extractSchemas(item, schemas, untypedNodes, graphContext);
     }

@@ -1,12 +1,19 @@
 // Client-side redirect detection (meta refresh, JavaScript)
 
+import { stripNoscriptMarkup } from "./dom";
+
 /**
  * Find client-side redirects in HTML content
  * Detects:
  * - Meta refresh: <meta http-equiv="refresh" content="0;url=...">
  * - JavaScript: window.location = "...", window.location.href = "..."
+ *
+ * Anything inside `<noscript>` is ignored: a browser with scripting on reads it
+ * as text, so a refresh or script there never fires (#437).
  */
-export function findClientRedirects(html: string, baseUrl: string): string | null {
+export function findClientRedirects(rawHtml: string, baseUrl: string): string | null {
+  const html = stripNoscriptMarkup(rawHtml);
+
   // 1. Check for meta refresh
   const metaRefresh = findMetaRefresh(html, baseUrl);
   if (metaRefresh) return metaRefresh;
