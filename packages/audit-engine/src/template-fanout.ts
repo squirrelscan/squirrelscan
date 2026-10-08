@@ -145,7 +145,8 @@ export interface TemplateFanoutStats {
  *    bundles) must not share a verdict;
  *  - the set of `<meta>` names (`name`, `property`, `http-equiv`, `charset`):
  *    `mobile/viewport` and friends pass or fail on one being present, and the
- *    viewport's `content` too, since the rule reads its value;
+ *    `content` of the metas a declared rule reads the value of (viewport, geo.*,
+ *    ICBM, http-equiv refresh);
  *  - the number of `<main>` / `role="main"` landmarks: `a11y/landmark-one-main`.
  *
  * It is part of the FANOUT grouping key only. The stored `template_fp` stays the
@@ -155,6 +156,14 @@ export interface TemplateFanoutStats {
  *
  * `null` for a page with no document, which then never groups.
  */
+const CONTENT_READ_METAS: ReadonlySet<string> = new Set([
+  "viewport",
+  "geo.region",
+  "geo.placename",
+  "geo.position",
+  "icbm",
+]);
+
 export function fanoutInputSignature(
   doc: {
     querySelectorAll(selector: string): ArrayLike<{ getAttribute(name: string): string | null }>;
@@ -168,8 +177,11 @@ export function fanoutInputSignature(
       el.getAttribute("property"),
       el.getAttribute("http-equiv"),
       el.getAttribute("charset") !== null ? "charset" : null,
-      // `mobile/viewport` passes or fails on the CONTENT, not just the presence.
-      el.getAttribute("name")?.toLowerCase() === "viewport"
+      // The metas a declared rule reads the VALUE of, not just the presence:
+      // `mobile/viewport`, `a11y/zoom-disabled`, `mobile/viewport-zoom`,
+      // `local/geo-meta` and `a11y/meta-refresh`.
+      CONTENT_READ_METAS.has((el.getAttribute("name") ?? "").toLowerCase()) ||
+      (el.getAttribute("http-equiv") ?? "").toLowerCase() === "refresh"
         ? `content=${el.getAttribute("content") ?? ""}`
         : null,
     ]

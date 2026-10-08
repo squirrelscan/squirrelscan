@@ -471,7 +471,8 @@ export function streamPageRules(
         const shared: SharedPageSignals = {
           fingerprint: fingerprintPage(parsed, pageUrl),
         };
-        // The grouping key is the template cluster AND this page's origin: a
+        // The grouping key is the template cluster, this page's rule-input signature
+        // (#275: script srcs, meta names, main count) AND its origin: a
         // declared rule may resolve resources against the origin (`security/sri`
         // decides "cross-origin" by comparing it), so a crawl spanning http:// and
         // https:// must not copy a verdict across that boundary.

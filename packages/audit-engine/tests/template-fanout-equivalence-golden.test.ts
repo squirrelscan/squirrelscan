@@ -566,6 +566,7 @@ describe("a verdict is never copied across origins", () => {
     `<link rel="stylesheet" href="/assets/site.css">${head}` +
     `<style>:root{--brand:#101010}</style></head><body class="tpl-x">` +
     `<nav><a href="/">Home</a></nav>${main}<footer>f</footer></body></html>`;
+  const SIG = "0123456789abcdef";
   const VIEWPORT = `<meta name="viewport" content="width=device-width, initial-scale=1">`;
   const counterexamples: Array<{ name: string; ruleId: string; a: string; b: string }> = [
     {
@@ -579,6 +580,12 @@ describe("a verdict is never copied across origins", () => {
       ruleId: "mobile/viewport",
       a: sameChrome(VIEWPORT),
       b: sameChrome(`<meta name="viewport" content="width=1024">`),
+    },
+    {
+      name: "a meta refresh with a different target",
+      ruleId: "a11y/meta-refresh",
+      a: sameChrome(`${VIEWPORT}<meta http-equiv="refresh" content="0;url=/x">`),
+      b: sameChrome(`${VIEWPORT}<meta http-equiv="refresh" content="0;url=/y">`),
     },
     {
       name: "a second main landmark",
@@ -632,25 +639,31 @@ describe("a verdict is never copied across origins", () => {
     expect(sig(sameChrome(`${VIEWPORT}<script src="/a.js"></script>`))).not.toBe(
       sig(sameChrome(`${VIEWPORT}<script src="/b.js"></script>`)),
     );
+    // Identical inputs on different pages must still group, or the key is
+    // vacuously tight and fan-out never happens.
+    expect(sig(sameChrome(VIEWPORT))).toBe(sig(sameChrome(VIEWPORT, "<main><p>other</p></main>")));
+    expect(fanoutClusterKey("abc123", "https://shop.test/a", base)).toBe(
+      fanoutClusterKey("abc123", "https://shop.test/b", base),
+    );
     expect(fanoutInputSignature(null)).toBeNull();
     expect(fanoutClusterKey("abc123", "https://shop.test/a", null)).toBeNull();
   });
 
   test("fanoutClusterKey separates origins and survives an unparseable url", () => {
-    expect(fanoutClusterKey("abc123", "https://shop.test/a", "")).not.toBe(
-      fanoutClusterKey("abc123", "http://shop.test/a", ""),
+    expect(fanoutClusterKey("abc123", "https://shop.test/a", SIG)).not.toBe(
+      fanoutClusterKey("abc123", "http://shop.test/a", SIG),
     );
-    expect(fanoutClusterKey("abc123", "https://shop.test/a", "")).toBe(
-      fanoutClusterKey("abc123", "https://shop.test/b?q=1", ""),
+    expect(fanoutClusterKey("abc123", "https://shop.test/a", SIG)).toBe(
+      fanoutClusterKey("abc123", "https://shop.test/b?q=1", SIG),
     );
     // No template key means no group, whatever the url.
-    expect(fanoutClusterKey(null, "https://shop.test/a", "")).toBeNull();
+    expect(fanoutClusterKey(null, "https://shop.test/a", SIG)).toBeNull();
     // A url that will not parse falls back to itself, so it can only ever group
     // with a byte-identical url.
-    expect(fanoutClusterKey("abc123", "not a url", "")).not.toBe(
-      fanoutClusterKey("abc123", "also not a url", ""),
+    expect(fanoutClusterKey("abc123", "not a url", SIG)).not.toBe(
+      fanoutClusterKey("abc123", "also not a url", SIG),
     );
-    expect(fanoutClusterKey("abc123", "not a url", "")).toBe(fanoutClusterKey("abc123", "not a url", ""));
+    expect(fanoutClusterKey("abc123", "not a url", SIG)).toBe(fanoutClusterKey("abc123", "not a url", SIG));
   });
 });
 
