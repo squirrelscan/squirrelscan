@@ -9,6 +9,7 @@ import type { AuthorInfo, SchemaCollection } from "@squirrelscan/parser";
 // Import and re-export RuleCategory from categories.ts (single source of truth)
 import type { RuleCategory } from "./categories";
 import type { CollectedSiteSignals } from "./collected-signals";
+import type { EndpointSurface } from "./endpoint-surface";
 import type { CloudResultStore, RuleCloudSpec } from "./cloud";
 import type {
   BusinessCategory,
@@ -354,6 +355,10 @@ export interface SiteData {
     fonts?: ResourceSizeData[];
   };
   scripts?: ScriptContentData[];
+  // Same-site chunks pages preload (modulepreload, preload as=script) that no
+  // <script src> names. Separate from `scripts` so the script rules' input is
+  // unchanged; read by security/csp-blocks-own-resources only.
+  preloadedScripts?: ScriptContentData[];
   pdfSizes?: ResourceSizeData[];
   sitemapUrlStatuses?: SitemapUrlStatusData[];
   // Differential cloaking-probe results (#118). Undefined when the opt-in probe
@@ -405,6 +410,13 @@ export interface RuleContext {
   // of re-materializing every page's DOM. Undefined on the v1 path — rules then run
   // their legacy `site.pages[].parsed.document` scan, byte-identical to today.
   collectedSignals?: CollectedSiteSignals;
+
+  // Candidate API surface found passively in served JS and HTML, plus convention
+  // paths for the detected stack (see endpoint-surface.ts). Deduped, same-origin
+  // flagged, capped. Present only in a site pass whose engine ran the discovery
+  // pass; undefined otherwise, which a rule must read as "no candidates known",
+  // not "no endpoints". A cross-origin candidate has `probeEligible: false`.
+  endpointSurface?: EndpointSurface;
 
   // Resolved Stage-0 site profile (cloud). Undefined offline / free / no-credits
   // / no-consent — rules must treat undefined as "run as today" (no gating).
