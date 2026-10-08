@@ -82,7 +82,7 @@ describe("perf/lcp-hints candidates and preload matching", () => {
 
   test("undimensioned two-image case still warns with value 2", () => {
     const c = preloadCheck(
-      `<!doctype html><html><body><img src="/hero.jpg"><img src="/banner.png"></body></html>`,
+      `<!doctype html><html><body><img src="/hero.jpg"><img src="/banner.png"></body></html>`
     );
     expect(c.status).toBe("warn");
     expect(c.value).toBe(2);
@@ -146,7 +146,8 @@ describe("perf/lcp-hints and perf/lcp-fetchpriority share the hero candidate", (
       <img src="/hero.png" width="1200" height="800"></body></html>`;
     const ctx = pageCtx(html);
     const hints = (lcpHintsRule.run(ctx) as { checks: any[] }).checks[0];
-    const fp = (perf.lcpFetchpriorityRule.run(ctx) as { checks: any[] }).checks[0];
+    const fp = (perf.lcpFetchpriorityRule.run(ctx) as { checks: any[] })
+      .checks[0];
     expect(hints.value).toBe(1);
     expect(fp.status).toBe("warn");
     expect(fp.items[0].id).toBe("/hero.png");
