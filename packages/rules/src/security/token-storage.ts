@@ -15,6 +15,7 @@
 // value is a live credential on a real site, and a report is shared and stored.
 
 import type { CheckItem } from "@squirrelscan/core-contracts";
+import { getDomain } from "tldts";
 
 import { sharedRegex } from "../shared-regex";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
@@ -69,6 +70,9 @@ const COMPANIONS = new Set([
  * A segment that says the value is not a credential: UI state, a timestamp, a
  * pagination cursor, or a token of another kind (CSRF, push, device).
  */
+// Deliberately a blocklist that wins over STRONG_SEGMENTS: `token_view`, `jwt_mode` and
+// `auth_token_time` are missed, in exchange for not flagging `token_expires_at`,
+// `csrf_token` or `next_page_token`. Precision over recall; see the rule page.
 const BENIGN_SEGMENTS = new Set([
   "csrf",
   "xsrf",
@@ -183,7 +187,11 @@ const SET_ITEM_LITERAL = sharedRegex(
     "g",
   ),
 );
-// `setItem(computed, value)`: no literal key, only the value can be judged.
+// `setItem(computed, value)`: no literal key, only the value can be judged. The end
+// of the first argument is found by a bounded scan (200 characters, brackets
+// counted, strings not parsed), so a comma inside a string argument or a very long
+// key expression can misplace the value window. That costs at most a missed or odd
+// JWT-value match, never a wrong key.
 const SET_ITEM_DYNAMIC = sharedRegex(
   new RegExp(
     `${STORAGE}\\s*(?:\\?\\.|\\.)\\s*setItem\\s*\\(\\s*(?!['"\`])`,
@@ -219,6 +227,7 @@ const VALUE_WINDOW = 1200;
 
 /** Hard cap on one script, so a pathological bundle cannot dominate a page's time. */
 const MAX_SCAN_CHARS = 6_000_000;
+// A script longer than this is read only up to the cap, without a note in the report.
 
 const MAX_WRITES_PER_SCRIPT = 25;
 
@@ -299,6 +308,29 @@ export function findTokenStorageWrites(text: string): TokenStorageWrite[] {
 interface Located extends TokenStorageWrite {
   location: "inline-script" | "external-script";
   script: string;
+  /** An external script served from another registrable domain than the page's. */
+  thirdParty?: boolean;
+}
+
+const registrable = (url: string): string | null => {
+  try {
+    const host = new URL(url).hostname.toLowerCase().replace(/\.$/, "");
+    return getDomain(host, { allowPrivateDomains: true }) ?? host;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Is this script served from a different registrable domain than the page? A
+ * vendor SDK or widget writes to storage under its own configuration, so the site
+ * owner reads such a finding differently: it is labelled, not hidden, because an
+ * auth SDK that persists the user's JWT is still an exposure the owner chose.
+ */
+export function isThirdPartyScript(scriptUrl: string, pageUrl: string): boolean {
+  const script = registrable(scriptUrl);
+  const page = registrable(pageUrl);
+  return script !== null && page !== null && script !== page;
 }
 
 const REASON_LABEL: Record<TokenStorageReason, string> = {
@@ -318,20 +350,25 @@ const EXECUTABLE_SCRIPT_TYPE = /^(?:text|application)\/(?:javascript|ecmascript)
 function findingCheck(found: Located[]): CheckResult {
   const items: CheckItem[] = found.slice(0, MAX_ITEMS).map((w) => ({
     id: `${w.script}: ${describe(w)} (${w.reason})`,
-    label: `${REASON_LABEL[w.reason]} written in ${w.location === "inline-script" ? "an inline script" : "script"} ${w.script}`,
+    label: `${REASON_LABEL[w.reason]} written in ${
+      w.location === "inline-script" ? "an inline script" : w.thirdParty ? "third-party script" : "script"
+    } ${w.script}`,
     meta: {
       storage: w.storage,
       key: w.key,
       reason: w.reason,
       location: w.location,
       script: w.script,
+      ...(w.thirdParty ? { thirdParty: true } : {}),
     },
   }));
   const first = found[0]!;
   return {
     name: "token-storage",
     status: "warn",
-    message: `${found.length} auth token write(s) to web storage: ${describe(first)} in ${first.script}${
+    message: `${found.length} auth token write(s) to web storage: ${describe(first)} in ${
+      first.thirdParty ? "third-party script " : ""
+    }${first.script}${
       found.length > 1 ? `, and ${found.length - 1} more` : ""
     }`,
     value: found.length,
@@ -341,6 +378,7 @@ function findingCheck(found: Located[]): CheckResult {
       ...(first.location === "external-script"
         ? { foldKey: `security/token-storage:${first.script}` }
         : {}),
+      ...(first.thirdParty ? { thirdParty: true } : {}),
       ...(found.length > MAX_ITEMS ? { additional: found.length - MAX_ITEMS } : {}),
     },
   };
@@ -414,7 +452,12 @@ export const tokenStorageRule: Rule = {
       if (writes.length === 0) continue;
       checks.push(
         findingCheck(
-          writes.map((w) => ({ ...w, location: "external-script" as const, script: script.url })),
+          writes.map((w) => ({
+            ...w,
+            location: "external-script" as const,
+            script: script.url,
+            thirdParty: isThirdPartyScript(script.url, ctx.page.url),
+          })),
         ),
       );
     }

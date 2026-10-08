@@ -11,6 +11,7 @@ import { rules as securityRules } from "../src/security";
 import {
   findTokenStorageWrites,
   isJwtShaped,
+  isThirdPartyScript,
   isTokenKey,
   tokenStorageRule,
 } from "../src/security/token-storage";
@@ -197,6 +198,42 @@ describe("finding-redacts-value", () => {
   test("a JWT in the key position is not echoed", () => {
     const w = findTokenStorageWrites(`localStorage.setItem("${JWT}", "${JWT}")`);
     expect(JSON.stringify(w)).not.toContain("eyJ");
+  });
+});
+
+describe("third-party scripts", () => {
+  const vendor = {
+    url: "https://cdn.vendor.test/sdk.js",
+    content: 'localStorage.setItem("session_id", s)',
+    sourcePages: [PAGE],
+  };
+
+  test("a script from another registrable domain is labelled third-party", () => {
+    const checks = run("", [vendor]);
+    expect(checks[0]!.status).toBe("warn");
+    expect(checks[0]!.message).toContain("third-party script https://cdn.vendor.test/sdk.js");
+    expect(checks[0]!.items![0]!.meta).toMatchObject({ thirdParty: true });
+    expect(checks[0]!.items![0]!.label).toContain("third-party script");
+  });
+
+  test("a first-party CDN subdomain is not labelled third-party", () => {
+    const checks = run("", [{ ...vendor, url: "https://static.shop.test/app.js" }]);
+    expect(checks[0]!.message).not.toContain("third-party");
+    expect(checks[0]!.items![0]!.meta).not.toHaveProperty("thirdParty");
+  });
+
+  test("isThirdPartyScript compares registrable domains", () => {
+    expect(isThirdPartyScript("https://cdn.shop.test/a.js", "https://www.shop.test/")).toBe(false);
+    expect(isThirdPartyScript("https://x.vendor.test/a.js", "https://shop.test/")).toBe(true);
+    expect(isThirdPartyScript("not a url", "https://shop.test/")).toBe(false);
+  });
+});
+
+describe("namespaced keys", () => {
+  test("only the last part after a namespace separator is judged", () => {
+    expect(keys('localStorage.setItem("app:token", t)')).toEqual(["localStorage:app:token:key-name"]);
+    expect(keys('localStorage.setItem("auth:theme", t)')).toEqual([]);
+    expect(keys('localStorage.setItem("token:foo", t)')).toEqual([]);
   });
 });
 

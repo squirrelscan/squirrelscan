@@ -40,13 +40,19 @@ Keys are split into words at punctuation and camelCase, and whole words decide, 
 
 When a key has a namespace such as `app:auth` or `app.session`, only the last part is judged.
 
+The word lists are a blocklist that wins over a strong word, so a key that mixes them is missed: `token_view`, `jwt_mode` and `auth_token_time` stay clean. That trades some recall for precision. A bare `auth` or `session` key is flagged for any value that is not empty or a flag, so `setItem("auth", "guest")` warns.
+
+### Third-party scripts
+
+A script served from another registrable domain than the page, such as an analytics tag, a widget or an auth SDK, is labelled `third-party script` in the message and the item, and carries `thirdParty` in the item `meta`. The status does not change. A vendor script that writes its own `session_id` is not something you can fix, so read the label first. An auth SDK that stores your user's JWT in web storage is still your risk, because you chose how it is configured.
+
 ### The value is never printed
 
 A token in a report is a token that leaks again. The report names the script and the key, and nothing else about the value. A key that is itself JWT-shaped is dropped from the report.
 
 ### Limits
 
-The rule reads script text, so it sees what a script writes and not what the browser holds. A token written through a variable key, a wrapper library or a minified alias is not found unless its value is a literal JWT. A finding is a prompt to check where the token goes, not proof that a live token is exposed.
+The rule reads script text, so it sees what a script writes and not what the browser holds. A script with no captured content (the fetch failed or it was too large) is not scanned, and one longer than 6 MB is read only up to that length, with no note in the report. A token written through a variable key, a wrapper library or a minified alias is not found unless its value is a literal JWT. A finding is a prompt to check where the token goes, not proof that a live token is exposed.
 
 ## How to fix it
 
