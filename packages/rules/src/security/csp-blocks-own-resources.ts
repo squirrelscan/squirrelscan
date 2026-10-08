@@ -150,7 +150,7 @@ function htmlReferences(doc: Document, base: string): Reference[] {
 function chunkReferences(ctx: RuleContext, pageUrls: Set<string>, pageHost: string): Reference[] {
   const refs: Reference[] = [];
   let scanned = 0;
-  for (const script of ctx.site?.scripts ?? []) {
+  for (const script of [...(ctx.site?.scripts ?? []), ...(ctx.site?.preloadedScripts ?? [])]) {
     if (!script.content || !script.sourcePages.some((p) => pageUrls.has(p))) continue;
     if (scanned >= MAX_TOTAL_SCAN) break;
     const text = script.content.slice(0, MAX_CHUNK_SCAN);

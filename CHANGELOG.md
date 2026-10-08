@@ -23,7 +23,11 @@ How it works:
 
 ### Changed
 
-- Scripts a page preloads with `<link rel="modulepreload">` or `<link rel="preload" as="script">` are fetched like its `<script src>` files, so script rules see lazy chunks too.
+- The audit also fetches the same-site script chunks a page preloads with `<link rel="modulepreload">` or `<link rel="preload" as="script">`, so `security/csp-blocks-own-resources` can read the third-party script URLs inside them. They are kept apart from the scripts every other rule reads, so no other rule's result changes, and they are capped at 20 extra fetches per audit. The rule cache format changed, so the first audit of each site after the upgrade runs every rule fresh, once.
+
+### Fixed
+
+- A site that sends response headers and then stalls its body can no longer hang the CLI. The shared request helper used by the reachability check, the robots.txt fetch and the update check disarmed its timeout as soon as the headers arrived, so the body read had no time limit. The timeout now covers the body too, and a stalled body fails like any other timeout.
 
 ## v0.0.106 (2026-10-08)
 

@@ -354,6 +354,10 @@ export interface SiteData {
     fonts?: ResourceSizeData[];
   };
   scripts?: ScriptContentData[];
+  // Same-site chunks pages preload (modulepreload, preload as=script) that no
+  // <script src> names. Separate from `scripts` so the script rules' input is
+  // unchanged; read by security/csp-blocks-own-resources only.
+  preloadedScripts?: ScriptContentData[];
   pdfSizes?: ResourceSizeData[];
   sitemapUrlStatuses?: SitemapUrlStatusData[];
   // Differential cloaking-probe results (#118). Undefined when the opt-in probe

@@ -17,27 +17,29 @@ const PAGE = "https://shop.test/";
 function run(
   head: string,
   csp: string | undefined,
-  opts: { url?: string; body?: string; scripts?: { url: string; content: string }[]; headers?: Record<string, string> } = {},
+  opts: { url?: string; body?: string; scripts?: { url: string; content: string }[]; preloaded?: { url: string; content: string }[]; headers?: Record<string, string> } = {},
 ) {
   const url = opts.url ?? PAGE;
   const html = `<!DOCTYPE html><html><head><title>t</title>${head}</head><body>${opts.body ?? "hello"}</body></html>`;
   const headers: Record<string, string> = { ...(opts.headers ?? {}) };
   if (csp !== undefined) headers["content-security-policy"] = csp;
+  const entry = (s: { url: string; content: string }) => ({
+    url: s.url,
+    status: 200,
+    error: null,
+    contentType: "text/javascript",
+    sizeBytes: s.content.length,
+    content: s.content,
+    sourcePages: [url],
+  });
   const ctx = {
     page: { url, html, statusCode: 200, loadTime: 0, headers },
     parsed: parsePage(html, url),
     site: {
       baseUrl: url,
       pages: [],
-      scripts: (opts.scripts ?? []).map((s) => ({
-        url: s.url,
-        status: 200,
-        error: null,
-        contentType: "text/javascript",
-        sizeBytes: s.content.length,
-        content: s.content,
-        sourcePages: [url],
-      })),
+      scripts: (opts.scripts ?? []).map(entry),
+      preloadedScripts: (opts.preloaded ?? []).map(entry),
     },
     options: {},
   } as unknown as RuleContext;
@@ -69,7 +71,7 @@ describe("acceptance fixtures", () => {
       `<link rel="modulepreload" href="/assets/booking-4f2a.js">`,
       "default-src 'self'; script-src 'self'",
       {
-        scripts: [
+        preloaded: [
           {
             url: "https://shop.test/assets/booking-4f2a.js",
             content: `export function open(){const s=document.createElement("script");s.src="https://widget.bookings.example/embed/v2/widget.js";document.head.appendChild(s)}`,
