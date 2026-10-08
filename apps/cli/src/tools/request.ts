@@ -2,6 +2,7 @@
 // Provides consistent user-agent, retry, rate-limiting across all requests
 // Uses plain fetch with browser-like headers
 
+import { withRequestDeadline } from "@squirrelscan/crawler/deadline";
 import { Effect, Schedule, Duration, Data } from "effect";
 
 import { CHROME_USER_AGENT, CHROME_SEC_CH_UA } from "@/constants";
@@ -152,6 +153,96 @@ function applyBrowserHeaders(headers: Headers, userAgent: string): void {
 }
 
 // ============================================
+// DEADLINE-SCOPED FETCH
+// ============================================
+
+const NULL_BODY_STATUSES = new Set([101, 204, 205, 304]);
+
+/**
+ * Read the body inside the request deadline and hand back a detached Response.
+ *
+ * The deadline stays armed until the body has been read, so an origin that
+ * sends headers and then stalls aborts the read instead of parking the caller.
+ * `url` and `redirected` do not survive the copy by themselves, so they are
+ * carried over.
+ */
+async function bufferResponse(response: Response): Promise<Response> {
+  const body = NULL_BODY_STATUSES.has(response.status)
+    ? null
+    : await response.arrayBuffer();
+  const copy = new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+  Object.defineProperty(copy, "url", { value: response.url });
+  Object.defineProperty(copy, "redirected", { value: response.redirected });
+  return copy;
+}
+
+function toRequestError(url: string, error: unknown): RequestError {
+  if ((error as Error).name === "AbortError") {
+    return RequestError.timeout(url);
+  }
+  if ((error as Error).message?.includes("timed out")) {
+    return RequestError.timeout(url);
+  }
+  return RequestError.network(url, (error as Error).message);
+}
+
+/**
+ * One attempt: fetch under a deadline that covers the body read.
+ *
+ * `use` reads or cancels the body before it returns; the deadline is disarmed
+ * as soon as it does. Every helper in this file goes through here, so no caller
+ * can end up with a Response whose body read is unbounded.
+ */
+function fetchWithDeadline<T>(
+  url: string,
+  options: RequestInit | undefined,
+  headers: Headers,
+  redirect: RequestRedirect,
+  timeoutMs: number,
+  use: (response: Response, timing: RequestTiming) => Promise<T>
+): Effect.Effect<T, RequestError, never> {
+  return Effect.tryPromise({
+    try: async () => {
+      const fetchStart = Date.now();
+      let responseTime = fetchStart;
+      return await withRequestDeadline(
+        timeoutMs,
+        async (signal) => {
+          const response = await fetch(url, {
+            ...options,
+            headers,
+            signal,
+            redirect,
+          });
+          responseTime = Date.now();
+          return response;
+        },
+        (response) => use(response, { fetchStart, responseTime })
+      );
+    },
+    catch: (error) => toRequestError(url, error),
+  });
+}
+
+function logRequest(
+  url: string,
+  options: RequestInit | undefined,
+  response: Response,
+  timing: RequestTiming
+): void {
+  logger.debug("request", {
+    url,
+    method: options?.method ?? "GET",
+    status: response.status,
+    ttfb: timing.responseTime - timing.fetchStart,
+  });
+}
+
+// ============================================
 // EFFECT-BASED REQUEST
 // ============================================
 
@@ -195,51 +286,20 @@ export function requestWithTiming(
     const redirectMode =
       options?.redirect ?? (config.followRedirects ? "follow" : "manual");
 
-    const result = yield* Effect.tryPromise({
-      try: async () => {
-        const fetchStart = Date.now();
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), config.timeout);
-
-        try {
-          const response = await fetch(url, {
-            ...options,
-            headers,
-            signal: controller.signal,
-            redirect: redirectMode,
-          });
-          const responseTime = Date.now();
-          return {
-            response,
-            timing: { fetchStart, responseTime },
-          };
-        } finally {
-          clearTimeout(timeoutId);
-        }
-      },
-      catch: (error) => {
-        if ((error as Error).name === "AbortError") {
-          return RequestError.timeout(url);
-        }
-        if ((error as Error).message?.includes("timed out")) {
-          return RequestError.timeout(url);
-        }
-        return RequestError.network(url, (error as Error).message);
-      },
-    });
-
-    // Log request completion
-    const { response, timing } = result;
-    const ttfb = timing.responseTime - timing.fetchStart;
-    logger.debug("request", {
+    const result = yield* fetchWithDeadline(
       url,
-      method: options?.method ?? "GET",
-      status: response.status,
-      ttfb,
-    });
+      options,
+      headers,
+      redirectMode,
+      config.timeout,
+      async (response, timing) => ({
+        response: await bufferResponse(response),
+        timing,
+      })
+    );
 
-    return { response, timing };
+    logRequest(url, options, result.response, result.timing);
+    return result;
   }).pipe(
     // Retry with exponential backoff on network errors
     Effect.retry(
@@ -280,53 +340,49 @@ export function requestOnceWithTiming(
     const headers = new Headers(options?.headers);
     applyBrowserHeaders(headers, config.userAgent);
 
-    const result = yield* Effect.tryPromise({
-      try: async () => {
-        const fetchStart = Date.now();
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), config.timeout);
-
-        try {
-          const response = await fetch(url, {
-            ...options,
-            headers,
-            signal: controller.signal,
-            redirect: config.followRedirects ? "follow" : "manual",
-          });
-          const responseTime = Date.now();
-          return {
-            response,
-            timing: { fetchStart, responseTime },
-          };
-        } finally {
-          clearTimeout(timeoutId);
-        }
-      },
-      catch: (error) => {
-        if ((error as Error).name === "AbortError") {
-          return RequestError.timeout(url);
-        }
-        if ((error as Error).message?.includes("timed out")) {
-          return RequestError.timeout(url);
-        }
-        return RequestError.network(url, (error as Error).message);
-      },
-    });
-
-    // Log request completion
-    const { response, timing } = result;
-    const ttfb = timing.responseTime - timing.fetchStart;
-    logger.debug("request", {
+    const result = yield* fetchWithDeadline(
       url,
-      method: options?.method ?? "GET",
-      status: response.status,
-      ttfb,
-    });
+      options,
+      headers,
+      config.followRedirects ? "follow" : "manual",
+      config.timeout,
+      async (response, timing) => ({
+        response: await bufferResponse(response),
+        timing,
+      })
+    );
 
-    return { response, timing };
+    logRequest(url, options, result.response, result.timing);
+    return result;
   });
   // Note: No retry wrapper - this is a single-attempt request
+}
+
+/**
+ * Single attempt whose caller reads the body itself, inside the deadline.
+ *
+ * For callers that only want part of a body (a sample, a header check) and
+ * would waste time buffering the rest. `use` must read or cancel the body
+ * before it returns. `timeoutMs` overrides the configured timeout.
+ */
+export function requestOnceScoped<T>(
+  url: string,
+  options: RequestInit | undefined,
+  use: (response: Response) => Promise<T>,
+  timeoutMs: number = config.timeout
+): Effect.Effect<T, RequestError, never> {
+  return Effect.suspend(() => {
+    const headers = new Headers(options?.headers);
+    applyBrowserHeaders(headers, config.userAgent);
+    return fetchWithDeadline(
+      url,
+      options,
+      headers,
+      config.followRedirects ? "follow" : "manual",
+      timeoutMs,
+      (response) => use(response)
+    );
+  });
 }
 
 /**
