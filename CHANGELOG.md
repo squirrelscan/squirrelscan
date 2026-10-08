@@ -24,6 +24,7 @@ How it works:
 
 ### Changed
 
+- `squirrel entities` and the MCP `list_entities` tool now apply the same page filter rule as the hosted API, and a filtered result keeps `summary` site-wide. `--page` with an absolute `http(s)` URL is a prefix of the page URL, a value starting with `/` is a prefix of the path and query (so `--page /blog` no longer matches `https://example.com/tag/blog`), and anything else is a substring. Use `--page blog` for the old substring behavior. A filtered `squirrel entities -f json` and `list_entities` used to return a `summary` recomputed over the matching entities. They now return the site-wide `summary` and a new `filtered: { nodes, edges }` block with what the filters kept, so scripts that read `summary.nodeCount` after a filter should read `filtered.nodes` instead. `--diff` still compares recomputed summaries.
 - The audit also fetches the same-site script chunks a page preloads with `<link rel="modulepreload">` or `<link rel="preload" as="script">`, so `security/csp-blocks-own-resources` can read the third-party script URLs inside them. They are kept apart from the scripts every other rule reads, so no other rule's result changes, and they are fetched only when a crawled page enforces a CSP, capped at 20 extra fetches per audit. The rule cache format changed, so the first audit of each site after the upgrade runs every rule fresh, once.
 
 ### Fixed
