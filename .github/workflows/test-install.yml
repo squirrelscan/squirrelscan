@@ -185,6 +185,8 @@ jobs:
 
           jq -e '.status == "completed" and .meta.totalPages == 1' "$work/audit.json" > /dev/null \
             || fail "audit did not complete with exactly one crawled page"
+          # http.server logs the request line, so this matches `GET / HTTP/1.1`
+          # and not the readiness probe's `GET /ready`.
           grep -q '"GET / ' "$work/server.log" \
             || fail "the fixture server never saw the audit's request"
           echo "Audit crawled 1 page from the local fixture"
@@ -307,6 +309,8 @@ jobs:
 
           jq -e '.status == "completed" and .meta.totalPages == 1' "$work/audit.json" > /dev/null \
             || fail "audit did not complete with exactly one crawled page"
+          # http.server logs the request line, so this matches `GET / HTTP/1.1`
+          # and not the readiness probe's `GET /ready`.
           grep -q '"GET / ' "$work/server.log" \
             || fail "the fixture server never saw the audit's request"
           echo "Audit crawled 1 page from the local fixture"
@@ -477,6 +481,8 @@ jobs:
 
           jq -e '.status == "completed" and .meta.totalPages == 1' "$work/audit.json" > /dev/null \
             || fail "audit did not complete with exactly one crawled page"
+          # http.server logs the request line, so this matches `GET / HTTP/1.1`
+          # and not the readiness probe's `GET /ready`.
           grep -q '"GET / ' "$work/server.log" \
             || fail "the fixture server never saw the audit's request"
           echo "Audit crawled 1 page from the local fixture"
@@ -640,6 +646,8 @@ jobs:
 
           jq -e '.status == "completed" and .meta.totalPages == 1' "$work/audit.json" > /dev/null \
             || fail "audit did not complete with exactly one crawled page"
+          # http.server logs the request line, so this matches `GET / HTTP/1.1`
+          # and not the readiness probe's `GET /ready`.
           grep -q '"GET / ' "$work/server.log" \
             || fail "the fixture server never saw the audit's request"
           echo "Audit crawled 1 page from the local fixture"
