@@ -269,10 +269,13 @@ describe("truncatedSchemaTypeNames", () => {
     ).toEqual(["Query", "User"]);
   });
 
+  test("a matching prefix with no complete name is still a schema (empty list, not null)", () => {
+    expect(truncatedSchemaTypeNames(cut(`{"data":{"__schema":{"types":[`))).toEqual([]);
+  });
+
   test("anything else is null", () => {
     expect(truncatedSchemaTypeNames(cut(`{"items":[{"name":"a"}]`))).toBeNull();
     expect(truncatedSchemaTypeNames(cut(`{"data":{"__schema":{"types":[{"name":"Q"}]`, "text/html"))).toBeNull();
-    expect(truncatedSchemaTypeNames(cut(`{"data":{"__schema":{"types":[`))).toBeNull();
     expect(
       truncatedSchemaTypeNames({ ...cut(`{"data":{"__schema":{"types":[{"name":"Q"}]}}}`), truncated: false })
     ).toBeNull();

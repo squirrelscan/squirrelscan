@@ -171,17 +171,31 @@ describe("security/graphql-introspection", () => {
     }
   });
 
-  test("a schema answer over the 1 MB cap is still flagged, with lower-bound counts", async () => {
+  test("an oversized introspection body is flagged as open but too large to count, never a pass", async () => {
     const types = Array.from({ length: 60_000 }, (_, i) => ({ name: `Type${i}` }));
     types.push({ name: "__Schema" }, { name: "String" });
     const big = () => json({ data: { __schema: { types } } });
     const { checks } = await run({ [GQL]: big });
     const warn = checks.find((c) => c.status === "warn");
     expect(warn?.message).toContain(GQL);
+    expect(warn?.message).toContain("larger than 1 MB, too large to count");
     expect(warn?.message).toContain("at least");
-    expect(warn?.message).toContain("first 1 MB");
-    expect(warn?.items?.[0]?.meta?.truncated).toBe(true);
+    expect(warn?.items?.[0]?.meta).toMatchObject({ truncated: true, confidence: "lower" });
+    expect(checks.some((c) => c.status === "pass")).toBe(false);
     expect(Number(warn?.items?.[0]?.meta?.types)).toBeGreaterThan(10_000);
+  });
+
+  test("an oversized schema with no complete type name in the cap is still flagged", async () => {
+    // The first type name alone is longer than the 1 MB cap.
+    const body = `{"data":{"__schema":{"types":[{"name":"${"A".repeat(1100 * 1024)}"}]}}}`;
+    const { checks } = await run({
+      [GQL]: () => new Response(body, { headers: { "content-type": "application/json" } }),
+    });
+    const warn = checks.filter((c) => c.status === "warn");
+    expect(warn).toHaveLength(1);
+    expect(warn[0]!.message).toContain(GQL);
+    expect(warn[0]!.message).toContain("too large to count (answered over GET)");
+    expect(checks.some((c) => c.status === "pass")).toBe(false);
   });
 
   test("a large answer that does not open as a schema is not flagged", async () => {

@@ -35,8 +35,9 @@ export interface SchemaSummary {
   /** Types the API defines itself: not `__*` introspection types or built-in scalars. */
   apiTypes: number;
   /**
-   * The answer was longer than the read cap, so the counts come from its first
-   * bytes and are lower bounds.
+   * The truncated verdict: the answer opened as a schema but was longer than
+   * the read cap, so it is open but too large to count. The counts are what the
+   * first 1 MB held (lower bounds), and the finding is lower confidence.
    */
   truncated?: true;
 }
@@ -196,21 +197,26 @@ export const graphqlIntrospectionRule: Rule = {
     }
 
     for (const { candidate, method, schema } of exposed) {
-      const atLeast = schema.truncated ? "at least " : "";
-      const note = schema.truncated ? ", counted from the first 1 MB of a longer answer" : "";
+      const seen = schema.types > 0 ? `at least ${schema.types} types seen, ` : "";
+      const message = schema.truncated
+        ? `GraphQL introspection is open at ${candidate.url}: the schema answer is larger than 1 MB, too large to count (${seen}answered over ${method})`
+        : `GraphQL introspection is open at ${candidate.url}: the schema lists ${schema.types} types, ${schema.apiTypes} of them defined by the API (answered over ${method})`;
+      const label = schema.truncated
+        ? `${candidate.url} (${method}): schema over 1 MB, too large to count`
+        : `${candidate.url} (${method}): ${schema.types} types, ${schema.apiTypes} API-defined`;
       checks.push({
         name: CHECK,
         status: "warn",
-        message: `GraphQL introspection is open at ${candidate.url}: the schema lists ${atLeast}${schema.types} types, ${atLeast}${schema.apiTypes} of them defined by the API (answered over ${method}${note})`,
+        message,
         items: [
           {
             id: candidate.url,
-            label: `${candidate.url} (${method}): ${atLeast}${schema.types} types, ${atLeast}${schema.apiTypes} API-defined`,
+            label,
             meta: {
               method,
               types: schema.types,
               apiTypes: schema.apiTypes,
-              ...(schema.truncated ? { truncated: true } : {}),
+              ...(schema.truncated ? { truncated: true, confidence: "lower" } : {}),
               source: candidate.source,
               discoveredVia: candidate.discoveredVia,
             },

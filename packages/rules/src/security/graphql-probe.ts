@@ -429,18 +429,20 @@ export function parseGraphqlBody(response: GraphqlProbeResponse): GraphqlBody | 
 const TRUNCATED_SCHEMA_PREFIX_RE = /^\s*\{\s*"data"\s*:\s*\{\s*"__schema"\s*:\s*\{\s*"types"\s*:\s*\[/;
 
 /**
- * Type names from the first bytes of an introspection answer that was longer
- * than the cap, or null. The prefix must open exactly as an introspection
- * answer does (`{"data":{"__schema":{"types":[`), so a large page that is not
- * GraphQL is never read as a schema. Only complete `"name":"..."` pairs count,
- * so the result is a lower bound.
+ * The truncated verdict: type names seen in the first bytes of an introspection
+ * answer that was longer than the cap, or null when the answer is not one. The
+ * prefix must open exactly as an introspection answer does
+ * (`{"data":{"__schema":{"types":[`), so a large page that is not GraphQL is
+ * never read as a schema. A matching prefix always yields an array, empty when
+ * no complete `"name":"..."` pair fits in the cap: the schema is open either
+ * way, only its size is unknown.
  */
 export function truncatedSchemaTypeNames(response: GraphqlProbeResponse): string[] | null {
   if (!response.truncated || response.contentType.includes("html")) return null;
   if (!TRUNCATED_SCHEMA_PREFIX_RE.test(response.body)) return null;
   const names: string[] = [];
   for (const m of response.body.matchAll(/"name"\s*:\s*"([^"\\]{1,200})"/g)) names.push(m[1]!);
-  return names.length > 0 ? names : null;
+  return names;
 }
 
 /** True for a 2xx status. */
