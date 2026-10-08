@@ -37,6 +37,7 @@ import {
   type EntityMapProperties,
   type EntityMapTruncation,
 } from "./entity-map";
+import { ENTITY_PROBLEM_CLASSES, entityProblemNodes } from "./entity-map-findings";
 
 function clampString(value: string, limits: EntityMapLimits): string {
   return value.length > limits.maxStringLength
@@ -206,81 +207,16 @@ function takeStratified(buckets: EntityMapNode[][], budget: number): EntityMapNo
 // verdicts themselves stay right: rules run on the full map before slimming).
 // A slice of the budget is therefore set aside for them first.
 //
-// The classes mirror what those rules read off a node. They are restated here
-// rather than imported because the rules depend on this package, never the
-// reverse; `entity-map-slim.test.ts` pins the correspondence.
-
-type ProblemClass = "conflict" | "dangling" | "no-id" | "split-identity";
-
-/** Types the `schema/entity-identity` rule expects an `@id` on. */
-const IDENTITY_TYPES = ["Organization", "LocalBusiness", "Person", "WebSite"];
-
-function pageTotal(node: EntityMapNode): number {
-  return node.pages.length + node.morePages;
-}
-
-/** Same signature `schema/entity-split-identity` groups by: sorted types plus normalised name. */
-function identitySignature(node: EntityMapNode): string | null {
-  if (!node.name) return null;
-  const types = [...new Set(node.types)].sort(compareKeys);
-  return JSON.stringify([types, node.name.trim().replace(/\s+/g, " ").toLowerCase()]);
-}
-
-/** Keys of nodes in a group of two or more distinct `@id`s that share a declaring page. */
-function splitIdentityKeys(nodes: EntityMapNode[]): Set<string> {
-  const groups = new Map<string, EntityMapNode[]>();
-  for (const node of nodes) {
-    const signature = identitySignature(node);
-    if (signature === null) continue;
-    const group = groups.get(signature);
-    if (group) group.push(node);
-    else groups.set(signature, [node]);
-  }
-  const out = new Set<string>();
-  for (const group of groups.values()) {
-    if (new Set(group.flatMap((node) => (node.id === null ? [] : [node.id]))).size < 2) continue;
-    const seen = new Map<string, string>();
-    let together = false;
-    for (const node of group) {
-      for (const page of node.pages) {
-        const other = seen.get(page);
-        if (other !== undefined && other !== node.key) together = true;
-        seen.set(page, node.key);
-      }
-    }
-    if (together) for (const node of group) out.add(node.key);
-  }
-  return out;
-}
+// What counts as a problem node is decided in `./entity-map-findings`, the same
+// predicates the rules import, so the two cannot drift.
 
 /** Nodes per problem class, each in `compare` order. A node may sit in several. */
-function problemBuckets(nodes: EntityMapNode[], compare: NodeCompare): EntityMapNode[][] {
-  const split = splitIdentityKeys(nodes);
-  const byClass = new Map<ProblemClass, EntityMapNode[]>();
-  const add = (cls: ProblemClass, node: EntityMapNode): void => {
-    const bucket = byClass.get(cls);
-    if (bucket) bucket.push(node);
-    else byClass.set(cls, [node]);
-  };
-  for (const node of nodes) {
-    if (node.conflicts.length > 0) add("conflict", node);
-    if (node.danglingRefs > 0) add("dangling", node);
-    if (
-      node.id === null &&
-      node.name !== null &&
-      pageTotal(node) > 1 &&
-      node.types.some((type) => IDENTITY_TYPES.includes(type))
-    ) {
-      add("no-id", node);
-    }
-    if (split.has(node.key)) add("split-identity", node);
-  }
-  const order: ProblemClass[] = ["conflict", "dangling", "no-id", "split-identity"];
-  return order.flatMap((cls) => {
-    const bucket = byClass.get(cls);
-    if (!bucket) return [];
-    bucket.sort(compare);
-    return [bucket];
+function problemBuckets(map: EntityMap, compare: NodeCompare): EntityMapNode[][] {
+  const byClass = entityProblemNodes(map);
+  return ENTITY_PROBLEM_CLASSES.flatMap((cls) => {
+    const bucket = byClass[cls];
+    if (!bucket || bucket.length === 0) return [];
+    return [[...bucket].sort(compare)];
   });
 }
 
@@ -327,8 +263,10 @@ function edgesFor(
  * order:
  *
  *   0. problem nodes — entities carrying a finding the `schema/entity-*` rules
- *      report: conflicts, dangling references, a missing `@id` on a multi-page
- *      identity entity, split identity. At least one per class present, up to
+ *      report: every class `entityProblemNodes` names: conflicts, dangling
+ *      references, a missing or unstable `@id`, split identity, orphans, a
+ *      missing `sameAs`, a stray publisher, anonymous authors, a per-page
+ *      LocalBusiness. At least one per class present, up to
  *      `maxProblemShare` of the budget, so a finding is never published without
  *      its evidence and a pathological site cannot spend the map on one class.
  *   1. shared subjects — entities declared on more than one page. The
@@ -377,7 +315,7 @@ export function projectEntityMap(
   }
 
   // Ranked once; only the budget moves between attempts.
-  const problemPool = problemBuckets(map.nodes, byReach);
+  const problemPool = problemBuckets(map, byReach);
   const problemCount = new Set(problemPool.flat().map((node) => node.key)).size;
   const sharedBuckets = bucketsByType(shared, byReach);
   const oneOffBuckets = bucketsByType(oneOff, byDegree);

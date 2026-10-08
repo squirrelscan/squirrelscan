@@ -172,7 +172,20 @@ The local document is uncapped, because a file on disk costs nothing. The publis
 
 The page cap is the one to watch. Locally an entity lists up to 50 of its declaring pages; hosted it lists 5, with the rest in `morePages`. Anything that needs the real set has to count `pages.length + morePages` rather than reading the array, and a `page` filter over a hosted map is correspondingly more likely to set `pageFilterIncomplete`.
 
-Which 750 entities survive is a sample, not the head of the list. A slice of the budget, about a fifth, is reserved first for entities that carry a finding the entity rules report: conflicting properties, references to an `@id` nothing declares, a multi-page `Organization`, `LocalBusiness`, `Person` or `WebSite` with no `@id`, and the same entity declared under two `@id`s on one page. Each of those classes keeps at least one entity while the budget allows, so a finding on the report always has an entity in the hosted graph to open. The reserved entities still count against the 750 and the 512 KB, and `truncated` still reports every entity and reference dropped. Findings about something absent, such as a missing `Organization`, have no entity to keep.
+Which 750 entities survive is a sample, not the head of the list. A slice of the budget, about a fifth, is reserved first for entities that carry a finding the entity rules report, so a finding on the report always has an entity in the hosted graph to open. The classes are:
+
+- an entity with conflicting properties, including a type disagreement
+- an entity with references to an `@id` nothing declares
+- a multi-page `Organization`, `LocalBusiness`, `Person` or `WebSite` with no `@id`
+- the same entity declared under two `@id`s on one page
+- an identified entity nothing references, declared on one page
+- an `@id` that is not an absolute URL
+- the primary organization when it has no `sameAs`
+- a publisher that disagrees with the rest of the site
+- a `Person` author with no `url` or `sameAs`
+- a `LocalBusiness` declared on nearly every crawled page
+
+Each class present keeps at least one entity while the budget allows, taking turns so one class cannot crowd out another. The reserved entities still count against the 750 and the 512 KB, and `truncated` still reports every entity and reference dropped. Findings about something absent, such as a missing `Organization` or `WebSite`, have no entity to keep.
 
 Entity and reference counts alone would not hold the size, because property values are site-controlled strings: fifty conflict values of a megabyte each would pass a node count and still blow the limit. The byte ceiling is the real backstop and the per-string caps are what usually keep it from engaging.
 
