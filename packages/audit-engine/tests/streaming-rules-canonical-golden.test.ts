@@ -72,11 +72,7 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // addition — if this number shifts on its own, a rule started failing.
       // 49 -> 50 (pub#487): crawl/indexability-conflicts no longer warns on
       // robots.txt Allow plus noindex, the supported way to deindex a page.
-      // 50 -> 49 (pub#318): perf/total-byte-weight now counts each crawled HTML
-      // document, which moves the fixture's total past its 5000 KB error
-      // threshold (the one check goes from warn to fail), so the performance
-      // category and the overall drop.
-      expect(v1.healthScore.overall).toBe(49);
+      expect(v1.healthScore.overall).toBe(50);
       // 97711 -> 98211: content/hidden-text emits one page check across the 500
       // fixture pages that have a document, and passes on every one of them. The
       // overall score is unmoved.

@@ -3,7 +3,13 @@
 
 import { z } from "zod";
 
-import type { CheckResult, ParsedPage, Rule, RuleContext, RuleResult } from "../types";
+import type {
+  CheckResult,
+  ParsedPage,
+  Rule,
+  RuleContext,
+  RuleResult,
+} from "../types";
 
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 
@@ -14,7 +20,9 @@ import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
  * `inlineJsLen` feed the total; the external `*Count`s feed the no-resource-data
  * estimate branch (used only for the first page).
  */
-export function extractPageByteSignal(doc: NonNullable<ParsedPage["document"]>): {
+export function extractPageByteSignal(
+  doc: NonNullable<ParsedPage["document"]>,
+): {
   inlineCssLen: number;
   inlineJsLen: number;
   externalCssCount: number;
@@ -27,7 +35,10 @@ export function extractPageByteSignal(doc: NonNullable<ParsedPage["document"]>):
   }
 
   let inlineJsLen = 0;
-  for (const script of querySelectorAllOutsideNoscript(doc, "script:not([src])")) {
+  for (const script of querySelectorAllOutsideNoscript(
+    doc,
+    "script:not([src])",
+  )) {
     // Skip JSON-LD and other data scripts
     const type = script.getAttribute("type") || "";
     if (!type.includes("json") && !type.includes("template")) {
@@ -38,7 +49,10 @@ export function extractPageByteSignal(doc: NonNullable<ParsedPage["document"]>):
   return {
     inlineCssLen,
     inlineJsLen,
-    externalCssCount: querySelectorAllOutsideNoscript(doc, 'link[rel="stylesheet"]').length,
+    externalCssCount: querySelectorAllOutsideNoscript(
+      doc,
+      'link[rel="stylesheet"]',
+    ).length,
     externalJsCount: querySelectorAllOutsideNoscript(doc, "script[src]").length,
     imageCount: querySelectorAllOutsideNoscript(doc, "img[src]").length,
   };
@@ -59,7 +73,7 @@ export const totalByteWeightRule: Rule = {
   meta: {
     id: "perf/total-byte-weight",
     name: "Total Page Weight",
-    description: "Checks the total byte weight of the page",
+    description: "Checks the byte weight of each page",
     solution:
       "Reduce total page weight for faster loads on slow connections. Optimize images (use modern formats, compress, serve appropriate sizes). Minify and compress CSS/JS. Remove unused code via tree-shaking. Lazy-load non-critical resources. Target under 1.6MB for mobile users.",
     category: "perf",
@@ -73,197 +87,181 @@ export const totalByteWeightRule: Rule = {
     const opts = optionsSchema.parse(ctx.options);
     const checks: CheckResult[] = [];
 
-    // Aggregate sizes from various sources across ALL pages
-    const sizes = {
-      html: 0,
-      inlineCss: 0,
-      externalCss: 0,
-      inlineJs: 0,
-      externalJs: 0,
-      images: 0,
-      fonts: 0,
-      other: 0,
-    };
-
-    // Track unique resources to avoid double-counting
-    const countedCssUrls = new Set<string>();
-    const countedJsUrls = new Set<string>();
-    const countedImageUrls = new Set<string>();
-    const countedFontUrls = new Set<string>();
-
-    // Aggregate inline CSS/JS across all pages. In the streaming engine (#1021)
-    // the per-page DOM scan happened at page-time — read the collected sums;
-    // otherwise fall back to scanning each live `site.pages` document (v1).
+    // Per-page own weight. The 1600 KB and 5000 KB thresholds describe one page
+    // load, so each page is scored on its HTML plus the inline code and the
+    // external resources it loads; nothing is summed across the site.
     const pages = ctx.site?.pages ?? [];
     const collected = ctx.collectedSignals;
-    if (collected) {
-      for (const rec of collected.pages) {
-        // Absent on a snapshot cached before the document size was collected.
-        sizes.html += rec.htmlBytes ?? 0;
-        sizes.inlineCss += rec.inlineCssLen;
-        sizes.inlineJs += rec.inlineJsLen;
-      }
-    } else {
-      for (const page of pages) {
-        sizes.html += page.sizeBytes ?? 0;
-        const doc = page.parsed?.document;
-        if (!doc) continue;
-        const s = extractPageByteSignal(doc);
-        sizes.inlineCss += s.inlineCssLen;
-        sizes.inlineJs += s.inlineJsLen;
-      }
-    }
+    // The streaming engine scans each DOM at page-time (#1021); v1 scans the live
+    // `site.pages` documents. Both produce the same per-page record.
+    const records: PageWeight[] = collected
+      ? collected.pages.map((rec) => ({
+          url: rec.url,
+          html: rec.htmlBytes ?? 0,
+          inlineCss: rec.inlineCssLen,
+          inlineJs: rec.inlineJsLen,
+          externalCssCount: rec.externalCssCount,
+          externalJsCount: rec.externalJsCount,
+          imageCount: rec.imageCount,
+        }))
+      : pages.map((page) => {
+          const s = page.parsed?.document
+            ? extractPageByteSignal(page.parsed.document)
+            : undefined;
+          return {
+            url: page.url,
+            html: page.sizeBytes ?? 0,
+            inlineCss: s?.inlineCssLen ?? 0,
+            inlineJs: s?.inlineJsLen ?? 0,
+            externalCssCount: s?.externalCssCount ?? 0,
+            externalJsCount: s?.externalJsCount ?? 0,
+            imageCount: s?.imageCount ?? 0,
+          };
+        });
 
-    // External CSS sizes from site data (already deduplicated by URL)
-    if (ctx.site?.resourceSizes?.css) {
-      for (const css of ctx.site.resourceSizes.css) {
-        if (!countedCssUrls.has(css.url)) {
-          sizes.externalCss += css.sizeBytes || 0;
-          countedCssUrls.add(css.url);
+    const byUrl = new Map<string, PageWeight>();
+    for (const rec of records) byUrl.set(rec.url, rec);
+
+    // Attribute each external resource to the pages that load it. A resource
+    // shared by several pages counts toward each of them; keying by URL within a
+    // page counts it once per page.
+    const unsized = new Set<string>();
+    const attribute = (
+      kind: "css" | "js" | "images" | "fonts",
+      list:
+        | Array<{
+            url: string;
+            sizeBytes: number | null;
+            sourcePages: string[];
+          }>
+        | undefined,
+    ): void => {
+      for (const res of list ?? []) {
+        const size = res.sizeBytes;
+        for (const pageUrl of new Set(res.sourcePages)) {
+          const rec = byUrl.get(pageUrl);
+          if (!rec) continue;
+          const bucket = (rec.external ??= {
+            css: new Map(),
+            js: new Map(),
+            images: new Map(),
+            fonts: new Map(),
+          })[kind];
+          if (size === null || size === undefined) {
+            unsized.add(res.url);
+            bucket.set(res.url, 0);
+          } else {
+            bucket.set(res.url, size);
+          }
         }
       }
-    }
+    };
+    attribute("css", ctx.site?.resourceSizes?.css);
+    attribute("js", ctx.site?.scripts);
+    attribute("images", ctx.site?.resourceSizes?.images);
+    attribute("fonts", ctx.site?.resourceSizes?.fonts);
 
-    // External JS sizes from scripts data (already deduplicated by URL)
-    if (ctx.site?.scripts) {
-      for (const script of ctx.site.scripts) {
-        if (!countedJsUrls.has(script.url)) {
-          sizes.externalJs += script.sizeBytes || 0;
-          countedJsUrls.add(script.url);
-        }
-      }
-    }
-
-    // Image sizes from site data (already deduplicated by URL)
-    if (ctx.site?.resourceSizes?.images) {
-      for (const img of ctx.site.resourceSizes.images) {
-        if (!countedImageUrls.has(img.url)) {
-          sizes.images += img.sizeBytes || 0;
-          countedImageUrls.add(img.url);
-        }
-      }
-    }
-
-    // Font sizes from site data (already deduplicated by URL)
-    if (ctx.site?.resourceSizes?.fonts) {
-      for (const font of ctx.site.resourceSizes.fonts) {
-        if (!countedFontUrls.has(font.url)) {
-          sizes.fonts += font.sizeBytes || 0;
-          countedFontUrls.add(font.url);
-        }
-      }
-    }
-
-    // Calculate totals
-    const totalCss = sizes.inlineCss + sizes.externalCss;
-    const totalJs = sizes.inlineJs + sizes.externalJs;
-    const totalKnownBytes =
-      sizes.html + totalCss + totalJs + sizes.images + sizes.fonts;
-    const totalKnownKb = totalKnownBytes / 1024;
-
-    // Determine what data we have
     const hasExternalResourceData =
       ctx.site?.resourceSizes || ctx.site?.scripts;
-
-    // Build detailed breakdown
-    const details: Record<string, string | number | boolean> = {
-      pagesAnalyzed: pages.length,
+    const sumBucket = (m: Map<string, number> | undefined): number => {
+      let n = 0;
+      for (const v of m?.values() ?? []) n += v;
+      return n;
     };
 
-    if (totalCss > 0) {
-      details.css = `${(totalCss / 1024).toFixed(0)}KB`;
-      if (sizes.inlineCss > 0 && sizes.externalCss > 0) {
-        details.cssBreakdown = `inline: ${(sizes.inlineCss / 1024).toFixed(0)}KB, external: ${(sizes.externalCss / 1024).toFixed(0)}KB`;
+    interface Scored {
+      rec: PageWeight;
+      kb: number;
+      parts: {
+        html: number;
+        css: number;
+        js: number;
+        images: number;
+        fonts: number;
+      };
+    }
+    const scored: Scored[] = records.map((rec, index) => {
+      const parts = {
+        html: rec.html,
+        css: rec.inlineCss + sumBucket(rec.external?.css),
+        js: rec.inlineJs + sumBucket(rec.external?.js),
+        images: sumBucket(rec.external?.images),
+        fonts: sumBucket(rec.external?.fonts),
+      };
+      let bytes =
+        parts.html + parts.css + parts.js + parts.images + parts.fonts;
+      // With no resource measurements at all, estimate the first page only.
+      if (!hasExternalResourceData && index === 0) {
+        bytes =
+          rec.html +
+          rec.inlineCss +
+          rec.inlineJs +
+          (rec.externalCssCount * 30 +
+            rec.externalJsCount * 50 +
+            rec.imageCount * 100) *
+            1024;
       }
-      details.cssFiles = countedCssUrls.size;
+      return { rec, kb: bytes / 1024, parts };
+    });
+
+    const isEstimate = !hasExternalResourceData && scored.length > 0;
+    const heaviest = scored.reduce<Scored | undefined>(
+      (best, cur) => (!best || cur.kb > best.kb ? cur : best),
+      undefined,
+    );
+    const overWarn = scored.filter(
+      (s) => s.kb >= opts.warn_threshold_kb,
+    ).length;
+    const overError = scored.filter(
+      (s) => s.kb >= opts.error_threshold_kb,
+    ).length;
+    const heaviestKb = heaviest?.kb ?? 0;
+
+    const details: Record<string, string | number | boolean> = {
+      pagesAnalyzed: scored.length,
+      pagesOverWarn: overWarn,
+      pagesOverError: overError,
+    };
+    if (heaviest) {
+      details.heaviestPage = heaviest.rec.url;
+      details.heaviestPageKb = `${heaviestKb.toFixed(0)}KB`;
+      const kb = (n: number): string => `${(n / 1024).toFixed(0)}KB`;
+      if (heaviest.parts.html > 0) details.html = kb(heaviest.parts.html);
+      if (heaviest.parts.css > 0) details.css = kb(heaviest.parts.css);
+      if (heaviest.parts.js > 0) details.js = kb(heaviest.parts.js);
+      if (heaviest.parts.images > 0) details.images = kb(heaviest.parts.images);
+      if (heaviest.parts.fonts > 0) details.fonts = kb(heaviest.parts.fonts);
     }
+    if (isEstimate) details.estimated = true;
+    if (unsized.size > 0) details.unsizedResources = unsized.size;
 
-    if (totalJs > 0) {
-      details.js = `${(totalJs / 1024).toFixed(0)}KB`;
-      if (sizes.inlineJs > 0 && sizes.externalJs > 0) {
-        details.jsBreakdown = `inline: ${(sizes.inlineJs / 1024).toFixed(0)}KB, external: ${(sizes.externalJs / 1024).toFixed(0)}KB`;
-      }
-      details.jsFiles = countedJsUrls.size;
-    }
+    const label = isEstimate ? "Estimated heaviest page" : "Heaviest page";
+    const where = heaviest
+      ? `${heaviest.rec.url} ${heaviestKb.toFixed(0)}KB`
+      : "no pages";
+    const counts = `${overWarn} over ${opts.warn_threshold_kb}KB, ${overError} over ${opts.error_threshold_kb}KB`;
+    const note =
+      unsized.size > 0
+        ? `; ${unsized.size} resource${unsized.size === 1 ? "" : "s"} could not be sized and ${unsized.size === 1 ? "is" : "are"} not counted`
+        : "";
+    const message = `${label}: ${where} (${counts})${note}`;
+    const value = `${heaviestKb.toFixed(0)}KB`;
 
-    if (sizes.html > 0) {
-      details.html = `${(sizes.html / 1024).toFixed(0)}KB`;
-    }
-
-    if (sizes.fonts > 0) {
-      details.fonts = `${(sizes.fonts / 1024).toFixed(0)}KB`;
-      details.fontFiles = countedFontUrls.size;
-    }
-
-    if (sizes.images > 0) {
-      details.images = `${(sizes.images / 1024).toFixed(0)}KB`;
-      details.imageFiles = countedImageUrls.size;
-    }
-
-    // If we don't have external resource data, estimate based on first page
-    let estimatedTotal = totalKnownKb;
-    let isEstimate = false;
-
-    if (!hasExternalResourceData && pages.length > 0) {
-      // External resource counts for the FIRST page — from the page-time collector
-      // (streaming) or the first live document (v1). Both resolve to the same page
-      // (site.pages[0] is the first HTML page; collected.pages[0] mirrors it).
-      const firstExternal = collected
-        ? collected.pages[0]
-        : (() => {
-            const doc = pages[0]?.parsed?.document;
-            return doc ? extractPageByteSignal(doc) : undefined;
-          })();
-      if (firstExternal) {
-        const externalCssCount = firstExternal.externalCssCount;
-        const externalJsCount = firstExternal.externalJsCount;
-        const imageCount = firstExternal.imageCount;
-
-        // Conservative estimates (KB per resource)
-        const avgCssSize = 30; // KB
-        const avgJsSize = 50; // KB
-        const avgImageSize = 100; // KB
-
-        const estimatedCss = externalCssCount * avgCssSize;
-        const estimatedJs = externalJsCount * avgJsSize;
-        const estimatedImages = imageCount * avgImageSize;
-
-        estimatedTotal =
-          (sizes.inlineCss + sizes.inlineJs) / 1024 +
-          estimatedCss +
-          estimatedJs +
-          estimatedImages;
-
-        isEstimate = true;
-
-        details.estimated = true;
-        details.externalCssCount = externalCssCount;
-        details.externalJsCount = externalJsCount;
-        details.imageCount = imageCount;
-      }
-    }
-
-    // Report total weight
-    const reportTotal = isEstimate ? estimatedTotal : totalKnownKb;
-    const totalLabel = isEstimate
-      ? "Estimated total"
-      : "Total tracked resources";
-
-    if (reportTotal < opts.warn_threshold_kb) {
+    if (heaviestKb < opts.warn_threshold_kb) {
       checks.push({
         name: "total-byte-weight",
         status: "pass",
-        message: `${totalLabel}: ${reportTotal.toFixed(0)}KB`,
-        value: `${reportTotal.toFixed(0)}KB`,
+        message,
+        value,
         expected: `< ${opts.warn_threshold_kb}KB`,
         details,
       });
-    } else if (reportTotal < opts.error_threshold_kb) {
+    } else if (heaviestKb < opts.error_threshold_kb) {
       checks.push({
         name: "total-byte-weight",
         status: "warn",
-        message: `${totalLabel}: ${reportTotal.toFixed(0)}KB (heavy page)`,
-        value: `${reportTotal.toFixed(0)}KB`,
+        message: `${message} (heavy page)`,
+        value,
         expected: `< ${opts.warn_threshold_kb}KB`,
         details,
       });
@@ -271,8 +269,8 @@ export const totalByteWeightRule: Rule = {
       checks.push({
         name: "total-byte-weight",
         status: "fail",
-        message: `${totalLabel}: ${reportTotal.toFixed(0)}KB (very heavy)`,
-        value: `${reportTotal.toFixed(0)}KB`,
+        message: `${message} (very heavy)`,
+        value,
         expected: `< ${opts.error_threshold_kb}KB`,
         details,
       });
@@ -281,3 +279,20 @@ export const totalByteWeightRule: Rule = {
     return { checks };
   },
 };
+
+interface PageWeight {
+  url: string;
+  html: number;
+  inlineCss: number;
+  inlineJs: number;
+  externalCssCount: number;
+  externalJsCount: number;
+  imageCount: number;
+  /** Resource URL to byte size, one map per kind, so a URL counts once per page. */
+  external?: {
+    css: Map<string, number>;
+    js: Map<string, number>;
+    images: Map<string, number>;
+    fonts: Map<string, number>;
+  };
+}
