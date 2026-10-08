@@ -15,6 +15,12 @@ How it works:
 - A `## [Unreleased]` section collects merged changes that have not been cut into
   a release yet; rename it to the version when the release goes out.
 
+## [Unreleased]
+
+### Fixed
+
+- A site that sends response headers and then stalls its body can no longer hang the CLI. The shared request helper used by the reachability check, the robots.txt fetch and the update check disarmed its timeout as soon as the headers arrived, so the body read had no time limit. The timeout now covers the body too, and a stalled body fails like any other timeout.
+
 ## v0.0.106 (2026-10-08)
 
 `squirrel mcp` speaks the new MCP 2026-07-28 protocol, `squirrel channel` gives your Claude Code session a heads-up the moment a cloud audit lands, every rule now runs against the clock to keep booby-trapped pages from stalling an audit, and two new content rules catch the `info@example.com` and `placehold.co` your theme shipped with. Plus a big pile of false positives, swept out of the nest.

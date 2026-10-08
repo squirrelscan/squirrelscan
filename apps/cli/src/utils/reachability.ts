@@ -4,7 +4,7 @@
 
 import { Effect, Duration } from "effect";
 
-import { requestOnce, RequestError } from "@/tools/request";
+import { requestOnceScoped, RequestError } from "@/tools/request";
 import { logger } from "@/utils/logger";
 import { detectWaf, type WafProvider } from "@/utils/waf";
 
@@ -204,6 +204,7 @@ async function attemptReachability(url: string): Promise<ReachabilityResult> {
         redirect: "follow",
         signal: controller.signal,
       });
+      await response.body?.cancel().catch(() => {});
       return { reachable: true, statusCode: response.status };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -217,9 +218,43 @@ async function attemptReachability(url: string): Promise<ReachabilityResult> {
     // Use the request utility with browser-like headers
     logger.debug("reachability check", url);
 
+    // The deadline stays armed through the body sample, so a server that
+    // sends headers and then stalls cannot park the probe (#192).
     const response = await Effect.runPromise(
-      requestOnce(url, { method: "GET" }).pipe(
-        // Override timeout for reachability (shorter than crawl timeout)
+      requestOnceScoped(
+        url,
+        { method: "GET" },
+        async (res) => {
+          // Server responded - site is reachable
+          // We accept any status code here since even 404/500 means the server is up
+          // The actual crawl will handle HTTP errors appropriately
+
+          // Detect WAF/bot protection from response headers and optional body sample.
+          // Body checks improve detection for challenge/interstitial pages.
+          let bodySample: string | undefined;
+          const contentType =
+            res.headers.get("content-type")?.toLowerCase() ?? "";
+          if (contentType.includes("text/html") || res.status === 403) {
+            try {
+              bodySample = await readBodySample(
+                res,
+                REACHABILITY_BODY_SAMPLE_BYTES,
+                REACHABILITY_BODY_SAMPLE_TIMEOUT_MS
+              );
+            } catch {
+              bodySample = undefined;
+            }
+          } else {
+            await res.body?.cancel().catch(() => {});
+          }
+          return {
+            status: res.status,
+            wafResult: detectWaf(res.headers, bodySample),
+          };
+        },
+        // Shorter than the crawl timeout
+        REACHABILITY_TIMEOUT_MS
+      ).pipe(
         Effect.timeoutFail({
           duration: Duration.millis(REACHABILITY_TIMEOUT_MS),
           onTimeout: () =>
@@ -230,28 +265,7 @@ async function attemptReachability(url: string): Promise<ReachabilityResult> {
         })
       )
     );
-
-    // Server responded - site is reachable
-    // We accept any status code here since even 404/500 means the server is up
-    // The actual crawl will handle HTTP errors appropriately
-
-    // Detect WAF/bot protection from response headers and optional body sample.
-    // Body checks improve detection for challenge/interstitial pages.
-    let bodySample: string | undefined;
-    const contentType =
-      response.headers.get("content-type")?.toLowerCase() ?? "";
-    if (contentType.includes("text/html") || response.status === 403) {
-      try {
-        bodySample = await readBodySample(
-          response,
-          REACHABILITY_BODY_SAMPLE_BYTES,
-          REACHABILITY_BODY_SAMPLE_TIMEOUT_MS
-        );
-      } catch {
-        bodySample = undefined;
-      }
-    }
-    const wafResult = detectWaf(response.headers, bodySample);
+    const wafResult = response.wafResult;
 
     return {
       reachable: true,
