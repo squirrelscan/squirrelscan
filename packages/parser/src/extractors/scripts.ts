@@ -60,3 +60,27 @@ export function isSameDomainScript(
   // Exact match or subdomain match
   return scriptHost === baseHost || scriptHost.endsWith(`.${baseHost}`);
 }
+
+/**
+ * Script files a page preloads without a `<script src>`: `<link rel="modulepreload">`
+ * and `<link rel="preload" as="script">`. A bundler's lazy chunks are named only
+ * here, so the audit fetches them too (security/csp-blocks-own-resources reads
+ * the third-party URLs inside). Resolved against `baseUrl`, deduplicated.
+ */
+export function extractPreloadedScriptUrls(doc: Document, baseUrl: string): string[] {
+  const found = new Set<string>();
+  for (const link of querySelectorAllOutsideNoscript(doc, "link[href]")) {
+    const rel = (link.getAttribute("rel") || "").toLowerCase().split(/\s+/);
+    const isScript =
+      rel.includes("modulepreload") ||
+      (rel.includes("preload") && link.getAttribute("as")?.toLowerCase() === "script");
+    const href = link.getAttribute("href")?.trim();
+    if (!isScript || !href || href.startsWith("data:")) continue;
+    try {
+      found.add(new URL(href, baseUrl).toString());
+    } catch {
+      // Ignore invalid URLs
+    }
+  }
+  return [...found];
+}

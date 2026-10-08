@@ -28,6 +28,7 @@ import {
   createSeenValues,
   leakedSecretsRule,
   lookBehind,
+  PUBLIC_URL_IDENTIFIERS,
   readKeyLookBack,
   scanContent,
 } from "../src/security/leaked-secrets";
@@ -1115,5 +1116,125 @@ describe("security/leaked-secrets: overlap suppression", () => {
     // A backstop for the absolute cliff the issue reported, loose enough for a
     // loaded CI runner and still an order of magnitude under 2.1s.
     expect(largeRun.ms).toBeLessThan(1000);
+  });
+});
+
+// #574: a vendor's public identifier in the query of a script URL is not a
+// leak. The fixtures use secret-shaped values on purpose (a DigitalOcean
+// Spaces key shape, an AWS access key ID shape), so the suppression is proven
+// against a real finding rather than against a value nothing would flag.
+const SPACES_SHAPE = "DO" + "ABCDEFGHJKLMNPQRST12"; // pragma: allowlist secret
+const AWS_SHAPE = "AKIA" + "IOSFODNN7EXAMPLE"; // pragma: allowlist secret
+const REAL_SECRET = "sk_live_" + "4eC39HqLyjWDarjtT1zdp7dc"; // pragma: allowlist secret
+
+function reported(pageHtml: string) {
+  const result = leakedSecretsRule.run(ctx(pageHtml));
+  return {
+    findings: findings(result.checks),
+    names: result.checks.map((c) => c.name),
+  };
+}
+
+describe("security/leaked-secrets: vendor public identifiers in URL queries (#574)", () => {
+  // The issue's repro, in the shape its reporter saw (a medium finding).
+  test("the Mida optimize.js repro reports nothing", () => {
+    const { findings: items, names } = reported(
+      html(`<script async src="https://cdn.mida.so/js/optimize.js?key=${SPACES_SHAPE}"></script>`)
+    );
+    expect(items).toEqual([]);
+    expect(names).toEqual(["leaked-secrets"]);
+  });
+
+  // [vendor, tag, value] — one row per table entry, with both attributes.
+  const VENDOR_CASES: Array<[string, string]> = [
+    ["Mida", "https://cdn.mida.so/js/optimize.js?key="],
+    ["Mida (EU)", "https://cdn-eu.mida.so/js/optimize.js?key="],
+    ["Klaviyo", "https://static.klaviyo.com/onsite/js/klaviyo.js?company_id="],
+    ["Klaviyo (extra params)", "https://static.klaviyo.com/onsite/js/klaviyo.js?v=2&company_id="],
+    ["reCAPTCHA", "https://www.google.com/recaptcha/api.js?render="],
+    ["reCAPTCHA (recaptcha.net)", "https://www.recaptcha.net/recaptcha/enterprise.js?render="],
+    ["protocol-relative", "//cdn.mida.so/js/optimize.js?key="],
+  ];
+
+  for (const value of [SPACES_SHAPE, AWS_SHAPE]) {
+    for (const [vendor, prefix] of VENDOR_CASES) {
+      test(`${vendor}: ${value.slice(0, 4)}-shaped value in src and href is not reported`, () => {
+        const { findings: items, names } = reported(
+          html(`<script async src="${prefix}${value}"></script><link rel="preload" as="script" href="${prefix}${value}&x=1">`)
+        );
+        expect(items).toEqual([]);
+        expect(names).not.toContain("leaked-secrets-public");
+      });
+    }
+  }
+
+  test("every table row is exercised above and names real hosts, paths and params", () => {
+    const covered = VENDOR_CASES.map(([, prefix]) => prefix).join("\n");
+    for (const entry of PUBLIC_URL_IDENTIFIERS) {
+      expect(entry.hosts.length).toBeGreaterThan(0);
+      expect(entry.params.length).toBeGreaterThan(0);
+      for (const host of entry.hosts) expect(host).toBe(host.toLowerCase());
+      for (const path of entry.paths) expect(path.startsWith("/")).toBe(true);
+      expect(entry.hosts.some((host) => covered.includes(host))).toBe(true);
+    }
+  });
+
+  // Same parameter, same shape: not a known vendor, so still a credential.
+  const STILL_REPORTED: Array<[string, string]> = [
+    ["unknown host, Mida's path and param", "https://cdn.example.net/js/optimize.js?key="],
+    ["unknown host, Klaviyo's path and param", "https://static.example.net/onsite/js/klaviyo.js?company_id="],
+    ["lookalike host suffix", "https://cdn.mida.so.evil.test/js/optimize.js?key="],
+    ["lookalike host prefix", "https://evilcdn.mida.so/js/optimize.js?key="],
+    ["userinfo trick", "https://cdn.mida.so@evil.test/js/optimize.js?key="],
+    ["port on the vendor host", "https://cdn.mida.so:8443/js/optimize.js?key="],
+    ["vendor host inside another URL's path", "https://evil.test/redirect//cdn.mida.so/js/optimize.js?key="],
+    ["vendor host, other path", "https://cdn.mida.so/js/other.js?key="],
+    ["vendor host, other param", "https://cdn.mida.so/js/optimize.js?token="],
+    ["vendor param, wrong parameter name case", "https://cdn.mida.so/js/optimize.js?KEY="],
+  ];
+  for (const [label, prefix] of STILL_REPORTED) {
+    test(`still reported: ${label}`, () => {
+      const { findings: items } = reported(html(`<script async src="${prefix}${SPACES_SHAPE}"></script>`));
+      expect(items.length).toBe(1);
+      expect(items[0]!.id).toContain("DigitalOcean Spaces Key");
+    });
+  }
+
+  test("a vendor URL does not hide a real secret elsewhere on the page", () => {
+    const { findings: items } = reported(
+      html(
+        `<script async src="https://cdn.mida.so/js/optimize.js?key=${SPACES_SHAPE}"></script>` +
+          `<script>var cfg = { token: "${REAL_SECRET}" };</script>`
+      )
+    );
+    expect(items.map((i) => i.id).join("\n")).toContain("Stripe Live Key");
+    expect(items.some((i) => i.id.includes("DigitalOcean"))).toBe(false);
+  });
+
+  test("the same value outside the vendor URL is still reported", () => {
+    const { findings: items } = reported(
+      html(
+        `<script async src="https://cdn.mida.so/js/optimize.js?key=${SPACES_SHAPE}"></script>` +
+          `<p>Spaces key: ${SPACES_SHAPE}</p>`
+      )
+    );
+    expect(items.length).toBe(1);
+  });
+
+  test("a longer secret that contains the identifier is not hidden by it", () => {
+    const { findings: items } = reported(
+      html(
+        `<script async src="https://cdn.mida.so/js/optimize.js?key=${SPACES_SHAPE}"></script>` +
+          `<script>var u = "postgres://app:${SPACES_SHAPE}@db.internal/prod";</script>`
+      )
+    );
+    expect(items.map((i) => i.id).join("\n")).toContain("PostgreSQL");
+  });
+
+  test("a secret in a non-identifier parameter of a vendor URL is still reported", () => {
+    const { findings: items } = reported(
+      html(`<script async src="https://cdn.mida.so/js/optimize.js?key=abc123&auth=${REAL_SECRET}"></script>`)
+    );
+    expect(items.map((i) => i.id).join("\n")).toContain("Stripe Live Key");
   });
 });
