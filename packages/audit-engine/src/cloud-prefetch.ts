@@ -632,7 +632,11 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : "unknown error";
 }
 
-/** `stop` marker for batches reached after an abandon (their outcome is never read). */
+/**
+ * `stop` marker for batches reached after an abandon. It only keeps them from
+ * dispatching: abandon() has already built the caller's result, so the outcome
+ * these batches produce is never read.
+ */
 const ABANDONED_STOP = { reason: "service-unavailable", detail: PREFETCH_DEADLINE_DETAIL } as const;
 
 /** Bound the prefetch wait on a render job — a browser render is slow, but must not wedge the phase. */

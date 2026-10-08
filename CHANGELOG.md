@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- A cloud audit whose cloud analysis step hits its time limit now keeps the results that had already come back, instead of discarding all of them. Rules use those results, the audit's spend lists exactly the calls that were charged (each once, including a render batch the cloud accepted but had not finished), and rules still waiting report `skipped` with reason `service-unavailable`. No new cloud call starts after the limit. An audit that finishes its cloud analysis in time is unchanged. See [credits](https://docs.squirrelscan.com/cloud/credits#when-credits-run-out).
+- A cloud audit whose cloud analysis step hits its time limit now keeps the results that had already come back, instead of discarding all of them. Rules use those results, the audit's spend lists each call it knows was charged, once (every call that came back, plus a render batch the cloud accepted but had not finished; a call still running at the limit is not listed, so your balance stays the authoritative figure), and rules still waiting report `skipped` with reason `service-unavailable`. No new cloud call starts after the limit. An audit that finishes its cloud analysis in time is unchanged. See [credits](https://docs.squirrelscan.com/cloud/credits#when-credits-run-out).
 
 ## v0.0.106 (2026-10-08)
 
