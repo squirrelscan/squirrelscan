@@ -32,6 +32,7 @@ import {
 } from "../src/merge-promise";
 import { calculateHealthScoreFromTallies } from "../src/scoring";
 import { findingFingerprint } from "../src/fingerprint";
+import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 const SITE = "web_1876";
 const AUDIT = "audit_2";
@@ -759,3 +760,5 @@ describe("computeMerge keeps its array-API contract (#1876)", () => {
     expect(merged.persisted[0]!.firstSeenAt).toBe(1_400_000_000_000);
   });
 });
+
+describeSitePagesContract("bounded-carried-merge.test.ts MemStore", () => new MemStore());
