@@ -35,6 +35,7 @@ describe("shouldRunBackgroundTasks (#170)", () => {
     // setup --dry-run promises to change nothing.
     ["setup --dry-run", ["setup", "--dry-run"]],
     ["mcp", ["mcp"]],
+    ["channel", ["channel"]],
     // self install resets settings; self update IS the updater.
     ["self install", ["self", "install"]],
     ["self update", ["self", "update", "--auto"]],
@@ -101,6 +102,7 @@ describe("light startup path (#2023)", () => {
       "feedback",
       "keys",
       "mcp",
+      "channel",
       "self",
       "skills",
     ]) {
