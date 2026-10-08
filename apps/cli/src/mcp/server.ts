@@ -46,7 +46,7 @@ function redirectConsoleLogToStderr(): void {
   console.debug = toStderr;
 }
 
-// Start the stdio server and block until the transport closes (mutates global console.log — not for tests).
+// Start the stdio server (mutates global console.log — not for tests). Returns once serving starts: like the v1 `connect`, the open stdin keeps the process alive until the client hangs up.
 export async function runMcpServer(): Promise<void> {
   redirectConsoleLogToStderr();
   // Loud warning for an unreadable/corrupt session (EACCES, corrupt JSON,
@@ -57,6 +57,6 @@ export async function runMcpServer(): Promise<void> {
   warnIfSessionUnreadable();
   // serveStdio picks the protocol era from the client's opening message: a
   // 2026-07-28 client (no `initialize`, `server/discover` for capabilities) and a
-  // 2025-era client (`initialize` handshake) are both served from this factory.
+  // 2025-era client (`initialize` handshake) are both served from this factory. The factory runs once per connection, when the era is pinned.
   serveStdio(() => createMcpServer());
 }

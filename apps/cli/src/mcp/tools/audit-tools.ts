@@ -1,7 +1,6 @@
 // Local deterministic audit tools — free, no auth; cloud enrichment when authed.
 
-import type { McpServer } from "@modelcontextprotocol/server";
-import type { CallToolResult } from "@modelcontextprotocol/server";
+import type { CallToolResult, McpServer } from "@modelcontextprotocol/server";
 
 import { renderLlm } from "@squirrelscan/report";
 import {

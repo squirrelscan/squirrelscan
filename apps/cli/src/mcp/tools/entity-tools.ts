@@ -7,8 +7,9 @@
 // `@squirrelscan/core-contracts/entity-mcp` rather than being written here,
 // because the two servers have to agree and the only way to guarantee that is
 // to have one source. The zod shapes below are assembled from those constants:
-// the SDK's `inputSchema` takes zod only, so the schema object itself cannot be
-// shared, but nothing an agent reads or sends differs between the servers.
+// the SDK's `inputSchema` takes a schema object (zod here), which cannot be
+// shared across the two servers, but nothing an agent reads or sends differs
+// between the servers.
 
 import type { McpServer } from "@modelcontextprotocol/server";
 
