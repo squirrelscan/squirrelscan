@@ -63,6 +63,7 @@ export const main = defineCommand({
     feedback: () => import("./commands/feedback").then((m) => m.feedback),
     keys: () => import("./commands/keys").then((m) => m.keys),
     mcp: () => import("./commands/mcp").then((m) => m.mcp),
+    channel: () => import("./commands/channel").then((m) => m.channel),
     self: () => import("./commands/self").then((m) => m.self),
     skills: () => import("./commands/skills").then((m) => m.skills),
   },
@@ -106,7 +107,7 @@ export function run(): void {
  * Skipped for simple commands and self install/update/uninstall (self install
  * resets settings, racing registerInstall; self update IS the updater —
  * including the detached --auto child — and must not spawn further checks or
- * installs), for the detached `skills update --auto` refresh (same reason), for `mcp` (JSON-RPC on stdout, nothing may pollute the stream),
+ * installs), for the detached `skills update --auto` refresh (same reason), for `mcp` and `channel` (JSON-RPC on stdout, nothing may pollute the stream),
  * for `self disk` (it MEASURES the logs directory, and the maintenance below
  * compresses and deletes logs — leaving it in lets the command change the
  * number it is about to print, and lets an update land mid-measurement), and
@@ -138,7 +139,8 @@ export function shouldRunBackgroundTasks(args: string[]): boolean {
     isSelfDisk ||
     isSkillsAutoRefresh ||
     isSetupDryRun ||
-    args[0] === "mcp";
+    args[0] === "mcp" ||
+    args[0] === "channel";
 
   return !isSimpleCommand && !args.includes("--offline");
 }
