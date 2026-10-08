@@ -127,6 +127,23 @@ describe("severity", () => {
   });
 });
 
+describe("vendor detection", () => {
+  const gtm = `<script async src="//www.googletagmanager.com/gtm.js?id=GTM-ABC123"></script>`;
+  const gtmFrame = `<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-ABC123"></iframe></noscript>`;
+
+  test("a GTM noscript frame needs frame-src, and a lookalike host is not GTM", () => {
+    const check = run(gtm, "script-src 'self' https://www.googletagmanager.com; frame-src 'self'", { body: gtmFrame });
+    expect(hostsOf(check)).toEqual(["frame-src:www.googletagmanager.com"]);
+    ok(`<script src="https://www.googletagmanager.com.evil.test/gtm.js?id=GTM-ABC123"></script>`, "default-src *");
+  });
+
+  test("a PostHog proxy on the site's own host needs no vendor host", () => {
+    ok(`<script>posthog.init('phc_x', {api_host: 'https://t.shop.test'})</script>`, "default-src 'self'");
+  });
+
+  const ok = (head: string, csp: string) => expect(run(head, csp).status).toBe("pass");
+});
+
 describe("policy scope", () => {
   test("each page is judged by its own policy", () => {
     const head = `<script src="https://cdn.other.test/a.js"></script>`;

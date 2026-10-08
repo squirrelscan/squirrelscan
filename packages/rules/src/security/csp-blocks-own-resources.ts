@@ -18,7 +18,14 @@ import type { CheckItem } from "@squirrelscan/core-contracts";
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 
 import { policiesAllow, parseCspPolicies, type CspFetchKind, type CspPolicy } from "./csp-source-match";
-import { CSP_VENDORS, hostCategory, type VendorCategory } from "./csp-vendors";
+import {
+  CSP_VENDORS,
+  deriveFlags,
+  hostCategory,
+  urlMatches,
+  type PageSignals,
+  type VendorCategory,
+} from "./csp-vendors";
 
 import type { Rule, RuleContext, RuleResult } from "../types";
 
@@ -159,14 +166,33 @@ function chunkReferences(ctx: RuleContext, pageUrls: Set<string>, pageHost: stri
   return refs;
 }
 
+/** Absolute and protocol-relative URL literals anywhere in the page, parsed. */
+const URL_LITERAL_RE = /(?:https?:)?\/\/[^\s"'`<>)\\]{3,300}/g;
+const MAX_SIGNAL_URLS = 2000;
+
+/** What the page's HTML shows, with comments removed so a disabled snippet is not use. */
+function pageSignals(html: string, base: string): PageSignals {
+  const code = html.replace(/<!--[\s\S]*?-->/g, "");
+  const urls: URL[] = [];
+  for (const m of code.matchAll(URL_LITERAL_RE)) {
+    const url = parseUrl(m[0], base);
+    if (url) urls.push(url);
+    if (urls.length >= MAX_SIGNAL_URLS) break;
+  }
+  return { urls, code };
+}
+
 /** Runtime hosts of the vendors this page's HTML shows it using. */
-function vendorReferences(html: string): Reference[] {
+function vendorReferences(signals: PageSignals): Reference[] {
   const refs: Reference[] = [];
+  const flags = deriveFlags(signals);
   for (const vendor of CSP_VENDORS) {
-    if (!vendor.detect.some((re) => re.test(html))) continue;
-    if (vendor.unless?.test(html)) continue;
+    const used =
+      !!vendor.detect.urls?.some((sig) => signals.urls.some((u) => urlMatches(u, sig))) ||
+      !!vendor.detect.code?.some((re) => re.test(signals.code));
+    if (!used || vendor.unless?.(signals)) continue;
     for (const need of vendor.needs) {
-      if (need.when && !need.when.test(html)) continue;
+      if (need.when && !flags.has(need.when)) continue;
       for (const host of need.hosts) {
         refs.push({
           url: new URL(`https://${host}/`),
@@ -225,7 +251,7 @@ export const cspBlocksOwnResourcesRule: Rule = {
     const references = [
       ...htmlReferences(doc, base),
       ...chunkReferences(ctx, pageUrls, pageUrl.hostname),
-      ...vendorReferences((ctx.page.html ?? "").replace(/<!--[\s\S]*?-->/g, "")),
+      ...vendorReferences(pageSignals(ctx.page.html ?? "", base)),
     ];
 
     const blocked = new Map<string, Blocked>();
