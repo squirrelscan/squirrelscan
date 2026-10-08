@@ -72,7 +72,11 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // addition — if this number shifts on its own, a rule started failing.
       // 49 -> 50 (pub#487): crawl/indexability-conflicts no longer warns on
       // robots.txt Allow plus noindex, the supported way to deindex a page.
-      expect(v1.healthScore.overall).toBe(50);
+      // 50 -> 51: security/token-storage passes on all 500 pages, which lifts the
+      // security score just past the point where the weighted overall rounds up,
+      // the same shape as 48 -> 49 above. main alone is 50 (verified with the rule
+      // removed), so the move comes from this deliberate rule addition.
+      expect(v1.healthScore.overall).toBe(51);
       // 97711 -> 98211: content/hidden-text emits one page check across the 500
       // fixture pages that have a document, and passes on every one of them. The
       // overall score is unmoved.
@@ -140,7 +144,10 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // always speaks, so it adds one check on each of the 500 pages with a
       // document. All 500 pass: the synthetic site serves no CSP header, and a
       // page with no enforced policy passes (security/csp owns a missing one).
-      expect(v1.findings.length).toBe(101234);
+      // 101234 -> 101734: security/token-storage is page-scoped and always speaks,
+      // so it adds one check on each of the 500 pages with a document. All 500
+      // pass: the synthetic site writes nothing to web storage.
+      expect(v1.findings.length).toBe(101734);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -159,9 +166,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // entity-website-missing, entity-organization-missing,
       // entity-sameas-missing, entity-orphan), 295 -> 296
       // content/placeholder-contact, 296 -> 297 content/placeholder-media, 297 -> 298
-      // security/csp-blocks-own-resources; anything
-      // else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(298);
+      // security/csp-blocks-own-resources, 298 -> 299 security/token-storage;
+      // anything else means a rule id leaked in, so fix that rather than this number.
+      expect(v1.perRuleTally.length).toBe(299);
       const cspBlocks = v1.perRuleTally.find(
         (t) => t.ruleId === "security/csp-blocks-own-resources",
       );
@@ -192,6 +199,16 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       );
       expect(placeholderContact).toEqual({
         ruleId: "content/placeholder-contact",
+        pass: 500,
+        warn: 0,
+        fail: 0,
+        info: 0,
+        skipped: 0,
+        total: 500,
+      });
+      const tokenStorage = v1.perRuleTally.find((t) => t.ruleId === "security/token-storage");
+      expect(tokenStorage).toEqual({
+        ruleId: "security/token-storage",
         pass: 500,
         warn: 0,
         fail: 0,
