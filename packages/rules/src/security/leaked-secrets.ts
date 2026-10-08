@@ -77,6 +77,14 @@ type FastPattern = {
    * this floor is a table, a digit run or a repeated nibble (#2218).
    */
   minTailEntropy?: number;
+  /**
+   * The prefix is a convention other vendors copy: `sk_live_` is Stripe's,
+   * and it is also what a widget vendor names its own secret keys. A token
+   * that runs on past the provider's format (`sk_live_…_acmewidget`) is
+   * still reported, under this prefix with the provider left unknown,
+   * rather than under the provider's name. See continuedTokenEnd.
+   */
+  sharedPrefix?: string;
 };
 
 // Type for context patterns (generic patterns, only run if keyword present)
@@ -256,12 +264,14 @@ export const FAST_PATTERNS: FastPattern[] = [
     pattern: /sk_live_[0-9a-zA-Z]{24,}/g,
     keywords: ["sk_live_"],
     confidence: "high",
+    sharedPrefix: "sk_live_",
   },
   {
     name: "Stripe Test Key",
     pattern: /sk_test_[0-9a-zA-Z]{24,}/g,
     keywords: ["sk_test_"],
     confidence: "high",
+    sharedPrefix: "sk_test_",
   },
   {
     // pk_live_/pk_test_ are public by design (Stripe docs)
@@ -529,6 +539,7 @@ export const FAST_PATTERNS: FastPattern[] = [
     pattern: /sk_live_[a-zA-Z0-9]{40,}/g,
     keywords: ["sk_live_"],
     confidence: "high",
+    sharedPrefix: "sk_live_",
   },
 
   // Maps/Location
@@ -1507,9 +1518,105 @@ function isDottedIdentifier(body: string): boolean {
   return segments.length > 1 && segments.every((segment) => DOTTED_SEGMENT_RE.test(segment));
 }
 
+// The word "password" in the languages a locale file most often carries it
+// in, folded to lowercase ASCII letters. A locale catalogue writes
+// `password: "Passwort"` and `"auth.password": "Contraseña"`, and both are // pragma: allowlist secret
+// the field's label in another language, never its value. Words under eight
+// letters (`senha`, `parola`) are absent: the generic pattern never matches
+// a value that short, so listing them would only read as a blind spot.
+const PASSWORD_TRANSLATIONS = new Set([
+  "passwort",
+  "kennwort",
+  "wachtwoord",
+  "wagwoord",
+  "adgangskode",
+  "losenord",
+  "salasana",
+  "contrasena",
+  "contrasenya",
+  "contrasinal",
+  "pasahitza",
+  "motdepasse",
+  "palavrapasse",
+  "katasandi",
+]);
+
+// A word in a language that is not English: letters only, at least one of
+// them outside ASCII, joined at most by a hyphen or an apostrophe.
+const NON_ASCII_WORD_RE = /^\p{L}+(?:['’-]\p{L}+)*$/u;
+const HAS_NON_ASCII_RE = /[^\x00-\x7f]/;
+
+/**
+ * A translated label: `password: "Passwort"`, `password: "Contraseña"`. // pragma: allowlist secret
+ * The share test in isNonAsciiText cannot see a Latin-script word with one
+ * accented letter, and a word in a table of translations is not random
+ * whatever its entropy. A value with a digit or a symbol in it is never
+ * read as a word here.
+ */
+function isTranslatedLabel(body: string): boolean {
+  if (NON_ASCII_WORD_RE.test(body) && HAS_NON_ASCII_RE.test(body)) return true;
+  const folded = body
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+  if (/[^a-z'’ -]/.test(folded)) return false;
+  return PASSWORD_TRANSLATIONS.has(folded.replace(/[^a-z]/g, ""));
+}
+
+// A template or JSX expression standing where a value will be filled in:
+// `{form.password}`, `{{ user.password }}`, `${cfg.password}`, `<%= pwd %>`.
+// The interior is a member chain or a call; a bare name qualifies only when
+// it has no digit in it, so a brace-wrapped random string stays a value.
+const TEMPLATE_EXPRESSION_RE =
+  /^(?:\{\{?|\$\{|<%=?|\[\[)\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*|\[[\w'"]*\]|\(\))*)\s*(?:\}\}?|%>|\]\])$/;
+
+function isTemplateExpression(body: string): boolean {
+  const inner = TEMPLATE_EXPRESSION_RE.exec(body)?.[1];
+  if (inner === undefined) return false;
+  return /[.[(]/.test(inner) || !/[0-9]/.test(inner);
+}
+
 /** Could this body be a credential at all? */
 function isNotACredentialValue(body: string): boolean {
-  return isNonAsciiText(body) || isLocationValue(body) || isDottedIdentifier(body);
+  return (
+    isNonAsciiText(body) ||
+    isLocationValue(body) ||
+    isDottedIdentifier(body) ||
+    isTranslatedLabel(body) ||
+    isTemplateExpression(body)
+  );
+}
+
+// How far left a key may sit inside the string literal that holds it.
+const LABEL_SCAN_LIMIT = 64;
+const LABEL_CHAR_RE = /[\p{L}\p{N} _.'’-]/u;
+
+/**
+ * Is the credential word this match opens with the text of a string
+ * literal, with the "value" opened by that literal's own closing quote?
+ *
+ * Compiled JSX writes a label as `children:"Password:"` and then goes on
+ * with code, so `Password:"}),(0,r.jsx)("` is an assignment character for
+ * character: the key, a `:`, a quote, eight characters that are not quotes
+ * and a quote. What gives it away is that the key is followed straight by
+ * the `:` (a quoted key closes first) while the walk to its left, over label
+ * text only, meets an opening quote of the same kind as the one the "value"
+ * opens with. A key in code is preceded by `{`, `,`, `;`, a line start or an
+ * operator, never by a quote with only words between.
+ */
+function keyInsideStringLiteral(text: string, index: number, match: string): boolean {
+  // A label ends `Password:`; an HTML attribute (`a="b" password="…"`)
+  // sits after a closing quote too, and is read as the assignment it is.
+  const key = keyOf(match);
+  const label = /^\s*:(['"])/.exec(match.slice(key.length));
+  if (!label) return false;
+  const valueQuote = label[1]!;
+  const floor = Math.max(0, index - LABEL_SCAN_LIMIT);
+  let at = index;
+  while (at > floor && LABEL_CHAR_RE.test(text[at - 1] ?? "")) at--;
+  // A label opens on its first word; a quote followed by a space is the
+  // close of an earlier string (`name: "bob" password: "…"`).
+  return at > 0 && text[at - 1] === valueQuote && !isSpaceAt(text, at);
 }
 
 // How far back a quoted key's own opening quote may sit.
@@ -1625,6 +1732,39 @@ function isWordCharAt(text: string, index: number): boolean {
   return (
     (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95
   );
+}
+
+// How far a continued token is read past its match before it is cut.
+const CONTINUED_TOKEN_MAX = 256;
+
+/**
+ * Where the token a match sits at the start of really ends, or `end` itself
+ * when the match is the whole token.
+ *
+ * The left-boundary guard makes a prefix count only at the start of a token;
+ * this is the same question asked on the right. A provider format has a
+ * fixed length or a fixed alphabet, so `ghp_` + 36, `AKIA` + 16 or `key-` +
+ * 32 followed by more letters and digits (or by `_`, or `-` and more) is a
+ * longer token that happens to open like a credential. It is not an
+ * independently delimited provider token and is not reported as one; the
+ * caller reports the whole token with the provider left unknown. A token the
+ * match does not stop short of ends on a quote, a space or punctuation, and
+ * this returns `end`.
+ */
+function continuedTokenEnd(text: string, end: number): number {
+  let at = end;
+  const limit = Math.min(text.length, end + CONTINUED_TOKEN_MAX);
+  while (at < limit) {
+    if (isWordCharAt(text, at)) at++;
+    else if (text.charCodeAt(at) === 45 && isWordCharAt(text, at + 1)) at++; // -
+    else break;
+  }
+  return at;
+}
+
+/** The finding type for a secret-prefixed token no provider can be named for. */
+export function unattributedKeyType(prefix?: string): string {
+  return prefix === undefined ? "Secret Key (provider unknown)" : `Secret Key (${prefix} prefix, provider unknown)`;
 }
 
 // One window's worth of characters. Every pattern in this file matches more
@@ -2074,6 +2214,65 @@ export function publicUrlIdentifierSpans(content: string): Array<[start: number,
   return spans;
 }
 
+/**
+ * Providers whose key kind is written in the key's own prefix, so a value
+ * under a generic credential key can be classified rather than labelled
+ * generically. A row applies only when the provider's name sits within
+ * PROVIDER_CONTEXT_GAP characters before the key (a parent object, an init
+ * call, an env var name). Without it, a `secret`-kind prefix is reported
+ * under the prefix with the provider left unknown, and a `client`-kind
+ * prefix is left to the generic assignment as before.
+ *
+ * Add a row only when the provider's documentation states which prefix is
+ * confidential and which is meant for public applications.
+ */
+export interface ProviderKeyPrefix {
+  provider: string;
+  /** Lowercase word that names the provider in the text before the key. */
+  keyword: string;
+  /** The whole value, prefix included. */
+  shape: RegExp;
+  prefix: string;
+  kind: "server-secret" | "client-sdk";
+  type: string;
+}
+
+export const PROVIDER_KEY_PREFIXES: readonly ProviderKeyPrefix[] = [
+  // Statsig: server secret keys are confidential, client SDK keys are meant
+  // for public applications (docs.statsig.com/access-management/api-keys).
+  {
+    provider: "Statsig",
+    keyword: "statsig",
+    shape: /^secret-[A-Za-z0-9]{32,64}$/,
+    prefix: "secret-",
+    kind: "server-secret",
+    type: "Statsig Server Secret Key",
+  },
+  {
+    provider: "Statsig",
+    keyword: "statsig",
+    shape: /^client-[A-Za-z0-9]{32,64}$/,
+    prefix: "client-",
+    kind: "client-sdk",
+    type: "Statsig Client SDK Key",
+  },
+];
+
+// From the end of the provider's name to the start of the whole key: wide
+// enough for a config object holding a server key and then a client key
+// (`statsig: {serverSideApiKey: "secret-…", clientSideApiKey:`), not for an // pragma: allowlist secret
+// import at the top of a bundle. The value must already have the row's exact
+// prefixed shape, so the name only has to say whose key it is.
+const PROVIDER_CONTEXT_GAP = 120;
+const PROVIDER_KEYWORD_MAX = Math.max(...PROVIDER_KEY_PREFIXES.map((row) => row.keyword.length));
+
+// What an offline read of a page can and cannot establish about a key.
+const EXPOSURE_ONLY: FindingExtra = {
+  exposure: "present in content served to the browser",
+  validity: "not tested",
+  scope: "not tested",
+};
+
 // The generic keys a public brand may claim: an API key or an access token
 // is the SDK's client credential, a password, secret or auth token is not,
 // whatever object it sits in (`sentry:{authToken:"sntrys_…"}` is a server
@@ -2170,10 +2369,12 @@ export function scanContent(
     confidence: Confidence,
     publicByDesign: boolean,
     before: () => string,
-    after: () => string
+    after: () => string,
+    known?: FindingExtra
   ): LeakedSecret | null => {
     const refined = refineFinding(name, value, Date.now(), { before, after });
     if (refined?.drop) return null;
+    const extra = known || refined?.extra ? { ...known, ...refined?.extra } : undefined;
     return {
       type: refined?.type ?? name,
       value,
@@ -2181,7 +2382,7 @@ export function scanContent(
       publicByDesign: refined?.publicByDesign ?? publicByDesign,
       location,
       sourceUrl,
-      ...(refined?.extra ? { extra: refined.extra } : {}),
+      ...(extra ? { extra } : {}),
     };
   };
 
@@ -2278,6 +2479,27 @@ export function scanContent(
     return undefined;
   };
 
+  // The provider-prefix row a generic assignment's value belongs to, and
+  // whether the provider is named in front of its key.
+  const providerKeyOf = (matchAt: number, body: string) => {
+    const rows = PROVIDER_KEY_PREFIXES.filter((row) => row.shape.test(body));
+    if (rows.length === 0) return undefined;
+    // The match can open part-way through its key (`ApiKey` of
+    // `clientSideApiKey`); the distance is measured from the key's start.
+    let keyAt = matchAt;
+    while (keyAt > 0 && matchAt - keyAt < 64 && IDENT_CHAR_RE.test(content[keyAt - 1] ?? "")) keyAt--;
+    // The name may also sit inside the key itself (`STATSIG_SERVER_SECRET`).
+    const from = Math.max(0, keyAt - PROVIDER_CONTEXT_GAP - PROVIDER_KEYWORD_MAX);
+    const window = content.slice(from, matchAt).toLowerCase();
+    for (const row of rows) {
+      const at = window.lastIndexOf(row.keyword);
+      if (at !== -1 && from + at + row.keyword.length >= keyAt - PROVIDER_CONTEXT_GAP) {
+        return { row, named: true };
+      }
+    }
+    return { row: rows[0]!, named: false };
+  };
+
   let shopifyPage: boolean | null = null;
   const isShopifyPage = () => (shopifyPage ??= pageLoadsFrom(content, SHOPIFY_CDN_HOST));
 
@@ -2285,15 +2507,25 @@ export function scanContent(
   // regex (#1864) and by the keywords each pattern declares (#357). Both
   // gates read the gram index, so a body the index rules out costs nothing.
   for (const entry of PREFILTERED_FAST_PATTERNS) {
-    const { name, pattern, confidence, publicByDesign, keyAnchored, generic, valuePosition, minTailEntropy, literals } =
-      entry;
+    const {
+      name,
+      pattern,
+      confidence,
+      publicByDesign,
+      keyAnchored,
+      generic,
+      valuePosition,
+      minTailEntropy,
+      sharedPrefix,
+      literals,
+    } = entry;
     if (!mayMatch(gramIndex, literals)) continue;
     if (!fastPatternMayFire(entry, gramIndex)) continue;
 
     pattern.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(content)) !== null) {
-      const value = match[0];
+      let value = match[0];
 
       // A prefix is a prefix only at the start of a token. `re_` inside
       // `_Care_Dry…`, `[0-9]{8,10}:` on the tail of a UUID and `fooghp_…`
@@ -2309,6 +2541,28 @@ export function scanContent(
         continue;
       }
 
+      // …and a provider's format ends where the token does. A match that
+      // stops short of the end of its token is not reported as that
+      // provider's token, but it may still be a credential: fixed-length
+      // formats grow, a key gets a `_PROD` suffix, and text with its markup
+      // stripped runs a token into the next word. So the whole token stays
+      // reviewable at medium with the provider left unknown, under the
+      // shared prefix when the pattern has one, otherwise under the pattern
+      // it resembles. Only the provider's own structure can rule it out: a
+      // matched part that fails its decoder (a GitHub checksum) is dropped.
+      let unattributed: string | null | undefined;
+      if (!keyAnchored && !generic) {
+        const matchEnd = match.index + value.length;
+        // A match that ends on its own delimiter (Azure's `;`) is whole.
+        const tokenEnd = isWordCharAt(content, matchEnd - 1) ? continuedTokenEnd(content, matchEnd) : matchEnd;
+        if (tokenEnd !== matchEnd) {
+          if (refineFinding(name, value)?.drop) continue;
+          unattributed = sharedPrefix !== undefined && value.startsWith(sharedPrefix) ? sharedPrefix : null;
+          value = content.slice(match.index, tokenEnd);
+          pattern.lastIndex = tokenEnd;
+        }
+      }
+
       // A generic assignment can start part-way through a longer key, so the
       // words to its left decide too: `cache-api-key` is a cache key.
       if (keyAnchored && startsInsideDigestKey(content, match.index)) {
@@ -2317,6 +2571,15 @@ export function scanContent(
 
       // …and a credential word inside a ternary's branch is not a key at all.
       if (keyAnchored && startsInTernaryBranch(content, match.index)) {
+        continue;
+      }
+
+      // …nor is the text of a label whose closing quote the match took for
+      // the opening quote of a value (`children:"Password:"}),(0,r.jsx)(`).
+      // The span it took may hold a real assignment, so the scan resumes
+      // right after the label's key rather than after the whole span.
+      if (keyAnchored && keyInsideStringLiteral(content, match.index, value)) {
+        pattern.lastIndex = match.index + keyOf(value).length;
         continue;
       }
 
@@ -2398,7 +2661,22 @@ export function scanContent(
       // under the brand's name at the informational tier.
       let reportType = name;
       let reportPublic = publicByDesign ?? false;
-      if (generic) {
+      let reportConfidence: Confidence = confidence;
+      let known: FindingExtra | undefined;
+      // A provider that writes the key's kind into its prefix: a server
+      // secret is a leak at high, a client SDK key is public. The same
+      // secret prefix with no provider named stays reviewable, unattributed.
+      const providerKey = generic && keyOf(value) !== "" ? providerKeyOf(match.index, body) : undefined;
+      if (providerKey?.named) {
+        const { row } = providerKey;
+        reportType = row.type;
+        reportPublic = row.kind === "client-sdk";
+        reportConfidence = row.kind === "server-secret" ? "high" : "medium";
+        known = { provider: row.provider, keyKind: row.kind, prefix: row.prefix, ...EXPOSURE_ONLY };
+      } else if (providerKey?.row.kind === "server-secret") {
+        reportType = unattributedKeyType(providerKey.row.prefix);
+        known = { prefix: providerKey.row.prefix, provider: "unknown", ...EXPOSURE_ONLY };
+      } else if (generic) {
         const brand = BRAND_CLAIMABLE_KEY_RE.test(keyOf(value)) ? publicBrandNear(match.index) : undefined;
         if (brand) {
           reportType = brand;
@@ -2415,14 +2693,23 @@ export function scanContent(
         }
       }
 
+      // A token that only opens like the provider's: reviewable, at medium,
+      // with the attribution saying what is and is not known.
+      if (unattributed !== undefined) {
+        reportType = unattributedKeyType(unattributed ?? undefined);
+        reportConfidence = "medium";
+        known = { ...(unattributed !== null ? { prefix: unattributed } : {}), provider: "unknown", resembles: name };
+      }
+
       seenValues.add(value);
       const finding = build(
         reportType,
         value,
-        confidence,
+        reportConfidence,
         reportPublic,
         () => readKeyLookBack(content, match!.index).before,
-        () => content.slice(match!.index + value.length, match!.index + value.length + FORWARD_REACH)
+        () => content.slice(match!.index + value.length, match!.index + value.length + FORWARD_REACH),
+        known
       );
       if (finding) found.push(finding);
     }
