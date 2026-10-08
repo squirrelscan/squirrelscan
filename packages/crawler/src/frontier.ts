@@ -184,16 +184,22 @@ export function isInScope(url: string, options: ScopeOptions): CrawlDecision {
   const candidateHostname = candidateUrlObj.hostname.toLowerCase();
   const candidatePath = candidateUrlObj.pathname;
 
-  const matchTarget = (pattern: string) =>
-    pattern.startsWith("http://") || pattern.startsWith("https://") ? url : candidatePath;
+  const isAbsolutePattern = (pattern: string) =>
+    pattern.startsWith("http://") || pattern.startsWith("https://");
+  const matchTarget = (pattern: string) => (isAbsolutePattern(pattern) ? url : candidatePath);
 
   if (exclude.some((pattern) => matchesPattern(matchTarget(pattern), pattern))) {
     return { allowed: false, reason: "excluded" };
   }
 
   if (include.length > 0) {
-    const allowed = include.some((pattern) => matchesPattern(matchTarget(pattern), pattern));
-    return allowed ? { allowed: true } : { allowed: false, reason: "not_included" };
+    const matching = include.filter((pattern) => matchesPattern(matchTarget(pattern), pattern));
+    if (matching.length === 0) return { allowed: false, reason: "not_included" };
+    // An absolute-URL pattern names its host, so a match is explicit consent to
+    // reach it, including a host outside the crawl's scope. A path-only pattern
+    // says nothing about the host, so it narrows WITHIN host scope (below)
+    // rather than replacing it (#347).
+    if (matching.some(isAbsolutePattern)) return { allowed: true };
   }
 
   if (allowedDomains && allowedDomains.length > 0) {
