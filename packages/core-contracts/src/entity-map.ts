@@ -170,6 +170,8 @@ export const ENTITY_MAP_VIEWER_LIMITS = {
   maxBytes: 4_000_000,
   /** Looser than publish: the viewer has a toggle that reveals these. */
   maxPageLocalShare: 0.25,
+  /** Same reservation as the publish copy: the viewer must not lose a finding's evidence either. */
+  maxProblemShare: 0.2,
 } as const;
 
 /**
