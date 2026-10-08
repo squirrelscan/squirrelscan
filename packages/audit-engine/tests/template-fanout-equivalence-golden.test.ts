@@ -575,6 +575,12 @@ describe("a verdict is never copied across origins", () => {
       b: sameChrome(""),
     },
     {
+      name: "a viewport meta with different content",
+      ruleId: "mobile/viewport",
+      a: sameChrome(VIEWPORT),
+      b: sameChrome(`<meta name="viewport" content="width=1024">`),
+    },
+    {
       name: "a second main landmark",
       ruleId: "a11y/landmark-one-main",
       a: sameChrome(VIEWPORT),
@@ -631,20 +637,20 @@ describe("a verdict is never copied across origins", () => {
   });
 
   test("fanoutClusterKey separates origins and survives an unparseable url", () => {
-    expect(fanoutClusterKey("abc123", "https://shop.test/a")).not.toBe(
-      fanoutClusterKey("abc123", "http://shop.test/a"),
+    expect(fanoutClusterKey("abc123", "https://shop.test/a", "")).not.toBe(
+      fanoutClusterKey("abc123", "http://shop.test/a", ""),
     );
-    expect(fanoutClusterKey("abc123", "https://shop.test/a")).toBe(
-      fanoutClusterKey("abc123", "https://shop.test/b?q=1"),
+    expect(fanoutClusterKey("abc123", "https://shop.test/a", "")).toBe(
+      fanoutClusterKey("abc123", "https://shop.test/b?q=1", ""),
     );
     // No template key means no group, whatever the url.
-    expect(fanoutClusterKey(null, "https://shop.test/a")).toBeNull();
+    expect(fanoutClusterKey(null, "https://shop.test/a", "")).toBeNull();
     // A url that will not parse falls back to itself, so it can only ever group
     // with a byte-identical url.
-    expect(fanoutClusterKey("abc123", "not a url")).not.toBe(
-      fanoutClusterKey("abc123", "also not a url"),
+    expect(fanoutClusterKey("abc123", "not a url", "")).not.toBe(
+      fanoutClusterKey("abc123", "also not a url", ""),
     );
-    expect(fanoutClusterKey("abc123", "not a url")).toBe(fanoutClusterKey("abc123", "not a url"));
+    expect(fanoutClusterKey("abc123", "not a url", "")).toBe(fanoutClusterKey("abc123", "not a url", ""));
   });
 });
 

@@ -65,10 +65,10 @@
 // can vary on a third.
 //
 // #275 tightened the GROUPING key past the stored one (see `fanoutInputSignature`):
-// script srcs, meta names and the <main> count. Besides that, two things are NOT
-// left to the declaration, because they are properties of the PAGE rather
-// than claims about a rule's markup inputs, and because a corpus of one origin can
-// never exhibit them:
+// script srcs, meta names and the <main> count. Two further things are NOT left
+// to the declaration, because they are properties of the PAGE rather than claims
+// about a rule's markup inputs, and because a corpus of one origin can never
+// exhibit them:
 //
 //  - **The page's ORIGIN is part of the grouping key here.** Several declared rules
 //    resolve resources against it: `security/sri` reports a script as cross-origin
@@ -144,7 +144,8 @@ export interface TemplateFanoutStats {
  *    two pages whose bundles differ in PATH on one host (per-route hashed
  *    bundles) must not share a verdict;
  *  - the set of `<meta>` names (`name`, `property`, `http-equiv`, `charset`):
- *    `mobile/viewport` and friends pass or fail on one being present;
+ *    `mobile/viewport` and friends pass or fail on one being present, and the
+ *    viewport's `content` too, since the rule reads its value;
  *  - the number of `<main>` / `role="main"` landmarks: `a11y/landmark-one-main`.
  *
  * It is part of the FANOUT grouping key only. The stored `template_fp` stays the
@@ -167,6 +168,10 @@ export function fanoutInputSignature(
       el.getAttribute("property"),
       el.getAttribute("http-equiv"),
       el.getAttribute("charset") !== null ? "charset" : null,
+      // `mobile/viewport` passes or fails on the CONTENT, not just the presence.
+      el.getAttribute("name")?.toLowerCase() === "viewport"
+        ? `content=${el.getAttribute("content") ?? ""}`
+        : null,
     ]
       .filter((v): v is string => v !== null)
       .map((v) => v.toLowerCase())
@@ -198,7 +203,7 @@ export function fanoutInputSignature(
 export function fanoutClusterKey(
   templateKey: string | null,
   pageUrl: string,
-  inputSignature: string | null = "",
+  inputSignature: string | null,
 ): string | null {
   // A page whose inputs could not be read never groups, rather than grouping on "".
   if (!templateKey || inputSignature === null) return null;
