@@ -223,7 +223,18 @@ export class RuleRunner {
   // of the one fail check that reported it. A slow pattern times out on every page
   // that triggers it, so only the first page is a fail and later ones are skipped
   // (and counted), not one fail per page flooding the report and the score.
-  private readonly timedOutPageRules = new Map<string, { pages: number }>();
+  //
+  // This is per-AUDIT state on the runner: a runner must serve one audit, or
+  // `resetAudit()` must be called between audits (`runSiteRules`, the last step of
+  // an audit, also clears it). Otherwise a second audit's first timeout of the
+  // same rule would be a skipped check and its report would carry no fail at all.
+  // The in-place `details.pages` on the first check is best effort: a sink may
+  // have serialized it already, so the final count is also emitted by
+  // `runSiteRules` as one `<rule>-timeouts` summary check.
+  private readonly timedOutPageRules = new Map<
+    string,
+    { details: { pages: number }; name: string; category: string; budgetMs: number }
+  >();
   // Per-run state — captured once at construction, immutable for the
   // lifetime of this runner instance. Each audit gets its own RuleRunner, so
   // concurrent audits never share these.
@@ -430,21 +441,26 @@ export class RuleRunner {
         const name = `${rule.meta.id}-error`;
         const earlier = scopeForLog ? undefined : this.timedOutPageRules.get(rule.meta.id);
         if (earlier) {
-          earlier.pages++;
+          earlier.details.pages++;
           return [
             {
               name,
               status: "skipped",
               message: `Rule error: ${e.message} (already reported for this audit)`,
               skipReason: "rule-timed-out",
-              details: { timedOut: true, budgetMs: e.budgetMs },
+              details: { timedOut: true, budgetMs: e.budgetMs, pages: earlier.details.pages },
             },
           ];
         }
         // `pages` is updated in place as later pages time out too.
         const details = { timedOut: true, budgetMs: e.budgetMs, pages: 1 };
         if (!scopeForLog) {
-          this.timedOutPageRules.set(rule.meta.id, details);
+          this.timedOutPageRules.set(rule.meta.id, {
+            details,
+            name: rule.meta.name,
+            category: rule.meta.category,
+            budgetMs: e.budgetMs,
+          });
         }
         return [{ name, status: "fail", message: `Rule error: ${e.message}`, details }];
       }
@@ -658,10 +674,41 @@ export class RuleRunner {
           allChecks.push(...result.checks);
         }
 
+        // One summary per page rule that timed out in this audit, carrying the
+        // final count of pages it did not check. The per-page checks are emitted as
+        // each page finishes, so only this one can hold the total.
+        allChecks.push(...this.timeoutSummaryChecks());
+        this.resetAudit();
+
         return { checks: allChecks, ruleResults };
       },
       () => ({})
     );
+  }
+
+  /**
+   * Forget which page rules have timed out, so the next audit on this runner
+   * reports its own first timeout as a fail. A runner should serve one audit;
+   * this is for a caller that reuses one.
+   */
+  resetAudit(): void {
+    this.timedOutPageRules.clear();
+  }
+
+  private timeoutSummaryChecks(): CheckResult[] {
+    return [...this.timedOutPageRules].map(([ruleId, t]) => {
+      const pages = t.details.pages;
+      const unchecked = `${pages} page${pages === 1 ? "" : "s"} not checked`;
+      return {
+        name: `${ruleId}-timeouts`,
+        status: "info" as const,
+        message:
+          t.category === "security"
+            ? `${t.name}: ${unchecked} because it exceeded its ${t.budgetMs} ms time budget. A timed-out security rule did not check those pages, so no finding there is not a clean result`
+            : `${t.name}: ${unchecked} because it exceeded its ${t.budgetMs} ms time budget`,
+        details: { timedOut: true, budgetMs: t.budgetMs, pagesNotChecked: pages },
+      };
+    });
   }
 }
 

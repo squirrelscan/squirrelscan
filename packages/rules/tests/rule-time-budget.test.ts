@@ -245,6 +245,59 @@ describe("per-rule time budget", () => {
     expect(second.checks).toEqual([{ name: "test/flaky", status: "pass", message: "ok" }]);
   }, 30_000);
 
+  test("three timeouts report 3 pages not checked, even when the first result was already serialized", async () => {
+    const slow = rule("test/slow-sec", "page", () => {
+      const until = performance.now() + 150;
+      while (performance.now() < until) {
+        // spin
+      }
+      return pass("test/slow-sec");
+    });
+    slow.meta.category = "security";
+    const runner = makeRunner([slow], 50);
+    let firstSnapshot = "";
+    for (const i of [1, 2, 3]) {
+      const { checks } = await runner.runPageRules({ ...redosPage(), url: `https://example.com/s${i}` }, siteData());
+      // What a page-result sink holds the moment the page finishes.
+      if (i === 1) firstSnapshot = JSON.stringify(checks);
+    }
+    // The early copy cannot see later pages...
+    expect(JSON.parse(firstSnapshot)[0].details.pages).toBe(1);
+    // ...so the total is its own check, in the site results.
+    const { checks } = await runner.runSiteRules(siteData(3));
+    const summary = byName(checks, "test/slow-sec-timeouts");
+    expect(summary?.details).toMatchObject({ timedOut: true, budgetMs: 50, pagesNotChecked: 3 });
+    expect(summary?.message).toContain("3 pages not checked");
+    expect(summary?.message).toContain("did not check those pages");
+  }, 30_000);
+
+  test("two audits on one runner each get their own fail", async () => {
+    const slow = rule("test/slow-twice", "page", () => {
+      const until = performance.now() + 150;
+      while (performance.now() < until) {
+        // spin
+      }
+      return pass("test/slow-twice");
+    });
+    const runner = makeRunner([slow], 50);
+    const auditStatuses = async (urls: string[]) => {
+      const statuses: string[] = [];
+      for (const url of urls) {
+        const { checks } = await runner.runPageRules({ ...redosPage(), url }, siteData());
+        statuses.push(checks[0].status);
+      }
+      return statuses;
+    };
+
+    expect(await auditStatuses(["https://example.com/1", "https://example.com/2"])).toEqual(["fail", "skipped"]);
+    // runSiteRules ends an audit...
+    await runner.runSiteRules(siteData());
+    expect(await auditStatuses(["https://example.com/3"])).toEqual(["fail"]);
+    // ...and resetAudit() is the explicit hook.
+    runner.resetAudit();
+    expect(await auditStatuses(["https://example.com/4"])).toEqual(["fail"]);
+  }, 30_000);
+
   test("thrown errors and fast rules are unchanged", async () => {
     const runner = makeRunner([
       rule("test/throws", "page", () => {
