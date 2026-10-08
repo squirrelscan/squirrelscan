@@ -1,0 +1,30 @@
+---
+title: "channel"
+icon: "bell"
+description: "Run the Claude Code channel that pushes cloud audit events into a session"
+---
+
+The `channel` command starts a local stdio server that polls your organization's cloud notification feed and pushes `audit_complete`, `audit_failed` and `issues_detected` events into a running Claude Code session. Claude Code launches it from your MCP config. You rarely run it directly.
+
+See the [Claude Code channel guide](/developers/channel) for setup, the development flag and the security model.
+
+## Usage
+
+```bash
+squirrel channel [--interval <seconds>] [--categories <list>]
+```
+
+## Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--interval` | `30` | Seconds between polls of the cloud feed. From 5 to 86400. Backs off on `429` and `5xx`. |
+| `--categories` | `audit_complete,audit_failed,issues_detected` | Comma-separated categories to deliver. |
+
+## Authentication
+
+The feed needs a login session from [`squirrel auth login`](/cli/auth). API keys cannot read it. Without a login the channel sends one `login_required` event and keeps running.
+
+## State
+
+Delivery state is stored per organization in `~/.squirrel/channel/`, so a restart catches up exactly once.

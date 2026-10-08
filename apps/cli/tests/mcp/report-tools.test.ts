@@ -12,8 +12,7 @@
 // dev machines often have a real login session, but not in CI (caught by
 // PR #1290's Test - CLI run). SQUIRRELSCAN_API_KEY makes it deterministic.
 
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { createMcpServer } from "@/mcp/server";

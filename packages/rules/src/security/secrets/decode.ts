@@ -24,6 +24,7 @@
 
 import type { LeakedSecret } from "../leaked-secrets";
 
+import { sharedRegex } from "../../shared-regex";
 /** The three places the scanner reads. */
 export type SecretLocation = "html" | "inline-script" | "external-script"; // pragma: allowlist secret
 
@@ -335,8 +336,7 @@ const SAMPLE_HALF = 15;
 
 // The rest of a run from a known start, matched natively rather than a
 // character at a time: a 200 KB image data URI is one exec, not 200k steps.
-const B64_RUN_RE = /[A-Za-z0-9+/_-]*={0,2}/y;
-
+const B64_RUN_RE = sharedRegex(/[A-Za-z0-9+/_-]*={0,2}/y);
 /**
  * Every run of base64 alphabet of at least `minChars` characters, with any
  * `=` padding folded into the run.

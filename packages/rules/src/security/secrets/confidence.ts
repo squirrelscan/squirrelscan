@@ -279,7 +279,9 @@ const CREDENTIAL_KEY_WORDS = new Set([
   "credential",
   "credentials",
 ]);
-const PRECEDING_KEY_RE = /["'`]?([A-Za-z_$][A-Za-z0-9_$.-]*)(?:["'`]\s*\]|["'`]?)\s*(?:[:=]|\|\|=?|\?\?=?)\s*["'`]?\s*$/;
+// Ends in `\s*(?:["'`]\s*)?$` rather than the equivalent `\s*["'`]?\s*$`, whose
+// two adjacent `\s*` made it cubic in the look-back window (leaked-secrets.ts).
+const PRECEDING_KEY_RE = /["'`]?([A-Za-z_$][A-Za-z0-9_$.-]*)(?:["'`]\s*\]|["'`]?)\s*(?:[:=]|\|\|=?|\?\?=?)\s*(?:["'`]\s*)?$/;
 
 /** Does the look-behind put the token in an Authorization literal or under a credential key? */
 export function heldAsCredential(before: string): boolean {

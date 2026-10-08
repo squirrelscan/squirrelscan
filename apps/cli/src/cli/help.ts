@@ -34,6 +34,7 @@ export const COMMAND_GROUPS: readonly CommandGroup[] = [
     commands: [
       ["skills", "Install and update the squirrelscan agent skills"],
       ["mcp", "Run the local MCP server for Claude Code, Cursor and more"],
+      ["channel", "Push cloud audit events into a running Claude Code session"],
     ],
   },
   {
