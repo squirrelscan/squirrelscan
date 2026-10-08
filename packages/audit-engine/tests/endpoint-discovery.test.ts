@@ -137,22 +137,67 @@ describe("endpoint discovery collector", () => {
     expect(collect(c, pageOf("/b", "<html></html>")).techIds).toBeUndefined();
   });
 
-  test("a bare literal does not spend the retained cap once its URL has a method", () => {
+  test("a method-carrying ref is kept ahead of bare literals once the retained cap is spent", () => {
     const c = createEndpointCollector({ headersOf: buildHeadersMap });
-    collect(c, pageOf("/", `<html><body><script>fetch("/api/a"); var x = "/api/a";</script></body></html>`));
-    collect(c, pageOf("/p", `<html><body><script>var y = "/api/a";</script></body></html>`));
-    const kept = c.pages.flatMap((p) => p.refs.map((r) => `${r.method ?? "-"} ${r.url}`));
-    expect(kept).toEqual(["GET https://example.com/api/a"]);
+    // 2,500 bare literals first (25 pages at the 100-per-page extractor cap), then
+    // one fetch call site with a lexically late URL.
+    for (let p = 0; p < 25; p++) {
+      const bare = Array.from({ length: 100 }, (_, i) => `var a${i} = "/api/a${String(p * 100 + i).padStart(4, "0")}";`).join("");
+      collect(c, pageOf(p === 0 ? "/" : `/b${p}`, `<html><body><script>${bare}</script></body></html>`));
+    }
+    collect(c, pageOf("/late", `<html><body><script>fetch("/api/zzz")</script></body></html>`));
+    const kept = c.retained();
+    expect(kept.length).toBe(MAX_RETAINED_REFS);
+    expect(kept.some((r) => r.method === "GET" && r.url === "https://example.com/api/zzz")).toBe(true);
   });
 
-  test("cross-origin refs cannot fill the retained set and push out later same-origin refs", () => {
-    const c = createEndpointCollector({ headersOf: buildHeadersMap });
-    const vendor = Array.from({ length: 500 }, (_, i) => `fetch("https://api.vendor.io/v1/r${i}");`).join("");
-    collect(c, pageOf("/", `<html><body><script>${vendor}</script></body></html>`));
-    collect(c, pageOf("/late", `<html><body><script>fetch("/api/late")</script></body></html>`));
-    const kept = c.pages.flatMap((p) => p.refs.map((r) => r.url));
-    expect(kept.filter((u) => u.includes("vendor.io")).length).toBeLessThanOrEqual(MAX_RETAINED_CROSS_ORIGIN_REFS);
-    expect(kept).toContain("https://example.com/api/late");
+  test("the retained set and the surface do not depend on crawl order or cache replay split", () => {
+    // 60 pages, 3,000 distinct same-origin refs (past the 2,000 cap) and 500
+    // cross-origin refs (past the 300 cap), each page carrying a slice of both.
+    const pagesHtml = Array.from({ length: 60 }, (_, p) => {
+      const same = Array.from({ length: 50 }, (_, i) => `fetch("/api/s${String(p * 50 + i).padStart(4, "0")}");`);
+      const other = Array.from({ length: 9 }, (_, i) => `fetch("https://api.vendor.io/v1/c${String(p * 9 + i).padStart(4, "0")}");`);
+      return { path: p === 0 ? "/" : `/p${p}`, html: `<html><body><script>${[...same, ...other].join("")}</script></body></html>` };
+    });
+    const run = (order: number[], replayFrom?: Map<string, unknown>) => {
+      const c = createEndpointCollector({ headersOf: buildHeadersMap });
+      for (const idx of order) {
+        const pg = pagesHtml[idx];
+        const page = pageOf(pg.path, pg.html);
+        const snap = replayFrom?.get(pg.path);
+        if (snap) c.replay!(page, snap);
+        else collect(c, page);
+      }
+      return c;
+    };
+    const forward = pagesHtml.map((_, i) => i);
+    const reversed = [...forward].reverse();
+    // A seeded shuffle, so the test is reproducible.
+    let seed = 12345;
+    const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    const shuffled = [...forward].sort(() => rand() - 0.5);
+
+    const base = run(forward);
+    const site = { baseUrl: `${ORIGIN}/`, scripts: [] };
+    const baseRefs = base.retained();
+    const baseSurface = base.finish(site);
+    expect(baseRefs.filter((r) => r.url.includes("vendor.io")).length).toBe(MAX_RETAINED_CROSS_ORIGIN_REFS);
+    expect(baseRefs.length).toBe(MAX_RETAINED_REFS + MAX_RETAINED_CROSS_ORIGIN_REFS);
+
+    for (const order of [reversed, shuffled]) {
+      const other = run(order);
+      expect(other.retained()).toEqual(baseRefs);
+      expect(other.finish(site)).toEqual(baseSurface);
+    }
+
+    // Half the pages replay from cached snapshots, the rest run fresh.
+    const snaps = new Map<string, unknown>();
+    for (const [i, pg] of pagesHtml.entries()) {
+      if (i % 2 === 0) snaps.set(pg.path, collect(createEndpointCollector({ headersOf: buildHeadersMap }), pageOf(pg.path, pg.html)));
+    }
+    const mixed = run(shuffled, snaps);
+    expect(mixed.retained()).toEqual(baseRefs);
+    expect(mixed.finish(site)).toEqual(baseSurface);
   });
 
   test("retained refs are capped across the crawl", () => {
@@ -161,7 +206,7 @@ describe("endpoint discovery collector", () => {
       const calls = Array.from({ length: 90 }, (_, i) => `fetch("/api/p${p}/r${i}");`).join("");
       collect(c, pageOf(`/p${p}`, `<html><body><script>${calls}</script></body></html>`));
     }
-    const retained = c.pages.reduce((n, p) => n + p.refs.length, 0);
+    const retained = c.retained().length;
     expect(retained).toBeLessThanOrEqual(MAX_RETAINED_REFS);
     expect(c.finish({ baseUrl: `${ORIGIN}/`, scripts: [] }).candidates.length).toBeLessThanOrEqual(200);
   });
