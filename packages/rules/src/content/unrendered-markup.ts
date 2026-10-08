@@ -6,6 +6,7 @@ import type { Element } from "linkedom";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { sharedRegex } from "../shared-regex";
 /** Never read by a visitor at all. */
 const SCRIPT_LIKE_TAGS = ["script", "style", "noscript", "template"] as const;
 
@@ -291,8 +292,7 @@ const KNOWN_ATTRIBUTES = new Set([
  * Each `name=` in an attribute list. Bounded and over disjoint classes, so the
  * scan stays linear over the 200 characters `ESCAPED_TAG_RE` can hand it.
  */
-const ATTRIBUTE_NAME_RE = /[\s/]([a-z][a-z0-9:_.-]{0,40})[ \t]{0,4}=/gi;
-
+const ATTRIBUTE_NAME_RE = sharedRegex(/[\s/]([a-z][a-z0-9:_.-]{0,40})[ \t]{0,4}=/gi);
 /** True when `rest` assigns a value to an attribute a browser would recognise. */
 function hasRecognisedAttribute(rest: string): boolean {
   ATTRIBUTE_NAME_RE.lastIndex = 0;

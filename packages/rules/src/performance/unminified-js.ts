@@ -8,6 +8,7 @@ import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 
+import { sharedRegex } from "../shared-regex";
 export const optionsSchema = z.object({
   min_size_bytes: z
     .number()
@@ -25,11 +26,10 @@ const LONG_VAR_THRESHOLD = 0.002; // Long vars per character
 // `.` never crosses a line terminator, so CRLF needs the explicit `\r?` before `\n`.
 const LEADING_BANNER_RE = /^\s*(?:\/\*!(?:[^*]|\*(?!\/))*\*\/|\/\/!.*(?:\r?\n|$))/;
 
-const LONG_VAR_RE = /(?:var|let|const)\s+[a-zA-Z_$][a-zA-Z0-9_$]{5,}/g;
-const LONG_FUNCTION_RE = /function\s+[a-zA-Z_$][a-zA-Z0-9_$]{10,}/g;
-const INDENT_RE = /\n[ \t]{2,}/g;
-const WHITESPACE_RUN_RE = /\s{2,}/g;
-
+const LONG_VAR_RE = sharedRegex(/(?:var|let|const)\s+[a-zA-Z_$][a-zA-Z0-9_$]{5,}/g);
+const LONG_FUNCTION_RE = sharedRegex(/function\s+[a-zA-Z_$][a-zA-Z0-9_$]{10,}/g);
+const INDENT_RE = sharedRegex(/\n[ \t]{2,}/g);
+const WHITESPACE_RUN_RE = sharedRegex(/\s{2,}/g);
 /** Occurrences of a single character, without materialising a match array. */
 function countChar(text: string, ch: string): number {
   let n = 0;
