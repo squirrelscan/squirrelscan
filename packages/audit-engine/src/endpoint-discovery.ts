@@ -58,26 +58,35 @@ function scriptUrls(parsed: ParsedPage, pageUrl: string): { url: string }[] {
  * map technology detection reads (the adapter's `buildHeadersMap`); it is passed
  * in so this module does not import the adapter.
  *
- * Technology detection runs once, on the first page the collector sees: the
- * entry page, which is where a stack announces itself. Its ids ride on that
- * page's snapshot, so a replayed run (rule cache) restores them without the html.
+ * Technology detection runs once per run, on the first page the collector sees
+ * (the entry page in crawl order), which is where a stack announces itself. Its
+ * ids ride on that page's snapshot, so a replayed run (rule cache) restores them
+ * without the html. `finish` unions the ids across all snapshots, so the result
+ * does not depend on which page happened to be first.
  */
 export function createEndpointCollector(opts: {
   headersOf: (page: PageRecord) => Record<string, string>;
 }): EndpointCollector {
   const pages: PageEndpointRefs[] = [];
   const seen = new Set<string>();
+  // URLs already retained with a method. A method-less ref to one of them is
+  // dropped by the fold anyway, so it must not spend the retained cap.
+  const withMethod = new Set<string>();
 
   // Keep a page's refs that are new to the crawl, up to the retained cap. The
   // snapshot handed to the rule cache stays whole, so a replay admits the same
   // refs a fresh run would.
   const admit = (record: PageEndpointRefs): void => {
     const refs = [];
-    for (const ref of record.refs) {
+    // Method-carrying refs first, so a bare literal never crowds one out.
+    const ordered = [...record.refs].sort((a, b) => Number(!!b.method) - Number(!!a.method));
+    for (const ref of ordered) {
       if (seen.size >= MAX_RETAINED_REFS) break;
+      if (!ref.method && withMethod.has(ref.url)) continue;
       const key = `${ref.method ?? ""} ${ref.url}`;
       if (seen.has(key)) continue;
       seen.add(key);
+      if (ref.method) withMethod.add(ref.url);
       refs.push(ref);
     }
     pages.push({ ...record, refs });
@@ -113,7 +122,9 @@ export function createEndpointCollector(opts: {
         baseUrl: site.baseUrl,
         pages,
         scripts: site.scripts,
-        techIds: pages[0]?.techIds,
+        // Union across pages: only a page that was first in its run carries ids,
+        // and a replayed snapshot may come from a run with a different first page.
+        techIds: [...new Set(pages.flatMap((p) => p.techIds ?? []))],
       });
     },
   };

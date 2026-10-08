@@ -87,6 +87,7 @@ describe("endpoint extraction from served JS", () => {
       `'a`.repeat(300_000) + `fetch("/api/ok")`,
       `fetch("/a",{{{x}}}`.repeat(25_000),
       `$.ajax({url:"/a",` + "{a}".repeat(150_000),
+      "$.ajax({".repeat(60_000),
     ];
     for (const hostile of hostiles) {
       const t0 = performance.now();
@@ -180,6 +181,21 @@ describe("endpoint surface fold", () => {
     });
     // A different scheme is a different origin.
     expect(byUrl.get("http://example.com/api/other-scheme")?.probeEligible).toBe(false);
+  });
+
+  test("an origin that differs by www, port or scheme is never probe-eligible, and the cross-origin cap holds with same-origin entries present", () => {
+    const refs = [
+      "https://www.example.com/api/a",
+      "https://example.com:8443/api/b",
+      "http://example.com/api/c",
+      ...Array.from({ length: 80 }, (_, i) => `https://api.vendor.io/v1/r${i}`),
+      "https://example.com/api/mine",
+    ].map((url) => ({ url, method: "GET", discoveredVia: "fetch" }));
+    const surface = buildEndpointSurface({ baseUrl: BASE, pages: pages(refs) });
+    const eligible = surface.candidates.filter((c) => c.probeEligible).map((c) => c.url);
+    expect(eligible).toEqual(["https://example.com/api/mine"]);
+    expect(surface.candidates.filter((c) => !c.sameOrigin).length).toBe(MAX_CROSS_ORIGIN_CANDIDATES);
+    expect(surface.truncated).toBe(true);
   });
 
   test("skips third-party scripts: their root-relative literals are not this website's endpoints", () => {

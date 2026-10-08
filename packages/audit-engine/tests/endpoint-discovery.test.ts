@@ -1,6 +1,8 @@
 // Engine side of the endpoint discovery pass: the page-time collector, technology
 // detection for convention paths, rule-cache replay, the retained cap, and the
-// guarantee that the pass sends no request.
+// guarantee that the pass sends no request. The no-request test is a tripwire on
+// the collector and the fold (including technology detection); the pass has no
+// other code path, so it is the whole pass.
 
 import { afterEach, describe, expect, test } from "bun:test";
 
@@ -102,6 +104,28 @@ describe("endpoint discovery collector", () => {
     replayed.replay!(pageOf("/", html), JSON.parse(JSON.stringify(snapshot)));
     const site = { baseUrl: `${ORIGIN}/`, scripts: [] };
     expect(replayed.finish(site)).toEqual(fresh.finish(site));
+  });
+
+  test("convention paths survive when a non-entry page is seen first or a replayed snapshot has no stack", () => {
+    const next = `<html><head><script id="__NEXT_DATA__" type="application/json">{}</script></head><body></body></html>`;
+    const c = createEndpointCollector({ headersOf: buildHeadersMap });
+    // The first page seen is not the entry page and shows no stack.
+    c.replay!(pageOf("/deep", "<html></html>"), { pageUrl: `${ORIGIN}/deep`, refs: [] });
+    c.replay!(pageOf("/", next), {
+      pageUrl: `${ORIGIN}/`,
+      refs: [],
+      techIds: ["nextjs"],
+    });
+    const site = { baseUrl: `${ORIGIN}/`, scripts: [] };
+    expect(c.finish(site).candidates.map((x) => x.discoveredVia)).toContain("convention:nextjs");
+  });
+
+  test("a bare literal does not spend the retained cap once its URL has a method", () => {
+    const c = createEndpointCollector({ headersOf: buildHeadersMap });
+    collect(c, pageOf("/", `<html><body><script>fetch("/api/a"); var x = "/api/a";</script></body></html>`));
+    collect(c, pageOf("/p", `<html><body><script>var y = "/api/a";</script></body></html>`));
+    const kept = c.pages.flatMap((p) => p.refs.map((r) => `${r.method ?? "-"} ${r.url}`));
+    expect(kept).toEqual(["GET https://example.com/api/a"]);
   });
 
   test("retained refs are capped across the crawl", () => {

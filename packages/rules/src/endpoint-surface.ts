@@ -13,8 +13,9 @@
 //   - `buildEndpointSurface` folds the per-page records, the served scripts and the
 //     convention paths for the detected stack into one deduped, capped list.
 //
-// Every regex here is linear: bounded character classes, no nested quantifiers,
-// and every input is length-capped before it is scanned (see rule-budget work for
+// Every regex here is linear or bounded polynomial (the options-object bodies
+// allow one nested brace level inside a 300-repeat cap): bounded character
+// classes, no unbounded nesting, and every input is length-capped before it is scanned (see rule-budget work for
 // why: these run over content the audited site controls).
 
 /** Where a candidate came from. */
@@ -146,7 +147,9 @@ function classifyLiteral(literal: string, base: string): string | null {
 
 /**
  * A call site names its URL outright, so the "looks like an API" test is looser:
- * any same-site or absolute http(s) URL that is not a static asset.
+ * any same-site or absolute http(s) URL that is not a static asset. A relative
+ * URL without a leading slash (`fetch("api/users")`) is skipped on purpose: its
+ * base depends on the page path, which a script scan cannot know.
  */
 function classifyCallSiteUrl(raw: string, base: string): string | null {
   if (NOT_A_URL_RE.test(raw) || raw.includes("${")) return null;
@@ -188,6 +191,8 @@ const JQUERY_AJAX_RE = new RegExp(
 );
 const LITERAL_RE = /(["'`])([^"'`\\\s]{2,512})\1/g;
 
+const SCAN_GATE_RE = /fetch|axios|\.open|\$|jQuery|api|graphql|gql|gateway|_next\/data|trpc|wp-json|actuator|openapi/i;
+
 type Push = (url: string, via: string, method?: string) => void;
 
 function normalizeMethod(m: string | undefined): string | undefined {
@@ -202,8 +207,8 @@ function normalizeMethod(m: string | undefined): string | undefined {
  */
 function scanScriptText(text: string, base: string, push: Push): void {
   const src = text.length > MAX_SCAN_CHARS ? text.slice(0, MAX_SCAN_CHARS) : text;
-  // Cheap gate: nothing below can match a script that has no slash or call text.
-  if (!src.includes("/")) return;
+  // Cheap gate: skip text that names no call site and no API-looking token.
+  if (!SCAN_GATE_RE.test(src)) return;
 
   for (const m of src.matchAll(FETCH_RE)) {
     const url = classifyCallSiteUrl(m[1], base);

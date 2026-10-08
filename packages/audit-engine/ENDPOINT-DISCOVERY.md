@@ -57,6 +57,7 @@ interface EndpointSurface {
 
 ## Constraints
 
-- Every regex is linear, and every input is length-capped before it is scanned (512 KiB per script, 1 MiB of inline script per page). The page content is attacker-controlled, so keep it that way when you add a pattern.
+- Every regex is linear or bounded polynomial (options-object bodies allow one nested brace level inside a 300-repeat cap), and every input is length-capped before it is scanned (512 KiB per script, 1 MiB of inline script per page). The page content is attacker-controlled, so keep it that way when you add a pattern.
 - The collector retains at most `MAX_RETAINED_REFS` (2000) distinct refs across the crawl, so memory stays flat on a large crawl.
-- The pass makes no network request. `endpoint-discovery.test.ts` asserts it.
+- The pass makes no network request. `endpoint-discovery.test.ts` stubs `fetch` to throw while it runs the collector, technology detection and the fold, which is the whole pass.
+- Technology ids are unioned across all page records, so the convention paths do not depend on which page the collector saw first.
