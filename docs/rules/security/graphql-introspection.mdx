@@ -1,0 +1,101 @@
+---
+title: "GraphQL introspection in production: what an open schema exposes"
+description: "Open introspection hands anyone a map of every type in your API. squirrel sends one read-only introspection query per endpoint and counts the types it gets back."
+---
+
+## What open introspection is
+
+GraphQL introspection is a query that asks the server to describe its own schema: every type, field, argument and mutation. Developer tools rely on it, and many servers leave it on by default, so it often ships to production with the rest of the stack.
+
+In production it gives an attacker the whole API surface in one request: admin mutations, internal fields and arguments nobody meant to document. It does not grant access by itself, but it removes the guesswork from finding the resolver that forgot its authorization check.
+
+## What squirrel checks
+
+This is a probing rule. It sends requests beyond the crawl, so it runs only when [probing intensity](/configuration/security) is `active` or `aggressive`. On a `passive` run it sends nothing and records one skipped check.
+
+### Which endpoints are probed
+
+- GraphQL endpoints the audit found in your pages and scripts, such as a `fetch("/graphql")` call site: a URL with a `graphql` or `gql` path segment. Finding them sends no request.
+- The conventional paths `/graphql` and `/api/graphql`.
+
+Every endpoint must have the same origin as the audited URL (scheme, host and port). An endpoint on another host, such as a vendor API, is never probed. An endpoint whose path names a state-changing action, such as `logout`, `delete`, `update` or `reset`, is never probed either, and neither is a call site that declares `PUT`, `PATCH` or `DELETE`. Below `aggressive`, a path that `robots.txt` disallows is skipped. At most five endpoints are probed.
+
+### What is sent
+
+One request per endpoint, a `GET` with the read-only introspection query in the URL:
+
+```text
+GET /graphql?query={__schema{types{name}}}
+```
+
+The query asks for type names only. It carries no cookies and does not follow redirects, and at most 1 MB of the answer is read.
+
+On an `aggressive` run only, one `POST` of the same query follows when the `GET` answer shows a GraphQL server but no schema, for example a server that blocks `GET` requests or asks for a JSON content type. The body is `{"query":"{__schema{types{name}}}"}` and nothing else. No `POST` is sent when the `GET` answer is not GraphQL, or when it already says introspection is disabled.
+
+### Results
+
+The rule emits checks named `graphql-introspection`:
+
+- Skipped when probing is passive. Message: `Probing is passive, so no GraphQL endpoint was probed. Run with --probe active to check for open introspection.`
+- Skipped, with reason `probe-budget`, when the shared probe budget ran out before the first request, or partway through with no finding on the endpoints it reached. A run cut short is never reported as a pass, because the endpoints it did not reach were not checked.
+- Skipped, with reason `probe-errors`, when every probe failed with a network error or timeout, so a failed run never reads as clean.
+- Warn, one check per endpoint, when the answer is a 2xx GraphQL response with a non-empty list of named types. Message: `GraphQL introspection is open at https://example.com/graphql: the schema lists 214 types, 187 of them defined by the API (answered over GET)`. The item meta has the method, the type count and the API-defined type count, which leaves out `__*` introspection types and the built-in scalars.
+- Warn, as a lower-confidence finding, when a 2xx answer opens as a schema (`{"data":{"__schema":{"types":[`) but is longer than the 1 MB read cap. The schema is open, it is just too large to count, so it is never a pass. Message: `GraphQL introspection is open at https://example.com/graphql: the schema answer is larger than 1 MB, too large to count (at least 41250 types seen, answered over GET)`. The item meta has `truncated: true` and `confidence: "lower"`.
+- Pass when no endpoint returned a schema. Message: `No GraphQL endpoint returned its schema (2 endpoint(s) probed, 1 answered as GraphQL)`.
+
+### What is not flagged
+
+- An error that says introspection is disabled, or any other GraphQL error.
+- A response with no schema, an empty type list or types without names.
+- A non-2xx response, a redirect or a network error.
+- An HTML page, a catch-all route or a JSON body that is not GraphQL-shaped. A GraphQL response is a JSON object with only `data`, `errors` and `extensions` keys, where each error has a `message`.
+
+### Limits
+
+The rule counts types, not fields, to keep the request and the answer small. For an answer larger than 1 MB, only the types in the first 1 MB are counted. An endpoint the crawl never referenced and that is not at a conventional path is not found. Introspection that is open only to signed-in users is not seen, because the probes carry no cookies.
+
+## How to fix it
+
+Turn introspection off in production. Most servers have one setting for it:
+
+| Server | Setting |
+|---|---|
+| Apollo Server | `introspection: false` |
+| graphql-js | add `NoSchemaIntrospectionCustomRule` to the validation rules |
+| Hasura | `HASURA_GRAPHQL_ENABLE_INTROSPECTION=false`, or disable it per role |
+| Spring for GraphQL | `spring.graphql.schema.introspection.enabled=false` |
+
+Keep it on in development, or only for authenticated staff. Turning it off hides the map, not the API: every resolver still needs its own authorization checks.
+
+| | |
+|---|---|
+| **Rule ID** | `security/graphql-introspection` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/graphql-introspection"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/graphql-introspection"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.

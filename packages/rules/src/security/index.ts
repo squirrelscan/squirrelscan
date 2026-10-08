@@ -7,6 +7,8 @@ import { cspRule } from "./csp";
 import { cspBlocksOwnResourcesRule } from "./csp-blocks-own-resources";
 import { formCaptchaRule } from "./form-captcha";
 import { formHttpsRule } from "./form-https";
+import { graphqlGetMutationsRule } from "./graphql-get-mutations";
+import { graphqlIntrospectionRule } from "./graphql-introspection";
 import { hstsRule } from "./hsts";
 import { httpToHttpsRule } from "./http-to-https";
 import { httpsRule } from "./https";
@@ -40,6 +42,8 @@ export const rules: Rule[] = [
   thirdPartyCookiesRule,
   sriRule,
   cookieFlagsRule,
+  graphqlIntrospectionRule,
+  graphqlGetMutationsRule,
 ];
 
 export {
@@ -48,6 +52,8 @@ export {
   cspRule,
   formCaptchaRule,
   formHttpsRule,
+  graphqlGetMutationsRule,
+  graphqlIntrospectionRule,
   hstsRule,
   httpToHttpsRule,
   httpsRule,
