@@ -16,6 +16,12 @@ describe("extractFontUrls", () => {
     ]);
   });
 
+  test("matches as=font and rel case-insensitively, and rel as a token list", () => {
+    expect(fonts('<link rel="Preload prefetch" as="FONT" href="/f/a.woff2">')).toEqual([
+      "https://example.com/f/a.woff2",
+    ]);
+  });
+
   test("finds every url() source of an inline @font-face, quoted or not", () => {
     const css = `@font-face{font-family:A;src:url("/f/a.woff2") format("woff2"),url('/f/a.woff?v=2') format('woff'),url(/f/a.ttf)}`;
     expect(fonts(`<style>${css}</style>`)).toEqual([
