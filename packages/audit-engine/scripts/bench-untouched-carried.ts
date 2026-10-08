@@ -29,8 +29,9 @@ import {
   type UntouchedCarriedPage,
   type UntouchedSamplePage,
 } from "../src/complete-store-fold";
-import { runCloudSmartAudits, type OpenFindingPage, type SmartAuditStore } from "../src/merge-promise";
+import { runCloudSmartAudits, type OpenFindingPage } from "../src/merge-promise";
 import { calculateHealthScoreFromTallies } from "../src/scoring";
+import { BenchStore } from "./bench-store";
 
 const arg = (name: string, fallback: number): number => {
   const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
@@ -130,37 +131,7 @@ for (let p = 0; p < backlogPages; p++) {
 const { aggregate, sample } = aggregateUntouchedCarried(untouched);
 untouched.length = 0;
 
-let storeCalls = 0;
-/** Rows handed to the store's writes: the hosting side batches these into statements. */
-let rowsWritten = 0;
-const store: SmartAuditStore = {
-  getFindings: async () => {
-    storeCalls += 1;
-    return [];
-  },
-  getSitePages: async () => {
-    storeCalls += 1;
-    return priorPages;
-  },
-  upsertFindings: async (rows) => {
-    storeCalls += 1;
-    rowsWritten += rows.length;
-  },
-  upsertSitePages: async (rows) => {
-    storeCalls += 1;
-    rowsWritten += rows.length;
-  },
-  markPageRemoved: async () => {
-    storeCalls += 1;
-  },
-  markPagesRemoved: async () => {
-    storeCalls += 1;
-  },
-  compactFindings: async () => {
-    storeCalls += 1;
-    return 0;
-  },
-};
+const store = new BenchStore(priorPages);
 
 // Touched pages first, then the backlog's sample: cursor order.
 async function* pages(): AsyncGenerator<OpenFindingPage | UntouchedSamplePage> {
@@ -183,7 +154,7 @@ const result = await runCloudSmartAudits({
   completeStore: {
     crawledUrls: crawled,
     untouchedCarried: async () => {
-      storeCalls += 1;
+      store.storeCalls += 1;
       return { pages: pages(), aggregate };
     },
   },
@@ -207,8 +178,8 @@ console.log(
     sampleRows: sample.reduce((n, p) => n + p.sample.length, 0),
     cpuMs: Number(((cpu.user + cpu.system) / 1000).toFixed(1)),
     wallMs: Number(wallMs.toFixed(1)),
-    storeCalls,
-    rowsWritten,
+    storeCalls: store.storeCalls,
+    rowsWritten: store.rowsWritten,
     unionBytes: union.length,
     digest,
     overall: score.overall,

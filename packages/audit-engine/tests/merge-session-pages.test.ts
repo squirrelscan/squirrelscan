@@ -16,6 +16,7 @@ import type { SitePageRecord } from "@squirrelscan/core-contracts";
 
 import { createMergeSession, type MergeSessionInput } from "../src/merge-core";
 import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
+import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 const SITE = "web_497_pages";
 const CRAWL = "audit_now";
@@ -180,23 +181,31 @@ describe("merge session site pages == the copies they replace (#497)", () => {
   }
 });
 
+/** Site pages in a caller's map, recording every row it is handed. No findings. */
+function pageMapStore(
+  pages: Map<string, SitePageRecord>,
+  upserted: SitePageRecord[] = [],
+): SmartAuditStore {
+  return {
+    getFindings: async () => [],
+    getSitePages: async () => [...pages.values()],
+    upsertFindings: async () => {},
+    upsertSitePages: async (rows) => {
+      upserted.push(...rows);
+      for (const p of rows) pages.set(p.normalizedUrl, p);
+    },
+    markPageRemoved: async () => {},
+    markPagesRemoved: async () => {},
+    compactFindings: async () => 0,
+  };
+}
+
 describe("a publish writes the run's pages, not the site's (#497)", () => {
   test("5,000 known pages, 20 crawled, 2 removed: 20 page rows upserted", async () => {
     const pages = new Map<string, SitePageRecord>();
     for (let i = 0; i < 5_000; i++) pages.set(url(i), page(url(i), i % 9 === 0 ? "removed" : "active", i));
     const upserted: SitePageRecord[] = [];
-    const store: SmartAuditStore = {
-      getFindings: async () => [],
-      getSitePages: async () => [...pages.values()],
-      upsertFindings: async () => {},
-      upsertSitePages: async (rows) => {
-        upserted.push(...rows);
-        for (const p of rows) pages.set(p.normalizedUrl, p);
-      },
-      markPageRemoved: async () => {},
-      markPagesRemoved: async () => {},
-      compactFindings: async () => 0,
-    };
+    const store = pageMapStore(pages, upserted);
     const crawled = Array.from({ length: 20 }, (_, i) => url(i * 250 + 1));
     const removed = [url(3), url(9)];
     const before = new Map(pages);
@@ -348,3 +357,6 @@ describe("upsertSitePages as a keyed upsert: changed rows only == every row (#49
     });
   }
 });
+
+describeSitePagesContract("merge-session-pages.test.ts pageMapStore", () => pageMapStore(new Map()));
+describeSitePagesContract("merge-session-pages.test.ts KeyedUpsertStore", () => new KeyedUpsertStore());

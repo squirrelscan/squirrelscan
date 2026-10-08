@@ -217,6 +217,10 @@ export interface SmartAuditStore {
    * Every other page keeps the row {@link getSitePages} returned, which the merge
    * would only have written back unchanged, so a keyed upsert of the changed rows
    * leaves the same rows as one of every page.
+   *
+   * Every in-repo implementation runs the cases in
+   * `tests/helpers/site-pages-contract.ts`, and
+   * `tests/site-pages-contract-coverage.test.ts` fails for one that does not.
    */
   upsertSitePages(pages: SitePageRecord[]): Promise<void>;
   /** Page→removed + its findings→stale in ONE transaction. */
