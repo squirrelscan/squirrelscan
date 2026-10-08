@@ -636,6 +636,7 @@ describe("a verdict is never copied across origins", () => {
     expect(sig(sameChrome(VIEWPORT))).toBe(base);
     expect(sig(sameChrome(""))).not.toBe(base);
     expect(sig(sameChrome(VIEWPORT, "<main>1</main><main>2</main>"))).not.toBe(base);
+    expect(sig(sameChrome(VIEWPORT, '<main>1</main><div role="main">2</div>'))).not.toBe(base);
     expect(sig(sameChrome(`${VIEWPORT}<script src="/a.js"></script>`))).not.toBe(
       sig(sameChrome(`${VIEWPORT}<script src="/b.js"></script>`)),
     );

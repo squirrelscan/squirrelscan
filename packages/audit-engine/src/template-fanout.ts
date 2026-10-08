@@ -136,6 +136,15 @@ export interface TemplateFanoutStats {
   readonly pagesOverCap: number;
 }
 
+/** Metas whose `content` a declared template rule reads (not just their presence). */
+const CONTENT_READ_METAS: ReadonlySet<string> = new Set([
+  "viewport",
+  "geo.region",
+  "geo.placename",
+  "geo.position",
+  "icbm",
+]);
+
 /**
  * The rule-input signature (#275): the markup inputs the chrome key does not
  * reach but a declared rule reads, reduced to 16 hex chars.
@@ -156,14 +165,6 @@ export interface TemplateFanoutStats {
  *
  * `null` for a page with no document, which then never groups.
  */
-const CONTENT_READ_METAS: ReadonlySet<string> = new Set([
-  "viewport",
-  "geo.region",
-  "geo.placename",
-  "geo.position",
-  "icbm",
-]);
-
 export function fanoutInputSignature(
   doc: {
     querySelectorAll(selector: string): ArrayLike<{ getAttribute(name: string): string | null }>;
