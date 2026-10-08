@@ -77,6 +77,10 @@ enable = ["security/csp"]
 
 Security findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
 
+## Related rules
+
+[security/csp-blocks-own-resources](/rules/security/csp-blocks-own-resources) checks the opposite failure: a policy that is present but leaves out a host the page loads, so the browser blocks it.
+
 ## References
 
 - [Content-Security-Policy, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy)
