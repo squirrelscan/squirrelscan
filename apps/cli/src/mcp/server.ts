@@ -1,7 +1,7 @@
 // Local stdio MCP server (#112): exposes squirrelscan to agents (Claude Code, Cursor).
 
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 
 import { warnIfSessionUnreadable } from "@/self/credentials";
 
@@ -55,7 +55,8 @@ export async function runMcpServer(): Promise<void> {
   // channel) is never touched — safe regardless of ordering relative to the
   // redirect above, which only ever affected console.log/info/debug.
   warnIfSessionUnreadable();
-  const server = createMcpServer();
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  // serveStdio picks the protocol era from the client's opening message: a
+  // 2026-07-28 client (no `initialize`, `server/discover` for capabilities) and a
+  // 2025-era client (`initialize` handshake) are both served from this factory.
+  serveStdio(() => createMcpServer());
 }

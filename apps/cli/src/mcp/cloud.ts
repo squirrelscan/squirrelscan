@@ -1,6 +1,6 @@
 // Auth + cloud helpers for MCP tools: probe availability, gate authed tools.
 
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 
 import type { ApiResult } from "@/lib/api-client";
 import type { ResolvedCredential } from "@/self/credentials";

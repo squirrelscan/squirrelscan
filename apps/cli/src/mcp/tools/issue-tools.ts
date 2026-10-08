@@ -1,6 +1,6 @@
 // Cloud issue tools (authed): list/get audit issues, comment on an issue.
 
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 
 import { z } from "zod";
 
@@ -24,9 +24,9 @@ export function registerIssueTools(
       description:
         "List the open, supplant-aware full-site issue state for a website. Superseded issues are excluded by default. Returns issues as JSON." +
         authNote(TOOL_AUTH.list_issues),
-      inputSchema: {
+      inputSchema: z.object({
         websiteId: z.string().describe("The website id whose issues to list"),
-      },
+      }),
     },
     async ({ websiteId }) => {
       const denied = requireLoginError(resolveLogin);
@@ -46,10 +46,10 @@ export function registerIssueTools(
       description:
         "Fetch one audit issue by its number for a website. Returns the issue detail + comments as JSON." +
         authNote(TOOL_AUTH.get_issue),
-      inputSchema: {
+      inputSchema: z.object({
         websiteId: z.string().describe("The website id the issue belongs to"),
         number: z.number().int().positive().describe("The issue number"),
-      },
+      }),
     },
     async ({ websiteId, number }) => {
       const denied = requireLoginError(resolveLogin);
@@ -72,7 +72,7 @@ export function registerIssueTools(
       description:
         "Post a comment on an audit issue for a website. Returns the created comment as JSON." +
         authNote(TOOL_AUTH.comment_on_issue),
-      inputSchema: {
+      inputSchema: z.object({
         websiteId: z.string().describe("The website id the issue belongs to"),
         number: z.number().int().positive().describe("The issue number"),
         body: z
@@ -80,7 +80,7 @@ export function registerIssueTools(
           .min(1)
           .max(10000)
           .describe("The comment text (1-10000 chars)"),
-      },
+      }),
     },
     async ({ websiteId, number, body }) => {
       const denied = requireLoginError(resolveLogin);

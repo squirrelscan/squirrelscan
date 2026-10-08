@@ -10,7 +10,7 @@
 // the SDK's `inputSchema` takes zod only, so the schema object itself cannot be
 // shared, but nothing an agent reads or sends differs between the servers.
 
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 
 import {
   ENTITY_MCP_DESCRIPTIONS,
@@ -90,7 +90,7 @@ export function registerEntityTools(server: McpServer): void {
     {
       title: "List the entities a site declares",
       description: ENTITY_MCP_DESCRIPTIONS.list_entities,
-      inputSchema: {
+      inputSchema: z.object({
         ...runShape,
         ...filterShape,
         limit: z
@@ -101,7 +101,7 @@ export function registerEntityTools(server: McpServer): void {
           .optional()
           .describe(F.common.limit),
         offset: z.number().int().min(0).optional().describe(F.common.offset),
-      },
+      }),
     },
     async (args) => {
       const loaded = await resolveMap(args.run_id);
@@ -136,10 +136,10 @@ export function registerEntityTools(server: McpServer): void {
     {
       title: "Get one entity in full",
       description: ENTITY_MCP_DESCRIPTIONS.get_entity,
-      inputSchema: {
+      inputSchema: z.object({
         ...runShape,
         key: z.string().describe(F.get_entity.key),
-      },
+      }),
     },
     async (args) => {
       const loaded = await resolveMap(args.run_id);
@@ -176,14 +176,14 @@ export function registerEntityTools(server: McpServer): void {
     {
       title: "Get the entity graph in a chosen format",
       description: ENTITY_MCP_DESCRIPTIONS.get_entity_graph,
-      inputSchema: {
+      inputSchema: z.object({
         ...runShape,
         ...filterShape,
         format: z
           .enum(ENTITY_MCP_GRAPH_FORMATS)
           .optional()
           .describe(F.get_entity_graph.format),
-      },
+      }),
     },
     async (args) => {
       const loaded = await resolveMap(args.run_id);
@@ -222,7 +222,7 @@ export function registerEntityTools(server: McpServer): void {
     {
       title: "Compare two audits of a site",
       description: ENTITY_MCP_DESCRIPTIONS.compare_entities,
-      inputSchema: {
+      inputSchema: z.object({
         from_run_id: z
           .string()
           .optional()
@@ -234,7 +234,7 @@ export function registerEntityTools(server: McpServer): void {
           .min(1)
           .optional()
           .describe(F.compare_entities.occurrence_threshold),
-      },
+      }),
     },
     async (args) => {
       const resolved = await resolveComparison(
@@ -271,7 +271,7 @@ export function registerEntityTools(server: McpServer): void {
     {
       title: "Get the entity rule verdicts for an audit",
       description: ENTITY_MCP_DESCRIPTIONS.get_entity_findings,
-      inputSchema: { ...runShape },
+      inputSchema: z.object({ ...runShape }),
     },
     async (args) => {
       const loaded = await resolveMap(args.run_id);
