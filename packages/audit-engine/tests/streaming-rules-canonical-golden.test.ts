@@ -70,7 +70,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // category's pass ratio just past the point where the weighted overall
       // rounds up. A MOVE here is only correct alongside a deliberate rule
       // addition — if this number shifts on its own, a rule started failing.
-      expect(v1.healthScore.overall).toBe(49);
+      // 49 -> 50 (pub#487): crawl/indexability-conflicts no longer warns on
+      // robots.txt Allow plus noindex, the supported way to deindex a page.
+      expect(v1.healthScore.overall).toBe(50);
       // 97711 -> 98211: content/hidden-text emits one page check across the 500
       // fixture pages that have a document, and passes on every one of them. The
       // overall score is unmoved.

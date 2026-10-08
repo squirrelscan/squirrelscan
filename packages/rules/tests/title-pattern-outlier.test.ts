@@ -21,6 +21,10 @@ interface PageSpec {
   path: string;
   title?: string | null;
   status?: number;
+  /** Meta robots noindex (legacy parsed meta) / robotsNoindex (streaming row). */
+  noindex?: boolean;
+  /** Same noindex, delivered as an X-Robots-Tag response header. */
+  headerNoindex?: boolean;
 }
 
 function url(path: string): string {
@@ -47,7 +51,7 @@ const baseCtx = {
 };
 
 /** Legacy path: specs become `ctx.site.pages` in crawl order. */
-function legacyCtx(specs: PageSpec[]): RuleContext {
+function legacyCtx(specs: PageSpec[], siteIndexable?: boolean): RuleContext {
   return {
     ...baseCtx,
     site: {
@@ -55,10 +59,14 @@ function legacyCtx(specs: PageSpec[]): RuleContext {
       pages: specs.map((spec) => ({
         url: url(spec.path),
         statusCode: spec.status ?? 200,
-        parsed: { meta: { title: spec.title ?? null } } as unknown as ParsedPage,
+        parsed: {
+          meta: { title: spec.title ?? null, robots: spec.noindex ? "noindex,follow" : null },
+        } as unknown as ParsedPage,
+        headers: spec.headerNoindex ? { "x-robots-tag": "noindex" } : {},
       })),
       robotsTxt: null,
       sitemaps: null,
+      siteIndexable,
     },
   };
 }
@@ -76,7 +84,7 @@ function featureRow(spec: PageSpec): PageFeatureRow {
     wordCount: null,
     pageType: null,
     schemaTypes: [],
-    robotsNoindex: false,
+    robotsNoindex: !!(spec.noindex || spec.headerNoindex),
     canonical: null,
     visibleAuthor: false,
     visibleDate: false,
@@ -104,7 +112,7 @@ function featureRow(spec: PageSpec): PageFeatureRow {
  * rest of the SiteQuery surface throws — a stub that silently returned empties
  * could hide the rule reading something it must not.
  */
-function siteQueryCtx(specs: PageSpec[]): RuleContext {
+function siteQueryCtx(specs: PageSpec[], siteIndexable?: boolean): RuleContext {
   const rows = specs.map(featureRow);
   const unused = (): never => {
     throw new Error("title-pattern-outlier must not use this SiteQuery method");
@@ -126,7 +134,13 @@ function siteQueryCtx(specs: PageSpec[]): RuleContext {
   return {
     ...baseCtx,
     // EMPTY pages — the streaming path must not read them.
-    site: { baseUrl: "https://example.com/", pages: [], robotsTxt: null, sitemaps: null },
+    site: {
+      baseUrl: "https://example.com/",
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+      siteIndexable,
+    },
     siteQuery,
   };
 }
@@ -136,9 +150,9 @@ async function checks(ctx: RuleContext): Promise<CheckResult[]> {
 }
 
 /** Run BOTH paths over one fixture, assert byte-identical output, return it. */
-async function bothPaths(specs: PageSpec[]): Promise<CheckResult> {
-  const legacy = await checks(legacyCtx(specs));
-  const streamed = await checks(siteQueryCtx(specs));
+async function bothPaths(specs: PageSpec[], siteIndexable?: boolean): Promise<CheckResult> {
+  const legacy = await checks(legacyCtx(specs, siteIndexable));
+  const streamed = await checks(siteQueryCtx(specs, siteIndexable));
   expect(streamed).toEqual(legacy);
   expect(JSON.stringify(streamed)).toBe(JSON.stringify(legacy));
   expect(legacy).toHaveLength(1);
@@ -451,5 +465,59 @@ describe("content/title-pattern-outlier — empty crawl", () => {
   test("legacy path with no pages skips", async () => {
     const result = await checks(legacyCtx([]));
     expect(result[0]?.status).toBe("skipped");
+  });
+});
+
+// pub#488: noindex pages sit out of the template vote on an indexable site.
+describe("content/title-pattern-outlier noindex pages (pub#488)", () => {
+  // 12 product pages plus the home page, as in the issue's repro.
+  const catalogue = (): PageSpec[] => [
+    { path: "/", title: "Home | Brand" },
+    ...template(
+      (i) => `/p${i + 1}.html`,
+      (i) => `Product number ${i + 1} in our catalogue | Brand`,
+      12
+    ),
+  ];
+  const shortTitles = (extra: Partial<PageSpec>): PageSpec[] => [
+    { path: "/campaign.html", title: "Campaign", ...extra },
+    { path: "/campaign-terms.html", title: "Terms", ...extra },
+  ];
+
+  test("two noindex short-title pages: no finding", async () => {
+    const check = await bothPaths([...catalogue(), ...shortTitles({ noindex: true })], true);
+    expect(check.status).toBe("pass");
+    expect(itemFor(check, "brand-missing")).toBeUndefined();
+  });
+
+  test("the same pages without noindex: brand-missing still fires", async () => {
+    const check = await bothPaths([...catalogue(), ...shortTitles({})], true);
+    expect(itemFor(check, "brand-missing")?.meta.pageCount).toBe(2);
+  });
+
+  test("X-Robots-Tag noindex is treated like a meta noindex", async () => {
+    const check = await bothPaths([...catalogue(), ...shortTitles({ headerNoindex: true })], true);
+    expect(check.status).toBe("pass");
+  });
+
+  test("noindex pages are left out when the template is learned", async () => {
+    // Six noindex pages share a different brand and would out-vote a thin norm.
+    const noisy = template(
+      (i) => `/promo-${pad(i)}.html`,
+      (i) => `Promo ${pad(i)} | Other`,
+      6
+    ).map((spec) => ({ ...spec, noindex: true }));
+    const check = await bothPaths([...catalogue(), ...noisy], true);
+    expect(check.status).toBe("pass");
+    expect((check.details?.norms as Array<{ norm: string }>)[0]!.norm).toBe("Brand");
+    expect(check.details?.judgedPages).toBe(13);
+  });
+
+  test("a site that is noindex everywhere (or unknown) is judged as before", async () => {
+    const specs = [...catalogue(), ...shortTitles({ noindex: true })];
+    for (const siteIndexable of [false, undefined]) {
+      const check = await bothPaths(specs, siteIndexable);
+      expect(itemFor(check, "brand-missing")?.meta.pageCount).toBe(2);
+    }
   });
 });

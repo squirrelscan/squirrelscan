@@ -97,8 +97,10 @@ Fixes for large DOMs:
     // Calculate max depth
     const maxDepth = calculateMaxDepth(root);
 
-    // Find elements with too many children
-    const maxChildrenCount = findMaxChildren(root);
+    // Find elements with too many children. <head> holds metadata (hreflang
+    // alternates, preload hints) and does not cost layout, so walk <body> only.
+    const body = document.body;
+    const maxChildrenCount = body ? findMaxChildren(body) : 0;
 
     // Check total nodes
     if (totalNodes < opts.warn_threshold) {
