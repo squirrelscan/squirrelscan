@@ -2,6 +2,8 @@
 
 import type { Rule, RuleContext, RuleResult } from "../types";
 
+import { sameAsProfiles } from "@squirrelscan/core-contracts/entity-map-findings";
+
 import {
   ENTITY_FIX_DOCS,
   clipValue,
@@ -48,12 +50,7 @@ export const entitySameAsMissingRule: Rule = {
       };
     }
 
-    const sameAs = (primary.properties as Record<string, unknown>).sameAs;
-    const profiles = Array.isArray(sameAs)
-      ? sameAs.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
-      : typeof sameAs === "string" && sameAs.length > 0
-        ? [sameAs]
-        : [];
+    const profiles = sameAsProfiles(primary);
 
     if (profiles.length > 0) {
       return {

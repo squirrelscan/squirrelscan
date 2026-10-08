@@ -2,12 +2,13 @@
 
 import type { Rule, RuleContext, RuleResult } from "../types";
 
+import { publisherWeights } from "@squirrelscan/core-contracts/entity-map-findings";
+
 import {
   ENTITY_FIX_DOCS,
   ENTITY_ITEM_CAP,
   cappedItems,
   clipValue,
-  compareStrings,
   entityLabel,
   isMapResolved,
   moreSuffix,
@@ -16,12 +17,6 @@ import {
 } from "./entity-shared";
 
 const CHECK = "entity-publisher-mismatch";
-
-/**
- * Share of publisher references one publisher must hold for the rest to read
- * as drift rather than as a site that genuinely has several.
- */
-const MAJORITY_SHARE = 0.8;
 
 export const entityPublisherMismatchRule: Rule = {
   meta: {
@@ -41,8 +36,8 @@ export const entityPublisherMismatchRule: Rule = {
     if (!isMapResolved(resolved)) return { checks: resolved.checks };
     const { map } = resolved;
 
-    const publisherEdges = map.edges.filter((edge) => edge.predicate === "publisher");
-    if (publisherEdges.length === 0) {
+    const publishers = publisherWeights(map);
+    if (publishers === null) {
       return {
         checks: [
           {
@@ -55,23 +50,8 @@ export const entityPublisherMismatchRule: Rule = {
       };
     }
 
-    // Counted by DECLARING WEIGHT, not by distinct target: one publisher named
-    // by 200 articles and another by 1 is not a 50/50 disagreement, and the
-    // message has to say which one is the outlier.
-    const weight = new Map<string, number>();
-    for (const edge of publisherEdges) {
-      weight.set(edge.target, (weight.get(edge.target) ?? 0) + edge.occurrences);
-    }
-
     const primary = primaryOrganization(map);
-    const ranked = [...weight.entries()].sort(
-      (a, b) => b[1] - a[1] || compareStrings(a[0], b[0])
-    );
-    // The site's own answer to "who publishes this" is whoever most of it says,
-    // falling back to the primary organization when the two disagree only
-    // because the primary is referenced rather than counted.
-    const canonical = ranked[0]![0];
-    const outliers = ranked.slice(1);
+    const { ranked, canonical, outliers, looksLikeDrift } = publishers;
 
     const byKey = new Map(map.nodes.map((node) => [node.key, node] as const));
     const label = (key: string): string => {
@@ -119,9 +99,7 @@ export const entityPublisherMismatchRule: Rule = {
     // names several publishers, and calling that a defect would be a warning
     // about a design decision. Both are reported, and only the first is a
     // finding — the shape of the distribution is what separates them.
-    const total = ranked.reduce((sum, [, count]) => sum + count, 0);
     const strays = outliers.reduce((sum, [, count]) => sum + count, 0);
-    const looksLikeDrift = ranked[0]![1] / total >= MAJORITY_SHARE;
 
     return {
       checks: [

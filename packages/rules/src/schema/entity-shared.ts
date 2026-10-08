@@ -21,6 +21,19 @@
 
 import type { CheckItem, CheckResult, EntityMap, EntityMapNode } from "../types";
 
+export {
+  IDENTITY_TYPES,
+  compareStrings,
+  groupByIdentity,
+  identityOf,
+  isLocalBusinessType,
+  normaliseName,
+  pageTotal,
+  primaryOrganization,
+  referencedKeys,
+} from "@squirrelscan/core-contracts/entity-map-findings";
+import { compareStrings, pageTotal } from "@squirrelscan/core-contracts/entity-map-findings";
+
 /** Where every rule's fix text points. */
 export const ENTITY_FIX_DOCS = "https://docs.squirrelscan.com/guides/entity-map/fixing";
 
@@ -36,160 +49,9 @@ export const ENTITY_ITEM_CAP = 10;
 /** Declaring pages listed against one item. */
 export const ENTITY_PAGE_CAP = 5;
 
-/** Types whose identity a search engine is expected to reconcile site-wide. */
-export const IDENTITY_TYPES = [
-  "Organization",
-  "LocalBusiness",
-  "Person",
-  "WebSite",
-] as const;
 
-/**
- * `@type` values that are a LocalBusiness or one of its subtypes.
- *
- * An explicit table rather than a suffix pattern. A pattern is tempting because
- * most subtype names end in Business, Store or Service, and it is wrong in both
- * directions: it misses `BankOrCreditUnion` and `Dentist`, which are subtypes
- * and end in neither, and it accepts `OnlineStore`, which is not one — an
- * online-only shop has no premises, which is the whole point of the type.
- *
- * Taken from the schema.org LocalBusiness hierarchy. Deliberately not
- * exhaustive to its last leaf: the deepest subtypes inherit from one of these
- * and a site declaring `Hairdresser` alone rather than with a parent is rare
- * enough to be worth missing rather than guessing at.
- */
-const LOCAL_BUSINESS_TYPES: ReadonlySet<string> = new Set([
-  "LocalBusiness",
-  "AnimalShelter",
-  "ArchiveOrganization",
-  "AutomotiveBusiness",
-  "AutoBodyShop",
-  "AutoDealer",
-  "AutoPartsStore",
-  "AutoRental",
-  "AutoRepair",
-  "AutoWash",
-  "BankOrCreditUnion",
-  "Bakery",
-  "BarOrPub",
-  "BeautySalon",
-  "BedAndBreakfast",
-  "BikeStore",
-  "BookStore",
-  "Brewery",
-  "CafeOrCoffeeShop",
-  "Campground",
-  "ChildCare",
-  "ClothingStore",
-  "ComputerStore",
-  "Dentist",
-  "DaySpa",
-  "DryCleaningOrLaundry",
-  "ElectronicsStore",
-  "Electrician",
-  "EmergencyService",
-  "EmploymentAgency",
-  "EntertainmentBusiness",
-  "FastFoodRestaurant",
-  "FinancialService",
-  "Florist",
-  "FoodEstablishment",
-  "FurnitureStore",
-  "GardenStore",
-  "GasStation",
-  "GeneralContractor",
-  "GroceryStore",
-  "HVACBusiness",
-  "HairSalon",
-  "HardwareStore",
-  "HealthAndBeautyBusiness",
-  "HobbyShop",
-  "HomeAndConstructionBusiness",
-  "HomeGoodsStore",
-  "Hostel",
-  "Hotel",
-  "HousePainter",
-  "IceCreamShop",
-  "InsuranceAgency",
-  "JewelryStore",
-  "LegalService",
-  "Library",
-  "LiquorStore",
-  "Locksmith",
-  "LodgingBusiness",
-  "MedicalBusiness",
-  "MedicalClinic",
-  "MensClothingStore",
-  "MobilePhoneStore",
-  "Motel",
-  "MovingCompany",
-  "MusicStore",
-  "NailSalon",
-  "Notary",
-  "NightClub",
-  "OfficeEquipmentStore",
-  "Optician",
-  "PetStore",
-  "Pharmacy",
-  "Physician",
-  "Plumber",
-  "ProfessionalService",
-  "RealEstateAgent",
-  "RecyclingCenter",
-  "Resort",
-  "Restaurant",
-  "RoofingContractor",
-  "SelfStorage",
-  "ShoeStore",
-  "SkiResort",
-  "SportingGoodsStore",
-  "SportsActivityLocation",
-  "Store",
-  "TattooParlor",
-  "TouristInformationCenter",
-  "ToyStore",
-  "TravelAgency",
-  "VeterinaryCare",
-  "WholesaleStore",
-  "Attorney",
-]);
 
-export function isLocalBusinessType(type: string): boolean {
-  return LOCAL_BUSINESS_TYPES.has(type);
-}
 
-/** Stable, locale-independent ordering. `localeCompare` is not portable. */
-export function compareStrings(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
-
-/** Every page an entity is declared on, including the ones past the cap. */
-export function pageTotal(node: EntityMapNode): number {
-  return node.pages.length + node.morePages;
-}
-
-/**
- * The identity an entity keeps across gaining or losing an `@id`.
- *
- * `JSON.stringify` of the sorted type set and the normalised name, never a
- * delimiter join: `@type` is a site-controlled string, so types `["A+B"]` and
- * `["A","B"]` would otherwise produce the same signature and pair two unrelated
- * entities. The same signature the engine's diff and the CLI's filters use,
- * deliberately, so the three agree about what "the same entity" means.
- *
- * Null for an unnamed entity: without a name there is nothing to reconcile by,
- * and treating every unnamed node as one identity would merge the site's whole
- * graph.
- */
-export function identityOf(node: EntityMapNode): string | null {
-  if (!node.name) return null;
-  const types = [...new Set(node.types)].sort(compareStrings);
-  return JSON.stringify([types, normaliseName(node.name)]);
-}
-
-export function normaliseName(name: string): string {
-  return name.trim().replace(/\s+/g, " ").toLowerCase();
-}
 
 /** What to call an entity in a message: its name, else its type, else its key. */
 export function entityLabel(node: EntityMapNode): string {
@@ -306,44 +168,6 @@ export function isMapResolved(
   result: { map: EntityMap } | { checks: CheckResult[] }
 ): result is { map: EntityMap } {
   return "map" in result;
-}
-
-/**
- * The site's primary Organization or LocalBusiness, or null.
- *
- * "Primary" is the most-declared one, ties broken on key so two equally
- * declared organizations resolve the same way on every run. A site with two is
- * usually a split identity, which is `schema/entity-split-identity`'s finding,
- * not this helper's problem to solve.
- */
-export function primaryOrganization(map: EntityMap): EntityMapNode | null {
-  const candidates = map.nodes.filter((node) =>
-    node.types.some(
-      (type) => type === "Organization" || type === "Corporation" || isLocalBusinessType(type)
-    )
-  );
-  if (candidates.length === 0) return null;
-  return [...candidates].sort(
-    (a, b) => b.occurrences - a.occurrences || compareStrings(a.key, b.key)
-  )[0]!;
-}
-
-/** Keys that at least one edge points at. */
-export function referencedKeys(map: EntityMap): Set<string> {
-  return new Set(map.edges.map((edge) => edge.target));
-}
-
-/** Group entities by their identity signature. Unnamed entities are dropped. */
-export function groupByIdentity(map: EntityMap): Map<string, EntityMapNode[]> {
-  const out = new Map<string, EntityMapNode[]>();
-  for (const node of map.nodes) {
-    const identity = identityOf(node);
-    if (!identity) continue;
-    const group = out.get(identity);
-    if (group) group.push(node);
-    else out.set(identity, [node]);
-  }
-  return out;
 }
 
 /** Entities sorted the way every finding lists them: widest reach first. */
