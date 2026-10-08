@@ -226,17 +226,25 @@ See [Crawler Settings](/configuration/crawler#include) for URL patterns.
 
 ### Priority
 
-If both `domains` and `include` are set, `include` takes precedence:
+`include` narrows within the hosts `domains` allows. It does not replace them:
 
 ```toml
 [project]
-domains = ["example.com"]  # Ignored
+domains = ["example.com"]
 
 [crawler]
-include = ["/blog/**"]     # Used instead
+include = ["/blog/**"]
 ```
 
-This crawls only `/blog/**` URLs, even if `domains` is set.
+This crawls only `/blog/**` URLs on `example.com` and its subdomains. A path-only
+pattern never admits another host. To reach one deliberately, use an absolute
+pattern such as `https://docs.example.org/*`; see
+[`include`](/configuration/crawler#include).
+
+`domains` is a hard allowlist: when it is set, an absolute `include` pattern cannot
+reach a host it does not list. The URL is skipped and the crawl logs a warning that
+names the include pattern and the host. List the host in `domains`, or leave
+`domains` empty, if the include should reach it.
 
 ### Recommendation
 

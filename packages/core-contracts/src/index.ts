@@ -890,7 +890,13 @@ export type CrawlWarningCode =
    * (squirrelscan/repo#1699). Their records carry the not-attempted marker,
    * never a confirmed absence.
    */
-  | "preamble-budget-exhausted";
+  | "preamble-budget-exhausted"
+  /**
+   * An absolute-URL `include` pattern matched a URL whose host `allowedDomains`
+   * does not list, so the URL was refused. `allowedDomains` is a hard
+   * allowlist; the message names the include pattern and the host.
+   */
+  | "include-vetoed-by-allowed-domains";
 
 export interface AuditLifecycleEvent {
   type:

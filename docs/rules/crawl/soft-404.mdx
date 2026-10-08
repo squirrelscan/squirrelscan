@@ -25,6 +25,8 @@ Every warn message ends with the same sentence: `This check reads the server's H
 
 The value is the status code as `HTTP 200`, and each detection signal is listed as an item with its own detail. The intermittent case matters on sites where a CDN or incremental regeneration occasionally serves the error shell for a real page.
 
+A page is picked for the confirmation re-fetch the same way in every audit mode, including the large-crawl mode that releases each page's document as it goes: the error-shell marker on the document root is recorded while the page is parsed, so it still counts after the document is gone.
+
 ## How to fix it
 
 ```js
