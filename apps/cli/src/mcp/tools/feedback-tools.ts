@@ -26,7 +26,7 @@ export function registerFeedbackTools(server: McpServer): void {
     {
       title: "Send feedback",
       description:
-        "Report your experience using squirrelscan: a bug, a missing feature, what worked, what confused you, missing report data, or tool ergonomics. Reviewed by the team; use it any time something surprises you, not just at the end of a session. No login required. The team needs an email to reply to: pass `email`, or it uses the one `squirrel feedback` last saved, then the signed-in account's.",
+        "Send feedback to the squirrelscan team: a bug, a missing feature, what worked, what was confusing, missing report data, or tool ergonomics. Use it when the user wants to report something or share their experience. No login required. The team needs an email to reply to: pass `email`, or it uses the one `squirrel feedback` last saved, then the signed-in account's.",
       inputSchema: z.object({
         category: z
           .enum(FEEDBACK_CATEGORIES)
