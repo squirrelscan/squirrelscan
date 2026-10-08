@@ -32,4 +32,14 @@ describe("findClientRedirects and <noscript>", () => {
     const html = `<head><noscript><link rel="stylesheet" href="/a.css"></noscript><meta http-equiv="refresh" content="0; url=/new"></head>`;
     expect(findClientRedirects(html, BASE)).toBe("https://example.com/new");
   });
+
+  test("an unclosed <noscript> runs to the end, so a refresh after it is ignored too", () => {
+    const html = `<head><noscript><link rel="stylesheet" href="/a.css"><meta http-equiv="refresh" content="0; url=/no-js.html"></head><body>app</body>`;
+    expect(findClientRedirects(html, BASE)).toBeNull();
+  });
+
+  test("negative control: the same markup with the <noscript> closed before the refresh", () => {
+    const html = `<head><noscript><link rel="stylesheet" href="/a.css"></noscript><meta http-equiv="refresh" content="0; url=/new"></head><body>app</body>`;
+    expect(findClientRedirects(html, BASE)).toBe("https://example.com/new");
+  });
 });
