@@ -431,6 +431,13 @@ is the way to reach another host on purpose:
 include = ["/blog/*", "https://docs.example.org/*"]
 ```
 
+The exception is an explicit `domains` list in `[project]`, which is a hard
+allowlist. If `domains` is set and does not list the host an absolute pattern
+names, that URL is not crawled, and the crawl warns once for each include and host
+(`include "https://docs.example.org/*" matches docs.example.org, which allowedDomains
+does not list`). Add the host to `domains`, or remove `domains`, to let the include
+reach it.
+
 <Note>
   Cloud audits don't read this file. The same two lists live on the dashboard at
   **Website → Settings → Crawl**, and apply to every cloud audit of that site.

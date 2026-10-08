@@ -6,7 +6,7 @@
 // sitemap (a `<loc>` on another host), which is how the crawl test feeds it.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Fiber, Stream } from "effect";
 
 import { createCrawler } from "../src/core/crawler";
 import type { CrawlerConfig } from "../src/core/types";
@@ -62,6 +62,56 @@ describe("isInScope: include narrows within host scope (#347)", () => {
     expect(d).toEqual({ allowed: false, reason: "cross_domain" });
     // Inside allowedDomains but outside the include: still narrowed.
     expect(isInScope(`${THIRD}/about`, opts)).toEqual({ allowed: false, reason: "not_included" });
+  });
+
+  test("an absolute include is vetoed by an allowedDomains that does not list its host", () => {
+    const d = isInScope(`${THIRD}/docs/a`, {
+      ...base,
+      include: [`${THIRD}/docs/*`],
+      allowedDomains: ["example.com"],
+    });
+    expect(d).toEqual({
+      allowed: false,
+      reason: "cross_domain",
+      vetoedInclude: `${THIRD}/docs/*`,
+    });
+  });
+
+  test("negative control: no allowedDomains, the same absolute include is admitted", () => {
+    const d = isInScope(`${THIRD}/docs/a`, { ...base, include: [`${THIRD}/docs/*`] });
+    expect(d).toEqual({ allowed: true });
+    const empty = isInScope(`${THIRD}/docs/a`, {
+      ...base,
+      include: [`${THIRD}/docs/*`],
+      allowedDomains: [],
+    });
+    expect(empty).toEqual({ allowed: true });
+  });
+
+  test("an absolute include whose host allowedDomains lists is admitted", () => {
+    const d = isInScope(`${THIRD}/docs/a`, {
+      ...base,
+      include: [`${THIRD}/docs/*`],
+      allowedDomains: ["example.net"],
+    });
+    expect(d).toEqual({ allowed: true });
+  });
+
+  test("a mixed list: a URL both a path-only and an absolute pattern match", () => {
+    const include = ["/blog/*", `${THIRD}/blog/*`];
+    // No allowedDomains: the absolute pattern is the explicit consent.
+    expect(isInScope(`${THIRD}/blog/post`, { ...base, include }).allowed).toBe(true);
+    // allowedDomains that omits the host vetoes it, naming the absolute pattern.
+    const vetoed = isInScope(`${THIRD}/blog/post`, {
+      ...base,
+      include,
+      allowedDomains: ["example.com"],
+    });
+    expect(vetoed).toEqual({
+      allowed: false,
+      reason: "cross_domain",
+      vetoedInclude: `${THIRD}/blog/*`,
+    });
   });
 
   test("exclude still wins over include", () => {
@@ -170,15 +220,34 @@ const BASE_CONFIG: Partial<CrawlerConfig> = {
 };
 
 async function runCrawl(config: Partial<CrawlerConfig>): Promise<string[]> {
+  return (await runCrawlWithWarnings(config)).fetched;
+}
+
+async function runCrawlWithWarnings(
+  config: Partial<CrawlerConfig>,
+): Promise<{ fetched: string[]; warnings: { code: string; message: string }[] }> {
   const fetched: string[] = [];
+  const warnings: { code: string; message: string }[] = [];
   const fetcher = buildFetcher(fetched);
   await Effect.runPromise(
     Effect.gen(function* () {
       const crawler = yield* createCrawler({ fetcher, config: { ...BASE_CONFIG, ...config } });
+      // Subscribed before start(), or the warning is published to nobody.
+      const collector = yield* Stream.runForEach(
+        crawler.events.pipe(Stream.takeUntil((e) => e.type === "completed")),
+        (event) =>
+          Effect.sync(() => {
+            if (event.type === "warning") {
+              warnings.push({ code: event.code, message: event.message });
+            }
+          }),
+      ).pipe(Effect.fork);
+      yield* Effect.yieldNow();
       yield* crawler.start(ORIGIN);
+      yield* Fiber.join(collector);
     }),
   );
-  return fetched;
+  return { fetched, warnings };
 }
 
 describe("crawl with a path-only include (#347)", () => {
@@ -223,6 +292,28 @@ describe("crawl with a path-only include (#347)", () => {
   test("an absolute-URL include still reaches the third-party host it names", async () => {
     const fetched = await runCrawl({ include: ["/", "/blog/*", `${THIRD}/blog/*`] });
     expect(fetched).toContain(`${THIRD}/blog/theirs`);
+  });
+
+  test("allowedDomains vetoes an absolute include for an unlisted host and warns once", async () => {
+    const include = ["/", "/blog/*", `${THIRD}/blog/*`];
+    const { fetched, warnings } = await runCrawlWithWarnings({
+      include,
+      allowedDomains: ["example.com"],
+    });
+    expect(fetched).toContain(`${ORIGIN}/blog/own`);
+    expect(fetched).not.toContain(`${THIRD}/blog/theirs`);
+    const vetoes = warnings.filter((w) => w.code === "include-vetoed-by-allowed-domains");
+    expect(vetoes).toHaveLength(1);
+    expect(vetoes[0]?.message).toContain(`${THIRD}/blog/*`);
+    expect(vetoes[0]?.message).toContain("third.example.net");
+  });
+
+  test("negative control: without allowedDomains the same include reaches the host, no warning", async () => {
+    const { fetched, warnings } = await runCrawlWithWarnings({
+      include: ["/", "/blog/*", `${THIRD}/blog/*`],
+    });
+    expect(fetched).toContain(`${THIRD}/blog/theirs`);
+    expect(warnings.filter((w) => w.code === "include-vetoed-by-allowed-domains")).toEqual([]);
   });
 
   test("allowedDomains admits the third-party host under the same include", async () => {

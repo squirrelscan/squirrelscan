@@ -195,11 +195,19 @@ export function isInScope(url: string, options: ScopeOptions): CrawlDecision {
   if (include.length > 0) {
     const matching = include.filter((pattern) => matchesPattern(matchTarget(pattern), pattern));
     if (matching.length === 0) return { allowed: false, reason: "not_included" };
-    // An absolute-URL pattern names its host, so a match is explicit consent to
-    // reach it, including a host outside the crawl's scope. A path-only pattern
-    // says nothing about the host, so it narrows WITHIN host scope (below)
-    // rather than replacing it (#347).
-    if (matching.some(isAbsolutePattern)) return { allowed: true };
+    // An absolute-URL pattern names its host, so with no allowedDomains a match
+    // is explicit consent to reach it, including a host outside the crawl's
+    // scope. An explicit allowedDomains is a hard allowlist and vetoes it: the
+    // decision carries the pattern so the crawler can say why. A path-only
+    // pattern says nothing about the host, so it narrows WITHIN host scope
+    // (below) rather than replacing it (#347).
+    const absoluteMatch = matching.find(isAbsolutePattern);
+    if (absoluteMatch) {
+      if (!allowedDomains || allowedDomains.length === 0) return { allowed: true };
+      if (!isAllowedDomain(candidateHostname, allowedDomains)) {
+        return { allowed: false, reason: "cross_domain", vetoedInclude: absoluteMatch };
+      }
+    }
   }
 
   if (allowedDomains && allowedDomains.length > 0) {
