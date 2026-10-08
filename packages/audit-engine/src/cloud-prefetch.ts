@@ -219,6 +219,14 @@ export interface CloudPrefetchResult {
    * not returned read `service-unavailable`. Absent on a completed prefetch.
    */
   abandoned?: true;
+  /**
+   * Set (with {@link abandoned}) when `balanceAfter` is a number on an
+   * abandoned result. A call still in flight at the deadline, such as a
+   * site-unit service, is not in `spend` but may yet be charged by the server,
+   * so `balanceAfter` can be higher than the real balance. Absent on a
+   * completed prefetch and whenever `balanceAfter` is null.
+   */
+  balanceAfterApproximate?: true;
 }
 
 /** Operator-facing cause recorded for calls cut off by an abandoned prefetch. */
@@ -364,17 +372,20 @@ export class CloudPrefetchAccumulator {
 
     const totalSpent = spend.reduce((sum, line) => sum + line.credits, 0);
     const preflight = this.preflight;
+    const balanceAfter =
+      !preflight || unmeteredBalance(preflight)
+        ? null
+        : Math.max(0, preflight.balance.total - totalSpent);
     this.settled = {
       store,
       spend,
       totalSpent,
       failures,
-      balanceAfter:
-        !preflight || unmeteredBalance(preflight)
-          ? null
-          : Math.max(0, preflight.balance.total - totalSpent),
+      balanceAfter,
       siteMetadata: this.siteMetadata,
       abandoned: true,
+      // Calls still in flight are not in `spend` but may yet be charged.
+      ...(balanceAfter !== null ? { balanceAfterApproximate: true as const } : {}),
     };
     return this.settled;
   }

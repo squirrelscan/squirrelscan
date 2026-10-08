@@ -156,6 +156,8 @@ describe("abandoned cloud prefetch (#280)", () => {
     ]);
     expect(res.totalSpent).toBe(29);
     expect(res.balanceAfter).toBe(1000 - 29);
+    // An in-flight call may still be charged, so the estimate is flagged.
+    expect(res.balanceAfterApproximate).toBe(true);
     expect(res.failures).toEqual([
       {
         service: "render",
@@ -201,6 +203,8 @@ describe("abandoned cloud prefetch (#280)", () => {
     expect(res.spend).toEqual([]);
     expect(res.totalSpent).toBe(0);
     expect(res.balanceAfter).toBeNull();
+    // Nothing to qualify when there is no balance figure.
+    expect("balanceAfterApproximate" in res).toBe(false);
     expect(res.siteMetadata).toBeNull();
     for (const p of pages) {
       expect(res.store.get("render")?.get(p.url)?.skipReason).toBe("service-unavailable");
@@ -232,6 +236,7 @@ describe("abandoned cloud prefetch (#280)", () => {
     const plain = await prefetchCloudData(input(complete()));
     const bounded = await prefetchCloudDataWithDeadline(input(complete()), 60_000);
     expect("abandoned" in bounded).toBe(false);
+    expect("balanceAfterApproximate" in bounded).toBe(false);
     expect(bounded).toEqual(plain);
     const serialize = (r: typeof plain) =>
       JSON.stringify({ ...r, store: [...r.store].map(([s, m]) => [s, [...m]]) });
