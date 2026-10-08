@@ -25,7 +25,7 @@ import { Effect } from "effect";
 
 import { generateSiteModel, writeCrawlToStorage } from "@squirrelscan/synthetic-site";
 import { SQLiteStorage } from "@squirrelscan/crawler";
-import { createRunner } from "@squirrelscan/rules";
+import { createRunner, RuleRunner } from "@squirrelscan/rules";
 import type { ContentStoreAdapter } from "@squirrelscan/crawler";
 import type { PreFetchedAssets } from "@squirrelscan/audit-engine";
 
@@ -365,6 +365,120 @@ describe("per-page rule-result cache — replay parity", () => {
       // And the cache really was in play, so this is exclusivity and not an
       // accidentally-disabled fan-out.
       expect(withCache.ruleCache.storedEntries).toBeGreaterThan(0);
+    });
+  }, 180_000);
+
+  // A timeout (rules/rule-budget.ts) says how busy the machine was, not what the
+  // page is, so a page with one must run fresh next time rather than replay it.
+  test("a page where a rule timed out is not stored", async () => {
+    const { dbPath, crawlId } = await buildCrawl("timeout-not-cached");
+    const cache = memoryCacheStore();
+    await withStorage(dbPath, async (storage) => {
+      let calls = 0;
+      const runner = new RuleRunner({
+        config: getGoldenBaselineConfig(),
+        ruleTimeBudgetMs: 20,
+        additionalNamespaces: [
+          {
+            name: "test",
+            rules: [
+              {
+                meta: {
+                  id: "test/slow-once",
+                  name: "slow once",
+                  description: "spins past the budget on the first page only",
+                  category: "core",
+                  scope: "page",
+                  severity: "info",
+                  weight: 1,
+                },
+                run() {
+                  if (calls++ === 0) {
+                    const until = performance.now() + 100;
+                    while (performance.now() < until) {
+                      // spin
+                    }
+                  }
+                  return { checks: [{ name: "test/slow-once", status: "pass", message: "ok" }] };
+                },
+              },
+            ],
+          },
+        ],
+      });
+      const siteData = {
+        baseUrl: "http://synthetic.test",
+        pages: [],
+        robotsTxt: null,
+        sitemaps: null,
+      } as unknown as Parameters<typeof streamPageRules>[3];
+
+      const result = await run(
+        streamPageRules(storage, crawlId, runner, siteData, {
+          batchSize: 20,
+          collectors: [],
+          retainPageResults: true,
+          ruleCache: bindRuleCache(cache.store, "run-context-for-this-test"),
+        }),
+      );
+      const timedOut = [...result.pageRuleResults.values()].filter((byRule) =>
+        byRule.get("test/slow-once")?.some((c) => c.details?.timedOut === true),
+      );
+      expect(timedOut).toHaveLength(1);
+      expect(result.ruleCache.freshPages).toBe(PAGE_COUNT);
+      expect(result.ruleCache.storedEntries).toBe(PAGE_COUNT - 1);
+    });
+  }, 180_000);
+
+  // The collector side of the same rule (adapter.ts `signalCollector`): a signal
+  // carrying `timedOut` is returned as `undefined`, so its page is never stored
+  // and `timedOut` can never be replayed away. The next run collects it fresh and
+  // reports the timeout again; every other page replays its snapshot.
+  test("a page whose collector timed out is collected fresh on the next run", async () => {
+    const { dbPath, crawlId } = await buildCrawl("collector-timeout-replay");
+    const cache = memoryCacheStore();
+    await withStorage(dbPath, async (storage) => {
+      const runner = createRunner(getGoldenBaselineConfig());
+      const siteData = {
+        baseUrl: "http://synthetic.test",
+        pages: [],
+        robotsTxt: null,
+        sitemaps: null,
+      } as unknown as Parameters<typeof streamPageRules>[3];
+
+      const collected: Array<{ url: string; timedOut?: boolean }> = [];
+      let firstUrl: string | undefined;
+      const collector = {
+        id: "timeout-probe",
+        collect(page: { normalizedUrl: string }) {
+          firstUrl ??= page.normalizedUrl;
+          const signal = { url: page.normalizedUrl, timedOut: page.normalizedUrl === firstUrl };
+          collected.push(signal);
+          return signal.timedOut ? undefined : signal;
+        },
+        replay(_page: unknown, snapshot: unknown) {
+          collected.push(snapshot as { url: string });
+        },
+      };
+      const pass = () =>
+        run(
+          streamPageRules(storage, crawlId, runner, siteData, {
+            batchSize: 20,
+            collectors: [collector],
+            ruleCache: bindRuleCache(cache.store, "run-context-for-this-test"),
+          }),
+        );
+
+      const first = await pass();
+      expect(first.ruleCache.storedEntries).toBe(PAGE_COUNT - 1);
+
+      collected.length = 0;
+      const second = await pass();
+      // Only the timed-out page runs again; the rest replay, in crawl order.
+      expect(second.ruleCache.freshPages).toBe(1);
+      expect(second.ruleCache.replayedPages).toBe(PAGE_COUNT - 1);
+      expect(collected.filter((c) => c.timedOut)).toHaveLength(1);
+      expect(collected).toHaveLength(PAGE_COUNT);
     });
   }, 180_000);
 

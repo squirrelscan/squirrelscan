@@ -6,6 +6,7 @@ export * from "./endpoint-surface";
 export * from "./categories";
 export * from "./filter";
 export * from "./runner";
+export * from "./rule-budget";
 export * from "./merge";
 export * from "./fold";
 export * from "./resolution";

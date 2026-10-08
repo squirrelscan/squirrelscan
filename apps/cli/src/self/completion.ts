@@ -46,7 +46,7 @@ _squirrel_completions() {
   local global_opts="--config-file -c"
 
   # Top-level commands
-  local commands="setup audit auth crawl credits analyze entities init config report feedback keys mcp self skills"
+  local commands="setup audit auth crawl credits analyze entities init config report feedback keys mcp channel self skills"
 
   # Auth subcommands
   local auth_commands="login logout status whoami"
@@ -191,6 +191,10 @@ _squirrel_completions() {
           ;;
       esac
       ;;
+    channel)
+      COMPREPLY=( $(compgen -W "--interval --categories" -- "\${cur}") )
+      return 0
+      ;;
     audit)
       case "\${prev}" in
         --coverage|-C)
@@ -318,6 +322,7 @@ _squirrel() {
     'feedback:Send feedback to the team'
     'keys:Manage org API keys'
     'mcp:Run the local MCP server (stdio)'
+    'channel:Run the Claude Code channel (stdio)'
     'self:Self-management commands'
     'skills:Manage agent skills'
   )
@@ -470,6 +475,11 @@ _squirrel() {
               _describe 'auth command' auth_commands
               ;;
           esac
+          ;;
+        channel)
+          _arguments \\
+            '--interval[Seconds between polls of the cloud feed]:seconds' \\
+            '--categories[Comma-separated categories to deliver]:categories'
           ;;
         keys)
           case $words[2] in
@@ -633,6 +643,7 @@ complete -c squirrel -n "__fish_use_subcommand" -a report -d "Generate report fr
 complete -c squirrel -n "__fish_use_subcommand" -a feedback -d "Send feedback to the team"
 complete -c squirrel -n "__fish_use_subcommand" -a keys -d "Manage org API keys"
 complete -c squirrel -n "__fish_use_subcommand" -a mcp -d "Run the local MCP server (stdio)"
+complete -c squirrel -n "__fish_use_subcommand" -a channel -d "Run the Claude Code channel (stdio)"
 complete -c squirrel -n "__fish_use_subcommand" -a self -d "Self-management commands"
 complete -c squirrel -n "__fish_use_subcommand" -a skills -d "Manage agent skills"
 
@@ -661,6 +672,10 @@ complete -c squirrel -n "__fish_seen_subcommand_from keys; and __fish_seen_subco
 complete -c squirrel -n "__fish_seen_subcommand_from keys; and __fish_seen_subcommand_from create" -l expires-days -d "Days until expiry"
 complete -c squirrel -n "__fish_seen_subcommand_from keys; and __fish_seen_subcommand_from create" -l shell -d "Append the export line to your shell rc file"
 complete -c squirrel -n "__fish_seen_subcommand_from keys; and __fish_seen_subcommand_from create list revoke" -l json -d "Output as JSON"
+
+# Channel options
+complete -c squirrel -n "__fish_seen_subcommand_from channel" -l interval -d "Seconds between polls of the cloud feed"
+complete -c squirrel -n "__fish_seen_subcommand_from channel" -l categories -d "Comma-separated categories to deliver"
 
 # Keys revoke options
 complete -c squirrel -n "__fish_seen_subcommand_from keys; and __fish_seen_subcommand_from revoke" -l force -d "Skip confirmation prompt"
