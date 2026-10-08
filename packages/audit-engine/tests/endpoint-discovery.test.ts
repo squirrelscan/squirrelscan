@@ -11,6 +11,7 @@ import type { PageRecord } from "@squirrelscan/core-contracts";
 import { buildHeadersMap, parseHtmlForRules } from "../src/adapter";
 import {
   createEndpointCollector,
+  MAX_DETECTION_ATTEMPTS,
   MAX_RETAINED_CROSS_ORIGIN_REFS,
   MAX_RETAINED_REFS,
 } from "../src/endpoint-discovery";
@@ -121,6 +122,39 @@ describe("endpoint discovery collector", () => {
     expect(c.finish(site).candidates.map((x) => x.discoveredVia)).toContain("convention:nextjs");
   });
 
+  test("detection finds the stack when the entry page is not the first page collected (v1 order)", () => {
+    const next = `<html><head><script id="__NEXT_DATA__" type="application/json">{}</script></head><body></body></html>`;
+    const c = createEndpointCollector({ headersOf: buildHeadersMap });
+    collect(c, pageOf("/redirect-hop", "<html></html>"));
+    collect(c, pageOf("/deep", "<html></html>"));
+    collect(c, pageOf("/", next));
+    const site = { baseUrl: `${ORIGIN}/`, scripts: [] };
+    expect(c.finish(site).candidates.map((x) => x.discoveredVia)).toContain("convention:nextjs");
+  });
+
+  test("detection stops after MAX_DETECTION_ATTEMPTS pages with no stack, so a large crawl pays for at most that many", () => {
+    const c = createEndpointCollector({ headersOf: buildHeadersMap });
+    const results = Array.from({ length: MAX_DETECTION_ATTEMPTS + 3 }, (_, i) => collect(c, pageOf(`/p${i}`, "<html></html>")).techIds);
+    expect(results.slice(0, MAX_DETECTION_ATTEMPTS)).toEqual(Array(MAX_DETECTION_ATTEMPTS).fill([]));
+    expect(results.slice(MAX_DETECTION_ATTEMPTS).every((r) => r === undefined)).toBe(true);
+  });
+
+  test("a ref that is cross-origin on one page and same-origin on another is retained once, as same-origin, in either order", () => {
+    const run = (order: string[]) => {
+      const c = createEndpointCollector({ headersOf: buildHeadersMap });
+      for (const path of order) {
+        const html = `<html><body><script>fetch("https://api.other.io/v1/x")</script></body></html>`;
+        // /a lives on example.com, /b lives on other.io: same ref, different page origin.
+        const page = path === "/a" ? pageOf("/a", html) : ({ ...pageOf("/b", html), normalizedUrl: "https://api.other.io/b", finalUrl: "https://api.other.io/b" } as PageRecord);
+        collect(c, page);
+      }
+      return c.retained();
+    };
+    expect(run(["/a", "/b"])).toEqual(run(["/b", "/a"]));
+    // The call site (GET) and the bare literal are two keys, one retained copy each.
+    expect(run(["/a", "/b"]).length).toBe(2);
+  });
+
   test("when the entry page replays without a stack result, the next fresh page runs detection", () => {
     const next = `<html><head><script id="__NEXT_DATA__" type="application/json">{}</script></head><body></body></html>`;
     const c = createEndpointCollector({ headersOf: buildHeadersMap });
@@ -129,12 +163,6 @@ describe("endpoint discovery collector", () => {
     collect(c, pageOf("/blog", next));
     const site = { baseUrl: `${ORIGIN}/`, scripts: [] };
     expect(c.finish(site).candidates.map((x) => x.discoveredVia)).toContain("convention:nextjs");
-  });
-
-  test("a detection that found nothing is recorded as empty and is not run again", () => {
-    const c = createEndpointCollector({ headersOf: buildHeadersMap });
-    expect(collect(c, pageOf("/", "<html></html>")).techIds).toEqual([]);
-    expect(collect(c, pageOf("/b", "<html></html>")).techIds).toBeUndefined();
   });
 
   test("a method-carrying ref is kept ahead of bare literals once the retained cap is spent", () => {

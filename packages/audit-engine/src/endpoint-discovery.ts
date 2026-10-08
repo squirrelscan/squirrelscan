@@ -42,6 +42,9 @@ export const MAX_RETAINED_REFS = 2000;
  */
 export const MAX_RETAINED_CROSS_ORIGIN_REFS = 300;
 
+/** Pages technology detection may run on while no stack has been found. */
+export const MAX_DETECTION_ATTEMPTS = 3;
+
 /** Collector id. The rule cache keys a page's stored snapshot by it. */
 export const ENDPOINT_COLLECTOR_ID = "endpoint-refs";
 
@@ -116,12 +119,14 @@ class SmallestKeys {
  * map technology detection reads (the adapter's `buildHeadersMap`); it is passed
  * in so this module does not import the adapter.
  *
- * Technology detection runs once per run, on the first page collected fresh
- * unless a replayed snapshot already carries a result. The entry page is first in
- * crawl order, and that is where a stack announces itself. The ids ride on the
+ * Technology detection runs on the first page collected fresh, and on up to
+ * MAX_DETECTION_ATTEMPTS pages while nothing has been detected, unless replayed
+ * snapshots already carry a result. The entry page is normally first in crawl
+ * order, and that is where a stack announces itself; the extra attempts cover a
+ * crawl whose first page is not the entry page. The ids ride on the
  * page's snapshot, so a replayed run (rule cache) restores them without the html.
- * The ids are unioned across all snapshots, so the result does not depend on
- * which page happened to be first.
+ * The ids are unioned across all snapshots, so replayed pages do not change the
+ * result by arriving in a different order.
  */
 export function createEndpointCollector(opts: {
   headersOf: (page: PageRecord) => Record<string, string>;
@@ -129,7 +134,11 @@ export function createEndpointCollector(opts: {
   const same = new SmallestKeys(MAX_RETAINED_REFS);
   const cross = new SmallestKeys(MAX_RETAINED_CROSS_ORIGIN_REFS);
   const techIds = new Set<string>();
-  let detectionSeen = false;
+  // Detection results seen so far, fresh or replayed. Detection keeps running on
+  // fresh pages until a stack is found or MAX_DETECTION_ATTEMPTS pages have a
+  // result, so an entry page that is not first (a redirect hop, a differently
+  // ordered store) does not lose the convention paths.
+  let detectionAttempts = 0;
 
   // Keep a page's refs under the stable admission order. The snapshot handed to
   // the rule cache stays whole, so a replay offers the same refs a fresh run would.
@@ -139,7 +148,7 @@ export function createEndpointCollector(opts: {
   // `probeEligible` against the site base URL and is authoritative.
   const admit = (record: PageEndpointRefs): void => {
     if (record.techIds !== undefined) {
-      detectionSeen = true;
+      detectionAttempts++;
       for (const id of record.techIds) techIds.add(id);
     }
     const pageOrigin = originOrNull(record.pageUrl);
@@ -171,11 +180,11 @@ export function createEndpointCollector(opts: {
         pageUrl: page.normalizedUrl,
         refs: parsed.document ? extractEndpointRefsFromDocument(parsed.document, pageUrl) : [],
       };
-      // Detect until some page, fresh or replayed, carries a detection result. An
-      // explicit empty array means "ran, found nothing", which differs from a
-      // snapshot that never ran (`undefined`). If the entry page replays from a
-      // run where it was not first, the next fresh page runs detection instead.
-      if (!detectionSeen) {
+      // Detect until a stack is found or enough pages have a result. An explicit
+      // empty array means "ran, found nothing", which differs from a snapshot that
+      // never ran (`undefined`). If the entry page replays from a run where it was
+      // not first, the next fresh page runs detection instead.
+      if (techIds.size === 0 && detectionAttempts < MAX_DETECTION_ATTEMPTS) {
         record.techIds = detectTechnologies({
           url: pageUrl,
           headers: opts.headersOf(page),

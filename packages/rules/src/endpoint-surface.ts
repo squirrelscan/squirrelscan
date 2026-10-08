@@ -19,6 +19,11 @@
 // length-capped before it is scanned.
 
 /** Where a candidate came from. */
+/**
+ * `render` is accepted by `buildEndpointSurface` (`renderedRequests`) but nothing in
+ * the engine feeds it today: the render result does not carry the requests a page
+ * issued.
+ */
 export type EndpointSource = "static-js" | "static-html" | "convention" | "render";
 
 /** One audited-site endpoint the pass found. */
@@ -70,7 +75,7 @@ export interface PageEndpointRef {
 export interface PageEndpointRefs {
   pageUrl: string;
   refs: PageEndpointRef[];
-  /** Technology ids detected on this page. Set on the first page only. */
+  /** Technology ids detected on this page. Set only on the pages detection ran on. */
   techIds?: string[];
 }
 
