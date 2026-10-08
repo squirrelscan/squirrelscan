@@ -136,7 +136,11 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 100234 -> 100734: content/placeholder-media is page-scoped and always
       // speaks, so it adds one check on each of the 500 pages with a document
       // (the other 18 have none).
-      expect(v1.findings.length).toBe(100734);
+      // 100734 -> 101234: security/csp-blocks-own-resources is page-scoped and
+      // always speaks, so it adds one check on each of the 500 pages with a
+      // document. All 500 pass: the synthetic site serves no CSP header, and a
+      // page with no enforced policy passes (security/csp owns a missing one).
+      expect(v1.findings.length).toBe(101234);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -154,9 +158,22 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // entity-publisher-mismatch, entity-local-business-per-page,
       // entity-website-missing, entity-organization-missing,
       // entity-sameas-missing, entity-orphan), 295 -> 296
-      // content/placeholder-contact, 296 -> 297 content/placeholder-media; anything
+      // content/placeholder-contact, 296 -> 297 content/placeholder-media, 297 -> 298
+      // security/csp-blocks-own-resources; anything
       // else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(297);
+      expect(v1.perRuleTally.length).toBe(298);
+      const cspBlocks = v1.perRuleTally.find(
+        (t) => t.ruleId === "security/csp-blocks-own-resources",
+      );
+      expect(cspBlocks).toEqual({
+        ruleId: "security/csp-blocks-own-resources",
+        pass: 500,
+        warn: 0,
+        fail: 0,
+        info: 0,
+        skipped: 0,
+        total: 500,
+      });
       // Each +500 above is only "all passes" if nothing warned. healthScore
       // staying at 48 does not prove that — a handful of weight-5 warnings in a
       // 20-rule category would not move it — so pin the tally directly.
