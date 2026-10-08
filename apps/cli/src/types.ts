@@ -190,6 +190,7 @@ import type {
   EntityMap as _EM,
   GroupScore as _GS,
   HealthScore as _HS,
+  RefusedFetch,
   ReportTechnologies as _RT,
   RuleCategory as _RC,
   SiteMetadata as _SM,
@@ -436,6 +437,12 @@ export interface AuditReport {
   };
   /** Machine-readable class behind `statusReason` (#1822). */
   statusReasonCode?: AuditFailureReasonCode;
+  /**
+   * Root fetches the site refused (401/403/429, a bot wall). Mirrors the field
+   * on the engine's AuditReport; the two types are structurally different, so
+   * it has to be declared in both.
+   */
+  refusedFetches?: RefusedFetch[];
   siteChecks: CheckResult[];
   pages: PageAudit[];
   summary: {

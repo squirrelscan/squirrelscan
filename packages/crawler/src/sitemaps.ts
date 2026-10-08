@@ -12,6 +12,7 @@ import { resolveRobotsSitemapUrl } from "@squirrelscan/utils/robots-txt";
 import { SITEMAP_NOT_CHECKED_ERROR } from "@squirrelscan/core-contracts/storage";
 
 import { safeFetchWithDeadline } from "./deadline";
+import { noteRefusal, type RefusalLog } from "./refusals";
 
 /**
  * Recorded against a sitemap the walk gave up on before reaching it. Shared
@@ -263,6 +264,9 @@ export function fetchSitemap(
   // squirrelscan/repo#1733: deadline for this one fetch, tightened by the
   // caller when the walk's progress window has less than a full timeout left.
   timeoutMs: number = SITEMAP_FETCH_TIMEOUT_MS,
+  // Where a refusal (401/403/429, a bot wall) is noted, so the report can
+  // say the sitemap request was refused rather than that no sitemap exists.
+  refusals?: RefusalLog,
 ): Effect.Effect<SitemapFetchResult, never, never> {
   // #1393: the caller's secret customHeaders are scoped to the audited origin. A
   // `Sitemap:` directive (robots.txt) or child-sitemap reference can point at an
@@ -294,6 +298,7 @@ export function fetchSitemap(
         async (response): Promise<SitemapFetchResult> => {
           if (!response.ok) {
             await response.body?.cancel().catch(() => {});
+            noteRefusal(refusals, url, "sitemap", response);
             // The origin answered; the status IS the answer.
             return { success: false, url, error: `HTTP ${response.status}`, settled: true };
           }
@@ -361,6 +366,7 @@ export function fetchSitemapsRecursive(
   // stalled origin ends the descent after one dead chunk while a slow-but-
   // healthy one keeps going. Created on the first call and threaded down.
   walkWindow: WalkWindow = newWalkWindow(),
+  refusals?: RefusalLog,
 ): Effect.Effect<SitemapFetchResult[], never, never> {
   if (urls.length === 0) return Effect.succeed([]);
   // Candidates exist but the walk will not visit them: that is a gap in
@@ -410,7 +416,9 @@ export function fetchSitemapsRecursive(
       const chunk = unseenUrls.slice(i, i + SITEMAP_FETCH_CONCURRENCY);
       const chunkTimeoutMs = Math.min(SITEMAP_FETCH_TIMEOUT_MS, remainingMs);
       const chunkResults = yield* Effect.all(
-        chunk.map((url) => fetchSitemap(url, userAgent, customHeaders, baseHost, chunkTimeoutMs)),
+        chunk.map((url) =>
+          fetchSitemap(url, userAgent, customHeaders, baseHost, chunkTimeoutMs, refusals),
+        ),
         { concurrency: SITEMAP_FETCH_CONCURRENCY },
       );
       fetchResults.push(...chunkResults);
@@ -466,6 +474,7 @@ export function fetchSitemapsRecursive(
       customHeaders,
       baseHost,
       walkWindow,
+      refusals,
     );
 
     return [...fetchResults, ...childResults];
@@ -508,6 +517,8 @@ export interface DiscoverSitemapsOptions {
   walkWindowMs?: number;
   /** Hard stop for the whole walk. Defaults to SITEMAP_WALK_TOTAL_MS. */
   walkTotalMs?: number;
+  /** Notes sitemap requests the site refused. */
+  refusals?: RefusalLog;
 }
 
 export function discoverSitemaps(
@@ -562,6 +573,7 @@ export function discoverSitemaps(
       options.customHeaders,
       baseHost,
       walkWindow,
+      options.refusals,
     );
 
     const allSitemaps = allResults.filter((result) => result.success).map((result) => result.data);
