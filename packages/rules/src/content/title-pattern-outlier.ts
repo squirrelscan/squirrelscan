@@ -57,6 +57,7 @@ import type { CheckItem, SiteQuery } from "@squirrelscan/core-contracts";
 
 import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
 
+import { sharedRegex } from "../shared-regex";
 /** Crawl-wide page floor: below this there is no site norm to judge against. */
 export const TITLE_NORM_MIN_PAGES = 10;
 
@@ -96,8 +97,7 @@ const CHECK_NAME = "title-pattern-outlier";
  * look-behind sits on the whitespace alone, so a separator right after one a
  * previous match ended on (`:: >>`) still matches.
  */
-const SEPARATOR_RE = /(?:(?<!\s)\s+)?(?:::|\||»|>>)\s*|(?<!\s)\s+[-–—·>]\s+|:\s+/g;
-
+const SEPARATOR_RE = sharedRegex(/(?:(?<!\s)\s+)?(?:::|\||»|>>)\s*|(?<!\s)\s+[-–—·>]\s+|:\s+/g);
 /** Deviation classes, in the order they are reported. */
 const CLASSES = ["brand-only", "brand-missing", "brand-position", "separator"] as const;
 type DeviationClass = (typeof CLASSES)[number];

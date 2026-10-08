@@ -8,6 +8,7 @@ import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 import { PUBLISH_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { resolveUrl } from "@squirrelscan/utils";
 
+import { sharedRegex } from "../shared-regex";
 const NOTE =
   "Source maps may expose original source code. Verify these URLs are not publicly accessible.";
 
@@ -51,8 +52,7 @@ function sharedLabel(map: FoundMap, siteUrl: string): string {
   return `from ${named.join(", ")}${more > 0 ? `, and ${more} more` : ""}`;
 }
 
-const JS_SOURCE_MAP = /\/\/[#@]\s*sourceMappingURL=(\S+)/g;
-
+const JS_SOURCE_MAP = sharedRegex(/\/\/[#@]\s*sourceMappingURL=(\S+)/g);
 interface MapConsumers {
   /** Every crawled page that loads a script exposing the map. */
   pages: Set<string>;

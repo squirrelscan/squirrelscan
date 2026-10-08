@@ -22,6 +22,7 @@ import {
 import { refineFinding, type Confidence, type FindingExtra } from "./secrets/confidence";
 import { decodeForLocation, scanBase64Blobs, type ReportedLocation } from "./secrets/decode";
 
+import { sharedRegex } from "../shared-regex";
 export type { ReportedLocation, SecretLocation } from "./secrets/decode";
 
 // Secret detection patterns with service names
@@ -1171,8 +1172,7 @@ const AUTH_SCHEME_RE = /\b(?:bearer|basic)\s+$/i;
 // `<meta content="…" name="algolia-api-key">` say the same thing.
 const TAG_NAMING_ATTR_RE =
   /\b(?:name|id|itemprop|property)\s*=\s*["']([^"']{1,64})["']/gi;
-const TAG_DATA_ATTR_RE = /\b(data-[A-Za-z0-9_-]{1,64})\s*=/g;
-
+const TAG_DATA_ATTR_RE = sharedRegex(/\b(data-[A-Za-z0-9_-]{1,64})\s*=/g);
 type KeyContext = "digest" | "credential" | "assigned" | "none";
 
 function classifyKeyName(key: string, keyword: string): KeyContext | "unknown" {
@@ -1924,7 +1924,7 @@ const SHOPIFY_TOKEN_RE = /^[a-f0-9]{32}$/;
 // Shopify's. Every absolute or protocol-relative URL in the body is a
 // candidate; each is parsed and its hostname compared whole.
 const SHOPIFY_CDN_HOST = "cdn.shopify.com";
-const URL_CANDIDATE_RE = /(?:https?:)?\/\/[^\s"'<>]+/g;
+const URL_CANDIDATE_RE = sharedRegex(/(?:https?:)?\/\/[^\s"'<>]+/g);
 const URL_CANDIDATE_CAP = 2000;
 
 /** Does the page reference `hostname` by URL? Parsed, never matched. */
@@ -1945,7 +1945,7 @@ function pageLoadsFrom(text: string, hostname: string): boolean {
 // A `<script …>` open tag, for the blocks whose attributes name a public
 // keyword (`<script id="shopify-features">`): the whole block is that
 // keyword's look-behind.
-const SCRIPT_OPEN_RE = /<script\b([^>]*)>/gi;
+const SCRIPT_OPEN_RE = sharedRegex(/<script\b([^>]*)>/gi);
 const SCRIPT_BLOCK_LIMIT = 65536;
 const SCRIPT_CLOSE_RE = /<\/script/i;
 

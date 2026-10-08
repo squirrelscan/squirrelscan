@@ -28,14 +28,21 @@
 //
 // An abandoned rule stops at an arbitrary point, so a rule must not leave
 // shared state half-written when it throws or is stopped: build results locally
-// and publish them last. Today's rules keep per-page work in locals; the only
-// state that outlives a call is the runner's own, which a timeout never touches.
+// and publish them last. What this module guarantees: the runner's own state is
+// never touched by a timeout, and `lastIndex` on the module-level `/g` and `/y`
+// regexes registered with `sharedRegex` (shared-regex.ts) is reset to 0 when a
+// rule is abandoned. What it does not: any other module-level state a rule
+// mutates (a cache, a counter, a regex that is not registered) is left as the
+// rule left it, so rules must keep such state consistent at every operation
+// boundary or not share it.
 //
 // Only the synchronous part of `run()` is budgeted. An async rule's awaits are
 // network I/O with their own per-request timeouts, and its code after an await
 // runs outside the call.
 
 import vm from "node:vm";
+
+import { resetSharedRegexes } from "./shared-regex";
 
 /**
  * Wall-clock budget for one page-rule evaluation on one page, in ms. A site rule
@@ -97,6 +104,9 @@ export function runWithinBudget<T>(fn: () => T, budgetMs: number): T {
     return callSlot.runInContext(context, { timeout: Math.ceil(budgetMs) }) as T;
   } catch (e) {
     if ((e as { code?: unknown } | null)?.code === "ERR_SCRIPT_EXECUTION_TIMEOUT") {
+      // The rule stopped at an arbitrary point, possibly mid `exec()` loop on a
+      // shared `/g` or `/y` regex whose `lastIndex` would carry into the next rule.
+      resetSharedRegexes();
       throw new RuleTimeoutError(budgetMs);
     }
     throw e;
