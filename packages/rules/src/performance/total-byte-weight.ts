@@ -89,6 +89,7 @@ export const totalByteWeightRule: Rule = {
     const countedCssUrls = new Set<string>();
     const countedJsUrls = new Set<string>();
     const countedImageUrls = new Set<string>();
+    const countedFontUrls = new Set<string>();
 
     // Aggregate inline CSS/JS across all pages. In the streaming engine (#1021)
     // the per-page DOM scan happened at page-time — read the collected sums;
@@ -97,11 +98,14 @@ export const totalByteWeightRule: Rule = {
     const collected = ctx.collectedSignals;
     if (collected) {
       for (const rec of collected.pages) {
+        // Absent on a snapshot cached before the document size was collected.
+        sizes.html += rec.htmlBytes ?? 0;
         sizes.inlineCss += rec.inlineCssLen;
         sizes.inlineJs += rec.inlineJsLen;
       }
     } else {
       for (const page of pages) {
+        sizes.html += page.sizeBytes ?? 0;
         const doc = page.parsed?.document;
         if (!doc) continue;
         const s = extractPageByteSignal(doc);
@@ -140,6 +144,16 @@ export const totalByteWeightRule: Rule = {
       }
     }
 
+    // Font sizes from site data (already deduplicated by URL)
+    if (ctx.site?.resourceSizes?.fonts) {
+      for (const font of ctx.site.resourceSizes.fonts) {
+        if (!countedFontUrls.has(font.url)) {
+          sizes.fonts += font.sizeBytes || 0;
+          countedFontUrls.add(font.url);
+        }
+      }
+    }
+
     // Calculate totals
     const totalCss = sizes.inlineCss + sizes.externalCss;
     const totalJs = sizes.inlineJs + sizes.externalJs;
@@ -170,6 +184,15 @@ export const totalByteWeightRule: Rule = {
         details.jsBreakdown = `inline: ${(sizes.inlineJs / 1024).toFixed(0)}KB, external: ${(sizes.externalJs / 1024).toFixed(0)}KB`;
       }
       details.jsFiles = countedJsUrls.size;
+    }
+
+    if (sizes.html > 0) {
+      details.html = `${(sizes.html / 1024).toFixed(0)}KB`;
+    }
+
+    if (sizes.fonts > 0) {
+      details.fonts = `${(sizes.fonts / 1024).toFixed(0)}KB`;
+      details.fontFiles = countedFontUrls.size;
     }
 
     if (sizes.images > 0) {

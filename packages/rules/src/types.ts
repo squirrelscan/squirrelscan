@@ -317,6 +317,8 @@ export interface SiteData {
     parsed: ParsedPage;
     headers?: Record<string, string>;
     redirectChain?: RedirectChain;
+    /** Bytes of the stored HTML response, when the crawler recorded them. */
+    sizeBytes?: number | null;
   }>;
   robotsTxt: RobotsTxtData | null;
   sitemaps: SitemapDiscovery | null;
@@ -337,6 +339,9 @@ export interface SiteData {
   resourceSizes?: {
     css: ResourceSizeData[];
     images: ResourceSizeData[];
+    /** Font files pages reference directly, HEAD-sized at audit time. Absent
+     * when nothing measured fonts (hand-built contexts, older callers). */
+    fonts?: ResourceSizeData[];
   };
   scripts?: ScriptContentData[];
   pdfSizes?: ResourceSizeData[];
