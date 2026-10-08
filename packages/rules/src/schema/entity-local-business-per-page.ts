@@ -3,6 +3,11 @@
 import type { Rule, RuleContext, RuleResult } from "../types";
 
 import {
+  LOCAL_BUSINESS_MIN_PAGES,
+  isLocalBusinessPerPageNode,
+} from "@squirrelscan/core-contracts/entity-map-findings";
+
+import {
   ENTITY_FIX_DOCS,
   byReach,
   cappedItems,
@@ -17,19 +22,6 @@ import {
 } from "./entity-shared";
 
 const CHECK = "entity-local-business-per-page";
-
-/**
- * The share of crawled pages a LocalBusiness must appear on to count as
- * "declared on every page".
- *
- * Not 100%: a site that skips its own 404 page or one legal page is doing the
- * same thing. Not a low bar either, because a business legitimately declared on
- * a home page and a contact page is correct markup, not this finding.
- */
-const PER_PAGE_SHARE = 0.8;
-
-/** Below this, "on every page" is not a meaningful claim about a crawl. */
-const MIN_PAGES = 5;
 
 export const entityLocalBusinessPerPageRule: Rule = {
   meta: {
@@ -66,7 +58,7 @@ export const entityLocalBusinessPerPageRule: Rule = {
     }
 
     const pagesCrawled = map.summary.pagesTotal;
-    if (pagesCrawled < MIN_PAGES) {
+    if (pagesCrawled < LOCAL_BUSINESS_MIN_PAGES) {
       return {
         checks: [
           {
@@ -79,9 +71,8 @@ export const entityLocalBusinessPerPageRule: Rule = {
       };
     }
 
-    const threshold = pagesCrawled * PER_PAGE_SHARE;
     const offenders = businesses
-      .filter((node) => pageTotal(node) >= threshold)
+      .filter((node) => isLocalBusinessPerPageNode(node, pagesCrawled))
       .sort(byReach);
 
     if (offenders.length === 0) {

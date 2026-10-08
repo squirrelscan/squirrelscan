@@ -1,6 +1,11 @@
 // schema/entity-authors — bylines with no Person entity behind them.
 
-import type { EntityMapNode, Rule, RuleContext, RuleResult } from "../types";
+import type { Rule, RuleContext, RuleResult } from "../types";
+
+import {
+  isIdentifiedEntity,
+  judgedPeople,
+} from "@squirrelscan/core-contracts/entity-map-findings";
 
 import {
   ENTITY_FIX_DOCS,
@@ -14,16 +19,6 @@ import {
 } from "./entity-shared";
 
 const CHECK = "entity-authors";
-
-/** A Person needs at least one of these to be more than a string. */
-function isIdentified(node: EntityMapNode): boolean {
-  const properties = node.properties as Record<string, unknown>;
-  const hasSameAs = Array.isArray(properties.sameAs)
-    ? properties.sameAs.length > 0
-    : typeof properties.sameAs === "string" && properties.sameAs.length > 0;
-  const hasUrl = typeof properties.url === "string" && properties.url.length > 0;
-  return hasSameAs || hasUrl;
-}
 
 export const entityAuthorsRule: Rule = {
   meta: {
@@ -106,12 +101,7 @@ export const entityAuthorsRule: Rule = {
     //
     // Falls back to every Person when nothing carries an `author` edge, which
     // is what a site with inline author blocks looks like.
-    const authorKeys = new Set(
-      map.edges.filter((edge) => edge.predicate === "author").map((edge) => edge.target)
-    );
-    const judged = authorKeys.size > 0
-      ? people.filter((node) => authorKeys.has(node.key))
-      : people;
+    const judged = judgedPeople(map);
 
     if (judged.length === 0) {
       return {
@@ -125,7 +115,7 @@ export const entityAuthorsRule: Rule = {
       };
     }
 
-    const anonymous = judged.filter((node) => !isIdentified(node)).sort(byReach);
+    const anonymous = judged.filter((node) => !isIdentifiedEntity(node)).sort(byReach);
     if (anonymous.length === 0) {
       return {
         checks: [

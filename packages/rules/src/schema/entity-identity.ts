@@ -2,9 +2,10 @@
 
 import type { Rule, RuleContext, RuleResult } from "../types";
 
+import { isNoIdIdentityNode } from "@squirrelscan/core-contracts/entity-map-findings";
+
 import {
   ENTITY_FIX_DOCS,
-  IDENTITY_TYPES,
   byReach,
   cappedItems,
   clipValue,
@@ -40,15 +41,7 @@ export const entityIdentityRule: Rule = {
     // site-wide. A one-page entity with no `@id` is ordinary, not a problem:
     // there is only one declaration, so there is nothing to tie together.
     const offenders = map.nodes
-      .filter(
-        (node) =>
-          node.id === null &&
-          node.name !== null &&
-          pageTotal(node) > 1 &&
-          node.types.some((type) =>
-            (IDENTITY_TYPES as readonly string[]).includes(type)
-          )
-      )
+      .filter(isNoIdIdentityNode)
       .sort(byReach);
 
     if (offenders.length === 0) {
