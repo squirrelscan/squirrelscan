@@ -14,7 +14,7 @@ export const optionsSchema = z.object({
   error_bytes: z
     .number()
     .default(GOOGLEBOT_PDF_MAX_BYTES)
-    .describe("Byte size to trigger error (Googlebot truncation limit)"),
+    .describe("Byte size to trigger error (60MB default, under Google's 64MB PDF limit)"),
 });
 
 export const pdfSizeRule: Rule = {
@@ -22,9 +22,9 @@ export const pdfSizeRule: Rule = {
     id: "crawl/pdf-size",
     name: "PDF Size",
     description:
-      "Checks linked PDF sizes against Googlebot 60MB truncation limit",
+      "Checks linked PDF sizes against a 60MB threshold, under the 64MB limit Google documents for PDFs",
     solution:
-      "Googlebot truncates PDFs at 60MB—content beyond that limit is ignored during indexing. Split large documents into smaller parts, compress images within PDFs, or add a noindex X-Robots-Tag header if the PDF doesn't need to appear in search results.",
+      "Google reads a PDF only up to 64MB, so content beyond that limit is ignored during indexing. squirrel warns at 30MB and fails at 60MB to leave room under it. Split large documents into smaller parts, compress images within PDFs, or add a noindex X-Robots-Tag header if the PDF doesn't need to appear in search results.",
     category: "crawl",
     scope: "site",
     severity: "error",
@@ -113,7 +113,7 @@ export const pdfSizeRule: Rule = {
       checks.push({
         name: "pdf-size",
         status: "fail",
-        message: `${errorPdfs.length} PDF(s) exceed Googlebot 60MB limit`,
+        message: `${errorPdfs.length} PDF(s) exceed the 60MB error threshold`,
         items: errorPdfs.map((p) => ({
           id: p.url,
           detail: `${(p.bytes / (1024 * 1024)).toFixed(1)}MB`,
@@ -125,7 +125,7 @@ export const pdfSizeRule: Rule = {
       checks.push({
         name: "pdf-size-warn",
         status: "warn",
-        message: `${warnPdfs.length} PDF(s) exceed 30MB — approaching Googlebot 60MB limit`,
+        message: `${warnPdfs.length} PDF(s) exceed 30MB, approaching the 60MB error threshold`,
         items: warnPdfs.map((p) => ({
           id: p.url,
           detail: `${(p.bytes / (1024 * 1024)).toFixed(1)}MB`,
@@ -137,7 +137,7 @@ export const pdfSizeRule: Rule = {
       checks.push({
         name: "pdf-size",
         status: "pass",
-        message: `${pdfSizes.length} PDF(s) checked — all under 30MB`,
+        message: `${pdfSizes.length} PDF(s) checked, all under 30MB`,
       });
     }
 
