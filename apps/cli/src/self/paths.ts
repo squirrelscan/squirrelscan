@@ -241,10 +241,12 @@ export function getUpdateLockPath(): string {
  * win32 branch every Windows install would read as hand-rolled and both
  * `self update` and auto-update would refuse to run (#1538). Only the DEFAULT
  * bin path counts; a --bin-dir install stays unmanaged, as it was before.
+ *
+ * `execPath` is a seam for `self uninstall`'s tests; callers omit it.
  */
-export function isManagedInstall(): boolean {
+export function isManagedInstall(execPath: string = process.execPath): boolean {
   try {
-    const exe = realpathSync(process.execPath);
+    const exe = realpathSync(execPath);
     const releases = realpathSync(getSquirrelPaths().releases);
     if (exe.startsWith(releases + sep)) return true;
     if (platform() === "win32") {

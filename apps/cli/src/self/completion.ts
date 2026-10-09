@@ -90,7 +90,7 @@ _squirrel_completions() {
           return 0
           ;;
         uninstall)
-          COMPREPLY=( $(compgen -W "--purge --force" -- "\${cur}") )
+          COMPREPLY=( $(compgen -W "--purge --yes --force" -- "\${cur}") )
           return 0
           ;;
         install)
@@ -420,8 +420,9 @@ _squirrel() {
               ;;
             uninstall)
               _arguments \\
-                '--purge[Also remove user settings]' \\
-                '--force[Skip confirmation prompt]'
+                '--purge[Also remove settings, credentials, audit data and the cache]' \\
+                '--yes[Skip the confirmation prompt]' \\
+                '--force[Same as --yes]'
               ;;
             install)
               _arguments \\
@@ -748,8 +749,9 @@ complete -c squirrel -n "__fish_seen_subcommand_from settings; and __fish_seen_s
 complete -c squirrel -n "__fish_seen_subcommand_from settings; and __fish_seen_subcommand_from set" -l user -d "Set in user settings"
 
 # Uninstall options
-complete -c squirrel -n "__fish_seen_subcommand_from uninstall" -l purge -d "Also remove user settings"
-complete -c squirrel -n "__fish_seen_subcommand_from uninstall" -l force -d "Skip confirmation prompt"
+complete -c squirrel -n "__fish_seen_subcommand_from self; and __fish_seen_subcommand_from uninstall" -l purge -d "Also remove settings, credentials, audit data and the cache"
+complete -c squirrel -n "__fish_seen_subcommand_from self; and __fish_seen_subcommand_from uninstall" -l yes -d "Skip the confirmation prompt"
+complete -c squirrel -n "__fish_seen_subcommand_from self; and __fish_seen_subcommand_from uninstall" -l force -d "Same as --yes"
 
 # Install options
 complete -c squirrel -n "__fish_seen_subcommand_from install" -l bin-dir -d "Custom bin directory for symlink"
