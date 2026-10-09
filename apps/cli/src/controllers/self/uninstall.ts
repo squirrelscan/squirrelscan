@@ -7,7 +7,7 @@ import {
   rmdirSync,
   rmSync,
   unlinkSync,
-  type Stats,
+  type BigIntStats,
 } from "node:fs";
 import { homedir, platform, tmpdir } from "node:os";
 import {
@@ -59,9 +59,14 @@ export type UninstallTargetKind =
 export interface UninstallTarget {
   kind: UninstallTargetKind;
   path: string;
-  /** dev/ino from planning time, re-checked before deleting. */
-  dev: number;
-  ino: number;
+  /**
+   * dev/ino from planning time, re-checked before deleting. bigint, because
+   * Windows file indexes are 64-bit and lose precision as a JS number. Best
+   * effort where a filesystem reports 0 (FAT, some network shares): there
+   * the realpath containment and directory checks are what still hold.
+   */
+  dev: bigint;
+  ino: bigint;
   /** Windows: this link is the exe that is running right now. */
   running?: boolean;
 }
@@ -132,9 +137,9 @@ function tryRealpath(path: string): string | null {
   }
 }
 
-function tryLstat(path: string): Stats | null {
+function tryLstat(path: string): BigIntStats | null {
   try {
-    return lstatSync(path);
+    return lstatSync(path, { bigint: true });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw error;
@@ -272,7 +277,15 @@ export function planUninstall(
         });
         // Old exes a Windows update renamed aside (updater.ts).
         const prefix = `${basename(link)}.old-`.toLowerCase();
-        for (const entry of readdirSync(dirname(link))) {
+        let siblings: string[] = [];
+        try {
+          siblings = readdirSync(dirname(link));
+        } catch (error) {
+          notes.push(
+            `Could not list ${dirname(link)} for old update leftovers: ${(error as Error).message}`
+          );
+        }
+        for (const entry of siblings) {
           if (!entry.toLowerCase().startsWith(prefix)) continue;
           const old = join(dirname(link), entry);
           const oldStat = tryLstat(old);
@@ -473,7 +486,7 @@ export function executeUninstall(
   const leftover: string[] = [];
 
   for (const target of plan.targets) {
-    let now: Stats | null;
+    let now: BigIntStats | null;
     try {
       now = tryLstat(target.path);
     } catch (error) {

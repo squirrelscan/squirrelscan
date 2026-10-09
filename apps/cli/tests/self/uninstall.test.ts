@@ -24,6 +24,7 @@ import {
   readdirSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -46,7 +47,7 @@ afterAll(() => {
 });
 
 const { getSquirrelPaths } = await import("@/self/paths");
-const { planUninstall, runSelfUninstall, isInside } =
+const { executeUninstall, planUninstall, runSelfUninstall, isInside } =
   await import("@/controllers/self/uninstall");
 
 // A scratch root holding the temp HOME and an "outside" tree next to it. The
@@ -273,6 +274,30 @@ describe("--purge", () => {
 });
 
 describe("safety", () => {
+  test("a target swapped between planning and deleting is left alone", () => {
+    const l = install(["1.0.0"]);
+    const plan = planUninstall(
+      { purge: false },
+      { ...noPrompt, execPath: managedExec(l) }
+    );
+    expect(plan.targets.map((t) => t.kind)).toContain("releases");
+
+    // Same path, different directory: the dev/ino recorded at planning time
+    // no longer matches, so the delete must not go ahead.
+    // Rename the original aside rather than deleting it, so the filesystem
+    // cannot hand its inode to the replacement.
+    renameSync(l.releases, join(home, "releases-moved"));
+    mkdirSync(join(l.releases, "swapped"), { recursive: true });
+    writeFileSync(join(l.releases, "swapped", "keep.txt"), "not planned");
+
+    const outcome = executeUninstall(plan, { isWindows: false });
+
+    expect(outcome.failed.map((f) => f.path)).toContain(l.releases);
+    expect(readFileSync(join(l.releases, "swapped", "keep.txt"), "utf8")).toBe(
+      "not planned"
+    );
+  });
+
   test("never deletes a link that points outside the managed releases", async () => {
     const l = install(["1.0.0"]);
     rmSync(l.link);
