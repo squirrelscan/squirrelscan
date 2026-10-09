@@ -1456,11 +1456,28 @@ each get a verdict from running the rule on their own page instead of inheriting
 one, pinned by `template-fanout-equivalence-golden.test.ts`, which fails on the
 old key and passes on the new one.
 
-Real-crawl counts (gymshark.com, openelectricity.org.au) are still not
-recorded: those crawls were not available where this was built. In their place,
-four synthetic estates of 360 pages and 6 chrome templates were run through
-`streamPageRules` with fan-out on, on `origin/main` and on this branch, each in
-its own process. They mimic the one thing the tighter key changes, the script
+Real crawls, measured 2026-10-10 (macOS arm64, Bun 1.3.14). Both keys were counted
+in one pass over each crawl (parse, chrome key, `fanoutInputSignature`, first
+page of a key is the representative, `DEFAULT_MAX_CLUSTERS` cap, no rules run).
+On openelectricity those counts match what `streamPageRules` itself reports
+with fan-out on:
+
+| crawl | auditable pages | main key: clusters / inherited | tightened key: clusters / inherited |
+| --- | --- | --- | --- |
+| www.gymshark.com (2026-09-22, 4000 pages) | 3983 | 37 / 3946 | 52 / 3931 |
+| openelectricity.org.au (fresh crawl 2026-10-10, `-C full -m 250`) | 250 | 11 / 239 | 11 / 239 |
+
+The tightened key costs gymshark 15 inherited pages (0.4%) and openelectricity
+none. `template-fanout-bench.ts --verify` on the openelectricity crawl is
+byte-identical with and without fan-out on both keys (250 pages compared, 239
+fanned, 5975 rule runs removed, about 40 s per run). On gymshark, `--verify`
+did not finish within 40 minutes (2,340 s CPU, 1.7 GB peak), so its
+byte-identity is not recorded here. The local openelectricity crawls from
+August had lost their HTML to content-store pruning, hence the fresh crawl.
+
+Before the real crawls, four synthetic estates of 360 pages and 6 chrome
+templates were run through `streamPageRules` with fan-out on, on `origin/main`
+and on this branch, each in its own process. They mimic the one thing the tighter key changes, the script
 list. Wall and CPU time were within 10% between the arms and between main and
 the branch (about 2.5 to 2.9 s wall per run), so they are not a result at this
 size; the counts below are.
