@@ -675,6 +675,23 @@ describe("a verdict is never copied across origins", () => {
     expect(fanoutClusterKey("abc123", "https://shop.test/a", null)).toBeNull();
   });
 
+  // #614: the html lang / xml:lang, the html and body aria-hidden and the favicon
+  // links are read by declared template rules, so pages that differ only there
+  // must not share a fan-out group.
+  test("fanoutInputSignature separates the <html> and <body> attributes and icon links (#614)", () => {
+    const sig = (html: string) => fanoutInputSignature(parseDocument(html));
+    const base = sig(sameChrome(VIEWPORT));
+    expect(sig(sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="fr">'))).not.toBe(base);
+    expect(sig(sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="en" xml:lang="fr">'))).not.toBe(base);
+    expect(sig(sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="en" aria-hidden="true">'))).not.toBe(base);
+    expect(sig(sameChrome(VIEWPORT).replace('<body class="tpl-x">', '<body class="tpl-x" aria-hidden="true">'))).not.toBe(base);
+    const icon = `<link rel="icon" href="/favicon-a.ico">`;
+    expect(sig(sameChrome(`${VIEWPORT}${icon}`))).not.toBe(base);
+    expect(sig(sameChrome(`${VIEWPORT}${icon}`))).not.toBe(
+      sig(sameChrome(`${VIEWPORT}<link rel="icon" href="/favicon-b.ico">`)),
+    );
+  });
+
   test("fanoutClusterKey separates origins and survives an unparseable url", () => {
     expect(fanoutClusterKey("abc123", "https://shop.test/a", SIG)).not.toBe(
       fanoutClusterKey("abc123", "http://shop.test/a", SIG),

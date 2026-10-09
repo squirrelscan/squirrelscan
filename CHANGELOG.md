@@ -19,6 +19,7 @@ How it works:
 
 ### Fixed
 
+- Template fan-out no longer shares a verdict between pages that differ in the `<html>` language or aria-hidden, the `<body>` aria-hidden, or a favicon link. Those are inputs three template rules read.
 - Docs: custom request headers are on every plan, Free included, where several pages said Pro only, and the pages that still called local audits free in general now say a local audit costs nothing only when it runs signed out or with `--offline`.
 
 ## v0.0.108 (2026-10-10)
