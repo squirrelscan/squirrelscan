@@ -30,6 +30,7 @@ import type {
 } from "@squirrelscan/core-contracts";
 
 import { isInSiteChrome } from "./extractors/chrome";
+import { isHiddenFromMarkup } from "./hidden-markup";
 
 import type { AuthorInfo } from "./schema";
 import type { PageType } from "./page-type";
@@ -333,7 +334,9 @@ export function extractHeadings(doc: Document): HeadingHierarchy {
         (el as Element).textContent?.trim() ?? "",
         REPORT_LIMITS.maxMediumString,
       );
-      const heading = { level, text, order: order++ };
+      const heading: HeadingHierarchy["headings"][number] = { level, text, order: order++ };
+      // A placeholder the reader never sees is not an empty heading (#547).
+      if (!text && isHiddenFromMarkup(el as Element)) heading.hidden = true;
       headings.push(heading);
 
       if (level === 1) h1Texts.push(text);

@@ -9,6 +9,8 @@ import type { HeadingHierarchy, HeadingData } from "@squirrelscan/core-contracts
 import { clampItemString } from "@squirrelscan/core-contracts/clamp";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 
+import { isHiddenFromMarkup } from "../hidden-markup";
+
 /**
  * Extract heading hierarchy from document
  */
@@ -38,6 +40,8 @@ export function extractHeadings(doc: Document): HeadingHierarchy {
     );
 
     const heading: HeadingData = { level, text, order };
+    // A placeholder the reader never sees is not an empty heading (#547).
+    if (!text && isHiddenFromMarkup(el)) heading.hidden = true;
     headings.push(heading);
 
     if (level === 1) h1Texts.push(text);
