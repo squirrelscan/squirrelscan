@@ -770,6 +770,16 @@ async function runPrefetch(
       specs.delete("render");
     }
   }
+  // The archive lookup (Wayback + Common Crawl) is keyed on the site URL and
+  // can only come back empty for a host the cloud cannot see, and it debits on
+  // submit, so it shares the render skip (repo#2075).
+  if (input.hostUnreachableByCloud) {
+    const spec = specs.get("archive-indexing");
+    if (spec) {
+      skipService(store, "archive-indexing", spec.unit, [], "not-applicable");
+      specs.delete("archive-indexing");
+    }
+  }
   if (specs.size === 0) return emptyResult(store);
   // From here every remaining service owes the store an envelope; an abandon
   // fills whichever it had not reached yet.
