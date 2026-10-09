@@ -328,7 +328,7 @@ function buildVisibilityCheck(
     name: VISIBILITY_CHECK,
     status: "warn",
     message:
-      `${describeRating(primary)} on ${describeEntity(primary)} is not visible anywhere on ` +
+      `${describeRating(primary)} on ${describeEntityType(primary)} is not visible anywhere on ` +
       `${pagePhrase(label)} — a rating readers cannot see is a structured-data policy violation ` +
       "and risks a manual action, not just a lost rich result",
     details: {
@@ -418,8 +418,8 @@ function buildSubjectCheck(entities: RatedEntity[], kind: IneligiblePageKind): C
     name: SUBJECT_CHECK,
     status: "warn",
     message:
-      `AggregateRating on ${describeEntity(primary)} is not the subject of this ${label} page — ` +
-      "sitewide rating markup on a page that cannot be rated is a structured-data policy " +
+      `AggregateRating on ${describeEntityType(primary)} is not the subject of this ${label} page. ` +
+      "Sitewide rating markup on a page that cannot be rated is a structured-data policy " +
       "violation and risks a manual action, not just a lost rich result",
     details: {
       pageType: label,
@@ -488,6 +488,11 @@ function describeEntity(entity: RatedEntity): string {
   if (entity.type) return entity.type;
   if (entity.name) return `"${entity.name}"`;
   return "an untyped entity";
+}
+
+/** The entity's type only: a name is per-page content and would split one finding's identity (#231). */
+function describeEntityType(entity: RatedEntity): string {
+  return entity.type ?? "an untyped entity";
 }
 
 function describeRating(entity: RatedEntity): string {

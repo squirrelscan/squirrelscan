@@ -67,7 +67,8 @@ describe("schema/rating-scope — visibility", () => {
     expect(visible?.status).toBe("warn");
     // Names the page type, the rated entity, and frames it as a policy risk.
     expect(visible?.message).toContain("privacy policy page");
-    expect(visible?.message).toContain('LocalBusiness "Northgate Auto Repair"');
+    expect(visible?.message).toContain("LocalBusiness");
+    expect(visible?.message).not.toContain("Northgate");
     expect(visible?.message).toContain("manual action");
     expect(visible?.message).not.toContain("missing");
     expect(visible?.details?.["ratedEntityType"]).toBe("LocalBusiness");
@@ -172,7 +173,8 @@ describe("schema/rating-scope — page subject", () => {
 
     expect(subject?.status).toBe("warn");
     expect(subject?.message).toContain("privacy policy page");
-    expect(subject?.message).toContain('LocalBusiness "Northgate Auto Repair"');
+    expect(subject?.message).toContain("LocalBusiness");
+    expect(subject?.message).not.toContain("Northgate");
     expect(subject?.message).toContain("manual action");
     expect(subject?.details?.["reason"]).toBe("entity-not-page-subject");
     expect(subject?.items?.[0]?.label).toContain("Northgate Auto Repair");
@@ -218,7 +220,8 @@ describe("schema/rating-scope — page subject", () => {
 
     expect(subject?.status).toBe("warn");
     expect(subject?.message).toContain("article page");
-    expect(subject?.message).toContain('LocalBusiness "Northgate Auto Repair"');
+    expect(subject?.message).toContain("LocalBusiness");
+    expect(subject?.message).not.toContain("Northgate");
     expect(subject?.details?.["ratedEntityName"]).toBe("Northgate Auto Repair");
   });
 
@@ -259,5 +262,14 @@ describe("schema/rating-scope — registration", () => {
     expect(ratingScopeRule.meta.category).toBe("schema");
     expect(ratingScopeRule.meta.scope).toBe("page");
     expect(ratingScopeRule.meta.severity).toBe("warning");
+  });
+});
+
+describe("schema/rating-scope identity (#231)", () => {
+  test("the check message does not carry the rated entity's name", () => {
+    const other = { ...SITEWIDE_BUSINESS, name: "Southside Tyres" };
+    const a = check(run(ratingScopeRule, pageCtx(page(SITEWIDE_BUSINESS, LEGAL_BODY), "https://example.com/privacy")), "rating-visible");
+    const b = check(run(ratingScopeRule, pageCtx(page(other, LEGAL_BODY), "https://example.com/privacy")), "rating-visible");
+    expect(a?.message).toBe(b?.message);
   });
 });

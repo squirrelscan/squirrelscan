@@ -14,7 +14,7 @@ It usually means the head was closed earlier than intended, or that a component 
 The rule runs on every crawled page over the selector `body meta`, skipping microdata. It emits a single check named `meta-in-body`:
 
 - Pass when there are none. Message: `All meta tags correctly placed in <head>`.
-- Fail otherwise. Message: `Found 3 meta tags in <body>`, or `Found 1 meta tag in <body>` for one. Each item is identified by its `name`, its `property`, or `unknown`, labelled with its content truncated to 50 characters. Severity error, weight 8.
+- Fail otherwise. Message: `Found N meta tag(s) in <body>`, the same wording for one tag or many. Each item is identified by its `name`, its `property`, or `unknown`, labelled with its content truncated to 50 characters. Severity error, weight 8.
 
 ### Microdata exemption
 

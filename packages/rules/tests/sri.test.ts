@@ -136,3 +136,16 @@ describe("security/sri", () => {
     expect(check?.items).toHaveLength(2);
   });
 });
+
+describe("security/sri wording is count-independent (#231)", () => {
+  test("one and several flagged resources share one message form", () => {
+    const one = sriCheck(sriRule.run(ctx(page(`<script src="https://cdn.example.net/a.js"></script>`))).checks);
+    const two = sriCheck(
+      sriRule.run(
+        ctx(page(`<script src="https://cdn.example.net/a.js"></script><link rel="stylesheet" href="https://cdn.example.net/b.css">`)),
+      ).checks,
+    );
+    expect(one?.message).toBe("1 cross-origin resource(s) without Subresource Integrity");
+    expect(two?.message).toBe("2 cross-origin resource(s) without Subresource Integrity");
+  });
+});
