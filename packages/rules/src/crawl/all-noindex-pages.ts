@@ -133,22 +133,21 @@ export const allNoindexPages: Rule = {
     scope: "site",
     severity: "info",
     weight: 2,
+    optionsSchema: z.object({
+      warnOnPatterns: z
+        .array(z.string())
+        .default([])
+        .describe(
+          "URL patterns that should trigger warning severity if noindex (e.g., '/blog/', '/products/')"
+        ),
+      errorOnPatterns: z
+        .array(z.string())
+        .default([])
+        .describe(
+          "URL patterns that should trigger error severity if noindex (e.g., '/landing-pages/')"
+        ),
+    }),
   },
-
-  optionsSchema: z.object({
-    warnOnPatterns: z
-      .array(z.string())
-      .default([])
-      .describe(
-        "URL patterns that should trigger warning severity if noindex (e.g., '/blog/', '/products/')"
-      ),
-    errorOnPatterns: z
-      .array(z.string())
-      .default([])
-      .describe(
-        "URL patterns that should trigger error severity if noindex (e.g., '/landing-pages/')"
-      ),
-  }),
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {
     const options = ctx.options;
