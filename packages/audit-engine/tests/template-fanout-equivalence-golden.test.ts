@@ -739,9 +739,11 @@ describe("SQUIRREL_TEMPLATE_FANOUT", () => {
   });
 });
 
-// Keeps CONTENT_READ_METAS honest: a declared template rule that selects a named
-// meta must have that meta's content in the signature, or two pages differing only
-// in that value would share a verdict.
+// A tripwire for CONTENT_READ_METAS, not a proof: a declared template rule that
+// selects a named meta with the literal `meta[name="…"]` form must have that
+// meta's content in the signature, or two pages differing only in that value
+// would share a verdict. A meta read through another selector form, through
+// `getAttribute`, or through a helper in another file is not caught here.
 describe("CONTENT_READ_METAS covers the metas declared rules select by name", () => {
   test("every meta[name=...] in a template-scoped rule is listed", async () => {
     const root = new URL("../../rules/src/", import.meta.url).pathname;

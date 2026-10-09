@@ -104,7 +104,9 @@ export type RuleSeverity = "error" | "warning" | "info";
  * presence — so two pages can share it and still differ in markup it never looked
  * at. The fan-out therefore groups on a tighter key than the stored one: the
  * chrome key plus the page ORIGIN plus a rule-input signature (the `<script src>`
- * list, the set of `<meta>` names and the `<main>` landmark count; see
+ * and stylesheet `<link href>` lists with whether each carries `integrity`, every
+ * `<meta>`'s name, property, http-equiv and charset, the `content` of the metas a
+ * declared rule reads the value of, and the `<main>` landmark count; see
  * `fanoutInputSignature`). That closes the three counterexamples tracked as
  * squirrelscan/squirrelscan#275 (a missing viewport `<meta>`, a second `<main>`,
  * a script path that differs on one host). It does NOT make a declaration

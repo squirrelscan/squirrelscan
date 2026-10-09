@@ -65,7 +65,8 @@
 // can vary on a third.
 //
 // #275 tightened the GROUPING key past the stored one (see `fanoutInputSignature`):
-// script srcs, meta names and the <main> count. Two further things are NOT left
+// script and stylesheet urls with integrity presence, meta names and the meta
+// values rules read, and the <main> count. Two further things are NOT left
 // to the declaration, because they are properties of the PAGE rather than claims
 // about a rule's markup inputs, and because a corpus of one origin can never
 // exhibit them:

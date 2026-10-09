@@ -1444,8 +1444,11 @@ reading a response header is disqualified outright.
 ### Decision on #275: tighten the fan-out grouping key
 
 Option 1 ships, narrowly. The fan-out groups on the chrome key, the page origin
-and a rule-input signature: the sorted `<script src>` list, the set of `<meta>`
-names and the `<main>` landmark count (`fanoutInputSignature`). The stored
+and a rule-input signature (`fanoutInputSignature`): the sorted `<script src>`
+and stylesheet `<link href>` lists with whether each carries `integrity`, every
+`<meta>`'s name, property, http-equiv and charset, the `content` of the metas a
+declared rule reads the value of (viewport, geo.*, ICBM, http-equiv refresh),
+and the `<main>` landmark count. The stored
 `template_fp` is unchanged, so `templateClusters()` and the parity gate are
 defined over the same key as before. The three constructed counterexamples (a
 missing viewport meta, a second `<main>`, a script path that differs on one host)
