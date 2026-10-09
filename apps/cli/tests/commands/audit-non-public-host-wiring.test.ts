@@ -29,12 +29,11 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { audit } from "@/cli/commands/audit";
-import { getGlobalConfigPath, setGlobalConfigPath } from "@/config";
 import * as pathsModule from "@/self/paths";
 
 // #2182: a SUCCESSFUL publish now stamps `first_publish_at` in the user
@@ -166,23 +165,7 @@ describe("squirrel audit — a host no hosted runner can reach (#1841)", () => {
   // command had stopped registering anything at all, and the run has to be
   // genuinely signed in or they pass for that reason instead.
   test("a public host still registers", async () => {
-    // A level with cloud checks: a quick audit is local and never registers.
-    // The config keeps every cloud call but the register out of the run.
-    const previousConfig = getGlobalConfigPath();
-    const configPath = join(home, "squirrel.toml");
-    writeFileSync(
-      configPath,
-      '[cloud]\nenabled = false\npublish = false\n\n[external_links]\nenabled = false\n\n[security]\nprobe = "passive"\n'
-    );
-    setGlobalConfigPath(configPath);
-    try {
-      await runAudit("https://example.com/", {
-        coverage: "surface",
-        http: true,
-      });
-    } finally {
-      setGlobalConfigPath(previousConfig);
-    }
+    await runAudit("https://example.com/");
     expect(requested.some((u) => u.includes("/v1/credits"))).toBe(true);
     expect(requested.some((u) => u.includes("/v1/agent-runs/register"))).toBe(
       true

@@ -128,7 +128,7 @@ async function runLocalAudit(options: Omit<RunAuditOptions, "configPath">) {
   return renderAuditResult(result);
 }
 
-const LEVEL_DESCRIPTION = `Audit level: ${levelHelpList()}. Default ${DEFAULT_AUDIT_LEVEL}. Quick spends no credits`;
+const LEVEL_DESCRIPTION = `Audit level: ${levelHelpList()}. Default ${DEFAULT_AUDIT_LEVEL}`;
 
 export function registerAuditTools(server: McpServer): void {
   server.registerTool(
@@ -186,8 +186,8 @@ export function registerAuditTools(server: McpServer): void {
         parseAuditLevel(level ?? coverage ?? DEFAULT_AUDIT_LEVEL) ??
         DEFAULT_AUDIT_LEVEL;
       const levelOptions = await levelRunOptions(auditLevel, maxPages);
-      // No cloud checks (the quick level) means no cloud at all: local rules,
-      // no credits.
+      // No cloud checks (the quick level) means no cloud at all here, as before
+      // audit levels: a tool call at quick runs the local rules only.
       const cloudAvailable =
         !levelOptions.auditLevel?.settings.cloudChecks || offline
           ? false
@@ -206,7 +206,7 @@ export function registerAuditTools(server: McpServer): void {
     "quick_check",
     {
       title: "Quick check",
-      description: `Fast, local-only audit at the quick level: the URL and its sitemaps, up to ${AUDIT_LEVEL_PRESETS.quick.pages} pages, with no link following and no cloud checks. Free and works offline. Use for a rapid health snapshot of a site.`,
+      description: `Fast, local-only audit at the quick level: the URL and its sitemaps, up to ${AUDIT_LEVEL_PRESETS.quick.pages} pages, with no link following and no cloud checks. Works offline. Use for a rapid health snapshot of a site.`,
       inputSchema: z.object({
         url: z.string().describe("The URL to check (e.g. https://example.com)"),
       }),

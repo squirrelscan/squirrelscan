@@ -204,12 +204,12 @@ const STRATEGY_WORDS: Record<CrawlStrategy, string> = {
 /**
  * One line per level for `--help`, built from the preset table so the help
  * can never disagree with what runs, e.g.
- * `quick (25 pages, seed and sitemaps, local rules only)`.
+ * `quick (25 pages, seed and sitemaps, no cloud checks)`.
  */
 export function levelHelpList(): string {
   return AUDIT_LEVELS.map((level) => {
     const s = AUDIT_LEVEL_PRESETS[level];
-    const checks = s.cloudChecks ? "cloud checks" : "local rules only";
+    const checks = s.cloudChecks ? "cloud checks" : "no cloud checks";
     return `${level} (${s.pages} pages, ${STRATEGY_WORDS[s.crawlStrategy]}, ${checks})`;
   }).join(", ");
 }

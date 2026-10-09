@@ -106,7 +106,7 @@ describe("defaultAuditLevel", () => {
     expect(defaultAuditLevel("free")).toBe("surface");
   });
 
-  test("anonymous → quick (local rules, no credits)", () => {
+  test("anonymous → quick (local rules, no account)", () => {
     expect(defaultAuditLevel("anonymous")).toBe("quick");
   });
 });
@@ -218,7 +218,7 @@ describe("configLevelOverrides", () => {
 describe("levelHelpList", () => {
   test("is built from the preset table", () => {
     expect(levelHelpList()).toBe(
-      "quick (25 pages, seed and sitemaps, local rules only), surface (100 pages, one page per URL pattern, cloud checks), full (500 pages, every page, cloud checks)"
+      "quick (25 pages, seed and sitemaps, no cloud checks), surface (100 pages, one page per URL pattern, cloud checks), full (500 pages, every page, cloud checks)"
     );
   });
 });

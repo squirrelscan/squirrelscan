@@ -159,16 +159,6 @@ describe("resolveRegisterDecision", () => {
     expect(reg(over)).toBe(false);
   });
 
-  // Audit levels: the quick level has no cloud checks, so it is a local audit
-  // and spends no credits. Registering is what debits the base and settles
-  // the pages, so a run without cloud checks does not register.
-  test("a run without cloud checks (the quick level) does not register", () => {
-    expect(reg({ cloudChecks: false })).toBe(false);
-    expect(reg({ cloudChecks: true })).toBe(true);
-    // Callers that predate levels pass nothing and keep registering.
-    expect(reg({ cloudChecks: undefined })).toBe(true);
-  });
-
   // The host outranks everything, including a signed-in online run that would
   // otherwise be the normal case.
   test("the host clause is not conditional on anything else", () => {

@@ -23,7 +23,7 @@ The server runs in the foreground and speaks JSON-RPC on stdin/stdout. You rarel
 | Tool | Auth | Description |
 |------|------|-------------|
 | `audit_website` | None | Full deterministic audit of a URL at an [audit level](/guides/audit-levels) (`level`: `quick`, `surface` or `full`, default `surface`; `coverage` is the older name). Cloud checks added at surface and full when logged in. |
-| `quick_check` | None | Fast, local-only audit at the quick level: the URL and its sitemaps, up to 25 pages, no link following, no cloud checks, no credits. |
+| `quick_check` | None | Fast, local-only audit at the quick level: the URL and its sitemaps, up to 25 pages, no link following, no cloud checks. Works offline. |
 | `list_rules` | None | List all built-in audit rules. |
 | `get_rule` | None | Full definition of one rule by id. |
 | `list_audits` | Login | Your org's running/pending audits. Prints a one-line `⚠ Page limit: ...` warning for any run whose page count was clamped to the plan's ceiling. |

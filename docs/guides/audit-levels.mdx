@@ -24,18 +24,18 @@ squirrel audit https://example.com --level full
 | Rendering | `auto`: only pages built with JavaScript | `all`: every page | `all`: every page |
 | External link checks | Off | On | On |
 | Probing | `passive` | `active` | `active` |
-| Credits, signed in | 0 | Up to 250 | Up to 1,050 |
+| Credits, signed in | Up to 100 | Up to 250 | Up to 1,050 |
 
 - **Cloud checks** are the checks that run in squirrelscan's cloud: [AI page analysis](/rules/ai/llm-parsability), [authority signals](/rules/eeat/authority-signals), the [editor's summary](/cloud/editor-summary) and [technology detection](/cloud/technologies). The rest of the rules run at every level.
 - **Rendering** loads pages in a cloud browser, so the audit sees content that JavaScript builds. See [Browser rendering](/guides/browser-rendering).
 - **Probing** is how hard each page is poked beyond what the crawl fetched. `passive` sends nothing extra, `active` sends a few quiet requests that look like normal traffic. `aggressive` is never a level's default; you have to ask for it. See [Security configuration](/configuration/security).
-- **Credits** follow the pages: 50 for the audit plus 2 per audited page, so a 40-page surface audit costs 130. A cloud audit also charges 1 credit per distinct external link it checks; the checks the CLI runs for itself are free. Signed out or `--offline`, every level is free. See [Credits and pricing](/cloud/credits).
+- **Credits** follow the pages: 50 for the audit plus 2 per audited page, so a 40-page surface audit costs 130. This holds at every level, quick included. A cloud audit also charges 1 credit per distinct external link it checks; the checks the CLI runs for itself are not charged. Credits apply to signed-in, online audits: signed out or with `--offline`, the audit runs on your machine. See [Credits and pricing](/cloud/credits).
 
 ### Quick
 
 A fast first look. Quick reads the URL you give it and the URLs in its sitemaps, up to 25 pages, and does not follow links. A site with no usable sitemap gets its links followed anyway, so it still gets a real sample.
 
-Quick runs the local rules only and spends no credits, signed in or not: it skips the cloud checks and, in the CLI, is not registered as a cloud audit, so no audit charge is made. Signed in, the CLI still reads your balance and publishes the report as usual (publishing is free). A cloud browser render does cost credits, so a quick CLI audit renders pages only when you turn rendering on with `--render-mode`, `--render` or `[cloud] render`, at 2 credits per rendered page, held to your balance and `max_credits_per_audit`. A quick audit run in the cloud renders the pages that need it.
+Quick skips the cloud checks; every other rule runs. Signed in, a quick CLI audit is still a cloud audit, billed like any other level: 50 credits plus 2 per audited page, so up to 100 credits for 25 pages. It renders the pages that need JavaScript in the cloud browser (`auto`). `--http` skips the browser but not the page charge, and `--offline` runs the audit on your machine. A quick audit run in the cloud renders the pages that need it too.
 
 ### Surface
 
@@ -145,7 +145,7 @@ Plans also set how many pages render at once (Free 1, Pro 5, Team 10), how many 
 
 ## Which level should I pick?
 
-- **quick** for a first look, a check on every push in CI, or an agent's fix loop. It is free.
+- **quick** for a first look, a check on every push in CI, or an agent's fix loop. It is the fastest, and the smallest bill signed in.
 - **surface** for regular audits: every page template, the cloud checks and the editor's summary, at a modest page count.
 - **full** before a launch, a migration or a sign-off, or for a site whose pages are all different.
 - **`--pentest`** to test a site you own or are authorized to test: a full audit with aggressive probing.

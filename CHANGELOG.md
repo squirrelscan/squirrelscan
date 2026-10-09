@@ -26,7 +26,6 @@ How it works:
 
 ### Changed
 
-- A quick audit spends no credits, signed in or not. It has no cloud checks, so it no longer registers the run (which is what charged the 50-credit base and settled the pages), and it renders pages in the cloud browser only when you turn rendering on (`--render-mode`, `--render` or `[cloud] render`), at 2 credits per rendered page, held to your balance and `max_credits_per_audit`. Signed in, it still reads your balance and publishes the report. A signed-in quick audit used to cost up to 100 credits.
 - A level's settings are now the defaults: quick no longer checks external links and probes passively, while surface and full check external links and probe actively, signed in or not. Before, external links were checked at every level and probing followed sign-in instead of the level. Explicit flags and config values win as before. `max_pages = 100` and `[external_links] enabled = true`, which `squirrel init` writes into every config, still read as unset.
 - Hints and locked-check messages point at `--level` instead of `-C`, and the quick-level message no longer says "coverage".
 - `security/leaked-secrets` reports a server-only secret found in a browser-served script (database connection strings, service-role and `sk_live_` keys, AWS secret keys and similar) in a new `leaked-secrets-critical` check, "shipped to every visitor". Publishable keys, DigitalOcean Spaces key ids, tutorial values (AWS's documented example keys, placeholder or `localhost` database URLs) and hits only in page HTML are unchanged.

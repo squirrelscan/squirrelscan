@@ -63,7 +63,7 @@ squirrel audit <url> [options]
 
 | Level | Pages | What it does |
 |-------|-------|--------------|
-| `quick` | 25 | The URL and its sitemaps, no link following, local rules only, no credits |
+| `quick` | 25 | The URL and its sitemaps, no link following, no cloud checks |
 | `surface` | 100 | Follows links, one page per URL pattern first, with the cloud checks and the editor's summary |
 | `full` | 500 | Every page it can reach up to the budget, with the cloud checks and the editor's summary |
 
@@ -81,13 +81,12 @@ to `surface`, so the cloud checks and the editor's summary run and a free report
 demos the full product. Signed-out and `--offline` runs default to `quick`. Pass
 `--level` (or set `[crawler] coverage` in config) to choose either way.
 
-`quick` runs the local rules only and spends no credits, signed in or not: it
-skips the cloud checks and is not registered as a cloud audit, so no audit
-charge is made (signed in, it still reads your balance and publishes the report,
-which is free). It renders pages in the cloud browser only when you turn
-rendering on with `--render-mode`, `--render` or `[cloud] render`, at 2 credits
-per rendered page. Free and Pro run the same checks: Pro just grants more
-monthly credits and lets you top up.
+`quick` skips the cloud checks, and nothing else changes about billing: signed
+in, a quick audit is a cloud audit like any other level, at 50 credits plus 2
+per audited page (up to 100 for 25 pages), and it renders the pages that need
+JavaScript in the cloud browser. `--http` skips the browser, not the page
+charge. Free and Pro run the same checks: Pro just grants more monthly credits
+and lets you top up.
 
 See [Audit levels](/guides/audit-levels) for every setting of every level, custom
 levels, and the plan and credit limits.

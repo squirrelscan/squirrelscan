@@ -34,12 +34,7 @@ const restores: (() => void)[] = [];
 beforeAll(() => {
   const previousConfig = getGlobalConfigPath();
   const configPath = join(scratch, "squirrel.toml");
-  // A registered run with no cloud work in it: the cloud checks stay out
-  // ([cloud] enabled = false), and so do external links and probes.
-  writeFileSync(
-    configPath,
-    '[cloud]\npublish = false\nenabled = false\n\n[external_links]\nenabled = false\n\n[security]\nprobe = "passive"\n'
-  );
+  writeFileSync(configPath, "[cloud]\npublish = false\n");
   setGlobalConfigPath(configPath);
   restores.push(() => setGlobalConfigPath(previousConfig));
   const redirect = {
@@ -148,11 +143,8 @@ async function runAudit(): Promise<void> {
     "https://unreachable.example/",
     "-m",
     "1",
-    // A level with cloud checks: a quick audit is local and never registers.
-    // --http keeps the cloud browser out of it.
-    "--level",
-    "surface",
-    "--http",
+    "-C",
+    "quick",
     "-y",
   ];
   try {
