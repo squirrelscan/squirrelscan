@@ -21,21 +21,23 @@ concurrency = 5
 ### `enabled`
 
 **Type:** `boolean`
-**Default:** `true`
+**Default:** `true`, which leaves the [audit level](/guides/audit-levels) in charge: checked at the surface and full levels, not at quick
 
 Enable external link checking during crawl.
 
 When enabled, squirrelscan validates all external links found during crawling to detect broken outbound links (404s, timeouts, DNS failures).
 
+External link checks are one of the audit level's settings. `true` is the default `squirrel init` writes into every config, so it reads as unset: surface and full audits check external links, quick audits do not. `false` turns them off at every level, and makes a surface or full audit custom.
+
 **Examples:**
 
-Enable (default):
+Follow the level (default):
 ```toml
 [external_links]
 enabled = true
 ```
 
-Disable for faster crawls:
+Disable for faster crawls, at every level:
 ```toml
 [external_links]
 enabled = false

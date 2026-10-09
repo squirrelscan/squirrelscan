@@ -92,6 +92,7 @@
             "pages": [
               "projects",
               "crawl",
+              "guides/audit-levels",
               "reports",
               "guides/failed-audits",
               "guides/badges",

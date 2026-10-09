@@ -62,17 +62,17 @@ Core SEO (1 error, 3 warnings)
 ──────────────────────────────────────────────────
 ```
 
-Logged out, audits default to the `quick` coverage mode: a fast scan of the seed URL plus sitemaps, with no cloud calls and no credit spend. For a wider crawl, raise the page limit or switch coverage:
+Logged out, audits default to the `quick` [audit level](/guides/audit-levels): a fast scan of the seed URL plus sitemaps, with the local rules only and no credit spend. For a wider crawl, raise the page limit or pick another level:
 
 ```bash
 # Crawl up to 200 pages
 squirrel audit https://example.com -m 200
 
 # Smart sampling across URL patterns
-squirrel audit https://example.com -C surface
+squirrel audit https://example.com --level surface
 ```
 
-The three coverage modes are `quick`, `surface`, and `full`. See [`squirrel audit`](/cli/audit#coverage-modes) for what each one crawls.
+The three levels are `quick`, `surface`, and `full`. Logged out, every level runs locally and is free; the cloud checks need an account. See [Audit levels](/guides/audit-levels) for what each one crawls and checks.
 
 <Tip>
 Auditing a site you are building? Point it at your dev server: `squirrel audit http://localhost:3000`. Local audits work the same against localhost, so you can catch issues before they ship. See [Projects](/projects) for keeping dev and production histories separate.
@@ -183,7 +183,7 @@ Quote each expression, since shells read bare `<` and `>` as redirection. The fu
 
 ## Related
 
-- [`squirrel audit`](/cli/audit) - every flag and coverage mode
+- [`squirrel audit`](/cli/audit) - every flag and audit level
 - [`squirrel report`](/cli/report) - query and export stored audits
 - [Reports and scoring](/reports) - how the health score works
 - [Cloud audits](/guides/cloud-audits) - add AI analysis, rendering, and a shared tracker

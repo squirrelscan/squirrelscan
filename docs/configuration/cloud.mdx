@@ -57,7 +57,7 @@ Auto-generate an [editor's summary](/cloud/editor-summary) - an exec-email-style
 
 **Default:** unset (auto)
 
-Render strategy: the canonical control (supersedes `rendering`). Leave it unset and the strategy is decided per coverage: **quick** crawls HTTP-first and renders only what needs it; **surface/full** render every page (logged-in only, after a one-time consent prompt). Set it explicitly to pin behavior:
+Render strategy: the canonical control (supersedes `rendering`). Leave it unset and the [audit level](/guides/audit-levels) decides: **surface** and **full** render every page (logged-in only); **quick** spends no credits, so it fetches over HTTP and renders only when you set a render mode. Set it explicitly to pin behavior, which makes the audit custom when it differs from the level's:
 
 - `"off"` - plain HTTP only; never render in the cloud
 - `"auto"` - **HTTP-first**: render *only* pages detected as client-side-rendered shells; static / server-rendered pages use fast plain HTTP

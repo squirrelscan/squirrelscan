@@ -1,10 +1,10 @@
 ---
 title: "Crawling"
 icon: "waypoints"
-description: "How SquirrelScan crawls websites efficiently and intelligently"
+description: "How squirrelscan crawls websites efficiently and intelligently"
 ---
 
-SquirrelScan uses a smart crawling system that balances thoroughness with efficiency. This page explains how crawling works under the hood.
+squirrelscan uses a smart crawling system that balances thoroughness with efficiency. This page explains how crawling works under the hood.
 
 ## How it works
 
@@ -21,34 +21,33 @@ When you run `squirrel audit https://example.com`, the crawler:
 squirrel audit https://example.com
 ```
 
-## Coverage modes
+## Audit levels
 
-SquirrelScan supports three coverage modes to balance thoroughness with speed:
+How many pages a crawl reads, and how it picks them, come from the [audit level](/guides/audit-levels):
 
-| Mode | Default Pages | Behavior | Use Case |
-|------|---------------|----------|----------|
-| `quick` | 25 | Seed + sitemaps only, no link discovery, no cloud rules | CI checks, fast health check (anonymous default) |
-| `surface` | 100 | One sample per URL pattern, runs cloud rules + summary | General audits (signed-in default, free or Pro) |
-| `full` | 500 | Crawl everything up to limit, runs cloud rules + summary | Deep analysis |
+| Level | Pages | How pages are picked | Use case |
+|-------|-------|----------------------|----------|
+| `quick` | 25 | The URL and its sitemaps, no link following | CI checks, a fast first look (signed-out default) |
+| `surface` | 100 | Follows links, one page per URL pattern first | Regular audits (signed-in default, free or Pro) |
+| `full` | 500 | Every page it can reach, up to the budget | Whole-site audits, sign-off |
+
+A level also decides the cloud checks, rendering, external link checks and probing. [Audit levels](/guides/audit-levels) lists every setting and what each level costs.
 
 ```bash
-# Signed-in default: surface (100 pages, cloud rules + summary).
-# Anonymous default: quick (25 pages, local, no cloud, no link discovery).
+# Signed-in default: surface. Signed-out default: quick.
 squirrel audit https://example.com
 
-# Surface crawl (100 pages, pattern sampling, cloud services)
-squirrel audit https://example.com -C surface
+# Pick a level
+squirrel audit https://example.com --level surface
+squirrel audit https://example.com --level full
 
-# Full comprehensive audit (500 pages)
-squirrel audit https://example.com -C full
-
-# Override page limit for any mode
-squirrel audit https://example.com -C surface -m 200
+# Change the page budget of any level (the audit becomes custom)
+squirrel audit https://example.com --level surface -m 200
 ```
 
-### Surface mode pattern detection
+### Surface pattern detection
 
-Surface mode is smart about detecting URL patterns. When it sees `/blog/my-first-post`, `/blog/another-post`, and `/blog/third-post`, it recognizes these as the same pattern (`/blog/{slug}`) and only crawls one sample.
+The surface level is smart about detecting URL patterns. When it sees `/blog/my-first-post`, `/blog/another-post`, and `/blog/third-post`, it recognizes these as the same pattern (`/blog/{slug}`) and, once it has one sample, pushes every further page of that pattern far down the queue. Other templates are crawled first, and a second page of a pattern is only reached when the budget has room left after them.
 
 **Detected Patterns:**
 - Numeric IDs: `/products/12345` → `/products/{id}`
@@ -59,7 +58,7 @@ Surface mode is smart about detecting URL patterns. When it sees `/blog/my-first
 This means a blog with 10,000 posts gets sampled efficiently without wasting crawl budget on duplicate templates.
 
 <Tip>
-Surface mode is the default for any signed-in account, free or Pro (only anonymous runs default to `quick`), and is recommended for most audits. It gives you comprehensive coverage of unique page templates while avoiding over-crawling repetitive content like blog archives or product listings, and runs the cloud-backed rules + editor's summary.
+Surface is the default level for any signed-in account, free or Pro (signed-out runs default to `quick`), and is recommended for most audits. It covers every unique page template without over-crawling repetitive content like blog archives or product listings, and runs the cloud checks and the editor's summary.
 </Tip>
 
 ## Hitting the page limit
@@ -68,7 +67,7 @@ Every crawl stops once it reaches the **max pages** limit. That limit comes from
 
 1. **`--max-pages <N>` / `-m <N>`**: per-run CLI override (wins over everything).
 2. **`[crawler] max_pages = N`** in your config, when set to a non-default value.
-3. **Coverage-mode default**: `quick` = 25, `surface` = 100, `full` = 500.
+3. **The level's page budget**: `quick` = 25, `surface` = 100, `full` = 500.
 
 A **hard cap of 10,000 pages** applies on top: any higher value is clamped down to 10,000.
 
@@ -77,19 +76,19 @@ When the limit is the reason a crawl stopped, the CLI says so and tells you how 
 ```bash
 squirrel audit https://example.com
 # ✓ Audited 100 pages in 42.3s
-# ⚠ Reached max pages (100). Raise with --max-pages <N> or [crawler] max_pages (cap 10000); use -C full for full coverage.
+# ⚠ Reached max pages (100). Raise with --max-pages <N> or [crawler] max_pages (cap 10000); use --level full for a full audit.
 ```
 
 A cloud audit can also stop early because its crawl time budget ran out before it reached the page limit. The report then says so: the scan line reads `stopped early on time` and a partial scan note replaces the "page limit reached" one. Raising the page limit does not help in that case; a slower site needs a plan that renders pages faster, or a narrower crawl with include patterns.
 
-To scan a larger site, raise the limit or switch to `full` coverage:
+To scan a larger site, raise the limit or switch to the `full` level:
 
 ```bash
 # Raise just this run
 squirrel audit https://example.com --max-pages 1000
 
-# Use full coverage (default 500 pages)
-squirrel audit https://example.com -C full
+# Use the full level (500 pages)
+squirrel audit https://example.com --level full
 
 # Or set it permanently in squirrel.toml
 ```
@@ -206,7 +205,7 @@ changed pages are still detected correctly. **Caching never changes audit
 results**: a fresh-cache run produces the same health score as a full re-fetch.
 
 A page reused from the cache follows the same link rules as a freshly fetched
-one. In `quick` mode (no link discovery), a reused page does not add its links to
+one. At the `quick` level (no link following), a reused page does not add its links to
 the crawl, so only the seed and sitemap URLs are audited. If the sitemap yields no
 crawlable URLs, links are discovered from reused pages just as they are from
 fetched ones.

@@ -16,7 +16,7 @@ Log in once so your audits can reach the cloud:
 squirrel auth login
 ```
 
-This opens your browser so you can log in. What runs next depends on the audit's coverage mode. Once you are logged in (free or Pro), audits default to `surface` coverage, which runs the cloud rules and merges their results into the same report as the local rules, spending credits as they run. Only anonymous, logged-out runs default to `quick`. Want a fast, free scan while logged in? Pass `-C quick`. Free accounts get 500 credits a month to spend; Pro includes 3,000. See [`squirrel auth`](/cli/auth) for API-key auth and credential precedence, and [`squirrel audit`](/cli/audit#coverage-modes) for the coverage modes.
+This opens your browser so you can log in. What runs next depends on the audit's [level](/guides/audit-levels). Once you are logged in (free or Pro), audits default to the `surface` level, which runs the cloud checks and merges their results into the same report as the local rules, spending credits as they run. Only logged-out runs default to `quick`. Want a fast, free scan while logged in? Pass `--level quick`: it runs the local rules only, makes no cloud call and spends no credits. Free accounts get 500 credits a month to spend; Pro includes 3,000. See [`squirrel auth`](/cli/auth) for API-key auth and credential precedence, and [Audit levels](/guides/audit-levels) for what each level checks and costs.
 
 ## Credits are pay-as-you-go
 
@@ -28,7 +28,7 @@ Free accounts get **500 credits every month**, no card required; Pro includes 3,
 squirrel credits
 ```
 
-An audit costs 50 credits base plus 2 per audited page, everything included, so a typical 25-page audit costs 100 credits. With [external link checking](/dashboard/audit-settings) on, each distinct external link the cloud checks adds 1 credit; internal links are free. Full pricing, plans, and top-ups are in [Credits and pricing](/cloud/credits).
+An audit costs 50 credits base plus 2 per audited page, everything included, so a 25-page audit costs 100 credits and a full 100-page surface audit 250. A quick audit costs nothing. With [external link checking](/dashboard/audit-settings) on, each distinct external link the cloud checks adds 1 credit; internal links are free. Full pricing, plans, and top-ups are in [Credits and pricing](/cloud/credits).
 
 <Tip>
 You stay in control of spend. A per-audit cap (`max_credits_per_audit`) lowers the page limit to what it covers and truncates cloud work deterministically at the ceiling, and estimates above `confirm_threshold` prompt before spending. See [Spend controls](/cloud/credits#spend-controls).
@@ -40,16 +40,16 @@ The audit is the same underneath. Pick whichever surface fits how you work.
 
 <Tabs>
   <Tab title="CLI">
-    Run an audit with the cloud rules included. Logged in, the default `surface` coverage already runs them (and, when relevant, pages render in a cloud browser); the flag below just makes it explicit:
+    Run an audit with the cloud checks included. Logged in, the default `surface` level already runs them (and pages render in a cloud browser); the flag below just makes it explicit:
 
     ```bash
-    squirrel audit https://example.com -C surface
+    squirrel audit https://example.com --level surface
     ```
 
     The start banner shows the estimated spend against your balance. See [`squirrel audit`](/cli/audit).
   </Tab>
   <Tab title="Dashboard">
-    Trigger a run from [app.squirrelscan.com](https://app.squirrelscan.com): open a website and use its Run dialog. Cloud audits use the website's own [audit settings](/dashboard/audit-settings) (which rules run, external link checking, the spend cap), not your local `squirrel.toml`.
+    Trigger a run from [app.squirrelscan.com](https://app.squirrelscan.com): open a website and use its Run dialog. Cloud audits use the website's own [audit level](/guides/audit-levels) and [audit settings](/dashboard/audit-settings) (which rules run, the spend cap), not your local `squirrel.toml`.
   </Tab>
   <Tab title="MCP">
     Your agent runs the audit as a tool call. Point any MCP client at the [hosted MCP server](/developers/mcp) and it calls `run_audit` with the URL, confirms the credit estimate, then polls `get_audit_status` and reads the report. The full agent workflow is in [Fix your website with a coding agent](/guides/fix-your-site-with-an-ai-agent).

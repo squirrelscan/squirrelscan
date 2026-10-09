@@ -99,8 +99,8 @@ squirrel audit example.com -f html -o report.html
 # Pipe to Claude for AI analysis
 squirrel audit example.com --format llm | claude
 
-# Quick audit for fast initial probe (other options surface, full)
-squirrel audit example.com -C quick
+# Quick audit for a fast first look (other levels: surface, full)
+squirrel audit example.com --level quick
 
 # run only agent experience and performance rules
 squirrel audit example.com --rule-include ax,performance

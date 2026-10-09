@@ -35,7 +35,7 @@ Two choices for where the crawl is allowed to go.
 </CardGroup>
 
 <Note>
-  The **Fast** depth preset, and the **Quick** coverage mode under Custom crawl config, do not follow links at all, whichever scope you pick. On those settings a **Follow links** crawl behaves like a sitemap-only one. Pick Surface or deeper if following links is the point.
+  The **Fast** depth preset, and the **Quick** coverage mode under Custom crawl config, do not follow links while the sitemap has pages to give, whichever scope you pick: only a site with no usable sitemap has its links followed. On those settings a **Follow links** crawl behaves like a sitemap-only one. Quick is the [audit level](/guides/audit-levels) of the same name. Pick Surface or deeper if following links is the point.
 </Note>
 
 **Sitemap only** is for sites whose sitemap is the list you actually care about. It is the same idea as pointing a desktop crawler at a sitemap instead of a homepage.
