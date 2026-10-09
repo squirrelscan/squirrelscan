@@ -77,6 +77,7 @@ import {
   runAudit,
   withAuditPageSettlement,
 } from "@/controllers/audit";
+import { validateFormat } from "@/controllers/report";
 import {
   publishReport,
   savePublishedReportInfo,
@@ -1252,6 +1253,17 @@ export const audit = defineCommand({
       return;
     }
 
+    // Same check as `squirrel report -f`: an unknown format used to run the
+    // whole audit, print no report and exit 0.
+    if (args.format !== undefined) {
+      const formatResult = validateFormat(args.format);
+      if (!formatResult.ok) {
+        console.error(`${fmt.red("Error:")} ${formatResult.error.message}`);
+        process.exitCode = 1;
+        return;
+      }
+    }
+
     // Parse --fail-on early so a malformed expression fails before crawling.
     // citty accumulates repeated string flags into an array at runtime (see
     // toVal in citty/dist) even though its type says `string`, so widen the cast.
@@ -2273,7 +2285,12 @@ export const audit = defineCommand({
         );
       });
 
-      const progress = createProgress("Initializing");
+      // A machine-readable report owns stdout, so its progress and log lines
+      // go to stderr: `squirrel audit URL -f json | jq` must see only JSON.
+      const progress = createProgress(
+        "Initializing",
+        isConsoleFormat ? "stdout" : "stderr"
+      );
       // #950: one stderr line at a steady interval through the pre-rules walk
       // when there is no terminal; the spinner covers a TTY.
       const walkHeartbeat = createWalkHeartbeat({
