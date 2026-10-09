@@ -31,6 +31,7 @@ import type { PreflightBalance } from "@/lib/balance";
 import type { UserSettings } from "@/self/types";
 import type { AuditOptions } from "@/types";
 
+import { decodeFailureLines, isDecodeFailure } from "@/audit/decode-failures";
 import {
   normalizeFailOnArgs,
   parseFailOn,
@@ -51,7 +52,6 @@ import {
   generateXmlReport,
   generateLlmReport,
 } from "@/audit/report";
-import { decodeFailureLines, isDecodeFailure } from "@/audit/decode-failures";
 import { formatRetentionNotice } from "@/audit/retention";
 import {
   filterResolvesToZeroCategories,
@@ -2096,7 +2096,8 @@ export const audit = defineCommand({
                 break;
               case "page:failed":
                 crawlPagesFailed++;
-                if (isDecodeFailure(event.error)) decodeFailures.push(event.error);
+                if (isDecodeFailure(event.error))
+                  decodeFailures.push(event.error);
                 break;
             }
           },

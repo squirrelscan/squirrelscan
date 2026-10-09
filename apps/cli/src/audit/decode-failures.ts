@@ -10,12 +10,16 @@ export function isDecodeFailure(message: string): boolean {
 }
 
 /** Console lines for the undecodable pages: the first `limit`, then a count of the rest. */
-export function decodeFailureLines(messages: readonly string[], limit = 5): string[] {
+export function decodeFailureLines(
+  messages: readonly string[],
+  limit = 5
+): string[] {
   if (messages.length === 0) return [];
   const lines = [
     `${messages.length} page(s) could not be decoded, so their content is missing from this audit:`,
   ];
   for (const message of messages.slice(0, limit)) lines.push(`  ${message}`);
-  if (messages.length > limit) lines.push(`  ...and ${messages.length - limit} more`);
+  if (messages.length > limit)
+    lines.push(`  ...and ${messages.length - limit} more`);
   return lines;
 }
