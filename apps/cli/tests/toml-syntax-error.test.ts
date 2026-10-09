@@ -28,7 +28,9 @@ describe("loadConfig with a TOML syntax error", () => {
       throw new Error("process.exit");
     }) as never);
     try {
-      await expect(loadConfig(path, { silent: true })).rejects.toThrow("process.exit");
+      await expect(loadConfig(path, { silent: true })).rejects.toThrow(
+        "process.exit"
+      );
       const lines = error.mock.calls.map((args) => args.join(" "));
       const label = lines.indexOf("TOML syntax error:");
       expect(label).toBeGreaterThanOrEqual(0);

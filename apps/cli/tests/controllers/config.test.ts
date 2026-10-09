@@ -368,7 +368,9 @@ describe("config read errors (repo#2055)", () => {
       const result = showConfig(path);
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.error.message).toContain("Failed to read config: TOML syntax error: ");
+        expect(result.error.message).toContain(
+          "Failed to read config: TOML syntax error: "
+        );
       }
     } finally {
       rmSync(dir, { recursive: true, force: true });
