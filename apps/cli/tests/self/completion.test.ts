@@ -10,6 +10,7 @@ import { credits } from "@/cli/commands/credits";
 import { feedback } from "@/cli/commands/feedback";
 import { keys } from "@/cli/commands/keys";
 import { report } from "@/cli/commands/report";
+import { self } from "@/cli/commands/self";
 import { skills } from "@/cli/commands/skills";
 import { OUTPUT_FORMATS } from "@/constants";
 import { generateCompletion, type Shell } from "@/self/completion";
@@ -349,5 +350,59 @@ describe.each(shells)("%s completion", (shell) => {
       ].map((m) => [m[1], m[2]] as const);
       expect(pairs).toEqual(expectedPairs);
     }
+  });
+
+  // #23: `self uninstall` is what `brew uninstall --cask squirrel` calls, with
+  // --yes. A completion that still offered only the old --force would hide it.
+  describe("self uninstall", () => {
+    const selfSubCommands = self.subCommands as Record<
+      string,
+      { args?: unknown }
+    >;
+    const def = commandFlags(selfSubCommands.uninstall!);
+
+    function block(): string {
+      if (shell === "fish") {
+        return text
+          .split("\n")
+          .filter((l) =>
+            l.includes(
+              "__fish_seen_subcommand_from self; and __fish_seen_subcommand_from uninstall"
+            )
+          )
+          .join("\n");
+      }
+      // The self arm comes before the skills arm, so the first `uninstall)`
+      // is `self uninstall`.
+      const start = text.indexOf("uninstall)");
+      expect(start).toBeGreaterThan(-1);
+      return text.slice(start, text.indexOf(";;", start));
+    }
+
+    test("is listed as a self subcommand", () => {
+      expect(Object.keys(selfSubCommands)).toContain("uninstall");
+      if (shell === "bash") {
+        expect(text).toMatch(/self_commands="[^"]*\buninstall\b/);
+      } else if (shell === "zsh") {
+        expect(text).toContain("'uninstall:Remove squirrel from the system'");
+      } else {
+        expect(text).toMatch(
+          /__fish_seen_subcommand_from self; and not [^\n]*-a uninstall /
+        );
+      }
+    });
+
+    test("every citty flag is offered, and nothing else", () => {
+      expect(def.flags.sort()).toEqual(["force", "purge", "yes"]);
+      const offered = longFlagsIn(shell, block());
+      expect(offered.sort()).toEqual(def.flags.sort());
+    });
+
+    test("skills uninstall does not inherit its flags in fish", () => {
+      if (shell !== "fish") return;
+      expect(text).not.toMatch(
+        /-n "__fish_seen_subcommand_from uninstall" -l (purge|yes|force)/
+      );
+    });
   });
 });

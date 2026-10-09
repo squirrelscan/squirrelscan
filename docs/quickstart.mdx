@@ -17,6 +17,12 @@ description: "Install squirrelscan and run your first audit"
     iwr -useb https://install.squirrelscan.com/install.ps1 | iex
     ```
   </Tab>
+  <Tab title="Homebrew">
+    ```bash
+    brew install --cask squirrelscan/tap/squirrel
+    ```
+    See [Homebrew](#homebrew) below for how this install updates and uninstalls.
+  </Tab>
 </Tabs>
 
 This downloads the binary to `~/.local/bin/squirrel` and adds it to your PATH.
@@ -68,6 +74,32 @@ To skip GitHub from the start rather than waiting for it to time out:
 If both hosts are unreachable, the installer prints the two URLs it tried. Allowlist either `github.com` or `install.squirrelscan.com`, or download the binary on a machine that can reach one of them and move it into place yourself. A host that answers with a sign-in page instead of the release files, which is what a captive portal or an intercepting proxy does, counts as unreachable and the installer moves on to the other one.
 
 `SQUIRREL_DOWNLOAD_ENDPOINT` points the fallback at a different host if you mirror the releases yourself. Only its scheme, host and path appear in the installer's anonymous failure report, so a URL carrying a token in its userinfo, query or fragment does not send that token anywhere.
+
+### Homebrew
+
+```bash
+brew install --cask squirrelscan/tap/squirrel
+```
+
+The cask puts a small `squirrel` launcher on your PATH. The first time you run it, it runs the regular installer and then your command. The CLI lands in `~/.squirrel/releases` with a `squirrel` link in `~/.local/bin`, the same layout as the install script.
+
+From then on it is an ordinary managed install. `squirrel self update` and auto-update keep it current, and `brew upgrade` leaves the CLI alone. Homebrew only owns the launcher.
+
+To uninstall:
+
+```bash
+brew uninstall --cask squirrel
+```
+
+This removes the launcher and runs `squirrel self uninstall --yes`. That removes the link and the release binaries, and keeps your settings, credentials and audit data in `~/.squirrel`. To remove `~/.squirrel` as well:
+
+```bash
+brew uninstall --zap --cask squirrel
+```
+
+### Uninstall
+
+Whichever way you installed, `squirrel self uninstall` removes the link and the release binaries. It asks before deleting anything. Add `--purge` to remove settings, credentials and audit data too. See [self uninstall](/cli/self#uninstall) for exactly what it removes.
 
 ### If the install is killed at the last step
 
