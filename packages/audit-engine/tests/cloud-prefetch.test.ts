@@ -1291,3 +1291,46 @@ describe("prefetchCloudData — render service (#673)", () => {
     expect(render?.get(pages[1].url)?.skipReason).toBe("service-unavailable");
   });
 });
+
+// ── archive-indexing against a non-public host (repo#2075) ──
+// The Wayback / Common Crawl lookup can only come back empty for a loopback or
+// private-network host, and it debits on submit. Like render, it is skipped
+// `not-applicable` before the charge; a public host still runs it.
+const ARCHIVE_RULES: CloudPrefetchInput["rules"] = [
+  {
+    id: "ax/archive-indexing",
+    cloud: { service: "archive-indexing", unit: "site", creditFeature: "archive_indexing" },
+  },
+];
+const ARCHIVE_PAYLOADS = { "archive-indexing": { url: "https://example.com" } } as const;
+
+describe("archive-indexing and the non-public host gate (repo#2075)", () => {
+  test("hostUnreachableByCloud: archive-indexing is skipped not-applicable and never called", async () => {
+    let called = false;
+    const client = okClient({
+      archiveIndexing: async () => {
+        called = true;
+        return {} as never;
+      },
+    });
+    const res = await prefetchCloudData(
+      input({ client, rules: ARCHIVE_RULES, sitePayloads: ARCHIVE_PAYLOADS, hostUnreachableByCloud: true }),
+    );
+    expect(called).toBe(false);
+    const archive = res.store.get("archive-indexing");
+    expect(archive?.get(CLOUD_SITE_KEY)?.skipReason).toBe("not-applicable");
+    expect(res.spend).toEqual([]);
+  });
+
+  test("a public host still runs archive-indexing", async () => {
+    let called = false;
+    const client = okClient({
+      archiveIndexing: async () => {
+        called = true;
+        return {} as never;
+      },
+    });
+    await prefetchCloudData(input({ client, rules: ARCHIVE_RULES, sitePayloads: ARCHIVE_PAYLOADS }));
+    expect(called).toBe(true);
+  });
+});
