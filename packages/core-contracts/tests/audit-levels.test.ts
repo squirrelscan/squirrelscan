@@ -237,6 +237,12 @@ describe("effective settings under a plan and a balance", () => {
         .pages,
     ).toBe(1);
   });
+
+  test("a fractional limit rounds down to whole pages", () => {
+    const full = { ...AUDIT_LEVEL_PRESETS.full };
+    expect(effectiveAuditSettings(full, { planMaxPages: 120.7 }).settings.pages).toBe(120);
+    expect(effectiveAuditSettings(full, { affordablePages: 2.9 }).settings.pages).toBe(2);
+  });
 });
 
 describe("the old cloud depths", () => {

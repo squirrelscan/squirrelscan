@@ -344,11 +344,11 @@ export function effectiveAuditSettings(
   let pages = clampAuditPages(settings.pages);
   let pagesLimitedBy: AuditPageLimitedBy | null = null;
   if (limits.planMaxPages !== undefined && pages > limits.planMaxPages) {
-    pages = Math.max(1, limits.planMaxPages);
+    pages = Math.max(1, Math.trunc(limits.planMaxPages));
     pagesLimitedBy = "plan";
   }
   if (limits.affordablePages !== undefined && pages > limits.affordablePages) {
-    pages = Math.max(1, limits.affordablePages);
+    pages = Math.max(1, Math.trunc(limits.affordablePages));
     pagesLimitedBy = "balance";
   }
   return { settings: { ...settings, pages }, requestedPages: settings.pages, pagesLimitedBy };
