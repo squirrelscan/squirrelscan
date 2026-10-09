@@ -17,6 +17,13 @@ interface ProgressState {
 }
 
 /**
+ * Where progress, spinner and log lines go. `stdout` only for the interactive
+ * console report; any machine-readable report owns stdout, so its progress
+ * goes to stderr and `squirrel audit URL -f json | jq` sees only the report.
+ */
+export type ProgressStream = "stdout" | "stderr";
+
+/**
  * Simple progress indicator that updates a single line
  * Buffers log output above the progress line
  */
@@ -27,9 +34,15 @@ export class Progress {
   private isTTY: boolean;
   private lastOutput = "";
   private isActive = false;
+  private out: NodeJS.WriteStream;
 
-  constructor() {
-    this.isTTY = process.stdout.isTTY === true;
+  constructor(stream: ProgressStream = "stdout") {
+    this.out = stream === "stderr" ? process.stderr : process.stdout;
+    this.isTTY = this.out.isTTY === true;
+  }
+
+  private writeLine(message: string): void {
+    this.out.write(`${message}\n`);
   }
 
   /**
@@ -73,13 +86,13 @@ export class Progress {
   log(message: string): void {
     if (this.isTTY && this.isActive) {
       // Clear current progress line
-      process.stdout.write("\r" + " ".repeat(this.lastOutput.length) + "\r");
+      this.out.write("\r" + " ".repeat(this.lastOutput.length) + "\r");
       // Print the log message
-      console.log(message);
+      this.writeLine(message);
       // Re-render progress
       this.render();
     } else {
-      console.log(message);
+      this.writeLine(message);
     }
   }
 
@@ -96,11 +109,11 @@ export class Progress {
 
     if (this.isTTY) {
       // Clear the line
-      process.stdout.write("\r" + " ".repeat(this.lastOutput.length) + "\r");
+      this.out.write("\r" + " ".repeat(this.lastOutput.length) + "\r");
     }
 
     if (finalMessage) {
-      console.log(finalMessage);
+      this.writeLine(finalMessage);
     }
   }
 
@@ -134,7 +147,7 @@ export class Progress {
 
     if (this.state.detail) {
       // Truncate detail to fit terminal
-      const columns = process.stdout.columns ?? DEFAULT_TERMINAL_COLUMNS;
+      const columns = this.out.columns ?? DEFAULT_TERMINAL_COLUMNS;
       const maxDetailLen = columns - output.length - PROGRESS_DETAIL_PADDING;
       let detail = this.state.detail;
       if (detail.length > maxDetailLen && maxDetailLen > MIN_DETAIL_LENGTH) {
@@ -147,7 +160,7 @@ export class Progress {
       // Clear previous output and write new
       const clearLen = Math.max(this.lastOutput.length, output.length);
       try {
-        process.stdout.write("\r" + " ".repeat(clearLen) + "\r" + output);
+        this.out.write("\r" + " ".repeat(clearLen) + "\r" + output);
         this.lastOutput = output;
       } catch {
         // Gracefully degrade if stdout fails (e.g., pipe closed)
@@ -161,8 +174,11 @@ export class Progress {
 /**
  * Create and start a new progress indicator
  */
-export function createProgress(message: string): Progress {
-  const progress = new Progress();
+export function createProgress(
+  message: string,
+  stream: ProgressStream = "stdout"
+): Progress {
+  const progress = new Progress(stream);
   progress.start(message);
   return progress;
 }
