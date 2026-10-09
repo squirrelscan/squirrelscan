@@ -17,13 +17,27 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- Audit levels: `--level quick|surface|full`. A level is a named set of audit settings (pages, crawl strategy, cloud checks, rendering, external link checks and probing), defined once and read by `squirrel audit`, `squirrel crawl`, the local MCP tools, the config and the shell completions. `--coverage`/`-C` and `[crawler] coverage` keep working as the older names, `fast` still means quick, and anything else stops with the list of levels. Picking a level fills in every setting; the flags and config values you already use (`--max-pages`, `--render-mode`, `--http`, `--probe`, `[external_links] enabled = false` and the rest) change single settings, and the audit becomes custom. The run banner says which: `Level     surface · max 100 pages`, or `Level     custom (surface + max_pages 200)`. See [Audit levels](https://docs.squirrelscan.com/guides/audit-levels).
+- Reports say which level they ran at. The JSON report has `meta.auditLevel` (`level`, `basedOn`, `changes`, `settings`), the LLM report an `<audit-level>` element, and the text, Markdown and HTML reports an `Audit level:` line. Existing fields keep their names, and `coverageMode` is still stamped.
+- The local MCP `audit_website` tool takes `level` (`coverage` still works) and applies the project config the way `squirrel audit` does, including `[crawler] max_pages`.
+- The audit lists the pages whose response could not be decoded after the crawl, with each URL and its declared content-encoding, the first five and a count of the rest.
+
 ### Changed
 
+- A quick audit spends no credits, signed in or not. It has no cloud checks, so it no longer registers the run (which is what charged the 50-credit base and settled the pages), and it renders pages in the cloud browser only when you ask with `--render-mode` or `--render`. A signed-in quick audit used to cost up to 100 credits.
+- A level's settings are now the defaults: quick no longer checks external links and probes passively, while surface and full check external links and probe actively, signed in or not. Before, external links were checked at every level and probing followed sign-in instead of the level. Explicit flags and config values win as before. `max_pages = 100` and `[external_links] enabled = true`, which `squirrel init` writes into every config, still read as unset.
+- Hints and locked-check messages point at `--level` instead of `-C`, and the quick-level message no longer says "coverage".
 - `security/leaked-secrets` reports a server-only secret found in a browser-served script (database connection strings, service-role and `sk_live_` keys, AWS secret keys and similar) in a new `leaked-secrets-critical` check, "shipped to every visitor". Publishable keys, DigitalOcean Spaces key ids, tutorial values (AWS's documented example keys, placeholder or `localhost` database URLs) and hits only in page HTML are unchanged.
 - `perf/bad-caching` explains a missing ETag behind Cloudflare. Cloudflare drops the `ETag` from HTML it rewrites (Email Address Obfuscation, Automatic HTTPS Rewrites, Replace insecure JavaScript libraries, and JavaScript Detections, which Bot Fight Mode turns on), sometimes only for requests that ask for a page, so a plain `curl -I` can show a header browsers never get. When the validators check warns and at least half of the pages missing a validator came through Cloudflare, the finding now says the CDN may be the cause and lists the fixes: `no-transform` in the HTML `Cache-Control`, turning those features off, or also sending `Last-Modified`. The validators check now warns instead of failing, because a page with no lifetime and no validator already counts against the freshness check. A weak `ETag` (`W/"..."`) still counts as a validator for every content encoding, and a new test pins that. The [rule page](https://docs.squirrelscan.com/rules/perf/bad-caching) shows how to check which side removes it.
+- `crawl/pdf-size` describes its 60MB failure threshold as squirrel's default, not as Google's limit. Google documents 64MB for PDFs; the rule's messages, description and option text now say so.
+- `security/sri`, `content/meta-in-body` and `schema/rating-scope` use one message wording whatever the count, and `schema/rating-scope` no longer puts the rated entity's name in its check message, so one defect keeps one finding identity across pages.
 
 ### Fixed
 
+- `squirrel crawl -C fast` crawled with no page limit at all: the crawl cast the flag to a level without checking it, the page lookup for `fast` came back empty and the cap became `NaN`. The crawl now reads its level through the same parser as `audit`, so `fast` is quick (25 pages) and an unknown level stops before the crawl starts. A `--max-pages` that is not a positive whole number is refused too, instead of the same unbounded crawl.
+- The local MCP `quick_check` tool described itself as a single-page check. It reads the URL and its sitemaps, up to 25 pages, and now says so.
 - The add-website form and every other surface that shows the Quick level now say it costs credits (50 plus 2 per page, up to 100) and is cloud-rendered, instead of saying it is free and local-only.
 - The console report footer counts warnings the same way as its "Total:" line. Before, the footer counted advisory warnings from severity-"info" rules and the score line did not, so one report could show two warning totals.
 - `squirrel audit -f json -o <file>` prints the "JSON report saved to" line on stderr, so stdout carries only the report data when the file is redirected.
@@ -34,16 +48,6 @@ How it works:
 - `crawl/all-noindex-pages` validates its `warnOnPatterns` and `errorOnPatterns` options. A non-array value now fails with a config error instead of being matched as a string.
 - `perf/source-maps` ignores `<script>` and `<style>` inside `<noscript>`. A browser with scripting enabled never runs that markup, so a source map referenced there is no longer reported.
 - `content/article-toc` finds a table of contents ItemList nested in a JSON-LD `@graph` wrapper, as Yoast, Rank Math and Slim SEO emit. Before, the rule reported a missing TOC schema on those sites.
-### Changed
-
-- `crawl/pdf-size` describes its 60MB failure threshold as squirrel's default, not as Google's limit. Google documents 64MB for PDFs; the rule's messages, description and option text now say so.
-### Changed
-
-- `security/sri`, `content/meta-in-body` and `schema/rating-scope` use one message wording whatever the count, and `schema/rating-scope` no longer puts the rated entity's name in its check message, so one defect keeps one finding identity across pages.
-
-### Added
-
-- The audit lists the pages whose response could not be decoded after the crawl, with each URL and its declared content-encoding, the first five and a count of the rest.
 
 ## v0.0.107 (2026-10-09)
 
