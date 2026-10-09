@@ -13,8 +13,23 @@ import {
   cacheControlLifetimeSeconds,
   parseCacheControl,
 } from "@squirrelscan/utils/cache-control";
+import { detectCdnFromHeaders } from "@squirrelscan/utils/cdn";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
+// Cloudflare documents removing the ETag from HTML when one of these features
+// rewrites the body (developers.cloudflare.com/cache/reference/etag-headers/,
+// .../javascript-detections/). The rule cannot see the origin's response, so
+// the note says "may": a site behind Cloudflare whose origin never sent a
+// validator reads the same as one whose validator the edge removed.
+function cloudflareNote(cloudflarePages: number): string {
+  return (
+    `. ${cloudflarePages} of them came through Cloudflare, which may drop the ETag from HTML it rewrites` +
+    " with Email Address Obfuscation, Automatic HTTPS Rewrites, Replace insecure JavaScript libraries" +
+    " or JavaScript Detections (Bot Fight Mode). Add no-transform to the HTML Cache-Control," +
+    " turn those features off, or also send Last-Modified"
+  );
+}
 
 export const optionsSchema = z.object({
   min_freshness_ratio: z
@@ -90,6 +105,7 @@ export const badCachingRule: Rule = {
     // (a validator behind `max-age=0` / `no-cache`). Either is a policy.
     let withCachePolicy = 0;
     let withValidator = 0; // has ETag or Last-Modified
+    let noValidatorViaCloudflare = 0;
     let compressibleTotal = 0;
     let compressibleCompressed = 0;
     const noCacheExamples: string[] = [];
@@ -116,9 +132,15 @@ export const badCachingRule: Rule = {
         !cc.noCache &&
         ((lifetime !== undefined && lifetime > 0) || Boolean(expires));
 
+      // Any non-empty ETag counts, weak (`W/"..."`) included: If-None-Match
+      // compares weakly (RFC 9110 13.1.2), so a weak tag still earns a 304,
+      // and CDNs that compress turn strong tags weak as a matter of course.
       const hasValidator = Boolean(etag || lastModified);
       if (hasValidator) withValidator++;
-      else if (noValidatorExamples.length < 5) noValidatorExamples.push(page.url);
+      else {
+        if (noValidatorExamples.length < 5) noValidatorExamples.push(page.url);
+        if (detectCdnFromHeaders(h) === "cloudflare") noValidatorViaCloudflare++;
+      }
 
       // `max-age=0, must-revalidate` (or `no-cache`) WITH an ETag or a
       // Last-Modified is not a site that forgot to configure caching. It is
@@ -175,15 +197,32 @@ export const badCachingRule: Rule = {
     }
 
     // --- Validator coverage ---
+    // Warns, never fails (pub#600). A page with no lifetime and no validator
+    // already counts against the freshness check above for the same header,
+    // and a page WITH a lifetime only loses a cheap revalidation after it
+    // expires. Cloudflare also removes HTML ETags through features that are
+    // on by default, so a fail here lands on origins configured correctly.
+    // The cap is unconditional: visitors pay the same full transfer whoever
+    // removed the header, so the Cloudflare attribution below only explains,
+    // it never moves the score.
     if (validatorRatio < opts.min_validator_ratio) {
+      const missing = total - withValidator;
+      const viaCloudflare =
+        noValidatorViaCloudflare > 0 && noValidatorViaCloudflare * 2 >= missing;
       checks.push({
         name: "bad-caching-validators",
-        status: validatorRatio < 0.25 ? "fail" : "warn",
-        message: `${total - withValidator}/${total} pages lack an ETag or Last-Modified validator`,
+        status: "warn",
+        message:
+          `${missing}/${total} pages lack an ETag or Last-Modified validator` +
+          (viaCloudflare ? cloudflareNote(noValidatorViaCloudflare) : ""),
         value: `${Math.round(validatorRatio * 100)}%`,
         expected: `≥ ${Math.round(opts.min_validator_ratio * 100)}% with ETag or Last-Modified`,
         pages: noValidatorExamples,
-        details: { pagesWithValidator: withValidator, totalPages: total },
+        details: {
+          pagesWithValidator: withValidator,
+          totalPages: total,
+          ...(viaCloudflare ? { cloudflarePages: noValidatorViaCloudflare } : {}),
+        },
       });
     } else {
       checks.push({

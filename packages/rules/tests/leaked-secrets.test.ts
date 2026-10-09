@@ -74,7 +74,7 @@ function ctx(pageHtml: string, url = "https://squirrelscan.com/releases"): RuleC
 
 function findings(checks: ReturnType<typeof leakedSecretsRule.run>["checks"]) {
   return checks
-    .filter((c) => c.name === "leaked-secrets-high" || c.name === "leaked-secrets-medium")
+    .filter((c) => c.name === "leaked-secrets-critical" || c.name === "leaked-secrets-high" || c.name === "leaked-secrets-medium")
     .flatMap((c) => c.items ?? []);
 }
 

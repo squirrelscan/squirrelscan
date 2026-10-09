@@ -24,7 +24,7 @@ import { NEGATIVES } from "./negatives";
 import { DEDUP_CASES, REAL_WORLD, ROUND_3, ROUND_5 } from "./real-world";
 
 /** `info`: the `leaked-secrets-info` check (#361): expired or session tokens, never a leak. */
-export type Check = "high" | "medium" | "public" | "info";
+export type Check = "critical" | "high" | "medium" | "public" | "info";
 
 export interface Expectation {
   pattern: string;
@@ -135,6 +135,29 @@ function bearerDuplicate(text: string): boolean {
   return shannon(body) >= 3.5 && !tripsFalsePositiveFilter(body);
 }
 
+// Server-only classes (written out here, not imported, so the harness checks
+// the rule's list rather than echoing it). In a browser-served script they
+// report under the critical check instead of high or medium.
+const SERVER_ONLY = new Set([
+  "MongoDB Connection String",
+  "PostgreSQL Connection String",
+  "MySQL Connection String",
+  "Redis Connection String",
+  "Supabase Service Role Key",
+  "Supabase Secret Key",
+  "Supabase Service Role JWT",
+  "Stripe Live Key",
+  "Clerk Secret Key",
+  "AWS Secret Access Key",
+  "Azure Storage Key",
+  "DigitalOcean Token",
+]);
+
+function escalate(pattern: string, check: Check, location: string): Check {
+  const served = location.startsWith("inline-script") || location.startsWith("external-script");
+  return SERVER_ONLY.has(pattern) && served && (check === "high" || check === "medium") ? "critical" : check;
+}
+
 const POSITIVES: Case[] = GENERATORS.flatMap((g) =>
   CONTEXTS.filter((c) => c.accepts.includes(g.tier) && !g.notIn?.includes(c.id)).map((c): Case => {
     const id = `${slug(g.pattern)}@${c.id}`;
@@ -148,8 +171,9 @@ const POSITIVES: Case[] = GENERATORS.flatMap((g) =>
     // A generator says which check its value lands in when a decoder (#361)
     // moves it off the pattern's tier; a context that claims the value first
     // (`Bearer …`) reports under its own pattern's tier instead.
-    const check =
+    const tier =
       pattern === (g.reportedAs ?? g.pattern) && g.check ? g.check : pattern ? checkFor(pattern) : "medium";
+    const check = escalate(pattern, tier, c.location);
     const expect: Expectation[] = pattern ? [{ pattern, check, location: c.location }] : [];
     let knownGap = gap?.gap;
 
@@ -207,7 +231,7 @@ const PROBES: Case[] = [
     // PayPal used to run before Azure and claim a 60+ lowercase run inside
     // the AccountKey, and the whole connection string was then an "overlap"
     // of it. Azure runs first now, and PayPal needs a value position (#357).
-    expect: [{ pattern: "Azure Storage Key", check: "high", location: "inline-script" }],
+    expect: [{ pattern: "Azure Storage Key", check: "critical", location: "inline-script" }],
     mustNotFire: ["PayPal Client ID"],
   })),
   probe("cohere-window-claims-together-key", (r) => ({
@@ -264,7 +288,7 @@ const PROBES: Case[] = [
     html: inline(`const supabase=createClient("https://${runOf(r, LOWER, 20)}.supabase.co",${JSON.stringify(supabaseJwt(r, "service_role"))});`),
     // The anon and service-role keys are both HS256 JWTs from the same
     // issuer; only the `role` claim differs, and the detector decodes it (#361).
-    expect: [{ pattern: "Supabase Service Role JWT", check: "high", location: "inline-script" }],
+    expect: [{ pattern: "Supabase Service Role JWT", check: "critical", location: "inline-script" }],
     mustNotFire: ["Supabase Anon Key"],
   })),
 
@@ -402,7 +426,7 @@ const PROBES: Case[] = [
   probe("rs256-supabase-service-role-jwt-is-high", (r) => ({
     // Which token it is comes from the claims, not from the header literal.
     html: inline(`const supabase=createClient("https://${runOf(r, LOWER, 20)}.supabase.co","${issuerJwt(r, { iss: "supabase", ref: runOf(r, LOWER, 20), role: "service_role", exp: 2000000000 }, "RS256")}");`),
-    expect: [{ pattern: "Supabase Service Role JWT", check: "high", location: "inline-script" }],
+    expect: [{ pattern: "Supabase Service Role JWT", check: "critical", location: "inline-script" }],
   })),
   probe("shopify-storefront-jwt-is-public", (r) => ({
     // Shopify's boot code on every page of a shop: issued by the shop's own
