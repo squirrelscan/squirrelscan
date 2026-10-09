@@ -28,10 +28,16 @@ describe("generateJsonReport stdout with an output file", () => {
       generateJsonReport(createMinimalReport(), outputPath);
 
       const stdoutLines = log.mock.calls.map((args) => args.join(" "));
-      expect(stdoutLines.some((line) => line.includes("JSON report saved to"))).toBe(false);
+      expect(
+        stdoutLines.some((line) => line.includes("JSON report saved to"))
+      ).toBe(false);
 
       const stderrLines = error.mock.calls.map((args) => args.join(" "));
-      expect(stderrLines.some((line) => line.includes(`JSON report saved to: ${outputPath}`))).toBe(true);
+      expect(
+        stderrLines.some((line) =>
+          line.includes(`JSON report saved to: ${outputPath}`)
+        )
+      ).toBe(true);
     } finally {
       log.mockRestore();
       error.mockRestore();
