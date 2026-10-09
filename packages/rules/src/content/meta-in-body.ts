@@ -65,7 +65,7 @@ export const metaInBodyRule: Rule = {
     checks.push({
       name: "meta-in-body",
       status: "fail",
-      message: `Found ${bodyMetas.length} meta tag${bodyMetas.length > 1 ? "s" : ""} in <body>`,
+      message: `Found ${bodyMetas.length} meta tag(s) in <body>`,
       items: metaItems,
       expected: "All meta tags in <head>",
     });

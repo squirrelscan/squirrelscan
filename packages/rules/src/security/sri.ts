@@ -127,7 +127,7 @@ export const sriRule: Rule = {
       checks.push({
         name: "sri",
         status: "warn",
-        message: `${flagged.length} cross-origin ${flagged.length === 1 ? "resource" : "resources"} without Subresource Integrity`,
+        message: `${flagged.length} cross-origin resource(s) without Subresource Integrity`,
         items: flagged.map((f) => ({ id: f.url, label: f.type })),
       });
     } else {

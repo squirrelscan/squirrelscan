@@ -31,6 +31,9 @@ How it works:
 ### Changed
 
 - `crawl/pdf-size` describes its 60MB failure threshold as squirrel's default, not as Google's limit. Google documents 64MB for PDFs; the rule's messages, description and option text now say so.
+### Changed
+
+- `security/sri`, `content/meta-in-body` and `schema/rating-scope` use one message wording whatever the count, and `schema/rating-scope` no longer puts the rated entity's name in its check message, so one defect keeps one finding identity across pages.
 
 ## v0.0.107 (2026-10-09)
 

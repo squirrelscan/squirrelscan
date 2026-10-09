@@ -49,7 +49,7 @@ describe("content/meta-in-body", () => {
     const c = run(`${MICRODATA}<meta name="description" content="Oops">`);
     expect(c.status).toBe("fail");
     expect(c.items).toHaveLength(1);
-    expect(c.message).toBe("Found 1 meta tag in <body>");
+    expect(c.message).toBe("Found 1 meta tag(s) in <body>");
     expect(c.items?.[0]?.id).toBe("description");
     expect(c.items?.some((i) => i.label.startsWith("unknown"))).toBe(false);
   });
@@ -93,5 +93,14 @@ describe("content/meta-in-body", () => {
     const c = run(`<h1>Shirt</h1>`);
     expect(c.status).toBe("pass");
     expect(c.message).toBe("All meta tags correctly placed in <head>");
+  });
+});
+
+describe("content/meta-in-body wording is count-independent (#231)", () => {
+  test("one and several body metas share one message form", () => {
+    expect(run(`<meta name="description" content="Oops">`).message).toBe("Found 1 meta tag(s) in <body>");
+    expect(run(`<meta name="description" content="Oops"><meta name="robots" content="index">`).message).toBe(
+      "Found 2 meta tag(s) in <body>",
+    );
   });
 });
