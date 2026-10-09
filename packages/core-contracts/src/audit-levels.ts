@@ -96,7 +96,7 @@ export const AUDIT_LEVEL_COPY: Readonly<
 > = {
   quick: {
     label: "Quick",
-    summary: "A fast look at the seed page and sitemaps. Local rules only, no credits.",
+    summary: `A fast look at the seed page and sitemaps: ${COVERAGE_PAGE_LIMITS.quick} pages, rendered in the cloud. Costs credits: 50 plus 2 per page, up to 100.`,
   },
   surface: {
     label: "Surface",
