@@ -20,8 +20,16 @@ import { checkAffectedPages } from "./affected-pages";
 export function auditLevelLine(report: AuditReport): string | null {
   const a = report.auditLevel;
   if (!a) return null;
-  if (a.level !== "custom") return `Audit level: ${AUDIT_LEVEL_COPY[a.level].label}.`;
-  const changed = a.changes.map((key) => AUDIT_SETTING_COPY[key].label).join(", ");
+  // A stored or fetched report can carry anything: only known names print, and a
+  // snapshot with an unknown level is left out rather than throwing or echoing it.
+  const level = Object.hasOwn(AUDIT_LEVEL_COPY, a.level) ? AUDIT_LEVEL_COPY[a.level] : null;
+  if (!level) return null;
+  if (a.level !== "custom") return `Audit level: ${level.label}.`;
+  if (!Object.hasOwn(AUDIT_LEVEL_COPY, a.basedOn)) return null;
+  const changed = a.changes
+    .filter((key) => Object.hasOwn(AUDIT_SETTING_COPY, key))
+    .map((key) => AUDIT_SETTING_COPY[key].label)
+    .join(", ");
   const basedOn = AUDIT_LEVEL_COPY[a.basedOn].label;
   return `Audit level: ${AUDIT_LEVEL_COPY.custom.label}, based on ${basedOn}${changed ? ` (changed: ${changed})` : ""}.`;
 }

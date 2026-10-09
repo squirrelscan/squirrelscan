@@ -258,8 +258,10 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   // changed setting keys are the core-contracts AuditSettings names.
   if (report.auditLevel) {
     const a = report.auditLevel;
+    // Escaped like every other attribute here: the snapshot can come from a
+    // stored or fetched report, and this output is read by an agent.
     lines.push(
-      `<audit-level level="${a.level}" based-on="${a.basedOn}" changes="${a.changes.join(",")}" pages="${a.settings.pages}"/>`,
+      `<audit-level level="${escapeXml(String(a.level))}" based-on="${escapeXml(String(a.basedOn))}" changes="${escapeXml(a.changes.map(String).join(","))}" pages="${Number(a.settings.pages)}"/>`,
     );
   }
 
