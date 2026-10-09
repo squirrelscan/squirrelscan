@@ -112,6 +112,16 @@ export const AUDIT_LEVEL_COPY: Readonly<
   },
 };
 
+/** Words for each setting, for any surface that lists or names one. */
+export const AUDIT_SETTING_COPY: Readonly<Record<AuditSettingKey, { label: string }>> = {
+  pages: { label: "Pages" },
+  crawlStrategy: { label: "Crawl strategy" },
+  cloudChecks: { label: "Cloud checks" },
+  render: { label: "Rendering" },
+  externalLinks: { label: "External link checks" },
+  probe: { label: "Probing" },
+};
+
 export const DEFAULT_AUDIT_LEVEL: AuditLevel = "surface";
 
 export interface ResolvedAuditSettings {
@@ -145,6 +155,23 @@ export function resolveAuditSettings(
   };
 }
 
+/**
+ * The crawler mode that implements a crawl strategy. The crawler and its
+ * stored records still speak the older coverage-mode words (quick, surface,
+ * full), one per strategy, so a custom audit's strategy maps to the mode that
+ * crawls that way, whichever level it started from.
+ */
+export function crawlStrategyCoverageMode(strategy: CrawlStrategy): AuditLevel {
+  switch (strategy) {
+    case "seed-and-sitemap":
+      return "quick";
+    case "sampled":
+      return "surface";
+    case "all":
+      return "full";
+  }
+}
+
 /** Which level a full set of settings is: a preset's name when it matches one exactly, else `custom`. */
 export function levelOfSettings(settings: AuditSettings): AuditLevelId {
   for (const level of AUDIT_LEVELS) {
@@ -168,6 +195,49 @@ export function parseAuditLevel(raw: string): AuditLevel | null {
   const value = raw.trim().toLowerCase();
   const aliased = value === "fast" ? "quick" : value;
   return (AUDIT_LEVELS as readonly string[]).includes(aliased) ? (aliased as AuditLevel) : null;
+}
+
+const CRAWL_STRATEGIES: readonly CrawlStrategy[] = ["seed-and-sitemap", "sampled", "all"];
+const RENDER_POLICIES: readonly RenderPolicy[] = ["off", "auto", "all"];
+const PROBE_INTENSITIES: readonly ProbeIntensity[] = ["passive", "active", "aggressive"];
+
+/**
+ * Read a stored snapshot (a report's `auditLevel`) back, or null when it is not
+ * one. A report file can come from anywhere, so nothing in it is trusted as is:
+ * `basedOn` must be a level, each setting must have its type (anything else
+ * falls back to that level's value, pages are clamped), and `level` and
+ * `changes` are kept only when they are valid values, else recomputed. Every
+ * string that comes back is one of this module's own words.
+ */
+export function parseResolvedAuditSettings(value: unknown): ResolvedAuditSettings | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const v = value as Record<string, unknown>;
+  const basedOn = typeof v.basedOn === "string" ? parseAuditLevel(v.basedOn) : null;
+  if (basedOn === null) return null;
+  const raw =
+    typeof v.settings === "object" && v.settings !== null && !Array.isArray(v.settings)
+      ? (v.settings as Record<string, unknown>)
+      : {};
+  const overrides: Partial<AuditSettings> = {};
+  if (typeof raw.pages === "number" && Number.isFinite(raw.pages)) overrides.pages = raw.pages;
+  if (CRAWL_STRATEGIES.includes(raw.crawlStrategy as CrawlStrategy)) {
+    overrides.crawlStrategy = raw.crawlStrategy as CrawlStrategy;
+  }
+  if (typeof raw.cloudChecks === "boolean") overrides.cloudChecks = raw.cloudChecks;
+  if (RENDER_POLICIES.includes(raw.render as RenderPolicy)) overrides.render = raw.render as RenderPolicy;
+  if (typeof raw.externalLinks === "boolean") overrides.externalLinks = raw.externalLinks;
+  if (PROBE_INTENSITIES.includes(raw.probe as ProbeIntensity)) {
+    overrides.probe = raw.probe as ProbeIntensity;
+  }
+  const resolved = resolveAuditSettings(basedOn, overrides);
+  const level =
+    v.level === "custom" || (typeof v.level === "string" && (AUDIT_LEVELS as readonly string[]).includes(v.level))
+      ? (v.level as AuditLevelId)
+      : resolved.level;
+  const changes = Array.isArray(v.changes)
+    ? AUDIT_SETTING_KEYS.filter((key) => (v.changes as unknown[]).includes(key))
+    : resolved.changes;
+  return { level, basedOn, settings: resolved.settings, changes };
 }
 
 /**

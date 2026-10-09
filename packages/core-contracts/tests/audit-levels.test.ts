@@ -7,13 +7,17 @@ import {
   AUDIT_LEVEL_PRESETS,
   AUDIT_LEVELS,
   AUDIT_MAX_PAGES,
+  AUDIT_SETTING_COPY,
+  AUDIT_SETTING_KEYS,
   clampAuditPages,
+  crawlStrategyCoverageMode,
   effectiveAuditSettings,
   legacyCloudDepthSettings,
   levelOfSettings,
   LEGACY_CLOUD_DEPTH_PROFILES,
   parseAuditLevel,
   parseLegacyCloudDepth,
+  parseResolvedAuditSettings,
   resolveAuditSettings,
 } from "../src/audit-levels";
 import { COVERAGE_PAGE_LIMITS } from "../src/limits";
@@ -110,6 +114,70 @@ describe("custom", () => {
     expect(clampAuditPages(Number.NaN)).toBe(100);
     expect(clampAuditPages(Number.POSITIVE_INFINITY)).toBe(100);
     expect(resolveAuditSettings("full", { pages: 99_999 }).settings.pages).toBe(10_000);
+  });
+});
+
+describe("reading a stored snapshot back", () => {
+  test("a snapshot round-trips unchanged", () => {
+    const custom = resolveAuditSettings("surface", { pages: 200, render: "off" });
+    expect(parseResolvedAuditSettings(JSON.parse(JSON.stringify(custom)))).toEqual(custom);
+    const quick = resolveAuditSettings("quick");
+    expect(parseResolvedAuditSettings(quick)).toEqual(quick);
+  });
+
+  test("keeps the stored level and changes, so a later preset change does not rewrite history", () => {
+    const stored = {
+      level: "surface",
+      basedOn: "surface",
+      changes: [],
+      settings: { ...AUDIT_LEVEL_PRESETS.surface, pages: 80 },
+    };
+    expect(parseResolvedAuditSettings(stored)).toMatchObject({
+      level: "surface",
+      changes: [],
+      settings: { pages: 80 },
+    });
+  });
+
+  test("anything that is not a snapshot is null", () => {
+    for (const value of [null, undefined, "surface", 3, [], {}, { basedOn: "deep" }]) {
+      expect(parseResolvedAuditSettings(value)).toBeNull();
+    }
+  });
+
+  test("untrusted values never come back: bad settings fall back to the level, bad words are recomputed", () => {
+    const parsed = parseResolvedAuditSettings({
+      level: '"/><script>',
+      basedOn: "FULL",
+      changes: ["pages", "<x>", 7],
+      settings: { pages: Infinity, render: "<img>", probe: "loud", cloudChecks: "yes", externalLinks: false },
+    });
+    expect(parsed).toEqual({
+      level: "custom",
+      basedOn: "full",
+      changes: ["pages"],
+      settings: { ...AUDIT_LEVEL_PRESETS.full, externalLinks: false },
+    });
+  });
+});
+
+describe("setting words", () => {
+  test("every setting has a label", () => {
+    expect(Object.keys(AUDIT_SETTING_COPY).sort()).toEqual([...AUDIT_SETTING_KEYS].sort());
+    for (const key of AUDIT_SETTING_KEYS) expect(AUDIT_SETTING_COPY[key].label.length).toBeGreaterThan(0);
+  });
+});
+
+describe("crawl strategy", () => {
+  test("each level's strategy maps back to the crawler mode of the same name", () => {
+    for (const level of AUDIT_LEVELS) {
+      expect(crawlStrategyCoverageMode(AUDIT_LEVEL_PRESETS[level].crawlStrategy)).toBe(level);
+    }
+  });
+
+  test("a custom audit crawls by its strategy, not by the level it started from", () => {
+    const custom = resolveAuditSettings("quick", { crawlStrategy: "all" });
+    expect(crawlStrategyCoverageMode(custom.settings.crawlStrategy)).toBe("full");
   });
 });
 
