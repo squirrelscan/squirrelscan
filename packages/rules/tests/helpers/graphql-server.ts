@@ -27,12 +27,17 @@ export function html(body = "<!doctype html><title>Not found</title>", status = 
   return new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8" } });
 }
 
+// The real fetch, captured when the first stub goes in. A test that stubs twice
+// would otherwise save the first stub as its "original" and leave it installed
+// for every later file in the same bun process.
+let realFetch: typeof fetch | undefined;
+
 /** Install the stub. Returns the request log and a restore function. */
 export function stubFetch(routes: Record<string, Route>): {
   sent: SentRequest[];
   restore: () => void;
 } {
-  const original = globalThis.fetch;
+  realFetch ??= globalThis.fetch;
   const sent: SentRequest[] = [];
   const stub = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
@@ -55,7 +60,8 @@ export function stubFetch(routes: Record<string, Route>): {
   return {
     sent,
     restore: () => {
-      globalThis.fetch = original;
+      if (realFetch) globalThis.fetch = realFetch;
+      realFetch = undefined;
     },
   };
 }
