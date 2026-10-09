@@ -22,6 +22,8 @@ export {
 
 export { detectPageType, type PageType } from "./page-type";
 
+export { isHiddenFromMarkup } from "./hidden-markup";
+
 export {
   detectSoft404,
   looksLikeNotFoundText,

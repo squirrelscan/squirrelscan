@@ -1298,6 +1298,12 @@ export interface HeadingData {
   level: number;
   text: string;
   order: number;
+  /**
+   * Set only when the markup hides the heading (#547): `hidden`, inline
+   * `display:none` or `visibility:hidden`, or a hidden ancestor. Stored with the
+   * parse, so a replayed parse and a fresh one agree.
+   */
+  hidden?: boolean;
 }
 
 export interface HeadingHierarchy {

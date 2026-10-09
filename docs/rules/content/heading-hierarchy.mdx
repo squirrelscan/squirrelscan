@@ -15,7 +15,7 @@ The rule runs on every crawled page and reads the heading analysis the parser pr
 
 - `heading-hierarchy` warns when a level was skipped. Message: `Skipped heading levels detected`, listing each skip. Severity warning, weight 5.
 - `heading-hierarchy` passes when nothing was skipped and the page has headings. Message: `Heading hierarchy is valid`.
-- `empty-headings` warns when a heading has no text. Message: `2 empty heading(s) found`.
+- `empty-headings` warns when a heading has no text. Message: `2 empty heading(s) found`. A heading the markup hides from every reader does not count: one with the `hidden` attribute, inline `display:none` or `visibility:hidden`, or inside a `[hidden]` or `aria-hidden="true"` ancestor. The same test decides which empty headings [a11y/empty-heading](/rules/a11y/empty-heading) reports. Hiding through a stylesheet class cannot be seen from the markup, so it still counts.
 - `long-headings` reports info for headings over 70 characters. Message: `3 heading(s) over 70 characters`, each item naming the level with the first 50 characters of its text.
 - `duplicate-headings` reports info for repeated heading text. Message: `4 duplicate heading(s)`, listing the repeated text.
 

@@ -36,13 +36,15 @@ export const headingHierarchyRule: Rule = {
       });
     }
 
-    // Check for empty headings
-    if (headings.emptyHeadings.length > 0) {
+    // Check for empty headings. Hidden placeholders are not read by anyone, so
+    // they are not counted (#547).
+    const emptyCount = headings.emptyHeadings.filter((h) => !h.hidden).length;
+    if (emptyCount > 0) {
       checks.push({
         name: "empty-headings",
         status: "warn",
-        message: `${headings.emptyHeadings.length} empty heading(s) found`,
-        details: { count: headings.emptyHeadings.length },
+        message: `${emptyCount} empty heading(s) found`,
+        details: { count: emptyCount },
       });
     }
 
