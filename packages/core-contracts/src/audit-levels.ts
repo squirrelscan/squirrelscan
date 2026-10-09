@@ -124,6 +124,12 @@ export const AUDIT_SETTING_COPY: Readonly<Record<AuditSettingKey, { label: strin
 
 export const DEFAULT_AUDIT_LEVEL: AuditLevel = "surface";
 
+/**
+ * A level and the settings it resolved to. A snapshot read back with
+ * `parseResolvedAuditSettings` keeps the `level` and `changes` it was stored
+ * with, so they describe the run as it was labelled then: read `settings` for
+ * what actually ran, never infer it from `level`.
+ */
 export interface ResolvedAuditSettings {
   /** The level these settings are: a preset's name, or `custom` when anything differs. */
   level: AuditLevelId;
@@ -331,6 +337,10 @@ export interface EffectiveAuditSettings {
   pagesLimitedBy: AuditPageLimitedBy | null;
 }
 
+function wholePageLimit(limit: number): number {
+  return Number.isNaN(limit) ? 1 : Math.max(1, Math.trunc(limit));
+}
+
 /**
  * The settings an audit will actually run with: the requested settings, with the
  * page budget lowered to the plan's ceiling and then to what the balance covers.
@@ -343,12 +353,14 @@ export function effectiveAuditSettings(
 ): EffectiveAuditSettings {
   let pages = clampAuditPages(settings.pages);
   let pagesLimitedBy: AuditPageLimitedBy | null = null;
-  if (limits.planMaxPages !== undefined && pages > limits.planMaxPages) {
-    pages = Math.max(1, Math.trunc(limits.planMaxPages));
+  // `!(pages <= limit)` so a NaN limit (a bad balance sum) limits to one page
+  // instead of failing open. An infinite limit does not limit.
+  if (limits.planMaxPages !== undefined && !(pages <= limits.planMaxPages)) {
+    pages = wholePageLimit(limits.planMaxPages);
     pagesLimitedBy = "plan";
   }
-  if (limits.affordablePages !== undefined && pages > limits.affordablePages) {
-    pages = Math.max(1, Math.trunc(limits.affordablePages));
+  if (limits.affordablePages !== undefined && !(pages <= limits.affordablePages)) {
+    pages = wholePageLimit(limits.affordablePages);
     pagesLimitedBy = "balance";
   }
   return { settings: { ...settings, pages }, requestedPages: settings.pages, pagesLimitedBy };

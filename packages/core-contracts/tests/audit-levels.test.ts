@@ -243,6 +243,19 @@ describe("effective settings under a plan and a balance", () => {
     expect(effectiveAuditSettings(full, { planMaxPages: 120.7 }).settings.pages).toBe(120);
     expect(effectiveAuditSettings(full, { affordablePages: 2.9 }).settings.pages).toBe(2);
   });
+
+  test("a NaN limit limits to one page instead of failing open; an infinite one does not limit", () => {
+    const full = { ...AUDIT_LEVEL_PRESETS.full };
+    expect(effectiveAuditSettings(full, { affordablePages: Number.NaN })).toMatchObject({
+      settings: { pages: 1 },
+      pagesLimitedBy: "balance",
+    });
+    expect(effectiveAuditSettings(full, { planMaxPages: Number.NaN }).pagesLimitedBy).toBe("plan");
+    expect(effectiveAuditSettings(full, { affordablePages: Infinity })).toMatchObject({
+      settings: { pages: full.pages },
+      pagesLimitedBy: null,
+    });
+  });
 });
 
 describe("the old cloud depths", () => {
