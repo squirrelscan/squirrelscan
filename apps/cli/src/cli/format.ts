@@ -97,7 +97,7 @@ export function pageLimitHint(
   if (maxPages >= MAX_PAGES_CAP) {
     return `⚠ Reached the max pages cap (${MAX_PAGES_CAP}). This is the hard limit; split the audit by section (e.g. [crawler] include) to scan more.`;
   }
-  return `⚠ Reached max pages (${maxPages}). Raise with --max-pages <N> or [crawler] max_pages (cap ${MAX_PAGES_CAP}); use -C full for full coverage.`;
+  return `⚠ Reached max pages (${maxPages}). Raise with --max-pages <N> or [crawler] max_pages (cap ${MAX_PAGES_CAP}); use --level full for a full audit.`;
 }
 
 export const divider = (char = "─", len = 50) => char.repeat(len);

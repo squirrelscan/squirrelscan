@@ -234,6 +234,10 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
         ? { stopReason: report.scanScope.stopReason }
         : {}),
       ...(report.coverage ? { coverage: report.coverage } : {}),
+      // The audit level and the settings it resolved to: `level` (a level's
+      // name, or `custom`), `basedOn`, `changes` and `settings`. Absent on
+      // reports written before audit levels.
+      ...(report.auditLevel ? { auditLevel: report.auditLevel } : {}),
       // #1990: how much of this audit's rules phase was replayed from a previous
       // audit rather than evaluated now. A replay and a fresh evaluation produce
       // identical findings by construction, so this is the only thing in the

@@ -48,8 +48,8 @@ describe("lockedRulesMessage", () => {
       coverageMode: "quick",
     });
     expect(msg?.audience).toBe("quick-coverage");
-    expect(msg?.action).toContain("quick coverage");
-    expect(msg?.action).toContain("-C surface or -C full");
+    expect(msg?.action).toContain("the quick level skips the cloud checks");
+    expect(msg?.action).toContain("--level surface or --level full");
     expect(msg?.action).not.toContain("temporarily unavailable");
     expect(msg?.cta).toBeUndefined();
   });

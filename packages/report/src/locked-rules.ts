@@ -89,7 +89,7 @@ export function lockedRulesMessage(report: LockedRulesReportShape): LockedRulesM
       ...base,
       audience: "quick-coverage",
       action:
-        "This was a quick audit: cloud checks don't run in quick coverage. Re-run with -C surface or -C full to include them.",
+        "This was a quick audit: the quick level skips the cloud checks. Re-run at the surface or full level (--level surface or --level full) to include them.",
     };
   }
   if (signedIn && optedOut) {

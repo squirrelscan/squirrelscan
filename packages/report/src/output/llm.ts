@@ -253,6 +253,16 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     );
   }
 
+  // The audit level, so an agent knows what kind of audit the score rests on
+  // and which settings were changed from the level (a custom audit). The
+  // changed setting keys are the core-contracts AuditSettings names.
+  if (report.auditLevel) {
+    const a = report.auditLevel;
+    lines.push(
+      `<audit-level level="${a.level}" based-on="${a.basedOn}" changes="${a.changes.join(",")}" pages="${a.settings.pages}"/>`,
+    );
+  }
+
   // Rule-result cache disclosure (#1990). An agent asking "is this a fresh
   // reading of my site?" cannot tell from the findings — a replay is identical by
   // construction — so the answer has to be stated (#1981).

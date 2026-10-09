@@ -90,8 +90,8 @@ describe("pickTip", () => {
     expect(reachable.size).toBe(TIPS.length - 1);
   });
 
-  test("interpolates the coverage constant instead of a hardcoded page count", () => {
-    const fullCoverageTip = TIPS.find((t) => t.includes("--coverage full"));
+  test("interpolates the full level's page budget instead of a hardcoded count", () => {
+    const fullCoverageTip = TIPS.find((t) => t.includes("--level full"));
     expect(fullCoverageTip).toBeDefined();
     expect(fullCoverageTip).not.toMatch(/\{COVERAGE_FULL_MAX_PAGES\}/);
     expect(fullCoverageTip).toContain(`up to ${COVERAGE_FULL_MAX_PAGES} pages`);

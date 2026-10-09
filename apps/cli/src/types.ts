@@ -1,6 +1,10 @@
 // Type definitions for SEO audit
 
 import type { ProbeLevel } from "@squirrelscan/config";
+import type {
+  AuditLevel,
+  ResolvedAuditSettings,
+} from "@squirrelscan/core-contracts/audit-levels";
 
 export interface AuditResult {
   url: string;
@@ -609,11 +613,18 @@ export interface AuditReport {
    */
   cloudMode?: "http" | "browser";
   /**
-   * Coverage mode this audit ran with (#747). "quick" makes locked cloud rules
-   * read as a coverage choice ("re-run with -C surface/full"), never a cloud
-   * outage. Stamped at publish. Mirrors core-contracts `AuditReport`.
+   * The audit level this run started from, in the crawler's words (#747).
+   * "quick" makes locked cloud rules read as a level choice ("re-run at the
+   * surface or full level"), never a cloud outage. Stamped at publish. Mirrors
+   * core-contracts `AuditReport`.
    */
   coverageMode?: CoverageMode;
+  /**
+   * The audit level and the settings it resolved to: the level (or `custom`),
+   * the level it started from, what changed, and every value. Mirrors
+   * core-contracts `AuditReport`. REPORT-ONLY.
+   */
+  auditLevel?: ResolvedAuditSettings;
   /**
    * Render-block recovery summary (#512): pages whose render was blocked and
    * recovered via a non-browser fallback fetch. Mirrors core-contracts
@@ -622,7 +633,8 @@ export interface AuditReport {
   fetchFallbacks?: { recovered: number };
 }
 
-export type CoverageMode = "quick" | "surface" | "full";
+/** The crawler's name for an audit level (see core-contracts audit-levels). */
+export type CoverageMode = AuditLevel;
 export type { ProbeLevel };
 
 export interface AuditOptions {
@@ -654,7 +666,13 @@ export interface AuditOptions {
   verbose?: boolean;
   debug?: boolean;
   projectName?: string; // custom project name (for local addresses)
-  coverageMode?: CoverageMode; // quick, surface, or full
+  coverageMode?: CoverageMode; // the crawl strategy, as the crawler names it
+  /**
+   * The audit level the command resolved, with every override applied. The
+   * controller reads its cloud checks setting and stamps it on the report.
+   * Absent for callers that predate audit levels: the coverage mode decides.
+   */
+  auditLevel?: ResolvedAuditSettings;
   // Crawl parallelism overrides (#1068): global worker pool + per-host cap.
   // Positive integers; override [crawler] concurrency / per_host_concurrency
   // and suppress the loopback fast path.

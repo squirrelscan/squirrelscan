@@ -1,17 +1,18 @@
 // squirrel crawl <url> - crawl only (no analysis)
 
+import type { ResolvedAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
+
 import { defineCommand } from "citty";
 import { platform } from "node:os";
 
 import { getGlobalConfigPath, loadConfig } from "@/config";
-import {
-  MAX_PAGES_CAP,
-  COVERAGE_QUICK_MAX_PAGES,
-  COVERAGE_SURFACE_MAX_PAGES,
-  COVERAGE_FULL_MAX_PAGES,
-} from "@/constants";
+import { MAX_PAGES_CAP } from "@/constants";
 import { runCrawl, type CrawlerEvent } from "@/controllers/crawl";
-import { pageLimitNotice, resolvePageLimit } from "@/lib/page-limit";
+import {
+  pageLimitNotice,
+  resolvePageLimit,
+  type PageLimit,
+} from "@/lib/page-limit";
 import { warnIfSessionUnreadable } from "@/self/credentials";
 import { loadUserSettings, updateSettings } from "@/self/settings";
 import { CWD_UNAVAILABLE, cwdOr } from "@/utils/cwd";
@@ -19,6 +20,18 @@ import { logger, setLogInterceptor } from "@/utils/logger";
 import { getProjectNameContext, parseUserUrl } from "@/utils/url";
 
 import { version as packageVersion } from "../../../package.json";
+import {
+  AUDIT_LEVELS,
+  type AuditLevel,
+  levelBannerValue,
+  levelCoverageMode,
+  levelHelpList,
+  levelMaxPages,
+  parseAuditLevel,
+  readLevelFlag,
+  resolveLocalAuditLevel,
+  unknownLevelMessage,
+} from "../audit-level";
 import {
   printHeader,
   printUpdateNotification,
@@ -32,6 +45,66 @@ import { fmt, pageLimitHint } from "../format";
 import { createProgress } from "../progress";
 import { promptForProjectName } from "../prompt";
 import { parsePositiveIntFlag } from "./audit";
+
+/** What `squirrel crawl` crawls: its level and page budget, or why it refused. */
+export type CrawlBudget =
+  | {
+      ok: true;
+      level: AuditLevel;
+      /** The crawler's coverage mode for the level's crawl strategy. */
+      coverageMode: AuditLevel;
+      pageLimit: PageLimit;
+      resolved: ResolvedAuditSettings;
+    }
+  | { ok: false; error: string };
+
+/**
+ * Resolve the crawl's level and page budget: --level / -C > [crawler] coverage
+ * > quick, and --max-pages > a non-default [crawler] max_pages > the level's
+ * budget, capped at the hard limit. Shared parsing with `audit`, so `fast` is
+ * quick here too, and a value that is not a level is refused instead of
+ * becoming a NaN page cap and an unbounded crawl.
+ */
+export function resolveCrawlBudget(input: {
+  level?: unknown;
+  coverage?: unknown;
+  maxPages?: string;
+  config: { crawler: { coverage?: AuditLevel; max_pages: number } };
+}): CrawlBudget {
+  const flag = readLevelFlag(input);
+  if (!flag.ok) return { ok: false, error: flag.error };
+  const raw = flag.raw ?? input.config.crawler.coverage ?? "quick";
+  const level = parseAuditLevel(raw);
+  if (level === null) return { ok: false, error: unknownLevelMessage(raw) };
+
+  let requested: number;
+  if (input.maxPages !== undefined) {
+    requested = Number.parseInt(input.maxPages, 10);
+    if (!Number.isInteger(requested) || requested < 1) {
+      return {
+        ok: false,
+        error: `--max-pages must be a positive integer (got '${input.maxPages}').`,
+      };
+    }
+  } else {
+    // A config that sets max_pages = 100 (the schema default) reads as unset.
+    requested =
+      input.config.crawler.max_pages === 100
+        ? levelMaxPages(level)
+        : input.config.crawler.max_pages;
+  }
+  const pageLimit = resolvePageLimit(requested);
+  const resolved = resolveLocalAuditLevel(level, {
+    pages: pageLimit.effective,
+  });
+  return {
+    ok: true,
+    level,
+    coverageMode: levelCoverageMode(resolved),
+    pageLimit,
+    resolved,
+  };
+}
 
 export const crawl = defineCommand({
   meta: {
@@ -47,7 +120,7 @@ export const crawl = defineCommand({
     "max-pages": {
       type: "string",
       alias: "m",
-      description: `Maximum pages to crawl (default by coverage mode: quick ${COVERAGE_QUICK_MAX_PAGES}, surface ${COVERAGE_SURFACE_MAX_PAGES}, full ${COVERAGE_FULL_MAX_PAGES}; cap ${MAX_PAGES_CAP})`,
+      description: `Maximum pages to crawl (default by level: ${AUDIT_LEVELS.map((l) => `${l} ${levelMaxPages(l)}`).join(", ")}; cap ${MAX_PAGES_CAP})`,
     },
     concurrency: {
       type: "string",
@@ -59,11 +132,14 @@ export const crawl = defineCommand({
       description:
         "Max concurrent requests per host (overrides [crawler] per_host_concurrency; suppresses the localhost fast path)",
     },
+    level: {
+      type: "string",
+      description: `Audit level, which sets the crawl's page budget and strategy (default: quick): ${levelHelpList()}`,
+    },
     coverage: {
       type: "string",
       alias: "C",
-      description:
-        "Coverage mode: quick (fast/local/free, default), surface (one per pattern), full (comprehensive)",
+      description: "Old name for --level, still accepted (fast = quick)",
     },
     refresh: {
       type: "boolean",
@@ -100,28 +176,22 @@ export const crawl = defineCommand({
       const channel = settings.ok ? settings.data.channel : "stable";
       const config = await loadConfig(getGlobalConfigPath());
 
-      // Resolve coverage mode: CLI flag > config > default (quick)
-      const coverageMode = (args.coverage ??
-        config.crawler.coverage ??
-        "quick") as "quick" | "surface" | "full";
-
-      // Get default max pages for coverage mode
-      const coverageMaxPages = {
-        quick: COVERAGE_QUICK_MAX_PAGES,
-        surface: COVERAGE_SURFACE_MAX_PAGES,
-        full: COVERAGE_FULL_MAX_PAGES,
-      }[coverageMode];
-
-      // CLI --max-pages > config max_pages (if non-default) > coverage mode default
-      const configMaxPagesIsDefault = config.crawler.max_pages === 100;
-      // Clamped and reported identically to `audit` (#1909).
-      const pageLimit = resolvePageLimit(
-        args["max-pages"]
-          ? Number.parseInt(args["max-pages"], 10)
-          : configMaxPagesIsDefault
-            ? coverageMaxPages
-            : config.crawler.max_pages
-      );
+      // Level and page budget, validated: an unknown level or a non-numeric
+      // --max-pages used to reach the crawler as an `undefined`/NaN cap, which
+      // no `pages >= cap` check ever stops (an unbounded crawl). Clamped and
+      // reported identically to `audit` (#1909).
+      const budget = resolveCrawlBudget({
+        level: args.level,
+        coverage: args.coverage,
+        maxPages: args["max-pages"],
+        config,
+      });
+      if (!budget.ok) {
+        console.error(`${fmt.red("Error:")} ${budget.error}`);
+        process.exitCode = 1;
+        return;
+      }
+      const { coverageMode, pageLimit } = budget;
       const maxPages = pageLimit.effective;
       const crawlClampNotice = pageLimitNotice(pageLimit);
       if (crawlClampNotice) console.error(fmt.yellow(crawlClampNotice));
@@ -173,7 +243,7 @@ export const crawl = defineCommand({
         await promptForUpdate(settings.data, {}); // crawl is always interactive
       }
       console.log(`Crawling: ${args.url}`);
-      console.log(`Coverage: ${coverageMode} (max ${maxPages} pages)`);
+      console.log(`Level: ${levelBannerValue(budget.resolved)}`);
       if (args.refresh) {
         console.log("Mode: Fresh crawl (ignoring cache)");
       }

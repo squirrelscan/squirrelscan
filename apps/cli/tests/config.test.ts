@@ -7,8 +7,8 @@ import { ConfigSchema, getDefaultConfig } from "../src/config";
 describe("ConfigSchema", () => {
   test("parses empty object with defaults", () => {
     const config = ConfigSchema.parse({});
-    expect(config.crawler.max_pages).toBe(100); // schema default; coverage mode budget overrides when unset
-    expect(config.crawler.coverage).toBeUndefined(); // unset → auth-resolved at the command layer (paid→surface, free/anon→quick)
+    expect(config.crawler.max_pages).toBe(100); // schema default; the level's page budget overrides when unset
+    expect(config.crawler.coverage).toBeUndefined(); // unset → auth-resolved at the command layer (signed in→surface, anon→quick)
     expect(config.crawler.delay_ms).toBe(100);
     expect(config.crawler.per_host_concurrency).toBe(5); // #265 single-host throughput bump
     expect(config.crawler.per_host_delay_ms).toBe(50); // #265
@@ -54,8 +54,8 @@ describe("ConfigSchema", () => {
 describe("getDefaultConfig", () => {
   test("returns valid default config", () => {
     const config = getDefaultConfig();
-    expect(config.crawler.max_pages).toBe(100); // schema default; coverage mode budget overrides when unset
-    expect(config.crawler.coverage).toBeUndefined(); // unset → auth-resolved at the command layer (paid→surface, free/anon→quick)
+    expect(config.crawler.max_pages).toBe(100); // schema default; the level's page budget overrides when unset
+    expect(config.crawler.coverage).toBeUndefined(); // unset → auth-resolved at the command layer (signed in→surface, anon→quick)
     expect(config.rules.enable).toEqual(["*"]);
     expect(config.plugins?.enabled).toBe(false);
   });
@@ -81,6 +81,32 @@ describe("cloud.domain_stats default (paused)", () => {
   test("the other included cloud steps are untouched by the pause", () => {
     const cloud = ConfigSchema.parse({}).cloud;
     expect(cloud.editor_summary).toBe(true);
+  });
+});
+
+describe("crawler.coverage (the audit level)", () => {
+  test("accepts the three levels, and fast as the old name for quick", () => {
+    for (const level of ["quick", "surface", "full"] as const) {
+      expect(
+        ConfigSchema.parse({ crawler: { coverage: level } }).crawler.coverage
+      ).toBe(level);
+    }
+    expect(
+      ConfigSchema.parse({ crawler: { coverage: "fast" } }).crawler.coverage
+    ).toBe("quick");
+    expect(
+      ConfigSchema.parse({ crawler: { coverage: "Full" } }).crawler.coverage
+    ).toBe("full");
+  });
+
+  test("rejects anything else, listing the levels", () => {
+    const result = ConfigSchema.safeParse({ crawler: { coverage: "deep" } });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(JSON.stringify(result.error.issues)).toContain(
+        "'quick' | 'surface' | 'full'"
+      );
+    }
   });
 });
 

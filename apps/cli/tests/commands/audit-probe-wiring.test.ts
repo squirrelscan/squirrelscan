@@ -218,9 +218,10 @@ describe("squirrel audit probing intensity", () => {
     expect(probes[0]?.budgetMs).toBe(10_000);
   });
 
-  test("--pentest is --coverage full --probe aggressive", async () => {
+  test("--pentest is --level full --probe aggressive", async () => {
     await runAudit(["--pentest"], "", []);
-    expect(line("Coverage")).toStartWith("full");
+    // -m 1 and aggressive probing are both changes from the full level.
+    expect(line("Level")).toBe("custom (full + max_pages 1, probe aggressive)");
     expect(line("Probing")).toBe("aggressive · budget 2m");
     expect(output.some((l) => l.includes(ROBOTS_NOTE))).toBe(true);
   });
@@ -259,7 +260,7 @@ describe("squirrel audit probing intensity", () => {
       "unknown --probe level 'loud'. Valid: passive, active, aggressive.",
     ],
     [["--probe-budget", "abc"], "--probe-budget must be a positive duration"],
-    [["--pentest"], "--pentest cannot be combined with --coverage quick"],
+    [["--pentest"], "--pentest cannot be combined with --level quick"],
   ])("%p is refused before any request", async (flags, message) => {
     await runAudit(flags);
     expect(process.exitCode).toBe(1);
@@ -273,7 +274,7 @@ describe("squirrel audit probing intensity", () => {
     expect(process.exitCode).toBe(1);
     expect(
       output.some((l) =>
-        l.includes("--pentest cannot be combined with --coverage full,full")
+        l.includes("--pentest cannot be combined with --level full,full")
       )
     ).toBe(true);
     expect(requested).toEqual([]);

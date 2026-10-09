@@ -18,7 +18,7 @@ describe("pageLimitHint", () => {
     expect(hint).toContain("--max-pages <N>");
     expect(hint).toContain("[crawler] max_pages");
     expect(hint).toContain(`cap ${MAX_PAGES_CAP}`);
-    expect(hint).toContain("-C full");
+    expect(hint).toContain("--level full");
   });
 
   test("uses the cap-specific wording at the hard cap", () => {

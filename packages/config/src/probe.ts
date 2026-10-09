@@ -1,5 +1,5 @@
-// Probing intensity: the third audit axis, next to breadth (coverage, max pages)
-// and rendering. It says how hard each page is poked beyond what the crawl
+// Probing intensity: one of the audit level's settings, next to breadth (the
+// level's page budget and crawl strategy) and rendering. It says how hard each page is poked beyond what the crawl
 // fetched:
 //
 //   passive:    no request beyond the crawl. Today's rules and passive rules.
@@ -11,6 +11,8 @@
 // Everything here is pure, so the CLI and the hosted runner resolve a run's
 // level the same way; the caller supplies the context (local or cloud, signed
 // in, ownership verified) instead of this module looking it up.
+
+import { parseAuditLevel } from "@squirrelscan/core-contracts/audit-levels";
 
 export const PROBE_LEVELS = ["passive", "active", "aggressive"] as const;
 export type ProbeLevel = (typeof PROBE_LEVELS)[number];
@@ -90,7 +92,7 @@ export interface ProbeFlags {
   probe?: string;
   passive?: boolean;
   aggressive?: boolean;
-  /** `--pentest`: shorthand for `--coverage full --probe aggressive`. */
+  /** `--pentest`: shorthand for `--level full --probe aggressive`. */
   pentest?: boolean;
   /** `--probe-budget`: a raw, unvalidated duration. */
   probeBudget?: string;
@@ -103,7 +105,7 @@ export interface ProbeConfig {
   budget?: string | number;
 }
 
-export type ProbeLevelSource = "flag" | "shortcut" | "config" | "default";
+export type ProbeLevelSource = "flag" | "shortcut" | "config" | "level" | "default";
 
 export interface ResolvedProbing {
   level: ProbeLevel;
@@ -172,15 +174,16 @@ export function validateProbeFlags(flags: ProbeFlags, coverage?: string): string
       return `--pentest cannot be combined with --probe ${probe} (--pentest is --probe aggressive)`;
     }
   }
-  if (flags.pentest && coverage !== undefined && coverage.trim().toLowerCase() !== "full") {
-    return `--pentest cannot be combined with --coverage ${coverage} (--pentest is --coverage full)`;
+  if (flags.pentest && coverage !== undefined && parseAuditLevel(coverage) !== "full") {
+    return `--pentest cannot be combined with --level ${coverage} (--pentest is --level full)`;
   }
   return null;
 }
 
 /**
  * Resolve the run's probing level and budget. Precedence, highest first:
- *   --probe  >  --passive / --aggressive / --pentest  >  [security] probe  >  context default
+ *   --probe  >  --passive / --aggressive / --pentest  >  [security] probe
+ *     >  the audit level's probe setting  >  context default
  * and for the budget:
  *   --probe-budget  >  [security] budget  >  the level's default.
  *
@@ -195,8 +198,14 @@ export function resolveProbeIntensity(input: {
   flags: ProbeFlags;
   config?: ProbeConfig;
   context: ProbeRunContext;
-  /** The raw coverage value, so `--pentest` can refuse a conflicting one. */
+  /** The raw level value (`--level` / `-C`), so `--pentest` can refuse a conflicting one. */
   coverage?: string;
+  /**
+   * The audit level's probe setting, the default when no flag or config value
+   * picks one. Never aggressive: no level defaults to it. A locked context
+   * still resolves to passive, since only an explicit choice is refused there.
+   */
+  levelDefault?: Exclude<ProbeLevel, "aggressive">;
 }): ProbeResolution {
   const { flags, config = {}, context } = input;
 
@@ -235,6 +244,9 @@ export function resolveProbeIntensity(input: {
   } else if (config.probe) {
     level = config.probe;
     source = "config";
+  } else if (input.levelDefault !== undefined && !isProbeLocked(context)) {
+    level = input.levelDefault;
+    source = "level";
   } else {
     level = defaultProbeLevel(context);
     source = "default";
@@ -248,7 +260,7 @@ export function resolveProbeIntensity(input: {
 
   const notices: string[] = [];
   if (context.discoveryProbesDisabled) {
-    if (level !== "passive" && source !== "default") {
+    if (level !== "passive" && source !== "default" && source !== "level") {
       notices.push(
         `Probing stays passive: discovery probes are disabled ([crawler] disable_discovery_probes or --disable-discovery-probes), so '${level}' sends no probe.`,
       );
