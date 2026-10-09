@@ -1441,6 +1441,68 @@ rule's inputs. Two things are not left to the declaration — the fan-out groups
 page ORIGIN as well as by template (`security/sri` compares it), and a rule
 reading a response header is disqualified outright.
 
+### Decision on #275: tighten the fan-out grouping key
+
+Option 1 ships, narrowly. The fan-out groups on the chrome key, the page origin
+and a rule-input signature (`fanoutInputSignature`): the sorted `<script src>`
+and stylesheet `<link href>` lists with whether each carries `integrity`, every
+`<meta>`'s name, property, http-equiv and charset, the `content` of the metas a
+declared rule reads the value of (viewport, geo.*, ICBM, http-equiv refresh),
+and the `<main>` landmark count. The stored
+`template_fp` is unchanged, so `templateClusters()` and the parity gate are
+defined over the same key as before. The three constructed counterexamples (a
+missing viewport meta, a second `<main>`, a script path that differs on one host)
+each get a verdict from running the rule on their own page instead of inheriting
+one, pinned by `template-fanout-equivalence-golden.test.ts`, which fails on the
+old key and passes on the new one.
+
+Real crawls, measured 2026-10-10 (macOS arm64, Bun 1.3.14). Both keys were counted
+in one pass over each crawl (parse, chrome key, `fanoutInputSignature`, first
+page of a key is the representative, `DEFAULT_MAX_CLUSTERS` cap, no rules run).
+On openelectricity those counts match what `streamPageRules` itself reports
+with fan-out on:
+
+| crawl | auditable pages | main key: clusters / inherited | tightened key: clusters / inherited |
+| --- | --- | --- | --- |
+| www.gymshark.com (2026-09-22, 4000 pages) | 3983 | 37 / 3946 | 52 / 3931 |
+| openelectricity.org.au (fresh crawl 2026-10-10, `-C full -m 250`) | 250 | 11 / 239 | 11 / 239 |
+
+The tightened key costs gymshark 15 inherited pages (0.4%) and openelectricity
+none. `template-fanout-bench.ts --verify` on the openelectricity crawl is
+byte-identical with and without fan-out on both keys (250 pages compared, 239
+fanned, 5975 rule runs removed, about 40 s per run). On gymshark, `--verify`
+did not finish within 40 minutes (2,340 s CPU, 1.7 GB peak), so its
+byte-identity is not recorded here. The local openelectricity crawls from
+August had lost their HTML to content-store pruning, hence the fresh crawl.
+
+Before the real crawls, four synthetic estates of 360 pages and 6 chrome
+templates were run through `streamPageRules` with fan-out on, on `origin/main`
+and on this branch, each in its own process. They mimic the one thing the tighter key changes, the script
+list. Wall and CPU time were within 10% between the arms and between main and
+the branch (about 2.5 to 2.9 s wall per run), so they are not a result at this
+size; the counts below are.
+
+| estate | main: clusters / inherited | main: fanned equals reference | branch: clusters / inherited | branch: fanned equals reference |
+| --- | --- | --- | --- | --- |
+| stable bundles (2 per template) | 6 / 354 | yes | 6 / 354 | yes |
+| per-route hashed chunks (5 routes per template, each chunk shared by its route's pages) | 6 / 354 | no, 36 pages differ | 30 / 330 | yes |
+| hashed chunk on every third page only | 6 / 354 | no, 120 pages differ | 126 / 234 | yes |
+| worst case, a unique hashed chunk name on every page | 6 / 354 | no, 2 pages differ | 360 / 0 | yes |
+
+Reading it: the chrome-only key inherits the most pages and is wrong on every
+estate where pages of one chrome load different bundles (in the unique-name case
+the differing rule is `js-libraries-detected`, which reads the script url). The
+tighter key gives coverage up only where the inputs genuinely differ, and is
+byte-identical to running every rule everywhere on all four. A stable-bundle
+site loses nothing, and a realistic per-route estate keeps 330 of 354. Only the
+unique-name-per-page worst case falls to zero, and a real route does not produce
+it, because the pages of a route share its chunk.
+
+Normalising hash tokens out of the script name was tried to win that worst case
+back (354 inherited again) and rejected: it reproduced the same 2 differing
+pages as `main`, because a rule can match inside a hash. Byte-identity is the
+claim this feature rests on, so the key keeps the full script name.
+
 ### Byte-identity
 
 The claim is that the output is indistinguishable from running every rule on every

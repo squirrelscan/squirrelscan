@@ -205,6 +205,7 @@ export { templateFingerprintKey, templateVerdictKey } from "./template-key";
 export {
   createTemplateFanout,
   fanoutClusterKey,
+  fanoutInputSignature,
   templateFanoutEnabled,
   DEFAULT_MAX_CLUSTERS,
 } from "./template-fanout";

@@ -64,9 +64,12 @@
 // That is #1950's premise and it is empirical: a rule constant on two real crawls
 // can vary on a third.
 //
-// Two things are NOT left to that, because they are properties of the PAGE rather
-// than claims about a rule's markup inputs, and because a corpus of one origin can
-// never exhibit them:
+// #275 tightened the GROUPING key past the stored one (see `fanoutInputSignature`):
+// script and stylesheet urls with integrity presence, meta names and the meta
+// values rules read, and the <main> count. Two further things are NOT left
+// to the declaration, because they are properties of the PAGE rather than claims
+// about a rule's markup inputs, and because a corpus of one origin can never
+// exhibit them:
 //
 //  - **The page's ORIGIN is part of the grouping key here.** Several declared rules
 //    resolve resources against it: `security/sri` reports a script as cross-origin
@@ -86,6 +89,7 @@
 // and their pages run the ordinary path. The cap changes cost, never output.
 
 import { detachFromPage } from "./detach";
+import { fnv1a64 } from "./fingerprint";
 
 import type { CheckResult } from "@squirrelscan/core-contracts";
 import type { RuleRunResult, RuleRunner } from "@squirrelscan/rules";
@@ -133,8 +137,85 @@ export interface TemplateFanoutStats {
   readonly pagesOverCap: number;
 }
 
+/** Metas whose `content` a declared template rule reads (not just their presence). */
+export const CONTENT_READ_METAS: ReadonlySet<string> = new Set([
+  "viewport",
+  "geo.region",
+  "geo.placename",
+  "geo.position",
+  "icbm",
+]);
+
 /**
- * The grouping key: the template cluster AND the page's origin.
+ * The rule-input signature (#275): the markup inputs the chrome key does not
+ * reach but a declared rule reads, reduced to 16 hex chars.
+ *
+ *  - the `<script src>` list (with whether each has `integrity`) and the same for
+ *    stylesheet links, sorted and not de-duplicated: `security/sri` reports the resource url, so
+ *    two pages whose bundles differ in PATH on one host (per-route hashed
+ *    bundles) must not share a verdict;
+ *  - the set of `<meta>` names (`name`, `property`, `http-equiv`, `charset`):
+ *    `mobile/viewport` and friends pass or fail on one being present, and the
+ *    `content` of the metas a declared rule reads the value of (viewport, geo.*,
+ *    ICBM, http-equiv refresh);
+ *  - the number of `<main>` / `role="main"` landmarks: `a11y/landmark-one-main`.
+ *
+ * It is part of the FANOUT grouping key only. The stored `template_fp` stays the
+ * chrome key `templateClusters()` and #1950's gate are defined over. A tighter
+ * production grouping than the one the parity gate proves constancy over is
+ * strictly safer; the cost is fan-out coverage, never output.
+ *
+ * `null` for a page with no document, which then never groups.
+ */
+export function fanoutInputSignature(
+  doc: {
+    querySelectorAll(selector: string): ArrayLike<{ getAttribute(name: string): string | null }>;
+  } | null,
+): string | null {
+  if (!doc) return null;
+  // `security/sri` reads whether each cross-origin script and stylesheet carries an
+  // `integrity`, so presence is part of the entry. Duplicates are kept: a rule that
+  // counts them must not inherit a verdict from a page with fewer.
+  const scripts = Array.from(
+    doc.querySelectorAll("script[src]"),
+    (el) => `${el.getAttribute("src") ?? ""}|${el.getAttribute("integrity") ? "sri" : ""}`,
+  );
+  const stylesheets = Array.from(
+    doc.querySelectorAll('link[rel~="stylesheet"][href]'),
+    (el) => `${el.getAttribute("href") ?? ""}|${el.getAttribute("integrity") ? "sri" : ""}`,
+  );
+  const metas = Array.from(doc.querySelectorAll("meta"), (el) => {
+    const name = el.getAttribute("name");
+    const httpEquiv = el.getAttribute("http-equiv");
+    // Each part is prefixed with its attribute, so `name="x"` and `property="x"`
+    // differ. `content` is included only for the metas a declared rule reads the
+    // VALUE of: `mobile/viewport`, `a11y/zoom-disabled`, `mobile/viewport-zoom`,
+    // `local/geo-meta` and `a11y/meta-refresh` (kept honest by a test).
+    const readsContent =
+      CONTENT_READ_METAS.has((name ?? "").toLowerCase()) ||
+      (httpEquiv ?? "").toLowerCase() === "refresh";
+    return JSON.stringify([
+      name,
+      el.getAttribute("property"),
+      httpEquiv,
+      el.getAttribute("charset") !== null,
+      readsContent ? (el.getAttribute("content") ?? "") : null,
+    ]);
+  });
+  const mains = doc.querySelectorAll('main, [role="main"]').length;
+  // JSON, not a join, so a value containing a delimiter cannot forge a boundary.
+  const canonical = JSON.stringify([
+    scripts.sort(),
+    stylesheets.sort(),
+    metas.sort(),
+    mains,
+  ]);
+  return fnv1a64(new TextEncoder().encode(canonical), 0n);
+}
+
+/**
+ * The grouping key: the template cluster, the page's origin AND (#275) its
+ * rule-input signature.
  *
  * Origin is here rather than in `page_features.template_fp` deliberately —
  * `template_fp` answers "same template?" for `SiteQuery.templateClusters()` and
@@ -145,8 +226,13 @@ export interface TemplateFanoutStats {
  * A url that will not parse gets its whole string as the origin, so it can only
  * ever share a group with a byte-identical url — the conservative answer.
  */
-export function fanoutClusterKey(templateKey: string | null, pageUrl: string): string | null {
-  if (!templateKey) return null;
+export function fanoutClusterKey(
+  templateKey: string | null,
+  pageUrl: string,
+  inputSignature: string | null,
+): string | null {
+  // A page whose inputs could not be read never groups, rather than grouping on "".
+  if (!templateKey || inputSignature === null) return null;
   let origin: string;
   try {
     origin = new URL(pageUrl).origin;
@@ -154,7 +240,7 @@ export function fanoutClusterKey(templateKey: string | null, pageUrl: string): s
     origin = pageUrl;
   }
   // NUL cannot appear in an origin or in a 16-hex key, so the join is injective.
-  return `${origin}\u0000${templateKey}`;
+  return `${origin}\u0000${templateKey}\u0000${inputSignature}`;
 }
 
 export interface TemplateFanout {

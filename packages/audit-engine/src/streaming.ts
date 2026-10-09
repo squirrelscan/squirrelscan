@@ -47,6 +47,7 @@ import { templateFingerprintKey } from "./template-key";
 import {
   createTemplateFanout,
   fanoutClusterKey,
+  fanoutInputSignature,
   templateFanoutEnabled,
   type TemplateFanoutStats,
 } from "./template-fanout";
@@ -470,12 +471,18 @@ export function streamPageRules(
         const shared: SharedPageSignals = {
           fingerprint: fingerprintPage(parsed, pageUrl),
         };
-        // The grouping key is the template cluster AND this page's origin: a
+        // The grouping key is the template cluster, this page's rule-input signature
+        // (#275: script and stylesheet urls with integrity presence, meta names and
+        // the meta values rules read, the main count) AND its origin: a
         // declared rule may resolve resources against the origin (`security/sri`
         // decides "cross-origin" by comparing it), so a crawl spanning http:// and
         // https:// must not copy a verdict across that boundary.
         const clusterKey = fanout
-          ? fanoutClusterKey(templateFingerprintKey(shared.fingerprint), pageUrl)
+          ? fanoutClusterKey(
+              templateFingerprintKey(shared.fingerprint),
+              pageUrl,
+              fanoutInputSignature(parsed.document),
+            )
           : null;
         const fanned = fanout?.take(clusterKey);
 
