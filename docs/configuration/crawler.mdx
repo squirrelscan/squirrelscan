@@ -357,6 +357,7 @@ does not honour, the body cannot be read. The crawl records that page as failed
 with a message naming the URL and the declared encoding, for example
 `Could not decode response body from https://example.com/a (content-encoding: br)`.
 The runtime also prints its own `Decompression error:` line, which carries no URL.
+The CLI lists those messages after the crawl, the first five and a count of the rest, so you can see which pages were lost without opening the crawl database.
 
 The page is missing from the analysis, so a rule that reports an absence cannot
 tell it from a page that really lacks the thing. When any page is lost this way

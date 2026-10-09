@@ -31,6 +31,7 @@ import type { PreflightBalance } from "@/lib/balance";
 import type { UserSettings } from "@/self/types";
 import type { AuditOptions } from "@/types";
 
+import { decodeFailureLines, isDecodeFailure } from "@/audit/decode-failures";
 import {
   normalizeFailOnArgs,
   parseFailOn,
@@ -1967,6 +1968,7 @@ export const audit = defineCommand({
       // carries the processed count.
       let lastProgressAt = 0;
       let crawlPagesFailed = 0;
+      const decodeFailures: string[] = [];
       const PROGRESS_MIN_INTERVAL_MS = 1_000;
 
       // #1583: newest counts seen from the crawl, kept OUTSIDE onProgress so the
@@ -2094,6 +2096,8 @@ export const audit = defineCommand({
                 break;
               case "page:failed":
                 crawlPagesFailed++;
+                if (isDecodeFailure(event.error))
+                  decodeFailures.push(event.error);
                 break;
             }
           },
@@ -2178,6 +2182,8 @@ export const audit = defineCommand({
         setLogInterceptor(undefined);
         progress.stop();
       }
+
+      for (const line of decodeFailureLines(decodeFailures)) log(line);
 
       // #271: register ran concurrently with the crawl above; resolve it now (it
       // settled long ago in the common case, so this await is instant) for the
