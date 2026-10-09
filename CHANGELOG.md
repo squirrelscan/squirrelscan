@@ -38,6 +38,10 @@ How it works:
 
 - `security/sri`, `content/meta-in-body` and `schema/rating-scope` use one message wording whatever the count, and `schema/rating-scope` no longer puts the rated entity's name in its check message, so one defect keeps one finding identity across pages.
 
+### Added
+
+- The audit lists the pages whose response could not be decoded after the crawl, with each URL and its declared content-encoding, the first five and a count of the rest.
+
 ## v0.0.107 (2026-10-09)
 
 squirrelscan can now probe, politely: a new probing intensity setting decides how much an audit may send, and the first two probing rules (GraphQL introspection and GraphQL mutations over GET) use it. There is also a rule for auth tokens kept in web storage, a rule for a CSP that blocks the page's own resources, quieter secret scanning, and the entity page filter now behaves the same in the CLI, the MCP tools and the hosted API.
