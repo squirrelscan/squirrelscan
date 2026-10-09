@@ -16,7 +16,7 @@ export function generateJsonReport(
 
   if (outputPath) {
     writeReportFile(outputPath, content);
-    console.log(`JSON report saved to: ${outputPath}`);
+    console.error(`JSON report saved to: ${outputPath}`);
   } else {
     process.stdout.write(content);
     process.stdout.write("\n");
