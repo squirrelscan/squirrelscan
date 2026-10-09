@@ -256,3 +256,55 @@ describe("fold keeps source-map groups apart (repo#2341)", () => {
     expect(foldGroupKey({ name: "x", status: "warn", message: "m" })).toBe("x\u0000warn\u0000\u0000");
   });
 });
+
+describe("perf/source-maps: noscript content is not read (#440)", () => {
+  function pageChecks(body: string): CheckResult[] {
+    const url = `${ORIGIN}/`;
+    const html = `<!DOCTYPE html><html><head><title>t</title></head><body>${body}</body></html>`;
+    const ctx = {
+      page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
+      parsed: parsePage(html, url),
+      site: { baseUrl: ORIGIN, pages: [], robotsTxt: null, sitemaps: null, scripts: [] },
+      options: {},
+    } as unknown as RuleContext;
+    const result = sourceMapsRule.run(ctx);
+    if (result instanceof Promise) throw new Error("rule is async");
+    return result.checks;
+  }
+
+  const STYLE = "body{opacity:1}/*# sourceMappingURL=/fallback.css.map */";
+  const SCRIPT = "console.log(1);//# sourceMappingURL=/fallback.js.map";
+  const INLINE_SCRIPT = "console.log(1);//# sourceMappingURL=data:application/json;base64,e30=";
+
+  test("an inline style inside noscript is not reported", () => {
+    const checks = pageChecks(`<noscript><style>${STYLE}</style></noscript>`);
+    expect(exposed(checks)).toHaveLength(0);
+    expect(checks.some((c) => c.name === "source-maps-inline")).toBe(false);
+  });
+
+  test("an inline script inside noscript is not reported", () => {
+    const checks = pageChecks(`<noscript><script>${SCRIPT}</script></noscript>`);
+    expect(exposed(checks)).toHaveLength(0);
+    expect(checks.some((c) => c.name === "source-maps-inline")).toBe(false);
+  });
+
+  test("an inline data: script map inside noscript is not reported as inline", () => {
+    const checks = pageChecks(`<noscript><script>${INLINE_SCRIPT}</script></noscript>`);
+    expect(checks.some((c) => c.name === "source-maps-inline")).toBe(false);
+  });
+
+  test("the same inline style outside noscript is still reported", () => {
+    const checks = pageChecks(`<style>${STYLE}</style>`);
+    expect(mapIds(checks)).toEqual([`${ORIGIN}/fallback.css.map`]);
+  });
+
+  test("the same inline script outside noscript is still reported", () => {
+    const checks = pageChecks(`<script>${SCRIPT}</script>`);
+    expect(mapIds(checks)).toEqual([`${ORIGIN}/fallback.js.map`]);
+  });
+
+  test("the same inline data: script outside noscript is still reported as inline", () => {
+    const checks = pageChecks(`<script>${INLINE_SCRIPT}</script>`);
+    expect(checks.some((c) => c.name === "source-maps-inline")).toBe(true);
+  });
+});
