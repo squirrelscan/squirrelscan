@@ -20,6 +20,7 @@ How it works:
 ### Changed
 
 - `security/leaked-secrets` reports a server-only secret found in a browser-served script (database connection strings, service-role and `sk_live_` keys, AWS secret keys and similar) in a new `leaked-secrets-critical` check, "shipped to every visitor". Publishable keys, DigitalOcean Spaces key ids, tutorial values (AWS's documented example keys, placeholder or `localhost` database URLs) and hits only in page HTML are unchanged.
+- `perf/bad-caching` explains a missing ETag behind Cloudflare. Cloudflare drops the `ETag` from HTML it rewrites (Email Address Obfuscation, Automatic HTTPS Rewrites, Replace insecure JavaScript libraries, and JavaScript Detections, which Bot Fight Mode turns on), sometimes only for requests that ask for a page, so a plain `curl -I` can show a header browsers never get. When the validators check warns and at least half of the pages missing a validator came through Cloudflare, the finding now says the CDN may be the cause and lists the fixes: `no-transform` in the HTML `Cache-Control`, turning those features off, or also sending `Last-Modified`. The validators check now warns instead of failing, because a page with no lifetime and no validator already counts against the freshness check. A weak `ETag` (`W/"..."`) still counts as a validator for every content encoding, and a new test pins that. The [rule page](https://docs.squirrelscan.com/rules/perf/bad-caching) shows how to check which side removes it.
 
 ## v0.0.107 (2026-10-09)
 
