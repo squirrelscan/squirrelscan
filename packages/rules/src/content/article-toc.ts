@@ -4,6 +4,8 @@ import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { flattenJsonLdNodes } from "@squirrelscan/utils";
+
 const optionsSchema = z.object({
   min_word_count: z.number().default(1500),
   min_headings: z.number().default(3),
@@ -117,25 +119,20 @@ interface ItemListSchema {
 function checkTocSchema(doc: Document): boolean {
   const scripts = doc.querySelectorAll('script[type="application/ld+json"]');
   for (const script of scripts) {
-    try {
-      const data = JSON.parse(script.textContent || "") as
-        | ItemListSchema
-        | ItemListSchema[];
-      const schemas: ItemListSchema[] = Array.isArray(data) ? data : [data];
-      for (const schema of schemas) {
-        if (
-          schema["@type"] === "ItemList" &&
-          Array.isArray(schema.itemListElement)
-        ) {
-          // Check if items have fragment URLs (in-page navigation)
-          const hasFragmentUrls = schema.itemListElement.some(
-            (item) => item.url?.includes("#") || item.item?.includes("#")
-          );
-          if (hasFragmentUrls) return true;
-        }
+    // Flattened per script, so an ItemList inside a Yoast / Rank Math `@graph`
+    // wrapper is found (#339). Unparseable JSON yields an empty list.
+    const schemas = flattenJsonLdNodes(script.textContent || "") as ItemListSchema[];
+    for (const schema of schemas) {
+      if (
+        schema["@type"] === "ItemList" &&
+        Array.isArray(schema.itemListElement)
+      ) {
+        // Check if items have fragment URLs (in-page navigation)
+        const hasFragmentUrls = schema.itemListElement.some(
+          (item) => item.url?.includes("#") || item.item?.includes("#")
+        );
+        if (hasFragmentUrls) return true;
       }
-    } catch {
-      // Ignore parse errors - handled by json-ld-valid rule
     }
   }
   return false;
