@@ -24,6 +24,7 @@ How it works:
 
 ### Fixed
 
+- The console report footer counts warnings the same way as its "Total:" line. Before, the footer counted advisory warnings from severity-"info" rules and the score line did not, so one report could show two warning totals.
 - Template fan-out, which lets the pages of one template share a rule's verdict, now groups pages only when the markup those rules read matches too: the same scripts and stylesheets (and whether each carries `integrity`), the same `<meta>` tags with the same viewport, geo and refresh values, and the same number of `<main>` landmarks. Before, a page missing its viewport meta, carrying a second `<main>` or loading a different per-route bundle could inherit a sibling's result. Fan-out runs in cloud audits and in CLI audits with `SQUIRREL_RULE_CACHE=0`. On a 4000-page gymshark.com crawl, 3931 of 3983 pages still inherit a verdict (3946 before).
 - `crawl/all-noindex-pages` validates its `warnOnPatterns` and `errorOnPatterns` options. A non-array value now fails with a config error instead of being matched as a string.
 - `perf/source-maps` ignores `<script>` and `<style>` inside `<noscript>`. A browser with scripting enabled never runs that markup, so a source map referenced there is no longer reported.
