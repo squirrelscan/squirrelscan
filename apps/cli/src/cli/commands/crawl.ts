@@ -350,7 +350,11 @@ export const crawl = defineCommand({
         `✓ Crawled ${result.data.pagesCount} pages in ${durationSec}s`
       );
       // Surface the page-cap override when the limit was the binding constraint. #124
-      const limitHint = pageLimitHint(result.data.limitReached, maxPages);
+      const limitHint = pageLimitHint(
+        result.data.limitReached,
+        maxPages,
+        budget.resolved.settings.crawlStrategy === "all"
+      );
       if (limitHint) console.log(fmt.yellow(limitHint));
 
       console.log("");

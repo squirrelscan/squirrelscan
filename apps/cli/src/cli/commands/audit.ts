@@ -2473,7 +2473,8 @@ export const audit = defineCommand({
       // basis), so == maxPages means the cap stopped the crawl. #124
       const limitHint = pageLimitHint(
         report.pages.length >= maxPages,
-        maxPages
+        maxPages,
+        auditLevel.settings.crawlStrategy === "all"
       );
       if (limitHint) log(fmt.yellow(limitHint));
       // #1180: when the cap didn't bind but the union score still carries

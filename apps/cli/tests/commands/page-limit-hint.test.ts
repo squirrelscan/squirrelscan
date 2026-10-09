@@ -21,6 +21,13 @@ describe("pageLimitHint", () => {
     expect(hint).toContain("--level full");
   });
 
+  test("does not suggest the full level to a crawl that already reads every page", () => {
+    const hint = pageLimitHint(true, 500, true);
+    expect(hint).toContain("Reached max pages (500)");
+    expect(hint).not.toContain("--level full");
+    expect(hint?.endsWith("(cap 10000).")).toBe(true);
+  });
+
   test("uses the cap-specific wording at the hard cap", () => {
     const hint = pageLimitHint(true, MAX_PAGES_CAP);
     expect(hint).not.toBeNull();
