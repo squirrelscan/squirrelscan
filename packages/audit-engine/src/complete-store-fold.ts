@@ -391,8 +391,8 @@ export function createCompleteStoreTallyFold(
       const freshChecks = isRemoved ? undefined : freshByRule?.get(ruleId);
       const carriedForRule = carriedByRule?.get(ruleId);
       const carriedChecks = carriedForRule?.map((f) => carriedFindingToCheck(f, normalizedUrl));
-      if (requireAggregatableCarried && carriedChecks) {
-        for (const check of carriedChecks) assertAggregatable(check, normalizedUrl);
+      if (requireAggregatableCarried && carriedChecks && carriedForRule) {
+        carriedForRule.forEach((f, i) => assertAggregatable(f.payload, carriedChecks[i]!, normalizedUrl));
       }
       if (carriedReport && carriedChecks) retainCarried(carriedReport, ruleId, carriedChecks);
       const checks: CheckResult[] = carriedChecks
@@ -426,7 +426,7 @@ export function createCompleteStoreTallyFold(
       // the tally map's order is the order the scorer walks it in.
       entryFor(ruleId, metaOf(ruleId)!);
       const checks = findings.map((f) => carriedFindingToCheck(f, normalizedUrl));
-      for (const check of checks) assertAggregatable(check, normalizedUrl);
+      findings.forEach((f, i) => assertAggregatable(f.payload, checks[i]!, normalizedUrl));
       if (carriedReport) retainCarried(carriedReport, ruleId, checks, false);
     }
   };
@@ -944,18 +944,35 @@ export const UNTOUCHED_MAX_OCCURRENCES = 1e9;
  * stricter, never looser.
  */
 export function isAggregatableCarriedRow(row: PageFindingRecord): boolean {
-  return aggregatableCheck(carriedFindingToCheck(untouchedCarriedFinding(row, false), row.normalizedUrl));
+  const finding = untouchedCarriedFinding(row, false);
+  return (
+    payloadItemsAggregatable(finding.payload) &&
+    aggregatableCheck(carriedFindingToCheck(finding, row.normalizedUrl))
+  );
+}
+
+/**
+ * The replayed check drops a non-array `items` (#504), so the exact-domain test
+ * reads it from the raw payload the row was stored with.
+ */
+function payloadItemsAggregatable(payload: string | null | undefined): boolean {
+  if (!payload) return true;
+  let items: unknown;
+  try {
+    items = (JSON.parse(payload) as { items?: unknown } | null)?.items;
+  } catch {
+    return true;
+  }
+  return typeof items !== "object" || items === null || Array.isArray(items);
 }
 
 function aggregatableCheck(check: CheckResult): boolean {
-  const items: unknown = check.items;
-  if (typeof items === "object" && items !== null && !Array.isArray(items)) return false;
   const occurrences = check.details?.occurrences;
   return !(typeof occurrences === "number" && occurrences >= UNTOUCHED_MAX_OCCURRENCES);
 }
 
-function assertAggregatable(check: CheckResult, normalizedUrl: string): void {
-  if (!aggregatableCheck(check)) {
+function assertAggregatable(payload: string | null | undefined, check: CheckResult, normalizedUrl: string): void {
+  if (!payloadItemsAggregatable(payload) || !aggregatableCheck(check)) {
     throw new Error(
       `carried finding on ${normalizedUrl} is outside the untouched aggregate's exact domain; the store must stream every page`
     );
@@ -1044,10 +1061,9 @@ export function aggregateUntouchedCarried(
 
     const sampled = new Set<number>();
     for (const [ruleId, indices] of byRule) {
-      const checks = indices.map((i) =>
-        carriedFindingToCheck(untouchedCarriedFinding(page.rows[i]!, neverRendered), page.normalizedUrl)
-      );
-      for (const check of checks) assertAggregatable(check, page.normalizedUrl);
+      const findings = indices.map((i) => untouchedCarriedFinding(page.rows[i]!, neverRendered));
+      const checks = findings.map((f) => carriedFindingToCheck(f, page.normalizedUrl));
+      findings.forEach((f, i) => assertAggregatable(f.payload, checks[i]!, page.normalizedUrl));
 
       const tally = emptyTally();
       addChecksToTally(tally, checks, false, 0);

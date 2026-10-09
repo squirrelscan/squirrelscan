@@ -197,7 +197,8 @@ export function carriedFindingToCheck(
     pageUrl: normalizedUrl,
     value: (payload.m !== undefined ? payload.v : f.value) ?? undefined,
     expected: (payload.m !== undefined ? payload.e : f.expected) ?? undefined,
-    ...(payload.items ? { items: payload.items } : {}),
+    // Arrays only: a corrupt non-iterable value would throw in foldGroup (#504).
+    ...(Array.isArray(payload.items) ? { items: payload.items } : {}),
     ...(payload.details ? { details: payload.details } : {}),
     ...(payload.pages ? { pages: payload.pages } : {}),
     // Key ORDER matters: the sampled path's caller ASSIGNS provenance then
