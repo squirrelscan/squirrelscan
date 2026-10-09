@@ -584,6 +584,8 @@
                   "rules/security/new-tab",
                   "rules/security/leaked-secrets",
                   "rules/security/token-storage",
+                  "rules/security/graphql-introspection",
+                  "rules/security/graphql-get-mutations",
                   "rules/security/third-party-cookies",
                   "rules/security/sri",
                   "rules/security/cookie-flags"

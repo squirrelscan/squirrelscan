@@ -22,7 +22,7 @@ Security is one of the four score groups on every report. This page covers trans
 
 ## Security rules
 
-HTTPS, headers, and safe link practices (18 rules).
+HTTPS, headers, and safe link practices (20 rules).
 
 <CardGroup cols={2}>
   <Card title="Content-Security-Policy: what to set and how to check it" icon="triangle-exclamation" href="/rules/security/csp">
@@ -42,6 +42,12 @@ HTTPS, headers, and safe link practices (18 rules).
   </Card>
   <Card title="Form action over HTTP: the insecure form submission warning" icon="triangle-exclamation" href="/rules/security/form-https">
     A form on an HTTPS page that posts to http:// sends the data in the clear and browsers interstitial it. squirrel checks action and formaction.
+  </Card>
+  <Card title="GraphQL mutations over GET: why they open the door to CSRF" icon="circle-exclamation" href="/rules/security/graphql-get-mutations">
+    A server that runs a mutation sent as a GET lets any site fire it with your visitors' cookies. squirrel sends a no-op mutation that cannot write and checks the answer.
+  </Card>
+  <Card title="GraphQL introspection in production: what an open schema exposes" icon="triangle-exclamation" href="/rules/security/graphql-introspection">
+    Open introspection hands anyone a map of every type in your API. squirrel sends one read-only introspection query per endpoint and counts the types it gets back.
   </Card>
   <Card title="HSTS: what Strict-Transport-Security needs to be valid" icon="triangle-exclamation" href="/rules/security/hsts">
     A missing or short Strict-Transport-Security header leaves the first request downgradeable. squirrel reads the header and checks max-age.
