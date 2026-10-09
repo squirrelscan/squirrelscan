@@ -22,6 +22,7 @@
     "./fingerprint": "./src/fingerprint.ts",
     "./concurrency": "./src/concurrency.ts",
     "./cache-control": "./src/cache-control.ts",
+    "./cdn": "./src/cdn.ts",
     "./rule-pattern": "./src/rule-pattern.ts",
     "./bytes": "./src/bytes.ts",
     "./rate-limit": "./src/rate-limit.ts"
