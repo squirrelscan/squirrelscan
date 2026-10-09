@@ -1456,7 +1456,9 @@ export interface LeakedSecret {
  * secret keys and other cloud provider secrets. Keyed by `LeakedSecret.type`
  * because the pattern tiers carry no class field. Publishable and anon keys
  * (Stripe pk_live, Supabase anon and publishable) are `publicByDesign` and
- * never reach this test.
+ * never reach this test. The DigitalOcean Spaces pattern is left out: it
+ * matches the access key id (the public half, like an AWS `AKIA` id) by
+ * shape alone, and public vendor ids share that shape (#574).
  */
 const SERVER_ONLY_TYPES: ReadonlySet<string> = new Set([
   "MongoDB Connection String",
@@ -1471,7 +1473,6 @@ const SERVER_ONLY_TYPES: ReadonlySet<string> = new Set([
   "AWS Secret Access Key",
   "Azure Storage Key",
   "DigitalOcean Token",
-  "DigitalOcean Spaces Key",
 ]);
 
 /** An inline or external script is shipped to every visitor's browser. */
@@ -1479,9 +1480,29 @@ function isBrowserServed(location: ReportedLocation): boolean {
   return location.startsWith("inline-script") || location.startsWith("external-script");
 }
 
+/**
+ * A value a tutorial prints rather than one a deploy shipped: AWS's documented
+ * example credentials (`…EXAMPLE`, `…EXAMPLEKEY`), a connection string the
+ * confidence pass already marked as naming a placeholder host or database, and
+ * a database URL to this machine, which is a development credential. A docs
+ * page built on a framework that inlines its content into `<script>` payloads
+ * would otherwise read as critical. These keep their own tier; they only do
+ * not escalate.
+ */
+function isTutorialValue(s: LeakedSecret): boolean {
+  if (s.value.includes("EXAMPLE") || s.extra?.placeholder !== undefined) return true;
+  if (!s.type.endsWith("Connection String")) return false;
+  const authority = /:\/\/([^/?#]*)/.exec(s.value)?.[1] ?? "";
+  const host = authority
+    .slice(authority.lastIndexOf("@") + 1)
+    .replace(/:\d*$/, "")
+    .toLowerCase();
+  return host === "localhost" || host.startsWith("127.") || host === "[::1]";
+}
+
 /** A server-only secret read from a browser-served script: critical. */
 export function isShippedServerSecret(s: LeakedSecret): boolean {
-  return !s.publicByDesign && SERVER_ONLY_TYPES.has(s.type) && isBrowserServed(s.location);
+  return !s.publicByDesign && SERVER_ONLY_TYPES.has(s.type) && isBrowserServed(s.location) && !isTutorialValue(s);
 }
 
 function isLikelyFalsePositive(value: string): boolean {

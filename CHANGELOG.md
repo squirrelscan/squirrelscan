@@ -19,7 +19,7 @@ How it works:
 
 ### Changed
 
-- `security/leaked-secrets` reports a server-only secret found in a browser-served script (database connection strings, service-role and `sk_live_` keys, AWS secret keys and similar) in a new `leaked-secrets-critical` check, "shipped to every visitor". Publishable keys and hits only in page HTML are unchanged.
+- `security/leaked-secrets` reports a server-only secret found in a browser-served script (database connection strings, service-role and `sk_live_` keys, AWS secret keys and similar) in a new `leaked-secrets-critical` check, "shipped to every visitor". Publishable keys, DigitalOcean Spaces key ids, tutorial values (AWS's documented example keys, placeholder or `localhost` database URLs) and hits only in page HTML are unchanged.
 
 ## v0.0.107 (2026-10-09)
 

@@ -372,7 +372,7 @@ export const ROUND_5: Case[] = [
     []),
   rw("digitalocean-spaces-key-still-fires", (r) =>
     page("", `<script>window.__ENV={DO_SPACES_KEY:"DO${runOf(r, UPPER + DIGIT, 22)}"};</script>`),
-    [inl("inline-script", "DigitalOcean Spaces Key", "critical")]),
+    [inl("inline-script", "DigitalOcean Spaces Key")]),
 
   // 6. The key id in a presigned S3 URL is the public half of the signature,
   // which means the signature and the expiry have to be there beside it.

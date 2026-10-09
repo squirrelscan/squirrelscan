@@ -151,7 +151,6 @@ const SERVER_ONLY = new Set([
   "AWS Secret Access Key",
   "Azure Storage Key",
   "DigitalOcean Token",
-  "DigitalOcean Spaces Key",
 ]);
 
 function escalate(pattern: string, check: Check, location: string): Check {
