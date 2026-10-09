@@ -40,6 +40,7 @@ import {
   type MergeResolutionInput,
 } from "../src/merge-core";
 import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
+import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 const SITE = "web_474";
 const RULE = "a11y/aria-dialog-name";
@@ -397,3 +398,5 @@ describe("runCloudSmartAudits: a still-failing page's unlisted item (pub#474)", 
     expect(rows.get("dialog.cart")?.state).toBe("open");
   });
 });
+
+describeSitePagesContract("item-locator-resolve.test.ts MemStore", () => new MemStore());

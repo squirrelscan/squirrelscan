@@ -49,7 +49,7 @@ Collapsing is by resolved `@id`, or by type and name when there is no `@id`. The
 |---|---|
 | `run_id` | A specific audit. Defaults to the latest that stored at least one entity, which is not always the latest audit. See below. |
 | `type` | Only these `@type` values. |
-| `page` | Only entities declared on a page whose URL contains one of these strings. A substring test, not a prefix and not a glob. |
+| `page` | Only entities declared on a page matching one of these values. An absolute `http(s)` URL or a value starting with `/` is a prefix (of the URL, or of the page path and query), so `/blog` matches `https://example.com/blog/post` but not `https://example.com/tag/blog`. Anything else is a substring, so `blog` matches both. Case-sensitive, not a glob. |
 | `problem` | `no-id`, `conflict`, `dangling`, `single-page` or `split-identity`. |
 | `q` | Only entities whose name or `@id` contains this text. |
 | `include_page_local` | Include a page's own `WebPage`, `BreadcrumbList` and unnamed images. False by default. |
@@ -57,7 +57,7 @@ Collapsing is by resolved `@id`, or by type and name when there is no `@id`. The
 
 Several values in one filter are an OR. Two different filters are an AND: `type` plus `problem` keeps the entities that match a listed type **and** have a listed problem.
 
-Returns a summary, a page of nodes, and `total` and `hasMore`. Those last two matter: they are how you tell a page from the whole list before describing a site from 25 of its entities.
+Returns the site-wide `summary`, a `filtered` block with the `nodes` and `edges` counts that survived the filters, a page of nodes, and `total` and `hasMore`. `summary` does not change with the filters. Those last two matter: they are how you tell a page from the whole list before describing a site from 25 of its entities.
 
 Page-local entities are hidden by default because they usually outnumber everything else. On squirrelscan.com they are 233 of 363 entities.
 

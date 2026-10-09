@@ -57,6 +57,7 @@ import type { CheckItem, SiteQuery } from "@squirrelscan/core-contracts";
 
 import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
 
+import { sharedRegex } from "../shared-regex";
 /** Crawl-wide page floor: below this there is no site norm to judge against. */
 export const TITLE_NORM_MIN_PAGES = 10;
 
@@ -89,9 +90,14 @@ const CHECK_NAME = "title-pattern-outlier";
  * A title whose brand is joined by something NOT in this set (or by nothing at all)
  * simply casts no separator vote: it is never reported as using "the wrong
  * separator", because the rule has no evidence about what it used.
+ *
+ * Leading whitespace is matched only from the first character of its run: from
+ * inside one the tail is the same, so it can only fail where the run's start
+ * did. Without `(?<!\s)` a long run of spaces in a title was quadratic. The
+ * look-behind sits on the whitespace alone, so a separator right after one a
+ * previous match ended on (`:: >>`) still matches.
  */
-const SEPARATOR_RE = /\s*(?:::|\||»|>>)\s*|\s+[-–—·>]\s+|:\s+/g;
-
+const SEPARATOR_RE = sharedRegex(/(?:(?<!\s)\s+)?(?:::|\||»|>>)\s*|(?<!\s)\s+[-–—·>]\s+|:\s+/g);
 /** Deviation classes, in the order they are reported. */
 const CLASSES = ["brand-only", "brand-missing", "brand-position", "separator"] as const;
 type DeviationClass = (typeof CLASSES)[number];
@@ -184,8 +190,9 @@ function segmentsOf(path: string): string[] {
 /**
  * Split a title into segments plus the separator used at each boundary.
  * `seps[i]` is the separator between `segments[i]` and `segments[i + 1]`.
+ * Exported for tests/redos-recheck.test.ts.
  */
-function splitTitle(title: string): { segments: string[]; seps: string[] } {
+export function splitTitle(title: string): { segments: string[]; seps: string[] } {
   const segments: string[] = [];
   const seps: string[] = [];
   let last = 0;

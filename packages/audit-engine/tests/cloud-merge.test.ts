@@ -20,6 +20,7 @@ import { buildResolutionSignal } from "@squirrelscan/rules/resolution";
 import { findingKey } from "../src/merge-core";
 import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
 import { calculateHealthScore } from "../src/scoring";
+import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 class MemStore implements SmartAuditStore {
   findings = new Map<string, PageFindingRecord>();
@@ -845,3 +846,5 @@ describe("runCloudSmartAudits — a noindex skip resolves the page's priors (pub
     expect(resolved).toEqual([]);
   });
 });
+
+describeSitePagesContract("cloud-merge.test.ts MemStore", () => new MemStore());

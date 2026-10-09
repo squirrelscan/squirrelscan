@@ -25,11 +25,13 @@
 import { Type, type Static } from "@sinclair/typebox";
 
 import {
+  EntityFilteredCountsSchema,
   EntityMapDiffSchema,
   EntityMapNodeSchema,
   EntityMapSchema,
   EntityMapSummarySchema,
 } from "./entity-map";
+import { ENTITY_PAGE_MATCH_RULE } from "./entity-page-match";
 
 // ── Names ──────────────────────────────────────────────────────────
 
@@ -133,7 +135,7 @@ export const ENTITY_MCP_LOOP =
  */
 export const ENTITY_MCP_DESCRIPTIONS: Record<EntityMcpToolName, string> = {
   list_entities:
-    "List the entities a site declares in its JSON-LD, collapsed across every crawled page into one graph, so an Organization declared identically on 60 pages is one row rather than 60. Declarations collapse by resolved @id, or by type and name when there is no @id, so the SAME real-world thing can still occupy several rows when its declared identity differs between pages: a relative @id such as \"#organization\" resolves against each page and yields one row per page. That is the split-identity problem, not a quirk of this tool. Filter by @type, by declaring page, by problem class, or by a text match on the name. Page-local entities (a page's own WebPage, BreadcrumbList and unnamed images) usually outnumber the site's actual subject matter and are hidden unless include_page_local is true. Returns a filtered summary, a page of nodes, total, and hasMore; keep requesting pages while hasMore is true rather than describing a site from one page. " +
+    "List the entities a site declares in its JSON-LD, collapsed across every crawled page into one graph, so an Organization declared identically on 60 pages is one row rather than 60. Declarations collapse by resolved @id, or by type and name when there is no @id, so the SAME real-world thing can still occupy several rows when its declared identity differs between pages: a relative @id such as \"#organization\" resolves against each page and yields one row per page. That is the split-identity problem, not a quirk of this tool. Filter by @type, by declaring page, by problem class, or by a text match on the name. Page-local entities (a page's own WebPage, BreadcrumbList and unnamed images) usually outnumber the site's actual subject matter and are hidden unless include_page_local is true. Returns the site-wide summary (it does not change with the filters), a filtered block with the node and edge counts that survived them, a page of nodes, total, and hasMore; keep requesting pages while hasMore is true rather than describing a site from one page. " +
     ENTITY_MCP_LOOP,
   get_entity:
     "Get one entity as the map recorded it: the properties the map keeps (name, url, logo, image, sameAs, telephone, email, address, description), the pages that declare it, the properties whose values disagree between those pages, and the references in and out of it. The map keeps those nine and @type and nothing else, so a property missing here may still be in the page's JSON-LD, and a disagreement in a property outside that set is not detected. Accepts the entity key, its @id, or its name. Use this after list_entities to see why an entity was flagged, before deciding what to change. Edges and declaring pages are capped; the counts tell you when. " +
@@ -160,7 +162,7 @@ export const ENTITY_MCP_FIELD_DESCRIPTIONS = {
       "The registered website to read, on the hosted server. Ignored by the local server, which reads the project store. When both this and run_id are given, run_id wins and this is ignored; naming a run of a different website is answered about the run.",
     run_id: "A specific audit run to read. Defaults to the latest audit that stored at least one entity, which is NOT always the latest audit: an audit that stored none is passed over, because the store cannot tell a site that declares nothing from an audit that predates the entity map. When one is passed over, warnings names it. If you are checking whether a change landed, name the run.",
     type: "Only entities carrying one of these @type values. Case-insensitive. Several values are an OR: an entity matching any one of them is kept.",
-    page: "Only entities declared on a page whose URL CONTAINS one of these strings. Not a prefix test and not a glob, so \"/blog\" matches https://example.com/blog/post and https://example.com/tag/blog alike. Several values are an OR.",
+    page: `Only entities declared on a page matching one of these values. ${ENTITY_PAGE_MATCH_RULE} Several values are an OR.`,
     problem: `Only entities with one of these problems: ${ENTITY_MCP_PROBLEMS.join(", ")}. Several values are an OR.`,
     q: "Only entities whose name or @id contains this text. Case-insensitive substring, not a pattern.",
     include_page_local:
@@ -337,8 +339,13 @@ export const EntityMcpListResultSchema = Type.Object({
   site: Type.String(),
   runId: Type.String(),
   auditedAt: Type.String(),
-  /** The summary AFTER filtering, describing what survived rather than the site. */
+  /**
+   * The SITE-WIDE summary, unchanged by the filters: the entity map's invariant
+   * is that `summary` describes the audit and the arrays are a projection of it.
+   * What survived the filters is in `filtered`.
+   */
   summary: EntityMapSummarySchema,
+  filtered: EntityFilteredCountsSchema,
   entities: Type.Array(EntityMcpListRowSchema),
   total: Type.Integer(),
   hasMore: Type.Boolean(),

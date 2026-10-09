@@ -28,6 +28,7 @@ import { normalizePageUrl } from "@squirrelscan/utils/url";
 
 import { findingKey } from "../src/merge-core";
 import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
+import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 const SITE = "web_501";
 const PAGE = "https://www.acme-shop.com/big";
@@ -243,3 +244,5 @@ for (const c of CASES) {
     });
   });
 }
+
+describeSitePagesContract("scan-truncated-carry.test.ts MemStore", () => new MemStore());

@@ -1,9 +1,9 @@
 ---
 title: "Rules reference"
-description: "All 297 audit rules organized by score group and category"
+description: "All 301 audit rules organized by score group and category"
 ---
 
-squirrelscan includes **297 rules** across **21 categories**, plus opt-in cloud gap analysis. Every category rolls up into one of four score groups: **SEO**, **Performance**, **Security**, and **Agents**. These are the four scores you see on reports and in the dashboard, alongside the overall health score.
+squirrelscan includes **301 rules** across **21 categories**, plus opt-in cloud gap analysis. Every category rolls up into one of four score groups: **SEO**, **Performance**, **Security**, and **Agents**. These are the four scores you see on reports and in the dashboard, alongside the overall health score.
 
 Most rules run locally for free. A handful of [cloud rules](/cloud/rules) use AI analysis, full filter lists, or live search data - they require login and are skipped when you're not logged in. Cloud rules carry a notice banner on their doc pages.
 
@@ -83,7 +83,7 @@ Transport security, compromise signals, compliance, and blocked content.
     Signs of compromise: injected pages, phishing kits, malware, SEO spam (9 rules)
   </Card>
   <Card title="Security" icon="folder" href="/rules/security">
-    HTTPS, headers, and safe link practices (16 rules)
+    HTTPS, headers, and safe link practices (20 rules)
   </Card>
   <Card title="Legal Compliance" icon="folder" href="/rules/legal">
     Privacy policy and legal compliance signals (4 rules)
@@ -112,7 +112,7 @@ The rules that describe what a browser loads or renders skip elements inside `<n
 - Accessibility: [aria-required-children](/rules/a11y/aria-required-children), [frame-title](/rules/a11y/frame-title), [image-redundant-alt](/rules/a11y/image-redundant-alt), [meta-refresh](/rules/a11y/meta-refresh)
 - Images: [alt-text](/rules/images/alt-text), [aspect-mismatch](/rules/images/aspect-mismatch), [broken-images](/rules/images/broken-images), [dimensions](/rules/images/dimensions), [filename-quality](/rules/images/filename-quality), [lazy-loading](/rules/images/lazy-loading), [modern-format](/rules/images/modern-format), [offscreen-lazy](/rules/images/offscreen-lazy), [optimized](/rules/images/optimized), [picture-element](/rules/images/picture-element), [responsive-size](/rules/images/responsive-size), [srcset](/rules/images/srcset)
 - Performance: [animated-content](/rules/perf/animated-content), [carousel-hidden-eager](/rules/perf/carousel-hidden-eager), [cls-hints](/rules/perf/cls-hints), [critical-request-chains](/rules/perf/critical-request-chains), [duplicate-js](/rules/perf/duplicate-js), [font-delivery](/rules/perf/font-delivery), [font-loading](/rules/perf/font-loading), [inp-hints](/rules/perf/inp-hints), [js-libraries](/rules/perf/js-libraries), [lazy-above-fold](/rules/perf/lazy-above-fold), [lcp-fetchpriority](/rules/perf/lcp-fetchpriority), [lcp-hints](/rules/perf/lcp-hints), [legacy-js](/rules/perf/legacy-js), [preconnect](/rules/perf/preconnect), [render-blocking](/rules/perf/render-blocking), [total-byte-weight](/rules/perf/total-byte-weight), [unminified-css](/rules/perf/unminified-css), [unminified-js](/rules/perf/unminified-js)
-- Security: [mixed-content](/rules/security/mixed-content), [sri](/rules/security/sri), [third-party-cookies](/rules/security/third-party-cookies)
+- Security: [csp-blocks-own-resources](/rules/security/csp-blocks-own-resources), [mixed-content](/rules/security/mixed-content), [sri](/rules/security/sri), [third-party-cookies](/rules/security/third-party-cookies)
 - Blocking and integrity: [blocked-links](/rules/adblock/blocked-links), [template-discontinuity](/rules/integrity/template-discontinuity)
 
 Same-domain scripts, stylesheets and images that appear only inside `<noscript>` are not fetched for the file-size and compression rules either. Links inside `<noscript>` are still collected for crawling, and the remaining rules read the page as before.
@@ -142,6 +142,16 @@ A site-wide `noindex` usually means the audit is checking a site before launch, 
 **In reports and scores.** A skipped check is not an issue. It does not appear in the issue list in any report format, it is not counted as passed, warning or failed, and the [health score](/reports#health-score) leaves it out. A page left out of a site rule's grouping simply is not in it.
 
 **Everything else still runs.** Accessibility, security and performance rules, and every link rule other than orphan pages, check noindex pages as usual, and so do [core/robots-meta](/rules/core/robots-meta), [crawl/indexability](/rules/crawl/indexability) and [crawl/all-noindex-pages](/rules/crawl/all-noindex-pages), which report the noindex pages themselves.
+
+## Rule time budget
+
+Rules read content the audited site controls, so a page can be built to make a pattern match very slowly. Every rule runs under a time budget: one second per page for a page rule, and one second per page of the site for a site rule, capped at 60 seconds. A rule that runs past it is stopped for that page, and the audit carries on with the next rule.
+
+The report records it as a failed check named after the rule with `-error` on the end, such as `content/hidden-text-error`, against the first page where it happened (or the whole site, for a site rule), with the message `Rule error: exceeded its 1000 ms time budget and was abandoned`. Its details carry `timedOut: true` and `pages`, the number of pages it timed out on. A rule that times out is reported once per audit, not once per page: later pages show a skipped check, so one slow pattern cannot flood the report or lower the score. The audit also gets one info check named after the rule with `-timeouts` on the end, such as `content/hidden-text-timeouts`, whose details carry `pagesNotChecked`: the final count of pages that rule did not check. That rule's own result for those pages is not in the report.
+
+A timed-out rule did not check those pages. For a security rule, such as `security/leaked-secrets`, that means no finding on those pages is not a clean result: the pages were not scanned, so treat them as unchecked and look at them yourself.
+
+Ordinary pages never come close: the slowest rule takes a few milliseconds per page. If you see this on a page that looks normal, [open an issue](https://github.com/squirrelscan/squirrelscan/issues) with the page URL.
 
 ## Configuration
 

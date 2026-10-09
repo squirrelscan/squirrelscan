@@ -51,6 +51,11 @@ squirrel audit <url> [options]
 | `--rule-include` | | Only run these rule categories or rules, e.g. `ax,perf` or `core/meta-title` (repeatable / comma-separated). Replaces `[rules] enable` for this run | none |
 | `--rule-exclude` | | Skip these rule categories or rules, e.g. `images,social` (repeatable / comma-separated). Adds to `[rules] disable` for this run | none |
 | `--disable-discovery-probes` | | Skip the pre-crawl discovery probes (`llms.txt`, `/.well-known/*`, `/swagger.json` and the rest) for this run. Overrides `[crawler] disable_discovery_probes`; `=false` sends them even when the config turns them off. See [Discovery probes](/configuration/crawler#discovery-probes) | `false` |
+| `--probe` | `-P` | Probing intensity: `passive`, `active` or `aggressive`. Overrides `[security] probe`. See [Probing intensity](#probing-intensity) | `active` logged in, `passive` logged out |
+| `--passive` | | Shortcut for `--probe passive` | `false` |
+| `--aggressive` | | Shortcut for `--probe aggressive` | `false` |
+| `--probe-budget` | | Wall-clock cap for all probing in this run, such as `30s` or `2m` (max `1h`). Overrides `[security] budget` | `30s` active, `2m` aggressive |
+| `--pentest` | | Shortcut for `--coverage full --probe aggressive` | `false` |
 | `--summary` | | Print only the score, category breakdown, and issue counts — no per-issue detail. Console format only | `false` |
 
 ### Coverage modes
@@ -69,6 +74,53 @@ to `quick` (fast, no cloud calls, no credit spend). Pass `--coverage` (or set
 **all** networked cloud enrichment. Use `surface`/`full` (or just log in) to run the
 full rule set. Free and Pro run the same checks: Pro just grants more monthly credits
 and lets you top up.
+
+### Probing intensity
+
+Probing intensity says how hard each page is poked beyond what the crawl
+fetched. It sits next to coverage (breadth) and render mode (rendering).
+
+| Level | What it sends |
+|-------|---------------|
+| `passive` | No request beyond the crawl |
+| `active` | Quiet probes: a handful of requests that look like normal traffic |
+| `aggressive` | Loud probes: many requests and many 404s, which can trip a WAF |
+
+A logged-in audit defaults to `active`, and a logged-out or `--offline` audit to
+`passive`. `aggressive` is never a default. The audit prints the level and its
+budget in the run banner:
+
+```text
+Coverage  quick · max 25 pages
+Probing   active · budget 30s
+```
+
+`--passive` and `--aggressive` are shortcuts for `--probe`. Using both is refused,
+as is a shortcut that contradicts `--probe`, the same way `--render` and `--http`
+are. An unknown level or budget fails before the crawl starts.
+
+`--probe-budget` caps the wall-clock time of **all** probing together, not each
+probe. Once it runs out, no new probe starts.
+
+The rules that probe, and exactly what each one sends, are listed in
+[Security configuration](/configuration/security#rules-that-probe).
+
+`--disable-discovery-probes` (or `[crawler] disable_discovery_probes = true`)
+keeps probing passive, and no probe sends a request.
+
+<Warning>
+`--aggressive` and `--pentest` request paths that `robots.txt` disallows, on
+purpose. Only use them on websites you own or are authorized to test.
+</Warning>
+
+```bash
+squirrel audit https://example.com --aggressive --probe-budget 1m
+squirrel audit https://example.com --pentest
+```
+
+To pick which rule families run, use `--rule-include` and `--rule-exclude`. See
+[Security configuration](/configuration/security) for `[security] probe` and
+`budget`, and the defaults for cloud audits.
 
 ## Examples
 

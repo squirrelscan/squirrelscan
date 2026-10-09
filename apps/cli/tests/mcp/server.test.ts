@@ -1,7 +1,6 @@
 // Integration tests for the local stdio MCP server (#112) over an in-memory transport.
 
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import { TOOL_AUTH } from "@/mcp/scopes";
@@ -98,6 +97,8 @@ describe("createMcpServer tool registration", () => {
       "get_entity_graph",
       "compare_entities",
       "get_entity_findings",
+      // No login and no credits: it only needs the network.
+      "send_feedback",
     ]);
     const { tools } = await client.listTools();
     for (const tool of tools) {

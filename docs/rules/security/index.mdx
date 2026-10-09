@@ -22,11 +22,14 @@ Security is one of the four score groups on every report. This page covers trans
 
 ## Security rules
 
-HTTPS, headers, and safe link practices (16 rules).
+HTTPS, headers, and safe link practices (20 rules).
 
 <CardGroup cols={2}>
   <Card title="Content-Security-Policy: what to set and how to check it" icon="triangle-exclamation" href="/rules/security/csp">
     A missing CSP, a report-only policy or an unsafe-inline script-src leaves XSS unmitigated. squirrel parses the header and names each gap.
+  </Card>
+  <Card title="CSP blocks your own scripts, frames and analytics endpoints" icon="triangle-exclamation" href="/rules/security/csp-blocks-own-resources">
+    A policy that leaves out a host your page depends on breaks a widget or a tracker silently. squirrel matches each page's policy against what the page loads.
   </Card>
   <Card title="Cookie flags: Secure, HttpOnly and SameSite on Set-Cookie" icon="triangle-exclamation" href="/rules/security/cookie-flags">
     SameSite=None without Secure is rejected outright, and a session cookie without HttpOnly is readable by any script. squirrel parses every Set-Cookie.
@@ -39,6 +42,12 @@ HTTPS, headers, and safe link practices (16 rules).
   </Card>
   <Card title="Form action over HTTP: the insecure form submission warning" icon="triangle-exclamation" href="/rules/security/form-https">
     A form on an HTTPS page that posts to http:// sends the data in the clear and browsers interstitial it. squirrel checks action and formaction.
+  </Card>
+  <Card title="GraphQL mutations over GET: why they open the door to CSRF" icon="circle-exclamation" href="/rules/security/graphql-get-mutations">
+    A server that runs a mutation sent as a GET lets any site fire it with your visitors' cookies. squirrel sends a no-op mutation that cannot write and checks the answer.
+  </Card>
+  <Card title="GraphQL introspection in production: what an open schema exposes" icon="triangle-exclamation" href="/rules/security/graphql-introspection">
+    Open introspection hands anyone a map of every type in your API. squirrel sends one read-only introspection query per endpoint and counts the types it gets back.
   </Card>
   <Card title="HSTS: what Strict-Transport-Security needs to be valid" icon="triangle-exclamation" href="/rules/security/hsts">
     A missing or short Strict-Transport-Security header leaves the first request downgradeable. squirrel reads the header and checks max-age.
@@ -66,6 +75,9 @@ HTTPS, headers, and safe link practices (16 rules).
   </Card>
   <Card title="Third-party cookies: which external domains a page loads" icon="circle-info" href="/rules/security/third-party-cookies">
     Trackers and 1x1 pixels set cookies from domains you do not control. squirrel inventories the third-party scripts, iframes and pixels per page.
+  </Card>
+  <Card title="Auth tokens in localStorage: why a stored JWT is exposed" icon="triangle-exclamation" href="/rules/security/token-storage">
+    A JWT or session token in localStorage or sessionStorage is readable by any script on the page. squirrel finds the writes in your scripts and names the key.
   </Card>
   <Card title="X-Content-Type-Options: nosniff and why it matters" icon="circle-info" href="/rules/security/x-content-type">
     Without nosniff a browser may execute an uploaded file as script because the bytes look like one. squirrel reads the header once per site.

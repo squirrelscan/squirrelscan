@@ -72,7 +72,11 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // addition — if this number shifts on its own, a rule started failing.
       // 49 -> 50 (pub#487): crawl/indexability-conflicts no longer warns on
       // robots.txt Allow plus noindex, the supported way to deindex a page.
-      expect(v1.healthScore.overall).toBe(50);
+      // 50 -> 51: security/token-storage passes on all 500 pages, which lifts the
+      // security score just past the point where the weighted overall rounds up,
+      // the same shape as 48 -> 49 above. main alone is 50 (verified with the rule
+      // removed), so the move comes from this deliberate rule addition.
+      expect(v1.healthScore.overall).toBe(51);
       // 97711 -> 98211: content/hidden-text emits one page check across the 500
       // fixture pages that have a document, and passes on every one of them. The
       // overall score is unmoved.
@@ -136,7 +140,18 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 100234 -> 100734: content/placeholder-media is page-scoped and always
       // speaks, so it adds one check on each of the 500 pages with a document
       // (the other 18 have none).
-      expect(v1.findings.length).toBe(100734);
+      // 100734 -> 101234: security/csp-blocks-own-resources is page-scoped and
+      // always speaks, so it adds one check on each of the 500 pages with a
+      // document. All 500 pass: the synthetic site serves no CSP header, and a
+      // page with no enforced policy passes (security/csp owns a missing one).
+      // 101234 -> 101734: security/token-storage is page-scoped and always speaks,
+      // so it adds one check on each of the 500 pages with a document. All 500
+      // pass: the synthetic site writes nothing to web storage.
+      // 101734 -> 101736: security/graphql-introspection and
+      // security/graphql-get-mutations are site-scoped probing rules. This gate
+      // runs with no probe budget (passive), so each adds one skipped check and
+      // sends nothing. The overall score is unmoved.
+      expect(v1.findings.length).toBe(101736);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -154,9 +169,35 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // entity-publisher-mismatch, entity-local-business-per-page,
       // entity-website-missing, entity-organization-missing,
       // entity-sameas-missing, entity-orphan), 295 -> 296
-      // content/placeholder-contact, 296 -> 297 content/placeholder-media; anything
-      // else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(297);
+      // content/placeholder-contact, 296 -> 297 content/placeholder-media, 297 -> 298
+      // security/csp-blocks-own-resources, 298 -> 299 security/token-storage,
+      // 299 -> 301 security/graphql-introspection and security/graphql-get-mutations;
+      // anything else means a rule id leaked in, so fix that rather than this number.
+      expect(v1.perRuleTally.length).toBe(301);
+      // Passive: both GraphQL probing rules skip without sending a request.
+      for (const ruleId of ["security/graphql-introspection", "security/graphql-get-mutations"]) {
+        expect(v1.perRuleTally.find((t) => t.ruleId === ruleId)).toEqual({
+          ruleId,
+          pass: 0,
+          warn: 0,
+          fail: 0,
+          info: 0,
+          skipped: 1,
+          total: 1,
+        });
+      }
+      const cspBlocks = v1.perRuleTally.find(
+        (t) => t.ruleId === "security/csp-blocks-own-resources",
+      );
+      expect(cspBlocks).toEqual({
+        ruleId: "security/csp-blocks-own-resources",
+        pass: 500,
+        warn: 0,
+        fail: 0,
+        info: 0,
+        skipped: 0,
+        total: 500,
+      });
       // Each +500 above is only "all passes" if nothing warned. healthScore
       // staying at 48 does not prove that — a handful of weight-5 warnings in a
       // 20-rule category would not move it — so pin the tally directly.
@@ -175,6 +216,16 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       );
       expect(placeholderContact).toEqual({
         ruleId: "content/placeholder-contact",
+        pass: 500,
+        warn: 0,
+        fail: 0,
+        info: 0,
+        skipped: 0,
+        total: 500,
+      });
+      const tokenStorage = v1.perRuleTally.find((t) => t.ruleId === "security/token-storage");
+      expect(tokenStorage).toEqual({
+        ruleId: "security/token-storage",
         pass: 500,
         warn: 0,
         fail: 0,

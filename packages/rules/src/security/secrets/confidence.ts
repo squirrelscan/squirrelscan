@@ -116,14 +116,38 @@ const CONNECTION_STRING_TYPES = new Set([
 // the authority: `postgresql://app@host/db?password=…` is what libpq documents,
 // JDBC spells it the same way, and a value there is every bit as leaked as one
 // before the `@`. The names below are the ones the common drivers accept.
-const CREDENTIAL_QUERY_RE =
-  /[?&](?:password|passwd|pwd|secret|token|auth|api[_-]?key|sslpassword)=[^&\s]/i;
+const CREDENTIAL_QUERY_VALUE_RE =
+  /[?&](?:password|passwd|pwd|secret|token|auth|api[_-]?key|sslpassword)=([^&\s#]+)/gi;
 
 // `%3A` is a colon the userinfo escaped (`mongodb://app%3Asecret@host`). Only
 // that one escape is undone, and only inside the userinfo: a password may
 // carry an escaped `@` of its own, so the authority's separator has to be
 // found on the raw text first.
 const ESCAPED_COLON_RE = /%3a/gi;
+
+// A documentation placeholder in place of a password, host or database:
+// `postgresql://username:password@host:5432/dbname`, `<password>`, // pragma: allowlist secret
+// `${DB_PASSWORD}`, `****`. Compared after wrappers, separators and case
+// are folded away, so a real password, which has digits, symbols or random
+// letters in it, never folds into one of these words.
+const PLACEHOLDER_SECRET_RE =
+  /^(?:your|my|the|db|database|user|app|redis|mongo|postgres|mysql)?(?:password|passwd|pass|pwd|pw|secret)$/;
+const PLACEHOLDER_HOST_RE =
+  /^(?:your|my|the|db|database)?(?:host|hostname|server|cluster|endpoint|address)(?:name)?$/;
+const PLACEHOLDER_DB_RE = /^(?:your|my|the)?(?:db|dbname|database|databasename|mydb|name)$/;
+
+function foldPlaceholder(part: string): string {
+  return part.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * `password`, `<password>`, `${DB_PASSWORD}`, `****`, `xxxx`: no credential.
+ * A mask is a run of `*`, `•` or `.`; other symbol-only passwords are kept.
+ */
+function isPlaceholderSecret(part: string): boolean {
+  const folded = foldPlaceholder(part);
+  return /^[*•.]+$/.test(part) || /^x+$/.test(folded) || PLACEHOLDER_SECRET_RE.test(folded);
+}
 
 /**
  * What a connection string leaks is the credential in it. A docs snippet
@@ -138,6 +162,12 @@ const ESCAPED_COLON_RE = /%3a/gi;
  * whole URI is read, and the finding is dropped only when NEITHER place holds
  * a credential. The host it names may still be one a site would rather not
  * publish, but that is a different finding from this one.
+ *
+ * A documentation placeholder in the password's place (`username:password@`,
+ * `:<password>@`) is no credential either. And a real-looking password in a
+ * URI whose host or database is itself a placeholder (`@host:5432/dbname`) is
+ * kept for review but not asserted at high confidence: that shape is a docs
+ * example far more often than a deployed string.
  */
 function refineConnectionString(value: string): Refinement {
   const scheme = value.indexOf("://");
@@ -145,13 +175,32 @@ function refineConnectionString(value: string): Refinement {
   const rest = value.slice(scheme + 3);
   const authority = rest.split(/[/?#]/, 1)[0] ?? "";
   const at = authority.lastIndexOf("@");
+  let credential = false;
   if (at !== -1) {
     const userinfo = authority.slice(0, at).replace(ESCAPED_COLON_RE, ":");
     const colon = userinfo.indexOf(":");
-    if (colon !== -1 && colon !== userinfo.length - 1) return {};
+    if (colon !== -1 && colon !== userinfo.length - 1 && !isPlaceholderSecret(userinfo.slice(colon + 1))) {
+      credential = true;
+    }
   }
-  if (CREDENTIAL_QUERY_RE.test(rest)) return {};
-  return { drop: true };
+  if (!credential) {
+    for (const found of rest.matchAll(CREDENTIAL_QUERY_VALUE_RE)) {
+      if (!isPlaceholderSecret(found[1] ?? "")) {
+        credential = true;
+        break;
+      }
+    }
+  }
+  if (!credential) return { drop: true };
+
+  const host = (at === -1 ? authority : authority.slice(at + 1)).replace(/:\d*$/, "");
+  const database = /^[^/?#]*\/([^/?#]*)/.exec(rest)?.[1] ?? "";
+  const placeholderHost = PLACEHOLDER_HOST_RE.test(foldPlaceholder(host));
+  const placeholderDb = database !== "" && PLACEHOLDER_DB_RE.test(foldPlaceholder(database));
+  if (placeholderHost || placeholderDb) {
+    return { confidence: "medium", extra: { placeholder: placeholderHost ? "host" : "database" } };
+  }
+  return {};
 }
 
 // ── GitHub tokens ───────────────────────────────────────────────────────────
@@ -279,7 +328,9 @@ const CREDENTIAL_KEY_WORDS = new Set([
   "credential",
   "credentials",
 ]);
-const PRECEDING_KEY_RE = /["'`]?([A-Za-z_$][A-Za-z0-9_$.-]*)(?:["'`]\s*\]|["'`]?)\s*(?:[:=]|\|\|=?|\?\?=?)\s*["'`]?\s*$/;
+// Ends in `\s*(?:["'`]\s*)?$` rather than the equivalent `\s*["'`]?\s*$`, whose
+// two adjacent `\s*` made it cubic in the look-back window (leaked-secrets.ts).
+const PRECEDING_KEY_RE = /["'`]?([A-Za-z_$][A-Za-z0-9_$.-]*)(?:["'`]\s*\]|["'`]?)\s*(?:[:=]|\|\|=?|\?\?=?)\s*(?:["'`]\s*)?$/;
 
 /** Does the look-behind put the token in an Authorization literal or under a credential key? */
 export function heldAsCredential(before: string): boolean {

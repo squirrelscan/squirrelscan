@@ -130,7 +130,8 @@
                 ]
               },
               "developers/mcp",
-              "developers/mcp-clients"
+              "developers/mcp-clients",
+              "developers/channel"
             ]
           },
           {
@@ -572,6 +573,7 @@
                   "rules/security/http-to-https",
                   "rules/security/hsts",
                   "rules/security/csp",
+                  "rules/security/csp-blocks-own-resources",
                   "rules/security/x-frame-options",
                   "rules/security/x-content-type",
                   "rules/security/referrer-policy",
@@ -581,6 +583,9 @@
                   "rules/security/form-captcha",
                   "rules/security/new-tab",
                   "rules/security/leaked-secrets",
+                  "rules/security/token-storage",
+                  "rules/security/graphql-introspection",
+                  "rules/security/graphql-get-mutations",
                   "rules/security/third-party-cookies",
                   "rules/security/sri",
                   "rules/security/cookie-flags"
@@ -657,6 +662,7 @@
               "cli/keys",
               "cli/credits",
               "cli/mcp",
+              "cli/channel",
               "cli/self",
               "cli/skills",
               "cli/debug"
@@ -673,6 +679,7 @@
               "configuration/output",
               "configuration/storage",
               "configuration/cloud",
+              "configuration/security",
               "configuration/rule-options",
               "configuration/examples"
             ]

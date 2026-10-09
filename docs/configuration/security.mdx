@@ -1,0 +1,127 @@
+---
+title: "Security configuration"
+icon: "shield"
+description: "Set how hard an audit probes each page beyond what the crawl fetched, and how long all probing may take"
+---
+
+The `[security]` section sets the **probing intensity** of an audit. Probing is
+the third audit setting, next to breadth (`--coverage`, `--max-pages`) and
+rendering (`--render-mode`). It says how hard each page is poked beyond what the
+crawl already fetched.
+
+## Configuration
+
+```toml
+[security]
+probe = "active"
+budget = "30s"
+```
+
+Both keys are optional. Leave them out and the audit picks a default from
+context (see below).
+
+## Options
+
+### `probe`
+
+**Type:** `"passive"`, `"active"` or `"aggressive"`
+**Default:** `"active"` when logged in, `"passive"` when not
+
+| Level | What it sends |
+|-------|---------------|
+| `passive` | No request beyond the crawl. The audit runs today's rules and passive rules only. |
+| `active` | Passive, plus quiet probes: a handful of requests that look like normal traffic. |
+| `aggressive` | Active, plus loud probes: many requests and many 404s. It can trip a WAF. |
+
+`aggressive` is never a default. You must ask for it, here or on the command
+line.
+
+<Warning>
+Aggressive probing requests paths that `robots.txt` disallows, on purpose.
+Only use it on websites you own or are authorized to test.
+</Warning>
+
+```toml
+[security]
+probe = "aggressive"
+```
+
+### `budget`
+
+**Type:** duration string or number of seconds
+**Default:** `"30s"` for `active`, `"2m"` for `aggressive`
+
+A wall-clock cap for **all** probing in one audit, shared by every probing rule.
+Once it runs out, no new probe starts. Write it as `"500ms"`, `"30s"`, `"2m"` or
+`"1h"`, or as a plain number of seconds. The maximum is one hour.
+
+```toml
+[security]
+budget = "45s"
+budget = 45      # the same, in seconds
+```
+
+A value that is not a positive duration of at most an hour fails config
+validation, so a typo never becomes an unbounded budget.
+
+## Defaults by context
+
+| Context | Default level |
+|---------|---------------|
+| CLI audit, logged in | `active` |
+| CLI audit, logged out or `--offline` | `passive` |
+| Cloud audit, website ownership verified | `active` |
+| Cloud audit, website ownership not verified | `passive`, locked |
+
+A locked cloud audit stays passive whatever you ask for. Asking for `active` or
+`aggressive` there fails with a message that says why, and how to verify
+ownership of the website. It is never lowered without telling you.
+
+## Precedence
+
+Highest first:
+
+1. `--probe <level>` (or `-P`)
+2. `--passive`, `--aggressive` or `--pentest`
+3. `[security] probe`
+4. The default for the context
+
+For the budget: `--probe-budget`, then `[security] budget`, then the level's
+default.
+
+## Rules that probe
+
+These rules send requests only when probing is `active` or `aggressive`. On a
+`passive` run each records one skipped check and sends nothing. All of them
+probe only the audited origin, never another host.
+
+| Rule | What it sends | Level |
+|------|---------------|-------|
+| [`security/graphql-introspection`](/rules/security/graphql-introspection) | One `GET /graphql?query={__schema{types{name}}}` per GraphQL endpoint, at most five | `active` |
+| | One `POST` of the same read-only query, only when the `GET` answer is GraphQL without a schema | `aggressive` |
+| [`security/graphql-get-mutations`](/rules/security/graphql-get-mutations) | One `GET /graphql?query=mutation{__typename}` per GraphQL endpoint, at most five. The no-op mutation names no schema field and cannot write | `active` |
+
+The GraphQL endpoints are the ones the audit found in your pages and scripts,
+plus `/graphql` and `/api/graphql`. A path that names a state-changing action,
+such as `logout` or `delete`, is never probed. Below `aggressive`, a path that
+`robots.txt` disallows is skipped. Probe requests carry no cookies and do not
+follow redirects.
+
+## Discovery probes turn probing off
+
+When `[crawler] disable_discovery_probes = true` or `--disable-discovery-probes`
+is set, probing resolves to `passive` and no probe sends a request. If you also
+asked for a higher level, the audit prints a note saying why it stayed passive.
+See [Discovery probes](/configuration/crawler#discovery-probes).
+
+## Turn rule families on and off
+
+Probing intensity sets how loud probes may be, not which ones run. Use the
+[rules configuration](/configuration/rules) (`[rules] enable` and `disable`) or
+`--rule-include` and `--rule-exclude` to pick rule families.
+
+## Related
+
+- [`squirrel audit`](/cli/audit#probing-intensity): the `--probe`, `--passive`,
+  `--aggressive`, `--probe-budget` and `--pentest` flags
+- [Crawler configuration](/configuration/crawler)

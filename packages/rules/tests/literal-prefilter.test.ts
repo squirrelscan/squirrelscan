@@ -194,7 +194,8 @@ function generate(src: string, depth = 0): string {
       const close = closeAt(src, i, "(", ")");
       let inner = src.slice(i + 1, close);
       i = close + 1;
-      if (inner.startsWith("?=") || inner.startsWith("?!")) continue;
+      // Lookarounds consume nothing; a sample they reject is dropped by the probe below.
+      if (/^\?(?:[=!]|<[=!])/.test(inner)) continue;
       if (inner.startsWith("?:")) inner = inner.slice(2);
       else if (inner.startsWith("?<") && !inner.startsWith("?<=") && !inner.startsWith("?<!"))
         inner = inner.slice(inner.indexOf(">") + 1);
@@ -394,6 +395,8 @@ describe("mandatoryLiterals extraction", () => {
     [/abcdz{0,1}efgh/, [["abcdefgh", "abcdzefgh"]]],
     // a lookahead proves nothing
     [/(?=foo)barbaz/, [["barbaz"]]],
+    // nor does a lookbehind, which ends the literal before it
+    [/abcd(?<!xabcd)efgh/, [["abcd"], ["efgh"]]],
     // a literal shorter than the floor proves nothing
     [/AC[0-9a-f]{32}/, []],
     // a \uXXXX escape is ONE character, so the run restarts AFTER it and its hex

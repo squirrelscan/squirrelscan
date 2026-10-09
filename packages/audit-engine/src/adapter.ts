@@ -13,6 +13,7 @@ import {
   extractLinks,
   extractMeta,
   extractOG,
+  extractPreloadedScriptUrls,
   extractScripts,
   extractStylesheets,
   extractTwitter,
@@ -56,6 +57,7 @@ import type {
 import type {
   CollectedPageSignal,
   CollectedSiteSignals,
+  EndpointSurface,
   ParsedPage,
   RuleRunResult,
   SiteData,
@@ -84,6 +86,7 @@ import {
   foldRuleResultIntoTallies,
   type RuleTally,
 } from "./scoring";
+import { createEndpointCollector, entryFirst } from "./endpoint-discovery";
 import { localIntelContext } from "./intel";
 import { logger } from "./adapter-logger";
 // Report assembly extracted to ./report-stream (#1021, PR-F). adapter references
@@ -509,6 +512,9 @@ export interface ResourceCheckOverrides {
   incremental?: boolean;
 }
 
+/** Most preloaded chunks fetched per audit, on top of the regular script fetch. */
+const PRELOAD_CHUNK_FETCH_LIMIT = 20;
+
 /**
  * Pre-fetched resource data — collected between crawl and rules phases.
  * Eliminates all HTTP requests during rules phase.
@@ -523,6 +529,14 @@ export interface PreFetchedAssets {
     fonts?: ResourceSizeData[];
   };
   scripts: ScriptContentData[];
+  /**
+   * Same-site chunks a page preloads (`modulepreload`, `preload as=script`) that
+   * no `<script src>` names. Held apart from `scripts` so the file-size,
+   * compression and minification rules see exactly what they saw before; only
+   * security/csp-blocks-own-resources reads them. Optional: callers that build
+   * assets by hand have none.
+   */
+  preloadedScripts?: ScriptContentData[];
   pdfSizes: ResourceSizeData[];
   sitemapUrlStatuses: SitemapUrlStatusData[];
   /**
@@ -551,6 +565,8 @@ export interface SiteAssetOccurrences {
   css: Map<string, Set<string>>;
   images: Map<string, Set<string>>;
   scripts: Map<string, Set<string>>;
+  /** Preloaded script chunks, kept out of `scripts` (see {@link PreFetchedAssets.preloadedScripts}). */
+  preloads: Map<string, Set<string>>;
   pdfs: Map<string, Set<string>>;
   fonts: Map<string, Set<string>>;
   /** Scalars for the sitemap-coverage pass — v1's non-WAF parsed-page list. */
@@ -565,6 +581,7 @@ function emptySiteAssetOccurrences(): SiteAssetOccurrences {
     css: new Map(),
     images: new Map(),
     scripts: new Map(),
+    preloads: new Map(),
     pdfs: new Map(),
     fonts: new Map(),
     coveragePages: [],
@@ -603,6 +620,7 @@ export function createSiteAssetCollector(baseUrl: string): {
         finalUrl?: string;
         statusCode: number;
         parsed: ParsedPage;
+        hasCsp: boolean;
       }> = [];
 
       for (const { page, parsed } of siteContext) {
@@ -623,6 +641,7 @@ export function createSiteAssetCollector(baseUrl: string): {
           finalUrl: page.finalUrl,
           statusCode: page.status,
           parsed,
+          hasCsp: !!page.securityHeaders.csp || hasMetaCsp(parsed.document),
         });
       }
 
@@ -869,6 +888,17 @@ export function fetchAssetsFromOccurrences(
           Array.from(resourceOccurrences.scripts.keys()),
           scriptFetchOptions,
         ),
+        // Chunks no <script src> already covers, on a cap of their own so a
+        // modulepreload-heavy site cannot grow the main script fetch.
+        preloads: fetchScriptContents(
+          Array.from(resourceOccurrences.preloads.keys()).filter(
+            (url) => !resourceOccurrences.scripts.has(url),
+          ),
+          {
+            ...scriptFetchOptions,
+            maxScripts: Math.min(scriptFetchOptions.maxScripts ?? PRELOAD_CHUNK_FETCH_LIMIT, PRELOAD_CHUNK_FETCH_LIMIT),
+          },
+        ),
         pdfs: checkResourceSizes(
           Array.from(pdfUrls.keys()).slice(0, pdfCheckLimit),
           resourceCheckOptions,
@@ -906,6 +936,7 @@ export function fetchAssetsFromOccurrences(
               images: [] as ResourceCheckResult[],
               fonts: [] as ResourceCheckResult[],
               scripts: [] as ScriptFetchResult[],
+              preloads: [] as ScriptFetchResult[],
               pdfs: [] as ResourceCheckResult[],
               sitemap: [] as ResourceCheckResult[],
             });
@@ -918,6 +949,7 @@ export function fetchAssetsFromOccurrences(
       images: resourceResults.images.length,
       fonts: resourceResults.fonts.length,
       scripts: resourceResults.scripts.length,
+      preloads: resourceResults.preloads.length,
       pdfs: resourceResults.pdfs.length,
       sitemap: resourceResults.sitemap.length,
       elapsed: `${Date.now() - resourceCheckStart}ms`,
@@ -975,6 +1007,19 @@ export function fetchAssetsFromOccurrences(
         sizeBytes: fetch.sizeBytes,
         content: fetch.content,
         sourcePages: Array.from(resourceOccurrences.scripts.get(fetch.url) ?? []),
+        redirected: fetch.redirected,
+        finalUrl: fetch.finalUrl,
+        sourceMapHeader: fetch.sourceMapHeader,
+        contentEncoding: fetch.contentEncoding,
+      })),
+      preloadedScripts: resourceResults.preloads.map((fetch) => ({
+        url: fetch.url,
+        status: fetch.status,
+        error: fetch.error,
+        contentType: fetch.contentType,
+        sizeBytes: fetch.sizeBytes,
+        content: fetch.content,
+        sourcePages: Array.from(resourceOccurrences.preloads.get(fetch.url) ?? []),
         redirected: fetch.redirected,
         finalUrl: fetch.finalUrl,
         sourceMapHeader: fetch.sourceMapHeader,
@@ -1354,7 +1399,7 @@ export function runRulesOnStorage(
     }
 
     // Use pre-fetched resource data (no HTTP calls during rules phase)
-    const { resourceSizes, scripts, pdfSizes, sitemapUrlStatuses } = assets;
+    const { resourceSizes, scripts, preloadedScripts, pdfSizes, sitemapUrlStatuses } = assets;
 
     // Differential cloaking probe (#118) — opt-in, bounded. Re-fetches suspicious
     // paths (orphan / recently-modified) with a googlebot UA + query variation and
@@ -1439,6 +1484,7 @@ export function runRulesOnStorage(
       externalLinks: externalLinksData,
       resourceSizes,
       scripts,
+      preloadedScripts,
       pdfSizes,
       sitemapUrlStatuses,
       cloakingProbes,
@@ -1510,7 +1556,24 @@ export function runRulesOnStorage(
 
     // Step 4: Run site rules
     const siteRulesSpan = logger.traceStart("runSiteRules");
-    const siteResult = yield* Effect.promise(() => runner.runSiteRules(siteDataForPageRules));
+    // Endpoint discovery: same collector the streaming path registers, fed from the
+    // parsed pages v1 already holds. Passive; no request is made. The entry page
+    // is chosen by URL and collected first, not by map insertion order.
+    const endpointCollector = createEndpointCollector({
+      headersOf: buildHeadersMap,
+      entryUrl: siteDataForPageRules.baseUrl,
+    });
+    for (const { page, parsed } of entryFirst(pageDataMap.values(), siteDataForPageRules.baseUrl)) {
+      endpointCollector.collect(page, parsed);
+    }
+    const siteResult = yield* Effect.promise(() =>
+      runner.runSiteRules(
+        siteDataForPageRules,
+        undefined,
+        undefined,
+        endpointCollector.finish(siteDataForPageRules),
+      ),
+    );
 
     // Build site rule results map for storage
     const siteRuleResults = new Map<string, CheckResult[]>();
@@ -2078,7 +2141,7 @@ function buildStreamingSiteData(
       sitemapDiscovery.orphanPagesTotal = coverage.orphanPages.length;
     }
 
-    const { resourceSizes, scripts, pdfSizes, sitemapUrlStatuses } = assets;
+    const { resourceSizes, scripts, preloadedScripts, pdfSizes, sitemapUrlStatuses } = assets;
 
     const cloakingProbes = yield* Effect.promise(() =>
       resolveCloakingProbes(
@@ -2143,6 +2206,7 @@ function buildStreamingSiteData(
       externalLinks: externalLinksData,
       resourceSizes,
       scripts,
+      preloadedScripts,
       pdfSizes,
       sitemapUrlStatuses,
       cloakingProbes,
@@ -2188,6 +2252,7 @@ function runSitePass(
   rateLimitedPages: ReadonlyArray<{ url: string; status: number }>,
   collectedSignals: CollectedSiteSignals,
   siteQuery: SiteQuery,
+  endpointSurface: EndpointSurface,
 ): Effect.Effect<
   {
     siteResults: CheckResult[];
@@ -2204,7 +2269,7 @@ function runSitePass(
     // identical to v1: identical scalar universe, collectors reproduce the per-page
     // DOM signal, and siteQuery's universe is reconciled to v1's site.pages.
     const siteResult = yield* Effect.promise(() =>
-      runner.runSiteRules(siteData, siteQuery, collectedSignals),
+      runner.runSiteRules(siteData, siteQuery, collectedSignals, endpointSurface),
     );
 
     const siteRuleResults = new Map<string, CheckResult[]>();
@@ -2572,8 +2637,10 @@ export function runStreamingRules(
         );
         collectedPages.push(signal);
         // The value the rule cache stores for this page. It is already detached
-        // and holds no DOM, so it is exactly what a replay needs (#1990).
-        return signal;
+        // and holds no DOM, so it is exactly what a replay needs (#1990). An
+        // extractor that ran past its time budget left a hole, which must not be
+        // replayed: `undefined` keeps the page out of the cache.
+        return signal.timedOut ? undefined : signal;
       },
       // A replayed page contributes at the same point in the stream, so
       // `collectedPages` stays in crawl order whether a page ran or replayed —
@@ -2582,11 +2649,15 @@ export function runStreamingRules(
         collectedPages.push(snapshot as CollectedPageSignal);
       },
     };
+    const endpointCollector = createEndpointCollector({
+      headersOf: buildHeadersMap,
+      entryUrl: siteDataForPageRules.baseUrl,
+    });
     const streamed = yield* phase("page-rules", () =>
       streamPageRules(storage, crawlId, runner, siteDataForPageRules, {
       batchSize,
       soft404Confirmations: soft404Map,
-      collectors: [signalCollector],
+      collectors: [signalCollector, endpointCollector],
       hooks: opts?.hooks,
       signal: opts?.signal,
       // v1's page-rule universe verbatim (its `pageDataMap` keys), so the streamed
@@ -2628,6 +2699,7 @@ export function runStreamingRules(
         rateLimitedPages,
         collectedSignals,
         siteQuery,
+        endpointCollector.finish(siteDataForPageRules),
       ),
     );
 
@@ -2931,7 +3003,17 @@ interface ResourceOccurrenceMap {
   css: Map<string, Set<string>>;
   images: Map<string, Set<string>>;
   scripts: Map<string, Set<string>>;
+  preloads: Map<string, Set<string>>;
   fonts: Map<string, Set<string>>;
+}
+
+/** A `<meta http-equiv="Content-Security-Policy">` is an enforced policy too. */
+function hasMetaCsp(doc: Document | null): boolean {
+  if (!doc) return false;
+  for (const meta of doc.querySelectorAll("meta[http-equiv]")) {
+    if (meta.getAttribute("http-equiv")?.trim().toLowerCase() === "content-security-policy") return true;
+  }
+  return false;
 }
 
 function isSameDomainResource(url: string, baseHost: string): boolean {
@@ -2953,6 +3035,7 @@ function collectResourceOccurrences(
     css: new Map<string, Set<string>>(),
     images: new Map<string, Set<string>>(),
     scripts: new Map<string, Set<string>>(),
+    preloads: new Map<string, Set<string>>(),
     fonts: new Map<string, Set<string>>(),
   };
   absorbResourceOccurrences(target, pages, baseUrl);
@@ -2968,11 +3051,13 @@ function absorbResourceOccurrences(
     url: string;
     finalUrl?: string;
     parsed: ParsedPage;
+    /** The page enforces a CSP (header or meta); only then are its preloads wanted. */
+    hasCsp?: boolean;
   }>,
   baseUrl: string,
 ): void {
   const baseHost = getHostname(baseUrl).toLowerCase();
-  const { css, images, scripts, fonts } = target;
+  const { css, images, scripts, preloads, fonts } = target;
 
   for (const page of pages) {
     const pageUrl = page.finalUrl ?? page.url;
@@ -3017,6 +3102,16 @@ function absorbResourceOccurrences(
       const sources = scripts.get(script.src) ?? new Set<string>();
       sources.add(page.url);
       scripts.set(script.src, sources);
+    }
+
+    // Preloaded chunks name the lazy third-party scripts a page loads. They go in
+    // their own map so no script rule's input changes, and only pages that
+    // enforce a CSP are read, since nothing else needs them.
+    for (const src of page.hasCsp ? extractPreloadedScriptUrls(doc, pageUrl) : []) {
+      if (!isSameDomainScript(src, baseHost)) continue;
+      const sources = preloads.get(src) ?? new Set<string>();
+      sources.add(page.url);
+      preloads.set(src, sources);
     }
   }
 }
