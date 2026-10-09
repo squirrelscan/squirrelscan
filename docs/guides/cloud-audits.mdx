@@ -16,7 +16,7 @@ Log in once so your audits can reach the cloud:
 squirrel auth login
 ```
 
-This opens your browser so you can log in. What runs next depends on the audit's [level](/guides/audit-levels). Once you are logged in (free or Pro), audits default to the `surface` level, which runs the cloud checks and merges their results into the same report as the local rules, spending credits as they run. Only logged-out runs default to `quick`. Want a fast, free scan while logged in? Pass `--level quick`: it runs the local rules only, makes no cloud call and spends no credits. Free accounts get 500 credits a month to spend; Pro includes 3,000. See [`squirrel auth`](/cli/auth) for API-key auth and credential precedence, and [Audit levels](/guides/audit-levels) for what each level checks and costs.
+This opens your browser so you can log in. What runs next depends on the audit's [level](/guides/audit-levels). Once you are logged in (free or Pro), audits default to the `surface` level, which runs the cloud checks and merges their results into the same report as the local rules, spending credits as they run. Only logged-out runs default to `quick`. Want a fast, free scan while logged in? Pass `--level quick`: it runs the local rules only, skips the cloud checks and spends no credits (unless you turn on cloud rendering). Free accounts get 500 credits a month to spend; Pro includes 3,000. See [`squirrel auth`](/cli/auth) for API-key auth and credential precedence, and [Audit levels](/guides/audit-levels) for what each level checks and costs.
 
 ## Credits are pay-as-you-go
 

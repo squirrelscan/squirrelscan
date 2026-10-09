@@ -35,7 +35,7 @@ squirrel audit https://example.com --level full
 
 A fast first look. Quick reads the URL you give it and the URLs in its sitemaps, up to 25 pages, and does not follow links. A site with no usable sitemap gets its links followed anyway, so it still gets a real sample.
 
-Quick runs the local rules only and spends no credits, signed in or not. In the CLI a cloud browser render costs credits, so a quick audit renders pages only when you ask for it with `--render-mode` or `--render` (2 credits per rendered page). A quick audit run in the cloud renders the pages that need it.
+Quick runs the local rules only and spends no credits, signed in or not: it skips the cloud checks and, in the CLI, is not registered as a cloud audit, so no audit charge is made. Signed in, the CLI still reads your balance and publishes the report as usual (publishing is free). A cloud browser render does cost credits, so a quick CLI audit renders pages only when you turn rendering on with `--render-mode`, `--render` or `[cloud] render`, at 2 credits per rendered page, held to your balance and `max_credits_per_audit`. A quick audit run in the cloud renders the pages that need it.
 
 ### Surface
 
@@ -121,7 +121,7 @@ Websites added before audit levels existed keep the settings they had, as a cust
 
 ### In reports
 
-Every report says which level it ran at. The JSON report's `meta.auditLevel` holds the level (or `custom`), the level it was `basedOn`, the settings it `changes`, and every setting's value. The LLM report has an `<audit-level>` element, and the text, Markdown and HTML reports a line such as `Audit level: Custom, based on Surface (changed: Pages).`
+The report an audit writes says which level it ran at, and so does a JSON report you load back with `squirrel report`. The JSON report's `meta.auditLevel` holds the level (or `custom`), the level it was `basedOn`, the settings it `changes`, and every setting's value. The LLM report has an `<audit-level>` element, and the text, Markdown and HTML reports a line such as `Audit level: Custom, based on Surface (changed: Pages).`
 
 ## Limits
 

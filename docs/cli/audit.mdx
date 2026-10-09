@@ -82,9 +82,12 @@ demos the full product. Signed-out and `--offline` runs default to `quick`. Pass
 `--level` (or set `[crawler] coverage` in config) to choose either way.
 
 `quick` runs the local rules only and spends no credits, signed in or not: it
-makes no cloud call, and renders pages in the cloud browser only when you ask
-with `--render-mode` or `--render`. Free and Pro run the same checks: Pro just
-grants more monthly credits and lets you top up.
+skips the cloud checks and is not registered as a cloud audit, so no audit
+charge is made (signed in, it still reads your balance and publishes the report,
+which is free). It renders pages in the cloud browser only when you turn
+rendering on with `--render-mode`, `--render` or `[cloud] render`, at 2 credits
+per rendered page. Free and Pro run the same checks: Pro just grants more
+monthly credits and lets you top up.
 
 See [Audit levels](/guides/audit-levels) for every setting of every level, custom
 levels, and the plan and credit limits.
