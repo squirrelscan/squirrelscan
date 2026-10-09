@@ -6,7 +6,7 @@ import type { ScriptContentData } from "@squirrelscan/core-contracts";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { PUBLISH_LIMITS } from "@squirrelscan/core-contracts/limits";
-import { resolveUrl } from "@squirrelscan/utils";
+import { querySelectorAllOutsideNoscript, resolveUrl } from "@squirrelscan/utils";
 
 import { sharedRegex } from "../shared-regex";
 const NOTE =
@@ -214,7 +214,7 @@ export const sourceMapsRule: Rule = {
     const cssSourceMapPattern = /\/\*[#@]\s*sourceMappingURL=(\S+)\s*\*\//g;
 
     // Check scripts for sourceMappingURL comments
-    const scripts = doc.querySelectorAll("script");
+    const scripts = querySelectorAllOutsideNoscript(doc, "script");
     for (const script of scripts) {
       const src = script.getAttribute("src");
       const content = script.textContent || "";
@@ -302,7 +302,7 @@ export const sourceMapsRule: Rule = {
     }
 
     // Check stylesheets for source maps
-    const styleElements = doc.querySelectorAll("style");
+    const styleElements = querySelectorAllOutsideNoscript(doc, "style");
     for (const style of styleElements) {
       const content = style.textContent || "";
       let match: RegExpExecArray | null;
