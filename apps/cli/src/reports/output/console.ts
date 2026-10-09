@@ -336,8 +336,11 @@ export function generateConsoleReport(
   // Footer
   log("");
   log(divider());
+  // The score's warning count (advisory info-rule warnings left out), so the
+  // footer agrees with the "Total:" line below it (repo#2395).
+  const warningTotal = report.healthScore?.warningCount ?? report.warnings;
   log(
-    `${fmt.green(`${report.passed} passed`)} • ${fmt.yellow(`${report.warnings} warnings`)} • ${fmt.red(`${report.failed} failed`)}`
+    `${fmt.green(`${report.passed} passed`)} • ${fmt.yellow(`${warningTotal} warnings`)} • ${fmt.red(`${report.failed} failed`)}`
   );
   log(divider());
   log("");
