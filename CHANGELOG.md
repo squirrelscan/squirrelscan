@@ -28,6 +28,9 @@ How it works:
 - `crawl/all-noindex-pages` validates its `warnOnPatterns` and `errorOnPatterns` options. A non-array value now fails with a config error instead of being matched as a string.
 - `perf/source-maps` ignores `<script>` and `<style>` inside `<noscript>`. A browser with scripting enabled never runs that markup, so a source map referenced there is no longer reported.
 - `content/article-toc` finds a table of contents ItemList nested in a JSON-LD `@graph` wrapper, as Yoast, Rank Math and Slim SEO emit. Before, the rule reported a missing TOC schema on those sites.
+### Changed
+
+- `crawl/pdf-size` describes its 60MB failure threshold as squirrel's default, not as Google's limit. Google documents 64MB for PDFs; the rule's messages, description and option text now say so.
 
 ## v0.0.107 (2026-10-09)
 
