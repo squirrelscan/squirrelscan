@@ -216,8 +216,8 @@ describe("provider attribution: an sk_live_ prefix alone does not make a key Str
     expect(raw.map((f) => f.type)).toEqual([unattributedKeyType("sk_test_")]);
   });
 
-  test("positive control: a delimited sk_live_ key is still Stripe's, at high", () => {
-    expect(reported(script(`var s={stripeKey:"${stripeShape}"};`))).toEqual([["leaked-secrets-high", "Stripe Live Key"]]);
+  test("positive control: a delimited sk_live_ key is still Stripe's, critical in a script", () => {
+    expect(reported(script(`var s={stripeKey:"${stripeShape}"};`))).toEqual([["leaked-secrets-critical", "Stripe Live Key"]]);
   });
 });
 
