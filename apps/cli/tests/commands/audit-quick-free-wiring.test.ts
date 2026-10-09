@@ -20,7 +20,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { audit } from "@/cli/commands/audit";
+import { audit, renderOnlyPageBudget } from "@/cli/commands/audit";
 import { getGlobalConfigPath, setGlobalConfigPath } from "@/config";
 import { closeGlobalContentStore } from "@/crawler/storage/content-store";
 import { closeGlobalLinkCache } from "@/crawler/storage/link-cache";
@@ -181,5 +181,64 @@ describe("a signed-in quick audit spends nothing", () => {
         (r) => r.startsWith("POST ") && r.includes("/v1/agent-runs")
       )
     ).toBe(true);
+  });
+});
+
+// A quick audit does not register, so the affordability preflight does not
+// run for it. A render the user asks for is a paid standalone render, held to
+// the same balance and per-audit cap on the worst case of every page.
+describe("renderOnlyPageBudget", () => {
+  const budget = (over: Partial<Parameters<typeof renderOnlyPageBudget>[0]>) =>
+    renderOnlyPageBudget({
+      maxPages: 25,
+      balance: 5000,
+      maxCreditsPerAudit: 1000,
+      ...over,
+    });
+
+  test("a budget that covers every page clamps nothing", () => {
+    expect(budget({})).toEqual({ maxPages: 25, clamped: false });
+  });
+
+  test("the per-audit cap lowers the pages, at 2 credits a render", () => {
+    expect(budget({ maxCreditsPerAudit: 10 })).toEqual({
+      maxPages: 5,
+      clamped: true,
+      limitedBy: "cap",
+    });
+    // 0 = no cap.
+    expect(budget({ maxCreditsPerAudit: 0, maxPages: 5000 }).maxPages).toBe(
+      2500
+    );
+  });
+
+  test("so does the balance, unless the plan is unmetered", () => {
+    expect(budget({ balance: 9 })).toEqual({
+      maxPages: 4,
+      clamped: true,
+      limitedBy: "balance",
+    });
+    expect(budget({ balance: 0, unlimited: true }).clamped).toBe(false);
+  });
+
+  test("not even one render fits: 0 pages", () => {
+    expect(budget({ maxCreditsPerAudit: 1 }).maxPages).toBe(0);
+  });
+});
+
+describe("a signed-in quick audit that asks to render", () => {
+  test("a cap below one render fetches over HTTP and says so, sending no render", async () => {
+    await runAudit(
+      ["--level", "quick", "--render-mode", "all"],
+      "[cloud]\npublish = false\nmax_credits_per_audit = 1\n"
+    );
+    expect(
+      output.some((l) =>
+        l.includes(
+          "does not cover one rendered page (2 credits), so this quick audit fetches over HTTP"
+        )
+      )
+    ).toBe(true);
+    expect(cloudCalls()).toEqual([]);
   });
 });

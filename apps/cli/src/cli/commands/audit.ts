@@ -297,6 +297,40 @@ export function computePreflightAffordability(opts: {
   };
 }
 
+/** What one standalone cloud render costs (a render outside a registered audit). */
+const RENDER_PAGE_CREDITS = computeCost("render", 1);
+
+/**
+ * The page cap for a run without cloud checks (the quick level) that renders
+ * because the user asked it to. Such a run does not register, so it pays no
+ * audit base and no page settlement, but each render is a standalone render
+ * at `render` credits. Every page might render, so the cap comes down to the
+ * pages the balance and `[cloud] max_credits_per_audit` (0 = no cap) can pay
+ * that for. `maxPages: 0` means not even one render fits.
+ */
+export function renderOnlyPageBudget(opts: {
+  maxPages: number;
+  balance: number;
+  maxCreditsPerAudit: number;
+  unlimited?: boolean;
+}): { maxPages: number; clamped: boolean; limitedBy?: "balance" | "cap" } {
+  const requested = Math.max(1, Math.floor(opts.maxPages));
+  const byBalance = opts.unlimited
+    ? Number.POSITIVE_INFINITY
+    : Math.max(0, Math.floor(opts.balance / RENDER_PAGE_CREDITS));
+  const byCap =
+    opts.maxCreditsPerAudit > 0
+      ? Math.floor(opts.maxCreditsPerAudit / RENDER_PAGE_CREDITS)
+      : Number.POSITIVE_INFINITY;
+  const pages = Math.min(requested, byBalance, byCap);
+  if (pages >= requested) return { maxPages: requested, clamped: false };
+  return {
+    maxPages: pages,
+    clamped: true,
+    limitedBy: byBalance <= byCap ? "balance" : "cap",
+  };
+}
+
 /**
  * Lines printed when register failed definitively and the run went untracked.
  *
@@ -1867,7 +1901,7 @@ export const audit = defineCommand({
       // failure. Announce it only when the user actually asked for rendering —
       // the default (unset) mode is resolved in the controller and never
       // reached the cloud for a local host anyway.
-      const explicitRenderMode = nonPublicHost ? "off" : requestedRenderMode;
+      let explicitRenderMode = nonPublicHost ? "off" : requestedRenderMode;
       // Only when rendering was actually going to happen: the user asked for it
       // AND this run could have reached the cloud at all. Signed out or
       // --offline, cloud rendering was already off for other reasons, and
@@ -1886,6 +1920,43 @@ export const audit = defineCommand({
         logger.debug(
           `[cloud] rendering = "${config.cloud.rendering}" is deprecated; prefer render = "${config.cloud.rendering === "http" ? "off" : "all"}"`
         );
+      }
+      // A run without cloud checks (the quick level) does not register, so the
+      // affordability preflight above never ran for it. A render the user
+      // asked for is still a paid, standalone render: hold it to the same two
+      // bounds, the balance and [cloud] max_credits_per_audit, on the worst
+      // case that every page renders.
+      if (
+        !auditLevel.settings.cloudChecks &&
+        signedIn &&
+        !args.offline &&
+        startingBalance != null &&
+        (explicitRenderMode === "auto" || explicitRenderMode === "all")
+      ) {
+        const renderBudget = renderOnlyPageBudget({
+          maxPages,
+          balance: startingBalance,
+          maxCreditsPerAudit: config.cloud.max_credits_per_audit,
+          unlimited: unlimitedCredits,
+        });
+        if (renderBudget.maxPages === 0) {
+          log("");
+          log(
+            fmt.yellow(
+              `⚠ ${renderBudget.limitedBy === "cap" ? `[cloud] max_credits_per_audit = ${config.cloud.max_credits_per_audit}` : `Your balance of ${startingBalance} credits`} does not cover one rendered page (${RENDER_PAGE_CREDITS} credits), so this quick audit fetches over HTTP.`
+            )
+          );
+          explicitRenderMode = "off";
+        } else if (renderBudget.clamped) {
+          log("");
+          log(
+            fmt.yellow(
+              `⚠ ${renderBudget.limitedBy === "cap" ? `[cloud] max_credits_per_audit = ${config.cloud.max_credits_per_audit}` : `Your balance of ${startingBalance} credits`} covers ${renderBudget.maxPages} rendered pages (${RENDER_PAGE_CREDITS} credits each), so this quick audit stops at ${renderBudget.maxPages} of the ${maxPages} pages requested.`
+            )
+          );
+          maxPages = renderBudget.maxPages;
+          options.maxPages = maxPages;
+        }
       }
       const levelRender = auditLevel.settings.render;
       const renderStrategy =

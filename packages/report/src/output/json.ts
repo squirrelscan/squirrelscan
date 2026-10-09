@@ -1,6 +1,7 @@
 // JSON report output
 
 import type { AuditFailureReasonCode, RefusedFetch } from "@squirrelscan/core-contracts";
+import type { ResolvedAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
 import type { AuditReport, AuditStatus, CheckItem, EntityMap } from "../types";
 import { reportFailureReasonCode } from "../failure-notice";
 import { getScoreGrade } from "../scoring";
@@ -54,6 +55,8 @@ interface SlimJsonReport {
      * run that finished or hit the page cap.
      */
     stopReason?: "time";
+    /** The audit level and the settings it resolved to. Absent before audit levels. */
+    auditLevel?: ResolvedAuditSettings;
     /** Smart audits (#110): present only when `smart_audits` ran. */
     coverage?: {
       auditedPages: number;
