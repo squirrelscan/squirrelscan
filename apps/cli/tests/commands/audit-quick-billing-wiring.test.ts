@@ -1,8 +1,9 @@
 // No audit is free in credits: a signed-in quick audit is a billed cloud audit
 // like any other level. It registers the run (registering is what debits the
 // audit base and settles the pages) and fetches through the cloud browser by
-// default. The quick level only skips the cloud checks. Driven through citty's
-// real parser, signed in with a fake token, like
+// default. The quick level only skips the cloud checks. Signed out there is no
+// account to bill, so quick stays on the machine. Driven through citty's real
+// parser, signed in with a fake token (or none), like
 // audit-local-store-wiring.test.ts. No `mock.module` (process-wide in Bun).
 
 import {
@@ -213,6 +214,22 @@ describe("a signed-in quick audit is a billed cloud audit", () => {
     await runAudit(["--level", "quick", "-m", "1", "--http"]);
     expect(registered()).toBe(true);
     expect(renderSubmitted()).toBe(false);
+    expect(costNotice()).toBeUndefined();
+  });
+});
+
+// Signed out there is no account to bill: quick runs on the machine, with no
+// account needed and nothing sent to the cloud API.
+describe("a signed-out quick audit", () => {
+  test("stays local: no balance read, no registration, no render", async () => {
+    delete process.env.SQUIRREL_API_TOKEN;
+    delete process.env.SQUIRRELSCAN_API_KEY;
+    pageBody = CSR_SHELL;
+    await runAudit(["--level", "quick", "-m", "1"]);
+    expect(process.exitCode).not.toBe(1);
+    expect(
+      requested.filter((r) => r.includes("/v1/") && !r.includes("/v1/traces"))
+    ).toEqual([]);
     expect(costNotice()).toBeUndefined();
   });
 });

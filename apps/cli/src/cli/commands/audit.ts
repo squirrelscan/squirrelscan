@@ -1447,8 +1447,9 @@ export const audit = defineCommand({
       // Resolve the audit level: --level / -C > --pentest (full) > [crawler]
       // coverage > auth-aware default. Any signed-in plan (free OR paid)
       // defaults to `surface` (cloud checks + editor summary on a page sample,
-      // pro-parity demo #684); only anonymous defaults to `quick` (local rules,
-      // no spend). The flag is a free string (citty has no enum), so it is
+      // pro-parity demo #684); only anonymous defaults to `quick` (local, no
+      // account needed). A signed-in quick run is billed like any level. The
+      // flag is a free string (citty has no enum), so it is
       // parsed (see audit-level.ts): an unknown value would otherwise make the
       // page budget `undefined`, a NaN cap and an unbounded crawl.
       // Transient outage: keep the signed-in user's level (no spend while cloud is down); expired token stays anon.
