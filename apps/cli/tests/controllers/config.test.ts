@@ -358,3 +358,20 @@ describe("getConfigPath", () => {
     }
   });
 });
+
+describe("config read errors (repo#2055)", () => {
+  test("showConfig labels a TOML syntax error with the parser detail", () => {
+    const dir = mkdtempSync(join(tmpdir(), "squirrel-toml-"));
+    try {
+      const path = join(dir, "squirrel.toml");
+      writeFileSync(path, "[crawl\nmax_pages = 5\n");
+      const result = showConfig(path);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toContain("Failed to read config: TOML syntax error: ");
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

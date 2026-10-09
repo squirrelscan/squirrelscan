@@ -2,7 +2,7 @@
 
 import { isUnsafeObjectKey } from "@squirrelscan/core-contracts/untrusted-keys";
 import { existsSync, readFileSync } from "node:fs";
-import { parse as parseTOML } from "smol-toml";
+import { parse as parseTOML, TomlError } from "smol-toml";
 
 import { ConfigSchema, type SquirrelScanConfig } from "@/config";
 import { redactValue } from "@/utils/redact";
@@ -96,7 +96,7 @@ export function showConfig(
     return err(
       commandError(
         ErrorCodes.FILE_READ_ERROR,
-        `Failed to read config: ${(error as Error).message}`,
+        `Failed to read config: ${readErrorDetail(error)}`,
         { path: configPath }
       )
     );
@@ -131,6 +131,12 @@ function parseValue(value: string): unknown {
   return value;
 }
 
+/** The parser's detail, labelled when the file is not valid TOML (repo#2055). */
+function readErrorDetail(error: unknown): string {
+  if (error instanceof TomlError) return `TOML syntax error: ${error.message}`;
+  return (error as Error).message;
+}
+
 /**
  * Set a config value (supports dot notation)
  * Returns the updated config - caller handles file writing
@@ -163,7 +169,7 @@ export function setConfigValue(
     return err(
       commandError(
         ErrorCodes.FILE_READ_ERROR,
-        `Failed to read config: ${(error as Error).message}`,
+        `Failed to read config: ${readErrorDetail(error)}`,
         { path: configPath }
       )
     );
