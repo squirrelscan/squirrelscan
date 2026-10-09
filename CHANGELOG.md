@@ -24,6 +24,7 @@ How it works:
 
 ### Fixed
 
+- The add-website form and every other surface that shows the Quick level now say it costs credits (50 plus 2 per page, up to 100) and is cloud-rendered, instead of saying it is free and local-only.
 - The console report footer counts warnings the same way as its "Total:" line. Before, the footer counted advisory warnings from severity-"info" rules and the score line did not, so one report could show two warning totals.
 - `squirrel audit -f json -o <file>` prints the "JSON report saved to" line on stderr, so stdout carries only the report data when the file is redirected.
 - A malformed `squirrel.toml` prints the "TOML syntax error:" line with the parser detail again. The check compared the error name, which the parser never sets, so the labelled message never showed.

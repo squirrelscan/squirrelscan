@@ -4,6 +4,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  AUDIT_LEVEL_COPY,
   AUDIT_LEVEL_PRESETS,
   AUDIT_LEVELS,
   AUDIT_MAX_PAGES,
@@ -283,5 +284,17 @@ describe("the old cloud depths", () => {
   test("parses the old names only", () => {
     expect(parseLegacyCloudDepth("Deep")).toBe("deep");
     expect(parseLegacyCloudDepth("quick")).toBeNull();
+  });
+});
+
+// Quick is billed and cloud-rendered, so no surface may describe it as free or
+// local-only (the live add-website form renders this copy).
+describe("AUDIT_LEVEL_COPY quick summary", () => {
+  test("says quick costs credits, is cloud-rendered, and gives its page budget", () => {
+    const summary = AUDIT_LEVEL_COPY.quick.summary;
+    expect(summary).toContain("25 pages");
+    expect(summary).toContain("rendered in the cloud");
+    expect(summary).toContain("Costs credits: 50 plus 2 per page, up to 100");
+    expect(summary).not.toMatch(/no credits|local rules only|free/i);
   });
 });
