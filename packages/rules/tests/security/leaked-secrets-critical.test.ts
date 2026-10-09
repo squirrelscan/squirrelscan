@@ -116,11 +116,29 @@ describe("leaked-secrets critical escalation", () => {
   });
 
   test("a database URL to this machine in a script keeps its current severity", () => {
-    for (const host of ["localhost:5432", "127.0.0.1", "[::1]:5432"]) {
+    for (const host of ["localhost:5432", "127.0.0.1", "[::1]:5432", "localhost:5432,127.0.0.1:5433"]) {
       const url = `postgresql://johndoe:Zx9fLq2Vb7Nm@${host}/shop`; // pragma: allowlist secret
       const checks = run(`<html><body><script>var db="${url}";</script></body></html>`);
       expect(byName(checks, "leaked-secrets-critical")).toBeUndefined();
       expect(ids(byName(checks, "leaked-secrets-high"))).toContain("PostgreSQL Connection String");
+    }
+  });
+
+  test("a database URL with any host off this machine still escalates", () => {
+    for (const host of ["127.0.0.1,db.acme.test:27017", "127.evil.test"]) {
+      const url = `mongodb://app:Zx9fLq2Vb7Nm@${host}/shop`; // pragma: allowlist secret
+      const checks = run(`<html><body><script>var db="${url}";</script></body></html>`);
+      expect(ids(byName(checks, "leaked-secrets-critical"))).toContain("MongoDB Connection String");
+    }
+  });
+
+  test("an Azure connection string escalates only with a real-shaped AccountKey", () => {
+    const conn = (key: string) => `DefaultEndpointsProtocol=https;AccountName=acmeprod;AccountKey=${key};EndpointSuffix=core.windows.net`;
+    const real = run(`<html><body><script>var c="${conn("az" + "aB3dE5gH7jK9mN1pQ3rS5tU7vW9xY1z".repeat(3).slice(0, 84) + "==")}";</script></body></html>`);
+    expect(ids(byName(real, "leaked-secrets-critical"))).toContain("Azure Storage Key");
+    for (const slot of ["<account-key>", "YOUR_ACCOUNT_KEY"]) {
+      const checks = run(`<html><body><script>var c="${conn(slot)}";</script></body></html>`);
+      expect(byName(checks, "leaked-secrets-critical")).toBeUndefined();
     }
   });
 

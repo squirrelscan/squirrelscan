@@ -1480,24 +1480,25 @@ function isBrowserServed(location: ReportedLocation): boolean {
   return location.startsWith("inline-script") || location.startsWith("external-script");
 }
 
+const LOOPBACK_HOST_RE = /^(?:localhost|127(?:\.\d{1,3}){3}|\[::1\])$/;
+
 /**
  * A value a tutorial prints rather than one a deploy shipped: AWS's documented
- * example credentials (`…EXAMPLE`, `…EXAMPLEKEY`), a connection string the
- * confidence pass already marked as naming a placeholder host or database, and
- * a database URL to this machine, which is a development credential. A docs
- * page built on a framework that inlines its content into `<script>` payloads
- * would otherwise read as critical. These keep their own tier; they only do
- * not escalate.
+ * example credentials (`…EXAMPLE`, `…EXAMPLEKEY`), an Azure connection string
+ * whose AccountKey is not a 64-byte base64 key (`<account-key>`), a connection
+ * string the confidence pass already marked as naming a placeholder host or
+ * database, and a database URL whose every host is this machine, which is a
+ * development credential. A docs page built on a framework that inlines its
+ * content into `<script>` payloads would otherwise read as critical. These
+ * keep their own tier; they only do not escalate.
  */
 function isTutorialValue(s: LeakedSecret): boolean {
   if (s.value.includes("EXAMPLE") || s.extra?.placeholder !== undefined) return true;
+  if (s.type === "Azure Storage Key") return !/AccountKey=[A-Z0-9+/]{86}==;/i.test(s.value);
   if (!s.type.endsWith("Connection String")) return false;
   const authority = /:\/\/([^/?#]*)/.exec(s.value)?.[1] ?? "";
-  const host = authority
-    .slice(authority.lastIndexOf("@") + 1)
-    .replace(/:\d*$/, "")
-    .toLowerCase();
-  return host === "localhost" || host.startsWith("127.") || host === "[::1]";
+  const hosts = authority.slice(authority.lastIndexOf("@") + 1).toLowerCase().split(",");
+  return hosts.every((host) => LOOPBACK_HOST_RE.test(host.replace(/:\d*$/, "")));
 }
 
 /** A server-only secret read from a browser-served script: critical. */
