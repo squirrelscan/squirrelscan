@@ -6,7 +6,7 @@ import { isUnsafeObjectKey } from "@squirrelscan/core-contracts/untrusted-keys";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import { parse as parseTOML } from "smol-toml";
+import { parse as parseTOML, TomlError } from "smol-toml";
 import { z } from "zod";
 
 // Re-export everything from the config package so existing
@@ -174,7 +174,7 @@ export async function loadConfig(
         const issuePath = issue.path.length ? issue.path.join(".") : "root";
         console.error(`- ${issuePath}: ${issue.message}`);
       }
-    } else if (error instanceof Error && error.name === "TomlError") {
+    } else if (error instanceof TomlError) {
       console.error("TOML syntax error:");
       console.error(error.message);
     } else if (error instanceof Error) {
