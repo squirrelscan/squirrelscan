@@ -17,10 +17,12 @@ The rule runs once per crawl over every page whose status was 2xx, whose headers
 
 - `bad-caching`, skipped with the message `No cacheable HTML responses with headers to evaluate` when nothing qualifies.
 - `bad-caching-freshness`: warns with the message `N/M pages set no caching policy (no freshness lifetime and no validator)` when under 60% of pages declare one, and fails with the same message under 25%. Otherwise it passes with `N/M pages declare a caching policy`.
-- `bad-caching-validators`: warns with `N/M pages lack an ETag or Last-Modified validator` under 60%, fails under 25%, and otherwise passes with `N/M pages expose a revalidation validator`.
+- `bad-caching-validators`: warns with `N/M pages lack an ETag or Last-Modified validator` under 60% and otherwise passes with `N/M pages expose a revalidation validator`. It never fails: a page with no lifetime and no validator already counts against `bad-caching-freshness`, and a page with a lifetime only loses a cheap revalidation once it expires. When the check warns and at least half of the pages missing a validator came through Cloudflare, the message gains a note, described in [When Cloudflare removes the ETag](#when-cloudflare-removes-the-etag).
 - `bad-caching-compression`: emitted only when at least one response was compressible. It warns with `N/M compressible pages served without gzip/Brotli` under 80%, fails under 50%, and otherwise passes with `N/M compressible pages compressed`.
 
-A page counts as declaring a caching policy in either of two ways. It has a freshness lifetime: neither `no-store` nor `no-cache`, and either a positive lifetime through `s-maxage` or `max-age`, with `s-maxage` taking precedence, or a non-empty `Expires` header. The `Expires` value is not parsed, so a date already in the past still counts. Or it revalidates: not `no-store`, a validator present, and either `no-cache` or a lifetime of exactly zero. A response with no `Cache-Control` and no `Expires` is neither, whatever validator it carries, because the server declared nothing and the reuse is a cache's heuristic rather than the site's choice. Compression counts `br`, `gzip`, `deflate` and `zstd`. Each failing check carries up to five example URLs.
+A page counts as declaring a caching policy in either of two ways. It has a freshness lifetime: neither `no-store` nor `no-cache`, and either a positive lifetime through `s-maxage` or `max-age`, with `s-maxage` taking precedence, or a non-empty `Expires` header. The `Expires` value is not parsed, so a date already in the past still counts. Or it revalidates: not `no-store`, a validator present, and either `no-cache` or a lifetime of exactly zero. A response with no `Cache-Control` and no `Expires` is neither, whatever validator it carries, because the server declared nothing and the reuse is a cache's heuristic rather than the site's choice. Compression counts `br`, `gzip`, `deflate` and `zstd`. Each check that warns or fails carries up to five example URLs.
+
+Any non-empty `ETag` is a validator, weak ones (`W/"..."`) included, whatever the content encoding. A browser revalidating with `If-None-Match` compares tags weakly, so a weak tag still earns a 304. CDNs that compress a response, Cloudflare, CloudFront, Google Cloud CDN and Bunny among them, turn a strong tag weak, and that is fine.
 
 ## How to fix it
 
@@ -34,7 +36,30 @@ Content-Encoding: br
 
 Most servers and CDNs emit an `ETag` automatically once the response is not streamed, and compression is usually a single switch. The freshness value is the one that needs a decision per content type.
 
-The common false positive is a site that is entirely personalised, where every page is per-user and `no-store` is correct. The policy check counts those as declaring none, because from a cache's point of view they do.
+The common false positive is a site that is entirely personalised, where every page is per-user and `no-store` is correct. The policy check counts those as declaring none, because from a cache's point of view they do. The other one that looks like a false positive is an `ETag` your server sends but your visitors never get, because the CDN removed it. The finding is accurate for them, and the next section shows how to check.
+
+## When Cloudflare removes the ETag
+
+Cloudflare drops the `ETag` from HTML it rewrites. Its docs name Email Address Obfuscation, Automatic HTTPS Rewrites, Replace insecure JavaScript libraries and JavaScript Detections, which Bot Fight Mode turns on. Some of these are on by default. On some zones the header goes missing only for requests that ask for a page, which every browser navigation does and squirrel does too, so a plain `curl -I` can show an `ETag` your visitors never receive. Compare the two:
+
+```bash
+curl -s -D - -o /dev/null -H "Accept: */*" https://example.com/page
+curl -s -D - -o /dev/null -H "Accept: text/html" https://example.com/page
+```
+
+When the first prints an `etag` line and the second does not, a rewriting feature is the likely cause. When neither has one, fetch a file that is not HTML from the same origin, such as `/robots.txt`: an `ETag` there points the same way, though some origins only send validators for static files. To be sure, request the same page from your origin directly, bypassing Cloudflare, or turn the suspected feature off and repeat the second command.
+
+To get a validator back, pick one:
+
+- Add `no-transform` to the `Cache-Control` of your HTML responses. Cloudflare skips Email Address Obfuscation, JavaScript Detections and Web Analytics injection for those responses. Keep compression on at your origin, since Cloudflare may stop compressing them for you, and add the Web Analytics snippet to your pages yourself if you rely on the automatic one.
+- Turn the rewriting features off for the zone, or for your HTML paths with a Configuration Rule.
+- Also send `Last-Modified`. None of these features is documented to remove it, and it is enough for a 304.
+
+When `bad-caching-validators` warns and at least half of the pages missing a validator carry Cloudflare response headers (`server: cloudflare` or `cf-cache-status`), its message ends with this note, where `K` is how many of those pages came through Cloudflare:
+
+`K of them came through Cloudflare, which may drop the ETag from HTML it rewrites with Email Address Obfuscation, Automatic HTTPS Rewrites, Replace insecure JavaScript libraries or JavaScript Detections (Bot Fight Mode). Add no-transform to the HTML Cache-Control, turn those features off, or also send Last-Modified`
+
+The note says "may" because squirrel only sees what Cloudflare sent, not what your origin sent: an origin that never set a validator looks the same from outside. It never changes the check's status, and the JSON report carries the count as `details.cloudflarePages`.
 
 | | |
 |---|---|
@@ -100,6 +125,10 @@ Performance findings ship in every audit next to the SEO, security and agent exp
 - [Prevent unnecessary network requests with the HTTP Cache, web.dev](https://web.dev/articles/http-cache)
 - [Cache-Control, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control)
 - [ETag, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/ETag)
+- [If-None-Match uses weak comparison, RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.2)
+- [ETag headers, Cloudflare](https://developers.cloudflare.com/cache/reference/etag-headers/)
+- [JavaScript detections, Cloudflare](https://developers.cloudflare.com/cloudflare-challenges/challenge-types/javascript-detections/)
+- [Replace insecure JavaScript libraries, Cloudflare](https://developers.cloudflare.com/waf/tools/replace-insecure-js-libraries/)
 
 ## Check your site
 
