@@ -22,7 +22,7 @@ The server runs in the foreground and speaks JSON-RPC on stdin/stdout. You rarel
 
 | Tool | Auth | Description |
 |------|------|-------------|
-| `audit_website` | None | Full deterministic audit of a URL at an [audit level](/guides/audit-levels) (`level`: `quick`, `surface` or `full`, default `surface`; `coverage` is the older name). Cloud checks added at surface and full when logged in. |
+| `audit_website` | None | Deterministic audit of a URL on this machine at an [audit level](/guides/audit-levels) (`level`: `quick`, `surface` or `full`, default `surface`; `coverage` is the older name). Logged in, surface and full add the cloud checks, but this local tool does not yet register them as a billed cloud audit ([known gap](https://github.com/squirrelscan/squirrelscan/issues/628)). A configured `[cloud] render` costs 2 credits per rendered page. For a billed cloud audit, use the [hosted MCP server's](/developers/mcp) `run_audit`. |
 | `quick_check` | None | Fast, local-only audit at the quick level: the URL and its sitemaps, up to 25 pages, no link following, no cloud checks. Works offline. |
 | `list_rules` | None | List all built-in audit rules. |
 | `get_rule` | None | Full definition of one rule by id. |

@@ -136,7 +136,7 @@ export function registerAuditTools(server: McpServer): void {
     {
       title: "Audit a website",
       description:
-        "Run a full deterministic website audit (performance, security, accessibility, content, structured data, and more) on a URL and return an LLM-optimized report. Free + local; adds cloud enrichment automatically when logged in (charges credits per your plan). Pass offline:true to force local-only.",
+        "Run a deterministic website audit (performance, security, accessibility, content, structured data, and more) of a URL on this machine and return an LLM-optimized report. Signed in, the surface and full levels add the cloud checks; this local tool does not yet register them as a billed cloud audit (known gap, squirrelscan#628). A configured [cloud] render sends pages to the cloud browser at 2 credits each. For a billed cloud audit, use the hosted MCP server's run_audit. Pass offline:true to keep it local-only.",
       inputSchema: z.object({
         url: z.string().describe("The URL to audit (e.g. https://example.com)"),
         level: z.enum(AUDIT_LEVELS).optional().describe(LEVEL_DESCRIPTION),
