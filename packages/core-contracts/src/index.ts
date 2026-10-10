@@ -75,6 +75,7 @@ import type { AuditFailureReasonCode } from "./failure-reason";
 import type { RefusedFetch } from "./refused-fetch";
 import type { EntityMap } from "./entity-map";
 import type { AuditLevel, ResolvedAuditSettings } from "./audit-levels";
+import type { ReportCapTier } from "./limits";
 
 export interface CheckItem {
   id: string;
@@ -473,6 +474,20 @@ export interface AuditReport {
    */
   resolutionSignal?: ResolutionSignal;
   /**
+   * This run's evaluated-check counts per rule and check name (repo#2656),
+   * counted BEFORE the publish capper sampled `ruleResults` and dropped the
+   * per-page pass rows. Present on capped published reports only. See
+   * {@link CheckTallies}. Transport for the server rescore: never rendered.
+   */
+  checkTallies?: CheckTallies;
+  /**
+   * Set when the report is a capped published summary (repo#2656): every issue
+   * class carries a sample plus its true counts, and the full per-page detail
+   * lives elsewhere. Absent on local reports and on reports published before
+   * the cap.
+   */
+  detail?: PublishedReportDetail;
+  /**
    * Aggregate crawl-cache stats for this audit — hit rate, bytes saved, and a
    * hits-by-reason breakdown across pages AND sub-resources (#108). Derived from
    * the crawl + sub-resource cache results via `buildCacheStats`. Present only
@@ -549,6 +564,65 @@ export interface AuditReport {
    * Absent when nothing was recovered.
    */
   fetchFallbacks?: { recovered: number };
+}
+
+/**
+ * One (rule, check name)'s evaluated checks in THIS run, counted before the
+ * publish capper sampled them (repo#2656). The capped report keeps a 10-page
+ * sample per issue class and no per-page pass rows, so a reader that needs the
+ * real numbers (the server rescore, repo#2657) reads them here instead of
+ * counting rows.
+ *
+ * The fields are the scorer's own (`IssueTally` in audit-engine scoring.ts),
+ * computed by the same function over the unfolded checks, so summing a rule's
+ * check names gives exactly the tally `calculateHealthScore` folds for it:
+ *  - `passed` / `warnings` / `failed`: check counts. Warns of a severity-"info"
+ *    rule are advisory and already excluded, as the scorer excludes them.
+ *  - `warnUnits` / `failUnits`: the item-aware density units (#683).
+ *  - `skipped`: checks that did not evaluate (not scored; for display).
+ *
+ * Only FRESH checks are counted: a carried or unrendered check is a replay of
+ * an earlier audit, which the server re-derives from its own store. Zero fields
+ * are omitted, so a clean class is `{ "passed": 49 }`. Bounded by rules × check
+ * names, never by pages.
+ */
+export interface CheckTally {
+  passed?: number;
+  warnings?: number;
+  failed?: number;
+  warnUnits?: number;
+  failUnits?: number;
+  skipped?: number;
+}
+
+/** `ruleId` → `checkName` → {@link CheckTally}. */
+export type CheckTallies = Record<string, Record<string, CheckTally>>;
+
+/**
+ * The stamp on a capped published report (repo#2656). It tells a viewer that
+ * every list in `ruleResults` is a sample, what the sample kept, and where the
+ * rest lives, so it can say "N more" and point there instead of presenting the
+ * sample as the whole.
+ */
+export interface PublishedReportDetail {
+  capped: true;
+  /** Index into `REPORT_CAPS.tiers` of the sample tier the byte fitter settled on. */
+  tier: number;
+  /** What each issue class kept at that tier. */
+  caps: ReportCapTier & { classesPerRule: number };
+  /**
+   * Where the full per-page detail is: `local` = the project database on the
+   * machine that ran the audit (`squirrel report --format json`); `findings` =
+   * the cloud findings store. Absent when the producer did not say.
+   */
+  fullDetail?: "local" | "findings";
+  /** Set when the fitter dropped the entity map to fit the budget. */
+  entityMapDropped?: true;
+  /**
+   * Issue classes left out entirely by the last-resort byte admission. Their
+   * counts survive in `checkTallies`. Absent when every class fit.
+   */
+  classesDropped?: number;
 }
 
 /** Where an audit executed + how much of the site it crawled (#1180). */
