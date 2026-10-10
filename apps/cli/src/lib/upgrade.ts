@@ -41,7 +41,9 @@ const UPGRADE_BASE = "https://squirrelscan.com/upgrade";
  * The one public upgrade URL. `src` is attribution only, so the surface that
  * sold the upgrade can be told apart from the ones that didn't.
  */
-export function upgradeUrl(src: "cli" | "cli-audit" | "cli-credits"): string {
+export function upgradeUrl(
+  src: "cli" | "cli-audit" | "cli-credits" | "mcp-audit"
+): string {
   return `${UPGRADE_BASE}?src=${src}`;
 }
 

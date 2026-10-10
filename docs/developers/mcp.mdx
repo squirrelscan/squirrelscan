@@ -151,7 +151,7 @@ The CLI ships a local stdio MCP server too:
 squirrel mcp
 ```
 
-It runs squirrelscan's deterministic audit engine on your machine: it works offline and needs no account. Reach for it when you are auditing localhost or a private network, or have no network at all. Signed in, its `audit_website` adds the cloud checks at surface and full without registering a billed cloud audit yet ([known gap](https://github.com/squirrelscan/squirrelscan/issues/628)); `run_audit` on the hosted server is the billed cloud audit. The hosted server is the better default for everything cloud-side: shared org state, the issue tracker, browser rendering, and zero local install.
+It runs squirrelscan's deterministic audit engine on your machine: it works offline and needs no account. Reach for it when you are auditing localhost or a private network, or have no network at all. Signed in, its `audit_website` is a billed cloud audit like `squirrel audit`, with the same confirmation step as the hosted `run_audit`. The hosted server is the better default for everything cloud-side: shared org state, the issue tracker, browser rendering, and zero local install.
 
 Full setup and tool reference: [`squirrel mcp`](/cli/mcp).
 
