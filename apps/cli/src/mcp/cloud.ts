@@ -1,45 +1,21 @@
-// Auth + cloud helpers for MCP tools: probe availability, gate authed tools.
+// Auth + cloud helpers for MCP tools: gate authed tools, map API results.
 
 import type { CallToolResult } from "@modelcontextprotocol/server";
 
 import type { ApiResult } from "@/lib/api-client";
 import type { ResolvedCredential } from "@/self/credentials";
 
-import { STATUS_REQUEST_TIMEOUT_MS } from "@/constants";
 import {
   API_TOKEN_ENV_VAR,
   LEGACY_API_TOKEN_ENV_VAR,
   resolveCredential,
 } from "@/self/credentials";
-import { createCloudClientFromSettings } from "@/tools/cloud";
-import { logger } from "@/utils/logger";
 
 import { errorResult, jsonResult } from "./result";
 import { API_KEYS_NOT_YET_SUPPORTED } from "./scopes";
 
 // Injectable credential check so authed tools stay deterministically testable.
 export type LoginResolver = () => ResolvedCredential | null;
-
-// Cache only a confirmed-available result for the server's lifetime; logged-out is network-free already, and a transient probe failure re-probes next call.
-let cloudConfirmed = false;
-
-// True when a credential resolves AND a balance probe succeeds — mirrors the CLI `signedIn` gate.
-export async function resolveCloudAvailability(): Promise<boolean> {
-  if (cloudConfirmed) return true;
-  const client = createCloudClientFromSettings({
-    timeoutMs: STATUS_REQUEST_TIMEOUT_MS,
-    maxAttempts: 2,
-  });
-  if (!client) return false;
-  try {
-    await client.getBalance();
-    cloudConfirmed = true;
-    return true;
-  } catch (error) {
-    logger.debug("mcp: cloud unavailable, running local-only", error);
-    return false;
-  }
-}
 
 // Logged-out guard for authed tools — returns a clean MCP error naming both
 // fixes (headless env token or interactive login), or null when authed.

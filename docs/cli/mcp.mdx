@@ -7,7 +7,7 @@ description: "Run the local MCP server so agents can drive squirrelscan"
 The `mcp` command starts a local [Model Context Protocol](https://modelcontextprotocol.io) server over stdio. Agents like Claude Code and Cursor launch it to call squirrelscan's audit engine and cloud features as tools.
 
 <Info>
-Prefer the **hosted MCP server** for most work: point any client at `https://mcp.squirrelscan.com/mcp` with nothing to install and no local process to run. See the [Hosted MCP server](/developers/mcp) guide. The local stdio server below is the offline, unmetered alternative: signed-out local audits, no account, no network needed.
+Prefer the **hosted MCP server** for most work: point any client at `https://mcp.squirrelscan.com/mcp` with nothing to install and no local process to run. See the [Hosted MCP server](/developers/mcp) guide. The local stdio server below runs audits on your machine: signed out it needs no account and no network, and signed in its `audit_website` is billed like `squirrel audit` (see [Billing a signed-in audit](#billing-a-signed-in-audit)).
 </Info>
 
 ## Usage
@@ -22,7 +22,7 @@ The server runs in the foreground and speaks JSON-RPC on stdin/stdout. You rarel
 
 | Tool | Auth | Description |
 |------|------|-------------|
-| `audit_website` | None | Deterministic audit of a URL on this machine at an [audit level](/guides/audit-levels) (`level`: `quick`, `surface` or `full`, default `surface`; `coverage` is the older name). Logged in, surface and full add the cloud checks, but this local tool does not yet register them as a billed cloud audit ([known gap](https://github.com/squirrelscan/squirrelscan/issues/628)). A configured `[cloud] render` costs 2 credits per rendered page. For a billed cloud audit, use the [hosted MCP server's](/developers/mcp) `run_audit`. |
+| `audit_website` | None | Deterministic audit of a URL at an [audit level](/guides/audit-levels) (`level`: `quick`, `surface` or `full`, default `surface`; `coverage` is the older name). Logged out, or with `offline: true`, it runs on your machine with no cloud call. Logged in, it is a billed cloud audit like [`squirrel audit`](/cli/audit): 50 credits plus 2 per audited page at every level, with pages that need JavaScript rendered in the cloud browser and the cloud checks at surface and full. See [Billing a signed-in audit](#billing-a-signed-in-audit). |
 | `quick_check` | None | Fast, local-only audit at the quick level: the URL and its sitemaps, up to 25 pages, no link following, no cloud checks. Works offline. |
 | `list_rules` | None | List all built-in audit rules. |
 | `get_rule` | None | Full definition of one rule by id. |
@@ -39,6 +39,30 @@ The server runs in the foreground and speaks JSON-RPC on stdin/stdout. You rarel
 | `send_feedback` | None | Send feedback to the squirrelscan team: a bug, a missing feature, what worked. Needs the network and an email to reply to: pass `email`, or it uses the one [`squirrel feedback`](/cli/feedback) saved, then your signed-in account's. |
 
 The five entity tools read the local project store, so they need no account and spend no credits. They answer questions about audits you have already run: see [the entity map for agents](/guides/entity-map/mcp) for the fix-and-verify loop they are built around.
+
+## Billing a signed-in audit
+
+Logged out, `audit_website` and `quick_check` run on your machine, need no account and make no cloud call. Logged in, `audit_website` is billed the way [`squirrel audit`](/cli/audit) is: 50 credits for the audit plus 2 per audited page, at every [audit level](/guides/audit-levels). `quick_check` always runs locally.
+
+A tool call cannot ask you a question, so the first call returns the estimate instead of starting:
+
+```json
+{
+  "status": "confirmation_required",
+  "estimate": { "credits": 100, "pages": 25, "baseCredits": 50, "creditsPerPage": 2 },
+  "balance": 5000,
+  "sufficient": true,
+  "next": "Show the user the estimate (...), then call audit_website again with confirm: true to start the billed cloud audit. Pass offline: true for a local-only audit."
+}
+```
+
+The agent shows you the estimate and calls again with `confirm: true`. The report then starts with the run and its cost, for example `Billed cloud audit, run <id>: 25 audited pages, about 100 credits (50 base + 2 per audited page).` The page charge settles when the run closes, on the pages the audit actually read.
+
+- An estimate at or under `[cloud] confirm_threshold` (50 by default) starts without `confirm`. Every audit costs at least 52 credits, so by default each one asks first.
+- When your balance or `[cloud] max_credits_per_audit` covers fewer pages than the level asks for, the audit runs on the pages it can pay for and says so.
+- When they cannot cover even one page, or the server refuses to register the audit, the tool returns an error with the cost and the balance. Nothing is registered or charged.
+- An audit that does not complete (the site is down or blocks the crawl) closes as failed: no page charge, and the audit base is refunded. Stopping the server mid-audit closes the run as cancelled.
+- `offline: true` runs the audit on your machine with no cloud call: not billed, and without the cloud checks or cloud rendering. A `localhost` or private-network URL always runs locally and is never billed.
 
 ## Supported protocol versions
 
