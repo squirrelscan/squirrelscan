@@ -16,7 +16,7 @@ Rendering follows your login state and the [audit level](/guides/audit-levels) b
 
 - **Logged in** - audits render in the cloud browser automatically, with no prompt. The level decides which pages: quick renders only the pages that need JavaScript (`auto`), surface and full render every page (`all`). The first such run prints a one-line note about what audits cost.
 - **Logged out or `--offline`** - plain HTTP, no credits.
-- **Logged in with `--http`, `rendering = "http"`, or an earlier "no" to the old rendering prompt** - plain HTTP, but the audit is still billed: 50 credits plus 2 per audited page.
+- **Logged in with `--http`, or rendering turned off in `[cloud]`** - plain HTTP, but the audit is still billed: 50 credits plus 2 per audited page.
 
 Override the default any time:
 

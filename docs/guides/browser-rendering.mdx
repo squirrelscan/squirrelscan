@@ -55,14 +55,14 @@ squirrel audit https://example.com --render-mode auto
 
 ## Make the choice permanent for a project
 
-Pin the behavior in `squirrel.toml` so it never depends on login state or the level:
+Pin the render strategy in `squirrel.toml` so it no longer follows the audit level. Cloud rendering still needs a signed-in, online run, and command-line flags override the setting:
 
 ```toml squirrel.toml
 [cloud]
 render = "auto"   # off | auto | all
 ```
 
-Setting `render` explicitly overrides the auto default, so every audit of this project behaves the same. (The older `rendering = "http" | "browser"` still works: `http` = `off`, `browser` = `all`, but `render` is preferred.)
+Setting `render` explicitly overrides the level's default, so every signed-in audit of this project renders the same way. (The older `rendering = "http" | "browser"` still works: `http` = `off`, `browser` = `all`, but `render` is preferred.)
 
 ## Watch your page count
 
