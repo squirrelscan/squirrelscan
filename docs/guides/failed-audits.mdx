@@ -169,7 +169,7 @@ Either way, once you have fixed the cause, **Run New Audit** on the run page sta
 
 **What to do.** Keep the protection on and add a narrow exception for squirrelscan:
 
-1. In the dashboard, open the website's **Settings → Crawl** and add a custom request header with a long random value only you know, for example `X-Squirrelscan-Auth`.
+1. In the dashboard, open the website's **Settings → Crawl** and add a [custom request header](/dashboard/crawl-settings#custom-request-headers) (every plan has them) with a long random value only you know, for example `X-Squirrelscan-Auth`.
 2. Add a WAF rule that skips the challenge only for requests carrying that header with that exact value. [Firewall and WAF exceptions](/cloud/firewall) has the rule for Cloudflare, nginx and other WAFs.
 3. Run the audit again.
 

@@ -90,11 +90,11 @@ headers = { "Signature-Input" = "sig1=(\"@authority\");keyid=\"...\"", "Signatur
 CLI `-H` flags **merge over** the TOML map, so you can keep a base set in config
 and override a single header per run.
 
-## Cloud audits (Pro)
+## Cloud audits
 
 On the dashboard, set custom headers per-website under **Settings → Crawl →
-Custom request headers**. Applying custom headers to **cloud** audits is a
-**Pro** feature; free plans receive a `403 upgrade_required`. The cloud render
+Custom request headers**. Custom headers for **cloud** audits are available on
+[every plan](/dashboard/crawl-settings#custom-request-headers), Free included. The cloud render
 worker applies the headers to the headless browser before navigation
 (`setExtraHTTPHeaders`), so they ride the initial load and every subresource.
 

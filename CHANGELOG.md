@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- Docs: custom request headers are on every plan, Free included, where several pages said Pro only, and the pages that still called local audits free in general now say a local audit costs nothing only when it runs signed out or with `--offline`.
+
 ## v0.0.108 (2026-10-10)
 
 Audits now come in three sizes, called levels: quick, surface and full. A level is one name for a whole set of settings (pages, crawl strategy, cloud checks, rendering, external link checks and probing), defined once and shared by the CLI, the local MCP server and the dashboard, so a surface audit means the same thing wherever you start it. A signed-in cloud audit costs credits at every level, quick included: 50 for the audit plus 2 per audited page. Signed out or with `--offline`, the audit runs on your machine and costs nothing. The [Audit levels](https://docs.squirrelscan.com/guides/audit-levels) guide has what each level reads, checks and costs. Also in this release: the local MCP `audit_website` tool now bills a signed-in audit the way `squirrel audit` does, a dev server on `localhost` stops getting marked down for having no HTTPS, `squirrel self uninstall` is safe for package managers to call, and a pile of rule fixes.

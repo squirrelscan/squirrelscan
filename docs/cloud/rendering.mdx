@@ -4,7 +4,7 @@ description: "How cloud browser rendering works under the hood"
 icon: "globe"
 ---
 
-A plain HTTP fetch is fast, free, and accurate for server-rendered sites - but sites that build their content with JavaScript (SPAs, client-side frameworks) can look nearly empty to it, which skews every content rule.
+A plain HTTP fetch is fast and accurate for server-rendered sites - but sites that build their content with JavaScript (SPAs, client-side frameworks) can look nearly empty to it, which skews every content rule.
 
 Cloud browser rendering fixes that: each page is loaded in a **real headless browser** in the cloud, and the fully rendered DOM is returned to your local crawler. Everything downstream - parsing, rules, reports - works exactly as it does with plain HTTP, just on the post-JavaScript HTML.
 
@@ -12,10 +12,11 @@ Cloud browser rendering fixes that: each page is loaded in a **real headless bro
 
 ## When it runs
 
-Rendering follows your login state by default:
+Rendering follows your login state and the [audit level](/guides/audit-levels) by default:
 
-- **Logged in** - audits render every page in the cloud automatically. The first time this would spend credits, the CLI asks once (`Render pages in the cloud? [Y/n]`) and remembers your choice in `squirrel self settings` - it never asks again.
-- **Logged out, `--offline`, or you declined the prompt** - plain HTTP, no credits.
+- **Logged in** - audits render in the cloud browser automatically, with no prompt. The level decides which pages: quick renders only the pages that need JavaScript (`auto`), surface and full render every page (`all`). The first such run prints a one-line note about what audits cost.
+- **Logged out or `--offline`** - plain HTTP, no credits.
+- **Logged in with `--http`, or rendering turned off in `[cloud]`** - plain HTTP, but the audit is still billed: 50 credits plus 2 per audited page.
 
 Override the default any time:
 
@@ -26,7 +27,7 @@ Override the default any time:
 | Always plain HTTP for a project | `rendering = "http"` in `[cloud]` |
 | Always render for a project | `rendering = "browser"` in `[cloud]` |
 
-Flags win over config, and config wins over the auto default. Non-interactive runs (CI, agents, pipes) never prompt - they render only if you've already consented or set `rendering = "browser"`, otherwise they use plain HTTP.
+Flags win over config, and config wins over the auto default. Non-interactive runs (CI, agents, pipes) follow the same rules: they never prompt, and signed in they render by default.
 
 ## Cost
 
@@ -49,7 +50,7 @@ A render failure never fails the audit.
 
 | Site | Recommendation |
 |------|----------------|
-| Server-rendered (most CMS, SSR frameworks, static sites) | Plain HTTP (default) - rendering adds cost, not accuracy |
+| Server-rendered (most CMS, SSR frameworks, static sites) | Plain HTTP (`--http`) is enough - rendering adds crawl time, not accuracy |
 | Client-side SPA (React/Vue/Angular without SSR) | Browser rendering |
 | Mixed - mostly SSR with a few JS-dependent pages | Try plain HTTP first; if content rules report thin/missing content on pages you know have content, switch |
 

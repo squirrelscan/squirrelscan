@@ -17,7 +17,7 @@ squirrel auth login          # once
 squirrel audit https://example.com
 ```
 
-Once you're logged in, audits render every page in the cloud by default. The first time this would spend credits, the CLI asks once and remembers your answer - so you opt in knowingly and never get prompted again. The crawl progress shows the rendering spend so far (the 50-credit base appears in the final total, not this counter):
+Once you're logged in, audits render in the cloud by default, with no prompt: the [audit level](/guides/audit-levels) decides which pages, only the ones that need JavaScript at quick and every page at surface and full. The first such run prints a one-line note about what audits cost. The crawl progress shows the rendering spend so far (the 50-credit base appears in the final total, not this counter):
 
 ```text
 Crawling (cloud-rendered) 34/100 · ~68 credits
@@ -55,14 +55,14 @@ squirrel audit https://example.com --render-mode auto
 
 ## Make the choice permanent for a project
 
-Pin the behavior in `squirrel.toml` so it never depends on login state or the prompt:
+Pin the render strategy in `squirrel.toml` so it no longer follows the audit level. Cloud rendering still needs a signed-in, online run, and command-line flags override the setting:
 
 ```toml squirrel.toml
 [cloud]
 render = "auto"   # off | auto | all
 ```
 
-Setting `render` explicitly overrides the auto default - no prompt, every audit of this project behaves the same. (The older `rendering = "http" | "browser"` still works: `http` = `off`, `browser` = `all`, but `render` is preferred.)
+Setting `render` explicitly overrides the level's default, so every signed-in audit of this project renders the same way. (The older `rendering = "http" | "browser"` still works: `http` = `off`, `browser` = `all`, but `render` is preferred.)
 
 ## Watch your page count
 
