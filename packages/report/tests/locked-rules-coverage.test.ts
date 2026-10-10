@@ -10,7 +10,7 @@ import type { GroupScore, HealthScore } from "@squirrelscan/core-contracts";
 import type { AuditReport } from "../src/types";
 import { renderHtml } from "../src/output/html";
 
-const QUICK_COPY = "cloud checks don&#x27;t run in quick coverage";
+const QUICK_COPY = "the quick level skips the cloud checks";
 const OUTAGE_COPY = "temporarily unavailable";
 const HTTP_COPY = "without cloud rendering (--http)";
 const FAILED_COPY = "need a completed audit to run";
@@ -54,7 +54,7 @@ describe("LockedRulesSection quick-coverage copy (#747)", () => {
   test("paid + quick gets the coverage hint, not the outage copy", () => {
     const html = renderHtml(baseReport({ cloudPlan: "paid", coverageMode: "quick" }));
     expect(html).toContain(QUICK_COPY);
-    expect(html).toContain("-C surface or -C full");
+    expect(html).toContain("--level surface or --level full");
     expect(html).not.toContain(OUTAGE_COPY);
   });
 
@@ -110,7 +110,7 @@ describe("Agents locked score slot (#747)", () => {
     );
     expect(html).toContain(LOCKED_SLOT);
     expect(html).toContain("Agents");
-    expect(html).toContain("not scored in quick coverage");
+    expect(html).toContain("not scored at the quick level");
   });
 
   test("no placeholder when the ai group scored (cloud checks ran)", () => {

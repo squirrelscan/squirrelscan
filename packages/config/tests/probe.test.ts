@@ -170,6 +170,51 @@ describe("precedence: --probe > shortcuts > [security] probe > default", () => {
   });
 });
 
+describe("the audit level's probe setting", () => {
+  test("is the default when no flag or config value picks one, whoever is signed in", () => {
+    expect(resolved({ flags: {}, context: LOCAL_ANON, levelDefault: "active" })).toMatchObject({
+      level: "active",
+      source: "level",
+      budgetMs: 30_000,
+    });
+    expect(resolved({ flags: {}, context: LOCAL_SIGNED_IN, levelDefault: "passive" })).toMatchObject({
+      level: "passive",
+      source: "level",
+      budgetMs: 0,
+    });
+  });
+
+  test("loses to [security] probe and to every flag", () => {
+    expect(
+      resolved({ flags: {}, config: { probe: "passive" }, context: LOCAL_SIGNED_IN, levelDefault: "active" }),
+    ).toMatchObject({ level: "passive", source: "config" });
+    expect(
+      resolved({ flags: { probe: "active" }, context: LOCAL_SIGNED_IN, levelDefault: "passive" }),
+    ).toMatchObject({ level: "active", source: "flag" });
+    expect(resolved({ flags: { pentest: true }, context: LOCAL_ANON, levelDefault: "passive" })).toMatchObject({
+      level: "aggressive",
+      source: "shortcut",
+    });
+  });
+
+  test("a locked cloud run stays passive, and is not refused for it", () => {
+    expect(resolved({ flags: {}, context: CLOUD_UNVERIFIED, levelDefault: "active" })).toMatchObject({
+      level: "passive",
+      locked: true,
+    });
+  });
+
+  test("disabled discovery probes force passive without a notice", () => {
+    const value = resolved({
+      flags: {},
+      context: { ...LOCAL_SIGNED_IN, discoveryProbesDisabled: true },
+      levelDefault: "active",
+    });
+    expect(value).toMatchObject({ level: "passive", budgetMs: 0 });
+    expect(value.notices).toEqual([]);
+  });
+});
+
 describe("budget precedence: --probe-budget > [security] budget > level default", () => {
   test("level defaults", () => {
     expect(resolved({ flags: { probe: "active" }, context: LOCAL_ANON }).budgetMs).toBe(30_000);
@@ -243,9 +288,13 @@ describe("validation", () => {
     );
   });
 
-  test("--pentest with a coverage other than full is refused", () => {
+  test("--pentest with a level other than full is refused", () => {
     expect(refused({ flags: { pentest: true }, context: LOCAL_ANON, coverage: "quick" }).error).toContain(
-      "--pentest cannot be combined with --coverage quick",
+      "--pentest cannot be combined with --level quick (--pentest is --level full)",
+    );
+    // `fast` is the old name for quick, so it conflicts too.
+    expect(refused({ flags: { pentest: true }, context: LOCAL_ANON, coverage: "fast" }).error).toContain(
+      "--pentest cannot be combined with --level fast",
     );
     expect(resolved({ flags: { pentest: true }, context: LOCAL_ANON, coverage: "Full" }).level).toBe("aggressive");
   });

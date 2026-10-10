@@ -21,6 +21,7 @@ import {
   estimateAuditCap,
   minimumAuditCredits,
 } from "@squirrelscan/core-contracts";
+import { AUDIT_LEVEL_PRESETS } from "@squirrelscan/core-contracts/audit-levels";
 import { fullScanHint } from "@squirrelscan/report";
 import { defineCommand } from "citty";
 import { existsSync } from "node:fs";
@@ -64,9 +65,6 @@ import {
   DASHBOARD_URL,
   MAX_PAGES_CAP,
   MAX_CRAWL_CONCURRENCY,
-  COVERAGE_QUICK_MAX_PAGES,
-  COVERAGE_SURFACE_MAX_PAGES,
-  COVERAGE_FULL_MAX_PAGES,
   STATUS_REQUEST_TIMEOUT_MS,
 } from "@/constants";
 import {
@@ -139,6 +137,21 @@ import { getProjectNameContext, parseUserUrl } from "@/utils/url";
 
 import { version as packageVersion } from "../../../package.json";
 import {
+  AUDIT_LEVELS,
+  type AuditLevel,
+  configLevelOverrides,
+  defaultAuditLevel,
+  defaultSmartAudits,
+  levelBannerParts,
+  levelCoverageMode,
+  levelHelpList,
+  levelMaxPages,
+  parseAuditLevel,
+  readLevelFlag,
+  resolveLocalAuditLevel,
+  unknownLevelMessage,
+} from "../audit-level";
+import {
   printHeader,
   printUpdateNotification,
   printEndOfRunUpdateReminder,
@@ -148,13 +161,6 @@ import {
   printFooter,
   lockedRulesFooterLine,
 } from "../banner";
-import {
-  COVERAGE_MODES,
-  coverageMaxPages,
-  defaultCoverageMode,
-  defaultSmartAudits,
-  normalizeCoverageMode,
-} from "../coverage";
 import { printDatabaseLockWarningIfNeeded } from "../db-lock-warning";
 import { hasFlag, hasNegatedFlag } from "../flags";
 import { fmt, pageLimitHint } from "../format";
@@ -786,8 +792,9 @@ export function probeFlagsFromArgs(args: Record<string, unknown>): ProbeFlags {
 /**
  * Resolve probing intensity for a local CLI run (see resolveProbeIntensity in
  * @squirrelscan/config, which the hosted runner shares). Mirrors
- * resolveExplicitRenderMode: flags > config > context default. A local run
- * is never locked; the cloud inputs are the hosted caller's to supply.
+ * resolveExplicitRenderMode: flags > config > the audit level's probe setting
+ * > context default. A local run is never locked; the cloud inputs are the
+ * hosted caller's to supply.
  */
 export function resolveLocalProbeIntensity(opts: {
   flags: ProbeFlags;
@@ -802,7 +809,10 @@ export function resolveLocalProbeIntensity(opts: {
   signedIn: boolean;
   /** --disable-discovery-probes[=false]; undefined → config decides. */
   disableDiscoveryProbes?: boolean;
+  /** The raw level flag, so --pentest can refuse a level other than full. */
   coverage?: string;
+  /** The level the run resolved to; its probe setting is the default. */
+  level?: AuditLevel;
 }): ProbeResolution {
   const context: ProbeRunContext = {
     surface: "local",
@@ -811,11 +821,19 @@ export function resolveLocalProbeIntensity(opts: {
       opts.disableDiscoveryProbes ??
       opts.config.crawler.disable_discovery_probes === true,
   };
+  const levelProbe =
+    opts.level === undefined
+      ? undefined
+      : AUDIT_LEVEL_PRESETS[opts.level].probe;
   return resolveProbeIntensity({
     flags: opts.flags,
     config: opts.config.security,
     context,
     coverage: opts.coverage,
+    // No level defaults to aggressive (core-contracts pins it), so this never drops a value.
+    ...(levelProbe !== undefined && levelProbe !== "aggressive"
+      ? { levelDefault: levelProbe }
+      : {}),
   });
 }
 
@@ -906,7 +924,7 @@ export const audit = defineCommand({
     "max-pages": {
       type: "string",
       alias: "m",
-      description: `Maximum pages to crawl (default by coverage mode: quick ${COVERAGE_QUICK_MAX_PAGES}, surface ${COVERAGE_SURFACE_MAX_PAGES}, full ${COVERAGE_FULL_MAX_PAGES}; cap ${MAX_PAGES_CAP})`,
+      description: `Maximum pages to crawl (default by level: ${AUDIT_LEVELS.map((l) => `${l} ${levelMaxPages(l)}`).join(", ")}; cap ${MAX_PAGES_CAP})`,
     },
     "max-depth": {
       type: "string",
@@ -923,11 +941,14 @@ export const audit = defineCommand({
       description:
         "Max concurrent requests per host (overrides [crawler] per_host_concurrency; suppresses the localhost fast path)",
     },
+    level: {
+      type: "string",
+      description: `Audit level (default: quick if signed out, surface if signed in): ${levelHelpList()}. Flags such as --max-pages, --render-mode and --probe change single settings`,
+    },
     coverage: {
       type: "string",
       alias: "C",
-      description:
-        "Coverage mode (default: quick if signed out, surface if signed in): quick (fast/local/free), surface (one per pattern), full (comprehensive)",
+      description: "Old name for --level, still accepted (fast = quick)",
     },
     format: {
       type: "string",
@@ -1068,7 +1089,7 @@ export const audit = defineCommand({
     },
     pentest: {
       type: "boolean",
-      description: "Shortcut for --coverage full --probe aggressive",
+      description: "Shortcut for --level full --probe aggressive",
     },
     summary: {
       type: "boolean",
@@ -1162,16 +1183,37 @@ export const audit = defineCommand({
     // shortcuts before any network work. The level itself resolves below, once
     // the account status (which picks the default) is known; this context is
     // only for validation and cannot fail on its own.
+    // --level, or its old name --coverage / -C. Read before the probing
+    // check, which needs it to refuse --pentest with a level other than full.
+    const levelFlag = readLevelFlag(args);
+    if (!levelFlag.ok) {
+      console.error(`${fmt.red("Error:")} ${levelFlag.error}`);
+      process.exitCode = 1;
+      return;
+    }
+
     const probeFlags = probeFlagsFromArgs(args);
     const probeFlagCheck = resolveProbeIntensity({
       flags: probeFlags,
       context: { surface: "local", signedIn: false },
-      // citty hands a repeated -C over as an array; coverage validation
-      // reads it with toString, so read it the same way here.
-      coverage: args.coverage === undefined ? undefined : String(args.coverage),
+      // A repeated -C never gets here: readLevelFlag refused it above.
+      coverage: levelFlag.raw,
     });
     if (!probeFlagCheck.ok) {
       console.error(`${fmt.red("Error:")} ${probeFlagCheck.error}`);
+      process.exitCode = 1;
+      return;
+    }
+
+    // A level named on the command line must be one, before any network work.
+    // Only the DEFAULT level waits for the account check below.
+    if (
+      levelFlag.raw !== undefined &&
+      parseAuditLevel(levelFlag.raw) === null
+    ) {
+      console.error(
+        `${fmt.red("Error:")} ${unknownLevelMessage(levelFlag.raw)}`
+      );
       process.exitCode = 1;
       return;
     }
@@ -1401,26 +1443,26 @@ export const audit = defineCommand({
         kv("Dashboard", fmt.cyan(DASHBOARD_URL));
       }
 
-      // Resolve coverage mode: CLI flag > config override > auth-aware default.
-      // Any signed-in plan (free OR paid) defaults to `surface` (cloud rules +
-      // editor summary on a page sample, pro-parity demo #684); only anonymous
-      // defaults to `quick` (fast, no cloud, no spend). The CLI `--coverage`/`-C` flag is an unvalidated free string
-      // (citty has no enum), so normalize + validate it (see normalizeCoverageMode).
-      // An unknown value would otherwise make the page budget `undefined` → a NaN
-      // cap → an unbounded crawl (every `pages.length >= NaN` check is false).
-      // Transient outage: keep the signed-in user's coverage (no spend while cloud is down); expired token stays anon.
-      const coverageAccountPlan =
+      // Resolve the audit level: --level / -C > --pentest (full) > [crawler]
+      // coverage > auth-aware default. Any signed-in plan (free OR paid)
+      // defaults to `surface` (cloud checks + editor summary on a page sample,
+      // pro-parity demo #684); only anonymous defaults to `quick` (local, no
+      // account needed). A signed-in quick run is billed like any level. The
+      // flag is a free string (citty has no enum), so it is
+      // parsed (see audit-level.ts): an unknown value would otherwise make the
+      // page budget `undefined`, a NaN cap and an unbounded crawl.
+      // Transient outage: keep the signed-in user's level (no spend while cloud is down); expired token stays anon.
+      const levelAccountPlan =
         cloudOutage === "unreachable" ? "paid" : accountPlan;
-      const coverageInput = (
-        args.coverage ??
+      const levelInput =
+        levelFlag.raw ??
         (probeFlags.pentest ? "full" : undefined) ??
         config.crawler.coverage ??
-        defaultCoverageMode(coverageAccountPlan)
-      ).toString();
-      const coverageMode = normalizeCoverageMode(coverageInput);
-      if (coverageMode === null) {
+        defaultAuditLevel(levelAccountPlan);
+      const level = parseAuditLevel(levelInput);
+      if (level === null) {
         console.error(
-          `${fmt.red("Error:")} unknown coverage mode '${coverageInput}'. Valid: ${COVERAGE_MODES.join(", ")} (or 'fast' = quick).`
+          `${fmt.red("Error:")} ${unknownLevelMessage(levelInput)}`
         );
         process.exitCode = 1;
         return;
@@ -1433,18 +1475,15 @@ export const audit = defineCommand({
         config.smart_audits ?? defaultSmartAudits(accountPlan, cloudOutage);
 
       // Probing intensity: --probe > --passive/--aggressive/--pentest >
-      // [security] probe > context default (signed in → active, anonymous →
-      // passive). Disabled discovery probes force passive. Same account
-      // evidence as coverage: any plan, or a signed-in user whose API is down.
+      // [security] probe > the level's probe setting (quick passive, surface
+      // and full active). Disabled discovery probes force passive.
       const probeResolution = resolveLocalProbeIntensity({
         flags: probeFlags,
         config,
-        signedIn: coverageAccountPlan !== "anonymous",
+        signedIn: levelAccountPlan !== "anonymous",
         disableDiscoveryProbes,
-        // citty hands a repeated -C over as an array; coverage validation
-        // reads it with toString, so read it the same way here.
-        coverage:
-          args.coverage === undefined ? undefined : String(args.coverage),
+        coverage: levelFlag.raw,
+        level,
       });
       if (!probeResolution.ok) {
         console.error(`${fmt.red("Error:")} ${probeResolution.error}`);
@@ -1471,14 +1510,21 @@ export const audit = defineCommand({
         process.exitCode = 1;
         return;
       }
+      // The render setting the user chose (flags > [cloud] render > [cloud]
+      // rendering), or undefined for the level's own. Resolved here, not at
+      // the consent step below, because the banner has to say when it changes
+      // the level.
+      const requestedRenderMode = resolveExplicitRenderMode(
+        { http: args.http, render: args.render, renderMode: renderModeArg },
+        config
+      );
 
-      // CLI --max-pages > config max_pages (if non-default) > coverage mode default
-      const configMaxPagesIsDefault = config.crawler.max_pages === 100;
+      // CLI --max-pages > config max_pages (if non-default) > the level's page
+      // budget. The config's settings over the level, read once.
+      const configOverrides = configLevelOverrides(config);
       const requestedMaxPages = args["max-pages"]
         ? Number.parseInt(args["max-pages"], 10)
-        : configMaxPagesIsDefault
-          ? coverageMaxPages(coverageMode)
-          : config.crawler.max_pages;
+        : (configOverrides.pages ?? levelMaxPages(level));
       // A non-numeric --max-pages (e.g. "abc") parses to NaN; reject it rather
       // than silently crawling unbounded (NaN fails every `>= maxPages` check).
       if (
@@ -1500,6 +1546,24 @@ export const audit = defineCommand({
       let maxPages = pageLimit.effective;
       const clampNotice = pageLimitNotice(pageLimit);
       if (clampNotice) console.error(fmt.yellow(clampNotice));
+
+      // The audit level with every setting the user chose laid over it; a
+      // chosen value that differs from the level's makes the run custom.
+      // `[external_links] enabled` is a choice only when it is false: true is
+      // the schema default `squirrel init` writes into every config, and it
+      // would otherwise switch the quick level's link checks on for everyone.
+      const auditLevel = resolveLocalAuditLevel(level, {
+        pages: maxPages,
+        ...(requestedRenderMode !== undefined
+          ? { render: requestedRenderMode }
+          : {}),
+        ...(configOverrides.externalLinks !== undefined
+          ? { externalLinks: configOverrides.externalLinks }
+          : {}),
+        probe: probing.level,
+      });
+      // The crawler's word for the strategy: quick, surface or full.
+      const coverageMode = levelCoverageMode(auditLevel);
 
       // CLI --max-depth > config crawler.max_depth > unset (unlimited).
       let maxDepth: number | undefined;
@@ -1579,6 +1643,7 @@ export const audit = defineCommand({
         debug: args.debug,
         projectName,
         coverageMode,
+        auditLevel,
         smartAudits,
         offline: args.offline,
         ...(concurrency !== undefined ? { concurrency } : {}),
@@ -1601,7 +1666,13 @@ export const audit = defineCommand({
       // Preamble — aligned key/value block (Account, and Dashboard when online,
       // already printed above during status resolution; kv defined there).
       kv("Auditing", fmt.bold(options.url));
-      kv("Coverage", `${coverageMode} ${fmt.dim(`· max ${maxPages} pages`)}`);
+      const levelBanner = levelBannerParts(auditLevel);
+      kv(
+        "Level",
+        levelBanner.detail
+          ? `${levelBanner.level} ${fmt.dim(levelBanner.detail)}`
+          : levelBanner.level
+      );
       const probeBanner = probeBannerLines(probing);
       kv("Probing", probeBanner.value);
       if (probeBanner.note) log(fmt.yellow(probeBanner.note));
@@ -1629,7 +1700,7 @@ export const audit = defineCommand({
       const storeProblems = storeUrl.ok
         ? checkAuditStores(
             options.projectName ?? domainToProjectName(storeUrl.url),
-            { linkCache: !args.offline && config.external_links.enabled }
+            { linkCache: !args.offline && auditLevel.settings.externalLinks }
           )
         : [];
       if (storeProblems.length > 0) {
@@ -1776,11 +1847,8 @@ export const audit = defineCommand({
       // the existing http/browser consent decision (off→http, auto|all→browser)
       // so the spend-consent flow is unchanged; the auto-vs-all *strategy* is
       // passed separately to the controller (hybrid vs render-all). Unset →
-      // coverage-driven default, decided in the controller.
-      const requestedRenderMode = resolveExplicitRenderMode(
-        { http: args.http, render: args.render, renderMode: renderModeArg },
-        config
-      );
+      // the level's render setting (quick auto, surface and full all).
+      // `requestedRenderMode` was resolved with the level, above.
       // Rendering debits on SUBMIT and the crawler-worker then refuses the
       // host outright ("Refusing to render a non-public host"), so an
       // unpreflighted --render against localhost is a charge for a guaranteed
@@ -1807,10 +1875,14 @@ export const audit = defineCommand({
           `[cloud] rendering = "${config.cloud.rendering}" is deprecated; prefer render = "${config.cloud.rendering === "http" ? "off" : "all"}"`
         );
       }
+      const levelRender = auditLevel.settings.render;
       const renderStrategy =
         explicitRenderMode === "auto" || explicitRenderMode === "all"
           ? explicitRenderMode
-          : undefined;
+          : explicitRenderMode === undefined &&
+              (levelRender === "auto" || levelRender === "all")
+            ? levelRender
+            : undefined;
 
       const { mode: cloudRendering, consented: cloudConsented } =
         await resolveCloudRendering({
@@ -1875,6 +1947,9 @@ export const audit = defineCommand({
                 config: {
                   maxPages,
                   coverageMode,
+                  // The level and every setting it resolved to, so the
+                  // dashboard can say what this run was.
+                  auditLevel,
                   cliVersion: packageVersion,
                   runner: runnerInfo,
                   // #2290: the pricing this binary quotes and settles under, so
@@ -2069,8 +2144,11 @@ export const audit = defineCommand({
           // authed default (cloud rendering) after one-time consent.
           cloudRendering,
           // Render strategy when rendering is on: auto = HTTP-first hybrid,
-          // all = render every page. Undefined → controller's coverage default.
+          // all = render every page. The level's setting unless overridden.
           renderStrategy,
+          // The level's external link checks unless [external_links] enabled
+          // in the config file says otherwise (--offline still turns them off).
+          externalLinksEnabled: auditLevel.settings.externalLinks,
           // Retention (#1912) deleted some of this project's audit history, so
           // say so. stderr unconditionally: this is the one line that tells a
           // user their older reports are gone, and putting it on stdout would
@@ -2283,8 +2361,9 @@ export const audit = defineCommand({
       // #368: stamp the resolved cloud mode so an explicit --http opt-out reads as
       // a deliberate choice, not a "cloud temporarily unavailable" failure.
       report.cloudMode = cloudRendering;
-      // #747: stamp the coverage mode so a quick run's locked cloud rules read as
-      // a coverage choice ("re-run with -C surface/full"), never a cloud outage.
+      // #747: stamp the level so a quick run's locked cloud rules read as a
+      // level choice ("re-run at the surface or full level"), never a cloud
+      // outage. The controller stamped `auditLevel` (the full snapshot).
       report.coverageMode = coverageMode;
 
       // #1179: the server's AUTHORITATIVE post-merge score/issues from a
@@ -2369,7 +2448,8 @@ export const audit = defineCommand({
       // basis), so == maxPages means the cap stopped the crawl. #124
       const limitHint = pageLimitHint(
         report.pages.length >= maxPages,
-        maxPages
+        maxPages,
+        auditLevel.settings.crawlStrategy === "all"
       );
       if (limitHint) log(fmt.yellow(limitHint));
       // #1180: when the cap didn't bind but the union score still carries

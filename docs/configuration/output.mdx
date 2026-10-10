@@ -594,6 +594,7 @@ Top-level keys. Keys marked optional are omitted when they do not apply.
     "stopReason": "time",
     "seedRedirect": {},
     "coverage": {},
+    "auditLevel": {},
     "rulesCache": {}
   },
   "status": "completed|failed|blocked",
@@ -652,7 +653,7 @@ Top-level keys. Keys marked optional are omitted when they do not apply.
 }
 ```
 
-**Always present:** `meta`, `status`, `score`, `summary`, `issues`. The rest are optional. `statusReason` and `statusReasonCode` appear when `status` is `failed` or `blocked`. `meta.maxPages`, `meta.requestedMaxPages`, `meta.stopReason`, `meta.seedRedirect`, `meta.coverage` and `meta.rulesCache` appear when they apply. `rateLimited`, `refusedFetches`, `editorSummary`, `technologies`, `entities` and `siteProfile` appear when the audit produced that data.
+**Always present:** `meta`, `status`, `score`, `summary`, `issues`. The rest are optional. `statusReason` and `statusReasonCode` appear when `status` is `failed` or `blocked`. `meta.maxPages`, `meta.requestedMaxPages`, `meta.stopReason`, `meta.seedRedirect`, `meta.coverage`, `meta.auditLevel` and `meta.rulesCache` appear when they apply. `meta.auditLevel` is the [audit level](/guides/audit-levels) the audit ran at: `level` (a level's name, or `custom`), `basedOn`, `changes` (the settings changed from the level) and `settings` (every setting's value). `rateLimited`, `refusedFetches`, `editorSummary`, `technologies`, `entities` and `siteProfile` appear when the audit produced that data.
 
 **Issues:** `issues` holds findings only. Every check in it has status `fail` or `warn`. `affectedPages` is a sample, and `affectedPagesCount` is the true total, so compare the two (or read `affectedPagesHasMore`) before treating the list as complete.
 

@@ -2,6 +2,7 @@
 // Shared across CLI, cloud runner, and any other consumer.
 // TOML loading and file discovery are NOT here — those are CLI adapters.
 
+import { AUDIT_LEVELS, parseAuditLevel } from "@squirrelscan/core-contracts/audit-levels";
 import { isValidHeaderName, isValidHeaderValue } from "@squirrelscan/utils/headers";
 import { z } from "zod";
 
@@ -12,7 +13,9 @@ import { PROBE_LEVELS, parseProbeBudget } from "./probe";
 // SUB-SCHEMAS
 // ============================================
 
-export const COVERAGE_MODES = ["quick", "surface", "full"] as const;
+// The audit levels, under the name the config key has always used. One
+// definition: @squirrelscan/core-contracts/audit-levels.
+export const COVERAGE_MODES = AUDIT_LEVELS;
 export type CoverageMode = (typeof COVERAGE_MODES)[number];
 
 // Authoritative crawl-concurrency defaults (the CLI + cloud runner both derive
@@ -31,11 +34,18 @@ export const CrawlerConfigSchema = z.object({
   max_pages: z.number().default(100),
   // Optional crawl-depth ceiling (#318); unset = unlimited (preserves default behavior).
   max_depth: z.number().int().min(1).optional(),
-  // Unset (optional, not defaulted) so the CLI can distinguish "user picked a
-  // mode" from "use the auth-aware default" — signed-in paid plans default to
-  // `surface` (cloud rules + summary), free/anonymous to `quick`. Resolved in
-  // the audit/crawl commands; a config file value here is an explicit override.
-  coverage: z.enum(COVERAGE_MODES).optional(),
+  // The audit level (quick, surface, full). Unset (optional, not defaulted) so
+  // the CLI can distinguish "user picked a level" from "use the auth-aware
+  // default": any signed-in account defaults to `surface`, anonymous to
+  // `quick`. Resolved in the audit/crawl commands; a config file value here is
+  // an explicit choice. `fast` is the old name for `quick` and still reads as
+  // quick; anything else fails validation with the list of levels.
+  coverage: z
+    .preprocess(
+      (value) => (typeof value === "string" ? (parseAuditLevel(value) ?? value) : value),
+      z.enum(COVERAGE_MODES),
+    )
+    .optional(),
   delay_ms: z.number().default(100),
   timeout_ms: z.number().default(30000),
   user_agent: z.string().default(""),

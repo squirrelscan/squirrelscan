@@ -27,7 +27,7 @@ describe("lockedRulesFooterLine", () => {
       cloudPlan: "paid",
       coverageMode: "quick",
     });
-    expect(line).toContain("-C surface or -C full");
+    expect(line).toContain("--level surface or --level full");
     expect(line).not.toContain("free squirrelscan account");
     expect(line).not.toContain("out of credits");
   });

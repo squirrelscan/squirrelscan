@@ -2,9 +2,37 @@
 // Shared across CLI console + report renderers. No-op when `smart_audits` is
 // off (the report carries no `coverage` and no carried checks).
 
+import {
+  AUDIT_LEVEL_COPY,
+  AUDIT_SETTING_COPY,
+} from "@squirrelscan/core-contracts/audit-levels";
+
 import type { AuditReport, CheckItem } from "./types";
 import type { GroupedCheck } from "./grouping";
 import { checkAffectedPages } from "./affected-pages";
+
+/**
+ * One-line audit level summary, e.g.
+ *   "Audit level: Surface."
+ *   "Audit level: Custom, based on Surface (changed: Pages, Rendering)."
+ * Returns null for reports written before audit levels (no `auditLevel`).
+ */
+export function auditLevelLine(report: AuditReport): string | null {
+  const a = report.auditLevel;
+  if (!a) return null;
+  // A stored or fetched report can carry anything: only known names print, and a
+  // snapshot with an unknown level is left out rather than throwing or echoing it.
+  const level = Object.hasOwn(AUDIT_LEVEL_COPY, a.level) ? AUDIT_LEVEL_COPY[a.level] : null;
+  if (!level) return null;
+  if (a.level !== "custom") return `Audit level: ${level.label}.`;
+  if (!Object.hasOwn(AUDIT_LEVEL_COPY, a.basedOn)) return null;
+  const changed = a.changes
+    .filter((key) => Object.hasOwn(AUDIT_SETTING_COPY, key))
+    .map((key) => AUDIT_SETTING_COPY[key].label)
+    .join(", ");
+  const basedOn = AUDIT_LEVEL_COPY[a.basedOn].label;
+  return `Audit level: ${AUDIT_LEVEL_COPY.custom.label}, based on ${basedOn}${changed ? ` (changed: ${changed})` : ""}.`;
+}
 
 /**
  * One-line coverage summary, e.g.

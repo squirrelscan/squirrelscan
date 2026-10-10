@@ -347,7 +347,8 @@ squirrel report -f llm | claude "analyze this audit and prioritize fixes"
 - **Text prefixes** - `Desc:`, `Fix:`, `Pages (n):`, `Items (n):`
 - **Comma-separated lists** - pages and URLs formatted inline
 - **Hybrid structure** - XML tags for parsing, text for readability
-- **`<locked-rules>`** - cloud-gated checks that didn't run this audit (logged out, quick coverage, out of credits), with an audience-aware action and, for anonymous/free runs, a signup or credits link. Absent when every eligible check ran.
+- **`<locked-rules>`** - cloud-gated checks that didn't run this audit (logged out, the quick level, out of credits), with an audience-aware action and, for anonymous/free runs, a signup or credits link. Absent when every eligible check ran.
+- **`<audit-level>`** - the [audit level](/guides/audit-levels) the audit ran at: `level` (`quick`, `surface`, `full` or `custom`), `based-on`, the `changes` made to it (setting names, comma-separated) and the page budget. Absent on reports from before audit levels.
 
 **Token Efficiency:**
 The LLM format achieves significant size reduction through:

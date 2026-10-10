@@ -17,10 +17,10 @@ How many pages each audit of this site crawls. The same four presets the [crawl 
 | **Deep** | 250 | Larger sites. |
 | **Full** | 500 | Whole-site coverage. |
 
-Pages are the main thing an audit costs, at 2 credits each on top of the 50-credit base however each page is fetched, so the preset you pick is also the size of the bill. Change it any time under **Settings → Crawl**, or override it per site with a custom page limit.
+Pages are the main thing an audit costs, at 2 credits each on top of the 50-credit base however each page is fetched, so the preset you pick is also the size of the bill. Change it any time under **Settings → Crawl**, or override it per site with a custom page limit. These presets are moving to the [audit levels](/guides/audit-levels) the CLI uses; a site keeps the settings it has when that happens.
 
 <Note>
-  **Fast** does not follow links at all. On that preset a crawl audits your sitemap and stops, whatever crawl scope the site is set to. Pick **Surface** or deeper if following links is the point.
+  **Fast** does not follow links while the sitemap has pages to give. On that preset a crawl audits your sitemap and stops, whatever crawl scope the site is set to; only a site with no usable sitemap has its links followed. Pick **Surface** or deeper if following links is the point.
 </Note>
 
 ## Schedule

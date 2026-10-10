@@ -19,6 +19,7 @@ import {
   fetchFallbacksLine,
   fullScanHint,
   scanScopeLine,
+  auditLevelLine,
   seedRedirectLine,
   ruleCarriedRollupLine,
   unfetchedNote,
@@ -144,6 +145,8 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   if (seedRedirect) lines.push(`${escapeMarkdownInline(seedRedirect)}  `);
   const scope = scanScopeLine(report);
   if (scope) lines.push(`${scope}  `);
+  const level = auditLevelLine(report);
+  if (level) lines.push(`${level}  `);
   const cov = coverageLine(report);
   if (cov) lines.push(`**${cov}**  `);
   // #190: a plain line for the same reason the seed-redirect disclosure above

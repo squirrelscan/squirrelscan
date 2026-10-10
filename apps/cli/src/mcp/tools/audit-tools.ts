@@ -2,6 +2,12 @@
 
 import type { CallToolResult, McpServer } from "@modelcontextprotocol/server";
 
+import { resolveProbeIntensity } from "@squirrelscan/config";
+import {
+  AUDIT_LEVEL_PRESETS,
+  type AuditLevel,
+  DEFAULT_AUDIT_LEVEL,
+} from "@squirrelscan/core-contracts/audit-levels";
 import { renderLlm } from "@squirrelscan/report";
 import {
   isValidHeaderName,
@@ -12,8 +18,16 @@ import { z } from "zod";
 import type { Result } from "@/controllers/types";
 import type { AuditReport } from "@/types";
 
-import { coverageMaxPages, type CoverageMode } from "@/cli/coverage";
-import { findConfigFile, getGlobalConfigPath } from "@/config";
+import {
+  AUDIT_LEVELS,
+  configLevelOverrides,
+  levelCoverageMode,
+  levelHelpList,
+  parseAuditLevel,
+  resolveLocalAuditLevel,
+} from "@/cli/audit-level";
+import { resolveExplicitRenderMode } from "@/cli/commands/audit";
+import { findConfigFile, getGlobalConfigPath, loadConfig } from "@/config";
 import { runAudit, type RunAuditOptions } from "@/controllers/audit";
 
 import { version } from "../../../package.json";
@@ -28,17 +42,93 @@ export function renderAuditResult(result: Result<AuditReport>): CallToolResult {
   );
 }
 
+// Mirror the CLI: honor --config-file, else auto-discover the project's squirrel config from cwd.
+function localConfigPath(): string | undefined {
+  return getGlobalConfigPath() ?? findConfigFile() ?? undefined;
+}
+
+/**
+ * The run options an audit level gives a local MCP audit: the level's
+ * settings, with the project config's choices laid over them the same way
+ * `squirrel audit` lays them (`[crawler] max_pages`, `[cloud] render`,
+ * `[security] probe`, `[external_links] enabled = false`), and the caller's
+ * `maxPages` over those. The report carries the result as `auditLevel`.
+ *
+ * Rendering stays opt-in here, as it always was: a tool call never starts
+ * paid cloud renders on its own, so the level's render setting is a limit
+ * the run may not reach (like a signed-out CLI run). A render setting in the
+ * config is applied as the fetch mode, so a configured one is what runs.
+ */
+export async function levelRunOptions(
+  level: AuditLevel,
+  maxPages?: number
+): Promise<
+  Pick<
+    RunAuditOptions,
+    | "coverageMode"
+    | "maxPages"
+    | "auditLevel"
+    | "externalLinksEnabled"
+    | "probe"
+    | "renderStrategy"
+    | "cloudRendering"
+  >
+> {
+  const config = await loadConfig(localConfigPath(), { silent: true });
+  const render = resolveExplicitRenderMode({}, config);
+  const configOverrides = configLevelOverrides(config);
+  const pages = maxPages ?? configOverrides.pages;
+  const levelProbe = AUDIT_LEVEL_PRESETS[level].probe;
+  const probe = resolveProbeIntensity({
+    flags: {},
+    config: config.security,
+    context: {
+      surface: "local",
+      signedIn: false,
+      discoveryProbesDisabled: config.crawler.disable_discovery_probes === true,
+    },
+    ...(levelProbe !== "aggressive" ? { levelDefault: levelProbe } : {}),
+  });
+  // No flags reach this resolution, so it cannot fail; passive if it ever did.
+  const probing = probe.ok
+    ? { level: probe.value.level, budgetMs: probe.value.budgetMs }
+    : { level: "passive" as const, budgetMs: 0 };
+  const resolved = resolveLocalAuditLevel(level, {
+    ...(pages !== undefined ? { pages } : {}),
+    ...(render !== undefined ? { render } : {}),
+    ...(configOverrides.externalLinks !== undefined
+      ? { externalLinks: configOverrides.externalLinks }
+      : {}),
+    probe: probing.level,
+  });
+  const strategy = resolved.settings.render;
+  return {
+    coverageMode: levelCoverageMode(resolved),
+    maxPages: resolved.settings.pages,
+    auditLevel: resolved,
+    externalLinksEnabled: resolved.settings.externalLinks,
+    probe: probing,
+    ...(strategy === "auto" || strategy === "all"
+      ? { renderStrategy: strategy }
+      : {}),
+    // Only a configured render setting picks the fetch mode; unset keeps the
+    // controller's default (plain HTTP unless [cloud] rendering says browser).
+    ...(render === undefined
+      ? {}
+      : { cloudRendering: render === "off" ? "http" : "browser" }),
+  };
+}
+
 // Run runAudit non-interactively and render the LLM report, or a clean MCP error.
-async function runLocalAudit(
-  options: Omit<RunAuditOptions, "configPath"> & { coverageMode: CoverageMode }
-) {
-  // Mirror the CLI: honor --config-file, else auto-discover the project's squirrel config from cwd.
+async function runLocalAudit(options: Omit<RunAuditOptions, "configPath">) {
   const result = await runAudit({
     ...options,
-    configPath: getGlobalConfigPath() ?? findConfigFile() ?? undefined,
+    configPath: localConfigPath(),
   });
   return renderAuditResult(result);
 }
+
+const LEVEL_DESCRIPTION = `Audit level: ${levelHelpList()}. Default ${DEFAULT_AUDIT_LEVEL}`;
 
 export function registerAuditTools(server: McpServer): void {
   server.registerTool(
@@ -46,22 +136,21 @@ export function registerAuditTools(server: McpServer): void {
     {
       title: "Audit a website",
       description:
-        "Run a full deterministic website audit (performance, security, accessibility, content, structured data, and more) on a URL and return an LLM-optimized report. Free + local; adds cloud enrichment automatically when logged in (charges credits per your plan). Pass offline:true to force local-only.",
+        "Run a deterministic website audit (performance, security, accessibility, content, structured data, and more) of a URL on this machine and return an LLM-optimized report. Signed in, the surface and full levels add the cloud checks; this local tool does not yet register them as a billed cloud audit (known gap, squirrelscan#628). A configured [cloud] render sends pages to the cloud browser at 2 credits each. For a billed cloud audit, use the hosted MCP server's run_audit. Pass offline:true to keep it local-only.",
       inputSchema: z.object({
         url: z.string().describe("The URL to audit (e.g. https://example.com)"),
+        level: z.enum(AUDIT_LEVELS).optional().describe(LEVEL_DESCRIPTION),
         coverage: z
-          .enum(["quick", "surface", "full"])
+          .enum(AUDIT_LEVELS)
           .optional()
-          .describe(
-            "Crawl coverage: quick (fast, local, free), surface (one page per pattern, default), full (comprehensive)"
-          ),
+          .describe("Old name for level, still accepted"),
         maxPages: z
           .number()
           .int()
           .positive()
           .optional()
           .describe(
-            "Override the max pages to crawl (default: coverage-mode budget)"
+            "Override the max pages to crawl (default: the level's page budget)"
           ),
         offline: z
           .boolean()
@@ -87,16 +176,25 @@ export function registerAuditTools(server: McpServer): void {
           ),
       }),
     },
-    async ({ url, coverage, maxPages, offline, headers }) => {
-      const coverageMode: CoverageMode = coverage ?? "surface";
+    async ({ url, level, coverage, maxPages, offline, headers }) => {
+      if (level !== undefined && coverage !== undefined && level !== coverage) {
+        return errorResult(
+          `level ${level} and coverage ${coverage} name different levels. Pass one (coverage is the old name for level).`
+        );
+      }
+      const auditLevel =
+        parseAuditLevel(level ?? coverage ?? DEFAULT_AUDIT_LEVEL) ??
+        DEFAULT_AUDIT_LEVEL;
+      const levelOptions = await levelRunOptions(auditLevel, maxPages);
+      // No cloud checks (the quick level) means no cloud at all here, as before
+      // audit levels: a tool call at quick runs the local rules only.
       const cloudAvailable =
-        coverageMode === "quick" || offline
+        !levelOptions.auditLevel?.settings.cloudChecks || offline
           ? false
           : await resolveCloudAvailability();
       return runLocalAudit({
         url,
-        coverageMode,
-        maxPages: maxPages ?? coverageMaxPages(coverageMode),
+        ...levelOptions,
         cloudAvailable,
         offline,
         ...(headers && Object.keys(headers).length > 0 ? { headers } : {}),
@@ -107,9 +205,8 @@ export function registerAuditTools(server: McpServer): void {
   server.registerTool(
     "quick_check",
     {
-      title: "Quick single-pass check",
-      description:
-        "Fast, local-only audit (quick coverage): a single-page pass with no crawl discovery or cloud enrichment. Free and works offline. Use for a rapid health snapshot of one URL.",
+      title: "Quick check",
+      description: `Fast, local-only audit at the quick level: the URL and its sitemaps, up to ${AUDIT_LEVEL_PRESETS.quick.pages} pages, with no link following and no cloud checks. Works offline. Use for a rapid health snapshot of a site.`,
       inputSchema: z.object({
         url: z.string().describe("The URL to check (e.g. https://example.com)"),
       }),
@@ -117,8 +214,7 @@ export function registerAuditTools(server: McpServer): void {
     async ({ url }) =>
       runLocalAudit({
         url,
-        coverageMode: "quick",
-        maxPages: coverageMaxPages("quick"),
+        ...(await levelRunOptions("quick")),
         cloudAvailable: false,
         offline: true,
       })

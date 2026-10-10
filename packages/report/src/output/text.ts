@@ -27,6 +27,7 @@ import {
   fetchFallbacksLine,
   fullScanHint,
   scanScopeLine,
+  auditLevelLine,
   seedRedirectLine,
 } from "../coverage";
 import { wrapText } from "../utils";
@@ -132,6 +133,8 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
   if (seedRedirect) write(stripControlChars(seedRedirect));
   const scope = scanScopeLine(report);
   if (scope) write(scope);
+  const level = auditLevelLine(report);
+  if (level) write(level);
   const cov = coverageLine(report);
   if (cov) write(cov);
   const hint = fullScanHint(report);

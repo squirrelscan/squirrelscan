@@ -954,11 +954,16 @@ export async function runAudit(
       );
       logger.debug(`using ${uaSource} user-agent`, userAgent);
 
-      // Resolve coverage mode: CLI flag > config > default (surface)
+      // Resolve the crawl's coverage mode: caller > config > default (surface)
       const coverageMode =
         options.coverageMode ?? mergedConfig.crawler.coverage ?? "surface";
-      // Quick coverage skips all networked cloud enrichment (no credit prompt).
+      // The quick strategy: seed and sitemaps, HTTP-first rendering.
       const isQuickMode = coverageMode === "quick";
+      // The level's cloud checks setting. Off (the quick level) skips all
+      // networked cloud enrichment (no credit prompt). Callers without a
+      // resolved level keep the old rule: quick coverage means no cloud checks.
+      const cloudChecks =
+        options.auditLevel?.settings.cloudChecks ?? !isQuickMode;
 
       const documentFetcher = resolveDocumentFetcher(
         options,
@@ -1426,7 +1431,7 @@ export async function runAudit(
       // TTY confirm callback exists, the user is prompted first; a decline
       // falls back to local per-link checks.
       const deadLinksClient =
-        options.cloudAvailable === false || isQuickMode
+        options.cloudAvailable === false || !cloudChecks
           ? null
           : createCloudClientFromSettings();
 
@@ -1439,7 +1444,7 @@ export async function runAudit(
       const cloudPrefetchEnabled =
         mergedConfig.cloud.enabled &&
         options.cloudAvailable !== false &&
-        !isQuickMode;
+        cloudChecks;
       const prefetchCollector = cloudPrefetchEnabled
         ? createCloudPrefetchCollector(url)
         : null;
@@ -1605,7 +1610,7 @@ export async function runAudit(
       if (
         mergedConfig.cloud.enabled &&
         options.cloudAvailable !== false &&
-        !isQuickMode &&
+        cloudChecks &&
         mergedConfig.cloud.technologies
       ) {
         phaseTimer.enter("tech_detect");
@@ -1950,6 +1955,10 @@ export async function runAudit(
       // publish: it says how this run was produced, not what the site is like.
       // Recorded even when nothing replayed, so "0 replayed" is a statement
       // rather than a silence an agent has to interpret.
+      // The level this run used and what it resolved to, so the report says
+      // what ran even after a level's definition changes. REPORT-ONLY.
+      if (options.auditLevel) report.auditLevel = options.auditLevel;
+
       report.rulesCache = {
         pagesReplayed: ruleResults.ruleCache.replayedPages,
         pagesEvaluated: ruleResults.ruleCache.freshPages,
@@ -1992,7 +2001,7 @@ export async function runAudit(
       if (
         mergedConfig.cloud.enabled &&
         options.cloudAvailable !== false &&
-        !isQuickMode &&
+        cloudChecks &&
         mergedConfig.cloud.editor_summary
       ) {
         phaseTimer.enter("editor_summary");
@@ -2033,7 +2042,7 @@ export async function runAudit(
       if (
         mergedConfig.cloud.enabled &&
         options.cloudAvailable !== false &&
-        !isQuickMode &&
+        cloudChecks &&
         mergedConfig.cloud.domain_stats
       ) {
         phaseTimer.enter("domain_stats");

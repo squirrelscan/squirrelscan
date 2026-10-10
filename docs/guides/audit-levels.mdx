@@ -1,0 +1,176 @@
+---
+title: "Audit levels"
+icon: "layers"
+description: "Quick, surface and full: what each audit level reads, checks and costs, and how to change any setting"
+---
+
+An audit level is a named set of audit settings. Pick a level and it fills in every one of them: how many pages the audit reads, how the crawl picks those pages, whether the cloud checks run, how pages are rendered, whether links to other sites are checked, and how hard each page is probed.
+
+There are three levels: **quick**, **surface** and **full**. The CLI, the local and hosted MCP servers, the API and the dashboard all use the same three, so a surface audit is the same audit wherever you start it.
+
+```bash
+squirrel audit https://example.com --level quick
+squirrel audit https://example.com --level surface
+squirrel audit https://example.com --level full
+```
+
+## The three levels
+
+| Setting | quick | surface | full |
+|---------|-------|---------|------|
+| Pages | 25 | 100 | 500 |
+| Crawl strategy | The URL and its sitemaps, no link following | Follows links, one page per URL pattern first | Every page it can reach, up to the page budget |
+| Cloud checks | Off | On | On |
+| Rendering | `auto`: only pages built with JavaScript | `all`: every page | `all`: every page |
+| External link checks | Off | On | On |
+| Probing | `passive` | `active` | `active` |
+| Credits, signed in | Up to 100 | Up to 250 | Up to 1,050 |
+
+- **Cloud checks** are the checks that run in squirrelscan's cloud: [AI page analysis](/rules/ai/llm-parsability), [authority signals](/rules/eeat/authority-signals), the [editor's summary](/cloud/editor-summary) and [technology detection](/cloud/technologies). The rest of the rules run at every level.
+- **Rendering** loads pages in a cloud browser, so the audit sees content that JavaScript builds. See [Browser rendering](/guides/browser-rendering).
+- **Probing** is how hard each page is poked beyond what the crawl fetched. `passive` sends nothing extra, `active` sends a few quiet requests that look like normal traffic. `aggressive` is never a level's default; you have to ask for it. See [Security configuration](/configuration/security).
+- **Credits** follow the pages: 50 for the audit plus 2 per audited page, so a 40-page surface audit costs 130. This holds at every level, quick included. A cloud audit also charges 1 credit per distinct external link it checks; the checks the CLI runs for itself are not charged. Credits apply to signed-in, online audits: signed out or with `--offline`, the audit runs locally, no account needed. See [Credits and pricing](/cloud/credits).
+
+### Quick
+
+A fast first look. Quick reads the URL you give it and the URLs in its sitemaps, up to 25 pages, and does not follow links. A site with no usable sitemap gets its links followed anyway, so it still gets a real sample.
+
+Quick skips the cloud checks; every other rule runs. Signed in, a quick CLI audit is still a cloud audit, billed like any other level: 50 credits plus 2 per audited page, so up to 100 credits for 25 pages. It renders the pages that need JavaScript in the cloud browser (`auto`). `--http` skips the browser but not the page charge, and `--offline` runs the audit locally. Signed out, quick runs locally, no account needed. A quick audit run in the cloud renders the pages that need it too.
+
+### Surface
+
+The default for most sites, and for any signed-in CLI run. Surface follows links, but it visits one page of each URL pattern before a second page of any pattern: `/blog/my-first-post` and `/blog/another-post` are both `/blog/{slug}`, so a blog with 10,000 posts takes one slot of the budget until every other template has been seen. It runs the cloud checks and the editor's summary on that sample.
+
+### Full
+
+Every page the crawl can reach, breadth-first, up to 500 pages or the limit you set. Use it when the score has to cover the whole site.
+
+## Which level runs by default
+
+| Where | Default |
+|-------|---------|
+| `squirrel audit`, signed in | surface |
+| `squirrel audit`, signed out or `--offline` | quick |
+| `squirrel crawl` | quick |
+| Local MCP server: `audit_website` | surface |
+| Local MCP server: `quick_check` | quick |
+| A website you add in the dashboard | surface |
+
+Set your own default for a project with `[crawler] coverage` in `squirrel.toml`:
+
+```toml
+[crawler]
+coverage = "full"
+```
+
+## Custom levels
+
+Change any setting and the audit becomes **custom**: it keeps the level it started from and records which settings you changed. A level is a starting point, not a lock.
+
+- Picking a level fills in every setting.
+- Changing a setting makes it custom, based on that level.
+- Picking a level again puts every setting back to that level's values.
+
+A setting you set to the level's own value is not a change: `--level surface --max-pages 100` is still surface.
+
+### In the CLI
+
+Every flag and config key that already set one of these settings now changes the level's value for that run:
+
+| Setting | Flag | Config |
+|---------|------|--------|
+| Pages | `--max-pages` / `-m` | `[crawler] max_pages` |
+| Rendering | `--render-mode`, `--render`, `--http` | `[cloud] render` |
+| External link checks | | `[external_links] enabled = false` |
+| Probing | `--probe` / `-P`, `--passive`, `--aggressive`, `--pentest` | `[security] probe` |
+
+Crawl strategy and cloud checks always follow the level.
+
+The run banner names the level, and for a custom audit, what changed:
+
+```text
+Level     surface · max 100 pages
+Level     custom (surface + max_pages 200)
+Level     custom (surface + render off) · max 100 pages
+```
+
+```bash
+squirrel audit https://example.com --level surface --max-pages 200
+squirrel audit https://example.com --level surface --http
+```
+
+The same in `squirrel.toml`:
+
+```toml
+[crawler]
+coverage = "surface"
+max_pages = 200
+```
+
+<Note>
+`squirrel init` writes every default into `squirrel.toml`, including `max_pages = 100` and `[external_links] enabled = true`. Those two values read as unset, so a fresh config leaves every level as it is. Any other `max_pages`, or `enabled = false`, is a change.
+</Note>
+
+### In the dashboard
+
+A website's crawl settings work the same way. Pick a level and every setting fills in. Change one and the site shows as custom, based on the level you started from, with the number of settings you changed and a way to reset it to the level.
+
+A website on a level follows that level, so it picks up any later change to the level's definition. A custom website keeps its own values. Every audit records the settings it ran with, so an old report still says what it checked.
+
+Websites added before audit levels existed keep the settings they had, as a custom level, so what they crawl, what they cost and when they run do not change.
+
+### In reports
+
+The report an audit writes says which level it ran at, and so does a JSON report you load back with `squirrel report`. The JSON report's `meta.auditLevel` holds the level (or `custom`), the level it was `basedOn`, the settings it `changes`, and every setting's value. The LLM report has an `<audit-level>` element, and the text, Markdown and HTML reports a line such as `Audit level: Custom, based on Surface (changed: Pages).`
+
+## Limits
+
+The level and your changes say what an audit asks for. Two limits can lower the page count, in this order:
+
+1. **Your plan.** A cloud audit reads at most this many pages:
+
+   | Plan | Pages per audit |
+   |------|-----------------|
+   | Free | 500 |
+   | Pro | 2,000 |
+   | Team and Enterprise | 10,000 |
+
+2. **Your credit balance.** An audit your balance can't cover in full runs on the pages it can pay for.
+
+No audit reads more than **10,000 pages**, on any plan, in the CLI or in the cloud. A CLI audit is not held to the plan ceiling, only to the 10,000 cap and to your credits: the balance, and the per-audit cap `[cloud] max_credits_per_audit` (1,000 by default, which stops a signed-in full audit at 475 pages). See [Spend controls](/cloud/credits#spend-controls).
+
+A limit never changes the level. A full audit on a small balance is still a full audit, run on fewer pages, and the run says what lowered it: your plan or your balance.
+
+Plans also set how many pages render at once (Free 1, Pro 5, Team 10), how many websites run on a schedule (one on Free, all of them on Pro and Team) and how often (weekly or monthly on Free, daily too on Pro and Team). Those apply at every level.
+
+## Which level should I pick?
+
+- **quick** for a first look, a check on every push in CI, or an agent's fix loop. It is the fastest, and the smallest bill signed in.
+- **surface** for regular audits: every page template, the cloud checks and the editor's summary, at a modest page count.
+- **full** before a launch, a migration or a sign-off, or for a site whose pages are all different.
+- **`--pentest`** to test a site you own or are authorized to test: a full audit with aggressive probing.
+
+Start with quick, fix what it finds, then run surface, and sign off against full.
+
+## Probing and rendering
+
+Probing intensity and rendering are two of a level's settings. Each level picks a default for both, and the flags change them for one run:
+
+- `--probe passive|active|aggressive` (or `--passive`, `--aggressive`) sets probing. `--disable-discovery-probes` keeps probing passive whatever the level. See [Probing intensity](/cli/audit#probing-intensity).
+- `--render-mode off|auto|all` (or `--http`, `--render`) sets rendering. Rendering needs a signed-in account; signed out, every level fetches over plain HTTP. See [Browser rendering](/guides/browser-rendering).
+
+Either change makes the audit custom, and the banner says so.
+
+## Older names
+
+- `--coverage` and `-C` are the older names for `--level`, and still work. So does `fast`, which means quick. `[crawler] coverage` keeps its name.
+- The cloud used to offer four scan depths: fast, surface (50 pages), deep and full. Websites set to one of them keep its settings as a custom level. The API and the hosted MCP server accept the older names for one more release, with the settings they had.
+
+## Related
+
+- [`squirrel audit`](/cli/audit): every flag
+- [Crawling](/crawl): how the crawl works
+- [Crawler configuration](/configuration/crawler): `coverage`, `max_pages`, `max_depth`
+- [Credits and pricing](/cloud/credits)
+- [Security configuration](/configuration/security): probing
+- [Browser rendering](/guides/browser-rendering)

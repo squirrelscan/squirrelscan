@@ -1,3 +1,4 @@
+import { resolveAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
 import { renderJson, seedRedirect } from "@squirrelscan/report";
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -237,6 +238,26 @@ describe("loadReport - slim JSON reconstruction", () => {
     expect(reloaded.finalUrl).not.toContain("not-a-url");
     expect(reloaded.finalUrl).not.toContain(csi);
     expect(reloaded.finalUrl).not.toContain(override);
+  });
+
+  test("carries the audit level through reconstruction", () => {
+    const auditLevel = resolveAuditSettings("surface", { pages: 200 });
+    const reloaded = roundTrip({ ...createMockReport({}), auditLevel });
+    expect(reloaded.auditLevel).toEqual(auditLevel);
+    expect(roundTrip(createMockReport({})).auditLevel).toBeUndefined();
+  });
+
+  test("a forged auditLevel comes back as valid words only", () => {
+    const report = {
+      ...createMockReport({}),
+      auditLevel: {
+        level: '"/><x>',
+        basedOn: "quick",
+        changes: ["<y>"],
+        settings: { render: "<z>" },
+      },
+    } as unknown as AuditReport;
+    expect(roundTrip(report).auditLevel).toEqual(resolveAuditSettings("quick"));
   });
 
   test("a report without a redirect gains no finalUrl from reconstruction", () => {

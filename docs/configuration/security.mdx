@@ -5,9 +5,9 @@ description: "Set how hard an audit probes each page beyond what the crawl fetch
 ---
 
 The `[security]` section sets the **probing intensity** of an audit. Probing is
-the third audit setting, next to breadth (`--coverage`, `--max-pages`) and
-rendering (`--render-mode`). It says how hard each page is poked beyond what the
-crawl already fetched.
+one of the [audit level's](/guides/audit-levels) settings, next to the page
+budget (`--level`, `--max-pages`) and rendering (`--render-mode`). It says how
+hard each page is poked beyond what the crawl already fetched.
 
 ## Configuration
 
@@ -17,15 +17,16 @@ probe = "active"
 budget = "30s"
 ```
 
-Both keys are optional. Leave them out and the audit picks a default from
-context (see below).
+Both keys are optional. Leave them out and the audit level picks the default
+(see below). Setting `probe` to a value other than the level's makes the audit
+custom.
 
 ## Options
 
 ### `probe`
 
 **Type:** `"passive"`, `"active"` or `"aggressive"`
-**Default:** `"active"` when logged in, `"passive"` when not
+**Default:** the audit level's: `"passive"` for quick, `"active"` for surface and full
 
 | Level | What it sends |
 |-------|---------------|
@@ -64,13 +65,13 @@ budget = 45      # the same, in seconds
 A value that is not a positive duration of at most an hour fails config
 validation, so a typo never becomes an unbounded budget.
 
-## Defaults by context
+## Defaults
 
 | Context | Default level |
 |---------|---------------|
-| CLI audit, logged in | `active` |
-| CLI audit, logged out or `--offline` | `passive` |
-| Cloud audit, website ownership verified | `active` |
+| CLI audit at the quick level (the signed-out default) | `passive` |
+| CLI audit at the surface or full level (the signed-in default) | `active` |
+| Cloud audit, website ownership verified | the audit level's |
 | Cloud audit, website ownership not verified | `passive`, locked |
 
 A locked cloud audit stays passive whatever you ask for. Asking for `active` or
@@ -84,7 +85,7 @@ Highest first:
 1. `--probe <level>` (or `-P`)
 2. `--passive`, `--aggressive` or `--pentest`
 3. `[security] probe`
-4. The default for the context
+4. The audit level's probe setting
 
 For the budget: `--probe-budget`, then `[security] budget`, then the level's
 default.

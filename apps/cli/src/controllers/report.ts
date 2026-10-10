@@ -22,6 +22,7 @@ export interface CrawlMetadataWithPublished extends CrawlMetadata {
   published?: PublishedReportRecord;
 }
 
+import { parseResolvedAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
 import { WITHHELD_SEED_REDIRECT_TARGET } from "@squirrelscan/report";
 
 import {
@@ -132,6 +133,8 @@ interface SlimJsonReport {
     maxPages?: number;
     /** Requested cap, present only when it was clamped (#1909). */
     requestedMaxPages?: number;
+    /** The audit level snapshot; absent in slim JSON written before audit levels. Untrusted. */
+    auditLevel?: unknown;
   };
   // Audit validity (#801): absent in slim JSON written before #801 ⇒ completed.
   status?: AuditStatus;
@@ -240,6 +243,11 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
     };
   }
 
+  // The audit level the run used. The file is user-supplied, so the snapshot
+  // is re-read through the shared parser: only valid levels and settings come
+  // back, never a string the renderers would print as is.
+  const auditLevel = parseResolvedAuditSettings(report.meta.auditLevel);
+
   return {
     baseUrl: report.meta.baseUrl,
     // #1418: carry a refused off-site seed redirect back through the round
@@ -277,6 +285,7 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
           },
         }
       : {}),
+    ...(auditLevel ? { auditLevel } : {}),
     passed: report.summary.passed,
     warnings: report.summary.warnings,
     failed: report.summary.failed,

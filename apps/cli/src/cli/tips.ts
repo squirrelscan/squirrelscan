@@ -28,7 +28,7 @@ const ALL_TIPS: readonly Tip[] = [
     text: "Something rough? Something great? `squirrel feedback` goes straight to the team.",
   },
   {
-    text: `This scratches the surface. \`--coverage full\` goes deep: up to ${COVERAGE_FULL_MAX_PAGES} pages.`,
+    text: `This scratches the surface. \`--level full\` audits every page it finds: up to ${COVERAGE_FULL_MAX_PAGES} pages.`,
   },
   {
     text: "Big site? `--incremental` only re-crawls what changed since your last audit.",

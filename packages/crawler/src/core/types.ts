@@ -9,6 +9,8 @@ import type {
   RedirectChain,
 } from "@squirrelscan/core-contracts";
 
+import type { AuditLevel } from "@squirrelscan/core-contracts/audit-levels";
+
 import type { CrawlStorage, CrawlStats, StorageError } from "../storage/types";
 import type { TlsEvent } from "../fetcher";
 
@@ -16,7 +18,12 @@ import type { TlsEvent } from "../fetcher";
 // CRAWLER CONFIG
 // ============================================
 
-export type CoverageMode = "quick" | "surface" | "full";
+/**
+ * How the crawl picks pages, named after the audit level that crawls this way:
+ * quick = seed and sitemaps, surface = one page per URL pattern, full = all.
+ * One definition: @squirrelscan/core-contracts/audit-levels.
+ */
+export type CoverageMode = AuditLevel;
 
 export interface CrawlerConfig {
   /** Maximum pages to crawl */

@@ -6,6 +6,7 @@ import type { Config } from "@/config";
 import type { CrawlerEvent, RateLimitEvent } from "@/crawler/core/types";
 import type { TlsEvent } from "@/crawler/fetcher";
 import type { CrawlerConfigSnapshot } from "@/crawler/storage/types";
+import type { CoverageMode } from "@/types";
 
 import { loadConfig } from "@/config";
 import { MAX_PAGES_CAP } from "@/constants";
@@ -91,7 +92,7 @@ export interface CrawlOptions {
   url: string;
   configPath?: string;
   maxPages?: number;
-  coverageMode?: "quick" | "surface" | "full";
+  coverageMode?: CoverageMode;
   refresh?: boolean;
   freshUa?: boolean; // re-roll the project's sticky random user-agent (#875)
   resume?: boolean;

@@ -6,6 +6,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@squirrelscan/core-contracts": "workspace:*",
     "@squirrelscan/utils": "workspace:*",
     "zod": "^3.25.76"
   },

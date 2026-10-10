@@ -91,13 +91,16 @@ export function pathOnly(url: string): string {
  */
 export function pageLimitHint(
   limitReached: boolean,
-  maxPages: number
+  maxPages: number,
+  /** The crawl already reads every page (the full level's strategy): no level to suggest. */
+  crawlsEveryPage = false
 ): string | null {
   if (!limitReached) return null;
   if (maxPages >= MAX_PAGES_CAP) {
     return `⚠ Reached the max pages cap (${MAX_PAGES_CAP}). This is the hard limit; split the audit by section (e.g. [crawler] include) to scan more.`;
   }
-  return `⚠ Reached max pages (${maxPages}). Raise with --max-pages <N> or [crawler] max_pages (cap ${MAX_PAGES_CAP}); use -C full for full coverage.`;
+  const level = crawlsEveryPage ? "" : "; use --level full for a full audit";
+  return `⚠ Reached max pages (${maxPages}). Raise with --max-pages <N> or [crawler] max_pages (cap ${MAX_PAGES_CAP})${level}.`;
 }
 
 export const divider = (char = "─", len = 50) => char.repeat(len);

@@ -1,6 +1,7 @@
 import type {
   AuditHistorySnapshot,
   AuditReport,
+  CoverageMode,
   QuotaDecision,
   UsageEvent,
   UsageStore,
@@ -11,7 +12,7 @@ export interface AuditRunInput {
   userId: string;
   siteKey: string;
   url: string;
-  coverageMode: "quick" | "surface" | "full";
+  coverageMode: CoverageMode;
   maxPages: number;
 }
 

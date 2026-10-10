@@ -5,6 +5,7 @@
 import { PROBE_LEVELS } from "@squirrelscan/config";
 import { describe, expect, test } from "bun:test";
 
+import { AUDIT_LEVELS } from "@/cli/audit-level";
 import { audit } from "@/cli/commands/audit";
 import { credits } from "@/cli/commands/credits";
 import { feedback } from "@/cli/commands/feedback";
@@ -75,6 +76,7 @@ function script(shell: Shell): string {
 // flag it never offered. Move the entry, do not widen it.
 const BASH_BLOCK_END: Record<string, string> = {
   audit: "entities)",
+  crawl: "credits)",
   report: "feedback)",
   credits: "analyze)",
   // The last command arm; the default arm follows it.
@@ -206,6 +208,24 @@ describe.each(shells)("%s completion", (shell) => {
     test("format list matches OUTPUT_FORMATS exactly", () => {
       expect(formatListIn(shell, block)).toEqual([...OUTPUT_FORMATS]);
     });
+  });
+
+  test("audit and crawl --level / -C complete the audit levels", () => {
+    const levels = AUDIT_LEVELS.join(" ");
+    for (const command of ["audit", "crawl"]) {
+      const block = commandBlock(shell, text, command);
+      if (shell === "fish") {
+        expect(block).toContain(`-l level -a "${levels}"`);
+        expect(block).toContain(`-s C -l coverage -a "${levels}"`);
+      } else if (shell === "zsh") {
+        expect(block).toContain(`--level[Audit level]:level:(${levels})`);
+        expect(block).toContain(`{-C,--coverage}'[Audit level`);
+      } else {
+        expect(block).toContain(
+          `--level|--coverage|-C)\n          COMPREPLY=( $(compgen -W "${levels}"`
+        );
+      }
+    }
   });
 
   test("audit --probe completes the three levels from PROBE_LEVELS", () => {

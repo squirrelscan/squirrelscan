@@ -54,7 +54,7 @@ describe("renderLlm locked rules (#780)", () => {
   test("paid + quick coverage: re-run hint, no CTA element", () => {
     const xml = renderLlm(baseReport({ cloudPlan: "paid", coverageMode: "quick" }));
     expect(xml).toContain('audience="quick-coverage"');
-    expect(xml).toContain("-C surface or -C full");
+    expect(xml).toContain("--level surface or --level full");
     expect(xml).not.toContain("<cta ");
   });
 
@@ -97,7 +97,7 @@ describe("renderMarkdown locked rules (#780)", () => {
 
   test("paid + quick coverage: re-run hint, no link", () => {
     const md = renderMarkdown(baseReport({ cloudPlan: "paid", coverageMode: "quick" }));
-    expect(md).toContain("-C surface or -C full");
+    expect(md).toContain("--level surface or --level full");
     expect(md).not.toContain("[Add credits");
   });
 
@@ -128,7 +128,7 @@ describe("renderText locked rules (#780)", () => {
 
   test("paid + quick coverage: re-run hint, no link", () => {
     const txt = renderText(baseReport({ cloudPlan: "paid", coverageMode: "quick" }));
-    expect(txt).toContain("-C surface or -C full");
+    expect(txt).toContain("--level surface or --level full");
     expect(txt).not.toContain("Add credits");
   });
 

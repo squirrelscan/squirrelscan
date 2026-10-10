@@ -39,6 +39,7 @@ import {
   coverageLine,
   fullScanHint,
   scanScopeLine,
+  auditLevelLine,
   seedRedirectLine,
   checkCarriedLabel,
   checkUnrenderedLabel,
@@ -590,7 +591,7 @@ function GroupScores({ report, issueGroups }: { report: AuditReport; issueGroups
           </div>
           <div className="group-circle-name">{getGroupName("ai")}</div>
           <div className="group-circle-counts">
-            not scored in quick coverage · re-run with -C surface or -C full
+            not scored at the quick level · re-run with --level surface or --level full
           </div>
         </div>
       )}
@@ -661,13 +662,16 @@ function ReportHeader({ report, branding }: { report: AuditReport; branding?: Re
                   there. */}
               {(() => {
                 const scope = scanScopeLine(report);
+                const level = auditLevelLine(report);
                 const cov = coverageLine(report);
                 const hint = fullScanHint(report);
                 const seedRedirect = seedRedirectLine(report);
                 return (
                   <>
-                    {(scope || cov) && (
-                      <div className="scan-scope">{[scope, cov].filter(Boolean).join(" ")}</div>
+                    {(scope || level || cov) && (
+                      <div className="scan-scope">
+                        {[scope, level, cov].filter(Boolean).join(" ")}
+                      </div>
                     )}
                     {seedRedirect && <div className="scan-hint">{seedRedirect}</div>}
                     {hint && <div className="scan-hint">{hint}</div>}

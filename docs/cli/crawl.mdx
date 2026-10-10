@@ -22,10 +22,11 @@ squirrel crawl <url> [options]
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--max-pages` | `-m` | Maximum pages to crawl (hard cap 10,000) | coverage default (`quick` = 25) |
+| `--max-pages` | `-m` | Maximum pages to crawl (hard cap 10,000) | the level's page budget (`quick` = 25) |
 | `--concurrency` | | Global crawl worker pool size (overrides `[crawler] concurrency`) | `5` |
 | `--per-host` | | Max concurrent requests per host (overrides `[crawler] per_host_concurrency`) | `5` |
-| `--coverage` | `-C` | Coverage mode: `quick`, `surface`, `full` | `quick` |
+| `--level` | | [Audit level](/guides/audit-levels): `quick`, `surface`, `full` | `quick` |
+| `--coverage` | `-C` | Older name for `--level`, still accepted (`fast` means `quick`) | |
 | `--refresh` | `-r` | Ignore cache, fetch all pages fresh | `false` |
 | `--fresh-ua` | | Re-roll the project's pinned random user-agent (the new one is pinned for later runs) | `false` |
 | `--resume` | | Resume interrupted crawl | `false` |
@@ -34,22 +35,27 @@ squirrel crawl <url> [options]
 [Crawler Configuration](/configuration/crawler)): against your own dev server, `crawl`
 otherwise raises concurrency and drops the per-host delay automatically.
 
-### Coverage modes
+### Audit levels
 
-| Mode | Default Pages | Description |
-|------|---------------|-------------|
-| `quick` | 25 | Fast scan - seed URL + sitemaps only, no link discovery |
-| `surface` | 100 | Smart sampling - one page per URL pattern |
-| `full` | 500 | Comprehensive - crawl everything up to the limit |
+A crawl takes two settings from its [audit level](/guides/audit-levels): the page
+budget and how pages are picked.
 
-Unlike [`audit`](/cli/audit#coverage-modes), whose default coverage is auth-aware,
+| Level | Pages | How pages are picked |
+|-------|-------|----------------------|
+| `quick` | 25 | The URL and its sitemaps, no link following |
+| `surface` | 100 | Follows links, one page per URL pattern first |
+| `full` | 500 | Every page it can reach, up to the budget |
+
+Unlike [`audit`](/cli/audit#audit-levels), whose default level is auth-aware,
 `crawl` always defaults to `quick`. A plain `squirrel crawl` stops after 25 pages;
-500 is `full` coverage's page budget, not the default.
+500 is the `full` level's page budget, not the default.
 
 The page budget resolves as **`--max-pages` / `-m` > non-default `[crawler] max_pages` >
-coverage-mode default**, capped at 10,000 pages either way. Switch modes with
-`--coverage` (or `[crawler] coverage` in config), or override the budget directly
-with `--max-pages`. See [Crawling & Coverage](/crawl) for how each mode behaves.
+the level's page budget**, capped at 10,000 pages either way. Switch levels with
+`--level` (or `[crawler] coverage` in config), or override the budget directly
+with `--max-pages`. `fast` is accepted as `quick`; any other value, or a
+`--max-pages` that is not a positive number, stops the crawl before it
+starts. See [Crawling](/crawl) for how each level picks pages.
 
 ## Examples
 
@@ -62,7 +68,7 @@ squirrel crawl https://example.com
 ### Comprehensive crawl
 
 ```bash
-squirrel crawl https://example.com -C full
+squirrel crawl https://example.com --level full
 ```
 
 ### Crawl more pages
@@ -96,7 +102,7 @@ The crawl command:
 
 ```text
 Crawling: https://example.com
-Coverage: quick (max 25 pages)
+Level: quick · max 25 pages
 
 ✓ Crawled 18 pages in 6.3s
 
@@ -127,7 +133,7 @@ exclude = ["/admin/*"]
 ```
 
 Note that `max_pages = 100` (the literal config default) is treated as unset and the
-coverage-mode budget applies instead; any other value overrides it. See
+level's page budget applies instead; any other value overrides it. See
 [Crawler Configuration](/configuration/crawler) for all options.
 
 ## Workflow

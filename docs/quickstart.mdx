@@ -167,7 +167,7 @@ You'll see output like:
   v0.0.84  •  https://squirrelscan.com
 ────────────────────────────────────────────
 Auditing  https://example.com
-Coverage  surface · max 100 pages
+Level     surface · max 100 pages
 Config    defaults
 Account   you@example.com · 500 credits
 Dashboard https://app.squirrelscan.com
@@ -241,12 +241,12 @@ Content (2 warnings)
     ```
   </Step>
 
-  <Step title="Choose a coverage mode">
-    Pick depth or speed. `quick` is fast, local and free. `surface` audits one page per template. `full` is comprehensive:
+  <Step title="Choose an audit level">
+    Pick depth or speed. `quick` is fast: up to 25 pages, without the cloud checks (logged out it runs locally, no account needed; logged in it is billed like any level, up to 100 credits). `surface` audits one page per template with the cloud checks. `full` reads every page up to 500:
     ```bash
-    squirrel audit https://example.com -C quick
+    squirrel audit https://example.com --level quick
     ```
-    The default is `quick` when you're logged out and `surface` when you're logged in.
+    The default is `quick` when you're logged out and `surface` when you're logged in. See [Audit levels](/guides/audit-levels) for what each one checks and costs.
   </Step>
 
   <Step title="Run only some categories">

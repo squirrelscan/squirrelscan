@@ -99,8 +99,8 @@ A skipped run is recorded, and the organization is told once with the cost of th
 
 ## How runs behave
 
-- Each scheduled run is a normal cloud audit and **spends [credits](/cloud/credits)** like any other cloud audit. Stay within budget with the same per-audit spend controls.
-- Scheduled runs crawl up to your plan's [max pages per cloud audit](/cloud/credits#max-pages-per-cloud-audit) ceiling, same as an on-demand dashboard audit.
+- Each scheduled run is a normal cloud audit and **spends [credits](/cloud/credits)** like any other cloud audit at its level. Stay within budget with the same per-audit spend controls.
+- Scheduled runs use the website's [audit level](/guides/audit-levels) (or its custom settings), same as an on-demand dashboard audit: they crawl the pages the level asks for, lowered to your plan's [max pages per cloud audit](/cloud/credits#max-pages-per-cloud-audit) when it asks for more.
 - If an audit for the website is already running when the schedule fires, the scheduled run is skipped for that cycle.
 - Results, score deltas, new issues, and notifications appear in the dashboard automatically.
 - A scheduled run's real outcome is what the schedule reports, so a failed run shows as failed rather than as a successful dispatch.
