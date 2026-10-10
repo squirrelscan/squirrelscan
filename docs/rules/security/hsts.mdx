@@ -23,6 +23,8 @@ The rule reads the response headers of the first crawled page and emits a single
 
 Severity is warning and the scope is site-wide, so the verdict comes from one page's headers rather than from every page.
 
+On a local or private-network host, such as `localhost` or `192.168.1.10`, the rule is skipped and left out of the score, because a dev server is not the production edge. See [Transport and delivery rules do not apply](/guides/local-audits-cli#transport-and-delivery-rules-do-not-apply).
+
 ## How to fix it
 
 ```

@@ -19,6 +19,8 @@ The rule parses the URL of each crawled page and emits a single check named `htt
 
 The check is per-page, so a site that has migrated but still links to a handful of `http://` URLs internally shows those pages individually rather than one site-wide verdict.
 
+On a local or private-network host, such as `localhost` or `192.168.1.10`, the rule is skipped and left out of the score, because a dev server is not the production edge. See [Transport and delivery rules do not apply](/guides/local-audits-cli#transport-and-delivery-rules-do-not-apply).
+
 ## How to fix it
 
 ```nginx

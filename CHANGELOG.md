@@ -38,6 +38,7 @@ How it works:
 
 ### Fixed
 
+- A clean site audited on `localhost` or a private-network host no longer scores a C or D for being a dev server ([#629](https://github.com/squirrelscan/squirrelscan/issues/629)). The transport and delivery rules (`security/https`, `security/hsts`, `security/http-to-https`, `perf/http2`, `perf/compression`, `perf/asset-compression`, `perf/cache-headers`, `perf/bad-caching`) are skipped there and left out of the score, so the same cause (no HTTPS, no compression, no caching policy) is no longer charged by several rules at once. The report says so in one line under the score, and the JSON report as `notApplicable`. The host is classified from the audit URL by the same check the cloud handoff already used, now shared in `@squirrelscan/utils`; public hosts score exactly as before. See [Transport and delivery rules do not apply](https://docs.squirrelscan.com/guides/local-audits-cli#transport-and-delivery-rules-do-not-apply).
 - Rule pages say local audits cost nothing only when signed out. Signed-in audits spend credits.
 - The setup and agent docs now say local audits cost nothing only when signed out, instead of free in general. Signed-in audits spend credits.
 - Signed-out local audits need no account and cost nothing. Signed-in audits spend credits. The agent setup pages and the cloud overview said local audits were free and unlimited.

@@ -21,6 +21,8 @@ The rule is site-wide and makes live network requests. It builds a sample of sam
 
 Read the warn status as an inventory rather than a defect: it lists the HTTP URLs that are still reachable and redirecting. Probes run five at a time with a 100 ms stagger, each hop times out after 10 seconds and chains stop at 10 hops. A 20 second budget stops workers picking up new URLs, so the rule reports on the subset it started; probes already in flight are still awaited and can finish after the budget expires. Redirect loops are skipped.
 
+On a local or private-network host, such as `localhost` or `192.168.1.10`, the rule is skipped and left out of the score, because a dev server is not the production edge. See [Transport and delivery rules do not apply](/guides/local-audits-cli#transport-and-delivery-rules-do-not-apply).
+
 ## How to fix it
 
 ```nginx

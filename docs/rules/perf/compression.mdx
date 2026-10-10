@@ -24,6 +24,8 @@ The rule runs on every crawled page and emits one check named `compression`:
 
 The size test measures the decoded HTML the crawl holds, in characters rather than bytes. A content type counts as compressible when it contains `text/`, `application/json`, `application/javascript`, `application/xml`, `+xml` or `+json`.
 
+On a local or private-network host, such as `localhost` or `192.168.1.10`, the rule is skipped and left out of the score, because a dev server is not the production edge. See [Transport and delivery rules do not apply](/guides/local-audits-cli#transport-and-delivery-rules-do-not-apply).
+
 ## How to fix it
 
 On nginx:
