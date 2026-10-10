@@ -19,7 +19,7 @@ Annual billing is 12 months for the price of 10. Your monthly credits still arri
 
 Monthly credits are spent before purchased top-up credits. Subscribe and top up from the **Billing & Credits** page in the [dashboard](/dashboard).
 
-Free, Pro, and Team run the **same** audit at the same price: the base charge includes every cloud service (AI analysis, editor's summary, blocking check, tech + site metadata, report publishing) on every plan. [Scheduled audits](/cloud/scheduled-audits) are on every plan: free re-audits one website weekly or monthly, Pro and Team re-audit every website daily. Pro and Team just grant more monthly credits and unlock top-ups, that daily cadence and extra scheduled sites, custom headers, and higher render concurrency - Team adds pooled credits, invites, and roles on top.
+Free, Pro, and Team run the **same** audit at the same price: the base charge includes every cloud service (AI analysis, editor's summary, blocking check, tech + site metadata, report publishing) on every plan. The one difference is the [Full level](/guides/audit-levels#full-on-the-free-plan): its every-page crawl is Pro and Team, and on Free a Full audit samples one page per URL pattern first instead, the way Surface does. [Scheduled audits](/cloud/scheduled-audits) are on every plan: free re-audits one website weekly or monthly, Pro and Team re-audit every website daily. Pro and Team just grant more monthly credits and unlock top-ups, that daily cadence and extra scheduled sites, custom headers, and higher render concurrency - Team adds pooled credits, invites, and roles on top.
 
 ### Max pages per cloud audit
 
@@ -76,7 +76,7 @@ A page is charged once per audit. Rendering it, serving it from a cache, or retr
 
 The page count is the one in the report's coverage line ("Coverage: audited 12 of 12 known pages"), or its page count when there is no coverage line. A URL the crawl fetched but could not audit, such as a `404` kept for its broken-link finding or a `500`, is not an audited page. A cloud render paid for one while the audit ran is refunded when the audit completes, so an audit's page charge always matches the pages its report shows. A re-audit is only charged for the pages it fetched itself: pages a [smart audit](/configuration#smart-audits) carries forward from an earlier audit are not charged again.
 
-Link checks are free in two cases: internal links (on the site you are auditing) always, and every link the CLI checks for an audit you run with `squirrel audit`. The external-link charge applies to [cloud audits](/guides/cloud-audits) with external link checking turned on, which is off by default.
+Link checks are free in two cases: internal links (on the site you are auditing) always, and every link the CLI checks for an audit you run with `squirrel audit`. The external-link charge applies to [cloud audits](/guides/cloud-audits) with external link checking turned on, which the surface and full [audit levels](/guides/audit-levels) do and quick does not.
 
 The base includes everything else: AI page analysis ([`ai/llm-parsability`](/rules/ai/llm-parsability), [`ai/page-type-match`](/rules/ai/page-type-match)), [authority signals](/rules/eeat/authority-signals), the [Blocking check](/rules/adblock), [technology detection](/cloud/technologies), [site metadata](/cloud/site-metadata), the [editor's summary](/cloud/editor-summary), and publishing the report. None of these are charged separately.
 

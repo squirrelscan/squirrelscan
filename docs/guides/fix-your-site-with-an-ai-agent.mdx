@@ -112,7 +112,7 @@ The loop is: audit, read, fix, deploy, re-audit. Here is what the agent does on 
     You prompt the agent to audit your site. It calls `run_audit` with the URL. The first call comes back with `status: "confirmation_required"`, a credit estimate (an upper bound), and your balance. The agent shows you the estimate.
   </Step>
   <Step title="Confirm the spend">
-    You approve, and the agent calls `run_audit` again with `confirm: true`. The audit starts and returns a `run_id`. A cloud fast audit takes about two minutes and covers roughly ten pages.
+    You approve, and the agent calls `run_audit` again with `confirm: true`. The audit starts and returns a `run_id`. It runs at the website's [audit level](/guides/audit-levels), which for a new website is surface: up to 100 pages, one page per URL pattern first. Ask for a quick audit and the agent passes `level: quick`, for 25 pages from the start page and its sitemaps. Either way the audit runs in the background and takes minutes.
   </Step>
   <Step title="Wait for results">
     The agent polls `get_audit_status` with the `run_id` until the run completes, then pulls the report with `get_report`. Start with the `summary` format for scores and top issues; `llm` or `markdown` gives the full detail.

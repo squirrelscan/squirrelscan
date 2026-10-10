@@ -52,7 +52,7 @@ The audit is the same underneath. Pick whichever surface fits how you work.
     Trigger a run from [app.squirrelscan.com](https://app.squirrelscan.com): open a website and use its Run dialog. Cloud audits use the website's own [audit level](/guides/audit-levels) and [audit settings](/dashboard/audit-settings) (which rules run, the spend cap), not your local `squirrel.toml`.
   </Tab>
   <Tab title="MCP">
-    Your agent runs the audit as a tool call. Point any MCP client at the [hosted MCP server](/developers/mcp) and it calls `run_audit` with the URL, confirms the credit estimate, then polls `get_audit_status` and reads the report. The full agent workflow is in [Fix your website with a coding agent](/guides/fix-your-site-with-an-ai-agent).
+    Your agent runs the audit as a tool call. Point any MCP client at the [hosted MCP server](/developers/mcp) and it calls `run_audit` with the URL (and a `level`, if you ask for one: otherwise the website's own level applies), confirms the credit estimate, then polls `get_audit_status` and reads the report. The full agent workflow is in [Fix your website with a coding agent](/guides/fix-your-site-with-an-ai-agent).
   </Tab>
 </Tabs>
 

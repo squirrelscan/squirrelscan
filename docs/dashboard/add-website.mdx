@@ -1,50 +1,65 @@
 ---
 title: "Adding a website"
-description: "Pick the scan depth and the audit schedule when you add a site"
+description: "Add a site, pick its audit level and schedule, and start its first audit"
 icon: "plus"
 ---
 
-**Dashboard → Add website** takes a URL and starts the first audit straight away. Two settings are chosen on the same form, and both can be changed later in the site's settings.
+**Dashboard → Add website** takes a URL and starts the first audit straight away. The form has three parts, top to bottom: the URL, the [audit level](/guides/audit-levels) and the schedule. Only the URL is required, and it has focus when the page opens, so you can type a domain and go. The level and the schedule start on sensible defaults, and both can be changed later in the site's settings.
 
-## Scan depth
+An organization with no websites yet sees the same form on its websites page, under a **First audit** heading. Same fields, same order, same button: the heading is the only difference, so your first site is set up the way every later one is.
 
-How many pages each audit of this site crawls. The same four presets the [crawl settings](/dashboard/crawl-settings) page offers, so what you pick here is what you will see there.
+## Website URL
 
-| Preset | Pages | For |
-| --- | --- | --- |
-| **Fast** | 10 | Quickest default run. |
-| **Surface** | 50 | Good default coverage. This is the default. |
-| **Deep** | 250 | Larger sites. |
-| **Full** | 500 | Whole-site coverage. |
+Type a domain or a full address. `example.com` is fine: when you leave the field it is tidied into a full URL, and anything that does not read as a website is left as you typed it so you can fix it.
 
-Pages are the main thing an audit costs, at 2 credits each on top of the 50-credit base however each page is fetched, so the preset you pick is also the size of the bill. Change it any time under **Settings → Crawl**, or override it per site with a custom page limit. These presets are moving to the [audit levels](/guides/audit-levels) the CLI uses; a site keeps the settings it has when that happens.
+If the page is opened from a link that carries a URL, the field is filled in and focus goes to the button instead. The form never submits on its own: the button spends credits, so you get a look at the URL first.
 
-<Note>
-  **Fast** does not follow links while the sitemap has pages to give. On that preset a crawl audits your sitemap and stops, whatever crawl scope the site is set to; only a site with no usable sitemap has its links followed. Pick **Surface** or deeper if following links is the point.
-</Note>
+## Audit level
+
+A slider with three stops, left to right: **Quick**, **Surface** and **Full**. It starts on **Surface**. The level decides every setting of the audit (how many pages, how the crawl picks them, whether the cloud checks run, rendering, external link checks), so there is nothing else to fill in here.
+
+| Level | Pages | What it reads | Shown cost |
+| --- | --- | --- | --- |
+| **Quick** | 25 | The start page and its sitemaps. Links are followed only when the sitemap has nothing to crawl. No cloud checks. | Up to 100 credits |
+| **Surface** | 100 | Follows links, one page per URL pattern first. Cloud checks and external link checks. The default. | Up to 350 credits |
+| **Full** | 500 | Every page it can reach, with the cloud checks and external link checks. Pro and Team. | Up to 1,550 credits |
+
+The box under the slider names the level you picked and the most its audit can cost, such as **Up to 350 credits**. When your plan or your balance lowers the page count, it says so in a few words ("Balance covers 150 pages.") rather than leaving you to find out from the report.
+
+The figure is a cap, not the bill. An audit costs 50 credits plus 2 per audited page, plus 1 for each distinct external link the cloud checks, and the cap reserves one link check per page on the levels that check links. A site with fewer pages than the level allows costs less. No level is free: Quick renders the pages that need JavaScript in the cloud and is billed like the others. Failed audits are refunded automatically, which is the one line of small print under the button. See [Credits and pricing](/cloud/credits).
+
+On the **Free** plan the Full stop is greyed out and tagged **Pro**, and the slider will not settle on it. Free cannot run Full's every-page crawl; [Audit levels](/guides/audit-levels#full-on-the-free-plan) says what happens to a Full request that reaches a Free organization another way.
+
+The form offers whole levels only. To change one setting (a bigger page budget, rendering off, no external link checks), add the site, then open its [crawl settings](/dashboard/crawl-settings): changing any of the level's settings there makes the site **Custom**.
 
 ## Schedule
 
 Whether the site is re-audited on its own, and how often. **Weekly and on** by default: a scheduled audit is how you find out what changed, and a site nobody re-audits only ever tells you about the day it was added.
 
+The choices sit in one row, left to right:
+
 | Choice | What happens |
 | --- | --- |
 | **Disabled** | Nothing recurring. The site is audited only when you ask. |
-| **Daily** | An audit every day. Pro and Team. |
-| **Weekly** | An audit every week. The default. |
 | **Monthly** | An audit every month. |
+| **Weekly** | An audit every week. The default. |
+| **Daily** | An audit every day. Pro and Team. |
 
-The schedule starts as soon as the site is added, not after its first audit has finished. Each run costs credits like any other cloud audit, and every completed run emails you [what changed](/cloud/scheduled-audits#the-digest-email). Turn it off any time under **Settings → Schedule**.
+The schedule starts as soon as the site is added, not after its first audit has finished. Each run is a cloud audit at the site's level and costs credits like any other, and every completed run emails you [what changed](/cloud/scheduled-audits#the-digest-email). Turn it off any time under **Settings → Schedule**.
 
 Picking a cadence here is a decision, and it is treated as one. A site added with the schedule **disabled** stays unscheduled: it will not switch itself on after its first audit, which is what happens to a site added through the CLI or the API without an explicit choice.
 
 ### What your plan funds
 
-Cadences your plan does not fund are shown locked, with the same wording the schedule settings page uses. Free covers weekly and monthly on one website; Pro and Team add daily and put every website on a schedule. See [scheduled audits](/cloud/scheduled-audits) for the full table.
+Cadences your plan does not fund are shown locked, with a **Pro** tag. Free covers weekly and monthly on one website; Pro and Team add daily and put every website on a schedule. See [scheduled audits](/cloud/scheduled-audits) for the full table.
 
-If your plan's scheduled-site slots are already taken, the schedule control starts **off** and says which site is holding the slot. Freeing that site's schedule is the alternative to upgrading, and it is usually the quicker one.
+If your plan's scheduled-site slots are already taken, every cadence but **Disabled** is locked, none is selected, and the line above them says which site is holding the slot. Freeing that site's schedule is the alternative to upgrading, and it is usually the quicker one.
 
-A site added while the slots are spent is not recorded as a refusal. It is left waiting instead, so if a slot frees up later, the site's next completed audit puts it on the weekly default. Only unticking the schedule yourself makes the off permanent.
+A site added while the slots are spent is not recorded as a refusal. It is left waiting instead, so if a slot frees up later, the site's next completed audit puts it on the weekly default. Only picking **Disabled** yourself makes the off permanent.
+
+## Add website
+
+Press **Add website**, or press Option+Enter (Alt+Enter on Windows and Linux) from anywhere in the form. Hold Option (or Alt) and the button shows the shortcut: `⌥ ↵` on a Mac, `Alt ↵` elsewhere. The site is added and its first audit starts in the same step, at the level you picked. If the audit cannot start, because the balance does not cover it for instance, the site is still added and the page says why the audit did not run.
 
 ### If the schedule was not granted
 
