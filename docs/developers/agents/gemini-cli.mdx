@@ -24,7 +24,7 @@ The skills and local audits run through the `squirrel` binary.
   </Tab>
 </Tabs>
 
-Local audits are free and run entirely on your machine. Verify with `squirrel --version`.
+Local audits run entirely on your machine. Signed out, they need no account and cost nothing; signed-in audits spend credits. Verify with `squirrel --version`.
 
 ## 2. Add the MCP server
 
@@ -97,13 +97,13 @@ Keep runs fast on a large site by capping the crawl up front:
 Audit only /docs/* on example.com, cap it at 20 pages, and fix the broken links.
 ```
 
-<Tip>Cloud audits cost credits (50 per audit plus 2 per audited page, and 1 per external link checked), and `run_audit` returns a cost estimate before anything runs. Local `squirrel audit` runs are free and unlimited, so use those for quick iteration and the cloud for browser-rendered checks.</Tip>
+<Tip>Cloud audits cost credits (50 per audit plus 2 per audited page, and 1 per external link checked), and `run_audit` returns a cost estimate before anything runs. Signed out, local `squirrel audit` runs cost nothing, so use those for quick iteration. A signed-in `squirrel audit` registers a cloud run and spends credits, so use the cloud for browser-rendered checks deliberately.</Tip>
 
 ## Headless and CI
 
 The OAuth flow needs a local browser and a reachable localhost redirect, so it fails over headless SSH or in a browser-less container. Use the API-key header there instead, exported from `SQUIRRELSCAN_API_KEY`.
 
-For a plain pass/fail deploy gate you do not need the agent at all, the free CLI exits non-zero when a threshold trips:
+For a plain pass/fail deploy gate you do not need the agent at all, the CLI exits non-zero when a threshold trips:
 
 ```bash
 squirrel audit https://example.com --fail-on 'score<90'
