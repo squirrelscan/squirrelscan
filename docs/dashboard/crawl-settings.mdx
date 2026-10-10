@@ -1,6 +1,6 @@
 ---
 title: "Crawl settings"
-description: "Control which URLs a website's cloud audits crawl, and how fast"
+description: "Set a website's audit level, which URLs its cloud audits crawl, and how fast"
 icon: "route"
 ---
 
@@ -8,18 +8,53 @@ Cloud audits don't read your local `squirrel.toml`, so the **Website → Setting
 
 Open it at **Dashboard → your website → Settings → Crawl**.
 
-Crawl scope and the include and exclude patterns apply to **every cloud audit of that website**: the one you start by hand, scheduled audits, the first audit after you add the site, the GitHub check, and an audit our infrastructure retries after a failure. None of it affects `squirrel audit` on your own machine, which reads your [config file](/configuration/crawler) instead.
+The [audit level](#audit-level) applies to the audits you start by hand, scheduled audits and the first audit after you add the site. An API or MCP request that names its own level runs at that level instead. Crawl scope and the include and exclude patterns apply to **every cloud audit of that website**: those three, plus the GitHub check and an audit our infrastructure retries after a failure. None of it affects `squirrel audit` on your own machine, which reads your [config file](/configuration/crawler) instead.
 
-The GitHub check is the one trigger that does not take the rest. It is a fixed 25-page quick crawl whatever your depth preset or page-limit override says, and it sends no custom request headers, which means it is never an [authorised crawl](#authorised-crawls) and does not read your robots.txt preference. Scope and patterns reach it because they can only ever narrow a crawl.
+The GitHub check is the one trigger that does not take the rest. It is a fixed 25-page quick crawl whatever the site's audit level says, and it sends no custom request headers, which means it is never an [authorised crawl](#authorised-crawls) and does not read your robots.txt preference. Scope and patterns reach it because they can only ever narrow a crawl.
 
-The page is four cards, each with its own save button, so saving one leaves the others alone.
+The page is three cards, each with its own save button, so saving one leaves the others alone.
 
 | Card | What it sets |
 | --- | --- |
-| **Crawl depth** | How many pages each audit crawls, as a preset. |
+| **Audit level** | The site's level, any setting you change to make it custom, and the max link depth. |
 | **Crawl rules** | Crawl scope, robots.txt, incremental crawl, and the include and exclude patterns. |
-| **Custom crawl config** | Per-site overrides for the depth preset: max pages, max depth, coverage mode, render mode. |
 | **Custom request headers** | Headers sent on every request. Pro plan. Also what makes a crawl [authorised](#authorised-crawls). |
+
+## Audit level
+
+The top card is the site's [audit level](/guides/audit-levels): the same **Quick**, **Surface** and **Full** slider as the [Add website](/dashboard/add-website) form, with every setting of the level listed underneath it. The form only offers whole levels; this card is where a site gets its own settings.
+
+- **Pick a level** and every setting fills in with that level's values. A site on a level follows it, so a later change to the level's definition reaches the site too.
+- **Change any setting** and the site becomes **Custom**. The line above the settings says what it started from and what changed, for example **Custom · Based on Surface, 2 changes: Pages, Rendering.**, and each changed setting carries a **Changed** tag.
+- **Reset to Surface** (or whichever level it started from) drops every change. Picking a different level on the slider does too, and fills in that level's values instead.
+
+| Setting | Choices |
+| --- | --- |
+| **Pages** | The most pages one audit reads, 1 to 10,000. An audit is held to your plan's ceiling, and the line under the field says what that is, such as "Pro plan allows up to 2,000 pages per audit." |
+| **Crawl strategy** | **Sitemap**: the start page and your sitemaps, no link following. **Sampled**: follows links, one page per URL pattern first. **All pages**: every page it can reach. |
+| **Cloud checks** | On or off: AI and authority signals, the editor's summary, tech detection and domain stats. |
+| **Rendering** | **Off** (plain HTTP), **Auto** (only pages that need JavaScript) or **All** (every page in a browser). |
+| **External link checks** | On or off. Each distinct external destination checked costs 1 credit. |
+
+Probing is not on the list: cloud audits probe passively whatever the level says, so a choice there would do nothing.
+
+**Max link depth** sits in the same card but is not part of a level: how many link hops from the start page the crawler follows (the start page is 0). It applies at every level; leave it empty for the engine default. **Save level** saves both.
+
+The box under the slider prices whatever the settings currently are: the level's name, or **Custom**, and **Up to N credits** for one audit, after your plan's page ceiling and your balance. It changes as you edit, so you see the cost of a change before you save it.
+
+### Full on the Free plan
+
+On the **Free** plan the slider's Full stop and the **All pages** crawl strategy are greyed out and tagged **Pro**. Free cannot run Full's every-page crawl. A site already set to crawl every page, because it was set up before a downgrade or through the API, keeps its settings: nothing stored is rewritten, and this limit does not touch its schedule. Its audits sample the way Surface does instead, one page per URL pattern first, up to the plan's 500 pages, and the card says so at the top. See [Audit levels](/guides/audit-levels#full-on-the-free-plan).
+
+### Sites added before audit levels
+
+A site added before audit levels existed was moved onto them as **Custom**, with exactly the settings it already had, so what it crawls, what it costs and when it runs did not change (apart from the Free plan's Full limit above). The slider sits on the level its old depth maps to: Fast on Quick, Surface and Deep on Surface, Full on Full. A site on the old Surface depth, for instance, reads **Custom · Based on Surface, 2 changes: Pages, External link checks.**: the old depth read 50 pages and did not check external links.
+
+It stays that way until you change it. Reset it, or pick another level, and the site moves onto that level's settings, and its price.
+
+### What the Run audit dialog quotes
+
+**Run New Audit** on a website opens a dialog that prices the run on that site's own level and settings, after your plan's ceiling and your balance. It says what the audit will run at, such as "This audit runs at Surface, 100 pages." or "This audit runs at Custom, based on Surface, 200 pages.", with a link back to this page, and its button reads **Run audit · up to N credits**. The run uses the site's settings too, so it runs at the level the dialog quoted. On Free, a site set to crawl every page also gets a sentence saying it will sample one page per URL pattern first instead.
 
 ## Crawl scope
 
@@ -35,7 +70,7 @@ Two choices for where the crawl is allowed to go.
 </CardGroup>
 
 <Note>
-  The **Fast** depth preset, and the **Quick** coverage mode under Custom crawl config, do not follow links while the sitemap has pages to give, whichever scope you pick: only a site with no usable sitemap has its links followed. On those settings a **Follow links** crawl behaves like a sitemap-only one. Quick is the [audit level](/guides/audit-levels) of the same name. Pick Surface or deeper if following links is the point.
+  The **Quick** level, and the **Sitemap** crawl strategy on a custom level, do not follow links while the sitemap has pages to give, whichever scope you pick: only a site with no usable sitemap has its links followed. On those settings a **Follow links** crawl behaves like a sitemap-only one. Sites added on the old **Fast** depth use the Sitemap strategy too. Pick Surface or Full if following links is the point.
 </Note>
 
 **Sitemap only** is for sites whose sitemap is the list you actually care about. It is the same idea as pointing a desktop crawler at a sitemap instead of a homepage.

@@ -24,12 +24,14 @@ squirrel audit https://example.com --level full
 | Rendering | `auto`: only pages built with JavaScript | `all`: every page | `all`: every page |
 | External link checks | Off | On | On |
 | Probing | `passive` | `active` | `active` |
-| Credits, signed in | Up to 100 | Up to 250 | Up to 1,050 |
+| Credits, signed-in CLI | Up to 100 | Up to 250 | Up to 1,050 |
+| Credits, cloud audit | Up to 100 | Up to 350 | Up to 1,550 |
+| Plans | All | All | Pro and Team in the cloud |
 
 - **Cloud checks** are the checks that run in squirrelscan's cloud: [AI page analysis](/rules/ai/llm-parsability), [authority signals](/rules/eeat/authority-signals), the [editor's summary](/cloud/editor-summary) and [technology detection](/cloud/technologies). The rest of the rules run at every level.
 - **Rendering** loads pages in a cloud browser, so the audit sees content that JavaScript builds. See [Browser rendering](/guides/browser-rendering).
-- **Probing** is how hard each page is poked beyond what the crawl fetched. `passive` sends nothing extra, `active` sends a few quiet requests that look like normal traffic. `aggressive` is never a level's default; you have to ask for it. See [Security configuration](/configuration/security).
-- **Credits** follow the pages: 50 for the audit plus 2 per audited page, so a 40-page surface audit costs 130. This holds at every level, quick included. A cloud audit also charges 1 credit per distinct external link it checks; the checks the CLI runs for itself are not charged. Credits apply to signed-in, online audits: signed out or with `--offline`, the audit runs locally, no account needed. See [Credits and pricing](/cloud/credits).
+- **Probing** is how hard each page is poked beyond what the crawl fetched. `passive` sends nothing extra, `active` sends a few quiet requests that look like normal traffic. `aggressive` is never a level's default; you have to ask for it. Cloud audits (the dashboard, the API and the hosted MCP server) probe passively at every level for now. See [Security configuration](/configuration/security).
+- **Credits** follow the pages: 50 for the audit plus 2 per audited page, so a 40-page surface audit costs 130. This holds at every level, quick included. A cloud audit also charges 1 credit per distinct external link it checks, and its quote reserves one per page on the levels that check links, which is why the cloud figures for surface and full are higher. The checks the CLI runs for itself are not charged. Credits apply to signed-in, online audits: signed out or with `--offline`, the audit runs locally, no account needed. See [Credits and pricing](/cloud/credits).
 
 ### Quick
 
@@ -43,7 +45,7 @@ The default for most sites, and for any signed-in CLI run. Surface follows links
 
 ### Full
 
-Every page the crawl can reach, breadth-first, up to 500 pages or the limit you set. Use it when the score has to cover the whole site.
+Every page the crawl can reach, breadth-first, up to 500 pages or the limit you set. Use it when the score has to cover the whole site. In the cloud, Full is on Pro and Team: the Free plan cannot run its every-page crawl (see [Full on the Free plan](#full-on-the-free-plan)).
 
 ## Which level runs by default
 
@@ -54,7 +56,8 @@ Every page the crawl can reach, breadth-first, up to 500 pages or the limit you 
 | `squirrel crawl` | quick |
 | Local MCP server: `audit_website` | surface |
 | Local MCP server: `quick_check` | quick |
-| A website you add in the dashboard | surface |
+| A new website in the cloud: added in the dashboard, through the API or the hosted MCP server, or by a CLI publish | surface |
+| A dashboard, API or hosted MCP audit that names no level | the website's own level |
 
 Set your own default for a project with `[crawler] coverage` in `squirrel.toml`:
 
@@ -113,7 +116,7 @@ max_pages = 200
 
 ### In the dashboard
 
-A website's crawl settings work the same way. Pick a level and every setting fills in. Change one and the site shows as custom, based on the level you started from, with the number of settings you changed and a way to reset it to the level.
+The [Add website](/dashboard/add-website) form picks a level on a slider, Quick, Surface and Full from left to right, and shows the most the audit can cost. It offers whole levels only. A website's [crawl settings](/dashboard/crawl-settings#audit-level) have the same slider with every setting listed under it: pick a level and every setting fills in, change one and the site shows as custom, based on the level you started from, with the settings you changed and a way to reset it to the level. On the Free plan both pages show Full greyed out and tagged Pro.
 
 A website on a level follows that level, so it picks up any later change to the level's definition. A custom website keeps its own values. Every audit records the settings it ran with, so an old report still says what it checked.
 
@@ -139,9 +142,17 @@ The level and your changes say what an audit asks for. Two limits can lower the 
 
 No audit reads more than **10,000 pages**, on any plan, in the CLI or in the cloud. A CLI audit is not held to the plan ceiling, only to the 10,000 cap and to your credits: the balance, and the per-audit cap `[cloud] max_credits_per_audit` (1,000 by default, which stops a signed-in full audit at 475 pages). See [Spend controls](/cloud/credits#spend-controls).
 
-A limit never changes the level. A full audit on a small balance is still a full audit, run on fewer pages, and the run says what lowered it: your plan or your balance.
+A page limit never changes the level. A full audit on a small balance is still a full audit, run on fewer pages, and the run says what lowered it: your plan or your balance.
 
 Plans also set how many pages render at once (Free 1, Pro 5, Team 10), how many websites run on a schedule (one on Free, all of them on Pro and Team) and how often (weekly or monthly on Free, daily too on Pro and Team). Those apply at every level.
+
+### Full on the Free plan
+
+A cloud audit on the Free plan cannot run Full's every-page crawl. A Full request on Free still runs rather than failing, whether it comes from the API, the hosted MCP server or a website that was set to Full before: it samples the way Surface does instead, one page per URL pattern first, and keeps everything else Full asks for, its page count included. So a Full audit on Free reads up to 500 sampled pages. The run records itself as custom, based on Full, with the crawl strategy changed, and the response carries a notice that says so, with an upgrade link (`levelNotice` in the API, `level_notice` from the hosted MCP server).
+
+Nothing stored is rewritten. A Free website set to Full keeps that setting, this limit leaves its schedule alone, and it crawls every page again once the organization upgrades. The dashboard does not offer Full on Free in the first place: the slider's Full stop and the All pages crawl strategy are tagged Pro.
+
+This is a cloud limit. Like the plan's page ceiling, it does not apply to a CLI audit, which crawls from your machine.
 
 ## Which level should I pick?
 
