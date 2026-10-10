@@ -21,6 +21,8 @@ The rule runs on every crawled page and reads the response headers. It emits one
 
 An http URL that advertises only `h2` produces all three of `http-version`, `http3-hint` and `http2-https-required`. The negotiated protocol is not a response header, so this rule infers rather than observes. `Alt-Svc` is an advertisement of what else is available, not a statement about the connection the response arrived on.
 
+On a local or private-network host, such as `localhost` or `192.168.1.10`, the rule is skipped and left out of the score, because a dev server is not the production edge. See [Transport and delivery rules do not apply](/guides/local-audits-cli#transport-and-delivery-rules-do-not-apply).
+
 ## How to fix it
 
 Most servers and every major CDN support HTTP/2 by default over HTTPS. On nginx it is a listen directive:

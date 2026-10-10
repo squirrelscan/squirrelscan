@@ -75,6 +75,8 @@ export const badCachingRule: Rule = {
     scope: "site",
     severity: "warning",
     weight: 5,
+    // A dev server or private-network host is not the delivery edge (pub#629).
+    skipOnPrivateTarget: true,
     optionsSchema,
   },
 

@@ -19,6 +19,7 @@ import {
   entityLabel,
   entityPageTotal,
   primaryEntities,
+  privateTargetLine,
   stableIdPercent,
   DOMAIN_STATS_NOTE,
   domainStatRows,
@@ -160,6 +161,9 @@ export function generateConsoleReport(
   if (scope) log(fmt.dim(scope));
   const cov = coverageLine(report);
   if (cov) log(fmt.dim(cov));
+  // pub#629: once, here, rather than a skipped line per rule and page.
+  const privateTarget = privateTargetLine(report);
+  if (privateTarget) log(fmt.dim(privateTarget));
   const partial = partialAuditLine(opts.ruleFilter, report.healthScore);
   if (partial) log(fmt.dim(partial));
   log(divider());

@@ -198,6 +198,20 @@ export interface RuleMeta {
    */
   skipOnNoindex?: boolean;
   /**
+   * Transport and delivery rules set this so the runner emits a visible
+   * `skipped` check (reason "private-target") instead of running them when the
+   * audited host is a local or private-network address: localhost, `*.local`,
+   * loopback, RFC1918, link-local and the like, as `nonPublicHostLabel` in
+   * `@squirrelscan/utils/non-public-host` decides from the audit URL (pub#629).
+   * Such a host is not the production edge: a dev server is plain HTTP/1.1 on
+   * purpose and sets no production caching or compression, so HTTPS, HSTS,
+   * caching, compression and HTTP/2 findings there say nothing about the site.
+   * Page and site rules alike. Keep the list to what the hosting edge decides:
+   * a rule that judges the markup or the build (mixed content, form actions,
+   * minification, security headers the app sets) must never set it.
+   */
+  skipOnPrivateTarget?: boolean;
+  /**
    * Page rules only: see {@link VerdictScope}. REQUIRED on every page rule, and
    * enforced by `rule-verdict-scope.test.ts` rather than by the type, so that a
    * rule added without it fails a named test instead of turning every rule file

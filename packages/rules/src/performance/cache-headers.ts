@@ -24,6 +24,8 @@ export const cacheHeadersRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // A dev server or private-network host is not the delivery edge (pub#629).
+    skipOnPrivateTarget: true,
     optionsSchema,
   },
 

@@ -6,6 +6,7 @@
     ".": "./src/index.ts",
     "./constants": "./src/constants.ts",
     "./url": "./src/url.ts",
+    "./non-public-host": "./src/non-public-host.ts",
     "./dom": "./src/dom.ts",
     "./waf": "./src/waf.ts",
     "./patterns": "./src/patterns.ts",

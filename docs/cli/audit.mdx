@@ -237,7 +237,7 @@ Publishing requires authentication. Run `squirrel auth login` first; logged-out 
 </Note>
 
 <Note>
-An audit of a host no squirrelscan server can reach never publishes, never registers a run, and never renders in the cloud, even with `--publish` or `--render`. That covers `localhost`, loopback and private ranges such as `192.168.1.10`, and internal names such as `box.local` or anything under `.internal`. Hosted services cannot reach your machine or your private network, so there is nothing they could screenshot, re-render or re-audit. The audit itself runs and prints normally. See [Local audits with the CLI](/guides/local-audits-cli).
+An audit of a host no squirrelscan server can reach never publishes, never registers a run, and never renders in the cloud, even with `--publish` or `--render`. That covers `localhost`, loopback and private ranges such as `192.168.1.10`, and internal names such as `box.local` or anything under `.internal`. Hosted services cannot reach your machine or your private network, so there is nothing they could screenshot, re-render or re-audit. The audit itself runs and prints normally, except that the transport and delivery rules (HTTPS, HSTS, HTTP/2, compression, caching) are skipped and left out of the score. See [Local audits with the CLI](/guides/local-audits-cli), including [which rules are skipped and why](/guides/local-audits-cli#transport-and-delivery-rules-do-not-apply).
 </Note>
 
 ### Browser rendering

@@ -8,6 +8,7 @@ import { ruleAffectedPages, ruleAffectedRollup, ruleCarriedPageCount } from "../
 import { getDocsUrl } from "../docs";
 import { domainAgeYears } from "../site-metadata";
 import { lockedRulesMessage } from "../locked-rules";
+import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
 import { editorSummaryView } from "../editor-summary";
 import {
   ENTITY_FINDING_LIMIT,
@@ -480,6 +481,20 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     lines.push("</issues>");
   } else {
     lines.push("<issues/>");
+  }
+
+  // pub#629: rules that do not apply to a local or private-network host. An
+  // agent must not read their absence from <issues> as "HTTPS and caching are
+  // fine", nor go fixing a dev server's transport. One element, not one per rule.
+  const privateTarget = privateTargetLine(report);
+  if (privateTarget) {
+    const rules = privateTargetSkippedRules(report);
+    lines.push(`<not-applicable reason="private-target" count="${rules.length}">`);
+    lines.push(`${indent(1)}${escapeXml(privateTarget)}`);
+    for (const rule of rules) {
+      lines.push(`${indent(1)}<rule id="${escapeXml(rule.id)}" name="${escapeXml(rule.name)}"/>`);
+    }
+    lines.push("</not-applicable>");
   }
 
   // Cloud-/Pro-gated rules that didn't run this audit (#780) — an agent must

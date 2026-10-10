@@ -11,6 +11,8 @@ import type { CheckResult } from "@squirrelscan/core-contracts";
 import type { RuleMeta, RuleRunResult } from "@squirrelscan/rules";
 
 import { flattenChecks, type RuleTally } from "@squirrelscan/audit-engine";
+import { PRIVATE_TARGET_SKIP_REASON } from "@squirrelscan/core-contracts";
+import { loadAllRules } from "@squirrelscan/rules";
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
@@ -285,5 +287,89 @@ describe("runSmartAudits end-to-end (no inflation)", () => {
     ]);
 
     await run(store.close());
+  });
+});
+
+describe("pub#629: rules a private host skips stay out of the union", () => {
+  const HTTPS = loadAllRules().get("security/https")!.meta;
+  const LOCAL = "http://localhost:3000";
+  const at = (site: string, i: number) => `${site}/page-${i}`;
+
+  /**
+   * Run 1 predates the skip: `security/https` failed on all 20 pages and the
+   * findings were stored. Run 2 re-crawls only 5 pages, where the rule now
+   * skips. The other 15 pages carry.
+   */
+  async function twoRuns(site: string) {
+    const store = new SQLiteStorage(":memory:");
+    await run(store.init());
+    const ruleMeta = new Map<string, RuleTally>([
+      [HTTPS.id, { meta: HTTPS } as RuleTally],
+    ]);
+    const pages = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        normalizedUrl: at(site, i),
+        status: 200,
+      }));
+
+    const fails = Array.from({ length: 20 }, (_, i) => ({
+      name: "https",
+      status: "fail" as const,
+      message: "Page not served over HTTPS",
+      pageUrl: at(site, i),
+    }));
+    await run(
+      runSmartAudits({
+        storage: store,
+        crawlId: "c1",
+        siteKey: site,
+        freshFindings: fails.flatMap((c) =>
+          flattenChecks(c.pageUrl, HTTPS.id, [c])
+        ),
+        scoredPageUrls: fails.map((c) => c.pageUrl),
+        ruleMeta,
+        pages: pages(20),
+      })
+    );
+
+    const skips: CheckResult[] = Array.from({ length: 5 }, (_, i) => ({
+      name: HTTPS.id,
+      status: "skipped",
+      message: "Not applicable: local or private-network host",
+      skipReason: PRIVATE_TARGET_SKIP_REASON,
+      pageUrl: at(site, i),
+    }));
+    const second: RunInput = {
+      freshFindings: [],
+      scoredPageUrls: skips.map((c) => c.pageUrl!),
+      ruleMeta,
+      freshByRule: new Map([[HTTPS.id, skips]]),
+    };
+    const result = await run(
+      runSmartAudits({
+        storage: store,
+        crawlId: "c2",
+        siteKey: site,
+        ...second,
+        pages: pages(5),
+      })
+    );
+    await run(store.close());
+    return { result, union: union(second, result) };
+  }
+
+  test("on localhost: no carried finding and no synthetic pass for the rule", async () => {
+    const { result, union: joined } = await twoRuns(LOCAL);
+    expect(result.carriedRuleResults.has(HTTPS.id)).toBe(false);
+    expect(result.coverage.carriedFindings).toBe(0);
+    const checks = joined.get(HTTPS.id)?.checks ?? [];
+    expect(checks.every((c) => c.status === "skipped")).toBe(true);
+    expect(joined.get(HTTPS.id)?.syntheticPassCount).toBeUndefined();
+  });
+
+  test("on a public host the carried findings still count", async () => {
+    const { result } = await twoRuns(SITE);
+    expect(result.coverage.carriedFindings).toBe(15);
+    expect(result.carriedRuleResults.has(HTTPS.id)).toBe(true);
   });
 });

@@ -12,6 +12,7 @@ import { techIconUrl } from "../technologies";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import { seedRedirect } from "../coverage";
+import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
 import { collectSkippedChecks, type SkippedCheck } from "../skipped";
 
 export interface JsonRenderOptions {
@@ -150,6 +151,17 @@ interface SlimJsonReport {
    * `issues`, which consumers treat as findings. Present only when non-empty.
    */
   skippedChecks?: SkippedCheck[];
+  /**
+   * Rules that do not apply to this audit's host (pub#629): the transport and
+   * delivery rules, skipped because the host is local or private-network. Not
+   * findings, not evaluation gaps, and never scored. Present only when a rule
+   * was skipped for that reason.
+   */
+  notApplicable?: {
+    reason: "private-target";
+    message: string;
+    rules: Array<{ ruleId: string; name: string }>;
+  };
   // Report-only — never part of the score. Present when the Pro cloud
   // editor-summary call ran (exec-email-shaped narrative + big-ticket items).
   editorSummary?: {
@@ -210,6 +222,7 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
   const es = editorSummaryView(report.editorSummary);
   const refusedSeedRedirect = seedRedirect(report);
   const skippedChecks = collectSkippedChecks(report.ruleResults);
+  const privateTarget = privateTargetLine(report);
   return {
     meta: {
       version,
@@ -339,6 +352,15 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
       }),
     })),
     ...(skippedChecks.length > 0 ? { skippedChecks } : {}),
+    ...(privateTarget
+      ? {
+          notApplicable: {
+            reason: "private-target" as const,
+            message: privateTarget,
+            rules: privateTargetSkippedRules(report).map((r) => ({ ruleId: r.id, name: r.name })),
+          },
+        }
+      : {}),
     ...(report.technologies && report.technologies.items.length > 0
       ? {
           technologies: {

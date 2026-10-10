@@ -112,6 +112,17 @@ export interface CheckResult {
   lastSeenAt?: number;
 }
 
+/**
+ * `skipReason` of a check the rules runner skipped because the audited host is
+ * a local or private-network address (pub#629) and the rule declares
+ * `skipOnPrivateTarget`: the transport and delivery rules (HTTPS, HSTS,
+ * caching, compression, HTTP/2) that judge a production edge a dev server is
+ * not. A "does not apply" verdict, not an evaluation gap, so it is never
+ * scored. Also the skip's `details.foldKey`, so a fold keeps it apart from the
+ * rule's other skips.
+ */
+export const PRIVATE_TARGET_SKIP_REASON = "private-target";
+
 export type RuleScope = "page" | "site";
 export type RuleSeverity = "error" | "warning" | "info";
 

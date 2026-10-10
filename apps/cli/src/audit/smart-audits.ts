@@ -26,6 +26,7 @@ import {
   type RuleTally,
 } from "@squirrelscan/audit-engine";
 import { loadAllRules, type RuleRunResult } from "@squirrelscan/rules";
+import { isNonPublicUrl } from "@squirrelscan/utils/non-public-host";
 import { Effect } from "effect";
 
 /**
@@ -35,6 +36,22 @@ import { Effect } from "effect";
  * last point a removed page's checks exist to be skipped (#2343).
  */
 export const REMOVED_STATUSES = new Set([404, 410]);
+
+/**
+ * Rules the runner skips on this site because its host is local or private
+ * (pub#629), or an empty set for a public host. They stay out of the union: a
+ * finding carried from an audit before the skip existed, or a clean carried
+ * page's synthetic pass, would otherwise put a rule that does not apply back
+ * into the score through the pages this run did not re-crawl.
+ */
+function privateTargetRuleIds(siteKey: string): ReadonlySet<string> {
+  if (!isNonPublicUrl(siteKey)) return new Set();
+  const ids = new Set<string>();
+  for (const rule of loadAllRules().values()) {
+    if (rule.meta.skipOnPrivateTarget) ids.add(rule.meta.id);
+  }
+  return ids;
+}
 
 /** Stable identity for a carried finding, used to tag report checks. */
 function carriedKey(
@@ -197,8 +214,10 @@ export function runSmartAudits(
     const carriedFindings: CarriedFinding[] = [];
     const carriedLastSeen = new Map<string, number>();
     let unrenderedCount = 0;
+    const notApplicable = privateTargetRuleIds(siteKey);
     for (const f of merged.findings) {
       if (f.provenance !== "carried") continue;
+      if (notApplicable.has(f.ruleId)) continue;
       carriedFindings.push({
         normalizedUrl: f.normalizedUrl,
         ruleId: f.ruleId,
@@ -244,8 +263,11 @@ export function runSmartAudits(
     // `removedUrls` (a removed page is not one of the "known non-removed" pages
     // the union covers), which is the filter this used to apply here.
     const freshShell = new Map<string, RuleRunResult>();
-    for (const [ruleId, t] of ruleMeta)
+    for (const [ruleId, t] of ruleMeta) {
+      // No synthetic passes for a rule that does not apply here (pub#629).
+      if (notApplicable.has(ruleId)) continue;
       freshShell.set(ruleId, { meta: t.meta, checks: [] });
+    }
 
     const carriedRuleResults = buildScoringResultsFromMerged({
       freshResults: freshShell,

@@ -62,6 +62,7 @@ import {
 } from "../affected-pages";
 import { getAuditFailureNotice, reportFailureReasonCode } from "../failure-notice";
 import { lockedRulesMessage } from "../locked-rules";
+import { privateTargetLine } from "../private-target";
 
 export interface HtmlRenderOptions {
   /** Report ID for OG meta tags (API use) */
@@ -666,6 +667,8 @@ function ReportHeader({ report, branding }: { report: AuditReport; branding?: Re
                 const cov = coverageLine(report);
                 const hint = fullScanHint(report);
                 const seedRedirect = seedRedirectLine(report);
+                // pub#629: the rules a local or private-network host skipped.
+                const privateTarget = privateTargetLine(report);
                 return (
                   <>
                     {(scope || level || cov) && (
@@ -673,6 +676,7 @@ function ReportHeader({ report, branding }: { report: AuditReport; branding?: Re
                         {[scope, level, cov].filter(Boolean).join(" ")}
                       </div>
                     )}
+                    {privateTarget && <div className="scan-scope">{privateTarget}</div>}
                     {seedRedirect && <div className="scan-hint">{seedRedirect}</div>}
                     {hint && <div className="scan-hint">{hint}</div>}
                   </>

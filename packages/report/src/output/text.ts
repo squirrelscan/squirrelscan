@@ -33,6 +33,7 @@ import {
 import { wrapText } from "../utils";
 import { unfetchedNote } from "../coverage";
 import { lockedRulesMessage } from "../locked-rules";
+import { privateTargetLine } from "../private-target";
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 
 export interface TextRenderOptions {
@@ -137,6 +138,9 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
   if (level) write(level);
   const cov = coverageLine(report);
   if (cov) write(cov);
+  // pub#629: the score's other basis line, the rules a private host skipped.
+  const privateTarget = privateTargetLine(report);
+  if (privateTarget) write(privateTarget);
   const hint = fullScanHint(report);
   if (hint) write(hint);
   const fallbacks = fetchFallbacksLine(report);

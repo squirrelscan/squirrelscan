@@ -14,6 +14,8 @@ export const http2Rule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 3,
+    // A dev server or private-network host is not the delivery edge (pub#629).
+    skipOnPrivateTarget: true,
   },
 
   run(ctx: RuleContext): RuleResult {

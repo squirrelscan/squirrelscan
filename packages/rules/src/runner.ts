@@ -1,8 +1,10 @@
 import { logger } from "./logger";
 // Rule runner - executes rules with context
 
+import { PRIVATE_TARGET_SKIP_REASON } from "@squirrelscan/core-contracts";
 import { detectSoft404, parsePage } from "@squirrelscan/parser";
 import { mapWithConcurrency } from "@squirrelscan/utils";
+import { nonPublicHostLabel } from "@squirrelscan/utils/non-public-host";
 
 import type {
   CheckResult,
@@ -222,6 +224,22 @@ function checkApplicability(
   };
 }
 
+/**
+ * The visible skip a `skipOnPrivateTarget` rule emits on a local or
+ * private-network target (pub#629). Constant text, no host: the report says
+ * which host once, not once per rule and page.
+ */
+function privateTargetSkip(ruleId: string): CheckResult {
+  return {
+    name: ruleId,
+    status: "skipped",
+    message: "Not applicable: local or private-network host",
+    skipReason: PRIVATE_TARGET_SKIP_REASON,
+    // Folds apart from any other skip of the same rule, like the noindex gate.
+    details: { foldKey: PRIVATE_TARGET_SKIP_REASON },
+  };
+}
+
 export class RuleRunner {
   private rules: Map<string, Rule>;
   private enabledRuleIds: string[];
@@ -258,6 +276,10 @@ export class RuleRunner {
   private readonly intel: IntelContext | undefined;
   private readonly entityMap: EntityMap | undefined;
   private readonly probe: ProbeBudget | undefined;
+  // The audited url last classified by `isPrivateTarget`, and the verdict. One
+  // audit has one base url, so this is a single classification per run; keyed on
+  // the url so a runner reused for another site cannot carry a stale verdict.
+  private privateTarget: { url: string; isPrivate: boolean } | undefined;
 
   constructor(options: RunnerOptions) {
     this.config = options.config;
@@ -284,6 +306,20 @@ export class RuleRunner {
       this.config.rules?.disable,
       this.config.rule_options as Record<string, { enabled?: boolean }>
     );
+  }
+
+  /**
+   * Whether this audit's target is a local or private-network host (pub#629),
+   * decided from the audit URL (`site.baseUrl`) by the same classifier the CLI's
+   * cloud preflight uses. A page rule run without site data falls back to the
+   * page's own url, which is on the audited host.
+   */
+  private isPrivateTarget(ctx: RuleContext): boolean {
+    const url = ctx.site?.baseUrl || ctx.page.url;
+    if (this.privateTarget?.url !== url) {
+      this.privateTarget = { url, isPrivate: nonPublicHostLabel(url) !== null };
+    }
+    return this.privateTarget.isPrivate;
   }
 
   // Get list of enabled rules
@@ -348,6 +384,16 @@ export class RuleRunner {
     const skip = checkApplicability(rule, this.config, siteMetadata);
     if (skip) {
       return { meta: rule.meta, checks: [skip] };
+    }
+
+    // Private-target gate (pub#629): transport and delivery rules judge the
+    // production edge, and a dev server or a box on the local network is not it.
+    // Plain HTTP, HTTP/1.1, no caching or compression are the norm there, so the
+    // rules are skipped rather than failed, which also keeps one cause (no
+    // HTTPS, no compression, no caching policy) from costing the score several
+    // times. Decided by the audit URL, so it is constant for the whole run.
+    if (rule.meta.skipOnPrivateTarget && this.isPrivateTarget(ctx)) {
+      return { meta: rule.meta, checks: [privateTargetSkip(rule.meta.id)] };
     }
 
     // Soft-404 gate: skip page content/mechanism rules on a URL that serves 404
