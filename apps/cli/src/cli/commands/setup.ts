@@ -129,7 +129,7 @@ export async function runSetup(opts: {
   step(t, 1, "Sign in", "optional");
   say(
     t.dim(
-      "Unlocks cloud audits, publishing and sharing. Local audits are free without it."
+      "Unlocks cloud audits, publishing and sharing. Signed out, local audits need no account and cost nothing."
     )
   );
   const settings = loadUserSettings();

@@ -37,6 +37,7 @@ How it works:
 
 ### Fixed
 
+- The setup and agent docs now say local audits cost nothing only when signed out, instead of free in general. Signed-in audits spend credits.
 - Signed-out local audits need no account and cost nothing. Signed-in audits spend credits. The agent setup pages and the cloud overview said local audits were free and unlimited.
 - `squirrel crawl -C fast` crawled with no page limit at all: the crawl cast the flag to a level without checking it, the page lookup for `fast` came back empty and the cap became `NaN`. The crawl now reads its level through the same parser as `audit`, so `fast` is quick (25 pages) and an unknown level stops before the crawl starts. A non-numeric `--max-pages` is refused too, instead of the same unbounded crawl.
 - The local MCP `quick_check` tool described itself as a single-page check. It reads the URL and its sitemaps, up to 25 pages, and now says so.
