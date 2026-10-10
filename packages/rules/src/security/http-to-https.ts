@@ -132,6 +132,8 @@ export const httpToHttpsRule: Rule = {
     scope: "site",
     severity: "warning",
     weight: 3,
+    // A dev server or private-network host is not the delivery edge (pub#629).
+    skipOnPrivateTarget: true,
     optionsSchema,
   },
 

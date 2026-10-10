@@ -88,6 +88,8 @@ export const assetCompressionRule: Rule = {
     scope: "site",
     severity: "warning",
     weight: 6,
+    // A dev server or private-network host is not the delivery edge (pub#629).
+    skipOnPrivateTarget: true,
     optionsSchema,
   },
 

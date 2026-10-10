@@ -14,6 +14,8 @@ export const compressionRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 6,
+    // A dev server or private-network host is not the delivery edge (pub#629).
+    skipOnPrivateTarget: true,
   },
 
   run(ctx: RuleContext): RuleResult {
