@@ -33,6 +33,7 @@ import {
 import { formatReportDate } from "../utils";
 import { getPathname } from "../url";
 import { lockedRulesMessage } from "../locked-rules";
+import { privateTargetLine } from "../private-target";
 
 export interface MarkdownRenderOptions {
   version?: string;
@@ -149,6 +150,9 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   if (level) lines.push(`${level}  `);
   const cov = coverageLine(report);
   if (cov) lines.push(`**${cov}**  `);
+  // pub#629: the score's other basis line, the rules a private host skipped.
+  const privateTarget = privateTargetLine(report);
+  if (privateTarget) lines.push(`${privateTarget}  `);
   // #190: a plain line for the same reason the seed-redirect disclosure above
   // is one. This used to be `> ${hint}`, and a blockquote CAN interrupt an open
   // paragraph, so the quote opened mid-metadata and CommonMark lazy

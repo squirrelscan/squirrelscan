@@ -115,6 +115,14 @@ export {
   type SiteProfileRow,
 } from "./site-metadata";
 
+// Transport and delivery rules skipped for a local or private-network host (pub#629)
+export {
+  privateTargetLine,
+  privateTargetSkippedRules,
+  type PrivateTargetRule,
+  type PrivateTargetReportShape,
+} from "./private-target";
+
 // Smart audits coverage + carried-finding provenance helpers (#110)
 // + scan scope disclosure (#1180) + refused off-site seed redirect (#1418)
 export {
