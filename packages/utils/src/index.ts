@@ -26,6 +26,8 @@ export {
   type ProjectNameContext,
 } from "./url";
 
+export { isNonPublicHostname, isNonPublicUrl, nonPublicHostLabel } from "./non-public-host";
+
 export {
   getAttrCI,
   hasAttrCI,
