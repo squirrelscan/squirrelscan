@@ -61,7 +61,12 @@ const METADATA_HOSTNAMES = new Set([
  * apex AND as a suffix. `local` is mDNS, `internal` / `intranet` / `lan` /
  * `home.arpa` are private-use zones, `localhost` is loopback by RFC 6761, `svc`
  * is a Kubernetes service name, `consul` / `nomad` are service-discovery zones.
- * None are publicly registrable, so refusing them cannot cost a real site.
+ * Not all of them are formally reserved: `localhost` (RFC 6761), `local`
+ * (RFC 6762), `home.arpa` (RFC 8375) and `internal` (ICANN, for private use)
+ * are; `corp` is indefinitely deferred by ICANN; the rest are simply not
+ * delegated public TLDs today, so no public site can sit under one. The list
+ * is the API's `classifyHostedEgressHost` list, entry for entry: if a zone is
+ * ever delegated, both change together.
  */
 const INTERNAL_NAME_ZONES = [
   "localhost",
@@ -81,9 +86,14 @@ const INTERNAL_NAME_ZONES = [
  * Lowercase and strip EVERY trailing root dot. Stripping only one would leave
  * `localhost..` classified as a public name while the IPv4 path already refuses
  * `127.0.0.1..`, an asymmetry with no reason to exist.
+ *
+ * A loop, not `/\.+$/`: that regex retries from every dot in a run that is not
+ * at the end, so a hostname of many dots is quadratic (CodeQL js/polynomial-redos).
  */
 function normalizeHostname(host: string): string {
-  return host.toLowerCase().replace(/\.+$/, "");
+  let end = host.length;
+  while (end > 0 && host.charCodeAt(end - 1) === 0x2e) end--;
+  return host.slice(0, end).toLowerCase();
 }
 
 /**

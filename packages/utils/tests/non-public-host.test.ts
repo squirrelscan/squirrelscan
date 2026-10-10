@@ -132,6 +132,14 @@ describe("nonPublicHostLabel", () => {
     expect(nonPublicHostLabel(url)).toBeNull();
   });
 
+  // The dotless rule decides from the name alone, so a mistyped public host
+  // with no TLD reads as private too. Pinned on purpose: such a name only ever
+  // resolves through the local search domain, which is a private network.
+  test("a dotless name is private even when it looks like a typo", () => {
+    expect(nonPublicHostLabel("http://example/")).toBe("example");
+    expect(nonPublicHostLabel("http://staging:8080/")).toBe("staging:8080");
+  });
+
   // Syntactic only, by design: no DNS lookup. A public name that resolves to
   // loopback is still a name someone can publish.
   test("a public name that resolves to loopback is public", () => {
@@ -140,6 +148,16 @@ describe("nonPublicHostLabel", () => {
 });
 
 describe("isNonPublicHostname", () => {
+  test("trailing dots are stripped, and a long run of dots stays linear", () => {
+    expect(isNonPublicHostname("localhost...")).toBe(true);
+    expect(isNonPublicHostname("example.com.")).toBe(false);
+    // Dots NOT at the end: the old `/\.+$/` retried from each one.
+    const dots = `${".".repeat(50_000)}x`;
+    const start = performance.now();
+    expect(isNonPublicHostname(dots)).toBe(false);
+    expect(performance.now() - start).toBeLessThan(500);
+  });
+
   test("takes a bare hostname, IPv6 without brackets", () => {
     expect(isNonPublicHostname("localhost")).toBe(true);
     expect(isNonPublicHostname("::1")).toBe(true);
