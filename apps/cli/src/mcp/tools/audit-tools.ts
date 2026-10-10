@@ -1,4 +1,6 @@
-// Local deterministic audit tools — free, no auth; cloud enrichment when authed.
+// Local deterministic audit tools. Signed out they run on this machine with no
+// cloud call; signed in, audit_website is a billed cloud audit like `squirrel
+// audit` (#628, see billed-audit.ts). quick_check is always local.
 
 import type { CallToolResult, McpServer } from "@modelcontextprotocol/server";
 
@@ -7,6 +9,7 @@ import {
   AUDIT_LEVEL_PRESETS,
   type AuditLevel,
   DEFAULT_AUDIT_LEVEL,
+  type ResolvedAuditSettings,
 } from "@squirrelscan/core-contracts/audit-levels";
 import { renderLlm } from "@squirrelscan/report";
 import {
@@ -15,6 +18,7 @@ import {
 } from "@squirrelscan/utils/headers";
 import { z } from "zod";
 
+import type { Config } from "@/config";
 import type { Result } from "@/controllers/types";
 import type { AuditReport } from "@/types";
 
@@ -31,7 +35,12 @@ import { findConfigFile, getGlobalConfigPath, loadConfig } from "@/config";
 import { runAudit, type RunAuditOptions } from "@/controllers/audit";
 
 import { version } from "../../../package.json";
-import { resolveCloudAvailability } from "../cloud";
+import {
+  billedAuditSummary,
+  finalizeMcpRun,
+  planMcpAudit,
+  startMcpRunHeartbeat,
+} from "../billed-audit";
 import { errorResult, textResult } from "../result";
 
 // Map a runAudit Result to a tool result: ok → LLM report text, err → clean error.
@@ -54,27 +63,27 @@ function localConfigPath(): string | undefined {
  * `[security] probe`, `[external_links] enabled = false`), and the caller's
  * `maxPages` over those. The report carries the result as `auditLevel`.
  *
- * Rendering stays opt-in here, as it always was: a tool call never starts
- * paid cloud renders on its own, so the level's render setting is a limit
- * the run may not reach (like a signed-out CLI run). A render setting in the
- * config is applied as the fetch mode, so a configured one is what runs.
+ * A render setting in the config is applied as the fetch mode, so a
+ * configured one is what runs. Otherwise the fetch mode is left to the caller:
+ * a local run fetches over plain HTTP, and a billed one (billed-audit.ts)
+ * renders in the cloud browser the way `squirrel audit` does.
  */
 export async function levelRunOptions(
   level: AuditLevel,
-  maxPages?: number
+  maxPages?: number,
+  loaded?: Config
 ): Promise<
   Pick<
     RunAuditOptions,
-    | "coverageMode"
-    | "maxPages"
-    | "auditLevel"
-    | "externalLinksEnabled"
-    | "probe"
-    | "renderStrategy"
-    | "cloudRendering"
-  >
+    "externalLinksEnabled" | "probe" | "renderStrategy" | "cloudRendering"
+  > & {
+    coverageMode: AuditLevel;
+    maxPages: number;
+    auditLevel: ResolvedAuditSettings;
+  }
 > {
-  const config = await loadConfig(localConfigPath(), { silent: true });
+  const config =
+    loaded ?? (await loadConfig(localConfigPath(), { silent: true }));
   const render = resolveExplicitRenderMode({}, config);
   const configOverrides = configLevelOverrides(config);
   const pages = maxPages ?? configOverrides.pages;
@@ -128,6 +137,104 @@ async function runLocalAudit(options: Omit<RunAuditOptions, "configPath">) {
   return renderAuditResult(result);
 }
 
+/** A result with a line in front of it: why the audit ran the way it did. */
+function withLeadingText(result: CallToolResult, text: string): CallToolResult {
+  return { ...result, content: [{ type: "text", text }, ...result.content] };
+}
+
+/**
+ * Run `audit_website` for one call: locally (signed out, offline, a host the
+ * cloud cannot reach), or as a billed cloud audit, registered before the crawl
+ * and closed out with its audited pages after it.
+ */
+async function runWebsiteAudit(input: {
+  url: string;
+  level: AuditLevel;
+  maxPages?: number;
+  offline?: boolean;
+  confirm?: boolean;
+  headers?: Record<string, string>;
+}): Promise<CallToolResult> {
+  const config = await loadConfig(localConfigPath(), { silent: true });
+  const levelOptions = await levelRunOptions(
+    input.level,
+    input.maxPages,
+    config
+  );
+  const extra = {
+    url: input.url,
+    offline: input.offline,
+    ...(input.headers && Object.keys(input.headers).length > 0
+      ? { headers: input.headers }
+      : {}),
+  };
+  const plan = await planMcpAudit({
+    url: input.url,
+    offline: input.offline,
+    confirm: input.confirm,
+    config,
+    level: {
+      coverageMode: levelOptions.coverageMode,
+      maxPages: levelOptions.maxPages,
+      auditLevel: levelOptions.auditLevel,
+      render: resolveExplicitRenderMode({}, config),
+    },
+  });
+  if (plan.kind === "stop") return plan.result;
+  if (plan.kind === "local") {
+    const result = await runLocalAudit({
+      ...levelOptions,
+      ...extra,
+      cloudAvailable: false,
+    });
+    return plan.note ? withLeadingText(result, plan.note) : result;
+  }
+
+  const { billed } = plan;
+  let pagesFetched = 0;
+  const stopHeartbeat = startMcpRunHeartbeat(billed.run, () => ({
+    pagesFetched,
+    pagesTotal: billed.maxPages,
+    pagesFailed: 0,
+  }));
+  let result: Result<AuditReport>;
+  try {
+    result = await runAudit({
+      ...levelOptions,
+      ...extra,
+      ...billed.options,
+      configPath: localConfigPath(),
+      onProgress: (p) => {
+        if (p.phase === "crawling" && p.current !== undefined) {
+          pagesFetched = p.current;
+        }
+      },
+    });
+  } catch (error) {
+    stopHeartbeat();
+    await finalizeMcpRun(billed.run, {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+  stopHeartbeat();
+  if (!result.ok) {
+    await finalizeMcpRun(billed.run, { error: result.error.message });
+    return renderAuditResult(result);
+  }
+  const report = result.data;
+  // The same stamps `squirrel audit` puts on a signed-in report, so the
+  // locked-checks section speaks to an account, not to a signed-out run.
+  report.cloudPlan = billed.accountPlan;
+  report.cloudMode = billed.options.cloudRendering;
+  report.coverageMode = levelOptions.coverageMode;
+  await finalizeMcpRun(billed.run, { report });
+  return withLeadingText(
+    renderAuditResult(result),
+    billedAuditSummary(billed, report)
+  );
+}
+
 const LEVEL_DESCRIPTION = `Audit level: ${levelHelpList()}. Default ${DEFAULT_AUDIT_LEVEL}`;
 
 export function registerAuditTools(server: McpServer): void {
@@ -136,7 +243,7 @@ export function registerAuditTools(server: McpServer): void {
     {
       title: "Audit a website",
       description:
-        "Run a deterministic website audit (performance, security, accessibility, content, structured data, and more) of a URL on this machine and return an LLM-optimized report. Signed in, the surface and full levels add the cloud checks; this local tool does not yet register them as a billed cloud audit (known gap, squirrelscan#628). A configured [cloud] render sends pages to the cloud browser at 2 credits each. For a billed cloud audit, use the hosted MCP server's run_audit. Pass offline:true to keep it local-only.",
+        "Run a deterministic website audit (performance, security, accessibility, content, structured data, and more) of a URL and return an LLM-optimized report. Signed out it runs on this machine with no cloud call. Signed in it is a billed cloud audit, the same as `squirrel audit`: 50 credits plus 2 per audited page at every level, with pages that need JavaScript rendered in the cloud browser and, at surface and full, the cloud checks. The first call returns the estimate as status confirmation_required; show it to the user and call again with confirm: true to start. An audit the balance cannot cover is refused with the cost and the balance. Pass offline: true for a local-only audit with no cloud call.",
       inputSchema: z.object({
         url: z.string().describe("The URL to audit (e.g. https://example.com)"),
         level: z.enum(AUDIT_LEVELS).optional().describe(LEVEL_DESCRIPTION),
@@ -155,7 +262,15 @@ export function registerAuditTools(server: McpServer): void {
         offline: z
           .boolean()
           .optional()
-          .describe("Force a fully local audit with no cloud enrichment"),
+          .describe(
+            "Run locally with no cloud call: not billed, no cloud checks, no cloud rendering"
+          ),
+        confirm: z
+          .boolean()
+          .optional()
+          .describe(
+            "Approve the credit spend of a signed-in audit. Without it, an estimate over [cloud] confirm_threshold comes back as confirmation_required instead of starting"
+          ),
         headers: z
           // Reject control chars in names/values — replayed onto outbound requests (#532).
           .record(
@@ -176,7 +291,7 @@ export function registerAuditTools(server: McpServer): void {
           ),
       }),
     },
-    async ({ url, level, coverage, maxPages, offline, headers }) => {
+    async ({ url, level, coverage, maxPages, offline, confirm, headers }) => {
       if (level !== undefined && coverage !== undefined && level !== coverage) {
         return errorResult(
           `level ${level} and coverage ${coverage} name different levels. Pass one (coverage is the old name for level).`
@@ -185,19 +300,13 @@ export function registerAuditTools(server: McpServer): void {
       const auditLevel =
         parseAuditLevel(level ?? coverage ?? DEFAULT_AUDIT_LEVEL) ??
         DEFAULT_AUDIT_LEVEL;
-      const levelOptions = await levelRunOptions(auditLevel, maxPages);
-      // No cloud checks (the quick level) means no cloud at all here, as before
-      // audit levels: a tool call at quick runs the local rules only.
-      const cloudAvailable =
-        !levelOptions.auditLevel?.settings.cloudChecks || offline
-          ? false
-          : await resolveCloudAvailability();
-      return runLocalAudit({
+      return runWebsiteAudit({
         url,
-        ...levelOptions,
-        cloudAvailable,
+        level: auditLevel,
+        maxPages,
         offline,
-        ...(headers && Object.keys(headers).length > 0 ? { headers } : {}),
+        confirm,
+        headers,
       });
     }
   );
