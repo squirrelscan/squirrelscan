@@ -18,7 +18,7 @@ The page is three cards, each with its own save button, so saving one leaves the
 | --- | --- |
 | **Audit level** | The site's level, any setting you change to make it custom, and the max link depth. |
 | **Crawl rules** | Crawl scope, robots.txt, incremental crawl, and the include and exclude patterns. |
-| **Custom request headers** | Headers sent on every request. Pro plan. Also what makes a crawl [authorised](#authorised-crawls). |
+| **Custom request headers** | Headers sent on every request, on [every plan](#custom-request-headers). Also what makes a crawl [authorised](#authorised-crawls). |
 
 ## Audit level
 
@@ -160,6 +160,10 @@ Turn the setting on and the crawler also skips URLs your robots.txt disallows, a
   A `Crawl-delay` is a hard limit on how fast a host can be crawled, because the wait applies per host no matter how many workers are running. The directive is capped at 2 seconds even when it asks for longer, and 2 seconds a page is 1,800 pages an hour from one host. Most sites are one host, so for most sites that is the whole crawl. If your page count cannot finish within the audit's time budget at that pace, the audit says so at the start and crawls fewer pages rather than running out of time with nothing to show. An [authorised crawl](#authorised-crawls) is the way to tell us that limit is not meant for us.
 </Warning>
 
+## Custom request headers
+
+Custom request headers are available on every plan, Free included. The bottom card sets them for this website, and its cloud audits send them on every request to your site: pages, assets, `robots.txt`, sitemaps and pages loaded in the cloud browser. Header values are stored as secrets and never shown in reports or logs. The usual reason to add one is a firewall exception: [Firewall and WAF exceptions](/cloud/firewall) has the rules. A header also makes the crawl [authorised](#authorised-crawls).
+
 ## Authorised crawls
 
 Configure a **custom request header** for this website and its cloud audits run as **authorised**. The header card shows the status, *Authorised crawl: on (custom header)*.
@@ -175,7 +179,7 @@ Setting a header that only your origin knows about is you telling us this crawle
 
 While a crawl is authorised, the **Respect robots.txt** toggle is shown disabled. Your saved preference is kept and applies again if authorisation goes away.
 
-Authorisation is decided from the headers the audit will actually send, and headers are a Pro plan feature. If your plan stops permitting them the headers are not sent, so the crawl is not authorised and returns to polite pacing on its own.
+Authorisation is decided from the headers the audit will actually send. Every plan permits them today; if a plan ever stopped permitting them, the headers would not be sent, so the crawl would not be authorised and would return to polite pacing on its own.
 
 An authorised crawl never reuses pages from your last audit either, for a different reason: the requests carry your header, and an authenticated response must not be stored where another audit could read it.
 

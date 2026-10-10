@@ -4,7 +4,7 @@ description: "How cloud browser rendering works under the hood"
 icon: "globe"
 ---
 
-A plain HTTP fetch is fast, free, and accurate for server-rendered sites - but sites that build their content with JavaScript (SPAs, client-side frameworks) can look nearly empty to it, which skews every content rule.
+A plain HTTP fetch is fast and accurate for server-rendered sites - but sites that build their content with JavaScript (SPAs, client-side frameworks) can look nearly empty to it, which skews every content rule.
 
 Cloud browser rendering fixes that: each page is loaded in a **real headless browser** in the cloud, and the fully rendered DOM is returned to your local crawler. Everything downstream - parsing, rules, reports - works exactly as it does with plain HTTP, just on the post-JavaScript HTML.
 

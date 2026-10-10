@@ -4,7 +4,7 @@ description: "How cloud credits work, what an audit costs, and how to control sp
 icon: "coins"
 ---
 
-Cloud audits are priced in **credits** - small integers, not dollars. Local audits never cost credits.
+Cloud audits are priced in **credits** - small integers, not dollars. A signed-in audit spends credits at every level, including one you run with `squirrel audit` on your own machine. A local audit costs nothing only when it runs signed out or with `--offline`, which means no cloud rendering and no cloud checks.
 
 ## Getting credits
 
@@ -19,7 +19,7 @@ Annual billing is 12 months for the price of 10. Your monthly credits still arri
 
 Monthly credits are spent before purchased top-up credits. Subscribe and top up from the **Billing & Credits** page in the [dashboard](/dashboard).
 
-Free, Pro, and Team run the **same** audit at the same price: the base charge includes every cloud service (AI analysis, editor's summary, blocking check, tech + site metadata, report publishing) on every plan. The one difference is the [Full level](/guides/audit-levels#full-on-the-free-plan): its every-page crawl is Pro and Team, and on Free a Full audit samples one page per URL pattern first instead, the way Surface does. [Scheduled audits](/cloud/scheduled-audits) are on every plan: free re-audits one website weekly or monthly, Pro and Team re-audit every website daily. Pro and Team just grant more monthly credits and unlock top-ups, that daily cadence and extra scheduled sites, custom headers, and higher render concurrency - Team adds pooled credits, invites, and roles on top.
+Free, Pro, and Team run the **same** audit at the same price: the base charge includes every cloud service (AI analysis, editor's summary, blocking check, tech + site metadata, report publishing) on every plan. The one difference is the [Full level](/guides/audit-levels#full-on-the-free-plan): its every-page crawl is Pro and Team, and on Free a Full audit samples one page per URL pattern first instead, the way Surface does. [Scheduled audits](/cloud/scheduled-audits) are on every plan: free re-audits one website weekly or monthly, Pro and Team re-audit every website daily. Pro and Team just grant more monthly credits and unlock top-ups, that daily cadence and extra scheduled sites, and higher render concurrency - Team adds pooled credits, invites, and roles on top. [Custom request headers](/dashboard/crawl-settings#custom-request-headers) are on every plan.
 
 ### Max pages per cloud audit
 

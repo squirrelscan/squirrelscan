@@ -15,8 +15,10 @@ curl https://api.squirrelscan.com/v1/credits \
 ```
 
 <Info>
-Local, deterministic audits are **free and need no token**. Authentication is
-only for the cloud: the API, publishing, and cloud enrichment.
+A local audit run signed out or with `--offline` is **free and needs no token**.
+Authentication is for the cloud: the API, publishing, cloud rendering and the
+cloud checks. Signed in, `squirrel audit` is a cloud audit and spends
+[credits](/cloud/credits).
 </Info>
 
 ## Two token types

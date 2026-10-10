@@ -776,9 +776,9 @@ end-to-end.
   sourced from secrets.
 </Warning>
 
-**Cloud audits:** applying custom headers to dashboard **cloud** audits is a
-**Pro** feature. Set them per-website under **Settings → Crawl → Custom request
-headers**; free plans receive `403 upgrade_required`. The render worker applies
+**Cloud audits:** custom headers for dashboard **cloud** audits are available on
+[every plan](/dashboard/crawl-settings#custom-request-headers), Free included.
+Set them per-website under **Settings → Crawl → Custom request headers**. The render worker applies
 them to the headless browser via `setExtraHTTPHeaders`, so they ride every
 request the rendered page makes.
 

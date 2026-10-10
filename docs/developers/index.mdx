@@ -21,7 +21,8 @@ authenticate with an [API key](/developers/authentication).
 <CardGroup cols={2}>
   <Card title="Agents & MCP" icon="sparkles" href="/developers/agents">
     Connect Claude Code, Cursor, Codex, opencode, and any MCP client to the
-    hosted server at `mcp.squirrelscan.com`. Free, no account needed.
+    hosted server at `mcp.squirrelscan.com`. Sign in with OAuth or an API key;
+    audits spend credits.
   </Card>
   <Card title="CI/CD" icon="git-branch" href="/guides/ci">
     Gate builds on audits with `--fail-on` exit codes. GitHub Actions, GitLab,
@@ -43,9 +44,10 @@ authenticate with an [API key](/developers/authentication).
 ## How it fits together
 
 The CLI (`squirrel`) and the REST API are two front doors to the same engine.
-Local, deterministic audits are **free and need no login**. Anything that talks
-to the cloud (publishing reports, browser rendering, AI summaries, the API)
-authenticates with a credential and is metered in [credits](/cloud/credits).
+A local audit run signed out or with `--offline` is **free and needs no login**.
+Anything that talks to the cloud (a signed-in audit, publishing reports, browser
+rendering, AI summaries, the API) authenticates with a credential and is metered
+in [credits](/cloud/credits).
 
 | You want to… | Reach for |
 |--------------|-----------|
@@ -60,10 +62,10 @@ authenticates with a credential and is metered in [credits](/cloud/credits).
 ## A 60-second tour
 
 ```bash
-# 1. Local, free, no login — exits non-zero if the gate trips.
-squirrel audit https://example.com --fail-on 'score<90'
+# 1. Local and free with --offline: exits non-zero if the gate trips.
+squirrel audit https://example.com --offline --fail-on 'score<90'
 
-# 2. Headless cloud auth — mint a key with `squirrel keys create`, or grab one
+# 2. Headless cloud auth: mint a key with `squirrel keys create`, or grab one
 #    from the dashboard.
 export SQUIRRELSCAN_API_KEY=sq_xxxxxxxxxxxx
 
