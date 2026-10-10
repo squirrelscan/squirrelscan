@@ -23,6 +23,7 @@ import { version as packageVersion } from "../../../package.json";
 import {
   AUDIT_LEVELS,
   type AuditLevel,
+  configMaxPagesChoice,
   levelBannerValue,
   levelCoverageMode,
   levelHelpList,
@@ -88,10 +89,7 @@ export function resolveCrawlBudget(input: {
     }
   } else {
     // A config that sets max_pages = 100 (the schema default) reads as unset.
-    requested =
-      input.config.crawler.max_pages === 100
-        ? levelMaxPages(level)
-        : input.config.crawler.max_pages;
+    requested = configMaxPagesChoice(input.config) ?? levelMaxPages(level);
   }
   const pageLimit = resolvePageLimit(requested);
   const resolved = resolveLocalAuditLevel(level, {

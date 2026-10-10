@@ -82,12 +82,15 @@ const CSR_SHELL =
   '<html><head><title>t</title></head><body><div id="root"></div><script src="/app.js"></script></body></html>';
 /** What the audited site answers with. Reassigned per test. */
 let pageBody = STATIC_PAGE;
+/** The body of every render submit the run sent. */
+let renderSubmits: Record<string, unknown>[] = [];
 let restoreConsole: () => void = () => {};
 
 beforeEach(() => {
   requested = [];
   output = [];
   pageBody = STATIC_PAGE;
+  renderSubmits = [];
   process.exitCode = 0;
   // A fresh settings file each run, so the once-only cost notice can show.
   rmSync(settingsPath, { force: true });
@@ -128,6 +131,16 @@ beforeEach(() => {
     // The render is recorded above; refusing it sends the page back to plain
     // HTTP at once instead of polling a job that will never finish.
     if (url.includes("/v1/services/render")) {
+      if (method === "POST") {
+        renderSubmits.push(
+          typeof init?.body === "string" ? JSON.parse(init.body) : {}
+        );
+      }
+      return Response.json({ error: "unavailable" }, { status: 503 });
+    }
+    // The cloud checks a surface or full run calls are unavailable here, so
+    // the run carries on without them.
+    if (url.includes("/v1/services/")) {
       return Response.json({ error: "unavailable" }, { status: 503 });
     }
     if (!url.includes("/v1/")) {
@@ -150,9 +163,14 @@ afterEach(() => {
   closeGlobalLinkCache();
 });
 
-async function runAudit(flags: string[]): Promise<void> {
-  writeFileSync(configPath, "[cloud]\npublish = false\n");
-  const rawArgs = ["https://example.com/", "-y", ...flags];
+async function runAudit(
+  flags: string[],
+  config = "[cloud]\npublish = false\n"
+): Promise<void> {
+  writeFileSync(configPath, config);
+  // --refresh: every run is a fresh crawl, so a page one test stored is never
+  // reused by the next and each test sees only its own requests.
+  const rawArgs = ["https://example.com/", "-y", "--refresh", ...flags];
   try {
     await runCommand(audit, { rawArgs });
   } catch (err) {
@@ -163,11 +181,13 @@ async function runAudit(flags: string[]): Promise<void> {
 const registered = () =>
   requested.some((r) => r.startsWith("POST ") && r.includes("/v1/agent-runs"));
 
-/** A page sent to the paid cloud browser. */
-const renderSubmitted = () =>
-  requested.some(
-    (r) => r.startsWith("POST ") && r.includes("/v1/services/render")
-  );
+/**
+ * A page the crawl sent to the paid cloud browser. The crawl's fetcher sends
+ * `timeoutMs` with its urls. At surface and full the cloud checks also submit
+ * urls for their JavaScript-content comparison (no `timeoutMs`): that is one
+ * of the cloud checks, not page rendering, so it does not count here.
+ */
+const renderSubmitted = () => renderSubmits.some((b) => "timeoutMs" in b);
 
 const costNotice = () =>
   output.find((l) => l.includes("Cloud audits are on for your account"));
@@ -215,6 +235,32 @@ describe("a signed-in quick audit is a billed cloud audit", () => {
     expect(registered()).toBe(true);
     expect(renderSubmitted()).toBe(false);
     expect(costNotice()).toBeUndefined();
+  });
+});
+
+// A render setting of `off` (from --http, --render-mode off or [cloud] render)
+// leaves the controller no render strategy, and the run must then fetch over
+// plain HTTP at every level rather than fall back to a strategy that renders.
+describe("a signed-in audit with rendering off never renders", () => {
+  test.each([
+    [["--level", "surface", "--http"], undefined],
+    [["--level", "full", "--render-mode", "off"], undefined],
+    [["--level", "quick", "--render-mode", "off"], undefined],
+    [["--level", "surface"], '[cloud]\npublish = false\nrender = "off"\n'],
+  ])("%p", async (flags, config) => {
+    pageBody = CSR_SHELL;
+    await runAudit([...flags, "-m", "1"], config);
+    expect(process.exitCode).not.toBe(1);
+    expect(registered()).toBe(true);
+    expect(renderSubmitted()).toBe(false);
+  });
+
+  // THE CONTROL: the same client-rendered page at surface, rendering left to
+  // the level, does reach the cloud browser.
+  test("rendering left to the level does render", async () => {
+    pageBody = CSR_SHELL;
+    await runAudit(["--level", "surface", "-m", "1"]);
+    expect(renderSubmitted()).toBe(true);
   });
 });
 

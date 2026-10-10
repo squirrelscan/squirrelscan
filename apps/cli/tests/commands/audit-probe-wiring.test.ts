@@ -274,7 +274,7 @@ describe("squirrel audit probing intensity", () => {
     expect(process.exitCode).toBe(1);
     expect(
       output.some((l) =>
-        l.includes("--pentest cannot be combined with --level full,full")
+        l.includes("--coverage was given more than once (full, full)")
       )
     ).toBe(true);
     expect(requested).toEqual([]);

@@ -37,13 +37,23 @@ export function unknownLevelMessage(raw: string): string {
 }
 
 /**
- * A level flag's raw value as citty delivered it. A repeated flag arrives as
- * an array and reads as its comma-joined text, which no level matches, so a
- * repeat is refused rather than silently resolved.
+ * A level flag's raw value as citty delivered it. citty hands a repeated flag
+ * over as an array; that is refused with its own error rather than resolved
+ * to one of the values.
  */
-function flagText(value: unknown): string | undefined {
-  if (value === undefined || value === null) return undefined;
-  return String(value);
+function flagText(
+  value: unknown,
+  name: string
+): { ok: true; text: string | undefined } | { ok: false; error: string } {
+  if (value === undefined || value === null)
+    return { ok: true, text: undefined };
+  if (Array.isArray(value)) {
+    return {
+      ok: false,
+      error: `${name} was given more than once (${value.map(String).join(", ")}). Pass one level.`,
+    };
+  }
+  return { ok: true, text: String(value) };
 }
 
 /**
@@ -55,8 +65,12 @@ export function readLevelFlag(args: {
   level?: unknown;
   coverage?: unknown;
 }): { ok: true; raw: string | undefined } | { ok: false; error: string } {
-  const level = flagText(args.level);
-  const coverage = flagText(args.coverage);
+  const levelFlag = flagText(args.level, "--level");
+  if (!levelFlag.ok) return levelFlag;
+  const coverageFlag = flagText(args.coverage, "--coverage");
+  if (!coverageFlag.ok) return coverageFlag;
+  const level = levelFlag.text;
+  const coverage = coverageFlag.text;
   if (level !== undefined && coverage !== undefined) {
     const a = parseAuditLevel(level);
     const b = parseAuditLevel(coverage);
@@ -122,6 +136,19 @@ export function resolveLocalAuditLevel(
 export const CONFIG_MAX_PAGES_DEFAULT = 100;
 
 /**
+ * `[crawler] max_pages` when the config chose it, or undefined when it is the
+ * schema default `squirrel init` writes, which leaves the level's page budget
+ * in place. The one place `audit`, `crawl` and the MCP tools read that rule.
+ */
+export function configMaxPagesChoice(config: {
+  crawler: { max_pages: number };
+}): number | undefined {
+  return config.crawler.max_pages !== CONFIG_MAX_PAGES_DEFAULT
+    ? config.crawler.max_pages
+    : undefined;
+}
+
+/**
  * The level settings a config file overrides. `squirrel init` writes every
  * schema default into squirrel.toml, so a value equal to its default reads as
  * unset and leaves the level's own value in place: `max_pages = 100` and
@@ -133,10 +160,9 @@ export function configLevelOverrides(config: {
   crawler: { max_pages: number };
   external_links: { enabled: boolean };
 }): { pages?: number; externalLinks?: false } {
+  const pages = configMaxPagesChoice(config);
   return {
-    ...(config.crawler.max_pages !== CONFIG_MAX_PAGES_DEFAULT
-      ? { pages: config.crawler.max_pages }
-      : {}),
+    ...(pages !== undefined ? { pages } : {}),
     ...(config.external_links.enabled === false
       ? { externalLinks: false as const }
       : {}),

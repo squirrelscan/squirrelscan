@@ -1196,8 +1196,7 @@ export const audit = defineCommand({
     const probeFlagCheck = resolveProbeIntensity({
       flags: probeFlags,
       context: { surface: "local", signedIn: false },
-      // citty hands a repeated -C over as an array, read as its comma-joined
-      // text (see readLevelFlag), which the level check below refuses.
+      // A repeated -C never gets here: readLevelFlag refused it above.
       coverage: levelFlag.raw,
     });
     if (!probeFlagCheck.ok) {
@@ -1520,13 +1519,12 @@ export const audit = defineCommand({
         config
       );
 
-      // CLI --max-pages > config max_pages (if non-default) > the level's page budget
-      const configMaxPagesIsDefault = config.crawler.max_pages === 100;
+      // CLI --max-pages > config max_pages (if non-default) > the level's page
+      // budget. The config's settings over the level, read once.
+      const configOverrides = configLevelOverrides(config);
       const requestedMaxPages = args["max-pages"]
         ? Number.parseInt(args["max-pages"], 10)
-        : configMaxPagesIsDefault
-          ? levelMaxPages(level)
-          : config.crawler.max_pages;
+        : (configOverrides.pages ?? levelMaxPages(level));
       // A non-numeric --max-pages (e.g. "abc") parses to NaN; reject it rather
       // than silently crawling unbounded (NaN fails every `>= maxPages` check).
       if (
@@ -1554,7 +1552,6 @@ export const audit = defineCommand({
       // `[external_links] enabled` is a choice only when it is false: true is
       // the schema default `squirrel init` writes into every config, and it
       // would otherwise switch the quick level's link checks on for everyone.
-      const configOverrides = configLevelOverrides(config);
       const auditLevel = resolveLocalAuditLevel(level, {
         pages: maxPages,
         ...(requestedRenderMode !== undefined

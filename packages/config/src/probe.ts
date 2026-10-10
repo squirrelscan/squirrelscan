@@ -1,6 +1,6 @@
 // Probing intensity: one of the audit level's settings, next to breadth (the
-// level's page budget and crawl strategy) and rendering. It says how hard each page is poked beyond what the crawl
-// fetched:
+// level's page budget and crawl strategy) and rendering. It says how hard each
+// page is poked beyond what the crawl fetched:
 //
 //   passive:    no request beyond the crawl. Today's rules and passive rules.
 //   active:     passive plus quiet probes: a handful of requests that look

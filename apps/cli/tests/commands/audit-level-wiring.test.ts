@@ -136,10 +136,22 @@ afterEach(() => {
   process.env = { ...originalEnv };
 });
 
-/** `squirrel audit https://example.com/ <flags> --offline -y`. */
-async function runAudit(flags: string[], config = ""): Promise<void> {
+/**
+ * `squirrel audit https://example.com/ <flags> --offline -y`, or online (still
+ * signed out) with `online: true`.
+ */
+async function runAudit(
+  flags: string[],
+  config = "",
+  { online = false } = {}
+): Promise<void> {
   writeFileSync(configPath, config);
-  const rawArgs = ["https://example.com/", ...flags, "--offline", "-y"];
+  const rawArgs = [
+    "https://example.com/",
+    ...flags,
+    ...(online ? [] : ["--offline"]),
+    "-y",
+  ];
   try {
     await runCommand(audit, { rawArgs });
   } catch (err) {
@@ -149,6 +161,23 @@ async function runAudit(flags: string[], config = ""): Promise<void> {
 
 const line = (label: string) =>
   output.find((l) => l.startsWith(label.padEnd(10)))?.slice(10);
+
+// Probing follows the level, not sign-in: a signed-out audit at surface or
+// full probes actively, like a signed-in one, and quick stays passive. The
+// maintainer signed this change off for anonymous users (pub#598).
+describe("signed out and online, probing follows the level", () => {
+  test.each([
+    ["quick", "passive"],
+    ["surface", "active"],
+    ["full", "active"],
+  ] as const)("--level %s probes %s", async (level, probe) => {
+    await runAudit(["--level", level, "-m", "1"], "", { online: true });
+    expect(process.exitCode).toBe(0);
+    expect(line("Account")).toContain("not signed in");
+    expect(runs[0]?.probe?.level).toBe(probe);
+    expect(line("Probing")?.startsWith(probe)).toBe(true);
+  });
+});
 
 describe("squirrel audit --level", () => {
   test.each([

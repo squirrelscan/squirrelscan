@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 import {
   AUDIT_LEVELS,
+  CONFIG_MAX_PAGES_DEFAULT,
   configLevelOverrides,
+  configMaxPagesChoice,
   defaultAuditLevel,
   defaultSmartAudits,
   describeAuditLevel,
@@ -76,10 +78,16 @@ describe("readLevelFlag: --level and its old name --coverage / -C", () => {
     }
   });
 
-  test("a repeated flag reads as its comma-joined text, which is no level", () => {
-    const read = readLevelFlag({ coverage: ["full", "full"] });
-    expect(read).toEqual({ ok: true, raw: "full,full" });
-    expect(parseAuditLevel("full,full")).toBeNull();
+  test("a repeated flag is refused with its own error, even when the values agree", () => {
+    expect(readLevelFlag({ coverage: ["full", "full"] })).toEqual({
+      ok: false,
+      error:
+        "--coverage was given more than once (full, full). Pass one level.",
+    });
+    expect(readLevelFlag({ level: ["quick", "full"] })).toEqual({
+      ok: false,
+      error: "--level was given more than once (quick, full). Pass one level.",
+    });
   });
 });
 
@@ -194,6 +202,15 @@ describe("resolveLocalAuditLevel: level + overrides → settings and banner", ()
     expect(
       levelCoverageMode(resolveLocalAuditLevel("quick", { pages: 200 }))
     ).toBe("quick");
+  });
+});
+
+describe("configMaxPagesChoice", () => {
+  test("the schema default reads as unset; any other value is the config's choice", () => {
+    expect(
+      configMaxPagesChoice({ crawler: { max_pages: CONFIG_MAX_PAGES_DEFAULT } })
+    ).toBeUndefined();
+    expect(configMaxPagesChoice({ crawler: { max_pages: 40 } })).toBe(40);
   });
 });
 
