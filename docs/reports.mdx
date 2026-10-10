@@ -705,6 +705,20 @@ curl https://reports.squirrelscan.com/SJEItpldwW.json
 curl -s https://reports.squirrelscan.com/SJEItpldwW.llm | claude "prioritize fixes"
 ```
 
+### Size cap on large sites
+
+A published report is a summary. Each issue lists a sample of affected pages with the true count, and your dashboard tracks which issues are fixed from one audit to the next.
+
+To tell a fixed page from one that just fell outside the sample, a publish also sends a compact list of every page it crawled and which of those still fail each check. That list has a fixed size budget of 192 KB, shared with the list of pages that returned an error status. Most sites fit every page, up to the 10,000-page crawl limit. Sites with long, unique URLs fit fewer: a news archive with long headline slugs fits about 4,000.
+
+When a crawl is bigger than that:
+
+- The pages that don't fit are still counted as audited.
+- An issue on one of those pages stays open until a later audit confirms the fix. It is never closed early.
+- The checks that cost the most to list, such as one failing on about half the pages with no pattern, can be dropped first. Their issues stay open the same way.
+
+The full per-page results are never cut. They stay in your local project: run `squirrel report --format json` or `squirrel report --format llm` to read every page and every finding.
+
 ### Managing published reports
 
 Visit the [dashboard](https://app.squirrelscan.com) to manage published reports:

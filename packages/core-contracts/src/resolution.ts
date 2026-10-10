@@ -10,6 +10,12 @@
 // of pages (as URL hashes, not full check payloads) still failing/warning
 // this run. The merge resolves any prior finding whose page was crawled this
 // run and is absent from its check's failing set — regardless of sampling.
+//
+// #2658: that signal still grew with the crawl, so producers now send it
+// deflated and indexed in a fixed byte budget ({@link CompactResolutionSignal});
+// the server decodes it back to the same {@link ResolutionSignal}.
+
+import { REPORT_LIMITS, RESOLUTION_PUBLISH_LIMITS, RESOLUTION_SIGNAL_LIMITS } from "./limits";
 
 /**
  * The signal object attached to `AuditReport.resolutionSignal` by the publish
@@ -53,6 +59,210 @@ export interface ResolutionSignal {
    * "carry", hash-absent falls back to the #1167 sample guard.
    */
   truncated?: string[];
+  /**
+   * (#2658) `false` when `crawledUrls` lists only PART of the crawl: the compact
+   * signal's byte budget clipped it. `failing` and `notEvaluated` are then exact
+   * for the listed pages only, so the merge takes the signal's word for a listed
+   * page and falls back to pre-#1185 behavior for every other one. Never set by
+   * the original producers, which marked every key truncated instead.
+   */
+  crawledComplete?: boolean;
+  /** (#2658) Pages crawled, listed or not, when `crawledComplete` is false. */
+  crawledCount?: number;
+}
+
+/**
+ * (#2658) The resolution signal as the publish producers send it now:
+ * `AuditReport.resolutionSignalCompact`. The original `resolutionSignal` grew
+ * with the crawl (raw URLs plus an 8-hex hash per failing page and check, about
+ * 0.3KB a page: over 1 MiB from ~2,800 pages). This one carries the same
+ * evidence in a fixed byte budget (RESOLUTION_PUBLISH_LIMITS).
+ *
+ * `data` is base64 of raw-deflated UTF-8 JSON, a {@link CompactResolutionPayload}.
+ * {@link decodeResolutionSignal} turns it back into a {@link ResolutionSignal},
+ * so the merge reads one shape whichever a producer sent.
+ */
+export interface CompactResolutionSignal {
+  v: 1;
+  data: string;
+}
+
+/**
+ * The JSON inside {@link CompactResolutionSignal.data}. Page sets are indexes
+ * into `urls` followed by `other`, sorted, written as gaps: the first index,
+ * then each next one as `index - previous - 1` (a run of pages is a run of
+ * zeros, which deflates to almost nothing).
+ */
+export interface CompactResolutionPayload {
+  v: 1;
+  /** Crawled pages, NORMALIZED, deduped, sorted. All of them when `complete`. */
+  urls: string[];
+  /**
+   * Pages a failing set names that were not crawled (a check whose `pageUrl` is
+   * not in the page list). Only when `complete`: with a partial list, failing
+   * evidence is needed for listed pages only.
+   */
+  other?: string[];
+  /** False when the byte budget clipped `urls` (see ResolutionSignal.crawledComplete). */
+  complete: boolean;
+  /** Pages crawled, listed or not. */
+  pages: number;
+  /** `ruleId|checkName` → gap-coded indexes of failing/warning pages. */
+  failing: Record<string, number[]>;
+  /** `ruleId|checkName` → gap-coded indexes (into `urls`) of crawled pages not evaluated. */
+  notEvaluated?: Record<string, number[]>;
+  /** Keys with incomplete sets, including keys the byte budget dropped. */
+  truncated?: string[];
+}
+
+/** Sorted, distinct indexes → gap code (see {@link CompactResolutionPayload}). */
+export function encodeIndexGaps(sortedIndexes: readonly number[]): number[] {
+  const gaps: number[] = [];
+  let previous = -1;
+  for (const index of sortedIndexes) {
+    gaps.push(index - previous - 1);
+    previous = index;
+  }
+  return gaps;
+}
+
+const isStringArray = (value: unknown, max: number, maxLength: number): value is string[] =>
+  Array.isArray(value) &&
+  value.length <= max &&
+  value.every((s) => typeof s === "string" && s.length <= maxLength);
+
+/**
+ * Inflate a {@link CompactResolutionSignal} back into the {@link ResolutionSignal}
+ * the merge reads: `crawledUrls` are the listed pages, and every index becomes
+ * the `resolutionUrlHash` of its URL, the value the original producer would
+ * have sent. Validates as strictly as the publish schema validates the original
+ * shape and THROWS on anything out of bounds; a caller that catches it should
+ * drop the signal, which only ever costs resolutions (findings carry), never
+ * causes one.
+ *
+ * Reads at most RESOLUTION_PUBLISH_LIMITS.maxInflatedBytes of inflated output.
+ */
+export async function decodeResolutionSignal(
+  compact: CompactResolutionSignal,
+): Promise<ResolutionSignal> {
+  if (compact.v !== 1) throw new Error(`unknown compact resolution signal version ${compact.v}`);
+  const json = await inflateCapped(compact.data, RESOLUTION_PUBLISH_LIMITS.maxInflatedBytes);
+  const payload = JSON.parse(json) as Partial<CompactResolutionPayload>;
+  const limits = RESOLUTION_SIGNAL_LIMITS;
+  const maxKey = REPORT_LIMITS.maxMediumString;
+  if (payload.v !== 1) throw new Error("compact resolution payload: bad version");
+  if (!isStringArray(payload.urls, limits.maxCrawledUrls, REPORT_LIMITS.maxUrlLength)) {
+    throw new Error("compact resolution payload: bad urls");
+  }
+  const other = payload.other ?? [];
+  if (!isStringArray(other, limits.maxHashesTotal, REPORT_LIMITS.maxUrlLength)) {
+    throw new Error("compact resolution payload: bad other");
+  }
+  if (typeof payload.complete !== "boolean") {
+    throw new Error("compact resolution payload: bad complete");
+  }
+  const urls = payload.urls;
+  const pages = payload.pages;
+  // Bounded by the crawl ceiling: the merge counts it as audited pages, and
+  // billing reads that count.
+  if (
+    typeof pages !== "number" ||
+    !Number.isSafeInteger(pages) ||
+    pages < urls.length ||
+    pages > REPORT_LIMITS.maxPages
+  ) {
+    throw new Error("compact resolution payload: bad pages");
+  }
+  const truncated = payload.truncated ?? [];
+  if (!isStringArray(truncated, limits.maxChecks, maxKey)) {
+    throw new Error("compact resolution payload: bad truncated");
+  }
+
+  const hashes: string[] = [];
+  const hashAt = (index: number): string =>
+    (hashes[index] ??= resolutionUrlHash(
+      index < urls.length ? urls[index]! : other[index - urls.length]!,
+    ));
+  const decodeMap = (
+    field: string,
+    record: Record<string, number[]> | undefined,
+    indexLimit: number,
+  ): Record<string, string[]> => {
+    if (record === undefined) return {};
+    if (typeof record !== "object" || record === null || Array.isArray(record)) {
+      throw new Error(`compact resolution payload: bad ${field}`);
+    }
+    const entries = Object.entries(record);
+    if (entries.length > limits.maxChecks)
+      throw new Error(`compact resolution payload: ${field} keys`);
+    const out: Record<string, string[]> = {};
+    let total = 0;
+    for (const [key, gaps] of entries) {
+      if (key.length > maxKey || !Array.isArray(gaps) || gaps.length > limits.maxHashesPerCheck) {
+        throw new Error(`compact resolution payload: bad ${field} entry`);
+      }
+      total += gaps.length;
+      if (total > limits.maxHashesTotal)
+        throw new Error(`compact resolution payload: ${field} size`);
+      const set: string[] = [];
+      let index = -1;
+      for (const gap of gaps) {
+        if (typeof gap !== "number" || !Number.isSafeInteger(gap) || gap < 0) {
+          throw new Error(`compact resolution payload: bad ${field} index`);
+        }
+        index += gap + 1;
+        if (index >= indexLimit)
+          throw new Error(`compact resolution payload: ${field} index range`);
+        set.push(hashAt(index));
+      }
+      out[key] = set;
+    }
+    return out;
+  };
+  if (payload.failing === undefined) throw new Error("compact resolution payload: no failing");
+  const failing = decodeMap("failing", payload.failing, urls.length + other.length);
+  const notEvaluated = decodeMap("notEvaluated", payload.notEvaluated, urls.length);
+
+  return {
+    crawledUrls: urls,
+    failing,
+    ...(Object.keys(notEvaluated).length > 0 ? { notEvaluated } : {}),
+    ...(truncated.length > 0 ? { truncated } : {}),
+    ...(payload.complete ? {} : { crawledComplete: false, crawledCount: pages }),
+  };
+}
+
+/**
+ * base64 → raw inflate → UTF-8, reading no more than `maxBytes` of output. Web
+ * streams only, so it runs unchanged in Workers, Bun and browsers.
+ */
+async function inflateCapped(base64: string, maxBytes: number): Promise<string> {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const reader = new Blob([bytes])
+    .stream()
+    .pipeThrough(new DecompressionStream("deflate-raw"))
+    .getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw new Error(`compact resolution signal inflates past ${maxBytes} bytes`);
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(out);
 }
 
 /**

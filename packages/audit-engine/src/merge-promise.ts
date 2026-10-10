@@ -257,6 +257,8 @@ export interface MergeFindingsPromiseInput {
   resolution?: MergeResolutionInput;
   /** (pub#474) Complete item lists — see {@link ComputeMergeInput.completeItemChecks}. */
   completeItemChecks?: Set<string>;
+  /** (#2658) Sampled item lists — see {@link ComputeMergeInput.incompleteItemChecks}. */
+  incompleteItemChecks?: Set<string>;
   /**
    * (#1873) Prior OPEN findings, already loaded by the caller — skips the
    * `store.getFindings(siteKey, ["open"])` read. The complete-store finalize uses
@@ -705,8 +707,9 @@ export async function runCloudSmartAudits(
     }
   }
   const completeItemChecks = new Set<string>();
+  const incompleteItemChecks = new Set<string>();
   for (const [key, complete] of itemListCompleteness) {
-    if (complete) completeItemChecks.add(key);
+    (complete ? completeItemChecks : incompleteItemChecks).add(key);
   }
   itemListCompleteness.clear();
 
@@ -736,6 +739,7 @@ export async function runCloudSmartAudits(
       failingByCheck,
       notEvaluatedByCheck,
       truncatedChecks: new Set(input.resolutionSignal.truncated ?? []),
+      ...(input.resolutionSignal.crawledComplete === false ? { crawledComplete: false } : {}),
     };
   }
 
@@ -762,6 +766,7 @@ export async function runCloudSmartAudits(
       sampledCheckPages,
       resolution,
       completeItemChecks,
+      incompleteItemChecks,
     },
     {
       persist: (record) => onPersist(record),
@@ -794,6 +799,14 @@ export async function runCloudSmartAudits(
       if (!removedUrls.has(url)) auditedUrls.add(url);
     }
   }
+  // (#2658) A signal whose byte budget clipped its page list still counts every
+  // crawled page (`crawledCount`), so the audited count, and the bill read off
+  // it, does not shrink with the list. Removed pages are crawled pages too.
+  const signalPages = input.resolutionSignal?.crawledCount;
+  const auditedPages =
+    input.resolutionSignal?.crawledComplete === false && signalPages !== undefined
+      ? Math.max(auditedUrls.size, signalPages - removedUrls.size)
+      : auditedUrls.size;
 
   // (#2063) Reduce the refused checks' pages to the ones this site has no record
   // of. `activePageUrls` is already settled here (the session reads `priorPages`
@@ -1020,12 +1033,8 @@ export async function runCloudSmartAudits(
       // the payload's evidence undercounted them, and billing reads this number.
       // Each such page got an active `site_pages` row above, so `knownPages`
       // stays at least this.
-      auditedPages: auditedUrls.size,
-      knownPages: knownPageCount(
-        session.activePageCount,
-        auditedUrls.size,
-        input.unfetchedPages,
-      ),
+      auditedPages,
+      knownPages: knownPageCount(session.activePageCount, auditedPages, input.unfetchedPages),
       carriedFindings: carriedCount - unrenderedCount,
       ...(unrenderedCount > 0 ? { unrenderedFindings: unrenderedCount } : {}),
     },

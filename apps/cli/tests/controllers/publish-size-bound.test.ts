@@ -8,7 +8,9 @@
 import {
   PUBLISH_LIMITS,
   REPORT_LIMITS,
+  RESOLUTION_PUBLISH_LIMITS,
 } from "@squirrelscan/core-contracts/limits";
+import { decodeResolutionSignal } from "@squirrelscan/core-contracts/resolution";
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport } from "../../src/types";
@@ -111,21 +113,34 @@ describe("slimForPublish payload size bound (#1167)", () => {
     // 10000) and sampled sourcePages differ — but the delta is a handful of digits
     // per rule, far below any crawl-proportional growth. That is the O(rules × cap)
     // invariant.
-    const b5k = bodyBytes(hugeReport(5000));
-    const b10k = bodyBytes(hugeReport(10_000));
-    expect(Math.abs(b10k - b5k) / b5k).toBeLessThan(0.001);
-    // #1185: the resolution signal is part of the body now — the flat invariant
-    // covers it too (its hash budget is fixed, not crawl-scaled). This
-    // adversarial shape is CPU-heavy (millions of synthetic URLs), hence the
-    // explicit timeout: slowness here is load, not a size regression.
-  }, 20_000);
+    //
+    // #2658: the resolution signal is held to its own fixed byte budget instead
+    // (it is deflated, so its size follows the URL text, not a count), and the
+    // rest of the body stays flat. This adversarial shape is CPU-heavy (millions
+    // of synthetic URLs), hence the explicit timeout: slowness here is load, not
+    // a size regression.
+    const parts = (pageCount: number) => {
+      const slim = slimForPublish(hugeReport(pageCount));
+      const signal = JSON.stringify(slim.resolutionSignalCompact).length;
+      const rest = JSON.stringify({
+        report: { ...slim, resolutionSignalCompact: undefined },
+        visibility: "public",
+      }).length;
+      return { signal, rest };
+    };
+    const p5k = parts(5000);
+    const p10k = parts(10_000);
+    expect(Math.abs(p10k.rest - p5k.rest) / p5k.rest).toBeLessThan(0.001);
+    expect(p5k.signal).toBeLessThanOrEqual(RESOLUTION_PUBLISH_LIMITS.maxBytes);
+    expect(p10k.signal).toBeLessThanOrEqual(RESOLUTION_PUBLISH_LIMITS.maxBytes);
+  }, 30_000);
 });
 
 // #1185: the resolution signal on the REAL evidence shape — a 505-page site
-// (NPJQ4JY0) with heavy failing rules. Measured bytes must be a small fraction
-// of the 20MB /v1/reports gate (the same bodyLimit guards /v1/reports/internal).
+// (NPJQ4JY0) with heavy failing rules. #2658: it ships compact now, inside the
+// fixed RESOLUTION_PUBLISH_LIMITS budget, carrying the same evidence.
 describe("resolution signal payload size (#1185, 505-page shape)", () => {
-  test("measured signal bytes are bounded and small against the 20MB gate", () => {
+  test("measured signal bytes are bounded and small against the 20MB gate", async () => {
     const PAGES = 505;
     const pageUrls = Array.from({ length: PAGES }, (_, i) => url(i));
     // Live-evidence shape: ~60 failing rule-check classes averaging ~300
@@ -162,28 +177,29 @@ describe("resolution signal payload size (#1185, 505-page shape)", () => {
     } as unknown as AuditReport;
 
     const slim = slimForPublish(report);
-    expect(slim.resolutionSignal).toBeDefined();
-    const signalBytes = JSON.stringify(slim.resolutionSignal).length;
+    expect(slim.resolutionSignalCompact).toBeDefined();
+    const signalBytes = JSON.stringify(slim.resolutionSignalCompact).length;
     const bodyTotal = JSON.stringify({
       report: slim,
       visibility: "public",
     }).length;
 
-    // ~505 URLs (~30KB) + ~18k hashes (~200KB): assert the measured order of
-    // magnitude so a regression back to crawl-scaled full URLs trips this.
-    expect(signalBytes).toBeLessThan(400 * 1024);
-    expect(signalBytes).toBeGreaterThan(30 * 1024); // sanity: it IS carrying data
+    // The original shape measured 366KB here (505 URLs + ~18k failing and
+    // ~11k not-evaluated hashes). Compact, the same evidence is a few KB.
+    expect(signalBytes).toBeLessThanOrEqual(RESOLUTION_PUBLISH_LIMITS.maxBytes);
+    expect(signalBytes).toBeLessThan(20 * 1024);
     expect(bodyTotal).toBeLessThan(REPORT_LIMITS.maxPayloadBytes);
-    // The signal is a minor fraction of the whole publish body budget.
-    expect(signalBytes / REPORT_LIMITS.maxPayloadBytes).toBeLessThan(0.02);
 
     // This shape has no pass records, so every clean page is unevaluated as far
-    // as the builder can prove — the worst case for `notEvaluated`. Measured:
-    // 366KB total (1.79% of the gate), 10,980 notEvaluated hashes.
-    expect(slim.resolutionSignal!.notEvaluated).toBeDefined();
+    // as the builder can prove — the worst case for `notEvaluated` — and none of
+    // it was dropped to fit.
+    const signal = await decodeResolutionSignal(slim.resolutionSignalCompact!);
+    expect(signal.crawledUrls).toHaveLength(PAGES);
+    expect(signal.notEvaluated).toBeDefined();
+    expect(signal.truncated).toBeUndefined();
   });
 
-  test("a run with pass records emits NO notEvaluated — the realistic case is free", () => {
+  test("a run with pass records emits NO notEvaluated — the realistic case is free", async () => {
     // A real report keeps the passing pages too (per-page pass checks, or a
     // folded pass aggregate listing them), so every crawled page is proven
     // evaluated and the complement is empty. Measured: 247KB, identical to the
@@ -229,8 +245,9 @@ describe("resolution signal payload size (#1185, 505-page shape)", () => {
       ruleResults,
     } as unknown as AuditReport;
 
-    const signal = slimForPublish(report).resolutionSignal!;
+    const compact = slimForPublish(report).resolutionSignalCompact!;
+    const signal = await decodeResolutionSignal(compact);
     expect(signal.notEvaluated).toBeUndefined();
-    expect(JSON.stringify(signal).length).toBeLessThan(400 * 1024);
+    expect(JSON.stringify(compact).length).toBeLessThan(20 * 1024);
   });
 });
