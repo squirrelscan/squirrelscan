@@ -176,12 +176,20 @@ export interface ComputeMergeInput {
   /**
    * (#2658) The other half of {@link completeItemChecks}: page checks that still
    * fail or warn this run with an item list that is a SAMPLE. Consulted where no
-   * signal speaks for the page (none sent, its key truncated, or the page outside
-   * a clipped signal list): a prior item finding there whose locator is not in
-   * this run's list may sit past the clip, so it carries rather than resolving.
-   * Undefined → the pre-#2658 resolve.
+   * signal speaks for the check (none sent, or the check is not in it): a prior
+   * finding there that this run's list does not match may sit past the clip, so
+   * it carries rather than resolving. Undefined → the pre-#2658 resolve.
    */
   incompleteItemChecks?: Set<string>;
+  /**
+   * (#2658) Page checks the published payload shows PASSING this run, keyed by
+   * {@link pageCheckKey}. Consulted only where a {@link resolution} signal was
+   * sent but lost its say for the page and check (its key truncated, or the page
+   * left off a clipped list): absence is then no evidence at all, so a prior
+   * finding resolves only on this positive evidence (or a complete item list
+   * that no longer holds it) and carries otherwise. Undefined → none.
+   */
+  passedCheckPages?: Set<string>;
 }
 
 /** Pre-indexed form of the publish `ResolutionSignal` (#1185). */
@@ -704,6 +712,7 @@ export function createMergeSession(
     resolution,
     completeItemChecks,
     incompleteItemChecks,
+    passedCheckPages,
   } = input;
 
   // Index fresh findings by key (latest wins on dup keys within a run).
@@ -1015,11 +1024,35 @@ export function createMergeSession(
         return;
       }
 
-      // (#2658) The page still fails this check, and this run's item list for it
-      // is a sample (a rule cap, a publish clip): an item missing from it may sit
-      // past the clip. Only a signal could say otherwise, and none spoke for it.
       const pageCheck = pageCheckKey(prior.normalizedUrl, prior.ruleId, prior.checkName);
-      if (prior.locator !== "" && incompleteItemChecks?.has(pageCheck)) {
+      // (#2658) A signal was sent but lost its say here: a count cap or the byte
+      // budget truncated the key, or the page is off a clipped list. What it
+      // would have said (still failing, not evaluated) is gone with it, so the
+      // finding's absence from the sampled payload proves nothing. Only positive
+      // evidence resolves: the payload shows the check passing on this page, or
+      // its complete item list no longer holds the finding (as the signal branch
+      // above resolves it).
+      if (resolution && (!signal || signal.truncatedChecks.has(checkKey))) {
+        if (!passedCheckPages?.has(pageCheck) && !completeItemChecks?.has(pageCheck)) {
+          const carried: PageFindingRecord = { ...prior, provenance: "carried" };
+          sink.persist(carried);
+          sink.active(toMerged(carried, unrendered));
+          return;
+        }
+        sink.persist({
+          ...prior,
+          state: "resolved",
+          lastSeenCrawlId: crawlId,
+          lastSeenAt: now,
+        });
+        return;
+      }
+
+      // (#2658) No signal speaks for this check (none sent, or the check is not
+      // in it). The page still fails the check, and this run's item list for it
+      // is a sample (a rule cap, a publish clip): a finding it does not match may
+      // sit past the clip.
+      if (incompleteItemChecks?.has(pageCheck)) {
         const carried: PageFindingRecord = { ...prior, provenance: "carried" };
         sink.persist(carried);
         sink.active(toMerged(carried, unrendered));

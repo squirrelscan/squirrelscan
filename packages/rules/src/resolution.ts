@@ -50,6 +50,8 @@ interface ResolutionEvidence {
   crawled: string[];
   /** Distinct normalized pages in the whole crawled list, before the clip. */
   crawledCount: number;
+  /** Those pages: `crawledCount` is its size. */
+  crawledSet: ReadonlySet<string>;
   /** The crawled list was longer than `maxCrawledUrls`. */
   crawledOverCap: boolean;
   /**
@@ -63,6 +65,8 @@ interface ResolutionEvidence {
   truncated: Set<string>;
   /** `resolutionUrlHash` of a normalized page URL, memoized. */
   hash: (normalizedUrl: string) => string;
+  /** Normalized page URL → 404/410, for the pages that returned one (compact shape only). */
+  removed: Map<string, number>;
 }
 
 /**
@@ -259,11 +263,13 @@ function collectResolutionEvidence(
     crawledRaw,
     crawled,
     crawledCount: seen.size,
+    crawledSet: seen,
     crawledOverCap: crawledPageUrls.length > limits.maxCrawledUrls,
     failing,
     evaluated,
     truncated,
     hash,
+    removed: new Map(),
   };
 }
 
@@ -453,6 +459,18 @@ function compactPayload(
     notEvaluatedTotal += missing.length;
   }
 
+  // The listed pages that 404'd or 410'd, by index: a few bytes each, where
+  // `pageStatuses` spends a whole URL and has to be clipped to its share.
+  const removed = new Map<string, number[]>();
+  for (const [url, status] of evidence.removed) {
+    const index = position.get(url);
+    if (index === undefined) continue;
+    const key = String(status);
+    let indexes = removed.get(key);
+    if (!indexes) removed.set(key, (indexes = []));
+    indexes.push(index);
+  }
+
   const gaps = (map: Map<string, number[]>): Record<string, number[]> => {
     const out: Record<string, number[]> = {};
     for (const [key, indexes] of map) out[key] = encodeIndexGaps(indexes.sort((a, b) => a - b));
@@ -468,6 +486,11 @@ function compactPayload(
     failing: gaps(failing),
     ...(notEvaluated.size > 0 ? { notEvaluated: gaps(notEvaluated) } : {}),
     ...(truncated.size > 0 ? { truncated: [...truncated] } : {}),
+    ...(removed.size > 0 ? { removed: gaps(removed) } : {}),
+    // Bounded by `pages` as the decoder requires: only crawled pages are removed.
+    ...(evidence.removed.size > 0
+      ? { removedCount: Math.min(evidence.removed.size, REPORT_LIMITS.maxPages) }
+      : {}),
   };
 }
 
@@ -517,9 +540,17 @@ export function buildCompactResolutionSignal(
   ruleResults: Record<string, { checks: CheckResult[] }>,
   crawledPageUrls: string[],
   maxBytes: number = RESOLUTION_PUBLISH_LIMITS.maxBytes,
+  // Pages that returned 404/410 (any other status is ignored), so the merge can
+  // stale their findings and leave them out of the audited count.
+  removedPages: ReadonlyArray<{ url: string; status: number }> = [],
 ): CompactResolutionSignal | undefined {
   const evidence = collectResolutionEvidence(ruleResults, crawledPageUrls);
   if (evidence.crawled.length === 0 && evidence.failing.size === 0) return undefined;
+  for (const { url, status } of removedPages) {
+    if (!REMOVED_PAGE_STATUSES.has(status)) continue;
+    const norm = normalizePageUrl(url);
+    if (evidence.crawledSet.has(norm)) evidence.removed.set(norm, status);
+  }
   const fit = (listed: number, kept?: ReadonlySet<string>): CompactResolutionSignal | undefined => {
     const out = deflatePayload(compactPayload(evidence, listed, kept));
     return out && out.bytes <= maxBytes ? out.signal : undefined;
@@ -619,6 +650,9 @@ function largestKeySet(
 /** Statuses the merge treats as a page gone (stale its findings): merge-promise.ts. */
 const REMOVED_PAGE_STATUSES = new Set([404, 410]);
 
+/** `,"pageStatuses":` and `,"resolutionSignalCompact":`, the two fields' keys in the body. */
+const FIELD_KEY_BYTES = byteLength(',"pageStatuses":,"resolutionSignalCompact":');
+
 /** The crawl-sized publish fields, fitted to RESOLUTION_PUBLISH_LIMITS. */
 export interface PublishResolution {
   /** Non-2xx pages (url + status); omitted for a site with none. */
@@ -654,6 +688,8 @@ export function buildPublishResolution(
       statuses.push({ url: page.url, status });
     }
   }
+  // The signal names every removed page by index, whatever the clip below keeps.
+  const removed = statuses.filter((s) => REMOVED_PAGE_STATUSES.has(s.status));
   // The publish schema REJECTS (not clamps) a list over MAX_PAGES.
   statuses = statuses.slice(0, REPORT_LIMITS.maxPages);
   if (statuses.length > 0 && byteLength(JSON.stringify(statuses)) > limits.maxPageStatusBytes) {
@@ -666,8 +702,14 @@ export function buildPublishResolution(
       limits.maxPageStatusBytes,
     ).pageStatuses!;
   }
+  // The budget covers both fields as they sit in the body, keys included.
   const statusBytes = statuses.length > 0 ? byteLength(JSON.stringify(statuses)) : 0;
-  const signal = buildCompactResolutionSignal(ruleResults, crawled, limits.maxBytes - statusBytes);
+  const signal = buildCompactResolutionSignal(
+    ruleResults,
+    crawled,
+    limits.maxBytes - statusBytes - FIELD_KEY_BYTES,
+    removed,
+  );
   return {
     ...(statuses.length > 0 ? { pageStatuses: statuses } : {}),
     ...(signal ? { resolutionSignalCompact: signal } : {}),

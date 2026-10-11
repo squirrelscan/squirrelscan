@@ -19,6 +19,7 @@ import { decodeResolutionSignal } from "@squirrelscan/core-contracts/resolution"
 import { foldOverflowChecks, sampleChecksForPublish } from "@squirrelscan/rules/fold";
 import {
   buildCompactResolutionSignal,
+  buildPublishResolution,
   buildResolutionSignal,
 } from "@squirrelscan/rules/resolution";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
@@ -416,5 +417,98 @@ describe("what the byte budget gives up only ever keeps findings open", () => {
     const control = await seededStore(urls, priors);
     await publish(control, samplePayload(full, urls, buildResolutionSignal(full, urls)));
     expect(stateOf(control, lateFailing, "rare", "rare", "item-199")).toBe("open:carried");
+  });
+
+  test("an unlisted page keeps a whole-check finding while the check still fails there", async () => {
+    // This run lists items for the page; the prior finding predates them (no
+    // locator), so nothing supersedes it, and the page still fails the check.
+    const { urls, lateFailing, full, signal, listed } = await clippedListScenario(200);
+    expect(listed.has(normalizePageUrl(lateFailing))).toBe(false);
+    const priors = [prior(lateFailing, "rare", "rare")];
+    const store = await seededStore(urls, priors);
+    await publish(store, samplePayload(full, urls, signal));
+    expect(stateOf(store, lateFailing, "rare", "rare")).toBe("open:carried");
+    const control = await seededStore(urls, priors);
+    await publish(control, samplePayload(full, urls, buildResolutionSignal(full, urls)));
+    expect(stateOf(control, lateFailing, "rare", "rare")).toBe("open:carried");
+  });
+
+  test("off a clipped list, a skipped check stays open and only a pass resolves", async () => {
+    // `probe` ran on two pages past the list, as per-page rows the publish keeps
+    // whole: no data on one (skipped), a pass on the other. With no sample to
+    // guard either, the payload's word is all there is.
+    const { urls, full } = await clippedListScenario();
+    const skippedPage = urls.at(-1)!;
+    const passedPage = urls.at(-2)!;
+    full.probe = {
+      meta: meta("probe"),
+      checks: [check("probe", skippedPage, "skipped"), check("probe", passedPage, "pass")],
+    };
+    const signal = await decodeResolutionSignal(
+      buildCompactResolutionSignal(full, urls, 8 * 1024)!,
+    );
+    const listed = new Set(signal.crawledUrls);
+    expect(signal.crawledComplete).toBe(false);
+    expect(listed.has(normalizePageUrl(skippedPage))).toBe(false);
+    expect(listed.has(normalizePageUrl(passedPage))).toBe(false);
+
+    const priors = [prior(skippedPage, "probe", "probe"), prior(passedPage, "probe", "probe")];
+    const store = await seededStore(urls, priors);
+    await publish(store, samplePayload(full, urls, signal));
+    expect(stateOf(store, skippedPage, "probe", "probe")).toBe("open:carried");
+    expect(stateOf(store, passedPage, "probe", "probe")).toBe("resolved:fresh");
+    // The whole original signal decides the same, from its not-evaluated set.
+    const control = await seededStore(urls, priors);
+    await publish(control, samplePayload(full, urls, buildResolutionSignal(full, urls)));
+    expect(stateOf(control, skippedPage, "probe", "probe")).toBe("open:carried");
+    expect(stateOf(control, passedPage, "probe", "probe")).toBe("resolved:fresh");
+  });
+
+  test("removed pages pageStatuses had to clip are still removed and not counted as audited", async () => {
+    const urls = Array.from(
+      { length: 600 },
+      (_, i) => `https://shop.test/products/${i}-${"widget-".repeat(20)}${i * 7}`,
+    );
+    const live = urls.slice(0, 100);
+    const gone = urls.slice(100);
+    const full = fullResults(live, { desc: new Set(live.filter((_, i) => i % 5 === 0)) });
+    const out = buildPublishResolution(
+      full,
+      urls.map((url, i) => ({ url, statusCode: i < 100 ? 200 : 404 })),
+    );
+    // The scenario is what it claims: most removed pages are past the clip.
+    expect(out.pageStatuses!.length).toBeLessThan(gone.length / 2);
+    const signal = await decodeResolutionSignal(out.resolutionSignalCompact!);
+    const priors = gone.map((u) => prior(u, "meta-description", "has-description"));
+
+    const run = async (
+      pageStatuses: Array<{ url: string; status: number }>,
+      resolutionSignal: ResolutionSignal,
+    ) => {
+      const store = await seededStore(urls, priors);
+      const payload = samplePayload(full, live, resolutionSignal);
+      const result = await runCloudSmartAudits({
+        store,
+        siteKey: SITE_KEY,
+        crawlId: "audit_1",
+        ruleResults: payload.ruleResults,
+        pageStatuses,
+        resolutionSignal,
+        now: NOW,
+      });
+      return { store, result };
+    };
+    const compact = await run(out.pageStatuses!, signal);
+    const legacy = await run(
+      gone.map((url) => ({ url, status: 404 })),
+      buildResolutionSignal(full, urls)!,
+    );
+    for (const { store, result } of [compact, legacy]) {
+      expect(result.coverage.auditedPages).toBe(100);
+      expect(result.removedPages).toBe(500);
+      // `markPagesRemoved` is what stales a removed page's findings, in the
+      // same transaction (this test store records the page only).
+      for (const u of gone) expect(store.pages.get(u)?.state).toBe("removed");
+    }
   });
 });

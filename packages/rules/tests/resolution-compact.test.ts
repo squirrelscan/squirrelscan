@@ -430,7 +430,7 @@ describe("the byte budget", () => {
     expect(Object.values(decoded.failing).filter((hashes) => hashes.length > 0).length).toBe(40);
   });
 
-  test("pageStatuses gets its own share, 404/410 first, and the signal the rest", () => {
+  test("pageStatuses gets its own share, 404/410 first, and the signal the rest", async () => {
     const urls = shopUrls(3_000);
     const pages = urls.map((url, i) => ({
       url,
@@ -441,10 +441,40 @@ describe("the byte budget", () => {
     expect(bytes(statuses)).toBeLessThanOrEqual(RESOLUTION_PUBLISH_LIMITS.maxPageStatusBytes);
     // All 1,000 removed pages do not fit either, but they lead the list.
     expect(statuses.every((s) => s.status === 404 || s.status === 410)).toBe(true);
-    expect(bytes(out.resolutionSignalCompact) + bytes(statuses)).toBeLessThanOrEqual(
-      RESOLUTION_PUBLISH_LIMITS.maxBytes,
-    );
+    expect(statuses.length).toBeLessThan(1_000);
+    // The body holds both fields, keys included, within the budget.
+    expect(
+      bytes({ pageStatuses: statuses, resolutionSignalCompact: out.resolutionSignalCompact }),
+    ).toBeLessThanOrEqual(RESOLUTION_PUBLISH_LIMITS.maxBytes);
+    // ...and the signal still names every removed page, with its status.
+    const decoded = await decodeResolutionSignal(out.resolutionSignalCompact!);
+    const removed = pages
+      .filter((p) => p.statusCode !== 301)
+      .map((p) => `${normalizePageUrl(p.url)} ${p.statusCode}`);
+    expect(decoded.removedPages!.map((p) => `${p.url} ${p.status}`).sort()).toEqual(removed.sort());
+    expect(decoded.removedCount).toBe(1_000);
   });
+
+  test("a clipped page list still counts the removed pages it cannot name", async () => {
+    const urls = newsUrls(3_000);
+    const pages = urls.map((url, i) => ({ url, statusCode: i % 10 === 0 ? 404 : 200 }));
+    const removed = pages.filter((p) => p.statusCode === 404);
+    const signal = buildCompactResolutionSignal(
+      fixtureShapedResults(urls),
+      urls,
+      24 * 1024,
+      removed.map((p) => ({ url: p.url, status: p.statusCode })),
+    )!;
+    const decoded = await decodeResolutionSignal(signal);
+    expect(decoded.crawledComplete).toBe(false);
+    expect(decoded.removedCount).toBe(300);
+    // Only listed pages are named, and every listed removed page is.
+    const listed = new Set(decoded.crawledUrls);
+    const listedRemoved = removed.map((p) => normalizePageUrl(p.url)).filter((u) => listed.has(u));
+    expect(listedRemoved.length).toBeGreaterThan(0);
+    expect(listedRemoved.length).toBeLessThan(300);
+    expect(decoded.removedPages!.map((p) => p.url).sort()).toEqual(listedRemoved.sort());
+  }, 60_000);
 
   test("a healthy site's pageStatuses are untouched and in crawl order", () => {
     const urls = shopUrls(50);
@@ -466,6 +496,12 @@ describe("decodeResolutionSignal refuses what it cannot bound", () => {
   test("a well-formed payload decodes", async () => {
     const decoded = await decodeResolutionSignal(encode(ok));
     expect(decoded.failing["r|c"]).toEqual([resolutionUrlHash(P2)]);
+    expect(decoded.removedPages).toBeUndefined();
+    const withRemoved = await decodeResolutionSignal(
+      encode({ ...ok, complete: false, pages: 5, removed: { "410": [1] }, removedCount: 2 }),
+    );
+    expect(withRemoved.removedPages).toEqual([{ url: P2, status: 410 }]);
+    expect(withRemoved.removedCount).toBe(2);
   });
 
   test.each([
@@ -474,6 +510,12 @@ describe("decodeResolutionSignal refuses what it cannot bound", () => {
     ["a fractional gap", { ...ok, failing: { "r|c": [0.5] } }],
     ["a not-evaluated index into `other`", { ...ok, other: [P3], notEvaluated: { "r|c": [2] } }],
     ["fewer pages than listed", { ...ok, pages: 1 }],
+    ["a complete list with pages it does not list", { ...ok, pages: 3 }],
+    ["`other` beside a partial list", { ...ok, complete: false, pages: 3, other: [P3] }],
+    ["a removed status other than 404/410", { ...ok, removed: { "301": [0] }, removedCount: 1 }],
+    ["more removed pages named than counted", { ...ok, removed: { "404": [0, 0] }, removedCount: 1 }],
+    ["a complete list with removed pages it does not name", { ...ok, removedCount: 1 }],
+    ["more removed pages than pages", { ...ok, complete: false, pages: 2, removedCount: 3 }],
     ["more pages than a crawl can have", { ...ok, complete: false, pages: 1e9 }],
     ["no failing map", { v: 1, urls: [P1], complete: true, pages: 1 }],
     ["a non-string url", { ...ok, urls: [P1, 7] }],

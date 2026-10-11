@@ -56,19 +56,33 @@ export interface ResolutionSignal {
    * Keys whose hash set is INCOMPLETE (the fold's page cap already clipped the
    * source pages, or the signal's own size budget dropped hashes). Absence
    * from a truncated set is non-authoritative: hash-present still means
-   * "carry", hash-absent falls back to the #1167 sample guard.
+   * "carry", hash-absent resolves only on positive evidence in the published
+   * payload, a pass on that page (#2658; before it, the #1167 sample guard).
    */
   truncated?: string[];
   /**
    * (#2658) `false` when `crawledUrls` lists only PART of the crawl: the compact
    * signal's byte budget clipped it. `failing` and `notEvaluated` are then exact
    * for the listed pages only, so the merge takes the signal's word for a listed
-   * page and falls back to pre-#1185 behavior for every other one. Never set by
-   * the original producers, which marked every key truncated instead.
+   * page and, for every other one, resolves only on positive evidence in the
+   * published payload, as for a truncated key. Never set by the original
+   * producers, which marked every key truncated instead.
    */
   crawledComplete?: boolean;
   /** (#2658) Pages crawled, listed or not, when `crawledComplete` is false. */
   crawledCount?: number;
+  /**
+   * (#2658) Listed pages that returned 404 or 410 this run. `pageStatuses` is
+   * clipped to its byte share, so this is where the merge learns of every
+   * removed page it can name. Set by the compact decoder only.
+   */
+  removedPages?: Array<{ url: string; status: number }>;
+  /**
+   * (#2658) Pages that returned 404 or 410 this run, listed or not, so the
+   * audited-page count can leave them out when the list is clipped. Set by the
+   * compact decoder only, when there are any.
+   */
+  removedCount?: number;
 }
 
 /**
@@ -113,6 +127,10 @@ export interface CompactResolutionPayload {
   notEvaluated?: Record<string, number[]>;
   /** Keys with incomplete sets, including keys the byte budget dropped. */
   truncated?: string[];
+  /** HTTP status (`"404"`, `"410"`) → gap-coded indexes (into `urls`) of listed pages that returned it. */
+  removed?: Record<string, number[]>;
+  /** Pages that returned 404 or 410, listed or not. Omitted when none did. */
+  removedCount?: number;
 }
 
 /** Sorted, distinct indexes → gap code (see {@link CompactResolutionPayload}). */
@@ -169,9 +187,14 @@ export async function decodeResolutionSignal(
     typeof pages !== "number" ||
     !Number.isSafeInteger(pages) ||
     pages < urls.length ||
-    pages > REPORT_LIMITS.maxPages
+    pages > REPORT_LIMITS.maxPages ||
+    // A complete list is every crawled page, deduped; `other` only rides with one.
+    (payload.complete && pages !== urls.length)
   ) {
     throw new Error("compact resolution payload: bad pages");
+  }
+  if (!payload.complete && other.length > 0) {
+    throw new Error("compact resolution payload: other with a partial list");
   }
   const truncated = payload.truncated ?? [];
   if (!isStringArray(truncated, limits.maxChecks, maxKey)) {
@@ -183,11 +206,12 @@ export async function decodeResolutionSignal(
     (hashes[index] ??= resolutionUrlHash(
       index < urls.length ? urls[index]! : other[index - urls.length]!,
     ));
-  const decodeMap = (
+  const decodeMap = <T>(
     field: string,
     record: Record<string, number[]> | undefined,
     indexLimit: number,
-  ): Record<string, string[]> => {
+    value: (index: number) => T,
+  ): Record<string, T[]> => {
     if (record === undefined) return {};
     if (typeof record !== "object" || record === null || Array.isArray(record)) {
       throw new Error(`compact resolution payload: bad ${field}`);
@@ -195,7 +219,7 @@ export async function decodeResolutionSignal(
     const entries = Object.entries(record);
     if (entries.length > limits.maxChecks)
       throw new Error(`compact resolution payload: ${field} keys`);
-    const out: Record<string, string[]> = {};
+    const out: Record<string, T[]> = {};
     let total = 0;
     for (const [key, gaps] of entries) {
       if (key.length > maxKey || !Array.isArray(gaps) || gaps.length > limits.maxHashesPerCheck) {
@@ -204,7 +228,7 @@ export async function decodeResolutionSignal(
       total += gaps.length;
       if (total > limits.maxHashesTotal)
         throw new Error(`compact resolution payload: ${field} size`);
-      const set: string[] = [];
+      const set: T[] = [];
       let index = -1;
       for (const gap of gaps) {
         if (typeof gap !== "number" || !Number.isSafeInteger(gap) || gap < 0) {
@@ -213,15 +237,34 @@ export async function decodeResolutionSignal(
         index += gap + 1;
         if (index >= indexLimit)
           throw new Error(`compact resolution payload: ${field} index range`);
-        set.push(hashAt(index));
+        set.push(value(index));
       }
       out[key] = set;
     }
     return out;
   };
   if (payload.failing === undefined) throw new Error("compact resolution payload: no failing");
-  const failing = decodeMap("failing", payload.failing, urls.length + other.length);
-  const notEvaluated = decodeMap("notEvaluated", payload.notEvaluated, urls.length);
+  const failing = decodeMap("failing", payload.failing, urls.length + other.length, hashAt);
+  const notEvaluated = decodeMap("notEvaluated", payload.notEvaluated, urls.length, hashAt);
+
+  const removedByStatus = decodeMap("removed", payload.removed, urls.length, (i) => urls[i]!);
+  const removedPages: Array<{ url: string; status: number }> = [];
+  for (const [status, removedUrls] of Object.entries(removedByStatus)) {
+    if (status !== "404" && status !== "410") {
+      throw new Error("compact resolution payload: bad removed status");
+    }
+    for (const url of removedUrls) removedPages.push({ url, status: Number(status) });
+  }
+  const removedCount = payload.removedCount ?? 0;
+  if (
+    typeof removedCount !== "number" ||
+    !Number.isSafeInteger(removedCount) ||
+    removedCount < removedPages.length ||
+    removedCount > pages ||
+    (payload.complete && removedCount !== removedPages.length)
+  ) {
+    throw new Error("compact resolution payload: bad removedCount");
+  }
 
   return {
     crawledUrls: urls,
@@ -229,6 +272,8 @@ export async function decodeResolutionSignal(
     ...(Object.keys(notEvaluated).length > 0 ? { notEvaluated } : {}),
     ...(truncated.length > 0 ? { truncated } : {}),
     ...(payload.complete ? {} : { crawledComplete: false, crawledCount: pages }),
+    ...(removedPages.length > 0 ? { removedPages } : {}),
+    ...(removedCount > 0 ? { removedCount } : {}),
   };
 }
 

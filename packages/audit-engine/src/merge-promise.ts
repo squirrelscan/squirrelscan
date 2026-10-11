@@ -491,6 +491,14 @@ export async function runCloudSmartAudits(
     statusByUrl.set(u, ps.status);
     if (REMOVED_STATUSES.has(ps.status)) removedUrls.add(u);
   }
+  // (#2658) The compact signal names every removed page it lists, including the
+  // ones `pageStatuses` had to clip to fit its byte share.
+  for (const ps of input.resolutionSignal?.removedPages ?? []) {
+    const u = normalizePageUrl(ps.url);
+    if (statusByUrl.has(u) || !REMOVED_STATUSES.has(ps.status)) continue;
+    statusByUrl.set(u, ps.status);
+    removedUrls.add(u);
+  }
 
   // freshResults + crawledUrls + the #1167 sampled-check sets. COMPLETE mode
   // (#1023 R-D3) reconstructs freshResults from the store's complete findings and
@@ -743,6 +751,23 @@ export async function runCloudSmartAudits(
     };
   }
 
+  // (#2658) Where the signal lost its say (a truncated key, a page off a clipped
+  // list), a prior resolves only on a pass the payload shows for its page and
+  // check (ComputeMergeInput.passedCheckPages). Indexed only for the checks that
+  // can need it, so a whole signal costs nothing here.
+  let passedCheckPages: Set<string> | undefined;
+  if (resolution && (resolution.crawledComplete === false || resolution.truncatedChecks.size > 0)) {
+    const everyCheck = resolution.crawledComplete === false;
+    passedCheckPages = new Set<string>();
+    for (const [ruleId, r] of freshResults) {
+      for (const c of r.checks) {
+        if (c.status !== "pass" || !c.pageUrl) continue;
+        if (!everyCheck && !resolution.truncatedChecks.has(`${ruleId}|${c.name}`)) continue;
+        passedCheckPages.add(pageCheckKey(normalizePageUrl(c.pageUrl), ruleId, c.name));
+      }
+    }
+  }
+
   // ── merge ────────────────────────────────────────────────────────────────
   //
   // (#1876) Prior findings stream past the merge rather than being loaded into an
@@ -767,6 +792,7 @@ export async function runCloudSmartAudits(
       resolution,
       completeItemChecks,
       incompleteItemChecks,
+      passedCheckPages,
     },
     {
       persist: (record) => onPersist(record),
@@ -801,11 +827,13 @@ export async function runCloudSmartAudits(
   }
   // (#2658) A signal whose byte budget clipped its page list still counts every
   // crawled page (`crawledCount`), so the audited count, and the bill read off
-  // it, does not shrink with the list. Removed pages are crawled pages too.
+  // it, does not shrink with the list. Removed pages are crawled pages too, and
+  // `removedCount` counts the unlisted ones the merge cannot name.
   const signalPages = input.resolutionSignal?.crawledCount;
+  const removedCount = Math.max(removedUrls.size, input.resolutionSignal?.removedCount ?? 0);
   const auditedPages =
     input.resolutionSignal?.crawledComplete === false && signalPages !== undefined
-      ? Math.max(auditedUrls.size, signalPages - removedUrls.size)
+      ? Math.max(auditedUrls.size, signalPages - removedCount)
       : auditedUrls.size;
 
   // (#2063) Reduce the refused checks' pages to the ones this site has no record
