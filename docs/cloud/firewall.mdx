@@ -43,7 +43,7 @@ Every website in the dashboard can send custom HTTP request headers with its clo
 
 On a request that is sent with them, the headers are removed at the first redirect to a different origin (scheme, host and port), and stay removed for the rest of that redirect chain. Only `User-Agent`, `Accept`, `Accept-Language` and `Upgrade-Insecure-Requests` are kept across it. `http://` to `https://` is a different origin, and so is `example.com` to `www.example.com`.
 
-Headers that are sent go to every host the audit fetches from on your site: the audited host, and any of its subdomains whose stylesheets, scripts, images or fonts the pages load. A credential in a custom request header therefore reaches those subdomains too. Give the audit a credential of its own, scoped as narrowly as the gateway allows.
+Headers that are sent go to every host the audit fetches from on your site: the audited host, and any of its subdomains whose stylesheets, scripts, images or fonts the pages load. Hosts on other domains, such as a CDN or an analytics provider, never get them. A credential in a custom request header therefore reaches your subdomains too, but nothing off your domain. Give the audit a credential of its own, scoped as narrowly as the gateway allows.
 
 Two consequences follow:
 
@@ -147,7 +147,7 @@ curl -sS -o /dev/null -D - \
 # HTTP/2 200
 ```
 
-The `location` path and query vary. What matters is that the second request answers `200` and has no `location` on `cloudflareaccess.com`.
+The `location` path and query vary. What matters is that the second request answers `200` and has no `location` on `cloudflareaccess.com`. A secret typed on the command line stays in your shell history, so clear it afterwards or test with a token you revoke.
 
 Things that change the result:
 
