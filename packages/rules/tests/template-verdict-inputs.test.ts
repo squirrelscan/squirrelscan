@@ -209,14 +209,60 @@ const ROOT_ARG = String.raw`(?:[\w.?]+\s*,\s*)?`;
 const DOCUMENT_ARG = String.raw`(?:ctx\.parsed\.document|doc|document|head)\b`;
 
 /**
- * Source with its comments blanked and its strings kept, so a commented-out read
- * neither counts nor hides behind a `//` inside a url.
+ * Source with its comments removed and its strings, template literals and regex
+ * literals kept, so a commented-out read neither counts nor hides behind a `//`
+ * inside a url or a regex. A `/` opens a regex where an operand is expected: at
+ * the start, after an operator or punctuation, or after a keyword like `return`.
  */
 function stripComments(src: string): string {
-  return src.replace(
-    /("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`)|\/\/[^\n]*|\/\*[\s\S]*?\*\//g,
-    (_m, str: string | undefined) => str ?? "",
-  );
+  let out = "";
+  let i = 0;
+  while (i < src.length) {
+    const c = src[i]!;
+    const next = src[i + 1];
+    if (c === "/" && next === "/") {
+      while (i < src.length && src[i] !== "\n") i++;
+      continue;
+    }
+    if (c === "/" && next === "*") {
+      const end = src.indexOf("*/", i + 2);
+      i = end < 0 ? src.length : end + 2;
+      out += " ";
+      continue;
+    }
+    let end = -1;
+    if (c === '"' || c === "'" || c === "`") {
+      end = i + 1;
+      while (end < src.length && src[end] !== c && (c === "`" || src[end] !== "\n")) {
+        end += src[end] === "\\" ? 2 : 1;
+      }
+    } else if (c === "/") {
+      const before = out.trimEnd();
+      const operandBefore =
+        /[\w$)\]}]$/.test(before) &&
+        !/\b(?:return|typeof|case|in|of|new|delete|void|throw|yield|await)$/.test(before);
+      if (!operandBefore) {
+        end = i + 1;
+        let inClass = false;
+        while (end < src.length && src[end] !== "\n") {
+          const d = src[end];
+          if (d === "\\") end++;
+          else if (d === "[") inClass = true;
+          else if (d === "]") inClass = false;
+          else if (d === "/" && !inClass) break;
+          end++;
+        }
+      }
+    }
+    if (end >= 0) {
+      out += src.slice(i, end + 1);
+      i = end + 1;
+      continue;
+    }
+    out += c;
+    i++;
+  }
+  return out;
 }
 
 /** The reads the scan finds in one rule source, in the notation REVIEWED uses. */
@@ -237,6 +283,10 @@ function scanReads(source: string): string[] {
   add(String.raw`(?:getAttribute|hasAttribute)\(\s*([A-Za-z_]\w*)\s*\)`, (m) => `attribute:${m[1]}`);
   // The case-insensitive `@squirrelscan/utils` forms: getAttrCI(el, "http-equiv").
   add(String.raw`(?:getAttrCI|hasAttrCI)\(\s*[\w.?]+\s*,\s*${QUOTED}`, (m) => `@${m[2]}`);
+  add(
+    String.raw`(?:getAttrCI|hasAttrCI)\(\s*[\w.?]+\s*,\s*([A-Za-z_]\w*)\s*\)`,
+    (m) => `attribute:${m[1]}`,
+  );
   add(String.raw`\.matches\(\s*${QUOTED}`, (m) => `matches:${m[2]}`);
   add(String.raw`\.matches\(\s*([A-Za-z_]\w*)\s*\)`, (m) => `matches:${m[1]}`);
   add(String.raw`\b([A-Za-z_]\w*)\(\s*${DOCUMENT_ARG}`, (m) =>
@@ -337,10 +387,18 @@ describe("template-declared rules read only reviewed inputs (#614)", () => {
       "@http-equiv",
       "matches:sel",
     ]);
-    // A commented-out read is not a read, and a `//` inside a string is not a comment.
+    expect(scanReads(`getAttrCI(meta, name); hasAttrCI(el, attr)`)).toEqual([
+      "attribute:attr",
+      "attribute:name",
+    ]);
+    // A commented-out read is not a read, and a `//` inside a string or a regex
+    // literal is not a comment.
     expect(scanReads(`// el.getAttribute("data-x")\nconst u = "https://x"; el.getAttribute("rel")`)).toEqual([
       "@rel",
     ]);
+    expect(scanReads(`const re = /https?:\\/\\//; el.getAttribute("data-new");`)).toEqual(["@data-new"]);
+    expect(scanReads(`const re = /["']/; // el.getAttribute("data-comment")`)).toEqual([]);
+    expect(scanReads(`const half = a / 2; /* el.getAttribute("x") */ el.getAttribute("y")`)).toEqual(["@y"]);
     // And in the real sources: a helper-call selector, a raw-HTML read and a
     // variable selector are all found where the rules make them.
     expect(scanned.get("security/third-party-cookies")).toContain("iframe[src]");
