@@ -43,6 +43,8 @@ Every website in the dashboard can send custom HTTP request headers with its clo
 
 On a request that is sent with them, the headers are removed at the first redirect to a different origin (scheme, host and port), and stay removed for the rest of that redirect chain. Only `User-Agent`, `Accept`, `Accept-Language` and `Upgrade-Insecure-Requests` are kept across it. `http://` to `https://` is a different origin, and so is `example.com` to `www.example.com`.
 
+Headers that are sent go to every host the audit fetches from on your site: the audited host, and any of its subdomains whose stylesheets, scripts, images or fonts the pages load. A credential in a custom request header therefore reaches those subdomains too. Give the audit a credential of its own, scoped as narrowly as the gateway allows.
+
 Two consequences follow:
 
 - **A refusal is retried without the browser.** When the site answers a cloud browser render with `401`, `403`, `429`, `503` or a challenge page, the page is fetched again over plain HTTP, which does carry the headers. A WAF exception keyed on a header therefore still lets the page through, unrendered.
@@ -197,7 +199,7 @@ A site with HTTP basic auth, such as nginx `auth_basic` or Apache `AuthType Basi
 
 Rendering can stay on: a render that gets the `401` is fetched again over plain HTTP with the header. Every rendered page then costs a render and a plain fetch in time, so **Rendering: Off** is faster for a site where every page needs the login.
 
-Use an account that exists only for the audit, because the credentials go with every request to the site. HTTP Digest authentication cannot be passed this way: its `Authorization` value depends on a one-time value the server sends with each challenge, so a fixed header never matches.
+Use an account that exists only for the audit, because the credentials go with every request to the site and to the subdomains it loads assets from. HTTP Digest authentication cannot be passed this way: its `Authorization` value depends on a one-time value the server sends with each challenge, so a fixed header never matches.
 
 ## Other zero-trust gateways \{#other-zero-trust-gateways\}
 
