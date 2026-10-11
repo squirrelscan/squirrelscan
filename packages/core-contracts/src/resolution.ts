@@ -10,6 +10,10 @@
 // of pages (as URL hashes, not full check payloads) still failing/warning
 // this run. The merge resolves any prior finding whose page was crawled this
 // run and is absent from its check's failing set — regardless of sampling.
+//
+// #2658: that signal still grew with the crawl, so producers now send it
+// deflated and indexed in a fixed byte budget ({@link CompactResolutionSignal});
+// the server decodes it back to the same {@link ResolutionSignal}.
 
 /**
  * The signal object attached to `AuditReport.resolutionSignal` by the publish
@@ -50,10 +54,95 @@ export interface ResolutionSignal {
    * Keys whose hash set is INCOMPLETE (the fold's page cap already clipped the
    * source pages, or the signal's own size budget dropped hashes). Absence
    * from a truncated set is non-authoritative: hash-present still means
-   * "carry", hash-absent falls back to the #1167 sample guard.
+   * "carry", hash-absent resolves only on positive evidence in the published
+   * payload, a pass on that page (#2658; before it, the #1167 sample guard).
    */
   truncated?: string[];
+  /**
+   * (#2658) `false` when `crawledUrls` lists only PART of the crawl: the compact
+   * signal's byte budget clipped it. `failing` and `notEvaluated` are then exact
+   * for the listed pages only, so the merge takes the signal's word for a listed
+   * page and, for every other one, resolves only on positive evidence in the
+   * published payload, as for a truncated key. Never set by the original
+   * producers, which marked every key truncated instead.
+   */
+  crawledComplete?: boolean;
+  /** (#2658) Pages crawled, listed or not, when `crawledComplete` is false. */
+  crawledCount?: number;
+  /**
+   * (#2658) Listed pages that returned 404 or 410 this run. `pageStatuses` is
+   * clipped to its byte share, so this is where the merge learns of every
+   * removed page it can name. Set by the compact decoder only.
+   */
+  removedPages?: Array<{ url: string; status: number }>;
+  /**
+   * (#2658) Pages that returned 404 or 410 this run, listed or not, so the
+   * audited-page count can leave them out when the list is clipped. Set by the
+   * compact decoder only, when there are any.
+   */
+  removedCount?: number;
 }
+
+/**
+ * (#2658) The resolution signal as the publish producers send it now:
+ * `AuditReport.resolutionSignalCompact`. The original `resolutionSignal` grew
+ * with the crawl (raw URLs plus an 8-hex hash per failing page and check, about
+ * 0.3KB a page: over 1 MiB from ~2,800 pages). This one carries the same
+ * evidence in a fixed byte budget (RESOLUTION_PUBLISH_LIMITS).
+ *
+ * `data` is base64 of raw-deflated UTF-8 JSON, a {@link CompactResolutionPayload}.
+ * `decodeResolutionSignal` (`@squirrelscan/rules/resolution-decode`)
+ * turns it back into a {@link ResolutionSignal}, so the merge reads one shape
+ * whichever a producer sent.
+ */
+export interface CompactResolutionSignal {
+  v: 1;
+  data: string;
+}
+
+/**
+ * The JSON inside {@link CompactResolutionSignal.data}. Page sets are indexes
+ * into `urls` followed by `other`, sorted, written as gaps: the first index,
+ * then each next one as `index - previous - 1` (a run of pages is a run of
+ * zeros, which deflates to almost nothing).
+ */
+export interface CompactResolutionPayload {
+  v: 1;
+  /** Crawled pages, NORMALIZED, deduped, sorted. All of them when `complete`. */
+  urls: string[];
+  /**
+   * Pages a failing set names that were not crawled (a check whose `pageUrl` is
+   * not in the page list). Only when `complete`: with a partial list, failing
+   * evidence is needed for listed pages only.
+   */
+  other?: string[];
+  /** False when the byte budget clipped `urls` (see ResolutionSignal.crawledComplete). */
+  complete: boolean;
+  /** Pages crawled, listed or not. */
+  pages: number;
+  /** `ruleId|checkName` → gap-coded indexes of failing/warning pages. */
+  failing: Record<string, number[]>;
+  /** `ruleId|checkName` → gap-coded indexes (into `urls`) of crawled pages not evaluated. */
+  notEvaluated?: Record<string, number[]>;
+  /** Keys with incomplete sets, including keys the byte budget dropped. */
+  truncated?: string[];
+  /** HTTP status (`"404"`, `"410"`) → gap-coded indexes (into `urls`) of listed pages that returned it. */
+  removed?: Record<string, number[]>;
+  /** Pages that returned 404 or 410, listed or not. Omitted when none did. */
+  removedCount?: number;
+}
+
+/** Sorted, distinct indexes → gap code (see {@link CompactResolutionPayload}). */
+export function encodeIndexGaps(sortedIndexes: readonly number[]): number[] {
+  const gaps: number[] = [];
+  let previous = -1;
+  for (const index of sortedIndexes) {
+    gaps.push(index - previous - 1);
+    previous = index;
+  }
+  return gaps;
+}
+
 
 /**
  * `skipReason` of a page check whose rule stopped at a work cap before it had
@@ -65,6 +154,13 @@ export interface ResolutionSignal {
  * skips.
  */
 export const SCAN_TRUNCATED_SKIP_REASON = "scan-truncated";
+
+/**
+ * The runner's noindex gate (pub#457): a skip that is a "does not apply"
+ * verdict for every check of its rule on that page, so the signal and the merge
+ * read it as clean, not as a gap. Also the skip's `details.foldKey`.
+ */
+export const NOT_APPLICABLE_SKIP_REASON = "noindex";
 
 /** Signal map key — same `ruleId|checkName` shape the merge core keys on. */
 export function resolutionCheckKey(ruleId: string, checkName: string): string {

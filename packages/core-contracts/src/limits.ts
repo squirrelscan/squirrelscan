@@ -533,6 +533,29 @@ export const RESOLUTION_SIGNAL_LIMITS = {
   maxChecks: 2_000,
 } as const;
 
+// #2658: one byte budget for the two publish fields sized by pages CRAWLED rather
+// than by findings, which no per-check sample can bound: the compact resolution
+// signal (`resolutionSignalCompact`, see core-contracts/resolution.ts) and the
+// non-2xx `pageStatuses`. Measured together as serialized JSON bytes.
+//
+// 192 KiB of the 1 MiB published-report budget (#2655), REPORT_CAPS.signalMaxBytes.
+// The signal ships the crawled URLs deflated: on the real-shape fixture's checks,
+// 6 to 25 bytes a page with realistic URLs, so a typical site fits all 10,000
+// pages; random 63-byte paths cost about 40 and fit about 4,500. Past the budget
+// the builder drops keys or clips the page list, and both degrade to carrying
+// findings forward, never to a wrong resolve (rules/src/resolution.ts).
+export const RESOLUTION_PUBLISH_LIMITS = {
+  maxBytes: 192 * 1024,
+  // `pageStatuses`' share, clipped first so a site with thousands of redirects or
+  // 404s cannot crowd out the signal: ~400 entries of ordinary URLs. A 404/410 it
+  // clips is still named in the signal (its `removed` indexes), so it is staled.
+  maxPageStatusBytes: 32 * 1024,
+  // Inflated size of the signal's deflated payload. The builder never emits more
+  // and the decoder stops reading past it, so a small body cannot expand into a
+  // large allocation on the server.
+  maxInflatedBytes: 4 * 1024 * 1024,
+} as const;
+
 // #1167: hard-clip fallback applied by the CLI publish degrade pass (publish.ts)
 // only when the primary-capped payload STILL exceeds maxPayloadBytes — should be
 // unreachable post-sampling, but guarantees a signalled clip over a 413. Tighter
@@ -568,10 +591,10 @@ export const PUBLISH_DEGRADE_LIMITS = {
  * stays where it already lives (the CLI's project database and `squirrel report`
  * exports, the cloud findings store).
  *
- * The capper (`capReportForPublish`) holds everything but the scoring transport
- * to it today. "Whatever the crawl size" needs repo#2658 too: `resolutionSignal`
- * and `pageStatuses` still carry raw URLs that grow with pages crawled, so a
- * 2,000-page body is over this until they are bounded.
+ * The capper (`capReportForPublish`) holds the whole body to it whatever the
+ * crawl size: the scoring transport that grows with pages crawled (the
+ * resolution signal and `pageStatuses`) has its own fixed share,
+ * RESOLUTION_PUBLISH_LIMITS (repo#2658), and the rest of the report gets the rest.
  *
  * 1 MiB because the API isolate that parses and renders the body dies from about
  * 2.8MB (repo#2634, zod clamping costs 20-25 MiB of heap per MiB of report).
@@ -655,17 +678,19 @@ export const REPORT_CAPS = {
   entityMapMaxBytes: 128 * 1024,
   /**
    * Bytes kept back inside {@link PUBLISHED_REPORT_MAX_BYTES} for the scoring
-   * transport that sampling cannot shrink: `resolutionSignal` and `pageStatuses`,
-   * both sized by pages crawled (repo#2658 bounds them to this). The capper
-   * fits everything else into the rest.
+   * transport that sampling cannot shrink: the compact resolution signal and
+   * `pageStatuses`, both sized by pages crawled. The same number as
+   * RESOLUTION_PUBLISH_LIMITS.maxBytes, which their builder fits them to
+   * (repo#2658). The capper fits everything else into the rest.
    */
-  signalMaxBytes: 192 * 1024,
+  signalMaxBytes: RESOLUTION_PUBLISH_LIMITS.maxBytes,
   /**
-   * `pageStatuses`' share of {@link signalMaxBytes}. Clipping it is safe in one
+   * `pageStatuses`' share of {@link signalMaxBytes}
+   * (RESOLUTION_PUBLISH_LIMITS.maxPageStatusBytes). Clipping it is safe in one
    * direction only, the one taken: fewer carried findings get staled for a
    * removed page, and they carry instead (see `clipPageStatusesToBytes`).
    */
-  pageStatusesMaxBytes: 32 * 1024,
+  pageStatusesMaxBytes: RESOLUTION_PUBLISH_LIMITS.maxPageStatusBytes,
   /**
    * Bytes kept back for the request envelope around the report (visibility,
    * linkage ids). With {@link signalMaxBytes}, leaves the report itself at

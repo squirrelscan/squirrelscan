@@ -20,7 +20,11 @@ import type {
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
 import { SCAN_TRUNCATED_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
-import { buildResolutionSignal } from "@squirrelscan/rules/resolution";
+import { decodeResolutionSignal } from "@squirrelscan/rules/resolution-decode";
+import {
+  buildCompactResolutionSignal,
+  buildResolutionSignal,
+} from "@squirrelscan/rules/resolution";
 import {
   CHECK_NAME_ROBOTS_DISALLOW,
   CHECK_NAME_ROBOTS_EXISTS,
@@ -239,13 +243,21 @@ function uncappedBody(report: Produced) {
   };
 }
 
-/** The capped body the CLI and the container publish after repo#2656. */
-function cappedBody(report: Produced) {
+/**
+ * The capped body the CLI and the container publish after repo#2656, as the
+ * server merge reads it: the compact signal decoded (repo#2658). A test that
+ * hands the report its own signal stands in for a producer that sent that one.
+ */
+async function cappedBody(report: Produced) {
   const capped = capReportForPublish(report);
   return {
     ruleResults: capped.ruleResults as unknown as Rules,
     pageStatuses: capped.pageStatuses ?? [],
-    resolutionSignal: capped.resolutionSignal,
+    resolutionSignal:
+      report.resolutionSignal ??
+      (capped.resolutionSignalCompact
+        ? await decodeResolutionSignal(capped.resolutionSignalCompact)
+        : undefined),
     checkTallies: capped.checkTallies,
   };
 }
@@ -291,7 +303,7 @@ function comparable(s: ReturnType<typeof rescored>) {
   };
 }
 
-type Body = ReturnType<typeof uncappedBody> | ReturnType<typeof cappedBody>;
+type Body = ReturnType<typeof uncappedBody> | Awaited<ReturnType<typeof cappedBody>>;
 
 function publish(store: MemStore, crawlId: string, body: Body, now: number) {
   return runCloudSmartAudits({ store, siteKey: "site", crawlId, now, ...body });
@@ -302,7 +314,7 @@ async function bothWays(seed: MemStore, crawlId: string, report: Produced) {
   const now = 1_780_000_000_000;
   const uncappedStore = seed.clone();
   const cappedStore = seed.clone();
-  const capped = cappedBody(report);
+  const capped = await cappedBody(report);
   const uncapped = await publish(uncappedStore, crawlId, uncappedBody(report), now);
   const cappedResult = await publish(cappedStore, crawlId, capped, now);
   return { uncapped, capped: cappedResult, cappedStore, uncappedStore, cappedBody: capped };
@@ -424,6 +436,64 @@ describe("rescore of a capped report (repo#2657)", () => {
     for (const i of range(40, 60).filter((i) => i % 3 === 0)) expect(tagged(i)).toBe(true);
   });
 
+  /**
+   * The capped body of `report` with its signal clipped to the first `listed`
+   * pages, as the builder clips a crawl too big for its byte budget.
+   */
+  async function clippedBody(report: ReturnType<typeof fullReport>, listed: number) {
+    const urls = report.pages.map((p) => p.url);
+    let budget = JSON.stringify(buildCompactResolutionSignal(report.ruleResults, urls)).length;
+    let signal: ResolutionSignal;
+    do {
+      budget -= 64;
+      signal = await decodeResolutionSignal(
+        buildCompactResolutionSignal(report.ruleResults, urls, budget)!,
+      );
+    } while (signal.crawledUrls.length > listed);
+    expect(signal.crawledComplete).toBe(false);
+    expect(signal.crawledCount).toBe(urls.length);
+    return { ...(await cappedBody(report)), resolutionSignal: signal };
+  }
+  const NOW = 1_780_000_000_000;
+
+  test("off a clipped signal list, no carried page is credited with passes the tallies hold", async () => {
+    // A clean first audit leaves no findings, only pages. Run 2 crawls the same
+    // 40 pages and its tallies count every one of them; past the list the signal
+    // cannot say they were crawled, and crediting them would count their passes twice.
+    const seed = await seeded(fullReport(range(0, 40).map((i) => ({ i }))));
+    const report = fullReport(busyShapes(range(0, 40)));
+    const uncapped = await publish(seed.clone(), "audit_2", uncappedBody(report), NOW);
+    const capped = await publish(seed.clone(), "audit_2", await clippedBody(report, 15), NOW);
+    expect(capped.scoringTallies).toBeDefined();
+    expect(rescored(capped).healthScore.overall).toBeLessThanOrEqual(
+      rescored(uncapped).healthScore.overall,
+    );
+  });
+
+  test("off a clipped signal list, a carry on a page the payload names stays scored", async () => {
+    // Run 1: ttfb slow on every page. Run 2: no timing data on page 33, which
+    // the payload names (its meta-description fail is in the sample) but the
+    // clipped list does not. Its ttfb carry is in no tally, so it must stay.
+    const seed = await seeded(fullReport(range(0, 40).map((i) => ({ i, ttfb: "slow" as const }))));
+    const report = fullReport(
+      range(0, 40).map((i) => ({
+        i,
+        ttfb: i === 33 ? ("skipped" as const) : ("slow" as const),
+        metaMissing: i >= 30,
+      })),
+    );
+    const body = await clippedBody(report, 15);
+    expect(body.ruleResults["core/meta-description"]!.checks.flatMap((c) => c.pages ?? [])).toContain(
+      url(33),
+    );
+    const uncapped = await publish(seed.clone(), "audit_2", uncappedBody(report), NOW);
+    const capped = await publish(seed.clone(), "audit_2", body, NOW);
+    expect(rescored(capped).healthScore.overall).toBeLessThanOrEqual(
+      rescored(uncapped).healthScore.overall,
+    );
+    expect(capped.carriedLastSeen.has(`${url(33)}|perf/ttfb|ttfb`)).toBe(true);
+  });
+
   test("a check skipped on a page keeps that page's finding open, and the score still matches", async () => {
     const seed = await seeded(
       fullReport(range(0, 30).map((i) => ({ i, ttfb: "slow" as const }))),
@@ -515,7 +585,7 @@ describe("rescore of a capped report (repo#2657)", () => {
   test("a tally for a rule the report does not carry is not scored", async () => {
     // No meta, so nothing to score it under, as no row of it could have been.
     const report = fullReport(busyShapes(range(0, 20)));
-    const body = cappedBody(report);
+    const body = await cappedBody(report);
     const ghost = {
       ...body,
       checkTallies: { ...body.checkTallies, "core/ghost": { ghost: { failed: 99, failUnits: 99 } } },

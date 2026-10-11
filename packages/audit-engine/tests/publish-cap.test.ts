@@ -14,9 +14,19 @@ import {
   type EntityMap,
   type EntityMapNode,
 } from "@squirrelscan/core-contracts/entity-map";
-import { PUBLISHED_REPORT_MAX_BYTES, REPORT_CAPS } from "@squirrelscan/core-contracts/limits";
+import {
+  PUBLISHED_REPORT_MAX_BYTES,
+  REPORT_CAPS,
+  RESOLUTION_PUBLISH_LIMITS,
+} from "@squirrelscan/core-contracts/limits";
+import { decodeResolutionSignal } from "@squirrelscan/rules/resolution-decode";
 import { checkAffectedPages } from "@squirrelscan/report/affected-pages";
 import { capMixedRuleChecksForPublish, foldOverflowChecks } from "@squirrelscan/rules/fold";
+import {
+  buildResolutionSignal,
+  PAGE_STATUSES_KEY_BYTES,
+  RESOLUTION_SIGNAL_KEY_BYTES,
+} from "@squirrelscan/rules/resolution";
 import type { RuleRunResult } from "@squirrelscan/rules/types";
 import { byteLength } from "@squirrelscan/utils/bytes";
 
@@ -295,12 +305,14 @@ describe("capReportForPublish: size", () => {
       const capped = capReportForPublish(report(pages));
       expect(bytesOf(capped)).toBeLessThanOrEqual(reportBudget);
       expect(capped.detail.tier).toBe(0);
-      sizes[pages] = bytesOf({ ...capped, resolutionSignal: undefined, pageStatuses: undefined });
+      sizes[pages] = bytesOf({ ...capped, resolutionSignalCompact: undefined, pageStatuses: undefined });
     }
     // A lighter shape for 10,000 pages (two rules), so the test stays cheap.
     const light = (pages: number) => {
       const capped = capReportForPublish(report(pages, { rules: PAGE_RULES.slice(0, 2) }));
-      return bytesOf({ ...capped, resolutionSignal: undefined, pageStatuses: undefined });
+      // The whole body too, transport included, at any page count (repo#2658).
+      expect(bytesOf(capped)).toBeLessThanOrEqual(reportBudget);
+      return bytesOf({ ...capped, resolutionSignalCompact: undefined, pageStatuses: undefined });
     };
     const light2k = light(2_000);
     const light10k = light(10_000);
@@ -310,18 +322,24 @@ describe("capReportForPublish: size", () => {
   }, SLOW);
 
   test("every class failing on every page fills breadth first and keeps every class", () => {
-    const capped = capReportForPublish(report(100, { rules: WIDE_RULES, everyClassFails: 10 }));
-    // The fill uses the room the signal leaves. Here the raw-URL signal (every
-    // class failing on every page) is over its reserve, so only the rest is
-    // bounded until repo#2658 bounds the signal.
-    const rest = bytesOf({ ...capped, resolutionSignal: undefined, pageStatuses: undefined });
-    expect(rest).toBeLessThanOrEqual(reportBudget - REPORT_CAPS.signalMaxBytes);
-    expect(bytesOf(capped.resolutionSignal)).toBeGreaterThan(REPORT_CAPS.signalMaxBytes);
+    // Twice the wide rules: with the transport bounded, the body has the room
+    // the raw signal used to take, and one set of them now fits at tier 0.
+    const rules = [...WIDE_RULES, ...WIDE_RULES.map((rule) => ({ ...rule, id: `${rule.id}-b` }))];
+    const capped = capReportForPublish(report(100, { rules, everyClassFails: 10 }));
+    // The whole body, transport included, fits (repo#2658 bounds the signal),
+    // and the transport stays inside its own share.
+    expect(bytesOf(capped)).toBeLessThanOrEqual(reportBudget);
+    const transport =
+      bytesOf(capped.resolutionSignalCompact) +
+      RESOLUTION_SIGNAL_KEY_BYTES +
+      (capped.pageStatuses ? bytesOf(capped.pageStatuses) + PAGE_STATUSES_KEY_BYTES : 0);
+    expect(capped.resolutionSignalCompact).toBeDefined();
+    expect(transport).toBeLessThanOrEqual(REPORT_CAPS.signalMaxBytes);
     expect(capped.detail.tier).toBe(1);
     expect(capped.detail.classesDropped).toBeUndefined();
     // Every failing class has a row: 2 per wide rule, plus sitemap-exists and broken-links.
     const classes = classesOf(capped).filter((c) => c.status === "fail");
-    expect(classes).toHaveLength(WIDE_RULES.length * 2 + 2);
+    expect(classes).toHaveLength(rules.length * 2 + 2);
     // Some kept the full sample, some a smaller one.
     const sampled = classes.filter((c) => c.details?.aggregated === true);
     expect(sampled.some((c) => c.pages?.length === 10 && c.items?.length === 5)).toBe(true);
@@ -403,11 +421,12 @@ describe("capReportForPublish: size", () => {
     const roomy = capReportForPublish(warned);
     expect(roomy.detail.tier).toBe(0);
     const transport =
-      (roomy.resolutionSignal ? bytesOf(roomy.resolutionSignal) + 24 : 0) +
-      (roomy.pageStatuses ? bytesOf(roomy.pageStatuses) + 20 : 0);
-    const body = bytesOf({ ...roomy, resolutionSignal: undefined, pageStatuses: undefined });
+      (roomy.resolutionSignalCompact
+        ? bytesOf(roomy.resolutionSignalCompact) + RESOLUTION_SIGNAL_KEY_BYTES
+        : 0) + (roomy.pageStatuses ? bytesOf(roomy.pageStatuses) + PAGE_STATUSES_KEY_BYTES : 0);
+    const body = bytesOf({ ...roomy, resolutionSignalCompact: undefined, pageStatuses: undefined });
     const tight = capReportForPublish(warned, {
-      maxBytes: body - 1 + REPORT_CAPS.envelopeBytes + Math.min(transport, REPORT_CAPS.signalMaxBytes),
+      maxBytes: body - 1 + REPORT_CAPS.envelopeBytes + transport,
     });
     expect(tight.detail.tier).toBe(1);
     expect(tight.detail.classesReduced).toBe(1);
@@ -613,7 +632,84 @@ describe("capReportForPublish: the sample and its counts", () => {
     expect(loose.sitemapUrlStatuses).toHaveLength(100);
     expect(bytesOf(loose.entityMap)).toBeLessThanOrEqual(REPORT_CAPS.entityMapMaxBytes);
     expect(loose.pageStatuses.every((p: { status: number }) => p.status === 404)).toBe(true);
-    expect(loose.resolutionSignal.crawledUrls).toHaveLength(500);
+    expect(loose.resolutionSignal).toBeUndefined();
+  });
+
+  test("the scoring transport is the compact signal, built from every crawled page", async () => {
+    const signal = await decodeResolutionSignal(capped.resolutionSignalCompact!);
+    expect(signal.crawledUrls).toHaveLength(500);
+    expect(signal.crawledComplete).toBeUndefined();
+    expect(signal.removedPages?.every((p) => p.status === 404)).toBe(true);
+    expect(
+      bytesOf({ pageStatuses: capped.pageStatuses, resolutionSignalCompact: capped.resolutionSignalCompact }),
+    ).toBeLessThanOrEqual(RESOLUTION_PUBLISH_LIMITS.maxBytes);
+  });
+
+  test("a smaller ceiling shrinks the transport's share with it", () => {
+    // 3,000 pages with long unique paths: a signal several times this ceiling's
+    // room if it kept the full share, and a skeleton of one small rule.
+    const urls = Array.from(
+      { length: 3_000 },
+      (_, i) =>
+        `${SITE}/${((i * 2_654_435_761) >>> 0).toString(36)}-${((i * 40_503) >>> 0).toString(16)}-${(i * 97 + 13).toString(36)}`,
+    );
+    const spec: RuleSpec = { id: "content/noisy", category: "content", severity: "warning", weight: 3, names: ["c"] };
+    const heavy: Report = {
+      ruleResults: {
+        [spec.id]: {
+          meta: meta(spec, "page"),
+          checks: urls.map((pageUrl, i) => ({
+            name: "c",
+            status: i % 2 ? ("fail" as const) : ("pass" as const),
+            message: "m",
+            pageUrl,
+          })),
+        },
+      },
+      pages: urls.map((url) => ({ url, statusCode: 200 })),
+    };
+    const maxBytes = 64 * 1024;
+    const small = capReportForPublish(heavy, { maxBytes });
+    expect(bytesOf(small)).toBeLessThanOrEqual(maxBytes - REPORT_CAPS.envelopeBytes);
+    const transport =
+      bytesOf(small.resolutionSignalCompact) +
+      RESOLUTION_SIGNAL_KEY_BYTES +
+      (small.pageStatuses ? bytesOf(small.pageStatuses) + PAGE_STATUSES_KEY_BYTES : 0);
+    expect(transport).toBeLessThanOrEqual(REPORT_CAPS.signalMaxBytes / 16);
+    // At the full ceiling the same crawl keeps a bigger signal.
+    expect(bytesOf(capReportForPublish(heavy).resolutionSignalCompact)).toBeGreaterThan(transport);
+  }, SLOW);
+
+  test("a report without pages publishes its statuses but no signal", () => {
+    const statuses = [{ url: pageUrl(3), status: 404 }];
+    const out = capReportForPublish({ ...input, pages: [], pageStatuses: statuses });
+    expect(out.resolutionSignalCompact).toBeUndefined();
+    expect(out.pageStatuses).toEqual(statuses);
+  });
+
+  test("a page listed twice keeps its removal, whatever the row order", () => {
+    const rows = (statuses: number[]) => ({
+      ...input,
+      pages: statuses.map((statusCode) => ({ url: pageUrl(1), statusCode })),
+    });
+    const a = capReportForPublish(rows([404, 200]));
+    const b = capReportForPublish(rows([200, 404]));
+    expect(a.pageStatuses).toEqual([{ url: pageUrl(1), status: 404 }]);
+    expect(JSON.stringify(b)).toBe(JSON.stringify(a));
+  });
+
+  test("a signal already on the input never rides along, raw or compact", () => {
+    const raw = buildResolutionSignal(input.ruleResults, ["https://elsewhere.test/"]);
+    const out = capReportForPublish(
+      { ...input, resolutionSignal: raw, resolutionSignalCompact: { v: 1, data: "c3RhbGU=" } },
+      { fullDetail: "local" },
+    ) as unknown as Record<string, unknown>;
+    expect(out.resolutionSignal).toBeUndefined();
+    // The one it carries is built from this report's pages, the same as without.
+    expect(out.resolutionSignalCompact).toEqual(capped.resolutionSignalCompact);
+    expect(Object.keys(out).filter((key) => key.startsWith("resolutionSignal"))).toEqual([
+      "resolutionSignalCompact",
+    ]);
   });
 });
 
