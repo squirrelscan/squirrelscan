@@ -1509,11 +1509,13 @@ Three declared rules read inputs the signature above did not cover:
 `a11y/html-xml-lang-mismatch` (`lang` and `xml:lang` on `<html>`),
 `a11y/aria-hidden-body` (`aria-hidden` on `<html>` and `<body>`) and
 `core/favicon` (the `rel` and `href` of icon links). `fanoutInputSignature`
-now includes all three, and `template-fanout-equivalence-golden.test.ts` pins
-six counterexamples (an `xml:lang` that contradicts `lang`, a different `lang`
-under one `xml:lang`, `aria-hidden` on `<html>`, on `<body>`, a missing favicon,
-a favicon in another format) that share a chrome key, fail on the previous key
-and pass on this one.
+now includes all three (icon links as `[rel, href]` pairs in document order,
+since the rule lists formats in the order it finds them), and
+`template-fanout-equivalence-golden.test.ts` pins seven counterexamples (an
+`xml:lang` that contradicts `lang`, a different `lang` under one `xml:lang`,
+`aria-hidden` on `<html>`, on `<body>`, a missing favicon, a favicon in another
+format, the same favicons in another order) that share a chrome key, fail on
+the previous key and pass on this one.
 
 Re-measured 2026-10-11 the same way as the table above (one pass, parse, chrome
 key, both signatures, first page of a key is the representative,

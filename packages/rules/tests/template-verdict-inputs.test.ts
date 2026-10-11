@@ -18,8 +18,8 @@
 // holds it to that).
 
 import { describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 
 import { loadAllRules } from "../src/loader";
 import { mayFanOutAcrossTemplate } from "../src/types";
@@ -29,18 +29,61 @@ const SRC = join(import.meta.dir, "../src");
 type Reviewed = { keyed: string[]; unkeyed: string[] };
 
 /**
+ * `getCWVHints` (src/performance/cwv.ts), which three rules hand their document
+ * and raw HTML to. The scan counts every read in that file, so this is all of
+ * them: preload, prefetch, preconnect and dns-prefetch links, script `type`,
+ * `async`, `defer` and `nomodule`, stylesheet `media`, images and iframes with
+ * their size and style, and the raw HTML.
+ */
+const CWV_HINTS: Reviewed = {
+  keyed: ["page.url", "script[src]"],
+  unkeyed: [
+    "@async",
+    "@defer",
+    "@height",
+    "@href",
+    "@language",
+    "@media",
+    "@nomodule",
+    "@src",
+    "@style",
+    "@type",
+    "@width",
+    "helper:analyzeCWVHints",
+    "helper:collectImagePreloadKeys",
+    "helper:findLcpCandidates",
+    "helper:get",
+    "helper:getCWVHints",
+    "helper:set",
+    "iframe",
+    "img",
+    'link[rel="dns-prefetch"]',
+    'link[rel="preconnect"]',
+    'link[rel="prefetch"]',
+    'link[rel="preload"]',
+    'link[rel="stylesheet"]:not([media="print"])',
+    "page.html",
+    "script[src], link[href], img[src]",
+  ],
+};
+
+/**
  * Every read the scan finds in each template-declared rule, by rule id.
  *
- * KEYED means the fan-out key checks it: script srcs and stylesheet hrefs with
- * their `integrity`, every meta's name and the content of the metas rules read,
- * the `<main>` count, the `<html>` lang / xml:lang / aria-hidden, the `<body>`
- * aria-hidden, icon link rel and href (#614), and the page origin (which is what
- * the `ctx.page.url` readers compare hosts against).
+ * KEYED means the fan-out key checks the value the rule reads, for every
+ * element it reads it from: script srcs and stylesheet hrefs with their
+ * `integrity`, every meta's name and the content of the metas rules read, the
+ * `<main>` count, the `<html>` lang / xml:lang / aria-hidden, the `<body>`
+ * aria-hidden, icon link rel and href in document order (#614), and the page
+ * origin (which is what the `ctx.page.url` readers compare hosts against). An
+ * attribute a rule also reads from an element the key does not cover (`@src` on
+ * an image) is UNKEYED for that rule.
  *
  * UNKEYED means two pages can share the key and still differ here, so the
  * declaration rests on the site's templates being built that way (see the
- * VerdictScope doc). Fixing one means extending `fanoutInputSignature` and
- * moving it to KEYED, or making the rule page-scoped.
+ * VerdictScope doc, which also names what no entry here captures: order,
+ * `<noscript>` ancestry and head placement). Fixing one means extending
+ * `fanoutInputSignature` and moving it to KEYED, or making the rule page-scoped.
  */
 const REVIEWED: Record<string, Reviewed> = {
   "a11y/aria-hidden-body": {
@@ -57,7 +100,10 @@ const REVIEWED: Record<string, Reviewed> = {
     // The first main's id and class, which its message names.
     unkeyed: ["@class", "@id"],
   },
-  "a11y/meta-refresh": { keyed: ["@content", "meta"], unkeyed: [] },
+  "a11y/meta-refresh": {
+    keyed: ["@content", "@http-equiv", "meta"],
+    unkeyed: [],
+  },
   "a11y/zoom-disabled": {
     keyed: ["@content", 'meta[name="viewport"]', "meta[name='viewport']"],
     unkeyed: [],
@@ -98,9 +144,9 @@ const REVIEWED: Record<string, Reviewed> = {
     unkeyed: ["@media", "style", "textContent"],
   },
   "perf/font-loading": {
-    keyed: ["@href", "page.url"],
-    // Every `<link href>` (preloads included), and the raw HTML.
-    unkeyed: ["helper:getCWVHints", "link[href]", "page.html"],
+    keyed: CWV_HINTS.keyed,
+    // Every `<link href>` (preloads included), on top of the CWV hints.
+    unkeyed: [...CWV_HINTS.unkeyed, "link[href]"],
   },
   "perf/js-libraries": {
     keyed: ["@src"],
@@ -117,17 +163,13 @@ const REVIEWED: Record<string, Reviewed> = {
       "textContent",
     ],
   },
-  "perf/preconnect": {
-    keyed: ["page.url"],
-    unkeyed: ["helper:getCWVHints", "page.html"],
-  },
-  "perf/render-blocking": {
-    keyed: ["page.url"],
-    unkeyed: ["helper:getCWVHints", "page.html"],
-  },
+  "perf/preconnect": CWV_HINTS,
+  "perf/render-blocking": CWV_HINTS,
   "perf/unminified-css": {
-    keyed: ["@href", 'link[rel="stylesheet"]'],
-    unkeyed: ["style", "textContent"],
+    keyed: ["@href"],
+    // An exact `rel="stylesheet"`: the key matches the token, so
+    // `rel="alternate stylesheet"` keys the same and selects differently here.
+    unkeyed: ['link[rel="stylesheet"]', "style", "textContent"],
   },
   "perf/unminified-js": {
     keyed: ["@src", "script[src]"],
@@ -145,9 +187,9 @@ const REVIEWED: Record<string, Reviewed> = {
     unkeyed: [],
   },
   "security/third-party-cookies": {
-    keyed: ["@src", "page.url", "script[src]"],
-    // Iframes and images, and an image's size.
-    unkeyed: ["@height", "@width", "iframe[src]", "img[src]"],
+    keyed: ["page.url", "script[src]"],
+    // Iframes and images, their `src` included, and their size.
+    unkeyed: ["@height", "@src", "@width", "iframe[src]", "img[src]"],
   },
 };
 
@@ -166,8 +208,20 @@ const QUOTED = String.raw`(["'\x60])(.*?)\1`;
 const ROOT_ARG = String.raw`(?:[\w.?]+\s*,\s*)?`;
 const DOCUMENT_ARG = String.raw`(?:ctx\.parsed\.document|doc|document|head)\b`;
 
+/**
+ * Source with its comments blanked and its strings kept, so a commented-out read
+ * neither counts nor hides behind a `//` inside a url.
+ */
+function stripComments(src: string): string {
+  return src.replace(
+    /("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`)|\/\/[^\n]*|\/\*[\s\S]*?\*\//g,
+    (_m, str: string | undefined) => str ?? "",
+  );
+}
+
 /** The reads the scan finds in one rule source, in the notation REVIEWED uses. */
-function scanReads(text: string): string[] {
+function scanReads(source: string): string[] {
+  const text = stripComments(source);
   const reads = new Set<string>();
   const add = (re: string, f: (m: RegExpMatchArray) => string) => {
     for (const m of text.matchAll(new RegExp(re, "g"))) reads.add(f(m));
@@ -181,7 +235,10 @@ function scanReads(text: string): string[] {
   add(String.raw`querySelector\w*\(\s*${ROOT_ARG}([A-Za-z_]\w*)\s*\)`, (m) => `selector:${m[1]}`);
   add(String.raw`(?:getAttribute|hasAttribute)\(\s*${QUOTED}`, (m) => `@${m[2]}`);
   add(String.raw`(?:getAttribute|hasAttribute)\(\s*([A-Za-z_]\w*)\s*\)`, (m) => `attribute:${m[1]}`);
+  // The case-insensitive `@squirrelscan/utils` forms: getAttrCI(el, "http-equiv").
+  add(String.raw`(?:getAttrCI|hasAttrCI)\(\s*[\w.?]+\s*,\s*${QUOTED}`, (m) => `@${m[2]}`);
   add(String.raw`\.matches\(\s*${QUOTED}`, (m) => `matches:${m[2]}`);
+  add(String.raw`\.matches\(\s*([A-Za-z_]\w*)\s*\)`, (m) => `matches:${m[1]}`);
   add(String.raw`\b([A-Za-z_]\w*)\(\s*${DOCUMENT_ARG}`, (m) =>
     m[1]!.startsWith("querySelector") ? "" : `helper:${m[1]}`,
   );
@@ -198,7 +255,26 @@ function scanReads(text: string): string[] {
   return [...reads].sort();
 }
 
-/** Rule id → the reads in its source, for every rule declaring `verdictScope: "template"`. */
+/** Helper name → the rules-package file it is imported from, for relative imports. */
+function localHelperFiles(text: string, file: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const m of text.matchAll(/import\s*\{([^}]*)\}\s*from\s*"(\.[^"]+)"/g)) {
+    const base = resolve(dirname(file), m[2]!);
+    const target = [`${base}.ts`, join(base, "index.ts")].find((p) => existsSync(p));
+    if (!target) continue;
+    for (const spec of m[1]!.split(",")) {
+      const name = spec.trim().replace(/^type\s+/, "").split(/\s+as\s+/).pop();
+      if (name) out.set(name, target);
+    }
+  }
+  return out;
+}
+
+/**
+ * Rule id → the reads in its source, for every rule declaring `verdictScope:
+ * "template"`. A document handed to a helper from this package also counts every
+ * read in the helper's file (more than that call may make, never less).
+ */
 function templateRuleReads(): Map<string, string[]> {
   const out = new Map<string, string[]>();
   for (const file of sourceFiles(SRC)) {
@@ -206,7 +282,13 @@ function templateRuleReads(): Map<string, string[]> {
     if (!/verdictScope:\s*"template"/.test(text)) continue;
     const id = text.match(/\bid:\s*"([^"]+)"/)?.[1];
     if (!id) throw new Error(`no rule id in ${file}`);
-    out.set(id, scanReads(text));
+    const reads = new Set(scanReads(text));
+    const helpers = localHelperFiles(text, file);
+    for (const read of [...reads]) {
+      const helperFile = read.startsWith("helper:") ? helpers.get(read.slice(7)) : undefined;
+      if (helperFile) for (const r of scanReads(readFileSync(helperFile, "utf-8"))) reads.add(r);
+    }
+    out.set(id, [...reads].sort());
   }
   return out;
 }
@@ -251,11 +333,21 @@ describe("template-declared rules read only reviewed inputs (#614)", () => {
       "page.html",
     ]);
     expect(scanReads(`const b = doc.body; s.textContent`)).toEqual(["body", "textContent"]);
+    expect(scanReads(`getAttrCI(meta, "http-equiv"); el.matches(sel)`)).toEqual([
+      "@http-equiv",
+      "matches:sel",
+    ]);
+    // A commented-out read is not a read, and a `//` inside a string is not a comment.
+    expect(scanReads(`// el.getAttribute("data-x")\nconst u = "https://x"; el.getAttribute("rel")`)).toEqual([
+      "@rel",
+    ]);
     // And in the real sources: a helper-call selector, a raw-HTML read and a
     // variable selector are all found where the rules make them.
     expect(scanned.get("security/third-party-cookies")).toContain("iframe[src]");
     expect(scanned.get("core/doctype")).toContain("page.html");
     expect(scanned.get("core/favicon")).toContain("selector:selector");
+    // A helper from this package is scanned too: getCWVHints reads preconnect links.
+    expect(scanned.get("perf/preconnect")).toContain('link[rel="preconnect"]');
   });
 
   test("the VerdictScope doc names every rule with an UNKEYED read", () => {

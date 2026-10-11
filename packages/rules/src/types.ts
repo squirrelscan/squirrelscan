@@ -119,30 +119,44 @@ export type RuleSeverity = "error" | "warning" | "info";
  * keep the rule page-scoped. A rule reading a response header is disqualified
  * outright (see `core/charset`).
  *
- * THE INPUTS DECLARED RULES READ THAT THE KEY DOES NOT CHECK, exactly, as
- * `tests/template-verdict-inputs.test.ts` lists them (it fails when a declared
- * rule starts reading anything that is not on its reviewed list, and when a rule
- * with an unkeyed read goes missing here):
+ * THE INPUTS DECLARED RULES READ THAT THE KEY DOES NOT CHECK. The per-rule list
+ * is the UNKEYED entries in `tests/template-verdict-inputs.test.ts`, which fails
+ * when a declared rule starts reading anything that is not on its reviewed list,
+ * and when a rule with an unkeyed read is not named here:
  *
  *  - the raw HTML (`ctx.page.html`): `core/doctype`, `a11y/focus-visible`,
- *    `analytics/consent-mode`, `analytics/gtm-present`, `perf/js-libraries`, and
- *    through `getCWVHints` (with the document) `perf/font-loading`,
- *    `perf/preconnect` and `perf/render-blocking`;
+ *    `analytics/consent-mode`, `analytics/gtm-present`, `perf/js-libraries`;
+ *  - everything `getCWVHints` reads, which `perf/font-loading`,
+ *    `perf/preconnect` and `perf/render-blocking` hand their document and raw
+ *    HTML to: preload, prefetch, preconnect and dns-prefetch links, script
+ *    `type`, `async`, `defer` and `nomodule`, stylesheet `media`, and images and
+ *    iframes with their size and style (`perf/font-loading` also reads every
+ *    `<link href>`);
  *  - inline `<script>` and `<style>` bodies and the script `type`: `perf/legacy-js`
  *    (also `type="module"` and `nomodule` scripts), `perf/unminified-js`,
- *    `perf/js-libraries`, `perf/unminified-css`, `perf/font-delivery`;
- *  - the stylesheet `media` (`perf/font-delivery`) and every `<link href>`,
- *    preloads included (`perf/font-loading`);
+ *    `perf/js-libraries`, `perf/unminified-css` (which also selects on an exact
+ *    `rel="stylesheet"`, where the key matches the token), `perf/font-delivery`
+ *    (also the stylesheet `media`);
  *  - the `id` and `class` of the first `<main>`, which its message names
  *    (`a11y/landmark-one-main`);
  *  - iframe and image `src`, and image `width` and `height`
  *    (`security/third-party-cookies`).
  *
- * The scan sees literal selectors, attribute names and those raw channels in the
- * rule's own file. What a helper reads from the document it is handed
- * (`getCWVHints` above) and what a selector variable holds (`core/favicon`'s five
- * icon selectors, all inside `link[rel*="icon"]`) are reviewed by hand. Deriving
- * the key from what the rules read is squirrelscan/squirrelscan#585.
+ * Three things no entry captures, for every declared rule. ORDER: the signature
+ * sorts the script, stylesheet and meta lists, so a rule that takes the first
+ * viewport meta or lists evidence in document order can see two pages differ
+ * where the key does not. `<noscript>` ANCESTRY: the `OutsideNoscript` helpers
+ * skip markup inside `<noscript>`, the signature does not. PLACEMENT: a rule that
+ * reads only the `<head>` (`perf/font-delivery`, `getCWVHints`) sees a stylesheet
+ * or script move to the `<body>`, the key does not.
+ *
+ * The scan sees literal selectors and attribute names (the `@squirrelscan/utils`
+ * helpers included), selector and attribute variables by name, those raw
+ * channels, and every read in a helper file from this package that a rule hands
+ * its document to. What a selector variable holds (`core/favicon`'s five icon
+ * selectors, all inside `link[rel*="icon"]`) is reviewed by hand, and the test
+ * checks that each rule with an unkeyed read is named above, not every input.
+ * Deriving the key from what the rules read is squirrelscan/squirrelscan#585.
  *
  * A declaration is a claim, not a proof, and it has two falsifiers.
  * `template-fanout-parity-golden.test.ts` runs in CI over an authored corpus with
