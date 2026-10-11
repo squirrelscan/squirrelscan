@@ -50,13 +50,13 @@ import { Effect } from "effect";
 import { parseDocument } from "@squirrelscan/parser";
 
 import { SQLiteStorage } from "@squirrelscan/crawler";
-import { RuleRunner, createRunner } from "@squirrelscan/rules";
+import { RuleRunner, createRunner, fingerprintPage } from "@squirrelscan/rules";
 import type { Rule, RuleRunResult, SiteData } from "@squirrelscan/rules";
 import { foldOverflowChecks } from "@squirrelscan/rules/fold";
 import type { CheckResult, PageRecord } from "@squirrelscan/core-contracts";
 import type { Config } from "@squirrelscan/config";
 
-import { buildHeadersMap, buildSiteContext, isRenderedFetch } from "../src/adapter";
+import { buildHeadersMap, buildSiteContext, isRenderedFetch, parseHtmlForRules } from "../src/adapter";
 import { isAuditablePage } from "../src/page-features";
 import { foldRuleResultIntoTallies, type RuleTally } from "../src/scoring";
 import { streamPageRules } from "../src/streaming";
@@ -67,6 +67,7 @@ import {
   fanoutInputSignature,
   templateFanoutEnabled,
 } from "../src/template-fanout";
+import { templateFingerprintKey } from "../src/template-key";
 import { checkAffectedPages } from "@squirrelscan/report";
 import { CORPUS, ORIGIN, mkPage } from "./helpers/template-corpus";
 
@@ -616,6 +617,43 @@ describe("a verdict is never copied across origins", () => {
       a: sameChrome(`${VIEWPORT}<script src="https://cdn.other.test/assets/a.js"></script>`),
       b: sameChrome(`${VIEWPORT}<script src="https://cdn.other.test/assets/b.js"></script>`),
     },
+    // #614: the root attributes and icon links three declared rules read.
+    {
+      name: "an xml:lang on <html> that contradicts its lang",
+      ruleId: "a11y/html-xml-lang-mismatch",
+      a: sameChrome(VIEWPORT),
+      b: sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="en" xml:lang="fr">'),
+    },
+    {
+      name: "a different <html lang> under the same xml:lang",
+      ruleId: "a11y/html-xml-lang-mismatch",
+      a: sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="fr" xml:lang="fr">'),
+      b: sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="en" xml:lang="fr">'),
+    },
+    {
+      name: "aria-hidden on <html>",
+      ruleId: "a11y/aria-hidden-body",
+      a: sameChrome(VIEWPORT),
+      b: sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="en" aria-hidden="true">'),
+    },
+    {
+      name: "aria-hidden on <body>",
+      ruleId: "a11y/aria-hidden-body",
+      a: sameChrome(VIEWPORT),
+      b: sameChrome(VIEWPORT).replace('<body class="tpl-x">', '<body class="tpl-x" aria-hidden="true">'),
+    },
+    {
+      name: "a missing favicon link",
+      ruleId: "core/favicon",
+      a: sameChrome(`${VIEWPORT}<link rel="icon" href="/favicon.ico">`),
+      b: sameChrome(VIEWPORT),
+    },
+    {
+      name: "a favicon href in another format",
+      ruleId: "core/favicon",
+      a: sameChrome(`${VIEWPORT}<link rel="icon" href="/favicon.ico">`),
+      b: sameChrome(`${VIEWPORT}<link rel="icon" href="/favicon.svg">`),
+    },
   ];
 
   for (const { name, ruleId, a, b } of counterexamples) {
@@ -636,6 +674,10 @@ describe("a verdict is never copied across origins", () => {
       // old chrome-only key really would have grouped them.
       const ref = (url: string) => reference.pageRuleResults.get(url)?.get(ruleId);
       expect(ref(urlA)).not.toEqual(ref(urlB));
+      const chromeKey = (url: string, html: string) =>
+        templateFingerprintKey(fingerprintPage(parseHtmlForRules(html, url), url));
+      expect(chromeKey(urlA, a)).not.toBeNull();
+      expect(chromeKey(urlA, a)).toBe(chromeKey(urlB, b));
 
       // Nothing was inherited, and each page carries the verdict of running on it.
       expect(result.templateFanout.fannedPages).toBe(0);
@@ -690,6 +732,14 @@ describe("a verdict is never copied across origins", () => {
     expect(sig(sameChrome(`${VIEWPORT}${icon}`))).not.toBe(
       sig(sameChrome(`${VIEWPORT}<link rel="icon" href="/favicon-b.ico">`)),
     );
+    // Positive control: a <body> or <html> attribute no declared rule reads leaves
+    // the signature alone, so the new inputs do not make the key over-sensitive.
+    const otherClass = sameChrome(VIEWPORT).replace('<body class="tpl-x">', '<body class="tpl-x home">');
+    const otherDir = sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="en" dir="ltr">');
+    expect(otherClass).not.toBe(sameChrome(VIEWPORT));
+    expect(otherDir).not.toBe(sameChrome(VIEWPORT));
+    expect(sig(otherClass)).toBe(base);
+    expect(sig(otherDir)).toBe(base);
   });
 
   test("fanoutClusterKey separates origins and survives an unparseable url", () => {
