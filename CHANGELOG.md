@@ -19,6 +19,7 @@ How it works:
 
 ### Fixed
 
+- A site behind Imperva that answers with `x-cdn: Imperva` is now recognised as Imperva bot protection, the same as `x-cdn: Incapsula`, so a blocked crawl names the right provider even when the response carries no `x-iinfo` header.
 - Docs: custom request headers are on every plan, Free included, where several pages said Pro only, and the pages that still called local audits free in general now say a local audit costs nothing only when it runs signed out or with `--offline`.
 
 ## v0.0.108 (2026-10-10)
