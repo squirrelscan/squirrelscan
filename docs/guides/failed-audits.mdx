@@ -496,7 +496,7 @@ The first request, without credentials, shows what the gateway does: a `302` wit
 **What to do.**
 
 1. Set the headers the gateway accepts under **Settings → Crawl → Custom request headers**, using the gateway's section in [Firewall and WAF exceptions](/cloud/firewall).
-2. Set **Rendering** to **Off** in the same page's audit level card, so the entry page and every other page are fetched with a plain request that carries the headers.
+2. Set **Rendering** to **Off** in the same page's audit level card, so the entry page and every other page are fetched with a plain request that carries the headers. The audit then reads the HTML your server sends, without running JavaScript.
 3. Audit the exact origin the second `curl` used, with the same scheme and host.
 4. Run the audit and work through the [verification checklist](/cloud/firewall#verification-checklist).
 

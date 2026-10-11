@@ -54,7 +54,7 @@ An audit started through the API or the MCP server with a level of its own uses 
 
 The header card accepts any valid HTTP header name, `Authorization` included. Nothing is reserved. A website can have up to 50 headers, each name up to 255 characters and each value up to 8,192 characters. A value may contain tabs but no other control characters. Values are stored as secrets and never shown in reports or logs. Setting any header also makes the crawl [authorised](/dashboard/crawl-settings#authorised-crawls), which raises its pace and stops `robots.txt` being applied.
 
-## Option 1: a secret request header (recommended)
+## Option 1: a secret request header (recommended) \{#option-1-a-secret-request-header-recommended\}
 
 A firewall rule that matches a header value only you know is the most precise exception you can make, and it works with any firewall that can match a request header.
 
@@ -129,7 +129,7 @@ Access lets a machine through with a **service token**: a Client ID and a Client
    | `CF-Access-Client-Id` | `<client-id>` |
    | `CF-Access-Client-Secret` | `<client-secret>` |
 
-4. **Turn rendering off.** In the audit level card on the same page, set **Rendering** to **Off** and save the level. Cloud browser renders do not carry custom request headers (see [how custom request headers are sent](#how-custom-request-headers-are-sent)).
+4. **Turn rendering off.** In the audit level card on the same page, set **Rendering** to **Off** and save the level. Cloud browser renders do not carry custom request headers (see [how custom request headers are sent](#how-custom-request-headers-are-sent)). The audit then reads the HTML your server sends, without running JavaScript, so content that only scripts build is not audited.
 5. **Audit the exact origin Access protects**, with `https://` and the exact hostname, so no redirect to another origin removes the headers before Access sees them.
 6. **Check it** with the [verification checklist](#verification-checklist).
 
