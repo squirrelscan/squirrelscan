@@ -11,11 +11,30 @@ A button with visible text already has a name. The problem case is a button whos
 
 ## What squirrel checks
 
-One check, `button-name`, at severity error. It covers every `<button>`, every element with `role="button"`, and every `<input>` of type `button`, `submit` or `reset`.
+Two checks, at rule severity error. They cover every `<button>`, every element with `role="button"`, and every `<input>` of type `button`, `submit` or `reset`. A button has a name when it has any of the following: a non-empty `aria-label`; an `aria-labelledby` pointing at an element that has text; a non-empty `title`; text content; a `value`; a nested `<img>` with non-empty `alt`; a nested `<svg><title>` with text; or a nested element carrying `aria-label`.
 
-- Fail when such an element has none of the following: a non-empty `aria-label`; an `aria-labelledby` pointing at an element that has text; a non-empty `title`; text content; a `value`; a nested `<img>` with non-empty `alt`; a nested `<svg><title>` with text; or a nested element carrying `aria-label`. Report message: `Buttons without accessible names`. Up to ten offenders are listed as `button#id`, `button.class`, `input[name="..."]` or `input[type="..."]`, with a count of any remainder.
-- Pass with `All buttons have accessible names`.
+- `button-name` fails with `Buttons without accessible names` for unnamed buttons that are in the accessibility tree. Up to ten offenders are listed as `button#id`, `button.class`, `input[name="..."]` or `input[type="..."]`, with a count of any remainder.
+- `button-name-unconfirmed` warns with `N button(s) without accessible names may be hidden by an inline style (unconfirmed)` for unnamed buttons whose own inline `style`, or an ancestor's, sets `display` or `visibility` in a form squirrel does not read exactly (see [What squirrel can see](#what-squirrel-can-see)).
+- `button-name` passes with `All buttons have accessible names`, or with `All buttons in the accessibility tree have accessible names` when some unnamed buttons were skipped as hidden. The pass carries `buttonsChecked`, and `hiddenWithoutName` when buttons were skipped.
 - Info with `No buttons found` when the page has none.
+
+### Hidden buttons
+
+A button that is not in the accessibility tree has nothing to announce, so the rule does not apply to it and it is not reported. That is a button with the `hidden` attribute (except `hidden="until-found"`), `aria-hidden="true"`, an inline `display: none` on itself or an ancestor, an inline `visibility: hidden` on itself, or a button inside a closed `<dialog>` or an unopened `popover`. Visibility inherited from an ancestor is reported as unconfirmed, because a stylesheet rule can make the button visible again. A button in a closed overlay still needs a name: give it one before the overlay can open.
+
+A `disabled` button is still in the accessibility tree, and so is one that is moved off-screen, clipped, or made transparent. Those are checked like any other button.
+
+### What squirrel can see
+
+squirrel reads the markup and each element's own inline `style` attribute. An inline style counts only when it plainly sets `display: none` or `visibility: hidden` (upper case and a trailing `!important` are fine).
+
+squirrel does not read `<style>` blocks or stylesheets, so hiding by a class or selector rule is not evaluated. A button hidden only that way, such as a closed modal whose `.modal` rule lives in the site's CSS, is still reported. Check those findings in a browser.
+
+Because stylesheets are not read, squirrel also misses a stylesheet rule that shows an element again, and treats that element as hidden. That happens in two rare cases. One is a `!important` rule that overrides an inline `display: none` or `visibility: hidden`. The other is a `display` rule on an element the browser hides by default, meaning one with the `hidden` attribute, a closed `<dialog>` or a `popover`: in a browser, the stylesheet wins.
+
+squirrel's parser can also build a different tree from a browser's around some elements: a `<p>`, list items, headings, buttons, forms, links and other inline formatting elements, table parts, `<select>`, `<svg>`, and tags a browser ignores or treats as empty where they appear. When a hidden element is one of those, or sits inside one, what is inside it is reported as unconfirmed rather than skipped.
+
+An inline style that mentions `display` or `visibility` in any other form is reported by `button-name-unconfirmed` rather than as a failure, because squirrel will not guess at it. That covers comments, escapes, CSS variables, other functions, non-ASCII characters, the `all` shorthand, `revert`, a `!` anywhere but a trailing `!important`, and an unlisted keyword.
 
 ## How to fix it
 
@@ -74,6 +93,7 @@ Accessibility findings ship in every audit next to the SEO, performance and agen
 ## References
 
 - [The button element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/button)
+- [Button has non-empty accessible name, W3C ACT rules](https://www.w3.org/WAI/standards-guidelines/act/rules/97a4e1/)
 - [Accessible name and description computation, W3C](https://www.w3.org/TR/accname-1.2/)
 - [Understanding SC 4.1.2 Name, Role, Value, W3C](https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html)
 

@@ -11,9 +11,10 @@ The two states have to agree. Either the region is available, in which case it s
 
 ## What squirrel checks
 
-Two checks, at rule severity error. The rule walks every `[aria-hidden="true"]` element and tests the element itself first. A focusable container is reported and its descendants are not examined; otherwise every descendant is tested.
+Three checks, at rule severity error. The rule walks every `[aria-hidden="true"]` element and tests the element itself first. A focusable container is reported and its descendants are not examined; otherwise every descendant is tested.
 
 - `aria-hidden-focus` fails with `N focusable element(s) inside aria-hidden`. Items read `a#archive`, or `div (self is focusable)` when the hidden container is itself focusable. Up to ten are listed with a count of the rest.
+- `aria-hidden-focus-unconfirmed` warns with `N focusable element(s) inside aria-hidden may be hidden by an inline style (unconfirmed)`. These are elements whose own inline `style`, or an ancestor's, sets `display` or `visibility` in a form squirrel does not read exactly (see [What squirrel can see](#what-squirrel-can-see)).
 - `aria-hidden-focus-honeypot` warns with `N focusable element(s) inside aria-hidden appear to be an anti-spam honeypot`, carrying the value `Add tabindex="-1" (and autocomplete="off") to remove the honeypot from the tab order`. An element qualifies only when all three hold: it is an `<input>`, its `id` or `name` contains `hp`, `honeypot` or `trap` as a hyphen- or underscore-delimited token, and it sits inside a `<form>`. Requiring all three keeps a genuine bug on an unrelated hidden control from being quietly downgraded.
 - With nothing focusable found, the check passes as `No focusable elements inside aria-hidden regions`, or returns info with `No aria-hidden elements found`.
 
@@ -25,8 +26,22 @@ Focusable means reachable with the Tab key. The test follows axe-core's rule of 
 - Without a `tabindex`, an element is focusable when it matches `a[href]`, `button`, `input`, `select`, `textarea`, `[contenteditable="true"]`, `audio[controls]`, `video[controls]` or `details > summary`.
 - A `button`, `input`, `select` or `textarea` with `disabled` is never focusable, and neither is `<input type="hidden">`.
 - Nothing inside an `inert` element is focusable, and neither is anything inside a `hidden` element (except `hidden="until-found"`). That covers `inert` or `hidden` on the `aria-hidden` container itself, on an ancestor of it, or on a wrapper inside it.
+- Nothing an inline `display: none` hides is focusable, whether it is on the element or an ancestor. Neither is an element whose own inline style sets `visibility: hidden` (or `collapse`). Visibility inherited from an ancestor is reported as unconfirmed, because a stylesheet rule can make a descendant visible again. A closed `<dialog>` and an unopened `popover` count as hidden too, because the browser's own stylesheet hides them.
+- Content that is only moved off-screen, clipped, shrunk to nothing or made transparent (`opacity: 0`) can still be reached with Tab, so it is still reported.
 
 Attribute lookups are case-insensitive, so React's `tabIndex` in server-rendered markup is read.
+
+### What squirrel can see
+
+squirrel reads the markup and each element's own inline `style` attribute. An inline style counts only when it plainly sets `display: none` or `visibility: hidden` (upper case and a trailing `!important` are fine).
+
+squirrel does not read `<style>` blocks or stylesheets, so hiding by a class or selector rule is not evaluated. A control hidden only that way, such as a closed modal whose `.modal` rule lives in the site's CSS, is still reported. Check those findings in a browser, or add `inert` to the hidden container, which clears the finding and is the better fix anyway.
+
+Because stylesheets are not read, squirrel also misses a stylesheet rule that shows an element again, and treats that element as hidden. That happens in two rare cases. One is a `!important` rule that overrides an inline `display: none` or `visibility: hidden`. The other is a `display` rule on an element the browser hides by default, meaning one with the `hidden` attribute, a closed `<dialog>` or a `popover`: in a browser, the stylesheet wins.
+
+squirrel's parser can also build a different tree from a browser's around some elements: a `<p>`, list items, headings, buttons, forms, links and other inline formatting elements, table parts, `<select>`, `<svg>`, and tags a browser ignores or treats as empty where they appear. When a hidden element is one of those, or sits inside one, what is inside it is reported as unconfirmed rather than skipped.
+
+An inline style that mentions `display` or `visibility` in any other form is reported by `aria-hidden-focus-unconfirmed` rather than as a failure, because squirrel will not guess at it. That covers comments, escapes, CSS variables, other functions, non-ASCII characters, the `all` shorthand, `revert`, a `!` anywhere but a trailing `!important`, and an unlisted keyword.
 
 ## How to fix it
 
@@ -44,7 +59,7 @@ Either drop `aria-hidden` from the container, add `inert` to it, or set `tabinde
 </div>
 ```
 
-Where the region is meant to be invisible as well, `display: none` or the `hidden` attribute is the better fix. Neither leaves the element focusable, so the two states cannot drift apart again. squirrel reads the `hidden` attribute but not CSS, so a region hidden only by a stylesheet rule or an inline `style` is still reported; `hidden` or `inert` in the markup clears it.
+Where the region is meant to be invisible as well, `display: none` or the `hidden` attribute is the better fix. Neither leaves the element focusable, so the two states cannot drift apart again. squirrel sees `display: none` only in an inline `style` attribute, so a region hidden by a stylesheet rule is still reported; `hidden` or `inert` in the markup clears it.
 
 | | |
 |---|---|
@@ -96,7 +111,7 @@ Accessibility findings ship in every audit next to the SEO, performance and agen
 
 ## Check your site
 
-Run `squirrel audit https://example.com` and open the Accessibility section of the report. Honeypot fields are reported separately, as warnings rather than errors. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+Run `squirrel audit https://example.com` and open the Accessibility section of the report. Honeypot fields and unconfirmed candidates are reported separately, as warnings rather than errors. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
 
 <CardGroup cols={2}>
   <Card title="Install squirrel" icon="terminal" href="/quickstart">
