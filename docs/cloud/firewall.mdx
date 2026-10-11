@@ -41,16 +41,16 @@ Every website in the dashboard can send custom HTTP request headers with its clo
 | External link checks | Not sent |
 | The [GitHub check](/dashboard/crawl-settings) | Not sent |
 
-On a request that is sent with them, the headers are removed at the first redirect to a different origin (scheme, host and port), and stay removed for the rest of that redirect chain. `http://` to `https://` is a different origin, and so is `example.com` to `www.example.com`.
+On a request that is sent with them, the headers are removed at the first redirect to a different origin (scheme, host and port), and stay removed for the rest of that redirect chain. Only `User-Agent`, `Accept`, `Accept-Language` and `Upgrade-Insecure-Requests` are kept across it. `http://` to `https://` is a different origin, and so is `example.com` to `www.example.com`.
 
 Two consequences follow:
 
 - **A refusal is retried without the browser.** When the site answers a cloud browser render with `401`, `403`, `429`, `503` or a challenge page, the page is fetched again over plain HTTP, which does carry the headers. A WAF exception keyed on a header therefore still lets the page through, unrendered.
-- **A sign-in redirect is not a refusal.** A render that lands on a sign-in page is not retried, and the audit fails as a [redirect to another site](/guides/failed-audits#offsite-redirect). For a site behind Cloudflare Access, Vercel deployment protection or any other gateway that redirects, set **Rendering** to **Off** in the audit level card under **Settings → Crawl**, so every page is fetched over plain HTTP with the headers.
+- **A sign-in redirect is not a refusal.** A render that lands on a sign-in page on another site is not retried, and the audit fails as a [redirect to another site](/guides/failed-audits#offsite-redirect). For a site behind Cloudflare Access, Vercel deployment protection or any other gateway that redirects, set **Rendering** to **Off** in the audit level card under **Settings → Crawl**, so every page is fetched over plain HTTP with the headers.
 
 An audit started through the API or the MCP server with a level of its own uses that level's rendering instead of the website's, and Surface and Full render every page. Start audits of a gated site from the dashboard or a schedule. A signed-in `squirrel audit` renders in the cloud browser too: add `--http` when the audit depends on headers passed with `-H`.
 
-The header card accepts any valid HTTP header name, `Authorization` included. Nothing is reserved. A website can have up to 50 headers, each name up to 255 characters and each value up to 8,192 characters, with no control characters. Values are stored as secrets and never shown in reports or logs. Setting any header also makes the crawl [authorised](/dashboard/crawl-settings#authorised-crawls), which raises its pace and stops `robots.txt` being applied.
+The header card accepts any valid HTTP header name, `Authorization` included. Nothing is reserved. A website can have up to 50 headers, each name up to 255 characters and each value up to 8,192 characters. A value may contain tabs but no other control characters. Values are stored as secrets and never shown in reports or logs. Setting any header also makes the crawl [authorised](/dashboard/crawl-settings#authorised-crawls), which raises its pace and stops `robots.txt` being applied.
 
 ## Option 1: a secret request header (recommended)
 
@@ -211,7 +211,7 @@ A gateway can be passed with a custom request header only when it offers a long-
 
 For these, audit from somewhere the gateway already lets through, or take the gateway out of the path:
 
-- **The CLI on a trusted network.** `squirrel audit` fetches from your machine, so a gateway that admits your office network, VPN or managed device admits the audit too. Signed in, the CLI renders pages in the cloud browser, which comes from squirrelscan's network: add `--http` so every page is fetched from yours.
+- **The CLI on a trusted network.** `squirrel audit` fetches from your machine, so a gateway that admits requests from your office network or VPN admits the audit too. Access that depends on a browser session or a device check may not extend to the CLI's requests. Signed in, the CLI renders pages in the cloud browser, which comes from squirrelscan's network: add `--http` so every page is fetched from yours.
 - **The CLI against a local build.** Run the same site on your machine without the gateway and audit it there: `squirrel audit http://localhost:3000`. See [local audits](/guides/local-audits-cli).
 - **An exception in your own application or proxy.** If you control the code or proxy that starts the sign-in, let requests through that carry a secret header with an exact value, as in [option 1](#option-1-a-secret-request-header-recommended), and add that header to squirrelscan.
 - **For a Shopify store**, remove the storefront password for the time of the audit, or audit a development copy locally.
@@ -255,9 +255,9 @@ After the audit:
 
    | Recorded attempt | What it means |
    |---|---|
-   | A crawler or direct attempt redirected to the gateway's origin | The gateway did not accept the headers. Check the token or secret, the policy (for Cloudflare Access, the **Service Auth** action and the selector), that the policy covers this hostname, and that the token has not expired |
+   | A crawler or direct attempt redirected to the gateway's origin | The request reached the sign-in page: either the headers did not reach the protected origin (a redirect to another origin removed them) or the gateway did not accept them. Check the audited address, the token or secret, the policy (for Cloudflare Access, the **Service Auth** action and the selector), that the policy covers this hostname, and that the token has not expired |
    | A browser attempt | Rendering was on for the run, and renders do not carry the headers |
-   | A direct attempt with status `401` or `403` | The credentials were rejected outright, for example by Cloudflare Access with strict service token authentication |
+   | A direct attempt with status `401` or `403` | The request was refused: by the gateway (for example Cloudflare Access with strict service token authentication and a token that does not match), or by another firewall or access rule in front of the site |
    | A `cf-ray` id | Search for it in **Security → Events** on Cloudflare to see which product acted on the request |
 
 See [Failed audits](/guides/failed-audits) for every cause and its fix.
