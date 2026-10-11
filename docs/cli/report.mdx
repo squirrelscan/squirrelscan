@@ -71,6 +71,8 @@ Manage published reports in the [dashboard](https://app.squirrelscan.com).
 
 A published report is a summary, at most 1 MB however many pages you audit. Each issue lists a sample of its affected pages and items with the true counts, and the score still counts every check the audit ran. The full per-page detail stays in the local project, and `squirrel report --format json` exports all of it.
 
+Publish an audit from its project, with `squirrel report <audit-id> --publish`. A JSON file loaded with `--input` publishes only when it is a full report that still lists its crawled pages: the `--format json` export and a published report do not, so `--publish` refuses them rather than publish a score built from the failures alone.
+
 <Note>
 A report of a host no squirrelscan server can reach is never published, even with `--publish`. That covers `localhost`, loopback and private ranges, and internal names such as `box.local` or anything under `.internal`. The command prints the report as usual and says the report stayed local. See [Local audits with the CLI](/guides/local-audits-cli).
 </Note>

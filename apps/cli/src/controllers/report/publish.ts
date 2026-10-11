@@ -18,7 +18,7 @@ import {
 import { Effect } from "effect";
 import { existsSync } from "node:fs";
 
-import type { AuditReport } from "@/types";
+import type { AuditReport, CheckResult } from "@/types";
 
 import { hasEverPublished } from "@/cli/publish-nudge";
 import { REPORTS_BASE_URL } from "@/constants";
@@ -124,13 +124,28 @@ function hasCrawledPages(report: AuditReport): boolean {
   return Array.isArray(report.pages) && report.pages.length > 0;
 }
 
-/** Any rule holds a page check: one with a `pageUrl`, or a folded aggregate of them. */
+/**
+ * Any rule holds a page check: one with a `pageUrl`, or a folded aggregate of
+ * them. Reads an `--input` file as loaded, unvalidated, so it never throws on
+ * a malformed one (the capper then refuses that with a clear error).
+ */
 function hasPageChecks(report: AuditReport): boolean {
-  for (const rule of Object.values(report.ruleResults ?? {})) {
-    for (const check of rule?.checks ?? []) {
-      if (check.pageUrl) return true;
-      if (check.details?.aggregated === true && (check.pages?.length ?? 0) > 0)
+  const rules = report.ruleResults;
+  if (!rules || typeof rules !== "object") return false;
+  for (const rule of Object.values(rules)) {
+    const checks: unknown = rule?.checks;
+    if (!Array.isArray(checks)) continue;
+    for (const check of checks as Array<
+      Partial<CheckResult> | null | undefined
+    >) {
+      if (check?.pageUrl) return true;
+      if (
+        check?.details?.aggregated === true &&
+        Array.isArray(check.pages) &&
+        check.pages.length > 0
+      ) {
         return true;
+      }
     }
   }
   return false;
@@ -247,9 +262,10 @@ export async function publishReport(
     return err(
       commandError(
         "PUBLISH_PREPARE_FAILED",
-        "This report has no crawled page list (an already published or slimmed copy?), " +
+        "This report has no crawled page list (an exported, published or slimmed copy), " +
           "so it cannot be published without losing its score.\n" +
-          "Publish the audit from its local project instead: `squirrel report <audit-id> --publish`."
+          "Publish the audit from its project with `squirrel report <audit-id> --publish`, " +
+          "or re-run the audit to publish it."
       )
     );
   }

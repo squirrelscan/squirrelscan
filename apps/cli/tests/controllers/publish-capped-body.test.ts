@@ -23,15 +23,20 @@ import {
   expect,
   test,
 } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import type { AuditReport } from "../../src/types";
 
 import { version } from "../../package.json";
+import { loadReport } from "../../src/controllers/report";
 import {
   payloadTooLargeMessage,
   pickHomepageSummary,
   publishReport,
 } from "../../src/controllers/report/publish";
+import { generateJsonReport } from "../../src/reports/output/json";
 import { API_TOKEN_ENV_VAR } from "../../src/self/credentials";
 import { publishReportShape } from "../helpers/publish-report-shape";
 import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
@@ -292,6 +297,48 @@ describe("the CLI publishes the capped report (repo#2667)", () => {
       ruleResults: {},
     } as unknown as AuditReport;
     expect((await publishReport(empty)).ok).toBe(true);
+  });
+
+  test("--input: a full report file publishes; the CLI's own -f json export is refused", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "squirrel-capped-input-"));
+    try {
+      const report = publishReportShape(50);
+      const fullPath = join(dir, "full.json");
+      writeFileSync(fullPath, JSON.stringify(report));
+      const exportPath = join(dir, "export.json");
+      generateJsonReport(report, exportPath);
+
+      const full = loadReport(fullPath);
+      if (!full.ok) throw new Error(full.error.message);
+      expect((await publishReport(full.data)).ok).toBe(true);
+      expect(posted).toHaveLength(1);
+
+      // The export is the slim format (meta and issues): no crawled pages.
+      posted = [];
+      const exported = loadReport(exportPath);
+      if (!exported.ok) throw new Error(exported.error.message);
+      const refused = await publishReport(exported.data);
+      if (refused.ok) throw new Error("unreachable");
+      expect(refused.error.code).toBe("PUBLISH_PREPARE_FAILED");
+      expect(refused.error.message).toContain("re-run the audit");
+      expect(posted).toHaveLength(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a malformed --input file is a clear publish error, not a crash", async () => {
+    const report = publishReportShape(1);
+    const result = await publishReport({
+      ...report,
+      ruleResults: {
+        "a/rule": { meta: { id: "a/rule" }, checks: {} },
+        "b/rule": { meta: { id: "b/rule" }, checks: [null] },
+      },
+    } as unknown as AuditReport);
+    if (result.ok) throw new Error("unreachable");
+    expect(result.error.code).toBe("PUBLISH_PREPARE_FAILED");
+    expect(posted).toHaveLength(0);
   });
 
   test("a stored report the capper cannot read is a clear publish error, and nothing is sent", async () => {
