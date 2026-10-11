@@ -578,6 +578,11 @@ export function pickHomepageSummary(
 // `sampleLimits` selects the per-check SAMPLE caps (#1167): the default primary
 // caps, or PUBLISH_DEGRADE_LIMITS for the publish.ts degrade pass (a harder re-slim
 // when the primary-capped body still exceeds maxPayloadBytes).
+//
+// TODO(repo#2656): replace with `capReportForPublish` (audit-engine), the one
+// capper both producers share, but NOT before repo#2658 bounds the scoring
+// transport and repo#2657 makes the server rescore read `checkTallies`; see the
+// gate in publish-cap.ts.
 export function slimForPublish(
   report: AuditReport,
   sampleLimits: PublishSampleLimits = DEFAULT_PUBLISH_SAMPLE,

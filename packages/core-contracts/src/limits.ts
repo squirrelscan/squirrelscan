@@ -560,6 +560,120 @@ export const PUBLISH_DEGRADE_LIMITS = {
   maxPageStatusBytes: 4 * 1024 * 1024,
 } as const;
 
+// ── Published report cap (repo#2656) ────────────────────────────
+/**
+ * The largest a publish request body may be, envelope included, as UTF-8 bytes.
+ * One constant for every producer (CLI, cloud container) and every API route:
+ * a published report is a capped summary BY DESIGN, and full per-page detail
+ * stays where it already lives (the CLI's project database and `squirrel report`
+ * exports, the cloud findings store).
+ *
+ * The capper (`capReportForPublish`) holds everything but the scoring transport
+ * to it today. "Whatever the crawl size" needs repo#2658 too: `resolutionSignal`
+ * and `pageStatuses` still carry raw URLs that grow with pages crawled, so a
+ * 2,000-page body is over this until they are bounded.
+ *
+ * 1 MiB because the API isolate that parses and renders the body dies from about
+ * 2.8MB (repo#2634, zod clamping costs 20-25 MiB of heap per MiB of report).
+ */
+export const PUBLISHED_REPORT_MAX_BYTES = 1024 * 1024;
+
+/** One sample level of the report capper: what an issue class keeps. */
+export interface ReportCapTier {
+  /** Affected-page URLs kept per issue class (the rest → `details.pagesTruncated`). */
+  readonly pagesPerClass: number;
+  /** Items kept per issue class (the rest → `details.additional`). */
+  readonly itemsPerClass: number;
+  /** `sourcePages` kept per kept item. */
+  readonly sourcePagesPerItem: number;
+  /**
+   * UTF-16 code units kept of a check's message (and string `value`/`expected`),
+   * the unit the publish schema's string caps count. Not bytes: CJK text is up
+   * to 3 bytes a unit in UTF-8. The byte fitter measures real UTF-8 bytes, so
+   * this only shapes how much text each level keeps, never the size bound.
+   */
+  readonly messageChars: number;
+}
+
+/**
+ * What a published report keeps, per section (repo#2656). Applied by
+ * `capReportForPublish` (audit-engine), the one function both publish producers
+ * call. Every number is a tunable: change it here and both producers follow.
+ *
+ * The per-class sample is the shape on every real site: 10 affected pages and
+ * 5 items per (rule, check name, status, provenance) issue class, with the true
+ * counts beside them. Tuned on 187 real published reports, the largest and a
+ * random sample (repo#2656, a standalone simulation of these caps): p99 545 KiB,
+ * max 590 KiB, flat in pages (the 5,463-page one came out at 418 KiB).
+ *
+ * `tiers` are the sample levels a class can be given, largest first. Every class
+ * gets `tiers[0]` while the body fits. When it does not, the byte fitter fills
+ * breadth first: every class gets a counts row (the last level), then a small
+ * sample, then the full one, in priority order while the budget lasts, so the
+ * classes that matter most keep their sample and none vanishes. Past that it
+ * shrinks the display sections and drops the entity map, then admits counts
+ * rows by byte budget (see `capReportForPublish`), which is what makes the size
+ * bounded for any input rather than for the inputs measured.
+ */
+export const REPORT_CAPS = {
+  tiers: [
+    { pagesPerClass: 10, itemsPerClass: 5, sourcePagesPerItem: 1, messageChars: 500 },
+    { pagesPerClass: 3, itemsPerClass: 1, sourcePagesPerItem: 1, messageChars: 300 },
+    // Counts only: no page or item samples, just the class and its true totals.
+    { pagesPerClass: 0, itemsPerClass: 0, sourcePagesPerItem: 0, messageChars: 200 },
+  ] satisfies readonly ReportCapTier[],
+  /**
+   * Issue classes kept per rule. A rule past it keeps the classes that matter
+   * most (fail, then warn, then the rest, largest first) and stamps the dropped
+   * total on the last kept one as `details.checksTruncated`.
+   */
+  classesPerRule: 25,
+  /** Site-wide checks (`siteChecks`): affected pages and items kept per check. */
+  siteCheckPages: 10,
+  siteCheckItems: 10,
+  /** `resourceSizes`: rows kept per category, and `sourcePages` per row. */
+  resourceRowsPerCategory: 20,
+  resourceSourcePages: 3,
+  /** `robotsTxt.rules`: directives kept across all user-agent groups. */
+  robotsDirectives: 50,
+  /**
+   * `sitemaps`: discovered sitemaps kept, child sitemaps and URLs kept per
+   * sitemap. One real index listed 2,000 children (234 KiB).
+   */
+  sitemapEntries: 25,
+  sitemapChildren: 10,
+  sitemapUrls: 10,
+  /**
+   * The display sections at their minimum, for a body whose counts rows alone
+   * do not fit: summary lists, robots directives and sitemap URL statuses
+   * empty, these many sitemaps (no children) and resource rows per category
+   * (no `sourcePages`).
+   */
+  minimalSitemapEntries: 5,
+  minimalResourceRows: 5,
+  /** Serialized ceiling of the published entity map (UTF-16 units, as `projectEntityMap` measures). */
+  entityMapMaxBytes: 128 * 1024,
+  /**
+   * Bytes kept back inside {@link PUBLISHED_REPORT_MAX_BYTES} for the scoring
+   * transport that sampling cannot shrink: `resolutionSignal` and `pageStatuses`,
+   * both sized by pages crawled (repo#2658 bounds them to this). The capper
+   * fits everything else into the rest.
+   */
+  signalMaxBytes: 192 * 1024,
+  /**
+   * `pageStatuses`' share of {@link signalMaxBytes}. Clipping it is safe in one
+   * direction only, the one taken: fewer carried findings get staled for a
+   * removed page, and they carry instead (see `clipPageStatusesToBytes`).
+   */
+  pageStatusesMaxBytes: 32 * 1024,
+  /**
+   * Bytes kept back for the request envelope around the report (visibility,
+   * linkage ids). With {@link signalMaxBytes}, leaves the report itself at
+   * least 816 KiB of the 1 MiB.
+   */
+  envelopeBytes: 16 * 1024,
+} as const;
+
 // ── Coverage Mode Page Limits ───────────────────────────────────
 export const COVERAGE_PAGE_LIMITS = {
   quick: 25,

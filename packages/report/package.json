@@ -4,6 +4,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./affected-pages": "./src/affected-pages.ts",
+    "./rule-catalog": "./src/rule-catalog.ts",
     "./editor-summary": "./src/editor-summary.ts",
     "./domain-stats": "./src/domain-stats.ts",
     "./entities": "./src/entities.ts",

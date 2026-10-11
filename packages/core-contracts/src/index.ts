@@ -75,12 +75,20 @@ import type { AuditFailureReasonCode } from "./failure-reason";
 import type { RefusedFetch } from "./refused-fetch";
 import type { EntityMap } from "./entity-map";
 import type { AuditLevel, ResolvedAuditSettings } from "./audit-levels";
+import type { ReportCapTier } from "./limits";
 
 export interface CheckItem {
   id: string;
   label?: string;
   snippet?: string;
   sourcePages?: string[];
+  /**
+   * Pages the item was found on, when a published report keeps fewer of them
+   * in `sourcePages` (repo#2656). Absent when `sourcePages` lists them all. A
+   * floor when the item came out of an earlier fold, which keeps at most
+   * `PUBLISH_LIMITS.maxSourcePagesPerItem` source pages and records no total.
+   */
+  pageCount?: number;
   meta?: Record<string, unknown>;
 }
 
@@ -473,6 +481,20 @@ export interface AuditReport {
    */
   resolutionSignal?: ResolutionSignal;
   /**
+   * This run's evaluated-check counts per rule and check name (repo#2656),
+   * counted BEFORE the publish capper sampled `ruleResults` and dropped the
+   * per-page pass rows. Present on capped published reports only. See
+   * {@link CheckTallies}. Transport for the server rescore: never rendered.
+   */
+  checkTallies?: CheckTallies;
+  /**
+   * Set when the report is a capped published summary (repo#2656): every issue
+   * class carries a sample plus its true counts, and the full per-page detail
+   * lives elsewhere. Absent on local reports and on reports published before
+   * the cap.
+   */
+  detail?: PublishedReportDetail;
+  /**
    * Aggregate crawl-cache stats for this audit — hit rate, bytes saved, and a
    * hits-by-reason breakdown across pages AND sub-resources (#108). Derived from
    * the crawl + sub-resource cache results via `buildCacheStats`. Present only
@@ -549,6 +571,82 @@ export interface AuditReport {
    * Absent when nothing was recovered.
    */
   fetchFallbacks?: { recovered: number };
+}
+
+/**
+ * One (rule, check name)'s evaluated checks in THIS run, counted before the
+ * publish capper sampled them (repo#2656). The capped report keeps a 10-page
+ * sample per issue class and no per-page pass rows, so a reader that needs the
+ * real numbers (the server rescore, repo#2657) reads them here instead of
+ * counting rows.
+ *
+ * The fields are the scorer's own (`IssueTally` in audit-engine scoring.ts),
+ * computed by the same function over the unfolded checks, so summing a rule's
+ * check names gives exactly the tally `calculateHealthScore` folds for it:
+ *  - `passed` / `warnings` / `failed`: check counts. Warns of a severity-"info"
+ *    rule are advisory and already excluded, as the scorer excludes them.
+ *  - `warnUnits` / `failUnits`: the item-aware density units (#683).
+ *  - `skipped`: checks that did not evaluate (not scored; for display).
+ *
+ * Only FRESH checks are counted: a carried or unrendered check is a replay of
+ * an earlier audit, which the server re-derives from its own store. Zero fields
+ * are omitted, so a clean class is `{ "passed": 49 }`. Bounded by rules × check
+ * names, never by pages.
+ */
+export interface CheckTally {
+  passed?: number;
+  warnings?: number;
+  failed?: number;
+  warnUnits?: number;
+  failUnits?: number;
+  skipped?: number;
+}
+
+/** `ruleId` → `checkName` → {@link CheckTally}. */
+export type CheckTallies = Record<string, Record<string, CheckTally>>;
+
+/**
+ * The stamp on a capped published report (repo#2656). It tells a viewer that
+ * every list in `ruleResults` is a sample, what the sample kept, and where the
+ * rest lives, so it can say "N more" and point there instead of presenting the
+ * sample as the whole.
+ */
+export interface PublishedReportDetail {
+  capped: true;
+  /**
+   * How far the byte fitter had to go: 0 = every class kept the full sample;
+   * 1 = filled breadth first, some classes kept a smaller sample or counts only
+   * (`classesReduced`); 2 = the same with the display sections at their minimum
+   * and the entity map dropped; 3 = counts rows admitted by byte budget, some
+   * classes left out (`classesDropped`).
+   */
+  tier: number;
+  /** The full sample: the most any issue class kept. */
+  caps: ReportCapTier & { classesPerRule: number };
+  /**
+   * Issue classes kept at less than the full sample (a smaller sample, or
+   * counts only). Their true totals are in their `details` either way. Absent
+   * when every kept class has the full sample.
+   */
+  classesReduced?: number;
+  /**
+   * Where the full per-page detail is: `local` = the project database on the
+   * machine that ran the audit (`squirrel report --format json`); `findings` =
+   * the cloud findings store. Absent when the producer did not say.
+   */
+  fullDetail?: "local" | "findings";
+  /** Set when the fitter dropped the entity map to fit the budget. */
+  entityMapDropped?: true;
+  /**
+   * Set when the report had an entity map that could not be projected to its
+   * publish bound, so it was left out. Never set together with a map.
+   */
+  entityMapFailed?: true;
+  /**
+   * Issue classes left out entirely by the last-resort byte admission. Their
+   * counts survive in `checkTallies`. Absent when every class fit.
+   */
+  classesDropped?: number;
 }
 
 /** Where an audit executed + how much of the site it crawled (#1180). */
