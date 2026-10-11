@@ -1086,6 +1086,9 @@ export function capReportForPublish<T extends CappableReport>(
       maxBytes: Math.floor(REPORT_CAPS.signalMaxBytes * share),
       maxPageStatusBytes: Math.floor(REPORT_CAPS.pageStatusesMaxBytes * share),
     },
+    // The capped report carries `checkTallies`, the one reader of the page
+    // hashes a clipped list ships (#2673).
+    { pageHashes: true },
   );
   const pageStatuses = built.pageStatuses;
   const crawled = Array.isArray(report.pages) && report.pages.length > 0;

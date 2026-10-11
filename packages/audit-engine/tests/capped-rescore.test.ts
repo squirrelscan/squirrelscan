@@ -477,16 +477,17 @@ describe("rescore of a capped report (repo#2657)", () => {
     let signal: ResolutionSignal;
     do {
       budget -= 64;
+      // With page hashes as the capper asks for them (it sends tallies, #2673).
       signal = await decodeResolutionSignal(
-        buildCompactResolutionSignal(report.ruleResults, urls, budget)!,
+        buildCompactResolutionSignal(report.ruleResults, urls, budget, [], { pageHashes: hashes })!,
       );
     } while (signal.crawledUrls.length > listed);
     expect(signal.crawledComplete).toBe(false);
     expect(signal.crawledCount).toBe(urls.length);
     // (#2673) The unlisted crawled pages' hashes ride along; a producer before
-    // #2673 sent none.
-    expect(signal.crawledHashes).toHaveLength(urls.length - signal.crawledUrls.length);
-    if (!hashes) delete signal.crawledHashes;
+    // #2673, or one that sends no tallies, sends none.
+    if (hashes) expect(signal.crawledHashes).toHaveLength(urls.length - signal.crawledUrls.length);
+    else expect(signal.crawledHashes).toBeUndefined();
     return { ...(await cappedBody(report)), resolutionSignal: signal };
   }
   const NOW = 1_780_000_000_000;
@@ -559,9 +560,40 @@ describe("rescore of a capped report (repo#2657)", () => {
   });
 
   test("(#2673) on a check that skipped a listed page, an unlisted hashed page keeps its carry", async () => {
-    // ttfb has no timing data on page 3 (listed) and page 33 (past the list).
-    // The signal shows the check skipped pages, so it may have skipped page 33
-    // too: its carry stays, rather than vanish from a score no tally replaces it in.
+    // ttfb has no timing data on every fourth page, some listed and some not.
+    // The signal shows the check skipped listed pages, so it may have skipped
+    // the unlisted ones too: their carries stay, rather than vanish from a score
+    // no tally replaces them in.
+    const seed = await seeded(
+      withNoisyUrls(fullReport(range(0, 40).map((i) => ({ i, ttfb: "slow" as const })))),
+    );
+    const skipped = range(0, 40).filter((i) => i % 4 === 3);
+    const report = withNoisyUrls(
+      fullReport(
+        range(0, 40).map((i) => ({
+          i,
+          ttfb: skipped.includes(i) ? ("skipped" as const) : ("slow" as const),
+        })),
+      ),
+    );
+    const body = await clippedBody(report, 15);
+    const listed = new Set(body.resolutionSignal.crawledUrls);
+    const unlisted = skipped.map((i) => noisy(url(i))).filter((u) => !listed.has(u));
+    expect(unlisted.length).toBeGreaterThan(0);
+    expect(unlisted.length).toBeLessThan(skipped.length);
+    const capped = await publish(seed.clone(), "audit_2", body, NOW);
+    const uncapped = await publish(seed.clone(), "audit_2", uncappedBody(report), NOW);
+    for (const u of unlisted) expect(capped.carriedLastSeen.has(`${u}|perf/ttfb|ttfb`)).toBe(true);
+    expect(rescored(capped).healthScore.overall).toBeLessThanOrEqual(
+      rescored(uncapped).healthScore.overall,
+    );
+  });
+
+  test("(#2673) skips clustered in one section past an alphabetical prefix still show in the listed spread", async () => {
+    // ttfb has no timing data on pages 30-39 only, the site's alphabetically
+    // last section. A prefix of 15 would list none of them and read the check as
+    // having skipped nothing; the hash-order spread lists some, so the carries on
+    // the unlisted ones stay.
     const seed = await seeded(
       withNoisyUrls(fullReport(range(0, 40).map((i) => ({ i, ttfb: "slow" as const })))),
     );
@@ -569,19 +601,18 @@ describe("rescore of a capped report (repo#2657)", () => {
       fullReport(
         range(0, 40).map((i) => ({
           i,
-          ttfb: i === 3 || i === 33 ? ("skipped" as const) : ("slow" as const),
+          ttfb: i >= 30 ? ("skipped" as const) : ("slow" as const),
         })),
       ),
     );
     const body = await clippedBody(report, 15);
-    expect(body.resolutionSignal.crawledUrls).toContain(noisy(url(3)));
-    expect(body.resolutionSignal.crawledHashes).toContain(resolutionUrlHash(noisy(url(33))));
+    const listed = new Set(body.resolutionSignal.crawledUrls);
+    const cluster = range(30, 40).map((i) => noisy(url(i)));
+    expect(cluster.some((u) => listed.has(u))).toBe(true);
+    const unlisted = cluster.filter((u) => !listed.has(u));
+    expect(unlisted.length).toBeGreaterThan(0);
     const capped = await publish(seed.clone(), "audit_2", body, NOW);
-    const uncapped = await publish(seed.clone(), "audit_2", uncappedBody(report), NOW);
-    expect(capped.carriedLastSeen.has(`${noisy(url(33))}|perf/ttfb|ttfb`)).toBe(true);
-    expect(rescored(capped).healthScore.overall).toBeLessThanOrEqual(
-      rescored(uncapped).healthScore.overall,
-    );
+    for (const u of unlisted) expect(capped.carriedLastSeen.has(`${u}|perf/ttfb|ttfb`)).toBe(true);
   });
 
   test("(#2673) uncrawled carried pages keep their synthetic passes; a hash collision only withholds one", async () => {

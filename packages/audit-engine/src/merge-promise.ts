@@ -1307,7 +1307,12 @@ function notEvaluatedThisRun(
     // not in the signal, so it is taken as evaluated only when the check ran this
     // run, evaluated every listed page and its sets are not truncated; a check
     // that skipped any listed page (no timing data, a scan cap) may have skipped
-    // this one too, and its carry stays.
+    // this one too, and its carry stays. The listed pages are a hash-order spread
+    // of the crawl, so skips clustered in one section show among them; a cluster
+    // too small to land in the sample can still lose its carries from the score.
+    // An uncrawled page whose hash collides with a crawled one is taken for
+    // crawled here too, and its carries drop out of the union (about 1.6e-6 a
+    // page at 7,000 hashes); they stay open in the store either way.
     if (resolution.crawledComplete === false && !resolution.crawledUrls.has(url)) {
       if (!resolution.crawledHashes?.has(resolutionUrlHash(url))) return false;
       const key = resolutionCheckKey(f.ruleId, f.checkName);
@@ -1338,11 +1343,13 @@ function notEvaluatedThisRun(
  * pass here, whatever it carries.
  *
  * (#2658, #2673) A signal whose byte budget clipped its page list names the
- * crawled pages past it by hash, and none of those is credited either. A hash
- * collision only withholds a credit, never grants one. A clipped list without
- * hashes (a producer before #2673) cannot tell an uncrawled page from a crawled
- * one past the list, so no carried page is credited: crediting one could count
- * its passes twice and raise the score, where losing them only lowers it.
+ * crawled pages past it by hash, and none of those is credited either. Here a
+ * hash collision only withholds a credit, never grants one (in
+ * `notEvaluatedThisRun` it can also drop a collided page's carries). A clipped
+ * list without hashes (a producer before #2673, or one that sends no tallies)
+ * cannot tell an uncrawled page from a crawled one past the list, so no carried
+ * page is credited: crediting one could count its passes twice and raise the
+ * score, where losing them only lowers it.
  */
 function notCrawledThisRun(
   carriedPageUrls: PageUrlSet,
