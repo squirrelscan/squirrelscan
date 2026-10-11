@@ -73,7 +73,7 @@ Custom request headers are available on [every plan](/dashboard/crawl-settings#c
 
     Header names are matched in lowercase in Cloudflare expressions.
 
-    Bot Fight Mode, the bot protection on Cloudflare's Free plan, cannot be skipped by a WAF custom rule or a Page Rule. If Bot Fight Mode is what challenges the crawler, turn it off, or use Super Bot Fight Mode, which a Skip rule can skip. A Skip rule cannot skip Cloudflare Access either: see [Cloudflare Access](#cloudflare-access).
+    Bot Fight Mode, the bot protection on Cloudflare's Free plan, cannot be skipped by a WAF custom rule or a Page Rule ([Cloudflare's Bot Fight Mode documentation](https://developers.cloudflare.com/bots/get-started/bot-fight-mode/)). If Bot Fight Mode is what challenges the crawler, turn it off, or use Super Bot Fight Mode, which a Skip rule can skip. A Skip rule cannot skip Cloudflare Access either: see [Cloudflare Access](#cloudflare-access).
   </Tab>
   <Tab title="nginx">
     ```nginx
@@ -116,7 +116,7 @@ If your firewall can only work with IP addresses, allow Cloudflare's published r
 
 Cloudflare Access answers a request that has no valid session with a `302` redirect to its login page on your team domain, `<team-name>.cloudflareaccess.com`. A cloud audit cannot sign in, so it fails as a [redirect to another site](/guides/failed-audits#offsite-redirect). A WAF custom rule does not help: Cloudflare Access is not one of the phases or products a Skip rule can skip.
 
-Access lets a machine through with a **service token**: a Client ID and a Client Secret sent as two request headers, matched by a policy with the **Service Auth** action.
+Access lets a machine through with a **service token**: a Client ID and a Client Secret sent as two request headers, matched by a policy with the **Service Auth** action. The menu paths below follow Cloudflare's documentation as of October 2026; if they have moved, Cloudflare's [service tokens](https://developers.cloudflare.com/cloudflare-one/identity/service-tokens/) and [Access policies](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/) pages have the current ones.
 
 1. **Create the token.** In Cloudflare, go to **Zero Trust → Access controls → Service credentials → Service Tokens** and select **Create Service Token**. Name it (for example `squirrelscan`), choose a **Service Token Duration**, and select **Generate token**. Copy the Client ID and the Client Secret. Cloudflare shows the Client Secret only once.
 2. **Add a Service Auth policy.** In **Zero Trust → Access controls → Applications**, open the application that protects the hostname you audit and add a policy to it with the action **Service Auth** and an Include rule with the selector **Service Token** set to the token you created. Service Auth policies are evaluated before Allow and Block policies, so your existing login policy stays as it is for people. The selector **Any Access Service Token** also works, but it admits every service token in your account.
@@ -157,7 +157,7 @@ Things that change the result:
 
 Vercel Deployment Protection puts **Vercel Authentication** (a redirect to a Vercel login), **Password Protection** (a password page) or **Trusted IPs** in front of a deployment. **Standard Protection**, the recommended scope, covers every deployment except production domains, so a production custom domain needs no exception. Preview deployments and generated `*.vercel.app` URLs do.
 
-Vercel lets automation through with **Protection Bypass for Automation**, available on every Vercel plan:
+Vercel lets automation through with **Protection Bypass for Automation**, available on every Vercel plan. The steps follow Vercel's [Protection Bypass for Automation](https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation) documentation as of October 2026:
 
 1. **Create the secret.** In the Vercel project, open **Settings → Deployment Protection** and create a secret under **Protection Bypass for Automation**.
 2. **Add the header to squirrelscan.** Under **Settings → Crawl → Custom request headers**, add `x-vercel-protection-bypass` with the secret as its value, and select **Save headers**.
@@ -186,7 +186,7 @@ A site with HTTP basic auth, such as nginx `auth_basic` or Apache `AuthType Basi
    # dXNlcm5hbWU6cGFzc3dvcmQ=
    ```
 
-   Use `printf '%s'`, not `echo`, so no newline is encoded with it.
+   Use `printf '%s'`, not `echo`, so no newline is encoded with it. The output shown is the encoding of the placeholder `username:password`; your value will differ, and it decodes back to your real password, so treat it as a secret.
 2. **Add the header.** Under **Settings → Crawl → Custom request headers**, add `Authorization` with the value `Basic <base64-value>`, for example `Basic dXNlcm5hbWU6cGFzc3dvcmQ=`, and select **Save headers**. The header card accepts `Authorization` like any other name.
 3. **Check it** from your machine:
 
