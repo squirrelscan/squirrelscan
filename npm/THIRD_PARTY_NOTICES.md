@@ -8,17 +8,21 @@ runtime dependency closure of `apps/cli`.
 
 | Package | License | Source |
 | --- | --- | --- |
+| `@cfworker/json-schema@4.1.1` | MIT | [source](https://github.com/cfworker/cfworker) |
 | `@modelcontextprotocol/core@2.3.1` | Apache-2.0 | [source](https://github.com/modelcontextprotocol/typescript-sdk) |
 | `@modelcontextprotocol/server@2.3.1` | Apache-2.0 | [source](https://github.com/modelcontextprotocol/typescript-sdk) |
 | `@nodable/entities@3.0.0` | MIT | [source](https://github.com/nodable/val-parsers) |
 | `@sinclair/typebox@0.34.52` | MIT | [source](https://github.com/sinclairzx81/sinclair-typebox) |
 | `@standard-schema/spec@1.1.0` | MIT | [source](https://github.com/standard-schema/standard-schema) |
 | `@types/tinycolor2@1.4.6` | MIT | [source](https://github.com/DefinitelyTyped/DefinitelyTyped) |
+| `ajv-formats@3.0.1` | MIT | [source](https://github.com/ajv-validator/ajv-formats) |
+| `ajv@8.18.0` | MIT | [source](https://github.com/ajv-validator/ajv) |
 | `anynum@1.0.1` | MIT | [source](https://github.com/NaturalIntelligence/anynum) |
 | `boolbase@2.0.0` | ISC | [source](https://github.com/fb55/boolbase) |
 | `chalk@5.6.2` | MIT | [source](https://github.com/chalk/chalk) |
 | `citty@0.1.6` | MIT | [source](https://github.com/unjs/citty) |
 | `consola@3.4.2` | MIT | [source](https://github.com/unjs/consola) |
+| `content-type@1.0.5` | MIT | [source](https://github.com/jshttp/content-type) |
 | `css-select@7.0.0` | BSD-2-Clause | [source](https://github.com/fb55/css-select) |
 | `css-what@8.0.0` | BSD-2-Clause | [source](https://github.com/fb55/css-what) |
 | `cssom@0.5.0` | MIT | [source](https://github.com/NV/CSSOM) |
@@ -35,12 +39,15 @@ runtime dependency closure of `apps/cli`.
 | `entities@7.0.1` | BSD-2-Clause | [source](https://github.com/fb55/entities) |
 | `entities@8.0.0` | BSD-2-Clause | [source](https://github.com/fb55/entities) |
 | `fast-check@3.23.2` | MIT | [source](https://github.com/dubzzz/fast-check) |
+| `fast-deep-equal@3.1.3` | MIT | [source](https://github.com/epoberezkin/fast-deep-equal) |
+| `fast-uri@3.1.0` | BSD-3-Clause | [source](https://github.com/fastify/fast-uri) |
 | `fast-xml-builder@1.3.0` | MIT | [source](https://github.com/NaturalIntelligence/fast-xml-builder) |
 | `fast-xml-parser@5.10.1` | MIT | [source](https://github.com/NaturalIntelligence/fast-xml-parser) |
 | `gradient-string@3.0.0` | MIT | [source](https://github.com/bokub/gradient-string) |
 | `html-escaper@3.0.3` | MIT | [source](https://github.com/WebReflection/html-escaper) |
 | `htmlparser2@10.1.0` | MIT | [source](https://github.com/fb55/htmlparser2) |
 | `is-unsafe@2.0.0` | MIT | [source](https://github.com/NaturalIntelligence/is-unsafe) |
+| `json-schema-traverse@1.0.0` | MIT | [source](https://github.com/epoberezkin/json-schema-traverse) |
 | `linkedom@0.18.13` | ISC | [source](https://github.com/WebReflection/linkedom) |
 | `nth-check@3.0.1` | BSD-2-Clause | [source](https://github.com/fb55/nth-check) |
 | `path-expression-matcher@1.6.2` | MIT | [source](https://github.com/NaturalIntelligence/path-expression-matcher) |
@@ -116,6 +123,32 @@ Packages: `css-select@7.0.0`, `css-what@8.0.0`, `domelementtype@2.3.0`, `domelem
     THIS IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS,
     EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+### LICENSE (0eb7e0538bf8)
+
+Packages: `ajv-formats@3.0.1`
+
+    MIT License
+
+    Copyright (c) 2020 Evgeny Poberezkin
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
 ### license (1529f88b3675)
 
 Packages: `chalk@5.6.2`
@@ -153,6 +186,43 @@ Packages: `html-escaper@3.0.3`
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
     THE SOFTWARE.
+
+### LICENSE (185ef4f37774)
+
+Packages: `fast-uri@3.1.0`
+
+    Copyright (c) 2011-2021, Gary Court until https://github.com/garycourt/uri-js/commit/a1acf730b4bba3f1097c9f52e7d9d3aba8cdcaae
+    Copyright (c) 2021-present The Fastify team
+    All rights reserved.
+
+    The Fastify team members are listed at https://github.com/fastify/fastify#team.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+        * Redistributions of source code must retain the above copyright
+          notice, this list of conditions and the following disclaimer.
+        * Redistributions in binary form must reproduce the above copyright
+          notice, this list of conditions and the following disclaimer in the
+          documentation and/or other materials provided with the distribution.
+        * The names of any contributors may not be used to endorse or promote
+          products derived from this software without specific prior written
+          permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+    ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+    DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS AND CONTRIBUTORS BE LIABLE FOR ANY
+    DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+    LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+    ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+                                      *   *   *
+
+    The complete list of contributors can be found at:
+    - https://github.com/garycourt/uri-js/graphs/contributors
 
 ### LICENSE (186fa9e312ae)
 
@@ -952,6 +1022,32 @@ Packages: `@sinclair/typebox@0.34.52`
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
     THE SOFTWARE.
 
+### LICENSE (aa407ee69b3f)
+
+Packages: `fast-deep-equal@3.1.3`, `json-schema-traverse@1.0.0`
+
+    MIT License
+
+    Copyright (c) 2017 Evgeny Poberezkin
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
 ### LICENSE (b0905ba7fbb5)
 
 Packages: `user-agents@1.1.675`
@@ -1219,6 +1315,32 @@ Packages: `react-icons@5.7.0`
     Icons8 Line Awesome - https://icons8.com/line-awesome
     License: MIT https://github.com/icons8/line-awesome/blob/master/LICENSE.md
 
+### LICENSE (f2fde84e6c1f)
+
+Packages: `ajv@8.18.0`
+
+    The MIT License (MIT)
+
+    Copyright (c) 2015-2021 Evgeny Poberezkin
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
 ### LICENSE (f5854c00454b)
 
 Packages: `@modelcontextprotocol/core@2.3.1`, `@modelcontextprotocol/server@2.3.1`
@@ -1485,6 +1607,33 @@ Packages: `picocolors@1.1.1`
     WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
     ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
     OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+### LICENSE (fb06d5b872e5)
+
+Packages: `content-type@1.0.5`
+
+    (The MIT License)
+
+    Copyright (c) 2015 Douglas Christopher Wilson
+
+    Permission is hereby granted, free of charge, to any person obtaining
+    a copy of this software and associated documentation files (the
+    'Software'), to deal in the Software without restriction, including
+    without limitation the rights to use, copy, modify, merge, publish,
+    distribute, sublicense, and/or sell copies of the Software, and to
+    permit persons to whom the Software is furnished to do so, subject to
+    the following conditions:
+
+    The above copyright notice and this permission notice shall be
+    included in all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,
+    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+    IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+    CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+    TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+    SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### LICENSE (fc7c40e5d55f)
 

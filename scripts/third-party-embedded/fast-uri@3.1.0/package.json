@@ -1,0 +1,9 @@
+{
+  "name": "fast-uri",
+  "version": "3.1.0",
+  "license": "BSD-3-Clause",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fastify/fast-uri.git"
+  }
+}
