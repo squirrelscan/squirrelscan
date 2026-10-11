@@ -119,6 +119,23 @@ const RECOVERY_TIMEOUT_MS = 10_000;
 // unreadable snapshot only disables recovery (fails closed), never the publish.
 const SNAPSHOT_TIMEOUT_MS = 3_000;
 
+/** The report still holds its crawled page list. */
+function hasCrawledPages(report: AuditReport): boolean {
+  return Array.isArray(report.pages) && report.pages.length > 0;
+}
+
+/** Any rule holds a page check: one with a `pageUrl`, or a folded aggregate of them. */
+function hasPageChecks(report: AuditReport): boolean {
+  for (const rule of Object.values(report.ruleResults ?? {})) {
+    for (const check of rule?.checks ?? []) {
+      if (check.pageUrl) return true;
+      if (check.details?.aggregated === true && (check.pages?.length ?? 0) > 0)
+        return true;
+    }
+  }
+  return false;
+}
+
 /**
  * What the user reads when a report is too large to publish, whether the
  * capper refused it before the POST or the API refused the body (413).
@@ -220,6 +237,22 @@ export async function publishReport(
     ...(options.runId ? { runId: options.runId } : {}),
     ...(options.websiteId ? { websiteId: options.websiteId } : {}),
   };
+
+  // A report with page checks but no crawled page list (a published or slimmed
+  // JSON loaded with `--input`) cannot be capped soundly: the capper drops its
+  // pass rows into tallies that the server reads only beside a resolution
+  // signal, which it builds from `pages[]`, so the score would collapse to the
+  // failures alone. Refused before any request.
+  if (!hasCrawledPages(report) && hasPageChecks(report)) {
+    return err(
+      commandError(
+        "PUBLISH_PREPARE_FAILED",
+        "This report has no crawled page list (an already published or slimmed copy?), " +
+          "so it cannot be published without losing its score.\n" +
+          "Publish the audit from its local project instead: `squirrel report <audit-id> --publish`."
+      )
+    );
+  }
 
   // repo#2667: the published report is the engine's capped summary, at most
   // PUBLISHED_REPORT_MAX_BYTES whatever the crawl size (the capper's own

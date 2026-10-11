@@ -275,6 +275,25 @@ describe("the CLI publishes the capped report (repo#2667)", () => {
     expect(homepage.description).toHaveLength(2_000);
   });
 
+  test("a published copy fed back in (no crawled pages) is refused, not republished with a collapsed score", async () => {
+    // `squirrel report --publish --input <file>` with a published or slimmed JSON:
+    // its pass rows are in tallies the server reads only beside a signal, which
+    // needs the crawled page list.
+    const { body } = await publishedBody(publishReportShape(50));
+    posted = [];
+    const result = await publishReport(body.report as unknown as AuditReport);
+    if (result.ok) throw new Error("unreachable");
+    expect(result.error.code).toBe("PUBLISH_PREPARE_FAILED");
+    expect(result.error.message).toContain("no crawled page list");
+    expect(posted).toHaveLength(0);
+    // A report with no page checks at all (a crawl that fetched nothing) still publishes.
+    const empty = {
+      ...publishReportShape(0),
+      ruleResults: {},
+    } as unknown as AuditReport;
+    expect((await publishReport(empty)).ok).toBe(true);
+  });
+
   test("a stored report the capper cannot read is a clear publish error, and nothing is sent", async () => {
     // An older or damaged stored report, republished with `squirrel report
     // --publish`: a check with no message.
