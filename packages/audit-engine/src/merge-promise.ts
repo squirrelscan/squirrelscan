@@ -13,12 +13,13 @@
 
 import type {
   CheckResult,
+  CheckTallies,
   FindingState,
   PageFindingRecord,
   ResolutionSignal,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
-import { resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
+import { resolutionCheckKey, resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
 // `/types` (leaf type module) not the barrel — see scoring.ts. (#195)
 import { unfoldAggregateCheck } from "@squirrelscan/rules/fold";
 import type { RuleRunResult } from "@squirrelscan/rules/types";
@@ -43,68 +44,19 @@ import {
   type UntouchedCarriedAggregate,
   type UntouchedSamplePage,
 } from "./complete-store-fold";
+import { isReplayedCheck, REMOVED_STATUSES } from "./published-checks";
 import type { SkippedPassCounts } from "./stream-findings";
 import {
+  addChecksToTally,
   buildScoringResultsFromMerged,
+  emptyTally,
   type CarriedFinding,
   type CarriedUnionSource,
+  type IssueTally,
   type PageUrlSet,
   type RuleTally,
 } from "./scoring";
 
-
-/** 404/410 = page gone → stale its findings (not carry). */
-const REMOVED_STATUSES = new Set([404, 410]);
-
-/**
- * True when a published check is a REPLAY, not evidence from this run (#2063).
- *
- * The producers tag every check they publish: `carried` = re-injected from the
- * producer's own finding store for a page this run did NOT crawl, `unrendered` =
- * a finding on a page no audit has ever rendered. Neither was observed by the
- * crawl being published, so neither may count as a crawled page or as a fresh
- * finding here — the cloud has its own store and its own history, and it decides
- * what to carry from that.
- *
- * The laundering this guards against is not hypothetical: a CLI whose LOCAL store
- * held 3,200 open findings on 508 URLs last seen weeks earlier published them as
- * carried, the server counted all 508 as crawled this run, and 129 "audited pages"
- * appeared for a 16-page crawl with every stale finding re-stamped as first seen
- * today (squirrelscan/repo#2063).
- *
- * Gated on the check being PAGE-ATTRIBUTED, so the ordinary site-scope check —
- * no `pageUrl`, no aggregate marker, scored from the shell verbatim — is never
- * dropped by a stray provenance tag. The gate reads the CHECK's shape, not the
- * rule's scope: a check carrying the aggregate marker and naming pages is treated
- * as a page replay whichever rule emitted it, which is the only honest reading of
- * a check that claims those pages.
- */
-function isReplayedCheck(check: CheckResult): boolean {
-  return (
-    isPageAttributed(check) &&
-    (check.provenance === "carried" || check.provenance === "unrendered")
-  );
-}
-
-/**
- * True when a check speaks for one or more PAGES: a per-page check carries a
- * `pageUrl`, and a folded aggregate carries its affected pages in `pages[]`
- * instead.
- *
- * Both forms matter. The sampled branch unfolds before it filters, so it only
- * ever sees the first; the COMPLETE-store branch deliberately does not unfold —
- * the shell's aggregates are its display surface — so there the second form is
- * the one a replay arrives as.
- *
- * The aggregate test is deliberately `unfoldAggregateCheck`'s own gate, so the
- * two branches agree on what an aggregate IS. A check carrying `pages` without
- * the `aggregated` marker is not unfolded there and is not page-attributed here:
- * either way it names no page this run is asked to believe in.
- */
-function isPageAttributed(check: CheckResult): boolean {
-  if (check.pageUrl) return true;
-  return check.details?.aggregated === true && !!check.pages && check.pages.length > 0;
-}
 
 /** Every page a check speaks for, normalized to the store's page identity. */
 function attributedPages(check: CheckResult): string[] {
@@ -306,6 +258,20 @@ export interface CloudSmartAuditsInput {
    */
   resolutionSignal?: ResolutionSignal;
   /**
+   * (repo#2657) A capped report's per-(rule, check name) counts of this run's
+   * fresh checks (`report.checkTallies`, built by the publish capper before it
+   * sampled `ruleResults` and dropped the per-page pass rows).
+   *
+   * With {@link resolutionSignal}, it moves the SAMPLED path's score off the rows:
+   * the published rows are a sample, so counting them would score 10 pages of
+   * every issue class and no passes at all. The fresh side is read from these
+   * counts instead, the carried side from the merge, and the result comes back
+   * as {@link CloudSmartAuditsResult.scoringTallies}. The merge itself (what is
+   * persisted, resolved, carried) reads the rows and the signal exactly as before.
+   * Ignored in complete-store mode, whose findings are unsampled.
+   */
+  checkTallies?: CheckTallies;
+  /**
    * (#1023 R-D3) Complete-store finalize override. When set, `freshResults` and
    * the scoring `crawledUrls` are reconstructed from the COMPLETE findings the
    * chunked-publish path streamed into the store, instead of the #1167-sampled
@@ -388,13 +354,21 @@ export interface CloudSmartAuditsResult {
    */
   unionRuleResults: Map<string, RuleRunResult>;
   /**
-   * (#1873) Per-rule folded tallies over the COMPLETE findings — present ONLY in
-   * complete-store mode. When set, the caller MUST take the health score
+   * (#1873) Per-rule folded tallies over the COMPLETE findings — present in
+   * complete-store mode, and (repo#2657) on the sampled path when the report
+   * carried `checkTallies`. When set, the caller MUST take the health score
    * (`calculateHealthScoreFromTallies`) and the passed/warnings/failed totals from
-   * these, not from {@link unionRuleResults}: the tallies count every affected
-   * page, the union map only lists the shell's sample.
+   * these (or from {@link reportTotals}), not from {@link unionRuleResults}: the
+   * tallies count every affected page, the union map only lists the sample.
    */
   scoringTallies?: Map<string, RuleTally>;
+  /**
+   * (repo#2657) The report's passed/warnings/failed when {@link scoringTallies}
+   * came from a capped report's `checkTallies`. Not a plain sum of the tallies:
+   * the sampled path has never counted carried-clean synthetic passes into
+   * `report.passed` (only into the score), and a capped report must not start.
+   */
+  reportTotals?: { passed: number; warnings: number; failed: number };
   /** Coverage line data for surfacing. */
   coverage: {
     auditedPages: number;
@@ -470,6 +444,10 @@ export async function runCloudSmartAudits(
   const { store, siteKey, crawlId } = input;
   const now = input.now ?? Date.now();
   const completeStore = input.completeStore;
+  // (repo#2657) A capped report: the score comes from its tallies, not its rows.
+  // Needs the signal too, which is what says which pages the tallies cover.
+  const checkTallies =
+    !completeStore && input.resolutionSignal ? input.checkTallies : undefined;
 
   // Rule meta + severity indexes from the report's ruleResults (both modes — the
   // shell always carries every rule that ran, so this is the meta source even in
@@ -512,6 +490,13 @@ export async function runCloudSmartAudits(
    * shell to speak of.
    */
   let shellResults: CloudSmartAuditsInput["ruleResults"] | undefined;
+  /**
+   * (repo#2657) Sampled branch with {@link checkTallies} only: the published
+   * checks with their replays removed, NOT unfolded. They are the union's fresh
+   * side, so the report body keeps the capper's classes and the true counts on
+   * them; unfolding would turn each class into its sampled pages.
+   */
+  let talliedResults: Map<string, RuleRunResult> | undefined;
   /**
    * (pub#474) Sampled branch only: `${ruleId}|${checkName}` of every folded
    * aggregate this run published. A per-page check rebuilt from one holds only
@@ -601,6 +586,7 @@ export async function runCloudSmartAudits(
     // — the cloud reports what the cloud has observed, not what some machine's
     // local database remembers.
     freshResults = new Map<string, RuleRunResult>();
+    if (checkTallies) talliedResults = new Map<string, RuleRunResult>();
     for (const [ruleId, r] of Object.entries(input.ruleResults)) {
       const checks: CheckResult[] = [];
       for (const original of r.checks) {
@@ -617,6 +603,10 @@ export async function runCloudSmartAudits(
         }
       }
       freshResults.set(ruleId, { meta: r.meta, checks });
+      talliedResults?.set(ruleId, {
+        meta: r.meta,
+        checks: r.checks.filter((c) => !isReplayedCheck(c)),
+      });
       if (r.checks.some((c) => typeof c.details?.checksTruncated === "number")) {
         rulesWithDroppedChecks.add(ruleId);
       }
@@ -977,11 +967,12 @@ export async function runCloudSmartAudits(
   // Drop checks for removed (404/410) pages from the fresh results before union
   // scoring — removed pages are not "known non-removed" pages. Site-scope checks
   // (no pageUrl) pass through untouched.
+  const unionFresh = talliedResults ?? freshResults;
   const freshForUnion =
     removedUrls.size === 0
-      ? freshResults
+      ? unionFresh
       : new Map(
-          Array.from(freshResults, ([ruleId, r]) => [
+          Array.from(unionFresh, ([ruleId, r]) => [
             ruleId,
             {
               meta: r.meta,
@@ -1008,9 +999,23 @@ export async function runCloudSmartAudits(
     ...(carriedSource ? { carriedSource } : {}),
   });
 
+  let reportTotals: CloudSmartAuditsResult["reportTotals"];
+  if (checkTallies && resolution) {
+    ({ scoringTallies, reportTotals } = scoreFromCheckTallies({
+      checkTallies,
+      freshForUnion,
+      carriedFindings,
+      carriedPageUrls,
+      crawledUrls,
+      resolution,
+      ruleMetaIndex,
+    }));
+  }
+
   return {
     unionRuleResults,
     ...(scoringTallies ? { scoringTallies } : {}),
+    ...(reportTotals ? { reportTotals } : {}),
     coverage: {
       // Pages this run CRAWLED, less the removed ones. After #2063 that excludes
       // the replayed checks that used to pad it. (#2067) On the SAMPLED path it
@@ -1097,11 +1102,17 @@ function assertUntouched(
  * A page with a carried finding is left as it was, whatever the signal says: its
  * failures are in the union. Bounded by the signal: one pass over its hashes,
  * one lookup each.
+ *
+ * (repo#2657) `freshTallied`: the fresh side is a capped report's tallies, which
+ * already count every page this run evaluated, passes and failures alike. A
+ * crawled page some check evaluated is therefore held out whatever it holds, and
+ * one no check evaluated stays only for its carried findings, as before.
  */
 function withoutUnscorablePages(
   carriedPageUrls: PageUrlSet,
   resolution: MergeResolutionInput,
   carriedFindings: readonly CarriedFinding[],
+  freshTallied = false,
 ): PageUrlSet {
   const candidates = new Set<string>();
   const byHash = new Map<string, string[]>();
@@ -1150,13 +1161,108 @@ function withoutUnscorablePages(
 
   const scorable = new Set<string>();
   for (const url of carriedPageUrls) {
-    if (candidates.has(url) && !withCarried.has(url)) {
+    if (candidates.has(url)) {
       const evaluated = evaluatingKeys - (notEvaluatedKeys.get(url) ?? 0) > 0;
-      if (!evaluated || failing.has(url)) continue;
+      if (freshTallied) {
+        if (evaluated || !withCarried.has(url)) continue;
+      } else if (!withCarried.has(url) && (!evaluated || failing.has(url))) {
+        continue;
+      }
     }
     scorable.add(url);
   }
   return scorable;
+}
+
+/**
+ * (repo#2657) The union's tallies for a capped report: this run's fresh counts
+ * from its `checkTallies`, plus the carried side the merge left open, in the
+ * same `addChecksToTally` units the materialized union is scored in.
+ *
+ * The capped rows cannot be counted: each issue class lists 10 pages and no
+ * pass is listed at all. The tallies were counted from every row before the
+ * capper sampled them, so they are what the union scorer would have counted
+ * from an uncapped report, minus what the merge adds:
+ *  - carried findings on pages this run did not evaluate for that check. One on
+ *    a page this run evaluated is left out: the tallies already count that page
+ *    for the check, failing or passing. (The merge carries those when the sample
+ *    clipped the page, or the signal's key was truncated.)
+ *  - synthetic passes for clean carried pages, from the same page set, without
+ *    the pages the tallies already count (see `withoutUnscorablePages`).
+ * Their (check name, page) keys never meet the fresh ones, so the sum is exact.
+ */
+function scoreFromCheckTallies(input: {
+  checkTallies: CheckTallies;
+  freshForUnion: Map<string, RuleRunResult>;
+  carriedFindings: readonly CarriedFinding[];
+  carriedPageUrls: PageUrlSet;
+  crawledUrls: ReadonlySet<string>;
+  resolution: MergeResolutionInput;
+  ruleMetaIndex: Map<string, RuleRunResult["meta"]>;
+}): {
+  scoringTallies: Map<string, RuleTally>;
+  reportTotals: NonNullable<CloudSmartAuditsResult["reportTotals"]>;
+} {
+  const { checkTallies, resolution, crawledUrls } = input;
+  const evaluatedThisRun = (f: CarriedFinding): boolean => {
+    const url = f.normalizedUrl;
+    if (!crawledUrls.has(url) && !resolution.crawledUrls.has(url)) return false;
+    const key = resolutionCheckKey(f.ruleId, f.checkName);
+    // No key: the check evaluated no page this run, so nothing counted this one.
+    if (!resolution.failingByCheck.has(key)) return false;
+    const notEvaluated = resolution.notEvaluatedByCheck.get(key);
+    if (!notEvaluated) return true;
+    // Both spellings, as the merge reads them: a query-blind hash from an older
+    // publisher listing the page means it was not evaluated, which scores the carry.
+    const q = url.indexOf("?");
+    if (notEvaluated.has(resolutionUrlHash(url))) return false;
+    return !(q !== -1 && notEvaluated.has(resolutionUrlHash(url.slice(0, q))));
+  };
+  const scored = input.carriedFindings.filter((f) => !evaluatedThisRun(f));
+
+  // The carried half of the union, over the same rules: no fresh checks (those
+  // are the tallies), so each rule holds only its scored carried replays and its
+  // clean-carried pass count.
+  const carriedSide = buildScoringResultsFromMerged({
+    freshResults: new Map(
+      Array.from(input.freshForUnion, ([ruleId, r]) => [ruleId, { meta: r.meta, checks: [] }]),
+    ),
+    carriedFindings: scored,
+    carriedPageUrls: withoutUnscorablePages(input.carriedPageUrls, resolution, scored, true),
+    ruleMetaIndex: input.ruleMetaIndex,
+  });
+
+  const scoringTallies = new Map<string, RuleTally>();
+  const reportTotals = { passed: 0, warnings: 0, failed: 0 };
+  for (const [ruleId, r] of carriedSide) {
+    const tally = freshTally(checkTallies[ruleId]);
+    const synthetic = r.syntheticPassCount ?? 0;
+    addChecksToTally(tally, r.checks, r.meta.severity === "info", synthetic);
+    scoringTallies.set(ruleId, { meta: r.meta, tally });
+    reportTotals.passed += tally.passed - synthetic;
+    reportTotals.warnings += tally.warnings;
+    reportTotals.failed += tally.failed;
+  }
+  return { scoringTallies, reportTotals };
+}
+
+/**
+ * One rule's fresh counts, summed over its check names. The tallies arrive in a
+ * publish body, so anything that is not a non-negative count counts as 0.
+ */
+function freshTally(byName: CheckTallies[string] | undefined): IssueTally {
+  const tally = emptyTally();
+  if (!byName) return tally;
+  const count = (n: unknown): number =>
+    typeof n === "number" && Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  for (const t of Object.values(byName)) {
+    tally.passed += count(t?.passed);
+    tally.warnings += count(t?.warnings);
+    tally.failed += count(t?.failed);
+    tally.warnUnits += count(t?.warnUnits);
+    tally.failUnits += count(t?.failUnits);
+  }
+  return tally;
 }
 
 /** No fresh side at all — a complete-store caller that passed only priors. */

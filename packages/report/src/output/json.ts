@@ -218,7 +218,7 @@ interface SlimJsonReport {
 }
 
 function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
-  const categoryIssues = groupIssuesByCategory(report.ruleResults);
+  const categoryIssues = groupIssuesByCategory(report.ruleResults, report.checkTallies);
   const es = editorSummaryView(report.editorSummary);
   const refusedSeedRedirect = seedRedirect(report);
   const skippedChecks = collectSkippedChecks(report.ruleResults);

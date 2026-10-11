@@ -2,6 +2,7 @@
 // Shared across CLI console + report renderers. No-op when `smart_audits` is
 // off (the report carries no `coverage` and no carried checks).
 
+import type { CheckTally } from "@squirrelscan/core-contracts";
 import {
   AUDIT_LEVEL_COPY,
   AUDIT_SETTING_COPY,
@@ -463,9 +464,16 @@ export interface MixedProvenanceCheck {
  * page. Such a page isn't actually clean, so it's excluded from the "checked
  * clean" count (only counted toward "pending re-check"); the two counts in
  * the rendered message are always disjoint.
+ *
+ * A capped published report (squirrelscan/repo#2657) lists no pass rows, so its
+ * fresh passes are only in the rule's `checkTallies`, passed here as
+ * `freshTally`. They are counts per check name, not pages, so the note still
+ * fires from them but without a clean-page count: "Fixed on all pages checked
+ * this run; N pages pending re-check."
  */
 export function ruleMixedProvenanceNote(
   checks: ReadonlyArray<MixedProvenanceCheck>,
+  freshTally?: Readonly<Record<string, CheckTally>>,
 ): string | undefined {
   const freshPassPages = new Set<string>();
   const carriedIssuePages = new Set<string>();
@@ -487,14 +495,25 @@ export function ruleMixedProvenanceNote(
       else for (const p of pages) freshIssuePages.add(p);
     }
   }
+  const pending = carriedIssuePages.size;
+  const pendingText = `${pending} page${pending === 1 ? "" : "s"} pending re-check.`;
+  if (freshPassPages.size === 0 && freshTally) {
+    let passed = 0;
+    let issues = 0;
+    for (const tally of Object.values(freshTally)) {
+      passed += tally.passed ?? 0;
+      issues += (tally.warnings ?? 0) + (tally.failed ?? 0);
+    }
+    if (passed === 0 || pending === 0 || issues > 0 || freshIssuePages.size > 0) return undefined;
+    return `Fixed on all pages checked this run; ${pendingText}`;
+  }
   // Disjoint the two buckets: a page counted as a carried issue can't also
   // count toward "checked clean", even if some other check passed it fresh.
   const trulyClean = [...freshPassPages].filter((p) => !carriedIssuePages.has(p)).length;
-  if (trulyClean === 0 || carriedIssuePages.size === 0 || freshIssuePages.size > 0) {
+  if (trulyClean === 0 || pending === 0 || freshIssuePages.size > 0) {
     return undefined;
   }
-  const pending = carriedIssuePages.size;
-  return `Fixed on all ${trulyClean} page${trulyClean === 1 ? "" : "s"} checked this run; ${pending} page${pending === 1 ? "" : "s"} pending re-check.`;
+  return `Fixed on all ${trulyClean} page${trulyClean === 1 ? "" : "s"} checked this run; ${pendingText}`;
 }
 
 /** Trailing note for the rate-limit line; empty when nothing is unfetched. */

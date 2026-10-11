@@ -38,8 +38,8 @@
 // Deterministic (same input, byte-identical output, so the publish content
 // hash is stable) and never mutates its input.
 //
-// Worker-clean: core-contracts, rules/fold, rules/resolution, utils and the
-// scorer's tally math only.
+// Worker-clean: core-contracts, rules/fold, rules/resolution, utils, the
+// scorer's tally math and the server's reading of a published check only.
 
 import type {
   CheckItem,
@@ -77,7 +77,9 @@ import { checkAffectedPages } from "@squirrelscan/report/affected-pages";
 import { buildResolutionSignal } from "@squirrelscan/rules/resolution";
 import { byteLength } from "@squirrelscan/utils/bytes";
 import { RULE_ID_ROBOTS_TXT, RULE_ID_SITEMAP_EXISTS } from "@squirrelscan/utils/constants";
+import { normalizePageUrl } from "@squirrelscan/utils/url";
 
+import { isReplayedCheck, REMOVED_STATUSES } from "./published-checks";
 import { addChecksToTally, emptyTally } from "./scoring";
 
 /** The rule meta fields the capper reads. Either producer's meta satisfies it. */
@@ -173,14 +175,17 @@ export class PublishedReportTooLargeError extends Error {
  * {@link CheckTally}). Counted over the UNFOLDED checks with the scorer's own
  * `addChecksToTally`, exactly as the server rescore counts a published report
  * today, so a reader that sums them gets the numbers it would have counted from
- * the rows the capper drops. Carried and unrendered checks are replays of an
- * earlier audit and are left out, as the server's sampled merge leaves them out.
+ * the rows the capper drops. The checks that rescore leaves out are left out
+ * here too (repo#2657): page replays (`isReplayedCheck`), and checks on a page
+ * that returned 404/410 this run (`removedUrls`, normalized), which it does not
+ * score because the page is gone.
  *
  * If the input was itself already sampled (an aggregate whose `pages` is shorter
  * than its `pagesTruncated`), the counts are a floor, same as a rescore of it.
  */
 export function buildCheckTallies(
   ruleResults: Record<string, { meta: { severity: string }; checks: CheckResult[] }>,
+  removedUrls: ReadonlySet<string> = new Set(),
 ): CheckTallies {
   const out: CheckTallies = {};
   for (const ruleId of Object.keys(ruleResults).sort()) {
@@ -189,7 +194,10 @@ export function buildCheckTallies(
     const byName = new Map<string, CheckResult[]>();
     for (const original of rule.checks) {
       for (const check of unfoldAggregateCheck(original)) {
-        if (check.provenance === "carried" || check.provenance === "unrendered") continue;
+        if (isReplayedCheck(check)) continue;
+        if (check.pageUrl && removedUrls.size > 0 && removedUrls.has(normalizePageUrl(check.pageUrl))) {
+          continue;
+        }
         const list = byName.get(check.name);
         if (list) list.push(check);
         else byName.set(check.name, [check]);
@@ -863,6 +871,25 @@ function slimEntityMap(map: EntityMap | null | undefined): { map?: EntityMap; fa
   }
 }
 
+/**
+ * Pages that returned 404/410 this run, normalized. The server stales their
+ * findings and leaves their checks out of the score (repo#2657), so the tallies
+ * do too. Read from the full report, before `pageStatuses` is clipped.
+ */
+function removedPageUrls(report: CappableReport): Set<string> {
+  const out = new Set<string>();
+  const add = (url: unknown, status: unknown): void => {
+    if (typeof url === "string" && typeof status === "number" && REMOVED_STATUSES.has(status)) {
+      out.add(normalizePageUrl(url));
+    }
+  };
+  if (Array.isArray(report.pages)) for (const page of report.pages) add(page?.url, page?.statusCode);
+  if (Array.isArray(report.pageStatuses)) {
+    for (const row of report.pageStatuses) add(row?.url, row?.status);
+  }
+  return out;
+}
+
 function crawledUrlsOf(pages: CappableReport["pages"]): string[] {
   if (!Array.isArray(pages)) return [];
   const urls: string[] = [];
@@ -992,7 +1019,7 @@ export function capReportForPublish<T extends CappableReport>(
       ),
   );
   const pageStatuses = buildPageStatuses(report);
-  const checkTallies = buildCheckTallies(report.ruleResults);
+  const checkTallies = buildCheckTallies(report.ruleResults, removedPageUrls(report));
   const transportBytes =
     (resolutionSignal ? bytesOf(resolutionSignal) + 24 : 0) +
     (pageStatuses ? bytesOf(pageStatuses) + 20 : 0);

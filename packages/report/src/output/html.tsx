@@ -1402,7 +1402,7 @@ function ReportPage({
   reportId?: string;
   branding?: ReportBranding;
 }) {
-  const categoryIssues = groupIssuesByCategory(report.ruleResults);
+  const categoryIssues = groupIssuesByCategory(report.ruleResults, report.checkTallies);
   const hasIssues = categoryIssues.length > 0;
   // #792: a 0-page failed/blocked run has no issues, but "No issues found"
   // would read as a clean pass. The FailureNotice carries the real state, so

@@ -853,8 +853,18 @@ describe("capReportForPublish: tallies", () => {
   test("the score from the tallies equals the score from every row", () => {
     const input = report(300);
     const capped = capReportForPublish(input);
+    // Every row the server's rescore scores: not the ones on a page that 404'd
+    // this run, whose findings it stales instead (repo#2657).
+    const removed = new Set(input.pages.filter((p) => p.statusCode === 404).map((p) => p.url));
+    expect(removed.size).toBeGreaterThan(0);
     const full = new Map<string, RuleRunResult>(
-      Object.entries(input.ruleResults).map(([id, r]) => [id, r as unknown as RuleRunResult]),
+      Object.entries(input.ruleResults).map(([id, r]) => [
+        id,
+        {
+          ...r,
+          checks: r.checks.filter((c) => !(c.pageUrl && removed.has(c.pageUrl))),
+        } as unknown as RuleRunResult,
+      ]),
     );
     const penalty = new Map<string, RuleRunResult>(
       ["crawl/robots-txt", "crawl/sitemap-exists"].map((id) => [
