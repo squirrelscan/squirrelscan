@@ -28,6 +28,7 @@ import type { AuditReport } from "../../src/types";
 
 import { version } from "../../package.json";
 import {
+  payloadTooLargeMessage,
   pickHomepageSummary,
   publishReport,
 } from "../../src/controllers/report/publish";
@@ -41,6 +42,18 @@ isolateSquirrelHome("squirrel-pub-capped");
 const originalToken = process.env[API_TOKEN_ENV_VAR];
 const originalFetch = globalThis.fetch;
 let posted: string[];
+/** The API's answer to the POST; a stored report by default. */
+let respond: () => Response;
+const stored = (): Response =>
+  Response.json(
+    {
+      id: "rep_1",
+      url: "https://reports.squirrelscan.com/rep_1",
+      visibility: "public",
+      createdAt: "2026-10-12T00:00:00.000Z",
+    },
+    { status: 201 }
+  );
 
 beforeAll(() => {
   process.env[API_TOKEN_ENV_VAR] = "sq_live_test_token_for_capped_publish";
@@ -51,21 +64,14 @@ afterAll(() => {
 });
 beforeEach(() => {
   posted = [];
+  respond = stored;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     if (
       new URL(String(input)).pathname === "/v1/reports" &&
       init?.method === "POST"
     ) {
       posted.push(String(init.body));
-      return Response.json(
-        {
-          id: "rep_1",
-          url: "https://reports.squirrelscan.com/rep_1",
-          visibility: "public",
-          createdAt: "2026-10-12T00:00:00.000Z",
-        },
-        { status: 201 }
-      );
+      return respond();
     }
     return new Response("not found", { status: 404 });
   }) as unknown as typeof fetch;
@@ -119,6 +125,22 @@ describe("the CLI publishes the capped report (repo#2667)", () => {
       );
       expect(byteLength(raw)).toBeLessThanOrEqual(PUBLISHED_REPORT_MAX_BYTES);
       expect(body.report.detail.capped).toBe(true);
+      // Twice the classes: past the full sample, the fitter reduces samples to
+      // fit, and the CLI says so.
+      posted = [];
+      const warnings: string[] = [];
+      const result = await publishReport(
+        publishReportShape(100, { everyClassFails: 10, rules: 460 }),
+        { onWarn: (message) => warnings.push(message) }
+      );
+      expect(result.ok).toBe(true);
+      expect(byteLength(posted[0]!)).toBeLessThanOrEqual(
+        PUBLISHED_REPORT_MAX_BYTES
+      );
+      const reduced = (JSON.parse(posted[0]!) as Body).report.detail;
+      expect(reduced.tier).toBeGreaterThan(0);
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain("squirrel report --format json");
     },
     SLOW
   );
@@ -198,6 +220,73 @@ describe("the CLI publishes the capped report (repo#2667)", () => {
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("unreachable");
     expect(result.error.code).toBe("PAYLOAD_TOO_LARGE");
+    expect(posted).toHaveLength(0);
+    // The same message as when the API refuses the body.
+    expect(result.error.message).toBe(payloadTooLargeMessage());
+    respond = () =>
+      Response.json(
+        { error: { code: "PAYLOAD_TOO_LARGE", message: "Too large" } },
+        { status: 413 }
+      );
+    const refused = await publishReport(publishReportShape(1));
+    if (refused.ok) throw new Error("unreachable");
+    expect(refused.error).toMatchObject({
+      code: "PAYLOAD_TOO_LARGE",
+      message: payloadTooLargeMessage(),
+    });
+  });
+
+  test("the API's old-CLI window refusal (a 422 PAYLOAD_TOO_LARGE) keeps its code and message", async () => {
+    // repo#2659 answers a CLI before the capper with a 422, so that CLI prints
+    // the server's text; this one passes it through unchanged.
+    respond = () =>
+      Response.json(
+        {
+          error: {
+            code: "PAYLOAD_TOO_LARGE",
+            message: "Run `squirrel self update`, then publish it again.",
+          },
+        },
+        { status: 422 }
+      );
+    const result = await publishReport(publishReportShape(50));
+    if (result.ok) throw new Error("unreachable");
+    expect(result.error).toMatchObject({
+      code: "PAYLOAD_TOO_LARGE",
+      message: "Run `squirrel self update`, then publish it again.",
+    });
+    expect(posted).toHaveLength(1);
+  });
+
+  test("a home page with a huge title still publishes, its text bounded as the API bounds it", async () => {
+    const report = publishReportShape(5);
+    const home = report.pages[0]! as {
+      meta: { title: string; description: string };
+    };
+    home.meta.title = "t".repeat(1_100_000);
+    home.meta.description = "d".repeat(1_100_000);
+    const { raw, body } = await publishedBody(report);
+    expect(byteLength(raw)).toBeLessThanOrEqual(PUBLISHED_REPORT_MAX_BYTES);
+    const homepage = body.report.homepage as {
+      title: string;
+      description: string;
+    };
+    expect(homepage.title).toHaveLength(1_000);
+    expect(homepage.description).toHaveLength(2_000);
+  });
+
+  test("a stored report the capper cannot read is a clear publish error, and nothing is sent", async () => {
+    // An older or damaged stored report, republished with `squirrel report
+    // --publish`: a check with no message.
+    const report = publishReportShape(5);
+    const rule = Object.values(report.ruleResults)[0]!;
+    delete (rule.checks[0] as { message?: string }).message;
+    const result = await publishReport(report);
+    if (result.ok) throw new Error("unreachable");
+    expect(result.error.code).toBe("PUBLISH_PREPARE_FAILED");
+    expect(result.error.message).toContain(
+      "Could not prepare this report for publishing"
+    );
     expect(result.error.message).toContain("squirrel report");
     expect(posted).toHaveLength(0);
   });

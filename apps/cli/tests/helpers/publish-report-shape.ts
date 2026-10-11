@@ -88,13 +88,14 @@ const CATEGORIES = [
   "schema",
   "links",
 ];
-/** As many page check classes as the real catalog has, for the worst case. */
-const WIDE_RULES: RuleSpec[] = Array.from({ length: 230 }, (_, r) => ({
-  id: `${CATEGORIES[r % CATEGORIES.length]}/wide-${String(r).padStart(3, "0")}`,
-  category: CATEGORIES[r % CATEGORIES.length]!,
-  severity: "warning" as const,
-  names: ["first-check", "second-check"],
-}));
+/** Page rules with two check classes each, for the every-class-fails shapes. */
+const wideRules = (count: number): RuleSpec[] =>
+  Array.from({ length: count }, (_, r) => ({
+    id: `${CATEGORIES[r % CATEGORIES.length]}/wide-${String(r).padStart(3, "0")}`,
+    category: CATEGORIES[r % CATEGORIES.length]!,
+    severity: "warning" as const,
+    names: ["first-check", "second-check"],
+  }));
 
 /** Deterministic pseudo-random in [0, 1) from a string. */
 function unit(key: string): number {
@@ -111,8 +112,10 @@ function statusFor(key: string): CheckResult["status"] {
 }
 
 export interface ReportShape {
-  /** Every page check class of 230 rules fails on every page, with this many items. */
+  /** Every page check class of `rules` rules fails on every page, with this many items. */
   everyClassFails?: number;
+  /** Rules for `everyClassFails` (default 230, about the real catalog's page classes). */
+  rules?: number;
   /** Write every site-controlled string in this character (multi-byte in UTF-8). */
   char?: string;
 }
@@ -131,7 +134,9 @@ export function publishReportShape(
     shape.char ? `${pageUrl(i)}/${text("slug-text")}` : pageUrl(i);
   const ruleResults: Record<string, { meta: unknown; checks: CheckResult[] }> =
     {};
-  const specs = shape.everyClassFails ? WIDE_RULES : PAGE_RULES;
+  const specs = shape.everyClassFails
+    ? wideRules(shape.rules ?? 230)
+    : PAGE_RULES;
   for (const spec of specs) {
     const checks: CheckResult[] = [];
     for (let p = 0; p < pages; p++) {

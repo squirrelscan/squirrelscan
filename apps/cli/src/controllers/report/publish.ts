@@ -10,7 +10,11 @@ import {
   PublishedReportTooLargeError,
   type CappedReport,
 } from "@squirrelscan/audit-engine/publish-cap";
-import { PUBLISHED_REPORT_MAX_BYTES } from "@squirrelscan/core-contracts/limits";
+import { clampItemString } from "@squirrelscan/core-contracts/clamp";
+import {
+  PUBLISHED_REPORT_MAX_BYTES,
+  REPORT_LIMITS,
+} from "@squirrelscan/core-contracts/limits";
 import { Effect } from "effect";
 import { existsSync } from "node:fs";
 
@@ -116,6 +120,14 @@ const RECOVERY_TIMEOUT_MS = 10_000;
 const SNAPSHOT_TIMEOUT_MS = 3_000;
 
 /**
+ * What the user reads when a report is too large to publish, whether the
+ * capper refused it before the POST or the API refused the body (413).
+ */
+export function payloadTooLargeMessage(): string {
+  return `Report exceeds maximum allowed size (${PUBLISHED_REPORT_MAX_BYTES / 1024 / 1024}MB).\nTry reducing the number of pages audited.`;
+}
+
+/**
  * Stamp the FIRST publish (#2182). Non-fatal by construction: the report IS
  * published, and a failed settings write must not turn it into an error.
  */
@@ -218,12 +230,16 @@ export async function publishReport(
   try {
     slimmed = slimForPublish(report);
   } catch (error) {
-    if (!(error instanceof PublishedReportTooLargeError)) throw error;
+    // Too large: the same message as the API's refusal of the body below.
+    if (error instanceof PublishedReportTooLargeError) {
+      return err(commandError("PAYLOAD_TOO_LARGE", payloadTooLargeMessage()));
+    }
+    // A stored report the capper cannot read (a malformed or much older one,
+    // republished with `squirrel report --publish`): say so and send nothing.
     return err(
       commandError(
-        "PAYLOAD_TOO_LARGE",
-        `Report is too large to publish: its ${error.part} is ${(error.bytes / 1024).toFixed(0)}KB, ` +
-          `over the ${(error.budgetBytes / 1024).toFixed(0)}KB publish budget.\n` +
+        "PUBLISH_PREPARE_FAILED",
+        `Could not prepare this report for publishing (${error instanceof Error ? error.message : String(error)}).\n` +
           "It is still saved locally: view it with `squirrel report`."
       )
     );
@@ -269,12 +285,7 @@ export async function publishReport(
       }
 
       if (response.status === 413) {
-        return err(
-          commandError(
-            "PAYLOAD_TOO_LARGE",
-            `Report exceeds maximum allowed size (${maxMB}MB).\nTry reducing the number of pages audited.`
-          )
-        );
+        return err(commandError("PAYLOAD_TOO_LARGE", payloadTooLargeMessage()));
       }
 
       // #1168: any server 5xx is a server-verifiable failure — classify it with a
@@ -518,7 +529,18 @@ export function pickHomepageSummary(
   const title = home.meta?.title ?? home.og?.title ?? null;
   const description = home.meta?.description ?? home.og?.description ?? null;
   if (!title && !description) return undefined;
-  return { title, description };
+  // Site-controlled text, bounded as the API bounds it: the capper keeps the
+  // field whole, so an unbounded title alone could push a report past its budget.
+  return {
+    title:
+      title === null
+        ? null
+        : clampItemString(title, REPORT_LIMITS.maxMediumString),
+    description:
+      description === null
+        ? null
+        : clampItemString(description, REPORT_LIMITS.maxMetaDescriptionString),
+  };
 }
 
 /** What the CLI adds to a report before it is capped for publish. */
