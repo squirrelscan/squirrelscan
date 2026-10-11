@@ -1503,6 +1503,34 @@ back (354 inherited again) and rejected: it reproduced the same 2 differing
 pages as `main`, because a rule can match inside a hash. Byte-identity is the
 claim this feature rests on, so the key keeps the full script name.
 
+### #614: the root attributes and icon links join the signature
+
+Three declared rules read inputs the signature above did not cover:
+`a11y/html-xml-lang-mismatch` (`lang` and `xml:lang` on `<html>`),
+`a11y/aria-hidden-body` (`aria-hidden` on `<html>` and `<body>`) and
+`core/favicon` (the `rel` and `href` of icon links). `fanoutInputSignature`
+now includes all three, and `template-fanout-equivalence-golden.test.ts` pins
+six counterexamples (an `xml:lang` that contradicts `lang`, a different `lang`
+under one `xml:lang`, `aria-hidden` on `<html>`, on `<body>`, a missing favicon,
+a favicon in another format) that share a chrome key, fail on the previous key
+and pass on this one.
+
+Re-measured 2026-10-11 the same way as the table above (one pass, parse, chrome
+key, both signatures, first page of a key is the representative,
+`DEFAULT_MAX_CLUSTERS` cap, no rules run). Gymshark is the same 2026-09-22 crawl;
+openelectricity is a fresh `--level full -m 250` crawl, because the 2026-10-10
+one is not in the local store. The previous key reproduces
+its row above on both, so the two rows compare like with like:
+
+| crawl | auditable pages | previous key: clusters / inherited | with #614: clusters / inherited |
+| --- | --- | --- | --- |
+| www.gymshark.com (2026-09-22, 4000 pages) | 3983 | 52 / 3931 | 72 / 3911 |
+| openelectricity.org.au (fresh crawl 2026-10-11, 250 pages) | 250 | 11 / 239 | 11 / 239 |
+
+The new inputs cost gymshark 20 inherited pages (0.5%) and openelectricity none.
+Which of the three inputs splits gymshark's 20 extra clusters was not broken
+down.
+
 ### Byte-identity
 
 The claim is that the output is indistinguishable from running every rule on every
