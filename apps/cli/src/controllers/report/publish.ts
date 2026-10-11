@@ -23,8 +23,7 @@ import {
 } from "@squirrelscan/rules";
 import { byteLength } from "@squirrelscan/utils/bytes";
 import { Effect } from "effect";
-import { existsSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync } from "node:fs";
 
 import type { AuditReport, CheckResult } from "@/types";
 
@@ -43,7 +42,6 @@ import {
   envTokenRejectedMessage,
   resolveCredential,
 } from "@/self/credentials";
-import { getProjectsPath } from "@/self/paths";
 import { loadUserSettings, updateSettings } from "@/self/settings";
 
 import { version } from "../../../package.json";
@@ -476,68 +474,49 @@ export async function publishReport(
 }
 
 /**
- * Get all project storage paths
- */
-function getProjectStoragePaths(): string[] {
-  const projectsDir = getProjectsPath();
-  if (!existsSync(projectsDir)) return [];
-
-  return readdirSync(projectsDir, { withFileTypes: true })
-    .filter((d) => d.isDirectory())
-    .map((d) => join(projectsDir, d.name, "project.db"))
-    .filter((p) => existsSync(p));
-}
-
-/**
- * Save published report info to local storage for tracking
- * This allows showing published status in `squirrel report --list`
+ * Mark a crawl as published in its project's database, so `squirrel report
+ * --list` shows the hosted report next to it.
+ *
+ * `dbPath` is that project's `project.db`, which every caller already knows: the
+ * audit just wrote to it, or the report was loaded from it. #625: this used to
+ * open and initialise every database under `~/.squirrel/projects` until one held
+ * the crawl, so the end of an audit stalled on a large store (17,248 databases on
+ * one machine) after the report url had already printed.
+ *
+ * Non-fatal by construction, as before: the report IS published. A database that
+ * is missing, does not hold the crawl or fails to open only skips the local mark.
  */
 export async function savePublishedReportInfo(
+  dbPath: string,
   crawlId: string,
   reportId: string,
   url: string,
   visibility: ReportVisibility
 ): Promise<void> {
-  const dbPaths = getProjectStoragePaths();
+  if (!existsSync(dbPath)) return;
 
-  // Search for the crawlId in all project databases
-  for (const dbPath of dbPaths) {
-    if (!existsSync(dbPath)) continue;
-
-    const storage = new SQLiteStorage(dbPath, getGlobalContentStore());
-    try {
-      const found = await Effect.runPromise(
-        Effect.gen(function* () {
-          yield* storage.init();
-          const crawl = yield* storage.getCrawl(crawlId);
-          if (!crawl) {
-            return false;
-          }
-          // Found the crawl - save published info
-          yield* storage.savePublishedReport(
-            crawlId,
-            reportId,
-            url,
-            visibility,
-            new Date().toISOString()
-          );
-          return true;
-        })
-      );
-
-      if (found) {
-        await Effect.runPromise(
-          storage.close().pipe(Effect.catchAll(() => Effect.void))
+  const storage = new SQLiteStorage(dbPath, getGlobalContentStore());
+  try {
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* storage.init();
+        const crawl = yield* storage.getCrawl(crawlId);
+        if (!crawl) return;
+        yield* storage.savePublishedReport(
+          crawlId,
+          reportId,
+          url,
+          visibility,
+          new Date().toISOString()
         );
-        return;
-      }
-    } catch {
-      // Continue to next database
-    } finally {
-      await Effect.runPromise(
-        storage.close().pipe(Effect.catchAll(() => Effect.void))
-      );
-    }
+      })
+    );
+  } catch {
+    // The publish succeeded; only the local "published" mark is lost.
+  } finally {
+    await Effect.runPromise(
+      storage.close().pipe(Effect.catchAll(() => Effect.void))
+    );
   }
 }
 

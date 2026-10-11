@@ -11,18 +11,14 @@ import {
   beforeEach,
   describe,
   expect,
-  spyOn,
   test,
 } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import type { AuditReport } from "../../src/types";
 
 import { publishReport } from "../../src/controllers/report/publish";
 import { API_TOKEN_ENV_VAR } from "../../src/self/credentials";
-import * as pathsModule from "../../src/self/paths";
+import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
 
 function report(): AuditReport {
   return {
@@ -47,26 +43,20 @@ function report(): AuditReport {
   } as unknown as AuditReport;
 }
 
-const settingsHome = mkdtempSync(join(tmpdir(), "squirrel-pub-5xx-"));
+// #626: settings, projects and stores all under one scratch dir.
+isolateSquirrelHome("squirrel-pub-5xx");
 const originalToken = process.env[API_TOKEN_ENV_VAR];
 const originalFetch = globalThis.fetch;
-let restoreSettingsPath: () => void = () => {};
 let calls: Array<{ method: string; path: string }>;
 // Called once per run read: n=0 is the pre-POST snapshot, n=1 the recovery read.
 let runResponse: (n: number) => Response;
 let runReads: number;
 
 beforeAll(() => {
-  const spy = spyOn(pathsModule, "getSettingsPath").mockImplementation(() =>
-    join(settingsHome, "settings.json")
-  );
-  restoreSettingsPath = () => spy.mockRestore();
   process.env[API_TOKEN_ENV_VAR] = "sq_live_test_token_for_5xx_recovery";
 });
 
 afterAll(() => {
-  restoreSettingsPath();
-  rmSync(settingsHome, { recursive: true, force: true });
   if (originalToken === undefined) delete process.env[API_TOKEN_ENV_VAR];
   else process.env[API_TOKEN_ENV_VAR] = originalToken;
 });

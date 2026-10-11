@@ -19,6 +19,8 @@ How it works:
 
 ### Fixed
 
+- `squirrel audit` no longer seems to hang after printing the report url on a machine with many local projects. Marking the report as published opened every project database under `~/.squirrel/projects` until it found the audit (5.5 s for 2,000 projects, and far longer on a large store); it now opens only the audited project's database. `squirrel report --publish` marks the database the report was loaded from.
+- A site behind Imperva that answers with `x-cdn: Imperva` is now recognised as Imperva bot protection, the same as `x-cdn: Incapsula`, so a blocked crawl names the right provider even when the response carries no `x-iinfo` header.
 - Docs: custom request headers are on every plan, Free included, where several pages said Pro only, and the pages that still called local audits free in general now say a local audit costs nothing only when it runs signed out or with `--offline`.
 
 ## v0.0.108 (2026-10-10)

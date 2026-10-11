@@ -13,11 +13,9 @@ import {
   beforeEach,
   describe,
   expect,
-  spyOn,
   test,
 } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { getGlobalConfigPath, setGlobalConfigPath } from "@/config";
@@ -31,9 +29,11 @@ import {
 } from "@/mcp/billed-audit";
 import { createMcpServer } from "@/mcp/server";
 import { levelRunOptions } from "@/mcp/tools/audit-tools";
-import * as pathsModule from "@/self/paths";
 
-const scratch = mkdtempSync(join(tmpdir(), "squirrel-mcp-billing-"));
+import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
+
+// #626: every squirrel path under one scratch dir, removed afterwards.
+const scratch = isolateSquirrelHome("squirrel-mcp-billing").root;
 const configPath = join(scratch, "squirrel.toml");
 const restores: (() => void)[] = [];
 
@@ -41,28 +41,12 @@ beforeAll(() => {
   const previousConfig = getGlobalConfigPath();
   setGlobalConfigPath(configPath);
   restores.push(() => setGlobalConfigPath(previousConfig));
-  const redirect = {
-    getSettingsPath: join(scratch, "settings.json"),
-    getProjectsPath: join(scratch, "projects"),
-    getLinkCachePath: join(scratch, "link-cache.db"),
-    getContentStorePath: join(scratch, "content-store.db"),
-    getCachePath: join(scratch, "cache"),
-    getLogsPath: join(scratch, "logs"),
-  } as const;
-  for (const [name, path] of Object.entries(redirect)) {
-    const spy = spyOn(
-      pathsModule,
-      name as keyof typeof redirect
-    ).mockImplementation(() => path);
-    restores.push(() => spy.mockRestore());
-  }
 });
 
 afterAll(() => {
   closeGlobalContentStore();
   closeGlobalLinkCache();
   for (const restore of restores) restore();
-  rmSync(scratch, { recursive: true, force: true });
 });
 
 /** A client-rendered shell: the hybrid fetcher sends it to the cloud browser. */

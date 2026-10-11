@@ -27,8 +27,7 @@ import {
 } from "bun:test";
 import { runCommand } from "citty";
 import { Effect } from "effect";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { audit } from "@/cli/commands/audit";
@@ -40,15 +39,18 @@ import {
 } from "@/crawler/storage/content-store";
 import { closeGlobalLinkCache } from "@/crawler/storage/link-cache";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
-import * as pathsModule from "@/self/paths";
 import { logger } from "@/utils/logger";
+
+import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
 
 // Each test runs one or two real audits.
 setDefaultTimeout(60_000);
 
-const scratch = mkdtempSync(join(tmpdir(), "squirrel-store-cap-"));
+// #626: every squirrel path under one scratch dir; each test takes its own home.
+const squirrelHome = isolateSquirrelHome("squirrel-store-cap");
+const scratch = squirrelHome.dir;
 const restores: (() => void)[] = [];
-let home = join(scratch, "unset");
+let home = squirrelHome.root;
 
 const SITE = "https://cap.example.com";
 const PAGES = 12;
@@ -59,28 +61,12 @@ beforeAll(() => {
   closeGlobalLinkCache();
   const previousConfig = getGlobalConfigPath();
   restores.push(() => setGlobalConfigPath(previousConfig));
-  const redirect = {
-    getSettingsPath: () => join(home, "settings.json"),
-    getProjectsPath: () => join(home, "projects"),
-    getLinkCachePath: () => join(home, "link-cache.db"),
-    getContentStorePath: () => join(home, "content-store.db"),
-    getCachePath: () => join(home, "cache"),
-    getLogsPath: () => join(home, "logs"),
-  } as const;
-  for (const [name, impl] of Object.entries(redirect)) {
-    const spy = spyOn(
-      pathsModule,
-      name as keyof typeof redirect
-    ).mockImplementation(impl);
-    restores.push(() => spy.mockRestore());
-  }
 });
 
 afterAll(() => {
   closeGlobalContentStore();
   closeGlobalLinkCache();
   for (const restore of restores) restore();
-  rmSync(scratch, { recursive: true, force: true });
 });
 
 /** Deterministic, poorly compressible text, so both arms see identical bytes. */
@@ -121,9 +107,7 @@ class ExitSignal extends Error {
 }
 
 function withHome(name: string, config: string): void {
-  closeGlobalContentStore();
-  closeGlobalLinkCache();
-  home = join(scratch, name);
+  home = squirrelHome.use(name);
   const configPath = join(scratch, `${name}.toml`);
   writeFileSync(configPath, `[cloud]\npublish = false\n${config}`);
   setGlobalConfigPath(configPath);

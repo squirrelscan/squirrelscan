@@ -4,7 +4,7 @@ import { randomUUID } from "crypto";
 import { Effect } from "effect";
 import { mkdirSync, existsSync } from "fs";
 import { tmpdir } from "os";
-import { join, resolve, sep } from "path";
+import { dirname, join, resolve, sep } from "path";
 
 import { getProjectsPath } from "@/self/paths";
 import { logger } from "@/utils/logger";
@@ -71,21 +71,30 @@ function assertContainedProjectName(
 }
 
 /**
+ * The database path for a project, without creating anything: for a reader that
+ * must not leave an empty project directory behind (#625).
+ */
+export function resolveProjectDbPath(projectName: string): string {
+  const projectsDir = getProjectsPath();
+  const projectDir = join(projectsDir, projectName);
+  assertContainedProjectName(projectName, projectsDir, projectDir);
+  return join(projectDir, "project.db");
+}
+
+/**
  * Get the database path for a project
  * Creates the project directory if it doesn't exist
  */
 export function getProjectDbPath(projectName: string): string {
-  const projectsDir = getProjectsPath();
-  const projectDir = join(projectsDir, projectName);
-
-  // Validate before touching the filesystem so traversal never creates dirs.
-  assertContainedProjectName(projectName, projectsDir, projectDir);
+  // Validated before touching the filesystem so traversal never creates dirs.
+  const dbPath = resolveProjectDbPath(projectName);
+  const projectDir = dirname(dbPath);
 
   if (!existsSync(projectDir)) {
     mkdirSync(projectDir, { recursive: true });
   }
 
-  return join(projectDir, "project.db");
+  return dbPath;
 }
 
 /**
