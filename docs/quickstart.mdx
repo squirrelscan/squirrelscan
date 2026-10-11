@@ -17,15 +17,15 @@ description: "Install squirrelscan and run your first audit"
     iwr -useb https://install.squirrelscan.com/install.ps1 | iex
     ```
   </Tab>
-  <Tab title="Homebrew">
+  <Tab title="Homebrew (macOS)">
     ```bash
     brew install --cask squirrelscan/tap/squirrel
     ```
-    See [Homebrew](#homebrew) below for how this install updates and uninstalls.
+    The cask is macOS only. `brew upgrade` does nothing for the CLI: update it with `squirrel self update`. See [Homebrew](#homebrew) below for how this install updates and uninstalls.
   </Tab>
 </Tabs>
 
-This downloads the binary to `~/.local/bin/squirrel` and adds it to your PATH.
+This downloads the binary to `~/.local/bin/squirrel` and adds it to your PATH. With Homebrew, that happens on the first run, when the launcher runs the regular installer.
 
 Then run setup once. It signs you in (optional), installs the agent skills for Claude Code, Codex, Cursor and more, and turns on auto-update:
 
@@ -81,7 +81,7 @@ If both hosts are unreachable, the installer prints the two URLs it tried. Allow
 brew install --cask squirrelscan/tap/squirrel
 ```
 
-The cask puts a small `squirrel` launcher on your PATH. The first time you run it, it runs the regular installer and then your command. The CLI lands in `~/.squirrel/releases` with a `squirrel` link in `~/.local/bin`, the same layout as the install script.
+The cask is macOS only (Linuxbrew is not supported; on Linux use the install script). It puts a small `squirrel` launcher on your PATH. The first time you run it, it runs the regular installer and then your command. The CLI lands in `~/.squirrel/releases` with a `squirrel` link in `~/.local/bin`, the same layout as the install script.
 
 From then on it is an ordinary managed install. `squirrel self update` and auto-update keep it current, and `brew upgrade` leaves the CLI alone. Homebrew only owns the launcher.
 

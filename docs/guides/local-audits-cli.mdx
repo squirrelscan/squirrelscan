@@ -23,15 +23,15 @@ Local audits run the deterministic rules only. The cloud-backed rules (AI analys
     iwr -useb https://install.squirrelscan.com/install.ps1 | iex
     ```
   </Tab>
-  <Tab title="Homebrew">
+  <Tab title="Homebrew (macOS)">
     ```bash
     brew install --cask squirrelscan/tap/squirrel
     ```
-    The cask installs a launcher that runs the regular installer on first use. See [Homebrew](/quickstart#homebrew) for updates and uninstall.
+    The cask is macOS only. It installs a launcher that runs the regular installer on first use. `brew upgrade` does nothing for the CLI: update it with `squirrel self update`. See [Homebrew](/quickstart#homebrew) for updates and uninstall.
   </Tab>
 </Tabs>
 
-This drops the binary at `~/.local/bin/squirrel` and adds it to your PATH. Confirm it works:
+This drops the binary at `~/.local/bin/squirrel` and adds it to your PATH. With Homebrew, that happens on the first run, when the launcher runs the regular installer. Confirm it works:
 
 ```bash
 squirrel self doctor
