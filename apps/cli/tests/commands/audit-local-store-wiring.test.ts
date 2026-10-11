@@ -16,25 +16,23 @@ import {
   test,
 } from "bun:test";
 import { runCommand } from "citty";
-import {
-  chmodSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { audit } from "@/cli/commands/audit";
 import { getGlobalConfigPath, setGlobalConfigPath } from "@/config";
 import { closeGlobalContentStore } from "@/crawler/storage/content-store";
 import { closeGlobalLinkCache } from "@/crawler/storage/link-cache";
-import * as pathsModule from "@/self/paths";
+
+import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
 
 // homedir() is fixed at process start in Bun, so every store an audit writes is
-// pointed at a scratch dir through the paths module instead.
-const scratch = mkdtempSync(join(tmpdir(), "squirrel-local-store-"));
+// pointed at a scratch dir through the paths module instead (#626). The
+// content store moves per test and lives OUTSIDE the scratch squirrel home, the
+// way a SQUIRREL_CONTENT_STORE_PATH store does, so its fix line names the file.
+const scratch = isolateSquirrelHome("squirrel-local-store", {
+  getContentStorePath: () => contentStorePath,
+}).dir;
 const restores: (() => void)[] = [];
 let contentStorePath = join(scratch, "content-store.db");
 
@@ -44,28 +42,12 @@ beforeAll(() => {
   writeFileSync(configPath, "[cloud]\npublish = false\n");
   setGlobalConfigPath(configPath);
   restores.push(() => setGlobalConfigPath(previousConfig));
-  const redirect = {
-    getSettingsPath: () => join(scratch, "settings.json"),
-    getProjectsPath: () => join(scratch, "projects"),
-    getLinkCachePath: () => join(scratch, "link-cache.db"),
-    getContentStorePath: () => contentStorePath,
-    getCachePath: () => join(scratch, "cache"),
-    getLogsPath: () => join(scratch, "logs"),
-  } as const;
-  for (const [name, impl] of Object.entries(redirect)) {
-    const spy = spyOn(
-      pathsModule,
-      name as keyof typeof redirect
-    ).mockImplementation(impl);
-    restores.push(() => spy.mockRestore());
-  }
 });
 
 afterAll(() => {
   closeGlobalContentStore();
   closeGlobalLinkCache();
   for (const restore of restores) restore();
-  rmSync(scratch, { recursive: true, force: true });
 });
 
 /** Thrown in place of process.exit, so a command exit cannot kill the runner. */

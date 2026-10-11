@@ -7,26 +7,15 @@
 //
 // Modelled on audit-non-public-host-wiring.test.ts, including its two rules:
 // NO `mock.module` (bun's module mocks are process-wide and outlive the file),
-// and `getSettingsPath` is spied rather than redirected through $HOME, because
-// a successful publish stamps `first_publish_at` and homedir() is fixed at
-// process start.
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  spyOn,
-  test,
-} from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+// and the squirrel home is a scratch dir from `isolateSquirrelHome`, not
+// $HOME, because homedir() is fixed at process start and a successful publish
+// writes both the settings (`first_publish_at`) and the project database.
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { audit } from "@/cli/commands/audit";
 import { scheduleSummaryLine } from "@/lib/schedule-notice";
-import * as pathsModule from "@/self/paths";
+
+import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
 
 const SETTINGS_URL =
   "https://app.squirrelscan.com/acme/website/web_1/settings/schedule";
@@ -63,20 +52,8 @@ const capped = () => ({
   upgradeUrl: UPGRADE_URL,
 });
 
-const settingsHome = mkdtempSync(join(tmpdir(), "squirrel-sched-settings-"));
-let restoreSettingsPath: () => void = () => {};
-
-beforeAll(() => {
-  const spy = spyOn(pathsModule, "getSettingsPath").mockImplementation(() =>
-    join(settingsHome, "settings.json")
-  );
-  restoreSettingsPath = () => spy.mockRestore();
-});
-
-afterAll(() => {
-  restoreSettingsPath();
-  rmSync(settingsHome, { recursive: true, force: true });
-});
+// #626: settings, projects and stores all under one scratch dir.
+isolateSquirrelHome("squirrel-sched");
 
 class ExitSignal extends Error {
   constructor(readonly code: number) {
@@ -90,13 +67,10 @@ const originalLog = console.log;
 const originalError = console.error;
 const originalEnv = { ...process.env };
 let printed: string[] = [];
-let home: string;
 
 beforeEach(() => {
   printed = [];
   publishSchedule = undefined;
-  home = mkdtempSync(join(tmpdir(), "squirrel-sched-test-"));
-  process.env.HOME = home;
   process.env.SQUIRREL_API_TOKEN = "sqcli_test_token";
   process.env.SQUIRREL_DISABLE_TELEMETRY = "1";
   process.exit = ((code?: number) => {
@@ -148,7 +122,6 @@ afterEach(() => {
   console.log = originalLog;
   console.error = originalError;
   process.env = { ...originalEnv };
-  rmSync(home, { recursive: true, force: true });
 });
 
 async function runAudit(extra: Record<string, unknown> = {}) {

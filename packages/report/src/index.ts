@@ -79,6 +79,10 @@ export { getPathname } from "./url";
 // Docs
 export { getDocsUrl } from "./docs";
 
+// Rule text from the catalog (capped published reports carry none, #2656)
+export { ruleCatalogLookup, withCatalogRuleText } from "./rule-catalog";
+export type { RuleCatalogLookup, RuleCatalogText } from "./rule-catalog";
+
 // Output formatters
 export { renderHtml } from "./output/html";
 export { renderMarkdown } from "./output/markdown";

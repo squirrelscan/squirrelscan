@@ -18,6 +18,10 @@ import {
   publishReport,
 } from "../../src/controllers/report/publish";
 import { API_TOKEN_ENV_VAR } from "../../src/self/credentials";
+import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
+
+// #626: a publish reads the user settings; keep the real ~/.squirrel out of it.
+isolateSquirrelHome("squirrel-pub-degrade");
 
 const emptySummary = {
   missingTitles: [],

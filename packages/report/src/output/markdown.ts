@@ -333,7 +333,7 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   lines.push("---");
   lines.push("");
 
-  const categoryIssues = groupIssuesByCategory(report.ruleResults);
+  const categoryIssues = groupIssuesByCategory(report.ruleResults, report.checkTallies);
 
   if (categoryIssues.length > 0) {
     lines.push("## Issues");

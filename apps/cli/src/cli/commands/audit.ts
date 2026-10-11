@@ -78,7 +78,7 @@ import {
   type ReportVisibility,
 } from "@/controllers/report/publish";
 import { ErrorCodes } from "@/controllers/types";
-import { domainToProjectName } from "@/crawler/storage";
+import { domainToProjectName, resolveProjectDbPath } from "@/crawler/storage";
 import {
   checkAuditStores,
   formatStoreProblems,
@@ -1697,11 +1697,15 @@ export const audit = defineCommand({
       // pages were crawled". Checked before the run is registered, so a broken
       // store charges nothing and leaves no failed run behind.
       const storeUrl = parseUserUrl(args.url);
-      const storeProblems = storeUrl.ok
-        ? checkAuditStores(
-            options.projectName ?? domainToProjectName(storeUrl.url),
-            { linkCache: !args.offline && auditLevel.settings.externalLinks }
-          )
+      // The project the audit stores into, named the way runAudit names it. The
+      // publish step below marks the report in this project's database only.
+      const storeProject = storeUrl.ok
+        ? (options.projectName ?? domainToProjectName(storeUrl.url))
+        : undefined;
+      const storeProblems = storeProject
+        ? checkAuditStores(storeProject, {
+            linkCache: !args.offline && auditLevel.settings.externalLinks,
+          })
         : [];
       if (storeProblems.length > 0) {
         commandResult = "error";
@@ -2696,8 +2700,9 @@ export const audit = defineCommand({
             );
             if (scheduleLine) log(scheduleLine);
 
-            if (report.crawlId) {
+            if (report.crawlId && storeProject) {
               await savePublishedReportInfo(
+                resolveProjectDbPath(storeProject),
                 report.crawlId,
                 publishResult.data.id,
                 publishResult.data.url,

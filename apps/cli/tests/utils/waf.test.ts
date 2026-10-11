@@ -74,6 +74,38 @@ describe("detectWafFromHeaders", () => {
     expect(result.provider).toBe("imperva");
   });
 
+  // pub#604: Imperva now brands the header with its own name (www.imperva.com,
+  // 2026-10-09), and a response can carry it without x-iinfo.
+  it("detects Imperva from X-CDN: Imperva without x-iinfo", () => {
+    const headers = new Headers({ "x-cdn": "Imperva" });
+    const result = detectWafFromHeaders(headers);
+
+    expect(result.detected).toBe(true);
+    expect(result.provider).toBe("imperva");
+    expect(result.indicators).toEqual(["header:x-cdn=Imperva"]);
+  });
+
+  it("lists both X-CDN: Imperva and x-iinfo as indicators", () => {
+    const headers = new Headers({
+      "x-cdn": "Imperva",
+      "x-iinfo": "12-34567890-0 0NNN RT(1760000000000 0) q(0 -1 -1 -1) r(0 -1)",
+    });
+    const result = detectWafFromHeaders(headers);
+
+    expect(result.provider).toBe("imperva");
+    expect(result.indicators).toContain("header:x-cdn=Imperva");
+    expect(result.indicators.some((i) => i.startsWith("header:x-iinfo="))).toBe(
+      true
+    );
+  });
+
+  it("does not read another vendor's X-CDN as Imperva", () => {
+    const result = detectWafFromHeaders(new Headers({ "x-cdn": "Fastly" }));
+
+    expect(result.detected).toBe(false);
+    expect(result.provider).toBeNull();
+  });
+
   it("detects DataDome from x-datadome header", () => {
     const headers = new Headers({ "x-datadome": "some-value" });
     const result = detectWafFromHeaders(headers);

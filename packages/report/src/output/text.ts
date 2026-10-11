@@ -276,7 +276,7 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
     write("");
   }
 
-  const categoryIssues = groupIssuesByCategory(report.ruleResults);
+  const categoryIssues = groupIssuesByCategory(report.ruleResults, report.checkTallies);
   // Severity → category → weight (#1536): one global order, so everything you
   // must fix sits above everything you might. Categories are labeled per rule
   // rather than used as headings, since a category now spans severity sections.

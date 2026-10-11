@@ -158,7 +158,7 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     lines.push(`${indent(1)}</technologies>`);
   }
 
-  const categoryIssues = groupIssuesByCategory(report.ruleResults);
+  const categoryIssues = groupIssuesByCategory(report.ruleResults, report.checkTallies);
 
   if (categoryIssues.length > 0) {
     lines.push(`${indent(1)}<issues>`);

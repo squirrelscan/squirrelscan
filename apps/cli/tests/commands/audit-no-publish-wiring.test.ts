@@ -17,20 +17,21 @@ import {
   test,
 } from "bun:test";
 import { runCommand } from "citty";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { audit } from "@/cli/commands/audit";
 import { getGlobalConfigPath, setGlobalConfigPath } from "@/config";
 import { closeGlobalContentStore } from "@/crawler/storage/content-store";
 import { closeGlobalLinkCache } from "@/crawler/storage/link-cache";
-import * as pathsModule from "@/self/paths";
+
+import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
 
 // homedir() is fixed at process start in Bun, so $HOME set here cannot keep a
 // full audit out of the real ~/.squirrel. Point every store it writes at a
 // scratch dir through the paths module instead.
-const scratch = mkdtempSync(join(tmpdir(), "squirrel-no-publish-"));
+// #626: every squirrel path under one scratch dir, removed afterwards.
+const scratch = isolateSquirrelHome("squirrel-no-publish").root;
 const restores: (() => void)[] = [];
 
 beforeAll(() => {
@@ -41,21 +42,6 @@ beforeAll(() => {
   writeFileSync(configPath, "[cloud]\npublish = true\n");
   setGlobalConfigPath(configPath);
   restores.push(() => setGlobalConfigPath(previousConfig));
-  const redirect = {
-    getSettingsPath: join(scratch, "settings.json"),
-    getProjectsPath: join(scratch, "projects"),
-    getLinkCachePath: join(scratch, "link-cache.db"),
-    getContentStorePath: join(scratch, "content-store.db"),
-    getCachePath: join(scratch, "cache"),
-    getLogsPath: join(scratch, "logs"),
-  } as const;
-  for (const [name, path] of Object.entries(redirect)) {
-    const spy = spyOn(
-      pathsModule,
-      name as keyof typeof redirect
-    ).mockImplementation(() => path);
-    restores.push(() => spy.mockRestore());
-  }
 });
 
 afterAll(() => {
@@ -64,7 +50,6 @@ afterAll(() => {
   closeGlobalContentStore();
   closeGlobalLinkCache();
   for (const restore of restores) restore();
-  rmSync(scratch, { recursive: true, force: true });
 });
 
 /** Thrown in place of process.exit, so a command exit cannot kill the runner. */

@@ -17,18 +17,14 @@ import {
   beforeEach,
   describe,
   expect,
-  spyOn,
   test,
 } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import type { AuditReport } from "../../src/types";
 
 import { publishReport } from "../../src/controllers/report/publish";
 import { API_TOKEN_ENV_VAR } from "../../src/self/credentials";
-import * as pathsModule from "../../src/self/paths";
+import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
 
 const SETTINGS_URL =
   "https://app.squirrelscan.com/acme/website/web_1/settings/schedule";
@@ -89,23 +85,17 @@ function report(): AuditReport {
   } as unknown as AuditReport;
 }
 
-const settingsHome = mkdtempSync(join(tmpdir(), "squirrel-pub-sched-"));
+// #626: settings, projects and stores all under one scratch dir.
+isolateSquirrelHome("squirrel-pub-sched");
 const originalToken = process.env[API_TOKEN_ENV_VAR];
 const originalFetch = globalThis.fetch;
-let restoreSettingsPath: () => void = () => {};
 let responseSchedule: unknown;
 
 beforeAll(() => {
-  const spy = spyOn(pathsModule, "getSettingsPath").mockImplementation(() =>
-    join(settingsHome, "settings.json")
-  );
-  restoreSettingsPath = () => spy.mockRestore();
   process.env[API_TOKEN_ENV_VAR] = "sq_live_test_token_for_schedule_notice";
 });
 
 afterAll(() => {
-  restoreSettingsPath();
-  rmSync(settingsHome, { recursive: true, force: true });
   if (originalToken === undefined) delete process.env[API_TOKEN_ENV_VAR];
   else process.env[API_TOKEN_ENV_VAR] = originalToken;
 });

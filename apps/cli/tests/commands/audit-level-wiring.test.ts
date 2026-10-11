@@ -14,8 +14,7 @@ import {
   test,
 } from "bun:test";
 import { runCommand } from "citty";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { RunAuditOptions } from "@/controllers/audit";
@@ -25,7 +24,8 @@ import { getGlobalConfigPath, setGlobalConfigPath } from "@/config";
 import * as controller from "@/controllers/audit";
 import { closeGlobalContentStore } from "@/crawler/storage/content-store";
 import { closeGlobalLinkCache } from "@/crawler/storage/link-cache";
-import * as pathsModule from "@/self/paths";
+
+import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
 
 // Same isolation as audit-probe-wiring.test.ts: every store the audit writes
 // goes to a scratch dir, and the process-wide stores are closed on the way in
@@ -34,7 +34,8 @@ function closeGlobalStores(): void {
   closeGlobalContentStore();
   closeGlobalLinkCache();
 }
-const scratch = mkdtempSync(join(tmpdir(), "squirrel-level-wiring-"));
+// #626: every squirrel path under one scratch dir, removed afterwards.
+const scratch = isolateSquirrelHome("squirrel-level-wiring").root;
 const configPath = join(scratch, "squirrel.toml");
 const restores: (() => void)[] = [];
 
@@ -46,21 +47,6 @@ beforeAll(() => {
   const previousConfig = getGlobalConfigPath();
   setGlobalConfigPath(configPath);
   restores.push(() => setGlobalConfigPath(previousConfig));
-  const redirect = {
-    getSettingsPath: join(scratch, "settings.json"),
-    getProjectsPath: join(scratch, "projects"),
-    getLinkCachePath: join(scratch, "link-cache.db"),
-    getContentStorePath: join(scratch, "content-store.db"),
-    getCachePath: join(scratch, "cache"),
-    getLogsPath: join(scratch, "logs"),
-  } as const;
-  for (const [name, path] of Object.entries(redirect)) {
-    const spy = spyOn(
-      pathsModule,
-      name as keyof typeof redirect
-    ).mockImplementation(() => path);
-    restores.push(() => spy.mockRestore());
-  }
   const realRunAudit = controller.runAudit;
   const spy = spyOn(controller, "runAudit").mockImplementation(
     (options: RunAuditOptions) => {
@@ -74,7 +60,6 @@ beforeAll(() => {
 afterAll(() => {
   closeGlobalStores();
   for (const restore of restores) restore();
-  rmSync(scratch, { recursive: true, force: true });
 });
 
 /** Thrown in place of process.exit, so a command exit cannot kill the runner. */

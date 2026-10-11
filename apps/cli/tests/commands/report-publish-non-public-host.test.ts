@@ -10,45 +10,23 @@
 //
 // `--input` is a real, supported entry point (load a report from JSON), so this
 // drives the actual command with no storage or network mocking beyond fetch.
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  spyOn,
-  test,
-} from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { report } from "@/cli/commands/report";
 import { scheduleSummaryLine } from "@/lib/schedule-notice";
-import * as pathsModule from "@/self/paths";
+
+import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
 
 // #2182: a SUCCESSFUL publish now stamps `first_publish_at` in the user
 // settings (controllers/report/publish.ts), and this file mocks fetch into a
 // 201 — so without isolation the "a public host still publishes" case below
-// writes to the developer's REAL ~/.squirrel/settings.json. homedir() is fixed
-// at process start in Bun, so $HOME cannot redirect it; spy on the paths
-// module's getSettingsPath export instead, exactly as tests/self/settings.test.ts
-// does and for the same reason.
-const settingsHome = mkdtempSync(join(tmpdir(), "squirrel-publish-settings-"));
-let restoreSettingsPath: () => void = () => {};
-
-beforeAll(() => {
-  const spy = spyOn(pathsModule, "getSettingsPath").mockImplementation(() =>
-    join(settingsHome, "settings.json")
-  );
-  restoreSettingsPath = () => spy.mockRestore();
-});
-
-afterAll(() => {
-  restoreSettingsPath();
-  rmSync(settingsHome, { recursive: true, force: true });
-});
+// writes to the developer's REAL ~/.squirrel/settings.json.
+// homedir() is fixed at process start in Bun, so $HOME cannot redirect it;
+// `isolateSquirrelHome` moves every squirrel path instead (#626).
+const squirrelHome = isolateSquirrelHome("squirrel-report-host");
 
 /** Thrown in place of process.exit, so a command exit cannot kill the runner. */
 class ExitSignal extends Error {
@@ -196,17 +174,28 @@ describe("squirrel report --publish — a host no hosted runner can reach (#1841
     expect(requested.some((u) => u.includes("/v1/reports"))).toBe(true);
   });
 
+  // #625: a report read from a file is marked in its site's default project. A
+  // url that names no project (a `file:` url has no host) cannot be marked, and
+  // that must not turn the publish that already happened into a crash.
+  test("a report whose url names no project still publishes and exits cleanly", async () => {
+    const printed: string[] = [];
+    console.log = (...args: unknown[]) => printed.push(args.join(" "));
+    await runReport("file:///tmp/site/index.html");
+    expect(requested.some((u) => u.includes("/v1/reports"))).toBe(true);
+    expect(printed).toContain("https://reports.test/rep_1");
+  });
+
   // #2182: the same run is the only place a successful publish can be observed
   // end to end, so it doubles as the wiring test for the first-publish stamp —
   // the flag the one-time "kept local" nudge reads to know it has nothing left
   // to say. Asserted on the SANDBOX file, which also proves the isolation above
   // is doing its job rather than the write landing in the real home.
   test("a successful publish stamps first_publish_at", async () => {
-    rmSync(join(settingsHome, "settings.json"), { force: true });
+    rmSync(join(squirrelHome.root, "settings.json"), { force: true });
     await runReport("https://example.com/");
 
     const saved = JSON.parse(
-      readFileSync(join(settingsHome, "settings.json"), "utf8")
+      readFileSync(join(squirrelHome.root, "settings.json"), "utf8")
     ) as { first_publish_at?: string | null };
     expect(saved.first_publish_at).toBeString();
     expect(Number.isNaN(Date.parse(saved.first_publish_at!))).toBe(false);
@@ -215,7 +204,7 @@ describe("squirrel report --publish — a host no hosted runner can reach (#1841
   // "never again after their first publish" has to survive a SECOND publish
   // without moving: the stamp is the FIRST one, not the latest.
   test("a later publish does not move the stamp", async () => {
-    const path = join(settingsHome, "settings.json");
+    const path = join(squirrelHome.root, "settings.json");
     rmSync(path, { force: true });
     // Publish once so the file on disk is a complete, schema-valid settings
     // object, then back-date the stamp by years. Comparing two same-run
