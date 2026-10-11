@@ -77,6 +77,12 @@ curl -fsSL https://install.squirrelscan.com | bash
 iwr -useb https://install.squirrelscan.com/install.ps1 | iex
 ```
 
+**Homebrew (macOS):**
+```bash
+brew install --cask squirrelscan/tap/squirrel
+```
+The cask installs a launcher that runs the regular installer on first use. The CLI then updates itself with `squirrel self update`; `brew upgrade` leaves it alone.
+
 **npm (all platforms):**
 ```bash
 npm install -g squirrelscan
