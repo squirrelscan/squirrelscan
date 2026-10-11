@@ -19,6 +19,10 @@ Combine your coding agent with a deterministic and extensible audit tool.
 [![npm](https://img.shields.io/npm/v/squirrelscan?style=for-the-badge&label=npm)](https://www.npmjs.com/package/squirrelscan)
 [![License: MIT](https://img.shields.io/badge/License-MIT-52a852?style=for-the-badge)](LICENSE)
 
+![Terminal demo: squirrel audit on a small test site reports 13 failed checks, the report is piped to Claude Code, which fixes the pages and re-audits from 32/100 (F) to 92/100 (A), then git status lists the files it changed](assets/readme-demo.gif)
+
+<sub>A real run on a tiny test site, with the released CLI (signed out, so free) and Claude Code. We cut the two minutes the agent spent working, because nobody wants to watch an agent think.</sub>
+
 ## Features
 
 - **300+ Rules, 21 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
@@ -66,6 +70,12 @@ See the [rules reference](https://docs.squirrelscan.com/rules) for full details.
 ## CLI
 
 ### Installation
+
+**Paste into your coding agent** (Claude Code, Codex, Cursor, opencode and friends):
+```text
+Fetch and follow the setup instructions for squirrelscan at https://docs.squirrelscan.com/agent-setup/prompt.md
+```
+Your agent installs the CLI, connects MCP and runs a first audit. You can [read exactly what it will follow](https://docs.squirrelscan.com/agent-setup/prompt) first.
 
 **macOS / Linux:**
 ```bash
@@ -275,6 +285,8 @@ NO_TELEMETRY=1 squirrel audit https://example.com
 - [Share feedback](https://squirrelscan.com/feedback)
 - [Bugs, issues and feature requests](https://github.com/squirrelscan/squirrelscan/issues)
 - [Twitter/X](https://x.com/squirrelscan_)
+
+If squirrelscan caught something your agent missed, a [star on GitHub](https://github.com/squirrelscan/squirrelscan) helps other developers find it.
 
 ## License
 
