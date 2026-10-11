@@ -533,6 +533,29 @@ export const RESOLUTION_SIGNAL_LIMITS = {
   maxChecks: 2_000,
 } as const;
 
+// #2658: one byte budget for the two publish fields sized by pages CRAWLED rather
+// than by findings, which no per-check sample can bound: the compact resolution
+// signal (`resolutionSignalCompact`, see core-contracts/resolution.ts) and the
+// non-2xx `pageStatuses`. Measured together as serialized JSON bytes.
+//
+// 192 KiB of the 1 MiB published-report budget (#2655). The signal ships the
+// crawled URLs deflated: real crawls measured 7 to 35 bytes a page (a 4,000-page
+// shop at 9.6, a 10,000-page news archive at 35), so a typical site fits all
+// 10,000 pages and a long-slug news site about 4,000 with its failing sets. Past
+// the budget the builder drops keys or clips the page list, and both degrade to
+// carrying findings forward, never to a wrong resolve (rules/src/resolution.ts).
+export const RESOLUTION_PUBLISH_LIMITS = {
+  maxBytes: 192 * 1024,
+  // `pageStatuses`' share, clipped first so a site with thousands of redirects or
+  // 404s cannot crowd out the signal: ~400 entries of ordinary URLs. A clipped
+  // entry only means a 404'd page's findings carry instead of going stale.
+  maxPageStatusBytes: 32 * 1024,
+  // Inflated size of the signal's deflated payload. The builder never emits more
+  // and the decoder stops reading past it, so a small body cannot expand into a
+  // large allocation on the server.
+  maxInflatedBytes: 4 * 1024 * 1024,
+} as const;
+
 // #1167: hard-clip fallback applied by the CLI publish degrade pass (publish.ts)
 // only when the primary-capped payload STILL exceeds maxPayloadBytes — should be
 // unreachable post-sampling, but guarantees a signalled clip over a 413. Tighter
