@@ -1,7 +1,7 @@
 {
   "name": "squirrelscan",
   "version": "0.0.108",
-  "description": "Website QA tool built for coding agents. 260+ rules across SEO, performance, security, accessibility & agent experience, from the CLI, cloud, or MCP.",
+  "description": "Website QA tool built for coding agents. 300+ rules across SEO, performance, security, accessibility & agent experience, from the CLI, cloud, or MCP.",
   "bin": {
     "squirrel": "bin/squirrel.js"
   },
