@@ -377,10 +377,17 @@ describe("rescore of a capped report (repo#2657)", () => {
     for (const i of range(0, 20)) expect(open.has(url(i))).toBe(false);
     // Not crawled this run: carried.
     for (const i of range(40, 60).filter((i) => i % 3 === 0)) expect(open.has(url(i))).toBe(true);
-    // Still failing, clipped from the 10-page sample: carried, not resolved.
-    for (const i of range(20, 30)) expect(open.has(url(i))).toBe(true);
+    // Failing this run, in the 10-page sample (20-29) or clipped from it (33,
+    // 36, 39 failed in both runs): open, not resolved.
+    for (const i of [...range(20, 30), 33, 36, 39]) expect(open.has(url(i))).toBe(true);
     // Gone (404): staled.
     expect(open.has(url(30))).toBe(false);
+    // Only what the union shows as carried is tagged carried: the clipped pages
+    // are counted by the tallies, the uncrawled ones are carried.
+    const tagged = (i: number) =>
+      capped.carriedLastSeen.has(`${url(i)}|core/meta-description|has-meta-description`);
+    for (const i of [33, 36, 39]) expect(tagged(i)).toBe(false);
+    for (const i of range(40, 60).filter((i) => i % 3 === 0)) expect(tagged(i)).toBe(true);
   });
 
   test("a check skipped on a page keeps that page's finding open, and the score still matches", async () => {
@@ -466,6 +473,9 @@ describe("rescore of a capped report (repo#2657)", () => {
     const { capped } = await bothWays(seed, "audit_2", run2);
     const first = await bothWays(new MemStore(), "audit_2", run2);
     expect(rescored(capped)).toEqual(rescored(first.capped));
+    // Nor does it tag the fresh check on that page as carried.
+    expect(capped.coverage.carriedFindings).toBe(0);
+    expect(capped.carriedLastSeen.size).toBe(0);
   });
 
   test("a report without tallies (an older producer) keeps the row-counting path", async () => {

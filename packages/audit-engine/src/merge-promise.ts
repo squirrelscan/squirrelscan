@@ -1018,9 +1018,14 @@ export async function runCloudSmartAudits(
       carriedPageUrls: unionCarriedPages,
       ruleMetaIndex,
     }));
-    // The coverage line counts what the report shows as carried.
+    // The coverage line counts what the report shows as carried, and only those
+    // are tagged: a fresh check on the page of a carry left out is not carried.
     carriedCount = unionCarried.length;
     unrenderedCount = unionCarried.filter((f) => f.neverRendered).length;
+    const shown = new Set(
+      unionCarried.map((f) => carriedKey(f.normalizedUrl, f.ruleId, f.checkName)),
+    );
+    for (const key of carriedLastSeen.keys()) if (!shown.has(key)) carriedLastSeen.delete(key);
   }
 
   return {
