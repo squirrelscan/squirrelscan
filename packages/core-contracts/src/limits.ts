@@ -564,9 +564,14 @@ export const PUBLISH_DEGRADE_LIMITS = {
 /**
  * The largest a publish request body may be, envelope included, as UTF-8 bytes.
  * One constant for every producer (CLI, cloud container) and every API route:
- * a published report is a capped summary BY DESIGN, so it fits this whatever the
- * crawl size, and full per-page detail stays where it already lives (the CLI's
- * project database and `squirrel report` exports, the cloud findings store).
+ * a published report is a capped summary BY DESIGN, and full per-page detail
+ * stays where it already lives (the CLI's project database and `squirrel report`
+ * exports, the cloud findings store).
+ *
+ * The capper (`capReportForPublish`) holds everything but the scoring transport
+ * to it today. "Whatever the crawl size" needs repo#2658 too: `resolutionSignal`
+ * and `pageStatuses` still carry raw URLs that grow with pages crawled, so a
+ * 2,000-page body is over this until they are bounded.
  *
  * 1 MiB because the API isolate that parses and renders the body dies from about
  * 2.8MB (repo#2634, zod clamping costs 20-25 MiB of heap per MiB of report).
@@ -581,7 +586,12 @@ export interface ReportCapTier {
   readonly itemsPerClass: number;
   /** `sourcePages` kept per kept item. */
   readonly sourcePagesPerItem: number;
-  /** Characters kept of a check's message (and string `value`/`expected`). */
+  /**
+   * UTF-16 code units kept of a check's message (and string `value`/`expected`),
+   * the unit the publish schema's string caps count. Not bytes: CJK text is up
+   * to 3 bytes a unit in UTF-8. The byte fitter measures real UTF-8 bytes, so
+   * this only shapes how much text each level keeps, never the size bound.
+   */
   readonly messageChars: number;
 }
 

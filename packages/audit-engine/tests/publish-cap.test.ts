@@ -342,6 +342,44 @@ describe("capReportForPublish: size", () => {
     expect(classesOf(capped).filter((c) => c.status === "fail")).toHaveLength(WIDE_RULES.length * 2 + 2);
   }, SLOW);
 
+  test("multi-byte text is bounded in bytes, clamped in UTF-16 units, never split", () => {
+    // CJK is 3 UTF-8 bytes per unit; the leading "x" puts every emoji pair
+    // across an odd cut, where a plain slice would orphan a surrogate.
+    const cjk = "検査結果の詳細説明".repeat(120);
+    const emoji = `x${"😀".repeat(600)}`;
+    const rules: RuleSpec[] = WIDE_RULES.slice(0, 60);
+    const base = report(20, { rules, everyClassFails: 6 });
+    const input: Report = {
+      ...base,
+      ruleResults: Object.fromEntries(
+        Object.entries(base.ruleResults).map(([id, r]) => [
+          id,
+          {
+            ...r,
+            checks: r.checks.map((c, i) => ({
+              ...c,
+              message: i % 2 === 0 ? cjk : emoji,
+              ...(c.items
+                ? { items: c.items.map((item, k) => ({ id: `${item.id}-${cjk.slice(0, 40)}`, label: k % 2 ? cjk : emoji })) }
+                : {}),
+            })),
+          },
+        ]),
+      ),
+    };
+    const capped = capReportForPublish(input);
+    const json = JSON.stringify(capped);
+    expect(byteLength(json)).toBeLessThanOrEqual(reportBudget);
+    // No lone surrogate anywhere: JSON.stringify escapes one as \udXXX.
+    expect(json).not.toMatch(/\\ud[89a-f][0-9a-f]{2}/i);
+    const messages = classesOf(capped).map((c) => c.message);
+    const longest = REPORT_CAPS.tiers[0]!.messageChars + " (+19 more pages)".length;
+    for (const message of messages) expect(message.length).toBeLessThanOrEqual(longest);
+    // The unit cap is not a byte cap: the fitter is what holds the size.
+    expect(messages.some((m) => byteLength(m) > m.length * 2)).toBe(true);
+    expect(capped.detail.classesDropped).toBeUndefined();
+  }, SLOW);
+
   test("the fill gives the full sample to the classes that matter most", () => {
     // One failing and one warning class, same shape: just under the size that
     // fits both at the full sample, the warning one is the one cut.
@@ -543,6 +581,15 @@ describe("capReportForPublish: the sample and its counts", () => {
       caps: { ...REPORT_CAPS.tiers[0], classesPerRule: REPORT_CAPS.classesPerRule },
       fullDetail: "local",
     });
+  });
+
+  test("an entity map that cannot be projected is left out and stamped apart from a budget drop", () => {
+    const broken = { ...input, entityMap: { format: "broken", nodes: null } as unknown as EntityMap };
+    const out = capReportForPublish(broken);
+    expect((out as unknown as Record<string, unknown>).entityMap).toBeUndefined();
+    expect(out.detail.entityMapFailed).toBe(true);
+    expect(out.detail.entityMapDropped).toBeUndefined();
+    expect(capped.detail.entityMapFailed).toBeUndefined();
   });
 
   test("display sections are capped and local-only fields dropped", () => {

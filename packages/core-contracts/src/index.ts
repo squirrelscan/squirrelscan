@@ -638,6 +638,11 @@ export interface PublishedReportDetail {
   /** Set when the fitter dropped the entity map to fit the budget. */
   entityMapDropped?: true;
   /**
+   * Set when the report had an entity map that could not be projected to its
+   * publish bound, so it was left out. Never set together with a map.
+   */
+  entityMapFailed?: true;
+  /**
    * Issue classes left out entirely by the last-resort byte admission. Their
    * counts survive in `checkTallies`. Absent when every class fit.
    */

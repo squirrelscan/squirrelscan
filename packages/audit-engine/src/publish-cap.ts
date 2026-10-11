@@ -1,10 +1,19 @@
 // One capper for every published report (squirrelscan/repo#2656).
 //
-// A published report is a SUMMARY by design: whatever the crawl size and
-// whatever fires, its body fits PUBLISHED_REPORT_MAX_BYTES. Both publish
-// producers build their body here (the CLI's `slimForPublish`, the cloud
-// container's `truncateReportForPublish`), so the two cannot drift, and the API
-// can run the same function over a body from a client that predates it.
+// A published report is a SUMMARY by design: whatever fires, everything but the
+// scoring transport fits PUBLISHED_REPORT_MAX_BYTES minus that transport's
+// reserve. Both publish producers will build their body here (the CLI's
+// `slimForPublish`, the cloud container's `truncateReportForPublish`), so the
+// two cannot drift, and the API can run the same function over a body from a
+// client that predates it.
+//
+// NOT YET "whatever the crawl size": `resolutionSignal` and `pageStatuses` still
+// grow with pages crawled (raw URLs; 1,401KB whole body at 2,000 pages on the
+// real-shape fixture), so the whole body fits only once repo#2658 bounds them.
+// TODO(repo#2658, repo#2657): do not wire this into either producer until the
+// transport is bounded and the server rescore reads `checkTallies`. The wiring
+// rebase of repo#2658 tightens the worst-case test to the whole body, which is
+// the gate.
 //
 // In order:
 //  1. Count what sampling is about to throw away, from the FULL report:
@@ -292,7 +301,12 @@ function compareMembers(a: CheckResult, b: CheckResult): number {
 /**
  * The fold keeps every page, item and source page: the sample clips them, and
  * it has to see them all to rank items and pin the worst page. Bounded by the
- * input, which already holds every one of them.
+ * input, which already holds every one of them. Measured on a synthetic 10,000
+ * pages x 24 checks (240k checks, up to 11 items on each warn or fail): 0.8 s,
+ * heap +141 MB right after the call, against +94 MB with the fold's default
+ * limits (1,000 items, 100 source pages). The producers run it on a report
+ * already in memory; if the API runs it, the input is a publish body, bounded
+ * by the route's body limit.
  */
 const CLASS_FOLD_LIMITS = {
   ...DEFAULT_FOLD_LIMITS,
@@ -706,7 +720,11 @@ function sliceList(value: unknown, max: number): unknown {
   return Array.isArray(value) && value.length > max ? value.slice(0, max) : value;
 }
 
-/** Every summary list to the publish sample, and any list inside an entry too. */
+/**
+ * Every summary list to the publish sample, and any list inside an entry too.
+ * Two levels is the whole depth of the summary: lists of URLs, or of entries
+ * holding one list (`urlIssues[].issues`, `redirectChains[].hops`, ...).
+ */
 function capSummary(summary: unknown, max: number): unknown {
   if (!isRecord(summary)) return summary;
   const out: Loose = {};
@@ -823,18 +841,25 @@ function capResourceSizes(resources: unknown, mode: SectionMode): unknown {
   return out;
 }
 
-function slimEntityMap(map: EntityMap | null | undefined): EntityMap | undefined {
-  if (!map) return undefined;
+/**
+ * The entity map at its publish bound. `failed` when the report had one that
+ * could not be projected: derived, report-only data is left out rather than
+ * failing a finished audit's publish, and the stamp says so
+ * (`detail.entityMapFailed`), apart from a budget drop (`entityMapDropped`).
+ */
+function slimEntityMap(map: EntityMap | null | undefined): { map?: EntityMap; failed: boolean } {
+  if (!map) return { failed: false };
   try {
-    return projectEntityMap(
-      map,
-      { ...ENTITY_MAP_PUBLISH_LIMITS, maxBytes: REPORT_CAPS.entityMapMaxBytes },
-      "publish",
-    );
+    return {
+      map: projectEntityMap(
+        map,
+        { ...ENTITY_MAP_PUBLISH_LIMITS, maxBytes: REPORT_CAPS.entityMapMaxBytes },
+        "publish",
+      ),
+      failed: false,
+    };
   } catch {
-    // Derived, report-only data: a map that cannot be projected is left out
-    // rather than failing a finished audit's publish.
-    return undefined;
+    return { failed: true };
   }
 }
 
@@ -1025,7 +1050,7 @@ export function capReportForPublish<T extends CappableReport>(
       : {}),
     checkTallies,
   });
-  const entityMap = slimEntityMap(report.entityMap);
+  const { map: entityMap, failed: entityMapFailed } = slimEntityMap(report.entityMap);
   const tiers = REPORT_CAPS.tiers;
   const countsLevel = tiers.length - 1;
 
@@ -1037,6 +1062,7 @@ export function capReportForPublish<T extends CappableReport>(
     tier,
     caps: { ...tiers[0]!, classesPerRule: REPORT_CAPS.classesPerRule },
     ...(options.fullDetail ? { fullDetail: options.fullDetail } : {}),
+    ...(entityMapFailed ? { entityMapFailed: true as const } : {}),
     ...extra,
   });
 
