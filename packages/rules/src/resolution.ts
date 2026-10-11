@@ -65,11 +65,6 @@ interface ResolutionEvidence {
   hash: (normalizedUrl: string) => string;
   /** Normalized page URL → 404/410, for the pages that returned one (compact shape only). */
   removed: Map<string, number>;
-  /**
-   * (#2673) `crawled` in hash order, the order a clip with page hashes lists pages
-   * in: a spread across the site rather than its alphabetically first section.
-   */
-  hashOrder?: string[];
 }
 
 /**
@@ -376,9 +371,9 @@ export function buildResolutionSignal(
 }
 
 /**
- * The compact payload over the first `listed` crawled pages (crawl order, or with
- * `withHashes` hash order), with only the keys in `kept` authoritative (all of
- * them when omitted).
+ * The compact payload over the first `listed` crawled pages (crawl order), with
+ * only the keys in `kept` authoritative (all of them when omitted), and with
+ * `withHashes` the rest of the crawl by hash.
  *
  * Same evidence and the same count caps as {@link buildResolutionSignal}, so with
  * every page listed and every key kept it decodes to that signal's content. Two
@@ -398,12 +393,7 @@ function compactPayload(
 ): CompactResolutionPayload {
   const limits = RESOLUTION_SIGNAL_LIMITS;
   const complete = !evidence.crawledOverCap && listed >= evidence.crawled.length;
-  // (#2673) A clip that ships page hashes lists a spread of the site: the capped
-  // rescore reads "this check skipped no listed page" as "it skipped no unlisted
-  // one", which a crawl-order (or, from the capper, alphabetical) prefix would get
-  // wrong for skips clustered in a section past it.
-  const order = withHashes ? (evidence.hashOrder ?? evidence.crawled) : evidence.crawled;
-  const listedPages = order.slice(0, listed);
+  const listedPages = evidence.crawled.slice(0, listed);
   // Sorted: neighbouring URLs share long prefixes, which is most of what makes
   // the list deflate to ~10 bytes a page on a real site.
   const urls = [...listedPages].sort();
@@ -457,22 +447,44 @@ function compactPayload(
     failing.set(key, indexes);
   }
 
+  // (#2673) A clipped list names the rest of the crawl by hash, so the merge can
+  // tell an unlisted page this run crawled (whose checks its tallies count) from
+  // one it did not. Distinct and sorted, so the bytes depend on the pages alone.
+  // Not past the collection cap: pages beyond `maxCrawledUrls` were never
+  // collected, and a set that misses some crawled pages would read as complete.
+  const unlistedPages =
+    withHashes && !complete && !evidence.crawledOverCap ? evidence.crawled.slice(listed) : [];
+  const hashes = [...new Set(unlistedPages.map(evidence.hash))].sort();
+  const hashIndex = new Map<string, number>();
+  for (let i = 0; i < hashes.length; i++) hashIndex.set(hashes[i]!, i);
+
+  // (#2688) With the hashes, the unlisted pages each key did not evaluate are
+  // named too, by index into them: the capped rescore counts an unlisted page as
+  // evaluated for a key only on that word, never by inference from the listed
+  // ones. Both halves share the count caps, as one `notEvaluated` set.
   const notEvaluated = new Map<string, number[]>();
+  const hashesNotEvaluated = new Map<string, number[]>();
   let notEvaluatedTotal = 0;
   for (const [key, ev] of evidence.evaluated) {
     if (truncated.has(key)) continue;
     const missing: number[] = [];
     for (const url of listedPages) if (!ev.has(url)) missing.push(position.get(url)!);
-    if (missing.length === 0) continue;
+    const missingHashed = new Set<number>();
+    for (const url of unlistedPages) {
+      if (!ev.has(url)) missingHashed.add(hashIndex.get(evidence.hash(url))!);
+    }
+    const count = missing.length + missingHashed.size;
+    if (count === 0) continue;
     if (
-      missing.length > limits.maxHashesPerCheck ||
-      notEvaluatedTotal + missing.length > limits.maxHashesTotal
+      count > limits.maxHashesPerCheck ||
+      notEvaluatedTotal + count > limits.maxHashesTotal
     ) {
       truncated.add(key);
       continue;
     }
-    notEvaluated.set(key, missing);
-    notEvaluatedTotal += missing.length;
+    if (missing.length > 0) notEvaluated.set(key, missing);
+    if (missingHashed.size > 0) hashesNotEvaluated.set(key, [...missingHashed]);
+    notEvaluatedTotal += count;
   }
 
   // The listed pages that 404'd or 410'd, by index: a few bytes each, where
@@ -501,18 +513,6 @@ function compactPayload(
     }
   }
 
-  // (#2673) A clipped list names the rest of the crawl by hash, so the merge can
-  // tell an unlisted page this run crawled (whose checks its tallies count) from
-  // one it did not. Distinct and sorted, so the bytes depend on the pages alone.
-  // Not past the collection cap: pages beyond `maxCrawledUrls` were never
-  // collected, and a set that misses some crawled pages would read as complete.
-  let hashes: string | undefined;
-  if (withHashes && !complete && !evidence.crawledOverCap && listed < evidence.crawled.length) {
-    const unlisted = new Set<string>();
-    for (const url of order.slice(listed)) unlisted.add(evidence.hash(url));
-    hashes = [...unlisted].sort().join("");
-  }
-
   const gaps = (map: Map<string, number[]>): Record<string, number[]> => {
     const out: Record<string, number[]> = {};
     for (const [key, indexes] of map) out[key] = encodeIndexGaps(indexes.sort((a, b) => a - b));
@@ -533,7 +533,8 @@ function compactPayload(
     ...(evidence.removed.size > 0
       ? { removedCount: Math.min(evidence.removed.size, REPORT_LIMITS.maxPages) }
       : {}),
-    ...(hashes ? { hashes } : {}),
+    ...(hashes.length > 0 ? { hashes: hashes.join("") } : {}),
+    ...(hashesNotEvaluated.size > 0 ? { hashesNotEvaluated: gaps(hashesNotEvaluated) } : {}),
   };
 }
 
@@ -557,7 +558,12 @@ function deflatePayload(
 function keyCosts(payload: CompactResolutionPayload): Map<string, number> {
   const costs = new Map<string, number>();
   for (const [key, gaps] of Object.entries(payload.failing)) {
-    const sets = JSON.stringify([key, gaps, payload.notEvaluated?.[key] ?? []]);
+    const unlisted = payload.hashesNotEvaluated?.[key];
+    const sets = JSON.stringify(
+      unlisted
+        ? [key, gaps, payload.notEvaluated?.[key] ?? [], unlisted]
+        : [key, gaps, payload.notEvaluated?.[key] ?? []],
+    );
     costs.set(key, deflateRawSync(Buffer.from(sets, "utf8")).byteLength);
   }
   return costs;
@@ -576,12 +582,13 @@ function keyCosts(payload: CompactResolutionPayload): Map<string, number> {
  *    listed. Unlisted pages fall back to pre-#1185 behavior in the merge, and
  *    `pages` still counts every crawled page so the audited-page count does not
  *    drop with the list. With `pageHashes` (a producer that sends tallies), the
- *    list is a hash-order spread rather than a prefix, and the unlisted pages
- *    ride as 8-hex hashes (#2673, about 5.7 bytes a page) so the capped rescore
- *    still knows them for crawled; the list shrinks to leave room for them. At the
- *    10,000-page crawl ceiling the hashes take about 56 KiB, inside the signal's
- *    share whatever `pageStatuses` holds; when even they do not fit (short
- *    regular URLs that deflate below a hash), the clip goes without them.
+ *    unlisted pages ride as 8-hex hashes (#2673, about 5.7 bytes a page), with
+ *    the ones each key did not evaluate named among them (#2688), so the capped
+ *    rescore still knows what this run crawled and evaluated; the list shrinks to
+ *    leave room for them. At the 10,000-page crawl ceiling the hashes take about
+ *    56 KiB, inside the signal's share whatever `pageStatuses` holds; when even
+ *    they do not fit (short regular URLs that deflate below a hash), the clip
+ *    goes without them.
  * Each is a binary search over re-deflated candidates: only the overflow case
  * pays more than one deflate.
  */
@@ -613,13 +620,6 @@ export function buildCompactResolutionSignal(
     };
   const fit = fitWith(false);
   const clipModes = options.pageHashes ? [true, false] : [false];
-  if (options.pageHashes) {
-    evidence.hashOrder = [...evidence.crawled].sort((a, b) => {
-      const ha = evidence.hash(a);
-      const hb = evidence.hash(b);
-      return ha < hb ? -1 : ha > hb ? 1 : a < b ? -1 : a > b ? 1 : 0;
-    });
-  }
 
   const all = evidence.crawled.length;
   const whole = fit(all);
@@ -660,7 +660,10 @@ export function buildCompactResolutionSignal(
     // back what keys still fit.
     const bare = largestPrefix(all, (listed) => fitWith(hashes)(listed, none));
     if (!bare) continue;
-    candidates.push({ ...largestKeySet(evidence, bare.listed, fitWith(hashes)), listed: bare.listed });
+    candidates.push({
+      ...largestKeySet(evidence, bare.listed, fitWith(hashes), hashes),
+      listed: bare.listed,
+    });
   }
   if (candidates.length === 0) return undefined;
   candidates.sort((a, b) => b.listed * b.keys - a.listed * a.keys || b.listed - a.listed);
@@ -703,8 +706,9 @@ function largestKeySet(
   evidence: ResolutionEvidence,
   listed: number,
   fit: Fit,
+  withHashes = false,
 ): { signal: CompactResolutionSignal; keys: number } {
-  const costs = keyCosts(compactPayload(evidence, listed));
+  const costs = keyCosts(compactPayload(evidence, listed, undefined, withHashes));
   const order = [...costs.keys()]
     .map((key, i) => ({ key, i, cost: costs.get(key)! }))
     .sort((a, b) => a.cost - b.cost || a.i - b.i)

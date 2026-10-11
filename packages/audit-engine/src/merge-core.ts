@@ -233,6 +233,7 @@ export interface MergeResolutionInput {
    * the list leaves out. Membership only (a collision makes an uncrawled page
    * look crawled): it tells the capped rescore which unlisted pages its tallies
    * already count. Undefined → the producer did not send them (before #2673).
+   * (#2688) With them, `notEvaluatedByCheck` covers these pages too.
    */
   crawledHashes?: Set<string>;
 }

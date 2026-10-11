@@ -132,6 +132,49 @@ export async function decodeResolutionSignal(
   const failing = decodeMap("failing", payload.failing, urls.length + other.length, hashAt);
   const notEvaluated = decodeMap("notEvaluated", payload.notEvaluated, urls.length, hashAt);
 
+  // (#2673) The unlisted crawled pages' hashes: one string of 8-hex values, only
+  // with a clipped list, at most one per crawled page the list leaves out.
+  let crawledHashes: string[] | undefined;
+  if (payload.hashes !== undefined) {
+    const hashes = payload.hashes;
+    if (
+      payload.complete ||
+      typeof hashes !== "string" ||
+      hashes.length % 8 !== 0 ||
+      hashes.length / 8 > pages - urls.length ||
+      !/^[0-9a-f]*$/.test(hashes)
+    ) {
+      throw new Error("compact resolution payload: bad hashes");
+    }
+    crawledHashes = [];
+    for (let i = 0; i < hashes.length; i += 8) crawledHashes.push(hashes.slice(i, i + 8));
+  }
+  // (#2688) The unlisted pages each key did not evaluate, by index into those
+  // hashes: folded into `notEvaluated`, within its caps, which then covers the
+  // whole crawl.
+  if (payload.hashesNotEvaluated !== undefined) {
+    const hashList = crawledHashes;
+    if (!hashList) {
+      throw new Error("compact resolution payload: hashesNotEvaluated without hashes");
+    }
+    const unlisted = decodeMap(
+      "hashesNotEvaluated",
+      payload.hashesNotEvaluated,
+      hashList.length,
+      (i) => hashList[i]!,
+    );
+    let total = 0;
+    for (const set of Object.values(notEvaluated)) total += set.length;
+    for (const [key, set] of Object.entries(unlisted)) {
+      const merged = [...(notEvaluated[key] ?? []), ...set];
+      total += set.length;
+      if (merged.length > limits.maxHashesPerCheck || total > limits.maxHashesTotal) {
+        throw new Error("compact resolution payload: notEvaluated size");
+      }
+      notEvaluated[key] = merged;
+    }
+  }
+
   const removedByStatus = decodeMap("removed", payload.removed, urls.length, (i) => urls[i]!);
   const removedPages: Array<{ url: string; status: number }> = [];
   for (const [status, removedUrls] of Object.entries(removedByStatus)) {
@@ -149,24 +192,6 @@ export async function decodeResolutionSignal(
     (payload.complete && removedCount !== removedPages.length)
   ) {
     throw new Error("compact resolution payload: bad removedCount");
-  }
-
-  // (#2673) The unlisted crawled pages' hashes: one string of 8-hex values, only
-  // with a clipped list, at most one per crawled page the list leaves out.
-  let crawledHashes: string[] | undefined;
-  if (payload.hashes !== undefined) {
-    const hashes = payload.hashes;
-    if (
-      payload.complete ||
-      typeof hashes !== "string" ||
-      hashes.length % 8 !== 0 ||
-      hashes.length / 8 > pages - urls.length ||
-      !/^[0-9a-f]*$/.test(hashes)
-    ) {
-      throw new Error("compact resolution payload: bad hashes");
-    }
-    crawledHashes = [];
-    for (let i = 0; i < hashes.length; i += 8) crawledHashes.push(hashes.slice(i, i + 8));
   }
 
   return {
@@ -199,17 +224,19 @@ function inflateCapped(base64: string, maxBytes: number): string {
 }
 
 // What a valid payload can hold, from the limits the decoder checks it against:
-// the root, its five lists, and one array per key of `failing`, `notEvaluated`
-// and `removed` (containers); one separator per list element, key and field;
-// one string per URL in `urls` and `other`, per key of the three maps and of
-// `truncated`, and per field name (strings).
+// the root, its lists and maps, and one array per key of `failing`,
+// `notEvaluated`, `hashesNotEvaluated` (#2688) and `removed` (containers); one
+// separator per list element, key and field (`notEvaluated` and
+// `hashesNotEvaluated` share one element budget); one string per URL in `urls`
+// and `other`, per key of the four maps and of `truncated`, and per field name
+// (strings).
 const limits = RESOLUTION_SIGNAL_LIMITS;
-const MAX_CONTAINERS = 3 * limits.maxChecks + 16;
-const MAX_STRINGS = limits.maxCrawledUrls + limits.maxHashesTotal + 4 * limits.maxChecks + 16;
+const MAX_CONTAINERS = 4 * limits.maxChecks + 16;
+const MAX_STRINGS = limits.maxCrawledUrls + limits.maxHashesTotal + 5 * limits.maxChecks + 16;
 /** The longest string a valid payload holds: `hashes` (#2673), 8 hex per crawled page. */
 const MAX_STRING_CHARS = 8 * limits.maxCrawledUrls;
 const MAX_SEPARATORS =
-  limits.maxCrawledUrls + 4 * limits.maxHashesTotal + 3 * limits.maxChecks + 16;
+  limits.maxCrawledUrls + 4 * limits.maxHashesTotal + 4 * limits.maxChecks + 16;
 /** Root, a map, its arrays. */
 const MAX_DEPTH = 3;
 

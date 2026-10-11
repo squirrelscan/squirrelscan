@@ -47,7 +47,8 @@ export interface ResolutionSignal {
    * `skipped` them (perf/ttfb without timing data) or emitted no check for
    * them at all. Absence from `failing` is then NOT evidence of clean, so the
    * merge must not resolve these pages. Omitted entirely when every key
-   * evaluated every crawled page (the common case).
+   * evaluated every crawled page (the common case). (#2688) With
+   * `crawledHashes`, it names the unlisted pages a key did not evaluate too.
    */
   notEvaluated?: Record<string, string[]>;
   /**
@@ -86,7 +87,10 @@ export interface ResolutionSignal {
    * crawled page the list leaves out, so the merge can tell an unlisted page
    * this run crawled from one it did not. Membership only: a page whose hash is
    * here was crawled, or collides with one that was. Set by the compact decoder
-   * only, from a payload that carries them (producers since #2673).
+   * only, from a payload that carries them (producers since #2673). (#2688)
+   * `notEvaluated` then covers these pages as well as the listed ones, so a key
+   * that is present, not truncated and does not name a page's hash there
+   * evaluated that page.
    */
   crawledHashes?: string[];
 }
@@ -145,6 +149,14 @@ export interface CompactResolutionPayload {
    * 7). Absent when there are none.
    */
   hashes?: string;
+  /**
+   * (#2688) Only with `hashes`: `ruleId|checkName` → gap-coded indexes (into the
+   * 8-hex values of `hashes`) of unlisted pages the check did not evaluate, the
+   * unlisted half of `notEvaluated`. A hash two unlisted pages share is named
+   * when either was not evaluated. The two maps share `notEvaluated`'s count
+   * caps: a key past them is listed in `truncated` instead.
+   */
+  hashesNotEvaluated?: Record<string, number[]>;
 }
 
 /** Sorted, distinct indexes → gap code (see {@link CompactResolutionPayload}). */

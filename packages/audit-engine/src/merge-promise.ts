@@ -1303,23 +1303,22 @@ function notEvaluatedThisRun(
     // hashes do not name was not crawled (or, without hashes from a producer
     // before #2673, there is no telling) and keeps its carry. A page they name
     // was crawled, and the tallies count it for every check that evaluated it,
-    // so a carry there would count it twice. Whether THIS check evaluated it is
-    // not in the signal, so it is taken as evaluated only when the check ran this
-    // run, evaluated every listed page and its sets are not truncated; a check
-    // that skipped any listed page (no timing data, a scan cap) may have skipped
-    // this one too, and its carry stays. The listed pages are a hash-order spread
-    // of the crawl, so skips clustered in one section show among them; a cluster
-    // too small to land in the sample can still lose its carries from the score.
-    // An uncrawled page whose hash collides with a crawled one is taken for
-    // crawled here too, and its carries drop out of the union (about 1.6e-6 a
-    // page at 7,000 hashes); they stay open in the store either way.
+    // so a carry there would count it twice. (#2688) With the hashes, the
+    // signal's `notEvaluated` names the unlisted pages each check did not
+    // evaluate as well, so this page was evaluated when the check ran this run,
+    // is not truncated and does not name it. A hash it shares with a page the
+    // check skipped keeps the carry. An uncrawled page whose hash collides with a
+    // crawled one is taken for crawled here too, and its carries drop out of the
+    // union (about 1.6e-6 a page at 7,000 hashes); they stay open in the store
+    // either way.
     if (resolution.crawledComplete === false && !resolution.crawledUrls.has(url)) {
-      if (!resolution.crawledHashes?.has(resolutionUrlHash(url))) return false;
+      const hash = resolutionUrlHash(url);
+      if (!resolution.crawledHashes?.has(hash)) return false;
       const key = resolutionCheckKey(f.ruleId, f.checkName);
       return (
         resolution.failingByCheck.has(key) &&
-        !resolution.notEvaluatedByCheck.has(key) &&
-        !resolution.truncatedChecks.has(key)
+        !resolution.truncatedChecks.has(key) &&
+        !resolution.notEvaluatedByCheck.get(key)?.has(hash)
       );
     }
     if (!crawledUrls.has(url) && !resolution.crawledUrls.has(url)) return false;

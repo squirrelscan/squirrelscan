@@ -150,6 +150,8 @@ interface PageShape {
   /** HTTP status this run (default 200). */
   status?: number;
   metaMissing?: boolean;
+  /** core/meta-description could not evaluate the page (wins over `metaMissing`). */
+  metaSkipped?: boolean;
   /** img-alt fail items; `extra` > 0 adds `details.additional`. */
   altItems?: number;
   extra?: number;
@@ -172,8 +174,12 @@ function fullReport(shapes: PageShape[], opts: { robotsMissing?: boolean } = {})
       meta: meta("core/meta-description", "core", "page", "warning", 10),
       checks: rows((s) => ({
         name: "has-meta-description",
-        status: s.metaMissing ? "fail" : "pass",
-        message: s.metaMissing ? "Missing meta description" : "Meta description present",
+        status: s.metaSkipped ? "skipped" : s.metaMissing ? "fail" : "pass",
+        message: s.metaSkipped
+          ? "Not evaluated"
+          : s.metaMissing
+            ? "Missing meta description"
+            : "Meta description present",
         pageUrl: url(s.i),
       })),
     },
@@ -559,11 +565,10 @@ describe("rescore of a capped report (repo#2657)", () => {
     expect(comparable(rescored(hashed))).toEqual(comparable(rescored(uncapped)));
   });
 
-  test("(#2673) on a check that skipped a listed page, an unlisted hashed page keeps its carry", async () => {
+  test("(#2688) an unlisted page the check skipped keeps its carry, one it evaluated does not", async () => {
     // ttfb has no timing data on every fourth page, some listed and some not.
-    // The signal shows the check skipped listed pages, so it may have skipped
-    // the unlisted ones too: their carries stay, rather than vanish from a score
-    // no tally replaces them in.
+    // The signal names the unlisted ones the check skipped: their carries stay,
+    // where no tally replaces them, and every other carry leaves the union.
     const seed = await seeded(
       withNoisyUrls(fullReport(range(0, 40).map((i) => ({ i, ttfb: "slow" as const })))),
     );
@@ -583,36 +588,42 @@ describe("rescore of a capped report (repo#2657)", () => {
     expect(unlisted.length).toBeLessThan(skipped.length);
     const capped = await publish(seed.clone(), "audit_2", body, NOW);
     const uncapped = await publish(seed.clone(), "audit_2", uncappedBody(report), NOW);
-    for (const u of unlisted) expect(capped.carriedLastSeen.has(`${u}|perf/ttfb|ttfb`)).toBe(true);
+    // Shown as carried: the skipped pages, listed or not, and no other.
+    const ttfbCarries = [...capped.carriedLastSeen.keys()].filter((k) => k.endsWith("|perf/ttfb|ttfb"));
+    expect(new Set(ttfbCarries)).toEqual(new Set(skipped.map((i) => `${noisy(url(i))}|perf/ttfb|ttfb`)));
+    expect(comparable(rescored(capped))).toEqual(comparable(rescored(uncapped)));
+  });
+
+  test("(#2688) one skipped unlisted page keeps its prior fail in the score, on a check that evaluated every listed page", async () => {
+    // Every page failed meta-description in run 1. Run 2 fixes it everywhere,
+    // but the rule could not evaluate page 39, which the clipped list leaves out.
+    // Nothing listed shows the skip, so only the signal's word on page 39 keeps
+    // its fail carried, as the uncapped merge carries it; without it the capped
+    // score comes out above the uncapped one.
+    const seed = await seeded(
+      withNoisyUrls(fullReport(range(0, 40).map((i) => ({ i, metaMissing: true })))),
+    );
+    const report = withNoisyUrls(
+      fullReport(range(0, 40).map((i) => ({ i, metaSkipped: i === 39 }))),
+    );
+    const body = await clippedBody(report, 15);
+    const page = noisy(url(39));
+    expect(body.resolutionSignal.crawledUrls).not.toContain(page);
+    expect(body.resolutionSignal.crawledHashes).toContain(resolutionUrlHash(page));
+    const key = "core/meta-description|has-meta-description";
+    const listed = new Set(body.resolutionSignal.crawledUrls.map((u) => resolutionUrlHash(u)));
+    expect(body.resolutionSignal.notEvaluated?.[key]?.some((hash) => listed.has(hash)) ?? false).toBe(
+      false,
+    );
+
+    const uncapped = await publish(seed.clone(), "audit_2", uncappedBody(report), NOW);
+    const capped = await publish(seed.clone(), "audit_2", body, NOW);
     expect(rescored(capped).healthScore.overall).toBeLessThanOrEqual(
       rescored(uncapped).healthScore.overall,
     );
-  });
-
-  test("(#2673) skips clustered in one section past an alphabetical prefix still show in the listed spread", async () => {
-    // ttfb has no timing data on pages 30-39 only, the site's alphabetically
-    // last section. A prefix of 15 would list none of them and read the check as
-    // having skipped nothing; the hash-order spread lists some, so the carries on
-    // the unlisted ones stay.
-    const seed = await seeded(
-      withNoisyUrls(fullReport(range(0, 40).map((i) => ({ i, ttfb: "slow" as const })))),
-    );
-    const report = withNoisyUrls(
-      fullReport(
-        range(0, 40).map((i) => ({
-          i,
-          ttfb: i >= 30 ? ("skipped" as const) : ("slow" as const),
-        })),
-      ),
-    );
-    const body = await clippedBody(report, 15);
-    const listed = new Set(body.resolutionSignal.crawledUrls);
-    const cluster = range(30, 40).map((i) => noisy(url(i)));
-    expect(cluster.some((u) => listed.has(u))).toBe(true);
-    const unlisted = cluster.filter((u) => !listed.has(u));
-    expect(unlisted.length).toBeGreaterThan(0);
-    const capped = await publish(seed.clone(), "audit_2", body, NOW);
-    for (const u of unlisted) expect(capped.carriedLastSeen.has(`${u}|perf/ttfb|ttfb`)).toBe(true);
+    expect(comparable(rescored(capped))).toEqual(comparable(rescored(uncapped)));
+    expect(uncapped.carriedLastSeen.has(`${page}|${key}`)).toBe(true);
+    expect(capped.carriedLastSeen.has(`${page}|${key}`)).toBe(true);
   });
 
   test("(#2673) uncrawled carried pages keep their synthetic passes; a hash collision only withholds one", async () => {
@@ -669,6 +680,8 @@ describe("rescore of a capped report (repo#2657)", () => {
       const capped = rescored(await publish(seed.clone(), "audit_2", body, NOW));
       expect(capped.healthScore.overall).toBeLessThanOrEqual(uncapped.healthScore.overall);
       expect(uncapped.healthScore.overall - capped.healthScore.overall).toBeLessThanOrEqual(1);
+      // (#2688) With the unlisted skips named, the counts come out exact.
+      expect(capped.totals).toEqual(uncapped.totals);
     },
     240_000,
   );

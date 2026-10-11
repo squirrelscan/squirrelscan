@@ -461,31 +461,41 @@ describe("the byte budget", () => {
     expect(decoded.crawledHashes).toBeUndefined();
   });
 
-  test("(#2673) with page hashes, a clipped list is a spread of the crawl and names the rest by hash", async () => {
+  test("(#2673, #2688) with page hashes, a clipped list names the rest by hash, and the ones each key did not evaluate", async () => {
     const urls = newsUrls(3_000);
     const results = fixtureShapedResults(urls);
+    // A check with no data on every seventh page, and one that hit a scan cap on
+    // the crawl's last ten pages, which no clipped list reaches.
+    const check = (url: string, skipped: boolean): CheckResult =>
+      skipped
+        ? { name: "c", status: "skipped", message: "no data", pageUrl: url }
+        : { name: "c", status: "pass", message: "ok", pageUrl: url };
+    results.sevenths = { checks: urls.map((url, i) => check(url, i % 7 === 0)) };
+    results.tail = { checks: urls.map((url, i) => check(url, i >= 2_990)) };
     const signal = buildCompactResolutionSignal(results, urls, 24 * 1024, [], { pageHashes: true })!;
     expect(bytes(signal)).toBeLessThanOrEqual(24 * 1024);
     const decoded = await decodeResolutionSignal(signal);
     expect(decoded.crawledComplete).toBe(false);
     expect(decoded.crawledCount).toBe(3_000);
-    // The listed pages are the first in hash order, not a crawl-order prefix.
+    // The listed pages are a crawl-order prefix, as without hashes.
     const norm = urls.map(normalizePageUrl);
-    const byHash = [...norm].sort((a, b) =>
-      resolutionUrlHash(a) < resolutionUrlHash(b) ? -1 : resolutionUrlHash(a) > resolutionUrlHash(b) ? 1 : 0,
-    );
-    expect(new Set(decoded.crawledUrls)).toEqual(new Set(byHash.slice(0, decoded.crawledUrls.length)));
+    const listedCount = decoded.crawledUrls.length;
+    expect(new Set(decoded.crawledUrls)).toEqual(new Set(norm.slice(0, listedCount)));
     // Every page the list leaves out is named by hash, sorted and distinct.
-    const listed = new Set(decoded.crawledUrls);
-    const unlisted = norm.filter((u) => !listed.has(u));
-    expect(decoded.crawledHashes).toEqual([...new Set(unlisted.map(resolutionUrlHash))].sort());
-    // A listed page keeps exactly its original evidence.
+    expect(decoded.crawledHashes).toEqual([...new Set(norm.slice(listedCount).map(resolutionUrlHash))].sort());
+    // A listed page keeps exactly its original failing evidence, and every key
+    // names exactly the pages, listed or not, the original says it did not evaluate.
     const legacy = buildResolutionSignal(results, urls)!;
     const listedHashes = new Set(decoded.crawledUrls.map(resolutionUrlHash));
+    const truncated = new Set(decoded.truncated ?? []);
     for (const [key, hashes] of Object.entries(legacy.failing)) {
-      if (!(key in decoded.failing)) continue;
+      expect(key in decoded.failing).toBe(true);
+      expect(truncated.has(key)).toBe(false);
       expect(new Set(decoded.failing[key])).toEqual(new Set(hashes.filter((h) => listedHashes.has(h))));
+      expect(new Set(decoded.notEvaluated?.[key] ?? [])).toEqual(new Set(legacy.notEvaluated?.[key] ?? []));
     }
+    expect(decoded.notEvaluated?.["tail|c"]).toHaveLength(10);
+    expect(decoded.notEvaluated?.["tail|c"]?.some((hash) => listedHashes.has(hash))).toBe(false);
   });
 
   test("(#2673) a crawl past the collection cap sends no hashes: they could not be complete", async () => {
@@ -612,6 +622,41 @@ describe("decodeResolutionSignal refuses what it cannot bound", () => {
       encode({ ...ok, complete: false, pages: 4, hashes: "0000000100000002" }),
     );
     expect(withHashes.crawledHashes).toEqual(["00000001", "00000002"]);
+    // (#2688) The unlisted pages a key did not evaluate join its listed ones.
+    const withSkips = await decodeResolutionSignal(
+      encode({
+        ...ok,
+        complete: false,
+        pages: 4,
+        notEvaluated: { "r|c": [0] },
+        hashes: "0000000100000002",
+        hashesNotEvaluated: { "r|c": [1], "r|d": [0] },
+      }),
+    );
+    expect(withSkips.notEvaluated).toEqual({
+      "r|c": [resolutionUrlHash(P1), "00000002"],
+      "r|d": ["00000001"],
+    });
+  });
+
+  test("(#2688) listed and unlisted not-evaluated pages share one count cap", async () => {
+    // Each map alone is within the whole-signal cap; together they are past it.
+    const urls = Array.from({ length: 1_000 }, (_, i) => `https://x.test/${i}`);
+    const keys = Array.from({ length: 11 }, (_, k) => `r|${k}`);
+    const payload = {
+      v: 1,
+      urls,
+      complete: false,
+      pages: 10_000,
+      failing: Object.fromEntries(keys.map((key) => [key, []])),
+      notEvaluated: Object.fromEntries(keys.map((key) => [key, new Array(1_000).fill(0)])),
+      hashes: "0".repeat(8 * 9_000),
+      hashesNotEvaluated: Object.fromEntries(keys.map((key) => [key, new Array(9_000).fill(0)])),
+    };
+    expect(11 * 9_000).toBeLessThanOrEqual(RESOLUTION_SIGNAL_LIMITS.maxHashesTotal);
+    await expect(decodeResolutionSignal(encode(payload))).rejects.toThrow(/notEvaluated size/);
+    const fewer = { ...payload, notEvaluated: { "r|0": [0] } };
+    expect((await decodeResolutionSignal(encode(fewer))).notEvaluated?.["r|0"]).toHaveLength(9_001);
   });
 
   test("(#2673) a hashes string past what the crawl can hold is refused cheaply", async () => {
@@ -640,6 +685,14 @@ describe("decodeResolutionSignal refuses what it cannot bound", () => {
     ["hashes that are not hex", { ...ok, complete: false, pages: 4, hashes: "0000000g" }],
     ["more hashes than unlisted pages", { ...ok, complete: false, pages: 3, hashes: "0000000100000002" }],
     ["hashes that are not a string", { ...ok, complete: false, pages: 4, hashes: ["00000001"] }],
+    [
+      "unlisted not-evaluated pages without hashes",
+      { ...ok, complete: false, pages: 4, hashesNotEvaluated: { "r|c": [0] } },
+    ],
+    [
+      "an unlisted not-evaluated index past the hashes",
+      { ...ok, complete: false, pages: 4, hashes: "00000001", hashesNotEvaluated: { "r|c": [1] } },
+    ],
     ["more removed pages than pages", { ...ok, complete: false, pages: 2, removedCount: 3 }],
     ["more pages than a crawl can have", { ...ok, complete: false, pages: 1e9 }],
     ["no failing map", { v: 1, urls: [P1], complete: true, pages: 1 }],
