@@ -871,7 +871,10 @@ function slimEntityMap(map: EntityMap | null | undefined): { map?: EntityMap; fa
 
 /**
  * Pages that returned 404/410 this run, normalized. Read from the full report,
- * before `pageStatuses` is clipped. See {@link withoutRemovedPages}.
+ * before `pageStatuses` is clipped, and from the same source the published
+ * statuses are built from: the producer's `pageStatuses` when it sent them, else
+ * its `pages`. The server's removed set is read off those, so the two cannot
+ * disagree on a page. See {@link withoutRemovedPages}.
  */
 function removedPageUrls(report: CappableReport): Set<string> {
   const out = new Set<string>();
@@ -880,9 +883,10 @@ function removedPageUrls(report: CappableReport): Set<string> {
       out.add(normalizePageUrl(url));
     }
   };
-  if (Array.isArray(report.pages)) for (const page of report.pages) add(page?.url, page?.statusCode);
   if (Array.isArray(report.pageStatuses)) {
     for (const row of report.pageStatuses) add(row?.url, row?.status);
+  } else if (Array.isArray(report.pages)) {
+    for (const page of report.pages) add(page?.url, page?.statusCode);
   }
   return out;
 }
@@ -925,6 +929,7 @@ function withoutRemovedPages<R extends { checks: CheckResult[] }>(
       }
       changed = true;
       const members = unfoldAggregateCheck(check);
+      // Every member of an unfolded aggregate carries the `pageUrl` it unfolded to.
       const kept = members.filter((member) => !removed(member.pageUrl!));
       const gone = members.length - kept.length;
       for (const member of kept) {

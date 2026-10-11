@@ -16,6 +16,7 @@ import type {
   FindingState,
   HealthScore,
   PageFindingRecord,
+  ResolutionSignal,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
 import { SCAN_TRUNCATED_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
@@ -218,22 +219,27 @@ function fullReport(shapes: PageShape[], opts: { robotsMissing?: boolean } = {})
   };
 }
 
+/** A producer's report, with the signal it built when it brings its own. */
+type Produced = ReturnType<typeof fullReport> & { resolutionSignal?: ResolutionSignal };
+
 /** Today's uncapped body: every row, the non-2xx statuses, the unsampled signal. */
-function uncappedBody(report: ReturnType<typeof fullReport>) {
+function uncappedBody(report: Produced) {
   return {
     ruleResults: report.ruleResults,
     pageStatuses: report.pages
       .filter((p) => p.statusCode < 200 || p.statusCode >= 300)
       .map((p) => ({ url: p.url, status: p.statusCode })),
-    resolutionSignal: buildResolutionSignal(
-      report.ruleResults,
-      report.pages.map((p) => p.url),
-    ),
+    resolutionSignal:
+      report.resolutionSignal ??
+      buildResolutionSignal(
+        report.ruleResults,
+        report.pages.map((p) => p.url),
+      ),
   };
 }
 
 /** The capped body the CLI and the container publish after repo#2656. */
-function cappedBody(report: ReturnType<typeof fullReport>) {
+function cappedBody(report: Produced) {
   const capped = capReportForPublish(report);
   return {
     ruleResults: capped.ruleResults as unknown as Rules,
@@ -291,7 +297,7 @@ function publish(store: MemStore, crawlId: string, body: Body, now: number) {
 }
 
 /** Publishes the same audit uncapped and capped to two copies of `seed`. */
-async function bothWays(seed: MemStore, crawlId: string, report: ReturnType<typeof fullReport>) {
+async function bothWays(seed: MemStore, crawlId: string, report: Produced) {
   const now = 1_780_000_000_000;
   const uncappedStore = seed.clone();
   const cappedStore = seed.clone();
@@ -347,10 +353,37 @@ describe("rescore of a capped report (repo#2657)", () => {
 
   test("no page findings at all: the capped body scores as the uncapped one", async () => {
     const report = fullReport(range(0, 40).map((i) => ({ i })));
-    const { uncapped, capped } = await bothWays(new MemStore(), "audit_1", report);
+    const { uncapped, capped, cappedBody: body } = await bothWays(new MemStore(), "audit_1", report);
     expect(comparable(rescored(capped))).toEqual(comparable(rescored(uncapped)));
     expect(rescored(capped).totals.passed).toBeGreaterThan(0);
     expect(capped.coverage).toEqual(uncapped.coverage);
+    // Rules of passes only publish no rows at all, and still score from their tallies.
+    expect(body.ruleResults["core/meta-description"]!.checks).toEqual([]);
+    for (const ruleId of Object.keys(body.checkTallies)) {
+      expect(capped.scoringTallies!.get(ruleId)?.tally.passed).toBeGreaterThan(0);
+    }
+  });
+
+  test("a truncated signal key: a clipped page still failing is counted once, by the tallies", async () => {
+    const shapes = range(0, 30).map((i) => ({ i, metaMissing: i < 15 }));
+    const seed = await seeded(fullReport(shapes));
+    // Run 2 fails the same 15 pages; the sample keeps 10, the merge carries the
+    // other 5. The signal's failing set for the check was clipped to 3 hashes, so
+    // it is truncated and lists no page as not evaluated.
+    const report = fullReport(shapes);
+    const key = "core/meta-description|has-meta-description";
+    const signal = buildResolutionSignal(report.ruleResults, report.pages.map((p) => p.url))!;
+    signal.failing[key] = signal.failing[key]!.slice(0, 3);
+    signal.truncated = [...(signal.truncated ?? []), key];
+    if (signal.notEvaluated) delete signal.notEvaluated[key];
+    const { uncapped, capped } = await bothWays(seed, "audit_2", {
+      ...report,
+      resolutionSignal: signal,
+    });
+    expect(comparable(rescored(capped))).toEqual(comparable(rescored(uncapped)));
+    expect(capped.coverage).toEqual(uncapped.coverage);
+    expect(capped.coverage.carriedFindings).toBe(0);
+    expect(capped.carriedLastSeen.size).toBe(0);
   });
 
   test("partial re-audit with open findings: same score, crawled-clean resolves, uncrawled carries", async () => {
@@ -503,6 +536,20 @@ describe("buildCheckTallies leaves out what the rescore leaves out (repo#2657)",
     expect(cls!.pages).not.toContain(url(3));
     expect(cls!.pages).not.toContain(url(4));
     expect(cls!.details?.occurrences).toBe(10);
+  });
+
+  test("removed pages are read from the producer's pageStatuses when it sent them, as the server reads them", () => {
+    const report = {
+      ...fullReport(range(0, 12).map((i) => ({ i, metaMissing: true, status: i === 3 ? 404 : undefined }))),
+      // The statuses the server will see: page 4 gone, page 3 not listed.
+      pageStatuses: [{ url: url(4), status: 410 }],
+    };
+    const capped = capReportForPublish(report);
+    expect(capped.pageStatuses).toEqual([{ url: url(4), status: 410 }]);
+    expect(capped.checkTallies["core/meta-description"]).toEqual({
+      "has-meta-description": { failed: 11, failUnits: 11 },
+    });
+    expect(capped.ruleResults["core/meta-description"]!.checks[0]!.pages).not.toContain(url(4));
   });
 
   test("a producer's page replays are not counted; a site check tagged carried is", () => {

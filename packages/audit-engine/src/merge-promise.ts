@@ -1020,6 +1020,7 @@ export async function runCloudSmartAudits(
     }));
     // The coverage line counts what the report shows as carried, and only those
     // are tagged: a fresh check on the page of a carry left out is not carried.
+    // `carriedLastSeen` is this call's own map, returned for exactly that tagging.
     carriedCount = unionCarried.length;
     unrenderedCount = unionCarried.filter((f) => f.neverRendered).length;
     const shown = new Set(
@@ -1267,6 +1268,10 @@ function scoreFromCheckTallies(input: {
     ruleMetaIndex: input.ruleMetaIndex,
   });
 
+  // Keyed like the union: every published rule (an emptied one keeps its key, and
+  // the capper publishes every rule, classes or not) plus the carried-only ones.
+  // A tally for a rule the report does not carry has no meta, so it cannot be
+  // scored, as no row of it could have been.
   const scoringTallies = new Map<string, RuleTally>();
   const reportTotals = { passed: 0, warnings: 0, failed: 0 };
   for (const [ruleId, r] of carriedSide) {
@@ -1286,6 +1291,11 @@ function scoreFromCheckTallies(input: {
  * with no entry scored nothing this run (`buildCheckTallies` leaves out classes
  * of info checks only), so it is 0, never unknown. The tallies arrive in a
  * publish body, so anything that is not a non-negative count counts as 0.
+ *
+ * Otherwise trusted as far as the rows they replace were: both are the
+ * publisher's own account of its audit, under the same key, for its own site.
+ * Not bounded by pages crawled: a rule may emit several checks of one name on a
+ * page, and the rows it would have sent were not bounded that way either.
  */
 function freshTally(byName: CheckTallies[string] | undefined): IssueTally {
   const tally = emptyTally();
