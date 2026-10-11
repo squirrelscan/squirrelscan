@@ -36,7 +36,8 @@ export const HEADER_PATTERNS: {
   },
   {
     provider: "imperva",
-    headers: [{ name: "x-cdn", pattern: /incapsula/i }, { name: "x-iinfo" }],
+    // `x-cdn` was `Incapsula`; Imperva now sends its own name there (#604).
+    headers: [{ name: "x-cdn", pattern: /incapsula|imperva/i }, { name: "x-iinfo" }],
     confidence: "high",
   },
   {
