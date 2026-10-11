@@ -78,6 +78,10 @@ const TRUNK_ZERO_CALLING_CODES = new Set([
 // "+49 (0)6061 …": the parenthesised optional trunk prefix after a calling code.
 const OPTIONAL_TRUNK_ZERO = /\+\s*(\d{1,3})\s*\(\s*0\s*\)\s*/;
 
+// Fewest digits (calling code included) read as a number in that display form:
+// seven, the length `tel-links` asks of an href.
+const MIN_INTL_DISPLAY_DIGITS = 7;
+
 /**
  * Display text with an optional trunk prefix "(0)" read as the destination
  * omits it (pub#663), e.g. "+49 (0)6061 630 980 0" → "+49 6061 630 980 0", the
@@ -152,23 +156,27 @@ export const telMailtoRule: Rule = {
 
         // Mismatch check (#694: E.164 href vs national trunk-zero text, e.g. +61414… vs 0414…, is NOT a mismatch)
         const text = link.textContent?.trim() || "";
-        if (/\d{3,}/.test(text) && !phoneNumbersMatch(phone, text)) {
-          // "+49 (0)6061 …" with href "+496061…" is the same destination in a
-          // non-recommended display form: formatting advice, not a mismatch.
-          const intlForm = withoutOptionalTrunkZero(text);
-          if (intlForm !== null && phoneNumbersMatch(phone, intlForm)) {
-            telTrunkPrefixes.push({
-              id: href,
-              label: `text "${text}": use "${intlForm}"`,
-              snippet: link.outerHTML.slice(0, 200),
-            });
-          } else {
-            telMismatches.push({
-              id: href,
-              label: `href "${phone}" ≠ text "${text}"`,
-              snippet: link.outerHTML.slice(0, 200),
-            });
-          }
+        // "+49 (0)6061 …" with href "+496061…" is the same destination in a
+        // non-recommended display form: formatting advice, never a mismatch.
+        // Read before the 3-digit gate so grouped numbers ("+33 (0)1 23 45 67
+        // 89") count; the length floor keeps a bare "+49 (0)" from suffix-matching.
+        const intlForm = withoutOptionalTrunkZero(text);
+        if (
+          intlForm !== null &&
+          normalizePhone(intlForm).length >= MIN_INTL_DISPLAY_DIGITS &&
+          phoneNumbersMatch(phone, intlForm)
+        ) {
+          telTrunkPrefixes.push({
+            id: href,
+            label: `text "${text}": use "${intlForm}"`,
+            snippet: link.outerHTML.slice(0, 200),
+          });
+        } else if (/\d{3,}/.test(text) && !phoneNumbersMatch(phone, text)) {
+          telMismatches.push({
+            id: href,
+            label: `href "${phone}" ≠ text "${text}"`,
+            snippet: link.outerHTML.slice(0, 200),
+          });
         }
       }
 

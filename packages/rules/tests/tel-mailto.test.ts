@@ -180,6 +180,26 @@ describe("links/tel-mailto — optional trunk prefix (0) in the display (pub#663
     }
   });
 
+  test("grouped digits and a national href get the advice too", () => {
+    for (const [href, text] of [
+      // No three consecutive digits: the mismatch check never reads this text.
+      ["tel:+33123456789", "+33 (0)1 23 45 67 89"],
+      // The raw digits already match a national href; the display is still advice.
+      ["tel:060616309800", "+49 (0)6061 630 980 0"],
+    ]) {
+      const { checks } = telMailtoRule.run(ctx(page(`<a href="${href}">${text}</a>`)));
+      expect([href, mismatchCheck(checks)]).toEqual([href, undefined]);
+      expect([href, trunkCheck(checks)?.status]).toEqual([href, "info"]);
+    }
+  });
+
+  test("a bare '+49 (0)' with no number after it is not read as one", () => {
+    const html = page(`<a href="tel:+4930123449">Call +49 (0)</a>`);
+    const { checks } = telMailtoRule.run(ctx(html));
+    expect(mismatchCheck(checks)).toBeUndefined();
+    expect(trunkCheck(checks)).toBeUndefined();
+  });
+
   test("a country with no trunk prefix keeps its zero: Italy and Spain still mismatch", () => {
     // In Italy the leading 0 is part of the number (+39 06 …), and Spain has
     // no trunk prefix, so "(0)" there is not read as optional.
