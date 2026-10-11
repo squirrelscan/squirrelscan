@@ -19,10 +19,8 @@ import type {
   ResolutionSignal,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
-import {
-  decodeResolutionSignal,
-  SCAN_TRUNCATED_SKIP_REASON,
-} from "@squirrelscan/core-contracts/resolution";
+import { SCAN_TRUNCATED_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+import { decodeResolutionSignal } from "@squirrelscan/rules/resolution-decode";
 import {
   buildCompactResolutionSignal,
   buildResolutionSignal,

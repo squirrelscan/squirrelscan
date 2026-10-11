@@ -19,7 +19,7 @@ import {
   REPORT_CAPS,
   RESOLUTION_PUBLISH_LIMITS,
 } from "@squirrelscan/core-contracts/limits";
-import { decodeResolutionSignal } from "@squirrelscan/core-contracts/resolution";
+import { decodeResolutionSignal } from "@squirrelscan/rules/resolution-decode";
 import { checkAffectedPages } from "@squirrelscan/report/affected-pages";
 import { capMixedRuleChecksForPublish, foldOverflowChecks } from "@squirrelscan/rules/fold";
 import {

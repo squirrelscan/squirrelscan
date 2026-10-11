@@ -10,7 +10,7 @@ import {
   REPORT_LIMITS,
   RESOLUTION_PUBLISH_LIMITS,
 } from "@squirrelscan/core-contracts/limits";
-import { decodeResolutionSignal } from "@squirrelscan/core-contracts/resolution";
+import { decodeResolutionSignal } from "@squirrelscan/rules/resolution-decode";
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport } from "../../src/types";

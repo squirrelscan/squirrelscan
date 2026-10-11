@@ -18,10 +18,10 @@ import {
 } from "@squirrelscan/core-contracts/limits";
 import {
   type CompactResolutionSignal,
-  decodeResolutionSignal,
   resolutionCheckKey,
   resolutionUrlHash,
 } from "@squirrelscan/core-contracts/resolution";
+import { decodeResolutionSignal } from "@squirrelscan/rules/resolution-decode";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
 
 import {
@@ -558,6 +558,32 @@ describe("decodeResolutionSignal refuses what it cannot bound", () => {
     await expect(decodeResolutionSignal({ v: 1, data: bomb.toString("base64") })).rejects.toThrow(
       /inflates past/,
     );
+  });
+
+  test("a small body whose JSON no valid payload has is refused before it is parsed", async () => {
+    // ~4 MiB of `{},` under an unknown key deflates to ~20 KB, and JSON.parse
+    // would build a million objects from it.
+    const raw = (body: string): CompactResolutionSignal => ({
+      v: 1,
+      data: deflateRawSync(Buffer.from(body)).toString("base64"),
+    });
+    const objects = raw(`{"v":1,"x":[${"{},".repeat(1_300_000)}{}],"urls":[],"complete":true,"pages":0,"failing":{}}`);
+    expect(objects.data.length).toBeLessThan(32 * 1024);
+    await expect(decodeResolutionSignal(objects)).rejects.toThrow(/shape past/);
+    // A flat list of more elements than every list together may hold.
+    const zeros = raw(`{"v":1,"x":[${"0,".repeat(600_000)}0],"urls":[],"complete":true,"pages":0,"failing":{}}`);
+    await expect(decodeResolutionSignal(zeros)).rejects.toThrow(/shape past/);
+    // Nesting deeper than root → map → list.
+    const deep = raw(`{"v":1,"x":[[[0]]],"urls":[],"complete":true,"pages":0,"failing":{}}`);
+    await expect(decodeResolutionSignal(deep)).rejects.toThrow(/shape past/);
+    // Brackets inside strings are text, not structure.
+    const quoted = raw(`{"v":1,"urls":["https://x.test/[{\\"}]"],"complete":true,"pages":1,"failing":{}}`);
+    expect((await decodeResolutionSignal(quoted)).crawledUrls).toHaveLength(1);
+  });
+
+  test("data past the signal's byte budget is refused before it is decoded", async () => {
+    const data = "A".repeat(RESOLUTION_PUBLISH_LIMITS.maxBytes + 1);
+    await expect(decodeResolutionSignal({ v: 1, data })).rejects.toThrow(/byte budget/);
   });
 
   test("garbage that is not deflate data is refused", async () => {

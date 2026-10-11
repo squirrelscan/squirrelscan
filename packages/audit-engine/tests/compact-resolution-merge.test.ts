@@ -16,7 +16,7 @@ import type {
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
-import { decodeResolutionSignal } from "@squirrelscan/core-contracts/resolution";
+import { decodeResolutionSignal } from "@squirrelscan/rules/resolution-decode";
 import { foldOverflowChecks, sampleChecksForPublish } from "@squirrelscan/rules/fold";
 import {
   buildCompactResolutionSignal,
