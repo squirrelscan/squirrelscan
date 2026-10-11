@@ -114,17 +114,6 @@ export function scanScopeLine(report: AuditReport): string | null {
 }
 
 /**
- * A capped published report's note (squirrelscan/repo#2661): every list in it
- * is a sample beside the true counts, so say so once and say where the full
- * per-page list is. Null for a report that is not capped, which is every
- * report the CLI renders from its own project database and every report
- * published before capping, so their output is unchanged.
- *
- * The same sentence the cloud's own views print (the dashboard, MCP and the
- * API's markdown, in the private repo's `published-report-detail`). The cloud
- * findings store is not served, so a cloud audit is pointed at the CLI.
- */
-/**
  * A non-negative whole number off report JSON, or `fallback`. The stamp is read
  * from stored or fetched reports of any origin, so a field that is not a finite
  * number (a string, NaN, an object) must not reach the copy.
@@ -135,6 +124,17 @@ function stampCount(value: unknown, fallback: number): number {
     : fallback;
 }
 
+/**
+ * A capped published report's note (squirrelscan/repo#2661): every list in it
+ * is a sample beside the true counts, so say so once and say where the full
+ * per-page list is. Null for a report that is not capped, which is every
+ * report the CLI renders from its own project database and every report
+ * published before capping, so their output is unchanged.
+ *
+ * The same sentence the cloud's own views print (the dashboard, MCP and the
+ * API's markdown, in the private repo's `published-report-detail`). The cloud
+ * findings store is not served, so a cloud audit is pointed at the CLI.
+ */
 export function publishedReportNote(report: Pick<AuditReport, "detail">): string | null {
   const d = report.detail;
   if (d?.capped !== true) return null;

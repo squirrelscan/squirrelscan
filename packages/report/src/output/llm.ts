@@ -441,6 +441,10 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   
       const allItems: CheckItem[] = [];
       // repo#2661: items a capped (or clamped) check left out still count.
+      // `details.additional` is always items LEFT OUT of `items`: the fold's and
+      // the publish clamp's dropped count, and every rule's own "first N items,
+      // the rest as additional" remainder (rules/src/shared/sample-items.ts and
+      // the a11y rules' slice(0, 10)). So listed + additional is the total.
       let itemsLeftOut = 0;
       for (const check of rule.checks) {
         if (check.items && check.items.length > 0) allItems.push(...check.items);
