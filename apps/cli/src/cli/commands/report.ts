@@ -148,6 +148,20 @@ function printAuditList(
   console.log('Use "squirrel report <audit-id>" to view a specific audit.');
 }
 
+/**
+ * The site's default project database, for a report read from a JSON file.
+ * Undefined when the url names no usable project (a hostless `file:` url
+ * resolves to ""): the report is already published by then, and the local mark
+ * is the part that may be skipped, never the run that may crash (#625).
+ */
+function defaultProjectDbPath(baseUrl: string): string | undefined {
+  try {
+    return resolveProjectDbPath(domainToProjectName(baseUrl));
+  } catch {
+    return undefined;
+  }
+}
+
 export const report = defineCommand({
   meta: {
     name: "report",
@@ -495,10 +509,10 @@ export const report = defineCommand({
       // Save published report info for tracking in report --list, in the
       // database the audit was loaded from. A report read from a JSON file has
       // none, so it is marked in its site's default project when that holds it.
-      if (reportData.crawlId) {
+      const dbPath = source.dbPath ?? defaultProjectDbPath(reportData.baseUrl);
+      if (reportData.crawlId && dbPath) {
         await savePublishedReportInfo(
-          source.dbPath ??
-            resolveProjectDbPath(domainToProjectName(reportData.baseUrl)),
+          dbPath,
           reportData.crawlId,
           publishResult.data.id,
           publishResult.data.url,

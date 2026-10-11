@@ -174,6 +174,17 @@ describe("squirrel report --publish — a host no hosted runner can reach (#1841
     expect(requested.some((u) => u.includes("/v1/reports"))).toBe(true);
   });
 
+  // #625: a report read from a file is marked in its site's default project. A
+  // url that names no project (a `file:` url has no host) cannot be marked, and
+  // that must not turn the publish that already happened into a crash.
+  test("a report whose url names no project still publishes and exits cleanly", async () => {
+    const printed: string[] = [];
+    console.log = (...args: unknown[]) => printed.push(args.join(" "));
+    await runReport("file:///tmp/site/index.html");
+    expect(requested.some((u) => u.includes("/v1/reports"))).toBe(true);
+    expect(printed).toContain("https://reports.test/rep_1");
+  });
+
   // #2182: the same run is the only place a successful publish can be observed
   // end to end, so it doubles as the wiring test for the first-publish stamp —
   // the flag the one-time "kept local" nudge reads to know it has nothing left
