@@ -23,10 +23,11 @@ const PRESCAN_BYTES = 1024;
 
 // One prescan token (HTML Standard §13.2.3.2): a comment; a `<meta>` tag; any
 // other tag, skipped whole so a `<meta` inside its quoted attribute is not read;
-// or a `<!…>`, `<?…>` construct. Quoted values may hold `>`. A tag cut off by
-// the end of the window matches without its closing `>`.
+// or a `<!…>`, `<?…>` construct. Quoted values may hold `>`, and one left open
+// runs to the end of the window, so scanning never resumes inside it. A `<meta>`
+// is complete only when `metaEnd` caught its closing `>`.
 const PRESCAN_TOKEN =
-  /<!--[\s\S]*?(?:-->|$)|<meta(?=[\s/>])(?:[^>"']|"[^"]*"|'[^']*')*>?|<\/?[a-z](?:[^>"']|"[^"]*"|'[^']*')*>?|<[!/?][^>]*>?/gi;
+  /<!--[\s\S]*?(?:-->|$)|<meta(?=[\s/>])(?:[^>"']|"[^"]*(?:"|$)|'[^']*(?:'|$))*(?<metaEnd>>)?|<\/?[a-z](?:[^>"']|"[^"]*(?:"|$)|'[^']*(?:'|$))*>?|<[!/?][^>]*>?/gi;
 const ATTRIBUTE = /([^\s"'>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
 
 /** A raw `<meta …>` tag that declares a charset, by either attribute form. */
@@ -56,7 +57,7 @@ function declaredWithinPrescan(html: string): boolean {
   for (const m of prefix.matchAll(PRESCAN_TOKEN)) {
     const tag = m[0];
     if (!/^<meta[\s/>]/i.test(tag) || !isCharsetDeclaration(tag)) continue;
-    if (!tag.endsWith(">")) return false;
+    if (m.groups?.metaEnd === undefined) return false;
     const end = m.index + tag.length;
     return new TextEncoder().encode(prefix.slice(0, end)).length <= PRESCAN_BYTES;
   }

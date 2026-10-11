@@ -127,6 +127,8 @@ describe("core/charset declaration beyond the first 1024 bytes (pub#659)", () =>
     for (const lookalike of [
       `<meta-data charset="utf-8">`,
       `<link rel="alternate" title='<meta charset="utf-8">' href="/x">`,
+      // The quote closes past the window: scanning must not resume inside it.
+      `<link rel="alternate" title='<meta charset="utf-8">${"x".repeat(1100)}' href="/x">`,
     ]) {
       const html = doc(`${lookalike}\n${late}`);
       expect([lookalike, run(html, UTF8_HEADER).status]).toEqual([lookalike, "warn"]);
