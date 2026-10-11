@@ -1182,6 +1182,13 @@ function assertUntouched(
  * A page with a carried finding is left as it was, whatever the signal says: its
  * failures are in the union. Bounded by the signal: one pass over its hashes,
  * one lookup each.
+ *
+ * (#2658) A signal whose byte budget clipped its page list (`crawledComplete:
+ * false`) is silent on every page past the list, as merge-core reads it: such a
+ * page is no candidate here and keeps the pre-#2067 credit, exactly as a page
+ * past the original signal's `maxCrawledUrls` cap always has. Holding every
+ * unlisted carried page out instead would also drop the passes of the pages this
+ * run never crawled, which on a site that outgrows its crawl is most of them.
  */
 function withoutUnscorablePages(
   carriedPageUrls: PageUrlSet,
