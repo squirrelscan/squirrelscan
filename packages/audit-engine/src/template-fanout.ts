@@ -158,7 +158,9 @@ export const CONTENT_READ_METAS: ReadonlySet<string> = new Set([
  *    `mobile/viewport` and friends pass or fail on one being present, and the
  *    `content` of the metas a declared rule reads the value of (viewport, geo.*,
  *    ICBM, http-equiv refresh);
- *  - the number of `<main>` / `role="main"` landmarks: `a11y/landmark-one-main`.
+ *  - the number of `<main>` / `role="main"` landmarks: `a11y/landmark-one-main`;
+ *  - the `lang`, `xml:lang` and `aria-hidden` of `<html>`, the `aria-hidden` of
+ *    `<body>`, and the `rel` and `href` of icon links (#614).
  *
  * It is part of the FANOUT grouping key only. The stored `template_fp` stays the
  * chrome key `templateClusters()` and #1950's gate are defined over. A tighter
@@ -203,12 +205,35 @@ export function fanoutInputSignature(
     ]);
   });
   const mains = doc.querySelectorAll('main, [role="main"]').length;
+  // The root attributes a declared rule reads: `a11y/html-xml-lang-mismatch`
+  // (lang, xml:lang on <html>) and `a11y/aria-hidden-body` (aria-hidden on <html>
+  // and <body>). Icon links are read by `core/favicon` (#614).
+  const roots = [
+    ...Array.from(doc.querySelectorAll("html"), (el) =>
+      JSON.stringify([
+        "html",
+        el.getAttribute("lang"),
+        el.getAttribute("xml:lang"),
+        el.getAttribute("aria-hidden"),
+      ]),
+    ),
+    ...Array.from(doc.querySelectorAll("body"), (el) =>
+      JSON.stringify(["body", el.getAttribute("aria-hidden")]),
+    ),
+  ];
+  // A JSON pair, so a `|` in either value cannot forge a boundary, and kept in
+  // document order: `core/favicon` lists the formats in the order it finds them.
+  const icons = Array.from(doc.querySelectorAll('link[rel*="icon"]'), (el) =>
+    JSON.stringify([el.getAttribute("rel"), el.getAttribute("href")]),
+  );
   // JSON, not a join, so a value containing a delimiter cannot forge a boundary.
   const canonical = JSON.stringify([
     scripts.sort(),
     stylesheets.sort(),
     metas.sort(),
     mains,
+    roots,
+    icons,
   ]);
   return fnv1a64(new TextEncoder().encode(canonical), 0n);
 }

@@ -106,16 +106,57 @@ export type RuleSeverity = "error" | "warning" | "info";
  * chrome key plus the page ORIGIN plus a rule-input signature (the `<script src>`
  * and stylesheet `<link href>` lists with whether each carries `integrity`, every
  * `<meta>`'s name, property, http-equiv and charset, the `content` of the metas a
- * declared rule reads the value of, and the `<main>` landmark count; see
- * `fanoutInputSignature`). That closes the three counterexamples tracked as
- * squirrelscan/squirrelscan#275 (a missing viewport `<meta>`, a second `<main>`,
- * a script path that differs on one host). It does NOT make a declaration
- * checkable: any OTHER markup input a rule reads (a `<link>` rel, a heading, an
- * attribute on a chrome element) is still not in the key, so a declaration is a
- * claim about how the site's templates are BUILT, and "constant on two crawls" is
- * evidence rather than proof. If your rule reads an input the signature omits,
- * either extend `fanoutInputSignature` or keep the rule page-scoped. A rule
- * reading a response header is disqualified outright (see `core/charset`).
+ * declared rule reads the value of, the `<main>` landmark count, the `lang`,
+ * `xml:lang` and `aria-hidden` of `<html>`, the `aria-hidden` of `<body>`, and
+ * the `rel` and `href` of icon links; see `fanoutInputSignature`). That closes the
+ * counterexamples tracked as squirrelscan/squirrelscan#275 (a missing viewport
+ * `<meta>`, a second `<main>`, a script path that differs on one host) and #614
+ * (an `xml:lang` or `aria-hidden` on the root elements, a favicon link). It does
+ * NOT make a declaration checkable: any OTHER markup input a rule reads is still
+ * not in the key, so a declaration is a claim about how the site's templates are
+ * BUILT, and "constant on two crawls" is evidence rather than proof. If your rule
+ * reads an input the signature omits, either extend `fanoutInputSignature` or
+ * keep the rule page-scoped. A rule reading a response header is disqualified
+ * outright (see `core/charset`).
+ *
+ * THE INPUTS DECLARED RULES READ THAT THE KEY DOES NOT CHECK. The per-rule list
+ * is the UNKEYED entries in `tests/template-verdict-inputs.test.ts`, which fails
+ * when a declared rule starts reading anything that is not on its reviewed list,
+ * and when a rule with an unkeyed read is not named here:
+ *
+ *  - the raw HTML (`ctx.page.html`): `core/doctype`, `a11y/focus-visible`,
+ *    `analytics/consent-mode`, `analytics/gtm-present`, `perf/js-libraries`;
+ *  - everything `getCWVHints` reads, which `perf/font-loading`,
+ *    `perf/preconnect` and `perf/render-blocking` hand their document and raw
+ *    HTML to: preload, prefetch, preconnect and dns-prefetch links, script
+ *    `type`, `async`, `defer` and `nomodule`, stylesheet `media`, and images and
+ *    iframes with their size and style (`perf/font-loading` also reads every
+ *    `<link href>`);
+ *  - inline `<script>` and `<style>` bodies and the script `type`: `perf/legacy-js`
+ *    (also `type="module"` and `nomodule` scripts), `perf/unminified-js`,
+ *    `perf/js-libraries`, `perf/unminified-css` (which also selects on an exact
+ *    `rel="stylesheet"`, where the key matches the token), `perf/font-delivery`
+ *    (also the stylesheet `media`);
+ *  - the `id` and `class` of the first `<main>`, which its message names
+ *    (`a11y/landmark-one-main`);
+ *  - iframe and image `src`, and image `width` and `height`
+ *    (`security/third-party-cookies`).
+ *
+ * Three things no entry captures, for every declared rule. ORDER: the signature
+ * sorts the script, stylesheet and meta lists, so a rule that takes the first
+ * viewport meta or lists evidence in document order can see two pages differ
+ * where the key does not. `<noscript>` ANCESTRY: the `OutsideNoscript` helpers
+ * skip markup inside `<noscript>`, the signature does not. PLACEMENT: a rule that
+ * reads only the `<head>` (`perf/font-delivery`, `getCWVHints`) sees a stylesheet
+ * or script move to the `<body>`, the key does not.
+ *
+ * The scan sees literal selectors and attribute names (the `@squirrelscan/utils`
+ * helpers included), selector and attribute variables by name, those raw
+ * channels, and every read in a helper file from this package that a rule hands
+ * its document to. What a selector variable holds (`core/favicon`'s five icon
+ * selectors, all inside `link[rel*="icon"]`) is reviewed by hand, and the test
+ * checks that each rule with an unkeyed read is named above, not every input.
+ * Deriving the key from what the rules read is squirrelscan/squirrelscan#585.
  *
  * A declaration is a claim, not a proof, and it has two falsifiers.
  * `template-fanout-parity-golden.test.ts` runs in CI over an authored corpus with
