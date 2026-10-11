@@ -1300,12 +1300,22 @@ function notEvaluatedThisRun(
   const evaluated = (f: CarriedFinding): boolean => {
     const url = f.normalizedUrl;
     // (#2658, #2673) Off a clipped list the signal has no page sets. A page its
-    // hashes name was crawled, and is taken as evaluated: the tallies count it,
-    // so the carry would count it twice. A page they do not name was not crawled
-    // and keeps its carry. Without hashes (a producer before #2673) there is no
-    // telling, and the carry stays.
+    // hashes do not name was not crawled (or, without hashes from a producer
+    // before #2673, there is no telling) and keeps its carry. A page they name
+    // was crawled, and the tallies count it for every check that evaluated it,
+    // so a carry there would count it twice. Whether THIS check evaluated it is
+    // not in the signal, so it is taken as evaluated only when the check ran this
+    // run, evaluated every listed page and its sets are not truncated; a check
+    // that skipped any listed page (no timing data, a scan cap) may have skipped
+    // this one too, and its carry stays.
     if (resolution.crawledComplete === false && !resolution.crawledUrls.has(url)) {
-      return resolution.crawledHashes?.has(resolutionUrlHash(url)) ?? false;
+      if (!resolution.crawledHashes?.has(resolutionUrlHash(url))) return false;
+      const key = resolutionCheckKey(f.ruleId, f.checkName);
+      return (
+        resolution.failingByCheck.has(key) &&
+        !resolution.notEvaluatedByCheck.has(key) &&
+        !resolution.truncatedChecks.has(key)
+      );
     }
     if (!crawledUrls.has(url) && !resolution.crawledUrls.has(url)) return false;
     const key = resolutionCheckKey(f.ruleId, f.checkName);

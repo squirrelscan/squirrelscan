@@ -493,8 +493,10 @@ function compactPayload(
   // (#2673) A clipped list names the rest of the crawl by hash, so the merge can
   // tell an unlisted page this run crawled (whose checks its tallies count) from
   // one it did not. Distinct and sorted, so the bytes depend on the pages alone.
+  // Not past the collection cap: pages beyond `maxCrawledUrls` were never
+  // collected, and a set that misses some crawled pages would read as complete.
   let hashes: string | undefined;
-  if (withHashes && !complete && listed < evidence.crawled.length) {
+  if (withHashes && !complete && !evidence.crawledOverCap && listed < evidence.crawled.length) {
     const unlisted = new Set<string>();
     for (const url of evidence.crawled.slice(listed)) unlisted.add(evidence.hash(url));
     hashes = [...unlisted].sort().join("");
@@ -620,8 +622,10 @@ export function buildCompactResolutionSignal(
   // clipped without them, as before #2673, and the merge stays conservative.
   for (const hashes of [true, false]) {
     const prefix = largestPrefix(all, (listed) => fitWith(hashes)(listed));
-    if (prefix) candidates.push({ ...prefix, keys: keyCount });
-    if (candidates.length > 0) break;
+    if (prefix) {
+      candidates.push({ ...prefix, keys: keyCount });
+      break;
+    }
   }
   for (const hashes of [true, false]) {
     if (candidates.length > 0) break;

@@ -558,6 +558,32 @@ describe("rescore of a capped report (repo#2657)", () => {
     expect(comparable(rescored(hashed))).toEqual(comparable(rescored(uncapped)));
   });
 
+  test("(#2673) on a check that skipped a listed page, an unlisted hashed page keeps its carry", async () => {
+    // ttfb has no timing data on page 3 (listed) and page 33 (past the list).
+    // The signal shows the check skipped pages, so it may have skipped page 33
+    // too: its carry stays, rather than vanish from a score no tally replaces it in.
+    const seed = await seeded(
+      withNoisyUrls(fullReport(range(0, 40).map((i) => ({ i, ttfb: "slow" as const })))),
+    );
+    const report = withNoisyUrls(
+      fullReport(
+        range(0, 40).map((i) => ({
+          i,
+          ttfb: i === 3 || i === 33 ? ("skipped" as const) : ("slow" as const),
+        })),
+      ),
+    );
+    const body = await clippedBody(report, 15);
+    expect(body.resolutionSignal.crawledUrls).toContain(noisy(url(3)));
+    expect(body.resolutionSignal.crawledHashes).toContain(resolutionUrlHash(noisy(url(33))));
+    const capped = await publish(seed.clone(), "audit_2", body, NOW);
+    const uncapped = await publish(seed.clone(), "audit_2", uncappedBody(report), NOW);
+    expect(capped.carriedLastSeen.has(`${noisy(url(33))}|perf/ttfb|ttfb`)).toBe(true);
+    expect(rescored(capped).healthScore.overall).toBeLessThanOrEqual(
+      rescored(uncapped).healthScore.overall,
+    );
+  });
+
   test("(#2673) uncrawled carried pages keep their synthetic passes; a hash collision only withholds one", async () => {
     // Run 2 crawls 30 of the 40 known pages, clipped to 15 listed. Pages 30-39
     // were not crawled: the uncapped merge credits them with clean passes, and

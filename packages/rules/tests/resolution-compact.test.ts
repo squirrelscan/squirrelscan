@@ -453,6 +453,15 @@ describe("the byte budget", () => {
     expect(decoded.crawledHashes).toEqual([...new Set(unlisted.map(resolutionUrlHash))].sort());
   });
 
+  test("(#2673) a crawl past the collection cap sends no hashes: they could not be complete", async () => {
+    const urls = newsUrls(RESOLUTION_SIGNAL_LIMITS.maxCrawledUrls + 1);
+    const decoded = await decodeResolutionSignal(
+      buildCompactResolutionSignal(fixtureShapedResults(urls.slice(0, 500)), urls, 120 * 1024)!,
+    );
+    expect(decoded.crawledComplete).toBe(false);
+    expect(decoded.crawledHashes).toBeUndefined();
+  }, 60_000);
+
   test("(#2673) a whole list carries no hashes", async () => {
     const urls = newsUrls(300);
     const decoded = await decodeResolutionSignal(
