@@ -4,6 +4,56 @@ import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { getAttrCI, querySelectorByAttrValueCI } from "@squirrelscan/utils";
 
+/** The `charset=` parameter of a Content-Type value, quotes dropped (`charset="utf-8"` is valid). */
+function charsetParam(contentType: string): string | undefined {
+  const raw = contentType.match(/charset\s*=\s*([^\s;]+)/i)?.[1];
+  return raw?.replace(/^["']|["']$/g, "") || undefined;
+}
+
+function isUtf8(label: string): boolean {
+  return /^utf-?8$/i.test(label);
+}
+
+/**
+ * HTML Standard §4.2.5.4: the element holding the encoding declaration "must be
+ * serialized completely within the first 1024 bytes of the document", the
+ * window the browser prescans before it starts parsing.
+ */
+const PRESCAN_BYTES = 1024;
+
+const META_OR_COMMENT = /<!--[\s\S]*?(?:-->|$)|<meta\b[^>]*>/gi;
+const ATTRIBUTE = /([^\s"'>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
+
+/** A raw `<meta …>` tag that declares a charset, by either attribute form. */
+function isCharsetDeclaration(tag: string): boolean {
+  const attrs = new Map<string, string>();
+  for (const m of tag.slice("<meta".length).matchAll(ATTRIBUTE)) {
+    const name = m[1].toLowerCase();
+    if (!attrs.has(name)) attrs.set(name, m[2] ?? m[3] ?? m[4] ?? "");
+  }
+  if (attrs.has("charset")) return true;
+  return (
+    attrs.get("http-equiv")?.toLowerCase() === "content-type" &&
+    /charset\s*=/i.test(attrs.get("content") ?? "")
+  );
+}
+
+/**
+ * Whether the first charset-declaring `<meta>` in the raw HTML ends within the
+ * prescan window. Comments are skipped, as the prescan skips them. A UTF-16
+ * code unit is at least one UTF-8 byte, so only the first 1024 code units can
+ * hold a declaration that fits, and only they are scanned.
+ */
+function declaredWithinPrescan(html: string): boolean {
+  const prefix = html.slice(0, PRESCAN_BYTES);
+  for (const m of prefix.matchAll(META_OR_COMMENT)) {
+    if (m[0].startsWith("<!--") || !isCharsetDeclaration(m[0])) continue;
+    const end = m.index + m[0].length;
+    return new TextEncoder().encode(prefix.slice(0, end)).length <= PRESCAN_BYTES;
+  }
+  return false;
+}
+
 export const charsetRule: Rule = {
   meta: {
     id: "core/charset",
@@ -64,20 +114,51 @@ export const charsetRule: Rule = {
       "Content-Type"
     );
     const contentValue = httpEquivMeta?.getAttribute("content") || "";
-    const httpEquivCharset = contentValue.match(/charset=([^\s;]+)/i)?.[1];
+    const httpEquivCharset = charsetParam(contentValue);
 
     // Check Content-Type header
     const headerContentType = ctx.page.headers["content-type"] || "";
-    const headerCharset = headerContentType.match(/charset=([^\s;]+)/i)?.[1];
+    const headerCharset = charsetParam(headerContentType);
 
-    const declaredCharset = charsetValue || httpEquivCharset || headerCharset;
+    const pageCharset = charsetValue || httpEquivCharset;
+    // The header decides the decoding when it names a charset: the browser
+    // reads the transport encoding before it prescans for a meta (pub#659).
+    const declaredCharset = headerCharset || pageCharset;
 
-    if (declaredCharset) {
-      const isUtf8 = /^utf-?8$/i.test(declaredCharset);
-
-      if (isUtf8) {
+    if (
+      headerCharset &&
+      pageCharset &&
+      isUtf8(headerCharset) !== isUtf8(pageCharset)
+    ) {
+      // Both non-UTF-8 under different labels (iso-8859-1 vs windows-1252) is
+      // not reported as a conflict: the labels can name one encoding, and the
+      // Non-UTF-8 warning below already covers the page.
+      checks.push({
+        name: "charset",
+        status: "warn",
+        message: `Conflicting charset declarations: header ${headerCharset}, page ${pageCharset}`,
+        value: declaredCharset,
+        expected: "UTF-8 in both the Content-Type header and the page",
+      });
+    } else if (declaredCharset) {
+      if (isUtf8(declaredCharset)) {
         // Check if charset is early in head
-        if (charsetMeta) {
+        if (
+          pageCharset &&
+          !ctx.page.rendered &&
+          ctx.page.html &&
+          !declaredWithinPrescan(ctx.page.html)
+        ) {
+          // An HTML-conformance issue even when the header decides the
+          // decoding; without a header the browser has already guessed.
+          checks.push({
+            name: "charset",
+            status: "warn",
+            message: "Charset meta is not within the first 1024 bytes",
+            value: declaredCharset,
+            expected: "charset meta serialized completely within the first 1024 bytes",
+          });
+        } else if (charsetMeta) {
           const head = doc.querySelector("head");
           const firstChild = head?.firstElementChild;
           const isFirst =
@@ -93,10 +174,13 @@ export const charsetRule: Rule = {
               value: declaredCharset,
             });
           } else {
+            // Placement advice, not an encoding problem (pub#659): the page
+            // decodes as UTF-8. Info is score-neutral, like other advice.
             checks.push({
               name: "charset",
-              status: "warn",
-              message: "UTF-8 charset declared but not at start of head",
+              status: "info",
+              message:
+                "UTF-8 is declared correctly; consider placing the charset meta first in head (best practice)",
               value: declaredCharset,
               expected: "charset meta should be first element in head",
             });

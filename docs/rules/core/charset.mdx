@@ -1,6 +1,6 @@
 ---
 title: "meta charset UTF-8: where it goes and what squirrel checks"
-description: "A page with no charset declaration, one that is not UTF-8, or a meta charset that is not first in head. squirrel checks all three sources."
+description: "A page with no charset declaration, one that is not UTF-8, a header that disagrees with the page, or a meta charset past the first 1024 bytes. squirrel checks all three sources."
 ---
 
 ## What the charset declaration does
@@ -11,16 +11,18 @@ There are three places to declare it: the `Content-Type` response header, a `<me
 
 ## What squirrel checks
 
-The rule runs on every crawled page and reads all three sources: any `<meta>` with a `charset` attribute, a `<meta http-equiv="Content-Type">` whose content names a charset, and the `Content-Type` response header. The first of those that yields a value wins, in that order. It emits one check named `charset`:
+The rule runs on every crawled page and reads all three sources: any `<meta>` with a `charset` attribute, a `<meta http-equiv="Content-Type">` whose content names a charset, and the `Content-Type` response header. The page's own declaration is the `<meta charset>` value, or the `http-equiv` one when there is no `<meta charset>`. When the header names a charset, that is the value the rule judges, because it is the one the browser decodes with. It emits one check named `charset`:
 
 - Skipped with the message `No document available` and the reason `Parse error` when the page did not parse.
+- Warning with the message `Conflicting charset declarations: header <header value>, page <page value>` and the expectation `UTF-8 in both the Content-Type header and the page` when one of the header and the page declares UTF-8 and the other does not. The header wins, so a page that says UTF-8 under a header that says `iso-8859-1` is decoded as the latter and its accented text breaks.
+- Warning with the message `Charset meta is not within the first 1024 bytes` and the expectation `charset meta serialized completely within the first 1024 bytes` when the value is UTF-8 but the first `<meta>` declaring a charset does not end within the first 1,024 bytes of the HTML. This is an HTML-conformance issue even when the header also says UTF-8. Comments are skipped, as the browser skips them. Pages crawled with browser rendering are not measured, because their HTML is the rendered DOM, not the bytes the server sent.
 - Passing with the message `UTF-8 charset declared early in head` when the value is UTF-8 and the meta element is the first child of `<head>`, or the second child directly after a `<title>`.
-- Warning with the message `UTF-8 charset declared but not at start of head` and the expectation `charset meta should be first element in head` when it is UTF-8 but sits later.
+- At info status with the message `UTF-8 is declared correctly; consider placing the charset meta first in head (best practice)` and the expectation `charset meta should be first element in head` when it is UTF-8 and within the first 1,024 bytes but sits later in `<head>`. This is placement advice, not an encoding problem: info checks do not count toward the score and are not listed as issues in the report.
 - Passing with the message `UTF-8 charset declared via http-equiv` or `UTF-8 charset declared via header` when there is no `<meta charset>` element but one of the other two sources declared UTF-8.
 - Warning with the message `Non-UTF-8 charset declared: <value>` and the expectation `UTF-8` for anything else.
 - Failing with the message `No charset declaration found` and the expectation `<meta charset="UTF-8">` when none of the three declared anything.
 
-The `charset` and `http-equiv` attribute names are matched case-insensitively, so React's `charSet` and `httpEquiv` output is recognised. The UTF-8 test accepts `utf8` and `utf-8` in any case. The position check allows a `<title>` before the charset meta, which is a common template ordering, even though the standard's advice is to put the charset first.
+The `charset` and `http-equiv` attribute names are matched case-insensitively, so React's `charSet` and `httpEquiv` output is recognised. The UTF-8 test accepts `utf8` and `utf-8` in any case, and a quoted header value such as `charset="utf-8"` is read without its quotes. Two different non-UTF-8 labels, such as `iso-8859-1` in the header and `windows-1252` in the page, are not reported as a conflict, because the labels can name the same encoding; the page gets the Non-UTF-8 warning for the header's value. The position check allows a `<title>` before the charset meta, which is a common template ordering, even though the standard's advice is to put the charset first.
 
 ## How to fix it
 
