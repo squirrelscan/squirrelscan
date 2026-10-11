@@ -7,7 +7,11 @@ import { describe, expect, test } from "bun:test";
 
 import { parsePage } from "@squirrelscan/parser";
 
-import { looksLikeEmail, telMailtoRule } from "../src/links/tel-mailto";
+import {
+  looksLikeEmail,
+  telMailtoRule,
+  withoutOptionalTrunkZero,
+} from "../src/links/tel-mailto";
 import type { RuleContext } from "../src/types";
 
 function ctx(html: string): RuleContext {
@@ -122,5 +126,80 @@ describe("links/tel-mailto — mailto display text", () => {
     // A few ms in practice; generous so a loaded CI runner cannot flake it.
     expect(performance.now() - start).toBeLessThan(500);
     expect(checks.find((c) => c.name === "mailto-mismatch")).toBeUndefined();
+  });
+});
+
+// pub#663: "+49 (0)6061 …" writes the German trunk prefix in parentheses after
+// the calling code. The destination omits the 0, so with href
+// "tel:+4960616309800" the number shown IS the number dialled. It is
+// non-recommended display (ITU-T E.123), reported as advice at info status,
+// never a mismatch. Only calling codes whose trunk prefix is 0 read it this way.
+describe("links/tel-mailto — optional trunk prefix (0) in the display (pub#663)", () => {
+  const trunkCheck = (checks: ReturnType<typeof telMailtoRule.run>["checks"]) =>
+    checks.find((c) => c.name === "tel-trunk-prefix");
+
+  test("the German example is advice, not a mismatch, and the href is left alone", () => {
+    const html = page(`<a href="tel:+4960616309800">+49 (0)6061 630 980 0</a>`);
+    const { checks } = telMailtoRule.run(ctx(html));
+    expect(mismatchCheck(checks)).toBeUndefined();
+    const advice = trunkCheck(checks);
+    expect(advice?.status).toBe("info");
+    expect(advice?.message).toBe(
+      "1 tel link(s) show the optional trunk prefix (0) in an international number; drop it (ITU-T E.123)"
+    );
+    expect(advice?.items?.[0]?.id).toBe("tel:+4960616309800");
+    expect(advice?.items?.[0]?.label).toBe(`text "+49 (0)6061 630 980 0": use "+49 6061 630 980 0"`);
+  });
+
+  test("the control (no (0) in the display) has neither finding", () => {
+    const html = page(`<a href="tel:+4960616309800">+49 6061 630 980 0</a>`);
+    const { checks } = telMailtoRule.run(ctx(html));
+    expect(mismatchCheck(checks)).toBeUndefined();
+    expect(trunkCheck(checks)).toBeUndefined();
+  });
+
+  test("a genuinely different German number still reports tel-mismatch", () => {
+    const html = page(`<a href="tel:+4960616309800">+49 (0)6061 630 980 1</a>`);
+    const { checks } = telMailtoRule.run(ctx(html));
+    expect(mismatchCheck(checks)?.status).toBe("warn");
+    expect(trunkCheck(checks)).toBeUndefined();
+  });
+
+  test("other trunk-0 codes read the same way: UK, Switzerland, Austria, Netherlands, Ireland", () => {
+    const pairs: Array<[string, string]> = [
+      ["tel:+442079460000", "+44 (0)20 7946 0000"],
+      ["tel:+41446681800", "+41 (0)44 668 18 00"],
+      ["tel:+4315121234", "+43(0)1 512 1234"],
+      ["tel:+31201234567", "+31 (0) 20 123 4567"],
+      ["tel:+35312345678", "Call +353 (0)1 234 5678"],
+    ];
+    for (const [href, text] of pairs) {
+      const { checks } = telMailtoRule.run(ctx(page(`<a href="${href}">${text}</a>`)));
+      expect([href, mismatchCheck(checks)]).toEqual([href, undefined]);
+      expect([href, trunkCheck(checks)?.status]).toEqual([href, "info"]);
+    }
+  });
+
+  test("a country with no trunk prefix keeps its zero: Italy and Spain still mismatch", () => {
+    // In Italy the leading 0 is part of the number (+39 06 …), and Spain has
+    // no trunk prefix, so "(0)" there is not read as optional.
+    for (const [href, text] of [
+      ["tel:+3961234567", "+39 (0)6 1234 567"],
+      ["tel:+34912345678", "+34 (0)91 234 5678"],
+    ]) {
+      const { checks } = telMailtoRule.run(ctx(page(`<a href="${href}">${text}</a>`)));
+      expect([href, mismatchCheck(checks)?.status]).toEqual([href, "warn"]);
+      expect([href, trunkCheck(checks)]).toEqual([href, undefined]);
+    }
+  });
+
+  test("withoutOptionalTrunkZero rewrites the display text only for listed codes", () => {
+    expect(withoutOptionalTrunkZero("+49 (0)6061 630 980 0")).toBe("+49 6061 630 980 0");
+    expect(withoutOptionalTrunkZero("+49(0)6061")).toBe("+49 6061");
+    expect(withoutOptionalTrunkZero("Tel. +44 ( 0 ) 20 7946 0000")).toBe("Tel. +44 20 7946 0000");
+    expect(withoutOptionalTrunkZero("+39 (0)6 1234 567")).toBeNull();
+    expect(withoutOptionalTrunkZero("+1 (0)555 123 4567")).toBeNull();
+    expect(withoutOptionalTrunkZero("+49 6061 630 980 0")).toBeNull();
+    expect(withoutOptionalTrunkZero("(0)6061 630 980 0")).toBeNull();
   });
 });

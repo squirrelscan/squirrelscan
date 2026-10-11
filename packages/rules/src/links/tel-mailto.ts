@@ -50,6 +50,52 @@ function phoneNumbersMatch(hrefPhone: string, text: string): boolean {
 }
 
 /**
+ * Calling codes whose national trunk prefix is "0" and is omitted after the
+ * country code, so a display like "+49 (0)6061 …" means the destination
+ * without the 0. Source for each: ITU-T, Dialling procedures (international
+ * prefix, national (trunk) prefix and national (significant) number), annex to
+ * ITU Operational Bulletin No. 994 (position on 15 December 2011), national
+ * prefix "0" for Netherlands 31, Belgium 32, France 33, Switzerland 41,
+ * Austria 43, United Kingdom 44, Germany 49, Australia 61, New Zealand 64 and
+ * Ireland 353. Deliberately absent: countries with no trunk prefix, where a
+ * leading 0 is part of the number (Italy 39, Spain 34, Norway 47, Denmark 45,
+ * Portugal 351 in the same list), and the rest of the trunk-0 countries, whose
+ * display text is read literally until there is a reason to add them.
+ */
+const TRUNK_ZERO_CALLING_CODES = new Set([
+  "31",
+  "32",
+  "33",
+  "41",
+  "43",
+  "44",
+  "49",
+  "61",
+  "64",
+  "353",
+]);
+
+// "+49 (0)6061 …": the parenthesised optional trunk prefix after a calling code.
+const OPTIONAL_TRUNK_ZERO = /\+\s*(\d{1,3})\s*\(\s*0\s*\)\s*/;
+
+/**
+ * Display text with an optional trunk prefix "(0)" read as the destination
+ * omits it (pub#663), e.g. "+49 (0)6061 630 980 0" → "+49 6061 630 980 0", the
+ * ITU-T E.123 international form. Null when the text has no such prefix, or
+ * its calling code is not one where the 0 is a trunk prefix. Interprets the
+ * display text only; the href is never rewritten.
+ */
+export function withoutOptionalTrunkZero(text: string): string | null {
+  const m = OPTIONAL_TRUNK_ZERO.exec(text);
+  if (!m || !TRUNK_ZERO_CALLING_CODES.has(m[1])) return null;
+  return (
+    text.slice(0, m.index) +
+    `+${m[1]} ` +
+    text.slice(m.index + m[0].length)
+  ).trim();
+}
+
+/**
  * `/.+@.+\..+/.test(text)` in linear time: some line has an "@" after its
  * first character, and a "." at least two characters later that is not the
  * line's last. The regex rescans to the end of the line from every start, so
@@ -88,6 +134,7 @@ export const telMailtoRule: Rule = {
     const invalidTel: string[] = [];
     const invalidMailto: string[] = [];
     const telMismatches: CheckItem[] = [];
+    const telTrunkPrefixes: CheckItem[] = [];
     const mailtoMismatches: CheckItem[] = [];
 
     const links = doc.querySelectorAll("a[href]");
@@ -106,11 +153,22 @@ export const telMailtoRule: Rule = {
         // Mismatch check (#694: E.164 href vs national trunk-zero text, e.g. +61414… vs 0414…, is NOT a mismatch)
         const text = link.textContent?.trim() || "";
         if (/\d{3,}/.test(text) && !phoneNumbersMatch(phone, text)) {
-          telMismatches.push({
-            id: href,
-            label: `href "${phone}" ≠ text "${text}"`,
-            snippet: link.outerHTML.slice(0, 200),
-          });
+          // "+49 (0)6061 …" with href "+496061…" is the same destination in a
+          // non-recommended display form: formatting advice, not a mismatch.
+          const intlForm = withoutOptionalTrunkZero(text);
+          if (intlForm !== null && phoneNumbersMatch(phone, intlForm)) {
+            telTrunkPrefixes.push({
+              id: href,
+              label: `text "${text}": use "${intlForm}"`,
+              snippet: link.outerHTML.slice(0, 200),
+            });
+          } else {
+            telMismatches.push({
+              id: href,
+              label: `href "${phone}" ≠ text "${text}"`,
+              snippet: link.outerHTML.slice(0, 200),
+            });
+          }
         }
       }
 
@@ -179,6 +237,16 @@ export const telMailtoRule: Rule = {
         status: "warn",
         message: `${telMismatches.length} tel link(s) have mismatched phone number in href vs display text`,
         items: telMismatches,
+      });
+    }
+
+    // Advice, a level below a mismatch: the link dials the number shown.
+    if (telTrunkPrefixes.length > 0) {
+      checks.push({
+        name: "tel-trunk-prefix",
+        status: "info",
+        message: `${telTrunkPrefixes.length} tel link(s) show the optional trunk prefix (0) in an international number; drop it (ITU-T E.123)`,
+        items: telTrunkPrefixes,
       });
     }
 
