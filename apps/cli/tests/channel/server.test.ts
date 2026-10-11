@@ -62,9 +62,9 @@ describe("channel server", () => {
       auto.getServerCapabilities()?.experimental?.["claude/channel"]
     ).toEqual({});
 
-    expect(
+    await expect(
       connect({ versionNegotiation: { mode: { pin: "2026-07-28" } } })
-    ).rejects.toThrow();
+    ).rejects.toThrow(/negotiation failed/i);
   });
 
   test("emits notifications/claude/channel with content and meta", async () => {
