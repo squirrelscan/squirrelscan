@@ -221,9 +221,10 @@ export function fanoutInputSignature(
       JSON.stringify(["body", el.getAttribute("aria-hidden")]),
     ),
   ];
-  const icons = Array.from(
-    doc.querySelectorAll('link[rel*="icon"]'),
-    (el) => `${el.getAttribute("rel") ?? ""}|${el.getAttribute("href") ?? ""}`,
+  // A JSON pair, so a `|` in either value cannot forge a boundary, and kept in
+  // document order: `core/favicon` lists the formats in the order it finds them.
+  const icons = Array.from(doc.querySelectorAll('link[rel*="icon"]'), (el) =>
+    JSON.stringify([el.getAttribute("rel"), el.getAttribute("href")]),
   );
   // JSON, not a join, so a value containing a delimiter cannot forge a boundary.
   const canonical = JSON.stringify([
@@ -232,7 +233,7 @@ export function fanoutInputSignature(
     metas.sort(),
     mains,
     roots,
-    icons.sort(),
+    icons,
   ]);
   return fnv1a64(new TextEncoder().encode(canonical), 0n);
 }

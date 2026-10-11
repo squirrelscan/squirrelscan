@@ -654,6 +654,12 @@ describe("a verdict is never copied across origins", () => {
       a: sameChrome(`${VIEWPORT}<link rel="icon" href="/favicon.ico">`),
       b: sameChrome(`${VIEWPORT}<link rel="icon" href="/favicon.svg">`),
     },
+    {
+      name: "the same favicon links in another order",
+      ruleId: "core/favicon",
+      a: sameChrome(`${VIEWPORT}<link rel="icon" href="/favicon.ico"><link rel="icon" href="/favicon.svg">`),
+      b: sameChrome(`${VIEWPORT}<link rel="icon" href="/favicon.svg"><link rel="icon" href="/favicon.ico">`),
+    },
   ];
 
   for (const { name, ruleId, a, b } of counterexamples) {
@@ -731,6 +737,10 @@ describe("a verdict is never copied across origins", () => {
     expect(sig(sameChrome(`${VIEWPORT}${icon}`))).not.toBe(base);
     expect(sig(sameChrome(`${VIEWPORT}${icon}`))).not.toBe(
       sig(sameChrome(`${VIEWPORT}<link rel="icon" href="/favicon-b.ico">`)),
+    );
+    // A `|` in rel or href cannot forge another pair.
+    expect(sig(sameChrome(`${VIEWPORT}<link rel="icon|apple-touch-icon" href="/a.ico">`))).not.toBe(
+      sig(sameChrome(`${VIEWPORT}<link rel="icon" href="apple-touch-icon|/a.ico">`)),
     );
     // Positive control: a <body> or <html> attribute no declared rule reads leaves
     // the signature alone, so the new inputs do not make the key over-sensitive.
