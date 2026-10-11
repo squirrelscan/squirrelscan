@@ -15,6 +15,7 @@ import type {
   ResolutionSignal,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
+import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { decodeResolutionSignal } from "@squirrelscan/core-contracts/resolution";
 import { foldOverflowChecks, sampleChecksForPublish } from "@squirrelscan/rules/fold";
 import {
@@ -598,37 +599,6 @@ describe("what the byte budget gives up only ever keeps findings open", () => {
     expect(stateOf(control, page, "gated", "other-check")).toBe("resolved:fresh");
   });
 
-  test("a clipped list's audited count leaves out removed pages the merge cannot name", async () => {
-    // The last 100 pages 404'd. The payload still names every page (two small
-    // per-page rules, kept whole), pageStatuses was clipped to 10 of the 404s,
-    // and most 404s are off the list.
-    const { urls, full } = await clippedListScenario();
-    const gone = urls.slice(500);
-    full.probeA = { meta: meta("probeA"), checks: urls.slice(0, 300).map((u) => check("a", u, "pass")) };
-    full.probeB = { meta: meta("probeB"), checks: urls.slice(300).map((u) => check("b", u, "pass")) };
-    const signal = await decodeResolutionSignal(
-      buildCompactResolutionSignal(
-        full,
-        urls,
-        8 * 1024,
-        gone.map((url) => ({ url, status: 404 })),
-      )!,
-    );
-    expect(signal.crawledComplete).toBe(false);
-    expect(signal.removedCount).toBe(100);
-    const store = await seededStore(urls, []);
-    const result = await runCloudSmartAudits({
-      store,
-      siteKey: SITE_KEY,
-      crawlId: "audit_1",
-      ruleResults: samplePayload(full, urls, signal).ruleResults,
-      pageStatuses: gone.slice(0, 10).map((url) => ({ url, status: 404 })),
-      resolutionSignal: signal,
-      now: NOW,
-    });
-    expect(result.coverage.auditedPages).toBe(500);
-  });
-
   test("off a clipped list, a pass from a rule whose publish dropped classes resolves nothing", async () => {
     // The publish kept `probe`'s pass row for the page but dropped some of the
     // rule's check classes (`checksTruncated`): a failing row may have gone with them.
@@ -645,5 +615,85 @@ describe("what the byte budget gives up only ever keeps findings open", () => {
     const store = await seededStore(urls, priors);
     await publish(store, payload);
     expect(stateOf(store, page, "probe", "probe")).toBe("open:carried");
+  });
+});
+
+/**
+ * `coverage.auditedPages` is what billing reads. A clipped list makes it lean on
+ * the counts the signal claims (`crawledCount`, `removedCount`), and the CLI body
+ * is user controlled: a claim may raise the count the payload evidences, up to
+ * the crawl ceiling, but never lower it.
+ */
+describe("the audited count (billing input) under a clipped list", () => {
+  const audited = async (
+    full: Full,
+    urls: string[],
+    resolutionSignal: ResolutionSignal,
+    pageStatuses: Array<{ url: string; status: number }> = [],
+  ) => {
+    const result = await runCloudSmartAudits({
+      store: await seededStore(urls, []),
+      siteKey: SITE_KEY,
+      crawlId: "audit_1",
+      ruleResults: samplePayload(full, urls, resolutionSignal).ruleResults,
+      pageStatuses,
+      resolutionSignal,
+      now: NOW,
+    });
+    return result.coverage.auditedPages;
+  };
+  /** Every page named by the payload: two small per-page rules, kept whole. */
+  const namingEveryPage = (full: Full, urls: string[]) => {
+    full.probeA = { meta: meta("probeA"), checks: urls.slice(0, 300).map((u) => check("a", u, "pass")) };
+    full.probeB = { meta: meta("probeB"), checks: urls.slice(300).map((u) => check("b", u, "pass")) };
+  };
+
+  test("counts every crawled page, less the removed ones it cannot name", async () => {
+    // The last 100 pages 404'd (no page checks), off the list; pageStatuses kept
+    // 10 of them.
+    const { urls, full } = await clippedListScenario();
+    const gone = urls.slice(500);
+    const goneSet = new Set(gone);
+    for (const rule of Object.values(full)) {
+      rule.checks = rule.checks.filter((c) => !c.pageUrl || !goneSet.has(c.pageUrl));
+    }
+    const signal = await decodeResolutionSignal(
+      buildCompactResolutionSignal(full, urls, 8 * 1024, gone.map((url) => ({ url, status: 404 })))!,
+    );
+    expect(signal.crawledComplete).toBe(false);
+    expect(signal.crawledCount).toBe(600);
+    expect(signal.removedCount).toBe(100);
+    const statuses = gone.slice(0, 10).map((url) => ({ url, status: 404 }));
+    expect(await audited(full, urls, signal, statuses)).toBe(500);
+  });
+
+  test("a tiny claimed count never bills below the pages the payload names", async () => {
+    const { urls, full } = await clippedListScenario();
+    namingEveryPage(full, urls);
+    const signal = await decodeResolutionSignal(buildCompactResolutionSignal(full, urls, 8 * 1024)!);
+    expect(await audited(full, urls, signal)).toBe(600);
+    expect(await audited(full, urls, { ...signal, crawledCount: 1 })).toBe(600);
+    expect(await audited(full, urls, { ...signal, crawledCount: 0, removedCount: 600 })).toBe(600);
+    expect(await audited(full, urls, { ...signal, crawledCount: 600, removedCount: 1e9 })).toBe(600);
+  });
+
+  test("a huge claimed count is clamped to the crawl ceiling, and a malformed one ignored", async () => {
+    const { urls, full } = await clippedListScenario();
+    namingEveryPage(full, urls);
+    const signal = await decodeResolutionSignal(buildCompactResolutionSignal(full, urls, 8 * 1024)!);
+    expect(await audited(full, urls, { ...signal, crawledCount: 1e9 })).toBe(REPORT_LIMITS.maxPages);
+    for (const crawledCount of [-5, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(await audited(full, urls, { ...signal, crawledCount })).toBe(600);
+    }
+  });
+
+  test("a complete list ignores claimed counts", async () => {
+    const { urls, full } = await clippedListScenario();
+    const whole = buildResolutionSignal(full, urls)!;
+    const baseline = await audited(full, urls, whole);
+    expect(baseline).toBe(600);
+    for (const crawledCount of [1, 1e9]) {
+      expect(await audited(full, urls, { ...whole, crawledCount, removedCount: 300 })).toBe(baseline);
+    }
   });
 });

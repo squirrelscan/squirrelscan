@@ -18,6 +18,7 @@ import type {
   ResolutionSignal,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
+import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import {
   NOT_APPLICABLE_SKIP_REASON,
   resolutionUrlHash,
@@ -865,16 +866,22 @@ export async function runCloudSmartAudits(
   }
   // (#2658) A signal whose byte budget clipped its page list still counts every
   // crawled page (`crawledCount`) and every removed one (`removedCount`, listed
-  // or not), so the audited count, and the bill read off it, is the producer's
-  // own: it does not shrink with the list, and an unlisted 404 the payload still
-  // names (so `auditedUrls` holds it) does not inflate it.
-  const signalPages = input.resolutionSignal?.crawledCount;
+  // or not), so the audited count, and the bill read off it, does not shrink
+  // with the list. Those counts are the publisher's CLAIM (the CLI body is user
+  // controlled), so they may only RAISE the count the payload evidences, never
+  // lower it, and only up to the crawl ceiling. A complete list ignores them.
+  const claimed = (value: unknown): number | undefined =>
+    typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+      ? Math.min(value, REPORT_LIMITS.maxPages)
+      : undefined;
+  const signalPages = claimed(input.resolutionSignal?.crawledCount);
+  const signalRemoved = Math.max(
+    removedUrls.size,
+    claimed(input.resolutionSignal?.removedCount) ?? 0,
+  );
   const auditedPages =
     input.resolutionSignal?.crawledComplete === false && signalPages !== undefined
-      ? Math.max(
-          0,
-          signalPages - Math.max(removedUrls.size, input.resolutionSignal.removedCount ?? 0),
-        )
+      ? Math.max(auditedUrls.size, signalPages - Math.min(signalPages, signalRemoved))
       : auditedUrls.size;
 
   // (#2063) Reduce the refused checks' pages to the ones this site has no record
