@@ -79,7 +79,7 @@ squirrel self settings set auto_update false
 
 With auto-update off you still get an update notification box (unless `notifications` is also off), and `squirrel self update` applies updates manually.
 
-Automatic updates only run for managed installs (installed via the install script, npm, or `self install`). If you copied the binary somewhere yourself, squirrel tells you how to update instead of touching your setup.
+Automatic updates only run for managed installs (installed via the install script, npm, Homebrew, or `self install`). A Homebrew install is a managed install after its first run: update it with `squirrel self update`, not `brew upgrade`. See [Homebrew](/quickstart#homebrew). If you copied the binary somewhere yourself, squirrel tells you how to update instead of touching your setup.
 
 #### Check frequency
 

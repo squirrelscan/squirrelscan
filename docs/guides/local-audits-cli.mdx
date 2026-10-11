@@ -23,6 +23,12 @@ Local audits run the deterministic rules only. The cloud-backed rules (AI analys
     iwr -useb https://install.squirrelscan.com/install.ps1 | iex
     ```
   </Tab>
+  <Tab title="Homebrew">
+    ```bash
+    brew install --cask squirrelscan/tap/squirrel
+    ```
+    The cask installs a launcher that runs the regular installer on first use. See [Homebrew](/quickstart#homebrew) for updates and uninstall.
+  </Tab>
 </Tabs>
 
 This drops the binary at `~/.local/bin/squirrel` and adds it to your PATH. Confirm it works:
