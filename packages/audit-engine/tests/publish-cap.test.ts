@@ -430,6 +430,10 @@ describe("capReportForPublish: size", () => {
     });
     expect(tight.detail.tier).toBe(1);
     expect(tight.detail.classesReduced).toBe(1);
+    // Before and after (repo#2669): the full-sample size is the roomy body's.
+    expect(roomy.detail.fullSampleBytes).toBeUndefined();
+    expect(Math.abs(tight.detail.fullSampleBytes! - bytesOf(roomy))).toBeLessThanOrEqual(4);
+    expect(tight.detail.fullSampleBytes!).toBeGreaterThan(bytesOf(tight));
     const fails = tight.ruleResults["a11y/fails"]!.checks[0]!;
     const warns = tight.ruleResults["a11y/warns"]!.checks[0]!;
     expect(fails.pages).toHaveLength(REPORT_CAPS.tiers[0]!.pagesPerClass);
@@ -489,6 +493,32 @@ describe("capReportForPublish: size", () => {
     expect(() => capReportForPublish(report(10), { maxBytes })).toThrow(
       PublishedReportTooLargeError,
     );
+  });
+
+  test("the typed error carries sizes, counts and section names only (repo#2669)", () => {
+    let caught: unknown;
+    try {
+      capReportForPublish(report(10), { maxBytes: REPORT_CAPS.envelopeBytes + 2 * 1024 });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(PublishedReportTooLargeError);
+    const err = caught as PublishedReportTooLargeError;
+    expect(err.part).toBe("skeleton");
+    expect(err.tier).toBe(3);
+    expect(err.pages).toBe(10);
+    expect(err.bytes).toBeGreaterThan(err.budgetBytes);
+    // What a producer reports: no URL, no report text.
+    const reported = JSON.stringify({
+      bytes: err.bytes,
+      budgetBytes: err.budgetBytes,
+      part: err.part,
+      tier: err.tier,
+      pages: err.pages,
+      largestSections: err.largestSections,
+    });
+    expect(reported).not.toContain(SITE.replace("https://", ""));
+    for (const section of Object.keys(err.largestSections)) expect(section).toMatch(/^[A-Za-z]+$/);
   });
 });
 
