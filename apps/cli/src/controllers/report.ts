@@ -404,12 +404,22 @@ export async function listStoredAudits(
 }
 
 /**
+ * Where a loaded audit came from: the loaders below fill it in when they find
+ * the audit, so a later write for that audit (`report --publish` marking it
+ * published, #625) goes to the same database instead of searching for it again.
+ */
+export interface AuditSource {
+  dbPath?: string;
+}
+
+/**
  * Get audit by ID from SQLite and reconstruct report
  * Searches all project databases if no explicit path given
  */
 export async function getStoredAudit(
   auditId: string,
-  storagePath?: string
+  storagePath?: string,
+  source?: AuditSource
 ): Promise<Result<AuditReport>> {
   const dbPaths = storagePath ? [storagePath] : getProjectStoragePaths();
 
@@ -459,6 +469,7 @@ export async function getStoredAudit(
       if (!validated.ok) {
         return validated;
       }
+      if (source) source.dbPath = dbPath;
       return ok(report);
     } catch {
       // Try next database
@@ -480,7 +491,8 @@ export async function getStoredAudit(
  */
 export async function getStoredAuditByPrefix(
   prefix: string,
-  storagePath?: string
+  storagePath?: string,
+  source?: AuditSource
 ): Promise<Result<AuditReport>> {
   const dbPaths = storagePath ? [storagePath] : getProjectStoragePaths();
 
@@ -559,7 +571,9 @@ export async function getStoredAuditByPrefix(
       })
     );
     await warnEvictedPages(storage, match.crawl.id, "report");
-    return validateReportData(report, match.crawl.id);
+    const validated = validateReportData(report, match.crawl.id);
+    if (validated.ok && source) source.dbPath = match.dbPath;
+    return validated;
   } catch (error) {
     return err(
       commandError(
@@ -580,7 +594,8 @@ export async function getStoredAuditByPrefix(
  */
 export async function getLatestAudit(
   baseUrl?: string,
-  storagePath?: string
+  storagePath?: string,
+  source?: AuditSource
 ): Promise<Result<AuditReport>> {
   const dbPaths = storagePath ? [storagePath] : getProjectStoragePaths();
 
@@ -705,7 +720,9 @@ export async function getLatestAudit(
       );
       await warnEvictedPages(storage, latest.crawl.id, "report");
 
-      return validateReportData(report, latest.crawl.id);
+      const validated = validateReportData(report, latest.crawl.id);
+      if (validated.ok && source) source.dbPath = latest.dbPath;
+      return validated;
     } finally {
       await Effect.runPromise(
         storage.close().pipe(Effect.catchAll(() => Effect.void))
