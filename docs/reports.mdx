@@ -692,6 +692,8 @@ Published reports support multiple output formats. Append a file extension to th
 | XML | [/SJEItpldwW.xml](https://reports.squirrelscan.com/SJEItpldwW.xml) | Enterprise integration |
 | LLM | [/SJEItpldwW.llm](https://reports.squirrelscan.com/SJEItpldwW.llm) | Coding agents, token-efficient |
 
+Every format is the same capped summary, the JSON included: each issue keeps up to 10 example pages and 5 items beside its true counts, which the JSON carries in a sampled check's `details` (`pagesTruncated` for pages, `occurrences` for per-page checks, `additional` for items left out). A capped report says so in its top-level `detail` field, and every format prints one line saying where the full list is. See [size cap on large sites](#size-cap-on-large-sites).
+
 Without an extension, the format is determined by the `Accept` header. Browsers receive HTML, while tools like `curl` can request specific formats:
 
 ```bash

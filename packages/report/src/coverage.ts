@@ -114,6 +114,33 @@ export function scanScopeLine(report: AuditReport): string | null {
 }
 
 /**
+ * A capped published report's note (squirrelscan/repo#2661): every list in it
+ * is a sample beside the true counts, so say so once and say where the full
+ * per-page list is. Null for a report that is not capped, which is every
+ * report the CLI renders from its own project database and every report
+ * published before capping, so their output is unchanged.
+ *
+ * The same sentence the cloud's own views print (the dashboard, MCP and the
+ * API's markdown, in the private repo's `published-report-detail`). The cloud
+ * findings store is not served, so a cloud audit is pointed at the CLI.
+ */
+export function publishedReportNote(report: Pick<AuditReport, "detail">): string | null {
+  const d = report.detail;
+  if (d?.capped !== true) return null;
+  const pages = d.caps?.pagesPerClass ?? 10;
+  const items = d.caps?.itemsPerClass ?? 5;
+  const where =
+    d.fullDetail === "local"
+      ? "The complete list is in the project on the machine that ran the audit: `squirrel report --format json` there prints every page."
+      : "The complete list is not stored with this report: audit the site with the squirrel CLI and run `squirrel report --format json` for every page.";
+  return (
+    `This published report is a summary: each issue lists up to ${pages} example ` +
+    `${pages === 1 ? "page" : "pages"} and ${items} ${items === 1 ? "item" : "items"} ` +
+    `beside its true counts. ${where}`
+  );
+}
+
+/**
  * Full-scan hint (#1180): shown when the score does not rest on a full fresh
  * crawl — the page limit stopped the crawl (`scanScope.capped`), the crawl time
  * budget ran out (`scanScope.stopReason === "time"`), or the smart-audit union

@@ -27,6 +27,7 @@ import {
   fetchFallbacksLine,
   fullScanHint,
   scanScopeLine,
+  publishedReportNote,
   auditLevelLine,
   seedRedirectLine,
 } from "../coverage";
@@ -134,6 +135,9 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
   if (seedRedirect) write(stripControlChars(seedRedirect));
   const scope = scanScopeLine(report);
   if (scope) write(scope);
+  // repo#2661: a capped published report lists samples; say so, and where the rest is.
+  const capped = publishedReportNote(report);
+  if (capped) write(capped);
   const level = auditLevelLine(report);
   if (level) write(level);
   const cov = coverageLine(report);

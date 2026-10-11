@@ -135,6 +135,7 @@ export {
   carriedTag,
   timeAgo,
   scanScopeLine,
+  publishedReportNote,
   seedRedirect,
   seedRedirectLine,
   WITHHELD_SEED_REDIRECT_TARGET,

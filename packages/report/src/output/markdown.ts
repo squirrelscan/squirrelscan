@@ -19,6 +19,7 @@ import {
   fetchFallbacksLine,
   fullScanHint,
   scanScopeLine,
+  publishedReportNote,
   auditLevelLine,
   seedRedirectLine,
   ruleCarriedRollupLine,
@@ -146,6 +147,9 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   if (seedRedirect) lines.push(`${escapeMarkdownInline(seedRedirect)}  `);
   const scope = scanScopeLine(report);
   if (scope) lines.push(`${scope}  `);
+  // repo#2661: a capped published report lists samples; say so, and where the rest is.
+  const capped = publishedReportNote(report);
+  if (capped) lines.push(`${capped}  `);
   const level = auditLevelLine(report);
   if (level) lines.push(`${level}  `);
   const cov = coverageLine(report);

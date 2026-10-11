@@ -39,6 +39,7 @@ import {
   coverageLine,
   fullScanHint,
   scanScopeLine,
+  publishedReportNote,
   auditLevelLine,
   seedRedirectLine,
   checkCarriedLabel,
@@ -669,6 +670,8 @@ function ReportHeader({ report, branding }: { report: AuditReport; branding?: Re
                 const seedRedirect = seedRedirectLine(report);
                 // pub#629: the rules a local or private-network host skipped.
                 const privateTarget = privateTargetLine(report);
+                // repo#2661: a capped published report lists samples; say so once.
+                const capped = publishedReportNote(report);
                 return (
                   <>
                     {(scope || level || cov) && (
@@ -677,6 +680,7 @@ function ReportHeader({ report, branding }: { report: AuditReport; branding?: Re
                       </div>
                     )}
                     {privateTarget && <div className="scan-scope">{privateTarget}</div>}
+                    {capped && <div className="scan-scope">{capped}</div>}
                     {seedRedirect && <div className="scan-hint">{seedRedirect}</div>}
                     {hint && <div className="scan-hint">{hint}</div>}
                   </>
