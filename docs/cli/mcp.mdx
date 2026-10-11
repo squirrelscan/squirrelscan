@@ -77,6 +77,22 @@ You don't configure anything. Claude Code and other clients on the 2026-07-28 re
 
 The HTTP-only parts of the 2026-07-28 revision (the `Mcp-Method` and `Mcp-Name` headers, no session id) don't apply to a stdio server.
 
+## Skills
+
+`squirrel mcp` also serves the squirrelscan [agent skills](/developers/agents) over MCP, through the Skills extension (`io.modelcontextprotocol/skills`). A client that supports the extension gets the skills that match the server it connected to, with no separate install step.
+
+| Skill | `SKILL.md` |
+|-------|------------|
+| `squirrelscan` | `skill://squirrelscan/SKILL.md` |
+| `audit-website` | `skill://audit-website/SKILL.md` |
+
+- The server declares the extension, and the `resources` capability it needs, in `server/discover` (and in the `initialize` result for 2025-era clients).
+- `skills/list` returns both skills and `skills/get` returns one, each with its `SKILL.md` frontmatter and every file's URI, `sha256` digest and size. A URI that is not one of these skills returns `-32602`.
+- Every file, the references and icons included, reads through `resources/read` at `skill://<skill>/<path>`, as exactly the bytes its digest describes, so a client can verify each file before it loads the skill.
+- The skills are bundled into the CLI from [squirrelscan/skills](https://github.com/squirrelscan/skills) when it is built. Nothing is generated per request, and a skill changes only with a CLI release.
+
+Client support for the extension is still new. Clients without it see the skill files as ordinary resources, and [`squirrel skills`](/cli/skills) and the plugin installs keep working as before.
+
 ## Authentication for agent/CI use
 
 Tools marked "Login" above need a credential to reach the squirrelscan API. The local server reuses the same [token resolution](/developers/authentication) as the rest of the CLI: it checks `SQUIRRELSCAN_API_KEY` (or the older `SQUIRREL_API_TOKEN` alias) first, then falls back to a `squirrel auth login` session.

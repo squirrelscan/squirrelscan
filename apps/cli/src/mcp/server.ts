@@ -8,6 +8,7 @@ import { warnIfSessionUnreadable } from "@/self/credentials";
 import { version } from "../../package.json";
 import { cancelActiveMcpRuns } from "./billed-audit";
 import { type LoginResolver } from "./cloud";
+import { registerSkills } from "./skills";
 import { registerAuditTools } from "./tools/audit-tools";
 import { registerEntityTools } from "./tools/entity-tools";
 import { registerFeedbackTools } from "./tools/feedback-tools";
@@ -35,6 +36,8 @@ export function createMcpServer(options: McpServerOptions = {}): McpServer {
   registerEntityTools(server);
   // No login and no credits, but it does need the network (#370).
   registerFeedbackTools(server);
+  // The squirrelscan agent skills, the same bytes the hosted server serves.
+  registerSkills(server);
 
   return server;
 }
