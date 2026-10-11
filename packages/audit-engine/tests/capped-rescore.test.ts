@@ -512,6 +512,21 @@ describe("rescore of a capped report (repo#2657)", () => {
     expect(capped.carriedLastSeen.size).toBe(0);
   });
 
+  test("a tally for a rule the report does not carry is not scored", async () => {
+    // No meta, so nothing to score it under, as no row of it could have been.
+    const report = fullReport(busyShapes(range(0, 20)));
+    const body = cappedBody(report);
+    const ghost = {
+      ...body,
+      checkTallies: { ...body.checkTallies, "core/ghost": { ghost: { failed: 99, failUnits: 99 } } },
+    };
+    const now = 1_780_000_000_000;
+    const plain = await publish(new MemStore(), "audit_1", body, now);
+    const withGhost = await publish(new MemStore(), "audit_1", ghost, now);
+    expect(withGhost.scoringTallies!.has("core/ghost")).toBe(false);
+    expect(rescored(withGhost)).toEqual(rescored(plain));
+  });
+
   test("a report without tallies (an older producer) keeps the row-counting path", async () => {
     const report = fullReport(busyShapes(range(0, 20)));
     const r = await publish(new MemStore(), "audit_1", uncappedBody(report), 1);

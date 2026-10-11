@@ -1010,6 +1010,7 @@ export async function runCloudSmartAudits(
   });
 
   let reportTotals: CloudSmartAuditsResult["reportTotals"];
+  let shownLastSeen = carriedLastSeen;
   if (checkTallies && resolution) {
     ({ scoringTallies, reportTotals } = scoreFromCheckTallies({
       checkTallies,
@@ -1020,13 +1021,12 @@ export async function runCloudSmartAudits(
     }));
     // The coverage line counts what the report shows as carried, and only those
     // are tagged: a fresh check on the page of a carry left out is not carried.
-    // `carriedLastSeen` is this call's own map, returned for exactly that tagging.
     carriedCount = unionCarried.length;
     unrenderedCount = unionCarried.filter((f) => f.neverRendered).length;
     const shown = new Set(
       unionCarried.map((f) => carriedKey(f.normalizedUrl, f.ruleId, f.checkName)),
     );
-    for (const key of carriedLastSeen.keys()) if (!shown.has(key)) carriedLastSeen.delete(key);
+    shownLastSeen = new Map([...carriedLastSeen].filter(([key]) => shown.has(key)));
   }
 
   return {
@@ -1051,7 +1051,7 @@ export async function runCloudSmartAudits(
       carriedFindings: carriedCount - unrenderedCount,
       ...(unrenderedCount > 0 ? { unrenderedFindings: unrenderedCount } : {}),
     },
-    carriedLastSeen,
+    carriedLastSeen: shownLastSeen,
     persistedFindings,
     removedPages: removedUrls.size,
     replayedChecksDropped,
@@ -1130,15 +1130,8 @@ function withoutUnscorablePages(
   for (const url of carriedPageUrls) {
     if (!resolution.crawledUrls.has(url)) continue;
     candidates.add(url);
-    // The page's own hash, and (#2063) the query-blind one an older publisher
-    // hashed it under. The latter only when no crawled page owns that spelling:
-    // otherwise `/p` failing would read as `/p?id=1` failing, and drop a clean
-    // page's pass.
-    const q = url.indexOf("?");
-    const hashes = [resolutionUrlHash(url)];
-    if (q !== -1 && !resolution.crawledUrls.has(url.slice(0, q))) {
-      hashes.push(resolutionUrlHash(url.slice(0, q)));
-    }
+    // `/p` failing must not read as `/p?id=1` failing and drop a clean page's pass.
+    const hashes = signalHashes(url, (u) => resolution.crawledUrls.has(u));
     for (const hash of hashes) {
       const urls = byHash.get(hash);
       if (urls) urls.push(url);
@@ -1182,6 +1175,19 @@ function withoutUnscorablePages(
 }
 
 /**
+ * The hashes the resolution signal may list a page under: its own, and (#2063)
+ * the query-blind one an older publisher hashed it under. The latter only when
+ * no crawled page owns that spelling (`crawled`), or `/p` would speak for
+ * `/p?id=1`. One reading for every scorer that looks a page up in the signal.
+ */
+function signalHashes(url: string, crawled: (url: string) => boolean): string[] {
+  const hashes = [resolutionUrlHash(url)];
+  const q = url.indexOf("?");
+  if (q !== -1 && !crawled(url.slice(0, q))) hashes.push(resolutionUrlHash(url.slice(0, q)));
+  return hashes;
+}
+
+/**
  * (repo#2657) The carried findings a capped report's tallies do not already
  * count: those on pages this run did not evaluate for that check. One on a page
  * this run did evaluate is left out, failing or passing, because the tallies
@@ -1203,15 +1209,9 @@ function notEvaluatedThisRun(
     if (!resolution.failingByCheck.has(key)) return false;
     const notEvaluated = resolution.notEvaluatedByCheck.get(key);
     if (!notEvaluated) return true;
-    if (notEvaluated.has(resolutionUrlHash(url))) return false;
-    // (#2063) The query-blind spelling an older publisher hashed it under, only
-    // when no crawled page owns it (as `withoutUnscorablePages` reads it): `/p`
-    // not evaluated says nothing about `/p?id=1`.
-    const q = url.indexOf("?");
-    if (q === -1) return true;
-    const bare = url.slice(0, q);
-    if (crawledUrls.has(bare) || resolution.crawledUrls.has(bare)) return true;
-    return !notEvaluated.has(resolutionUrlHash(bare));
+    // `/p` not evaluated says nothing about `/p?id=1`.
+    const crawled = (u: string): boolean => crawledUrls.has(u) || resolution.crawledUrls.has(u);
+    return !signalHashes(url, crawled).some((hash) => notEvaluated.has(hash));
   };
   return carriedFindings.filter((f) => !evaluated(f));
 }
@@ -1293,9 +1293,12 @@ function scoreFromCheckTallies(input: {
  * publish body, so anything that is not a non-negative count counts as 0.
  *
  * Otherwise trusted as far as the rows they replace were: both are the
- * publisher's own account of its audit, under the same key, for its own site.
- * Not bounded by pages crawled: a rule may emit several checks of one name on a
- * page, and the rows it would have sent were not bounded that way either.
+ * publisher's own account of its audit, under the same key, for its own site,
+ * and the rescore has no evidence of its own to check them against. A bound on
+ * the counts would protect nothing: a publisher could always reach any score,
+ * 100 included, by leaving its fail and warn rows out, with rows or tallies.
+ * Nor would a bound by pages crawled be safe: a rule may emit several checks of
+ * one name on a page.
  */
 function freshTally(byName: CheckTallies[string] | undefined): IssueTally {
   const tally = emptyTally();
