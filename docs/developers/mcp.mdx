@@ -60,7 +60,14 @@ Best for: CI, headless machines, containers, and configs you commit and share.
 Setting an `Authorization` header disables the OAuth fallback in most clients: if the key is missing or invalid the connection just fails, and no browser flow is attempted. Use either OAuth or a header per entry, never both.
 </Warning>
 
-Anonymous connections can initialize and list the tool catalog, but every tool call requires credentials. Unauthenticated calls get a 401 with a `WWW-Authenticate` challenge that points OAuth-capable clients at the login flow.
+Without credentials you can read the public catalog and the agent skills:
+
+- `initialize`, `server/discover`, `tools/list`, `resources/list`, `prompts/list`
+- `skills/list` and `skills/get`
+- `resources/read` for `skill://` URIs only
+- the client notifications `notifications/initialized`, `notifications/cancelled`, `notifications/progress` and `notifications/roots/list_changed`
+
+Everything else needs credentials: every tool call, every other resource, and every other method. Unauthenticated calls get a 401 with a `WWW-Authenticate` challenge that points OAuth-capable clients at the login flow. Anonymous requests share a limit of 30 per minute per IP, an anonymous batch holds at most 10 messages, and any request body over 1 MiB is refused with a 413.
 
 ## Tools
 
