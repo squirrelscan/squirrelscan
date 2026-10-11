@@ -13,6 +13,7 @@ Combine your coding agent with a deterministic and extensible audit tool.
 [![Add to Codex](https://img.shields.io/badge/Add_to-Codex-000000?style=for-the-badge)](https://squirrelscan.com/add/codex)
 [![Add to opencode](https://img.shields.io/badge/Add_to-opencode-383838?style=for-the-badge)](https://squirrelscan.com/add/opencode)
 [![MCP Registry](https://img.shields.io/badge/MCP-Registry-1f6feb?style=for-the-badge)](https://registry.modelcontextprotocol.io)
+[![MCP Queen operational grade](https://mcpqueen.com/badge/com.squirrelscan/squirrelscan.svg)](https://mcpqueen.com/s/com.squirrelscan/squirrelscan)
 
 [![CI](https://img.shields.io/github/actions/workflow/status/squirrelscan/squirrelscan/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/squirrelscan/squirrelscan/actions/workflows/ci.yml)
 [![CodeQL](https://img.shields.io/github/actions/workflow/status/squirrelscan/squirrelscan/codeql.yml?branch=main&style=for-the-badge&label=CodeQL)](https://github.com/squirrelscan/squirrelscan/actions/workflows/codeql.yml)
