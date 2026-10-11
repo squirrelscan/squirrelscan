@@ -133,10 +133,16 @@ export function publishedReportNote(report: Pick<AuditReport, "detail">): string
     d.fullDetail === "local"
       ? "The complete list is in the project on the machine that ran the audit: `squirrel report --format json` there prints every page."
       : "The complete list is not stored with this report: audit the site with the squirrel CLI and run `squirrel report --format json` for every page.";
+  // Issues the byte budget left out entirely are counted in the score only.
+  const dropped = d.classesDropped ?? 0;
+  const droppedText =
+    dropped > 0
+      ? ` ${dropped.toLocaleString("en-US")} more ${dropped === 1 ? "issue" : "issues"} did not fit and ${dropped === 1 ? "is" : "are"} counted in the score only.`
+      : "";
   return (
     `This published report is a summary: each issue lists up to ${pages} example ` +
     `${pages === 1 ? "page" : "pages"} and ${items} ${items === 1 ? "item" : "items"} ` +
-    `beside its true counts. ${where}`
+    `beside its true counts.${droppedText} ${where}`
   );
 }
 

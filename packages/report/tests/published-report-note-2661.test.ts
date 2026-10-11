@@ -80,6 +80,12 @@ describe("publishedReportNote", () => {
     }
   });
 
+  test("says how many issues did not fit", () => {
+    expect(publishedReportNote({ detail: { ...STAMP, fullDetail: "local", classesDropped: 3 } })).toContain(
+      "beside its true counts. 3 more issues did not fit and are counted in the score only. The complete list",
+    );
+  });
+
   test("is null for a report that is not capped", () => {
     expect(publishedReportNote({})).toBeNull();
     expect(publishedReportNote({ detail: undefined })).toBeNull();
