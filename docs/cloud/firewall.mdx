@@ -29,28 +29,38 @@ Every exception except IP allowlisting is a custom request header. Read [how cus
 
 ## How custom request headers are sent \{#how-custom-request-headers-are-sent\}
 
-Every website in the dashboard can send custom HTTP request headers with its cloud audits. You set them under **Settings → Crawl → Custom request headers** (see [crawl settings](/dashboard/crawl-settings#custom-request-headers)). This is where they go:
+Every website in the dashboard can send custom HTTP request headers with its cloud audits. You set them under **Settings → Crawl → Custom request headers** (see [crawl settings](/dashboard/crawl-settings#custom-request-headers)). Whether a request carries them depends on the kind of request and, for pages, on the website's **Rendering** setting.
 
-| Request | Custom request headers |
-|---|---|
-| The seed redirect probe, which checks where the audited address redirects before the crawl starts | Not sent |
-| `robots.txt`, sitemaps, `llms.txt` and the other root files | Sent |
-| Page fetches over plain HTTP | Sent |
-| Pages rendered in the cloud browser | **Not sent** |
-| Asset checks: stylesheets, scripts, images and fonts on the audited host and its subdomains | Sent |
-| External link checks | Not sent |
-| The [GitHub check](/dashboard/crawl-settings) | Not sent |
+### Rendering and custom headers \{#rendering-and-custom-headers\}
+
+This table is the reference for which requests of a cloud audit carry your custom request headers. **Rendering** is the setting in the audit level card under **Settings → Crawl**.
+
+| Request | Rendering: Off | Rendering: Auto | Rendering: All |
+|---|---|---|---|
+| Page request | Sent. Every page is a plain HTTP request | Sent on the plain HTTP request every page starts with. Not sent when a page that needs JavaScript is then rendered in the cloud browser | Not sent on the cloud browser render. Sent on the plain HTTP request that replaces a render the site refuses, or that starts when the render has no result after 18 s |
+| Subresources the cloud browser loads while it renders a page: scripts, stylesheets, images, and the requests its scripts make | No browser is used | Not sent | Not sent |
+| Asset checks: stylesheets, scripts, images and fonts on the audited host and its subdomains | Sent | Sent | Sent |
+| Seed redirect probe, which checks where the audited address redirects before the crawl starts | Not sent | Not sent | Not sent |
+| `robots.txt`, sitemaps, `llms.txt` and the other root files | Sent | Sent | Sent |
+
+External link checks and the [GitHub check](/dashboard/crawl-settings) never send them, whatever the setting.
+
+**Rendering: Off** is therefore the setting in which every page request carries the headers. Use it for a site that is only reachable with a header, such as one behind Cloudflare Access or Vercel deployment protection.
+
+Two behaviours follow from the table:
+
+- **A refusal is retried without the browser.** When the site answers a cloud browser render with `401`, `403`, `429`, `503` or a challenge page, the page is fetched again over plain HTTP, which does carry the headers. A WAF exception keyed on a header therefore still lets the page through, unrendered.
+- **A sign-in redirect is not a refusal.** A render that lands on a sign-in page on another site is not retried, and the audit fails as a [redirect to another site](/guides/failed-audits#offsite-redirect). This is why a gateway that redirects needs **Rendering: Off**.
+
+An audit started through the API or the MCP server with a level of its own uses that level's rendering instead of the website's, and Surface and Full render every page. Start audits of a gated site from the dashboard or a schedule. A signed-in `squirrel audit` renders in the cloud browser too: add `--http` when the audit depends on headers passed with `-H`.
+
+### Redirects and scope
 
 On a request that is sent with them, the headers are removed at the first redirect to a different origin (scheme, host and port), and stay removed for the rest of that redirect chain. Only `User-Agent`, `Accept`, `Accept-Language` and `Upgrade-Insecure-Requests` are kept across it. `http://` to `https://` is a different origin, and so is `example.com` to `www.example.com`.
 
 Headers that are sent go to every host the audit fetches from on your site: the audited host, and any of its subdomains whose stylesheets, scripts, images or fonts the pages load. Hosts on other domains, such as a CDN or an analytics provider, never get them. A credential in a custom request header therefore reaches your subdomains too, but nothing off your domain. Give the audit a credential of its own, scoped as narrowly as the gateway allows.
 
-Two consequences follow:
-
-- **A refusal is retried without the browser.** When the site answers a cloud browser render with `401`, `403`, `429`, `503` or a challenge page, the page is fetched again over plain HTTP, which does carry the headers. A WAF exception keyed on a header therefore still lets the page through, unrendered.
-- **A sign-in redirect is not a refusal.** A render that lands on a sign-in page on another site is not retried, and the audit fails as a [redirect to another site](/guides/failed-audits#offsite-redirect). For a site behind Cloudflare Access, Vercel deployment protection or any other gateway that redirects, set **Rendering** to **Off** in the audit level card under **Settings → Crawl**, so every page is fetched over plain HTTP with the headers.
-
-An audit started through the API or the MCP server with a level of its own uses that level's rendering instead of the website's, and Surface and Full render every page. Start audits of a gated site from the dashboard or a schedule. A signed-in `squirrel audit` renders in the cloud browser too: add `--http` when the audit depends on headers passed with `-H`.
+### Accepted names and limits
 
 The header card accepts any valid HTTP header name, `Authorization` included. Nothing is reserved. A website can have up to 50 headers, each name up to 255 characters and each value up to 8,192 characters. A value may contain tabs but no other control characters. Values are stored as secrets and never shown in reports or logs. Setting any header also makes the crawl [authorised](/dashboard/crawl-settings#authorised-crawls), which raises its pace and stops `robots.txt` being applied.
 
@@ -129,7 +139,7 @@ Access lets a machine through with a **service token**: a Client ID and a Client
    | `CF-Access-Client-Id` | `<client-id>` |
    | `CF-Access-Client-Secret` | `<client-secret>` |
 
-4. **Turn rendering off.** In the audit level card on the same page, set **Rendering** to **Off** and save the level. Cloud browser renders do not carry custom request headers (see [how custom request headers are sent](#how-custom-request-headers-are-sent)). The audit then reads the HTML your server sends, without running JavaScript, so content that only scripts build is not audited.
+4. **Turn rendering off.** In the audit level card on the same page, set **Rendering** to **Off** and save the level. Every page is then fetched with a request that carries the headers (see [rendering and custom headers](#rendering-and-custom-headers)). The audit reads the HTML your server sends, without running JavaScript, so content that only scripts build is not audited.
 5. **Audit the exact origin Access protects**, with `https://` and the exact hostname, so no redirect to another origin removes the headers before Access sees them.
 6. **Check it** with the [verification checklist](#verification-checklist).
 
@@ -258,7 +268,7 @@ After the audit:
    | Recorded attempt | What it means |
    |---|---|
    | A crawler or direct attempt redirected to the gateway's origin | The request reached the sign-in page: either the headers did not reach the protected origin (a redirect to another origin removed them) or the gateway did not accept them. Check the audited address, the token or secret, the policy (for Cloudflare Access, the **Service Auth** action and the selector), that the policy covers this hostname, and that the token has not expired |
-   | A browser attempt | Rendering was on for the run, and renders do not carry the headers |
+   | A browser attempt | Rendering was on for the run. See [rendering and custom headers](#rendering-and-custom-headers) |
    | A direct attempt with status `401` or `403` | The request was refused: by the gateway (for example Cloudflare Access with strict service token authentication and a token that does not match), or by another firewall or access rule in front of the site |
    | A `cf-ray` id | Search for it in **Security → Events** on Cloudflare to see which product acted on the request |
 
