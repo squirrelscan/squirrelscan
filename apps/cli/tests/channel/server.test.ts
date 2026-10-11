@@ -1,10 +1,10 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 
 import { LOGIN_REQUIRED_EVENT, type ChannelEvent } from "@/channel/events";
 import {
+  CHANNEL_PROTOCOL_VERSIONS,
   type LoopDeps,
   createChannelServer,
   nextDelayMs,
@@ -32,8 +32,39 @@ describe("channel server", () => {
     );
     expect(capabilities?.tools).toBeUndefined();
     expect(client.getInstructions()?.length).toBeLessThanOrEqual(8192);
-    // Legacy handshake: the channel must not negotiate a newer revision.
-    expect(server.transport).toBeDefined();
+  });
+
+  // #570: Claude Code will not register a channel that negotiates 2026-07-28, so
+  // an auto-negotiating client must land on the 2025-era handshake, and a client
+  // that insists on 2026-07-28 must not get it.
+  test("negotiates only the legacy handshake, never 2026-07-28", async () => {
+    expect(CHANNEL_PROTOCOL_VERSIONS).toContain("2025-11-25");
+    expect(CHANNEL_PROTOCOL_VERSIONS.every((v) => v < "2026-07-28")).toBe(true);
+
+    const connect = async (
+      versionNegotiation: ConstructorParameters<typeof Client>[1]
+    ) => {
+      const server = createChannelServer();
+      const client = new Client(
+        { name: "test", version: "0.0.0" },
+        versionNegotiation
+      );
+      const [clientTransport, serverTransport] =
+        InMemoryTransport.createLinkedPair();
+      await server.connect(serverTransport);
+      await client.connect(clientTransport);
+      return client;
+    };
+
+    const auto = await connect({ versionNegotiation: { mode: "auto" } });
+    expect(auto.getProtocolEra()).toBe("legacy");
+    expect(
+      auto.getServerCapabilities()?.experimental?.["claude/channel"]
+    ).toEqual({});
+
+    expect(
+      connect({ versionNegotiation: { mode: { pin: "2026-07-28" } } })
+    ).rejects.toThrow();
   });
 
   test("emits notifications/claude/channel with content and meta", async () => {
@@ -42,15 +73,15 @@ describe("channel server", () => {
     const received: Array<{ content: string; meta: Record<string, string> }> =
       [];
     client.setNotificationHandler(
-      z.object({
-        method: z.literal("notifications/claude/channel"),
+      "notifications/claude/channel",
+      {
         params: z.object({
           content: z.string(),
           meta: z.record(z.string(), z.string()),
         }),
-      }),
-      async (notification) => {
-        received.push(notification.params);
+      },
+      async (params) => {
+        received.push(params);
       }
     );
     const [clientTransport, serverTransport] =

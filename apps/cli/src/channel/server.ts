@@ -1,12 +1,18 @@
 // `squirrel channel` (#569): a stdio MCP *channel* server for Claude Code.
 //
-// Built on the low-level SDK v1 `Server` on purpose: Claude Code refuses to
-// register a channel that negotiates MCP revision 2026-07-28, and v1 tops out
-// at 2025-11-25. Kept apart from `src/mcp/server.ts` so migrating `squirrel mcp`
-// to a newer SDK cannot change what the channel negotiates.
+// Built on the low-level v2 `Server`, connected straight to a stdio transport,
+// on purpose: Claude Code refuses to register a channel that negotiates MCP
+// revision 2026-07-28. A `Server` connected this way negotiates only the
+// 2025-era versions through `initialize` and answers no `server/discover`, so an
+// auto-negotiating client falls back to the legacy handshake. `serveStdio`, which
+// `squirrel mcp` uses, would add 2026-07-28; the channel must never go through it
+// (#570). Kept apart from `src/mcp/server.ts` for the same reason.
 
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import {
+  SUPPORTED_PROTOCOL_VERSIONS,
+  Server,
+} from "@modelcontextprotocol/server";
+import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 
 import { fetchActiveOrgContext } from "@/controllers/orgs/resolve";
 import { cliApi } from "@/lib/api-client";
@@ -41,6 +47,11 @@ export interface ChannelOptions {
   categories?: readonly ChannelCategory[];
 }
 
+/** The 2025-era versions only: the channel never offers 2026-07-28 (#570). */
+export const CHANNEL_PROTOCOL_VERSIONS = SUPPORTED_PROTOCOL_VERSIONS.filter(
+  (v) => v < "2026-07-28"
+);
+
 export function createChannelServer(): Server {
   return new Server(
     { name: "squirrelscan", version },
@@ -48,6 +59,7 @@ export function createChannelServer(): Server {
       // Presence of this key is what registers the channel. The permission relay capability is deliberately not declared: nobody but Claude Code may approve tool use in the session.
       capabilities: { experimental: { "claude/channel": {} } },
       instructions: buildInstructions(),
+      supportedProtocolVersions: CHANNEL_PROTOCOL_VERSIONS,
     }
   );
 }

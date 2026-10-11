@@ -1,7 +1,7 @@
 // End to end: the real CLI entry as a stdio server, a real MCP client, a mocked cloud API.
 
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { Client } from "@modelcontextprotocol/client";
+import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -62,18 +62,23 @@ describe("squirrel channel over stdio", () => {
       },
     });
     const home = mkdtempSync(join(tmpdir(), "channel-e2e-"));
-    const client = new Client({ name: "e2e", version: "0.0.0" });
+    // Auto-negotiating, as Claude Code's v2 runtime is: the channel must still
+    // land on the legacy handshake for Claude Code to register it (#570).
+    const client = new Client(
+      { name: "e2e", version: "0.0.0" },
+      { versionNegotiation: { mode: "auto" } }
+    );
     const received: Array<{ content: string; meta: Record<string, string> }> =
       [];
     client.setNotificationHandler(
-      z.object({
-        method: z.literal("notifications/claude/channel"),
+      "notifications/claude/channel",
+      {
         params: z.object({
           content: z.string(),
           meta: z.record(z.string(), z.string()),
         }),
-      }),
-      async (n) => void received.push(n.params)
+      },
+      async (params) => void received.push(params)
     );
     const transport = new StdioClientTransport({
       command: process.execPath,
@@ -89,6 +94,7 @@ describe("squirrel channel over stdio", () => {
     });
     try {
       await client.connect(transport);
+      expect(client.getProtocolEra()).toBe("legacy");
       expect(client.getServerCapabilities()?.experimental).toEqual({
         "claude/channel": {},
       });

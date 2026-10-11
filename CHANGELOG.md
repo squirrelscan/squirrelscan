@@ -21,6 +21,10 @@ How it works:
 
 - `squirrel mcp` serves the squirrelscan agent skills (`squirrelscan` and `audit-website`) over MCP through the Skills extension (`io.modelcontextprotocol/skills`): `skills/list`, `skills/get` and every skill file through `resources/read`, each listed with its sha256 digest and size. A client that supports the extension gets the skills that match the server it connected to, with no separate install. See [Skills](https://docs.squirrelscan.com/cli/mcp#skills).
 
+### Changed
+
+- `squirrel channel` now runs on the same MCP SDK (v2) as `squirrel mcp`, and the CLI no longer ships the v1 SDK or the HTTP server packages it pulled in. The channel still connects with the 2025-era `initialize` handshake, which Claude Code needs to register it as a channel, and the docs now say so.
+
 ### Fixed
 
 - Template fan-out no longer shares a verdict between pages that differ in the `<html>` language or aria-hidden, the `<body>` aria-hidden, or a favicon link. Those are inputs three template rules read.

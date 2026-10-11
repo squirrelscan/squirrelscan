@@ -77,6 +77,8 @@ You don't configure anything. Claude Code and other clients on the 2026-07-28 re
 
 The HTTP-only parts of the 2026-07-28 revision (the `Mcp-Method` and `Mcp-Name` headers, no session id) don't apply to a stdio server.
 
+[`squirrel channel`](/cli/channel#protocol-version) is the exception: it always uses the `initialize` handshake, because Claude Code registers a channel only over it.
+
 ## Skills
 
 `squirrel mcp` also serves the squirrelscan [agent skills](/developers/agents) over MCP, through the Skills extension (`io.modelcontextprotocol/skills`). A client that supports the extension gets the skills that match the server it connected to, with no separate install step.

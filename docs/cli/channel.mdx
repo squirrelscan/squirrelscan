@@ -28,3 +28,7 @@ The feed needs a login session from [`squirrel auth login`](/cli/auth). API keys
 ## State
 
 Delivery state is stored per organization in `~/.squirrel/channel/`, so a restart catches up exactly once.
+
+## Protocol version
+
+The channel always connects with the 2025-era `initialize` handshake (MCP `2025-11-25` and earlier), even when the client supports `2026-07-28`. Claude Code registers a channel only over that handshake, so `squirrel channel` never offers the newer revision. [`squirrel mcp`](/cli/mcp#supported-protocol-versions) serves both.
