@@ -27,6 +27,7 @@ import { normalizePageUrl } from "@squirrelscan/utils/url";
 import { findingKey } from "../src/merge-core";
 import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
 import { calculateHealthScore } from "../src/scoring";
+import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 class MemStore implements SmartAuditStore {
   findings = new Map<string, PageFindingRecord>();
@@ -74,6 +75,8 @@ class MemStore implements SmartAuditStore {
     return 0;
   }
 }
+
+describeSitePagesContract("compact-resolution-merge.test.ts MemStore", () => new MemStore());
 
 const SITE_KEY = "web_compact";
 const NOW = 1_780_000_000_000;
@@ -510,5 +513,119 @@ describe("what the byte budget gives up only ever keeps findings open", () => {
       // same transaction (this test store records the page only).
       for (const u of gone) expect(store.pages.get(u)?.state).toBe("removed");
     }
+  });
+
+  test("off a clipped list, a pass does not outweigh a failing row for the same check", async () => {
+    // A rule may report one check name more than once on a page. Here `rare`
+    // both fails (200 items, 50 published) and passes on the same late page.
+    const { urls, lateFailing, full } = await clippedListScenario(200);
+    full.rare!.checks.push(check("rare", lateFailing, "pass"));
+    const signal = await decodeResolutionSignal(
+      buildCompactResolutionSignal(full, urls, 8 * 1024)!,
+    );
+    expect(new Set(signal.crawledUrls).has(normalizePageUrl(lateFailing))).toBe(false);
+    const priors = [prior(lateFailing, "rare", "rare", "item-199")];
+    const store = await seededStore(urls, priors);
+    await publish(store, samplePayload(full, urls, signal));
+    expect(stateOf(store, lateFailing, "rare", "rare", "item-199")).toBe("open:carried");
+  });
+
+  test("off a clipped list, a pass does not outweigh a failing sample that left the page out", async () => {
+    // `dual` fails on pages 0-549 and passes on 480-599, so pages 480-549 do
+    // both. Each status folds into a sampled aggregate: pick a late page the
+    // pass sample kept and the fail sample dropped.
+    const { urls, full } = await clippedListScenario();
+    full.dual = {
+      meta: meta("dual"),
+      checks: [
+        ...urls.slice(0, 550).map((u) => check("dual", u, "fail")),
+        ...urls.slice(480).map((u) => check("dual", u, "pass")),
+      ],
+    };
+    const signal = await decodeResolutionSignal(
+      buildCompactResolutionSignal(full, urls, 8 * 1024)!,
+    );
+    const listed = new Set(signal.crawledUrls);
+    const payload = samplePayload(full, urls, signal);
+    const samples = (status: string) =>
+      new Set(
+        payload.ruleResults.dual!.checks.filter((c) => c.status === status).flatMap((c) => c.pages ?? []),
+      );
+    const passSample = samples("pass");
+    const failSample = samples("fail");
+    const page = urls
+      .slice(480, 550)
+      .find((u) => passSample.has(u) && !failSample.has(u) && !listed.has(normalizePageUrl(u)));
+    expect(page).toBeDefined();
+    const priors = [prior(page!, "dual", "dual")];
+    const store = await seededStore(urls, priors);
+    await publish(store, payload);
+    expect(stateOf(store, page!, "dual", "dual")).toBe("open:carried");
+    const control = await seededStore(urls, priors);
+    await publish(control, samplePayload(full, urls, buildResolutionSignal(full, urls)));
+    expect(stateOf(control, page!, "dual", "dual")).toBe("open:carried");
+  });
+
+  test("off a clipped list, the rule's noindex verdict still resolves", async () => {
+    // The runner's noindex gate: nothing the rule reports applies to the page,
+    // which the signal reads as clean for every check of the rule.
+    const { urls, full } = await clippedListScenario();
+    const page = urls.at(-1)!;
+    full.gated = {
+      meta: meta("gated"),
+      checks: [
+        {
+          name: "gated",
+          status: "skipped",
+          message: "noindex",
+          pageUrl: page,
+          skipReason: "noindex",
+          details: { foldKey: "noindex" },
+        },
+        check("gated", urls[0]!, "pass"),
+      ],
+    };
+    const signal = await decodeResolutionSignal(
+      buildCompactResolutionSignal(full, urls, 8 * 1024)!,
+    );
+    expect(new Set(signal.crawledUrls).has(normalizePageUrl(page))).toBe(false);
+    const priors = [prior(page, "gated", "other-check")];
+    const store = await seededStore(urls, priors);
+    await publish(store, samplePayload(full, urls, signal));
+    expect(stateOf(store, page, "gated", "other-check")).toBe("resolved:fresh");
+    const control = await seededStore(urls, priors);
+    await publish(control, samplePayload(full, urls, buildResolutionSignal(full, urls)));
+    expect(stateOf(control, page, "gated", "other-check")).toBe("resolved:fresh");
+  });
+
+  test("a clipped list's audited count leaves out removed pages the merge cannot name", async () => {
+    // The last 100 pages 404'd. The payload still names every page (two small
+    // per-page rules, kept whole), pageStatuses was clipped to 10 of the 404s,
+    // and most 404s are off the list.
+    const { urls, full } = await clippedListScenario();
+    const gone = urls.slice(500);
+    full.probeA = { meta: meta("probeA"), checks: urls.slice(0, 300).map((u) => check("a", u, "pass")) };
+    full.probeB = { meta: meta("probeB"), checks: urls.slice(300).map((u) => check("b", u, "pass")) };
+    const signal = await decodeResolutionSignal(
+      buildCompactResolutionSignal(
+        full,
+        urls,
+        8 * 1024,
+        gone.map((url) => ({ url, status: 404 })),
+      )!,
+    );
+    expect(signal.crawledComplete).toBe(false);
+    expect(signal.removedCount).toBe(100);
+    const store = await seededStore(urls, []);
+    const result = await runCloudSmartAudits({
+      store,
+      siteKey: SITE_KEY,
+      crawlId: "audit_1",
+      ruleResults: samplePayload(full, urls, signal).ruleResults,
+      pageStatuses: gone.slice(0, 10).map((url) => ({ url, status: 404 })),
+      resolutionSignal: signal,
+      now: NOW,
+    });
+    expect(result.coverage.auditedPages).toBe(500);
   });
 });

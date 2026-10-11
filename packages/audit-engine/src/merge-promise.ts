@@ -18,7 +18,10 @@ import type {
   ResolutionSignal,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
-import { resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
+import {
+  NOT_APPLICABLE_SKIP_REASON,
+  resolutionUrlHash,
+} from "@squirrelscan/core-contracts/resolution";
 // `/types` (leaf type module) not the barrel — see scoring.ts. (#195)
 import { unfoldAggregateCheck } from "@squirrelscan/rules/fold";
 import type { RuleRunResult } from "@squirrelscan/rules/types";
@@ -30,6 +33,7 @@ import {
   flattenChecks,
   itemListComplete,
   pageCheckKey,
+  pageRuleKey,
   type FlatFinding,
   type MergedFinding,
   type MergedState,
@@ -752,20 +756,51 @@ export async function runCloudSmartAudits(
   }
 
   // (#2658) Where the signal lost its say (a truncated key, a page off a clipped
-  // list), a prior resolves only on a pass the payload shows for its page and
-  // check (ComputeMergeInput.passedCheckPages). Indexed only for the checks that
-  // can need it, so a whole signal costs nothing here.
+  // list), a prior resolves only on positive evidence in the payload: a pass for
+  // its page and check with no failing row beside it, or the rule's noindex
+  // verdict for the page (see ComputeMergeInput.passedCheckPages). A check whose
+  // failing rows were sampled gives no pass evidence at all, since the page may
+  // fail it past the sample. Indexed only for the checks that can need it, so a
+  // whole signal costs nothing here.
   let passedCheckPages: Set<string> | undefined;
+  let notApplicablePages: Set<string> | undefined;
   if (resolution && (resolution.crawledComplete === false || resolution.truncatedChecks.size > 0)) {
-    const everyCheck = resolution.crawledComplete === false;
-    passedCheckPages = new Set<string>();
-    for (const [ruleId, r] of freshResults) {
+    const needed = (key: string) =>
+      resolution!.crawledComplete === false || resolution!.truncatedChecks.has(key);
+    const failingSampled = new Set<string>();
+    for (const [ruleId, r] of Object.entries(input.ruleResults)) {
       for (const c of r.checks) {
-        if (c.status !== "pass" || !c.pageUrl) continue;
-        if (!everyCheck && !resolution.truncatedChecks.has(`${ruleId}|${c.name}`)) continue;
-        passedCheckPages.add(pageCheckKey(normalizePageUrl(c.pageUrl), ruleId, c.name));
+        if (isReplayedCheck(c) || (c.status !== "fail" && c.status !== "warn")) continue;
+        const pagesTruncated = c.details?.pagesTruncated;
+        if (typeof pagesTruncated === "number" && pagesTruncated > (c.pages?.length ?? 0)) {
+          failingSampled.add(`${ruleId}|${c.name}`);
+        }
       }
     }
+    passedCheckPages = new Set<string>();
+    notApplicablePages = new Set<string>();
+    const failingPageChecks = new Set<string>();
+    for (const [ruleId, r] of freshResults) {
+      for (const c of r.checks) {
+        if (!c.pageUrl) continue;
+        const url = normalizePageUrl(c.pageUrl);
+        if (
+          c.status === "skipped" &&
+          c.skipReason === NOT_APPLICABLE_SKIP_REASON &&
+          c.details?.foldKey === NOT_APPLICABLE_SKIP_REASON
+        ) {
+          notApplicablePages.add(pageRuleKey(url, ruleId));
+          continue;
+        }
+        const key = `${ruleId}|${c.name}`;
+        if (!needed(key) || failingSampled.has(key)) continue;
+        if (c.status === "pass") passedCheckPages.add(pageCheckKey(url, ruleId, c.name));
+        else if (c.status === "fail" || c.status === "warn") {
+          failingPageChecks.add(pageCheckKey(url, ruleId, c.name));
+        }
+      }
+    }
+    for (const pageCheck of failingPageChecks) passedCheckPages.delete(pageCheck);
   }
 
   // ── merge ────────────────────────────────────────────────────────────────
@@ -793,6 +828,7 @@ export async function runCloudSmartAudits(
       completeItemChecks,
       incompleteItemChecks,
       passedCheckPages,
+      notApplicablePages,
     },
     {
       persist: (record) => onPersist(record),
@@ -826,14 +862,17 @@ export async function runCloudSmartAudits(
     }
   }
   // (#2658) A signal whose byte budget clipped its page list still counts every
-  // crawled page (`crawledCount`), so the audited count, and the bill read off
-  // it, does not shrink with the list. Removed pages are crawled pages too, and
-  // `removedCount` counts the unlisted ones the merge cannot name.
+  // crawled page (`crawledCount`) and every removed one (`removedCount`, listed
+  // or not), so the audited count, and the bill read off it, is the producer's
+  // own: it does not shrink with the list, and an unlisted 404 the payload still
+  // names (so `auditedUrls` holds it) does not inflate it.
   const signalPages = input.resolutionSignal?.crawledCount;
-  const removedCount = Math.max(removedUrls.size, input.resolutionSignal?.removedCount ?? 0);
   const auditedPages =
     input.resolutionSignal?.crawledComplete === false && signalPages !== undefined
-      ? Math.max(auditedUrls.size, signalPages - removedCount)
+      ? Math.max(
+          0,
+          signalPages - Math.max(removedUrls.size, input.resolutionSignal.removedCount ?? 0),
+        )
       : auditedUrls.size;
 
   // (#2063) Reduce the refused checks' pages to the ones this site has no record

@@ -27,6 +27,7 @@ import {
   type CompactResolutionPayload,
   type CompactResolutionSignal,
   encodeIndexGaps,
+  NOT_APPLICABLE_SKIP_REASON,
   resolutionCheckKey,
   resolutionUrlHash,
   SCAN_TRUNCATED_SKIP_REASON,
@@ -35,9 +36,6 @@ import { byteLength } from "@squirrelscan/utils/bytes";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
 
 import { clipPageStatusesToBytes } from "./fold";
-
-/** The runner's noindex gate (pub#457): a skip that is a "does not apply" verdict. */
-const NOT_APPLICABLE_SKIP_REASON = "noindex";
 
 /**
  * What one run says about each page and check, keyed by NORMALIZED page URL:

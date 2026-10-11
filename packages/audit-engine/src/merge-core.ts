@@ -182,14 +182,22 @@ export interface ComputeMergeInput {
    */
   incompleteItemChecks?: Set<string>;
   /**
-   * (#2658) Page checks the published payload shows PASSING this run, keyed by
-   * {@link pageCheckKey}. Consulted only where a {@link resolution} signal was
-   * sent but lost its say for the page and check (its key truncated, or the page
-   * left off a clipped list): absence is then no evidence at all, so a prior
-   * finding resolves only on this positive evidence (or a complete item list
-   * that no longer holds it) and carries otherwise. Undefined → none.
+   * (#2658) Page checks the published payload shows PASSING this run, with no
+   * failing row for the same page and check and no sampled failing rows for the
+   * check, keyed by {@link pageCheckKey}. Consulted only where a
+   * {@link resolution} signal was sent but lost its say for the page and check
+   * (its key truncated, or the page left off a clipped list): absence is then no
+   * evidence at all, so a prior finding resolves only on positive evidence (this,
+   * {@link notApplicablePages}, or a complete item list that no longer holds it)
+   * and carries otherwise. Undefined → none.
    */
   passedCheckPages?: Set<string>;
+  /**
+   * (#2658) Pages whose rule returned the noindex "does not apply" verdict this
+   * run, keyed by {@link pageRuleKey}: clean for every check of that rule, as the
+   * signal reads it. Positive evidence alongside {@link passedCheckPages}.
+   */
+  notApplicablePages?: Set<string>;
 }
 
 /** Pre-indexed form of the publish `ResolutionSignal` (#1185). */
@@ -241,6 +249,11 @@ export function findingKey(
 /** Key for one check on one page (a {@link findingKey} without the locator). */
 export function pageCheckKey(normalizedUrl: string, ruleId: string, checkName: string): string {
   return [normalizedUrl, ruleId, checkName].join(KEY_SEP);
+}
+
+/** (#2658) A (page, rule) pair: the key of {@link ComputeMergeInput.notApplicablePages}. */
+export function pageRuleKey(normalizedUrl: string, ruleId: string): string {
+  return [normalizedUrl, ruleId].join(KEY_SEP);
 }
 
 /**
@@ -713,6 +726,7 @@ export function createMergeSession(
     completeItemChecks,
     incompleteItemChecks,
     passedCheckPages,
+    notApplicablePages,
   } = input;
 
   // Index fresh findings by key (latest wins on dup keys within a run).
@@ -1029,11 +1043,15 @@ export function createMergeSession(
       // budget truncated the key, or the page is off a clipped list. What it
       // would have said (still failing, not evaluated) is gone with it, so the
       // finding's absence from the sampled payload proves nothing. Only positive
-      // evidence resolves: the payload shows the check passing on this page, or
-      // its complete item list no longer holds the finding (as the signal branch
-      // above resolves it).
+      // evidence resolves: the payload shows the check passing on this page (or
+      // the rule's noindex verdict for it), or the page's complete item list no
+      // longer holds the finding (as the signal branch above resolves it).
       if (resolution && (!signal || signal.truncatedChecks.has(checkKey))) {
-        if (!passedCheckPages?.has(pageCheck) && !completeItemChecks?.has(pageCheck)) {
+        const clean =
+          passedCheckPages?.has(pageCheck) ||
+          notApplicablePages?.has(pageRuleKey(prior.normalizedUrl, prior.ruleId)) ||
+          completeItemChecks?.has(pageCheck);
+        if (!clean) {
           const carried: PageFindingRecord = { ...prior, provenance: "carried" };
           sink.persist(carried);
           sink.active(toMerged(carried, unrendered));

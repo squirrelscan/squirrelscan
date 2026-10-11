@@ -321,6 +321,13 @@ async function inflateCapped(base64: string, maxBytes: number): Promise<string> 
  */
 export const SCAN_TRUNCATED_SKIP_REASON = "scan-truncated";
 
+/**
+ * The runner's noindex gate (pub#457): a skip that is a "does not apply"
+ * verdict for every check of its rule on that page, so the signal and the merge
+ * read it as clean, not as a gap. Also the skip's `details.foldKey`.
+ */
+export const NOT_APPLICABLE_SKIP_REASON = "noindex";
+
 /** Signal map key — same `ruleId|checkName` shape the merge core keys on. */
 export function resolutionCheckKey(ruleId: string, checkName: string): string {
   return `${ruleId}|${checkName}`;
