@@ -1282,7 +1282,9 @@ function scoreFromCheckTallies(input: {
 }
 
 /**
- * One rule's fresh counts, summed over its check names. The tallies arrive in a
+ * One rule's fresh counts, summed over its check names. A rule or check name
+ * with no entry scored nothing this run (`buildCheckTallies` leaves out classes
+ * of info checks only), so it is 0, never unknown. The tallies arrive in a
  * publish body, so anything that is not a non-negative count counts as 0.
  */
 function freshTally(byName: CheckTallies[string] | undefined): IssueTally {

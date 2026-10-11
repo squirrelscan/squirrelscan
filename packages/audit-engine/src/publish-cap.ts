@@ -175,17 +175,18 @@ export class PublishedReportTooLargeError extends Error {
  * {@link CheckTally}). Counted over the UNFOLDED checks with the scorer's own
  * `addChecksToTally`, exactly as the server rescore counts a published report
  * today, so a reader that sums them gets the numbers it would have counted from
- * the rows the capper drops. The checks that rescore leaves out are left out
- * here too (repo#2657): page replays (`isReplayedCheck`), and checks on a page
- * that returned 404/410 this run (`removedUrls`, normalized), which it does not
- * score because the page is gone.
+ * the rows the capper drops. Page replays are left out as that rescore leaves
+ * them out (`isReplayedCheck`, repo#2657); so are checks on a page that
+ * returned 404/410, which `capReportForPublish` removes before counting.
+ *
+ * A (rule, check name) whose checks score nothing (info only) has no entry, so
+ * a reader takes a missing rule or check name as 0 scored, never as unknown.
  *
  * If the input was itself already sampled (an aggregate whose `pages` is shorter
  * than its `pagesTruncated`), the counts are a floor, same as a rescore of it.
  */
 export function buildCheckTallies(
   ruleResults: Record<string, { meta: { severity: string }; checks: CheckResult[] }>,
-  removedUrls: ReadonlySet<string> = new Set(),
 ): CheckTallies {
   const out: CheckTallies = {};
   for (const ruleId of Object.keys(ruleResults).sort()) {
@@ -195,9 +196,6 @@ export function buildCheckTallies(
     for (const original of rule.checks) {
       for (const check of unfoldAggregateCheck(original)) {
         if (isReplayedCheck(check)) continue;
-        if (check.pageUrl && removedUrls.size > 0 && removedUrls.has(normalizePageUrl(check.pageUrl))) {
-          continue;
-        }
         const list = byName.get(check.name);
         if (list) list.push(check);
         else byName.set(check.name, [check]);
@@ -872,9 +870,8 @@ function slimEntityMap(map: EntityMap | null | undefined): { map?: EntityMap; fa
 }
 
 /**
- * Pages that returned 404/410 this run, normalized. The server stales their
- * findings and leaves their checks out of the score (repo#2657), so the tallies
- * do too. Read from the full report, before `pageStatuses` is clipped.
+ * Pages that returned 404/410 this run, normalized. Read from the full report,
+ * before `pageStatuses` is clipped. See {@link withoutRemovedPages}.
  */
 function removedPageUrls(report: CappableReport): Set<string> {
   const out = new Set<string>();
@@ -886,6 +883,71 @@ function removedPageUrls(report: CappableReport): Set<string> {
   if (Array.isArray(report.pages)) for (const page of report.pages) add(page?.url, page?.statusCode);
   if (Array.isArray(report.pageStatuses)) {
     for (const row of report.pageStatuses) add(row?.url, row?.status);
+  }
+  return out;
+}
+
+/**
+ * The rules without their checks on a page that returned 404/410 this run
+ * (repo#2657). The page is gone: the server stales its findings and never scores
+ * or shows its checks, so the capper drops them before it counts the tallies and
+ * folds the classes, and the two agree. A class whose every page is gone leaves
+ * the report.
+ *
+ * An aggregate from an earlier fold is reopened only when its `pages` name a
+ * removed page, so every other class keeps the totals it arrived with. Its true
+ * page count drops by the removed pages its sample named; a removed page it had
+ * already clipped cannot be seen, so that count stays a floor.
+ */
+function withoutRemovedPages<R extends { checks: CheckResult[] }>(
+  ruleResults: Record<string, R>,
+  removedUrls: ReadonlySet<string>,
+): Record<string, R> {
+  if (removedUrls.size === 0) return ruleResults;
+  const removed = (url: string): boolean => removedUrls.has(normalizePageUrl(url));
+  const out: Record<string, R> = {};
+  for (const [ruleId, rule] of Object.entries(ruleResults)) {
+    if (!Array.isArray(rule.checks)) {
+      out[ruleId] = rule;
+      continue;
+    }
+    let changed = false;
+    const checks: CheckResult[] = [];
+    for (const check of rule.checks) {
+      if (check.pageUrl) {
+        if (removed(check.pageUrl)) changed = true;
+        else checks.push(check);
+        continue;
+      }
+      if (check.details?.aggregated !== true || !check.pages?.some(removed)) {
+        checks.push(check);
+        continue;
+      }
+      changed = true;
+      const members = unfoldAggregateCheck(check);
+      const kept = members.filter((member) => !removed(member.pageUrl!));
+      const gone = members.length - kept.length;
+      for (const member of kept) {
+        const total = member.details?.pagesTruncated;
+        checks.push({
+          ...member,
+          // An item's other pages ride along in its `sourcePages`.
+          ...(member.items
+            ? {
+                items: member.items.map((item) =>
+                  item.sourcePages?.some(removed)
+                    ? { ...item, sourcePages: item.sourcePages.filter((page) => !removed(page)) }
+                    : item,
+                ),
+              }
+            : {}),
+          ...(typeof total === "number" && Number.isFinite(total)
+            ? { details: { ...member.details, pagesTruncated: Math.max(total - gone, kept.length) } }
+            : {}),
+        });
+      }
+    }
+    out[ruleId] = changed ? { ...rule, checks } : rule;
   }
   return out;
 }
@@ -1019,7 +1081,9 @@ export function capReportForPublish<T extends CappableReport>(
       ),
   );
   const pageStatuses = buildPageStatuses(report);
-  const checkTallies = buildCheckTallies(report.ruleResults, removedPageUrls(report));
+  // The rows the server scores and shows: none on a page that 404'd or 410'd.
+  const live = withoutRemovedPages(report.ruleResults, removedPageUrls(report));
+  const checkTallies = buildCheckTallies(live);
   const transportBytes =
     (resolutionSignal ? bytesOf(resolutionSignal) + 24 : 0) +
     (pageStatuses ? bytesOf(pageStatuses) + 20 : 0);
@@ -1027,7 +1091,7 @@ export function capReportForPublish<T extends CappableReport>(
     maxBytes - REPORT_CAPS.envelopeBytes - Math.min(transportBytes, REPORT_CAPS.signalMaxBytes);
 
   // 2. Every rule's classes folded once, in rule-id order.
-  const rules = ruleIds.map((id) => foldRule(id, report.ruleResults[id]!));
+  const rules = ruleIds.map((id) => foldRule(id, live[id]!));
   // Top-level `siteChecks` repeats the site checks of `ruleResults` (9,137 of
   // 9,138 entries over 187 real reports), and nothing reads it but the schema
   // bounds and the publish counts, so a copy of a check `ruleResults` already

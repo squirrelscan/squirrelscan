@@ -498,6 +498,11 @@ describe("buildCheckTallies leaves out what the rescore leaves out (repo#2657)",
     expect(buildCheckTallies(report.ruleResults)["core/meta-description"]).toEqual({
       "has-meta-description": { failed: 12, failUnits: 12 },
     });
+    // Nor shown: the class names 10 live pages and counts no more.
+    const [cls] = capped.ruleResults["core/meta-description"]!.checks;
+    expect(cls!.pages).not.toContain(url(3));
+    expect(cls!.pages).not.toContain(url(4));
+    expect(cls!.details?.occurrences).toBe(10);
   });
 
   test("a producer's page replays are not counted; a site check tagged carried is", () => {

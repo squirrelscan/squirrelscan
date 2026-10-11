@@ -415,7 +415,8 @@ describe("capReportForPublish: size", () => {
     const warns = tight.ruleResults["a11y/warns"]!.checks[0]!;
     expect(fails.pages).toHaveLength(REPORT_CAPS.tiers[0]!.pagesPerClass);
     expect(warns.pages).toHaveLength(REPORT_CAPS.tiers[1]!.pagesPerClass);
-    expect(warns.details?.pagesTruncated).toBe(60);
+    // 60 pages, 2 of them 404 this run (7 and 48), which no class counts (repo#2657).
+    expect(warns.details?.pagesTruncated).toBe(58);
   }, SLOW);
 
   test("past the fill, classes are admitted by byte budget and the body still fits", () => {
@@ -490,8 +491,13 @@ describe("capReportForPublish: the sample and its counts", () => {
   test("true page, item and occurrence totals are recoverable from details", () => {
     const rule = input.ruleResults["images/dimensions"]!;
     const out = capped.ruleResults["images/dimensions"]!.checks;
+    // A page that 404'd this run is in no class (repo#2657).
+    const removed = new Set(input.pages!.filter((p) => p.statusCode === 404).map((p) => p.url));
+    expect(removed.size).toBeGreaterThan(0);
     for (const status of ["warn", "fail"] as const) {
-      const members = rule.checks.filter((c) => c.name === "img-dimensions" && c.status === status);
+      const members = rule.checks.filter(
+        (c) => c.name === "img-dimensions" && c.status === status && !removed.has(c.pageUrl!),
+      );
       const pages = new Set(members.map((c) => c.pageUrl));
       const items = new Set(members.flatMap((c) => (c.items ?? []).map((i) => i.id)));
       const agg = out.find((c) => c.name === "img-dimensions" && c.status === status)!;
@@ -632,7 +638,9 @@ describe("capReportForPublish: classes", () => {
   });
 
   test("an already folded report folds once more without stacking the suffix", () => {
-    const input = report(600, { rules: PAGE_RULES.slice(0, 1) });
+    // Every page live: with no 404 to take out, nothing is reopened.
+    const base = report(600, { rules: PAGE_RULES.slice(0, 1) });
+    const input: Report = { ...base, pages: base.pages!.map((p) => ({ ...p, statusCode: 200 })) };
     const rule = input.ruleResults["core/doctype"]!;
     const prefolded: Report = {
       ...input,
@@ -642,6 +650,72 @@ describe("capReportForPublish: classes", () => {
     const again = capReportForPublish(prefolded).ruleResults["core/doctype"]!.checks;
     expect(again).toEqual(fresh);
     for (const c of again) expect(c.message).not.toMatch(/more pages\).*more pages\)/);
+  });
+
+  test("an already folded class naming a 404 page drops it; its total stays a floor", () => {
+    const input = report(600, { rules: PAGE_RULES.slice(0, 1) });
+    const removed = new Set(input.pages!.filter((p) => p.statusCode === 404).map((p) => p.url));
+    const rule = input.ruleResults["core/doctype"]!;
+    const prefolded: Report = {
+      ...input,
+      ruleResults: { "core/doctype": { ...rule, checks: foldOverflowChecks(rule.checks) } },
+    };
+    const fresh = capReportForPublish(input).ruleResults["core/doctype"]!.checks;
+    const again = capReportForPublish(prefolded).ruleResults["core/doctype"]!.checks;
+    expect(again.map((c) => [c.name, c.status])).toEqual(fresh.map((c) => [c.name, c.status]));
+    again.forEach((c, i) => {
+      for (const page of c.pages ?? []) expect(removed.has(page)).toBe(false);
+      for (const item of c.items ?? []) {
+        for (const page of item.sourcePages ?? []) expect(removed.has(page)).toBe(false);
+      }
+      // The earlier fold clipped some 404 pages out of its sample, so its count
+      // of them cannot come off: at least the live pages, at most all of them.
+      const total = c.details?.pagesTruncated as number;
+      expect(total).toBeGreaterThanOrEqual(fresh[i]!.details?.pagesTruncated as number);
+      expect(total).toBeLessThanOrEqual((fresh[i]!.details?.pagesTruncated as number) + removed.size);
+    });
+  });
+
+  test("a class whose every page 404'd leaves the report, and the tallies", () => {
+    const gone = [pageUrl(1), pageUrl(2)];
+    const fail = (url: string): CheckResult => ({ name: "x", status: "fail", message: "x", pageUrl: url });
+    const spec: RuleSpec = { id: "core/x", category: "core", severity: "warning", weight: 2, names: ["x"] };
+    const perPage: Report = {
+      ruleResults: {
+        "core/x": {
+          meta: meta(spec, "page"),
+          checks: [
+            ...gone.map(fail),
+            { name: "x", status: "warn", message: "y", pageUrl: pageUrl(3) },
+            { name: "x", status: "pass", message: "ok", pageUrl: pageUrl(4) },
+          ],
+        },
+      },
+      pages: [1, 2, 3, 4].map((n) => ({ url: pageUrl(n), statusCode: n <= 2 ? 404 : 200 })),
+    };
+    const prefolded: Report = {
+      ...perPage,
+      ruleResults: {
+        "core/x": {
+          ...perPage.ruleResults["core/x"]!,
+          checks: [
+            {
+              name: "x",
+              status: "fail",
+              message: "x (+1 more pages)",
+              pages: gone,
+              details: { aggregated: true, occurrences: 2 },
+            },
+            ...perPage.ruleResults["core/x"]!.checks.slice(2),
+          ],
+        },
+      },
+    };
+    for (const input of [perPage, prefolded]) {
+      const capped = capReportForPublish(input);
+      expect(capped.ruleResults["core/x"]!.checks.map((c) => c.status)).toEqual(["warn"]);
+      expect(capped.checkTallies["core/x"]).toEqual({ x: { passed: 1, warnings: 1, warnUnits: 1 } });
+    }
   });
 
   test("an aggregate and more pages of its class fold into one, with one suffix", () => {
@@ -855,7 +929,7 @@ describe("capReportForPublish: tallies", () => {
     const capped = capReportForPublish(input);
     // Every row the server's rescore scores: not the ones on a page that 404'd
     // this run, whose findings it stales instead (repo#2657).
-    const removed = new Set(input.pages.filter((p) => p.statusCode === 404).map((p) => p.url));
+    const removed = new Set(input.pages!.filter((p) => p.statusCode === 404).map((p) => p.url));
     expect(removed.size).toBeGreaterThan(0);
     const full = new Map<string, RuleRunResult>(
       Object.entries(input.ruleResults).map(([id, r]) => [
