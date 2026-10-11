@@ -17,6 +17,8 @@ const STORE_TOUCHING = new RegExp(
   [
     // A command run: `audit.run!(…)`, `report.run?.(…)`.
     String.raw`\b(?:audit|report|crawl)\.run(?:!|\?\.)?\(`,
+    // citty's runner, which is how most command tests drive the real command.
+    String.raw`\brunCommand\(`,
     String.raw`\b(?:publishReport|savePublishedReportInfo|runAudit|runCrawl|createStorage|getStoredAudit|getStoredAuditByPrefix|getLatestAudit|listStoredAudits)\(`,
     // The local MCP tools that audit or read the projects: `name: "audit_website"`.
     String.raw`name:\s*"(?:audit_website|quick_check|list_entities|get_entity|get_entity_graph|get_entity_findings|compare_entities)"`,
@@ -70,6 +72,9 @@ describe("CLI tests never touch the real ~/.squirrel (#626)", () => {
       "x.test.ts",
     ]);
     expect(unisolated(file(`await report.run?.({ args })`))).toEqual([
+      "x.test.ts",
+    ]);
+    expect(unisolated(file(`await runCommand(command, { rawArgs })`))).toEqual([
       "x.test.ts",
     ]);
     expect(unisolated(file(`await publishReport(r, {})`))).toEqual([

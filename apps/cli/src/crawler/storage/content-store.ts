@@ -764,13 +764,12 @@ export class ContentStore {
 let globalContentStore: ContentStore | null = null;
 
 export function getGlobalContentStore(): ContentStore {
-  const desiredPath = process.env.SQUIRREL_CONTENT_STORE_PATH;
+  // Through the paths module (SQUIRREL_CONTENT_STORE_PATH, else the default), so
+  // it is the one place the store's location is decided: a test that redirects
+  // the paths module cannot be bypassed by an env var it inherited (#626).
+  const desiredPath = getContentStorePath();
 
-  if (
-    globalContentStore &&
-    desiredPath &&
-    globalContentStore.getPath() !== desiredPath
-  ) {
+  if (globalContentStore && globalContentStore.getPath() !== desiredPath) {
     globalContentStore.close();
     globalContentStore = null;
   }

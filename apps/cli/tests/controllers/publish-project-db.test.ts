@@ -17,6 +17,10 @@ import {
 } from "@/controllers/report";
 import { savePublishedReportInfo } from "@/controllers/report/publish";
 import { resolveProjectDbPath } from "@/crawler/storage";
+import {
+  closeGlobalContentStore,
+  getGlobalContentStore,
+} from "@/crawler/storage/content-store";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
 import { getProjectsPath } from "@/self/paths";
 
@@ -205,6 +209,23 @@ describe("savePublishedReportInfo (#625)", () => {
       "public"
     );
     expect(await publishedIn("shop-test", crawlId)).toBeNull();
+  });
+});
+
+describe("the scratch home holds against an inherited env override (#626)", () => {
+  test("SQUIRREL_CONTENT_STORE_PATH does not move the shared store out of it", () => {
+    const prior = process.env.SQUIRREL_CONTENT_STORE_PATH;
+    process.env.SQUIRREL_CONTENT_STORE_PATH = join(home.dir, "elsewhere.db");
+    try {
+      closeGlobalContentStore();
+      expect(getGlobalContentStore().getPath()).toBe(
+        join(home.root, "content-store.db")
+      );
+    } finally {
+      closeGlobalContentStore();
+      if (prior === undefined) delete process.env.SQUIRREL_CONTENT_STORE_PATH;
+      else process.env.SQUIRREL_CONTENT_STORE_PATH = prior;
+    }
   });
 });
 
