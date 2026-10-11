@@ -1,5 +1,6 @@
 // Category-grouped issues derived from rule results
 
+import type { CheckTallies } from "@squirrelscan/core-contracts";
 import { PUBLISH_LIMITS } from "@squirrelscan/core-contracts/limits";
 import type { ReportRuleResult, CheckItem, CheckResult } from "./types";
 import { KEY_SEPARATOR } from "./constants";
@@ -133,12 +134,16 @@ function attributeItemToPage(item: CheckItem, pageUrl: string | undefined): Chec
  * Only includes rules with issues (fail or warn)
  *
  * Accepts both Map and Record for compatibility with CLI and API.
+ *
+ * `checkTallies` is a capped published report's own (squirrelscan/repo#2657):
+ * its rows hold no passes, so the "fixed on all pages" note reads them there.
  */
 export function groupIssuesByCategory(
   ruleResults:
     | Record<string, ReportRuleResult>
     | Record<string, { meta: Record<string, unknown>; checks: Array<Record<string, unknown>> }>
-    | Map<string, ReportRuleResult>
+    | Map<string, ReportRuleResult>,
+  checkTallies?: CheckTallies
 ): GroupedCategory[] {
   const categoryMap = new Map<string, GroupedRule[]>();
   const entries =
@@ -183,6 +188,7 @@ export function groupIssuesByCategory(
     // same idiom as every other field read in this loop.
     const mixedProvenanceNote = ruleMixedProvenanceNote(
       result.checks as unknown as MixedProvenanceCheck[],
+      checkTallies?.[ruleId],
     );
     for (const check of result.checks) {
       const status = (check as { status: string }).status;

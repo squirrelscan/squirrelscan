@@ -484,7 +484,9 @@ export interface AuditReport {
    * This run's evaluated-check counts per rule and check name (repo#2656),
    * counted BEFORE the publish capper sampled `ruleResults` and dropped the
    * per-page pass rows. Present on capped published reports only. See
-   * {@link CheckTallies}. Transport for the server rescore: never rendered.
+   * {@link CheckTallies}. Read by the server rescore in place of the dropped
+   * rows (repo#2657), and by the "fixed on all pages checked this run" note for
+   * the passes the rows no longer list. Never rendered as data.
    */
   checkTallies?: CheckTallies;
   /**
@@ -582,16 +584,18 @@ export interface AuditReport {
  *
  * The fields are the scorer's own (`IssueTally` in audit-engine scoring.ts),
  * computed by the same function over the unfolded checks, so summing a rule's
- * check names gives exactly the tally `calculateHealthScore` folds for it:
+ * check names gives exactly the fresh tally the server's union rescore folds for
+ * it from an uncapped report:
  *  - `passed` / `warnings` / `failed`: check counts. Warns of a severity-"info"
  *    rule are advisory and already excluded, as the scorer excludes them.
  *  - `warnUnits` / `failUnits`: the item-aware density units (#683).
  *  - `skipped`: checks that did not evaluate (not scored; for display).
  *
  * Only FRESH checks are counted: a carried or unrendered check is a replay of
- * an earlier audit, which the server re-derives from its own store. Zero fields
- * are omitted, so a clean class is `{ "passed": 49 }`. Bounded by rules × check
- * names, never by pages.
+ * an earlier audit, which the server re-derives from its own store. Checks on a
+ * page that returned 404/410 this run are left out too, as the server's rescore
+ * leaves them out (repo#2657). Zero fields are omitted, so a clean class is
+ * `{ "passed": 49 }`. Bounded by rules × check names, never by pages.
  */
 export interface CheckTally {
   passed?: number;

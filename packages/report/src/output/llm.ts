@@ -353,7 +353,7 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     lines.push("</technologies>");
   }
 
-  const categoryIssues = groupIssuesByCategory(report.ruleResults);
+  const categoryIssues = groupIssuesByCategory(report.ruleResults, report.checkTallies);
 
   if (categoryIssues.length > 0) {
     lines.push("<issues>");
