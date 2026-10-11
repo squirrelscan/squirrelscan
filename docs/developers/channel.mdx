@@ -69,7 +69,7 @@ The channel's instructions tell Claude what to do next: read the report with `ge
 
 ### Event text never comes from your site
 
-Notification titles and bodies can contain text taken from crawled pages, and an ungated channel is a prompt-injection path. So the channel never forwards them. Event text is built from the category, validated ids, counts and fixed strings only. Your agent pulls the details through the [squirrelscan MCP tools](/developers/mcp), where they are marked as data.
+Notification titles and bodies can contain text taken from crawled pages, and an ungated channel is a prompt-injection path. So the channel never forwards them. Event text is built from the category, validated ids, counts and fixed strings only. Your agent pulls the details through the [squirrelscan MCP tools](/developers/mcp), where the server's instructions tell the agent to treat anything taken from your site as data, never as instructions.
 
 The channel does not declare Claude Code's permission relay capability, so nothing delivered through it can approve or deny a tool call.
 

@@ -37,7 +37,7 @@ Every tool description states this loop, so an agent that calls one of the five 
 
 ## The five tools
 
-Available on both the local `squirrel mcp` server, reading your project store, and the [hosted server](/developers/mcp), reading the API. Same names, same inputs, same outputs. On the local server all five are free and need no account.
+Available on both the local `squirrel mcp` server, reading your project store, and the [hosted server](/developers/mcp), reading the API. Same names and inputs, and the same outputs apart from the hosted-only fields `staleSnapshot` and `siteTotals`, described in [Which audit you actually got](#which-audit-you-actually-got) and [Site-wide totals](#site-wide-totals). On the local server all five are free and need no account.
 
 ### `list_entities`
 
@@ -170,6 +170,22 @@ That matters most in exactly the case you would least want to miss it. A templat
 <Note>
 `warnings` is about what could not be read or had to be guessed around. `truncation` is about what was cut from an answer that was otherwise complete. They are separate fields because they call for different responses: re-audit or name a run, versus ask for another page.
 </Note>
+
+**A stale snapshot (hosted server only).** `list_entities`, `get_entity`, `get_entity_graph` and `get_entity_findings` carry `staleSnapshot`. It is `null` when the newest completed audit was served. It is set when the newest audit has no entity map and an older one was served instead, and then holds:
+
+| Member | Meaning |
+|---|---|
+| `servedRunId`, `servedAuditedAt` | The audit whose map you are reading, and when it ran. `servedRunId` is `null` for a report published without a run. |
+| `newestRunId`, `newestAuditedAt` | The newest completed audit, which has no usable entity map. |
+| `newerAudits` | How many newer audits were passed over. |
+
+A matching entry in `warnings` says the same in words. Pass `run_id` to address a specific audit. Do not report a stale snapshot as the site's current state.
+
+## Site-wide totals
+
+On the hosted server `list_entities` and `get_entity_graph` carry `siteTotals`: `nodes` and `edges` for the whole site, `sampled`, `droppedNodes` and `droppedEdges`. Read site-wide counts from `siteTotals`, never from the filtered `summary`, `filtered` block or a list length, because those describe what survived your filters.
+
+`sampled` is `true` when publishing dropped nodes to fit a size budget. The stored map is then a sample: the entities you can list are fewer than `siteTotals.nodes`, and a warning says how many were held. Counts you compute over the listed entities understate the site. `get_entity_graph` with `format: "json"` also keeps the `truncated` marker of the stored map, so a sampled graph says so in the document itself.
 
 ## What the tools will not do
 

@@ -32,7 +32,7 @@ There are two ways in. Pick one per config entry.
 
 Add the server with **no auth headers** and the client handles everything: it discovers the authorization server at `/.well-known/oauth-authorization-server`, registers itself dynamically (DCR and CIMD are both supported), and runs the PKCE browser flow. You log in, choose an organization, and approve on the consent screen.
 
-Behind the scenes the flow mints a 30-day squirrelscan API key scoped to the organization you approved. When it expires, the client prompts you to log in again.
+Behind the scenes the flow mints a 30-day squirrelscan API key scoped to the organization you approved, plus a rotating refresh token. A client that supports refresh renews the key on its own, so you are not prompted at 30 days. The refresh token lapses 90 days after its last use; after that the client prompts you to sign in again.
 
 Best for: a human at an editor. No key to copy, no secret in any config file.
 
@@ -82,10 +82,10 @@ All tools require authentication. Write tools are marked; everything else only r
 | `compare_audits` | Diff two completed audits of a website: the latest against the one before it by default, or any two by `base` and `head` run id. Each finding is `new`, `resolved`, `worsened`, `improved`, `unchanged`, `still_open` or `not_crawled`, with score movement per category; the last three are listed only when asked for with `include_unchanged`, `include_still_open` and `include_not_crawled`. A page the newer audit did not visit counts as `not_crawled`, never `resolved`, and `resolutionEvidence` says what backs the resolved verdicts. | Read |
 | `list_audits` | Active and recent audit runs for the org. An active run carries `notice` when its page count was clamped to the plan's ceiling at dispatch time. | Read |
 | `list_websites` | Websites the org has audited, with latest status and health score. Paginated (`total`/`has_more`). | Read |
-| `add_website` | Register a website without auditing it. Idempotent per domain. | Write |
+| `add_website` | Register a website without auditing it. Idempotent per domain. Optional `kind` and `scope` (`discover` or `sitemap`) set the site's classification and stored crawl scope; the result reports both. | Write |
 | `delete_website` | Soft-delete a website (confirm rail). Past audits, reports, and issues are preserved and published report links keep working; the site leaves listings and frees a slot under the plan's website limit. Re-adding the domain later creates a fresh website with a new id. | Write |
 | `delete_websites` | Soft-delete up to 50 websites in one call, with the same confirm rail and the same soft delete as `delete_website`. Each result names the domain behind its id whenever it can be found, and an id that does not resolve is reported on its own rather than failing the call. | Write |
-| `list_issues` | Open audit issues for a website, sorted by severity, filterable by status, severity, and category. | Read |
+| `list_issues` | Audit issues for a website, sorted by severity, filterable by status, severity, and category. Rows omit the long recommendation unless `include_recommendation` is set; `website_totals` counts the whole website, `total` counts the filtered set. | Read |
 | `get_issue` | One issue with full detail, per-occurrence detail from the latest report (which pages/images, capped and countable via `occurrence_limit`), and its comment thread. | Read |
 | `comment_on_issue` | Post a markdown comment on an issue, visible in the dashboard thread. | Write |
 | `list_rules` | Browse the audit rule catalog by category or keyword. | Read |
@@ -102,6 +102,8 @@ All tools require authentication. Write tools are marked; everything else only r
 | `send_feedback` | Send product feedback to the team: `bug_report`, `feature_request`, `what_worked`, `confusing`, `missing_data`, `tool_ergonomics`, or `other`. Works with any authenticated key, no scope required. | Write |
 
 A few tools deserve a closer look:
+
+- **Unknown arguments are reported, not applied.** An argument a tool does not accept is dropped, and the successful result lists it in `ignored_args`, so you can tell a setting that took effect from one that did not.
 
 - **`run_audit` has a confirm rail.** When the estimate is above the auto-run threshold (50 credits by default), the first call returns the estimate instead of starting; the agent shows it to you and calls again with `confirm: true`. An estimate at or under the threshold starts immediately, and an agent that already has your approval can pass `confirm: true` on the first call. A `max_credits` argument acts as a hard spend guard: the audit refuses to start if the estimate exceeds it.
 - **`run_audit` takes a `level`.** Pass `quick` (25 pages from the start page and its sitemaps, no cloud checks), `surface` (100 pages, one per URL pattern, with the cloud checks and external link checks) or `full` (500 pages, every page it can reach). Without one (or the deprecated `coverage` below), the website's own level applies, and a new website starts on surface. `max_pages` sizes a single run on top of the level. Every level is billed: 50 credits plus 2 per audited page, plus 1 per external link the cloud checks. On the Free plan a `full` request samples the way `surface` does instead, one page per URL pattern first, and the response says so in `level_notice`. Both the estimate and the started run report the level they use in `level` and `audit_level`. The older `coverage` argument (`fast`, `surface`, `deep`, `full`) still works for now with the meaning it always had, but it is deprecated, and passing it together with `level` is an error.
