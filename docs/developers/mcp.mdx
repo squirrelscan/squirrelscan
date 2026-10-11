@@ -4,7 +4,7 @@ description: "Connect any MCP client to the hosted squirrelscan MCP server: clou
 icon: "plug"
 ---
 
-squirrelscan runs a hosted [Model Context Protocol](https://modelcontextprotocol.io) server in the cloud. Point any MCP client at it and your agent gets tools for running cloud audits, reading and comparing reports, working the per-website issue tracker, catching up on notifications, sending product feedback, and browsing the 260+ rule catalog. Nothing to install, nothing to keep running:
+squirrelscan runs a hosted [Model Context Protocol](https://modelcontextprotocol.io) server in the cloud. Point any MCP client at it and your agent gets tools for running cloud audits, reading and comparing reports, working the per-website issue tracker, catching up on notifications, sending product feedback, and browsing the 300+ rule catalog. Nothing to install, nothing to keep running:
 
 ```text
 https://mcp.squirrelscan.com/mcp
@@ -69,7 +69,7 @@ All tools require authentication. Write tools are marked; everything else only r
 | Tool | What it does | Access |
 |------|--------------|--------|
 | `whoami` | Identify the active credentials: org, plan, auth kind, credit balance. Call it first. | Read |
-| `run_audit` | Run a cloud audit of a URL (crawl + 260+ rule analysis + report) at an [audit level](/guides/audit-levels). Estimate and confirm rail, see [Credits](#credits). Registers the website automatically on first audit. If the requested page count exceeds the org's plan ceiling, the audit still runs at the plan's max (never a hard error) and the response carries a `notice` field saying so. | Write, spends credits |
+| `run_audit` | Run a cloud audit of a URL (crawl + 300+ rule analysis + report) at an [audit level](/guides/audit-levels). Estimate and confirm rail, see [Credits](#credits). Registers the website automatically on first audit. If the requested page count exceeds the org's plan ceiling, the audit still runs at the plan's max (never a hard error) and the response carries a `notice` field saying so. | Write, spends credits |
 | `get_audit_status` | Poll a running audit by `run_id` until it completes. While running, the response includes a `progress` field (phase, message, page/link counts) when available. `notice` is present when the run's page count was clamped to the plan's ceiling at dispatch time. | Read |
 | `get_report` | Fetch a finished report: `summary` (JSON scores, top issues grouped by rule with fix text deduped into a `rules` dict, and score/issue-count history across prior audits), `llm` (compact text for agent context), or `markdown` (full report). | Read |
 | `compare_audits` | Diff two completed audits of a website: the latest against the one before it by default, or any two by `base` and `head` run id. Each finding is `new`, `resolved`, `worsened`, `improved`, `unchanged`, `still_open` or `not_crawled`, with score movement per category; the last three are listed only when asked for with `include_unchanged`, `include_still_open` and `include_not_crawled`. A page the newer audit did not visit counts as `not_crawled`, never `resolved`, and `resolutionEvidence` says what backs the resolved verdicts. | Read |

@@ -625,9 +625,9 @@ export function buildCompactResolutionSignal(
   const whole = fit(all);
   if (whole) return whole;
 
-  // TODO(repo#2669): past here the budget bites. The API reports it to Sentry on
-  // decode (`crawledComplete: false`, or keys in `truncated` the count caps did
-  // not put there) with page and key counts only, never URLs.
+  // Past here the budget bites. The API reports it to Sentry on decode
+  // (repo#2669: `crawledComplete: false`, or keys in `truncated`) with page and
+  // key counts only, never URLs.
 
   // Over budget. Two ways to give something up, scored by what the merge can
   // still decide: listed pages × authoritative keys.

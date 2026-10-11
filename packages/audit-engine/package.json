@@ -6,6 +6,7 @@
     ".": "./src/index.ts",
     "./smart-audits": "./src/smart-audits.ts",
     "./publish-cap": "./src/publish-cap.ts",
+    "./published-checks": "./src/published-checks.ts",
     "./entity-map": "./src/entity-map/index.ts",
     "./entity-map/collect": "./src/entity-map/collect.ts"
   },

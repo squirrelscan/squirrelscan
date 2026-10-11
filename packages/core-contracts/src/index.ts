@@ -643,6 +643,12 @@ export interface PublishedReportDetail {
    */
   classesReduced?: number;
   /**
+   * UTF-8 bytes the whole body would have been with every class at the full
+   * sample: the "before" of a reduced body, whose own size is the "after".
+   * Set only when `tier` is past 0 (repo#2669 reports the pair).
+   */
+  fullSampleBytes?: number;
+  /**
    * Where the full per-page detail is: `local` = the project database on the
    * machine that ran the audit (`squirrel report --format json`); `findings` =
    * the cloud findings store. Absent when the producer did not say.
