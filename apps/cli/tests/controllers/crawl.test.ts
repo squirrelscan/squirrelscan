@@ -4,6 +4,11 @@ import { describe, expect, test } from "bun:test";
 
 import { runCrawl, type CrawlResult } from "../../src/controllers/crawl";
 import { domainToProjectName } from "../../src/crawler/storage";
+import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
+
+// #626: the invalid-url cases return before any store opens, but a crawl that
+// got further would write the projects dir; keep it out of the real home.
+isolateSquirrelHome("squirrel-crawl-controller");
 
 describe("runCrawl", () => {
   test("returns error for empty URL", async () => {

@@ -16,6 +16,7 @@ import {
 } from "@/audit/report";
 import { OUTPUT_FORMATS_HELP } from "@/constants";
 import {
+  type AuditSource,
   loadReport,
   validateFormat,
   listStoredAudits,
@@ -28,6 +29,7 @@ import {
   publishReport,
   type ReportVisibility,
 } from "@/controllers/report/publish";
+import { domainToProjectName, resolveProjectDbPath } from "@/crawler/storage";
 import {
   LOCAL_HOST_NOT_PUBLISHED_LINE,
   nonPublicHostLabel,
@@ -146,6 +148,20 @@ function printAuditList(
   console.log('Use "squirrel report <audit-id>" to view a specific audit.');
 }
 
+/**
+ * The site's default project database, for a report read from a JSON file.
+ * Undefined when the url names no usable project (a hostless `file:` url
+ * resolves to ""): the report is already published by then, and the local mark
+ * is the part that may be skipped, never the run that may crash (#625).
+ */
+function defaultProjectDbPath(baseUrl: string): string | undefined {
+  try {
+    return resolveProjectDbPath(domainToProjectName(baseUrl));
+  } catch {
+    return undefined;
+  }
+}
+
 export const report = defineCommand({
   meta: {
     name: "report",
@@ -262,31 +278,33 @@ export const report = defineCommand({
       return;
     }
 
-    const resolveAuditRef = async (ref: string) => {
+    const resolveAuditRef = async (ref: string, source?: AuditSource) => {
       if (isUUID(ref)) {
-        return await getStoredAudit(ref);
+        return await getStoredAudit(ref, undefined, source);
       }
       if (isShortId(ref)) {
-        return await getStoredAuditByPrefix(ref);
+        return await getStoredAuditByPrefix(ref, undefined, source);
       }
 
       let domain = ref;
       if (!domain.startsWith("http://") && !domain.startsWith("https://")) {
         domain = `https://${domain}`;
       }
-      return await getLatestAudit(domain);
+      return await getLatestAudit(domain, undefined, source);
     };
 
     const isDiffMode = Boolean(args.diff || args.regressionSince);
 
     // Load report from source
     let loadResult;
+    // The database a stored audit came from; `--publish` marks it there (#625).
+    const source: AuditSource = {};
 
     if (args.input) {
       // Load from JSON file (sync)
       loadResult = loadReport(args.input);
     } else if (args.id) {
-      loadResult = await resolveAuditRef(args.id);
+      loadResult = await resolveAuditRef(args.id, source);
 
       if (!loadResult.ok) {
         console.error(loadResult.error.message);
@@ -295,7 +313,7 @@ export const report = defineCommand({
       }
     } else {
       // Load latest audit globally (async)
-      loadResult = await getLatestAudit();
+      loadResult = await getLatestAudit(undefined, undefined, source);
 
       if (!loadResult.ok) {
         console.error("No audits found. Run 'squirrel audit <url>' first");
@@ -488,9 +506,13 @@ export const report = defineCommand({
       const scheduleLine = scheduleSummaryLine(publishResult.data.schedule);
       if (scheduleLine) console.error(scheduleLine);
 
-      // Save published report info for tracking in report --list
-      if (reportData.crawlId) {
+      // Save published report info for tracking in report --list, in the
+      // database the audit was loaded from. A report read from a JSON file has
+      // none, so it is marked in its site's default project when that holds it.
+      const dbPath = source.dbPath ?? defaultProjectDbPath(reportData.baseUrl);
+      if (reportData.crawlId && dbPath) {
         await savePublishedReportInfo(
+          dbPath,
           reportData.crawlId,
           publishResult.data.id,
           publishResult.data.url,

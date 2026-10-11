@@ -19,44 +19,19 @@
 // part of it; the contract is that nothing hands the ADDRESS to a hosted
 // runner. The public-host control below is what proves the gate is a gate and
 // not an outage.
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  spyOn,
-  test,
-} from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { audit } from "@/cli/commands/audit";
-import * as pathsModule from "@/self/paths";
+
+import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
 
 // #2182: a SUCCESSFUL publish now stamps `first_publish_at` in the user
 // settings (controllers/report/publish.ts), and this file stubs fetch into
 // success responses — so without isolation the public-host control below can
-// write to the developer's REAL ~/.squirrel/settings.json. homedir() is fixed
-// at process start in Bun, so $HOME cannot redirect it; spy on the paths
-// module's getSettingsPath export instead, exactly as tests/self/settings.test.ts
-// does and for the same reason.
-const settingsHome = mkdtempSync(join(tmpdir(), "squirrel-publish-settings-"));
-let restoreSettingsPath: () => void = () => {};
-
-beforeAll(() => {
-  const spy = spyOn(pathsModule, "getSettingsPath").mockImplementation(() =>
-    join(settingsHome, "settings.json")
-  );
-  restoreSettingsPath = () => spy.mockRestore();
-});
-
-afterAll(() => {
-  restoreSettingsPath();
-  rmSync(settingsHome, { recursive: true, force: true });
-});
+// write to the developer's REAL ~/.squirrel/settings.json.
+// homedir() is fixed at process start in Bun, so $HOME cannot redirect it;
+// `isolateSquirrelHome` moves every squirrel path instead (#626).
+isolateSquirrelHome("squirrel-audit-host");
 
 /** Thrown in place of process.exit, so a command exit cannot kill the runner. */
 class ExitSignal extends Error {
@@ -69,13 +44,9 @@ const originalFetch = globalThis.fetch;
 const originalExit = process.exit;
 const originalEnv = { ...process.env };
 let requested: string[] = [];
-let home: string;
 
 beforeEach(() => {
   requested = [];
-  home = mkdtempSync(join(tmpdir(), "squirrel-audit-test-"));
-  // Never touch the real ~/.squirrel.
-  process.env.HOME = home;
   process.env.SQUIRREL_API_TOKEN = "sqcli_test_token";
   process.env.SQUIRREL_DISABLE_TELEMETRY = "1";
   // File-local, restored below. `safeExit` ends in process.exit, and a command
@@ -112,7 +83,6 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
   process.exit = originalExit;
   process.env = { ...originalEnv };
-  rmSync(home, { recursive: true, force: true });
 });
 
 /** Run the real command to completion, swallowing only its exit. */
