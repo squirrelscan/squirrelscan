@@ -28,11 +28,14 @@ export function registerSkills(server: McpServer): void {
     extensions: { [SKILLS_EXTENSION]: {} },
   });
 
+  // The bundler refuses a skill without a description; a non-string one is
+  // left out rather than served as "undefined".
   const descriptions = new Map(
-    AGENT_SKILLS_BUNDLE.map((skill) => [
-      skill.name,
-      String(skill.frontmatter.description),
-    ])
+    AGENT_SKILLS_BUNDLE.flatMap((skill) =>
+      typeof skill.frontmatter.description === "string"
+        ? [[skill.name, skill.frontmatter.description] as const]
+        : []
+    )
   );
   for (const file of agentSkillFiles().values()) {
     const isSkillMd = file.path === "SKILL.md";
@@ -42,21 +45,33 @@ export function registerSkills(server: McpServer): void {
       file.uri,
       {
         mimeType: file.mimeType,
-        ...(isSkillMd ? { description: descriptions.get(file.skill) } : {}),
+        ...(isSkillMd && descriptions.has(file.skill)
+          ? { description: descriptions.get(file.skill) }
+          : {}),
         cacheHint: SKILLS_CACHE,
       },
       async () => ({ contents: [file.contents] })
     );
   }
 
+  // One page: the listing never returns `nextCursor`, so any cursor a client
+  // sends is not one this server issued.
   server.server.setRequestHandler(
     "skills/list",
     { params: z.looseObject({ cursor: z.string().optional() }) },
-    async () => ({
-      resultType: "complete",
-      skills: await agentSkillEntries(),
-      ...SKILLS_CACHE,
-    })
+    async ({ cursor }) => {
+      if (cursor !== undefined) {
+        throw new ProtocolError(
+          ProtocolErrorCode.InvalidParams,
+          `Unknown cursor: skills/list returns every skill in one page`
+        );
+      }
+      return {
+        resultType: "complete",
+        skills: await agentSkillEntries(),
+        ...SKILLS_CACHE,
+      };
+    }
   );
 
   server.server.setRequestHandler(

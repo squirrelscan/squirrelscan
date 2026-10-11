@@ -92,7 +92,9 @@ describe("the Skills extension on squirrel mcp", () => {
     const client = await modernClient();
     expect(client.getProtocolEra()).toBe("modern");
     const capabilities = client.getServerCapabilities();
-    expect(capabilities?.resources).toBeDefined();
+    // registerSkills' explicit `resources: {}` merges with what registerResource
+    // declares rather than replacing it.
+    expect(capabilities?.resources).toMatchObject({ listChanged: true });
     expect(capabilities?.extensions?.[SKILLS_EXTENSION]).toEqual({});
   }, 30_000);
 
@@ -157,6 +159,20 @@ describe("the Skills extension on squirrel mcp", () => {
     }
     await expect(
       client.readResource({ uri: "skill://squirrelscan/../../etc/passwd" })
+    ).rejects.toMatchObject({ code: -32602 });
+  }, 30_000);
+
+  test("one page, sorted by name: a cursor is refused with -32602", async () => {
+    const client = await modernClient();
+    const { skills } = await listSkills(client);
+    const names = skills.map((s) => s.frontmatter.name);
+    expect(names).toEqual([...names].sort());
+    expect("nextCursor" in (await listSkills(client))).toBe(false);
+    await expect(
+      client.request(
+        { method: "skills/list", params: { cursor: "page-2" } },
+        Result
+      )
     ).rejects.toMatchObject({ code: -32602 });
   }, 30_000);
 

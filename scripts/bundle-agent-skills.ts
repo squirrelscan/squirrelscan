@@ -13,6 +13,9 @@
  *   bun run scripts/bundle-agent-skills.ts [--from <skills checkout>]
  *   bun run scripts/bundle-agent-skills.ts --check   # exit 1 when stale
  *
+ * `--out <file>` writes (or checks) another file than the committed bundle,
+ * which is how the bundler's own test runs it against a synthetic checkout.
+ *
  * `--from` defaults to `../skills`, where the squirrelscan monorepo mounts the
  * skills repo next to this one.
  */
@@ -31,9 +34,14 @@ interface Manifest {
 }
 
 const root = resolve(import.meta.dir, "..");
-const fromIndex = process.argv.indexOf("--from");
-const skillsRoot = resolve(fromIndex > 0 ? process.argv[fromIndex + 1]! : join(root, "..", "skills"));
-const target = join(root, "packages", "utils", "src", "agent-skills", "bundle.generated.ts");
+function flag(name: string): string | undefined {
+  const index = process.argv.indexOf(name);
+  return index > 0 ? process.argv[index + 1] : undefined;
+}
+const skillsRoot = resolve(flag("--from") ?? join(root, "..", "skills"));
+const target = resolve(
+  flag("--out") ?? join(root, "packages", "utils", "src", "agent-skills", "bundle.generated.ts"),
+);
 
 const MIME_TYPES: Record<string, string> = {
   ".md": "text/markdown",

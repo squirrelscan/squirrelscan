@@ -93,6 +93,7 @@ export function readAgentSkillFile(uri: string): SkillFileContents | undefined {
 }
 
 async function sha256(bytes: Uint8Array): Promise<string> {
+  // The cast only satisfies TS's lib typing of `Uint8Array<ArrayBufferLike>`.
   const digest = await crypto.subtle.digest("SHA-256", bytes as BufferSource);
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -106,11 +107,15 @@ export async function buildSkillEntries(
   bundle: readonly BundledSkill[] = AGENT_SKILLS_BUNDLE,
 ): Promise<SkillEntry[]> {
   const served = agentSkillFiles(bundle);
+  const sorted = [...bundle].sort((a, b) => a.name.localeCompare(b.name));
   return Promise.all(
-    bundle.map(async (skill) => {
+    sorted.map(async (skill) => {
       const resources: SkillResource[] = await Promise.all(
         skill.files.map(async (file) => {
-          const { uri, bytes } = served.get(skillUri(skill.name, file.path))!;
+          // Built from the same bundle just above, so every file is present.
+          const servedFile = served.get(skillUri(skill.name, file.path));
+          if (!servedFile) throw new Error(`agent skills: ${skill.name}/${file.path} missing`);
+          const { uri, bytes } = servedFile;
           return { uri, digest: `sha256:${await sha256(bytes)}`, size: bytes.byteLength };
         }),
       );
