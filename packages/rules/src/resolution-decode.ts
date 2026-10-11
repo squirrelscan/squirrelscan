@@ -181,9 +181,12 @@ function inflateCapped(base64: string, maxBytes: number): string {
 
 // What a valid payload can hold, from the limits the decoder checks it against:
 // the root, its five lists, and one array per key of `failing`, `notEvaluated`
-// and `removed` (containers); one separator per list element, key and field.
+// and `removed` (containers); one separator per list element, key and field;
+// one string per URL in `urls` and `other`, per key of the three maps and of
+// `truncated`, and per field name (strings).
 const limits = RESOLUTION_SIGNAL_LIMITS;
 const MAX_CONTAINERS = 3 * limits.maxChecks + 16;
+const MAX_STRINGS = limits.maxCrawledUrls + limits.maxHashesTotal + 4 * limits.maxChecks + 16;
 const MAX_SEPARATORS =
   limits.maxCrawledUrls + 4 * limits.maxHashesTotal + 3 * limits.maxChecks + 16;
 /** Root, a map, its arrays. */
@@ -191,12 +194,14 @@ const MAX_DEPTH = 3;
 
 /**
  * Refuse JSON whose shape no valid payload has, before `JSON.parse` builds it:
- * a few KB of deflated `{},` under an unknown key would otherwise allocate
- * millions of objects. One pass, strings skipped.
+ * a few KB of deflated `{},` (or `"a",`) under an unknown key would otherwise
+ * allocate hundreds of thousands to millions of values. One pass; a string's
+ * contents are skipped, the string itself is counted.
  */
 function assertParseBounded(json: string): void {
   let containers = 0;
   let separators = 0;
+  let strings = 0;
   let depth = 0;
   let inString = false;
   for (let i = 0; i < json.length; i++) {
@@ -206,8 +211,12 @@ function assertParseBounded(json: string): void {
       else if (c === 34 /* " */) inString = false;
       continue;
     }
-    if (c === 34) inString = true;
-    else if (c === 123 /* { */ || c === 91 /* [ */) {
+    if (c === 34 /* " */) {
+      inString = true;
+      if (++strings > MAX_STRINGS) {
+        throw new Error("compact resolution payload: shape past the signal's bounds");
+      }
+    } else if (c === 123 /* { */ || c === 91 /* [ */) {
       if (++containers > MAX_CONTAINERS || ++depth > MAX_DEPTH) {
         throw new Error("compact resolution payload: shape past the signal's bounds");
       }

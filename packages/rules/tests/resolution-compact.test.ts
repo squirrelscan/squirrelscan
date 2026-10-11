@@ -573,6 +573,10 @@ describe("decodeResolutionSignal refuses what it cannot bound", () => {
     // A flat list of more elements than every list together may hold.
     const zeros = raw(`{"v":1,"x":[${"0,".repeat(600_000)}0],"urls":[],"complete":true,"pages":0,"failing":{}}`);
     await expect(decodeResolutionSignal(zeros)).rejects.toThrow(/shape past/);
+    // More strings than every URL list and key together may hold: ~10 KB
+    // deflated, which JSON.parse would make 416k strings of.
+    const strings = raw(`{"v":1,"x":[${'"a",'.repeat(416_000)}"a"],"urls":[],"complete":true,"pages":0,"failing":{}}`);
+    await expect(decodeResolutionSignal(strings)).rejects.toThrow(/shape past/);
     // Nesting deeper than root → map → list.
     const deep = raw(`{"v":1,"x":[[[0]]],"urls":[],"complete":true,"pages":0,"failing":{}}`);
     await expect(decodeResolutionSignal(deep)).rejects.toThrow(/shape past/);
