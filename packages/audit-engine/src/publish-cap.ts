@@ -160,16 +160,22 @@ export interface CapReportOptions {
  * expected: the worst-case tests assert how far from it real shapes are.
  * Carries the largest sections so the cause is visible without the body.
  *
- * TODO(repo#2669): the producer that catches this reports it to Sentry (bytes,
- * budget, part, tier reached, page count, `largestSections`; never URLs or text).
+ * Everything on it is a size, a count or a top-level section name, never a URL
+ * or report text, so a producer can send it to its error reporting as is: the
+ * cloud container reports it to Sentry (repo#2669).
  */
 export class PublishedReportTooLargeError extends Error {
   readonly code = "PUBLISHED_REPORT_TOO_LARGE";
+  /** The fitter stage it failed at (`PublishedReportDetail.tier`). */
+  readonly tier: number;
+  /** Pages the report crawled. */
+  readonly pages: number;
   constructor(
     readonly bytes: number,
     readonly budgetBytes: number,
     readonly largestSections: Record<string, number>,
     readonly part: "skeleton" | "body" = "skeleton",
+    context: { tier?: number; pages?: number } = {},
   ) {
     super(
       `Published report ${part} is ${bytes} bytes, over its ${budgetBytes}-byte budget ` +
@@ -178,6 +184,8 @@ export class PublishedReportTooLargeError extends Error {
           .join(", ")})`,
     );
     this.name = "PublishedReportTooLargeError";
+    this.tier = context.tier ?? 0;
+    this.pages = context.pages ?? 0;
   }
 }
 
@@ -1158,6 +1166,11 @@ export function capReportForPublish<T extends CappableReport>(
   const tiers = REPORT_CAPS.tiers;
   const countsLevel = tiers.length - 1;
 
+  // The whole body at the full sample, set once step 3 has measured it; stamped
+  // on any body the fitter had to reduce, beside the size it reached.
+  let fullSampleBytes: number | undefined;
+  const pagesCrawled = Array.isArray(report.pages) ? report.pages.length : 0;
+
   const detailFor = (
     tier: number,
     extra: Partial<PublishedReportDetail> = {},
@@ -1167,11 +1180,14 @@ export function capReportForPublish<T extends CappableReport>(
     caps: { ...tiers[0]!, classesPerRule: REPORT_CAPS.classesPerRule },
     ...(options.fullDetail ? { fullDetail: options.fullDetail } : {}),
     ...(entityMapFailed ? { entityMapFailed: true as const } : {}),
+    ...(tier > 0 && fullSampleBytes !== undefined ? { fullSampleBytes } : {}),
     ...extra,
   });
 
   // Every body leaves through here, measured whole, transport included: the
   // ceiling is the invariant, checked rather than assumed (module note, step 4).
+  // A body past tier 0 says so in `detail`, which the API reports to Sentry
+  // (repo#2669), so the capper itself reports nothing.
   const finish = (body: Loose): CappedReport<T> => {
     const out = canonical({
       ...body,
@@ -1180,11 +1196,11 @@ export function capReportForPublish<T extends CappableReport>(
     });
     const bytes = bytesOf(out);
     if (bytes > ceiling) {
-      throw new PublishedReportTooLargeError(bytes, ceiling, largestSections(out), "body");
+      throw new PublishedReportTooLargeError(bytes, ceiling, largestSections(out), "body", {
+        tier: (body.detail as PublishedReportDetail | undefined)?.tier,
+        pages: pagesCrawled,
+      });
     }
-    // TODO(repo#2669): the producer reports a hard cap to Sentry from `detail`
-    // (tier past 0, `classesDropped`, `entityMapDropped`/`entityMapFailed`) with
-    // sizes and counts only; sampled for tier 1, every event past it.
     return out as unknown as CappedReport<T>;
   };
 
@@ -1253,7 +1269,9 @@ export function capReportForPublish<T extends CappableReport>(
     true,
     detailFor(0),
   );
-  if (bytesOf(first) <= budget) return finish(first);
+  const firstBytes = bytesOf(first);
+  if (firstBytes <= budget) return finish(first);
+  fullSampleBytes = firstBytes + transportBytes;
 
   // 4. Breadth first, then the same with the display sections at their minimum
   // and no entity map.
@@ -1348,7 +1366,13 @@ export function capReportForPublish<T extends CappableReport>(
     let room = budget - skeletonBytes;
     if (room < 0) {
       if (mode !== "empty") return undefined;
-      throw new PublishedReportTooLargeError(skeletonBytes, budget, largestSections(skeleton));
+      throw new PublishedReportTooLargeError(
+        skeletonBytes,
+        budget,
+        largestSections(skeleton),
+        "skeleton",
+        { tier: 3, pages: pagesCrawled },
+      );
     }
     // A rule's first admitted class also pays for the `checksTruncated` stamp
     // the rule carries if it loses any, so the stamps can never overrun.
@@ -1372,7 +1396,10 @@ export function capReportForPublish<T extends CappableReport>(
     const bytes = bytesOf(body);
     if (bytes > budget) {
       if (mode !== "empty") return undefined;
-      throw new PublishedReportTooLargeError(bytes, budget, largestSections(body));
+      throw new PublishedReportTooLargeError(bytes, budget, largestSections(body), "skeleton", {
+        tier: 3,
+        pages: pagesCrawled,
+      });
     }
     return body;
   }
