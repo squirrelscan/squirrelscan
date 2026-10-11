@@ -645,6 +645,59 @@ describe("capReportForPublish: the sample and its counts", () => {
     ).toBeLessThanOrEqual(RESOLUTION_PUBLISH_LIMITS.maxBytes);
   });
 
+  test("a smaller ceiling shrinks the transport's share with it", () => {
+    // 3,000 pages with long unique paths: a signal several times this ceiling's
+    // room if it kept the full share, and a skeleton of one small rule.
+    const urls = Array.from(
+      { length: 3_000 },
+      (_, i) =>
+        `${SITE}/${((i * 2_654_435_761) >>> 0).toString(36)}-${((i * 40_503) >>> 0).toString(16)}-${(i * 97 + 13).toString(36)}`,
+    );
+    const spec: RuleSpec = { id: "content/noisy", category: "content", severity: "warning", weight: 3, names: ["c"] };
+    const heavy: Report = {
+      ruleResults: {
+        [spec.id]: {
+          meta: meta(spec, "page"),
+          checks: urls.map((pageUrl, i) => ({
+            name: "c",
+            status: i % 2 ? ("fail" as const) : ("pass" as const),
+            message: "m",
+            pageUrl,
+          })),
+        },
+      },
+      pages: urls.map((url) => ({ url, statusCode: 200 })),
+    };
+    const maxBytes = 64 * 1024;
+    const small = capReportForPublish(heavy, { maxBytes });
+    expect(bytesOf(small)).toBeLessThanOrEqual(maxBytes - REPORT_CAPS.envelopeBytes);
+    const transport =
+      bytesOf(small.resolutionSignalCompact) +
+      RESOLUTION_SIGNAL_KEY_BYTES +
+      (small.pageStatuses ? bytesOf(small.pageStatuses) + PAGE_STATUSES_KEY_BYTES : 0);
+    expect(transport).toBeLessThanOrEqual(REPORT_CAPS.signalMaxBytes / 16);
+    // At the full ceiling the same crawl keeps a bigger signal.
+    expect(bytesOf(capReportForPublish(heavy).resolutionSignalCompact)).toBeGreaterThan(transport);
+  }, SLOW);
+
+  test("a report without pages publishes its statuses but no signal", () => {
+    const statuses = [{ url: pageUrl(3), status: 404 }];
+    const out = capReportForPublish({ ...input, pages: [], pageStatuses: statuses });
+    expect(out.resolutionSignalCompact).toBeUndefined();
+    expect(out.pageStatuses).toEqual(statuses);
+  });
+
+  test("a page listed twice keeps its removal, whatever the row order", () => {
+    const rows = (statuses: number[]) => ({
+      ...input,
+      pages: statuses.map((statusCode) => ({ url: pageUrl(1), statusCode })),
+    });
+    const a = capReportForPublish(rows([404, 200]));
+    const b = capReportForPublish(rows([200, 404]));
+    expect(a.pageStatuses).toEqual([{ url: pageUrl(1), status: 404 }]);
+    expect(JSON.stringify(b)).toBe(JSON.stringify(a));
+  });
+
   test("a signal already on the input never rides along, raw or compact", () => {
     const raw = buildResolutionSignal(input.ruleResults, ["https://elsewhere.test/"]);
     const out = capReportForPublish(

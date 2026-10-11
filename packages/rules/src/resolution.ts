@@ -98,7 +98,8 @@ function collectResolutionEvidence(
   crawledPageUrls: string[],
 ): ResolutionEvidence {
   const limits = RESOLUTION_SIGNAL_LIMITS;
-  // Insertion-ordered so the budgets clip deterministically (report order).
+  // Keys in report order, so the whole-signal budget clips deterministically;
+  // each key's pages are put in URL order once collected (below).
   const failing = new Map<string, Set<string>>();
   const truncated = new Set<string>();
   // Pages that produced an EVALUATED (pass/warn/fail) result for each key,
@@ -235,6 +236,11 @@ function collectResolutionEvidence(
     if (skipped) for (const url of skipped) ev.add(url);
   }
 
+  // Each failing set in URL order, so where a count cap cuts it and which page
+  // stands for a hash collision depend on the pages, not on the order the checks
+  // listed them in.
+  for (const [key, pages] of failing) failing.set(key, new Set([...pages].sort()));
+
   // Deduped by normalized URL (not by hash) — see `evaluated` above for why
   // hash identity must not decide membership.
   const crawledRaw = crawledPageUrls.slice(0, limits.maxCrawledUrls);
@@ -306,8 +312,8 @@ export function buildResolutionSignal(
   }
 
   // Enforce the per-check and whole-signal hash budgets. An over-budget set is
-  // CLIPPED to what fits (deterministic prefix — insertion order follows the
-  // report) and marked truncated: kept hashes still prove "still failing"
+  // CLIPPED to what fits (deterministic prefix: keys in report order, pages in
+  // URL order) and marked truncated: kept hashes still prove "still failing"
   // (positive carry evidence), while the truncated marker makes absence
   // non-authoritative server-side. Clipping (vs emptying) also keeps the
   // signal byte-FLAT in crawl size, preserving the #1167 O(rules × cap)

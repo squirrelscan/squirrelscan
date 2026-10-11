@@ -974,29 +974,33 @@ function withoutRemovedPages<R extends { checks: CheckResult[] }>(
  * The pages the scoring transport is built over, in URL order so what its byte
  * budget keeps does not depend on the order pages were crawled in. Statuses come
  * from one source, as {@link removedPageUrls} and the server read them: the
- * producer's `pageStatuses` when it sent them, else each page's own. A status
- * row for a page `pages` does not list is a page too, as the server merge counts
- * it.
+ * producer's `pageStatuses` when it sent them, else each page's own. A URL listed
+ * twice keeps a 404/410 over any other status (a removal is what both readers
+ * act on), else the higher status, so the order of the rows does not matter. A
+ * status row for a page `pages` does not list is a page too, as the server merge
+ * counts it.
  */
 function transportPages(report: CappableReport): Array<{ url: string; statusCode?: number }> {
   const sent = Array.isArray(report.pageStatuses);
+  const rank = (status: number): number => (REMOVED_STATUSES.has(status) ? 1_000 : 0) + status;
   const statusOf = new Map<string, number>();
-  for (const row of sent ? report.pageStatuses! : []) {
-    if (typeof row?.url === "string" && typeof row.status === "number") {
-      statusOf.set(row.url, row.status);
-    }
-  }
-  const pages: Array<{ url: string; statusCode?: number }> = [];
+  const note = (url: unknown, status: unknown): void => {
+    if (typeof url !== "string" || typeof status !== "number") return;
+    const held = statusOf.get(url);
+    if (held === undefined || rank(status) > rank(held)) statusOf.set(url, status);
+  };
   const listed = new Set<string>();
   for (const page of Array.isArray(report.pages) ? report.pages : []) {
-    const url = page?.url;
-    if (typeof url !== "string" || listed.has(url)) continue;
-    listed.add(url);
-    const status = sent ? statusOf.get(url) : page.statusCode;
-    pages.push(typeof status === "number" ? { url, statusCode: status } : { url });
+    if (typeof page?.url !== "string") continue;
+    listed.add(page.url);
+    if (!sent) note(page.url, page.statusCode);
   }
-  for (const [url, statusCode] of statusOf) if (!listed.has(url)) pages.push({ url, statusCode });
-  return pages.sort((a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0));
+  if (sent) for (const row of report.pageStatuses!) note(row?.url, row?.status);
+  for (const url of statusOf.keys()) listed.add(url);
+  return [...listed].sort().map((url) => {
+    const statusCode = statusOf.get(url);
+    return statusCode === undefined ? { url } : { url, statusCode };
+  });
 }
 
 // ── Assembly ────────────────────────────────────────────────────
@@ -1046,7 +1050,9 @@ function stableKey(value: unknown): string {
  * by pages crawled and cannot be sampled, so it is built first, to its own share
  * (REPORT_CAPS.signalMaxBytes), and the rest of the report gets what it leaves.
  * Build it from the FULL report: the signal is read off `pages` and the
- * pre-sample checks, and any signal already on the input is dropped.
+ * pre-sample checks, and any signal already on the input is dropped (the API
+ * reads a client's signal off the request it parsed, never off a recapped
+ * body). A report without `pages` publishes no signal.
  *
  * Throws {@link PublishedReportTooLargeError} when the skeleton alone does not
  * fit, or (never expected) when the finished body is over the ceiling.
@@ -1061,7 +1067,13 @@ export function capReportForPublish<T extends CappableReport>(
   const ruleIds = Object.keys(report.ruleResults).sort();
   // Built over rules, check names and pages in a fixed order, so what its byte
   // budget keeps does not depend on the order rules ran or pages were crawled in.
-  const { resolutionSignalCompact, pageStatuses } = buildPublishResolution(
+  // Its share scales with the ceiling, so a smaller `maxBytes` shrinks it too.
+  // A report with no `pages` (one already slimmed for publish) has lost its
+  // crawl list, so it publishes no signal rather than one claiming a crawl of
+  // just its status rows. Without a signal the server does not read the
+  // tallies either, so pass the capper the full report.
+  const share = Math.min(1, maxBytes / PUBLISHED_REPORT_MAX_BYTES);
+  const built = buildPublishResolution(
     Object.fromEntries(
       ruleIds.map((id) => {
         const rule = report.ruleResults[id]!;
@@ -1070,7 +1082,14 @@ export function capReportForPublish<T extends CappableReport>(
       }),
     ),
     transportPages(report),
+    {
+      maxBytes: Math.floor(REPORT_CAPS.signalMaxBytes * share),
+      maxPageStatusBytes: Math.floor(REPORT_CAPS.pageStatusesMaxBytes * share),
+    },
   );
+  const pageStatuses = built.pageStatuses;
+  const crawled = Array.isArray(report.pages) && report.pages.length > 0;
+  const resolutionSignalCompact = crawled ? built.resolutionSignalCompact : undefined;
   // The rows the server scores and shows: none on a page that 404'd or 410'd.
   const live = withoutRemovedPages(report.ruleResults, removedPageUrls(report));
   const checkTallies = buildCheckTallies(live);
