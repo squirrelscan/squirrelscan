@@ -18,6 +18,7 @@ import type {
   PageFindingRecord,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
+import { SCAN_TRUNCATED_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 import { buildResolutionSignal } from "@squirrelscan/rules/resolution";
 import {
   CHECK_NAME_ROBOTS_DISALLOW,
@@ -395,6 +396,76 @@ describe("rescore of a capped report (repo#2657)", () => {
     expect(comparable(rescored(capped))).toEqual(comparable(rescored(uncapped)));
     const open = await openUrls(cappedStore, "perf/ttfb", "ttfb");
     expect(open).toEqual(new Set(range(20, 30).map(url)));
+  });
+
+  test("a crawled page no check evaluated earns no synthetic pass from its carried finding", async () => {
+    // Page 10's ttfb warning is open. Run 2 crawls all 11 pages but every check
+    // skips every page, so the capped sample (10 pages per class) leaves page 10
+    // out of the payload: it must still not read as an uncrawled clean page.
+    const seed = await seeded(
+      fullReport(range(0, 11).map((i) => ({ i, ttfb: i === 10 ? ("slow" as const) : undefined }))),
+    );
+    const skipped = (name: string, i: number): CheckResult => ({
+      name,
+      status: "skipped",
+      message: "Not evaluated",
+      pageUrl: url(i),
+      skipReason: SCAN_TRUNCATED_SKIP_REASON,
+      details: { foldKey: SCAN_TRUNCATED_SKIP_REASON },
+    });
+    const base = fullReport(range(0, 11).map((i) => ({ i })));
+    const run2 = {
+      ...base,
+      ruleResults: {
+        "perf/ttfb": {
+          meta: base.ruleResults["perf/ttfb"]!.meta,
+          checks: range(0, 11).map((i) => skipped("ttfb", i)),
+        },
+        "core/meta-description": {
+          meta: base.ruleResults["core/meta-description"]!.meta,
+          checks: range(0, 11).map((i) => skipped("has-meta-description", i)),
+        },
+      },
+    };
+    const { uncapped, capped } = await bothWays(seed, "audit_2", run2);
+    expect(capped.coverage.carriedFindings).toBe(1);
+    expect(comparable(rescored(capped))).toEqual(comparable(rescored(uncapped)));
+  });
+
+  test("a carry the merge keeps on a page the tallies count adds nothing to the score", async () => {
+    // `/p` and `/p?id=1` are two pages. `/p?id=1` fails the item check in both
+    // runs with different items; `/p` is crawled but not evaluated. The merge
+    // carries the old item on `/p?id=1` (its query-blind hash is `/p`'s, which is
+    // listed not evaluated), but the tallies already count `/p?id=1`.
+    const P = `${SITE}/p`;
+    const Q = `${SITE}/p?id=1`;
+    const audit = (items: string[]) => {
+      const base = fullReport([{ i: 0 }]);
+      return {
+        ...base,
+        pages: [P, Q].map((u) => ({ url: u, statusCode: 200 })),
+        ruleResults: {
+          "a11y/img-alt": {
+            meta: base.ruleResults["a11y/img-alt"]!.meta,
+            checks: [
+              { name: "img-alt", status: "skipped" as const, message: "n/a", pageUrl: P },
+              {
+                name: "img-alt",
+                status: "fail" as const,
+                message: "Images missing alt",
+                pageUrl: Q,
+                items: items.map((id) => ({ id, sourcePages: [Q] })),
+              },
+            ],
+          },
+        },
+      };
+    };
+    const seed = await seeded(audit(["a.png", "b.png"]));
+    const run2 = audit(["b.png", "c.png"]);
+    const { capped } = await bothWays(seed, "audit_2", run2);
+    const first = await bothWays(new MemStore(), "audit_2", run2);
+    expect(rescored(capped)).toEqual(rescored(first.capped));
   });
 
   test("a report without tallies (an older producer) keeps the row-counting path", async () => {

@@ -996,9 +996,11 @@ export async function runCloudSmartAudits(
     checkTallies && resolution
       ? notEvaluatedThisRun(carriedFindings, crawledUrls, resolution)
       : carriedFindings;
-  const unionCarriedPages = resolution
-    ? withoutUnscorablePages(carriedPageUrls, resolution, unionCarried, !!checkTallies)
-    : carriedPageUrls;
+  const unionCarriedPages = !resolution
+    ? carriedPageUrls
+    : checkTallies
+      ? notCrawledThisRun(carriedPageUrls, resolution)
+      : withoutUnscorablePages(carriedPageUrls, resolution, carriedFindings);
   const unionRuleResults = buildScoringResultsFromMerged({
     freshResults: freshForUnion,
     carriedFindings: unionCarried,
@@ -1111,17 +1113,11 @@ function assertUntouched(
  * A page with a carried finding is left as it was, whatever the signal says: its
  * failures are in the union. Bounded by the signal: one pass over its hashes,
  * one lookup each.
- *
- * (repo#2657) `freshTallied`: the fresh side is a capped report's tallies, which
- * already count every page this run evaluated, passes and failures alike. A
- * crawled page some check evaluated is therefore held out whatever it holds, and
- * one no check evaluated stays only for its carried findings, as before.
  */
 function withoutUnscorablePages(
   carriedPageUrls: PageUrlSet,
   resolution: MergeResolutionInput,
   carriedFindings: readonly CarriedFinding[],
-  freshTallied = false,
 ): PageUrlSet {
   const candidates = new Set<string>();
   const byHash = new Map<string, string[]>();
@@ -1170,13 +1166,9 @@ function withoutUnscorablePages(
 
   const scorable = new Set<string>();
   for (const url of carriedPageUrls) {
-    if (candidates.has(url)) {
+    if (candidates.has(url) && !withCarried.has(url)) {
       const evaluated = evaluatingKeys - (notEvaluatedKeys.get(url) ?? 0) > 0;
-      if (freshTallied) {
-        if (evaluated || !withCarried.has(url)) continue;
-      } else if (!withCarried.has(url) && (!evaluated || failing.has(url))) {
-        continue;
-      }
+      if (!evaluated || failing.has(url)) continue;
     }
     scorable.add(url);
   }
@@ -1205,13 +1197,33 @@ function notEvaluatedThisRun(
     if (!resolution.failingByCheck.has(key)) return false;
     const notEvaluated = resolution.notEvaluatedByCheck.get(key);
     if (!notEvaluated) return true;
-    // Both spellings, as the merge reads them: a query-blind hash from an older
-    // publisher listing the page means it was not evaluated, which keeps the carry.
     if (notEvaluated.has(resolutionUrlHash(url))) return false;
+    // (#2063) The query-blind spelling an older publisher hashed it under, only
+    // when no crawled page owns it (as `withoutUnscorablePages` reads it): `/p`
+    // not evaluated says nothing about `/p?id=1`.
     const q = url.indexOf("?");
-    return !(q !== -1 && notEvaluated.has(resolutionUrlHash(url.slice(0, q))));
+    if (q === -1) return true;
+    const bare = url.slice(0, q);
+    if (crawledUrls.has(bare) || resolution.crawledUrls.has(bare)) return true;
+    return !notEvaluated.has(resolutionUrlHash(bare));
   };
   return carriedFindings.filter((f) => !evaluated(f));
+}
+
+/**
+ * (repo#2657) The carried pages a capped report's union may credit with clean
+ * passes: those this run did not crawl. A page it crawled is in the tallies for
+ * every check that evaluated it, and earns nothing for the checks that did not
+ * (a skipped or non-HTML page passes nothing), so it never takes a synthetic
+ * pass here, whatever it carries.
+ */
+function notCrawledThisRun(
+  carriedPageUrls: PageUrlSet,
+  resolution: MergeResolutionInput,
+): PageUrlSet {
+  const out = new Set<string>();
+  for (const url of carriedPageUrls) if (!resolution.crawledUrls.has(url)) out.add(url);
+  return out;
 }
 
 /**
@@ -1224,7 +1236,7 @@ function notEvaluatedThisRun(
  * capper sampled them, so they are what the union scorer would have counted
  * from an uncapped report. The carried side is what the merge adds on top:
  * `carriedFindings` and `carriedPageUrls` as the union got them (see
- * `notEvaluatedThisRun`, `withoutUnscorablePages`), none on a page the tallies
+ * `notEvaluatedThisRun`, `notCrawledThisRun`), none on a page the tallies
  * count for that check, so no (check name, page) key meets a fresh one and the
  * sum is exact.
  */
