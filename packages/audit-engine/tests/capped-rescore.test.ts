@@ -38,6 +38,7 @@ import {
 } from "../src/merge-promise";
 import { buildCheckTallies, capReportForPublish } from "../src/publish-cap";
 import { calculateHealthScore, calculateHealthScoreFromTallies } from "../src/scoring";
+import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 class MemStore implements SmartAuditStore {
   findings = new Map<string, PageFindingRecord>();
@@ -570,3 +571,5 @@ describe("buildCheckTallies leaves out what the rescore leaves out (repo#2657)",
     });
   });
 });
+
+describeSitePagesContract("capped-rescore.test.ts MemStore", () => new MemStore());
