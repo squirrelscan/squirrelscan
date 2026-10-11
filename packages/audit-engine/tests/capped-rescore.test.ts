@@ -367,8 +367,9 @@ describe("rescore of a capped report (repo#2657)", () => {
 
     expect(capped.coverage.carriedFindings).toBeGreaterThan(0);
     expect(comparable(rescored(capped))).toEqual(comparable(rescored(uncapped)));
-    expect(capped.coverage.auditedPages).toBe(uncapped.coverage.auditedPages);
-    expect(capped.coverage.knownPages).toBe(uncapped.coverage.knownPages);
+    // The coverage line counts what the report shows as carried: not the
+    // still-failing pages the sample clipped, which the tallies already count.
+    expect(capped.coverage).toEqual(uncapped.coverage);
 
     const open = await openUrls(cappedStore, "core/meta-description", "has-meta-description");
     // Crawled clean this run: resolved, though most of them were never in a sample.

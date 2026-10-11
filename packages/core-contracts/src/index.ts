@@ -484,7 +484,9 @@ export interface AuditReport {
    * This run's evaluated-check counts per rule and check name (repo#2656),
    * counted BEFORE the publish capper sampled `ruleResults` and dropped the
    * per-page pass rows. Present on capped published reports only. See
-   * {@link CheckTallies}. Transport for the server rescore: never rendered.
+   * {@link CheckTallies}. Read by the server rescore in place of the dropped
+   * rows (repo#2657), and by the "fixed on all pages checked this run" note for
+   * the passes the rows no longer list. Never rendered as data.
    */
   checkTallies?: CheckTallies;
   /**
