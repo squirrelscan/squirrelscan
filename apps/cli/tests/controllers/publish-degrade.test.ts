@@ -89,8 +89,8 @@ describe("publishReport degrade pass + error copy (#1167)", () => {
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("unreachable");
     expect(result.error.code).toBe("PAYLOAD_TOO_LARGE");
-    expect(result.error.message).toContain("20MB");
-    expect(result.error.message).not.toContain("5MB");
+    expect(result.error.message).toContain("over the 20 MB publish limit");
+    expect(result.error.message).not.toContain("over the 5 MB");
   });
 
   test("degrade pass shrinks the body below the primary sample", () => {

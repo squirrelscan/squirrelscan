@@ -128,6 +128,58 @@ const RECOVERY_TIMEOUT_MS = 10_000;
 // unreadable snapshot only disables recovery (fails closed), never the publish.
 const SNAPSHOT_TIMEOUT_MS = 3_000;
 
+function megabytes(bytes: number): string {
+  const value = bytes / 1024 / 1024;
+  return Number.isInteger(value) ? `${value} MB` : `${value.toFixed(1)} MB`;
+}
+
+/**
+ * What the user reads when a report is too large to publish (repo#2659): what
+ * happened, that the audit is still on this machine, and what to do next.
+ *
+ * One message for the local check before the POST and for the API refusing the
+ * body, which answers with a 413, or with a 422 to a CLI older than the report
+ * capper so that CLI prints the server's own text. Either way the code stays
+ * PAYLOAD_TOO_LARGE, which the run's finalize classifies as a size failure.
+ *
+ * `details` is the API's error details when it refused the body: its limit,
+ * and `updateCommand` when this CLI predates the capper and updating fixes it.
+ * `audit` names this audit and the visibility asked for, so the commands it
+ * prints act on this audit, not on the latest one, and never publish it more
+ * widely than asked (a bare `squirrel report --publish` defaults to public).
+ */
+export function reportTooLargeMessage(
+  bodyBytes: number,
+  details?: { budgetBytes?: unknown; updateCommand?: unknown },
+  audit?: { ref: string; visibility: ReportVisibility }
+): string {
+  const limit =
+    typeof details?.budgetBytes === "number" && details.budgetBytes > 0
+      ? `, over the ${megabytes(details.budgetBytes)} publish limit`
+      : "";
+  const view = audit ? `squirrel report ${audit.ref}` : "squirrel report";
+  const publish = audit
+    ? `publish it with \`squirrel report ${audit.ref} --publish --visibility ${audit.visibility}\``
+    : "publish it again";
+  return [
+    `This report is too large to publish (${megabytes(bodyBytes)}${limit}), so it was not published.`,
+    `Your audit is saved locally: view it with \`${view}\`.`,
+    details?.updateCommand
+      ? `Run \`squirrel self update\`, then ${publish}.`
+      : "To publish a smaller report, audit fewer pages with `--max-pages`.",
+  ].join("\n");
+}
+
+/** The `error.details` of an API error body, when it is an object. */
+function errorDetails(
+  error: ApiErrorResponse["error"] | undefined
+): { budgetBytes?: unknown; updateCommand?: unknown } | undefined {
+  const details = error?.details;
+  return details && typeof details === "object"
+    ? (details as { budgetBytes?: unknown; updateCommand?: unknown })
+    : undefined;
+}
+
 /**
  * Stamp the FIRST publish (#2182). Non-fatal by construction: the report IS
  * published, and a failed settings write must not turn it into an error.
@@ -203,6 +255,11 @@ export async function publishReport(
   }
 
   const visibility = options.visibility ?? "public";
+  // repo#2659: the audit a size refusal's commands should name (the short id
+  // `squirrel report --list` prints), when it came from the local store.
+  const thisAudit = report.crawlId
+    ? { ref: report.crawlId.slice(0, 8), visibility }
+    : undefined;
 
   // Snapshot the run's linked report BEFORE the POST so a 5xx recovery can tell
   // a report this attempt wrote from one a previous publish left behind. Started
@@ -274,11 +331,14 @@ export async function publishReport(
         `(${PUBLISH_DEGRADE_LIMITS.maxPagesPerCheck} affected pages per finding).`
     );
     if (byteLength(body) > REPORT_LIMITS.maxPayloadBytes) {
-      const sizeMB = (byteLength(body) / 1024 / 1024).toFixed(2);
       return err(
         commandError(
           "PAYLOAD_TOO_LARGE",
-          `Report size (${sizeMB}MB) exceeds maximum allowed (${maxMB}MB).\nTry reducing the number of pages audited.`
+          reportTooLargeMessage(
+            byteLength(body),
+            { budgetBytes: REPORT_LIMITS.maxPayloadBytes },
+            thisAudit
+          )
         )
       );
     }
@@ -316,11 +376,23 @@ export async function publishReport(
         );
       }
 
+      // repo#2659: the API refused the body as too large. Rendered here from its
+      // details (limit, and whether updating fixes it), never shown raw.
       if (response.status === 413) {
+        let refused: ApiErrorResponse | undefined;
+        try {
+          refused = (await response.json()) as ApiErrorResponse;
+        } catch {
+          // An edge 413 with no JSON body: say what we know.
+        }
         return err(
           commandError(
             "PAYLOAD_TOO_LARGE",
-            `Report exceeds maximum allowed size (${maxMB}MB).\nTry reducing the number of pages audited.`
+            reportTooLargeMessage(
+              byteLength(body),
+              errorDetails(refused?.error),
+              thisAudit
+            )
           )
         );
       }
@@ -375,6 +447,22 @@ export async function publishReport(
 
       if (errorData?.error) {
         const error = errorData.error;
+
+        // repo#2659: the API answers a CLI older than the report capper with a
+        // 422 rather than a 413, so that CLI prints its message; this one
+        // renders the same refusal itself, as for the 413 above.
+        if (error.code === "PAYLOAD_TOO_LARGE") {
+          return err(
+            commandError(
+              "PAYLOAD_TOO_LARGE",
+              reportTooLargeMessage(
+                byteLength(body),
+                errorDetails(error),
+                thisAudit
+              )
+            )
+          );
+        }
 
         // Handle security violations specially
         if (error.code === "SECURITY_VIOLATION" && error.threats) {

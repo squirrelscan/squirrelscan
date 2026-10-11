@@ -71,6 +71,23 @@ Manage published reports in the [dashboard](https://app.squirrelscan.com).
 A report of a host no squirrelscan server can reach is never published, even with `--publish`. That covers `localhost`, loopback and private ranges, and internal names such as `box.local` or anything under `.internal`. The command prints the report as usual and says the report stayed local. See [Local audits with the CLI](/guides/local-audits-cli).
 </Note>
 
+### When a report is too large to publish
+
+A report over the publish size limit is not published, and the command says so in three lines:
+
+```text
+This report is too large to publish (<size>, over the <limit> publish limit), so it was not published.
+Your audit is saved locally: view it with `squirrel report`.
+<what to do next>
+```
+
+Nothing is lost: the audit stays in its local project, and the `squirrel report <id>` command the message names shows or exports it in full. The last line tells you how to get it published:
+
+- When it says to run `squirrel self update`, a newer version of squirrel can publish this report. Update, then run the `squirrel report <id> --publish --visibility <level>` command it names, which publishes this audit at the visibility you asked for.
+- When it suggests `--max-pages`, run the audit again with a lower `--max-pages` to publish a smaller report.
+
+`squirrel report --publish` and `squirrel audit --publish` exit with `1` here. When `squirrel audit` publishes on its own at the end of a signed-in run, the same message prints as a warning and the audit finishes as usual.
+
 ### Publish with visibility
 
 ```bash

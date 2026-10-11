@@ -19,6 +19,7 @@ How it works:
 
 ### Fixed
 
+- A report too large to publish now says what happened, that the audit is still saved locally, and what to do next: update squirrel and publish that audit again (the message names the exact `squirrel report <id> --publish` command, at the visibility you asked for), or audit fewer pages with `--max-pages`. It used to print a fixed "exceeds maximum allowed size (20MB)" line whatever limit the server applied.
 - Docs: custom request headers are on every plan, Free included, where several pages said Pro only, and the pages that still called local audits free in general now say a local audit costs nothing only when it runs signed out or with `--offline`.
 
 ## v0.0.108 (2026-10-10)
