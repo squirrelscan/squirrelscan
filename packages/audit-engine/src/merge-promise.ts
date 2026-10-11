@@ -759,9 +759,9 @@ export async function runCloudSmartAudits(
   // list), a prior resolves only on positive evidence in the payload: a pass for
   // its page and check with no failing row beside it, or the rule's noindex
   // verdict for the page (see ComputeMergeInput.passedCheckPages). A check whose
-  // failing rows were sampled gives no pass evidence at all, since the page may
-  // fail it past the sample. Indexed only for the checks that can need it, so a
-  // whole signal costs nothing here.
+  // failing rows were sampled, or whose rule had classes dropped, gives no pass
+  // evidence at all, since the page may fail it past the clip. Indexed only for
+  // the checks that can need it, so a whole signal costs nothing here.
   let passedCheckPages: Set<string> | undefined;
   let notApplicablePages: Set<string> | undefined;
   if (resolution && (resolution.crawledComplete === false || resolution.truncatedChecks.size > 0)) {
@@ -793,7 +793,9 @@ export async function runCloudSmartAudits(
           continue;
         }
         const key = `${ruleId}|${c.name}`;
-        if (!needed(key) || failingSampled.has(key)) continue;
+        // A rule whose publish dropped whole check classes (`checksTruncated`)
+        // may have dropped this page's failing row for the check with them.
+        if (!needed(key) || failingSampled.has(key) || rulesWithDroppedChecks.has(ruleId)) continue;
         if (c.status === "pass") passedCheckPages.add(pageCheckKey(url, ruleId, c.name));
         else if (c.status === "fail" || c.status === "warn") {
           failingPageChecks.add(pageCheckKey(url, ruleId, c.name));

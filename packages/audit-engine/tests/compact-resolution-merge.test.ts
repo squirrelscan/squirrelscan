@@ -628,4 +628,22 @@ describe("what the byte budget gives up only ever keeps findings open", () => {
     });
     expect(result.coverage.auditedPages).toBe(500);
   });
+
+  test("off a clipped list, a pass from a rule whose publish dropped classes resolves nothing", async () => {
+    // The publish kept `probe`'s pass row for the page but dropped some of the
+    // rule's check classes (`checksTruncated`): a failing row may have gone with them.
+    const { urls, full } = await clippedListScenario();
+    const page = urls.at(-1)!;
+    full.probe = { meta: meta("probe"), checks: [check("probe", page, "pass")] };
+    const signal = await decodeResolutionSignal(
+      buildCompactResolutionSignal(full, urls, 8 * 1024)!,
+    );
+    expect(new Set(signal.crawledUrls).has(normalizePageUrl(page))).toBe(false);
+    const payload = samplePayload(full, urls, signal);
+    payload.ruleResults.probe!.checks[0]!.details = { checksTruncated: 3 };
+    const priors = [prior(page, "probe", "probe")];
+    const store = await seededStore(urls, priors);
+    await publish(store, payload);
+    expect(stateOf(store, page, "probe", "probe")).toBe("open:carried");
+  });
 });
