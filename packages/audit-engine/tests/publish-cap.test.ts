@@ -16,7 +16,7 @@ import {
 } from "@squirrelscan/core-contracts/entity-map";
 import { PUBLISHED_REPORT_MAX_BYTES, REPORT_CAPS } from "@squirrelscan/core-contracts/limits";
 import { checkAffectedPages } from "@squirrelscan/report/affected-pages";
-import { foldOverflowChecks } from "@squirrelscan/rules/fold";
+import { capMixedRuleChecksForPublish, foldOverflowChecks } from "@squirrelscan/rules/fold";
 import type { RuleRunResult } from "@squirrelscan/rules/types";
 import { byteLength } from "@squirrelscan/utils/bytes";
 
@@ -309,22 +309,78 @@ describe("capReportForPublish: size", () => {
     expect(Math.abs(light10k - light2k)).toBeLessThan(8 * 1024);
   }, SLOW);
 
-  test("every class failing on every page fits at a later tier", () => {
+  test("every class failing on every page fills breadth first and keeps every class", () => {
     const capped = capReportForPublish(report(100, { rules: WIDE_RULES, everyClassFails: 10 }));
-    expect(bytesOf(capped)).toBeLessThanOrEqual(reportBudget);
+    // The fill uses the room the signal leaves. Here the raw-URL signal (every
+    // class failing on every page) is over its reserve, so only the rest is
+    // bounded until repo#2658 bounds the signal.
+    const rest = bytesOf({ ...capped, resolutionSignal: undefined, pageStatuses: undefined });
+    expect(rest).toBeLessThanOrEqual(reportBudget - REPORT_CAPS.signalMaxBytes);
+    expect(bytesOf(capped.resolutionSignal)).toBeGreaterThan(REPORT_CAPS.signalMaxBytes);
     expect(capped.detail.tier).toBe(1);
+    expect(capped.detail.classesDropped).toBeUndefined();
+    // Every failing class has a row: 2 per wide rule, plus sitemap-exists and broken-links.
+    const classes = classesOf(capped).filter((c) => c.status === "fail");
+    expect(classes).toHaveLength(WIDE_RULES.length * 2 + 2);
+    // Some kept the full sample, some a smaller one.
+    const sampled = classes.filter((c) => c.details?.aggregated === true);
+    expect(sampled.some((c) => c.pages?.length === 10 && c.items?.length === 5)).toBe(true);
+    expect(sampled.some((c) => (c.pages?.length ?? 0) < 10)).toBe(true);
+    expect(capped.detail.classesReduced).toBeGreaterThan(0);
   }, SLOW);
 
-  test("max-length strings everywhere fit at the counts-only tier", () => {
+  test("max-length strings everywhere still give every class a row", () => {
     const capped = capReportForPublish(
       report(12, { rules: WIDE_RULES, everyClassFails: 5, maxStrings: true }),
     );
     expect(bytesOf(capped)).toBeLessThanOrEqual(reportBudget);
-    expect(capped.detail.tier).toBe(REPORT_CAPS.tiers.length - 1);
+    // 2 KiB URLs fill even the capped display sections: they go to their
+    // minimum, the entity map goes, and every class still gets a row.
+    expect(capped.detail.tier).toBe(2);
+    expect(capped.detail.entityMapDropped).toBe(true);
     expect(capped.detail.classesDropped).toBeUndefined();
+    expect(classesOf(capped).filter((c) => c.status === "fail")).toHaveLength(WIDE_RULES.length * 2 + 2);
   }, SLOW);
 
-  test("past the tiers, classes are admitted by byte budget and the body still fits", () => {
+  test("the fill gives the full sample to the classes that matter most", () => {
+    // One failing and one warning class, same shape: just under the size that
+    // fits both at the full sample, the warning one is the one cut.
+    const rules: RuleSpec[] = [
+      { id: "a11y/fails", category: "a11y", severity: "warning", weight: 4, names: ["fails"] },
+      { id: "a11y/warns", category: "a11y", severity: "warning", weight: 4, names: ["warns"] },
+    ];
+    const base = report(60, { rules, everyClassFails: 8 });
+    // Only these two classes, so nothing else competes for the last bytes.
+    const warned: Report = {
+      ...base,
+      siteChecks: [],
+      ruleResults: {
+        "a11y/fails": base.ruleResults["a11y/fails"]!,
+        "a11y/warns": {
+          ...base.ruleResults["a11y/warns"]!,
+          checks: base.ruleResults["a11y/warns"]!.checks.map((c) => ({ ...c, status: "warn" as const })),
+        },
+      },
+    };
+    const roomy = capReportForPublish(warned);
+    expect(roomy.detail.tier).toBe(0);
+    const transport =
+      (roomy.resolutionSignal ? bytesOf(roomy.resolutionSignal) + 24 : 0) +
+      (roomy.pageStatuses ? bytesOf(roomy.pageStatuses) + 20 : 0);
+    const body = bytesOf({ ...roomy, resolutionSignal: undefined, pageStatuses: undefined });
+    const tight = capReportForPublish(warned, {
+      maxBytes: body - 1 + REPORT_CAPS.envelopeBytes + Math.min(transport, REPORT_CAPS.signalMaxBytes),
+    });
+    expect(tight.detail.tier).toBe(1);
+    expect(tight.detail.classesReduced).toBe(1);
+    const fails = tight.ruleResults["a11y/fails"]!.checks[0]!;
+    const warns = tight.ruleResults["a11y/warns"]!.checks[0]!;
+    expect(fails.pages).toHaveLength(REPORT_CAPS.tiers[0]!.pagesPerClass);
+    expect(warns.pages).toHaveLength(REPORT_CAPS.tiers[1]!.pagesPerClass);
+    expect(warns.details?.pagesTruncated).toBe(60);
+  }, SLOW);
+
+  test("past the fill, classes are admitted by byte budget and the body still fits", () => {
     // 60 rules x 25 distinct classes x long messages: no sample tier is enough.
     const rules: RuleSpec[] = Array.from({ length: 60 }, (_, r) => ({
       id: `content/many-${String(r).padStart(2, "0")}`,
@@ -336,6 +392,7 @@ describe("capReportForPublish: size", () => {
     const input = report(4, { rules, everyClassFails: 1, maxStrings: true });
     const capped = capReportForPublish(input, { maxBytes: 256 * 1024 });
     expect(bytesOf(capped)).toBeLessThanOrEqual(256 * 1024 - REPORT_CAPS.envelopeBytes);
+    expect(capped.detail.tier).toBe(3);
     expect(capped.detail.classesDropped).toBeGreaterThan(0);
     expect(capped.detail.entityMapDropped).toBe(true);
     // The scorer's critical-penalty checks survive any cut.
@@ -441,7 +498,8 @@ describe("capReportForPublish: the sample and its counts", () => {
     const check = capped.ruleResults["crawl/sitemap-coverage"]!.checks[0]!;
     expect(check.details?.pagesTruncated).toBe(1_500);
     expect(check.details?.additional).toBe(1_495);
-    expect(capped.siteChecks[0]!.details?.pagesTruncated).toBe(1_500);
+    // The top-level copy repeats the rule's check, so it is left out.
+    expect(capped.siteChecks).toEqual([]);
   });
 
   test("members naming different pages through their items all count", () => {
@@ -591,6 +649,139 @@ describe("capReportForPublish: classes", () => {
     expect(capReportForPublish(input).checkTallies["core/doctype"]).toEqual({
       doctype: { failed: 2, failUnits: 2 },
     });
+  });
+
+  test("items on the most pages lead the sample, with their true page count", () => {
+    // Each page's own images sort first by id; two shared ones sort last.
+    const checks: CheckResult[] = Array.from({ length: 30 }, (_, i) => ({
+      name: "img-dimensions",
+      status: "fail" as const,
+      message: "Images without dimensions",
+      pageUrl: pageUrl(i),
+      items: [
+        ...Array.from({ length: 3 }, (_, k) => ({ id: `${pageUrl(i)}#img-${k}` })),
+        ...(i % 3 === 0 ? [{ id: `${SITE}/y-banner.png` }] : []),
+        ...(i % 2 === 0 ? [{ id: `${SITE}/z-logo.png` }] : []),
+      ],
+    }));
+    const input: Report = {
+      ruleResults: { "images/dimensions": { meta: meta(PAGE_RULES[4]!, "page"), checks } },
+    };
+    const agg = capReportForPublish(input).ruleResults["images/dimensions"]!.checks[0]!;
+    expect(agg.items!.map((i) => [i.id, i.pageCount])).toEqual([
+      [`${SITE}/z-logo.png`, 15],
+      [`${SITE}/y-banner.png`, 10],
+      [`${pageUrl(0)}#img-0`, undefined],
+      [`${pageUrl(0)}#img-1`, undefined],
+      [`${pageUrl(0)}#img-2`, undefined],
+    ]);
+    for (const item of agg.items!) expect(item.sourcePages).toHaveLength(1);
+    expect(agg.details?.additional).toBe(30 * 3 + 2 - 5);
+  });
+
+  test("a site check's items are ranked by their source pages too", () => {
+    // Source pages listed newest first: the sample keeps the first in URL order.
+    const items: CheckItem[] = Array.from({ length: 8 }, (_, k) => ({
+      id: `${SITE}/gone-${k}`,
+      sourcePages: Array.from({ length: k + 1 }, (_, s) => pageUrl(k - s)),
+    }));
+    const input: Report = {
+      ruleResults: {
+        "links/broken-links": {
+          meta: meta(SITE_RULES[2]!, "site"),
+          checks: [{ name: "broken-links", status: "fail", message: "Broken links found", items }],
+        },
+      },
+    };
+    const check = capReportForPublish(input).ruleResults["links/broken-links"]!.checks[0]!;
+    expect(check.items!.map((i) => [i.id, i.pageCount])).toEqual(
+      [7, 6, 5, 4, 3].map((k) => [`${SITE}/gone-${k}`, k + 1]),
+    );
+    for (const item of check.items!) expect(item.sourcePages).toEqual([pageUrl(0)]);
+    expect(check.details?.additional).toBe(3);
+  });
+
+  test("the most widespread item survives an items array past the per-check cap", () => {
+    // 1,200 items, one on 40 pages near the end: the items cap must not cut it.
+    const items: CheckItem[] = Array.from({ length: 1_200 }, (_, k) => ({
+      id: `${SITE}/gone-${String(k).padStart(4, "0")}`,
+      sourcePages: k === 1_150 ? Array.from({ length: 40 }, (_, s) => pageUrl(s)) : [pageUrl(k % 50)],
+    }));
+    const check: CheckResult = { name: "broken-links", status: "fail", message: "Broken links found", items };
+    const input: Report = {
+      ruleResults: {
+        "links/broken-links": { meta: meta(SITE_RULES[2]!, "site"), checks: [check] },
+      },
+      // The producer's top-level copy, clamped (first 1,000 items) the way report-stream clamps it.
+      siteChecks: capMixedRuleChecksForPublish([check], 500),
+    };
+    const capped = capReportForPublish(input);
+    const out = capped.ruleResults["links/broken-links"]!.checks[0]!;
+    expect(out.items![0]).toEqual({ id: `${SITE}/gone-1150`, sourcePages: [pageUrl(0)], pageCount: 40 });
+    expect((out.items?.length ?? 0) + (out.details?.additional as number)).toBe(1_200);
+    // Still recognised as the same check as the clamped top-level copy.
+    expect(capped.siteChecks).toEqual([]);
+  });
+
+  test("the page a class hits hardest leads its page sample", () => {
+    const checks: CheckResult[] = Array.from({ length: 30 }, (_, i) => ({
+      name: "alt-text",
+      status: "fail" as const,
+      message: "Images without alt text",
+      pageUrl: pageUrl(i),
+      items: Array.from({ length: i === 17 ? 9 : 1 }, (_, k) => ({ id: `${pageUrl(i)}#img-${k}` })),
+    }));
+    const input: Report = { ruleResults: { "images/alt-text": { meta: meta(PAGE_RULES[5]!, "page"), checks } } };
+    const agg = capReportForPublish(input).ruleResults["images/alt-text"]!.checks[0]!;
+    expect(agg.pages).toEqual([pageUrl(17), ...Array.from({ length: 9 }, (_, i) => pageUrl(i))]);
+    expect(agg.details?.pagesTruncated).toBe(30);
+    // No page outweighs another: the sample stays in URL order.
+    const even: Report = {
+      ruleResults: {
+        "images/alt-text": {
+          meta: meta(PAGE_RULES[5]!, "page"),
+          checks: checks.map((c) => ({ ...c, items: c.items!.slice(0, 1) })),
+        },
+      },
+    };
+    const flat = capReportForPublish(even).ruleResults["images/alt-text"]!.checks[0]!;
+    expect(flat.pages).toEqual(Array.from({ length: 10 }, (_, i) => pageUrl(i)));
+    // An aggregate built elsewhere: only one of its pages has items.
+    const pages = Array.from({ length: 30 }, (_, i) => pageUrl(i));
+    const prefolded: Report = {
+      ruleResults: {
+        "images/alt-text": {
+          meta: meta(PAGE_RULES[5]!, "page"),
+          checks: [
+            {
+              name: "alt-text",
+              status: "fail",
+              message: "Images without alt text (+29 more pages)",
+              pages,
+              items: [0, 1].map((k) => ({ id: `${pageUrl(23)}#img-${k}`, sourcePages: [pageUrl(23)] })),
+              details: { aggregated: true, occurrences: 30 },
+            },
+          ],
+        },
+      },
+    };
+    expect(capReportForPublish(prefolded).ruleResults["images/alt-text"]!.checks[0]!.pages![0]).toBe(pageUrl(23));
+  });
+
+  test("top-level site checks that repeat a rule's check are left out", () => {
+    const input = report(50);
+    expect(input.siteChecks!.length).toBeGreaterThan(0);
+    expect(capReportForPublish(input).siteChecks).toEqual([]);
+    // A site check no rule carries stays.
+    const orphan: CheckResult = { name: "orphan-check", status: "warn", message: "Only here" };
+    const withOrphan: Report = { ...input, siteChecks: [...input.siteChecks!, orphan] };
+    expect(capReportForPublish(withOrphan).siteChecks).toEqual([orphan]);
+    // Key order does not hide a copy.
+    const reordered: Report = {
+      ...input,
+      siteChecks: input.siteChecks!.map((c) => Object.fromEntries(Object.entries(c).reverse()) as CheckResult),
+    };
+    expect(capReportForPublish(reordered).siteChecks).toEqual([]);
   });
 });
 

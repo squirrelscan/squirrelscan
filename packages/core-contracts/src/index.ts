@@ -82,6 +82,13 @@ export interface CheckItem {
   label?: string;
   snippet?: string;
   sourcePages?: string[];
+  /**
+   * Pages the item was found on, when a published report keeps fewer of them
+   * in `sourcePages` (repo#2656). Absent when `sourcePages` lists them all. A
+   * floor when the item came out of an earlier fold, which keeps at most
+   * `PUBLISH_LIMITS.maxSourcePagesPerItem` source pages and records no total.
+   */
+  pageCount?: number;
   meta?: Record<string, unknown>;
 }
 
@@ -606,10 +613,22 @@ export type CheckTallies = Record<string, Record<string, CheckTally>>;
  */
 export interface PublishedReportDetail {
   capped: true;
-  /** Index into `REPORT_CAPS.tiers` of the sample tier the byte fitter settled on. */
+  /**
+   * How far the byte fitter had to go: 0 = every class kept the full sample;
+   * 1 = filled breadth first, some classes kept a smaller sample or counts only
+   * (`classesReduced`); 2 = the same with the display sections at their minimum
+   * and the entity map dropped; 3 = counts rows admitted by byte budget, some
+   * classes left out (`classesDropped`).
+   */
   tier: number;
-  /** What each issue class kept at that tier. */
+  /** The full sample: the most any issue class kept. */
   caps: ReportCapTier & { classesPerRule: number };
+  /**
+   * Issue classes kept at less than the full sample (a smaller sample, or
+   * counts only). Their true totals are in their `details` either way. Absent
+   * when every kept class has the full sample.
+   */
+  classesReduced?: number;
   /**
    * Where the full per-page detail is: `local` = the project database on the
    * machine that ran the audit (`squirrel report --format json`); `findings` =

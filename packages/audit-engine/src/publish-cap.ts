@@ -14,11 +14,16 @@
 //     status, provenance, foldKey), and drop the per-page pass rows (their
 //     counts are in the tallies). Folding once matters: `foldGroup` appends
 //     "(+N more pages)", so folding an aggregate again stacks the suffix.
-//  3. Sample each class at REPORT_CAPS.tiers[0] and measure. While the body is
-//     over budget, walk down the tiers, then drop the entity map, then empty
-//     the display-only sections and admit issue classes by byte budget,
-//     highest priority first. That last step fits by construction, so the
-//     only refusal is a report whose skeleton alone (score, rule meta, tallies,
+//     Each class's page sample leads with the page it hits hardest, and its
+//     items are ranked by how many pages they are on. Top-level `siteChecks`
+//     entries that repeat a site check of `ruleResults` are left out.
+//  3. Sample each class at REPORT_CAPS.tiers[0] and measure. Over budget, fill
+//     breadth first: every class gets a counts row, then a small sample, then
+//     the full one, highest priority first, while the budget lasts. If the
+//     counts rows alone do not fit, the display sections go to their minimum
+//     and the entity map is dropped, and the fill runs again. Last, counts rows
+//     are admitted by byte budget. That fits by construction, so the only
+//     refusal is a report whose skeleton alone (score, rule meta, tallies,
 //     enrichment sections) is over budget: a typed error naming its sections.
 //
 // Deterministic (same input, byte-identical output, so the publish content
@@ -132,8 +137,8 @@ export interface CapReportOptions {
 /**
  * A report whose skeleton alone (score, rule meta, tallies, enrichment
  * sections) does not fit the budget, after every list has been emptied. Never
- * expected: the worst-case fixture test asserts how far from it real shapes
- * are. Carries the largest sections so the cause is visible without the body.
+ * expected: the worst-case tests assert how far from it real shapes are.
+ * Carries the largest sections so the cause is visible without the body.
  */
 export class PublishedReportTooLargeError extends Error {
   readonly code = "PUBLISHED_REPORT_TOO_LARGE";
@@ -217,7 +222,7 @@ const STATUS_RANK: Record<string, number> = { fail: 0, warn: 1, info: 2, skipped
 /** Rules whose site checks the critical-penalty scorer reads by name. */
 const PINNED_RULES = new Set<string>([RULE_ID_ROBOTS_TXT, RULE_ID_SITEMAP_EXISTS]);
 
-/** One entry of a rule's published checks, folded once, sampled per tier. */
+/** One entry of a rule's published checks, folded once, sampled per level. */
 interface ClassUnit {
   ruleId: string;
   check: CheckResult;
@@ -227,6 +232,8 @@ interface ClassUnit {
   size: number;
   /** Pages the check names before sampling (see sampleCheck). */
   affected: number;
+  /** A site check's identity for the top-level `siteChecks` dedupe (see siteCheckKey). */
+  key?: string;
 }
 
 function unitOf(
@@ -234,8 +241,9 @@ function unitOf(
   check: CheckResult,
   order: number,
   affected: number = affectedPageCount(check),
+  key?: string,
 ): ClassUnit {
-  return { ruleId, check, order, size: occurrencesOf(check), affected };
+  return { ruleId, check, order, size: occurrencesOf(check), affected, ...(key !== undefined ? { key } : {}) };
 }
 
 interface FoldedRule {
@@ -282,12 +290,95 @@ function compareMembers(a: CheckResult, b: CheckResult): number {
 }
 
 /**
+ * The fold keeps every page, item and source page: the sample clips them, and
+ * it has to see them all to rank items and pin the worst page. Bounded by the
+ * input, which already holds every one of them.
+ */
+const CLASS_FOLD_LIMITS = {
+  ...DEFAULT_FOLD_LIMITS,
+  maxChecks: 1,
+  maxItemsPerCheck: Number.MAX_SAFE_INTEGER,
+  maxPagesPerCheck: Number.MAX_SAFE_INTEGER,
+  maxSourcePagesPerItem: Number.MAX_SAFE_INTEGER,
+};
+
+/**
+ * The page a class hits hardest: the most items on one page (a check without
+ * items counts once), from each per-page member and from the source pages of
+ * an aggregate's items. Ties go to URL order. Undefined when no page of `pages`
+ * outweighs another, so a class with one finding per page keeps its sorted
+ * sample.
+ */
+function worstPage(members: CheckResult[], pages: string[]): string | undefined {
+  const weight = new Map<string, number>();
+  const add = (page: string, n: number): void => {
+    weight.set(page, (weight.get(page) ?? 0) + n);
+  };
+  for (const check of members) {
+    if (check.pageUrl) {
+      add(check.pageUrl, Math.max(1, (check.items?.length ?? 0) + additionalOf(check)));
+      continue;
+    }
+    for (const item of check.items ?? []) {
+      for (const page of new Set(item.sourcePages ?? [])) add(page, 1);
+    }
+  }
+  let best: string | undefined;
+  let bestWeight = 0;
+  let lowest = Number.POSITIVE_INFINITY;
+  for (const page of pages) {
+    const w = weight.get(page) ?? 0;
+    lowest = Math.min(lowest, w);
+    if (w > bestWeight || (w === bestWeight && best !== undefined && page < best)) {
+      best = page;
+      bestWeight = w;
+    }
+  }
+  return bestWeight > lowest ? best : undefined;
+}
+
+/** `check` with its worst page first and the rest in URL order. */
+function pinWorstPage(check: CheckResult, members: CheckResult[]): CheckResult {
+  if (!check.pages || check.pages.length < 2) return check;
+  const worst = worstPage(members, check.pages);
+  if (worst === undefined || worst === check.pages[0]) return check;
+  return { ...check, pages: [worst, ...check.pages.filter((page) => page !== worst)] };
+}
+
+/**
+ * An item's page count as the largest any member recorded: the fold keeps the
+ * first member's copy of a repeated item, so a larger `pageCount` on a later
+ * copy (an input that was itself capped) would otherwise be lost.
+ */
+function keepPriorPageCounts(check: CheckResult, members: CheckResult[]): CheckResult {
+  if (!check.items) return check;
+  let prior: Map<string, number> | undefined;
+  for (const member of members) {
+    for (const item of member.items ?? []) {
+      const n = item.pageCount;
+      if (typeof n !== "number" || !Number.isFinite(n)) continue;
+      prior ??= new Map();
+      if (n > (prior.get(item.id) ?? 0)) prior.set(item.id, Math.floor(n));
+    }
+  }
+  if (!prior) return check;
+  return {
+    ...check,
+    items: check.items.map((item) => {
+      const n = prior.get(item.id);
+      return n !== undefined && n > itemPageCount(item) ? { ...item, pageCount: n } : item;
+    }),
+  };
+}
+
+/**
  * One aggregate for a whole issue class. A class of one keeps its check as is:
  * a single per-page check is the truth about one page, and an existing
  * aggregate is already the fold of its class. A class of several is folded
  * from scratch: members in page order, so the aggregate's message and item
  * details come from the same page however the crawl ordered them, and any
- * earlier fold's message suffix stripped first so it cannot stack.
+ * earlier fold's message suffix stripped first so it cannot stack. Either way
+ * an aggregate's pages lead with its worst page (see {@link worstPage}).
  */
 function foldClass(members: CheckResult[]): CheckResult {
   if (members.length === 1) {
@@ -295,18 +386,20 @@ function foldClass(members: CheckResult[]): CheckResult {
     if (only.details?.aggregated !== true) return only;
     // An aggregate built elsewhere may list its pages in any order; the sample
     // is its first pages, so put them in the order a fold here would.
-    return {
+    const sorted: CheckResult = {
       ...only,
       ...(only.pages ? { pages: [...only.pages].sort() } : {}),
       ...(only.items ? { items: [...only.items].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)) } : {}),
     };
+    return pinWorstPage(sorted, [sorted]);
   }
   const clean = [...members].sort(compareMembers).map((check) =>
     check.details?.aggregated === true && FOLD_SUFFIX.test(check.message)
       ? { ...check, message: check.message.replace(FOLD_SUFFIX, "") }
       : check,
   );
-  return foldOverflowChecks(clean, { ...DEFAULT_FOLD_LIMITS, maxChecks: 1 })[0]!;
+  const folded = foldOverflowChecks(clean, CLASS_FOLD_LIMITS)[0]!;
+  return pinWorstPage(keepPriorPageCounts(folded, clean), clean);
 }
 
 function compareNames(a: CheckResult, b: CheckResult): number {
@@ -334,10 +427,35 @@ function capMeta(meta: CappableRuleMeta): CappedRuleMeta {
   };
 }
 
-function boundChecks(checks: CheckResult[]): CheckResult[] {
+/** The publish clamps every producer applies to a check list (`capMixedRuleChecksForPublish`'s). */
+function clampChecks(checks: CheckResult[]): CheckResult[] {
   return clampCheckItemsOverflow(
     clampCheckItemIds(clampCheckDetails(clampCheckStrings(checks))),
   );
+}
+
+/**
+ * The clamps, with an oversized items array ranked first so the items cap keeps
+ * the most widespread ones rather than the first seen.
+ */
+function boundChecks(checks: CheckResult[]): CheckResult[] {
+  return clampChecks(
+    checks.map((check) =>
+      check.items && check.items.length > REPORT_LIMITS.maxItemsPerCheck
+        ? { ...check, items: rankItems(check.items) }
+        : check,
+    ),
+  );
+}
+
+/**
+ * A site check's identity, compared as the plain clamps leave it: the top-level
+ * `siteChecks` copy was clamped that way by the producer, unranked, so the
+ * rule's own copy has to be too for the two to match.
+ */
+function siteCheckKey(original: CheckResult, bounded: CheckResult): string {
+  const ranked = (original.items?.length ?? 0) > REPORT_LIMITS.maxItemsPerCheck;
+  return stableKey(ranked ? clampChecks([original])[0]! : bounded);
 }
 
 /**
@@ -387,10 +505,17 @@ function foldRule(ruleId: string, rule: { meta: CappableRuleMeta; checks: CheckR
       return { check, affected: affectedBeforeBounds(entry.originals, check) };
     })
     .sort((a, b) => compareClassOrder(a.check, b.check));
-  const units = [
-    ...site.map(({ check, original }) => ({ check, affected: affectedBeforeBounds([original], check) })),
+  const entries: Array<{ check: CheckResult; affected: number; key?: string }> = [
+    ...site.map(({ check, original }) => ({
+      check,
+      affected: affectedBeforeBounds([original], check),
+      key: siteCheckKey(original, check),
+    })),
     ...folded,
-  ].map(({ check, affected }, order) => unitOf(ruleId, check, order, affected));
+  ];
+  const units = entries.map((entry, order) =>
+    unitOf(ruleId, entry.check, order, entry.affected, entry.key),
+  );
   const total = Math.max(units.length, maxChecksTruncated(checks));
   let kept = units;
   if (units.length > REPORT_CAPS.classesPerRule) {
@@ -435,21 +560,52 @@ function clampMessage(message: string, aggregated: boolean, max: number): string
   return clampItemString(base, max) + suffix;
 }
 
+/** Distinct pages an item names, or what an earlier cap recorded if more. */
+function itemPageCount(item: CheckItem): number {
+  const listed = item.sourcePages ? new Set(item.sourcePages).size : 0;
+  const prior = item.pageCount;
+  return typeof prior === "number" && Number.isFinite(prior) && prior > listed ? Math.floor(prior) : listed;
+}
+
+/**
+ * Items on the most pages first: one item on half a class's pages is a
+ * template-level fix, and a first-seen sample misses it (repo#2656: it held the
+ * most widespread item 60% of the time on cloud reports). Stable, so items on
+ * as many pages keep the order they came in.
+ *
+ * Exact over the checks this function is given. A rule the producer already
+ * folded (past REPORT_LIMITS.maxChecksPerRule checks) arrives with its first
+ * 1,000 items and at most 100 source pages each, so for it the ranking and
+ * `pageCount` are over what that fold kept.
+ */
+function rankItems(items: CheckItem[]): CheckItem[] {
+  return items
+    .map((item, index) => ({ item, index, pages: itemPageCount(item) }))
+    .sort((a, b) => b.pages - a.pages || a.index - b.index)
+    .map(({ item }) => item);
+}
+
 function sampleItem(item: CheckItem, caps: SampleCaps): CheckItem {
   const next: CheckItem = { ...item };
   // A label equal to the id says nothing the id does not (134KB on one real report).
   if (next.label !== undefined && next.label === next.id) delete next.label;
   if (next.snippet !== undefined) next.snippet = clampItemString(next.snippet, caps.messageChars);
   if (next.sourcePages) {
-    const unique = [...new Set(next.sourcePages)];
+    const pages = itemPageCount(item);
+    // URL order, so the page kept does not depend on the order the crawl met them.
+    const unique = [...new Set(next.sourcePages)].sort();
     if (caps.sourcePages <= 0) delete next.sourcePages;
     else next.sourcePages = unique.slice(0, caps.sourcePages);
+    // The true spread, when the sample no longer lists every page.
+    if (pages > (next.sourcePages?.length ?? 0)) next.pageCount = pages;
+    else delete next.pageCount;
   }
   return next;
 }
 
 /**
- * One check at one tier: page and item samples, with the true totals kept in
+ * One check at one sample level: page and item samples (items on the most
+ * pages first, see {@link rankItems}), with the true totals kept in
  * `details.pagesTruncated` (preserved if an earlier sample recorded more) and
  * `details.additional` (added to the rule's own remainder).
  *
@@ -483,7 +639,9 @@ function sampleCheck(
   }
 
   if (check.items && check.items.length > 0) {
-    const kept = check.items.slice(0, caps.items);
+    // Ranked at most twice per class: renders are memoized per sample level,
+    // and a counts row keeps no items to rank.
+    const kept = caps.items > 0 ? rankItems(check.items).slice(0, caps.items) : [];
     const dropped = check.items.length - kept.length;
     if (dropped > 0) details = { ...details, additional: additionalOf(check) + dropped };
     if (kept.length > 0) out.items = kept.map((item) => sampleItem(item, caps));
@@ -524,9 +682,9 @@ function classCaps(tier: ReportCapTier, countsOnly: boolean): SampleCaps {
   };
 }
 
-/** Top-level `siteChecks` keep the site caps, never more than the tier's own. */
-function siteCaps(tierIndex: number, tier: ReportCapTier, countsOnly: boolean): SampleCaps {
-  const first = tierIndex === 0;
+/** Top-level `siteChecks` keep the site caps, never more than the level's own. */
+function siteCaps(level: number, tier: ReportCapTier, countsOnly: boolean): SampleCaps {
+  const first = level === 0;
   return {
     pages: first ? REPORT_CAPS.siteCheckPages : Math.min(REPORT_CAPS.siteCheckPages, tier.pagesPerClass),
     items: first ? REPORT_CAPS.siteCheckItems : Math.min(REPORT_CAPS.siteCheckItems, tier.itemsPerClass),
@@ -534,15 +692,6 @@ function siteCaps(tierIndex: number, tier: ReportCapTier, countsOnly: boolean): 
     messageChars: tier.messageChars,
     countsOnly,
   };
-}
-
-function sampleRule(rule: FoldedRule, kept: ClassUnit[], caps: SampleCaps): CheckResult[] {
-  const checks = kept.map((unit) => sampleCheck(unit.check, caps, unit.affected));
-  const last = checks.length - 1;
-  if (rule.total > kept.length && last >= 0) {
-    checks[last] = stampChecksTruncated(checks[last]!, rule.total);
-  }
-  return checks;
 }
 
 // ── Fixed sections ──────────────────────────────────────────────
@@ -576,29 +725,41 @@ function capSummary(summary: unknown, max: number): unknown {
   return out;
 }
 
-function capSitemaps(sitemaps: unknown, empty: boolean): unknown {
+/**
+ * How much of the display-only sections a body keeps: `normal`, the `minimal`
+ * the fitter falls back to when the counts rows alone do not fit, and `empty`
+ * for a last-resort admission whose skeleton does not fit even then.
+ */
+type SectionMode = "normal" | "minimal" | "empty";
+
+function capSitemaps(sitemaps: unknown, mode: SectionMode): unknown {
   if (!isRecord(sitemaps)) return sitemaps;
   const discovered = Array.isArray(sitemaps.discovered) ? sitemaps.discovered : undefined;
+  const normal = mode === "normal";
+  const entries =
+    mode === "normal"
+      ? REPORT_CAPS.sitemapEntries
+      : mode === "minimal"
+        ? REPORT_CAPS.minimalSitemapEntries
+        : 0;
   const out: Loose = {
     ...sitemaps,
     ...(discovered
       ? {
-          discovered: empty
-            ? []
-            : discovered.slice(0, REPORT_CAPS.sitemapEntries).map((s: unknown) =>
-                isRecord(s)
-                  ? {
-                      ...s,
-                      urls: sliceList(s.urls, REPORT_CAPS.sitemapUrls),
-                      childSitemaps: sliceList(s.childSitemaps, REPORT_CAPS.sitemapChildren),
-                      errors: sliceList(s.errors, PUBLISH_LIMITS.maxSummary),
-                    }
-                  : s,
-              ),
+          discovered: discovered.slice(0, entries).map((s: unknown) =>
+            isRecord(s)
+              ? {
+                  ...s,
+                  urls: sliceList(s.urls, normal ? REPORT_CAPS.sitemapUrls : 0),
+                  childSitemaps: sliceList(s.childSitemaps, normal ? REPORT_CAPS.sitemapChildren : 0),
+                  errors: sliceList(s.errors, normal ? PUBLISH_LIMITS.maxSummary : 0),
+                }
+              : s,
+          ),
         }
       : {}),
   };
-  const listMax = empty ? 0 : PUBLISH_LIMITS.maxSummary;
+  const listMax = normal ? PUBLISH_LIMITS.maxSummary : 0;
   for (const key of ["orphanPages", "missingPages", "failed"]) {
     if (Array.isArray(sitemaps[key])) out[key] = (sitemaps[key] as unknown[]).slice(0, listMax);
   }
@@ -610,8 +771,10 @@ function capSitemaps(sitemaps: unknown, empty: boolean): unknown {
   return out;
 }
 
-function capRobotsTxt(robots: unknown, empty: boolean): unknown {
+function capRobotsTxt(robots: unknown, mode: SectionMode): unknown {
   if (!isRecord(robots)) return robots;
+  // Display only: the critical-penalty scorer reads the robots-txt rule's checks.
+  const empty = mode !== "normal";
   const out: Loose = { ...robots };
   if (typeof robots.content === "string") {
     out.content = empty ? null : clampItemString(robots.content, REPORT_LIMITS.maxLongString);
@@ -638,14 +801,21 @@ function capRobotsTxt(robots: unknown, empty: boolean): unknown {
   return out;
 }
 
-function capResourceSizes(resources: unknown, empty: boolean): unknown {
+function capResourceSizes(resources: unknown, mode: SectionMode): unknown {
   if (!isRecord(resources)) return resources;
+  const rowsMax =
+    mode === "normal"
+      ? REPORT_CAPS.resourceRowsPerCategory
+      : mode === "minimal"
+        ? REPORT_CAPS.minimalResourceRows
+        : 0;
+  const sourcesMax = mode === "normal" ? REPORT_CAPS.resourceSourcePages : 0;
   const out: Loose = {};
   for (const [category, rows] of Object.entries(resources)) {
     out[category] = Array.isArray(rows)
-      ? rows.slice(0, empty ? 0 : REPORT_CAPS.resourceRowsPerCategory).map((row: unknown) =>
+      ? rows.slice(0, rowsMax).map((row: unknown) =>
           isRecord(row) && Array.isArray(row.sourcePages)
-            ? { ...row, sourcePages: row.sourcePages.slice(0, REPORT_CAPS.resourceSourcePages) }
+            ? { ...row, sourcePages: row.sourcePages.slice(0, sourcesMax) }
             : row,
         )
       : rows;
@@ -746,6 +916,19 @@ function largestSections(body: Loose): Record<string, number> {
   );
 }
 
+/** JSON with every object's keys sorted, so two copies of one check match however they were built. */
+function stableKey(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    isRecord(v)
+      ? Object.fromEntries(
+          Object.keys(v)
+            .sort()
+            .map((k) => [k, v[k]]),
+        )
+      : v,
+  );
+}
+
 /**
  * Cap a finished report for publish (squirrelscan/repo#2656). See the module
  * note for the ladder. `options.fullDetail` says where the uncapped detail
@@ -793,10 +976,21 @@ export function capReportForPublish<T extends CappableReport>(
 
   // 2. Every rule's classes folded once, in rule-id order.
   const rules = ruleIds.map((id) => foldRule(id, report.ruleResults[id]!));
+  // Top-level `siteChecks` repeats the site checks of `ruleResults` (9,137 of
+  // 9,138 entries over 187 real reports), and nothing reads it but the schema
+  // bounds and the publish counts, so a copy of a check `ruleResults` already
+  // publishes is left out. Whatever it holds that no rule does stays.
+  const published = new Set<string>();
+  for (const rule of rules) {
+    for (const unit of rule.kept) if (unit.key !== undefined) published.add(unit.key);
+  }
   const siteOriginals = Array.isArray(report.siteChecks) ? report.siteChecks : [];
-  const siteUnits = boundChecks(siteOriginals).map((check, order) =>
-    unitOf("", check, order, affectedBeforeBounds([siteOriginals[order]!], check)),
-  );
+  const siteUnits = boundChecks(siteOriginals)
+    .map((check, order) => {
+      const original = siteOriginals[order]!;
+      return unitOf("", check, order, affectedBeforeBounds([original], check), siteCheckKey(original, check));
+    })
+    .filter((unit) => !published.has(unit.key!));
 
   const {
     pages: _pages,
@@ -810,22 +1004,22 @@ export function capReportForPublish<T extends CappableReport>(
     pageStatuses: _pageStatuses,
     ...rest
   } = report;
-  const sections = (empty: boolean): Loose => ({
+  const sections = (mode: SectionMode): Loose => ({
     ...rest,
     pages: [],
     ...("summary" in report
-      ? { summary: capSummary(report.summary, empty ? 0 : PUBLISH_LIMITS.maxSummary) }
+      ? { summary: capSummary(report.summary, mode === "normal" ? PUBLISH_LIMITS.maxSummary : 0) }
       : {}),
-    ...("sitemaps" in report ? { sitemaps: capSitemaps(report.sitemaps, empty) } : {}),
-    ...("robotsTxt" in report ? { robotsTxt: capRobotsTxt(report.robotsTxt, empty) } : {}),
+    ...("sitemaps" in report ? { sitemaps: capSitemaps(report.sitemaps, mode) } : {}),
+    ...("robotsTxt" in report ? { robotsTxt: capRobotsTxt(report.robotsTxt, mode) } : {}),
     ...("resourceSizes" in report
-      ? { resourceSizes: capResourceSizes(report.resourceSizes, empty) }
+      ? { resourceSizes: capResourceSizes(report.resourceSizes, mode) }
       : {}),
     ...("sitemapUrlStatuses" in report
       ? {
           sitemapUrlStatuses: sliceList(
             report.sitemapUrlStatuses,
-            empty ? 0 : PUBLISH_LIMITS.maxSitemapUrls,
+            mode === "normal" ? PUBLISH_LIMITS.maxSitemapUrls : 0,
           ),
         }
       : {}),
@@ -833,11 +1027,15 @@ export function capReportForPublish<T extends CappableReport>(
   });
   const entityMap = slimEntityMap(report.entityMap);
   const tiers = REPORT_CAPS.tiers;
+  const countsLevel = tiers.length - 1;
 
-  const detailFor = (tier: number, extra: Partial<PublishedReportDetail> = {}): PublishedReportDetail => ({
+  const detailFor = (
+    tier: number,
+    extra: Partial<PublishedReportDetail> = {},
+  ): PublishedReportDetail => ({
     capped: true,
     tier,
-    caps: { ...tiers[tier]!, classesPerRule: REPORT_CAPS.classesPerRule },
+    caps: { ...tiers[0]!, classesPerRule: REPORT_CAPS.classesPerRule },
     ...(options.fullDetail ? { fullDetail: options.fullDetail } : {}),
     ...extra,
   });
@@ -849,99 +1047,190 @@ export function capReportForPublish<T extends CappableReport>(
       ...(resolutionSignal ? { resolutionSignal } : {}),
     }) as unknown as CappedReport<T>;
 
-  const assemble = (tierIndex: number, withEntityMap: boolean, extra?: Partial<PublishedReportDetail>): Loose => {
-    const tier = tiers[tierIndex]!;
-    const countsOnly = tier.pagesPerClass === 0 && tier.itemsPerClass === 0;
-    const caps = classCaps(tier, countsOnly);
+  // Every class the body can carry, in output order: each rule's kept classes,
+  // then the site checks. A rule that lost classes carries the stamp on its last.
+  interface Slot {
+    unit: ClassUnit;
+    rule?: FoldedRule;
+    stamp: boolean;
+  }
+  const slots: Slot[] = [];
+  for (const rule of rules) {
+    rule.kept.forEach((unit, i) => {
+      slots.push({ unit, rule, stamp: i === rule.kept.length - 1 && rule.total > rule.kept.length });
+    });
+  }
+  for (const unit of siteUnits) slots.push({ unit, stamp: false });
+
+  // A class sampled at one level, with its size, memoized: the fill prices
+  // every class at every level.
+  const rendered = slots.map(() => new Array<{ check: CheckResult; bytes: number }>(tiers.length));
+  const render = (index: number, level: number): { check: CheckResult; bytes: number } => {
+    const memo = rendered[index]![level];
+    if (memo) return memo;
+    const slot = slots[index]!;
+    const tier = tiers[level]!;
+    const countsOnly = level === countsLevel;
+    const caps = slot.rule ? classCaps(tier, countsOnly) : siteCaps(level, tier, countsOnly);
+    let check = sampleCheck(slot.unit.check, caps, slot.unit.affected);
+    if (slot.stamp) check = stampChecksTruncated(check, slot.rule!.total);
+    const out = { check, bytes: bytesOf(check) };
+    rendered[index]![level] = out;
+    return out;
+  };
+
+  const assemble = (
+    levels: number[],
+    mode: SectionMode,
+    withEntityMap: boolean,
+    detail: PublishedReportDetail,
+  ): Loose => {
     const ruleResults: Loose = {};
+    let index = 0;
     for (const rule of rules) {
-      ruleResults[rule.id] = { meta: rule.meta, checks: sampleRule(rule, rule.kept, caps) };
+      const checks: CheckResult[] = [];
+      for (let k = 0; k < rule.kept.length; k++, index++) {
+        checks.push(render(index, levels[index]!).check);
+      }
+      ruleResults[rule.id] = { meta: rule.meta, checks };
     }
-    const site = siteCaps(tierIndex, tier, countsOnly);
+    const siteChecks: CheckResult[] = [];
+    for (; index < slots.length; index++) siteChecks.push(render(index, levels[index]!).check);
     return {
-      ...sections(false),
+      ...sections(mode),
       ...(withEntityMap && entityMap ? { entityMap } : {}),
-      siteChecks: siteUnits.map((unit) => sampleCheck(unit.check, site, unit.affected)),
+      siteChecks,
       ruleResults,
-      detail: detailFor(tierIndex, extra),
+      detail,
     };
   };
 
-  // 3. The sample tiers, then without the entity map.
-  for (let t = 0; t < tiers.length; t++) {
-    const body = assemble(t, true);
-    if (bytesOf(body) <= budget) return finish(body);
-  }
-  const last = tiers.length - 1;
-  if (entityMap) {
-    const body = assemble(last, false, { entityMapDropped: true });
-    if (bytesOf(body) <= budget) return finish(body);
+  // 3. Every class at the full sample.
+  const first = assemble(
+    slots.map(() => 0),
+    "normal",
+    true,
+    detailFor(0),
+  );
+  if (bytesOf(first) <= budget) return finish(first);
+
+  // 4. Breadth first, then the same with the display sections at their minimum
+  // and no entity map.
+  const filled = fill(1, "normal", true) ?? fill(2, "minimal", false);
+  if (filled) return finish(filled);
+
+  // 5. Last resort: counts rows admitted by byte budget in priority order. Fits
+  // by construction; the empty sections are for a skeleton the minimal ones
+  // leave over budget.
+  return finish(admitByBudget("minimal") ?? admitByBudget("empty")!);
+
+  /**
+   * Every class a counts row, then each a small sample, then the full one,
+   * highest priority first, while the budget lasts. A class's row is swapped in
+   * place and the separators stay, so sizes add up exactly and each step is
+   * priced without rebuilding the body; the body is measured at the end anyway.
+   * Undefined when the counts rows alone do not fit.
+   */
+  function fill(tier: number, mode: SectionMode, withEntityMap: boolean): Loose | undefined {
+    const dropped = !withEntityMap && entityMap ? { entityMapDropped: true as const } : {};
+    const levels = slots.map(() => countsLevel);
+    // Priced with the most digits `classesReduced` can need.
+    const base = assemble(
+      levels,
+      mode,
+      withEntityMap,
+      detailFor(tier, { classesReduced: slots.length, ...dropped }),
+    );
+    let room = budget - bytesOf(base);
+    if (room < 0) return undefined;
+    const order = slots
+      .map((_, i) => i)
+      .sort((a, b) => compareUnits(slots[a]!.unit, slots[b]!.unit));
+    for (let level = countsLevel - 1; level >= 0; level--) {
+      for (const i of order) {
+        if (levels[i] !== level + 1) continue;
+        const delta = render(i, level).bytes - render(i, level + 1).bytes;
+        if (delta > room) continue;
+        levels[i] = level;
+        room -= delta;
+      }
+    }
+    const reduced = levels.filter((level) => level > 0).length;
+    const body = assemble(
+      levels,
+      mode,
+      withEntityMap,
+      detailFor(tier, { ...(reduced > 0 ? { classesReduced: reduced } : {}), ...dropped }),
+    );
+    return bytesOf(body) <= budget ? body : undefined;
   }
 
-  // 4. Last resort: display-only sections emptied, then every class (counts
-  // only) admitted by byte budget in priority order. Fits by construction.
-  return finish(admitByBudget());
-
-  function admitByBudget(): Loose {
-    const caps = classCaps(tiers[last]!, true);
-    const candidates = [
-      ...rules.flatMap((rule) => rule.kept),
-      ...siteUnits,
-    ].map((unit) => {
-      const check = sampleCheck(unit.check, caps, unit.affected);
-      // +1 for the separating comma.
-      return { unit, check, bytes: bytesOf(check) + 1 };
-    });
-    const total = candidates.length;
-    const extra = (dropped: number): Partial<PublishedReportDetail> => ({
+  /**
+   * Counts rows only, admitted in priority order while they fit. Undefined when
+   * the skeleton does not fit in `minimal` mode; in `empty` mode that throws.
+   */
+  function admitByBudget(mode: SectionMode): Loose | undefined {
+    const caps = classCaps(tiers[countsLevel]!, true);
+    const rows = slots.map((slot) => sampleCheck(slot.unit.check, caps, slot.unit.affected));
+    const total = slots.length;
+    const extra = (admitted: number): Partial<PublishedReportDetail> => ({
       ...(entityMap ? { entityMapDropped: true as const } : {}),
-      ...(dropped > 0 ? { classesDropped: dropped } : {}),
+      ...(admitted > 0 ? { classesReduced: admitted } : {}),
+      ...(total - admitted > 0 ? { classesDropped: total - admitted } : {}),
     });
-    const build = (admitted: Set<ClassUnit>, dropped: number): Loose => {
+    const build = (admitted: Set<number>, detail: PublishedReportDetail): Loose => {
       const ruleResults: Loose = {};
+      let index = 0;
       for (const rule of rules) {
-        const kept = rule.kept.filter((unit) => admitted.has(unit));
-        const checks = kept.map((unit) => sampleCheck(unit.check, caps, unit.affected));
+        const checks: CheckResult[] = [];
+        for (let k = 0; k < rule.kept.length; k++, index++) {
+          if (admitted.has(index)) checks.push(rows[index]!);
+        }
         // Every class this rule lost, stamped where a reader of the rule sees it.
         const ruleTotal = Math.max(rule.total, rule.kept.length);
-        if (ruleTotal > kept.length && checks.length > 0) {
+        if (ruleTotal > checks.length && checks.length > 0) {
           checks[checks.length - 1] = stampChecksTruncated(checks[checks.length - 1]!, ruleTotal);
         }
         ruleResults[rule.id] = { meta: rule.meta, checks };
       }
-      return {
-        ...sections(true),
-        siteChecks: siteUnits
-          .filter((unit) => admitted.has(unit))
-          .map((unit) => sampleCheck(unit.check, caps, unit.affected)),
-        ruleResults,
-        detail: detailFor(last, extra(dropped)),
-      };
+      const siteChecks: CheckResult[] = [];
+      for (; index < slots.length; index++) if (admitted.has(index)) siteChecks.push(rows[index]!);
+      return { ...sections(mode), siteChecks, ruleResults, detail };
     };
 
-    // The skeleton, priced with the most digits `classesDropped` can need.
-    const skeleton = build(new Set(), total);
+    // The skeleton, priced with the most digits the counts in `detail` can need.
+    const skeleton = build(
+      new Set(),
+      detailFor(3, { ...extra(0), classesReduced: total, classesDropped: total }),
+    );
     const skeletonBytes = bytesOf(skeleton);
     let room = budget - skeletonBytes;
     if (room < 0) {
+      if (mode !== "empty") return undefined;
       throw new PublishedReportTooLargeError(skeletonBytes, budget, largestSections(skeleton));
     }
     // A rule's first admitted class also pays for the `checksTruncated` stamp
     // the rule carries if it loses any, so the stamps can never overrun.
     const STAMP_BYTES = 48;
     const stamped = new Set<string>();
-    const admitted = new Set<ClassUnit>();
-    for (const candidate of [...candidates].sort((a, b) => compareUnits(a.unit, b.unit))) {
-      const ruleId = candidate.unit.ruleId;
+    const admitted = new Set<number>();
+    const order = slots
+      .map((_, i) => i)
+      .sort((a, b) => compareUnits(slots[a]!.unit, slots[b]!.unit));
+    for (const i of order) {
+      const ruleId = slots[i]!.unit.ruleId;
+      // +1 for the separating comma.
+      const bytes = bytesOf(rows[i]) + 1;
       const stamp = ruleId !== "" && !stamped.has(ruleId) ? STAMP_BYTES : 0;
-      if (candidate.bytes + stamp > room) continue;
-      admitted.add(candidate.unit);
+      if (bytes + stamp > room) continue;
+      admitted.add(i);
       if (stamp > 0) stamped.add(ruleId);
-      room -= candidate.bytes + stamp;
+      room -= bytes + stamp;
     }
-    const body = build(admitted, total - admitted.size);
+    const body = build(admitted, detailFor(3, extra(admitted.size)));
     const bytes = bytesOf(body);
     if (bytes > budget) {
+      if (mode !== "empty") return undefined;
       throw new PublishedReportTooLargeError(bytes, budget, largestSections(body));
     }
     return body;
