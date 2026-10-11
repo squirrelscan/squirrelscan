@@ -162,7 +162,11 @@ Turn the setting on and the crawler also skips URLs your robots.txt disallows, a
 
 ## Custom request headers
 
-Custom request headers are available on every plan, Free included. The bottom card sets them for this website, and its cloud audits send them on every request to your site: pages, assets, `robots.txt`, sitemaps and pages loaded in the cloud browser. Header values are stored as secrets and never shown in reports or logs. The usual reason to add one is a firewall exception: [Firewall and WAF exceptions](/cloud/firewall) has the rules. A header also makes the crawl [authorised](#authorised-crawls).
+Custom request headers are available on every plan, Free included. The bottom card sets them for this website, and its cloud audits send them with the requests they make to your site over plain HTTP: pages, assets on your host and its subdomains, `robots.txt` and sitemaps. Pages rendered in the cloud browser do not carry them, and neither does the probe that checks where the audited address redirects before the crawl starts. On any request, the headers are removed at a redirect to a different origin. [How custom request headers are sent](/cloud/firewall#how-custom-request-headers-are-sent) has the full list.
+
+The card accepts any valid header name, `Authorization` included, up to 50 headers per website, with names up to 255 characters and values up to 8,192 characters. Header values are stored as secrets and never shown in reports or logs.
+
+The usual reason to add one is a firewall exception: [Firewall and WAF exceptions](/cloud/firewall) has the rules. A header is also how a cloud audit gets past an access gateway in front of a staging site, such as [Cloudflare Access](/cloud/firewall#cloudflare-access), [Vercel deployment protection](/cloud/firewall#vercel-deployment-protection) or [HTTP basic auth](/cloud/firewall#http-basic-auth); for a gateway that redirects to a sign-in page, also set **Rendering** to **Off** in the [audit level](#audit-level) card. When an audit fails anyway, [failed audits](/guides/failed-audits#access-gateway) says what the crawler saw. A header also makes the crawl [authorised](#authorised-crawls).
 
 ## Authorised crawls
 

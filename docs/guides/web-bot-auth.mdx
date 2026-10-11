@@ -94,9 +94,10 @@ and override a single header per run.
 
 On the dashboard, set custom headers per-website under **Settings → Crawl →
 Custom request headers**. Custom headers for **cloud** audits are available on
-[every plan](/dashboard/crawl-settings#custom-request-headers), Free included. The cloud render
-worker applies the headers to the headless browser before navigation
-(`setExtraHTTPHeaders`), so they ride the initial load and every subresource.
+[every plan](/dashboard/crawl-settings#custom-request-headers), Free included. Plain HTTP
+requests carry them; pages rendered in the cloud browser do not. When the site
+refuses a render, the page is fetched again over plain HTTP with the signed
+headers. See [how custom request headers are sent](/cloud/firewall#how-custom-request-headers-are-sent).
 
 ## Related
 

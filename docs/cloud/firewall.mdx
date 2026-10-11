@@ -1,38 +1,79 @@
 ---
 title: "Firewall and WAF exceptions"
 sidebarTitle: "Firewall exceptions"
-description: "Let squirrelscan cloud audits through your firewall, WAF, or bot protection"
+description: "Let squirrelscan cloud audits through your firewall, WAF, bot protection, or access gateway"
 icon: "shield-check"
 ---
 
-Cloud audits fetch your pages from squirrelscan's infrastructure, not from your machine. If your site sits behind a WAF, bot protection, or an IP allowlist, those requests can come back as 403s, challenge pages, or rate limits, and the report ends up auditing the block page instead of your site.
+Cloud audits fetch your pages from squirrelscan's infrastructure, not from your machine. If your site sits behind a WAF, bot protection, an IP allowlist, or an access gateway such as Cloudflare Access, those requests can come back as 403s, challenge pages, rate limits or redirects to a sign-in page, and the audit either fails or audits the block page instead of your site.
 
-This page covers how to recognise squirrelscan cloud traffic and the three ways to let it through, from most to least reliable.
+This page covers how to recognise squirrelscan cloud traffic, the three ways to let it through a firewall, from most to least reliable, and how to get it past the access gateways that protect staging sites.
 
 <Note>
   Local audits run by the `squirrel` CLI come from your own network and are configured in `squirrel.toml`. See [User-Agent](/crawl#user-agent) and [Web Bot Auth](/guides/web-bot-auth) for the CLI equivalents of everything below.
 </Note>
 
+## Which exception fits \{#which-exception-fits\}
+
+| In front of the site | What a cloud audit gets without an exception | Exception |
+|---|---|---|
+| A WAF rule, bot protection or rate limit | `403`, `429` or a challenge page | [A secret request header](#option-1-a-secret-request-header-recommended) and a rule that skips the protection for it |
+| A platform that verifies signed crawlers | `403` or a challenge | [Web Bot Auth](#option-2-web-bot-auth) |
+| A firewall that only matches IP addresses | Refused connections or `403` | [IP allowlisting](#option-3-ip-allowlisting), paired with the header |
+| Cloudflare Access | A redirect to `<team-name>.cloudflareaccess.com` | [A service token](#cloudflare-access) |
+| Vercel Authentication or Password Protection | A redirect to a Vercel login, or a password page | [The protection bypass header](#vercel-deployment-protection) |
+| HTTP basic auth | `401` with `WWW-Authenticate: Basic` | [An `Authorization` header](#http-basic-auth) |
+| Single sign-on through Okta, Auth0, Microsoft Entra ID, Google IAP and similar | A redirect to the identity provider | No header route. See [other zero-trust gateways](#other-zero-trust-gateways) |
+
+Every exception except IP allowlisting is a custom request header. Read [how custom request headers are sent](#how-custom-request-headers-are-sent) before you rely on one: they are not sent on every kind of request.
+
+## How custom request headers are sent \{#how-custom-request-headers-are-sent\}
+
+Every website in the dashboard can send custom HTTP request headers with its cloud audits. You set them under **Settings → Crawl → Custom request headers** (see [crawl settings](/dashboard/crawl-settings#custom-request-headers)). This is where they go:
+
+| Request | Custom request headers |
+|---|---|
+| The seed redirect probe, which checks where the audited address redirects before the crawl starts | Not sent |
+| `robots.txt`, sitemaps, `llms.txt` and the other root files | Sent |
+| Page fetches over plain HTTP | Sent |
+| Pages rendered in the cloud browser | **Not sent** |
+| Asset checks: stylesheets, scripts, images and fonts on the audited host and its subdomains | Sent |
+| External link checks | Not sent |
+| The [GitHub check](/dashboard/crawl-settings) | Not sent |
+
+On a request that is sent with them, the headers are removed at the first redirect to a different origin (scheme, host and port), and stay removed for the rest of that redirect chain. `http://` to `https://` is a different origin, and so is `example.com` to `www.example.com`.
+
+Two consequences follow:
+
+- **A refusal is retried without the browser.** When the site answers a cloud browser render with `401`, `403`, `429`, `503` or a challenge page, the page is fetched again over plain HTTP, which does carry the headers. A WAF exception keyed on a header therefore still lets the page through, unrendered.
+- **A sign-in redirect is not a refusal.** A render that lands on a sign-in page is not retried, and the audit fails as a [redirect to another site](/guides/failed-audits#offsite-redirect). For a site behind Cloudflare Access, Vercel deployment protection or any other gateway that redirects, set **Rendering** to **Off** in the audit level card under **Settings → Crawl**, so every page is fetched over plain HTTP with the headers.
+
+An audit started through the API or the MCP server with a level of its own uses that level's rendering instead of the website's, and Surface and Full render every page. Start audits of a gated site from the dashboard or a schedule. A signed-in `squirrel audit` renders in the cloud browser too: add `--http` when the audit depends on headers passed with `-H`.
+
+The header card accepts any valid HTTP header name, `Authorization` included. Nothing is reserved. A website can have up to 50 headers, each name up to 255 characters and each value up to 8,192 characters, with no control characters. Values are stored as secrets and never shown in reports or logs. Setting any header also makes the crawl [authorised](/dashboard/crawl-settings#authorised-crawls), which raises its pace and stops `robots.txt` being applied.
+
 ## Option 1: a secret request header (recommended)
 
-Every website in the dashboard can send custom HTTP headers on every request a cloud audit makes: pages, assets, `robots.txt`, sitemaps, and pages loaded in the headless browser when [rendering](/cloud/rendering) is on. A firewall rule that matches a header value only you know is the most precise exception you can make, and it works with any firewall.
+A firewall rule that matches a header value only you know is the most precise exception you can make, and it works with any firewall that can match a request header.
 
 1. Open the website in the [dashboard](https://app.squirrelscan.com) and go to **Settings → Crawl**.
 2. Scroll to **Custom request headers** at the bottom of the page.
 3. Add a header, for example `X-Squirrelscan-Auth` with a long random value, and click **Save headers**.
 4. Add a rule to your firewall that skips bot protection when that header carries that exact value.
 
-Header values are stored as secrets and never shown in reports or logs. You can set up to 50 headers per website, and they are available on [every plan](/dashboard/crawl-settings#custom-request-headers).
+Custom request headers are available on [every plan](/dashboard/crawl-settings#custom-request-headers).
 
 <Tabs>
   <Tab title="Cloudflare WAF">
-    Create a custom rule under **Security → WAF → Custom rules** with the action **Skip** (select the products to skip, such as Bot Fight Mode, rate limiting, and managed rules):
+    Create a custom rule under **Security → WAF → Custom rules** with the action **Skip**, and select what to skip: Super Bot Fight Mode rules, rate limiting rules and managed rules, as the block requires.
 
     ```text
     (http.request.headers["x-squirrelscan-auth"][0] eq "your-long-random-value")
     ```
 
     Header names are matched in lowercase in Cloudflare expressions.
+
+    Bot Fight Mode, the bot protection on Cloudflare's Free plan, cannot be skipped by a WAF custom rule or a Page Rule. If Bot Fight Mode is what challenges the crawler, turn it off, or use Super Bot Fight Mode, which a Skip rule can skip. A Skip rule cannot skip Cloudflare Access either: see [Cloudflare Access](#cloudflare-access).
   </Tab>
   <Tab title="nginx">
     ```nginx
@@ -71,6 +112,110 @@ If your firewall can only work with IP addresses, allow Cloudflare's published r
   These ranges are shared by every Cloudflare customer's Workers and by Cloudflare's own proxy traffic. Allowlisting them opens the exception to far more than squirrelscan, so pair the IP rule with the header check from option 1 wherever your firewall allows an AND condition.
 </Warning>
 
+## Cloudflare Access \{#cloudflare-access\}
+
+Cloudflare Access answers a request that has no valid session with a `302` redirect to its login page on your team domain, `<team-name>.cloudflareaccess.com`. A cloud audit cannot sign in, so it fails as a [redirect to another site](/guides/failed-audits#offsite-redirect). A WAF custom rule does not help: Cloudflare Access is not one of the phases or products a Skip rule can skip.
+
+Access lets a machine through with a **service token**: a Client ID and a Client Secret sent as two request headers, matched by a policy with the **Service Auth** action.
+
+1. **Create the token.** In Cloudflare, go to **Zero Trust → Access controls → Service credentials → Service Tokens** and select **Create Service Token**. Name it (for example `squirrelscan`), choose a **Service Token Duration**, and select **Generate token**. Copy the Client ID and the Client Secret. Cloudflare shows the Client Secret only once.
+2. **Add a Service Auth policy.** In **Zero Trust → Access controls → Applications**, open the application that protects the hostname you audit and add a policy to it with the action **Service Auth** and an Include rule with the selector **Service Token** set to the token you created. Service Auth policies are evaluated before Allow and Block policies, so your existing login policy stays as it is for people. The selector **Any Access Service Token** also works, but it admits every service token in your account.
+3. **Add the headers to squirrelscan.** Under **Settings → Crawl → Custom request headers**, add two headers and select **Save headers**:
+
+   | Name | Value |
+   |---|---|
+   | `CF-Access-Client-Id` | `<client-id>` |
+   | `CF-Access-Client-Secret` | `<client-secret>` |
+
+4. **Turn rendering off.** In the audit level card on the same page, set **Rendering** to **Off** and save the level. Cloud browser renders do not carry custom request headers (see [how custom request headers are sent](#how-custom-request-headers-are-sent)).
+5. **Audit the exact origin Access protects**, with `https://` and the exact hostname, so no redirect to another origin removes the headers before Access sees them.
+6. **Check it** with the [verification checklist](#verification-checklist).
+
+From your own machine, the difference looks like this:
+
+```bash
+curl -sS -o /dev/null -D - https://staging.example.com/ | grep -i -E '^(HTTP/|location)'
+# HTTP/2 302
+# location: https://<team-name>.cloudflareaccess.com/...
+
+curl -sS -o /dev/null -D - \
+  -H 'CF-Access-Client-Id: <client-id>' \
+  -H 'CF-Access-Client-Secret: <client-secret>' \
+  https://staging.example.com/ | grep -i -E '^(HTTP/|location)'
+# HTTP/2 200
+```
+
+The `location` path and query vary. What matters is that the second request answers `200` and has no `location` on `cloudflareaccess.com`.
+
+Things that change the result:
+
+- **Strict service token authentication.** With it on, a request whose token does not match gets a `401` or `403` instead of the redirect, so a wrong or expired token makes the audit blocked rather than redirected.
+- **Expiry.** The token stops working at the end of its duration, and audits fail with the redirect again. **Refresh** extends a token by one year, and Cloudflare's **Expiring Access Service Token** notification warns a week before expiry.
+- **A single header.** An Access application can be set to read the token from one header, such as `Authorization`, holding both values as JSON. Two headers need no extra setup, so use them unless your application already works that way.
+
+## Vercel deployment protection \{#vercel-deployment-protection\}
+
+Vercel Deployment Protection puts **Vercel Authentication** (a redirect to a Vercel login), **Password Protection** (a password page) or **Trusted IPs** in front of a deployment. **Standard Protection**, the recommended scope, covers every deployment except production domains, so a production custom domain needs no exception. Preview deployments and generated `*.vercel.app` URLs do.
+
+Vercel lets automation through with **Protection Bypass for Automation**, available on every Vercel plan:
+
+1. **Create the secret.** In the Vercel project, open **Settings → Deployment Protection** and create a secret under **Protection Bypass for Automation**.
+2. **Add the header to squirrelscan.** Under **Settings → Crawl → Custom request headers**, add `x-vercel-protection-bypass` with the secret as its value, and select **Save headers**.
+3. **Leave out `x-vercel-set-bypass-cookie`.** It makes Vercel answer with a redirect that sets a cookie, which a crawl does not need: the header goes with every request.
+4. **Turn rendering off** in the audit level card, as for [Cloudflare Access](#cloudflare-access).
+5. **Check it** with the [verification checklist](#verification-checklist).
+
+```bash
+curl -sS -o /dev/null -D - https://my-project-git-staging-team.vercel.app/ | grep -i -E '^(HTTP/|location)'
+curl -sS -o /dev/null -D - -H 'x-vercel-protection-bypass: <secret>' \
+  https://my-project-git-staging-team.vercel.app/ | grep -i -E '^(HTTP/|location)'
+```
+
+The first request, without the header, is redirected to a Vercel login or gets the password page. The second answers `200`.
+
+The bypass also skips Vercel's bot protection challenges and its system mitigations, but not an active DDoS mitigation. A secret works until it is revoked: when you regenerate or delete it in Vercel, update the header in squirrelscan.
+
+## HTTP basic auth \{#http-basic-auth\}
+
+A site with HTTP basic auth, such as nginx `auth_basic` or Apache `AuthType Basic`, answers `401` with a `WWW-Authenticate: Basic` header, and the audit is [blocked](/guides/failed-audits#login-required). A browser sends the username and password in an `Authorization` header, and a cloud audit can send the same header.
+
+1. **Encode the credentials.** The value is `Basic` followed by a space and the Base64 encoding of `username:password`:
+
+   ```bash
+   printf '%s' 'username:password' | base64
+   # dXNlcm5hbWU6cGFzc3dvcmQ=
+   ```
+
+   Use `printf '%s'`, not `echo`, so no newline is encoded with it.
+2. **Add the header.** Under **Settings → Crawl → Custom request headers**, add `Authorization` with the value `Basic <base64-value>`, for example `Basic dXNlcm5hbWU6cGFzc3dvcmQ=`, and select **Save headers**. The header card accepts `Authorization` like any other name.
+3. **Check it** from your machine:
+
+   ```bash
+   curl -sS -o /dev/null -w '%{http_code}\n' -H 'Authorization: Basic <base64-value>' https://staging.example.com/
+   # 200
+   ```
+
+Rendering can stay on: a render that gets the `401` is fetched again over plain HTTP with the header. Every rendered page then costs a render and a plain fetch in time, so **Rendering: Off** is faster for a site where every page needs the login.
+
+Use an account that exists only for the audit, because the credentials go with every request to the site. HTTP Digest authentication cannot be passed this way: its `Authorization` value depends on a one-time value the server sends with each challenge, so a fixed header never matches.
+
+## Other zero-trust gateways \{#other-zero-trust-gateways\}
+
+A gateway can be passed with a custom request header only when it offers a long-lived machine credential, as Cloudflare Access service tokens, Vercel's bypass secret and HTTP basic auth do. These cannot:
+
+| Gateway | Why a saved header does not work |
+|---|---|
+| Okta, Auth0, Microsoft Entra ID, Amazon Cognito, OneLogin, Clerk, or another identity provider in front of your application | The application, or the proxy in front of it, sends an anonymous visitor to an interactive sign-in. The identity provider has no request header that skips it |
+| Google Identity-Aware Proxy | It accepts OIDC ID tokens, which expire after about an hour, so a saved header stops working |
+| Shopify storefront password | Shopify does not document a header that opens a password-protected storefront. Its crawler access signatures let a crawler through bot protection on a public store |
+
+For these, audit from somewhere the gateway already lets through, or take the gateway out of the path:
+
+- **The CLI on a trusted network.** `squirrel audit` fetches from your machine, so a gateway that admits your office network, VPN or managed device admits the audit too. Signed in, the CLI renders pages in the cloud browser, which comes from squirrelscan's network: add `--http` so every page is fetched from yours.
+- **The CLI against a local build.** Run the same site on your machine without the gateway and audit it there: `squirrel audit http://localhost:3000`. See [local audits](/guides/local-audits-cli).
+- **An exception in your own application or proxy.** If you control the code or proxy that starts the sign-in, let requests through that carry a secret header with an exact value, as in [option 1](#option-1-a-secret-request-header-recommended), and add that header to squirrelscan.
+- **For a Shopify store**, remove the storefront password for the time of the audit, or audit a development copy locally.
+
 ## What squirrelscan cloud looks like in your logs
 
 Cloud audits deliberately look like a browser so that the audit sees what your visitors see. Do not rely on a user agent match to identify them:
@@ -92,3 +237,27 @@ Run an audit after saving the rule and open the report. A block that is still in
 - a [rate-limited host](/guides/rate-limited-hosts) warning.
 
 If the audit still fails, see [Failed audits](/guides/failed-audits) or contact support from the dashboard with the audit id.
+
+### Verification checklist \{#verification-checklist\}
+
+Before the audit:
+
+1. **Without credentials**, `curl -sS -o /dev/null -D - <audited-url>` shows what the protection does: a `302` with a `location` on the sign-in host, a `401`, a `403`, or a challenge.
+2. **With the same headers** as the website's custom request headers, added with `-H`, the same request answers `200` and has no `location` on a sign-in host.
+3. The audited address is the exact URL that second request used, scheme and host included.
+4. **Settings → Crawl** shows the headers saved, and the header card shows **Authorised crawl: on (custom header)**.
+5. For a gateway that redirects (Cloudflare Access, Vercel deployment protection), **Rendering** is **Off**, and the audit is started from the dashboard or a schedule, not through the API or the MCP server with a level that renders.
+
+After the audit:
+
+6. The report audited at least one page. The start page's status is `200` and its title is your page's, not a sign-in or challenge page.
+7. A failed audit's run page lists what happened under **Technical details**:
+
+   | Recorded attempt | What it means |
+   |---|---|
+   | A crawler or direct attempt redirected to the gateway's origin | The gateway did not accept the headers. Check the token or secret, the policy (for Cloudflare Access, the **Service Auth** action and the selector), that the policy covers this hostname, and that the token has not expired |
+   | A browser attempt | Rendering was on for the run, and renders do not carry the headers |
+   | A direct attempt with status `401` or `403` | The credentials were rejected outright, for example by Cloudflare Access with strict service token authentication |
+   | A `cf-ray` id | Search for it in **Security → Events** on Cloudflare to see which product acted on the request |
+
+See [Failed audits](/guides/failed-audits) for every cause and its fix.

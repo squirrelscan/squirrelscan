@@ -1,18 +1,18 @@
 ---
 title: "Failed audits"
 icon: "triangle-alert"
-description: "Why an audit fetched nothing, and what to do about each cause"
+description: "What a failed audit sent and observed, how the cause is classified, whose side it points at, what is refunded, and the fix for each cause"
 ---
 
-An audit fails when the crawl finishes without a single auditable page. There is no score and no issue list, because nothing was read.
+An audit fails when the crawl finishes without a single auditable page. A failed audit has no score and no issue list, because nothing was read.
 
-Every failed audit names the cause. The reason appears in the report, in the failure email, in `squirrel audit` output, and on the `get_audit_status` MCP tool as a short sentence plus a machine-readable code. For a cloud audit, [troubleshooting by cause](#troubleshooting) below has a section for each one.
+Every failed audit names its cause. The cause appears in the report, in the failure email, in the in-app notification, in `squirrel audit` output, and on the `get_audit_status` MCP tool, as a short sentence plus a machine-readable code. For a cloud audit, [troubleshooting by cause](#troubleshooting) has one section per cause, and each of those surfaces links to the section that applies.
 
-<Note>Failed audits are refunded automatically. A run that fetched nothing does not cost you credits.</Note>
+<Note>Failed and blocked audits are refunded in full, whichever side the cause was on. See [refunds and retries](#refunds-and-retries) and [when a refund lands](#refund-timing).</Note>
 
 ## Blocked is not failed
 
-If your site actively refused the crawler with a 403 or 429, the audit is marked **blocked**, not failed. That is a separate state with its own guidance: let the squirrelscan crawler through your WAF or bot protection without switching the protection off (see [bot protection or WAF challenge](#waf-challenge) and [Firewall and WAF exceptions](/cloud/firewall)), or run the CLI from a trusted network.
+If your site actively refused the crawler on the audited address, with a `401`, a `403`, a rate limit (`429`, `430`, or a `503` carrying `Retry-After`) or a bot protection challenge, the audit is marked **blocked**, not failed. That is a separate state with its own guidance: let the squirrelscan crawler through your WAF or bot protection without switching the protection off (see [bot protection or WAF challenge](#waf-challenge) and [Firewall and WAF exceptions](/cloud/firewall)), get it past a login (see [sign-in page or access gateway](#access-gateway)), or run the CLI from a trusted network. A blocked audit is refunded the same way as a failed one.
 
 ### What a blocked report says about your root files
 
@@ -33,12 +33,14 @@ The JSON report carries the same list as `refusedFetches`, one entry per refused
 | `dns` | The hostname did not resolve. | Check the domain's DNS records and that the name resolves from the public internet. If you moved hosts recently, wait for the change to propagate. |
 | `tls` | The TLS handshake failed: an expired certificate, a hostname mismatch, a self-signed certificate, or an incomplete chain. | Renew or repair the certificate so it is valid for this hostname and served with the full chain. |
 | `connection` | Nothing answered. The connection was refused, reset, or closed before any response arrived. | Check that the origin server is running and accepting connections from the public internet, and that no firewall is dropping the requests. If a CLI audit got an answer at first and then nothing, a firewall such as fail2ban may have banned your IP for the [discovery probes](/configuration/crawler#discovery-probes): re-run with `--disable-discovery-probes`, or [let the audit through](/configuration/crawler#or-let-squirrelscan-through). |
-| `timeout` | The origin accepted the connection but sent no response in time. | Check server load, slow database queries, or a firewall holding connections open. |
-| `http_4xx` | The server answered every request with a 4xx status. | A 401, 403 or 429 is a refusal: allowlist the squirrelscan crawler, or check that the URL is reachable without a login. A 404 or 410 means the page is not there: check the address. A root 403 or 429 is reported as blocked instead. |
-| `http_5xx` | The server returned an error of its own for every request. | Check your error logs, then re-run the audit once the site is serving normally. |
-| `redirect` | The audited URL redirected somewhere the crawl could not follow, usually off its own site. | Audit the URL the site actually serves, or fix the redirect so it stays on the same site. |
+| `timeout` | No response arrived within the request's time budget. | Check server load, slow database queries, cold starts, or a firewall holding connections open. |
+| `http_4xx` | The server answered with a 4xx status. | A 401, 403 or 429 is a refusal: allowlist the squirrelscan crawler, or get it past the login. A 404 or 410 means the page is not there: check the address. A root 401, 403 or 429 is reported as blocked instead. |
+| `http_5xx` | The server returned an error of its own. | Check your error logs, then re-run the audit once the site is serving normally. |
+| `redirect` | The audited URL redirected somewhere the crawl could not follow, usually off its own site: a domain the site moved to, or a sign-in page in front of it. | Audit the URL the site actually serves, or get the crawler past the sign-in (see [access gateways](#access-gateway)). |
 | `robots` | `robots.txt` disallows the crawler on this URL. | Allow the squirrelscan crawler in `robots.txt`, or point the audit at a path it permits. |
 | `unknown` | The cause could not be attributed. The reason still carries whatever the fetch reported. | Check that the site is reachable and try again. If it keeps failing, send us the report link. |
+
+A cloud audit has two more codes of its own: `audit_timeout`, when the audit reached its overall time limit, and `stalled`, when it stopped making progress. Both are on squirrelscan's side; see [the audit ran out of time](#audit-timeout) and [the audit stalled](#stalled).
 
 ## Reading the reason
 
@@ -70,36 +72,107 @@ The `llm` output states the same thing for an agent:
 
 ## Checking it yourself
 
-A failed cloud audit is worth reproducing locally before you change anything: the CLI runs from your network, so a result that differs points at how your origin treats our egress rather than at the site being down.
+A failed cloud audit is worth reproducing before you change anything. Two checks cover most causes.
+
+The first repeats the cloud's page request with `curl`. Cloud page fetches send a desktop or mobile browser user agent, so send one too, or a firewall that treats `curl` differently gives you a different answer:
+
+```bash
+UA='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36'
+curl -sS -o /dev/null -D - -A "$UA" https://example.com/
+```
+
+`-D -` prints the response headers. A working site answers `HTTP/2 200` (or `HTTP/1.1 200 OK`). Each section below says what to look for when it does not. Add the same `-H 'Name: value'` options as your website's custom request headers to see what an audit with those headers gets.
+
+The second runs the audit with the CLI, which fetches from your network:
 
 ```bash
 squirrel audit https://example.com --max-pages 1
 ```
 
-If the local run succeeds and the cloud run fails with `connection` or `http_4xx`, your origin or its CDN is treating our requests differently from yours.
+If the local run succeeds and the cloud run fails with `connection` or `http_4xx`, your origin or its CDN is treating requests from squirrelscan's network differently from yours.
+
+## How a cloud audit requests your site \{#request-sequence\}
+
+Every cause below refers to the same sequence of requests. These terms are used throughout:
+
+- **Audited address**: the URL the audit was started with.
+- **Origin**: the scheme, host and port of a URL together. `http://example.com` and `https://example.com` are different origins, and so are `example.com` and `www.example.com`.
+- **Same site**: two addresses whose hosts share a registrable domain and whose ports match, such as `example.com`, `www.example.com` and `staging.example.com`. The scheme may differ. Hosts on a shared hosting domain are separate sites: `a.vercel.app` and `b.vercel.app` are not the same site, and neither is `example.vercel.app` and `example.com`.
+- **Attempt**: one request, or one browser render, with its own time budget.
+- **Budget**: how long an attempt may take before it is abandoned. The run page lists each recorded attempt's elapsed time against its budget.
+
+### The requests, in order
+
+| Step | Request | Custom request headers | Time budget |
+|---|---|---|---|
+| 1. Seed redirect probe | `GET` of the audited address, following up to 10 redirects, including a meta refresh or a script redirect in the page | Not sent. Only the `User-Agent` | 10 s per hop, 30 s for the whole chain |
+| 2. Root files | `robots.txt`, `llms.txt`, sitemaps and the other root files | Sent | Shares 45 s with step 1. Sitemaps have a limit of their own |
+| 3. Entry page | The page the crawl starts from: the audited address, or where step 1 landed when that is on the same site | Depends on the rendering setting, below | 30 s per attempt |
+| 4. Entry retry | One more plain `GET` of the entry page, only when step 3 timed out (or, with Rendering Auto or All, got no response at all) and no page has been stored yet | Sent | 60 s |
+
+Step 1 decides the crawl's base. When the seed redirect probe lands on the same site, the crawl starts there. When it lands on a different site, the crawl keeps the audited address and fetches it in step 3, which follows the same redirects again: if they still end on the other site, the audit fails as a [redirect to another site](#offsite-redirect). Step 1 never sends your custom request headers, so a site that only lets requests with those headers through always redirects or refuses in step 1. That on its own does not fail the audit.
+
+### How the entry page is fetched
+
+Which request serves the entry page depends on the website's **Rendering** setting, under **Settings → Crawl** in the audit level card (see [crawl settings](/dashboard/crawl-settings#audit-level)). An audit started through the API or the MCP server with a level of its own uses that level's rendering instead: Quick renders only the pages that need JavaScript, Surface and Full render every page.
+
+| Rendering | Entry page request | Custom request headers |
+|---|---|---|
+| **Off** | Plain `GET`. The crawler follows redirects itself, up to 10 hops. A timeout, connection error, TLS error or `5xx` is retried, up to 3 attempts in all. | Sent on every attempt |
+| **Auto** | Plain `GET` first. When the response is an app shell that needs JavaScript, the page is rendered in the cloud browser and the render is used, unless it fails. | Sent on the plain `GET`, not on the render |
+| **All** | Cloud browser render. When it has not finished after 18 s, a plain `GET` starts as well and the first usable answer is used. A render the site answers with `401`, `403`, `429`, `503` or a challenge page is replaced by a plain `GET`. | Not sent on the render. Sent on the plain `GET` |
+
+<Warning>
+  Cloud browser renders do not carry your custom request headers. A render that lands on a sign-in page is not a refusal, so it is not retried as a plain `GET`, and the audit fails as a redirect to another site. A site that is only reachable with a header, such as one behind Cloudflare Access or Vercel deployment protection, needs **Rendering: Off**. See [access gateways](#access-gateway).
+</Warning>
+
+On a plain request, custom request headers are removed at the first redirect to a different origin, and stay removed for the rest of that redirect chain. A redirect from `http://` to `https://`, or from `example.com` to `www.example.com`, is enough to drop them, so audit the exact origin that serves the page. A browser render follows redirects inside the browser, including a page's own script redirects, and reports where it landed.
+
+### How each response is handled
+
+| Final response to the entry page | What the crawl does | Cause |
+|---|---|---|
+| `2xx` on the same site | Stores the page and carries on | None |
+| `3xx` | Follows it. A chain that ends on a different site is not stored | [Redirected to another site](#offsite-redirect) |
+| `401` or `407` | Stores an error page. Nothing is auditable | [Login required](#login-required) |
+| `403` | A refusal, not retried | [Access denied](#access-denied), or [challenge](#waf-challenge) when the response proved one |
+| `404` or `410` | Stores an error page | [Page not found](#not-found) |
+| `429`, `430`, or `503` with `Retry-After` | Backs off for the whole host and retries, honouring `Retry-After` | [Rate limited](#rate-limited) |
+| `503` with `cf-mitigated: challenge` or a challenge page | A refusal, not retried | [Bot protection or WAF challenge](#waf-challenge) |
+| Any other `4xx` | Stores an error page | [Other 4xx responses](#client-error) |
+| Any other `5xx` | A server error. Retried with Rendering Off | [Server error](#server-error) |
+| No response | Records the transport failure | [DNS](#dns), [TLS](#tls), [connection](#connection), [timeout](#timeout) |
+
+A `401`, a `403`, a rate limit or a proven challenge makes the audit **blocked**. Every other row that ends with nothing auditable makes it **failed**.
 
 ## Troubleshooting by cause \{#troubleshooting\}
 
-A failed cloud audit keeps a record of what it tried: the first attempts at the site, how long each waited, what came back, and whether our own rendering service was working at the time. The failure email and the audit's run page in the dashboard turn that record into three answers: what failed, which side the evidence points at, and what to try next. Each cause below has its own link, and the email and run page link to the one that applies.
+A failed cloud audit keeps a record of what it tried: the first attempts at the site, how long each waited against its budget, what came back, and whether our own rendering service was working at the time. The failure email and the audit's run page in the dashboard turn that record into three answers: what failed, which side the evidence points at, and what to try next. Each cause below has its own link, and the email and run page link to the one that applies.
+
+Each cause section says what the crawler observed, how the cause is classified, which side it is attributed to, how to check it from your side where you can, and what to do. The `curl` commands set the browser user agent from `$UA`, defined in [checking it yourself](#checking-it-yourself).
 
 ### Whose side it was on \{#attribution\}
 
 The run page says which side the evidence points at, and it only goes as far as the evidence does.
 
-| It says | What that means |
+| It says | When |
 |---|---|
-| **The site** | The requests we recorded failed at your site or its DNS, and nothing of ours was recorded failing. |
-| **squirrelscan** | Something of ours failed: the rendering service, a step of the audit, or the time we gave it. Your site was not the cause. |
-| **Both** | Our rendering service was failing during the run, and the site also failed, for example by not answering in time. We cannot say which one stopped the audit, so we tell you about both. |
-| **Unknown** | The record does not settle it. We say so rather than guess, and we never tell you your server is at fault on a guess. |
+| **The site** | The cause is one of the site-side causes (DNS, TLS, connection, private address, timeout, a 4xx or 5xx, a redirect, `robots.txt`), the run recorded at least one request to the site or an answer from DNS, and nothing of ours was recorded failing. |
+| **squirrelscan** | Something of ours failed: the audit reached its own time limit, stalled, or a step of ours failed, or our rendering service failed while nothing at the site did. Your site was not the cause. |
+| **Both** | A site-side cause, and our rendering service failed during the same run. A failing renderer and a failing site can each make the other look worse, so we tell you about both. |
+| **Unknown** | The record does not settle it: the run kept only its failure sentence and no request record, a DNS failure was not confirmed by our own follow-up lookup, or no cause could be identified. We say so rather than guess, and we never tell you your server is at fault on a guess. |
+
+When a browser render had not answered by the time the plain request took over, the run page also says that a part for us cannot be fully ruled out, even when the attribution is the site.
 
 Audits that failed before we started keeping these records only have the short reason, and the run page says that its details are limited.
 
-To check a result from your side, the run page has a **Technical details** section listing the attempts we recorded, up to a dozen: the browser render, the direct fetch and the crawler's verdict, with the status or error, how long it waited against its time limit, and where a redirect pointed. When there were more, it says how many were left out. When your site sits behind Cloudflare, an attempt also carries the `cf-ray` id of the response, which you can search for in your Cloudflare security events.
+To check a result from your side, the run page has a **Technical details** section listing the attempts we recorded, up to a dozen: the browser render, the direct fetch and the crawler's verdict, each with the status or error, how long it waited against its budget, and the origin a redirect pointed to (never its path or query). When there were more, it says how many were left out. When your site sits behind Cloudflare, an attempt also carries the `cf-ray` id of the response, which you can search for in your Cloudflare security events.
 
 ### Refunds and retries \{#refunds-and-retries\}
 
-Failed audits are refunded automatically. The email and the run page show what our credit records hold for that run: refunded, not charged at all, or charged with the refund still to land. A refund normally lands within minutes. If a charge is still there later, send us the support reference from the run page.
+Failed and blocked audits are refunded automatically and in full, whichever side the cause was on. The refund covers every credit charged against the run. It applies to every audit run on your organization's credits, whether it started from the dashboard, a schedule, the API, the MCP server or a signed-in `squirrel audit`, that ends failed, blocked or cancelled without delivering an audit report. An audit that completes, including a partial audit that stopped early, is charged for the pages it audited, as described in [credits and pricing](/cloud/credits).
+
+The email and the run page show what our credit records hold for that run: refunded, not charged at all, or charged with the refund still to land. If a charge is still there later, send us the support reference from the run page.
 
 Once an audit has failed, nothing runs it again for you unless the site has recurring audits on:
 
@@ -109,186 +182,416 @@ Once an audit has failed, nothing runs it again for you unless the site has recu
 
 Either way, once you have fixed the cause, **Run New Audit** on the run page starts a new one straight away.
 
+### When a refund lands \{#refund-timing\}
+
+1. **At the failure.** The refund is written when the run is recorded as failed, blocked or cancelled, right after that status is saved. It normally lands within seconds of the failure.
+2. **If that write did not complete.** For a run that delivered no report, a sweep that runs every 15 minutes picks up the run once it has been over for 15 minutes and still holds charges, and refunds what is left. It keeps trying for 7 days.
+3. **Where to see it.** The failure email and the in-app notification state what the credit records held when they were written, which can be a moment before the refund. The run page reads the records each time it opens, so it shows the current state. The **Credit log** under **Settings → Usage** lists the charge and the refund as separate entries, with the run id on each; its **Refunds** filter shows only refunds.
+
+If the run page still shows a charge half an hour after the failure, contact support with the run page's reference.
+
 ### DNS lookup failed \{#dns\}
 
-**What it means.** The site's hostname did not resolve to an address, so there was nothing to connect to. When our own lookup a moment later did not confirm it, the result reads as unknown: it may have been a passing resolver problem, on either side.
+**What the crawler observed.** The resolver answered that the hostname does not exist (`ENOTFOUND`, `EAI_NONAME`, `NXDOMAIN`), or the lookup did not complete (`EAI_AGAIN`, a timeout). No connection was attempted. After the failure, the hostname is looked up once more, with a 2-second limit.
+
+**How it is classified.** `dns`. The follow-up lookup is the witness: when it says the name does not exist, the cause is DNS even if the first failure was reported as a refused connection or with no recognisable error at all.
+
+**Attribution.** **The site** when the follow-up lookup confirms the name does not exist. **Unknown** when it does not (it timed out or failed, or the name resolved a moment later), because a passing resolver problem on either side looks the same. The run page then says so.
 
 **How to check.**
 
-- Look the name up from outside your network: `dig +short example.com` and `dig +short www.example.com`, or any online DNS lookup tool.
-- Check that the exact hostname you audited, bare or `www`, has an `A`, `AAAA` or `CNAME` record.
-- Check that the domain has not expired and that its nameservers are the ones your DNS host expects.
+```bash
+dig +short example.com A
+dig +short example.com AAAA
+dig example.com | grep status
+```
 
-**What to do.** Add or fix the record for the hostname you audit, or audit the hostname that does resolve: **Run New Audit** lets you change the address for one run, and adding it as a website makes it stick. After a nameserver or host move, wait for the change to propagate, then run the audit again.
+A working name prints at least one address and `status: NOERROR`. A missing name prints no address and `status: NXDOMAIN`. Check the exact hostname you audited, bare or `www`.
+
+**What to do.**
+
+- Add or fix the `A`, `AAAA` or `CNAME` record for the hostname you audit, or audit the hostname that does resolve: **Run New Audit** lets you change the address for one run, and adding it as a website makes it stick.
+- Check that the domain has not expired and that its nameservers are the ones your DNS host expects.
+- After a nameserver or host move, wait for the change to propagate, then run the audit again.
 
 ### TLS handshake failed \{#tls\}
 
-**What it means.** The server answered, but the secure connection could not be set up: the certificate expired, does not cover this hostname, is self-signed, or is missing part of its chain.
+**What the crawler observed.** The TCP connection opened, but the TLS handshake did not complete, or the certificate the server presented failed verification: it has expired, it does not cover this hostname, it is self-signed, or its chain is incomplete. Certificate verification is on for every cloud request, and there is no setting to turn it off. A TLS failure is retried before it is recorded.
+
+**How it is classified.** `tls`, from the certificate or handshake error, such as `CERT_HAS_EXPIRED`, `ERR_TLS_CERT_ALTNAME_INVALID`, `DEPTH_ZERO_SELF_SIGNED_CERT`, `UNABLE_TO_VERIFY_LEAF_SIGNATURE` or `EPROTO`.
+
+**Attribution.** The site.
 
 **How to check.**
 
-- Open the site in a private browser window and look for a certificate warning.
-- From a terminal: `openssl s_client -connect example.com:443 -servername example.com` shows the chain the server sends and any verification error.
-- An online TLS checker reports the same problems with more explanation.
+```bash
+curl -sS -o /dev/null https://example.com/ && echo ok
+openssl s_client -connect example.com:443 -servername example.com </dev/null 2>/dev/null | grep 'Verify return code'
+```
+
+A valid certificate prints `ok` and `Verify return code: 0 (ok)`. A failure prints a `curl` error with exit code `60` (for example `SSL certificate problem: certificate has expired`) or `35` (the handshake failed), and a non-zero verify code such as `10 (certificate has expired)` or `21 (unable to verify the first certificate)`.
 
 **What to do.** Renew or reissue the certificate so it covers the exact hostname, bare and `www` if you use both, and serve the full chain including intermediates. Then run the audit again.
 
+- **certbot (Let's Encrypt).** Point the server at `fullchain.pem`, not `cert.pem`, so the intermediate is served.
+- **Cloudflare (proxied).** The visitor sees Cloudflare's edge certificate. Universal SSL covers the apex and first-level subdomains only, so a host such as `dev.www.example.com` needs an advanced or custom certificate.
+- **Vercel, Netlify and similar hosts.** Certificates are issued automatically once the domain's DNS points at the host. A pending or failed issuance shows in the domain settings.
+
 ### Connection refused or reset \{#connection\}
 
-**What it means.** We could not hold a connection to the server: it was refused, reset, or closed before any response arrived. A server that is down does this, and so does a firewall that drops requests from networks it does not recognise.
+**What the crawler observed.** No HTTP response: the connection was refused (`ECONNREFUSED`), reset (`ECONNRESET`), closed before a response arrived, or the network had no route to the host (`EHOSTUNREACH`, `ENETUNREACH`). With Rendering Off the request is retried, up to 3 attempts. A server that is down does this, and so does a firewall that drops requests from networks it does not recognise.
+
+**How it is classified.** `connection`. When the hostname resolves to an address outside the public internet, the cause is [private address](#private-address) instead. When the follow-up DNS lookup finds the name does not exist, it is [DNS](#dns).
+
+**Attribution.** The site.
 
 **How to check.**
 
-- Load the site from a network you do not normally use, such as a phone on mobile data.
-- Check that the server listens on port 443 (or 80 for `http://`) on its public address.
-- Look in your firewall, host or CDN logs for refused connections at the time of the audit. Cloud audits come from Cloudflare's network, not from a fixed squirrelscan address (see [Firewall and WAF exceptions](/cloud/firewall)).
+```bash
+curl -sS -o /dev/null -w '%{http_code}\n' https://example.com/
+```
 
-**What to do.** Bring the server back up, or let squirrelscan through the firewall with a [secret request header](/cloud/firewall#option-1-a-secret-request-header-recommended) rather than an IP rule. Then run the audit again.
+A reachable server prints a status such as `200`. A refused connection fails with `curl` exit code `7` (could not connect), a reset with `56` (receive failure), and a connection closed without an answer with `52` (empty reply). Run it from a network you do not normally use, such as a phone on mobile data: a firewall that trusts your office network answers you and refuses the cloud.
+
+**What to do.**
+
+- Bring the server back up, and check that it listens on port 443 (or 80 for `http://`) on its public address.
+- Look in your firewall, host or CDN logs for refused connections at the time of the audit. Cloud audits come from Cloudflare's network, not from a fixed squirrelscan address (see [Firewall and WAF exceptions](/cloud/firewall)).
+- Let squirrelscan through the firewall with a [secret request header](/cloud/firewall#option-1-a-secret-request-header-recommended) rather than an IP rule.
+- A site behind a CDN rarely fails this way: the CDN answers, and an unreachable origin shows up as a `5xx` from the CDN instead, such as Cloudflare's `521`, `522` or `523` (see [server error](#server-error)).
 
 ### No response in time \{#timeout\}
 
-**What it means.** Our requests to the site got no response before their time limit ran out. On its own that does not tell us whether the server accepted the connection and then stalled, or never answered at all, so we do not claim either.
+**What the crawler observed.** Requests to the site got no response before their budget ran out (see [the requests, in order](#request-sequence)): 30 s per page attempt, then the entry page's 60 s plain retry. With Rendering All, the browser render has the first 18 s of a page's 30 s to itself, and a plain request races it for the rest. The run page lists each attempt that timed out and its budget. The record cannot tell a server that accepted the connection and then stalled from one that never answered, so neither is claimed.
+
+**How it is classified.** `timeout`, from the runtime's timeout error or an abort at the deadline. When the hostname resolves to an address outside the public internet, the cause is [private address](#private-address) instead.
+
+**Attribution.** The site, or **Both** when our rendering service was failing during the run. When the browser render had not answered by the time the plain request took over, the run page says a part for us cannot be fully ruled out.
 
 **How to check.**
 
-- Time the page from outside your network: `curl -s -o /dev/null -w '%{time_starttransfer}\n' https://example.com/`. A first byte that takes many seconds is the problem.
-- Check server load, slow database queries and cold starts at the time of the audit.
-- Some firewalls hold unknown clients open without answering instead of refusing them. Check for a rule like that.
-- If the run page also says our rendering service failed, see [both sides failed](#rendering-service).
+```bash
+curl -sS -o /dev/null -m 30 -A "$UA" \
+  -w 'connect %{time_connect}s, first byte %{time_starttransfer}s, total %{time_total}s, status %{http_code}\n' \
+  https://example.com/
+```
 
-**What to do.** Fix whatever makes the first response slow, or let the crawler past the firewall rule that holds it, then run the audit again. If the site is fast for you and the audit still times out, contact support with the reference from the run page.
+A healthy page shows a first byte well under 30 seconds. `curl` exit code `28` (operation timed out) is what the cloud saw. A site can be fast from your desk and slow from far away, so a fast result here does not rule out a slow path to squirrelscan's network.
+
+**What to do.**
+
+- If the run page also says our rendering service failed, run the audit again first: a second run shows whether the site is really slow. See [both sides failed](#rendering-service).
+- Fix whatever makes the first response slow: server load, slow database queries, cold starts on a serverless host.
+- Some firewalls hold unknown clients open without answering instead of refusing them. Let the crawler past that rule with a [secret request header](/cloud/firewall#option-1-a-secret-request-header-recommended).
+- If the site is fast for you, audit it from your own machine with the CLI, which uses your network: `squirrel audit https://example.com`.
+- If the site is fast for you and the audit still times out, contact support with the reference from the run page.
 
 ### Bot protection or WAF challenge \{#waf-challenge\}
 
-**What it means.** The site's bot protection answered our request with a challenge, such as a Cloudflare "Just a moment" page, instead of the page itself. We only say this when the failed response itself proved it: a challenge header or a challenge page in the response, not just a CDN name in a header. The run page names the protection when the response did.
+**What the crawler observed.** The site answered with a challenge instead of the page, such as a Cloudflare "Just a moment" interstitial. A challenge is a refusal and is not retried. With rendering on, a challenged render is first replaced by a plain request, which carries your custom request headers.
+
+**How it is classified.** Only when the failed response itself proved it: a `cf-mitigated: challenge` header, or a body that is a recognised challenge interstitial, on a response with a status of `400` or above. A `Server: cloudflare` header or a detected CDN is not proof, and a plain `403` without either signal is classified as [access denied](#access-denied). The run page names the protection when the response did.
+
+**Attribution.** The site.
 
 **How to check.**
 
-- Open your WAF or bot protection event log and filter to the time of the audit. On Cloudflare that is **Security → Events**, where you can also search for the `cf-ray` id listed in the run page's technical details.
-- Look for the rule or product that issued the challenge: bot fight mode, a managed challenge rule, or a custom rule.
+```bash
+curl -sS -o /dev/null -D - -A "$UA" https://example.com/ | grep -i -E '^(HTTP/|cf-mitigated|cf-ray|server)'
+```
+
+An unchallenged request shows `HTTP/2 200`. A Cloudflare challenge shows a `403` or `503` with `cf-mitigated: challenge`. Your own IP address may not be challenged the way squirrelscan's network is, so also open your WAF or bot protection event log for the time of the audit. On Cloudflare that is **Security → Events**, where you can search for the `cf-ray` id from the run page's technical details. Look for the rule or product that issued the challenge: Bot Fight Mode, Super Bot Fight Mode, a managed challenge rule, or a custom rule.
 
 **What to do.** Keep the protection on and add a narrow exception for squirrelscan:
 
 1. In the dashboard, open the website's **Settings → Crawl** and add a [custom request header](/dashboard/crawl-settings#custom-request-headers) (every plan has them) with a long random value only you know, for example `X-Squirrelscan-Auth`.
-2. Add a WAF rule that skips the challenge only for requests carrying that header with that exact value. [Firewall and WAF exceptions](/cloud/firewall) has the rule for Cloudflare, nginx and other WAFs.
+2. Add a WAF rule that skips the challenge only for requests carrying that header with that exact value. [Firewall and WAF exceptions](/cloud/firewall) has the rule for Cloudflare, nginx and other WAFs. On Cloudflare, Bot Fight Mode cannot be skipped by any rule; the firewall page says what to do instead.
 3. Run the audit again.
 
 Avoid switching bot protection off for the whole site, and avoid allowlisting IP ranges: cloud audits leave from Cloudflare's shared addresses, so an IP rule opens your site to far more than squirrelscan. If your platform verifies crawlers with signed requests, [Web Bot Auth](/guides/web-bot-auth) is another way in.
 
 ### Access denied (403) \{#access-denied\}
 
-**What it means.** The site answered `403 Forbidden`. The response did not say what refused us: it could be a WAF rule, a geographic or IP block, hotlink or referrer protection, or a page that really is private. Unlike a [challenge](#waf-challenge), a plain 403 does not prove bot protection, so we do not name one.
+**What the crawler observed.** The site answered `403 Forbidden`, without a challenge header or a challenge page. The response did not say what refused the request: a WAF rule, a geographic or IP block, hotlink or referrer protection, or a page that really is private. A `403` is not retried.
+
+**How it is classified.** `http_4xx` with status `403`, shown as access denied. Unlike a [challenge](#waf-challenge), a plain `403` does not prove bot protection, so none is named. The audit is blocked.
+
+**Attribution.** The site.
 
 **How to check.**
 
-- Fetch the page with an ordinary request: `curl -sI https://example.com/`. A 403 there too points at the server's own rules.
-- Look in your WAF, CDN and server logs for the 403 at the time of the audit and the rule that produced it.
-- Check for country or IP blocks. Cloud audits come from Cloudflare's network.
+```bash
+curl -sS -o /dev/null -D - -A "$UA" https://example.com/ | grep -i -E '^(HTTP/|server|cf-ray)'
+```
 
-**What to do.** Find the rule that returns the 403 and add an exception for squirrelscan keyed on a [secret request header](/cloud/firewall#option-1-a-secret-request-header-recommended), the same way as for a [challenge](#waf-challenge). If the page is meant to be private, audit a public page instead.
+`HTTP/2 403` here too points at the server's own rules. A `200` here means the rule singles out squirrelscan's network: look in your WAF, CDN and server logs for the `403` at the time of the audit and the rule that produced it, and check for country or IP blocks. Cloud audits come from Cloudflare's network.
+
+**What to do.** Find the rule that returns the `403` and add an exception for squirrelscan keyed on a [secret request header](/cloud/firewall#option-1-a-secret-request-header-recommended), the same way as for a [challenge](#waf-challenge). If the page is meant to be private, audit a public page instead.
 
 ### Login required (401) \{#login-required\}
 
-**What it means.** The site answered `401 Unauthorized` (or `407` from a proxy): it wants credentials before it serves the page. Staging sites behind a password often do this. A cloud audit cannot sign in.
+**What the crawler observed.** The site answered `401 Unauthorized`, or `407 Proxy Authentication Required` from a proxy: it wants credentials before it serves the page. A `401` whose `WWW-Authenticate` header starts with `Basic` is HTTP basic auth, which staging sites often use. The page is stored as an error page, and nothing is auditable.
 
-**How to check.** Open the address in a private browser window. A login prompt or a password page confirms it.
+**How it is classified.** `http_4xx` with status `401` or `407`, shown as login required. A `401` makes the audit blocked. A sign-in that works by redirecting to another host, such as Cloudflare Access or a single sign-on provider, is not a `401`: it is classified as a [redirect to another site](#offsite-redirect). See [sign-in page or access gateway](#access-gateway).
 
-**What to do.**
+**Attribution.** The site.
 
-- Audit the public address of the site instead.
-- For a staging site you control, let requests that carry a secret header past the password check, and add that header under **Settings → Crawl**.
-- Or run the audit with the CLI from somewhere that can reach the site: `squirrel audit https://staging.example.com`.
+**How to check.**
+
+```bash
+curl -sS -o /dev/null -D - https://staging.example.com/ | grep -i -E '^(HTTP/|www-authenticate)'
+curl -sS -o /dev/null -w '%{http_code}\n' -u 'username:password' https://staging.example.com/
+```
+
+The first shows `401` and, for basic auth, `www-authenticate: Basic realm="..."`. The second, with the right username and password, prints `200`.
+
+**What to do.** A cloud audit cannot fill in a login form, but it can send credentials as a header:
+
+- **HTTP basic auth.** Add an `Authorization` header with the value `Basic` followed by the Base64 encoding of `username:password` under **Settings → Crawl → Custom request headers**. [HTTP basic auth](/cloud/firewall#http-basic-auth) has the steps.
+- **An access gateway or single sign-on.** See [sign-in page or access gateway](#access-gateway) for Cloudflare Access, Vercel deployment protection and the gateways that cannot be passed with a header.
+- **Neither.** Audit the public address of the site instead, or run the CLI from somewhere that can reach the site: `squirrel audit https://staging.example.com`.
 
 ### Rate limited (429) \{#rate-limited\}
 
-**What it means.** The site answered `429 Too Many Requests` (or the `430` some platforms use): a rate limit decided we were sending too much, often from a rule that counts requests per network rather than per visitor.
+**What the crawler observed.** The site answered `429 Too Many Requests`, the `430` some platforms use, or a `503` carrying `Retry-After`: a rate limit decided too many requests were arriving, often from a rule that counts requests per network rather than per visitor. The crawl backs off for the whole host, waits as long as `Retry-After` asks, and retries before it gives a page up. See [rate-limited hosts](/guides/rate-limited-hosts) for the pacing and backoff.
 
-**How to check.** Look for the rate limit rule in your CDN or WAF, and for 429s in its log at the time of the audit. See [rate-limited hosts](/guides/rate-limited-hosts) for how the crawler paces itself and backs off.
+**How it is classified.** `http_4xx`, reported with status `429` whichever of the three the site sent (the status it actually sent is in the message), shown as rate limited. When no page could be fetched, the audit is blocked.
 
-**What to do.** If you control the rate limit rule, exempt squirrelscan from it with a [secret request header](/cloud/firewall#option-1-a-secret-request-header-recommended). That also makes the crawl [authorised](/dashboard/crawl-settings#authorised-crawls), and an authorised crawl still slows down when your server asks it to. On a platform whose limits you cannot change, such as a Shopify storefront, audit fewer pages instead: [rate-limited hosts](/guides/rate-limited-hosts) covers what works there. Then run the audit again, or wait for the limit to reset first.
+**Attribution.** The site.
+
+**How to check.**
+
+```bash
+for i in $(seq 1 20); do curl -sS -o /dev/null -w '%{http_code}\n' -A "$UA" https://example.com/; done | sort | uniq -c
+```
+
+Twenty requests in a row that all print `200` mean your own rate is under the limit. A count of `429` or `430` lines shows where it starts. Look for the rate limit rule in your CDN or WAF, and for `429`s in its log at the time of the audit.
+
+**What to do.**
+
+- If you control the rate limit rule, exempt squirrelscan from it with a [secret request header](/cloud/firewall#option-1-a-secret-request-header-recommended). That also makes the crawl [authorised](/dashboard/crawl-settings#authorised-crawls), and an authorised crawl still slows down when your server asks it to.
+- On a platform whose limits you cannot change, such as a Shopify storefront, audit fewer pages instead: [rate-limited hosts](/guides/rate-limited-hosts) covers what works there.
+- Then run the audit again, or wait for the limit to reset first.
 
 ### Page not found (404 or 410) \{#not-found\}
 
-**What it means.** The address we were asked to audit answered `404 Not Found` or `410 Gone`. The server is up, but there is no page at that address.
+**What the crawler observed.** The audited address, after any redirects on the same site, answered `404 Not Found` or `410 Gone`. The server is up, but there is no page at that address.
 
-**How to check.** Open the exact address from the run page in a browser. Check the hostname (bare or `www`), the path and any trailing slash.
+**How it is classified.** `http_4xx` with status `404` or `410`, shown as page not found.
+
+**Attribution.** The site.
+
+**How to check.**
+
+```bash
+curl -sS -o /dev/null -D - -L -A "$UA" https://example.com/the/audited/path | grep -i -E '^(HTTP/|location)'
+```
+
+`-L` follows the redirects, so the last `HTTP/` line is the final status. It should be `200`. Check the hostname (bare or `www`), the path and any trailing slash against the exact address on the run page.
 
 **What to do.** Publish the page, or audit the right address: **Run New Audit** lets you change it for one run, and adding the site's real home page as a website makes it stick. A site that moved to a new domain usually shows up as a [redirect to another site](#offsite-redirect) instead.
 
 ### Other 4xx responses \{#client-error\}
 
-**What it means.** The site answered with a 4xx status not covered above, such as `400` or `451`. The status is on the run page.
+**What the crawler observed.** The site answered with a 4xx status not covered above, such as `400`, `405`, `406`, `421` or `451`. The page is stored as an error page. The status is on the run page.
 
-**How to check.** Fetch the address yourself with `curl -sI https://example.com/` and compare the status. Look in your server logs for the request at the time of the audit.
+**How it is classified.** `http_4xx` with that status, shown as a client error.
+
+**Attribution.** The site.
+
+**How to check.**
+
+```bash
+curl -sS -o /dev/null -w '%{http_code}\n' -A "$UA" https://example.com/
+```
+
+Compare the status with the run page's, and look in your server logs for the request at the time of the audit. A status that only squirrelscan gets points at a rule that matches its requests.
 
 **What to do.** Fix the rule or route that returns that status for the address, then run the audit again.
 
 ### Server error (5xx) \{#server-error\}
 
-**What it means.** The site answered with a server error of its own, such as `500` or `503`, for the pages we asked for.
+**What the crawler observed.** The site answered with a server error of its own, such as `500`, `502` or a `503` without `Retry-After`, for the pages we asked for. With Rendering Off a `5xx` is retried, up to 3 attempts. A `503` carrying `Retry-After` is treated as a [rate limit](#rate-limited), and a `503` that is a challenge as a [challenge](#waf-challenge).
 
-**How to check.** Look in your error logs and your hosting status page for the time of the audit. A `503` from a CDN while the origin is healthy can also be a protection rule. If the response was a challenge, the run page says so and [bot protection or WAF challenge](#waf-challenge) applies instead.
+**How it is classified.** `http_5xx`, unless the response proved a challenge, in which case it is a [challenge](#waf-challenge).
 
-**What to do.** Fix the error, then run the audit again once the site serves normally.
+**Attribution.** The site.
+
+**How to check.**
+
+```bash
+curl -sS -o /dev/null -D - -A "$UA" https://example.com/ | grep -i -E '^(HTTP/|server|retry-after|cf-ray)'
+```
+
+A `5xx` here too is the server's own error: look in your error logs and your hosting status page for the time of the audit. On Cloudflare, `521` (web server is down), `522` (connection timed out) and `523` (origin is unreachable) mean Cloudflare could not reach your origin, and `525` that the TLS handshake between Cloudflare and your origin failed.
+
+**What to do.** Fix the error, then run the audit again once the site serves normally. A `503` from a CDN while the origin is healthy can also be a protection rule: check the CDN's security log for it.
 
 ### Redirected to another site \{#offsite-redirect\}
 
-**What it means.** The address redirected to a different site, and an audit does not follow a redirect off the address it was given. The run page and the email name the destination. Two common cases: the site moved to its own new domain, or it sends visitors to a sign-in page because it is password protected.
+**What the crawler observed.** Following the audited address's redirects ended on a different site (see [same site](#request-sequence)). The redirect is an HTTP `3xx` with a `Location` header or, with rendering on, a redirect the page makes in the browser. The crawl does not follow it: it neither stores nor audits another site's pages. The run page and the email name the destination's origin, without its path or query.
 
-**How to check.** Open the audited address in a private window and watch where it ends up, or run `curl -sIL https://example.com/ | grep -i '^location'`.
+**How it is classified.** `redirect`, shown as redirected off-site. The destination decides the wording of the next step:
 
-**What to do.** Audit the canonical address, the one the site actually serves: add the destination as a website in the dashboard and audit it there. Audits of the old address keep failing while the redirect is in place. If the destination is a sign-in page, see [login required](#login-required).
+| Destination | Wording | Example |
+|---|---|---|
+| A sign-in host | The site needs a login before it can be audited. See [access gateways](#access-gateway) | `staging.example.com` to `example-team.cloudflareaccess.com` |
+| What looks like the same site's own domain | The site moved. Audit the destination instead | `example.vercel.app` to `www.example.com` |
+| Anything else | The site redirects to a different site | `example.com` to `another-site.com` |
+
+A destination counts as a sign-in host when it is on `cloudflareaccess.com`, `okta.com`, `oktapreview.com`, `auth0.com`, `onelogin.com`, `amazoncognito.com`, `b2clogin.com` or `clerk.accounts.dev`; when it is `accounts.google.com`, `login.microsoftonline.com`, `login.live.com`, `vercel.com`, `accounts.shopify.com`, `id.atlassian.com` or `appleid.apple.com`; or when it has at least three labels and its first label is `login`, `signin`, `sign-in`, `sso`, `auth`, `accounts` or `account`.
+
+**Attribution.** The site.
+
+**How to check.**
+
+```bash
+curl -sS -o /dev/null -D - -L -A "$UA" https://example.com/ | grep -i -E '^(HTTP/|location)'
+```
+
+Each `location` line is one hop. The last one shows where the audited address ends up. If it is on another site, the audit fails this way. Add your custom request headers with `-H` to see whether they change where it ends up.
+
+**What to do.**
+
+- **The site moved.** Audit the canonical address, the one the site actually serves: add the destination as a website in the dashboard and audit it there. Audits of the old address keep failing while the redirect is in place.
+- **A sign-in page.** See [sign-in page or access gateway](#access-gateway).
+- **Anything else.** Fix the redirect so it stays on the same site, or audit the address the site actually serves.
+
+### Sign-in page or access gateway \{#access-gateway\}
+
+**What it means.** An access gateway is a service in front of the site that sends every request without valid credentials to a sign-in page: a zero-trust proxy such as Cloudflare Access, a hosting platform's deployment protection, single sign-on in the application, or HTTP basic auth. A cloud audit cannot sign in. The gateway shows up as one of two causes:
+
+- a redirect to the gateway's or the identity provider's host, reported as a [redirect to another site](#offsite-redirect) with sign-in wording, or
+- a `401` or `407` from the site itself, reported as [login required](#login-required).
+
+**What the crawler observed.** The seed redirect probe never sends your custom request headers, so on a gated site it always lands on the sign-in page or gets the `401`. That alone does not fail the audit: the crawl keeps the audited address and fetches it again with the headers. The audit fails only when the entry page request also lands on the sign-in page, which happens when:
+
+- no header the gateway accepts is set,
+- the request that carried the headers was a cloud browser render, which does not send them (Rendering is Auto or All), or
+- the audited address redirected to another origin before reaching the gateway, which removes the headers (for example `http://` to `https://`, or `example.com` to `www.example.com`).
+
+**Gateways and the way through.**
+
+| Gateway | A request without credentials gets | Way through for a cloud audit |
+|---|---|---|
+| Cloudflare Access | A redirect to your team domain, `<team-name>.cloudflareaccess.com` | A service token in two headers. See [Cloudflare Access](/cloud/firewall#cloudflare-access) |
+| Vercel Authentication | A redirect to a Vercel login | The `x-vercel-protection-bypass` header. See [Vercel deployment protection](/cloud/firewall#vercel-deployment-protection) |
+| Vercel Password Protection | A password page | The same header |
+| HTTP basic auth | `401` with `WWW-Authenticate: Basic` | An `Authorization` header. See [HTTP basic auth](/cloud/firewall#http-basic-auth) |
+| Okta, Auth0, Microsoft Entra ID, Amazon Cognito, OneLogin, Clerk | A redirect to the identity provider's sign-in page | No header route. See [other zero-trust gateways](/cloud/firewall#other-zero-trust-gateways) |
+| Google Identity-Aware Proxy | A Google sign-in | No lasting header route: it accepts only tokens valid for about an hour |
+| Shopify storefront password | The password page, or for a development store a redirect to `accounts.shopify.com` | No documented header route |
+
+A Shopify store that serves its password page from its own domain does not fail: the crawl reads that page as the store's content. Check the audited pages, not only the status.
+
+**How to check.**
+
+```bash
+curl -sS -o /dev/null -D - https://staging.example.com/ | grep -i -E '^(HTTP/|location|www-authenticate)'
+curl -sS -o /dev/null -D - -H 'Header-Name: <value>' https://staging.example.com/ | grep -i -E '^(HTTP/|location|www-authenticate)'
+```
+
+The first request, without credentials, shows what the gateway does: a `302` with a `location` on the sign-in host, or a `401`. The second, with the same headers as the website's custom request headers, should show `HTTP/2 200` and no `location`. If the second still redirects, the gateway does not accept the headers, and no audit will get through until it does.
+
+**What to do.**
+
+1. Set the headers the gateway accepts under **Settings → Crawl → Custom request headers**, using the gateway's section in [Firewall and WAF exceptions](/cloud/firewall).
+2. Set **Rendering** to **Off** in the same page's audit level card, so the entry page and every other page are fetched with a plain request that carries the headers.
+3. Audit the exact origin the second `curl` used, with the same scheme and host.
+4. Run the audit and work through the [verification checklist](/cloud/firewall#verification-checklist).
+
+For a gateway with no header route, audit from somewhere the gateway already lets through: the CLI on a network or device the gateway trusts, or the CLI against a local build of the same site (`squirrel audit http://localhost:3000`). Signed in, the CLI renders pages in the cloud browser by default, which does not carry your `-H` headers either, so add `--http` when the audit depends on them.
 
 ### Localhost or private address \{#private-address\}
 
-**What it means.** The hostname resolves to an address that only exists on your machine or your private network, such as `127.0.0.1`, `::1` or `192.168.x.x`. Local development hostnames often do this. A cloud audit runs on the internet and cannot reach it.
+**What the crawler observed.** The hostname resolves to an address that only exists on your machine or your private network: a loopback address such as `127.0.0.1` or `::1`, a private network address such as `10.x.x.x` or `192.168.x.x`, a link-local address, or a reserved one. Local development hostnames often do this. A cloud audit runs on the internet and does not connect to addresses outside the public internet. The follow-up DNS lookup records the class of address and, because it is not public, the address itself, which the run page shows.
 
-**How to check.** Run `dig +short your-site.test` and look at the address it returns.
+**How it is classified.** Private address, when the failure would otherwise be a connection failure, a timeout or unknown, and at least one address the hostname resolves to is not public.
+
+**Attribution.** The site.
+
+**How to check.**
+
+```bash
+dig +short your-site.test
+```
+
+A cloud-reachable site prints only public addresses. `127.0.0.1`, `::1`, `10.`, `172.16.` to `172.31.`, `192.168.` or `169.254.` addresses are the cause.
 
 **What to do.**
 
 - Audit it locally with the CLI, which runs on your machine and can reach it: `squirrel audit http://localhost:3000`. See [local audits](/guides/local-audits-cli).
-- Or deploy to a publicly reachable staging address and audit that. If the staging site should stay private, protect it with a secret header and add the header under **Settings → Crawl**.
+- Or deploy to a publicly reachable staging address and audit that. If the staging site should stay private, put it behind a gateway a header can pass (see [access gateways](#access-gateway)) and add the header under **Settings → Crawl**.
 
 ### Disallowed by robots.txt \{#robots\}
 
-**What it means.** The site's `robots.txt` tells crawlers not to fetch the address, and the audit respects it.
+**What the crawler observed.** The site's `robots.txt`, fetched at the start of every audit, disallows the audited address for the user agent the crawl sends, and the audit respects it. This only happens when **Respect robots.txt** is on under **Settings → Crawl**, which it is not by default, and only on a crawl that is not [authorised](/dashboard/crawl-settings#authorised-crawls): a website with a custom request header never applies `robots.txt`.
 
-**How to check.** Open `https://example.com/robots.txt` and look for a `Disallow` rule covering the audited path.
+**How it is classified.** `robots`.
 
-**What to do.** Allow the path in `robots.txt`, or, for a site you own, turn off **Respect robots.txt** under **Settings → Crawl** (see [crawl settings](/dashboard/crawl-settings#respect-robotstxt)). Or point the audit at a path robots.txt permits.
+**Attribution.** The site.
+
+**How to check.**
+
+```bash
+curl -sS -A "$UA" https://example.com/robots.txt
+```
+
+Look for a `Disallow` rule covering the audited path, under `User-agent: *` or a group that matches a browser user agent.
+
+**What to do.** Allow the path in `robots.txt`, or, for a site you own, turn off **Respect robots.txt** under **Settings → Crawl** (see [crawl settings](/dashboard/crawl-settings#respect-robotstxt)). Or point the audit at a path `robots.txt` permits.
 
 ### Our rendering service failed \{#rendering-service\}
 
-**What it means.** Our headless browser service, which renders pages when rendering is on, failed or stopped answering during the run. That one is ours. The crawl falls back to fetching pages directly when the browser fails, so this alone rarely fails an audit.
+**What the crawler observed.** Our cloud browser service, which renders pages when rendering is on, refused render requests, failed render jobs, or was switched off for the rest of the run after failing. That one is ours. The crawl falls back to fetching pages with a plain request when the browser fails, so this alone rarely fails an audit.
 
-**Both sides failed.** When the site also failed during the same run, for example by not answering in time, the run page and the email say both. A busy or failing renderer and a slow site can each make the other look worse, so we do not pick one.
+**How it is classified.** Rendering service failure, when our renderer failed and nothing at the site was recorded failing. When the site also failed, the cause is the site's and the attribution is **Both**.
 
-**What to do.** Run the audit again. If it fails the same way while the run page shows our side working, the cause is the site's, and its own section above applies. If our side keeps failing, contact support with the reference from the run page.
+**Attribution.** squirrelscan, or **Both** when the site also failed during the same run, for example by not answering in time. A busy or failing renderer and a slow site can each make the other look worse, so we do not pick one.
+
+**What to do.** Run the audit again. If it fails the same way while the run page shows our side working, the cause is the site's, and its own section above applies. If our side keeps failing, contact support with the reference from the run page. Setting **Rendering** to **Off** under **Settings → Crawl** takes the renderer out of the audit while you wait.
 
 ### Something failed on our side \{#our-side\}
 
-**What it means.** A step of ours failed after the site was reached, such as publishing the report. Your site was not the cause.
+**What the crawler observed.** A step of ours failed after the site was reached, such as a call to our own API or publishing the report, or the audit's container refused to start because one of its own safety checks failed.
+
+**How it is classified.** Failed on our side.
+
+**Attribution.** squirrelscan. Your site was not the cause.
 
 **What to do.** Run the audit again. If it fails again, contact support with the reference from the run page.
 
 ### The audit ran out of time \{#audit-timeout\}
 
-**What it means.** The audit did not finish within its overall time limit. That usually comes from the size or the pace of the crawl, not from a site that is down: large crawls, slow pages and a `Crawl-delay` in `robots.txt` all make an audit take longer.
+**What the crawler observed.** The audit did not finish within its overall time limit. That usually comes from the size or the pace of the crawl, not from a site that is down: large crawls, slow pages and a `Crawl-delay` in `robots.txt` all make an audit take longer. A crawl that runs out of its own crawl-phase time is a different case: it stops early and publishes a partial report instead of failing.
+
+**How it is classified.** `audit_timeout`, shown as ran out of time.
+
+**Attribution.** squirrelscan: the limit is ours, not a failure seen at your site.
+
+**How to check.** `curl -sS https://example.com/robots.txt | grep -i crawl-delay` shows whether a `Crawl-delay` slows the crawl. The run page's page count shows how far it got.
 
 **What to do.** Audit fewer pages, or narrow the crawl to the sections you care about with include patterns under **Settings → Crawl** (see [crawl settings](/dashboard/crawl-settings)). Then run it again.
 
 ### The audit stalled \{#stalled\}
 
-**What it means.** The audit stopped making progress part way through, and we ended it. Your site is not the problem, and there is nothing for you to change.
+**What the crawler observed.** The audit stopped making progress part way through: no page fetched, no batch of rules finished and no stage completed, for the whole of the stall window of the phase it was in. We ended it. The run page names the phase.
+
+**How it is classified.** `stalled`, shown as audit stalled.
+
+**Attribution.** squirrelscan. Your site is not the problem, and there is nothing for you to change.
 
 **What to do.** Run the audit again. If it stops in the same place twice, contact support with the reference from the run page, because that one is ours to fix.
 
 ### Unknown cause \{#unknown\}
 
-**What it means.** We could not tell what made the audit fail, or whose side it was on.
+**What the crawler observed.** No cause could be identified, or the run kept only a failure sentence that names none. The reason still carries whatever the fetch reported.
 
-**How to check.** Load the site from outside your network, then run the same audit with the CLI from your machine: `squirrel audit https://example.com --max-pages 1`. A local run that works while the cloud run fails points at how your site treats requests from our network.
+**How it is classified.** `unknown`.
+
+**Attribution.** Unknown.
+
+**How to check.** Load the site from outside your network, then run the same audit with the CLI from your machine: `squirrel audit https://example.com --max-pages 1`. A local run that works while the cloud run fails points at how your site treats requests from our network. The `curl` checks in [checking it yourself](#checking-it-yourself) narrow it further.
 
 **What to do.** Run the audit again. If it keeps failing, contact support with the reference from the run page: the run id and the audit id.
 
