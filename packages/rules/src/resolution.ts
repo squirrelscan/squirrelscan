@@ -388,6 +388,7 @@ function compactPayload(
   evidence: ResolutionEvidence,
   listed: number,
   kept?: ReadonlySet<string>,
+  withHashes = true,
 ): CompactResolutionPayload {
   const limits = RESOLUTION_SIGNAL_LIMITS;
   const complete = !evidence.crawledOverCap && listed >= evidence.crawled.length;
@@ -489,6 +490,16 @@ function compactPayload(
     }
   }
 
+  // (#2673) A clipped list names the rest of the crawl by hash, so the merge can
+  // tell an unlisted page this run crawled (whose checks its tallies count) from
+  // one it did not. Distinct and sorted, so the bytes depend on the pages alone.
+  let hashes: string | undefined;
+  if (withHashes && !complete && listed < evidence.crawled.length) {
+    const unlisted = new Set<string>();
+    for (const url of evidence.crawled.slice(listed)) unlisted.add(evidence.hash(url));
+    hashes = [...unlisted].sort().join("");
+  }
+
   const gaps = (map: Map<string, number[]>): Record<string, number[]> => {
     const out: Record<string, number[]> = {};
     for (const [key, indexes] of map) out[key] = encodeIndexGaps(indexes.sort((a, b) => a - b));
@@ -509,6 +520,7 @@ function compactPayload(
     ...(evidence.removed.size > 0
       ? { removedCount: Math.min(evidence.removed.size, REPORT_LIMITS.maxPages) }
       : {}),
+    ...(hashes ? { hashes } : {}),
   };
 }
 
@@ -550,7 +562,11 @@ function keyCosts(payload: CompactResolutionPayload): Map<string, number> {
  *  - the tail of the crawl, with every key kept: a crawl-order prefix stays
  *    listed. Unlisted pages fall back to pre-#1185 behavior in the merge, and
  *    `pages` still counts every crawled page so the audited-page count does not
- *    drop with the list.
+ *    drop with the list. The unlisted pages ride as 8-hex hashes (#2673, about
+ *    5.7 bytes a page), so the capped rescore still knows them for crawled; the
+ *    prefix shrinks to leave room for them. At the 10,000-page crawl ceiling the
+ *    hashes take about 56 KiB, inside the signal's share whatever `pageStatuses`
+ *    holds, so they always fit; only the listed prefix gives way.
  * Each is a binary search over re-deflated candidates: only the overflow case
  * pays more than one deflate.
  */
@@ -569,10 +585,13 @@ export function buildCompactResolutionSignal(
     const norm = normalizePageUrl(url);
     if (evidence.crawledSet.has(norm)) evidence.removed.set(norm, status);
   }
-  const fit = (listed: number, kept?: ReadonlySet<string>): CompactResolutionSignal | undefined => {
-    const out = deflatePayload(compactPayload(evidence, listed, kept));
-    return out && out.bytes <= maxBytes ? out.signal : undefined;
-  };
+  const fitWith =
+    (hashes: boolean): Fit =>
+    (listed, kept) => {
+      const out = deflatePayload(compactPayload(evidence, listed, kept, hashes));
+      return out && out.bytes <= maxBytes ? out.signal : undefined;
+    };
+  const fit = fitWith(true);
 
   const all = evidence.crawled.length;
   const whole = fit(all);
@@ -595,15 +614,24 @@ export function buildCompactResolutionSignal(
     const kept = largestKeySet(evidence, all, fit);
     candidates.push({ ...kept, listed: all });
   }
-  const prefix = largestPrefix(all, (listed) => fit(listed));
-  if (prefix) candidates.push({ ...prefix, keys: keyCount });
-  if (candidates.length === 0) {
+  // B ships the unlisted pages as hashes (#2673). A hash costs more than a URL
+  // that deflates to almost nothing, so on a site with short, regular URLs a
+  // clipped list with hashes can be bigger than the whole list: then it is
+  // clipped without them, as before #2673, and the merge stays conservative.
+  for (const hashes of [true, false]) {
+    const prefix = largestPrefix(all, (listed) => fitWith(hashes)(listed));
+    if (prefix) candidates.push({ ...prefix, keys: keyCount });
+    if (candidates.length > 0) break;
+  }
+  for (const hashes of [true, false]) {
+    if (candidates.length > 0) break;
     // Not even one page fits with every key: list what fits with none, then add
     // back what keys still fit.
-    const bare = largestPrefix(all, (listed) => fit(listed, none));
-    if (!bare) return undefined;
-    candidates.push({ ...largestKeySet(evidence, bare.listed, fit), listed: bare.listed });
+    const bare = largestPrefix(all, (listed) => fitWith(hashes)(listed, none));
+    if (!bare) continue;
+    candidates.push({ ...largestKeySet(evidence, bare.listed, fitWith(hashes)), listed: bare.listed });
   }
+  if (candidates.length === 0) return undefined;
   candidates.sort((a, b) => b.listed * b.keys - a.listed * a.keys || b.listed - a.listed);
   return candidates[0]!.signal;
 }

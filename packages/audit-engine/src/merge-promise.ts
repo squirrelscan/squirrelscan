@@ -744,6 +744,9 @@ export async function runCloudSmartAudits(
       notEvaluatedByCheck,
       truncatedChecks: new Set(input.resolutionSignal.truncated ?? []),
       ...(input.resolutionSignal.crawledComplete === false ? { crawledComplete: false } : {}),
+      ...(input.resolutionSignal.crawledComplete === false && input.resolutionSignal.crawledHashes
+        ? { crawledHashes: new Set(input.resolutionSignal.crawledHashes) }
+        : {}),
     };
   }
 
@@ -1296,11 +1299,15 @@ function notEvaluatedThisRun(
 ): CarriedFinding[] {
   const evaluated = (f: CarriedFinding): boolean => {
     const url = f.normalizedUrl;
+    // (#2658, #2673) Off a clipped list the signal has no page sets. A page its
+    // hashes name was crawled, and is taken as evaluated: the tallies count it,
+    // so the carry would count it twice. A page they do not name was not crawled
+    // and keeps its carry. Without hashes (a producer before #2673) there is no
+    // telling, and the carry stays.
+    if (resolution.crawledComplete === false && !resolution.crawledUrls.has(url)) {
+      return resolution.crawledHashes?.has(resolutionUrlHash(url)) ?? false;
+    }
     if (!crawledUrls.has(url) && !resolution.crawledUrls.has(url)) return false;
-    // (#2658) Off a clipped list the signal is silent: no word on whether the
-    // check evaluated the page, so the carry stays. At worst a page the tallies
-    // already count is counted again, which only lowers the score.
-    if (resolution.crawledComplete === false && !resolution.crawledUrls.has(url)) return false;
     const key = resolutionCheckKey(f.ruleId, f.checkName);
     // No key: the check evaluated no page this run, so nothing counted this one.
     if (!resolution.failingByCheck.has(key)) return false;
@@ -1320,19 +1327,25 @@ function notEvaluatedThisRun(
  * (a skipped or non-HTML page passes nothing), so it never takes a synthetic
  * pass here, whatever it carries.
  *
- * (#2658) A signal whose byte budget clipped its page list cannot tell an
- * uncrawled page from a crawled one past the list, which the tallies already
- * count, so no carried page is credited: crediting one could count its passes
- * twice and raise the score. Losing the uncrawled pages' passes only lowers it.
- * At about 10,000 ordinary pages per budget this almost never applies.
+ * (#2658, #2673) A signal whose byte budget clipped its page list names the
+ * crawled pages past it by hash, and none of those is credited either. A hash
+ * collision only withholds a credit, never grants one. A clipped list without
+ * hashes (a producer before #2673) cannot tell an uncrawled page from a crawled
+ * one past the list, so no carried page is credited: crediting one could count
+ * its passes twice and raise the score, where losing them only lowers it.
  */
 function notCrawledThisRun(
   carriedPageUrls: PageUrlSet,
   resolution: MergeResolutionInput,
 ): PageUrlSet {
   const out = new Set<string>();
-  if (resolution.crawledComplete === false) return out;
-  for (const url of carriedPageUrls) if (!resolution.crawledUrls.has(url)) out.add(url);
+  const hashes = resolution.crawledHashes;
+  if (resolution.crawledComplete === false && !hashes) return out;
+  for (const url of carriedPageUrls) {
+    if (resolution.crawledUrls.has(url)) continue;
+    if (hashes?.has(resolutionUrlHash(url))) continue;
+    out.add(url);
+  }
   return out;
 }
 

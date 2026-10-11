@@ -228,6 +228,13 @@ export interface MergeResolutionInput {
    * takes the pre-#1185 path. Undefined → the whole crawl is listed.
    */
   crawledComplete?: boolean;
+  /**
+   * (#2673) With a clipped list: the `resolutionUrlHash` of every crawled page
+   * the list leaves out. Membership only (a collision makes an uncrawled page
+   * look crawled): it tells the capped rescore which unlisted pages its tallies
+   * already count. Undefined → the producer did not send them (before #2673).
+   */
+  crawledHashes?: Set<string>;
 }
 
 const KEY_SEP = "|";

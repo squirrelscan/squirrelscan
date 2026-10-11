@@ -19,7 +19,10 @@ import type {
   ResolutionSignal,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
-import { SCAN_TRUNCATED_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+import {
+  resolutionUrlHash,
+  SCAN_TRUNCATED_SKIP_REASON,
+} from "@squirrelscan/core-contracts/resolution";
 import { decodeResolutionSignal } from "@squirrelscan/rules/resolution-decode";
 import {
   buildCompactResolutionSignal,
@@ -106,6 +109,30 @@ type Rules = Record<string, { meta: Meta; checks: CheckResult[] }>;
 
 const SITE = "https://shop.test";
 const url = (i: number): string => `${SITE}/p/${String(i).padStart(3, "0")}`;
+/**
+ * A page URL with a high-entropy tail, as on a site whose list the signal's byte
+ * budget clips: short regular URLs deflate to less than the hash that would
+ * stand in for them, so they are never worth clipping (#2673).
+ */
+const noisy = (u: string): string =>
+  `${u}-${[0, 1, 2, 3, 4, 5].map((k) => resolutionUrlHash(`${u}${"#".repeat(k)}`)).join("")}`;
+
+/** `report` with every page URL made {@link noisy}. */
+function withNoisyUrls<T extends { pages: Array<{ url: string }>; ruleResults: Rules }>(report: T): T {
+  const out = structuredClone(report);
+  for (const page of out.pages) page.url = noisy(page.url);
+  for (const rule of Object.values(out.ruleResults)) {
+    for (const check of rule.checks) {
+      if (check.pageUrl) check.pageUrl = noisy(check.pageUrl);
+      if (check.pages) check.pages = check.pages.map(noisy);
+      for (const item of check.items ?? []) {
+        if (item.sourcePages) item.sourcePages = item.sourcePages.map(noisy);
+      }
+    }
+  }
+  return out;
+}
+
 const range = (from: number, to: number): number[] =>
   Array.from({ length: to - from }, (_, i) => from + i);
 
@@ -440,7 +467,11 @@ describe("rescore of a capped report (repo#2657)", () => {
    * The capped body of `report` with its signal clipped to the first `listed`
    * pages, as the builder clips a crawl too big for its byte budget.
    */
-  async function clippedBody(report: ReturnType<typeof fullReport>, listed: number) {
+  async function clippedBody(
+    report: ReturnType<typeof fullReport>,
+    listed: number,
+    { hashes = true }: { hashes?: boolean } = {},
+  ) {
     const urls = report.pages.map((p) => p.url);
     let budget = JSON.stringify(buildCompactResolutionSignal(report.ruleResults, urls)).length;
     let signal: ResolutionSignal;
@@ -452,6 +483,10 @@ describe("rescore of a capped report (repo#2657)", () => {
     } while (signal.crawledUrls.length > listed);
     expect(signal.crawledComplete).toBe(false);
     expect(signal.crawledCount).toBe(urls.length);
+    // (#2673) The unlisted crawled pages' hashes ride along; a producer before
+    // #2673 sent none.
+    expect(signal.crawledHashes).toHaveLength(urls.length - signal.crawledUrls.length);
+    if (!hashes) delete signal.crawledHashes;
     return { ...(await cappedBody(report)), resolutionSignal: signal };
   }
   const NOW = 1_780_000_000_000;
@@ -460,8 +495,8 @@ describe("rescore of a capped report (repo#2657)", () => {
     // A clean first audit leaves no findings, only pages. Run 2 crawls the same
     // 40 pages and its tallies count every one of them; past the list the signal
     // cannot say they were crawled, and crediting them would count their passes twice.
-    const seed = await seeded(fullReport(range(0, 40).map((i) => ({ i }))));
-    const report = fullReport(busyShapes(range(0, 40)));
+    const seed = await seeded(withNoisyUrls(fullReport(range(0, 40).map((i) => ({ i })))));
+    const report = withNoisyUrls(fullReport(busyShapes(range(0, 40))));
     const uncapped = await publish(seed.clone(), "audit_2", uncappedBody(report), NOW);
     const capped = await publish(seed.clone(), "audit_2", await clippedBody(report, 15), NOW);
     expect(capped.scoringTallies).toBeDefined();
@@ -470,29 +505,116 @@ describe("rescore of a capped report (repo#2657)", () => {
     );
   });
 
-  test("off a clipped signal list, a carry on a page the payload names stays scored", async () => {
+  test("a clipped list without hashes (before #2673) keeps a carry on a page the payload names", async () => {
     // Run 1: ttfb slow on every page. Run 2: no timing data on page 33, which
     // the payload names (its meta-description fail is in the sample) but the
-    // clipped list does not. Its ttfb carry is in no tally, so it must stay.
-    const seed = await seeded(fullReport(range(0, 40).map((i) => ({ i, ttfb: "slow" as const }))));
-    const report = fullReport(
-      range(0, 40).map((i) => ({
-        i,
-        ttfb: i === 33 ? ("skipped" as const) : ("slow" as const),
-        metaMissing: i >= 30,
-      })),
+    // clipped list does not. Without the hashes there is no telling the page was
+    // crawled, so its ttfb carry stays scored.
+    const seed = await seeded(
+      withNoisyUrls(fullReport(range(0, 40).map((i) => ({ i, ttfb: "slow" as const })))),
     );
-    const body = await clippedBody(report, 15);
+    const report = withNoisyUrls(
+      fullReport(
+        range(0, 40).map((i) => ({
+          i,
+          ttfb: i === 33 ? ("skipped" as const) : ("slow" as const),
+          metaMissing: i >= 30,
+        })),
+      ),
+    );
+    const body = await clippedBody(report, 15, { hashes: false });
     expect(body.ruleResults["core/meta-description"]!.checks.flatMap((c) => c.pages ?? [])).toContain(
-      url(33),
+      noisy(url(33)),
     );
     const uncapped = await publish(seed.clone(), "audit_2", uncappedBody(report), NOW);
     const capped = await publish(seed.clone(), "audit_2", body, NOW);
     expect(rescored(capped).healthScore.overall).toBeLessThanOrEqual(
       rescored(uncapped).healthScore.overall,
     );
-    expect(capped.carriedLastSeen.has(`${url(33)}|perf/ttfb|ttfb`)).toBe(true);
+    expect(capped.carriedLastSeen.has(`${noisy(url(33))}|perf/ttfb|ttfb`)).toBe(true);
   });
+
+  test("(#2673) an unlisted page the hashes name counts as evaluated: its carry is not counted twice", async () => {
+    // Every page fails meta-description in both runs. The publish samples 10 of
+    // them and the list names 15, so the merge carries the rest; the tallies
+    // already count them, and the union must not count them again.
+    const shapes = range(0, 40).map((i) => ({ i, metaMissing: true }));
+    const seed = await seeded(withNoisyUrls(fullReport(shapes)));
+    const report = withNoisyUrls(fullReport(shapes));
+    const uncapped = await publish(seed.clone(), "audit_2", uncappedBody(report), NOW);
+    const hashed = await publish(seed.clone(), "audit_2", await clippedBody(report, 15), NOW);
+    const bare = await publish(
+      seed.clone(),
+      "audit_2",
+      await clippedBody(report, 15, { hashes: false }),
+      NOW,
+    );
+    const carried = (r: CloudSmartAuditsResult) =>
+      [...r.carriedLastSeen.keys()].filter((k) =>
+        k.endsWith("|core/meta-description|has-meta-description"),
+      );
+    expect(carried(hashed)).toEqual([]);
+    expect(carried(bare).length).toBeGreaterThan(0);
+    expect(comparable(rescored(hashed))).toEqual(comparable(rescored(uncapped)));
+  });
+
+  test("(#2673) uncrawled carried pages keep their synthetic passes; a hash collision only withholds one", async () => {
+    // Run 2 crawls 30 of the 40 known pages, clipped to 15 listed. Pages 30-39
+    // were not crawled: the uncapped merge credits them with clean passes, and
+    // with the hashes the capped one does too. Without them it credits none.
+    const seed = await seeded(withNoisyUrls(fullReport(range(0, 40).map((i) => ({ i })))));
+    const report = withNoisyUrls(fullReport(busyShapes(range(0, 30))));
+    const uncapped = await publish(seed.clone(), "audit_2", uncappedBody(report), NOW);
+    const body = await clippedBody(report, 15);
+    const hashed = await publish(seed.clone(), "audit_2", body, NOW);
+    const bare = await publish(
+      seed.clone(),
+      "audit_2",
+      await clippedBody(report, 15, { hashes: false }),
+      NOW,
+    );
+    expect(rescored(hashed).healthScore.overall).toBe(rescored(uncapped).healthScore.overall);
+    const passed = (r: CloudSmartAuditsResult) =>
+      [...r.scoringTallies!.values()].reduce((n, rule) => n + rule.tally.passed, 0);
+    expect(passed(bare)).toBeLessThan(passed(hashed));
+
+    // An uncrawled page whose hash collides with a crawled one is not credited.
+    const collided = await publish(
+      seed.clone(),
+      "audit_2",
+      {
+        ...body,
+        resolutionSignal: {
+          ...body.resolutionSignal,
+          crawledHashes: [...body.resolutionSignal.crawledHashes!, resolutionUrlHash(noisy(url(35)))],
+        },
+      },
+      NOW,
+    );
+    expect(passed(collided)).toBeLessThan(passed(hashed));
+    expect(passed(collided)).toBeGreaterThan(passed(bare));
+  });
+
+  test(
+    "(#2673) a clipped 10,000-page crawl of random URLs scores at most the uncapped body, within a point",
+    async () => {
+      // Run 1 audits 10,000 pages. Run 2 re-crawls 9,000 of them through the real
+      // capper, whose signal budget clips the list of random URLs; the other
+      // 1,000 are carried.
+      const seed = await seeded(withNoisyUrls(fullReport(busyShapes(range(0, 10_000)))));
+      const report = withNoisyUrls(
+        fullReport(busyShapes(range(0, 9_000)).map((s) => ({ ...s, readability: !s.readability }))),
+      );
+      const body = await cappedBody(report);
+      expect(body.resolutionSignal?.crawledComplete).toBe(false);
+      expect(body.resolutionSignal?.crawledHashes?.length).toBeGreaterThan(0);
+      const uncapped = rescored(await publish(seed.clone(), "audit_2", uncappedBody(report), NOW));
+      const capped = rescored(await publish(seed.clone(), "audit_2", body, NOW));
+      expect(capped.healthScore.overall).toBeLessThanOrEqual(uncapped.healthScore.overall);
+      expect(uncapped.healthScore.overall - capped.healthScore.overall).toBeLessThanOrEqual(1);
+    },
+    240_000,
+  );
 
   test("a check skipped on a page keeps that page's finding open, and the score still matches", async () => {
     const seed = await seeded(

@@ -151,6 +151,24 @@ export async function decodeResolutionSignal(
     throw new Error("compact resolution payload: bad removedCount");
   }
 
+  // (#2673) The unlisted crawled pages' hashes: one string of 8-hex values, only
+  // with a clipped list, at most one per crawled page the list leaves out.
+  let crawledHashes: string[] | undefined;
+  if (payload.hashes !== undefined) {
+    const hashes = payload.hashes;
+    if (
+      payload.complete ||
+      typeof hashes !== "string" ||
+      hashes.length % 8 !== 0 ||
+      hashes.length / 8 > pages - urls.length ||
+      !/^[0-9a-f]*$/.test(hashes)
+    ) {
+      throw new Error("compact resolution payload: bad hashes");
+    }
+    crawledHashes = [];
+    for (let i = 0; i < hashes.length; i += 8) crawledHashes.push(hashes.slice(i, i + 8));
+  }
+
   return {
     crawledUrls: urls,
     failing,
@@ -159,6 +177,7 @@ export async function decodeResolutionSignal(
     ...(payload.complete ? {} : { crawledComplete: false, crawledCount: pages }),
     ...(removedPages.length > 0 ? { removedPages } : {}),
     ...(removedCount > 0 ? { removedCount } : {}),
+    ...(crawledHashes && crawledHashes.length > 0 ? { crawledHashes } : {}),
   };
 }
 
@@ -187,6 +206,8 @@ function inflateCapped(base64: string, maxBytes: number): string {
 const limits = RESOLUTION_SIGNAL_LIMITS;
 const MAX_CONTAINERS = 3 * limits.maxChecks + 16;
 const MAX_STRINGS = limits.maxCrawledUrls + limits.maxHashesTotal + 4 * limits.maxChecks + 16;
+/** The longest string a valid payload holds: `hashes` (#2673), 8 hex per crawled page. */
+const MAX_STRING_CHARS = 8 * limits.maxCrawledUrls;
 const MAX_SEPARATORS =
   limits.maxCrawledUrls + 4 * limits.maxHashesTotal + 3 * limits.maxChecks + 16;
 /** Root, a map, its arrays. */
@@ -195,8 +216,9 @@ const MAX_DEPTH = 3;
 /**
  * Refuse JSON whose shape no valid payload has, before `JSON.parse` builds it:
  * a few KB of deflated `{},` (or `"a",`) under an unknown key would otherwise
- * allocate hundreds of thousands to millions of values. One pass; a string's
- * contents are skipped, the string itself is counted.
+ * allocate hundreds of thousands to millions of values, and one long string
+ * (#2673's `hashes` is the longest valid one) megabytes. One pass; a string's
+ * contents are skipped, the string itself is counted and measured.
  */
 function assertParseBounded(json: string): void {
   let containers = 0;
@@ -204,15 +226,20 @@ function assertParseBounded(json: string): void {
   let strings = 0;
   let depth = 0;
   let inString = false;
+  let stringStart = 0;
   for (let i = 0; i < json.length; i++) {
     const c = json.charCodeAt(i);
     if (inString) {
       if (c === 92 /* \ */) i++;
       else if (c === 34 /* " */) inString = false;
+      if (i - stringStart > MAX_STRING_CHARS) {
+        throw new Error("compact resolution payload: shape past the signal's bounds");
+      }
       continue;
     }
     if (c === 34 /* " */) {
       inString = true;
+      stringStart = i;
       if (++strings > MAX_STRINGS) {
         throw new Error("compact resolution payload: shape past the signal's bounds");
       }
