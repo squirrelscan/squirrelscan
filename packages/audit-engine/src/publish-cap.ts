@@ -5,10 +5,10 @@
 // The scoring transport that grows with pages crawled (the compact resolution
 // signal and `pageStatuses`) is built to its own fixed share
 // (RESOLUTION_PUBLISH_LIMITS, repo#2658), and the rest of the report gets the
-// rest. Both publish producers will build their body here (the CLI's
-// `slimForPublish`, the cloud container's `truncateReportForPublish`), so the
-// two cannot drift, and the API can run the same function over a body from a
-// client that predates it.
+// rest. Both publish producers build their body here (repo#2667: the CLI's
+// `slimForPublish`, and the cloud container's publish), so the two cannot
+// drift, and the API can run the same function over a body from a client that
+// predates it.
 //
 // In order:
 //  1. Count what sampling is about to throw away, from the FULL report:

@@ -556,12 +556,13 @@ export const RESOLUTION_PUBLISH_LIMITS = {
   maxInflatedBytes: 4 * 1024 * 1024,
 } as const;
 
-// #1167: hard-clip fallback applied by the CLI publish degrade pass (publish.ts)
+// #1167: hard-clip fallback applied by the cloud container's publish degrade pass
 // only when the primary-capped payload STILL exceeds maxPayloadBytes — should be
 // unreachable post-sampling, but guarantees a signalled clip over a 413. Tighter
 // than PUBLISH_LIMITS on every axis so the rebuilt body provably fits the 20MB gate.
 // Shape matches the rules pkg `PublishSampleLimits` so it drops straight into
-// sampleChecksForPublish / slimForPublish's degrade pass.
+// sampleChecksForPublish / that degrade pass. (The CLI publishes the capped
+// report since repo#2667 and has no degrade pass.)
 export const PUBLISH_DEGRADE_LIMITS = {
   maxPagesPerCheck: 25,
   maxItems: 10,

@@ -67,6 +67,10 @@ When the site is on a recurring [schedule](/cloud/scheduled-audits) the command 
 
 Manage published reports in the [dashboard](https://app.squirrelscan.com).
 
+### What a published report holds
+
+A published report is a summary, at most 1 MB however many pages you audit. Each issue lists a sample of its affected pages and items with the true counts, and the score still counts every check the audit ran. The full per-page detail stays in the local project, and `squirrel report --format json` exports all of it.
+
 <Note>
 A report of a host no squirrelscan server can reach is never published, even with `--publish`. That covers `localhost`, loopback and private ranges, and internal names such as `box.local` or anything under `.internal`. The command prints the report as usual and says the report stayed local. See [Local audits with the CLI](/guides/local-audits-cli).
 </Note>

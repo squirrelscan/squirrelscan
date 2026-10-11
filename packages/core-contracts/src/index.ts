@@ -379,9 +379,10 @@ export interface AuditReport {
    * Built on EVERY audit (#2091) — there is no flag. Absent only on a report
    * produced before the feature, or when the build itself failed.
    *
-   * It rides the publish body through `slimForPublish`'s spread, capped by
-   * `ENTITY_MAP_PUBLISH_LIMITS` so a pathological site cannot push the body
-   * toward the payload gate. The project store keeps the uncapped graph.
+   * The publish capper (`capReportForPublish`, repo#2667) projects it to
+   * `ENTITY_MAP_PUBLISH_LIMITS`, or drops it to fit the body, so a pathological
+   * site cannot push the body over its budget. The project store keeps the
+   * uncapped graph.
    *
    * NOTE for the cloud side: the API's publish schema must accept this field.
    * A strict schema rejects the whole body on an unknown key, and every publish
@@ -442,7 +443,7 @@ export interface AuditReport {
    *
    * An agent reading a report has to be able to tell a replay from a fresh
    * evaluation — the findings are identical by construction, so nothing else in
-   * the report distinguishes them (#1981). LOCAL ONLY: `slimForPublish` strips it,
+   * the report distinguishes them (#1981). LOCAL ONLY: the publish capper strips it,
    * because it describes how this machine produced the report and not the site.
    * REPORT-ONLY — never feeds `healthScore`.
    */

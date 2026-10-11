@@ -23,6 +23,7 @@ How it works:
 
 ### Changed
 
+- A published report is now a summary of at most 1 MB, however many pages the audit crawled: each issue keeps a sample of its affected pages and items with the true counts, and the score still counts every check the audit ran. The full per-page detail stays local (`squirrel report --format json`). Large audits used to publish bodies of several MB, which the server could fail to store. See [What a published report holds](https://docs.squirrelscan.com/cli/report#what-a-published-report-holds).
 - `squirrel channel` now runs on the same MCP SDK (v2) as `squirrel mcp`, and the CLI no longer ships the v1 SDK or the HTTP server packages it pulled in. The channel still connects with the 2025-era `initialize` handshake, which Claude Code needs to register it as a channel, and the docs now say so.
 
 ### Fixed

@@ -1,7 +1,7 @@
 // Build the unsampled publish resolution signal (#1185).
 //
-// Runs in BOTH publish producers — the CLI (`slimForPublish`) and the cloud
-// container (worker-agent `truncateReportForPublish`) — over the PRE-sample
+// Runs in BOTH publish producers — through the report capper
+// (`capReportForPublish`, audit-engine) since repo#2667 — over the PRE-sample
 // `ruleResults`, before #1167's `sampleChecksForPublish` clips `pages[]`. The
 // server merge consumes the signal to resolve findings on pages crawled clean
 // this run regardless of sampling; see core-contracts/resolution.ts for the
@@ -753,9 +753,9 @@ export interface PublishResolution {
 /**
  * The two publish fields sized by pages crawled rather than by findings (#2658):
  * `pageStatuses` and the compact resolution signal, together within
- * `limits.maxBytes`. Both producers (CLI `slimForPublish`, worker-agent
- * `truncateReportForPublish`) call this over the PRE-sample rule results and the
- * report's full `pages[]`, before either is dropped or sampled.
+ * `limits.maxBytes`. The report capper (`capReportForPublish`, which both
+ * producers publish through) calls this over the PRE-sample rule results and
+ * the report's full `pages[]`, before either is dropped or sampled.
  *
  * `pageStatuses` lists only non-2xx pages: a 200 is implied by the signal's page
  * list, so a healthy site sends none. It is clipped first, to its own share, so a
