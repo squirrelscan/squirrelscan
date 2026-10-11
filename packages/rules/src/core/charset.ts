@@ -21,7 +21,12 @@ function isUtf8(label: string): boolean {
  */
 const PRESCAN_BYTES = 1024;
 
-const META_OR_COMMENT = /<!--[\s\S]*?(?:-->|$)|<meta\b[^>]*>/gi;
+// One prescan token (HTML Standard §13.2.3.2): a comment; a `<meta>` tag; any
+// other tag, skipped whole so a `<meta` inside its quoted attribute is not read;
+// or a `<!…>`, `<?…>` construct. Quoted values may hold `>`. A tag cut off by
+// the end of the window matches without its closing `>`.
+const PRESCAN_TOKEN =
+  /<!--[\s\S]*?(?:-->|$)|<meta(?=[\s/>])(?:[^>"']|"[^"]*"|'[^']*')*>?|<\/?[a-z](?:[^>"']|"[^"]*"|'[^']*')*>?|<[!/?][^>]*>?/gi;
 const ATTRIBUTE = /([^\s"'>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
 
 /** A raw `<meta …>` tag that declares a charset, by either attribute form. */
@@ -40,15 +45,19 @@ function isCharsetDeclaration(tag: string): boolean {
 
 /**
  * Whether the first charset-declaring `<meta>` in the raw HTML ends within the
- * prescan window. Comments are skipped, as the prescan skips them. A UTF-16
- * code unit is at least one UTF-8 byte, so only the first 1024 code units can
- * hold a declaration that fits, and only they are scanned.
+ * prescan window. Comments and other tags are skipped, as the prescan skips
+ * them. A UTF-16 code unit is at least one UTF-8 byte, so only the first 1024
+ * code units can hold a declaration that fits, and only they are scanned. The
+ * decoded body has lost any UTF-8 BOM, so such a page is measured 3 bytes
+ * short; its BOM decides the decoding anyway.
  */
 function declaredWithinPrescan(html: string): boolean {
   const prefix = html.slice(0, PRESCAN_BYTES);
-  for (const m of prefix.matchAll(META_OR_COMMENT)) {
-    if (m[0].startsWith("<!--") || !isCharsetDeclaration(m[0])) continue;
-    const end = m.index + m[0].length;
+  for (const m of prefix.matchAll(PRESCAN_TOKEN)) {
+    const tag = m[0];
+    if (!/^<meta[\s/>]/i.test(tag) || !isCharsetDeclaration(tag)) continue;
+    if (!tag.endsWith(">")) return false;
+    const end = m.index + tag.length;
     return new TextEncoder().encode(prefix.slice(0, end)).length <= PRESCAN_BYTES;
   }
   return false;

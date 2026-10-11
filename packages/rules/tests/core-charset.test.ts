@@ -114,6 +114,25 @@ describe("core/charset declaration beyond the first 1024 bytes (pub#659)", () =>
     expect(run(html, UTF8_HEADER).status).toBe("warn");
   });
 
+  test("a quoted > inside the charset meta does not end the tag early", () => {
+    const early = doc(`<meta data-note=">" charset="utf-8">\n${VIEWPORT}`);
+    expect(run(early, UTF8_HEADER).status).toBe("pass");
+    // The tag's real `>` is past byte 1024; a quoted `>` near its start is not it.
+    const long = doc(`<meta charset="utf-8" data-note=">${"x".repeat(1100)}">`);
+    expect(run(long, UTF8_HEADER).message).toBe("Charset meta is not within the first 1024 bytes");
+  });
+
+  test("lookalikes before a late declaration do not count: <meta-data>, a quoted <meta in another tag", () => {
+    const late = `<style>${"a{}".repeat(400)}</style>\n${CHARSET}`;
+    for (const lookalike of [
+      `<meta-data charset="utf-8">`,
+      `<link rel="alternate" title='<meta charset="utf-8">' href="/x">`,
+    ]) {
+      const html = doc(`${lookalike}\n${late}`);
+      expect([lookalike, run(html, UTF8_HEADER).status]).toEqual([lookalike, "warn"]);
+    }
+  });
+
   test("a http-equiv declaration beyond 1024 bytes is flagged the same way", () => {
     const equiv = `<meta http-equiv="Content-Type" content="text/html; charset=utf-8">`;
     const html = doc(equiv, `<!-- ${"x".repeat(2000)} -->`);
