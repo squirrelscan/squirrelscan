@@ -255,9 +255,10 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   }
 
   // repo#2661: a capped published report lists a sample of each issue's pages
-  // and items beside the true counts. Our own copy, so it is not escaped.
+  // and items beside the true counts. Escaped like every other value here: the
+  // numbers in it come off the report's own JSON.
   const capped = publishedReportNote(report);
-  if (capped) lines.push(`<published-summary>${capped}</published-summary>`);
+  if (capped) lines.push(`<published-summary>${escapeXml(capped)}</published-summary>`);
 
   // The audit level, so an agent knows what kind of audit the score rests on
   // and which settings were changed from the level (a custom audit). The

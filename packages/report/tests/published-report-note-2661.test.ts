@@ -58,6 +58,16 @@ function report(detail?: AuditReport["detail"]): AuditReport {
   } as unknown as AuditReport;
 }
 
+/** An uncapped report whose one check lists `listed` items and left `leftOut` out. */
+function reportWithItems(listed: number, leftOut: number): AuditReport {
+  const r = report();
+  const check = r.ruleResults["images/alt"]!.checks[0]!;
+  check.pages = [SAMPLE[0]!];
+  check.items = Array.from({ length: listed }, (_, i) => ({ id: `https://example.com/i${i}.png` }));
+  check.details = { additional: leftOut };
+  return r;
+}
+
 const STAMP = {
   capped: true,
   tier: 0,
@@ -84,6 +94,23 @@ describe("publishedReportNote", () => {
     expect(publishedReportNote({ detail: { ...STAMP, fullDetail: "local", classesDropped: 3 } })).toContain(
       "beside its true counts. 3 more issues did not fit and are counted in the score only. The complete list",
     );
+  });
+
+  test("caps that are not finite numbers fall back to the full sample, never reach the copy", () => {
+    for (const bad of ["10<script>", Number.NaN, Number.POSITIVE_INFINITY, -3, { n: 1 }, null]) {
+      const note = publishedReportNote({
+        detail: {
+          ...STAMP,
+          fullDetail: "local",
+          caps: { ...STAMP.caps, pagesPerClass: bad, itemsPerClass: bad },
+          classesDropped: bad,
+        },
+      } as unknown as Pick<AuditReport, "detail">);
+      expect(note).toStartWith(NOTE);
+      expect(note).not.toContain("did not fit");
+      expect(note).not.toContain("<script>");
+      expect(note).not.toContain("NaN");
+    }
   });
 
   test("is null for a report that is not capped", () => {
@@ -117,5 +144,22 @@ describe("every renderer says it once on a capped report, never on an uncapped o
 
   test("llm counts the items a capped check left out", () => {
     expect(renderLlm(capped)).toContain("Items (1/38):");
+  });
+
+  test("llm escapes the note like every other value", () => {
+    const out = renderLlm(capped);
+    const line = out.split("\n").find((l) => l.startsWith("<published-summary>"))!;
+    expect(line).toEndWith("</published-summary>");
+    expect(line.slice("<published-summary>".length, -"</published-summary>".length)).not.toMatch(/[<>&]/);
+  });
+
+  // `details.additional` counts items a check LEFT OUT of `items` (the fold's
+  // and the publish clamp's dropped count, plus a rule's own remainder), never
+  // items it lists, so adding it to the listed count is the true total.
+  test("an uncapped report with clamped items: listed plus left out, no note", () => {
+    const report = reportWithItems(3, 4);
+    const out = renderLlm(report);
+    expect(out).toContain("Items (3/7):");
+    expect(out).not.toContain("<published-summary>");
   });
 });
