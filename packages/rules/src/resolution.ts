@@ -65,6 +65,11 @@ interface ResolutionEvidence {
   hash: (normalizedUrl: string) => string;
   /** Normalized page URL → 404/410, for the pages that returned one (compact shape only). */
   removed: Map<string, number>;
+  /**
+   * (#2673) `crawled` in hash order, the order a clip with page hashes lists pages
+   * in: a spread across the site rather than its alphabetically first section.
+   */
+  hashOrder?: string[];
 }
 
 /**
@@ -371,8 +376,9 @@ export function buildResolutionSignal(
 }
 
 /**
- * The compact payload over the first `listed` crawled pages (crawl order), with
- * only the keys in `kept` authoritative (all of them when omitted).
+ * The compact payload over the first `listed` crawled pages (crawl order, or with
+ * `withHashes` hash order), with only the keys in `kept` authoritative (all of
+ * them when omitted).
  *
  * Same evidence and the same count caps as {@link buildResolutionSignal}, so with
  * every page listed and every key kept it decodes to that signal's content. Two
@@ -388,10 +394,16 @@ function compactPayload(
   evidence: ResolutionEvidence,
   listed: number,
   kept?: ReadonlySet<string>,
+  withHashes = false,
 ): CompactResolutionPayload {
   const limits = RESOLUTION_SIGNAL_LIMITS;
   const complete = !evidence.crawledOverCap && listed >= evidence.crawled.length;
-  const listedPages = evidence.crawled.slice(0, listed);
+  // (#2673) A clip that ships page hashes lists a spread of the site: the capped
+  // rescore reads "this check skipped no listed page" as "it skipped no unlisted
+  // one", which a crawl-order (or, from the capper, alphabetical) prefix would get
+  // wrong for skips clustered in a section past it.
+  const order = withHashes ? (evidence.hashOrder ?? evidence.crawled) : evidence.crawled;
+  const listedPages = order.slice(0, listed);
   // Sorted: neighbouring URLs share long prefixes, which is most of what makes
   // the list deflate to ~10 bytes a page on a real site.
   const urls = [...listedPages].sort();
@@ -489,6 +501,18 @@ function compactPayload(
     }
   }
 
+  // (#2673) A clipped list names the rest of the crawl by hash, so the merge can
+  // tell an unlisted page this run crawled (whose checks its tallies count) from
+  // one it did not. Distinct and sorted, so the bytes depend on the pages alone.
+  // Not past the collection cap: pages beyond `maxCrawledUrls` were never
+  // collected, and a set that misses some crawled pages would read as complete.
+  let hashes: string | undefined;
+  if (withHashes && !complete && !evidence.crawledOverCap && listed < evidence.crawled.length) {
+    const unlisted = new Set<string>();
+    for (const url of order.slice(listed)) unlisted.add(evidence.hash(url));
+    hashes = [...unlisted].sort().join("");
+  }
+
   const gaps = (map: Map<string, number[]>): Record<string, number[]> => {
     const out: Record<string, number[]> = {};
     for (const [key, indexes] of map) out[key] = encodeIndexGaps(indexes.sort((a, b) => a - b));
@@ -509,6 +533,7 @@ function compactPayload(
     ...(evidence.removed.size > 0
       ? { removedCount: Math.min(evidence.removed.size, REPORT_LIMITS.maxPages) }
       : {}),
+    ...(hashes ? { hashes } : {}),
   };
 }
 
@@ -550,7 +575,13 @@ function keyCosts(payload: CompactResolutionPayload): Map<string, number> {
  *  - the tail of the crawl, with every key kept: a crawl-order prefix stays
  *    listed. Unlisted pages fall back to pre-#1185 behavior in the merge, and
  *    `pages` still counts every crawled page so the audited-page count does not
- *    drop with the list.
+ *    drop with the list. With `pageHashes` (a producer that sends tallies), the
+ *    list is a hash-order spread rather than a prefix, and the unlisted pages
+ *    ride as 8-hex hashes (#2673, about 5.7 bytes a page) so the capped rescore
+ *    still knows them for crawled; the list shrinks to leave room for them. At the
+ *    10,000-page crawl ceiling the hashes take about 56 KiB, inside the signal's
+ *    share whatever `pageStatuses` holds; when even they do not fit (short
+ *    regular URLs that deflate below a hash), the clip goes without them.
  * Each is a binary search over re-deflated candidates: only the overflow case
  * pays more than one deflate.
  */
@@ -561,6 +592,11 @@ export function buildCompactResolutionSignal(
   // Pages that returned 404/410 (any other status is ignored), so the merge can
   // stale their findings and leave them out of the audited count.
   removedPages: ReadonlyArray<{ url: string; status: number }> = [],
+  // (#2673) Ship the hashes of the crawled pages a clipped list leaves out. Only
+  // the capped rescore reads them (it needs `checkTallies`), so only a producer
+  // that sends tallies (the report capper) asks: for any other a hash only takes
+  // room the listed prefix could use.
+  options: { pageHashes?: boolean } = {},
 ): CompactResolutionSignal | undefined {
   const evidence = collectResolutionEvidence(ruleResults, crawledPageUrls);
   if (evidence.crawled.length === 0 && evidence.failing.size === 0) return undefined;
@@ -569,10 +605,21 @@ export function buildCompactResolutionSignal(
     const norm = normalizePageUrl(url);
     if (evidence.crawledSet.has(norm)) evidence.removed.set(norm, status);
   }
-  const fit = (listed: number, kept?: ReadonlySet<string>): CompactResolutionSignal | undefined => {
-    const out = deflatePayload(compactPayload(evidence, listed, kept));
-    return out && out.bytes <= maxBytes ? out.signal : undefined;
-  };
+  const fitWith =
+    (hashes: boolean): Fit =>
+    (listed, kept) => {
+      const out = deflatePayload(compactPayload(evidence, listed, kept, hashes));
+      return out && out.bytes <= maxBytes ? out.signal : undefined;
+    };
+  const fit = fitWith(false);
+  const clipModes = options.pageHashes ? [true, false] : [false];
+  if (options.pageHashes) {
+    evidence.hashOrder = [...evidence.crawled].sort((a, b) => {
+      const ha = evidence.hash(a);
+      const hb = evidence.hash(b);
+      return ha < hb ? -1 : ha > hb ? 1 : a < b ? -1 : a > b ? 1 : 0;
+    });
+  }
 
   const all = evidence.crawled.length;
   const whole = fit(all);
@@ -595,15 +642,27 @@ export function buildCompactResolutionSignal(
     const kept = largestKeySet(evidence, all, fit);
     candidates.push({ ...kept, listed: all });
   }
-  const prefix = largestPrefix(all, (listed) => fit(listed));
-  if (prefix) candidates.push({ ...prefix, keys: keyCount });
-  if (candidates.length === 0) {
+  // With `pageHashes`, B ships the unlisted pages as hashes (#2673). A hash costs
+  // more than a URL that deflates to almost nothing, so on a site with short,
+  // regular URLs a clipped list with hashes can be bigger than the whole list:
+  // then it is clipped without them, as before #2673, and the merge stays
+  // conservative.
+  for (const hashes of clipModes) {
+    const prefix = largestPrefix(all, (listed) => fitWith(hashes)(listed));
+    if (prefix) {
+      candidates.push({ ...prefix, keys: keyCount });
+      break;
+    }
+  }
+  for (const hashes of clipModes) {
+    if (candidates.length > 0) break;
     // Not even one page fits with every key: list what fits with none, then add
     // back what keys still fit.
-    const bare = largestPrefix(all, (listed) => fit(listed, none));
-    if (!bare) return undefined;
-    candidates.push({ ...largestKeySet(evidence, bare.listed, fit), listed: bare.listed });
+    const bare = largestPrefix(all, (listed) => fitWith(hashes)(listed, none));
+    if (!bare) continue;
+    candidates.push({ ...largestKeySet(evidence, bare.listed, fitWith(hashes)), listed: bare.listed });
   }
+  if (candidates.length === 0) return undefined;
   candidates.sort((a, b) => b.listed * b.keys - a.listed * a.keys || b.listed - a.listed);
   return candidates[0]!.signal;
 }
@@ -704,6 +763,8 @@ export function buildPublishResolution(
   ruleResults: Record<string, { checks: CheckResult[] }>,
   pages: ReadonlyArray<{ url?: unknown; statusCode?: unknown }>,
   limits: { maxBytes: number; maxPageStatusBytes: number } = RESOLUTION_PUBLISH_LIMITS,
+  // See buildCompactResolutionSignal: only a producer that sends `checkTallies`.
+  options: { pageHashes?: boolean } = {},
 ): PublishResolution {
   const crawled: string[] = [];
   let statuses: Array<{ url: string; status: number }> = [];
@@ -736,6 +797,7 @@ export function buildPublishResolution(
     crawled,
     limits.maxBytes - statusBytes - PAGE_STATUSES_KEY_BYTES - RESOLUTION_SIGNAL_KEY_BYTES,
     removed,
+    options,
   );
   return {
     ...(statuses.length > 0 ? { pageStatuses: statuses } : {}),

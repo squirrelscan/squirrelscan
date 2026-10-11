@@ -332,10 +332,22 @@ describe("the byte budget", () => {
           expect(decoded.crawledUrls).toHaveLength(pages);
         } else {
           // 10,000 long news slugs do not fit: the list is clipped and says so,
-          // but still counts every page.
+          // but still counts every page. No tallies are sent alongside, so no
+          // page hashes either (#2673): they would only shrink the list.
           expect(decoded.crawledComplete).toBe(false);
           expect(decoded.crawledCount).toBe(pages);
           expect(decoded.crawledUrls.length).toBeGreaterThan(3_000);
+          expect(decoded.crawledHashes).toBeUndefined();
+          // The capper, which sends tallies, asks for them: the rest of the crawl
+          // rides by hash, at the cost of fewer listed pages.
+          const capped = await decodeResolutionSignal(
+            buildPublishResolution(fixtureShapedResults(crawl), reportPages, RESOLUTION_PUBLISH_LIMITS, {
+              pageHashes: true,
+            }).resolutionSignalCompact!,
+          );
+          expect(capped.crawledUrls.length).toBeGreaterThan(2_500);
+          expect(capped.crawledUrls.length).toBeLessThan(decoded.crawledUrls.length);
+          expect(capped.crawledHashes).toHaveLength(pages - capped.crawledUrls.length);
         }
       }
     }
@@ -446,6 +458,82 @@ describe("the byte budget", () => {
     }
     // ...and the listed pages keep their failing evidence, not just a URL list.
     expect(Object.values(decoded.failing).filter((hashes) => hashes.length > 0).length).toBe(40);
+    expect(decoded.crawledHashes).toBeUndefined();
+  });
+
+  test("(#2673) with page hashes, a clipped list is a spread of the crawl and names the rest by hash", async () => {
+    const urls = newsUrls(3_000);
+    const results = fixtureShapedResults(urls);
+    const signal = buildCompactResolutionSignal(results, urls, 24 * 1024, [], { pageHashes: true })!;
+    expect(bytes(signal)).toBeLessThanOrEqual(24 * 1024);
+    const decoded = await decodeResolutionSignal(signal);
+    expect(decoded.crawledComplete).toBe(false);
+    expect(decoded.crawledCount).toBe(3_000);
+    // The listed pages are the first in hash order, not a crawl-order prefix.
+    const norm = urls.map(normalizePageUrl);
+    const byHash = [...norm].sort((a, b) =>
+      resolutionUrlHash(a) < resolutionUrlHash(b) ? -1 : resolutionUrlHash(a) > resolutionUrlHash(b) ? 1 : 0,
+    );
+    expect(new Set(decoded.crawledUrls)).toEqual(new Set(byHash.slice(0, decoded.crawledUrls.length)));
+    // Every page the list leaves out is named by hash, sorted and distinct.
+    const listed = new Set(decoded.crawledUrls);
+    const unlisted = norm.filter((u) => !listed.has(u));
+    expect(decoded.crawledHashes).toEqual([...new Set(unlisted.map(resolutionUrlHash))].sort());
+    // A listed page keeps exactly its original evidence.
+    const legacy = buildResolutionSignal(results, urls)!;
+    const listedHashes = new Set(decoded.crawledUrls.map(resolutionUrlHash));
+    for (const [key, hashes] of Object.entries(legacy.failing)) {
+      if (!(key in decoded.failing)) continue;
+      expect(new Set(decoded.failing[key])).toEqual(new Set(hashes.filter((h) => listedHashes.has(h))));
+    }
+  });
+
+  test("(#2673) a crawl past the collection cap sends no hashes: they could not be complete", async () => {
+    const urls = newsUrls(RESOLUTION_SIGNAL_LIMITS.maxCrawledUrls + 1);
+    const decoded = await decodeResolutionSignal(
+      buildCompactResolutionSignal(fixtureShapedResults(urls.slice(0, 500)), urls, 120 * 1024, [], {
+        pageHashes: true,
+      })!,
+    );
+    expect(decoded.crawledComplete).toBe(false);
+    expect(decoded.crawledHashes).toBeUndefined();
+  }, 60_000);
+
+  test("(#2673) a whole list carries no hashes", async () => {
+    const urls = newsUrls(300);
+    const decoded = await decodeResolutionSignal(
+      buildCompactResolutionSignal(fixtureShapedResults(urls), urls, undefined, [], { pageHashes: true })!,
+    );
+    expect(decoded.crawledComplete).toBeUndefined();
+    expect(decoded.crawledHashes).toBeUndefined();
+  });
+
+  test("(#2673) short regular URLs clip without hashes when the hashes would not fit", async () => {
+    // A hash costs more than a URL that deflates to almost nothing. Under the
+    // bare list's own size (so no key can be dropped to make room), only a
+    // clipped list WITHOUT hashes fits: the builder falls back to one rather
+    // than sending no signal.
+    const urls = Array.from({ length: 2_000 }, (_, i) => `https://x.test/p/${i}`);
+    const results: Rules = {
+      r: {
+        checks: [
+          {
+            name: "c",
+            status: "fail",
+            message: "x",
+            pages: urls.filter((_, i) => i % 97 === 0),
+            details: { aggregated: true },
+          },
+        ],
+      },
+    };
+    const budget = bytes(buildCompactResolutionSignal({}, urls)) - 64;
+    const signal = buildCompactResolutionSignal(results, urls, budget, [], { pageHashes: true })!;
+    expect(signal).toBeDefined();
+    expect(bytes(signal)).toBeLessThanOrEqual(budget);
+    const decoded = await decodeResolutionSignal(signal);
+    expect(decoded.crawledComplete).toBe(false);
+    expect(decoded.crawledHashes).toBeUndefined();
   });
 
   test("pageStatuses gets its own share, 404/410 first, and the signal the rest", async () => {
@@ -520,6 +608,20 @@ describe("decodeResolutionSignal refuses what it cannot bound", () => {
     );
     expect(withRemoved.removedPages).toEqual([{ url: P2, status: 410 }]);
     expect(withRemoved.removedCount).toBe(2);
+    const withHashes = await decodeResolutionSignal(
+      encode({ ...ok, complete: false, pages: 4, hashes: "0000000100000002" }),
+    );
+    expect(withHashes.crawledHashes).toEqual(["00000001", "00000002"]);
+  });
+
+  test("(#2673) a hashes string past what the crawl can hold is refused cheaply", async () => {
+    // ~4 MiB of hex in one string deflates to a few KB: refused before it is
+    // parsed, on the longest string a payload may hold (10,000 hashes)...
+    const huge = encode({ ...ok, complete: false, pages: 10_000, hashes: "0".repeat(4_000_000) });
+    await expect(decodeResolutionSignal(huge)).rejects.toThrow(/shape past/);
+    // ...and one within that but past the pages the list leaves out, on its count.
+    const many = encode({ ...ok, complete: false, pages: 100, hashes: "0".repeat(8 * 99) });
+    await expect(decodeResolutionSignal(many)).rejects.toThrow(/bad hashes/);
   });
 
   test.each([
@@ -533,6 +635,11 @@ describe("decodeResolutionSignal refuses what it cannot bound", () => {
     ["a removed status other than 404/410", { ...ok, removed: { "301": [0] }, removedCount: 1 }],
     ["more removed pages named than counted", { ...ok, removed: { "404": [0, 0] }, removedCount: 1 }],
     ["a complete list with removed pages it does not name", { ...ok, removedCount: 1 }],
+    ["hashes beside a complete list", { ...ok, hashes: "00000001" }],
+    ["hashes that are not 8-hex", { ...ok, complete: false, pages: 4, hashes: "0000001" }],
+    ["hashes that are not hex", { ...ok, complete: false, pages: 4, hashes: "0000000g" }],
+    ["more hashes than unlisted pages", { ...ok, complete: false, pages: 3, hashes: "0000000100000002" }],
+    ["hashes that are not a string", { ...ok, complete: false, pages: 4, hashes: ["00000001"] }],
     ["more removed pages than pages", { ...ok, complete: false, pages: 2, removedCount: 3 }],
     ["more pages than a crawl can have", { ...ok, complete: false, pages: 1e9 }],
     ["no failing map", { v: 1, urls: [P1], complete: true, pages: 1 }],

@@ -81,6 +81,14 @@ export interface ResolutionSignal {
    * compact decoder only, when there are any.
    */
   removedCount?: number;
+  /**
+   * (#2673) When `crawledComplete` is false: the `resolutionUrlHash` of every
+   * crawled page the list leaves out, so the merge can tell an unlisted page
+   * this run crawled from one it did not. Membership only: a page whose hash is
+   * here was crawled, or collides with one that was. Set by the compact decoder
+   * only, from a payload that carries them (producers since #2673).
+   */
+  crawledHashes?: string[];
 }
 
 /**
@@ -130,6 +138,13 @@ export interface CompactResolutionPayload {
   removed?: Record<string, number[]>;
   /** Pages that returned 404 or 410, listed or not. Omitted when none did. */
   removedCount?: number;
+  /**
+   * (#2673) Only when not `complete`: the 8-hex `resolutionUrlHash` of each
+   * distinct crawled page `urls` leaves out, sorted and concatenated into one
+   * string (about 5.7 bytes a page once deflated, where a list of strings costs
+   * 7). Absent when there are none.
+   */
+  hashes?: string;
 }
 
 /** Sorted, distinct indexes → gap code (see {@link CompactResolutionPayload}). */

@@ -744,6 +744,9 @@ export async function runCloudSmartAudits(
       notEvaluatedByCheck,
       truncatedChecks: new Set(input.resolutionSignal.truncated ?? []),
       ...(input.resolutionSignal.crawledComplete === false ? { crawledComplete: false } : {}),
+      ...(input.resolutionSignal.crawledComplete === false && input.resolutionSignal.crawledHashes
+        ? { crawledHashes: new Set(input.resolutionSignal.crawledHashes) }
+        : {}),
     };
   }
 
@@ -1296,11 +1299,30 @@ function notEvaluatedThisRun(
 ): CarriedFinding[] {
   const evaluated = (f: CarriedFinding): boolean => {
     const url = f.normalizedUrl;
+    // (#2658, #2673) Off a clipped list the signal has no page sets. A page its
+    // hashes do not name was not crawled (or, without hashes from a producer
+    // before #2673, there is no telling) and keeps its carry. A page they name
+    // was crawled, and the tallies count it for every check that evaluated it,
+    // so a carry there would count it twice. Whether THIS check evaluated it is
+    // not in the signal, so it is taken as evaluated only when the check ran this
+    // run, evaluated every listed page and its sets are not truncated; a check
+    // that skipped any listed page (no timing data, a scan cap) may have skipped
+    // this one too, and its carry stays. The listed pages are a hash-order spread
+    // of the crawl, so skips clustered in one section show among them; a cluster
+    // too small to land in the sample can still lose its carries from the score.
+    // An uncrawled page whose hash collides with a crawled one is taken for
+    // crawled here too, and its carries drop out of the union (about 1.6e-6 a
+    // page at 7,000 hashes); they stay open in the store either way.
+    if (resolution.crawledComplete === false && !resolution.crawledUrls.has(url)) {
+      if (!resolution.crawledHashes?.has(resolutionUrlHash(url))) return false;
+      const key = resolutionCheckKey(f.ruleId, f.checkName);
+      return (
+        resolution.failingByCheck.has(key) &&
+        !resolution.notEvaluatedByCheck.has(key) &&
+        !resolution.truncatedChecks.has(key)
+      );
+    }
     if (!crawledUrls.has(url) && !resolution.crawledUrls.has(url)) return false;
-    // (#2658) Off a clipped list the signal is silent: no word on whether the
-    // check evaluated the page, so the carry stays. At worst a page the tallies
-    // already count is counted again, which only lowers the score.
-    if (resolution.crawledComplete === false && !resolution.crawledUrls.has(url)) return false;
     const key = resolutionCheckKey(f.ruleId, f.checkName);
     // No key: the check evaluated no page this run, so nothing counted this one.
     if (!resolution.failingByCheck.has(key)) return false;
@@ -1320,19 +1342,27 @@ function notEvaluatedThisRun(
  * (a skipped or non-HTML page passes nothing), so it never takes a synthetic
  * pass here, whatever it carries.
  *
- * (#2658) A signal whose byte budget clipped its page list cannot tell an
- * uncrawled page from a crawled one past the list, which the tallies already
- * count, so no carried page is credited: crediting one could count its passes
- * twice and raise the score. Losing the uncrawled pages' passes only lowers it.
- * At about 10,000 ordinary pages per budget this almost never applies.
+ * (#2658, #2673) A signal whose byte budget clipped its page list names the
+ * crawled pages past it by hash, and none of those is credited either. Here a
+ * hash collision only withholds a credit, never grants one (in
+ * `notEvaluatedThisRun` it can also drop a collided page's carries). A clipped
+ * list without hashes (a producer before #2673, or one that sends no tallies)
+ * cannot tell an uncrawled page from a crawled one past the list, so no carried
+ * page is credited: crediting one could count its passes twice and raise the
+ * score, where losing them only lowers it.
  */
 function notCrawledThisRun(
   carriedPageUrls: PageUrlSet,
   resolution: MergeResolutionInput,
 ): PageUrlSet {
   const out = new Set<string>();
-  if (resolution.crawledComplete === false) return out;
-  for (const url of carriedPageUrls) if (!resolution.crawledUrls.has(url)) out.add(url);
+  const hashes = resolution.crawledHashes;
+  if (resolution.crawledComplete === false && !hashes) return out;
+  for (const url of carriedPageUrls) {
+    if (resolution.crawledUrls.has(url)) continue;
+    if (hashes?.has(resolutionUrlHash(url))) continue;
+    out.add(url);
+  }
   return out;
 }
 
