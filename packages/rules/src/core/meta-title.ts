@@ -9,6 +9,17 @@ export const optionsSchema = z.object({
   max_length: z.number().default(75).describe("Maximum title length"),
 });
 
+/**
+ * The title as a browser displays it (`document.title`): runs of ASCII
+ * whitespace collapsed to one space, then trimmed (HTML Standard, "strip and
+ * collapse ASCII whitespace"). Themes that indent `<title>` across lines
+ * (Shopware, Shopify) otherwise measured their indentation (pub#658). Only
+ * ASCII whitespace: a no-break space is part of the displayed title.
+ */
+function displayedTitle(raw: string): string {
+  return raw.replace(/[\t\n\f\r ]+/g, " ").replace(/^ | $/g, "");
+}
+
 export const metaTitleRule: Rule = {
   meta: {
     id: "core/meta-title",
@@ -28,9 +39,11 @@ export const metaTitleRule: Rule = {
 
   run(ctx: RuleContext): RuleResult {
     const opts = optionsSchema.parse(ctx.options);
-    const { title } = ctx.parsed.meta;
+    const rawTitle = ctx.parsed.meta.title;
+    const title = rawTitle ? displayedTitle(rawTitle) : null;
     const checks: CheckResult[] = [];
 
+    // A whitespace-only title displays as empty, the same as `<title></title>`.
     if (!title) {
       checks.push({
         name: "meta-title",
