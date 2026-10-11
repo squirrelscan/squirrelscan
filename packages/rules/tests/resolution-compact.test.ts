@@ -283,6 +283,24 @@ describe("under the budget it carries exactly the original signal", () => {
     );
   });
 
+  test("the order a check lists its pages in does not change the bytes", async () => {
+    // P3 and P4 are failing pages the crawl list does not hold: they ride in
+    // `other`, which must not take its order from the check.
+    const aggregate = (pages: string[]): Rules => ({
+      r: {
+        checks: [
+          { name: "c", status: "fail", message: "x", pages, details: { aggregated: true } },
+        ],
+      },
+    });
+    const forward = buildCompactResolutionSignal(aggregate([P1, P3, P4]), [P1, P2])!;
+    const backward = buildCompactResolutionSignal(aggregate([P4, P3, P1]), [P1, P2])!;
+    expect(backward).toEqual(forward);
+    expect((await decodeResolutionSignal(forward)).failing["r|c"]!.sort()).toEqual(
+      [h(P1), h(P3), h(P4)].sort(),
+    );
+  });
+
   test("nothing to signal → undefined, as before", () => {
     expect(buildCompactResolutionSignal({}, [])).toBeUndefined();
     expect(buildPublishResolution({}, [])).toEqual({});

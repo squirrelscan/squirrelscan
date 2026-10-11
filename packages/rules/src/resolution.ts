@@ -469,6 +469,20 @@ function compactPayload(
     indexes.push(index);
   }
 
+  // `other` in URL order, like `urls`, so the bytes do not depend on the order
+  // the checks listed their pages in. Its indexes follow the sort.
+  const sortedOther = [...other].sort();
+  if (other.length > 1) {
+    const sortedIndex = new Map<string, number>();
+    sortedOther.forEach((url, i) => sortedIndex.set(url, urls.length + i));
+    for (const indexes of failing.values()) {
+      for (let i = 0; i < indexes.length; i++) {
+        const index = indexes[i]!;
+        if (index >= urls.length) indexes[i] = sortedIndex.get(other[index - urls.length]!)!;
+      }
+    }
+  }
+
   const gaps = (map: Map<string, number[]>): Record<string, number[]> => {
     const out: Record<string, number[]> = {};
     for (const [key, indexes] of map) out[key] = encodeIndexGaps(indexes.sort((a, b) => a - b));
@@ -477,7 +491,7 @@ function compactPayload(
   return {
     v: 1,
     urls,
-    ...(other.length > 0 ? { other } : {}),
+    ...(sortedOther.length > 0 ? { other: sortedOther } : {}),
     complete,
     // Never past the crawl ceiling, which the decoder enforces: billing reads it.
     pages: Math.min(evidence.crawledCount, REPORT_LIMITS.maxPages),
@@ -557,6 +571,10 @@ export function buildCompactResolutionSignal(
   const all = evidence.crawled.length;
   const whole = fit(all);
   if (whole) return whole;
+
+  // TODO(repo#2669): past here the budget bites. The API reports it to Sentry on
+  // decode (`crawledComplete: false`, or keys in `truncated` the count caps did
+  // not put there) with page and key counts only, never URLs.
 
   // Over budget. Two ways to give something up, scored by what the merge can
   // still decide: listed pages × authoritative keys.
@@ -648,8 +666,13 @@ function largestKeySet(
 /** Statuses the merge treats as a page gone (stale its findings): merge-promise.ts. */
 const REMOVED_PAGE_STATUSES = new Set([404, 410]);
 
-/** `,"pageStatuses":` and `,"resolutionSignalCompact":`, the two fields' keys in the body. */
-const FIELD_KEY_BYTES = byteLength(',"pageStatuses":,"resolutionSignalCompact":');
+/**
+ * What each publish field adds to the body around its value: its key, the colon
+ * and the separating comma. A budget for the fields "as they sit in the body"
+ * counts these too (here and in the report capper).
+ */
+export const PAGE_STATUSES_KEY_BYTES = byteLength(',"pageStatuses":');
+export const RESOLUTION_SIGNAL_KEY_BYTES = byteLength(',"resolutionSignalCompact":');
 
 /** The crawl-sized publish fields, fitted to RESOLUTION_PUBLISH_LIMITS. */
 export interface PublishResolution {
@@ -705,7 +728,7 @@ export function buildPublishResolution(
   const signal = buildCompactResolutionSignal(
     ruleResults,
     crawled,
-    limits.maxBytes - statusBytes - FIELD_KEY_BYTES,
+    limits.maxBytes - statusBytes - PAGE_STATUSES_KEY_BYTES - RESOLUTION_SIGNAL_KEY_BYTES,
     removed,
   );
   return {

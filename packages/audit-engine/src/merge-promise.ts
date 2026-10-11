@@ -1297,6 +1297,10 @@ function notEvaluatedThisRun(
   const evaluated = (f: CarriedFinding): boolean => {
     const url = f.normalizedUrl;
     if (!crawledUrls.has(url) && !resolution.crawledUrls.has(url)) return false;
+    // (#2658) Off a clipped list the signal is silent: no word on whether the
+    // check evaluated the page, so the carry stays. At worst a page the tallies
+    // already count is counted again, which only lowers the score.
+    if (resolution.crawledComplete === false && !resolution.crawledUrls.has(url)) return false;
     const key = resolutionCheckKey(f.ruleId, f.checkName);
     // No key: the check evaluated no page this run, so nothing counted this one.
     if (!resolution.failingByCheck.has(key)) return false;
@@ -1315,12 +1319,19 @@ function notEvaluatedThisRun(
  * every check that evaluated it, and earns nothing for the checks that did not
  * (a skipped or non-HTML page passes nothing), so it never takes a synthetic
  * pass here, whatever it carries.
+ *
+ * (#2658) A signal whose byte budget clipped its page list cannot tell an
+ * uncrawled page from a crawled one past the list, which the tallies already
+ * count, so no carried page is credited: crediting one could count its passes
+ * twice and raise the score. Losing the uncrawled pages' passes only lowers it.
+ * At about 10,000 ordinary pages per budget this almost never applies.
  */
 function notCrawledThisRun(
   carriedPageUrls: PageUrlSet,
   resolution: MergeResolutionInput,
 ): PageUrlSet {
   const out = new Set<string>();
+  if (resolution.crawledComplete === false) return out;
   for (const url of carriedPageUrls) if (!resolution.crawledUrls.has(url)) out.add(url);
   return out;
 }

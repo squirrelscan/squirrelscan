@@ -1,24 +1,20 @@
 // One capper for every published report (squirrelscan/repo#2656).
 //
-// A published report is a SUMMARY by design: whatever fires, everything but the
-// scoring transport fits PUBLISHED_REPORT_MAX_BYTES minus that transport's
-// reserve. Both publish producers will build their body here (the CLI's
+// A published report is a SUMMARY by design: whatever fires and whatever the
+// crawl size, the whole body fits PUBLISHED_REPORT_MAX_BYTES minus the envelope.
+// The scoring transport that grows with pages crawled (the compact resolution
+// signal and `pageStatuses`) is built to its own fixed share
+// (RESOLUTION_PUBLISH_LIMITS, repo#2658), and the rest of the report gets the
+// rest. Both publish producers will build their body here (the CLI's
 // `slimForPublish`, the cloud container's `truncateReportForPublish`), so the
 // two cannot drift, and the API can run the same function over a body from a
 // client that predates it.
 //
-// NOT YET "whatever the crawl size": `resolutionSignal` and `pageStatuses` still
-// grow with pages crawled (raw URLs; 1,401KB whole body at 2,000 pages on the
-// real-shape fixture), so the whole body fits only once repo#2658 bounds them.
-// TODO(repo#2658, repo#2657): do not wire this into either producer until the
-// transport is bounded and the server rescore reads `checkTallies`. The wiring
-// rebase of repo#2658 tightens the worst-case test to the whole body, which is
-// the gate.
-//
 // In order:
 //  1. Count what sampling is about to throw away, from the FULL report:
 //     `checkTallies` (this run's fresh checks per rule and check name, in the
-//     scorer's own units), the unsampled `resolutionSignal`, and `pageStatuses`.
+//     scorer's own units), and build the scoring transport: the compact
+//     resolution signal and `pageStatuses`, together within their byte share.
 //  2. Fold every rule's issue classes ONCE, one aggregate per (check name,
 //     status, provenance, foldKey), and drop the per-page pass rows (their
 //     counts are in the tallies). Folding once matters: `foldGroup` appends
@@ -34,6 +30,9 @@
 //     are admitted by byte budget. That fits by construction, so the only
 //     refusal is a report whose skeleton alone (score, rule meta, tallies,
 //     enrichment sections) is over budget: a typed error naming its sections.
+//  4. Measure the finished body, transport included, and refuse it with the
+//     same typed error if it is somehow still over. Never expected: it is the
+//     invariant, checked rather than assumed.
 //
 // Deterministic (same input, byte-identical output, so the publish content
 // hash is stable) and never mutates its input.
@@ -50,6 +49,7 @@ import type {
   ResolutionSignal,
   RuleMetaLite,
 } from "@squirrelscan/core-contracts";
+import type { CompactResolutionSignal } from "@squirrelscan/core-contracts/resolution";
 import { clampItemString } from "@squirrelscan/core-contracts/clamp";
 import { ENTITY_MAP_PUBLISH_LIMITS, type EntityMap } from "@squirrelscan/core-contracts/entity-map";
 import { projectEntityMap } from "@squirrelscan/core-contracts/entity-map-project";
@@ -65,7 +65,6 @@ import {
   clampCheckItemIds,
   clampCheckItemsOverflow,
   clampCheckStrings,
-  clipPageStatusesToBytes,
   DEFAULT_FOLD_LIMITS,
   foldGroupKey,
   foldOverflowChecks,
@@ -74,7 +73,11 @@ import {
   unfoldAggregateCheck,
 } from "@squirrelscan/rules/fold";
 import { checkAffectedPages } from "@squirrelscan/report/affected-pages";
-import { buildResolutionSignal } from "@squirrelscan/rules/resolution";
+import {
+  buildPublishResolution,
+  PAGE_STATUSES_KEY_BYTES,
+  RESOLUTION_SIGNAL_KEY_BYTES,
+} from "@squirrelscan/rules/resolution";
 import { byteLength } from "@squirrelscan/utils/bytes";
 import { RULE_ID_ROBOTS_TXT, RULE_ID_SITEMAP_EXISTS } from "@squirrelscan/utils/constants";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
@@ -103,7 +106,10 @@ export interface CappableReport {
   siteChecks?: CheckResult[] | null;
   pages?: ReadonlyArray<{ url?: unknown; statusCode?: unknown }> | null;
   pageStatuses?: Array<{ url: string; status: number }> | null;
+  /** Never published: the capper builds the compact signal from `pages` itself. */
   resolutionSignal?: ResolutionSignal | null;
+  /** Never trusted from the input: the capper builds its own from `pages`. */
+  resolutionSignalCompact?: unknown;
   entityMap?: EntityMap | null;
   summary?: unknown;
   sitemaps?: unknown;
@@ -126,6 +132,7 @@ export type CappedReport<T extends CappableReport> = Omit<
   | "checkTallies"
   | "detail"
   | "resolutionSignal"
+  | "resolutionSignalCompact"
   | "pageStatuses"
 > & {
   pages: [];
@@ -134,7 +141,7 @@ export type CappedReport<T extends CappableReport> = Omit<
   entityMap?: EntityMap;
   checkTallies: CheckTallies;
   detail: PublishedReportDetail;
-  resolutionSignal?: ResolutionSignal;
+  resolutionSignalCompact?: CompactResolutionSignal;
   pageStatuses?: Array<{ url: string; status: number }>;
 };
 
@@ -146,10 +153,15 @@ export interface CapReportOptions {
 }
 
 /**
- * A report whose skeleton alone (score, rule meta, tallies, enrichment
- * sections) does not fit the budget, after every list has been emptied. Never
+ * A report that does not fit: its skeleton alone (score, rule meta, tallies,
+ * enrichment sections) is over the budget after every list has been emptied
+ * (`part: "skeleton"`), or the finished body, transport included, is over the
+ * ceiling (`part: "body"`, which the fitter should make impossible). Never
  * expected: the worst-case tests assert how far from it real shapes are.
  * Carries the largest sections so the cause is visible without the body.
+ *
+ * TODO(repo#2669): the producer that catches this reports it to Sentry (bytes,
+ * budget, part, tier reached, page count, `largestSections`; never URLs or text).
  */
 export class PublishedReportTooLargeError extends Error {
   readonly code = "PUBLISHED_REPORT_TOO_LARGE";
@@ -157,9 +169,10 @@ export class PublishedReportTooLargeError extends Error {
     readonly bytes: number,
     readonly budgetBytes: number,
     readonly largestSections: Record<string, number>,
+    readonly part: "skeleton" | "body" = "skeleton",
   ) {
     super(
-      `Published report skeleton is ${bytes} bytes, over its ${budgetBytes}-byte budget ` +
+      `Published report ${part} is ${bytes} bytes, over its ${budgetBytes}-byte budget ` +
         `(largest: ${Object.entries(largestSections)
           .map(([k, v]) => `${k} ${v}`)
           .join(", ")})`,
@@ -957,38 +970,33 @@ function withoutRemovedPages<R extends { checks: CheckResult[] }>(
   return out;
 }
 
-function crawledUrlsOf(pages: CappableReport["pages"]): string[] {
-  if (!Array.isArray(pages)) return [];
-  const urls: string[] = [];
-  for (const page of pages) if (typeof page?.url === "string") urls.push(page.url);
-  return urls;
-}
-
 /**
- * Non-2xx pages of this run for the server's removed-page detection. A 2xx is
- * implied by the page's checks, so a healthy site sends nothing. Clipped to its
- * share of the transport budget, which only means fewer findings get staled.
+ * The pages the scoring transport is built over, in URL order so what its byte
+ * budget keeps does not depend on the order pages were crawled in. Statuses come
+ * from one source, as {@link removedPageUrls} and the server read them: the
+ * producer's `pageStatuses` when it sent them, else each page's own. A status
+ * row for a page `pages` does not list is a page too, as the server merge counts
+ * it.
  */
-function buildPageStatuses(
-  report: CappableReport,
-): Array<{ url: string; status: number }> | undefined {
-  let statuses = Array.isArray(report.pageStatuses) ? report.pageStatuses : undefined;
-  if (!statuses && Array.isArray(report.pages)) {
-    statuses = [];
-    for (const page of report.pages) {
-      const url = page?.url;
-      const status = page?.statusCode;
-      if (typeof url !== "string" || typeof status !== "number") continue;
-      if (status >= 200 && status < 300) continue;
-      statuses.push({ url, status });
+function transportPages(report: CappableReport): Array<{ url: string; statusCode?: number }> {
+  const sent = Array.isArray(report.pageStatuses);
+  const statusOf = new Map<string, number>();
+  for (const row of sent ? report.pageStatuses! : []) {
+    if (typeof row?.url === "string" && typeof row.status === "number") {
+      statusOf.set(row.url, row.status);
     }
   }
-  if (!statuses || statuses.length === 0) return undefined;
-  // URL order, so the clip keeps the same pages however the crawl ordered them.
-  const sorted = [...statuses].sort((a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0));
-  const holder = { pageStatuses: sorted.slice(0, REPORT_LIMITS.maxPages) };
-  clipPageStatusesToBytes(holder, REPORT_CAPS.pageStatusesMaxBytes);
-  return holder.pageStatuses.length > 0 ? holder.pageStatuses : undefined;
+  const pages: Array<{ url: string; statusCode?: number }> = [];
+  const listed = new Set<string>();
+  for (const page of Array.isArray(report.pages) ? report.pages : []) {
+    const url = page?.url;
+    if (typeof url !== "string" || listed.has(url)) continue;
+    listed.add(url);
+    const status = sent ? statusOf.get(url) : page.statusCode;
+    pages.push(typeof status === "number" ? { url, statusCode: status } : { url });
+  }
+  for (const [url, statusCode] of statusOf) if (!listed.has(url)) pages.push({ url, statusCode });
+  return pages.sort((a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0));
 }
 
 // ── Assembly ────────────────────────────────────────────────────
@@ -1004,26 +1012,6 @@ function canonical(body: Loose): Loose {
     if (body[key] !== undefined) out[key] = body[key];
   }
   return out;
-}
-
-/**
- * The signal in one order whatever order the producer met rules and pages in.
- * Its bounds were applied when it was built; this only sorts what was kept.
- */
-function canonicalSignal(signal: ResolutionSignal | null | undefined): ResolutionSignal | undefined {
-  if (!signal) return undefined;
-  const sortMap = (map: Record<string, string[]>): Record<string, string[]> =>
-    Object.fromEntries(
-      Object.keys(map)
-        .sort()
-        .map((key) => [key, [...map[key]!].sort()]),
-    );
-  return {
-    crawledUrls: [...signal.crawledUrls].sort(),
-    failing: sortMap(signal.failing),
-    ...(signal.notEvaluated ? { notEvaluated: sortMap(signal.notEvaluated) } : {}),
-    ...(signal.truncated ? { truncated: [...signal.truncated].sort() } : {}),
-  };
 }
 
 function largestSections(body: Loose): Record<string, number> {
@@ -1054,13 +1042,14 @@ function stableKey(value: unknown): string {
  * lives (`local` for a CLI audit, `findings` for a cloud run that streams it).
  *
  * The byte budget covers the whole body minus REPORT_CAPS.envelopeBytes. The
- * scoring transport (`resolutionSignal`, `pageStatuses`) is sized by pages
- * crawled and cannot be sampled, so it is measured first and the rest of the
- * report gets what it leaves, never less than the budget minus its reserve
- * (REPORT_CAPS.signalMaxBytes). Bounding the transport itself is repo#2658.
+ * scoring transport (the compact resolution signal and `pageStatuses`) is sized
+ * by pages crawled and cannot be sampled, so it is built first, to its own share
+ * (REPORT_CAPS.signalMaxBytes), and the rest of the report gets what it leaves.
+ * Build it from the FULL report: the signal is read off `pages` and the
+ * pre-sample checks, and any signal already on the input is dropped.
  *
- * Throws {@link PublishedReportTooLargeError} only when the skeleton alone does
- * not fit.
+ * Throws {@link PublishedReportTooLargeError} when the skeleton alone does not
+ * fit, or (never expected) when the finished body is over the ceiling.
  */
 export function capReportForPublish<T extends CappableReport>(
   report: T,
@@ -1070,30 +1059,29 @@ export function capReportForPublish<T extends CappableReport>(
 
   // 1. Counted from the full report, before anything is sampled.
   const ruleIds = Object.keys(report.ruleResults).sort();
-  // Built over rules and check names in a fixed order, so the keys its budget
-  // keeps do not depend on the order rules ran in.
-  const resolutionSignal = canonicalSignal(
-    report.resolutionSignal ??
-      buildResolutionSignal(
-        Object.fromEntries(
-          ruleIds.map((id) => {
-            const rule = report.ruleResults[id]!;
-            const checks = Array.isArray(rule.checks) ? rule.checks : [];
-            return [id, { checks: [...checks].sort(compareNames) }];
-          }),
-        ),
-        crawledUrlsOf(report.pages).sort(),
-      ),
+  // Built over rules, check names and pages in a fixed order, so what its byte
+  // budget keeps does not depend on the order rules ran or pages were crawled in.
+  const { resolutionSignalCompact, pageStatuses } = buildPublishResolution(
+    Object.fromEntries(
+      ruleIds.map((id) => {
+        const rule = report.ruleResults[id]!;
+        const checks = Array.isArray(rule.checks) ? rule.checks : [];
+        return [id, { checks: [...checks].sort(compareNames) }];
+      }),
+    ),
+    transportPages(report),
   );
-  const pageStatuses = buildPageStatuses(report);
   // The rows the server scores and shows: none on a page that 404'd or 410'd.
   const live = withoutRemovedPages(report.ruleResults, removedPageUrls(report));
   const checkTallies = buildCheckTallies(live);
+  // Exactly what the two fields add to the body. Their builder holds them to
+  // REPORT_CAPS.signalMaxBytes together, keys included.
   const transportBytes =
-    (resolutionSignal ? bytesOf(resolutionSignal) + 24 : 0) +
-    (pageStatuses ? bytesOf(pageStatuses) + 20 : 0);
-  const budget =
-    maxBytes - REPORT_CAPS.envelopeBytes - Math.min(transportBytes, REPORT_CAPS.signalMaxBytes);
+    (resolutionSignalCompact
+      ? bytesOf(resolutionSignalCompact) + RESOLUTION_SIGNAL_KEY_BYTES
+      : 0) + (pageStatuses ? bytesOf(pageStatuses) + PAGE_STATUSES_KEY_BYTES : 0);
+  const ceiling = maxBytes - REPORT_CAPS.envelopeBytes;
+  const budget = ceiling - transportBytes;
 
   // 2. Every rule's classes folded once, in rule-id order.
   const rules = ruleIds.map((id) => foldRule(id, live[id]!));
@@ -1122,6 +1110,7 @@ export function capReportForPublish<T extends CappableReport>(
     checkTallies: _checkTallies,
     detail: _detail,
     resolutionSignal: _resolutionSignal,
+    resolutionSignalCompact: _resolutionSignalCompact,
     pageStatuses: _pageStatuses,
     ...rest
   } = report;
@@ -1162,12 +1151,23 @@ export function capReportForPublish<T extends CappableReport>(
     ...extra,
   });
 
-  const finish = (body: Loose): CappedReport<T> =>
-    canonical({
+  // Every body leaves through here, measured whole, transport included: the
+  // ceiling is the invariant, checked rather than assumed (module note, step 4).
+  const finish = (body: Loose): CappedReport<T> => {
+    const out = canonical({
       ...body,
       ...(pageStatuses ? { pageStatuses } : {}),
-      ...(resolutionSignal ? { resolutionSignal } : {}),
-    }) as unknown as CappedReport<T>;
+      ...(resolutionSignalCompact ? { resolutionSignalCompact } : {}),
+    });
+    const bytes = bytesOf(out);
+    if (bytes > ceiling) {
+      throw new PublishedReportTooLargeError(bytes, ceiling, largestSections(out), "body");
+    }
+    // TODO(repo#2669): the producer reports a hard cap to Sentry from `detail`
+    // (tier past 0, `classesDropped`, `entityMapDropped`/`entityMapFailed`) with
+    // sizes and counts only; sampled for tier 1, every event past it.
+    return out as unknown as CappedReport<T>;
+  };
 
   // Every class the body can carry, in output order: each rule's kept classes,
   // then the site checks. A rule that lost classes carries the stamp on its last.

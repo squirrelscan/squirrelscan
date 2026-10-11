@@ -575,9 +575,10 @@ export function pickHomepageSummary(
 // when the primary-capped body still exceeds maxPayloadBytes).
 //
 // TODO(repo#2656): replace with `capReportForPublish` (audit-engine), the one
-// capper both producers share, but NOT before repo#2658 bounds the scoring
-// transport and repo#2657 makes the server rescore read `checkTallies`; see the
-// gate in publish-cap.ts.
+// capper both producers share. Its preconditions have landed: the scoring
+// transport is bounded (repo#2658) and the server rescore reads `checkTallies`
+// (repo#2657). The capper builds the compact signal itself, so drop the
+// `precomputed` transport with it.
 export function slimForPublish(
   report: AuditReport,
   sampleLimits: PublishSampleLimits = DEFAULT_PUBLISH_SAMPLE,
