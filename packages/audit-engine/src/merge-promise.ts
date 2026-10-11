@@ -18,7 +18,11 @@ import type {
   ResolutionSignal,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
-import { resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
+import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
+import {
+  NOT_APPLICABLE_SKIP_REASON,
+  resolutionUrlHash,
+} from "@squirrelscan/core-contracts/resolution";
 // `/types` (leaf type module) not the barrel — see scoring.ts. (#195)
 import { unfoldAggregateCheck } from "@squirrelscan/rules/fold";
 import type { RuleRunResult } from "@squirrelscan/rules/types";
@@ -30,6 +34,7 @@ import {
   flattenChecks,
   itemListComplete,
   pageCheckKey,
+  pageRuleKey,
   type FlatFinding,
   type MergedFinding,
   type MergedState,
@@ -257,6 +262,8 @@ export interface MergeFindingsPromiseInput {
   resolution?: MergeResolutionInput;
   /** (pub#474) Complete item lists — see {@link ComputeMergeInput.completeItemChecks}. */
   completeItemChecks?: Set<string>;
+  /** (#2658) Sampled item lists — see {@link ComputeMergeInput.incompleteItemChecks}. */
+  incompleteItemChecks?: Set<string>;
   /**
    * (#1873) Prior OPEN findings, already loaded by the caller — skips the
    * `store.getFindings(siteKey, ["open"])` read. The complete-store finalize uses
@@ -489,6 +496,14 @@ export async function runCloudSmartAudits(
     statusByUrl.set(u, ps.status);
     if (REMOVED_STATUSES.has(ps.status)) removedUrls.add(u);
   }
+  // (#2658) The compact signal names every removed page it lists, including the
+  // ones `pageStatuses` had to clip to fit its byte share.
+  for (const ps of input.resolutionSignal?.removedPages ?? []) {
+    const u = normalizePageUrl(ps.url);
+    if (statusByUrl.has(u) || !REMOVED_STATUSES.has(ps.status)) continue;
+    statusByUrl.set(u, ps.status);
+    removedUrls.add(u);
+  }
 
   // freshResults + crawledUrls + the #1167 sampled-check sets. COMPLETE mode
   // (#1023 R-D3) reconstructs freshResults from the store's complete findings and
@@ -705,8 +720,9 @@ export async function runCloudSmartAudits(
     }
   }
   const completeItemChecks = new Set<string>();
+  const incompleteItemChecks = new Set<string>();
   for (const [key, complete] of itemListCompleteness) {
-    if (complete) completeItemChecks.add(key);
+    (complete ? completeItemChecks : incompleteItemChecks).add(key);
   }
   itemListCompleteness.clear();
 
@@ -736,7 +752,58 @@ export async function runCloudSmartAudits(
       failingByCheck,
       notEvaluatedByCheck,
       truncatedChecks: new Set(input.resolutionSignal.truncated ?? []),
+      ...(input.resolutionSignal.crawledComplete === false ? { crawledComplete: false } : {}),
     };
+  }
+
+  // (#2658) Where the signal lost its say (a truncated key, a page off a clipped
+  // list), a prior resolves only on positive evidence in the payload: a pass for
+  // its page and check with no failing row beside it, or the rule's noindex
+  // verdict for the page (see ComputeMergeInput.passedCheckPages). A check whose
+  // failing rows were sampled, or whose rule had classes dropped, gives no pass
+  // evidence at all, since the page may fail it past the clip. Indexed only for
+  // the checks that can need it, so a whole signal costs nothing here.
+  let passedCheckPages: Set<string> | undefined;
+  let notApplicablePages: Set<string> | undefined;
+  if (resolution && (resolution.crawledComplete === false || resolution.truncatedChecks.size > 0)) {
+    const needed = (key: string) =>
+      resolution!.crawledComplete === false || resolution!.truncatedChecks.has(key);
+    const failingSampled = new Set<string>();
+    for (const [ruleId, r] of Object.entries(input.ruleResults)) {
+      for (const c of r.checks) {
+        if (isReplayedCheck(c) || (c.status !== "fail" && c.status !== "warn")) continue;
+        const pagesTruncated = c.details?.pagesTruncated;
+        if (typeof pagesTruncated === "number" && pagesTruncated > (c.pages?.length ?? 0)) {
+          failingSampled.add(`${ruleId}|${c.name}`);
+        }
+      }
+    }
+    passedCheckPages = new Set<string>();
+    notApplicablePages = new Set<string>();
+    const failingPageChecks = new Set<string>();
+    for (const [ruleId, r] of freshResults) {
+      for (const c of r.checks) {
+        if (!c.pageUrl) continue;
+        const url = normalizePageUrl(c.pageUrl);
+        if (
+          c.status === "skipped" &&
+          c.skipReason === NOT_APPLICABLE_SKIP_REASON &&
+          c.details?.foldKey === NOT_APPLICABLE_SKIP_REASON
+        ) {
+          notApplicablePages.add(pageRuleKey(url, ruleId));
+          continue;
+        }
+        const key = `${ruleId}|${c.name}`;
+        // A rule whose publish dropped whole check classes (`checksTruncated`)
+        // may have dropped this page's failing row for the check with them.
+        if (!needed(key) || failingSampled.has(key) || rulesWithDroppedChecks.has(ruleId)) continue;
+        if (c.status === "pass") passedCheckPages.add(pageCheckKey(url, ruleId, c.name));
+        else if (c.status === "fail" || c.status === "warn") {
+          failingPageChecks.add(pageCheckKey(url, ruleId, c.name));
+        }
+      }
+    }
+    for (const pageCheck of failingPageChecks) passedCheckPages.delete(pageCheck);
   }
 
   // ── merge ────────────────────────────────────────────────────────────────
@@ -762,6 +829,9 @@ export async function runCloudSmartAudits(
       sampledCheckPages,
       resolution,
       completeItemChecks,
+      incompleteItemChecks,
+      passedCheckPages,
+      notApplicablePages,
     },
     {
       persist: (record) => onPersist(record),
@@ -794,6 +864,25 @@ export async function runCloudSmartAudits(
       if (!removedUrls.has(url)) auditedUrls.add(url);
     }
   }
+  // (#2658) A signal whose byte budget clipped its page list still counts every
+  // crawled page (`crawledCount`) and every removed one (`removedCount`, listed
+  // or not), so the audited count, and the bill read off it, does not shrink
+  // with the list. Those counts are the publisher's CLAIM (the CLI body is user
+  // controlled), so they may only RAISE the count the payload evidences, never
+  // lower it, and only up to the crawl ceiling. A complete list ignores them.
+  const claimed = (value: unknown): number | undefined =>
+    typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+      ? Math.min(value, REPORT_LIMITS.maxPages)
+      : undefined;
+  const signalPages = claimed(input.resolutionSignal?.crawledCount);
+  const signalRemoved = Math.max(
+    removedUrls.size,
+    claimed(input.resolutionSignal?.removedCount) ?? 0,
+  );
+  const auditedPages =
+    input.resolutionSignal?.crawledComplete === false && signalPages !== undefined
+      ? Math.max(auditedUrls.size, signalPages - Math.min(signalPages, signalRemoved))
+      : auditedUrls.size;
 
   // (#2063) Reduce the refused checks' pages to the ones this site has no record
   // of. `activePageUrls` is already settled here (the session reads `priorPages`
@@ -1020,12 +1109,8 @@ export async function runCloudSmartAudits(
       // the payload's evidence undercounted them, and billing reads this number.
       // Each such page got an active `site_pages` row above, so `knownPages`
       // stays at least this.
-      auditedPages: auditedUrls.size,
-      knownPages: knownPageCount(
-        session.activePageCount,
-        auditedUrls.size,
-        input.unfetchedPages,
-      ),
+      auditedPages,
+      knownPages: knownPageCount(session.activePageCount, auditedPages, input.unfetchedPages),
       carriedFindings: carriedCount - unrenderedCount,
       ...(unrenderedCount > 0 ? { unrenderedFindings: unrenderedCount } : {}),
     },
@@ -1097,6 +1182,13 @@ function assertUntouched(
  * A page with a carried finding is left as it was, whatever the signal says: its
  * failures are in the union. Bounded by the signal: one pass over its hashes,
  * one lookup each.
+ *
+ * (#2658) A signal whose byte budget clipped its page list (`crawledComplete:
+ * false`) is silent on every page past the list, as merge-core reads it: such a
+ * page is no candidate here and keeps the pre-#2067 credit, exactly as a page
+ * past the original signal's `maxCrawledUrls` cap always has. Holding every
+ * unlisted carried page out instead would also drop the passes of the pages this
+ * run never crawled, which on a site that outgrows its crawl is most of them.
  */
 function withoutUnscorablePages(
   carriedPageUrls: PageUrlSet,

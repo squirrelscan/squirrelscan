@@ -3,6 +3,8 @@
 // accounts items — the second-pass drop must also land in details.additional or
 // the "detail cut" signal under-reports on exactly the large-crawl case.
 
+import { RESOLUTION_PUBLISH_LIMITS } from "@squirrelscan/core-contracts/limits";
+import { decodeResolutionSignal } from "@squirrelscan/core-contracts/resolution";
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport } from "../../src/types";
@@ -203,7 +205,7 @@ describe("slimForPublish resolution signal (#1185)", () => {
   const pages = (n: number) =>
     Array.from({ length: n }, (_, i) => `https://example.com/page-${i}`);
 
-  test("attaches the signal with UNSAMPLED failing sets + the full crawled list", () => {
+  test("attaches the signal with UNSAMPLED failing sets + the full crawled list", async () => {
     const report = makeReport([
       {
         name: "alt-text-missing",
@@ -221,17 +223,46 @@ describe("slimForPublish resolution signal (#1185)", () => {
       pages: string[];
     };
     expect(check.pages).toHaveLength(100);
-    // …but the signal kept every failing page and every crawled URL.
-    expect(slim.resolutionSignal).toBeDefined();
-    expect(slim.resolutionSignal!.crawledUrls).toHaveLength(500);
-    expect(
-      slim.resolutionSignal!.failing["images/alt-text|alt-text-missing"]
-    ).toHaveLength(500);
-    expect(slim.resolutionSignal!.truncated).toBeUndefined();
+    // …but the signal kept every failing page and every crawled URL, compact
+    // (#2658): the original shape is never sent.
+    expect("resolutionSignal" in slim).toBe(false);
+    expect(slim.resolutionSignalCompact).toBeDefined();
+    const signal = await decodeResolutionSignal(slim.resolutionSignalCompact!);
+    expect(signal.crawledUrls).toHaveLength(500);
+    expect(signal.failing["images/alt-text|alt-text-missing"]).toHaveLength(
+      500
+    );
+    expect(signal.truncated).toBeUndefined();
   });
 
   test("no signal for an empty report (adds zero payload)", () => {
     const slim = slimForPublish(makeReport([]));
-    expect(slim.resolutionSignal).toBeUndefined();
+    expect(slim.resolutionSignalCompact).toBeUndefined();
+    expect(slim.pageStatuses).toBeUndefined();
+  });
+
+  test("signal and pageStatuses share one byte budget (#2658)", () => {
+    // 3,000 pages, a third of them redirects or 404s, every page failing a check.
+    const report = makeReport([
+      {
+        name: "alt-text-missing",
+        status: "fail",
+        pages: pages(3_000),
+        details: { aggregated: true, occurrences: 3_000 },
+      },
+    ]);
+    report.pages = pages(3_000).map(
+      (url, i) =>
+        ({ url, statusCode: i % 3 ? 200 : i % 2 ? 404 : 301 }) as never
+    );
+    const slim = slimForPublish(report);
+    const used =
+      JSON.stringify(slim.resolutionSignalCompact).length +
+      JSON.stringify(slim.pageStatuses).length;
+    expect(used).toBeLessThanOrEqual(RESOLUTION_PUBLISH_LIMITS.maxBytes);
+    expect(slim.pageStatuses!.length).toBeGreaterThan(0);
+    expect(JSON.stringify(slim.pageStatuses).length).toBeLessThanOrEqual(
+      RESOLUTION_PUBLISH_LIMITS.maxPageStatusBytes
+    );
   });
 });

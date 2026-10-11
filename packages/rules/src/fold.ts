@@ -418,16 +418,13 @@ export function degradeAndRebuild<
  * with ordinary URLs keeps thousands of them and one with pathological URLs
  * keeps few — both landing at the same size.
  *
- * `resolutionSignal` is deliberately NOT touched here even though it is the
- * other crawl-scaled field. Its `crawledUrls` is the SCORING DENOMINATOR on the
- * complete-store path (audit-engine reconstruct.ts counts clean pages as
- * "crawled minus failing"), so shrinking it does not degrade the report, it
- * silently understates the health score. A loud PAYLOAD_TOO_LARGE naming the
- * page count is a better answer than a quietly wrong score. Reaching that
- * needs ~10,000 pages whose URLs are all near the 2048-character maximum.
+ * The resolution signal, the other crawl-scaled field, is NOT touched here:
+ * since #2658 both are fitted to one budget when they are built
+ * (`buildPublishResolution` in resolution.ts, which also calls this), and the
+ * signal keeps a count of every crawled page when it has to clip its list.
  *
  * Exported for direct testing; production callers reach it through
- * {@link degradeAndRebuild}.
+ * {@link degradeAndRebuild} and `buildPublishResolution`.
  */
 export function clipPageStatusesToBytes<
   T extends { pageStatuses?: { url: string; status: number }[] | null },

@@ -3,7 +3,6 @@
  */
 
 import type { WebsiteScheduleSummary } from "@squirrelscan/cloud-client";
-import type { ResolutionSignal } from "@squirrelscan/core-contracts";
 
 import { computeLockedRules } from "@squirrelscan/audit-engine";
 import { slimEntityMapForPublish } from "@squirrelscan/audit-engine/entity-map";
@@ -13,12 +12,13 @@ import {
   PUBLISH_DEGRADE_LIMITS,
 } from "@squirrelscan/core-contracts/limits";
 import {
-  buildResolutionSignal,
+  buildPublishResolution,
   clampReportPagesToBudget,
   degradeAndRebuild,
   foldOverflowChecks,
   sampleChecksForPublish,
   DEFAULT_PUBLISH_SAMPLE,
+  type PublishResolution,
   type PublishSampleLimits,
 } from "@squirrelscan/rules";
 import { byteLength } from "@squirrelscan/utils/bytes";
@@ -225,12 +225,7 @@ export async function publishReport(
   // primary and degrade passes — build it once. Rebuilding it inside the
   // degrade pass would redo O(rules × pages) work on exactly the pathological
   // large-site path that triggered the degrade.
-  const precomputed = {
-    resolutionSignal: buildResolutionSignal(
-      report.ruleResults,
-      report.pages.map((p) => p.url)
-    ),
-  };
+  const precomputed = buildPublishResolution(report.ruleResults, report.pages);
   const wrapBody = (slimmed: ReturnType<typeof slimForPublish>): string =>
     JSON.stringify({
       report: slimmed,
@@ -604,22 +599,26 @@ export function slimForPublish(
   sampleLimits: PublishSampleLimits = DEFAULT_PUBLISH_SAMPLE,
   // Lets the caller build the (sampling-independent) signal once across the
   // primary and degrade passes. Omit it and one is built here.
-  precomputed?: { resolutionSignal: ResolutionSignal | undefined }
+  precomputed?: PublishResolution
 ): Omit<AuditReport, "pages"> & {
   pages: [];
   homepage?: HomepageSummary;
-  resolutionSignal?: ResolutionSignal;
-} {
+} & PublishResolution {
   // #1185: build the UNSAMPLED resolution signal from the pre-sample rule
   // results + the full crawled-page list, BEFORE sampling clips pages[] below
   // — the server merge uses it to resolve findings on pages crawled clean this
   // run that the sample would otherwise leave carried forever.
-  const resolutionSignal = precomputed
-    ? precomputed.resolutionSignal
-    : buildResolutionSignal(
-        report.ruleResults,
-        report.pages.map((p) => p.url)
-      );
+  //
+  // Smart-audits cloud (#195): with it, the non-2xx `pageStatuses`, so the
+  // server merge can STALE the carried findings of pages that 404/410'd this run
+  // rather than carry them forever. 200 pages are implied by the signal's page
+  // list, so a healthy site sends none.
+  //
+  // #2658: both are sized by pages crawled, not by findings, so no per-check
+  // sample bounds them; buildPublishResolution fits them into one fixed byte
+  // budget (RESOLUTION_PUBLISH_LIMITS) and sends the signal compact.
+  const { pageStatuses, resolutionSignalCompact } =
+    precomputed ?? buildPublishResolution(report.ruleResults, report.pages);
   // robots.txt content clamp helper (see below).
   const truncate = (value: string | undefined, max: number) =>
     value !== undefined && value.length > max ? value.slice(0, max) : value;
@@ -752,20 +751,6 @@ export function slimForPublish(
       }
     : report.robotsTxt;
 
-  // Smart-audits cloud (#195): the server-side finding merge needs to know which
-  // pages 404/410'd this run so it can STALE their carried findings rather than
-  // carry them forever. 200 pages are implied by their ruleResults checks, so we
-  // send ONLY non-2xx statuses — tiny, and adds NOTHING (omitted entirely) for a
-  // healthy site, so it can't regress the publish payload size when there are no
-  // broken pages. URLs are re-normalized server-side.
-  // REPORT_LIMITS.maxPages here and the API schema's REPORT_LIMITS.MAX_PAGES both
-  // resolve to the SAME core-contracts `maxPages` (the API object aliases it), so
-  // the cap can't drift out from under the publish schema's `.max(MAX_PAGES)`.
-  const pageStatuses = report.pages
-    .filter((p) => p.statusCode < 200 || p.statusCode >= 300)
-    .map((p) => ({ url: p.url, status: p.statusCode }))
-    .slice(0, REPORT_LIMITS.maxPages);
-
   return {
     ...report,
     // #2091: the report carries the FULL entity map, because `-f json` is the
@@ -783,8 +768,8 @@ export function slimForPublish(
     rulesCache: undefined,
     generatorVersion: version, // stamp the CLI version for the report footer
     lockedRules: computeLockedRules(report), // cloud/Pro checks not run → upsell
-    ...(pageStatuses.length > 0 ? { pageStatuses } : {}),
-    ...(resolutionSignal ? { resolutionSignal } : {}),
+    ...(pageStatuses ? { pageStatuses } : {}),
+    ...(resolutionSignalCompact ? { resolutionSignalCompact } : {}),
     // ...but keep a tiny home-page title/description so the API can seed the
     // website record (full pages[] is gone).
     homepage: pickHomepageSummary(report),

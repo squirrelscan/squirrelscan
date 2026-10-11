@@ -70,7 +70,7 @@ import type {
   WellKnownProbe,
 } from "./storage";
 import type { SiteMetadata } from "./site-metadata";
-import type { ResolutionSignal } from "./resolution";
+import type { CompactResolutionSignal, ResolutionSignal } from "./resolution";
 import type { AuditFailureReasonCode } from "./failure-reason";
 import type { RefusedFetch } from "./refused-fetch";
 import type { EntityMap } from "./entity-map";
@@ -470,8 +470,17 @@ export interface AuditReport {
    * were clipped out of every check's published sample. Absent for older
    * CLIs/containers and local runs → the merge behaves exactly as pre-#1185.
    * Transport-only: NEVER rendered, NEVER feeds `healthScore` directly.
+   *
+   * Sent by CLIs and containers released before #2658, which replaced it with
+   * {@link AuditReport.resolutionSignalCompact}; the API accepts either.
    */
   resolutionSignal?: ResolutionSignal;
+  /**
+   * (#2658) The same signal in a fixed byte budget: crawled URLs deflated,
+   * failing pages as indexes into them (see CompactResolutionSignal). What the
+   * publish producers send now; transport-only like `resolutionSignal`.
+   */
+  resolutionSignalCompact?: CompactResolutionSignal;
   /**
    * Aggregate crawl-cache stats for this audit — hit rate, bytes saved, and a
    * hits-by-reason breakdown across pages AND sub-resources (#108). Derived from

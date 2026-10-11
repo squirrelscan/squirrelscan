@@ -173,6 +173,31 @@ export interface ComputeMergeInput {
    * today's carry.
    */
   completeItemChecks?: Set<string>;
+  /**
+   * (#2658) The other half of {@link completeItemChecks}: page checks that still
+   * fail or warn this run with an item list that is a SAMPLE. Consulted where no
+   * signal speaks for the check (none sent, or the check is not in it): a prior
+   * finding there that this run's list does not match may sit past the clip, so
+   * it carries rather than resolving. Undefined → the pre-#2658 resolve.
+   */
+  incompleteItemChecks?: Set<string>;
+  /**
+   * (#2658) Page checks the published payload shows PASSING this run, with no
+   * failing row for the same page and check and no sampled failing rows for the
+   * check, keyed by {@link pageCheckKey}. Consulted only where a
+   * {@link resolution} signal was sent but lost its say for the page and check
+   * (its key truncated, or the page left off a clipped list): absence is then no
+   * evidence at all, so a prior finding resolves only on positive evidence (this,
+   * {@link notApplicablePages}, or a complete item list that no longer holds it)
+   * and carries otherwise. Undefined → none.
+   */
+  passedCheckPages?: Set<string>;
+  /**
+   * (#2658) Pages whose rule returned the noindex "does not apply" verdict this
+   * run, keyed by {@link pageRuleKey}: clean for every check of that rule, as the
+   * signal reads it. Positive evidence alongside {@link passedCheckPages}.
+   */
+  notApplicablePages?: Set<string>;
 }
 
 /** Pre-indexed form of the publish `ResolutionSignal` (#1185). */
@@ -196,6 +221,13 @@ export interface MergeResolutionInput {
   notEvaluatedByCheck: Map<string, Set<string>>;
   /** Keys whose hash set is incomplete → absence is non-authoritative. */
   truncatedChecks: Set<string>;
+  /**
+   * (#2658) False when the signal lists only part of the crawl (its byte budget
+   * clipped `crawledUrls`). Its page sets are then exact for the listed pages
+   * only, so a page outside `crawledUrls` gets no resolve authority from it and
+   * takes the pre-#1185 path. Undefined → the whole crawl is listed.
+   */
+  crawledComplete?: boolean;
 }
 
 const KEY_SEP = "|";
@@ -217,6 +249,11 @@ export function findingKey(
 /** Key for one check on one page (a {@link findingKey} without the locator). */
 export function pageCheckKey(normalizedUrl: string, ruleId: string, checkName: string): string {
   return [normalizedUrl, ruleId, checkName].join(KEY_SEP);
+}
+
+/** (#2658) A (page, rule) pair: the key of {@link ComputeMergeInput.notApplicablePages}. */
+export function pageRuleKey(normalizedUrl: string, ruleId: string): string {
+  return [normalizedUrl, ruleId].join(KEY_SEP);
 }
 
 /**
@@ -687,6 +724,9 @@ export function createMergeSession(
     sampledCheckPages,
     resolution,
     completeItemChecks,
+    incompleteItemChecks,
+    passedCheckPages,
+    notApplicablePages,
   } = input;
 
   // Index fresh findings by key (latest wins on dup keys within a run).
@@ -908,19 +948,26 @@ export function createMergeSession(
       // truncated (or absent — rule disabled, unknown shape, old CLI) gives no
       // authority and falls through to the pre-#1185 behavior.
       const checkKey = `${prior.ruleId}${KEY_SEP}${prior.checkName}`;
-      const priorHashes = resolution ? resolutionHashes(prior.normalizedUrl) : EMPTY_HASHES;
+      // (#2658) A signal that lists only part of the crawl speaks for the listed
+      // pages only: for any other page its sets are silent, not evidence of clean.
+      const signal =
+        resolution &&
+        (resolution.crawledComplete !== false || resolution.crawledUrls.has(prior.normalizedUrl))
+          ? resolution
+          : undefined;
+      const priorHashes = signal ? resolutionHashes(prior.normalizedUrl) : EMPTY_HASHES;
       // The check produced NO evaluated result for this page this run (the rule
       // `skipped` it — perf/ttfb without timing data — or emitted nothing for
       // it). Its absence from the fresh findings is not evidence the finding is
       // gone, so it can never resolve: carry regardless of what the sampled
       // payload suggests.
-      if (hasAnyHash(resolution?.notEvaluatedByCheck.get(checkKey), priorHashes)) {
+      if (hasAnyHash(signal?.notEvaluatedByCheck.get(checkKey), priorHashes)) {
         const carried: PageFindingRecord = { ...prior, provenance: "carried" };
         sink.persist(carried);
         sink.active(toMerged(carried, unrendered));
         return;
       }
-      const failingSet = resolution?.failingByCheck.get(checkKey);
+      const failingSet = signal?.failingByCheck.get(checkKey);
       if (failingSet) {
         if (hasAnyHash(failingSet, priorHashes)) {
           // (pub#474) The page still fails the check, but this run's item list
@@ -958,7 +1005,7 @@ export function createMergeSession(
           sink.active(toMerged(carried, unrendered));
           return;
         }
-        if (!resolution!.truncatedChecks.has(checkKey)) {
+        if (!signal!.truncatedChecks.has(checkKey)) {
           sink.persist({
             ...prior,
             state: "resolved",
@@ -985,6 +1032,45 @@ export function createMergeSession(
       // authoritative "re-crawled, no longer present → resolved".
       const sample = sampledCheckPages?.get(checkKey);
       if (sample && !sample.has(prior.normalizedUrl)) {
+        const carried: PageFindingRecord = { ...prior, provenance: "carried" };
+        sink.persist(carried);
+        sink.active(toMerged(carried, unrendered));
+        return;
+      }
+
+      const pageCheck = pageCheckKey(prior.normalizedUrl, prior.ruleId, prior.checkName);
+      // (#2658) A signal was sent but lost its say here: a count cap or the byte
+      // budget truncated the key, or the page is off a clipped list. What it
+      // would have said (still failing, not evaluated) is gone with it, so the
+      // finding's absence from the sampled payload proves nothing. Only positive
+      // evidence resolves: the payload shows the check passing on this page (or
+      // the rule's noindex verdict for it), or the page's complete item list no
+      // longer holds the finding (as the signal branch above resolves it).
+      if (resolution && (!signal || signal.truncatedChecks.has(checkKey))) {
+        const clean =
+          passedCheckPages?.has(pageCheck) ||
+          notApplicablePages?.has(pageRuleKey(prior.normalizedUrl, prior.ruleId)) ||
+          completeItemChecks?.has(pageCheck);
+        if (!clean) {
+          const carried: PageFindingRecord = { ...prior, provenance: "carried" };
+          sink.persist(carried);
+          sink.active(toMerged(carried, unrendered));
+          return;
+        }
+        sink.persist({
+          ...prior,
+          state: "resolved",
+          lastSeenCrawlId: crawlId,
+          lastSeenAt: now,
+        });
+        return;
+      }
+
+      // (#2658) No signal speaks for this check (none sent, or the check is not
+      // in it). The page still fails the check, and this run's item list for it
+      // is a sample (a rule cap, a publish clip): a finding it does not match may
+      // sit past the clip.
+      if (incompleteItemChecks?.has(pageCheck)) {
         const carried: PageFindingRecord = { ...prior, provenance: "carried" };
         sink.persist(carried);
         sink.active(toMerged(carried, unrendered));

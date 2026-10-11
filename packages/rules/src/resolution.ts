@@ -7,23 +7,69 @@
 // this run regardless of sampling; see core-contracts/resolution.ts for the
 // contract semantics.
 //
-// Worker-clean like fold.ts: core-contracts + utils/url only, no rule runtime.
+// #2658: producers send it compact ({@link buildPublishResolution}), in a fixed
+// byte budget shared with `pageStatuses`. Both shapes are built from the same
+// evidence ({@link collectResolutionEvidence}), so the server, which decodes the
+// compact one back into a ResolutionSignal, reads the same signal either way.
+//
+// Worker-clean like fold.ts: core-contracts + utils only, no rule runtime. The
+// compact encoder deflates with node:zlib, which only the producers (Bun) call.
+
+import { deflateRawSync } from "node:zlib";
 
 import type { CheckResult, ResolutionSignal } from "@squirrelscan/core-contracts";
-import { RESOLUTION_SIGNAL_LIMITS } from "@squirrelscan/core-contracts/limits";
 import {
+  REPORT_LIMITS,
+  RESOLUTION_PUBLISH_LIMITS,
+  RESOLUTION_SIGNAL_LIMITS,
+} from "@squirrelscan/core-contracts/limits";
+import {
+  type CompactResolutionPayload,
+  type CompactResolutionSignal,
+  encodeIndexGaps,
+  NOT_APPLICABLE_SKIP_REASON,
   resolutionCheckKey,
   resolutionUrlHash,
   SCAN_TRUNCATED_SKIP_REASON,
 } from "@squirrelscan/core-contracts/resolution";
+import { byteLength } from "@squirrelscan/utils/bytes";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
 
-/** The runner's noindex gate (pub#457): a skip that is a "does not apply" verdict. */
-const NOT_APPLICABLE_SKIP_REASON = "noindex";
+import { clipPageStatusesToBytes } from "./fold";
 
 /**
- * Build the resolution signal from a report's pre-sample rule results + the
- * crawled page URLs (`report.pages[].url`, which publish drops).
+ * What one run says about each page and check, keyed by NORMALIZED page URL:
+ * the input both signal shapes are encoded from.
+ */
+interface ResolutionEvidence {
+  /** The crawled list as given, clipped to `maxCrawledUrls` (the original shape ships these). */
+  crawledRaw: string[];
+  /** `crawledRaw` normalized and deduped, in crawl order. */
+  crawled: string[];
+  /** Distinct normalized pages in the whole crawled list, before the clip. */
+  crawledCount: number;
+  /** Those pages: `crawledCount` is its size. */
+  crawledSet: ReadonlySet<string>;
+  /** The crawled list was longer than `maxCrawledUrls`. */
+  crawledOverCap: boolean;
+  /**
+   * Key → pages failing/warning it, in report order. A walk stops one page past
+   * `maxHashesPerCheck` (enough to prove the set is incomplete).
+   */
+  failing: Map<string, Set<string>>;
+  /** Key → pages that produced an evaluated result for it, noindex verdicts included. */
+  evaluated: Map<string, Set<string>>;
+  /** Keys whose source page list the fold had already clipped. */
+  truncated: Set<string>;
+  /** `resolutionUrlHash` of a normalized page URL, memoized. */
+  hash: (normalizedUrl: string) => string;
+  /** Normalized page URL → 404/410, for the pages that returned one (compact shape only). */
+  removed: Map<string, number>;
+}
+
+/**
+ * Walk a report's pre-sample rule results + the crawled page URLs
+ * (`report.pages[].url`, which publish drops) into {@link ResolutionEvidence}.
  *
  * Key-emission contract (the server treats an ABSENT key as "no signal, never
  * resolve"): a `ruleId|checkName` key is emitted for every check class that
@@ -46,28 +92,20 @@ const NOT_APPLICABLE_SKIP_REASON = "noindex";
  * means the rule stopped at a work cap before it had seen the whole page. That page
  * is not evaluated, and its key is emitted even when no other page evaluated the
  * check, so the page lands in `notEvaluated` and its prior findings carry.
- *
- * Every bound degrades safely server-side: a hash set clipped by the fold's
- * page cap or this builder's own budget is listed in `truncated` (absence
- * becomes non-authoritative → today's carry behavior); keys past `maxChecks`
- * are dropped entirely (absent key → today's behavior).
- *
- * Returns undefined when there is nothing to signal (no crawled pages and no
- * page-attributable checks) so empty reports add zero payload.
  */
-export function buildResolutionSignal(
+function collectResolutionEvidence(
   ruleResults: Record<string, { checks: CheckResult[] }>,
   crawledPageUrls: string[],
-): ResolutionSignal | undefined {
+): ResolutionEvidence {
   const limits = RESOLUTION_SIGNAL_LIMITS;
-  // Insertion-ordered so the budget clips deterministically (report order).
+  // Insertion-ordered so the budgets clip deterministically (report order).
   const failing = new Map<string, Set<string>>();
   const truncated = new Set<string>();
   // Pages that produced an EVALUATED (pass/warn/fail) result for each key,
   // keyed by NORMALIZED URL rather than by hash. Build-time only — shipped as
-  // its complement against `crawledUrls` (see `notEvaluated` below), which is
-  // empty for the overwhelmingly common case of a check that ran on every
-  // crawled page.
+  // its complement against the crawled pages (`notEvaluated`), which is empty
+  // for the overwhelmingly common case of a check that ran on every crawled
+  // page.
   //
   // Subtracting by URL, not by hash, is what keeps a hash collision in the
   // SAFE direction. If a not-evaluated page collided with an evaluated one and
@@ -80,7 +118,7 @@ export function buildResolutionSignal(
   // (normalized URL), merged into `evaluated` once every key is known.
   const keyRule = new Map<string, string>();
   const notApplicable = new Map<string, Set<string>>();
-  // (#2063) Hashed on the QUERY-PRESERVING page identity, the same key the merge
+  // (#2063) Keyed on the QUERY-PRESERVING page identity, the same key the merge
   // stores findings under. A consumer on an older release hashed these
   // query-blind; it recognizes both spellings (see merge-core's resolutionHashes),
   // and the mismatch it cannot resolve only ever makes it carry, never resolve.
@@ -95,16 +133,6 @@ export function buildResolutionSignal(
       normalizeCache.set(url, norm);
     }
     return norm;
-  };
-  const hashCache = new Map<string, string>();
-  const urlHash = (url: string): string => {
-    const norm = normalized(url);
-    let hash = hashCache.get(norm);
-    if (hash === undefined) {
-      hash = resolutionUrlHash(norm);
-      hashCache.set(norm, hash);
-    }
-    return hash;
   };
 
   for (const [ruleId, rule] of Object.entries(ruleResults)) {
@@ -177,14 +205,14 @@ export function buildResolutionSignal(
       for (const url of pageUrls) ev.add(normalized(url));
       if (check.status !== "pass") {
         for (const url of pageUrls) {
-          // Past the per-check cap the budget pass below clips to at most the
-          // cap anyway — stop hashing (cap+1 is enough to prove truncation).
+          // Past the per-check cap the budget pass clips to at most the cap
+          // anyway — stop collecting (cap+1 is enough to prove truncation).
           // The overshoot to cap+1 is REQUIRED, not an off-by-one: the budget
           // pass detects truncation by `set.size > budget`, so a set stopped at
           // exactly the cap would look complete and be treated as authoritative
           // — resolving pages that were merely clipped.
           if (set.size > limits.maxHashesPerCheck) break;
-          set.add(urlHash(url));
+          set.add(normalized(url));
         }
         // The source pages[] was already clipped upstream (fold page cap /
         // byte-budget backstop stamp details.pagesTruncated) → the set is
@@ -199,6 +227,82 @@ export function buildResolutionSignal(
         }
       }
     }
+  }
+
+  // Noindex-gated pages are clean for every key of their rule (see the header).
+  for (const [key, ev] of evaluated) {
+    const skipped = notApplicable.get(keyRule.get(key)!);
+    if (skipped) for (const url of skipped) ev.add(url);
+  }
+
+  // Deduped by normalized URL (not by hash) — see `evaluated` above for why
+  // hash identity must not decide membership.
+  const crawledRaw = crawledPageUrls.slice(0, limits.maxCrawledUrls);
+  const crawled: string[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < crawledPageUrls.length; i++) {
+    const norm = normalized(crawledPageUrls[i]!);
+    if (seen.has(norm)) continue;
+    seen.add(norm);
+    if (i < limits.maxCrawledUrls) crawled.push(norm);
+  }
+
+  const hashCache = new Map<string, string>();
+  const hash = (norm: string): string => {
+    let value = hashCache.get(norm);
+    if (value === undefined) {
+      value = resolutionUrlHash(norm);
+      hashCache.set(norm, value);
+    }
+    return value;
+  };
+
+  return {
+    crawledRaw,
+    crawled,
+    crawledCount: seen.size,
+    crawledSet: seen,
+    crawledOverCap: crawledPageUrls.length > limits.maxCrawledUrls,
+    failing,
+    evaluated,
+    truncated,
+    hash,
+    removed: new Map(),
+  };
+}
+
+/**
+ * Build the original (#1185) resolution signal from a report's pre-sample rule
+ * results + the crawled page URLs. Producers send {@link buildPublishResolution}
+ * now; this shape stays for the API's rollout window and as the reference the
+ * compact one is tested against.
+ *
+ * Every bound degrades safely server-side: a hash set clipped by the fold's
+ * page cap or this builder's own budget is listed in `truncated` (absence
+ * becomes non-authoritative → today's carry behavior); keys past `maxChecks`
+ * are dropped entirely (absent key → today's behavior).
+ *
+ * Returns undefined when there is nothing to signal (no crawled pages and no
+ * page-attributable checks) so empty reports add zero payload.
+ */
+export function buildResolutionSignal(
+  ruleResults: Record<string, { checks: CheckResult[] }>,
+  crawledPageUrls: string[],
+): ResolutionSignal | undefined {
+  const limits = RESOLUTION_SIGNAL_LIMITS;
+  const evidence = collectResolutionEvidence(ruleResults, crawledPageUrls);
+  if (evidence.crawledRaw.length === 0 && evidence.failing.size === 0) return undefined;
+  const truncated = new Set(evidence.truncated);
+  const urlHash = evidence.hash;
+
+  const failing = new Map<string, Set<string>>();
+  for (const [key, pages] of evidence.failing) {
+    const set = new Set<string>();
+    for (const url of pages) set.add(urlHash(url));
+    // The walk stopped one page past the cap; colliding hashes could shrink the
+    // set back under it and hide that, so the page count decides.
+    if (pages.size > limits.maxHashesPerCheck) truncated.add(key);
+    failing.set(key, set);
   }
 
   // Enforce the per-check and whole-signal hash budgets. An over-budget set is
@@ -220,43 +324,21 @@ export function buildResolutionSignal(
     totalHashes += set.size;
   }
 
-  // Noindex-gated pages are clean for every key of their rule (see the header).
-  for (const [key, ev] of evaluated) {
-    const skipped = notApplicable.get(keyRule.get(key)!);
-    if (skipped) for (const url of skipped) ev.add(url);
-  }
-
-  const crawledUrls = crawledPageUrls.slice(0, limits.maxCrawledUrls);
-  if (crawledUrls.length === 0 && failing.size === 0) return undefined;
-
   // Per-key complement: crawled pages that produced NO evaluated result for
   // this check (rule skipped them, or didn't apply to them). The server must
   // not resolve on these — absence from `failing` isn't evidence of clean.
   // Emitted as the complement because it is empty for a check that ran
   // everywhere, keeping the common case free.
-  // Deduped by normalized URL (not by hash) — see `evaluated` above for why
-  // hash identity must not decide membership here.
-  const crawledNormalized: string[] = [];
-  const seenCrawled = new Set<string>();
-  for (const url of crawledUrls) {
-    const norm = normalized(url);
-    if (!seenCrawled.has(norm)) {
-      seenCrawled.add(norm);
-      crawledNormalized.push(norm);
-    }
-  }
   const notEvaluated: Record<string, string[]> = {};
-  if (crawledPageUrls.length > limits.maxCrawledUrls) {
+  if (evidence.crawledOverCap) {
     // The crawled list itself was clipped, so no complement can be trusted —
     // every key loses resolve authority (falls back to pre-#1185 carry).
     for (const key of failing.keys()) truncated.add(key);
   } else {
     let notEvaluatedTotal = 0;
-    for (const [key, ev] of evaluated) {
+    for (const [key, ev] of evidence.evaluated) {
       if (truncated.has(key)) continue; // already non-authoritative
-      const missing = crawledNormalized
-        .filter((norm) => !ev.has(norm))
-        .map((norm) => resolutionUrlHash(norm));
+      const missing = evidence.crawled.filter((norm) => !ev.has(norm)).map(urlHash);
       if (missing.length === 0) continue;
       // An oversized complement costs more than it's worth: drop resolve
       // authority for the key instead (safe direction).
@@ -275,9 +357,359 @@ export function buildResolutionSignal(
   const failingRecord: Record<string, string[]> = {};
   for (const [key, set] of failing) failingRecord[key] = [...set];
   return {
-    crawledUrls,
+    crawledUrls: evidence.crawledRaw,
     failing: failingRecord,
     ...(Object.keys(notEvaluated).length > 0 ? { notEvaluated } : {}),
     ...(truncated.size > 0 ? { truncated: [...truncated] } : {}),
+  };
+}
+
+/**
+ * The compact payload over the first `listed` crawled pages (crawl order), with
+ * only the keys in `kept` authoritative (all of them when omitted).
+ *
+ * Same evidence and the same count caps as {@link buildResolutionSignal}, so with
+ * every page listed and every key kept it decodes to that signal's content. Two
+ * differences once the byte budget bites, both in the safe direction:
+ *  - a key left out of `kept` ships no page set and is listed in `truncated`, so
+ *    the merge carries instead of resolving on it;
+ *  - with only part of the crawl listed (`complete: false`), failing and
+ *    not-evaluated sets cover the listed pages, and the merge trusts the signal
+ *    for those pages only (merge-core). The original shape could only mark every
+ *    key truncated in that case.
+ */
+function compactPayload(
+  evidence: ResolutionEvidence,
+  listed: number,
+  kept?: ReadonlySet<string>,
+): CompactResolutionPayload {
+  const limits = RESOLUTION_SIGNAL_LIMITS;
+  const complete = !evidence.crawledOverCap && listed >= evidence.crawled.length;
+  const listedPages = evidence.crawled.slice(0, listed);
+  // Sorted: neighbouring URLs share long prefixes, which is most of what makes
+  // the list deflate to ~10 bytes a page on a real site.
+  const urls = [...listedPages].sort();
+  const position = new Map<string, number>();
+  for (let i = 0; i < urls.length; i++) position.set(urls[i]!, i);
+  const other: string[] = [];
+  const otherPosition = new Map<string, number>();
+  const truncated = new Set(evidence.truncated);
+
+  const failing = new Map<string, number[]>();
+  let total = 0;
+  for (const [key, pages] of evidence.failing) {
+    if (kept && !kept.has(key)) {
+      truncated.add(key);
+      continue;
+    }
+    // The same per-check and whole-signal caps as the original shape, which
+    // also bound what the decoder materializes server-side. Counted in distinct
+    // hashes, as the original counts its hash set, so both clip at the same page.
+    const budget = Math.min(limits.maxHashesPerCheck, limits.maxHashesTotal - total);
+    const indexes: number[] = [];
+    const hashes = new Set<string>();
+    for (const url of pages) {
+      let index = position.get(url);
+      // A failing page that is not a listed crawled page. With a partial list
+      // the merge never consults the signal for an unlisted page: skip it.
+      if (index === undefined && !complete) continue;
+      const hash = evidence.hash(url);
+      // A page sharing a hash with one already in the set adds nothing the
+      // decoded set could tell apart.
+      if (hashes.has(hash)) continue;
+      if (hashes.size >= budget) {
+        truncated.add(key);
+        break;
+      }
+      hashes.add(hash);
+      if (index === undefined) {
+        // With the whole crawl listed it is a page the crawl never fetched; the
+        // original shape hashed it all the same, so it rides in `other`.
+        index = otherPosition.get(url);
+        if (index === undefined) {
+          index = urls.length + other.length;
+          otherPosition.set(url, index);
+          other.push(url);
+        }
+      }
+      indexes.push(index);
+    }
+    if (pages.size > limits.maxHashesPerCheck) truncated.add(key);
+    total += hashes.size;
+    failing.set(key, indexes);
+  }
+
+  const notEvaluated = new Map<string, number[]>();
+  let notEvaluatedTotal = 0;
+  for (const [key, ev] of evidence.evaluated) {
+    if (truncated.has(key)) continue;
+    const missing: number[] = [];
+    for (const url of listedPages) if (!ev.has(url)) missing.push(position.get(url)!);
+    if (missing.length === 0) continue;
+    if (
+      missing.length > limits.maxHashesPerCheck ||
+      notEvaluatedTotal + missing.length > limits.maxHashesTotal
+    ) {
+      truncated.add(key);
+      continue;
+    }
+    notEvaluated.set(key, missing);
+    notEvaluatedTotal += missing.length;
+  }
+
+  // The listed pages that 404'd or 410'd, by index: a few bytes each, where
+  // `pageStatuses` spends a whole URL and has to be clipped to its share.
+  const removed = new Map<string, number[]>();
+  for (const [url, status] of evidence.removed) {
+    const index = position.get(url);
+    if (index === undefined) continue;
+    const key = String(status);
+    let indexes = removed.get(key);
+    if (!indexes) removed.set(key, (indexes = []));
+    indexes.push(index);
+  }
+
+  const gaps = (map: Map<string, number[]>): Record<string, number[]> => {
+    const out: Record<string, number[]> = {};
+    for (const [key, indexes] of map) out[key] = encodeIndexGaps(indexes.sort((a, b) => a - b));
+    return out;
+  };
+  return {
+    v: 1,
+    urls,
+    ...(other.length > 0 ? { other } : {}),
+    complete,
+    // Never past the crawl ceiling, which the decoder enforces: billing reads it.
+    pages: Math.min(evidence.crawledCount, REPORT_LIMITS.maxPages),
+    failing: gaps(failing),
+    ...(notEvaluated.size > 0 ? { notEvaluated: gaps(notEvaluated) } : {}),
+    ...(truncated.size > 0 ? { truncated: [...truncated] } : {}),
+    ...(removed.size > 0 ? { removed: gaps(removed) } : {}),
+    // Bounded by `pages` as the decoder requires: only crawled pages are removed.
+    ...(evidence.removed.size > 0
+      ? { removedCount: Math.min(evidence.removed.size, REPORT_LIMITS.maxPages) }
+      : {}),
+  };
+}
+
+/** Deflate + base64 a payload; undefined past the decoder's inflated-size cap. */
+function deflatePayload(
+  payload: CompactResolutionPayload,
+): { signal: CompactResolutionSignal; bytes: number } | undefined {
+  const json = Buffer.from(JSON.stringify(payload), "utf8");
+  if (json.byteLength > RESOLUTION_PUBLISH_LIMITS.maxInflatedBytes) return undefined;
+  const signal: CompactResolutionSignal = { v: 1, data: deflateRawSync(json).toString("base64") };
+  // base64 and the envelope are ASCII: characters are bytes.
+  return { signal, bytes: JSON.stringify(signal).length };
+}
+
+/**
+ * What each key adds to the deflated payload, roughly: its page sets deflated on
+ * their own. Raw length would be the wrong measure: a check failing on nearly
+ * every page is a long run of zero gaps that deflates to a few bytes, while one
+ * failing on a random half of the pages costs a bit a page whatever the text.
+ */
+function keyCosts(payload: CompactResolutionPayload): Map<string, number> {
+  const costs = new Map<string, number>();
+  for (const [key, gaps] of Object.entries(payload.failing)) {
+    const sets = JSON.stringify([key, gaps, payload.notEvaluated?.[key] ?? []]);
+    costs.set(key, deflateRawSync(Buffer.from(sets, "utf8")).byteLength);
+  }
+  return costs;
+}
+
+/**
+ * The compact resolution signal (#2658) for a report's pre-sample rule results
+ * and crawled page URLs, at most `maxBytes` of serialized JSON. Undefined when
+ * there is nothing to signal, or when not even an empty page list fits.
+ *
+ * Everything fits for any real site up to a few thousand pages. Past that the
+ * builder gives up, whichever keeps more (listed page × key) decisions:
+ *  - the costliest keys, with every page listed (a dense, site-wide failing
+ *    check goes first; its findings carry instead of resolving), or
+ *  - the tail of the crawl, with every key kept: a crawl-order prefix stays
+ *    listed. Unlisted pages fall back to pre-#1185 behavior in the merge, and
+ *    `pages` still counts every crawled page so the audited-page count does not
+ *    drop with the list.
+ * Each is a binary search over re-deflated candidates: only the overflow case
+ * pays more than one deflate.
+ */
+export function buildCompactResolutionSignal(
+  ruleResults: Record<string, { checks: CheckResult[] }>,
+  crawledPageUrls: string[],
+  maxBytes: number = RESOLUTION_PUBLISH_LIMITS.maxBytes,
+  // Pages that returned 404/410 (any other status is ignored), so the merge can
+  // stale their findings and leave them out of the audited count.
+  removedPages: ReadonlyArray<{ url: string; status: number }> = [],
+): CompactResolutionSignal | undefined {
+  const evidence = collectResolutionEvidence(ruleResults, crawledPageUrls);
+  if (evidence.crawled.length === 0 && evidence.failing.size === 0) return undefined;
+  for (const { url, status } of removedPages) {
+    if (!REMOVED_PAGE_STATUSES.has(status)) continue;
+    const norm = normalizePageUrl(url);
+    if (evidence.crawledSet.has(norm)) evidence.removed.set(norm, status);
+  }
+  const fit = (listed: number, kept?: ReadonlySet<string>): CompactResolutionSignal | undefined => {
+    const out = deflatePayload(compactPayload(evidence, listed, kept));
+    return out && out.bytes <= maxBytes ? out.signal : undefined;
+  };
+
+  const all = evidence.crawled.length;
+  const whole = fit(all);
+  if (whole) return whole;
+
+  // Over budget. Two ways to give something up, scored by what the merge can
+  // still decide: listed pages × authoritative keys.
+  //  A. every page listed, the costliest keys dropped (only if the list fits);
+  //  B. every key kept, the list clipped to a crawl-order prefix.
+  // B alone is what a long-slug site at thousands of pages needs; A alone, for
+  // a list that just fits, would keep pages but give up nearly every failing key.
+  const none = new Set<string>();
+  const candidates: Array<{ signal: CompactResolutionSignal; listed: number; keys: number }> = [];
+  const keyCount = evidence.failing.size;
+  if (fit(all, none)) {
+    const kept = largestKeySet(evidence, all, fit);
+    candidates.push({ ...kept, listed: all });
+  }
+  const prefix = largestPrefix(all, (listed) => fit(listed));
+  if (prefix) candidates.push({ ...prefix, keys: keyCount });
+  if (candidates.length === 0) {
+    // Not even one page fits with every key: list what fits with none, then add
+    // back what keys still fit.
+    const bare = largestPrefix(all, (listed) => fit(listed, none));
+    if (!bare) return undefined;
+    candidates.push({ ...largestKeySet(evidence, bare.listed, fit), listed: bare.listed });
+  }
+  candidates.sort((a, b) => b.listed * b.keys - a.listed * a.keys || b.listed - a.listed);
+  return candidates[0]!.signal;
+}
+
+type Fit = (listed: number, kept?: ReadonlySet<string>) => CompactResolutionSignal | undefined;
+
+/**
+ * Largest `listed` in [1, limit) for which `fit` succeeds (binary search; `limit`
+ * itself is known not to fit). Undefined when even one page does not fit.
+ */
+function largestPrefix(
+  limit: number,
+  fit: (listed: number) => CompactResolutionSignal | undefined,
+): { signal: CompactResolutionSignal; listed: number } | undefined {
+  let best = limit > 1 ? fit(1) : undefined;
+  if (!best) return undefined;
+  let lo = 1;
+  let hi = limit;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >>> 1;
+    const candidate = fit(mid);
+    if (candidate) {
+      lo = mid;
+      best = candidate;
+    } else {
+      hi = mid;
+    }
+  }
+  return { signal: best, listed: lo };
+}
+
+/**
+ * With `listed` pages, the most keys that fit, cheapest first (ties in report
+ * order): many cheap keys, the all-pass classes above all, are worth more than
+ * one dense one. Caller has checked that no keys at all fits.
+ */
+function largestKeySet(
+  evidence: ResolutionEvidence,
+  listed: number,
+  fit: Fit,
+): { signal: CompactResolutionSignal; keys: number } {
+  const costs = keyCosts(compactPayload(evidence, listed));
+  const order = [...costs.keys()]
+    .map((key, i) => ({ key, i, cost: costs.get(key)! }))
+    .sort((a, b) => a.cost - b.cost || a.i - b.i)
+    .map((entry) => entry.key);
+  const keep = (count: number) => new Set(order.slice(0, count));
+  const every = fit(listed, keep(order.length));
+  if (every) return { signal: every, keys: order.length };
+  let best = fit(listed, keep(0))!;
+  let lo = 0;
+  let hi = order.length;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >>> 1;
+    const candidate = fit(listed, keep(mid));
+    if (candidate) {
+      lo = mid;
+      best = candidate;
+    } else {
+      hi = mid;
+    }
+  }
+  return { signal: best, keys: lo };
+}
+
+/** Statuses the merge treats as a page gone (stale its findings): merge-promise.ts. */
+const REMOVED_PAGE_STATUSES = new Set([404, 410]);
+
+/** `,"pageStatuses":` and `,"resolutionSignalCompact":`, the two fields' keys in the body. */
+const FIELD_KEY_BYTES = byteLength(',"pageStatuses":,"resolutionSignalCompact":');
+
+/** The crawl-sized publish fields, fitted to RESOLUTION_PUBLISH_LIMITS. */
+export interface PublishResolution {
+  /** Non-2xx pages (url + status); omitted for a site with none. */
+  pageStatuses?: Array<{ url: string; status: number }>;
+  resolutionSignalCompact?: CompactResolutionSignal;
+}
+
+/**
+ * The two publish fields sized by pages crawled rather than by findings (#2658):
+ * `pageStatuses` and the compact resolution signal, together within
+ * `limits.maxBytes`. Both producers (CLI `slimForPublish`, worker-agent
+ * `truncateReportForPublish`) call this over the PRE-sample rule results and the
+ * report's full `pages[]`, before either is dropped or sampled.
+ *
+ * `pageStatuses` lists only non-2xx pages: a 200 is implied by the signal's page
+ * list, so a healthy site sends none. It is clipped first, to its own share, so a
+ * site with thousands of redirects cannot crowd out the signal; when it has to be
+ * clipped, 404/410 pages go first, since they are the ones that stale findings.
+ * The signal gets the rest of the budget.
+ */
+export function buildPublishResolution(
+  ruleResults: Record<string, { checks: CheckResult[] }>,
+  pages: ReadonlyArray<{ url?: unknown; statusCode?: unknown }>,
+  limits: { maxBytes: number; maxPageStatusBytes: number } = RESOLUTION_PUBLISH_LIMITS,
+): PublishResolution {
+  const crawled: string[] = [];
+  let statuses: Array<{ url: string; status: number }> = [];
+  for (const page of pages) {
+    if (typeof page?.url !== "string") continue;
+    crawled.push(page.url);
+    const status = page.statusCode;
+    if (typeof status === "number" && (status < 200 || status >= 300)) {
+      statuses.push({ url: page.url, status });
+    }
+  }
+  // The signal names every removed page by index, whatever the clip below keeps.
+  const removed = statuses.filter((s) => REMOVED_PAGE_STATUSES.has(s.status));
+  // The publish schema REJECTS (not clamps) a list over MAX_PAGES.
+  statuses = statuses.slice(0, REPORT_LIMITS.maxPages);
+  if (statuses.length > 0 && byteLength(JSON.stringify(statuses)) > limits.maxPageStatusBytes) {
+    statuses = [
+      ...statuses.filter((s) => REMOVED_PAGE_STATUSES.has(s.status)),
+      ...statuses.filter((s) => !REMOVED_PAGE_STATUSES.has(s.status)),
+    ];
+    statuses = clipPageStatusesToBytes(
+      { pageStatuses: statuses },
+      limits.maxPageStatusBytes,
+    ).pageStatuses!;
+  }
+  // The budget covers both fields as they sit in the body, keys included.
+  const statusBytes = statuses.length > 0 ? byteLength(JSON.stringify(statuses)) : 0;
+  const signal = buildCompactResolutionSignal(
+    ruleResults,
+    crawled,
+    limits.maxBytes - statusBytes - FIELD_KEY_BYTES,
+    removed,
+  );
+  return {
+    ...(statuses.length > 0 ? { pageStatuses: statuses } : {}),
+    ...(signal ? { resolutionSignalCompact: signal } : {}),
   };
 }
