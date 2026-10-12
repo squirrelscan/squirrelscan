@@ -1,3 +1,5 @@
+import { brotliDecompressSync, gunzipSync, inflateRawSync, inflateSync } from "node:zlib";
+
 import { Effect } from "effect";
 import { XMLParser } from "fast-xml-parser";
 
@@ -25,6 +27,32 @@ export const SITEMAP_NOT_REACHED_ERROR = SITEMAP_NOT_CHECKED_ERROR;
 const logger = {
   debug: (_message: string, ..._args: unknown[]) => {},
 };
+
+/**
+ * The sitemap protocol's limit for one file, uncompressed: 50 MB, which
+ * sitemaps.org spells out as 52,428,800 bytes. It bounds every body the walk
+ * holds: the bytes on the wire, the body once its `Content-Encoding` is undone,
+ * and a gzip FILE decompressed after that, so a gzip bomb or an endless body is
+ * refused at the limit instead of exhausting memory (#662).
+ */
+export const SITEMAP_MAX_BYTES = 52_428_800;
+
+/** Recorded against a sitemap whose uncompressed body is over SITEMAP_MAX_BYTES. */
+export const SITEMAP_TOO_LARGE_ERROR = "Sitemap exceeds the 50 MB uncompressed size limit";
+
+/** Prefix for a body that carries the gzip signature but does not decompress. */
+export const SITEMAP_CORRUPT_GZIP_ERROR = "Corrupt gzip body";
+
+/** Prefix for a response whose `Content-Encoding` the walk cannot undo. */
+export const SITEMAP_UNSUPPORTED_ENCODING_ERROR = "Unsupported Content-Encoding";
+
+/** Recorded against a sitemap URL that answered with a web page instead (#670). */
+export const SITEMAP_HTML_PAGE_ERROR = "Not a sitemap: the URL returned an HTML page";
+
+/** The shape a sitemap takes when its body could not be read as one. */
+function unreadableSitemap(url: string, error: string): SitemapData {
+  return { url, type: "urlset", urls: [], childSitemaps: [], errors: [error], urlCount: 0 };
+}
 
 /**
  * Decode the five XML predefined escapes.
@@ -139,28 +167,257 @@ export function parseSitemap(content: string, url: string): SitemapData {
       };
     }
 
-    return {
-      url,
-      type: "urlset",
-      urls: [],
-      childSitemaps: [],
-      errors: ["Unknown sitemap format"],
-      urlCount: 0,
-    };
+    return unreadableSitemap(url, "Unknown sitemap format");
   } catch (error) {
-    return {
-      url,
-      type: "urlset",
-      urls: [],
-      childSitemaps: [],
-      errors: [`Parse error: ${(error as Error).message}`],
-      urlCount: 0,
-    };
+    return unreadableSitemap(url, `Parse error: ${(error as Error).message}`);
   }
 }
 
+function isHtmlContentType(contentType: string | null): boolean {
+  const essence = contentType?.split(";")[0]?.trim().toLowerCase();
+  return essence === "text/html" || essence === "application/xhtml+xml";
+}
+
+function isXmlSpace(code: number): boolean {
+  return code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0d;
+}
+
+/**
+ * The index just past a `<!DOCTYPE ...>` that starts at `start`, or -1 when it
+ * never closes. Quotes, comments, processing instructions and an internal
+ * `[...]` subset may hold a `>`.
+ */
+function doctypeEnd(text: string, start: number): number {
+  let quote: string | null = null;
+  let subset = false;
+  for (let i = start + 2; i < text.length; i++) {
+    const c = text[i];
+    if (quote) {
+      if (c === quote) quote = null;
+    } else if (text.startsWith("<!--", i) || text.startsWith("<?", i)) {
+      const close = text[i + 1] === "?" ? "?>" : "-->";
+      const end = text.indexOf(close, i + 2);
+      if (end === -1) return -1;
+      i = end + close.length - 1;
+    } else if (c === '"' || c === "'") {
+      quote = c;
+    } else if (c === "[") {
+      subset = true;
+    } else if (c === "]") {
+      subset = false;
+    } else if (c === ">" && !subset) {
+      return i + 1;
+    }
+  }
+  return -1;
+}
+
+/**
+ * What a body opens with, past whitespace, XML declarations, processing
+ * instructions, comments and a non-HTML doctype: a web page (an HTML doctype or
+ * `<html>` root), a sitemap root (`<urlset>`, `<sitemapindex>`, any prefix),
+ * other markup, or no markup at all. A scan rather than a regex: each skipped
+ * construct is passed over once, so the cost is linear however the opening is
+ * built.
+ */
+function bodyOpening(text: string): "html" | "sitemap" | "xml" | "not-xml" {
+  let i = 0;
+  for (;;) {
+    while (i < text.length && isXmlSpace(text.charCodeAt(i))) i++;
+    let end: number;
+    if (text.startsWith("<?", i)) {
+      end = text.indexOf("?>", i + 2);
+      end = end === -1 ? -1 : end + 2;
+    } else if (text.startsWith("<!--", i)) {
+      end = text.indexOf("-->", i + 4);
+      end = end === -1 ? -1 : end + 3;
+    } else if (text.slice(i, i + 9).toLowerCase() === "<!doctype") {
+      if (/^<!doctype\s+html\b/i.test(text.slice(i, i + 32))) return "html";
+      end = doctypeEnd(text, i);
+    } else {
+      break;
+    }
+    // Unterminated: markup, but nothing more can be said about it.
+    if (end === -1) return "xml";
+    i = end;
+  }
+  if (text.charCodeAt(i) !== 0x3c) return "not-xml";
+  const tag = /^<([a-z_][\w.:-]*)/i.exec(text.slice(i, i + 256))?.[1];
+  if (!tag) return "xml";
+  const name = (tag.split(":").pop() ?? "").toLowerCase();
+  if (name === "html") return "html";
+  return name === "urlset" || name === "sitemapindex" ? "sitemap" : "xml";
+}
+
+export interface DecodedSitemapBody {
+  data: SitemapData;
+  /**
+   * The body was not sitemap content at all: an HTML page, or text that is not
+   * XML. A catch-all server answers 200 with a page for every path, so at a
+   * location the walk only GUESSED this means no sitemap lives there; it is a
+   * defect only where the site claimed one (#670). Never set for a body that
+   * opens with a sitemap root, however broken the rest of it is.
+   */
+  notASitemap?: true;
+}
+
+function hasGzipSignature(bytes: Uint8Array): boolean {
+  return bytes[0] === 0x1f && bytes[1] === 0x8b;
+}
+
+/** The first byte past a UTF-8 BOM and ASCII whitespace is `<`. */
+function opensWithMarkup(bytes: Uint8Array): boolean {
+  let i = bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf ? 3 : 0;
+  while (i < bytes.length && isXmlSpace(bytes[i] ?? 0)) i++;
+  return bytes[i] === 0x3c;
+}
+
+type Inflate = (bytes: Uint8Array, options: { maxOutputLength: number }) => Uint8Array;
+
+/** HTTP's `deflate` is zlib-wrapped, but servers that send it raw are common enough to accept. */
+const inflateEither: Inflate = (bytes, options) => {
+  try {
+    return inflateSync(bytes, options);
+  } catch (error) {
+    if (error instanceof RangeError) throw error;
+    try {
+      return inflateRawSync(bytes, options);
+    } catch (rawError) {
+      // Neither reads it: the zlib reason describes what was declared.
+      throw rawError instanceof RangeError ? rawError : error;
+    }
+  }
+};
+
+const INFLATERS = new Map<string, Inflate>([
+  ["gzip", gunzipSync],
+  ["x-gzip", gunzipSync],
+  ["deflate", inflateEither],
+  ["br", brotliDecompressSync],
+]);
+
+/** Undo one coding, bounded by SITEMAP_MAX_BYTES; a string is the error to record. */
+function inflateWithin(coding: string, bytes: Uint8Array): Uint8Array | string {
+  const inflate = INFLATERS.get(coding);
+  if (!inflate) return `${SITEMAP_UNSUPPORTED_ENCODING_ERROR}: ${coding}`;
+  try {
+    return inflate(bytes, { maxOutputLength: SITEMAP_MAX_BYTES });
+  } catch (error) {
+    if (error instanceof RangeError || (error as { code?: unknown }).code === "ERR_BUFFER_TOO_LARGE") {
+      return SITEMAP_TOO_LARGE_ERROR;
+    }
+    const prefix = inflate === gunzipSync ? SITEMAP_CORRUPT_GZIP_ERROR : `Corrupt ${coding} body`;
+    return `${prefix}: ${(error as Error).message}`;
+  }
+}
+
+/**
+ * Whether this runtime's fetch hands back the raw bytes when asked to
+ * (`decompress: false`). Bun does, and it is what runs the crawl (the CLI and
+ * the cloud containers). Elsewhere fetch has already decoded the body and the
+ * Content-Encoding header is history, not an instruction.
+ */
+const FETCH_RETURNS_RAW_BODY = "Bun" in globalThis;
+
+/**
+ * Decode a fetched sitemap body and parse it.
+ *
+ * `contentEncoding` is the coding still on `bytes`: the walk fetches with the
+ * runtime's decoding off, so it is undone here, within SITEMAP_MAX_BYTES. A body
+ * that still starts with the gzip signature after that is a gzip FILE
+ * (`sitemap.xml.gz` served as `application/gzip`), which the protocol allows.
+ * It is decompressed once, within the same bound, and the result parsed as
+ * XML (#662).
+ */
+export function decodeSitemapBody(
+  bytes: Uint8Array,
+  url: string,
+  contentType: string | null,
+  contentEncoding: string | null = null,
+): DecodedSitemapBody {
+  let body = bytes;
+
+  const codings = (contentEncoding ?? "")
+    .split(",")
+    .map((coding) => coding.trim().toLowerCase())
+    .filter((coding) => coding !== "" && coding !== "identity");
+  // One coding at most: each layer can inflate to the full limit, and nothing
+  // a real server sends stacks them.
+  if (codings.length > 1) {
+    return { data: unreadableSitemap(url, `${SITEMAP_UNSUPPORTED_ENCODING_ERROR}: ${codings.join(", ")}`) };
+  }
+  const coding = codings[0];
+  if (coding) {
+    const inflated = inflateWithin(coding, body);
+    if (typeof inflated !== "string") {
+      body = inflated;
+    } else if (inflated === SITEMAP_TOO_LARGE_ERROR || !opensWithMarkup(body)) {
+      return { data: unreadableSitemap(url, inflated) };
+    }
+    // Otherwise the coding did not apply to bytes that open with markup: some
+    // hop (a runtime or proxy that ignored `decompress: false`) decoded them
+    // already, and they are read as they are.
+  }
+
+  if (hasGzipSignature(body)) {
+    const inflated = inflateWithin("gzip", body);
+    if (typeof inflated === "string") return { data: unreadableSitemap(url, inflated) };
+    body = inflated;
+  }
+
+  const text = new TextDecoder().decode(body);
+  const opening = bodyOpening(text);
+  if (opening === "html") {
+    return { data: unreadableSitemap(url, SITEMAP_HTML_PAGE_ERROR), notASitemap: true };
+  }
+
+  const data = parseSitemap(text, url);
+  if (opening === "sitemap" || data.errors.length === 0) return { data };
+  // A page that opens with something other than a doctype (a fragment, a
+  // script) still says what it is in its Content-Type.
+  if (isHtmlContentType(contentType)) {
+    return { data: unreadableSitemap(url, SITEMAP_HTML_PAGE_ERROR), notASitemap: true };
+  }
+  if (opening === "not-xml") return { data, notASitemap: true };
+  return { data };
+}
+
+/**
+ * The body as bytes, or null once it passes `maxBytes`. Metered chunk by chunk
+ * and cancelled at the limit, so an oversized or endless body is never held in
+ * full. Chunks are copied into one buffer as they arrive rather than kept, so a
+ * body dribbled out a byte at a time costs bytes, not an object per chunk. A
+ * read that fails (a stalled body aborted at the deadline) rejects.
+ */
+async function readBodyWithin(response: Response, maxBytes: number): Promise<Uint8Array | null> {
+  // A null body is a bodyless response, never a large one.
+  const reader = response.body?.getReader();
+  if (!reader) return new Uint8Array(0);
+  let buffer = new Uint8Array(64 * 1024);
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const needed = total + value.byteLength;
+    if (needed > maxBytes) {
+      // Not awaited: the answer is already known, and nothing should wait on
+      // how a misbehaving origin's stream winds down.
+      reader.cancel().catch(() => {});
+      return null;
+    }
+    if (needed > buffer.byteLength) {
+      const grown = new Uint8Array(Math.min(maxBytes, Math.max(buffer.byteLength * 2, needed)));
+      grown.set(buffer.subarray(0, total));
+      buffer = grown;
+    }
+    buffer.set(value, total);
+    total = needed;
+  }
+  return buffer.subarray(0, total);
+}
+
 export type SitemapFetchResult =
-  | { success: true; data: SitemapData }
+  | ({ success: true } & DecodedSitemapBody)
   | {
       success: false;
       url: string;
@@ -274,6 +531,21 @@ export function fetchSitemap(
   // When baseHost is unset (direct callers/tests), preserve prior behavior.
   const originScopedHeaders =
     baseHost !== undefined && new URL(url).host !== baseHost ? undefined : customHeaders;
+  const init: RequestInit & { decompress: boolean } = {
+    headers: {
+      "User-Agent": userAgent,
+      Accept: "application/xml, text/xml, */*",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Accept-Encoding": "gzip",
+      ...originScopedHeaders,
+    },
+    redirect: "follow",
+    // #662: a Bun fetch option. Bun's own decoding inflates a whole response
+    // before a reader can stop it (a 1 MB gzip bomb cost 1.9 GB that way), so
+    // the walk takes the raw bytes and decodeSitemapBody undoes the
+    // Content-Encoding within SITEMAP_MAX_BYTES.
+    decompress: false,
+  };
   return Effect.promise(async (): Promise<SitemapFetchResult> => {
     if (timeoutMs <= 0) {
       return { success: false, url, error: SITEMAP_NOT_REACHED_ERROR, settled: false };
@@ -285,15 +557,7 @@ export function fetchSitemap(
       // and then stalls its body would otherwise park the crawl forever (#1699).
       return await safeFetchWithDeadline(
         url,
-        {
-          headers: {
-            "User-Agent": userAgent,
-            Accept: "application/xml, text/xml, */*",
-            "Accept-Language": "en-US,en;q=0.9",
-            ...originScopedHeaders,
-          },
-          redirect: "follow",
-        },
+        init,
         timeoutMs,
         async (response): Promise<SitemapFetchResult> => {
           if (!response.ok) {
@@ -306,16 +570,29 @@ export function fetchSitemap(
           // as "Empty response", the same as one that arrives empty. This text
           // reaches persisted sitemap-failure records, so it stays what it was
           // before the read moved inside the deadline.
-          let content: string;
+          let body: Uint8Array | null;
           try {
-            content = await response.text();
+            body = await readBodyWithin(response, SITEMAP_MAX_BYTES);
           } catch {
             // The read never finished — a stalled or aborted body.
             return { success: false, url, error: "Empty response", settled: false };
           }
+          if (body === null) {
+            return { success: true, data: unreadableSitemap(url, SITEMAP_TOO_LARGE_ERROR) };
+          }
           // Arrived, just empty.
-          if (!content) return { success: false, url, error: "Empty response", settled: true };
-          return { success: true, data: parseSitemap(content, url) };
+          if (body.byteLength === 0) {
+            return { success: false, url, error: "Empty response", settled: true };
+          }
+          return {
+            success: true,
+            ...decodeSitemapBody(
+              body,
+              url,
+              response.headers.get("content-type"),
+              FETCH_RETURNS_RAW_BODY ? response.headers.get("content-encoding") : null,
+            ),
+          };
         },
       );
     } catch (error) {
@@ -563,7 +840,7 @@ export function discoverSitemaps(
     // every common location can be visited while an index's children are
     // dropped, which is a real gap in the URLs the crawl will see.
     const walkWindow = newWalkWindow(options.walkWindowMs, options.walkTotalMs);
-    const allResults = yield* fetchSitemapsRecursive(
+    const walked = yield* fetchSitemapsRecursive(
       entryPoints,
       userAgent,
       undefined,
@@ -574,6 +851,27 @@ export function discoverSitemaps(
       baseHost,
       walkWindow,
       options.refusals,
+    );
+
+    // #670: a server that answers 200 with a page for every path makes each
+    // guessed location look like a broken sitemap. A web page at a location the
+    // walk only guessed means no sitemap lives there; it stays a defect where the
+    // site claimed a sitemap, in a robots.txt `Sitemap:` line or an index entry.
+    const claimed = new Set(robotsSitemaps);
+    for (const result of walked) {
+      if (!result.success) continue;
+      for (const childUrl of result.data.childSitemaps) claimed.add(childUrl);
+    }
+    const allResults = walked.map(
+      (result): SitemapFetchResult =>
+        result.success && result.notASitemap && !claimed.has(result.data.url)
+          ? {
+              success: false,
+              url: result.data.url,
+              error: result.data.errors[0] ?? SITEMAP_HTML_PAGE_ERROR,
+              settled: true,
+            }
+          : result,
     );
 
     const allSitemaps = allResults.filter((result) => result.success).map((result) => result.data);
