@@ -35,6 +35,7 @@ import { formatReportDate } from "../utils";
 import { getPathname } from "../url";
 import { lockedRulesMessage } from "../locked-rules";
 import { privateTargetLine } from "../private-target";
+import { notCheckedLines } from "../not-checked";
 
 export interface MarkdownRenderOptions {
   version?: string;
@@ -159,6 +160,10 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   // pub#629: the score's other basis line, the rules a private host skipped.
   const privateTarget = privateTargetLine(report);
   if (privateTarget) lines.push(`${privateTarget}  `);
+  // repo#2729: checks this audit did not run, so a skipped check never reads as
+  // clean. Bold like the coverage line: both qualify what the score covers. Not
+  // escaped: rule names and messages are our own text, with numbers only.
+  for (const line of notCheckedLines(report)) lines.push(`**${line}**  `);
   // #190: a plain line for the same reason the seed-redirect disclosure above
   // is one. This used to be `> ${hint}`, and a blockquote CAN interrupt an open
   // paragraph, so the quote opened mid-metadata and CommonMark lazy

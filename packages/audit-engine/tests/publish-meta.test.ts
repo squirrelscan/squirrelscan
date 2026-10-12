@@ -131,6 +131,18 @@ describe("computeLockedRules", () => {
       { id: "eeat/authority-signals", name: "Authority Signals" },
     ]);
   });
+
+  test("does not lock a rule skipped because external link checking was off (repo#2729)", () => {
+    // A paid run with the setting off skips it the same way: the "Not checked"
+    // note says how to turn it on, the upsell must not say "temporarily unavailable".
+    const rules = [rule("links/dead-links", "Dead Links (Cloud)", true, "dead-links")];
+    const off = reportWith({
+      "links/dead-links": {
+        checks: [{ status: "skipped", skipReason: "external-links-not-checked" }],
+      },
+    });
+    expect(computeLockedRules(off, rules)).toEqual([]);
+  });
 });
 
 // Cross-check the three places that encode "does this cloud service have an

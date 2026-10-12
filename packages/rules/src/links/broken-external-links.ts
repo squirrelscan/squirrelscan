@@ -1,9 +1,10 @@
 // links/broken-external-links - Broken external link detection
 // Uses cached check results from external link checker
 
+import { EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON } from "@squirrelscan/core-contracts";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+import type { Rule, RuleContext, RuleResult, CheckResult, SiteData } from "../types";
 
 /**
  * A link the origin refused to answer because it was throttling us (#1829).
@@ -15,6 +16,17 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
  */
 function isRateLimitedLink(link: { status: number | null; rateLimited?: boolean }): boolean {
   return link.rateLimited === true || isRateLimitStatus(link.status);
+}
+
+/** Distinct external hrefs on the audited pages, checked or not. */
+function countExternalLinks(pages: SiteData["pages"] | undefined): number {
+  const hrefs = new Set<string>();
+  for (const page of pages ?? []) {
+    for (const link of page.parsed?.links ?? []) {
+      if (!link.isInternal && link.url) hrefs.add(link.url);
+    }
+  }
+  return hrefs.size;
 }
 
 export const brokenExternalLinksRule: Rule = {
@@ -34,7 +46,26 @@ export const brokenExternalLinksRule: Rule = {
     const checks: CheckResult[] = [];
     const externalLinks = ctx.site?.externalLinks;
 
-    if (!externalLinks || externalLinks.length === 0) {
+    // repo#2729: undefined means external link checking did not run (Quick,
+    // --offline, external_links off). That is not "no external links": the
+    // pass it used to be read as healthy and resolved open issues.
+    if (externalLinks === undefined) {
+      const found = countExternalLinks(ctx.site?.pages);
+      checks.push({
+        name: "broken-external-links",
+        status: "skipped",
+        message:
+          found > 0
+            ? `External link checking was off for this audit, so ${found} external link(s) on the audited pages were not checked`
+            : "External link checking was off for this audit, so external links were not checked",
+        skipReason: EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
+        value: found,
+        details: { externalLinksFound: found },
+      });
+      return { checks };
+    }
+
+    if (externalLinks.length === 0) {
       checks.push({
         name: "broken-external-links",
         status: "pass",

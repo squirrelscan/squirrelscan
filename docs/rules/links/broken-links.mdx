@@ -14,11 +14,16 @@ Internal links break quietly. A page is renamed, a section is restructured, a pr
 The rule is site-wide and compares link targets against pages the crawl actually fetched. It collects every internal link from every crawled page, normalises both sides, and looks up the recorded status code. Targets the crawl never visited are skipped rather than guessed at.
 
 - Skipped when there is no site data. Message: `Site data not available for broken link analysis`.
+- `broken-links` is skipped when the crawl did not follow links and some link targets were never fetched, with skip reason `link-targets-not-fetched`. Message: `9 of 40 internal link target(s) were not fetched because this audit did not follow links, so they were not checked for broken links`. It replaces the pass, and sits next to the failure when a target the crawl did fetch is broken. The report shows it as **Not checked**, and the score does not count it.
 - `broken-links` fails when a target returned 400 or above. Message: `7 broken internal link(s) (4xx/5xx)`. Each item reads `https://example.com/old-page (404)` and lists every page that links to it. Severity error, weight 7.
 - `broken-links` passes otherwise. Message: `No broken internal links detected`.
 - `rate-limited-links` reports info for targets that returned a rate-limit status. Message: `3 internal link(s) rate-limited - status unverifiable`.
 
 Normalisation strips the fragment and the trailing slash and lowercases the scheme and host, but not the path, so a case difference in the path is treated as a different URL. A throttled response means the host limited the crawl, not that the page is missing, so those are separated out before the 400 test.
+
+## Which audits can find a broken link
+
+The rule only sees a target the crawl fetched. Surface and Full [audit levels](/guides/audit-levels) follow links, so a broken link from any crawled page is found as long as the page budget reaches the target. Quick, and the Sitemap crawl strategy, fetch the entry URL and the sitemap URLs only: a broken target listed in the sitemap is still found, but one that is only linked is not fetched. Those audits report the unfetched targets as **Not checked** instead of passing, and an open broken link finding stays open until an audit that follows links runs. A site with no usable sitemap has its links followed even at Quick.
 
 ## How to fix it
 

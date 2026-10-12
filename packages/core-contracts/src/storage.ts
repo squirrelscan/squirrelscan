@@ -239,6 +239,15 @@ export interface CrawlStats {
    */
   sitemapDiscoveryTruncated?: boolean;
   /**
+   * The crawl did not follow links: it fetched the seed and the sitemap URLs
+   * only (Quick level, sitemap scope), so internal link targets outside them
+   * were never fetched and their status is unknown (repo#2729). Not set when
+   * link discovery was on, or was re-enabled because the sitemaps yielded
+   * nothing to crawl. Optional for backward compatibility; absent reads as
+   * "links were followed".
+   */
+  linkDiscoveryOff?: boolean;
+  /**
    * Root fetches (robots.txt, sitemaps, llms.txt, the Markdown probe) the site
    * REFUSED with a 401/403/429 or a bot-challenge 503, capped at
    * `MAX_REFUSED_FETCHES`. A refusal is a coverage failure, not an observation

@@ -35,6 +35,7 @@ import { wrapText } from "../utils";
 import { unfetchedNote } from "../coverage";
 import { lockedRulesMessage } from "../locked-rules";
 import { privateTargetLine } from "../private-target";
+import { notCheckedLines } from "../not-checked";
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 
 export interface TextRenderOptions {
@@ -145,6 +146,8 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
   // pub#629: the score's other basis line, the rules a private host skipped.
   const privateTarget = privateTargetLine(report);
   if (privateTarget) write(privateTarget);
+  // repo#2729: checks this audit did not run, so a skipped check never reads as clean.
+  for (const line of notCheckedLines(report)) write(line);
   const hint = fullScanHint(report);
   if (hint) write(hint);
   const fallbacks = fetchFallbacksLine(report);

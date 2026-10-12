@@ -15,7 +15,7 @@ The cloud service moves that work behind a cache shared across every audit. A li
 
 The rule is a summary. The per-link findings belong to `links/broken-external-links`, and this check never re-scores them, which is why its status is always informational. It emits a single check named `dead-links`:
 
-- Skipped when external link checking did not run. Message: `No external link check data available`.
+- Skipped when external link checking did not run for the audit (Quick level, `--offline`, or external link checks off), with skip reason `external-links-not-checked`. Message: `External link checking was off for this audit, so external links were not verified`. It is not listed among the cloud checks a cloud audit would unlock, because turning external link checks on is what runs it.
 - Info when the site has no external links. Message: `No external links found to verify`, with a value of 0.
 - Info otherwise, with one of two wordings: `Checked 128 external link(s); none are dead` or `Checked 128 external link(s); 4 dead`. When some targets were throttled, `; 2 rate-limited (status unverifiable)` is appended.
 

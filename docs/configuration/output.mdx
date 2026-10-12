@@ -646,6 +646,15 @@ Top-level keys. Keys marked optional are omitted when they do not apply.
       "pagesHasMore": false
     }
   ],
+  "notChecked": [
+    {
+      "ruleId": "links/broken-external-links",
+      "name": "string",
+      "check": "broken-external-links",
+      "reason": "external-links-not-checked",
+      "message": "string"
+    }
+  ],
   "editorSummary": {},
   "technologies": {},
   "entities": {},
@@ -672,6 +681,18 @@ Top-level keys. Keys marked optional are omitted when they do not apply.
 `summary.skipped` is the sum of `pagesCount` across `skippedChecks`, and is 0 when none were skipped.
 
 A consumer that closes a finding when a rule stops reporting it should leave the pages in `skippedChecks` for that rule open, because the rule did not finish looking at them.
+
+**Not checked:** `notChecked` lists rules whose check did not run for this audit, so an absence of issues for them means nothing was checked. It appears only when at least one rule was not checked. Like skipped checks, these are never part of `issues` and never scored.
+
+| Field | Meaning |
+|-------|---------|
+| `ruleId` | Rule that was not checked, e.g. `links/broken-external-links` |
+| `name` | Rule display name |
+| `check` | Check name within the rule |
+| `reason` | `external-links-not-checked`: external link checking was off (Quick level, `--offline`, `[external_links] enabled = false`). `link-targets-not-fetched`: the crawl did not follow links (Quick level, Sitemap crawl strategy), so some internal link targets were never fetched |
+| `message` | The line every report format shows, e.g. `Not checked: Broken External Links. External link checking was off for this audit, so 12 external link(s) on the audited pages were not checked. Run a Surface or Full audit with external link checks on to check them.` |
+
+The text, Markdown and HTML reports print the same `Not checked:` line under the score, and the LLM report has a `<not-checked>` element with one `<rule>` per entry. A consumer that closes a finding when a rule stops reporting it should leave findings for these rules open.
 
 **Use for:**
 - Automated analysis

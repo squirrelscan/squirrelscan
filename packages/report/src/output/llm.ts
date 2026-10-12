@@ -9,6 +9,7 @@ import { getDocsUrl } from "../docs";
 import { domainAgeYears } from "../site-metadata";
 import { lockedRulesMessage } from "../locked-rules";
 import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
+import { notCheckedLine, notCheckedRules } from "../not-checked";
 import { editorSummaryView } from "../editor-summary";
 import {
   ENTITY_FINDING_LIMIT,
@@ -510,6 +511,20 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
       lines.push(`${indent(1)}<rule id="${escapeXml(rule.id)}" name="${escapeXml(rule.name)}"/>`);
     }
     lines.push("</not-applicable>");
+  }
+
+  // repo#2729: checks this audit did not run (link checks off, links not
+  // followed). Their absence from <issues> is NOT a clean result: an agent must
+  // not tell the user "no broken links" when no link was checked.
+  const notChecked = notCheckedRules(report);
+  if (notChecked.length > 0) {
+    lines.push(`<not-checked count="${notChecked.length}">`);
+    for (const rule of notChecked) {
+      lines.push(
+        `${indent(1)}<rule id="${escapeXml(rule.ruleId)}" name="${escapeXml(rule.name)}" check="${escapeXml(rule.check)}" reason="${escapeXml(rule.reason)}">${escapeXml(notCheckedLine(rule))}</rule>`,
+      );
+    }
+    lines.push("</not-checked>");
   }
 
   // Cloud-/Pro-gated rules that didn't run this audit (#780) — an agent must

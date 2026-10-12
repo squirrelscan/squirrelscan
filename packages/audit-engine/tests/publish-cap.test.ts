@@ -576,6 +576,29 @@ describe("capReportForPublish: the sample and its counts", () => {
     expect(links.details?.pagesTruncated).toBe(named);
   });
 
+  test("a not-checked site skip keeps its status, reason and message (repo#2729)", () => {
+    // The server's issue sync and the dashboard read these from the capped body:
+    // a dropped skip would read as a clean rule and resolve open issues again.
+    const skip: CheckResult = {
+      name: "broken-links",
+      status: "skipped",
+      message: "1 of 3 internal link target(s) were not fetched because this audit did not follow links, so they were not checked for broken links",
+      skipReason: "link-targets-not-fetched",
+      value: 1,
+      details: { linkTargets: 3, unfetchedTargets: 1 },
+    };
+    const input: Report = {
+      ruleResults: {
+        "links/broken-links": { meta: meta(SITE_RULES[2]!, "site"), checks: [skip] },
+      },
+      siteChecks: [skip],
+    };
+    const check = capReportForPublish(input).ruleResults["links/broken-links"]!.checks[0]!;
+    expect(check.status).toBe("skipped");
+    expect(check.skipReason).toBe("link-targets-not-fetched");
+    expect(check.message).toBe(skip.message);
+  });
+
   test("pages named by more items than a check may carry are all counted", () => {
     const items = Array.from({ length: 1_500 }, (_, k) => ({ id: pageUrl(k) }));
     const input: Report = {

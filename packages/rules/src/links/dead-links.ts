@@ -6,6 +6,7 @@
 // cache). The check itself is a summary — per-link findings are reported by
 // links/broken-external-links; this rule never re-scores them (info only).
 
+import { EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON } from "@squirrelscan/core-contracts";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
@@ -29,12 +30,15 @@ export const deadLinksRule: Rule = {
     const checks: CheckResult[] = [];
     const externalLinks = ctx.site?.externalLinks;
 
+    // External link checking was off for this audit (repo#2729). A paid run
+    // would skip it the same way, so it stays off the locked upsell; the
+    // report's "Not checked" note says how to turn checking on.
     if (!externalLinks) {
       checks.push({
         name: "dead-links",
         status: "skipped",
-        message: "No external link check data available",
-        skipReason: "External link checking did not run",
+        message: "External link checking was off for this audit, so external links were not verified",
+        skipReason: EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
       });
       return { checks };
     }

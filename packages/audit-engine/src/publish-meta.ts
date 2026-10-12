@@ -3,7 +3,7 @@
 // structurally by the CLI's vendored AuditReport), and runCloudAudit calls it
 // directly, so cloud and CLI reports stamp identical `homepage`/`lockedRules`.
 
-import type { LockedRule } from "@squirrelscan/core-contracts";
+import { NOT_CHECKED_SKIP_REASONS, type LockedRule } from "@squirrelscan/core-contracts";
 import {
   isNotApplicableCloudSkip,
   loadAllRules,
@@ -59,7 +59,8 @@ export function deriveHomepageSummary(report: {
  * The list is an upsell ("run a cloud audit to unlock"), so it must only name
  * rules a paid run would actually produce (#656): unwired services and rules
  * the Stage-1 metadata gate skipped as not-applicable for this site type stay
- * off it — a cloud audit would skip them exactly the same way.
+ * off it — a cloud audit would skip them exactly the same way. So do rules
+ * skipped because a setting turned their check off (repo#2729).
  */
 export function computeLockedRules(
   report: {
@@ -80,6 +81,14 @@ export function computeLockedRules(
       checks.length > 0 &&
       checks.every((c) => isNotApplicableCloudSkip(c.skipReason));
     if (notApplicable) continue;
+    // repo#2729: a check the audit's settings turned off (external link
+    // checking) is not something a cloud audit unlocks; the report's "Not
+    // checked" note says what does.
+    const notChecked =
+      checks != null &&
+      checks.length > 0 &&
+      checks.every((c) => c.skipReason !== undefined && NOT_CHECKED_SKIP_REASONS.has(c.skipReason));
+    if (notChecked) continue;
     locked.push({ id: rule.meta.id, name: rule.meta.name });
   }
   return locked;

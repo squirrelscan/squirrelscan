@@ -64,6 +64,7 @@ import {
 import { getAuditFailureNotice, reportFailureReasonCode } from "../failure-notice";
 import { lockedRulesMessage } from "../locked-rules";
 import { privateTargetLine } from "../private-target";
+import { notCheckedLines } from "../not-checked";
 
 export interface HtmlRenderOptions {
   /** Report ID for OG meta tags (API use) */
@@ -670,6 +671,9 @@ function ReportHeader({ report, branding }: { report: AuditReport; branding?: Re
                 const seedRedirect = seedRedirectLine(report);
                 // pub#629: the rules a local or private-network host skipped.
                 const privateTarget = privateTargetLine(report);
+                // repo#2729: checks this audit did not run, shown so a skipped
+                // check never reads as a clean one.
+                const notChecked = notCheckedLines(report);
                 // repo#2661: a capped published report lists samples; say so once.
                 const capped = publishedReportNote(report);
                 return (
@@ -680,6 +684,11 @@ function ReportHeader({ report, branding }: { report: AuditReport; branding?: Re
                       </div>
                     )}
                     {privateTarget && <div className="scan-scope">{privateTarget}</div>}
+                    {notChecked.map((line) => (
+                      <div key={line} className="scan-hint not-checked">
+                        {line}
+                      </div>
+                    ))}
                     {capped && <div className="scan-scope">{capped}</div>}
                     {seedRedirect && <div className="scan-hint">{seedRedirect}</div>}
                     {hint && <div className="scan-hint">{hint}</div>}

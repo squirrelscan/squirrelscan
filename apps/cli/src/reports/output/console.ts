@@ -20,6 +20,7 @@ import {
   entityPageTotal,
   primaryEntities,
   privateTargetLine,
+  notCheckedLines,
   stableIdPercent,
   DOMAIN_STATS_NOTE,
   domainStatRows,
@@ -164,6 +165,9 @@ export function generateConsoleReport(
   // pub#629: once, here, rather than a skipped line per rule and page.
   const privateTarget = privateTargetLine(report);
   if (privateTarget) log(fmt.dim(privateTarget));
+  // repo#2729: checks this audit did not run (link checks off, links not
+  // followed). Yellow, not dim: a missing check must not read as a clean one.
+  for (const line of notCheckedLines(report)) log(fmt.yellow(line));
   const partial = partialAuditLine(opts.ruleFilter, report.healthScore);
   if (partial) log(fmt.dim(partial));
   log(divider());

@@ -1,6 +1,7 @@
 // links/dead-links — locked-list semantics (#656): zero external links is a
-// real result (no plan could verify anything), not a skipped/locked one; only
-// genuinely missing link data keeps the rule skipped (and thus upsellable).
+// real result (no plan could verify anything), not a skipped/locked one.
+// Missing link data means external link checking was off for the audit
+// (repo#2729): skipped, with a reason that keeps it off the locked upsell.
 
 import { describe, expect, test } from "bun:test";
 
@@ -31,9 +32,10 @@ const link = (over: Partial<ExternalLinkCheckData> = {}): ExternalLinkCheckData 
 });
 
 describe("links/dead-links", () => {
-  test("missing link data → skipped (stays in the locked upsell)", () => {
+  test("missing link data → skipped: external link checking was off (repo#2729)", () => {
     const { checks } = deadLinksRule.run(ctx(undefined));
     expect(checks[0].status).toBe("skipped");
+    expect(checks[0].skipReason).toBe("external-links-not-checked");
   });
 
   test("zero external links → info, NOT skipped (#656: nothing any plan could check)", () => {

@@ -37,6 +37,8 @@ squirrel audit https://example.com --level full
 
 A fast first look. Quick reads the URL you give it and the URLs in its sitemaps, up to 25 pages, and does not follow links. A site with no usable sitemap gets its links followed anyway, so it still gets a real sample.
 
+Quick does not check external links, and it only finds a broken internal link when the broken target is in the sitemap. The report says so: [`links/broken-external-links`](/rules/links/broken-external-links) and [`links/broken-links`](/rules/links/broken-links) show as **Not checked**, with the reason, rather than as passes. Run Surface or Full to check links.
+
 Quick skips the cloud checks; every other rule runs. Signed in, a quick CLI audit is still a cloud audit, billed like any other level: 50 credits plus 2 per audited page, so up to 100 credits for 25 pages. It renders the pages that need JavaScript in the cloud browser (`auto`). `--http` skips the browser but not the page charge, and `--offline` runs the audit locally. Signed out, quick runs locally, no account needed. A quick audit run in the cloud renders the pages that need it too.
 
 ### Surface

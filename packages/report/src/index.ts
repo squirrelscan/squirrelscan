@@ -127,6 +127,15 @@ export {
   type PrivateTargetReportShape,
 } from "./private-target";
 
+// Checks that did not run for this audit: link checks off, links not followed (repo#2729)
+export {
+  notCheckedLine,
+  notCheckedLines,
+  notCheckedRules,
+  type NotCheckedReportShape,
+  type NotCheckedRule,
+} from "./not-checked";
+
 // Smart audits coverage + carried-finding provenance helpers (#110)
 // + scan scope disclosure (#1180) + refused off-site seed redirect (#1418)
 export {

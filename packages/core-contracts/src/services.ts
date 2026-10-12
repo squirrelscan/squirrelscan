@@ -299,6 +299,21 @@ export interface EditorSummaryRequest {
    * audience). Slimmed by the CLI; absent when no metadata was resolved.
    */
   siteProfile?: EditorSummarySiteProfile;
+  /**
+   * Checks this audit did not run (repo#2729): link checks off, or a crawl
+   * that did not follow links. The summary must say so rather than imply the
+   * site has no broken links. Absent when every check ran.
+   */
+  notChecked?: EditorSummaryNotCheckedInput[];
+}
+
+/** One check the audit did not run, for the summary prompt. */
+export interface EditorSummaryNotCheckedInput {
+  ruleId: string;
+  /** Rule display name, e.g. "Broken External Links". */
+  title: string;
+  /** Skip reason, e.g. "external-links-not-checked". */
+  reason: string;
 }
 
 /** Slim site-metadata context for the summary prompt (never the full profile). */

@@ -12,12 +12,14 @@ import type {
   EditorSummary,
   EditorSummaryCategoryInput,
   EditorSummaryIssueInput,
+  EditorSummaryNotCheckedInput,
   EditorSummaryRequest,
   EditorSummarySiteProfile,
   SiteMetadata,
 } from "@squirrelscan/core-contracts";
 import { SERVICE_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { normalizeCategoryCode } from "./categories";
+import { notCheckedRules } from "./not-checked";
 import { checkOccurrences } from "./occurrences";
 
 /** Note rendered above the summary so it reads as informational, not scored. */
@@ -86,6 +88,14 @@ function buildTopIssues(report: AuditReport, max: number): EditorSummaryIssueInp
   return issues.slice(0, max);
 }
 
+/**
+ * Checks this audit did not run (repo#2729), so the summary can say a Quick or
+ * offline audit did not check links instead of calling the site clean.
+ */
+function buildNotChecked(report: AuditReport): EditorSummaryNotCheckedInput[] {
+  return notCheckedRules(report).map((r) => ({ ruleId: r.ruleId, title: r.name, reason: r.reason }));
+}
+
 /** Build the per-category score lines (worst first), capped. */
 function buildCategories(report: AuditReport, max: number): EditorSummaryCategoryInput[] {
   const cats = report.healthScore?.categories ?? [];
@@ -117,6 +127,7 @@ export function buildEditorSummaryRequest(
   report: AuditReport,
   opts: BuildEditorSummaryRequestOptions = {},
 ): EditorSummaryRequest {
+  const notChecked = buildNotChecked(report);
   return {
     ...(opts.auditId ? { auditId: opts.auditId } : {}),
     ...(opts.websiteId ? { websiteId: opts.websiteId } : {}),
@@ -130,6 +141,7 @@ export function buildEditorSummaryRequest(
     topIssues: buildTopIssues(report, SERVICE_LIMITS.editorSummaryMaxIssues),
     ...(opts.delta ? { delta: opts.delta } : {}),
     ...(report.siteMetadata ? { siteProfile: toSiteProfile(report.siteMetadata) } : {}),
+    ...(notChecked.length > 0 ? { notChecked } : {}),
   };
 }
 

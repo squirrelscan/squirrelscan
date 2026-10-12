@@ -2,6 +2,7 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { LINK_TARGETS_NOT_FETCHED_SKIP_REASON } from "@squirrelscan/core-contracts";
 import { normalizeUrl } from "@squirrelscan/utils";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 
@@ -62,11 +63,19 @@ export const brokenLinksRule: Rule = {
       statusCode: number;
     }[] = [];
 
+    // Distinct targets the crawl never fetched: their status is unknown.
+    const unfetchedTargets = new Set<string>();
+    const allTargets = new Set<string>();
+
     for (const [target, sources] of linkTargets) {
       // Normalize target URL to match crawler's normalization
       const normalizedTarget = normalizeUrl(target);
+      allTargets.add(normalizedTarget);
       const statusCode = crawledPages.get(normalizedTarget);
-      if (statusCode === undefined) continue;
+      if (statusCode === undefined) {
+        unfetchedTargets.add(normalizedTarget);
+        continue;
+      }
 
       // #1829: a 429/430 means the host throttled the crawl, not that the page
       // is missing. The adapter already keeps rate-limited pages out of the
@@ -84,6 +93,12 @@ export const brokenLinksRule: Rule = {
       }
     }
 
+    // repo#2729: a crawl that did not follow links (Quick, sitemap scope) never
+    // fetched the targets outside the seed and the sitemaps. "No broken links"
+    // would then be a pass on links nobody requested, and it resolved open
+    // broken-link issues on every such run. Say they were not checked instead.
+    const notFollowed = ctx.site?.linkDiscoveryOff === true && unfetchedTargets.size > 0;
+
     if (brokenLinks.length > 0) {
       checks.push({
         name: "broken-links",
@@ -96,11 +111,22 @@ export const brokenLinksRule: Rule = {
           meta: { statusCode: b.statusCode, linkedFrom: b.sources.length },
         })),
       });
-    } else {
+    } else if (!notFollowed) {
       checks.push({
         name: "broken-links",
         status: "pass",
         message: "No broken internal links detected",
+      });
+    }
+
+    if (notFollowed) {
+      checks.push({
+        name: "broken-links",
+        status: "skipped",
+        message: `${unfetchedTargets.size} of ${allTargets.size} internal link target(s) were not fetched because this audit did not follow links, so they were not checked for broken links`,
+        skipReason: LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
+        value: unfetchedTargets.size,
+        details: { linkTargets: allTargets.size, unfetchedTargets: unfetchedTargets.size },
       });
     }
 

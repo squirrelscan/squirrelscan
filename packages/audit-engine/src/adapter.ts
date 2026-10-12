@@ -1481,7 +1481,10 @@ export function runRulesOnStorage(
       agentAccess: agentAccessData,
       rsl: rslData,
       sitemaps: sitemapDiscovery,
-      externalLinks: externalLinksData,
+      // repo#2729: undefined, not [], when external link checking was off, so
+      // links/broken-external-links reports "not checked" instead of passing.
+      externalLinks: config.external_links?.enabled === false ? undefined : externalLinksData,
+      linkDiscoveryOff: crawl?.stats?.linkDiscoveryOff === true,
       resourceSizes,
       scripts,
       preloadedScripts,
@@ -2203,7 +2206,9 @@ function buildStreamingSiteData(
       agentAccess: agentAccessData,
       rsl: rslData,
       sitemaps: sitemapDiscovery,
-      externalLinks: externalLinksData,
+      // repo#2729: see runRulesOnStorage — undefined means "not checked".
+      externalLinks: config.external_links?.enabled === false ? undefined : externalLinksData,
+      linkDiscoveryOff: crawl?.stats?.linkDiscoveryOff === true,
       resourceSizes,
       scripts,
       preloadedScripts,

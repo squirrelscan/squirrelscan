@@ -409,7 +409,20 @@ export interface SiteData {
   agentAccess?: AgentAccessData | null;
   // AX: robots.txt-derived RSL licensing (License: directives + fetched RSL docs).
   rsl?: RslData | null;
+  /**
+   * External links with their check results. Undefined when external link
+   * checking did not run for this audit (Quick level, `--offline`,
+   * `external_links.enabled = false`): rules must read that as "not checked",
+   * never as "no external links" (repo#2729). An empty array means checking
+   * ran and the pages link nowhere outside the site.
+   */
   externalLinks?: ExternalLinkCheckData[];
+  /**
+   * True when the crawl did not follow links (Quick level, sitemap scope), so
+   * internal link targets outside the seed and the sitemaps were never fetched
+   * (repo#2729). Undefined reads as "links were followed".
+   */
+  linkDiscoveryOff?: boolean;
   resourceSizes?: {
     css: ResourceSizeData[];
     images: ResourceSizeData[];

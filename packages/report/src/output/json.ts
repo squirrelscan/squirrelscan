@@ -13,6 +13,7 @@ import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import { seedRedirect } from "../coverage";
 import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
+import { notCheckedLine, notCheckedRules } from "../not-checked";
 import { collectSkippedChecks, type SkippedCheck } from "../skipped";
 
 export interface JsonRenderOptions {
@@ -162,6 +163,19 @@ interface SlimJsonReport {
     message: string;
     rules: Array<{ ruleId: string; name: string }>;
   };
+  /**
+   * Checks this audit did not run (repo#2729): external link checking was off,
+   * or the crawl did not follow links. NOT a pass: "no issue" for these rules
+   * means nothing was checked. `message` is the full line every format shows,
+   * including what to run instead. Never scored. Present only when non-empty.
+   */
+  notChecked?: Array<{
+    ruleId: string;
+    name: string;
+    check: string;
+    reason: string;
+    message: string;
+  }>;
   // Report-only — never part of the score. Present when the Pro cloud
   // editor-summary call ran (exec-email-shaped narrative + big-ticket items).
   editorSummary?: {
@@ -223,6 +237,7 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
   const refusedSeedRedirect = seedRedirect(report);
   const skippedChecks = collectSkippedChecks(report.ruleResults);
   const privateTarget = privateTargetLine(report);
+  const notChecked = notCheckedRules(report);
   return {
     meta: {
       version,
@@ -359,6 +374,17 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
             message: privateTarget,
             rules: privateTargetSkippedRules(report).map((r) => ({ ruleId: r.id, name: r.name })),
           },
+        }
+      : {}),
+    ...(notChecked.length > 0
+      ? {
+          notChecked: notChecked.map((r) => ({
+            ruleId: r.ruleId,
+            name: r.name,
+            check: r.check,
+            reason: r.reason,
+            message: notCheckedLine(r),
+          })),
         }
       : {}),
     ...(report.technologies && report.technologies.items.length > 0

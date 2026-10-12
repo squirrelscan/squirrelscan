@@ -131,6 +131,33 @@ export interface CheckResult {
  */
 export const PRIVATE_TARGET_SKIP_REASON = "private-target";
 
+/**
+ * `skipReason` of `links/broken-external-links` (and `links/dead-links`) when
+ * external link checking did not run for the audit (repo#2729): the Quick
+ * level, `--offline`, or `external_links.enabled = false`. An evaluation gap,
+ * not a pass: the external links on the pages were never requested, so "no
+ * broken external links" would be a claim nothing tested.
+ */
+export const EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON = "external-links-not-checked";
+
+/**
+ * `skipReason` of `links/broken-links` when the crawl did not follow links
+ * (the Quick level, or a sitemap-scoped crawl) and some internal link targets
+ * were never fetched (repo#2729). Their status is unknown, so the rule cannot
+ * say they are not broken. An evaluation gap, not a pass.
+ */
+export const LINK_TARGETS_NOT_FETCHED_SKIP_REASON = "link-targets-not-fetched";
+
+/**
+ * Skip reasons that mean "this check did not run for the audit", which every
+ * report renders as a visible "Not checked" line instead of leaving the rule
+ * looking clean (repo#2729), and which never resolve an open finding.
+ */
+export const NOT_CHECKED_SKIP_REASONS: ReadonlySet<string> = new Set([
+  EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
+  LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
+]);
+
 export type RuleScope = "page" | "site";
 export type RuleSeverity = "error" | "warning" | "info";
 
