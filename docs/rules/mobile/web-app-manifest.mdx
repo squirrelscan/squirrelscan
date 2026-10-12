@@ -1,0 +1,117 @@
+---
+title: "Web app manifest: the file that sets the home-screen icon and name"
+description: "A linked web app manifest that is missing, broken or inconsistent gives a blank home-screen icon and a generic name. squirrel checks the manifest the pages link."
+---
+
+## What the web app manifest controls
+
+A web app manifest is a JSON file, usually `site.webmanifest`, that a page links with `<link rel="manifest">`. It tells the browser what to show when someone adds the site to their home screen or pins it: the name, the icons, the splash colours and the page the app opens on.
+
+Nothing about a broken manifest shows on a desktop browser, which is why it goes unnoticed. On Android, "Add to Home screen" falls back to a screenshot and a generic name when the manifest will not load or has no usable icons. The splash screen is blank, and the browser chrome takes a colour that clashes with the page.
+
+## What squirrel checks
+
+The rule is site-wide. It reads each manifest the pages link, fetches it once however many pages link it, and fetches the icons it declares. It emits one check per manifest URL, named `web-app-manifest`, listing the pages that link it. Its status is the worst problem found, and each problem is listed as an item.
+
+- **Error:** the manifest answers 4xx or 5xx, or its body is not a valid JSON object. A catch-all server that returns an HTML page with status 200 fails here, because the browser cannot use it either. Messages: `Linked web app manifest {url} answers HTTP {status} (linked from {pages})` and `Linked web app manifest {url} is not a valid JSON object (linked from {pages})`.
+- **Warning:** the manifest is served as a content type other than `application/manifest+json` or `application/json`. Some browsers ignore it. The check names the type served.
+- **Warning:** the manifest has neither `name` nor `short_name`, has no `start_url`, or has no `display`. Each missing field is named.
+- **Warning:** `start_url` points at another origin than the manifest.
+- **Warning:** there is no 192x192 PNG icon or no 512x512 PNG icon declared.
+- **Warning:** a declared icon answers 4xx or 5xx, or its real pixel size differs from its declared `sizes`. The check shows both sizes.
+- **Warning:** the `theme_color` in the manifest differs from the `<meta name="theme-color">` on a linking page. A light and dark pair of `theme-color` metas counts as agreeing when either one matches. Only hex colours (`#fff`, `#ffffff`) are compared: `rgb()`, `hsl()` and named colours can be equal in another spelling, so they are not compared at all.
+- **Info, not checked:** the manifest or an icon answered with a rate limit (429, 430, or 503 with `Retry-After`) or a WAF or bot challenge, which says nothing about the file; or it redirects off the site, which is not followed. Icons on another origin than the manifest are not fetched, and the check counts them: `{count} icon(s) on another origin not checked`.
+- **Info:** no icon has `purpose` including `maskable`. Android crops other icons into a circle, so a maskable icon keeps the shape clean. This is advice, not a warning.
+- **Info:** no page links a manifest at all. Many sites have no reason for one, so the result is advice and does not affect the score.
+- **Info:** the pages link more than 5 manifests. The first 5 by URL are checked and a `web-app-manifest-unchecked` note counts the rest: `{count} more linked web app manifest(s) not checked: the first 5 were`.
+
+A manifest whose icons are all SVG with `sizes: "any"` still gets the 192x192 and 512x512 PNG warnings: the rule asks for the PNG sizes Android uses for the home screen and the splash screen. Site-controlled text in a message (a URL, a header, a manifest value) is cut at 120 characters.
+
+The manifest link itself resolves against the page's `<base href>` when it sets one, as browsers resolve it, so an Angular app's `<base href="/">` with `href="manifest.webmanifest"` is checked at `/manifest.webmanifest` on every page. Relative `start_url`, `scope` and icon `src` values resolve against the manifest URL, not the page. A manifest at `/static/m.json` with an icon `"src": "icon.png"` is checked at `/static/icon.png`.
+
+Only manifests and icons on the same site (its host and subdomains) are fetched. A manifest or icon on another host is never requested, and neither is a redirect that leaves the site or points at a link-local or cloud metadata address, nor a subdomain that resolves to a private address (unless the audited site is itself on a private network): such a manifest or icon is reported as not checked. Requests use the same timeouts and size caps as the other asset checks: up to 5 manifests and 20 icons per manifest are fetched, the icons past 20 are counted as not checked, and an `icons` array is read up to its first 200 entries. The requests are made only when this rule runs: disable it and squirrel sends none of them.
+
+What the rule does not report:
+
+- A missing `apple-touch-icon` or favicon. [core/favicon](/rules/core/favicon) covers those.
+- Pages whose `theme-color` differs from each other rather than from the manifest. [social/asset-divergence](/rules/social/asset-divergence) covers that.
+- Whether the site can be installed in full. That needs a browser and a service worker, which squirrel does not run.
+
+Severity error, weight 3. A result with only warnings is reported as a warning.
+
+## How to fix it
+
+Serve the manifest as `application/manifest+json` and give it a `name`, a `start_url` and a `display` mode such as `standalone`. Declare a 192x192 and a 512x512 PNG, and add a maskable icon for Android. Set `theme_color` to the same value as the `theme-color` meta on your pages, and make sure every icon `src` returns a file whose real size matches its `sizes` attribute.
+
+```json site.webmanifest
+{
+  "name": "Example",
+  "short_name": "Example",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#ffffff",
+  "icons": [
+    { "src": "/icons/192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
+```
+
+Check the result in a browser. The DevTools Application panel lists the manifest, its icons and any parse errors.
+
+| | |
+|---|---|
+| **Rule ID** | `mobile/web-app-manifest` |
+| **Category** | [Mobile](/rules/mobile) |
+| **Scope** | Site-wide |
+| **Severity** | error (a manifest that fails to load or parse); warning otherwise |
+| **Weight** | 3/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["mobile/web-app-manifest"]
+```
+
+### Disable all Mobile rules
+
+```toml squirrel.toml
+[rules]
+disable = ["mobile/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["mobile/web-app-manifest"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [core/favicon](/rules/core/favicon): the favicon and Apple touch icon, which the manifest does not replace.
+- [social/asset-divergence](/rules/social/asset-divergence): the theme-color that differs from page to page.
+- [mobile/viewport](/rules/mobile/viewport): the viewport tag that controls layout on a phone.
+
+## References
+
+- [Web App Manifest, W3C](https://www.w3.org/TR/appmanifest/)
+- [Web app manifests, MDN](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Mobile section of the report. A site with no linked manifest shows one advisory line. A linked manifest appears once, with its linking pages and each problem as an item.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Mobile section looks like on a real site.
+  </Card>
+</CardGroup>

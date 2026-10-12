@@ -927,7 +927,8 @@ function checkSingleResource(
     const result = await checkSingleResourceAsync(url, options);
     // A refusal is not a failing host (the refused hop was never sent), so it is
     // recorded as an answer: only its latency can strike, from the hops that
-    // were sent before it. Never an error strike against the URL's host.
+    // were sent before it. Never an error strike against the URL's host, often
+    // the audited site's own.
     const outcome = result.error === ASSET_FETCH_REFUSED_ERROR ? "ok" : resourceOutcome(result);
     options.budget?.record(url, Date.now() - startedAt, outcome);
     return result;

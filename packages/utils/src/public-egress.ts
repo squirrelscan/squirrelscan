@@ -84,6 +84,22 @@ export interface EgressPolicy {
    * lose its Host, which the proxy rewrites from the request target.
    */
   pin?: boolean;
+  /**
+   * Hosts a request may reach, the first hop and every redirect: false refuses
+   * the hop. Set for requests that must stay on the audited site (a same-site
+   * manifest that redirects to another host is not followed there). Gets the
+   * URL's hostname, lowercased, IPv6 without brackets.
+   */
+  allowHost?: (hostname: string) => boolean;
+  /**
+   * Targets that may resolve to private addresses even when `allowPrivateNetwork`
+   * is off: the audited site's own origin (host AND port), which the crawl
+   * already requests. A subdomain, another host, or another port on the site's
+   * host that resolves privately is still refused, so a public page cannot point
+   * squirrel at the auditor's network through a name it controls. Link-local and
+   * metadata addresses are refused regardless. Gets the hop's parsed URL.
+   */
+  allowPrivateTarget?: (url: URL) => boolean;
 }
 
 /** Thrown before a request the egress policy refuses. Nothing was sent. */
@@ -229,9 +245,9 @@ export function isNonPublicAddress(address: string): boolean {
   return v6 !== null && isNonPublicIpv6(v6);
 }
 
-function refusesAddress(address: string, policy: EgressPolicy): boolean {
+function refusesAddress(address: string, allowPrivate: boolean): boolean {
   if (isLinkLocalOrMetadataAddress(address)) return true;
-  return !policy.allowPrivateNetwork && isNonPublicAddress(address);
+  return !allowPrivate && isNonPublicAddress(address);
 }
 
 /** Rejects with an AbortError when `signal` aborts first. */
@@ -339,18 +355,25 @@ export async function vetEgressTarget(
   }
   // URL.hostname keeps IPv6 literals bracketed and IPv4 literals canonical.
   const host = parsed.hostname.replace(/^\[|\]$/g, "");
+  if (policy.allowHost && !policy.allowHost(host)) {
+    throw new EgressRefusedError("refused: host outside the allowed set");
+  }
 
+  const allowPrivate = policy.allowPrivateNetwork || policy.allowPrivateTarget?.(parsed) === true;
   if (isIP(host) !== 0) {
-    if (refusesAddress(host, policy)) throw new EgressRefusedError("refused address");
+    if (refusesAddress(host, allowPrivate)) throw new EgressRefusedError("refused address");
     return null;
   }
   if (isCloudMetadataHostname(host)) throw new EgressRefusedError("refused metadata host");
-  if (!policy.allowPrivateNetwork && isNonPublicHostname(host)) {
+  if (!allowPrivate && isNonPublicHostname(host)) {
     throw new EgressRefusedError("refused non-public host");
   }
 
   const addresses = await raceAbort((policy.resolve ?? resolveHostAddresses)(host), signal);
-  if (addresses.length === 0 || addresses.some((address) => refusesAddress(address, policy))) {
+  if (
+    addresses.length === 0 ||
+    addresses.some((address) => refusesAddress(address, allowPrivate))
+  ) {
     throw new EgressRefusedError("refused: host resolves to a non-public address");
   }
 

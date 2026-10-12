@@ -62,6 +62,7 @@ import type {
   ParsedPage,
   RuleRunResult,
   SiteData,
+  WebAppManifestData,
 } from "@squirrelscan/rules";
 import type { SQLiteStorage } from "@squirrelscan/crawler";
 import type {
@@ -144,6 +145,13 @@ import {
   looksLikeAnAction,
   probeLinkTargets,
 } from "./link-target-probe";
+import {
+  absorbWebAppManifestLinks,
+  emptyWebAppManifestOccurrences,
+  fetchWebAppManifests,
+  type FetchedWebAppManifests,
+  type WebAppManifestOccurrences,
+} from "./web-app-manifest";
 import { fetchScriptContents, type ScriptFetchResult } from "./script-fetcher";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 import { isNonPublicHostname } from "@squirrelscan/utils/non-public-host";
@@ -541,6 +549,9 @@ const PRELOAD_CHUNK_FETCH_LIMIT = 20;
 /** The one rule that reads the third-party asset pools (#703). */
 const BROKEN_RESOURCES_RULE_ID = "reliability/broken-resources";
 
+/** The one rule that reads the web app manifest fetch (#710). */
+const WEB_APP_MANIFEST_RULE_ID = "mobile/web-app-manifest";
+
 /**
  * Referenced URLs each fetch cap left unfetched, per kind (#703): the count of
  * URLs the pages reference minus the rows the fetch returned.
@@ -610,6 +621,13 @@ export interface PreFetchedAssets {
     headUnreliable?: boolean;
   };
   /**
+   * #710: web app manifests the pages link, each with its icons checked. Optional:
+   * callers that build assets by hand have none, so the rule reports not checked.
+   */
+  webAppManifests?: WebAppManifestData[];
+  /** #710: linked same-site manifest URLs past the per-site fetch cap, not fetched. */
+  webAppManifestsDropped?: number;
+  /**
    * #1252: set only when the asset-fetch step degraded (total budget spent or a
    * host tarpitting) and some fetches were skipped. Undefined on a healthy run,
    * so nothing changes downstream unless the phase actually hit a wall. Surfaced
@@ -643,6 +661,8 @@ export interface SiteAssetOccurrences {
   externalCss: Map<string, Set<string>>;
   externalScripts: Map<string, Set<string>>;
   externalFonts: Map<string, Set<string>>;
+  /** Web app manifest links and the theme-colors of the pages that link them (#710). */
+  webAppManifests: WebAppManifestOccurrences;
   /** Scalars for the sitemap-coverage pass — v1's non-WAF parsed-page list. */
   coveragePages: Array<{ url: string; finalUrl?: string; statusCode: number }>;
   /** Every page absorbed, WAF and non-HTML included — v1's `siteContext.length`,
@@ -677,6 +697,7 @@ export function emptySiteAssetOccurrences(): SiteAssetOccurrences {
     externalCss: new Map(),
     externalScripts: new Map(),
     externalFonts: new Map(),
+    webAppManifests: emptyWebAppManifestOccurrences(),
     coveragePages: [],
     pageCount: 0,
     internalLinkTargets: new Map(),
@@ -785,6 +806,13 @@ export function createSiteAssetCollector(baseUrl: string): {
             });
           }
         }
+      }
+
+      // Web app manifest links, same-site only (#710).
+      for (const page of parsedPages) {
+        absorbWebAppManifestLinks(occurrences.webAppManifests, page, (url) =>
+          isSameDomainResource(url, getHostname(baseUrl).toLowerCase()),
+        );
       }
 
       // PDF links come from parsed scalars.
@@ -1091,6 +1119,14 @@ export function fetchAssetsFromOccurrences(
         BROKEN_RESOURCES_RULE_ID
       ],
     );
+    const probeWebAppManifests = isRuleEnabled(
+      WEB_APP_MANIFEST_RULE_ID,
+      config.rules?.enable ?? [],
+      config.rules?.disable ?? [],
+      (config.rule_options as Record<string, { enabled?: boolean }> | undefined)?.[
+        WEB_APP_MANIFEST_RULE_ID
+      ],
+    );
     const externalAssetLimit = probeExternalAssets
       ? Math.min(
           maxResources ?? RESOURCE_SIZE_LIMITS.MAX_EXTERNAL_ASSETS_TO_CHECK,
@@ -1111,6 +1147,12 @@ export function fetchAssetsFromOccurrences(
     const { customHeaders: _ownHostOnly, priorByUrl: _ownHostCache, ...probeShared } =
       resourceCheckOptions;
     const baseHost = getHostname(baseUrl).replace(/^\[|\]$/g, "");
+    let siteOrigin = "";
+    try {
+      siteOrigin = baseUrl ? new URL(baseUrl).origin : "";
+    } catch {
+      // An unparseable base URL grants no private exception.
+    }
     const externalCheckOptions = {
       ...probeShared,
       statusOnly: true,
@@ -1163,6 +1205,23 @@ export function fetchAssetsFromOccurrences(
           Array.from(pdfUrls.keys()).slice(0, pdfCheckLimit),
           resourceCheckOptions,
         ),
+        // Manifest body first, then its icons (the icon list comes from the body).
+        // Every hop held to the site's own host and subdomains (#710): a manifest
+        // or icon that redirects elsewhere is not followed there. Only when the
+        // rule runs: disabled, it sends nothing and reads as not checked.
+        webAppManifests: probeWebAppManifests
+          ? fetchWebAppManifests(resourceOccurrences.webAppManifests, resourceCheckOptions, {
+              // Private addresses only for a site that is itself private, or for the
+              // site's own origin, which the crawl already requested: a public site's
+              // subdomain (or another port) that resolves privately is refused.
+              allowPrivateNetwork: baseHost !== "" && isNonPublicHostname(baseHost),
+              allowPrivateTarget: (url) => siteOrigin !== "" && url.origin === siteOrigin,
+              allowHost: (host) =>
+                baseHost !== "" && (host === baseHost || host.endsWith(`.${baseHost}`)),
+              resolve: memoizeResolveHost(resolveHostAddresses),
+              pin: overrides?.egressPinnedByTransport !== true,
+            })
+          : Effect.succeed(null as FetchedWebAppManifests | null),
         sitemap: checkResourceSizes(
           orphanCandidates.slice(0, sitemapStatusLimit),
           resourceCheckOptions,
@@ -1236,6 +1295,7 @@ export function fetchAssetsFromOccurrences(
               externalCss: [] as ResourceCheckResult[],
               externalScripts: [] as ResourceCheckResult[],
               externalFonts: [] as ResourceCheckResult[],
+              webAppManifests: null as FetchedWebAppManifests | null,
             });
           },
         )
@@ -1253,6 +1313,13 @@ export function fetchAssetsFromOccurrences(
     });
 
     const result: PreFetchedAssets = {
+      // Absent on the timeout fallback: not checked, rather than "no manifest linked".
+      ...(resourceResults.webAppManifests
+        ? {
+            webAppManifests: resourceResults.webAppManifests.manifests,
+            webAppManifestsDropped: resourceResults.webAppManifests.dropped,
+          }
+        : {}),
       resourceSizes: {
         css: resourceResults.css.map((check) => ({
           url: check.url,
@@ -1779,6 +1846,8 @@ export function runRulesOnStorage(
       assetCapDropped,
       pdfSizes,
       sitemapUrlStatuses,
+      webAppManifests,
+      webAppManifestsDropped,
     } = assets;
 
     // Differential cloaking probe (#118) — opt-in, bounded. Re-fetches suspicious
@@ -1875,6 +1944,8 @@ export function runRulesOnStorage(
       assetCapDropped,
       pdfSizes,
       sitemapUrlStatuses,
+      webAppManifests,
+      webAppManifestsDropped,
       cloakingProbes,
       // Raw committed-page count vs the run's configured cap (#697), so
       // sitemap-coverage can tell "crawl budget truncated this run" apart
@@ -2541,6 +2612,8 @@ function buildStreamingSiteData(
       assetCapDropped,
       pdfSizes,
       sitemapUrlStatuses,
+      webAppManifests,
+      webAppManifestsDropped,
     } = assets;
 
     const cloakingProbes = yield* Effect.promise(() =>
@@ -2616,6 +2689,8 @@ function buildStreamingSiteData(
       assetCapDropped,
       pdfSizes,
       sitemapUrlStatuses,
+      webAppManifests,
+      webAppManifestsDropped,
       cloakingProbes,
       crawlLimits: {
         pagesCrawled: totalPageCount,

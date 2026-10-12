@@ -66,6 +66,7 @@ export * as social from "./social";
 export * as crawl from "./crawl";
 export * as url from "./url";
 export * as mobile from "./mobile";
+export { listWebAppManifestIconUrls, WEB_APP_MANIFEST_ICON_LIMIT } from "./mobile/web-app-manifest";
 export * as legal from "./legal";
 export * as local from "./local";
 export * as video from "./video";

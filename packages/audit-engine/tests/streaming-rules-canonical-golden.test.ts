@@ -164,7 +164,10 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // is skipped: the synthetic page records carry no X-Powered-By field, which
       // is how a crawl stored before the rule reads. Neither scores, so
       // healthScore.overall is unmoved at 51.
-      expect(v1.findings.length).toBe(101740);
+      // 101740 -> 101741: mobile/web-app-manifest is site-scoped and adds one
+      // whole-crawl check (#710). It is info (not checked): the harness's empty
+      // assets carry no manifest data. healthScore.overall is unmoved at 51.
+      expect(v1.findings.length).toBe(101741);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -186,9 +189,19 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // security/csp-blocks-own-resources, 298 -> 299 security/token-storage,
       // 299 -> 301 security/graphql-introspection and security/graphql-get-mutations,
       // 301 -> 302 reliability/broken-resources, 302 -> 303 links/broken-anchors,
-      // 303 -> 305 security/security-txt and security/version-disclosure;
+      // 303 -> 305 security/security-txt and security/version-disclosure,
+      // 305 -> 306 mobile/web-app-manifest;
       // anything else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(305);
+      expect(v1.perRuleTally.length).toBe(306);
+      expect(v1.perRuleTally.find((t) => t.ruleId === "mobile/web-app-manifest")).toEqual({
+        ruleId: "mobile/web-app-manifest",
+        pass: 0,
+        warn: 0,
+        fail: 0,
+        info: 1,
+        skipped: 0,
+        total: 1,
+      });
       expect(v1.perRuleTally.find((t) => t.ruleId === "links/broken-anchors")).toEqual({
         ruleId: "links/broken-anchors",
         pass: 1,

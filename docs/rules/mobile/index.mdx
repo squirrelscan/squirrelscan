@@ -20,6 +20,9 @@ Mobile rules check whether a page works on a phone: the viewport tag that decide
   <Card title="Tap target size: the 44 by 44 pixel guideline" icon="triangle-exclamation" href="/rules/mobile/tap-targets">
     A control smaller than a fingertip is a control people miss. squirrel counts interactive elements and flags small inline dimensions.
   </Card>
+  <Card title="Web app manifest: the file that sets the home-screen icon and name" icon="triangle-exclamation" href="/rules/mobile/web-app-manifest">
+    A linked manifest that is missing, broken or inconsistent leaves the home-screen icon blank. squirrel checks the file the pages link and its icons.
+  </Card>
   <Card title="Missing viewport meta tag: what it does and what to set" icon="circle-exclamation" href="/rules/mobile/viewport">
     Without a viewport meta tag a phone renders the page at desktop width and zooms out. squirrel checks the tag and its content properties.
   </Card>

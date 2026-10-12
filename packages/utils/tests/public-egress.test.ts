@@ -237,6 +237,16 @@ describe("egressGuardedSend with safeRedirectFetch: every hop is vetted, then pi
     expect(sent.map((s) => s.url)).toEqual(["https://93.184.216.34/a.js"]);
   });
 
+  test("allowHost holds every hop to the allowed hosts: an off-site redirect is refused unsent", async () => {
+    const first = "https://cdn.example.net/m.json";
+    const { send, sent } = transport({ [first]: to("https://dual.example.net/m.json") });
+    const policy = { ...publicOnly(), allowHost: (host: string) => host === "cdn.example.net" };
+    await expect(
+      safeRedirectFetch(first, {}, egressGuardedSend(send, policy)),
+    ).rejects.toBeInstanceOf(EgressRefusedError);
+    expect(sent.map((s) => s.host)).toEqual(["cdn.example.net"]);
+  });
+
   test("a connection that fails moves to the next vetted address; an answer or an abort is final", async () => {
     // localhost answering ::1 and 127.0.0.1 for a dev server listening on ::1 only.
     const resolve = table({ "dev.localhost": ["::1", "127.0.0.1"] });
@@ -338,6 +348,26 @@ describe("egressGuardedSend with safeRedirectFetch: every hop is vetted, then pi
       ),
     ).rejects.toMatchObject({ code: "ConnectionRefused" });
     expect(tried).toEqual(["https://93.184.216.1/a.js", "https://[2606:2800:220:1::1]/a.js"]);
+  });
+
+  test("allowPrivateTarget lets the site's own origin resolve privately, and nothing else", async () => {
+    const resolve = table({
+      "staging.example.com": ["10.0.0.20"],
+      "cdn.staging.example.com": ["10.0.0.21"],
+      "meta.staging.example.com": ["169.254.169.254"],
+    });
+    const policy = {
+      allowPrivateNetwork: false,
+      allowPrivateTarget: (url: URL) => url.origin === "https://staging.example.com",
+      resolve,
+    };
+    expect(await refused("https://staging.example.com/m.json", policy)).toBe(false);
+    // Another port on the same host, or a subdomain, is not the site's origin.
+    expect(await refused("https://staging.example.com:8443/m.json", policy)).toBe(true);
+    expect(await refused("https://cdn.staging.example.com/m.json", policy)).toBe(true);
+    // Link-local and metadata stay refused even for an allowed target.
+    const metaPolicy = { ...policy, allowPrivateTarget: () => true };
+    expect(await refused("https://meta.staging.example.com/m.json", metaPolicy)).toBe(true);
   });
 
   test("a refused first hop sends nothing", async () => {

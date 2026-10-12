@@ -4,12 +4,18 @@
 import { Effect } from "effect";
 
 import {
+  ASSET_FETCH_REFUSED_ERROR,
   ASSET_FETCH_SKIPPED_ERROR,
   SCRIPT_FETCH_LIMITS,
   SQUIRRELSCAN_USER_AGENT,
 } from "@squirrelscan/utils/constants";
+import {
+  EgressRefusedError,
+  egressGuardedSend,
+  type EgressPolicy,
+} from "@squirrelscan/utils/public-egress";
 import { fetchUndecoded, readBodyCapped } from "@squirrelscan/utils/response-body";
-import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
+import { isHttpOrHttpsUrl, safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 import type { FetchBudget, FetchOutcome } from "./fetch-budget";
 import { rateLimitedFlag, wafBlockedFlag } from "./lib/asset-status";
 import { normalizeEncoding } from "./resource-checker";
@@ -51,6 +57,18 @@ export interface ScriptFetcherOptions {
    * budget is spent or its host is tarpitting. Absent (CLI) → fetch as today.
    */
   budget?: FetchBudget;
+  /**
+   * #710: keep the body of a non-JavaScript response too. The web app manifest
+   * is fetched through this path and is JSON, which the JS-only gate would drop.
+   * Default false, so every script caller keeps its gate.
+   */
+  anyContentType?: boolean;
+  /**
+   * Every hop is vetted against this policy before it is sent (see
+   * `@squirrelscan/utils/public-egress`); a refused one is never requested and
+   * reads as ASSET_FETCH_REFUSED_ERROR. Absent: hosts are unrestricted.
+   */
+  egress?: EgressPolicy;
 }
 
 const DEFAULT_OPTIONS: ScriptFetcherOptions = {
@@ -130,7 +148,7 @@ async function fetchScriptAttempt(
         signal: controller.signal,
       },
       // #2717: undecoded on every hop; readBodyCapped decodes within its cap.
-      fetchUndecoded
+      options.egress ? egressGuardedSend(fetchUndecoded, options.egress) : fetchUndecoded
     );
 
     const contentType = response.headers.get("content-type");
@@ -187,7 +205,7 @@ async function fetchScriptAttempt(
       };
     }
 
-    if (!isJavaScriptContentType(contentType)) {
+    if (!options.anyContentType && !isJavaScriptContentType(contentType)) {
       return {
         ...defaultResult,
         status: response.status,
@@ -248,8 +266,15 @@ async function fetchSingleScriptAsync(
   retryCount = 0
 ): Promise<ScriptFetchResult> {
   try {
+    if (options.egress && !isHttpOrHttpsUrl(url)) {
+      throw new EgressRefusedError("refused scheme");
+    }
     return await fetchScriptAttempt(url, options);
   } catch (error) {
+    // Refused by the egress policy: nothing was sent, and a retry is refused too.
+    if (error instanceof EgressRefusedError) {
+      return { ...emptyScriptResult(url), error: ASSET_FETCH_REFUSED_ERROR };
+    }
     // Retries live outside the attempt so each one arms its own deadline; a
     // retry started inside the attempt's `finally` would inherit an expired
     // timer, or keep the spent one alive for the length of the retry.
@@ -273,9 +298,16 @@ async function fetchSingleScriptAsync(
   }
 }
 
-/** Map a completed script fetch to a tarpit outcome — any error (incl. timeout) strikes. */
-function scriptOutcome(result: ScriptFetchResult): FetchOutcome {
+/**
+ * Map a completed script fetch to a tarpit outcome — any error (incl. timeout)
+ * strikes. A body kept whatever its type (the manifest pass, #710) has no
+ * "not JavaScript" error, so there an HTTP answer is an answer, not a failing
+ * host: a site whose linked manifests 404 is not a tarpit. Slow answers still
+ * strike on their latency.
+ */
+function scriptOutcome(result: ScriptFetchResult, anyContentType = false): FetchOutcome {
   if (result.error === "timeout") return "timeout";
+  if (anyContentType && result.status !== null && result.error?.startsWith("HTTP ")) return "ok";
   if (result.error != null) return "error";
   return "ok";
 }
@@ -292,7 +324,13 @@ function fetchSingleScript(
     }
     const startedAt = Date.now();
     const result = await fetchSingleScriptAsync(url, options);
-    options.budget?.record(url, Date.now() - startedAt, scriptOutcome(result));
+    // A refusal is an answer for the budget: only its latency strikes (see the
+    // resource checker).
+    const outcome =
+      result.error === ASSET_FETCH_REFUSED_ERROR
+        ? "ok"
+        : scriptOutcome(result, options.anyContentType === true);
+    options.budget?.record(url, Date.now() - startedAt, outcome);
     return result;
   });
 }

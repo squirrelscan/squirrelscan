@@ -382,6 +382,47 @@ export interface ExternalLinkCheckData {
 }
 
 // Site-level data for site-scope rules
+/** One icon a web app manifest declares, checked over the same-origin fetch (#710). */
+export interface WebAppManifestIconCheck {
+  /** Absolute icon URL, resolved against the manifest URL. */
+  url: string;
+  status: number | null;
+  error: string | null;
+  /** Natural pixel size from the image header; null when not read or not an image. */
+  naturalWidth: number | null;
+  naturalHeight: number | null;
+  /** Throttled (429/430, or 503 with Retry-After): the status says nothing about the icon. */
+  rateLimited?: boolean;
+  /** A WAF or bot challenge answered in place of the icon. */
+  wafBlocked?: boolean;
+}
+
+/** A `<meta name="theme-color">` one linking page carries. */
+export interface WebAppManifestPageThemeColor {
+  content: string;
+  media: string | null;
+}
+
+/** One same-site web app manifest a page links, fetched once for the whole site (#710). */
+export interface WebAppManifestData {
+  /** Absolute manifest URL (the `href` resolved against the linking page). */
+  url: string;
+  status: number | null;
+  error: string | null;
+  contentType: string | null;
+  /** Body text when fetched; null when the request failed or was skipped. */
+  content: string | null;
+  /** Throttled (429/430, or 503 with Retry-After): the status says nothing about the file. */
+  rateLimited?: boolean;
+  /** A WAF or bot challenge answered in place of the manifest. */
+  wafBlocked?: boolean;
+  /** Pages that link this manifest, sorted. */
+  sourcePages: string[];
+  /** Each linking page's theme-color metas, keyed by page URL. */
+  themeColorsByPage: Record<string, WebAppManifestPageThemeColor[]>;
+  icons: WebAppManifestIconCheck[];
+}
+
 export interface SiteData {
   baseUrl: string;
   pages: Array<{
@@ -492,6 +533,12 @@ export interface SiteData {
   };
   pdfSizes?: ResourceSizeData[];
   sitemapUrlStatuses?: SitemapUrlStatusData[];
+  // Web app manifests the pages link (`<link rel="manifest">`), one entry per
+  // same-site manifest URL, with its icons checked (#710). Undefined when the
+  // asset pass did not run (not checked); an empty array means no page links one.
+  webAppManifests?: WebAppManifestData[];
+  // Linked same-site manifest URLs past the per-site fetch cap, not fetched (#710).
+  webAppManifestsDropped?: number;
   // Differential cloaking-probe results (#118). Undefined when the opt-in probe
   // is off; an empty array means it ran but found no suspicious paths to probe.
   cloakingProbes?: CloakingProbeData[];

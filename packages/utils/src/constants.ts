@@ -29,9 +29,9 @@ export const RESOURCE_SIZE_LIMITS = {
 export const ASSET_FETCH_SKIPPED_ERROR = "skipped";
 
 // The `error` an asset fetch records when the egress policy refused the URL or
-// one of its redirect hops (a third-party asset on a private, loopback,
-// link-local or metadata address, #703). The refused hop was never sent; rules
-// read it as "not checked".
+// one of its redirect hops: a third-party asset on a private, loopback,
+// link-local or metadata address (#703), or a same-site fetch redirected off
+// the site (#710). The refused hop was never sent; rules read it as "not checked".
 export const ASSET_FETCH_REFUSED_ERROR = "refused by the egress policy";
 
 // Sub-resource compression thresholds (#9). Compression helps from ~1KB up, but
