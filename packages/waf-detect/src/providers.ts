@@ -130,13 +130,23 @@ export const CONTENT_PATTERNS: {
   },
   {
     provider: "datadome",
-    // The tag's host, the captcha host, and the key the tag is configured with.
-    patterns: [/js\.datadome\.co\b/i, /captcha-delivery\.com\b/i, /\bddjskey\b/],
+    // The tag's host, a script from the captcha host, and the key the tag is
+    // configured with. Hosts are matched where a script loads them (`src=`).
+    patterns: [
+      /js\.datadome\.co\b/i,
+      /src\s*=\s*["']?(?:https?:)?\/\/[\w.-]*captcha-delivery\.com/i,
+      /\bddjskey\b/,
+    ],
     confidence: "medium",
   },
   {
     provider: "perimeterx",
-    patterns: [/px-captcha/i, /_pxCaptcha/, /\b_pxAppId\b/, /client\.perimeterx\.net\b/i],
+    patterns: [
+      /px-captcha/i,
+      /_pxCaptcha/,
+      /\b_pxAppId\b/,
+      /src\s*=\s*["']?(?:https?:)?\/\/client\.perimeterx\.net/i,
+    ],
     confidence: "high",
   },
   {

@@ -110,11 +110,12 @@ describe("each provider's body signatures are infrastructure, not prose", () => 
     ["imperva", "Request unsuccessful. Incapsula incident ID: <b>1234000280151781213-1234</b>"],
     ["imperva", '<script src="/_Incapsula_Resource?SWJIYLWA=719d34d31c8e3a6e6fffd425f7e032f3"></script>'],
     ["datadome", '<script src="https://js.datadome.co/tags.js" async></script>'],
-    ["datadome", "<script>var dd={'rt':'c','cid':'x','host':'geo.captcha-delivery.com'}</script>"],
+    ["datadome", '<script src="https://ct.captcha-delivery.com/c.js"></script>'],
     ["datadome", "<script>window.ddjskey = 'ABC123';</script>"],
     ["perimeterx", '<div id="px-captcha"></div>'],
     ["perimeterx", '<script>window._pxAppId = "PX12345";</script>'],
     ["perimeterx", '<script src="//client.perimeterx.net/PX12345/main.min.js"></script>'],
+    ["perimeterx", "<script>s.src = 'https://client.perimeterx.net/PX12345/main.min.js';</script>"],
     ["kasada", "<script>window.KPSDK={};</script>"],
     ["kasada", '<script src="/149e9513-01fa-4fb0-aad4-566afd725d1b/2d206a39-8ed7-437e-a3be-862e0f06eea3/ips.js"></script>'],
   ];
