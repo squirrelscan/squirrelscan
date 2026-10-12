@@ -316,6 +316,12 @@ export interface DownloadTimeouts {
  * staleness bound for the release check before the download and the install
  * after it, so a live update does not have its lock taken over.
  */
+/**
+ * The download buffer is allocated at the manifest's size before any byte
+ * arrives, so a bogus size must not reach it. Releases are about 75 MB.
+ */
+const MAX_BINARY_BYTES = 1024 * 1024 * 1024;
+
 export const DOWNLOAD_TIMEOUTS: DownloadTimeouts = {
   headersMs: 30_000,
   stallMs: 60_000,
@@ -343,7 +349,8 @@ export async function downloadBinary(
     !RELEASE_FILENAME_PATTERN.test(binary.filename) ||
     !SHA256_PATTERN.test(binary.sha256) ||
     !Number.isSafeInteger(binary.size) ||
-    binary.size <= 0
+    binary.size <= 0 ||
+    binary.size > MAX_BINARY_BYTES
   ) {
     return err(
       commandError("INVALID_RELEASE", "Release binary metadata is invalid")
@@ -406,6 +413,8 @@ export async function downloadBinary(
       fetch(url, { signal: controller.signal }),
       aborted,
     ]);
+    // A deadline that fires just as the response lands still wins: the body
+    // read races the same abort, so the download fails before any checksum.
     clearTimeout(headersTimer);
     if (!response.ok) {
       // An error page's body is not read, so close it rather than leave it open.
@@ -456,9 +465,15 @@ export async function downloadBinary(
         )
       );
     }
-    // A short body fails the checksum below.
-    const buffer =
-      received === out.byteLength ? out.buffer : out.slice(0, received).buffer;
+    if (received !== out.byteLength) {
+      return err(
+        commandError(
+          "DOWNLOAD_FAILED",
+          `Download ended after ${received} of ${binary.size} bytes`
+        )
+      );
+    }
+    const buffer = out.buffer;
 
     // Verify SHA256
     const hash = await computeSHA256(buffer);

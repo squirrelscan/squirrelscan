@@ -511,6 +511,43 @@ describe("updater", () => {
       }
     });
 
+    test("a body that ends short of the manifest's size says so", async () => {
+      serveRelease(
+        async () => new Response(body(BYTES.slice(0, 4), [], 0, true))
+      );
+      const result = await downloadBinary(manifest, "darwin-arm64", {
+        timeouts: FAST,
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe("DOWNLOAD_FAILED");
+        expect(result.error.message).toBe(
+          `Download ended after 4 of ${BYTES.length} bytes`
+        );
+      }
+    });
+
+    test("a manifest size too large to allocate is rejected before any request", async () => {
+      let fetched = false;
+      globalThis.fetch = (async () => {
+        fetched = true;
+        return new Response("");
+      }) as unknown as typeof fetch;
+      const huge = {
+        ...manifest,
+        binaries: {
+          ...manifest.binaries,
+          "darwin-arm64": { ...binaryEntry, size: 2 ** 40 },
+        },
+      } as ReleaseManifest;
+      const result = await downloadBinary(huge, "darwin-arm64", {
+        timeouts: FAST,
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("INVALID_RELEASE");
+      expect(fetched).toBe(false);
+    });
+
     test("an error status closes its unread body", async () => {
       let cancelled = false;
       serveRelease(
