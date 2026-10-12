@@ -550,7 +550,8 @@
                 "group": "Reliability",
                 "pages": [
                   "rules/reliability/index",
-                  "rules/reliability/broken-resources"
+                  "rules/reliability/broken-resources",
+                  "rules/reliability/broken-forms"
                 ]
               }
             ]

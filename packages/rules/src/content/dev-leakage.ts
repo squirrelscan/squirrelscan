@@ -282,7 +282,7 @@ const MARKDOWN_ACTIVE_ESCAPES: Record<string, string> = {
   ")": "%29",
 };
 
-function toSample(raw: string): string {
+export function toSample(raw: string): string {
   const flat = raw
     .replace(/\s+/g, " ")
     .trim()

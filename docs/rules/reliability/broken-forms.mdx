@@ -1,0 +1,123 @@
+---
+title: "Forms that lose submissions: unnamed fields and dead actions"
+description: "A form can look perfect and still drop every submission. squirrel checks that each field has a name the browser sends, and that each form action answers."
+---
+
+## What this rule detects
+
+Two faults lose form submissions without any visible error. The first is a field with no `name`. The browser shows it, the visitor fills it in, and then the browser leaves it out of the request, because only named controls are submitted. The usual cause is a copy-pasted field or a refactor that moved `name` to `id`.
+
+The second is an `action` that goes nowhere. It may be an old endpoint that now returns 404, a staging or localhost host that shipped by accident, or a `mailto:` link that only opens the visitor's mail client. The visitor sees a success message, and the site owner finds out weeks later.
+
+The rule reads the forms the crawl already parsed. It checks each form's fields in the page, and it checks each action against the crawl or, where needed, with a request.
+
+## What squirrel checks
+
+The rule is site-wide. Each finding lists the form and the pages it appears on.
+
+- **Field with no name, in a form that posts to an action:** a warning, check name `unnamed-form-fields`. Each item reads `{field} ({type}) in {form} has no name, so the browser never submits it (a script on the page may still read it)`.
+- **Field with no name, in a form with no real action** (no `action`, or `action="#"`): information, check name `unnamed-form-fields-no-action`. A script may read the field by `id` or from component state, so this is not reported as broken.
+- **First-party action the crawl fetched answers 404 or 410:** an error, check name `dead-form-action`. Every submission to it is lost.
+- **First-party action answers 404 or 410 to the rule's own `HEAD` or `GET` probe:** a warning, check name `form-action-not-found-to-probe`, saying `the endpoint may accept POST only`. Express, Rails and many APIs answer 404 to `GET` or `HEAD` on a route that only accepts `POST`, so a probe 404 is not proof the endpoint is gone.
+- **Action points at a staging, preview, development or localhost host:** a warning, check name `non-production-form-action`. The same host classification as [content/dev-leakage](/rules/content/dev-leakage) is used. No request is sent to these hosts. When the audited site, or the page, is itself on such a host, its actions point there on purpose and are judged like any other action instead: auditing `http://localhost:3000` or a private-network box, no localhost, private-IP, preview or dev action is reported; auditing a `*.vercel.app` or `*.netlify.app` deployment, preview and dev actions are its own, but a localhost or private-IP action still ships to every visitor and is still reported. A site reached through a tunnel (ngrok, `trycloudflare.com`) counts as local.
+- **Action uses `mailto:`:** a warning, check name `mailto-form-action`. It opens the visitor's mail client, so most submissions are lost.
+- **Action answers 5xx, fails at the network level, or a third-party action answers 404 or 410:** a warning, check name `unreachable-form-action`.
+- **Action answers 429, 503 with `Retry-After`, or a WAF challenge:** information, check name `unverified-form-actions`. The status says nothing about the handler, so it is not reported as broken.
+- **Action not checked:** information, check name `unchecked-form-actions`. The message says why: passive probing sends no requests, the probe budget ran out, external link checking is off, the address is private, loopback or link-local (or off the site, for a same-site action), it is a plain-http action on a page the crawl did not fetch, or the probe cap was reached.
+- **Pass:** every form names its fields and its actions answer. Message: `All {count} form(s) name their fields and their actions answer`.
+
+Form selectors and URLs in messages are cut at 120 characters, and their parentheses are percent-encoded, so text from the page cannot turn into a link in the report.
+
+Fields that are never sent are not reported: `submit`, `button`, `reset` and `image` controls, disabled controls, controls inside a `<template>`, and controls whose `form` attribute names a different form. A control outside any `<form>` that names one with `form="id"` is judged as part of that form.
+
+### How actions are checked
+
+The rule never submits a form and never sends a `POST`. It checks an action in this order:
+
+1. A `mailto:` action, or a staging, preview, development or localhost host, is reported from the URL alone. No request is sent.
+2. A same-site action the crawl already fetched uses the crawl's status. No request is sent.
+3. Any other same-site action is requested only when the probe level is `active` or `aggressive`. The request is a `HEAD`, and a `GET` follows only when `HEAD` returns 405 or 501, or fails at the network level. That costs two units of the shared probe budget. Each endpoint is probed at most once: query variants of one path (`/cart/add?id=1`, `?id=2`) share one probe. At most 25 endpoints are probed per audit, no more than 10 on one site (registrable domain), and the site's own actions go first; the rest are reported as not checked (`probe cap reached`).
+4. A third-party action (a form service such as Formspree or HubSpot) is requested only when external link checking is on. It is probed the same way as step 3.
+
+Under passive probing, steps 3 and 4 send nothing, and the result says the action was not checked.
+
+What a probe sends and where it can go:
+
+- squirrel's `User-Agent` and an `Accept` header only: no cookies and none of your custom request headers.
+- Redirects are not followed. A 3xx answer counts as reachable, so an action that redirects to a dead page is not reported.
+- The response body is never read, and it is fetched without decompression, so a compressed body is never inflated.
+- A third-party action is requested only on a public address: never a private, loopback, link-local or cloud metadata address, or a name that resolves to one, unless the audited site is itself on a private network (and never link-local or metadata even then). A same-site action is requested only on the site's own host or a subdomain of it, and a subdomain of a public site, or another port on its host, only on a public address. The request goes to the exact address that was checked.
+
+On an `https:` site, a plain `http:` action is left to [security/form-https](/rules/security/form-https), which reports insecure submission. On an `http:` site (a local dev server, for example) a same-site `http:` action is judged from the crawl's status when the crawl fetched it, and is not probed otherwise.
+
+## How to fix it
+
+Give every input, select and textarea a `name` that the handler reads. An `id` is for the label and the script, and it is not sent.
+
+```html
+<!-- Shown and filled in, but never sent: no name -->
+<input id="email" type="email">
+
+<!-- Sent as email=... -->
+<input id="email" name="email" type="email">
+```
+
+For an action that answers 404 or 410, point the form at the endpoint that exists, or remove the form. Replace a staging or localhost action with the production URL before release. Replace a `mailto:` action with a handler that stores or sends the submission.
+
+| | |
+|---|---|
+| **Rule ID** | `reliability/broken-forms` |
+| **Category** | [Reliability](/rules/reliability) |
+| **Scope** | Site-wide |
+| **Severity** | error for a first-party action the crawl found 404 or 410; warning for a probe 404, unnamed fields, dead third-party actions, staging, localhost, mailto and 5xx actions |
+| **Weight** | 6/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["reliability/broken-forms"]
+```
+
+### Disable all Reliability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["reliability/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["reliability/broken-forms"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it.
+
+## Related rules
+
+- [security/form-https](/rules/security/form-https): forms that submit over plain `http:`.
+- [a11y/form-labels](/rules/a11y/form-labels): fields that have no accessible label.
+- [content/dev-leakage](/rules/content/dev-leakage): staging and localhost hosts in links and images.
+- [links/broken-links](/rules/links/broken-links): the same idea for anchor targets.
+
+## References
+
+- [HTML form submission, MDN](https://developer.mozilla.org/en-US/docs/Learn/Forms/Sending_and_retrieving_form_data)
+- [HTTP response status codes, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Reliability section of the report. Each unnamed field is listed with its form and page, and each action with its status. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Reliability section looks like on a real site.
+  </Card>
+</CardGroup>
