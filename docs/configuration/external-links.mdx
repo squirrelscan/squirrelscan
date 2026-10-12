@@ -277,7 +277,7 @@ A longer slug that only mentions one of them is still a page and is checked: `/w
 
 **It re-checks every redirect hop.** It does not follow a redirect to another host, out of the crawl scope, to a path robots.txt disallows, or to an action link; that redirect is the target's status. It follows at most 5 hops.
 
-**It stays polite.** It stays inside the crawl scope and, when the crawl respects it, robots.txt. It runs at the crawl's per-host concurrency, and checks at most `max_targets` targets an audit, each with one `HEAD` and the redirect hops that follow it.
+**It stays polite.** It stays inside the crawl scope and, when the crawl respects it, robots.txt. It never has more of its own requests in flight than the crawl's per-host concurrency, and checks at most `max_targets` targets an audit, each with one `HEAD` and the redirect hops that follow it.
 
 A skipped target is counted in the **Not checked** line of `links/broken-links` when the audit did not follow links, and is never reported as passing.
 

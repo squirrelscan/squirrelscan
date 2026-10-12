@@ -49,7 +49,7 @@ squirrel audit <url> [options]
 | `--offline` | | Run fully offline: skip cloud features, publishing, and telemetry. External links are not checked; internal link targets still are | `false` |
 | `--external-links` | | Check links to other sites this run, at any level. Cannot be combined with `--offline` or `--no-external-links` | the level's: off for quick, on for surface and full |
 | `--no-external-links` | | Do not check links to other sites this run. The report shows them as **Not checked** | the level's |
-| `--no-internal-links` | | Do not status-check internal link targets the crawl did not fetch. See [Link checking defaults](/rules/links#link-checking-defaults) | checked |
+| `--no-internal-links` | | Do not status-check internal link targets the crawl did not fetch (one `HEAD` request each, on by default at every level). See [Link checking defaults](/rules/links#link-checking-defaults) | checked |
 | `--header` | `-H` | Custom HTTP header on every crawl request, `Name: Value` (repeatable). Merges over `[crawler] headers`; values are redacted in output. See [Web Bot Auth](/guides/web-bot-auth) | none |
 | `--fail-on` | | Exit `2` when a threshold trips, for CI gating (repeatable / comma-separated) | none |
 | `--rule-include` | | Only run these rule categories or rules, e.g. `ax,perf` or `core/meta-title` (repeatable / comma-separated). Replaces `[rules] enable` for this run | none |

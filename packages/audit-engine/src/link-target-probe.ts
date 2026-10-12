@@ -359,7 +359,8 @@ async function probeOne(url: string, options: LinkTargetProbeOptions): Promise<L
     if (response.status === 405 || response.status === 501) {
       response = await requestStatus(url, "GET", options, controller.signal);
     }
-    options.budget?.record(url, Date.now() - started, "ok");
+    // A 5xx strikes like an error, so an erroring host trips the budget too.
+    options.budget?.record(url, Date.now() - started, response.status >= 500 ? "error" : "ok");
     const rateLimited = isRateLimitedResponse(response.status, response.headers.get("retry-after"));
     return { url, status: response.status, error: null, ...(rateLimited ? { rateLimited } : {}) };
   } catch (error) {

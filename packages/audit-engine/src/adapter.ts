@@ -1041,8 +1041,9 @@ export function fetchAssetsFromOccurrences(
         // GET only on 405/501, no credentials or custom headers, every
         // redirect hop held to the same checks. The crawl's UA, its own limit
         // (the cloud's per-pool item cap would otherwise cut it below
-        // max_targets), and the crawl's per-host concurrency: every target is
-        // on the audited host.
+        // max_targets), and no more requests of its own in flight than the
+        // crawl's per-host concurrency: every target is on the audited host.
+        // The asset pools beside it keep their own limits, as before.
         linkTargets: probeLinkTargets(probeTargets, {
           userAgent: probeUserAgent,
           timeoutMs: resourceCheckOptions.timeoutMs,
@@ -1202,7 +1203,9 @@ export function fetchAssetsFromOccurrences(
               unfetched: unfetchedTargets.length,
               // Answered, not merely attempted: a fetch the budget skipped or
               // that failed outright says nothing about the target.
-              probed: resourceResults.linkTargets.results.filter((r) => typeof r.status === "number" && r.status > 0).length,
+              probed: resourceResults.linkTargets.results.filter(
+                (r) => typeof r.status === "number" && r.status > 0,
+              ).length,
               cap: probeCap,
               outOfScope,
               ...(resourceResults.linkTargets.headUnreliable ? { headUnreliable: true } : {}),
