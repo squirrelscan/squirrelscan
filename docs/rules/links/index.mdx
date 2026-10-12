@@ -17,6 +17,9 @@ Links rules read the link graph the crawl built. Half of them are health checks:
   <Card title="Broken internal links: 404s inside your own site" icon="circle-exclamation" href="/rules/links/broken-links">
     An internal link to a page that returns 404 or 500 is a dead end you control. squirrel cross-references every internal link against the crawl.
   </Card>
+  <Card title="Broken anchor links: #fragments that point at nothing" icon="circle-exclamation" href="/rules/links/broken-anchors">
+    A link to #pricing whose target id is gone still loads, and the reader lands at the top of the page. squirrel checks every in-page anchor against its element.
+  </Card>
   <Card title="Cloud dead-link checking: the shared external link cache" icon="circle-info" href="/rules/links/dead-links">
     Checking every external link from your machine is slow and rude to the sites you link to. The cloud service checks against a shared cache instead.
   </Card>

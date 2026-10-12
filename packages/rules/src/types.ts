@@ -393,6 +393,12 @@ export interface SiteData {
     redirectChain?: RedirectChain;
     /** Bytes of the stored HTML response, when the crawler recorded them. */
     sizeBytes?: number | null;
+    /**
+     * The page's HTML came from a browser render (see PageData.rendered). Read by
+     * links/broken-anchors on the v1 path, where the DOM is present; the streaming
+     * path takes the same judgement from ctx.collectedSignals.
+     */
+    rendered?: boolean;
   }>;
   robotsTxt: RobotsTxtData | null;
   sitemaps: SitemapDiscovery | null;

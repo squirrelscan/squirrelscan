@@ -25,6 +25,8 @@ import { extractPageByteSignal } from "./performance/total-byte-weight";
 import { fingerprintPage } from "./integrity/fingerprint";
 import { hasCommercialOfferLink, matchSubprocessorLink } from "./legal/subprocessor-disclosure";
 import { pageScriptSrcs } from "./adblock/blocked-links";
+import type { PageAnchorSignal } from "./links/page-anchors";
+import { buildPageAnchorSignal } from "./links/page-anchors";
 import { RULE_TIME_BUDGET_MS, RuleTimeoutError, runWithinBudget } from "./rule-budget";
 import { scanPageForSecrets } from "./security/leaked-secrets";
 
@@ -62,6 +64,12 @@ export interface CollectedPageSignal {
    *  (pricing, plans, enterprise, trust center, contact sales, book a demo). */
   commercialOffer: boolean;
   /**
+   * links/broken-anchors: the page's distinct ids and `<a name>` values, and its
+   * skip-link fragments (page-anchors.ts). Null when the page has no document.
+   * Absent on a record cached before the field existed, which reads as unjudged.
+   */
+  anchors?: PageAnchorSignal | null;
+  /**
    * Rules whose page-time extractor ran past its time budget on this page and was
    * abandoned (its field holds the empty value). The site pass records each as a
    * rule error for this page. Absent when nothing timed out.
@@ -96,6 +104,8 @@ export function buildCollectedPageSignal(input: {
   budgetMs?: number;
   /** The page's stored HTML response size in bytes, when the crawler recorded it. */
   htmlBytes?: number | null;
+  /** The page's HTML came from a browser render (links/broken-anchors reads it). */
+  rendered?: boolean;
 }): CollectedPageSignal {
   const { url, finalUrl, parsed } = input;
   const htmlBytes = input.htmlBytes ?? 0;
@@ -116,6 +126,7 @@ export function buildCollectedPageSignal(input: {
       scriptSrcs: [],
       subprocessorMatch: null,
       commercialOffer: false,
+      anchors: null,
     };
   }
 
@@ -192,6 +203,9 @@ export function buildCollectedPageSignal(input: {
     ),
     commercialOffer: timed("legal/subprocessor-disclosure", false, () =>
       hasCommercialOfferLink(doc)
+    ),
+    anchors: timed("links/broken-anchors", null, () =>
+      buildPageAnchorSignal({ parsed, rendered: input.rendered === true })
     ),
   };
   if (timedOutRuleIds.length > 0) signal.timedOut = { budgetMs, ruleIds: timedOutRuleIds };

@@ -1,0 +1,105 @@
+---
+title: "Broken anchor links: #fragments that point at nothing"
+description: "A link to #pricing whose target id is gone still loads, and the reader lands at the top of the page. squirrel checks every in-page anchor against the element it names."
+---
+
+## What a broken anchor link is
+
+An anchor link is an `<a href>` whose fragment names an element on the page: `#pricing`, or `/docs/setup#install` for a section of another page. The browser scrolls to the element with that `id`. If no element has the id any more, nothing errors. The page loads and the reader lands at the top, not at the section they clicked.
+
+Anchors break after a redesign, a CMS migration, or a table of contents copied from another page. Headings get new generated ids, and the old links keep pointing at the old ones.
+
+## What squirrel checks
+
+The rule is site-wide. It judges a link when the target page was crawled and answered without an error. A page's id set is the `id` attributes and `<a name>` values on it, the two targets the HTML spec resolves a fragment to.
+
+- Skipped when there is no site data. Message: `Site data not available for in-page anchor analysis`.
+- Skipped, not passed, when the crawl's page records were cached before this check existed and carry no anchor data. Message: `In-page anchors were not checked: this crawl's page records predate the check. Re-run the audit with --refresh to check them`.
+- `broken-anchors` warns when a link's fragment names no id on its target page. Message: `{count} in-page anchor link(s) point at an id that does not exist on the target page`. Each item names the link and lists every page that links to it, so a broken anchor in the site navigation is one finding, not one per page. Severity warning, weight 4.
+- A broken skip link is labelled `(skip link)` in its item. The skip link is reported here, once. [a11y/skip-link](/rules/a11y/skip-link) keeps its own verdict.
+- `unconfirmed-anchors` reports info for a link whose target page was fetched without rendering and looks like an empty client-side shell. Its ids may be added by JavaScript after load, so squirrel cannot confirm the id is missing. Message: `{count} in-page anchor link(s) target a client-rendered page that was not rendered, so the id may be added by JavaScript`.
+- `broken-anchors` passes otherwise. Message: `No broken in-page anchor links detected`, with `details.anchorLinks` (how many links the rule judged).
+
+Matching follows the browser. The fragment is percent-decoded, so `#caf%C3%A9` finds `id="café"`, and the comparison is case-sensitive, so `#Pricing` does not match `id="pricing"`.
+
+## What squirrel does not report
+
+- `href="#"` and `#top`. Both scroll to the top of the page by specification, whether or not an element has the id.
+- Purely numeric fragments such as `#0` and `#1`. Templates use them as do-nothing links for menus and buttons that scripts drive, far more often than as ids, so a missing `#0` is not reported.
+- Hash routes and state, which are not element ids: fragments starting with `/` or `!` (`#/settings`, `#!/home`), and fragments containing `=` (`#access_token=abc`, `#q=shoes`).
+- Text fragments (`#:~:text=hello`).
+- Links to pages the crawl did not fetch, to other websites, or to pages that answered with a 4xx or 5xx. [links/broken-links](/rules/links/broken-links) already reports the last two.
+- Targets with more than 512 distinct ids. A link into such a page could name an id that was not kept, so it is not judged.
+
+## Which audits can find a broken anchor
+
+A same-page link needs only the page it sits on. A link into another page is checked only when that page was fetched. Surface and Full [audit levels](/guides/audit-levels) follow links, so they reach most targets. Quick, and the Sitemap crawl strategy, fetch the entry URL and the sitemap URLs only. A link into a page they did not fetch is not judged.
+
+Pages that are built in the browser can add their ids after load. squirrel reports those as unconfirmed rather than broken, unless the page was rendered during the audit.
+
+## How to fix it
+
+Update the link to the id that exists now, or add the id to the target element. Prefer fixing the link: an id added only to satisfy a link often breaks again in the next redesign.
+
+Skip links need a target too. Give `<main>` or the content container the id the skip link points at, such as `id="main-content"`.
+
+Fix the source, not just the page. The report lists which pages carry each link, and a link repeated in the navigation needs one change rather than twenty.
+
+| | |
+|---|---|
+| **Rule ID** | `links/broken-anchors` |
+| **Category** | [Links](/rules/links) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["links/broken-anchors"]
+```
+
+### Disable all Links rules
+
+```toml squirrel.toml
+[rules]
+disable = ["links/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["links/broken-anchors"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [links/broken-links](/rules/links/broken-links): internal links to pages that return an error.
+- [a11y/skip-link](/rules/a11y/skip-link): whether the page offers a way past repeated navigation at all.
+- [links/redirect-chains](/rules/links/redirect-chains): internal links that resolve, but through a redirect.
+
+Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Fragment identifiers, WHATWG HTML Standard](https://html.spec.whatwg.org/multipage/browsing-the-web.html#scroll-to-fragid)
+- [Skip to main content, WCAG 2.4.1](https://www.w3.org/WAI/WCAG22/Understanding/bypass-blocks.html)
+
+## Check your website
+
+Run `squirrel audit https://example.com` and open the Links section of the report. Each broken anchor is listed with the link and the pages that carry it. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Links section looks like on a real website.
+  </Card>
+</CardGroup>

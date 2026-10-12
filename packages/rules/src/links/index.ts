@@ -3,6 +3,7 @@
 import type { Rule } from "../types";
 
 import { anchorTextRule } from "./anchor-text";
+import { brokenAnchorsRule } from "./broken-anchors";
 import { brokenExternalLinksRule } from "./broken-external-links";
 import { brokenLinksRule } from "./broken-links";
 import { deadEndPages } from "./dead-end-pages";
@@ -25,6 +26,7 @@ export const rules: Rule[] = [
   externalLinksRule,
   invalidLinksRule,
   brokenLinksRule,
+  brokenAnchorsRule,
   brokenExternalLinksRule,
   deadLinksRule,
   redirectChainsRule,
@@ -40,6 +42,7 @@ export const rules: Rule[] = [
 
 export {
   anchorTextRule,
+  brokenAnchorsRule,
   brokenExternalLinksRule,
   brokenLinksRule,
   deadEndPages,

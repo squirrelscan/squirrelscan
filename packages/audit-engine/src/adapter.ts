@@ -1505,6 +1505,7 @@ export function runRulesOnStorage(
       headers?: Record<string, string>;
       redirectChain?: RedirectChain;
       sizeBytes?: number | null;
+      rendered?: boolean;
     }> = [];
     const wafBlockedPages: Array<{
       url: string;
@@ -1567,6 +1568,7 @@ export function runRulesOnStorage(
         headers,
         redirectChain: page.redirectChain,
         sizeBytes: page.sizeBytes,
+        rendered: isRenderedFetch(page.fetcherId),
       });
       pageDataMap.set(page.normalizedUrl, { page, parsed, headers });
     }
@@ -2151,6 +2153,7 @@ type StreamParsedPage = {
   headers?: Record<string, string>;
   redirectChain?: RedirectChain;
   sizeBytes?: number | null;
+  rendered?: boolean;
 };
 
 /**
@@ -2285,6 +2288,7 @@ function createParsedUniverseAccumulator(): {
           parsed: kept,
           headers,
           redirectChain: page.redirectChain,
+          rendered: isRenderedFetch(page.fetcherId),
         });
         // Scalars only — NOT the PageRecord (see StreamPageIdentity).
         pageDataMap.set(page.normalizedUrl, {
@@ -3016,6 +3020,8 @@ export function runStreamingRules(
             parsed,
             fingerprint: shared.fingerprint,
             htmlBytes: page.sizeBytes,
+            // links/broken-anchors: an unrendered client shell's ids are unconfirmed.
+            rendered: isRenderedFetch(page.fetcherId),
           }),
           "collected-signal",
         );

@@ -155,7 +155,10 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // one whole-crawl check (#703). It is info: the harness's empty assets
       // carry no fonts or third-party lists, so the rule reports those kinds as
       // not measured. healthScore.overall is unmoved at 51.
-      expect(v1.findings.length).toBe(101737);
+      // 101737 -> 101738: links/broken-anchors is site-scoped and adds one
+      // whole-crawl check (#706). It passes: no anchor link on the synthetic
+      // site names a missing id, so healthScore.overall is unmoved at 51.
+      expect(v1.findings.length).toBe(101738);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -176,9 +179,18 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // content/placeholder-contact, 296 -> 297 content/placeholder-media, 297 -> 298
       // security/csp-blocks-own-resources, 298 -> 299 security/token-storage,
       // 299 -> 301 security/graphql-introspection and security/graphql-get-mutations,
-      // 301 -> 302 reliability/broken-resources;
+      // 301 -> 302 reliability/broken-resources, 302 -> 303 links/broken-anchors;
       // anything else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(302);
+      expect(v1.perRuleTally.length).toBe(303);
+      expect(v1.perRuleTally.find((t) => t.ruleId === "links/broken-anchors")).toEqual({
+        ruleId: "links/broken-anchors",
+        pass: 1,
+        warn: 0,
+        fail: 0,
+        info: 0,
+        skipped: 0,
+        total: 1,
+      });
       expect(v1.perRuleTally.find((t) => t.ruleId === "reliability/broken-resources")).toEqual({
         ruleId: "reliability/broken-resources",
         pass: 0,

@@ -7,6 +7,23 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 // not enough for real content.
 const EARLY_HEADING_LIMIT = 2000;
 
+/**
+ * The anchors this rule counts as a skip link by class or target. Exported so
+ * links/broken-anchors labels the same links as skip links, without a second
+ * copy of the list to drift.
+ */
+export const SKIP_LINK_SELECTOR =
+  'a[href^="#main"], a[href^="#content"], a[href="#skip"], a.skip-link, a.skip-to-content, a.skip-nav';
+
+/**
+ * A `#`-link whose text reads as a skip link, for links the selector above
+ * misses. Shared with links/broken-anchors for the same reason.
+ */
+export function hasSkipLinkText(text: string): boolean {
+  const lower = text.toLowerCase();
+  return lower.includes("skip") || lower.includes("jump to content") || lower.includes("go to main");
+}
+
 export const skipLinkRule: Rule = {
   meta: {
     id: "a11y/skip-link",
@@ -30,9 +47,7 @@ export const skipLinkRule: Rule = {
     const bypassMethods: string[] = [];
 
     // 1. Check for skip link patterns
-    const skipLinks = doc.querySelectorAll(
-      'a[href^="#main"], a[href^="#content"], a[href="#skip"], a.skip-link, a.skip-to-content, a.skip-nav'
-    );
+    const skipLinks = doc.querySelectorAll(SKIP_LINK_SELECTOR);
     if (skipLinks.length > 0) {
       bypassMethods.push("skip link");
     }
@@ -41,12 +56,7 @@ export const skipLinkRule: Rule = {
     if (bypassMethods.length === 0) {
       const allLinks = doc.querySelectorAll("a[href^='#']");
       for (const link of allLinks) {
-        const text = link.textContent?.toLowerCase() || "";
-        if (
-          text.includes("skip") ||
-          text.includes("jump to content") ||
-          text.includes("go to main")
-        ) {
+        if (hasSkipLinkText(link.textContent ?? "")) {
           bypassMethods.push("skip link (text match)");
           break;
         }

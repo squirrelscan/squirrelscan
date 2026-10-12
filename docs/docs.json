@@ -242,6 +242,7 @@
                   "rules/links/external-links",
                   "rules/links/invalid-links",
                   "rules/links/broken-links",
+                  "rules/links/broken-anchors",
                   "rules/links/broken-external-links",
                   "rules/links/dead-links",
                   "rules/links/redirect-chains",
