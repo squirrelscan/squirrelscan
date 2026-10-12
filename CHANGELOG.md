@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- New rule `security/tls-certificate` reads the TLS certificate of each audited host with one handshake and reports its expiry (a warning inside 30 days, an error inside 7, set by `warn_days` and `error_days`), whether it covers the hostname, whether it has a complete chain to a trusted root, whether it is self-signed, and whether an RSA key is under 2048 bits. The www or apex counterpart is checked when it answers on the same port. A host the rule cannot read is reported as not checked, never as a pass, and local or private-network hosts are skipped. When a page fetch fails on a TLS error, the failure now names the cause the same handshake found, such as an expiry date or a missing intermediate, instead of listing every possibility. See [TLS certificate](https://docs.squirrelscan.com/rules/security/tls-certificate). squirrelscan/squirrelscan#712
+
 ## v0.0.111 (2026-10-13)
 
 Broken links have nowhere left to hide. Every audit, Quick included, now status-checks the internal link targets its crawl did not fetch, so a linked 404 shows up even when it is not in your sitemap or sits past the page budget. External links stay opt-in at Quick, and there are new flags for both.

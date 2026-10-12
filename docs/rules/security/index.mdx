@@ -22,7 +22,7 @@ Security is one of the four score groups on every report. This page covers trans
 
 ## Security rules
 
-HTTPS, headers, and safe link practices (20 rules).
+HTTPS, certificates, headers, and safe link practices (21 rules).
 
 <CardGroup cols={2}>
   <Card title="Content-Security-Policy: what to set and how to check it" icon="triangle-exclamation" href="/rules/security/csp">
@@ -51,6 +51,9 @@ HTTPS, headers, and safe link practices (20 rules).
   </Card>
   <Card title="HSTS: what Strict-Transport-Security needs to be valid" icon="triangle-exclamation" href="/rules/security/hsts">
     A missing or short Strict-Transport-Security header leaves the first request downgradeable. squirrel reads the header and checks max-age.
+  </Card>
+  <Card title="TLS certificate: expiry, hostname, chain and key checks" icon="triangle-exclamation" href="/rules/security/tls-certificate">
+    A certificate that expires, misses the hostname or lacks its intermediate breaks the page for some visitors. squirrel reads it once per host and names each problem.
   </Card>
   <Card title="HTTP to HTTPS redirect: how squirrel probes for it" icon="triangle-exclamation" href="/rules/security/http-to-https">
     squirrel requests the http:// version of a sample of your URLs and reports which ones redirect to HTTPS, with the status code of the first hop.

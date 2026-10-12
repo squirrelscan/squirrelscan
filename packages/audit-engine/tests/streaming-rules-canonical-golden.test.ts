@@ -151,7 +151,11 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // security/graphql-get-mutations are site-scoped probing rules. This gate
       // runs with no probe budget (passive), so each adds one skipped check and
       // sends nothing. The overall score is unmoved.
-      expect(v1.findings.length).toBe(101736);
+      // 101736 -> 101737: security/tls-certificate is site-scoped and emits one
+      // check on every crawl. The synthetic origin is `http://synthetic.test`, so
+      // the rule returns a single `skipped` check (not-https) and opens no socket.
+      // Sibling PRs that add site rules must recompute this constant on merge.
+      expect(v1.findings.length).toBe(101737);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -172,8 +176,10 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // content/placeholder-contact, 296 -> 297 content/placeholder-media, 297 -> 298
       // security/csp-blocks-own-resources, 298 -> 299 security/token-storage,
       // 299 -> 301 security/graphql-introspection and security/graphql-get-mutations;
+      // 301 -> 302 security/tls-certificate (#712), a site rule that is `skipped`
+      // (not-https) on the synthetic origin. Recompute when a sibling PR merges.
       // anything else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(301);
+      expect(v1.perRuleTally.length).toBe(302);
       // Passive: both GraphQL probing rules skip without sending a request.
       for (const ruleId of ["security/graphql-introspection", "security/graphql-get-mutations"]) {
         expect(v1.perRuleTally.find((t) => t.ruleId === ruleId)).toEqual({

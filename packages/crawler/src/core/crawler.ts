@@ -30,6 +30,7 @@ import { urlHostKey } from "@squirrelscan/utils/url";
 import { budgetRemainingMs, createPhaseBudget, withRequestDeadline } from "../deadline";
 import type { PhaseBudget, ProbeGate } from "../deadline";
 import { RefusalLog } from "../refusals";
+import { withTlsCause } from "../tls-cause";
 import {
   computeSitemapUrlCap,
   discoverSitemaps,
@@ -1425,7 +1426,14 @@ export function createCrawler(
               // #1822: the fetcher knows WHY (DNS, TLS, socket, timeout, 5xx).
               // Without this the reason is discarded here and a zero-page audit
               // can only say "No pages were crawled".
-              rootFailure: crawlErrorToFailureDetail(error, failureSourceFor(entry.source)),
+              // #712: a TLS failure names its cause (expired, hostname, chain,
+              // self-signed) when the same handshake can see one.
+              rootFailure: yield* Effect.promise(() =>
+                withTlsCause(
+                  crawlErrorToFailureDetail(error, failureSourceFor(entry.source)),
+                  entry.normalizedUrl,
+                ),
+              ),
             });
             markPrefixFailed(entry.normalizedUrl, entry.depth);
             return;

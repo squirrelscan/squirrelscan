@@ -27,6 +27,7 @@
     "./rule-pattern": "./src/rule-pattern.ts",
     "./bytes": "./src/bytes.ts",
     "./rate-limit": "./src/rate-limit.ts",
+    "./tls-certificate": "./src/tls-certificate.ts",
     "./agent-skills": "./src/agent-skills/index.ts"
   },
   "dependencies": {

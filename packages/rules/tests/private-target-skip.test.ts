@@ -18,6 +18,7 @@ import type { PageData, SiteData } from "../src/types";
 const PAGE_GATED = ["security/https", "perf/http2", "perf/compression", "perf/cache-headers"];
 const SITE_GATED = [
   "security/hsts",
+  "security/tls-certificate",
   "security/http-to-https",
   "perf/bad-caching",
   "perf/asset-compression",
