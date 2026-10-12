@@ -184,7 +184,8 @@ export const totalByteWeightRule: Rule = {
     const scored: Scored[] = records.map((rec, index) => {
       // The recorded HTML size already holds the inline <style> and <script>
       // code, so adding it again counted those bytes twice (#668). A page with
-      // no recorded size is weighed by its inline code alone.
+      // no recorded size is weighed by its inline code alone: a deliberate
+      // floor, in text length rather than the usual transfer size.
       const html = rec.html > 0 ? rec.html : rec.inlineCss + rec.inlineJs;
       const parts = {
         html,

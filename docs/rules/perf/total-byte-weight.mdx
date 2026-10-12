@@ -27,7 +27,7 @@ The details carry the heaviest page's URL and weight, the number of pages analyz
 
 ### Size basis
 
-The HTML size is the response size the crawler recorded for the page: the `Content-Length` the server sent, which is the transfer size, or the decoded body length when it sent none. It is applied the same way on the streaming and resident engines. Error pages, pages blocked by a bot challenge and non-HTML responses are not scored. Inline `<style>` and `<script>` code is part of that size, so it is not counted a second time. A page with no recorded size is weighed by its inline CSS and JavaScript instead, measured by text length, where inline JavaScript excludes any `<script>` whose type mentions `json` or `template`, so JSON-LD is not counted as code. External resources use the size from a HEAD request, or the fetched body for scripts.
+The HTML size is the response size the crawler recorded for the page: the `Content-Length` the server sent, which is the transfer size, or the decoded body length when it sent none. It is applied the same way on the streaming and resident engines. Error pages, pages blocked by a bot challenge and non-HTML responses are not scored. Inline `<style>` and `<script>` code is part of that size, so it is not counted a second time. A page with no recorded size is weighed by its inline CSS and JavaScript instead, measured by text length. That inline JavaScript excludes any `<script>` whose type mentions `json` or `template`, so JSON-LD is not counted as code. External resources use the size from a HEAD request, or the fetched body for scripts.
 
 ### Limits
 
