@@ -2,15 +2,19 @@ import type { WafChallengeResult } from "./types";
 import {
   CHALLENGE_200_SIGNATURES,
   CHALLENGE_INTERSTITIAL_MAX_TEXT,
-  CHALLENGE_INTERSTITIAL_PATTERNS,
+  CHALLENGE_MARKUP_PATTERNS,
+  CHALLENGE_TEXT_PATTERNS,
   WAF_CHALLENGE_STATUS_CODES,
   getWafProviderName,
 } from "./providers";
 import { detectWaf } from "./detect";
 
-function hasChallengeInterstitialMarkers(html: string): boolean {
+/** Which kind of interstitial marker the page's opening carries, if any. */
+function challengeMarkers(html: string): "markup" | "text" | null {
   const sample = html.slice(0, 10240);
-  return CHALLENGE_INTERSTITIAL_PATTERNS.some((pattern) => pattern.test(sample));
+  if (CHALLENGE_MARKUP_PATTERNS.some((pattern) => pattern.test(sample))) return "markup";
+  if (CHALLENGE_TEXT_PATTERNS.some((pattern) => pattern.test(sample))) return "text";
+  return null;
 }
 
 function tagEnd(html: string, start: number): number {
@@ -149,10 +153,14 @@ export function detectWafChallengePage(page: {
     return { detected: false, provider: null };
   }
 
-  if (hasChallengeInterstitialMarkers(page.html)) {
+  const markers = challengeMarkers(page.html);
+  if (markers) {
     const statusSuggestsChallenge = WAF_CHALLENGE_STATUS_CODES.has(page.status);
     const wafResult = detectWaf(buildWafHeaders(page), page.html.slice(0, 10240));
-    if (statusSuggestsChallenge || wafResult.detected) {
+    // Challenge text alone is something any page can say, so on a 200 it takes
+    // challenge markup to call the page a challenge: a protected site's own
+    // pages carry its WAF's headers too (#666).
+    if (statusSuggestsChallenge || (markers === "markup" && wafResult.detected)) {
       return {
         detected: true,
         provider: wafResult.provider ? getWafProviderName(wafResult.provider) : null,

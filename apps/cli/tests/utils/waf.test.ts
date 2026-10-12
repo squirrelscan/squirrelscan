@@ -257,7 +257,8 @@ describe("detectWaf", () => {
 
   it("checks body if headers have low/medium confidence", () => {
     const headers = new Headers({ "x-amzn-requestid": "abc" }); // medium confidence
-    const body = "<html><body>Cloudflare Ray ID: xyz</body></html>";
+    const body =
+      "<html><body>Cloudflare Ray ID: 8d1f2a3b4c5d6e7f</body></html>";
     const result = detectWaf(headers, body);
 
     // Should prefer cloudflare from body (high confidence) over aws-waf
@@ -267,7 +268,7 @@ describe("detectWaf", () => {
 
   it("merges indicators from headers and body", () => {
     const headers = new Headers({ "x-amzn-requestid": "abc" });
-    const body = "Cloudflare Ray ID: xyz";
+    const body = "Cloudflare Ray ID: 8d1f2a3b4c5d6e7f";
     const result = detectWaf(headers, body);
 
     expect(result.indicators.length).toBeGreaterThanOrEqual(2);

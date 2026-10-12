@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
+import { CLOUDFLARE_CHALLENGE_SCRIPT } from "@squirrelscan/utils/waf";
 
 import { BUDGET_EXHAUSTED_ERROR, budgetedTimeoutMs, safeFetchWithDeadline, ungated } from "./deadline";
 
@@ -28,9 +29,12 @@ interface ProbeIdentity {
 export function detectChallenge(headers: Headers, body: string): string | null {
   if (headers.get("cf-mitigated") === "challenge") return "cf-mitigated";
   const head = body.slice(0, 4_096);
-  if (head.includes("challenge-platform")) return "challenge-platform";
-  if (head.includes("__cf_chl_")) return "__cf_chl_";
-  if (head.includes("Just a moment")) return "just-a-moment";
+  // Not the bare /cdn-cgi/challenge-platform/ directory: JavaScript Detections
+  // loads a script from it on every ordinary page of a Cloudflare site (#666).
+  if (CLOUDFLARE_CHALLENGE_SCRIPT.test(head)) return "challenge-platform";
+  if (head.includes("__cf_chl_") || head.includes("_cf_chl_opt")) return "__cf_chl_";
+  // The challenge page's title, not the phrase anywhere in a page.
+  if (/<title\b[^>]*>\s*Just a moment/i.test(head)) return "just-a-moment";
   return null;
 }
 
