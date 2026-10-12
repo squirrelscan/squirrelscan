@@ -7,6 +7,11 @@ import {
   isRateLimitedResponse,
   isRateLimitStatus,
 } from "@squirrelscan/utils/rate-limit";
+import {
+  DEFAULT_MAX_BODY_BYTES,
+  fetchUndecoded,
+  readBodyCapped,
+} from "@squirrelscan/utils/response-body";
 import { detectWaf, type WafProvider } from "@squirrelscan/waf-detect";
 
 // ============================================
@@ -118,14 +123,14 @@ async function checkSingleUrlAsync(
   const controller = new AbortController();
   // #1729: the deadline stays armed until this function returns, so it also
   // covers the WAF body read below. Clearing it where the GET resolved disarmed
-  // the abort at the HEADERS, leaving `getResponse.text()` no time bound at all
+  // the abort at the HEADERS, leaving the body read below no time bound at all
   // — the 403 interstitials this branch exists to read are exactly the
   // responses a hostile origin is happy to trickle forever.
   const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs);
 
   try {
     try {
-      const headResponse = await fetch(href, {
+      const headResponse = await fetchUndecoded(href, {
         method: "HEAD",
         headers: { "User-Agent": options.userAgent, Accept: "*/*" },
         signal: controller.signal,
@@ -143,7 +148,7 @@ async function checkSingleUrlAsync(
       // HEAD failed, try GET
     }
 
-    const getResponse = await fetch(href, {
+    const getResponse = await fetchUndecoded(href, {
       method: "GET",
       headers: { "User-Agent": options.userAgent, Accept: "*/*" },
       signal: controller.signal,
@@ -155,7 +160,9 @@ async function checkSingleUrlAsync(
     if (getResponse.status === 403) {
       let body: string | undefined;
       try {
-        body = await getResponse.text();
+        // Capped, and decoded no further than the cap (#2717): the WAF
+        // markers sit at the top of an interstitial.
+        body = await readBodyCapped(getResponse, DEFAULT_MAX_BODY_BYTES);
       } catch {
         // The body never arrived: the deadline above fired mid-read, or the
         // connection dropped. Do NOT give up on detection here — falling

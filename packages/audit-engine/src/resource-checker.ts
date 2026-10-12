@@ -18,9 +18,19 @@ import { calculateFreshness } from "@squirrelscan/crawler";
 import { RESOURCE_SIZE_LIMITS, SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
 import { isCompressibleContentType } from "@squirrelscan/utils/headers";
 import { isRateLimitedResponse } from "@squirrelscan/utils/rate-limit";
+import { decodedBody, fetchUndecoded } from "@squirrelscan/utils/response-body";
 import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 import type { FetchBudget, FetchOutcome } from "./fetch-budget";
 import { parseImageHeader, type ImageHeaderInfo } from "./image-header";
+
+/**
+ * Every request this module sends: redirects followed by hand (#1395), each hop
+ * fetched undecoded so the runtime never inflates a Content-Encoding body
+ * ahead of the capped reads below (#2717).
+ */
+function fetchResource(url: string, init: RequestInit) {
+  return safeRedirectFetch(url, init, fetchUndecoded);
+}
 
 export interface ResourceCheckResult {
   url: string;
@@ -238,7 +248,9 @@ async function readCappedBody(
   measureRest: boolean,
   abort: () => void
 ): Promise<CappedBody> {
-  const reader = response.body?.getReader();
+  // Decoded as it is read (#2717): every request here is fetched undecoded, so
+  // a Content-Encoding bomb is inflated no further than this read goes.
+  const reader = decodedBody(response)?.getReader();
   if (!reader) return { head: new Uint8Array(0), received: 0, complete: true };
   const chunks: Uint8Array[] = [];
   let kept = 0;
@@ -293,7 +305,7 @@ async function measureUnrangedSize(
   const headers = { "User-Agent": options.userAgent, Accept: "*/*", ...options.customHeaders };
   try {
     try {
-      const { response } = await safeRedirectFetch(url, {
+      const { response } = await fetchResource(url, {
         method: "HEAD",
         headers,
         signal: controller.signal,
@@ -304,7 +316,7 @@ async function measureUnrangedSize(
     } catch {
       // Fall through to the counted read, as the HEAD path above does.
     }
-    const { response } = await safeRedirectFetch(url, {
+    const { response } = await fetchResource(url, {
       method: "GET",
       headers,
       signal: controller.signal,
@@ -471,7 +483,7 @@ async function checkSingleResourceAsync(
         // #1395: follow redirects manually so per hop the http/https scheme
         // allowlist applies and secret customHeaders are stripped on a cross-origin
         // redirect (native redirect:"follow" replays them to the redirect target).
-        const { response: headResponse, finalUrl: headFinalUrl } = await safeRedirectFetch(url, {
+        const { response: headResponse, finalUrl: headFinalUrl } = await fetchResource(url, {
           method: "HEAD",
           headers: {
             "User-Agent": options.userAgent,
@@ -573,7 +585,7 @@ async function checkSingleResourceAsync(
     // #1395: manual redirects — scheme allowlist + strip secret customHeaders on
     // cross-origin redirects (see the HEAD path above).
     let getController = readHeader ? requestController(controller) : controller;
-    let { response: getResponse, finalUrl: getFinalUrl } = await safeRedirectFetch(url, {
+    let { response: getResponse, finalUrl: getFinalUrl } = await fetchResource(url, {
       method: "GET",
       headers: {
         "User-Agent": options.userAgent,
@@ -598,7 +610,7 @@ async function checkSingleResourceAsync(
       if (readHeader) getController.abort();
       getResponse.body?.cancel().catch(() => {});
       getController = readHeader ? requestController(controller) : controller;
-      ({ response: getResponse, finalUrl: getFinalUrl } = await safeRedirectFetch(url, {
+      ({ response: getResponse, finalUrl: getFinalUrl } = await fetchResource(url, {
         method: "GET",
         headers: {
           "User-Agent": options.userAgent,
@@ -670,7 +682,7 @@ async function checkSingleResourceAsync(
       // arrive: a cancel alone lets the whole file download (#470).
       const confirmController = readHeader ? requestController(controller) : controller;
       try {
-        const { response: confirmResponse } = await safeRedirectFetch(url, {
+        const { response: confirmResponse } = await fetchResource(url, {
           method: "GET",
           headers: {
             "User-Agent": options.userAgent,
@@ -759,10 +771,19 @@ async function checkSingleResourceAsync(
     // a non-ranged 200 makes Content-Length the full body.
     let transferBytes: number | null = sizeFromRange ?? sizeFromLength;
     if (sizeBytes === null && getResponse.ok) {
-      const body = await getResponse.arrayBuffer();
-      sizeBytes = body.byteLength;
+      // Counted as it is decoded, never held (#2717): a body that inflates to
+      // gigabytes costs the time to read it, not its size in memory. A failed
+      // read throws as the buffered read it replaces did.
+      let received = 0;
+      const reader = decodedBody(getResponse)?.getReader();
+      for (;;) {
+        const chunk = reader ? await reader.read() : { done: true as const };
+        if (chunk.done) break;
+        received += chunk.value.byteLength;
+      }
+      sizeBytes = received;
       // Whole body read (no range honored) — transfer ≈ that.
-      if (transferBytes === null) transferBytes = body.byteLength;
+      if (transferBytes === null) transferBytes = received;
     }
 
     clearTimeout(timeoutId);

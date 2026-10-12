@@ -1,6 +1,7 @@
 # Benchmark harness
 
-Scripts used to produce [`../2026-09-perf-program.md`](../2026-09-perf-program.md).
+Scripts used to produce [`../2026-09-perf-program.md`](../2026-09-perf-program.md)
+and [`../2026-10-content-encoding-bombs.md`](../2026-10-content-encoding-bombs.md).
 They are measurement tools, not part of the product, and they assume a checkout
 of this repository with the workspace installed (`bun install` at the root).
 
@@ -13,6 +14,7 @@ of this repository with the workspace installed (`bun install` at the root).
 | `rss-sampler.ts` | Process-tree RSS sampler with the guard. |
 | `phases.ts` | Extracts per-phase timings from the CLI `--trace` output. |
 | `analyze.ts` | Turns a stage directory into the summary table rows. |
+| `encoding-bomb.ts` | Peak RSS of the page fetchers and root probes against gzip and brotli bombs served from a separate process, for [`../2026-10-content-encoding-bombs.md`](../2026-10-content-encoding-bombs.md). `--root` measures another checkout's packages, which is how the before column was taken. |
 
 Paths in `run-stage.sh` assume the harness runs from a monorepo checkout where
 this repository is the `repo-public` submodule; adjust `HERE`/the CLI path for a

@@ -60,10 +60,15 @@ export interface SafeRedirectResult {
  * The returned response's body is unread — the caller reads it. A non-3xx
  * response (or a 3xx without a `Location`, e.g. 304 Not Modified) is returned as
  * the final response. Exceeding the redirect cap throws, like native fetch.
+ *
+ * Every hop goes out through `send`: pass `fetchUndecoded` to keep the
+ * runtime from inflating any hop's body, the 3xx bodies this loop discards
+ * included (#2717).
  */
 export async function safeRedirectFetch(
   url: string,
   init: RequestInit = {},
+  send: (url: string, init: RequestInit) => Promise<Response> = fetch,
 ): Promise<SafeRedirectResult> {
   if (!isHttpOrHttpsUrl(url)) {
     throw new TypeError(`Refusing to fetch non-http(s) URL: ${url}`);
@@ -73,7 +78,7 @@ export async function safeRedirectFetch(
   let headers = new Headers(init.headers);
 
   for (let hop = 0; hop < MAX_REDIRECTS; hop++) {
-    const response = await fetch(currentUrl, { ...init, headers, redirect: "manual" });
+    const response = await send(currentUrl, { ...init, headers, redirect: "manual" });
 
     const location =
       response.status >= 300 && response.status < 400 ? response.headers.get("location") : null;

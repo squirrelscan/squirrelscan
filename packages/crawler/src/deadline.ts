@@ -2,6 +2,7 @@
 // budget that bounds a whole sequence of them (squirrelscan/repo#1733).
 
 import { PROBE_NOT_ATTEMPTED_ERROR } from "@squirrelscan/core-contracts/storage";
+import { fetchUndecoded } from "@squirrelscan/utils/response-body";
 import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 
 import type { RefusalLog } from "./refusals";
@@ -38,6 +39,10 @@ export async function withRequestDeadline<T>(
  * the crawl preamble (robots, llms, markdown, well-known, agent-access, rsl,
  * sitemaps) uses. Manual redirects apply the per-hop scheme allowlist and strip
  * secret customHeaders when the origin changes (#1395).
+ *
+ * Every hop is fetched undecoded, so a Content-Encoding bomb on any of them is
+ * never inflated by the runtime; `readBodyCapped` decodes the final body
+ * within its cap (#2717).
  */
 export function safeFetchWithDeadline<T>(
   url: string,
@@ -47,7 +52,10 @@ export function safeFetchWithDeadline<T>(
 ): Promise<T> {
   return withRequestDeadline(
     timeoutMs,
-    (signal) => safeRedirectFetch(url, { ...options, signal }).then((result) => result.response),
+    (signal) =>
+      safeRedirectFetch(url, { ...options, signal }, fetchUndecoded).then(
+        (result) => result.response,
+      ),
     use,
   );
 }

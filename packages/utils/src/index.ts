@@ -50,8 +50,12 @@ export {
 export { isHttpOrHttpsUrl, safeRedirectFetch, type SafeRedirectResult } from "./safe-fetch";
 
 export {
+  ContentDecodingError,
   DEFAULT_MAX_BODY_BYTES,
   DEFAULT_MAX_DOCUMENT_BODY_BYTES,
+  decodedBody,
+  fetchUndecoded,
+  isDecompressionError,
   readBodyCapped,
 } from "./response-body";
 

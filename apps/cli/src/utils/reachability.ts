@@ -2,6 +2,7 @@
 // Uses request tool with browser-like headers
 // Detects WAF/bot protection on target site
 
+import { decodedBody, fetchUndecoded } from "@squirrelscan/utils/response-body";
 import { Effect, Duration } from "effect";
 
 import { requestOnceScoped, RequestError } from "@/tools/request";
@@ -68,7 +69,7 @@ async function readBodySample(
   maxBytes: number,
   timeoutMs: number
 ): Promise<string | undefined> {
-  const body = response.body;
+  const body = decodedBody(response);
   if (!body) return undefined;
 
   const reader = body.getReader();
@@ -199,7 +200,9 @@ async function attemptReachability(url: string): Promise<ReachabilityResult> {
       REACHABILITY_TIMEOUT_MS
     );
     try {
-      const response = await fetch(url, {
+      // Undecoded (#2717): Bun inflates a Content-Encoding body in full even
+      // when it is cancelled unread, as this one is.
+      const response = await fetchUndecoded(url, {
         method: "GET",
         redirect: "follow",
         signal: controller.signal,

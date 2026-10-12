@@ -1,7 +1,9 @@
 import type { RedirectChain } from "@squirrelscan/core-contracts";
 import {
   DEFAULT_MAX_DOCUMENT_BODY_BYTES,
+  fetchUndecoded,
   headersForRedirect,
+  isDecompressionError,
   isHttpOrHttpsUrl,
   readBodyCapped,
 } from "@squirrelscan/utils";
@@ -171,18 +173,12 @@ function headersToRecord(headers: Headers): Record<string, string> {
   return result;
 }
 
-// Bun throws "BrotliDecompressionError"/"ZlibError" when a server lies about (or truncates) its encoding.
-function isDecompressionError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    (error.message.includes("DecompressionError") || error.message.includes("ZlibError"))
-  );
-}
-
 // Fetch tolerant of a bad Content-Encoding: on decompress failure, refetch raw (identity) so the page isn't dropped #292.
+// Undecoded on every hop (#2717): the runtime would otherwise inflate a bomb in
+// full before readBodyCapped's cap applies.
 async function fetchTolerant(url: string, init: RequestInit): Promise<Response> {
   try {
-    return await fetch(url, init);
+    return await fetchUndecoded(url, init);
   } catch (error) {
     if (!isDecompressionError(error)) throw error;
     // `decompress: false` is a Bun fetch option returning the undecoded bytes.

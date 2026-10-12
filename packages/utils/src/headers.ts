@@ -21,6 +21,10 @@ export function isValidHeaderValue(value: string): boolean {
 
 const CROSS_ORIGIN_REDIRECT_HEADER_ALLOWLIST = new Set([
   "accept",
+  // Kept so a hop asks for the codings its caller can decode: a fetch with the
+  // runtime's decoding off (#2717) would otherwise fall back to the default
+  // set, which a caller like the sitemap reader does not decode.
+  "accept-encoding",
   "accept-language",
   "upgrade-insecure-requests",
   "user-agent",

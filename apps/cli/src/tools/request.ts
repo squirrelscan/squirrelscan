@@ -3,6 +3,7 @@
 // Uses plain fetch with browser-like headers
 
 import { withRequestDeadline } from "@squirrelscan/crawler/deadline";
+import { fetchUndecoded } from "@squirrelscan/utils/response-body";
 import { Effect, Schedule, Duration, Data } from "effect";
 
 import { CHROME_USER_AGENT, CHROME_SEC_CH_UA } from "@/constants";
@@ -203,7 +204,8 @@ function fetchWithDeadline<T>(
   headers: Headers,
   redirect: RequestRedirect,
   timeoutMs: number,
-  use: (response: Response, timing: RequestTiming) => Promise<T>
+  use: (response: Response, timing: RequestTiming) => Promise<T>,
+  send: (url: string, init: RequestInit) => Promise<Response> = fetch
 ): Effect.Effect<T, RequestError, never> {
   return Effect.tryPromise({
     try: async () => {
@@ -212,7 +214,7 @@ function fetchWithDeadline<T>(
       return await withRequestDeadline(
         timeoutMs,
         async (signal) => {
-          const response = await fetch(url, {
+          const response = await send(url, {
             ...options,
             headers,
             signal,
@@ -364,6 +366,10 @@ export function requestOnceWithTiming(
  * For callers that only want part of a body (a sample, a header check) and
  * would waste time buffering the rest. `use` must read or cancel the body
  * before it returns. `timeoutMs` overrides the configured timeout.
+ *
+ * Fetched undecoded (#2717), so `use` reads the body through `decodedBody` or
+ * `readBodyCapped`: the runtime's own decoding would inflate a Content-Encoding
+ * body in full before a partial read could stop it.
  */
 export function requestOnceScoped<T>(
   url: string,
@@ -380,7 +386,8 @@ export function requestOnceScoped<T>(
       headers,
       config.followRedirects ? "follow" : "manual",
       timeoutMs,
-      (response) => use(response)
+      (response) => use(response),
+      fetchUndecoded
     );
   });
 }

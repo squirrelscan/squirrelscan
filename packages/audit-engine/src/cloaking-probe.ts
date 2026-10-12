@@ -16,7 +16,7 @@
 import { getPathname, normalizeUrl } from "@squirrelscan/utils/url";
 import { stripHtmlForText } from "@squirrelscan/utils";
 
-import { DEFAULT_MAX_BODY_BYTES, readBodyCapped } from "./lib/capped-body-read";
+import { DEFAULT_MAX_BODY_BYTES, fetchUndecoded, readBodyCapped } from "./lib/capped-body-read";
 
 import type { CloakingProbeData } from "@squirrelscan/core-contracts";
 
@@ -209,7 +209,8 @@ function defaultProbeFetch(timeoutMs: number): ProbeFetch {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const res = await fetch(url, {
+      // Undecoded on every hop (#2717): readBodyCapped decodes within its cap.
+      const res = await fetchUndecoded(url, {
         headers: {
           "User-Agent": userAgent,
           Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",

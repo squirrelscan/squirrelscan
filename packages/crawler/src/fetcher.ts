@@ -21,6 +21,8 @@ import { headersForRedirect } from "@squirrelscan/utils/headers";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import {
   DEFAULT_MAX_DOCUMENT_BODY_BYTES,
+  fetchUndecoded,
+  isDecompressionError,
   readBodyCapped,
 } from "@squirrelscan/utils/response-body";
 import {
@@ -326,16 +328,12 @@ const defaultRetryPolicy: RetryPolicy = {
  * competing retry budgets that multiply.
  */
 /**
- * Bun throws "BrotliDecompressionError" / "ZlibError" when a server lies about
- * (or truncates) its `content-encoding`. Matched on the message because the
- * runtime gives these no stable code.
+ * A body that does not decode: a server lied about (or truncated) its
+ * `content-encoding`. Pages are fetched undecoded and decoded while read
+ * (#2717), so this is mostly our ContentDecodingError now; the runtime's own
+ * "BrotliDecompressionError" / "ZlibError" still matches.
  */
-export function isDecompressionError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    (error.message.includes("DecompressionError") || error.message.includes("ZlibError"))
-  );
-}
+export { isDecompressionError };
 
 function isRetryable(error: CrawlError): boolean {
   return error.type === "timeout" || error.type === "network" || error.type === "tls";
@@ -441,7 +439,10 @@ function requestWithTiming(
         const headers = new Headers(options.headers);
         applyBrowserHeaders(headers, userAgent);
 
-        const response = await fetch(url, {
+        // #2717: undecoded on every hop, or the runtime inflates a
+        // Content-Encoding body in full before the capped read below (or the
+        // abort of a discarded 3xx) can stop it.
+        const response = await fetchUndecoded(url, {
           ...options,
           headers,
           signal: controller.signal,

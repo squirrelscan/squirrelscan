@@ -2,6 +2,10 @@
 // Fetches actual JS content for secrets detection
 
 import { normalizeEncoding } from "@squirrelscan/audit-engine";
+import {
+  fetchUndecoded,
+  readBodyCapped,
+} from "@squirrelscan/utils/response-body";
 import { Effect } from "effect";
 
 import { SCRIPT_FETCH_LIMITS, SQUIRRELSCAN_USER_AGENT } from "@/constants";
@@ -96,7 +100,7 @@ function emptyScriptResult(url: string): ScriptFetchResult {
 /**
  * One attempt, under a deadline that stays armed until the body has been read
  * (#1729). Clearing the timer where the response resolves disarms the abort at
- * the HEADERS, which leaves the `response.text()` below no time bound at all:
+ * the HEADERS, which leaves the body read below no time bound at all:
  * a script origin that answers 200 and then trickles or stalls its body parks
  * the audit forever. Scripts are fetched during rules enrichment, after the
  * crawl, so that shows up as an audit that has its pages and never finishes.
@@ -112,7 +116,9 @@ async function fetchScriptAttempt(
 
   try {
     // Single GET request with redirect: follow (removed unnecessary HEAD request)
-    const response = await fetch(url, {
+    // Undecoded (#2717): `redirect: "follow"` carries it to every hop, and the
+    // capped read below decodes no further than the size limit.
+    const response = await fetchUndecoded(url, {
       method: "GET",
       headers: {
         "User-Agent": options.userAgent,
@@ -134,9 +140,9 @@ async function fetchScriptAttempt(
       response.headers.get("x-sourcemap") ||
       undefined;
 
-    // #9: a transfer coding (gzip/br/…) or null for identity/absent. `fetch`
-    // decodes the body but leaves this header intact, so it stays observable
-    // even though `sizeBytes` below measures the DECODED text.
+    // #9: a transfer coding (gzip/br/…) or null for identity/absent. The body
+    // is decoded as it is read but this header stays intact, so it remains
+    // observable even though `sizeBytes` below measures the DECODED text.
     const contentEncoding = normalizeEncoding(
       response.headers.get("content-encoding")
     );
@@ -192,15 +198,15 @@ async function fetchScriptAttempt(
       };
     }
 
-    // Fetch the content
-    const text = await response.text();
+    // One byte past the limit, so an oversized script still trips the check
+    // below while the read stays bounded.
+    const maxSizeBytes =
+      options.maxSizeBytes ?? SCRIPT_FETCH_LIMITS.MAX_SCRIPT_SIZE_BYTES;
+    const text = await readBodyCapped(response, maxSizeBytes + 1);
     const sizeBytes = new TextEncoder().encode(text).length;
 
     // Check size after download (in case Content-Length was missing)
-    if (
-      sizeBytes >
-      (options.maxSizeBytes ?? SCRIPT_FETCH_LIMITS.MAX_SCRIPT_SIZE_BYTES)
-    ) {
+    if (sizeBytes > maxSizeBytes) {
       return {
         ...defaultResult,
         status: response.status,

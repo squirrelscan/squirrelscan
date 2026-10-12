@@ -19,7 +19,11 @@ import { COVERAGE_PAGE_LIMITS, REPORT_LIMITS } from "@squirrelscan/core-contract
 import { extractCrawlableUrls } from "@squirrelscan/parser/extractors";
 import { parseDocument, parsePage, type ParsedPageCache } from "@squirrelscan/parser";
 import { findClientRedirects } from "@squirrelscan/utils/client-redirects";
-import { DEFAULT_MAX_DOCUMENT_BODY_BYTES, readBodyCapped } from "@squirrelscan/utils/response-body";
+import {
+  DEFAULT_MAX_DOCUMENT_BODY_BYTES,
+  fetchUndecoded,
+  readBodyCapped,
+} from "@squirrelscan/utils/response-body";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import { urlHostKey } from "@squirrelscan/utils/url";
 
@@ -2352,8 +2356,10 @@ export function createCrawler(
             const hopUrl = currentUrl;
             const redirectTo = await withRequestDeadline(
               Math.min(hopTimeoutMs, remainingMs),
+              // Undecoded (#2717): `redirect: "follow"` carries it to every
+              // hop, and the capped read below decodes within its cap.
               (signal) =>
-                fetch(hopUrl, {
+                fetchUndecoded(hopUrl, {
                   method: "GET",
                   signal,
                   redirect: "follow",

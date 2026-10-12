@@ -4,7 +4,7 @@
 import { Effect } from "effect";
 
 import { SCRIPT_FETCH_LIMITS, SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
-import { readBodyCapped } from "@squirrelscan/utils/response-body";
+import { fetchUndecoded, readBodyCapped } from "@squirrelscan/utils/response-body";
 import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 import type { FetchBudget, FetchOutcome } from "./fetch-budget";
 import { normalizeEncoding } from "./resource-checker";
@@ -109,15 +109,20 @@ async function fetchScriptAttempt(
       response,
       finalUrl: resolvedFinalUrl,
       redirected,
-    } = await safeRedirectFetch(url, {
-      method: "GET",
-      headers: {
-        "User-Agent": options.userAgent,
-        Accept: "application/javascript, text/javascript, */*",
-        ...options.customHeaders,
+    } = await safeRedirectFetch(
+      url,
+      {
+        method: "GET",
+        headers: {
+          "User-Agent": options.userAgent,
+          Accept: "application/javascript, text/javascript, */*",
+          ...options.customHeaders,
+        },
+        signal: controller.signal,
       },
-      signal: controller.signal,
-    });
+      // #2717: undecoded on every hop; readBodyCapped decodes within its cap.
+      fetchUndecoded
+    );
 
     const contentType = response.headers.get("content-type");
     const contentLength = response.headers.get("content-length");
@@ -130,9 +135,9 @@ async function fetchScriptAttempt(
       response.headers.get("x-sourcemap") ||
       undefined;
 
-    // #9: a transfer coding (gzip/br/…) or null for identity/absent. `fetch`
-    // decodes the body but leaves this header intact, so it stays observable
-    // even though `sizeBytes` below measures the DECODED text.
+    // #9: a transfer coding (gzip/br/…) or null for identity/absent. The body
+    // is decoded as it is read but this header stays intact, so it remains
+    // observable even though `sizeBytes` below measures the DECODED text.
     const contentEncoding = normalizeEncoding(
       response.headers.get("content-encoding")
     );
