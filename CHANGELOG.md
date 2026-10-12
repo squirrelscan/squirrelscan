@@ -17,15 +17,38 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.111 (2026-10-13)
+
+Broken links have nowhere left to hide. Every audit, Quick included, now status-checks the internal link targets its crawl did not fetch, so a linked 404 shows up even when it is not in your sitemap or sits past the page budget. External links stay opt-in at Quick, and there are new flags for both.
+
+Behaviour changes:
+
+- **squirrel sends requests it did not send before.** After the crawl, every audit sends a status-only `HEAD` to each internal link target the crawl did not fetch: up to 200 per audit, the links on the most pages first. Before those, it sends one `HEAD` to the audited URL, to see whether the server answers `HEAD` properly. These requests send no cookies, credentials or custom request headers, and never go to a link that looks like an action (log out, unsubscribe, delete, add to cart) or carries a token. Switch them off with `--no-internal-links` or `[internal_links] enabled = false`.
+- **Expect new `links/broken-links` findings**, and Links scores that move with them: Quick audits now find linked 404s their sitemap does not list, and Surface and Full audits find broken pages past their page budget.
+- **"Not checked" is narrower.** In 0.0.110 a Quick audit reported every internal link target it did not fetch as Not checked. Now that only covers the targets the status check did not answer: over the limit, outside the crawl scope or robots.txt, an action or token link, no answer, or a site whose `HEAD` answers cannot be trusted.
+- **External links:** which levels check them by default does not change. Surface and Full do, and Quick does not unless you pass `--external-links`. An audit that checks them now requests at most its page budget or 200 distinct external links, whichever is more.
+
 ### Changed
 
-- Internal link checks run at every audit level, Quick included. Each internal link target the crawl did not fetch now gets a status-only `HEAD` request (a one-byte `GET` only when the server answers `HEAD` with 405 or 501): up to 200 per audit, the links on the most pages first, inside the crawl scope and (when the crawl respects it) robots.txt, and free. A Quick audit now finds a linked 404 that the sitemap does not list, and Surface and Full audits find broken pages past their page budget: expect new `links/broken-links` findings, and Links scores that move with them. A target that answers this check with 401 or 403 is reported as unverifiable (`refused-links`), never as broken. Switch the check off with `--no-internal-links` or `[internal_links] enabled = false`, and change the limit with `[internal_links] max_targets`. See [Link checking defaults](https://docs.squirrelscan.com/rules/links#link-checking-defaults). squirrelscan/repo#2729
-- The internal link check is built not to change anything on the site: it never requests a link that looks like an action (log out, unsubscribe, delete, confirm, add to cart) or carries a token, re-checks every redirect hop, and sends no cookies, credentials or custom request headers. On a site that answers `HEAD` with an error on the audited URL, the targets' errors are not trusted, so they are never reported as broken. The rules are a careful default, not a guarantee: a site that changes state on `GET` requests to links that read like pages should switch the check off with `--no-internal-links`. See [What the internal link check never requests](https://docs.squirrelscan.com/configuration/external-links#what-the-internal-link-check-never-requests). squirrelscan/repo#2729
-- An audit that checks external links now requests at most its page budget or 200 distinct external links, whichever is more, the links on the most pages first, and lists the rest as **Not checked** (reason `external-links-over-cap`). Only sites that link out to more than that see a difference. Change the limit with `[external_links] max_links`. squirrelscan/repo#2729
+- Internal link checks run at every audit level, Quick included. Each internal link target the crawl did not fetch gets a status-only `HEAD` request, or a one-byte `GET` when the server answers `HEAD` with 405 or 501.
+  - The check covers up to 200 targets per audit, the links on the most pages first, inside the crawl scope and, when the crawl respects it, robots.txt. Change the limit with `[internal_links] max_targets`.
+  - It is free: no page is added, rendered or charged.
+  - A target that answers with 401 or 403 is recorded as unverifiable in an info-level `refused-links` check, never as broken. Reports do not list info checks yet.
+  - See [Link checking defaults](https://docs.squirrelscan.com/rules/links#link-checking-defaults).
+- The internal link check is built not to change anything on the site.
+  - It never requests a link that looks like an action (log out, unsubscribe, delete, confirm, add to cart) or carries a token. It re-checks every redirect hop against the same rules, and it sends no cookies, credentials or custom request headers.
+  - On a site that answers `HEAD` with an error on the audited URL, the targets' errors are not trusted, so they are never reported as broken.
+  - These rules are a careful default, not a guarantee. A site that changes state on `GET` requests to links that read like pages should switch the check off with `--no-internal-links`.
+  - See [What the internal link check never requests](https://docs.squirrelscan.com/configuration/external-links#what-the-internal-link-check-never-requests).
+- An audit that checks external links now requests at most its page budget or 200 distinct external links, whichever is more, the links on the most pages first. The rest are listed as **Not checked** (reason `external-links-over-cap`). Only sites that link out to more than that see a difference. Change the limit with `[external_links] max_links`.
 
 ### Added
 
-- `--external-links` checks external links for one run at any level, Quick included, and `--no-external-links` skips them. Which levels check them by default does not change: Surface and Full do, Quick does not. The local MCP server's `audit_website` tool takes `externalLinks` and `internalLinks` switches. squirrelscan/repo#2729
+- `--external-links` checks external links for one run at any level, Quick included, and `--no-external-links` skips them. `--no-internal-links` switches the internal link check off.
+  - `--external-links` cannot be combined with `--offline` or `--no-external-links`, and it overrides `[external_links] enabled = false`.
+  - At Quick it makes the audit custom, `custom (quick + external_links on)`.
+  - All three are in the shell completions.
+- The local MCP server's `audit_website` tool takes `externalLinks` and `internalLinks` switches. `offline: true` with `externalLinks: true` is refused, as on the command line.
 
 ## v0.0.110 (2026-10-12)
 
