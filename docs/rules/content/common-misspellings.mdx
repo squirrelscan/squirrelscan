@@ -1,0 +1,118 @@
+---
+title: "Misspellings and doubled words in English copy"
+description: "A typo in a heading, a price table or a page title is the first thing a visitor notices. squirrel finds known misspellings and doubled words on English pages, and names the correction."
+---
+
+## What a common misspelling is
+
+A common misspelling is a word that is almost never meant: `recieve` for `receive`, `seperate` for `separate`, `accomodation` for `accommodation`. Each one is a typo that a CMS edit or a translation pass leaves behind, and each one reaches the reader exactly as written. A doubled word, such as "Click the the button", is the same kind of slip.
+
+squirrel does not run a dictionary spellchecker. It looks each word up in a fixed map of known misspellings and their corrections. A hit is almost always a real typo, and the check runs locally with no network request and no render.
+
+## What squirrel checks
+
+The rule runs once per site, over every crawled page whose `<html lang>` primary language is `en` (`en`, `en-US`, `en-GB` and so on). Pages with no `lang`, or another language, are skipped, and so is any element that declares its own non-English `lang`, the `<title>` included. Within an English page it reads:
+
+- the `<title>`, the meta description and every heading from `h1` to `h6`,
+- the rendered prose of `<body>`, with scripts, styles, `<code>`, `<pre>`, `<samp>`, `<kbd>`, templates and code editors excluded.
+
+Elements marked `translate="no"` or `spellcheck="false"` are skipped too. Words it never judges:
+
+- URLs, email addresses, `@handles` and `#hashtags`,
+- tokens with digits or underscores,
+- ALL CAPS words and camelCase or other mixed-case words,
+- a capitalised word that does not open a sentence, which is likely a name or a brand.
+
+Titles and headings are read as capitalised by convention, so a capitalised typo there is still reported, unless the page's body copy uses the same word as a name, capitalised mid-sentence (a page about Kelsey Grammer never reports `grammer` in its title).
+
+The rule emits one check per misspelled word, named `misspelling:<word>`, and one per doubled word, named `doubled-word:<word>`. Each check reports:
+
+- the word and its correction, in the message `"{word}" → "{correction}" on {count} pages` (or `doubled word "{word}" on {count} pages`),
+- the number of pages it appears on,
+- up to five example pages, each with about 40 characters of context either side.
+
+Each page contributes at most 25 distinct words from its title, meta description and headings, and 25 from its body copy, so a page full of misspelt headings cannot hide its body findings. A word repeated on a page counts once.
+
+Findings are capped at 50 per audit, worst first by page count. When there are more, an info check named `common-misspellings-truncated` counts the rest: `{count} more misspelled or doubled word(s) not listed: the 50 on the most pages are`. The statuses are:
+
+- **Warn** for a misspelling in the title, the meta description or a heading. These are visible in search results or at the top of the page.
+- **Info** for a misspelling in body prose, and for every doubled word.
+
+Only the warnings appear in the report. Info findings (body-copy misspellings and doubled words) are kept with the audit's stored rule results but are not listed in the report, so a body-copy typo is advice rather than an issue.
+
+Doubled words are reported only for a closed list of function words: `the`, `a`, `an`, `and`, `of`, `to`, `for`, `with`, `or`, `by`, `be`, `from`. "had had" and "that that" are grammatical and stay out, and so do `as`, `at`, `in`, `is`, `it` and `on`, which can repeat correctly ("what it is is", "log in in seconds", "turn it on on startup"). When the page has no finding, the rule passes with the message `No known misspellings or doubled words on English pages`.
+
+The rule is skipped when the audit has no crawled pages.
+
+The map is a list of about 520 common misspellings written for squirrelscan, grouped by kind of slip: `ie`/`ei` swaps, doubled or single consonants, confused suffixes, wrong unstressed vowels, dropped or added letters, and swapped letters in very common words. Every misspelling is checked to be no word at all in large US, British, Canadian and Australian word lists, so a valid spelling in any of them is never reported, and every correction is a common word. It is MIT licensed like the rest of squirrelscan; how it was made and checked is described in `packages/rules/src/content/data/README.md`.
+
+Two things are not reported: British and American spelling variants (`colour`, `organise`), and anything on a page that is not English.
+
+| | |
+|---|---|
+| **Rule ID** | `content/common-misspellings` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Per-site |
+| **Severity** | warning (title, meta description, heading); info otherwise |
+| **Weight** | 3/10 |
+
+## How to fix it
+
+Fix the copy where it was written. A misspelling that appears on many pages usually comes from a template, a navigation block or a shared component, so fix it once there rather than page by page.
+
+A misspelling in the title, the meta description or a heading is worth fixing first, because a visitor sees it in search results or at the top of the page.
+
+If a word is a deliberate spelling, such as a brand or a product name the list does not know about, add it to `ignore_words`.
+
+## Options
+
+```toml squirrel.toml
+[rule_options."content/common-misspellings"]
+ignore_words = ["recieve"]
+```
+
+`ignore_words` is a list of words that are never reported as misspellings. Matching is case-insensitive. It does not apply to doubled words: a doubled function word is always a slip.
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/common-misspellings"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/common-misspellings"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [content/placeholder-text](/rules/content/placeholder-text): template leftovers and filler copy, a different failure in the same visible text.
+- [content/mojibake](/rules/content/mojibake): encoding corruption in page text.
+- [content/reading-level](/rules/content/reading-level): how hard the copy is to read, not whether its words are spelt correctly.
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each misspelling in a title, meta description or heading is listed with its correction, its page count and example pages. Signed-out local audits need no account and cost nothing.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="Lorem ipsum in production" icon="triangle-exclamation" href="/rules/content/placeholder-text">
+    The sibling rule for template leftovers in visible text.
+  </Card>
+</CardGroup>

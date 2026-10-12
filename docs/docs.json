@@ -275,6 +275,7 @@
                   "rules/content/placeholder-contact",
                   "rules/content/placeholder-text",
                   "rules/content/placeholder-media",
+                  "rules/content/common-misspellings",
                   "rules/content/article-links",
                   "rules/content/quality",
                   "rules/content/stale-copyright",

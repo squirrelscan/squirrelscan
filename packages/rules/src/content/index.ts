@@ -5,6 +5,7 @@ import type { Rule } from "../types";
 import { articleLinksRule } from "./article-links";
 import { authorInfoRule } from "./author-info";
 import { brokenHtmlRule } from "./broken-html";
+import { commonMisspellingsRule } from "./common-misspellings";
 import { dateAgreementRule } from "./date-agreement";
 import { devLeakageRule } from "./dev-leakage";
 import { duplicateDescriptionRule } from "./duplicate-description";
@@ -52,12 +53,14 @@ export const rules: Rule[] = [
   unrenderedMarkupRule,
   devLeakageRule,
   placeholderContactRule,
+  commonMisspellingsRule,
 ];
 
 export {
   articleLinksRule,
   authorInfoRule,
   brokenHtmlRule,
+  commonMisspellingsRule,
   contentQualityRule,
   dateAgreementRule,
   devLeakageRule,

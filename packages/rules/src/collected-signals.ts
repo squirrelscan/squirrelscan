@@ -17,6 +17,7 @@
 import type { IntegritySignal, PageSignalContext } from "./integrity/signals";
 import type { LeakedSecret } from "./security/leaked-secrets";
 import type { PageFingerprint } from "./integrity/fingerprint";
+import type { PageMisspellings } from "./content/common-misspellings";
 import type { ParsedPage } from "./types";
 
 import { logger, profileRules } from "./logger";
@@ -27,6 +28,7 @@ import { hasCommercialOfferLink, matchSubprocessorLink } from "./legal/subproces
 import { pageScriptSrcs } from "./adblock/blocked-links";
 import type { PageAnchorSignal } from "./links/page-anchors";
 import { buildPageAnchorSignal } from "./links/page-anchors";
+import { scanPageForMisspellings } from "./content/common-misspellings";
 import { RULE_TIME_BUDGET_MS, RuleTimeoutError, runWithinBudget } from "./rule-budget";
 import { scanPageForSecrets } from "./security/leaked-secrets";
 
@@ -60,6 +62,9 @@ export interface CollectedPageSignal {
   /** subprocessor-disclosure: the first sub-processor/DPA link match on this page
    *  (`href || url`), or null — mirrors the legacy break-on-first-match. */
   subprocessorMatch: string | null;
+  /** content/common-misspellings: the page's English-text scan (absent on a
+   *  snapshot cached before it was collected, which reads as no findings). */
+  misspellings?: PageMisspellings;
   /** subprocessor-disclosure: whether this page links to a commercial offer
    *  (pricing, plans, enterprise, trust center, contact sales, book a demo). */
   commercialOffer: boolean;
@@ -127,6 +132,7 @@ export function buildCollectedPageSignal(input: {
       subprocessorMatch: null,
       commercialOffer: false,
       anchors: null,
+      misspellings: { english: false, occurrences: [] },
     };
   }
 
@@ -206,6 +212,9 @@ export function buildCollectedPageSignal(input: {
     ),
     anchors: timed("links/broken-anchors", null, () =>
       buildPageAnchorSignal({ parsed, rendered: input.rendered === true })
+    ),
+    misspellings: timed("content/common-misspellings", { english: false, occurrences: [] }, () =>
+      scanPageForMisspellings(doc)
     ),
   };
   if (timedOutRuleIds.length > 0) signal.timedOut = { budgetMs, ruleIds: timedOutRuleIds };

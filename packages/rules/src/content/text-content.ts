@@ -137,6 +137,24 @@ export function getRenderedProseText(element: Element): string {
   );
 }
 
+/**
+ * `getRenderedProseText` with one more reason to skip a subtree: `isExtraExcluded`
+ * is consulted for every element, and a true answer drops that element and
+ * everything under it. For rules that judge some marked-up regions differently
+ * (`translate="no"`, `spellcheck="false"`, another language's `lang`).
+ */
+export function getRenderedProseTextWhere(
+  element: Element,
+  isExtraExcluded: (el: Element) => boolean,
+): string {
+  return collectTextExcluding(
+    element,
+    (el) => isScriptCodeOrUnrendered(el) || isExtraExcluded(el),
+    SKIPPED_SUBTREE_BOUNDARY,
+    isBlockElement,
+  );
+}
+
 /** Tags `getSeparatedText` never reads: markup the browser does not render as text. */
 const isSeparatedTextSkipped = tagExcluder(
   new Set<string>([...SCRIPT_LIKE_TAGS, ...NON_RENDERED_TAGS]),

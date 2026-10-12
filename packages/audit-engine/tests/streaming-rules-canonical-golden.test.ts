@@ -170,7 +170,10 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 101741 -> 101742: reliability/broken-forms is site-scoped and adds one
       // whole-crawl check (#707). It is the info "No forms detected": the
       // synthetic pages carry no form, so healthScore.overall is unmoved at 51.
-      expect(v1.findings.length).toBe(101742);
+      // 101742 -> 101743: content/common-misspellings is site-scoped and adds one
+      // whole-crawl check (#709). It passes: the synthetic copy has no listed
+      // misspelling or doubled word, so healthScore.overall is unmoved at 51.
+      expect(v1.findings.length).toBe(101743);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -194,9 +197,10 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 301 -> 302 reliability/broken-resources, 302 -> 303 links/broken-anchors,
       // 303 -> 305 security/security-txt and security/version-disclosure,
       // 305 -> 306 mobile/web-app-manifest,
-      // 306 -> 307 reliability/broken-forms;
+      // 306 -> 307 reliability/broken-forms,
+      // 307 -> 308 content/common-misspellings;
       // anything else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(307);
+      expect(v1.perRuleTally.length).toBe(308);
       expect(v1.perRuleTally.find((t) => t.ruleId === "reliability/broken-forms")).toEqual({
         ruleId: "reliability/broken-forms",
         pass: 0,
@@ -212,6 +216,15 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
         warn: 0,
         fail: 0,
         info: 1,
+        skipped: 0,
+        total: 1,
+      });
+      expect(v1.perRuleTally.find((t) => t.ruleId === "content/common-misspellings")).toEqual({
+        ruleId: "content/common-misspellings",
+        pass: 1,
+        warn: 0,
+        fail: 0,
+        info: 0,
         skipped: 0,
         total: 1,
       });
