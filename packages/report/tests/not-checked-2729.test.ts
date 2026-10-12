@@ -7,6 +7,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
+  EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
   LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
 } from "@squirrelscan/core-contracts";
 
@@ -101,6 +102,26 @@ describe("notCheckedRules / notCheckedLines", () => {
       ["links/broken-links", LINK_TARGETS_NOT_FETCHED_SKIP_REASON],
     ]);
     expect(notCheckedLines(quickReport())).toEqual([EXTERNAL_LINE, INTERNAL_LINE]);
+  });
+
+  test("external links over the audit's limit are not checked, with the limit's hint", () => {
+    const report = quickReport();
+    const message =
+      "40 of 240 external link(s) were not checked: over this audit's limit of 200, which checks the most-linked first";
+    report.ruleResults = {
+      "links/broken-external-links": rule("links/broken-external-links", "Broken External Links", "warning", [
+        { name: "broken-external-links", status: "pass", message: "All 200 external link(s) are working" },
+        {
+          name: "broken-external-links",
+          status: "skipped",
+          message,
+          skipReason: EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
+        },
+      ]),
+    };
+    expect(notCheckedLines(report)).toEqual([
+      `Not checked: Broken External Links. ${message}. Raise the limit with external_links.max_links, or audit more pages, to check them.`,
+    ]);
   });
 
   test("other skip reasons are not 'not checked'", () => {

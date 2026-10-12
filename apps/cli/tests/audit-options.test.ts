@@ -79,6 +79,24 @@ describe("mergeOptionsToConfig", () => {
     expect(merged.external_links.enabled).toBe(false);
   });
 
+  // repo#2729: the internal link probe requests the audited site only, so
+  // --offline keeps it and --no-internal-links switches it off.
+  test("can disable internal link checks per run; offline keeps them", () => {
+    const config = getDefaultConfig();
+    const off = mergeOptionsToConfig(config, {
+      url: "https://example.com",
+      internalLinksEnabled: false,
+    });
+    expect(off.internal_links?.enabled).toBe(false);
+
+    const offline = mergeOptionsToConfig(config, {
+      url: "https://example.com",
+      offline: true,
+    });
+    expect(offline.external_links.enabled).toBe(false);
+    expect(offline.internal_links?.enabled).not.toBe(false);
+  });
+
   test("clamps external link overrides to safe minimums", () => {
     const config = getDefaultConfig();
     const merged = mergeOptionsToConfig(config, {

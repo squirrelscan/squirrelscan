@@ -291,6 +291,21 @@ describe("squirrel audit --level", () => {
   });
 
   test.each([
+    [["--external-links=false"]],
+    [["--external-links", "false"]],
+  ] as const)(
+    "%p is an off switch, even with --offline (repo#2729)",
+    async (flags) => {
+      await runAudit(["--level", "surface", ...flags]);
+      expect(process.exitCode).toBe(0);
+      expect(line("Level")).toBe(
+        "custom (surface + external_links off) · max 100 pages"
+      );
+      expect(runs[0]?.externalLinksEnabled).toBe(false);
+    }
+  );
+
+  test.each([
     [
       ["--external-links"],
       "--offline cannot be combined with --external-links",

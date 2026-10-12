@@ -1052,7 +1052,7 @@ export const audit = defineCommand({
     "external-links": {
       type: "boolean",
       description:
-        "Check links to other sites this run, at any level (Surface and Full check them by default)",
+        "Check links to other sites this run, at any level, even where the level does not",
     },
     "no-external-links": {
       type: "boolean",
@@ -1149,9 +1149,18 @@ export const audit = defineCommand({
     // --no-publish is passed its publish value depends on argv order, so any
     // --publish/-p token alongside it counts as the conflict.
     const noPublish = hasNegatedFlag(rawArgs, "publish");
-    // The same for the external link switches (repo#2729).
-    const externalLinksOn = hasFlag(rawArgs, "external-links");
-    const externalLinksOff = hasNegatedFlag(rawArgs, "external-links");
+    // The same for the external link switches (repo#2729): with
+    // --no-external-links in argv any positive token is the conflict. Alone,
+    // `--external-links=false` (or `--external-links false`, which citty
+    // reads as the value) parses as false, so it is an off switch.
+    const externalLinksNegated = hasNegatedFlag(rawArgs, "external-links");
+    const externalLinksPositive = hasFlag(rawArgs, "external-links");
+    const externalLinksOn =
+      externalLinksPositive &&
+      (externalLinksNegated || args["external-links"] !== false);
+    const externalLinksOff =
+      externalLinksNegated ||
+      (externalLinksPositive && args["external-links"] === false);
     const flagError = validateAuditFlags({
       ...args,
       publish:

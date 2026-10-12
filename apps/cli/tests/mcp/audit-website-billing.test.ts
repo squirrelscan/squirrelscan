@@ -457,6 +457,20 @@ describe("local runs make no cloud call", () => {
     expect(cloudCalls()).toEqual([]);
   });
 
+  test("offline: true with externalLinks: true is refused, like --offline --external-links (repo#2729)", async () => {
+    const out = await call("audit_website", {
+      ...AUDIT,
+      level: "quick",
+      offline: true,
+      externalLinks: true,
+    });
+    expect(out.isError).toBe(true);
+    expect(out.text).toContain(
+      "offline: true cannot be combined with externalLinks: true"
+    );
+    expect(cloudCalls()).toEqual([]);
+  });
+
   test("quick_check, signed in, runs locally", async () => {
     const out = await call("quick_check", { url: AUDIT.url });
     expect(out.isError).toBe(false);

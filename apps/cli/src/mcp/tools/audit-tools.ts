@@ -289,7 +289,7 @@ export function registerAuditTools(server: McpServer): void {
           .boolean()
           .optional()
           .describe(
-            "false skips the status check of internal link targets the crawl did not fetch (default on at every level, like [internal_links] enabled)"
+            "false skips the status check of internal link targets the crawl did not fetch. It is on at every level unless [internal_links] enabled = false in squirrel.toml, which true does not override"
           ),
         confirm: z
           .boolean()
@@ -331,6 +331,12 @@ export function registerAuditTools(server: McpServer): void {
       if (level !== undefined && coverage !== undefined && level !== coverage) {
         return errorResult(
           `level ${level} and coverage ${coverage} name different levels. Pass one (coverage is the old name for level).`
+        );
+      }
+      // repo#2729: as `squirrel audit` refuses --offline --external-links.
+      if (offline === true && externalLinks === true) {
+        return errorResult(
+          "offline: true cannot be combined with externalLinks: true (an offline audit does not request other sites)."
         );
       }
       const auditLevel =

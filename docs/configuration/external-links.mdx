@@ -238,7 +238,7 @@ concurrency = 15
 
 ## Internal links
 
-The `[internal_links]` section controls the internal link check: a status-only request (`HEAD`, then `GET`) for each internal link target the crawl did not fetch, so [`links/broken-links`](/rules/links/broken-links) finds a linked 404 even when the crawl did not follow links (the Quick level, the Sitemap crawl strategy) or ran out of page budget. No render, no rules and no credits. It requests the audited site only, so it runs with `--offline` too, and it stays inside the crawl scope and robots.txt. It never requests a link that looks like an action (a `logout`, `sign-out` or `unsubscribe` path, or a query such as `?action=delete`).
+The `[internal_links]` section controls the internal link check: a status-only request (`HEAD`, then `GET`) for each internal link target the crawl did not fetch, so [`links/broken-links`](/rules/links/broken-links) finds a linked 404 even when the crawl did not follow links (the Quick level, the Sitemap crawl strategy) or ran out of page budget. No render, no rules and no credits. It requests the audited site only, so it runs with `--offline` too, and it stays inside the crawl scope and, when the crawl respects it, robots.txt. It never requests a link that looks like an action (a `logout`, `sign-out` or `unsubscribe` path, or a query such as `?action=delete`).
 
 ```toml
 [internal_links]

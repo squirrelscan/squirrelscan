@@ -72,6 +72,11 @@ export const AUDIT_SETTING_KEYS = [
  * (repo#2729). Off until the shared link checker lands: one line turns them
  * on. Surface and Full always check them. Internal link checks are a separate
  * setting (`[internal_links]`) and are on at every level.
+ *
+ * The quick summary below follows it. Copy that names Quick's default by hand
+ * changes with it: the `audit_website` MCP descriptions (apps/cli
+ * mcp/tools/audit-tools.ts), the external link hint in report not-checked.ts,
+ * and the docs (rules/links "Link checking defaults", guides/audit-levels).
  */
 export const EXTERNAL_LINKS_DEFAULT_ON: boolean = false;
 
