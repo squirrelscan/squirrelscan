@@ -56,6 +56,7 @@ import {
 } from "@/audit/cloud";
 import { gateStage1 } from "@/audit/cloud-gating";
 import { entityMapSite, storeEntityMap } from "@/audit/entity-map";
+import { guardCollector } from "@/audit/guard-collector";
 import {
   RetentionReclaimError,
   auditMayRetire,
@@ -1445,13 +1446,35 @@ export async function runAudit(
         mergedConfig.cloud.enabled &&
         options.cloudAvailable !== false &&
         cloudChecks;
+      // The collectors that read page content are guarded (pub#401): a throw on
+      // one batch must not fail the audit, and a result built from the batches
+      // that survived would look complete, so the first failure drops that
+      // result whole and is logged once.
       const prefetchCollector = cloudPrefetchEnabled
-        ? createCloudPrefetchCollector(url)
+        ? guardCollector(createCloudPrefetchCollector(url), (error) => {
+            logger.warn(
+              `Cloud prefetch failed; continuing without cloud analysis: ${error instanceof Error ? error.message : String(error)}`
+            );
+          })
         : null;
+      // Left bare: it only reads status, url and whether html is present off
+      // each crawl record and keeps a capped list, so it parses nothing the
+      // site wrote. The external-link set and page statuses below are the same.
       const techSampleCollector = createTechDetectSampleCollector(url);
       // #2091: url + raw JSON-LD per page, and nothing else. Always on — the
       // entity map is part of every report now, not a flag.
-      const entityMapCollector = createEntityMapCollector();
+      //
+      // A failure degrades to no map rather than losing a finished audit. The
+      // rules treat undefined as "no map was built" and skip, which is not the
+      // same claim as "this site declares nothing".
+      const entityMapCollector = guardCollector(
+        createEntityMapCollector(),
+        (error) => {
+          logger.warn(
+            `Could not build the entity map: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      );
       // normalizedUrl + status per page, for the smart-audits merge and nothing
       // else — two scalars a page instead of the PageRecord it used to slice
       // them off.
@@ -1557,49 +1580,54 @@ export async function runAudit(
         phaseTimer.enter("cloud_prefetch");
         logger.debug("step 2.4: cloud prefetch", crawlId);
         onProgress({ phase: "cloud" });
-        try {
-          cloudResult = await runCloudPrefetchFromPayloads(
-            {
-              client: createCloudClientFromSettings(),
-              cloudConfig: mergedConfig.cloud,
-              config: mergedConfig,
-              baseUrl: url,
-              auditId: crawlId,
-              // #2290: the registered run, so the raw-vs-rendered renders bill
-              // as this audit's pages rather than as standalone renders.
-              runId: (await options.getRunId?.()) ?? undefined,
-              // Stage-1 gating policy (CLI-owned): Stage-0 metadata gates which
-              // downstream cloud features run before the per-audit cap.
-              gate: gateStage1,
-              // Consented users skip THIS confirm (capped + disclosed up front);
-              // dead-links/tech/editor keep their gate below.
-              confirm: options.cloudConsented
-                ? undefined
-                : options.confirmCloudSpend,
-              onProgress: (detail) => onProgress({ phase: "cloud", detail }),
-              // Skip the raw-vs-rendered `render` service only when the crawl rendered EVERY page — i.e. the
-              // resolved fetcher is the full-render one ("cloud-render"), NOT the "auto" hybrid ("hybrid-http-
-              // first", most pages raw) or plain HTTP (undefined). #673.
-              crawlRendered: documentFetcher?.id === "cloud-render",
-            },
-            // Collected batch by batch during the pre-rules walk (#1913), so
-            // there is no whole-crawl DOM working set left to release for the
-            // duration of the cloud round trips — each batch's went with it.
-            prefetchCollector.build()
-          );
-          logger.debug(
-            "cloud prefetch done",
-            `spent=${cloudResult.totalSpent}`,
-            `services=${cloudResult.spend.length}`
-          );
-        } catch (error) {
-          // Defends the never-fail-the-audit invariant against anything the
-          // prefetch path (incl. caller-supplied confirm/onProgress callbacks)
-          // might throw. Rules see no store → skipped not-prefetched.
-          cloudResult = null;
-          logger.warn(
-            `Cloud prefetch failed; continuing without cloud analysis: ${(error as Error).message}`
-          );
+        // Collected batch by batch during the pre-rules walk (#1913), so there
+        // is no whole-crawl DOM working set left to release for the duration of
+        // the cloud round trips — each batch's went with it. Undefined when a
+        // batch failed to fold in (logged once by the guard): the prefetch then
+        // does not run, the same outcome as a prefetch that failed.
+        const prefetchPayloads = prefetchCollector.build();
+        if (prefetchPayloads) {
+          try {
+            cloudResult = await runCloudPrefetchFromPayloads(
+              {
+                client: createCloudClientFromSettings(),
+                cloudConfig: mergedConfig.cloud,
+                config: mergedConfig,
+                baseUrl: url,
+                auditId: crawlId,
+                // #2290: the registered run, so the raw-vs-rendered renders bill
+                // as this audit's pages rather than as standalone renders.
+                runId: (await options.getRunId?.()) ?? undefined,
+                // Stage-1 gating policy (CLI-owned): Stage-0 metadata gates which
+                // downstream cloud features run before the per-audit cap.
+                gate: gateStage1,
+                // Consented users skip THIS confirm (capped + disclosed up front);
+                // dead-links/tech/editor keep their gate below.
+                confirm: options.cloudConsented
+                  ? undefined
+                  : options.confirmCloudSpend,
+                onProgress: (detail) => onProgress({ phase: "cloud", detail }),
+                // Skip the raw-vs-rendered `render` service only when the crawl rendered EVERY page — i.e. the
+                // resolved fetcher is the full-render one ("cloud-render"), NOT the "auto" hybrid ("hybrid-http-
+                // first", most pages raw) or plain HTTP (undefined). #673.
+                crawlRendered: documentFetcher?.id === "cloud-render",
+              },
+              prefetchPayloads
+            );
+            logger.debug(
+              "cloud prefetch done",
+              `spent=${cloudResult.totalSpent}`,
+              `services=${cloudResult.spend.length}`
+            );
+          } catch (error) {
+            // Defends the never-fail-the-audit invariant against anything the
+            // prefetch path (incl. caller-supplied confirm/onProgress callbacks)
+            // might throw. Rules see no store → skipped not-prefetched.
+            cloudResult = null;
+            logger.warn(
+              `Cloud prefetch failed; continuing without cloud analysis: ${(error as Error).message}`
+            );
+          }
         }
         phaseTimer.mark("cloud_prefetch");
       }
@@ -1661,22 +1689,15 @@ export async function runAudit(
       // absorbing during the pre-rules walk above, so this is a move rather
       // than extra work: it sees exactly the same pages either way.
       //
-      // A failure degrades to undefined rather than losing a finished audit.
-      // The rules treat undefined as "no map was built" and skip, which is not
-      // the same claim as "this site declares nothing".
-      let entityMap: EntityMap | undefined;
-      try {
-        // The crawl's own audited URL, not this invocation's: a `--resume` of an
-        // audit started on another path of the site carries the first one, and
-        // `squirrel entities` reads the site from the crawl (#492).
-        entityMap = entityMapCollector.build(
-          crawlMeta ? entityMapSite(crawlMeta) : url
-        );
-      } catch (error) {
-        logger.warn(
-          `Could not build the entity map: ${error instanceof Error ? error.message : String(error)}`
-        );
-      }
+      // Undefined when any batch or the build failed (logged once by the guard
+      // above).
+      //
+      // The crawl's own audited URL, not this invocation's: a `--resume` of an
+      // audit started on another path of the site carries the first one, and
+      // `squirrel entities` reads the site from the crawl (#492).
+      const entityMap: EntityMap | undefined = entityMapCollector.build(
+        crawlMeta ? entityMapSite(crawlMeta) : url
+      );
 
       // #2343: SPILL the page-rule output instead of accumulating it.
       //
