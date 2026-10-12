@@ -1,4 +1,3 @@
-import * as entityMapCollect from "@squirrelscan/audit-engine/entity-map/collect";
 // pub#401: a collector that throws inside the pre-rules walk's onBatchContext
 // does not fail `squirrel audit`. The run completes and writes its report, the
 // entity map is left out whole rather than built from the batches that
@@ -7,6 +6,8 @@ import * as entityMapCollect from "@squirrelscan/audit-engine/entity-map/collect
 // No real JSON-LD makes the entity-map collector throw today, so the test
 // swaps in one that does, through a spy on the module's live binding (not
 // `mock.module`, which is process-wide in Bun). The site is a stubbed fetch.
+
+import * as entityMapCollect from "@squirrelscan/audit-engine/entity-map/collect";
 import {
   afterAll,
   afterEach,

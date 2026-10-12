@@ -28,7 +28,8 @@ export interface GuardedCollector<Batch, BuildArgs extends unknown[], Result> {
  * Wrap a collector so neither `absorb` nor `build` can fail the audit.
  * `onFailure` runs at most once per collector, on the first failure of either
  * call: the page set is site-controlled, and one line per batch across a large
- * crawl would carry nothing the first one did not.
+ * crawl would carry nothing the first one did not. Collectors are synchronous;
+ * a promise one returned would reject past this guard.
  */
 export function guardCollector<Batch, BuildArgs extends unknown[], Result>(
   collector: {
