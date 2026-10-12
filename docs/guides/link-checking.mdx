@@ -1,0 +1,95 @@
+---
+title: "Link checking and monitoring"
+icon: "link"
+description: "What squirrelscan checks about your links, what Not checked means, and what is coming for monitoring"
+---
+
+Broken links are easy to make and hard to notice: a page gets renamed, a section is restructured, a site you cite shuts down. squirrelscan checks the links on the pages it audits, so you hear about it before your visitors do.
+
+This page covers what is checked today, how to read the results, and what is coming. Sections marked **Coming soon** describe work in progress, not something you can use yet.
+
+## What gets checked
+
+| | Internal links | External links |
+|---|---|---|
+| What | Links to pages on your own site | Links to other sites |
+| Rules | [`links/broken-links`](/rules/links/broken-links) | [`links/broken-external-links`](/rules/links/broken-external-links), [`links/dead-links`](/rules/links/dead-links) |
+| Quick level | On | Off, unless you pass `--external-links` |
+| Surface and Full levels | On | On |
+| Limit per audit | 200 targets the crawl did not fetch | The audit's page budget or 200 links, whichever is more |
+| Cost in a cloud audit | Free | 1 credit per distinct external link, at most one per page of the audit's budget |
+
+The full list of switches is in [Link checking defaults](/rules/links#link-checking-defaults).
+
+## Internal links
+
+A link to your own site is checked two ways:
+
+- **Pages the crawl fetched** are checked from the crawl itself: a target that answered with an error (400 or above, other than throttling) is a broken link.
+- **Pages the crawl did not fetch** get a status-only `HEAD` request each, up to 200 per audit, the most-linked first. This is what lets a Quick audit, which does not follow links, find a 404 that only a link points at. It also finds a broken page past a Surface or Full audit's page budget.
+
+The status-only check is built not to change anything on your site:
+- It never requests links that look like actions (log out, unsubscribe, delete, confirm, add to cart) or that carry a token.
+- It sends no cookies, credentials or custom request headers.
+- It stays inside the crawl scope and, when the crawl respects it, robots.txt.
+
+The full rules are in [What the internal link check never requests](/configuration/external-links#what-the-internal-link-check-never-requests). Switch it off with `--no-internal-links` or `[internal_links] enabled = false`.
+
+## External links
+
+External links are checked at Surface and Full, and at Quick with `--external-links`. One audit checks at most its page budget or 200 distinct external links, whichever is more. The links on the most pages go first: the nav and footer links every page shares. The rest are listed as **Not checked**.
+
+- **In the CLI**, external links are checked from your machine.
+- **In a cloud audit**, they are checked by squirrelscan's link-check service, which shares its results across audits. Each distinct external link costs 1 credit, at most one per page of the audit's budget. External link checks are a website setting in the dashboard.
+
+## Links that cannot be verified
+
+Many sites refuse automated requests. A refusal says nothing about whether a person would reach the page, so squirrelscan keeps refusals apart from broken links where it can tell them apart:
+
+- **Throttled** (429, or a 503 with `Retry-After`): listed as rate-limited, status unverifiable, never broken.
+- **Blocked by a firewall** (a 403 with a recognisable web application firewall signature): listed as blocked, status unverifiable, never broken.
+- **An internal link that answers 401 or 403** to the status-only check: listed as refused, never broken.
+
+Some blocks carry no signature squirrelscan recognises, such as a plain 403, a 406, LinkedIn's 999, or a CDN error page. Those are still reported as broken today. If a link in the broken list loads in your browser, it is probably one of these. See **Coming soon** below.
+
+## Not checked
+
+When a check did not run, squirrelscan says so rather than reporting the rule as passing. Every report format lists these under **Not checked**, with the reason and what to run instead. The score leaves them out.
+
+| Reason | What happened |
+|---|---|
+| `external-links-not-checked` | External link checking was off: the Quick level without `--external-links`, `--offline`, `--no-external-links`, `[external_links] enabled = false`, or a website or run that switched it off. |
+| `external-links-over-cap` | The audit found more external links than its limit. The most-linked were checked. |
+| `link-targets-not-fetched` | The audit did not follow links, and some internal link targets were fetched neither by the crawl nor by the status-only check: it was off, over its limit, or the targets were skipped. |
+
+In the cloud's issue tracker, an open broken-link issue stays open while its link goes unchecked. It closes only when an audit that can see the link finds it working.
+
+## Coming soon: browser-grade verification
+
+<Note>
+  Coming soon. This describes work in progress. Today's external link checks work as described above.
+</Note>
+
+We are building a new way to verify external links. It treats a site that blocks bots the way a real visitor's browser would:
+
+- A link that a site blocks for automated clients is checked again the way a real browser would load it, before anything is reported.
+- A link is reported broken only after a second, confirmed failure.
+- A link that still cannot be verified is listed as **unverified**, never as broken.
+- A domain that no longer exists is reported as such, with the evidence.
+
+Cloud reports will label these results **Verified by Perch**.
+
+## Coming soon: link monitoring
+
+<Note>
+  Coming soon. Not available yet.
+</Note>
+
+For paid plans, a website on a recurring audit schedule will have its links re-checked between audits. You will be told when a link breaks, when it recovers, or when a domain it points to disappears, in the dashboard and by email if you have alerts on. Pricing for monitoring is not set yet.
+
+## See also
+
+- [Link checking defaults](/rules/links#link-checking-defaults): every switch, per level and per surface.
+- [External and internal link configuration](/configuration/external-links): limits, timeouts and caching.
+- [Audit levels](/guides/audit-levels): what each level checks and costs.
+- [Crawling rate-limited hosts](/guides/rate-limited-hosts): why a throttled link is never reported broken.
