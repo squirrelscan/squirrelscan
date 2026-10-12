@@ -281,7 +281,7 @@ A longer slug that only mentions one of them is still a page and is checked: `/w
 
 A skipped target is counted in the **Not checked** line of `links/broken-links` when the audit did not follow links, and is never reported as passing.
 
-These rules are a careful default, not a guarantee. The word lists are English, and no list can know every route a site wires to a `GET`. If your site changes state on `GET` or `HEAD` requests to links that read like pages, switch the check off for that site with `--no-internal-links` or `[internal_links] enabled = false`.
+These rules are a careful default, not a guarantee. The word lists are English, and no list can know every route a site wires to a `GET`. If your site changes state on `GET` or `HEAD` requests to links that read like pages, switch the check off for that site with `--no-internal-links` or `[internal_links] enabled = false`, or, in the cloud, with the website's **Internal link checks** [crawl setting](/dashboard/crawl-settings#internal-link-checks).
 
 ## How external link checking works
 

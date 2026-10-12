@@ -17,7 +17,7 @@ The page is three cards, each with its own save button, so saving one leaves the
 | Card | What it sets |
 | --- | --- |
 | **Audit level** | The site's level, any setting you change to make it custom, and the max link depth. |
-| **Crawl rules** | Crawl scope, robots.txt, incremental crawl, and the include and exclude patterns. |
+| **Crawl rules** | Crawl scope, robots.txt, incremental crawl, internal link checks, and the include and exclude patterns. |
 | **Custom request headers** | Headers sent on every request, on [every plan](#custom-request-headers). Also what makes a crawl [authorised](#authorised-crawls). |
 
 ## Audit level
@@ -159,6 +159,16 @@ Turn the setting on and the crawler also skips URLs your robots.txt disallows, a
 <Warning>
   A `Crawl-delay` is a hard limit on how fast a host can be crawled, because the wait applies per host no matter how many workers are running. The directive is capped at 2 seconds even when it asks for longer, and 2 seconds a page is 1,800 pages an hour from one host. Most sites are one host, so for most sites that is the whole crawl. If your page count cannot finish within the audit's time budget at that pace, the audit says so at the start and crawls fewer pages rather than running out of time with nothing to show. An [authorised crawl](#authorised-crawls) is the way to tell us that limit is not meant for us.
 </Warning>
+
+## Internal link checks
+
+On by default. For each internal link target the crawl did not fetch, a cloud audit sends one status-only `HEAD` request, so [`links/broken-links`](/rules/links/broken-links) finds a linked 404 even when the crawl did not follow links (the Quick level, Sitemap scope) or ran out of page budget. It is free: no page charge, no render, no rules. It sends a one-byte `GET` only when your server answers `HEAD` with 405 or 501.
+
+The check never requests links that look like actions (log out, unsubscribe, delete, confirm, add to cart) or carry a token. It sends no cookies, credentials or custom request headers, and it re-checks every redirect hop against the crawl scope. See [What the internal link check never requests](/configuration/external-links#what-the-internal-link-check-never-requests).
+
+Turn it off if requesting your links can change something on your site that those rules would not catch. With it off, an audit that did not follow links lists the internal link targets it could not see as **Not checked**, never as passing. Like the crawl scope, the setting applies to every cloud audit of the website, the GitHub check and retries included, and a retry never checks internal links that the run or the website has switched off.
+
+An API or MCP request can set it for one run: `internalLinks` on `POST /v1/agent-runs/cloud`, or `internal_links` on the hosted MCP server's `run_audit`.
 
 ## Custom request headers
 

@@ -68,7 +68,7 @@ External link checks run at Surface and Full. At Quick they are opt-in for now: 
 |-------|----------------|----------------|
 | One CLI run | `--external-links` to check them, `--no-external-links` to skip them | `--no-internal-links` to skip them |
 | `squirrel.toml` | `[external_links] enabled = false` to skip them | `[internal_links] enabled = false` to skip them |
-| A cloud website | The website's **External link checks** setting | Always on |
+| A cloud website | The website's **External link checks** setting | The website's **Internal link checks** [crawl setting](/dashboard/crawl-settings#internal-link-checks) |
 
 `--offline` skips external links, since it promises no requests beyond the audited site. A check that did not run is reported as **Not checked** with the reason, never as a pass.
 
