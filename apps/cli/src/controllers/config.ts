@@ -1,5 +1,7 @@
 // Generic config command - interface-agnostic
 
+import type { RuleOptionsProblem } from "@squirrelscan/rules";
+
 import { isUnsafeObjectKey } from "@squirrelscan/core-contracts/untrusted-keys";
 import { existsSync, readFileSync } from "node:fs";
 import { parse as parseTOML, TomlError } from "smol-toml";
@@ -101,6 +103,31 @@ export function showConfig(
       )
     );
   }
+}
+
+export interface ValidateConfigResult extends ShowConfigResult {
+  /**
+   * `[rule_options]` problems the schema cannot see (pub#510): a table naming
+   * no rule, an option the rule does not declare, a value of the wrong type.
+   */
+  ruleOptionProblems: RuleOptionsProblem[];
+}
+
+/**
+ * `showConfig`, plus every rule option checked against the rule it names. The
+ * rules package loads only here, so `config show` and `config set` stay on the
+ * light startup path (#2023).
+ */
+export async function validateConfig(
+  configPath: string | null
+): Promise<Result<ValidateConfigResult>> {
+  const shown = showConfig(configPath);
+  if (!shown.ok) return shown;
+  const { checkRuleOptions } = await import("@squirrelscan/rules");
+  return ok({
+    ...shown.data,
+    ruleOptionProblems: checkRuleOptions(shown.data.config.rule_options),
+  });
 }
 
 /**

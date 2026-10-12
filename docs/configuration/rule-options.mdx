@@ -45,10 +45,22 @@ Each rule's page in the [Rules reference](/rules) has an **Options** table listi
 
 ### What happens to a mistake
 
-Rule options are not checked by `squirrel config validate`, which reports `Config valid` for a misspelled rule ID, a misspelled option name or a value of the wrong type. A mistake shows up when the audit runs:
+`squirrel config validate` checks every `[rule_options]` table against the rule it names, and `squirrel audit` checks them again before it crawls. Each message names the table and the option:
 
-- **An unknown rule ID or option name is ignored without a warning.** The rule runs on its defaults, so the configuration silently changes nothing.
-- **A value of the wrong type fails the audit.** For example `min_length = "thirty"` on `core/meta-title` stops the run with `✗ Audit failed:` and the validation error `Invalid input: expected number, received string` at path `min_length`. The message does not name the rule, so search your `[rule_options]` for the path it gives. The one rule on this page that does not check its option types is `crawl/all-noindex-pages`, so give its pattern lists as arrays of strings.
+- **An unknown rule ID or option name changes nothing**: the rule runs on its defaults. `config validate` reports it and exits 1, and `squirrel audit` prints a warning and carries on. The message suggests a rule with the same name in another category, or lists the options the rule takes:
+
+  ```text
+  Invalid config: [rule_options."performance/ttfb"]: no rule has this id, so the table changes nothing (did you mean "perf/ttfb"?)
+  Invalid config: [rule_options."core/meta-description"] no_such_option: not an option of core/meta-description, so it changes nothing (options: min_length, max_length)
+  ```
+
+- **A value of the wrong type would fail the rule.** `config validate` reports it, and `squirrel audit` stops before crawling when the audit runs that rule. On a rule the audit does not run, it is a warning.
+
+  ```text
+  Error: [rule_options."core/meta-title"] min_length: Invalid input: expected number, received string
+  ```
+
+- **An `enabled` that is not `true` or `false` is ignored**, and reported like an unknown option.
 
 ---
 
@@ -735,28 +747,17 @@ excludePatterns = ["/lp/"]  # Landing pages
 
 ## Checking your options
 
-`squirrel config show` prints the `[rule_options]` you have set (it does not list defaults), and `squirrel config validate` checks the rest of the file but not rule options, so check them against the rule's page:
+`squirrel config show` prints the `[rule_options]` you have set (it does not list defaults). `squirrel config validate` checks each table against the rule it names:
 
 ```bash
-squirrel config show
+squirrel config validate
 ```
-
-A wrong type is reported when the audit runs:
 
 ```text
-✗ Audit failed: [
-  {
-    "expected": "number",
-    "code": "invalid_type",
-    "path": [
-      "min_length"
-    ],
-    "message": "Invalid input: expected number, received string"
-  }
-]
+Invalid config: [rule_options."core/meta-title"] min_length: Invalid input: expected number, received string
 ```
 
-Fix and run the audit again:
+Fix it and validate again:
 
 ```toml
 # Before (fails the audit)

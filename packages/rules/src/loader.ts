@@ -85,6 +85,19 @@ export function loadAllRules(options: LoaderOptions = {}): Map<string, Rule> {
   return rules;
 }
 
+/**
+ * Every rule a `[rule_options]` table can name, disabled ones included: a
+ * disabled rule's options can still be read outside the runner (the CLI sends
+ * the `gaps/*` options to the cloud), so config checks must know it (pub#510).
+ */
+export function loadKnownRules(options: LoaderOptions = {}): Map<string, Rule> {
+  const rules = new Map<string, Rule>();
+  for (const ns of getRuleNamespaces(options)) {
+    for (const rule of ns.rules) rules.set(rule.meta.id, rule);
+  }
+  return rules;
+}
+
 // Get all rule IDs
 export function getAllRuleIds(options: LoaderOptions = {}): string[] {
   const ids: string[] = [];

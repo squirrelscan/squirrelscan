@@ -329,7 +329,7 @@ squirrel config set crawler.max_pages 200 --dry-run
 
 ### Validate configuration
 
-Check for errors:
+Check for errors, including a `[rule_options]` table that names no rule, an option the rule does not take, or a value of the wrong type (see [what happens to a mistake](/configuration/rule-options#what-happens-to-a-mistake)):
 
 ```bash
 squirrel config validate

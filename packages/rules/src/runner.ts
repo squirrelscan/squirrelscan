@@ -32,6 +32,7 @@ import type { ProbeBudget } from "./probe-budget";
 import { ruleApplies } from "./applicability";
 import { filterRules } from "./filter";
 import { loadAllRules, type RuleNamespace } from "./loader";
+import { describeRuleOptionIssues } from "./rule-options-check";
 import {
   RULE_TIME_BUDGET_MS,
   RuleTimeoutError,
@@ -190,9 +191,14 @@ export interface SiteRunResult {
 function getRuleOptions(rule: Rule, config: RulesConfig): Record<string, unknown> {
   const ruleConfig = config.rule_options[rule.meta.id] ?? {};
 
-  // If rule has options schema, parse with defaults
+  // If rule has options schema, parse with defaults. A value of the wrong type
+  // names the table and the option (pub#510), not a bare zod issue list.
   if (rule.meta.optionsSchema) {
-    return rule.meta.optionsSchema.parse(ruleConfig);
+    const parsed = rule.meta.optionsSchema.safeParse(ruleConfig);
+    if (!parsed.success) {
+      throw new Error(describeRuleOptionIssues(rule.meta.id, parsed.error.issues).join("; "));
+    }
+    return parsed.data;
   }
 
   return ruleConfig;

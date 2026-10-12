@@ -60,6 +60,7 @@ import {
   parseRuleFilters,
   resolveRulesConfig,
 } from "@/audit/rule-filter";
+import { preflightRuleOptions } from "@/audit/rule-options-preflight";
 import { findConfigFile, getGlobalConfigPath, loadConfig } from "@/config";
 import {
   DASHBOARD_URL,
@@ -1293,6 +1294,27 @@ export const audit = defineCommand({
             return;
           }
         }
+      }
+
+      // A rule option of the wrong type fails the audit once its rule runs,
+      // after the crawl and the run registration: stop before either, naming
+      // the table and the key. Options that change nothing only warn. pub#510
+      const optionsCheck = preflightRuleOptions(
+        config.rule_options,
+        resolveRulesConfig(config.rules, ruleFilter)
+      );
+      for (const warning of optionsCheck.warnings) {
+        console.error(fmt.yellow(`Warning: ${warning}`));
+      }
+      if (optionsCheck.errors.length > 0) {
+        for (const error of optionsCheck.errors) {
+          console.error(`${fmt.red("Error:")} ${error}`);
+        }
+        console.error(
+          "Check every rule option with `squirrel config validate`."
+        );
+        process.exitCode = 1;
+        return;
       }
 
       // Route progress messages to stderr for non-console formats to keep stdout

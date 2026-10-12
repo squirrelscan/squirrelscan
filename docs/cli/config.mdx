@@ -85,7 +85,7 @@ Useful for scripting or verifying which config file is in use.
 
 ### validate
 
-Check that your config file is valid TOML and passes schema validation:
+Check that your config file is valid TOML and passes schema validation, and that every `[rule_options]` table names a rule, sets only options that rule declares, and gives each one a value of the right type:
 
 ```bash
 squirrel config validate
@@ -100,6 +100,14 @@ Output on error:
 ```text
 Invalid config: crawler.max_pages: Expected number, received string
 ```
+
+Each rule option problem gets its own line, naming the table and the option:
+```text
+Invalid config: [rule_options."performance/ttfb"]: no rule has this id, so the table changes nothing (did you mean "perf/ttfb"?)
+Invalid config: [rule_options."core/meta-title"] min_length: Invalid input: expected number, received string
+```
+
+The command exits 1 on any problem. See [what happens to a mistake](/configuration/rule-options#what-happens-to-a-mistake) for how `squirrel audit` treats the same problems.
 
 ## Examples
 
@@ -136,6 +144,8 @@ squirrel config validate && echo "Config OK"
 ## Config file resolution
 
 squirrelscan searches for `squirrel.toml` starting from the current directory and walking up to your home directory. The first config file found is used.
+
+`squirrel --config-file <path> config <subcommand>` uses that file instead, as `squirrel --config-file <path> audit` does, so `config validate` checks the config an audit will use.
 
 If no config file exists, commands that require one will prompt you to run `squirrel init`.
 

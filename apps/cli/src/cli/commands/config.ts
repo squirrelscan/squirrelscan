@@ -4,16 +4,25 @@ import { defineCommand } from "citty";
 import { writeFileSync } from "node:fs";
 import { stringify as stringifyTOML } from "smol-toml";
 
-import { findConfigFile } from "@/config";
+import { findConfigFile, getGlobalConfigPath } from "@/config";
 import {
   getConfigPath,
   redactConfigForDisplay,
   redactConfigValueForDisplay,
   setConfigValue,
   showConfig,
+  validateConfig,
 } from "@/controllers/config";
 import { warnIfSessionUnreadable } from "@/self/credentials";
 import { safeExit } from "@/self/updater";
+
+/**
+ * The file `--config-file` names, else the nearest squirrel.toml: the file
+ * `squirrel audit` reads, so `config validate` checks what the audit will use.
+ */
+function configFilePath(): string | null {
+  return getGlobalConfigPath() ?? findConfigFile();
+}
 
 export const config = defineCommand({
   meta: {
@@ -28,7 +37,7 @@ export const config = defineCommand({
       },
       run() {
         warnIfSessionUnreadable();
-        const configPath = findConfigFile();
+        const configPath = configFilePath();
         const result = showConfig(configPath);
 
         if (!result.ok) {
@@ -76,7 +85,7 @@ export const config = defineCommand({
       },
       async run({ args }) {
         warnIfSessionUnreadable();
-        const configPath = findConfigFile();
+        const configPath = configFilePath();
         const result = setConfigValue(
           configPath,
           String(args.key),
@@ -119,7 +128,7 @@ export const config = defineCommand({
       },
       async run() {
         warnIfSessionUnreadable();
-        const configPath = findConfigFile();
+        const configPath = configFilePath();
         const result = getConfigPath(configPath);
 
         if (!result.ok) {
@@ -137,11 +146,21 @@ export const config = defineCommand({
       },
       async run() {
         warnIfSessionUnreadable();
-        const configPath = findConfigFile();
-        const result = showConfig(configPath);
+        const configPath = configFilePath();
+        const result = await validateConfig(configPath);
 
         if (!result.ok) {
           console.error(result.error.message);
+          return safeExit(1);
+        }
+
+        // An unknown rule id or option is silently ignored by an audit, so a
+        // config that names one is not valid either (pub#510).
+        const problems = result.data.ruleOptionProblems;
+        if (problems.length > 0) {
+          for (const problem of problems) {
+            console.error(`Invalid config: ${problem.message}`);
+          }
           return safeExit(1);
         }
 
