@@ -17,8 +17,9 @@ import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
  * Per-page byte-weight signal read off a live DOM (#1021 E-E2). Shared by the
  * page-time collector (buildCollectedPageSignal) and this rule's legacy
  * `site.pages` fallback so both produce byte-identical sums. `inlineCssLen` /
- * `inlineJsLen` feed the total; the external `*Count`s feed the no-resource-data
- * estimate branch (used only for the first page).
+ * `inlineJsLen` stand in for the HTML size only when none was recorded (the
+ * HTML already holds them, #668); the external `*Count`s feed the
+ * no-resource-data estimate branch (used only for the first page).
  */
 export function extractPageByteSignal(
   doc: NonNullable<ParsedPage["document"]>,
@@ -88,7 +89,7 @@ export const totalByteWeightRule: Rule = {
     const checks: CheckResult[] = [];
 
     // Per-page own weight. The 1600 KB and 5000 KB thresholds describe one page
-    // load, so each page is scored on its HTML plus the inline code and the
+    // load, so each page is scored on its HTML (inline code included) and the
     // external resources it loads; nothing is summed across the site.
     const pages = ctx.site?.pages ?? [];
     const collected = ctx.collectedSignals;
@@ -181,10 +182,14 @@ export const totalByteWeightRule: Rule = {
       };
     }
     const scored: Scored[] = records.map((rec, index) => {
+      // The recorded HTML size already holds the inline <style> and <script>
+      // code, so adding it again counted those bytes twice (#668). A page with
+      // no recorded size is weighed by its inline code alone.
+      const html = rec.html > 0 ? rec.html : rec.inlineCss + rec.inlineJs;
       const parts = {
-        html: rec.html,
-        css: rec.inlineCss + sumBucket(rec.external?.css),
-        js: rec.inlineJs + sumBucket(rec.external?.js),
+        html,
+        css: sumBucket(rec.external?.css),
+        js: sumBucket(rec.external?.js),
         images: sumBucket(rec.external?.images),
         fonts: sumBucket(rec.external?.fonts),
       };
@@ -193,9 +198,7 @@ export const totalByteWeightRule: Rule = {
       // With no resource measurements at all, estimate the first page only.
       if (!hasExternalResourceData && index === 0) {
         bytes =
-          rec.html +
-          rec.inlineCss +
-          rec.inlineJs +
+          html +
           (rec.externalCssCount * 30 +
             rec.externalJsCount * 50 +
             rec.imageCount * 100) *

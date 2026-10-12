@@ -11,7 +11,7 @@ Images are usually the largest share and the easiest to cut, through a modern fo
 
 ## What squirrel checks
 
-The rule scores each crawled page on its own weight and reports the heaviest one. A page's weight is its HTML document, its inline CSS and inline JavaScript, and the external CSS, script, image and font files it loads. The 1,600 KB and 5,000 KB thresholds describe one page load, so nothing is summed across the site and the result does not depend on how many pages were crawled.
+The rule scores each crawled page on its own weight and reports the heaviest one. A page's weight is its HTML document, which already holds its inline CSS and JavaScript, plus the external CSS, script, image and font files it loads. The 1,600 KB and 5,000 KB thresholds describe one page load, so nothing is summed across the site and the result does not depend on how many pages were crawled.
 
 A resource shared by several pages counts toward every page that loads it, and counts once within a page, by URL. The rule emits one check named `total-byte-weight`, scored on the heaviest page:
 
@@ -21,13 +21,13 @@ A resource shared by several pages counts toward every page that loads it, and c
 
 The message names the heaviest page and its weight, and how many pages are over each threshold: `Heaviest page: https://example.com/gallery 5510KB (2 over 1600KB, 1 over 5000KB)`. A page over 5,000 KB is also counted as over 1,600 KB. The threshold comparison uses the unrounded weight, while the message prints it rounded.
 
-When the crawl produced no resource-size record and no script record at all, the rule estimates the first page instead, at 30 KB per stylesheet, 50 KB per script and 100 KB per image. An empty record still counts as present, so a crawl that collected the containers but measured nothing reports each page by its HTML and inline code only. In that case the message opens `Estimated heaviest page:` and the details record that it is an estimate.
+When the crawl produced no resource-size record and no script record at all, the rule estimates the first page instead, at 30 KB per stylesheet, 50 KB per script and 100 KB per image. An empty record still counts as present, so a crawl that collected the containers but measured nothing reports each page by its HTML only. In that case the message opens `Estimated heaviest page:` and the details record that it is an estimate.
 
-The details carry the heaviest page's URL and weight, the number of pages analyzed, the number over each threshold, and that page's breakdown: HTML, CSS, JavaScript, image and font totals. A bucket with nothing in it is left out. Inline JavaScript excludes any `<script>` whose type mentions `json` or `template`, so JSON-LD is not counted as code.
+The details carry the heaviest page's URL and weight, the number of pages analyzed, the number over each threshold, and that page's breakdown: the HTML total, inline code included, and the external CSS, JavaScript, image and font totals. A bucket with nothing in it is left out.
 
 ### Size basis
 
-The HTML size is the response size the crawler recorded for the page: the `Content-Length` the server sent, which is the transfer size, or the decoded body length when it sent none. It is applied the same way on the streaming and resident engines. Error pages, pages blocked by a bot challenge and non-HTML responses are not scored. A page with no recorded size contributes no HTML weight. Inline CSS and JavaScript are measured by text length. External resources use the size from a HEAD request, or the fetched body for scripts.
+The HTML size is the response size the crawler recorded for the page: the `Content-Length` the server sent, which is the transfer size, or the decoded body length when it sent none. It is applied the same way on the streaming and resident engines. Error pages, pages blocked by a bot challenge and non-HTML responses are not scored. Inline `<style>` and `<script>` code is part of that size, so it is not counted a second time. A page with no recorded size is weighed by its inline CSS and JavaScript instead, measured by text length, where inline JavaScript excludes any `<script>` whose type mentions `json` or `template`, so JSON-LD is not counted as code. External resources use the size from a HEAD request, or the fetched body for scripts.
 
 ### Limits
 

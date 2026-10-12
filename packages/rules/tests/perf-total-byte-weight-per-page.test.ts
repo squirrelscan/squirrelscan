@@ -14,6 +14,12 @@ const KB = 1024;
 const html = (n: number): string =>
   `<!doctype html><html><head><title>Page ${n}</title></head><body><h1>Page ${n}</h1></body></html>`;
 
+/** A page whose markup holds `css` bytes of inline style and `js` of inline script. */
+const inlineDoc = (css: number, js: number): string =>
+  `<!doctype html><html><head><title>Inline</title><style>${"a{}".repeat(css / 3)}</style></head><body><h1>Inline</h1>${js > 0 ? `<script>${";".repeat(js)}</script>` : ""}</body></html>`;
+
+const byteLength = (s: string): number => Buffer.byteLength(s, "utf8");
+
 interface Res {
   url: string;
   size: number | null;
@@ -23,6 +29,8 @@ interface Res {
 interface Fixture {
   /** HTML document bytes, one entry per page at `${BASE}/p<i>`. */
   htmlSizes: number[];
+  /** Page markup by index; a page without one gets a minimal document. */
+  docs?: string[];
   css?: Res[];
   js?: Res[];
   images?: Res[];
@@ -44,7 +52,7 @@ function baseCtx(f: Fixture): RuleContext {
   const pages = f.htmlSizes.map((sizeBytes, i) => ({
     url: pageUrl(i),
     statusCode: 200,
-    parsed: parsePage(html(i), pageUrl(i)),
+    parsed: parsePage(f.docs?.[i] ?? html(i), pageUrl(i)),
     sizeBytes,
   }));
   return {
@@ -75,7 +83,7 @@ function streamingCtx(f: Fixture): RuleContext {
   const signals = f.htmlSizes.map((htmlBytes, i) =>
     buildCollectedPageSignal({
       url: pageUrl(i),
-      parsed: parsePage(html(i), pageUrl(i)),
+      parsed: parsePage(f.docs?.[i] ?? html(i), pageUrl(i)),
       htmlBytes,
     }),
   );
@@ -200,6 +208,59 @@ describe("perf/total-byte-weight per-page scoring", () => {
       expect(kb).toBe(10);
       expect(details.unsizedResources).toBe(1);
       expect(message).toContain("1 resource could not be sized");
+    });
+
+    // #668: the HTML size already includes inline <style> and <script> code.
+    test(`${name}: a page whose weight is one inline stylesheet scores its document size, not double`, () => {
+      const doc = inlineDoc(1800 * KB, 0);
+      const f: Fixture = { htmlSizes: [byteLength(doc)], docs: [doc] };
+      const { kb, details } = run(build(f));
+      // Before #668 the inline stylesheet was added on top: about 3600KB.
+      expect(kb).toBe(Math.round(byteLength(doc) / KB));
+      expect(kb).toBeLessThan(1810);
+      expect(details.html).toBe(`${(byteLength(doc) / KB).toFixed(0)}KB`);
+      expect(details.css).toBeUndefined();
+      expect(details.js).toBeUndefined();
+    });
+
+    test(`${name}: a compressed transfer size smaller than the inline code is still the document's weight`, () => {
+      // Content-Length of a gzipped response: the inline text decodes larger.
+      const doc = inlineDoc(1800 * KB, 0);
+      const { kb, details } = run(build({ htmlSizes: [100 * KB], docs: [doc] }));
+      expect(kb).toBe(100);
+      expect(details.html).toBe("100KB");
+    });
+
+    test(`${name}: inline code is counted once, external stylesheets and scripts once each`, () => {
+      const doc = inlineDoc(200 * KB, 300 * KB);
+      const f: Fixture = {
+        htmlSizes: [byteLength(doc)],
+        docs: [doc],
+        css: [{ url: `${BASE}/a.css`, size: 100 * KB, pages: [pageUrl(0)] }],
+        js: [{ url: `${BASE}/a.js`, size: 50 * KB, pages: [pageUrl(0)] }],
+      };
+      const { kb, details } = run(build(f));
+      expect(kb).toBe(Math.round(byteLength(doc) / KB) + 150);
+      expect(details.css).toBe("100KB");
+      expect(details.js).toBe("50KB");
+    });
+
+    test(`${name}: the no-resource-data estimate does not add inline code to the HTML`, () => {
+      const doc = inlineDoc(400 * KB, 0);
+      const ctx = build({ htmlSizes: [byteLength(doc)], docs: [doc] });
+      delete ctx.site!.resourceSizes;
+      delete ctx.site!.scripts;
+      const { kb, details } = run(ctx);
+      expect(details.estimated).toBe(true);
+      expect(kb).toBe(Math.round(byteLength(doc) / KB));
+    });
+
+    test(`${name}: a page with no recorded HTML size is weighed by its inline code`, () => {
+      const doc = inlineDoc(300 * KB, 100 * KB);
+      const { kb, details } = run(build({ htmlSizes: [0], docs: [doc] }));
+      expect(kb).toBe(400);
+      expect(details.html).toBe("400KB");
+      expect(details.css).toBeUndefined();
     });
   }
 
