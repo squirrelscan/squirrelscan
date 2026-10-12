@@ -17,6 +17,14 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- Internal link checks run at every audit level, Quick included. Each internal link target the crawl did not fetch now gets a status-only request (`HEAD`, then `GET`): up to 200 per audit, the links on the most pages first, inside the crawl scope and robots.txt, never a link that looks like an action such as log out or unsubscribe, and free. A Quick audit now finds a linked 404 that the sitemap does not list, and Surface and Full audits find broken pages past their page budget: expect new `links/broken-links` findings, and Links scores that move with them. A target that answers 401 or 403 is reported as unverifiable, never as broken. Switch the check off with `--no-internal-links` or `[internal_links] enabled = false`, and change the limit with `[internal_links] max_targets`. See [Link checking defaults](https://docs.squirrelscan.com/rules/links#link-checking-defaults). squirrelscan/repo#2729
+
+### Added
+
+- `--external-links` checks external links for one run at any level, Quick included, and `--no-external-links` skips them. The defaults do not change: Surface and Full check external links, Quick does not. An audit that checks them now requests at most its page budget or 200 distinct external links, whichever is more, the links on the most pages first, and lists the rest as **Not checked** (reason `external-links-over-cap`). Change the limit with `[external_links] max_links`. The local MCP server's `audit_website` tool takes `externalLinks` and `internalLinks` switches. squirrelscan/repo#2729
+
 ## v0.0.110 (2026-10-12)
 
 A small release with two fixes worth having. A site that answers with compression bombs no longer eats gigabytes of your memory while squirrel crawls and checks it: squirrel now decodes compressed responses itself, as it reads them, and stops at each read's size limit. And a Quick audit stops telling you your links are fine when it never checked them: those checks now say **Not checked**, with what to run instead.

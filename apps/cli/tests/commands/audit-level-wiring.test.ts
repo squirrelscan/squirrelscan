@@ -190,7 +190,10 @@ describe("squirrel audit --level", () => {
     const options = runs[0]!;
     expect(options.coverageMode).toBe("quick");
     expect(options.maxPages).toBe(25);
+    // repo#2729: internal link checks are on at every level; external ones
+    // are off at quick until EXTERNAL_LINKS_DEFAULT_ON turns them on.
     expect(options.externalLinksEnabled).toBe(false);
+    expect(options.internalLinksEnabled).toBeUndefined();
     expect(options.renderStrategy).toBe("auto");
     expect(options.probe?.level).toBe("passive");
     expect(options.auditLevel?.settings.cloudChecks).toBe(false);
@@ -257,6 +260,57 @@ describe("squirrel audit --level", () => {
     );
     expect(line("Level")).toBe("quick · max 25 pages");
     expect(runs[0]?.externalLinksEnabled).toBe(false);
+  });
+
+  test("--no-external-links and --no-internal-links switch link checks off (repo#2729)", async () => {
+    await runAudit([
+      "--level",
+      "surface",
+      "--no-external-links",
+      "--no-internal-links",
+    ]);
+    expect(line("Level")).toBe(
+      "custom (surface + external_links off) · max 100 pages"
+    );
+    expect(runs[0]?.externalLinksEnabled).toBe(false);
+    expect(runs[0]?.internalLinksEnabled).toBe(false);
+  });
+
+  test("--external-links checks external links at quick, over the config (repo#2729)", async () => {
+    await runAudit(
+      ["--level", "quick", "--external-links", "-m", "1"],
+      "[external_links]\nenabled = false\n",
+      { online: true }
+    );
+    expect(process.exitCode).toBe(0);
+    expect(line("Level")).toBe(
+      "custom (quick + max_pages 1, external_links on)"
+    );
+    expect(runs[0]?.externalLinksEnabled).toBe(true);
+    expect(runs[0]?.internalLinksEnabled).toBeUndefined();
+  });
+
+  test.each([
+    [
+      ["--external-links"],
+      "--offline cannot be combined with --external-links",
+      false,
+    ],
+    [
+      ["--external-links", "--no-external-links"],
+      "--no-external-links cannot be combined with --external-links",
+      true,
+    ],
+    [
+      ["--no-external-links", "--external-links"],
+      "--no-external-links cannot be combined with --external-links",
+      true,
+    ],
+  ] as const)("%p is refused (repo#2729)", async (flags, message, online) => {
+    await runAudit([...flags], "", { online });
+    expect(process.exitCode).toBe(1);
+    expect(output.some((l) => l.includes(message))).toBe(true);
+    expect(runs).toHaveLength(0);
   });
 
   test("[crawler] coverage picks the level, and fast is quick there too", async () => {

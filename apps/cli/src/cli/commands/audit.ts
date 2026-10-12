@@ -864,6 +864,8 @@ export function validateAuditFlags(args: {
   noPublish?: boolean;
   render?: boolean;
   http?: boolean;
+  externalLinks?: boolean;
+  noExternalLinks?: boolean;
 }): string | null {
   // --offline conflicts with flags that require the cloud API.
   if (args.offline && (args.publish || args.render)) {
@@ -873,6 +875,13 @@ export function validateAuditFlags(args: {
   // --no-publish (skip publishing) contradicts --publish (force publishing).
   if (args.noPublish && args.publish) {
     return "--no-publish cannot be combined with --publish";
+  }
+  // repo#2729: an offline audit never requests other sites.
+  if (args.offline && args.externalLinks) {
+    return "--offline cannot be combined with --external-links (an offline audit does not request other sites)";
+  }
+  if (args.noExternalLinks && args.externalLinks) {
+    return "--no-external-links cannot be combined with --external-links";
   }
   // --render and --http are opposite overrides; refuse the contradiction
   // rather than silently picking one.
@@ -1038,6 +1047,23 @@ export const audit = defineCommand({
       description:
         "Run fully offline: skip cloud features, publishing, and telemetry",
     },
+    // repo#2729: internal link checks are on at every level, external ones at
+    // Surface and Full. Read from rawArgs like --publish / --no-publish.
+    "external-links": {
+      type: "boolean",
+      description:
+        "Check links to other sites this run, at any level (Surface and Full check them by default)",
+    },
+    "no-external-links": {
+      type: "boolean",
+      description:
+        "Do not check links to other sites this run (same as [external_links] enabled = false)",
+    },
+    "no-internal-links": {
+      type: "boolean",
+      description:
+        "Do not status-check internal link targets the crawl did not fetch (same as [internal_links] enabled = false)",
+    },
     visibility: {
       type: "string",
       description:
@@ -1123,11 +1149,16 @@ export const audit = defineCommand({
     // --no-publish is passed its publish value depends on argv order, so any
     // --publish/-p token alongside it counts as the conflict.
     const noPublish = hasNegatedFlag(rawArgs, "publish");
+    // The same for the external link switches (repo#2729).
+    const externalLinksOn = hasFlag(rawArgs, "external-links");
+    const externalLinksOff = hasNegatedFlag(rawArgs, "external-links");
     const flagError = validateAuditFlags({
       ...args,
       publish:
         !!args.publish || (noPublish && hasFlag(rawArgs, "publish", ["p"])),
       noPublish,
+      externalLinks: externalLinksOn,
+      noExternalLinks: externalLinksOff,
     });
     if (flagError) {
       console.error(flagError);
@@ -1574,14 +1605,17 @@ export const audit = defineCommand({
       // `[external_links] enabled` is a choice only when it is false: true is
       // the schema default `squirrel init` writes into every config, and it
       // would otherwise switch the quick level's link checks on for everyone.
+      // --external-links and --no-external-links beat the config (repo#2729).
       const auditLevel = resolveLocalAuditLevel(level, {
         pages: maxPages,
         ...(requestedRenderMode !== undefined
           ? { render: requestedRenderMode }
           : {}),
-        ...(configOverrides.externalLinks !== undefined
-          ? { externalLinks: configOverrides.externalLinks }
-          : {}),
+        ...(externalLinksOn || externalLinksOff
+          ? { externalLinks: externalLinksOn }
+          : configOverrides.externalLinks !== undefined
+            ? { externalLinks: configOverrides.externalLinks }
+            : {}),
         probe: probing.level,
       });
       // The crawler's word for the strategy: quick, surface or full.
@@ -2172,9 +2206,14 @@ export const audit = defineCommand({
           // Render strategy when rendering is on: auto = HTTP-first hybrid,
           // all = render every page. The level's setting unless overridden.
           renderStrategy,
-          // The level's external link checks unless [external_links] enabled
-          // in the config file says otherwise (--offline still turns them off).
+          // The level's external link checks unless a flag or [external_links]
+          // enabled in the config file says otherwise (--offline still turns
+          // them off).
           externalLinksEnabled: auditLevel.settings.externalLinks,
+          // repo#2729: the internal link probe, on unless switched off.
+          ...(hasNegatedFlag(rawArgs, "internal-links")
+            ? { internalLinksEnabled: false }
+            : {}),
           // Retention (#1912) deleted some of this project's audit history, so
           // say so. stderr unconditionally: this is the one line that tells a
           // user their older reports are gone, and putting it on stdout would

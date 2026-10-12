@@ -94,4 +94,27 @@ describe("levelRunOptions", () => {
     expect(all.cloudRendering).toBe("browser");
     expect(all.renderStrategy).toBe("all");
   });
+
+  // repo#2729: audit_website's externalLinks / internalLinks, like the CLI's
+  // --external-links, --no-external-links and --no-internal-links.
+  test("the tool's link switches beat the level and the config", async () => {
+    writeFileSync(configPath, "[external_links]\nenabled = false\n");
+    const on = await levelRunOptions("quick", undefined, undefined, {
+      external: true,
+    });
+    expect(on.externalLinksEnabled).toBe(true);
+    expect(on.internalLinksEnabled).toBeUndefined();
+    expect(on.auditLevel).toMatchObject({
+      level: "custom",
+      changes: ["externalLinks"],
+    });
+
+    writeFileSync(configPath, "");
+    const off = await levelRunOptions("surface", undefined, undefined, {
+      external: false,
+      internal: false,
+    });
+    expect(off.externalLinksEnabled).toBe(false);
+    expect(off.internalLinksEnabled).toBe(false);
+  });
 });

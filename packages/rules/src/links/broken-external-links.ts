@@ -1,7 +1,10 @@
 // links/broken-external-links - Broken external link detection
 // Uses cached check results from external link checker
 
-import { EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON } from "@squirrelscan/core-contracts";
+import {
+  EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
+  EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
+} from "@squirrelscan/core-contracts";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 
 import type { Rule, RuleContext, RuleResult, CheckResult, SiteData } from "../types";
@@ -63,8 +66,9 @@ export const brokenExternalLinksRule: Rule = {
     const externalLinks = ctx.site?.externalLinks;
 
     // repo#2729: undefined means external link checking did not run (Quick,
-    // --offline, external_links off). That is not "no external links": the
-    // pass it used to be read as healthy and resolved open issues.
+    // --offline, external_links off, switched off for the run). That is not
+    // "no external links": the pass it used to be read as healthy and resolved
+    // open issues.
     if (externalLinks === undefined) {
       const found = countExternalLinks(ctx.site?.pages);
       checks.push(
@@ -177,6 +181,21 @@ export const brokenExternalLinksRule: Rule = {
           totalBroken: brokenLinks.length,
           totalChecked: checkedCount,
         },
+      });
+    }
+
+    // repo#2729: links over this audit's limit were never requested. Say so,
+    // next to the result for the ones that were.
+    const capped = ctx.site?.externalLinkCheck;
+    if (capped && capped.found > capped.checked) {
+      const unchecked = capped.found - capped.checked;
+      checks.push({
+        name: "broken-external-links",
+        status: "skipped",
+        message: `${unchecked} of ${capped.found} external link(s) were not checked: over this audit's limit of ${capped.cap}, which checks the most-linked first`,
+        skipReason: EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
+        value: unchecked,
+        details: { externalLinksFound: capped.found, externalLinksChecked: capped.checked, cap: capped.cap },
       });
     }
 

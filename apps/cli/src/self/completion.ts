@@ -220,7 +220,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --visibility --yes -y --render --render-mode --http --offline --fail-on --header -H --rule-include --rule-exclude --disable-discovery-probes --probe -P --passive --aggressive --probe-budget --pentest --summary --help" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --visibility --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --fail-on --header -H --rule-include --rule-exclude --disable-discovery-probes --probe -P --passive --aggressive --probe-budget --pentest --summary --help" -- "\${cur}") )
       return 0
       ;;
     entities)
@@ -544,6 +544,9 @@ _squirrel() {
             '--render-mode[Render strategy]:mode:(off auto all)' \\
             '--http[Force plain HTTP fetch for this run]' \\
             '--offline[Run fully offline: no cloud, publishing, or telemetry]' \\
+            '--external-links[Check links to other sites this run, at any level]' \\
+            '--no-external-links[Do not check links to other sites this run]' \\
+            '--no-internal-links[Do not status-check unfetched internal link targets]' \\
             '*--fail-on[Exit 2 when a threshold trips (e.g. score<90, severity>=error)]:expr' \\
             '*'{-H,--header}'[Custom HTTP header on every crawl request, format "Name: Value" (repeatable)]:header' \\
             '*--rule-include[Only run these rule categories or rules]:pattern' \\
@@ -795,6 +798,9 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -l render -d "Force 
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l render-mode -a "off auto all" -d "Render strategy"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l http -d "Force plain HTTP fetch for this run"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l offline -d "Run fully offline: no cloud, publishing, or telemetry"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l external-links -d "Check links to other sites this run, at any level"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-external-links -d "Do not check links to other sites this run"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-internal-links -d "Do not status-check unfetched internal link targets"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l fail-on -d "Exit 2 when a threshold trips (e.g. score<90, severity>=error)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -s H -l header -d "Custom HTTP header on every crawl request, format \\"Name: Value\\" (repeatable)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-include -d "Only run these rule categories or rules"

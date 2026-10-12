@@ -46,7 +46,10 @@ squirrel audit <url> [options]
 | `--render` | | Force cloud browser rendering for this run: alias of `--render-mode all` ([uses credits](/guides/browser-rendering); requires login) | auto |
 | `--render-mode` | | Render strategy: `off` (HTTP only) · `auto` (render only client-rendered pages) · `all` (render every page). Overrides `[cloud].render` | the level's: `auto` for quick, `all` for surface and full |
 | `--http` | | Force plain HTTP for this run: alias of `--render-mode off` (never render in the cloud; pages cost the same either way) | auto |
-| `--offline` | | Run fully offline: skip cloud features, publishing, and telemetry | `false` |
+| `--offline` | | Run fully offline: skip cloud features, publishing, and telemetry. External links are not checked; internal link targets still are | `false` |
+| `--external-links` | | Check links to other sites this run, at any level. Cannot be combined with `--offline` or `--no-external-links` | the level's: off for quick, on for surface and full |
+| `--no-external-links` | | Do not check links to other sites this run. The report shows them as **Not checked** | the level's |
+| `--no-internal-links` | | Do not status-check internal link targets the crawl did not fetch. See [Link checking defaults](/rules/links#link-checking-defaults) | checked |
 | `--header` | `-H` | Custom HTTP header on every crawl request, `Name: Value` (repeatable). Merges over `[crawler] headers`; values are redacted in output. See [Web Bot Auth](/guides/web-bot-auth) | none |
 | `--fail-on` | | Exit `2` when a threshold trips, for CI gating (repeatable / comma-separated) | none |
 | `--rule-include` | | Only run these rule categories or rules, e.g. `ax,perf` or `core/meta-title` (repeatable / comma-separated). Replaces `[rules] enable` for this run | none |
@@ -63,7 +66,7 @@ squirrel audit <url> [options]
 
 | Level | Pages | What it does |
 |-------|-------|--------------|
-| `quick` | 25 | The URL and its sitemaps, no link following, no cloud checks |
+| `quick` | 25 | The URL and its sitemaps, no link following, no cloud checks, internal links checked |
 | `surface` | 100 | Follows links, one page per URL pattern first, with the cloud checks and the editor's summary |
 | `full` | 500 | Every page it can reach up to the budget, with the cloud checks and the editor's summary |
 

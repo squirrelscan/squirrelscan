@@ -411,8 +411,8 @@ export interface SiteData {
   rsl?: RslData | null;
   /**
    * External links with their check results. Undefined when external link
-   * checking did not run for this audit (Quick level, `--offline`,
-   * `external_links.enabled = false`): rules must read that as "not checked",
+   * checking did not run for this audit (`--offline`, `external_links.enabled
+   * = false`, switched off for the website or run): rules must read that as "not checked",
    * never as "no external links" (repo#2729). An empty array means checking
    * ran and the pages link nowhere outside the site.
    */
@@ -423,6 +423,19 @@ export interface SiteData {
    * (repo#2729). Undefined reads as "links were followed".
    */
   linkDiscoveryOff?: boolean;
+  /**
+   * External link checking this audit (repo#2729): distinct external links
+   * found, how many were checked, and the per-audit limit. Undefined when the
+   * check did not run, or for callers that do not record it.
+   */
+  externalLinkCheck?: { found: number; checked: number; cap: number };
+  /**
+   * Status of internal link targets the crawl did not fetch, from the link
+   * probe (repo#2729). Undefined when internal link checks were off.
+   */
+  linkTargetStatuses?: SitemapUrlStatusData[];
+  /** What the internal link probe covered. Undefined when it did not run. */
+  internalLinkProbe?: { unfetched: number; probed: number; cap: number; outOfScope?: number };
   resourceSizes?: {
     css: ResourceSizeData[];
     images: ResourceSizeData[];

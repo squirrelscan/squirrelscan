@@ -248,6 +248,12 @@ export interface CrawlStats {
    */
   linkDiscoveryOff?: boolean;
   /**
+   * External link checking this run (repo#2729): distinct external links the
+   * pages carry, how many were checked, and the per-audit limit that capped it.
+   * Set by the external-link phase when it ran; absent when it did not.
+   */
+  externalLinkCheck?: { found: number; checked: number; cap: number };
+  /**
    * Root fetches (robots.txt, sitemaps, llms.txt, the Markdown probe) the site
    * REFUSED with a 401/403/429 or a bot-challenge 503, capped at
    * `MAX_REFUSED_FETCHES`. A refusal is a coverage failure, not an observation

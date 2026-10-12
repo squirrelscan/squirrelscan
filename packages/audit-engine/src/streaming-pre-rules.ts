@@ -28,6 +28,7 @@ import { Effect } from "effect";
 
 import type { ExternalLinksConfig, Config } from "@squirrelscan/config";
 import type { PageRecord } from "@squirrelscan/core-contracts";
+import { externalLinkCheckCap } from "@squirrelscan/core-contracts/limits";
 import type { SQLiteStorage } from "@squirrelscan/crawler";
 
 import {
@@ -78,6 +79,12 @@ export interface StreamPreRulesOptions {
     resolveBulkChecker?: () => Promise<
       ((urls: string[]) => Promise<Map<string, ExternalCheckResult>>) | undefined
     >;
+    /**
+     * Links to check ahead of the per-audit limit's most-linked order
+     * (repo#2729): the cloud passes the ones an open broken-link finding names,
+     * so a capped run still re-checks them and can tell they were fixed.
+     */
+    priorityHrefs?: readonly string[];
   };
   /**
    * Site URL to collect cloud-prefetch payloads for. Omit when the run has no
@@ -220,10 +227,18 @@ export function runStreamingPreRules(
           storage,
           crawlId,
           externalLinkOccurrences,
-          options.externalLinks.config,
+          // repo#2729: an explicit `max_links` wins; unset is the audit's page
+          // budget, so the cloud's one-credit-per-page reservation is an upper bound.
+          {
+            ...options.externalLinks.config,
+            max_links:
+              options.externalLinks.config.max_links ??
+              externalLinkCheckCap(config.crawler?.max_pages ?? 0),
+          },
           options.externalLinks.onProgress,
           options.externalLinks.linkCache ?? null,
           bulkChecker,
+          options.externalLinks.priorityHrefs,
         )
       : [];
 

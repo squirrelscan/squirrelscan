@@ -12,6 +12,7 @@ import {
   AUDIT_SETTING_KEYS,
   clampAuditPages,
   crawlStrategyCoverageMode,
+  EXTERNAL_LINKS_DEFAULT_ON,
   effectiveAuditSettings,
   legacyCloudDepthSettings,
   levelOfSettings,
@@ -275,7 +276,7 @@ describe("the old cloud depths", () => {
     }
   });
 
-  test("they all keep external links off, as the cloud did", () => {
+  test("they keep external links off, as the cloud did, until the default turns on (repo#2729)", () => {
     for (const p of LEGACY_CLOUD_DEPTH_PROFILES) {
       expect(legacyCloudDepthSettings(p).settings.externalLinks).toBe(false);
     }
@@ -294,7 +295,26 @@ describe("AUDIT_LEVEL_COPY quick summary", () => {
     const summary = AUDIT_LEVEL_COPY.quick.summary;
     expect(summary).toContain("25 pages");
     expect(summary).toContain("rendered in the cloud");
+    expect(summary).toContain("with internal link checks");
+    expect(summary).not.toContain("external");
     expect(summary).toContain("Costs credits: 50 plus 2 per page, up to 100");
     expect(summary).not.toMatch(/no credits|local rules only|free/i);
+  });
+});
+
+// repo#2729: one constant holds the external link default, so turning it on
+// later is a one-line change that every surface follows.
+describe("EXTERNAL_LINKS_DEFAULT_ON", () => {
+  test("is off for now", () => {
+    expect(EXTERNAL_LINKS_DEFAULT_ON).toBe(false);
+  });
+
+  test("is what Quick and every old cloud depth use; Surface and Full check them always", () => {
+    expect(AUDIT_LEVEL_PRESETS.quick.externalLinks).toBe(EXTERNAL_LINKS_DEFAULT_ON);
+    for (const p of LEGACY_CLOUD_DEPTH_PROFILES) {
+      expect(legacyCloudDepthSettings(p).settings.externalLinks).toBe(EXTERNAL_LINKS_DEFAULT_ON);
+    }
+    expect(AUDIT_LEVEL_PRESETS.surface.externalLinks).toBe(true);
+    expect(AUDIT_LEVEL_PRESETS.full.externalLinks).toBe(true);
   });
 });

@@ -707,6 +707,34 @@ export const COVERAGE_PAGE_LIMITS = {
   full: 500,
 } as const satisfies Record<CoverageMode, number>;
 
+/**
+ * Link checking bounds (repo#2729). Internal link checks are on at every level
+ * and external ones are meant to be (`EXTERNAL_LINKS_DEFAULT_ON`), so each
+ * needs a ceiling an audit can never exceed.
+ *
+ * - `externalPerAuditMin`: an audit requests at most `max(pages, this)` distinct
+ *   external links, most-linked first (and any the caller asks to check first);
+ *   the rest are reported as not checked. Two real sites linked out to 37,740
+ *   and 42,228 distinct URLs in one audit, which is why there is a ceiling at
+ *   all; 200 covers the 90th percentile of audits that checked them (about 110).
+ *   This bounds REQUESTS. What a cloud audit is charged is bounded separately
+ *   and lower: 1 credit per link up to one per page of its budget
+ *   (`externalLinkBudget` in credits.ts), the rest checked free.
+ * - `internalTargetProbes`: status-only requests (HEAD, then GET) for internal
+ *   link targets the crawl did not fetch, most-linked first. Free: no render,
+ *   no rules, no page charge.
+ */
+export const LINK_CHECK_LIMITS = {
+  externalPerAuditMin: 200,
+  internalTargetProbes: 200,
+} as const;
+
+/** Distinct external links one audit may request: its page budget, at least `externalPerAuditMin`. */
+export function externalLinkCheckCap(pages: number): number {
+  const budget = Number.isFinite(pages) ? Math.trunc(pages) : 0;
+  return Math.max(LINK_CHECK_LIMITS.externalPerAuditMin, budget);
+}
+
 // Hard ceiling on a single crawl, applied by the CLI (resolvePageLimit) and by
 // every cloud dispatch path via REPORT_LIMITS.maxPages, which now equals it.
 // 5,000 → 10,000 (#1028): see the memory arithmetic on REPORT_LIMITS.maxPages.

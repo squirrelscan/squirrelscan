@@ -1,8 +1,9 @@
 // Checks that did not run for this audit (repo#2729). Shared across the CLI
 // console and every report renderer.
 //
-// When external link checking is off (Quick level, --offline,
-// external_links.enabled = false) or the crawl did not follow links, the link
+// When external link checking is off (the Quick level, --offline,
+// `[external_links] enabled = false`, a website setting), an audit found more
+// external links than its limit, or the crawl did not follow links, the link
 // rules emit a `skipped` check with a NOT_CHECKED skip reason. Skipped checks
 // are neither passes nor findings, so the issue list leaves them out and the
 // score never counts them. Left at that, a Quick audit reads as "no broken
@@ -11,6 +12,7 @@
 
 import {
   EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
+  EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
   LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
   NOT_CHECKED_SKIP_REASONS,
 } from "@squirrelscan/core-contracts";
@@ -38,9 +40,11 @@ export interface NotCheckedReportShape {
 
 const HINTS: Record<string, string> = {
   [EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON]:
-    "Turn external link checks on to check them: in the CLI they run at the Surface and Full levels without --offline, and in the cloud they are a website setting.",
+    "Turn external link checks on to check them: in the CLI pass --external-links, or run a Surface or Full audit, without --offline; in the cloud they are a website setting.",
   [LINK_TARGETS_NOT_FETCHED_SKIP_REASON]:
-    "Run a Surface or Full audit, which follows links, to check them.",
+    "Turn internal link checks back on (they are off with --no-internal-links or internal_links.enabled = false), raise internal_links.max_targets, or run a Surface or Full audit, which follows links, to check them.",
+  [EXTERNAL_LINKS_OVER_CAP_SKIP_REASON]:
+    "Raise the limit with external_links.max_links, or audit more pages, to check them.",
 };
 
 const DEFAULT_HINT = "Run a Surface or Full audit to check them.";

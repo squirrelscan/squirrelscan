@@ -46,7 +46,11 @@ export interface AuditSettings {
   /** Cloud-backed checks: AI and authority signals, the editor's summary, tech detection, domain stats. */
   cloudChecks: boolean;
   render: RenderPolicy;
-  /** Check links that leave the site. In the cloud each destination costs a credit. */
+  /**
+   * Check links that leave the site. In the cloud each distinct destination
+   * costs a credit, at most `externalLinkCheckCap(pages)` per audit. Quick and
+   * the old cloud depths take `EXTERNAL_LINKS_DEFAULT_ON`.
+   */
   externalLinks: boolean;
   probe: ProbeIntensity;
 }
@@ -63,13 +67,21 @@ export const AUDIT_SETTING_KEYS = [
   "probe",
 ] as const satisfies readonly AuditSettingKey[];
 
+/**
+ * Whether Quick and the old cloud depths check external links by default
+ * (repo#2729). Off until the shared link checker lands: one line turns them
+ * on. Surface and Full always check them. Internal link checks are a separate
+ * setting (`[internal_links]`) and are on at every level.
+ */
+export const EXTERNAL_LINKS_DEFAULT_ON: boolean = false;
+
 export const AUDIT_LEVEL_PRESETS: Readonly<Record<AuditLevel, Readonly<AuditSettings>>> = {
   quick: {
     pages: COVERAGE_PAGE_LIMITS.quick,
     crawlStrategy: "seed-and-sitemap",
     cloudChecks: false,
     render: "auto",
-    externalLinks: false,
+    externalLinks: EXTERNAL_LINKS_DEFAULT_ON,
     probe: "passive",
   },
   surface: {
@@ -96,7 +108,9 @@ export const AUDIT_LEVEL_COPY: Readonly<
 > = {
   quick: {
     label: "Quick",
-    summary: `A fast look at the seed page and sitemaps: ${COVERAGE_PAGE_LIMITS.quick} pages, rendered in the cloud. Costs credits: 50 plus 2 per page, up to 100.`,
+    summary: EXTERNAL_LINKS_DEFAULT_ON
+      ? `A fast look at the seed page and sitemaps: ${COVERAGE_PAGE_LIMITS.quick} pages, rendered in the cloud, with internal and external link checks. Costs credits: 50, plus 2 per page and 1 per external link checked, up to ${50 + 3 * COVERAGE_PAGE_LIMITS.quick}.`
+      : `A fast look at the seed page and sitemaps: ${COVERAGE_PAGE_LIMITS.quick} pages, rendered in the cloud, with internal link checks. Costs credits: 50 plus 2 per page, up to ${50 + 2 * COVERAGE_PAGE_LIMITS.quick}.`,
   },
   surface: {
     label: "Surface",
@@ -248,10 +262,12 @@ export function parseResolvedAuditSettings(value: unknown): ResolvedAuditSetting
 
 /**
  * The cloud's old four scan depths, kept so existing websites and API callers keep
- * working. Each is the full set of settings it resolved to before audit levels
- * existed (pages, engine coverage mode, cloud checks, rendering, external links),
- * so migrating a website to these values changes nothing it does or costs. They
- * are `custom` settings by construction, except where they happen to equal a level.
+ * working. Each is the set of settings it resolved to before audit levels existed
+ * (pages, engine coverage mode, cloud checks, rendering, external links), so
+ * migrating a website to these values changes nothing it does or costs. External
+ * links follow `EXTERNAL_LINKS_DEFAULT_ON`, which keeps them off as the cloud did
+ * until it turns them on everywhere (repo#2729). They are `custom` settings by
+ * construction, except where they happen to equal a level.
  */
 export const LEGACY_CLOUD_DEPTH_PROFILES = ["fast", "surface", "deep", "full"] as const;
 export type LegacyCloudDepthProfile = (typeof LEGACY_CLOUD_DEPTH_PROFILES)[number];
@@ -266,7 +282,7 @@ const LEGACY_CLOUD_DEPTHS: Readonly<
       crawlStrategy: "seed-and-sitemap",
       cloudChecks: true,
       render: "all",
-      externalLinks: false,
+      externalLinks: EXTERNAL_LINKS_DEFAULT_ON,
       probe: "passive",
     },
   },
@@ -277,7 +293,7 @@ const LEGACY_CLOUD_DEPTHS: Readonly<
       crawlStrategy: "sampled",
       cloudChecks: true,
       render: "all",
-      externalLinks: false,
+      externalLinks: EXTERNAL_LINKS_DEFAULT_ON,
       probe: "passive",
     },
   },
@@ -288,7 +304,7 @@ const LEGACY_CLOUD_DEPTHS: Readonly<
       crawlStrategy: "sampled",
       cloudChecks: true,
       render: "all",
-      externalLinks: false,
+      externalLinks: EXTERNAL_LINKS_DEFAULT_ON,
       probe: "passive",
     },
   },
@@ -299,7 +315,7 @@ const LEGACY_CLOUD_DEPTHS: Readonly<
       crawlStrategy: "all",
       cloudChecks: true,
       render: "all",
-      externalLinks: false,
+      externalLinks: EXTERNAL_LINKS_DEFAULT_ON,
       probe: "passive",
     },
   },

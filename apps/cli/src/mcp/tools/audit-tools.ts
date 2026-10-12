@@ -61,7 +61,8 @@ function localConfigPath(): string | undefined {
  * settings, with the project config's choices laid over them the same way
  * `squirrel audit` lays them (`[crawler] max_pages`, `[cloud] render`,
  * `[security] probe`, `[external_links] enabled = false`), and the caller's
- * `maxPages` over those. The report carries the result as `auditLevel`.
+ * `maxPages` and link switches over those. The report carries the result as
+ * `auditLevel`.
  *
  * A render setting in the config is applied as the fetch mode, so a
  * configured one is what runs. Otherwise the fetch mode is left to the caller:
@@ -71,11 +72,18 @@ function localConfigPath(): string | undefined {
 export async function levelRunOptions(
   level: AuditLevel,
   maxPages?: number,
-  loaded?: Config
+  loaded?: Config,
+  // repo#2729: the caller's link switches, like --external-links,
+  // --no-external-links and --no-internal-links.
+  links: { external?: boolean; internal?: boolean } = {}
 ): Promise<
   Pick<
     RunAuditOptions,
-    "externalLinksEnabled" | "probe" | "renderStrategy" | "cloudRendering"
+    | "externalLinksEnabled"
+    | "internalLinksEnabled"
+    | "probe"
+    | "renderStrategy"
+    | "cloudRendering"
   > & {
     coverageMode: AuditLevel;
     maxPages: number;
@@ -105,9 +113,11 @@ export async function levelRunOptions(
   const resolved = resolveLocalAuditLevel(level, {
     ...(pages !== undefined ? { pages } : {}),
     ...(render !== undefined ? { render } : {}),
-    ...(configOverrides.externalLinks !== undefined
-      ? { externalLinks: configOverrides.externalLinks }
-      : {}),
+    ...(links.external !== undefined
+      ? { externalLinks: links.external }
+      : configOverrides.externalLinks !== undefined
+        ? { externalLinks: configOverrides.externalLinks }
+        : {}),
     probe: probing.level,
   });
   const strategy = resolved.settings.render;
@@ -116,6 +126,7 @@ export async function levelRunOptions(
     maxPages: resolved.settings.pages,
     auditLevel: resolved,
     externalLinksEnabled: resolved.settings.externalLinks,
+    ...(links.internal === false ? { internalLinksEnabled: false } : {}),
     probe: probing,
     ...(strategy === "auto" || strategy === "all"
       ? { renderStrategy: strategy }
@@ -154,12 +165,15 @@ async function runWebsiteAudit(input: {
   offline?: boolean;
   confirm?: boolean;
   headers?: Record<string, string>;
+  externalLinks?: boolean;
+  internalLinks?: boolean;
 }): Promise<CallToolResult> {
   const config = await loadConfig(localConfigPath(), { silent: true });
   const levelOptions = await levelRunOptions(
     input.level,
     input.maxPages,
-    config
+    config,
+    { external: input.externalLinks, internal: input.internalLinks }
   );
   const extra = {
     url: input.url,
@@ -243,7 +257,7 @@ export function registerAuditTools(server: McpServer): void {
     {
       title: "Audit a website",
       description:
-        "Run a deterministic website audit (performance, security, accessibility, content, structured data, and more) of a URL and return an LLM-optimized report. Signed out it runs on this machine with no cloud call. Signed in it is a billed cloud audit, the same as `squirrel audit`: 50 credits plus 2 per audited page at every level, with pages that need JavaScript rendered in the cloud browser and, at surface and full, the cloud checks. The first call returns the estimate as status confirmation_required; show it to the user and call again with confirm: true to start. An audit the balance cannot cover is refused with the cost and the balance. Pass offline: true for a local-only audit with no cloud call.",
+        "Run a deterministic website audit (performance, security, accessibility, content, structured data, and more) of a URL and return an LLM-optimized report. Signed out it runs on this machine with no cloud call. Signed in it is a billed cloud audit, the same as `squirrel audit`: 50 credits plus 2 per audited page at every level, with pages that need JavaScript rendered in the cloud browser and, at surface and full, the cloud checks. Every level checks internal links; surface and full also check external links, and externalLinks: true checks them at quick. Pass externalLinks: false or internalLinks: false to switch either off. A link check that did not run is listed under not-checked in the report, never as clean. The first call returns the estimate as status confirmation_required; show it to the user and call again with confirm: true to start. An audit the balance cannot cover is refused with the cost and the balance. Pass offline: true for a local-only audit with no cloud call.",
       inputSchema: z.object({
         url: z.string().describe("The URL to audit (e.g. https://example.com)"),
         level: z.enum(AUDIT_LEVELS).optional().describe(LEVEL_DESCRIPTION),
@@ -264,6 +278,18 @@ export function registerAuditTools(server: McpServer): void {
           .optional()
           .describe(
             "Run locally with no cloud call: not billed, no cloud checks, no cloud rendering"
+          ),
+        externalLinks: z
+          .boolean()
+          .optional()
+          .describe(
+            "Check links to other sites: true at any level, false to skip them (default: the level's setting, on at surface and full; [external_links] enabled = false in squirrel.toml turns them off). An offline audit never checks them"
+          ),
+        internalLinks: z
+          .boolean()
+          .optional()
+          .describe(
+            "false skips the status check of internal link targets the crawl did not fetch (default on at every level, like [internal_links] enabled)"
           ),
         confirm: z
           .boolean()
@@ -291,7 +317,17 @@ export function registerAuditTools(server: McpServer): void {
           ),
       }),
     },
-    async ({ url, level, coverage, maxPages, offline, confirm, headers }) => {
+    async ({
+      url,
+      level,
+      coverage,
+      maxPages,
+      offline,
+      confirm,
+      headers,
+      externalLinks,
+      internalLinks,
+    }) => {
       if (level !== undefined && coverage !== undefined && level !== coverage) {
         return errorResult(
           `level ${level} and coverage ${coverage} name different levels. Pass one (coverage is the old name for level).`
@@ -307,6 +343,8 @@ export function registerAuditTools(server: McpServer): void {
         offline,
         confirm,
         headers,
+        externalLinks,
+        internalLinks,
       });
     }
   );
@@ -315,7 +353,7 @@ export function registerAuditTools(server: McpServer): void {
     "quick_check",
     {
       title: "Quick check",
-      description: `Fast, local-only audit at the quick level: the URL and its sitemaps, up to ${AUDIT_LEVEL_PRESETS.quick.pages} pages, with no link following and no cloud checks. Works offline. Use for a rapid health snapshot of a site.`,
+      description: `Fast, local-only audit at the quick level: the URL and its sitemaps, up to ${AUDIT_LEVEL_PRESETS.quick.pages} pages, with no link following and no cloud checks. Internal link targets are status-checked; external links are not, because it runs offline. Use for a rapid health snapshot of a site.`,
       inputSchema: z.object({
         url: z.string().describe("The URL to check (e.g. https://example.com)"),
       }),

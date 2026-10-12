@@ -177,6 +177,8 @@ export interface RunAuditOptions extends AuditOptions {
   configPath?: string;
   documentFetcher?: DocumentFetcher;
   externalLinksEnabled?: boolean;
+  /** repo#2729: false switches the internal link probe off for this run. */
+  internalLinksEnabled?: boolean;
   externalLinksConcurrency?: number;
   externalLinksTimeoutMs?: number;
   crawlerTimeoutMs?: number;
@@ -2419,6 +2421,11 @@ export function mergeOptionsToConfig(
     external_links: options.offline
       ? { ...nextExternalLinks, enabled: false }
       : nextExternalLinks,
+    // repo#2729: the internal link probe only requests the audited site, so
+    // --offline keeps it; --no-internal-links turns it off.
+    ...(options.internalLinksEnabled === false
+      ? { internal_links: { ...config.internal_links, enabled: false } }
+      : {}),
     // --offline forces cloud off regardless of config/flags: no prefetch, no
     // bulk dead-link checks, no browser rendering (resolveDocumentFetcher
     // checks cloud.enabled first).

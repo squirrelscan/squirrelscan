@@ -144,6 +144,21 @@ export const ExternalLinksConfigSchema = z.object({
   cache_ttl_days: z.number().int().min(1).default(7),
   timeout_ms: z.number().int().min(1000).max(60000).default(10000),
   concurrency: z.number().int().min(1).max(20).default(5),
+  // Most distinct external links one audit checks, most-linked first; the rest
+  // are reported as not checked (repo#2729). Unset = the audit's page budget,
+  // at least LINK_CHECK_LIMITS.externalPerAuditMin.
+  max_links: z.number().int().min(1).max(100_000).optional(),
+});
+
+// Internal link checks (repo#2729): a status-only request (HEAD, then GET) for
+// each internal link target the crawl did not fetch, so a linked 404 is found
+// even when the crawl did not follow links (Quick, sitemap scope) or ran out of
+// page budget. No render, no rules, no page charge. On by default.
+export const InternalLinksConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  // Most targets one audit status-checks, most-linked first; the rest are
+  // reported as not checked. Unset = LINK_CHECK_LIMITS.internalTargetProbes.
+  max_targets: z.number().int().min(0).max(10_000).optional(),
 });
 
 export const OutputConfigSchema = z.object({
@@ -405,6 +420,9 @@ export const ConfigSchema = z.object({
   rules: RulesConfigSchema.default(defaultRules),
   plugins: PluginsConfigSchema.default(defaultPlugins),
   external_links: ExternalLinksConfigSchema.default(defaultExternalLinks),
+  // Optional, unlike its siblings, so a Config built by hand (tests, the cloud
+  // container) needs no change: absent reads as every default (on).
+  internal_links: InternalLinksConfigSchema.optional(),
   output: OutputConfigSchema.default(defaultOutput),
   // Local disk retention (#1912) — how many audits a project keeps.
   storage: StorageConfigSchema.default(defaultStorage),
@@ -443,6 +461,7 @@ export type PluginCapability = z.infer<typeof PluginCapabilitySchema>;
 export type PluginManifestItem = z.infer<typeof PluginManifestItemSchema>;
 export type PluginsConfig = z.infer<typeof PluginsConfigSchema>;
 export type ExternalLinksConfig = z.infer<typeof ExternalLinksConfigSchema>;
+export type InternalLinksConfig = z.infer<typeof InternalLinksConfigSchema>;
 export type OutputConfig = z.infer<typeof OutputConfigSchema>;
 export type StorageConfig = z.infer<typeof StorageConfigSchema>;
 export type CloudConfig = z.infer<typeof CloudConfigSchema>;

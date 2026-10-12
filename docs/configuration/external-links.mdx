@@ -1,7 +1,7 @@
 ---
 title: "External Links Configuration"
 icon: "external-link"
-description: "Configure external link checking, caching, and timeouts"
+description: "Configure external and internal link checking, limits, caching, and timeouts"
 ---
 
 The `[external_links]` section controls how squirrelscan validates outbound links during crawls.
@@ -14,7 +14,10 @@ enabled = true
 cache_ttl_days = 7
 timeout_ms = 10000
 concurrency = 5
+# max_links = 500   # unset: the page budget or 200, whichever is more
 ```
+
+Internal links have a section of their own, [`[internal_links]`](#internal-links).
 
 ## Options
 
@@ -27,7 +30,7 @@ Enable external link checking during crawl.
 
 When enabled, squirrelscan validates all external links found during crawling to detect broken outbound links (404s, timeouts, DNS failures).
 
-External link checks are one of the audit level's settings. `true` is the default `squirrel init` writes into every config, so it reads as unset: surface and full audits check external links, quick audits do not. `false` turns them off at every level, and makes a surface or full audit custom.
+External link checks are one of the audit level's settings. `true` is the default `squirrel init` writes into every config, so it reads as unset: surface and full audits check external links, quick audits do not. `false` turns them off at every level, and makes a surface or full audit custom. For one run, `--external-links` checks them at any level and `--no-external-links` skips them; either beats this setting. With them off, `links/broken-external-links` reports **Not checked**, never a pass.
 
 **Examples:**
 
@@ -53,8 +56,22 @@ enabled = false
 **Impact when disabled:**
 
 - Faster crawls (no external HTTP requests)
-- `links/broken-external-links` rule won't report issues
+- `links/broken-external-links` reports **Not checked** instead of findings
 - Outbound link quality not validated
+
+---
+
+### `max_links`
+
+**Type:** `number`
+**Default:** unset: the audit's page budget or 200, whichever is more
+
+The most distinct external links one audit requests. The links on the most pages go first (the nav and footer links every page shares), then the rest by URL, so the same crawl always checks the same set. Links over the limit are reported as **Not checked** with reason `external-links-over-cap`. It bounds requests, not credits: a cloud audit is charged for at most one external link per page of its budget either way.
+
+```toml
+[external_links]
+max_links = 500
+```
 
 ---
 
@@ -218,6 +235,18 @@ concurrency = 15
 | Rate-limited | 1-2 | Avoid 429 errors |
 
 ---
+
+## Internal links
+
+The `[internal_links]` section controls the internal link check: a status-only request (`HEAD`, then `GET`) for each internal link target the crawl did not fetch, so [`links/broken-links`](/rules/links/broken-links) finds a linked 404 even when the crawl did not follow links (the Quick level, the Sitemap crawl strategy) or ran out of page budget. No render, no rules and no credits. It requests the audited site only, so it runs with `--offline` too, and it stays inside the crawl scope and robots.txt. It never requests a link that looks like an action (a `logout`, `sign-out` or `unsubscribe` path, or a query such as `?action=delete`).
+
+```toml
+[internal_links]
+enabled = true      # false, or --no-internal-links for one run, switches it off
+max_targets = 200   # most targets one audit checks, most-linked first
+```
+
+With it off, or past `max_targets`, an audit that did not follow links reports the targets it could not see as **Not checked**.
 
 ## How external link checking works
 

@@ -134,9 +134,10 @@ export const PRIVATE_TARGET_SKIP_REASON = "private-target";
 /**
  * `skipReason` of `links/broken-external-links` (and `links/dead-links`) when
  * external link checking did not run for the audit (repo#2729): the Quick
- * level, `--offline`, or `external_links.enabled = false`. An evaluation gap,
- * not a pass: the external links on the pages were never requested, so "no
- * broken external links" would be a claim nothing tested.
+ * level (see `EXTERNAL_LINKS_DEFAULT_ON`), `--offline`,
+ * `external_links.enabled = false`, or a website or run that switched it off.
+ * An evaluation gap, not a pass: the external links on the pages were never
+ * requested, so "no broken external links" would be a claim nothing tested.
  */
 export const EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON = "external-links-not-checked";
 
@@ -149,6 +150,13 @@ export const EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON = "external-links-not-checke
 export const LINK_TARGETS_NOT_FETCHED_SKIP_REASON = "link-targets-not-fetched";
 
 /**
+ * `skipReason` of `links/broken-external-links` for the external links an audit
+ * found but did not check because they were over its per-audit limit
+ * (`externalLinkCheckCap`, repo#2729). The most-linked ones are checked first.
+ */
+export const EXTERNAL_LINKS_OVER_CAP_SKIP_REASON = "external-links-over-cap";
+
+/**
  * Skip reasons that mean "this check did not run for the audit", which every
  * report renders as a visible "Not checked" line instead of leaving the rule
  * looking clean (repo#2729), and which never resolve an open finding.
@@ -156,6 +164,7 @@ export const LINK_TARGETS_NOT_FETCHED_SKIP_REASON = "link-targets-not-fetched";
 export const NOT_CHECKED_SKIP_REASONS: ReadonlySet<string> = new Set([
   EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
   LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
+  EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
 ]);
 
 export type RuleScope = "page" | "site";

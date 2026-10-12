@@ -16,7 +16,7 @@ import {
 import { brokenExternalLinksRule } from "../src/links/broken-external-links";
 import { brokenLinksRule } from "../src/links/broken-links";
 import { deadLinksRule } from "../src/links/dead-links";
-import type { ExternalLinkCheckData, ParsedPage, RuleContext } from "../src/types";
+import type { ExternalLinkCheckData, ParsedPage, RuleContext, SiteData } from "../src/types";
 
 const BASE = "https://example.com";
 
@@ -29,7 +29,16 @@ interface FixturePage {
 
 function ctx(
   pages: FixturePage[],
-  site: { externalLinks?: ExternalLinkCheckData[]; linkDiscoveryOff?: boolean } = {},
+  site: Partial<
+    Pick<
+      SiteData,
+      | "externalLinks"
+      | "linkDiscoveryOff"
+      | "linkTargetStatuses"
+      | "internalLinkProbe"
+      | "externalLinkCheck"
+    >
+  > = {},
 ): RuleContext {
   return {
     page: { url: `${BASE}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
@@ -150,6 +159,24 @@ describe("links/broken-external-links when external link checking did not run", 
     expect(checks[0]!.status).toBe("warn");
   });
 
+  test("links over the per-audit limit are not checked, next to the result for the rest", () => {
+    const { checks } = brokenExternalLinksRule.run(
+      ctx([{ url: `${BASE}/`, statusCode: 200 }], {
+        externalLinks: [
+          { href: "https://a.example/", status: 200, error: null, sourcePages: [`${BASE}/`] },
+        ],
+        externalLinkCheck: { found: 30, checked: 1, cap: 1 },
+      }),
+    );
+    expect(checks.map((c) => `${c.status}:${c.skipReason ?? ""}`)).toEqual([
+      "pass:",
+      "skipped:external-links-over-cap",
+    ]);
+    expect(checks[1]!.message).toBe(
+      "29 of 30 external link(s) were not checked: over this audit's limit of 1, which checks the most-linked first",
+    );
+  });
+
   test("links/dead-links skips with the same reason (kept off the locked upsell)", () => {
     const { checks } = deadLinksRule.run(ctx([{ url: `${BASE}/`, statusCode: 200 }]));
     expect(checks[0]!.status).toBe("skipped");
@@ -175,9 +202,9 @@ describe("links/broken-links when the crawl did not follow links", () => {
     const skipped = checks[0]!;
     expect(skipped.skipReason).toBe(LINK_TARGETS_NOT_FETCHED_SKIP_REASON);
     expect(skipped.message).toBe(
-      "2 of 4 internal link target(s) were not fetched because this audit did not follow links, so they were not checked for broken links",
+      "2 of 4 internal link target(s) were not fetched because this audit did not follow links and internal link checks were off, so they were not checked for broken links",
     );
-    expect(skipped.details).toEqual({ linkTargets: 4, unfetchedTargets: 2 });
+    expect(skipped.details).toEqual({ linkTargets: 4, unfetchedTargets: 2, probedTargets: 0 });
   });
 
   test("a broken target it did fetch still fails, next to the not-checked skip", () => {
@@ -206,7 +233,7 @@ describe("links/broken-links when the crawl did not follow links", () => {
       ),
     );
     expect(named(checks, "broken-links").map((c) => c.status)).toEqual(["pass"]);
-    expect(checks[0]!.details).toEqual({ linkTargets: 2, unfetchedTargets: 0 });
+    expect(checks[0]!.details).toEqual({ linkTargets: 2, unfetchedTargets: 0, probedTargets: 0 });
   });
 
   test("links followed (Surface, Full): unfetched targets keep today's pass", () => {
@@ -214,6 +241,70 @@ describe("links/broken-links when the crawl did not follow links", () => {
     // is; the pass says how much it covered.
     const { checks } = brokenLinksRule.run(ctx(pages));
     expect(named(checks, "broken-links").map((c) => c.status)).toEqual(["pass"]);
-    expect(checks[0]!.details).toEqual({ linkTargets: 4, unfetchedTargets: 2 });
+    expect(checks[0]!.details).toEqual({ linkTargets: 4, unfetchedTargets: 2, probedTargets: 0 });
+  });
+
+  test("the link probe's statuses count as known: a probed 404 fails, a probed 200 passes", () => {
+    const { checks } = brokenLinksRule.run(
+      ctx(pages, {
+        linkDiscoveryOff: true,
+        linkTargetStatuses: [
+          { url: `${BASE}/gone`, status: 404, error: null },
+          { url: `${BASE}/blog/old`, status: 200, error: null },
+        ],
+        internalLinkProbe: { unfetched: 2, probed: 2, cap: 200 },
+      }),
+    );
+    expect(named(checks, "broken-links").map((c) => c.status)).toEqual(["fail"]);
+    expect(checks[0]!.items?.map((i) => [i.id, i.meta?.probed])).toEqual([[`${BASE}/gone`, true]]);
+  });
+
+  test("targets past the probe's limit stay not checked, and the message says why", () => {
+    const { checks } = brokenLinksRule.run(
+      ctx(pages, {
+        linkDiscoveryOff: true,
+        linkTargetStatuses: [{ url: `${BASE}/blog/old`, status: 200, error: null }],
+        internalLinkProbe: { unfetched: 2, probed: 1, cap: 1 },
+      }),
+    );
+    expect(named(checks, "broken-links").map((c) => c.status)).toEqual(["skipped"]);
+    expect(checks[0]!.message).toBe(
+      "1 of 4 internal link target(s) were not fetched because this audit did not follow links and status-checked only the 1 most-linked targets, so they were not checked for broken links",
+    );
+  });
+
+  test("a probe refused with 401/403 is unverifiable, not broken (a bot wall)", () => {
+    const { checks } = brokenLinksRule.run(
+      ctx(pages, {
+        linkTargetStatuses: [
+          { url: `${BASE}/gone`, status: 403, error: null },
+          { url: `${BASE}/blog/old`, status: 401, error: null },
+        ],
+        internalLinkProbe: { unfetched: 2, probed: 2, cap: 200 },
+      }),
+    );
+    expect(named(checks, "broken-links").map((c) => c.status)).toEqual(["pass"]);
+    expect(named(checks, "refused-links").map((c) => c.status)).toEqual(["info"]);
+  });
+
+  test("a probe that got no answer says so rather than naming zero targets", () => {
+    const { checks } = brokenLinksRule.run(
+      ctx(pages, { linkDiscoveryOff: true, internalLinkProbe: { unfetched: 2, probed: 0, cap: 200 } }),
+    );
+    expect(checks[0]!.message).toContain("its internal link checks got no answer");
+  });
+
+  test("a probe that was throttled is rate-limited, not broken", () => {
+    const { checks } = brokenLinksRule.run(
+      ctx(pages, {
+        linkTargetStatuses: [
+          { url: `${BASE}/gone`, status: 429, error: null, rateLimited: true },
+          { url: `${BASE}/blog/old`, status: 200, error: null },
+        ],
+        internalLinkProbe: { unfetched: 2, probed: 2, cap: 200 },
+      }),
+    );
+    expect(named(checks, "broken-links").map((c) => c.status)).toEqual(["pass"]);
+    expect(named(checks, "rate-limited-links").map((c) => c.status)).toEqual(["info"]);
   });
 });
