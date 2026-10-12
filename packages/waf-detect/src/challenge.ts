@@ -9,7 +9,10 @@ import {
 } from "./providers";
 import { detectWaf } from "./detect";
 
-/** Which kind of interstitial marker the page's opening carries, if any. */
+/**
+ * Which kind of interstitial marker the page's opening carries, if any. Markup
+ * is checked first on purpose: a page with both is held to the markup rule.
+ */
 function challengeMarkers(html: string): "markup" | "text" | null {
   const sample = html.slice(0, 10240);
   if (CHALLENGE_MARKUP_PATTERNS.some((pattern) => pattern.test(sample))) return "markup";

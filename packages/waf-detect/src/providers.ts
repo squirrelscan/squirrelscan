@@ -66,7 +66,10 @@ export const CLOUDFLARE_CHALLENGE_SCRIPT = /\/cdn-cgi\/challenge-platform\/(?:h\
 const AKAMAI_REFERENCE_ID = /reference\s*#\s*\d+\.[0-9a-f]+\.\d+\.[0-9a-f]+/i;
 
 /** Imperva's block-page line with its id: `Incapsula incident ID: 1234000280151781213-1234`. */
-const IMPERVA_INCIDENT_LINE = /incapsula incident id\s*:?\s*(?:<[^>]*>\s*)*\d/i;
+const IMPERVA_INCIDENT_LINE = /incapsula incident id\s*(?::|&#58;)?\s*(?:<[^>]*>\s*)*\d/i;
+
+/** A dash as block pages write it: hyphen, en dash, or either as an entity. */
+const DASH = "(?:-|\\u2013|&#8211;|&ndash;)";
 
 /**
  * Content-based WAF signatures: markup, script hosts and reference formats the
@@ -110,8 +113,8 @@ export const CONTENT_PATTERNS: {
     provider: "sucuri",
     // The block page's title and heading, in full.
     patterns: [
-      /sucuri website ?firewall\s*-\s*(?:cloudproxy\s*-\s*)?access denied/i,
-      /access denied\s*-\s*sucuri website ?firewall/i,
+      new RegExp(`sucuri website ?firewall\\s*${DASH}\\s*(?:cloudproxy\\s*${DASH}\\s*)?access denied`, "i"),
+      new RegExp(`access denied\\s*${DASH}\\s*sucuri website ?firewall`, "i"),
     ],
     confidence: "high",
   },
@@ -159,7 +162,8 @@ export const CHALLENGE_MARKUP_PATTERNS = [
   // and entity-encodes the reference ("Reference&#32;&#35;18&#46;..."), so the
   // combined text pattern below misses it; &#32;&#35; is Akamai-specific enough
   // to stand alone (#802). The plain reference id needs the denial before it: a
-  // troubleshooting page can quote one.
+  // troubleshooting page can quote one. The gap between them stays bounded so
+  // the scan stays linear over the 10 KB sample.
   /reference&#32;&#35;\s*\d/i,
   new RegExp(`access denied[\\s\\S]{0,2000}?${AKAMAI_REFERENCE_ID.source}`, "i"),
   /_pxCaptcha/i,

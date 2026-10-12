@@ -130,13 +130,22 @@ describe("agent-access challenge + payment detection", () => {
     expect(detectChallenge(new Headers(), "<html><body><p>Just a moment, the oven heats.</p></body></html>")).toBeNull();
   });
 
-  test("a challenge whose scripts sit past the 4 KB head is still caught by its title", () => {
-    const styles = `<style>${"body{margin:0}".repeat(400)}</style>`;
+  test("a challenge whose scripts sit past the sample is still caught by its title", () => {
+    const styles = `<style>${"body{margin:0}".repeat(800)}</style>`;
     const challenge =
       `<!DOCTYPE html><html lang="en-US"><head><title lang="en-US">Just a moment...</title>${styles}</head><body>` +
       "<script>window._cf_chl_opt={cType:'managed'};</script></body></html>";
-    expect(challenge.indexOf("_cf_chl_opt")).toBeGreaterThan(4_096);
+    expect(challenge.indexOf("_cf_chl_opt")).toBeGreaterThan(10_240);
     expect(detectChallenge(new Headers(), challenge)).toBe("just-a-moment");
+  });
+
+  test("a challenge with another title is caught by its script within 10 KB", () => {
+    const styles = `<style>${"body{margin:0}".repeat(400)}</style>`;
+    const challenge =
+      `<!DOCTYPE html><html lang="de"><head><title>Einen Moment bitte...</title>${styles}</head><body>` +
+      "<script>window._cf_chl_opt={cType:'managed'};</script></body></html>";
+    expect(challenge.indexOf("_cf_chl_opt")).toBeGreaterThan(4_096);
+    expect(detectChallenge(new Headers(), challenge)).toBe("__cf_chl_");
   });
 
   test("detectPayment flags 402 + x402 body and crawler-price header", () => {
