@@ -310,18 +310,18 @@ export interface DownloadTimeouts {
 }
 
 /**
+ * The download buffer is allocated at the manifest's size before any byte
+ * arrives, so a bogus size must not reach it. Releases are about 75 MB.
+ */
+const MAX_BINARY_BYTES = 1024 * 1024 * 1024;
+
+/**
  * A ~100 MB binary on a slow connection can legitimately stream for minutes, so
  * the body is bounded by progress (a stall) and by a total that needs only
  * about 85 KB/s. The total leaves room under the update lock's 30-minute
  * staleness bound for the release check before the download and the install
  * after it, so a live update does not have its lock taken over.
  */
-/**
- * The download buffer is allocated at the manifest's size before any byte
- * arrives, so a bogus size must not reach it. Releases are about 75 MB.
- */
-const MAX_BINARY_BYTES = 1024 * 1024 * 1024;
-
 export const DOWNLOAD_TIMEOUTS: DownloadTimeouts = {
   headersMs: 30_000,
   stallMs: 60_000,
@@ -434,6 +434,7 @@ export async function downloadBinary(
     reader = bodyReader;
     const consume = async (): Promise<void> => {
       if (!bodyReader) return;
+      // The headers deadline ended above; from here a stall bounds each wait.
       armStall();
       while (true) {
         const { done, value } = await bodyReader.read();
