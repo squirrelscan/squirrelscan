@@ -406,17 +406,115 @@ function skipComment(css: string, start: number): number {
   return end === -1 ? css.length : end + 2;
 }
 
+/** A character that continues a CSS name: `myurl(` is not `url(`. */
+function isNameChar(ch: string | undefined): boolean {
+  return ch !== undefined && (/[-_a-zA-Z0-9\\]/.test(ch) || ch.charCodeAt(0) >= 0x80);
+}
+
+const CSS_WHITESPACE = new Set(["\t", "\n", "\f", "\r", " "]);
+
+/**
+ * Whether a `url(` at `start` begins its own token. After a name character, a
+ * `#` or `@` (hash and at-keyword tokens), an escaped space, or the space that
+ * ends a hex escape, `url` is the tail of another token: `myurl(`, `#url(`,
+ * `@url(`, `a\ url(` and `a\20 url(` are a function or a `(` block, not a url
+ * token.
+ */
+function urlTokenCanStart(css: string, start: number): boolean {
+  const prev = css[start - 1];
+  if (prev === undefined) return true;
+  if (prev === "#" || prev === "@" || isNameChar(prev)) return false;
+  // Any escaped character (`a\!url(`, `a\ url(`) is part of a name. A newline
+  // cannot be escaped.
+  const newline = prev === "\n" || prev === "\r" || prev === "\f";
+  if (!newline && escapeIntroducerEndsAt(css, start - 2)) return false;
+  if (!CSS_WHITESPACE.has(prev)) return true;
+  // The whitespace may end a hex escape (`\20 url(`, `\20` + newline): look
+  // back over at most six hex digits. A browser reads CRLF as one newline.
+  let k = prev === "\n" && css[start - 2] === "\r" ? start - 3 : start - 2;
+  let hex = 0;
+  while (k >= 0 && hex < 6 && /[0-9a-fA-F]/.test(css[k])) {
+    k--;
+    hex++;
+  }
+  return hex === 0 || !escapeIntroducerEndsAt(css, k);
+}
+
+/**
+ * Whether the backslash run ending at `end` closes on an escape introducer: an
+ * odd run does, an even one is escaped backslashes. Each run sits before one
+ * character, so the callers' lookbacks never rescan it.
+ */
+function escapeIntroducerEndsAt(css: string, end: number): boolean {
+  let slashes = 0;
+  for (let k = end; k >= 0 && css[k] === "\\"; k--) slashes++;
+  return slashes % 2 === 1;
+}
+
+/**
+ * Index just past an unquoted `url(…)` starting at `start`, or -1 when none
+ * starts there. A browser reads it as one token up to `)`, so the `{`, `}` and
+ * `;` inside (`url(}.b{x)`) are never structure (pub#679). `url("…")` is an
+ * ordinary function holding a string, and returns -1.
+ */
+function skipUnquotedUrl(css: string, start: number): number {
+  // `| 0x20` lower-cases an ASCII letter without allocating.
+  if (
+    (css.charCodeAt(start) | 0x20) !== 0x75 ||
+    (css.charCodeAt(start + 1) | 0x20) !== 0x72 ||
+    (css.charCodeAt(start + 2) | 0x20) !== 0x6c ||
+    css[start + 3] !== "("
+  ) {
+    return -1;
+  }
+  if (!urlTokenCanStart(css, start)) return -1;
+  let i = start + 4;
+  while (i < css.length && CSS_WHITESPACE.has(css[i])) i++;
+  if (css[i] === '"' || css[i] === "'") return -1;
+  while (i < css.length) {
+    if (css[i] === "\\") {
+      i += 2;
+      continue;
+    }
+    if (css[i] === ")") return i + 1;
+    i++;
+  }
+  return css.length;
+}
+
+/**
+ * Tracks the `(`, `[` and `{` blocks a browser opens inside a stretch of CSS.
+ * Only the closer a block expects ends it; any other closer is plain text, so
+ * `(}` keeps the `}` inside the parentheses (pub#679). Returns the index to
+ * continue at, after the character (or unquoted `url(…)` token) at `i`.
+ * Callers skip escapes, strings and comments first.
+ */
+function stepBlocks(css: string, i: number, closers: string[]): number {
+  const ch = css[i];
+  if (ch === "u" || ch === "U") {
+    const end = skipUnquotedUrl(css, i);
+    if (end !== -1) return end;
+  }
+  if (ch === "(") closers.push(")");
+  else if (ch === "[") closers.push("]");
+  else if (ch === "{") closers.push("}");
+  else if (ch === closers[closers.length - 1]) closers.pop();
+  return i + 1;
+}
+
 /**
  * Parses a declaration block (`color:red;display:none`) into a property map.
  * Splits on the structural `;` and `:` only: `background:url("data:…;base64,…")`
  * carries both inside a quoted string and a `url()`, and naive splitting there
- * manufactures declarations that were never written.
+ * manufactures declarations that were never written. A `;` inside a `(`, `[` or
+ * `{` block or an unquoted `url(…)`, or written as `\;`, is part of a value, as
+ * in a browser (pub#679).
  */
 export function parseDeclarations(css: string): Declarations {
   const decls: Declarations = new Map();
   let i = 0;
   let chunkStart = 0;
-  let depth = 0;
+  const closers: string[] = [];
 
   const flush = (end: number): void => {
     const chunk = css.slice(chunkStart, end);
@@ -445,6 +543,11 @@ export function parseDeclarations(css: string): Declarations {
 
   while (i < css.length) {
     const ch = css[i];
+    // An escaped character (`\;`, `\(`, `\"`) is part of a name, never structure.
+    if (ch === "\\") {
+      i += 2;
+      continue;
+    }
     if (ch === '"' || ch === "'") {
       i = skipString(css, i);
       continue;
@@ -453,13 +556,13 @@ export function parseDeclarations(css: string): Declarations {
       i = skipComment(css, i);
       continue;
     }
-    if (ch === "(") depth++;
-    else if (ch === ")") depth--;
-    else if (ch === ";" && depth === 0) {
+    if (ch === ";" && closers.length === 0) {
       flush(i);
       chunkStart = i + 1;
+      i++;
+      continue;
     }
-    i++;
+    i = stepBlocks(css, i, closers);
   }
   flush(css.length);
   return decls;
@@ -485,22 +588,36 @@ interface RawRule {
  * quadratically, and a page carrying 200KB of brace-less or unterminated-comment
  * CSS took 26 seconds to index — a crawler-wide stall on attacker-supplied
  * input. This scanner is O(n) and allocates only the rules it yields.
+ *
+ * Escapes, unquoted `url(…)` tokens and `(`/`[` blocks are read the way a
+ * browser tokenizes them, so a `{`, `}` or `;` inside one is not structure:
+ * `.a{background:url(}.b{display:none}.c{)}` declares no `.b` rule (pub#679).
  */
 function parseRules(css: string, maxRules: number): RawRule[] {
   const rules: RawRule[] = [];
   let i = 0;
   let preludeStart = 0;
   let atDepth = 0;
+  // Blocks open in the current prelude (`:not(…`, `[…`).
+  const closers: string[] = [];
 
   while (i < css.length && rules.length < maxRules) {
     const ch = css[i];
 
+    if (ch === "\\") {
+      i += 2;
+      continue;
+    }
     if (ch === "/" && css[i + 1] === "*") {
       i = skipComment(css, i);
       continue;
     }
     if (ch === '"' || ch === "'") {
       i = skipString(css, i);
+      continue;
+    }
+    if (closers.length > 0 || ch === "(" || ch === "[" || ch === "u" || ch === "U") {
+      i = stepBlocks(css, i, closers);
       continue;
     }
     // A statement at-rule (`@import url(…);`) or a stray semicolon: whatever
@@ -531,13 +648,18 @@ function parseRules(css: string, maxRules: number): RawRule[] {
       continue;
     }
 
-    // A style rule. Consume its whole block, including any nested braces, so a
-    // malformed sheet cannot desynchronise the scan.
+    // A style rule. Consume its whole block, including any nested blocks, so a
+    // malformed sheet cannot desynchronise the scan. The body ends only at the
+    // `}` that matches its `{`, read through blocks and url() tokens.
     const bodyStart = i + 1;
-    let depth = 1;
+    const bodyClosers = ["}"];
     let j = bodyStart;
-    while (j < css.length && depth > 0) {
+    while (j < css.length && bodyClosers.length > 0) {
       const c = css[j];
+      if (c === "\\") {
+        j += 2;
+        continue;
+      }
       if (c === "/" && css[j + 1] === "*") {
         j = skipComment(css, j);
         continue;
@@ -546,13 +668,11 @@ function parseRules(css: string, maxRules: number): RawRule[] {
         j = skipString(css, j);
         continue;
       }
-      if (c === "{") depth++;
-      else if (c === "}") depth--;
-      j++;
+      j = stepBlocks(css, j, bodyClosers);
     }
     rules.push({
       selector: prelude,
-      body: css.slice(bodyStart, depth === 0 ? j - 1 : css.length),
+      body: css.slice(bodyStart, bodyClosers.length === 0 ? j - 1 : css.length),
       conditional: atDepth > 0,
     });
     i = j;

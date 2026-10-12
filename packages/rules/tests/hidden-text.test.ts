@@ -455,6 +455,132 @@ describe("content/hidden-text — CSS parsing", () => {
   });
 });
 
+/**
+ * pub#679: `{`, `}` and `;` inside an unquoted `url(…)`, a `(`/`[`/`{` block or
+ * after a backslash are not structure. Each verdict was read from headless
+ * Chromium 156 (getComputedStyle on a `<p class="b">` under the row's
+ * stylesheet or inline style): "hidden" means `display:none` applied. `~`
+ * stands for a backslash so the rows read as written.
+ */
+const CHROMIUM_ROWS: Array<{
+  name: string;
+  css: string;
+  style?: string;
+  browser: "hidden" | "shown";
+}> = [
+  { name: "unquoted url( swallows braces (the #679 repro)", css: ".a{background:url(}.b{display:none}.c{)}", browser: "shown" },
+  { name: "URL( in upper case", css: ".a{background:URL(}.b{display:none}.c{)}", browser: "shown" },
+  { name: "url( with a leading space", css: ".a{background:url( }.b{display:none}.c{)}", browser: "shown" },
+  { name: "a bad url( (inner space) still runs to its )", css: ".a{background:url(x y}.b{display:none}.c{)}", browser: "shown" },
+  { name: "an escaped ) inside url( does not end it", css: ".a{background:url(x~)}.b{display:none}.c{)}", browser: "shown" },
+  { name: "a name ending in url( is a plain function", css: ".a{background:myurl(}.b{display:none}.c{)}", browser: "shown" },
+  { name: "`.url(` in a prelude is a url token", css: ".url(}.b{display:none}", browser: "shown" },
+  { name: "a ( block in a value swallows }", css: ".a{width:calc(1px}.b{display:none}.c{)}", browser: "shown" },
+  { name: "a [ block in a value swallows }", css: ".a{x:[}.b{display:none}.c{]}", browser: "shown" },
+  { name: "a ( block in a prelude swallows }", css: ".a:not(.c}.b{display:none}", browser: "shown" },
+  { name: "a [ block in a prelude swallows }", css: ".a[x=}.b{display:none}", browser: "shown" },
+  { name: "an escaped } in a value", css: ".a{color:red~}.b{display:none}", browser: "shown" },
+  { name: "an escaped } in a selector", css: ".a~}.b{display:none}", browser: "shown" },
+  { name: "; inside a ( block in a value", css: ".b{x:(;display:none;)}", browser: "shown" },
+  { name: "; inside a [ block in a value", css: ".b{x:[;display:none;]}", browser: "shown" },
+  { name: "; inside a { block in a value", css: ".b{x:{;display:none;}}", browser: "shown" },
+  { name: "; inside an unquoted url(", css: ".b{background:url(a;display:none)}", browser: "shown" },
+  { name: "an escaped ; in a value", css: ".b{color:red~;display:none}", browser: "shown" },
+  { name: "an escaped ; in a custom property", css: ".b{--x:a~;display:none}", browser: "shown" },
+  { name: "an escaped ; in a selector", css: ".a~;.b{display:none}", browser: "shown" },
+  { name: "an escaped ; inside ( in a value", css: ".b{x:(~;display:none)}", browser: "shown" },
+  { name: "an escaped backslash then a real ;", css: ".b{color:red~~;display:none}", browser: "hidden" },
+  { name: "a stray ) does not open or close anything", css: ".b{color:red);display:none}", browser: "hidden" },
+  { name: "a stray ] does not open or close anything", css: ".b{color:red];display:none}", browser: "hidden" },
+  { name: "an escaped ( is not a block", css: ".a{content:~(}.b{display:none}", browser: "hidden" },
+  { name: "an escaped [ is not a block", css: ".a{content:~[}.b{display:none}", browser: "hidden" },
+  { name: "an escaped ( then ; in a value", css: ".b{content:~(;display:none}", browser: "hidden" },
+  { name: "an escaped ) closes no block", css: ".b{x:(~);display:none}", browser: "shown" },
+  { name: "an escaped quote is not a string", css: '.b{content:~";display:none}', browser: "hidden" },
+  { name: "an escaped { in a value", css: ".a{content:~{}.b{display:none}", browser: "hidden" },
+  { name: "a bad url( ends at its first )", css: ".b{x:url((;display:none);display:none}", browser: "hidden" },
+  { name: "#url( is a hash token and a ( block", css: ".b{x:#url((;display:none);display:none}", browser: "shown" },
+  { name: "@url( is an at-keyword and a ( block", css: ".b{x:@url((;display:none);display:none}", browser: "shown" },
+  { name: "url( after a hex escape's space continues that name", css: ".b{x:a~20 url((;display:none);display:none}", browser: "shown" },
+  { name: "url( after an escaped backslash and a space is a url token", css: ".b{x:a~~20 url((;display:none);display:none}", browser: "hidden" },
+  { name: "url( after an escaped space continues that name", css: ".b{x:a~ url((;display:none);display:none}", browser: "shown" },
+  { name: "url( after a plain space is a url token", css: ".b{x:a url((;display:none);display:none}", browser: "hidden" },
+  { name: "url( after an escaped ! continues that name", css: ".b{x:a~!url((;display:none);display:none}", browser: "shown" },
+  { name: "url( after an escaped backslash and a ! is a url token", css: ".b{x:a~~!url((;display:none);display:none}", browser: "hidden" },
+  { name: "url( after an escaped # continues that name", css: ".b{x:~#url((;display:none);display:none}", browser: "shown" },
+  { name: "url( after a hex escape ended by a newline continues that name", css: ".b{x:a~20\nurl((;display:none);display:none}", browser: "shown" },
+  { name: "an inline style: #url( is a hash token and a ( block", css: "", style: "x:#url((;display:none);display:none", browser: "shown" },
+  { name: "a plain display:none rule", css: ".b{display:none}", browser: "hidden" },
+  { name: "an ordinary url()", css: ".a{background:url(x.png)}.b{display:none}", browser: "hidden" },
+  { name: "a quoted url()", css: '.a{background:url("x")}.b{display:none}', browser: "hidden" },
+  { name: "a data: url() with ; inside", css: ".a{background:url(data:image/png;base64,AAAA)}.b{display:none}", browser: "hidden" },
+  { name: "a } inside a string", css: '.a{content:"}"}.b{display:none}', browser: "hidden" },
+  { name: "an escaped quote inside a string", css: '.a{content:"~"}"}.b{display:none}', browser: "hidden" },
+  { name: "a } inside a comment", css: ".a{color:red/* } */}.b{display:none}", browser: "hidden" },
+  { name: "an inline style: ; inside a [ block", css: "", style: "x:[;display:none]", browser: "shown" },
+  { name: "an inline style: ; inside an unquoted url(", css: "", style: "background:url(a;display:none)", browser: "shown" },
+  { name: "an inline style: an escaped ;", css: "", style: "color:red~;display:none", browser: "shown" },
+  { name: "an inline style: a plain display:none", css: "", style: "color:red;display:none", browser: "hidden" },
+  { name: "an @media block with parentheses", css: "@media (min-width:1px){.c{color:red}}.b{display:none}", browser: "hidden" },
+  { name: "Tailwind escaped slash", css: ".w-1~/2{width:50%}.b{display:none}", browser: "hidden" },
+  { name: "Tailwind arbitrary url() value", css: ".bg-~[url~(x~)~]{color:red}.b{display:none}", browser: "hidden" },
+  { name: "Tailwind arbitrary variant", css: ".~[~&~>~*~]~:p-4>*{padding:1rem}.b{display:none}", browser: "hidden" },
+  { name: "calc() and var() in values", css: ".a{width:calc(100% - var(--x, 2px))}.b{display:none}", browser: "hidden" },
+  { name: "grid line names in [ ]", css: ".a{grid-template-columns:[full-start] 1fr [full-end]}.b{display:none}", browser: "hidden" },
+  { name: "an attribute selector with a quoted }", css: '.a[title="}"]{color:red}.b{display:none}', browser: "hidden" },
+  { name: "nested rule inside a block", css: ".a{color:red;&:hover{color:blue}}.b{display:none}", browser: "hidden" },
+];
+
+const backslashes = (s: string): string => s.replaceAll("~", "\\");
+
+describe("content/hidden-text — CSS tokenization matches Chromium (pub#679)", () => {
+  for (const row of CHROMIUM_ROWS) {
+    test(`${row.name}: ${row.browser}`, () => {
+      const style =
+        row.style === undefined ? "" : ` style="${backslashes(row.style).replaceAll('"', "&quot;")}"`;
+      const html = `<html><head><style>${backslashes(row.css)}</style></head>
+        <body><p class="b"${style}>${PAYLOAD}</p></body></html>`;
+      expect(run(html).status).toBe(row.browser === "hidden" ? "warn" : "pass");
+    });
+  }
+
+  // Not a Chromium row: an HTML parser turns CRLF into one newline before CSS
+  // sees it, and linkedom keeps both characters, so the scanner must too.
+  test("a hex escape ended by CRLF reads like one ended by a newline", () => {
+    const css = backslashes(".b{x:a~20\r\nurl((;display:none);display:none}");
+    const html = `<html><head><style>${css}</style></head>
+      <body><p class="b">${PAYLOAD}</p></body></html>`;
+    expect(run(html).status).toBe("pass");
+  });
+
+  test("floods of unclosed blocks, url( tokens and escapes stay linear", () => {
+    const floods = [
+      "(".repeat(400_000),
+      "[".repeat(400_000),
+      "{".repeat(400_000),
+      "url(".repeat(100_000),
+      "a{b:url(".repeat(50_000),
+      "u".repeat(400_000),
+      `url(${" ".repeat(1_000)}"`.repeat(300),
+      "\\".repeat(400_000),
+      ".a{b:(".repeat(60_000),
+      // Each url( after a space looks back over a hex escape and its backslashes.
+      `${backslashes("~").repeat(200_000)}20 url(`,
+      "a url(".repeat(60_000),
+      backslashes("~20 url(").repeat(50_000),
+      backslashes("~ url(").repeat(50_000),
+      backslashes("~!url(").repeat(50_000),
+    ];
+    for (const junk of floods) {
+      const html = `<html><head><style>${junk}.b{display:none}</style></head>
+        <body><p class="b">${PAYLOAD}</p></body></html>`;
+      const started = performance.now();
+      run(html);
+      expect(performance.now() - started).toBeLessThan(1_000);
+    }
+  });
+});
+
 describe("content/hidden-text — script-controlled elements", () => {
   test("an element the page's own script addresses by id is not flagged", () => {
     const html = `<html><body>
