@@ -4,6 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { loadKnownRules } from "../src/loader";
 import { checkRuleOptions, ruleOptionsTable } from "../src/rule-options-check";
 import { RuleRunner } from "../src/runner";
 
@@ -95,6 +96,16 @@ describe("checkRuleOptions", () => {
       "performance/ttfb",
       "core/meta-description",
     ]);
+  });
+
+  // The unknown-option check reads each schema's `shape`; a wrapped schema
+  // (refine, union) would have none and report every key as unknown.
+  test("every built-in rule's options schema exposes its keys", () => {
+    for (const [id, rule] of loadKnownRules()) {
+      const schema = rule.meta.optionsSchema;
+      if (!schema) continue;
+      expect(typeof schema.shape, id).toBe("object");
+    }
   });
 
   test("the table header is the TOML a user wrote", () => {

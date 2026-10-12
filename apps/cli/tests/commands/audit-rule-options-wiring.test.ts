@@ -115,7 +115,9 @@ min_length = "thirty"
 warn_threshold = 300
 `);
     expect(process.exitCode).toBe(1);
-    expect(requested.filter((url) => url.includes("example.com"))).toEqual([]);
+    expect(
+      requested.filter((url) => new URL(url).hostname === "example.com")
+    ).toEqual([]);
     const output = stderr.join("\n");
     expect(output).toContain(
       '[rule_options."core/meta-title"] min_length: Invalid input: expected number, received string'
