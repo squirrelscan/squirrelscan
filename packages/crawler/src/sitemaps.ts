@@ -265,6 +265,13 @@ function hasGzipSignature(bytes: Uint8Array): boolean {
   return bytes[0] === 0x1f && bytes[1] === 0x8b;
 }
 
+/** The first byte past a UTF-8 BOM and ASCII whitespace is `<`. */
+function opensWithMarkup(bytes: Uint8Array): boolean {
+  let i = bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf ? 3 : 0;
+  while (i < bytes.length && isXmlSpace(bytes[i] ?? 0)) i++;
+  return bytes[i] === 0x3c;
+}
+
 type Inflate = (bytes: Uint8Array, options: { maxOutputLength: number }) => Uint8Array;
 
 /** HTTP's `deflate` is zlib-wrapped, but servers that send it raw are common enough to accept. */
@@ -342,8 +349,14 @@ export function decodeSitemapBody(
   const coding = codings[0];
   if (coding) {
     const inflated = inflateWithin(coding, body);
-    if (typeof inflated === "string") return { data: unreadableSitemap(url, inflated) };
-    body = inflated;
+    if (typeof inflated !== "string") {
+      body = inflated;
+    } else if (inflated === SITEMAP_TOO_LARGE_ERROR || !opensWithMarkup(body)) {
+      return { data: unreadableSitemap(url, inflated) };
+    }
+    // Otherwise the coding did not apply to bytes that open with markup: some
+    // hop (a runtime or proxy that ignored `decompress: false`) decoded them
+    // already, and they are read as they are.
   }
 
   if (hasGzipSignature(body)) {
@@ -518,6 +531,21 @@ export function fetchSitemap(
   // When baseHost is unset (direct callers/tests), preserve prior behavior.
   const originScopedHeaders =
     baseHost !== undefined && new URL(url).host !== baseHost ? undefined : customHeaders;
+  const init: RequestInit & { decompress: boolean } = {
+    headers: {
+      "User-Agent": userAgent,
+      Accept: "application/xml, text/xml, */*",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Accept-Encoding": "gzip",
+      ...originScopedHeaders,
+    },
+    redirect: "follow",
+    // #662: a Bun fetch option. Bun's own decoding inflates a whole response
+    // before a reader can stop it (a 1 MB gzip bomb cost 1.9 GB that way), so
+    // the walk takes the raw bytes and decodeSitemapBody undoes the
+    // Content-Encoding within SITEMAP_MAX_BYTES.
+    decompress: false,
+  };
   return Effect.promise(async (): Promise<SitemapFetchResult> => {
     if (timeoutMs <= 0) {
       return { success: false, url, error: SITEMAP_NOT_REACHED_ERROR, settled: false };
@@ -529,21 +557,7 @@ export function fetchSitemap(
       // and then stalls its body would otherwise park the crawl forever (#1699).
       return await safeFetchWithDeadline(
         url,
-        {
-          headers: {
-            "User-Agent": userAgent,
-            Accept: "application/xml, text/xml, */*",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip",
-            ...originScopedHeaders,
-          },
-          redirect: "follow",
-          // #662: a Bun fetch option. Bun's own decoding inflates a whole
-          // response before a reader can stop it (a 1 MB gzip bomb cost 1.9 GB
-          // that way), so the walk takes the raw bytes and decodeSitemapBody
-          // undoes the Content-Encoding within SITEMAP_MAX_BYTES.
-          decompress: false,
-        } as RequestInit,
+        init,
         timeoutMs,
         async (response): Promise<SitemapFetchResult> => {
           if (!response.ok) {

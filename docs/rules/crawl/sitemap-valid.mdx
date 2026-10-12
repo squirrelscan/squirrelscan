@@ -32,7 +32,7 @@ Both of those branches only run when there was no reportable robots.txt fetch fa
 
 The URL count stored on a top-level index is the aggregated total across its children, which is why an index is measured against its child count rather than that total. Severity error, weight 8.
 
-Gzip-compressed sitemap files, such as a `sitemap.xml.gz` served as `application/gzip`, are decompressed before parsing. squirrel asks for gzip-compressed responses and decodes them itself, within the same 50 MB limit. A common location that squirrel only guessed, such as `/sitemap.xml` when neither robots.txt nor a sitemap index names it, counts as no sitemap when it answers with an HTML page or with a body that is not XML. A server that answers every path with a page is not reported for sitemaps it never published.
+Gzip-compressed sitemap files, such as a `sitemap.xml.gz` served as `application/gzip`, are decompressed before parsing. squirrel asks for gzip-compressed responses and decodes them itself, within the same 50 MB limit. A common location that squirrel only guessed, such as `/sitemap.xml` when neither robots.txt nor a sitemap index names it, counts as no sitemap when it answers with an HTML page or with a body that is not XML. A response labelled `text/html` that does not parse counts as a page unless it opens with a `<urlset>` or `<sitemapindex>` root. A server that answers every path with a page is not reported for sitemaps it never published.
 
 ## How to fix it
 

@@ -220,12 +220,40 @@ describe("gzip child sitemaps (#662)", () => {
 
   test("a coding name that is an Object property is still unknown", () => {
     const decoded = decodeSitemapBody(
-      new TextEncoder().encode(urlset("https://example.com/")),
+      Uint8Array.from([1, 2, 3]),
       "https://example.com/s.xml",
       "application/xml",
       "constructor",
     );
     expect(decoded.data.errors).toEqual([`${SITEMAP_UNSUPPORTED_ENCODING_ERROR}: constructor`]);
+  });
+
+  test("a body that opens with markup under a coding that does not apply was decoded already", () => {
+    // Some hop (a runtime or proxy that ignored `decompress: false`) decoded the
+    // body and left the header on it. Markup cannot be gzip, br or deflate.
+    for (const coding of ["gzip", "br", "deflate", "zstd"]) {
+      const decoded = decodeSitemapBody(
+        new TextEncoder().encode(`\n  ${urlset("https://example.com/")}`),
+        "https://example.com/s.xml",
+        "application/xml",
+        coding,
+      );
+      expect([coding, decoded.data.errors, decoded.data.urlCount]).toEqual([coding, [], 1]);
+    }
+  });
+
+  test("Bun hands back the raw bytes: a corrupt Content-Encoding body is the walk's to report", async () => {
+    // With the runtime decoding, this fetch throws and the sitemap reads as a
+    // network failure; with `decompress: false` the bytes reach the walk.
+    const corrupt = Uint8Array.from([0x1f, 0x8b, 0x08, 0, 0, 0, 0, 0, 0, 3, 1, 2, 3, 4, 5, 6, 7, 8]);
+    const origin = serve(() => ({
+      "/sitemap.xml": { body: corrupt, headers: { ...XML, "Content-Encoding": "gzip" } },
+    }));
+
+    const result = await Effect.runPromise(fetchSitemap(`${origin}/sitemap.xml`, "squirrel-test"));
+
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.errors[0]?.startsWith(`${SITEMAP_CORRUPT_GZIP_ERROR}: `)).toBe(true);
   });
 
   test("every request, redirect hops included, turns the runtime's decoding off", async () => {
