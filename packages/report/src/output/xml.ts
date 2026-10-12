@@ -10,6 +10,7 @@ import { domainAgeYears } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import { entityPageTotal, stableIdPercent } from "../entities";
 import { seedRedirect } from "../coverage";
+import { notCheckedLine, notCheckedRules } from "../not-checked";
 
 export interface XmlRenderOptions {
   version?: string;
@@ -213,6 +214,18 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     lines.push(`${indent(1)}</issues>`);
   } else {
     lines.push(`${indent(1)}<issues/>`);
+  }
+
+  // repo#2729: checks this audit did not run. Not issues, and not clean either.
+  const notChecked = notCheckedRules(report);
+  if (notChecked.length > 0) {
+    lines.push(`${indent(1)}<not-checked count="${notChecked.length}">`);
+    for (const rule of notChecked) {
+      lines.push(
+        `${indent(2)}<rule id="${escapeXml(rule.ruleId)}" name="${escapeXml(rule.name)}" check="${escapeXml(rule.check)}" reason="${escapeXml(rule.reason)}">${escapeXml(notCheckedLine(rule))}</rule>`,
+      );
+    }
+    lines.push(`${indent(1)}</not-checked>`);
   }
 
   // Entities (#2091) — the site's JSON-LD as one graph. Report-only, never part

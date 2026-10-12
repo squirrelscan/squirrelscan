@@ -17,6 +17,7 @@ import { renderJson } from "../src/output/json";
 import { renderLlm } from "../src/output/llm";
 import { renderMarkdown } from "../src/output/markdown";
 import { renderText } from "../src/output/text";
+import { renderXml } from "../src/output/xml";
 import type { AuditReport, ReportRuleResult } from "../src/types";
 
 function rule(
@@ -90,7 +91,7 @@ function quickReport(): AuditReport {
   };
 }
 
-const EXTERNAL_LINE = `Not checked: Broken External Links. ${EXTERNAL_MESSAGE}. Run a Surface or Full audit with external link checks on to check them.`;
+const EXTERNAL_LINE = `Not checked: Broken External Links. ${EXTERNAL_MESSAGE}. Turn external link checks on to check them: in the CLI they run at the Surface and Full levels without --offline, and in the cloud they are a website setting.`;
 const INTERNAL_LINE = `Not checked: Broken Links. ${INTERNAL_MESSAGE}. Run a Surface or Full audit, which follows links, to check them.`;
 
 describe("notCheckedRules / notCheckedLines", () => {
@@ -126,10 +127,13 @@ describe("every format shows it, never as an issue", () => {
     expect(count(out, INTERNAL_LINE)).toBe(1);
   });
 
-  test("markdown", () => {
+  test("markdown, escaped like any message a published report carries", () => {
     const out = renderMarkdown(quickReport());
-    expect(count(out, `**${EXTERNAL_LINE}**`)).toBe(1);
-    expect(count(out, `**${INTERNAL_LINE}**`)).toBe(1);
+    // The lines' only markdown punctuation is the "(s)" plural.
+    const escaped = (line: string) => line.replaceAll("(", "\\(").replaceAll(")", "\\)");
+    expect(count(out, `**${escaped(EXTERNAL_LINE)}**`)).toBe(1);
+    expect(count(out, `**${escaped(INTERNAL_LINE)}**`)).toBe(1);
+    expect(out).toContain("link\\(s\\)");
   });
 
   test("html", () => {
@@ -149,6 +153,12 @@ describe("every format shows it, never as an issue", () => {
     ).toBe(1);
     expect(out).toContain('reason="link-targets-not-fetched"');
     expect(out).toContain("<issues/>");
+  });
+
+  test("xml: one not-checked element naming each rule", () => {
+    const out = renderXml(quickReport());
+    expect(count(out, '<not-checked count="2">')).toBe(1);
+    expect(count(out, `reason="external-links-not-checked">${EXTERNAL_LINE}</rule>`)).toBe(1);
   });
 
   test("json: a notChecked list, no issues, nothing scored", () => {

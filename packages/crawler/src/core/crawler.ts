@@ -3015,6 +3015,11 @@ export function createCrawler(
             "restored sitemap-discovery gate",
             `${gate.sitemapPendingCount}/${gate.sitemapUrlCount} sitemap URL(s) pending`,
           );
+          // repo#2729: a crawl interrupted before start() recorded it, or begun
+          // on an older release, still says it did not follow links.
+          if (!linkDiscoveryAllowed()) {
+            yield* storage.updateStats(crawlId, { linkDiscoveryOff: true });
+          }
         }
 
         // Rebuild breadth-first state from existing frontier entries

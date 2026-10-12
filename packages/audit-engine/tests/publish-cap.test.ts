@@ -464,6 +464,35 @@ describe("capReportForPublish: size", () => {
     expect(capped.checkTallies["content/many-59"]).toBeDefined();
   }, SLOW);
 
+  test("a not-checked skip survives the byte-budget cut (repo#2729)", () => {
+    const rules: RuleSpec[] = Array.from({ length: 60 }, (_, r) => ({
+      id: `content/many-${String(r).padStart(2, "0")}`,
+      category: "content",
+      severity: "warning" as const,
+      weight: 3,
+      names: Array.from({ length: 25 }, (_, n) => `check-${n}`),
+    }));
+    const input = report(4, { rules, everyClassFails: 1, maxStrings: true });
+    input.ruleResults["links/broken-external-links"] = {
+      meta: meta(
+        { id: "links/broken-external-links", category: "links", severity: "warning", weight: 5, names: [] },
+        "site",
+      ),
+      checks: [
+        {
+          name: "broken-external-links",
+          status: "skipped",
+          message: "External link checking was off for this audit, so external links were not checked",
+          skipReason: "external-links-not-checked",
+        },
+      ],
+    };
+    const capped = capReportForPublish(input, { maxBytes: 256 * 1024 });
+    expect(capped.detail.classesDropped).toBeGreaterThan(0);
+    const kept = capped.ruleResults["links/broken-external-links"]!.checks;
+    expect(kept.map((c) => [c.status, c.skipReason])).toEqual([["skipped", "external-links-not-checked"]]);
+  }, SLOW);
+
   test("a skeleton that fits is published even with every class left out", () => {
     const input = report(3, { rules: PAGE_RULES.slice(0, 3) });
     const fits = (maxBytes: number): boolean => {

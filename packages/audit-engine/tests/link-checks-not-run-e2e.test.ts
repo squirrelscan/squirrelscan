@@ -3,7 +3,8 @@
 // the real crawler, the real rules and BOTH rule paths (v1 and streaming).
 //
 // The fixture's home page links a page the sitemap lists, an internal 404 the
-// sitemap does not list, and an external URL. Before repo#2729 the quick crawl
+// sitemap does not list, and an external URL (the same server under another
+// host name, so a real check can reach it). Before repo#2729 the quick crawl
 // passed `links/broken-links` and `links/broken-external-links` here.
 
 import { afterEach, describe, expect, test } from "bun:test";
@@ -19,6 +20,7 @@ import {
   runStreamingRules,
   type PreFetchedAssets,
 } from "../src/adapter";
+import { runStreamingPreRules } from "../src/streaming-pre-rules";
 
 const RULES = ["links/broken-links", "links/broken-external-links"];
 
@@ -49,11 +51,13 @@ function serveSite(opts: { sitemap: boolean }): string {
         case "/":
           return ok(
             html(
-              `<a href="/about">About</a> <a href="/missing">Old</a> <a href="https://external.invalid/page">Elsewhere</a>`,
+              `<a href="/about">About</a> <a href="/missing">Old</a> <a href="http://127.0.0.1:${url.port}/elsewhere">Elsewhere</a>`,
             ),
           );
         case "/about":
           return ok(html(`<a href="/">Home</a>`));
+        case "/elsewhere":
+          return ok(html("Another site"));
         case "/sitemap.xml":
           if (!opts.sitemap) break;
           return ok(
@@ -94,13 +98,20 @@ async function audit(
   );
   const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
   const storage = crawler.storage;
-  // External checking itself is not exercised: with it on the engine reads the
-  // (here empty) checked-link store, which is the "it ran" state.
   const config = {
     rule_options: {},
     rules: { enable: RULES },
-    external_links: { enabled: opts.externalLinks },
+    external_links: { enabled: opts.externalLinks, concurrency: 1, timeout_ms: 5_000, cache_ttl_days: 1 },
   } as unknown as Config;
+  // The real external-link phase, gated on the setting exactly as the CLI and
+  // the cloud container gate it.
+  if (opts.externalLinks) {
+    await Effect.runPromise(
+      runStreamingPreRules(storage, crawlId, config, {
+        externalLinks: { config: config.external_links, linkCache: null },
+      }),
+    );
+  }
 
   const ran = await Effect.runPromise(
     Effect.gen(function* () {
@@ -144,8 +155,8 @@ for (const engine of ["v1", "v2"] as const) {
       expect(stats?.linkDiscoveryOff).toBeUndefined();
       expect(statuses(internal)).toEqual(["fail:"]);
       expect(internal[0]!.items?.map((i) => i.id)).toEqual([expect.stringContaining("/missing")]);
-      // Checking "ran" with an empty store: a real result, not a skip.
       expect(statuses(external)).toEqual(["pass:"]);
+      expect(external[0]!.message).toBe("All 1 external link(s) are working");
     });
 
     test("no usable sitemap: the crawler follows links after all, so the 404 is found", async () => {

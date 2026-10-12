@@ -95,6 +95,50 @@ describe("links/broken-external-links when external link checking did not run", 
     expect(checks[0]!.message).toBe("No external links found to check");
   });
 
+  test("no check results while the pages link out is not a pass either", () => {
+    // `squirrel analyze` re-runs rules on a stored crawl whose link phase never ran.
+    const { checks } = brokenExternalLinksRule.run(
+      ctx([{ url: `${BASE}/`, statusCode: 200, external: ["https://a.example/"] }], {
+        externalLinks: [],
+      }),
+    );
+    expect(checks[0]!.status).toBe("skipped");
+    expect(checks[0]!.skipReason).toBe(EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON);
+    expect(checks[0]!.message).toBe(
+      "No external link check results for the 1 external link(s) on the audited pages, so they were not checked",
+    );
+  });
+
+  test("results with no status or error at all are not 'All 0 working'", () => {
+    const { checks } = brokenExternalLinksRule.run(
+      ctx([{ url: `${BASE}/`, statusCode: 200 }], {
+        externalLinks: [
+          { href: "https://a.example/", status: null, error: null, sourcePages: [`${BASE}/`] },
+        ],
+      }),
+    );
+    expect(checks[0]!.status).toBe("skipped");
+    expect(checks[0]!.message).toBe("None of the 1 external link(s) could be checked this audit");
+  });
+
+  test("only http(s) hrefs the checker could request are counted", () => {
+    const page = {
+      url: `${BASE}/`,
+      statusCode: 200,
+      parsed: {
+        links: [
+          { url: "https://a.example/", isInternal: false, text: "" },
+          { url: "ftp://files.example/x", isInternal: false, text: "" },
+          { url: "http://[bad", isInternal: false, text: "", error: "Invalid URL format" },
+        ],
+      } as unknown as ParsedPage,
+    };
+    const context = ctx([]);
+    context.site!.pages = [page];
+    const { checks } = brokenExternalLinksRule.run(context);
+    expect(checks[0]!.details).toEqual({ externalLinksFound: 1 });
+  });
+
   test("checked links still warn on a 404", () => {
     const { checks } = brokenExternalLinksRule.run(
       ctx([{ url: `${BASE}/`, statusCode: 200 }], {

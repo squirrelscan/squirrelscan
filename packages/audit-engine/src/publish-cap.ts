@@ -49,6 +49,7 @@ import type {
   ResolutionSignal,
   RuleMetaLite,
 } from "@squirrelscan/core-contracts";
+import { NOT_CHECKED_SKIP_REASONS } from "@squirrelscan/core-contracts";
 import type { CompactResolutionSignal } from "@squirrelscan/core-contracts/resolution";
 import { clampItemString } from "@squirrelscan/core-contracts/clamp";
 import { ENTITY_MAP_PUBLISH_LIMITS, type EntityMap } from "@squirrelscan/core-contracts/entity-map";
@@ -302,10 +303,22 @@ function occurrencesOf(check: CheckResult): number {
   return Math.max(1, Math.floor(n));
 }
 
+/**
+ * A "not checked" skip (repo#2729) is what stops the report and the server's
+ * issue sync reading the rule as clean, and it is one small row, so no cut may
+ * drop it ahead of anything else.
+ */
+function isNotCheckedUnit(unit: ClassUnit): boolean {
+  const { status, skipReason } = unit.check;
+  return status === "skipped" && skipReason !== undefined && NOT_CHECKED_SKIP_REASONS.has(skipReason);
+}
+
 /** Priority order for any cut: status, then size, then a stable identity. */
 function compareUnits(a: ClassUnit, b: ClassUnit): number {
   const pinned = Number(PINNED_RULES.has(b.ruleId)) - Number(PINNED_RULES.has(a.ruleId));
   if (pinned !== 0) return pinned;
+  const notChecked = Number(isNotCheckedUnit(b)) - Number(isNotCheckedUnit(a));
+  if (notChecked !== 0) return notChecked;
   const rank = (STATUS_RANK[a.check.status] ?? 5) - (STATUS_RANK[b.check.status] ?? 5);
   if (rank !== 0) return rank;
   if (a.size !== b.size) return b.size - a.size;

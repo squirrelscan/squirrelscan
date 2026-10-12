@@ -130,7 +130,12 @@ async function seedFrontier(
 async function runReusePass(opts: {
   disableLinkDiscovery: boolean;
   sitemapPaths: string[];
-}): Promise<{ fetched: string[]; frontier: string[]; unchanged: number }> {
+}): Promise<{
+  fetched: string[];
+  frontier: string[];
+  unchanged: number;
+  linkDiscoveryOff: boolean | undefined;
+}> {
   const storage = await Effect.runPromise(createTestStorage());
 
   const cfg1 = { ...baseConfig, incremental: false, useCacheControl: false };
@@ -166,6 +171,7 @@ async function runReusePass(opts: {
     fetched,
     frontier: entries.map((e) => e.normalizedUrl),
     unchanged: stats?.pagesUnchanged ?? 0,
+    linkDiscoveryOff: stats?.linkDiscoveryOff,
   };
 }
 
@@ -179,17 +185,21 @@ describe("cached page reuse honours disableLinkDiscovery (#354)", () => {
     expect(r.unchanged).toBeGreaterThan(0);
     expect(r.frontier).not.toContain(OFF_MAP);
     expect(r.fetched).not.toContain(OFF_MAP);
+    // repo#2729: a resumed crawl records it too, so broken-links says "not checked".
+    expect(r.linkDiscoveryOff).toBe(true);
   }, 30000);
 
   test("sitemap fallback: with no crawlable sitemap URLs a reused page's links are discovered", async () => {
     const r = await runReusePass({ disableLinkDiscovery: true, sitemapPaths: [] });
     expect(r.fetched).toEqual([]);
     expect(r.frontier).toContain(OFF_MAP);
+    expect(r.linkDiscoveryOff).toBeUndefined();
   }, 30000);
 
   test("negative control: disableLinkDiscovery false discovers a reused page's links", async () => {
     const r = await runReusePass({ disableLinkDiscovery: false, sitemapPaths: ["/listed"] });
     expect(r.fetched).toEqual([]);
     expect(r.frontier).toContain(OFF_MAP);
+    expect(r.linkDiscoveryOff).toBeUndefined();
   }, 30000);
 });

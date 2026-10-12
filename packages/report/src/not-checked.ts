@@ -38,7 +38,7 @@ export interface NotCheckedReportShape {
 
 const HINTS: Record<string, string> = {
   [EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON]:
-    "Run a Surface or Full audit with external link checks on to check them.",
+    "Turn external link checks on to check them: in the CLI they run at the Surface and Full levels without --offline, and in the cloud they are a website setting.",
   [LINK_TARGETS_NOT_FETCHED_SKIP_REASON]:
     "Run a Surface or Full audit, which follows links, to check them.",
 };

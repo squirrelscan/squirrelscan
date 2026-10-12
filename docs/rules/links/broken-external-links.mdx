@@ -14,7 +14,8 @@ Not every failed check is a dead link. A 403 from a web application firewall mea
 The rule is site-wide and reads the results of the external link check. It emits up to three checks:
 
 - `broken-external-links` is skipped when external link checking did not run for the audit, with skip reason `external-links-not-checked`. Message: `External link checking was off for this audit, so 12 external link(s) on the audited pages were not checked`, counting the distinct external links on the audited pages. It is not a pass: the report shows it as **Not checked**, and the score does not count it.
-- `broken-external-links` passes when checking ran and there are no external links at all. Message: `No external links found to check`.
+- `broken-external-links` is skipped the same way when checking was on but left no result to read: `No external link check results for the 3 external link(s) on the audited pages, so they were not checked` when there are no results at all (for example when `squirrel analyze` re-runs the rules on a crawl whose link check never ran), and `None of the 5 external link(s) could be checked this audit` when every link is still unresolved.
+- `broken-external-links` passes when checking ran and the audited pages have no external links. Message: `No external links found to check`.
 - `broken-external-links` warns when links failed. Message: `4 broken external link(s): 3 with 404, 1 failed`, grouped by status code with `failed` covering fetch errors. Each item reads `https://other.example/page (404)` or `(Error: timeout)`, with the pages that link to it. Severity warning, weight 5.
 - `broken-external-links` passes otherwise. Message: `All 128 external link(s) are working`.
 - `waf-blocked-external-links` reports info for links refused by a firewall. Message: `6 external link(s) blocked by WAF - status unverifiable`, naming the provider where it is known.
