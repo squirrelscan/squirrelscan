@@ -7,7 +7,15 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import { brotliCompressSync, deflateRawSync, deflateSync, gzipSync } from "node:zlib";
+import {
+  brotliCompressSync,
+  constants as zlibConstants,
+  deflateRawSync,
+  deflateSync,
+  gzipSync,
+  inflateRawSync,
+  inflateSync,
+} from "node:zlib";
 
 import {
   SITEMAP_CORRUPT_GZIP_ERROR,
@@ -164,6 +172,35 @@ describe("gzip child sitemaps (#662)", () => {
       const decoded = decodeSitemapBody(body, "https://example.com/s.xml", "application/xml", coding);
       expect([coding, decoded.data.errors, decoded.data.urlCount]).toEqual([coding, [], 1]);
     }
+  });
+
+  test("a br or deflate bomb is refused at the limit too", () => {
+    const zeros = Buffer.alloc(SITEMAP_MAX_BYTES + 1, 0x20);
+    const br = brotliCompressSync(zeros, { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 1 } });
+    for (const [coding, body] of [
+      ["br", br],
+      ["deflate", deflateSync(zeros)],
+    ] as const) {
+      const decoded = decodeSitemapBody(body, "https://example.com/s.xml", "application/xml", coding);
+      expect([coding, decoded.data.errors]).toEqual([coding, [SITEMAP_TOO_LARGE_ERROR]]);
+    }
+  });
+
+  test("a corrupt deflate body reports the zlib reason, not the raw-deflate retry's", () => {
+    const corrupt = Uint8Array.from([0x78, 0x9c, 0xff, 0xff, 0xff]);
+    const failure = (inflate: (bytes: Uint8Array) => unknown) => {
+      try {
+        inflate(corrupt);
+      } catch (error) {
+        return (error as Error).message;
+      }
+      throw new Error("fixture inflated");
+    };
+    const reason = failure(inflateSync);
+    // Otherwise the assertion below could not tell the two apart.
+    expect(failure(inflateRawSync)).not.toBe(reason);
+    const decoded = decodeSitemapBody(corrupt, "https://example.com/s.xml", "application/xml", "deflate");
+    expect(decoded.data.errors).toEqual([`Corrupt deflate body: ${reason}`]);
   });
 
   test("a corrupt, stacked or unknown Content-Encoding is reported, not parsed", () => {

@@ -37,7 +37,7 @@ afterEach(() => {
   for (const server of servers.splice(0)) server.stop(true);
 });
 
-type Route = { body: string; headers: Record<string, string> };
+type Route = { body: string; headers: Record<string, string>; status?: number };
 
 /** A catch-all origin: `routes` where given, the same 200 web page everywhere else. */
 function catchAll(routes: (base: string) => Record<string, Route> = () => ({})): string {
@@ -46,7 +46,7 @@ function catchAll(routes: (base: string) => Record<string, Route> = () => ({})):
     port: 0,
     fetch(req) {
       const route = table[new URL(req.url).pathname] ?? { body: PAGE, headers: HTML_TYPE };
-      return new Response(route.body, { headers: route.headers });
+      return new Response(route.body, { headers: route.headers, status: route.status });
     },
   });
   servers.push(server);
@@ -102,6 +102,20 @@ describe("guessed sitemap locations on a catch-all server (#670)", () => {
       [`${origin}/site-map.xml`, [SITEMAP_HTML_PAGE_ERROR]],
     ]);
     expect(result.discovered.map((sitemap) => sitemap.url)).toEqual([`${origin}/site-map.xml`]);
+  });
+
+  test("a declared sitemap that redirects to a web page is still the declared one", async () => {
+    // The walk records a result under the URL it requested, not where the
+    // redirect landed, so the claim still matches.
+    const origin = catchAll(() => ({
+      "/old-sitemap.xml": { body: "", headers: { location: "/" }, status: 301 },
+    }));
+
+    const result = await discover(origin, robots(origin, `${origin}/old-sitemap.xml`));
+
+    expect(result.all.map((sitemap) => [sitemap.url, sitemap.errors])).toEqual([
+      [`${origin}/old-sitemap.xml`, [SITEMAP_HTML_PAGE_ERROR]],
+    ]);
   });
 
   test("a declared sitemap at a common location keeps its error too", async () => {

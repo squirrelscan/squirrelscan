@@ -273,7 +273,12 @@ const inflateEither: Inflate = (bytes, options) => {
     return inflateSync(bytes, options);
   } catch (error) {
     if (error instanceof RangeError) throw error;
-    return inflateRawSync(bytes, options);
+    try {
+      return inflateRawSync(bytes, options);
+    } catch (rawError) {
+      // Neither reads it: the zlib reason describes what was declared.
+      throw rawError instanceof RangeError ? rawError : error;
+    }
   }
 };
 
