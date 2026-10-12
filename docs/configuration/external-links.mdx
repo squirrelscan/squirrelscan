@@ -269,7 +269,7 @@ A longer slug that only mentions one of them is still a page and is checked: `/w
 - A query key or value that looks like a token: a long hex string, a long run of letters and digits with no separator, a long mixed-case base64 string, or a JWT.
 - A token in the path: a JWT always, and any other token-like segment when the URL also says `login`, `signin`, `magic`, `token`, `auth`, `session`, `password`, `email`, `invite`, `reset`, `verify`, `confirm`, `activate`, `unsubscribe` or `unsub` (`/magic-login/…`, `/login/token/…`). A plain id such as `/posts/<uuid>` is still checked.
 
-**It skips links the page marks as actions**: `rel="nofollow"` on text that is an action ("Log out", "Delete").
+**It skips links whose text is an action.** Short text that is clearly one ("Log out", "Unsubscribe", "Delete account") is skipped whatever its URL says. Any action text ("Remove", "Buy now") is skipped on a `rel="nofollow"` link.
 
 **It sends no credentials**: no cookies, no `Authorization`, and none of the audit's custom request headers (`[crawler] headers`, `-H`), which can carry auth. It identifies itself with the crawl's `User-Agent`.
 
@@ -279,7 +279,9 @@ A longer slug that only mentions one of them is still a page and is checked: `/w
 
 **It stays polite.** It stays inside the crawl scope and, when the crawl respects it, robots.txt. It runs at the crawl's per-host concurrency, and checks at most `max_targets` targets an audit, each with one `HEAD` and the redirect hops that follow it.
 
-A skipped target is counted in the **Not checked** line of `links/broken-links` when the audit did not follow links, and is never reported as passing. To switch the check off completely, use `--no-internal-links` or `[internal_links] enabled = false`.
+A skipped target is counted in the **Not checked** line of `links/broken-links` when the audit did not follow links, and is never reported as passing.
+
+These rules are a careful default, not a guarantee. The word lists are English, and no list can know every route a site wires to a `GET`. If your site changes state on `GET` or `HEAD` requests to links that read like pages, switch the check off for that site with `--no-internal-links` or `[internal_links] enabled = false`.
 
 ## How external link checking works
 

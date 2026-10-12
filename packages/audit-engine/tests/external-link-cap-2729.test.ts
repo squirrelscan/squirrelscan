@@ -152,10 +152,18 @@ describe("linkTextLooksLikeAnAction", () => {
     expect(linkTextLooksLikeAnAction("Unsubscribe from all our emails", true)).toBe(true);
   });
 
-  test("action text a page links normally, and ordinary nofollow text, are not", () => {
+  test("short unambiguous action text, with or without nofollow", () => {
+    // `/account/session/end` says nothing, but its text does.
+    expect(linkTextLooksLikeAnAction("Log out", false)).toBe(true);
+    expect(linkTextLooksLikeAnAction("Unsubscribe", false)).toBe(true);
+    expect(linkTextLooksLikeAnAction("Delete account", false)).toBe(true);
+  });
+
+  test("ambiguous action text without nofollow, long text, and ordinary text are not", () => {
     // A product page linked as "Buy now" is still a page; its URL decides.
     expect(linkTextLooksLikeAnAction("Buy now", false)).toBe(false);
-    expect(linkTextLooksLikeAnAction("Log out", false)).toBe(false);
+    expect(linkTextLooksLikeAnAction("Subscribe", false)).toBe(false);
+    expect(linkTextLooksLikeAnAction("Delete files safely: a guide for teams", false)).toBe(false);
     expect(linkTextLooksLikeAnAction("Pricing", true)).toBe(false);
     expect(linkTextLooksLikeAnAction("", true)).toBe(false);
   });

@@ -38,13 +38,29 @@ import type { FetchBudget } from "./fetch-budget";
  */
 
 /** Verbs that never mean a page, matched anywhere, even run together (`/UserLogout.aspx`, `/dologout`). */
-const RUN_TOGETHER_ACTIONS = ["logout", "logoff", "signout", "signoff", "unsubscribe"];
+const RUN_TOGETHER_ACTIONS = [
+  "logout",
+  "logoff",
+  "signout",
+  "signoff",
+  "unsubscribe",
+];
 
 /** Words that are an action anywhere in a URL. */
 const ANYWHERE_ACTION_WORDS = new Set(["unsub", "optout"]);
 
-/** Two-word actions (`log-out`, `sign_off`, `opt out`, `add-to-cart`), in a segment of at most four words or a query. */
-const ACTION_PAIRS = new Set(["log out", "log off", "sign out", "sign off", "opt out", "add to"]);
+/**
+ * Two-word actions (`log-out`, `sign_off`, `opt out`, `add-to-cart`), in a
+ * segment of at most four words or a query.
+ */
+const ACTION_PAIRS = new Set([
+  "log out",
+  "log off",
+  "sign out",
+  "sign off",
+  "opt out",
+  "add to",
+]);
 
 /** Action verbs, in a segment of at most three words (`/delete-your-account`) or a query. */
 const STRONG_ACTION_WORDS = new Set([
@@ -109,7 +125,16 @@ const SECRET_KEY_WORDS = new Set([
 /** A session id in the URL, anywhere. */
 const SESSION_ID_WORDS = new Set(["jsessionid", "phpsessid", "sessionid"]);
 /** Whole query keys that carry a secret: `?code=` (OAuth), `?key=`, `?hash=`, `?auth=`. */
-const SECRET_KEYS = new Set(["code", "key", "hash", "auth", "session", "sid", "ticket", "state"]);
+const SECRET_KEYS = new Set([
+  "code",
+  "key",
+  "hash",
+  "auth",
+  "session",
+  "sid",
+  "ticket",
+  "state",
+]);
 
 /** Words that say a path token is a credential (`/magic-login/<jwt>`, `/login/token/<hex>`). */
 const CREDENTIAL_CONTEXT_WORDS = new Set([
@@ -235,13 +260,21 @@ export function looksLikeAnAction(url: string): boolean {
 const ACTION_TEXT =
   /^(log ?out|log ?off|sign ?out|sign ?off|unsubscribe|opt ?out|delete|remove|destroy|trash|cancel|revoke|disable|deactivate|confirm|verify|activate|reset|approve|unlock|checkout|check out|add to|buy|purchase|vote|like|follow|subscribe|invite|accept|decline)\b/i;
 
+/** Short link text that is an unambiguous action, whatever the URL says. */
+const PLAIN_ACTION_TEXT =
+  /^(log ?out|log ?off|sign ?out|sign ?off|unsubscribe|opt ?out|delete|destroy|trash|revoke|deactivate)\b/i;
+
 /**
- * A link the page marks as not for bots and words as an action: rel=nofollow
- * on text such as "Log out" or "Delete".
+ * A link whose text says it is an action: short text that is an unambiguous
+ * one ("Log out", "Unsubscribe", "Delete account"), whatever its URL says, or
+ * rel=nofollow on any action text ("Remove", "Buy now"). Without nofollow,
+ * "Buy now" or "Subscribe" on a product or newsletter page is still a page.
  */
 export function linkTextLooksLikeAnAction(text: string, nofollow: boolean): boolean {
-  if (!nofollow) return false;
-  return ACTION_TEXT.test(text.trim().replace(/\s+/g, " "));
+  const label = text.trim().replace(/\s+/g, " ");
+  if (label === "") return false;
+  if (nofollow && ACTION_TEXT.test(label)) return true;
+  return label.split(" ").length <= 4 && PLAIN_ACTION_TEXT.test(label);
 }
 
 export interface LinkTargetProbeOptions {

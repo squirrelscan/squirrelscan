@@ -714,8 +714,8 @@ export function createSiteAssetCollector(baseUrl: string): {
         for (const link of page.parsed.links) {
           if (!link.isInternal || !link.url || link.error) continue;
           const key = normalizeUrl(link.url);
-          // A link any page marks as an action (rel=nofollow on action text,
-          // such as "Log out") is never probed, wherever else it appears.
+          // A link any page words as an action ("Log out", or rel=nofollow on
+          // action text) is never probed, wherever else it appears.
           const action =
             nofollowActions.has(key) ||
             linkTextLooksLikeAnAction(

@@ -1153,6 +1153,14 @@ export const audit = defineCommand({
     // --no-external-links in argv any positive token is the conflict. Alone,
     // `--external-links=false` (or `--external-links false`, which citty
     // reads as the value) parses as false, so it is an off switch.
+    //
+    //   argv                                      on     off    result
+    //   --external-links                          true   false  on
+    //   --external-links=false / --external-links false
+    //                                             false  true   off
+    //   --no-external-links                       false  true   off
+    //   --external-links and --no-external-links  true   true   refused
+    //   (neither)                                 false  false  level / config
     const externalLinksNegated = hasNegatedFlag(rawArgs, "external-links");
     const externalLinksPositive = hasFlag(rawArgs, "external-links");
     const externalLinksOn =

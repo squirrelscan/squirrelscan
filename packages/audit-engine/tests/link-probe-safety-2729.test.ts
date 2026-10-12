@@ -30,6 +30,8 @@ const ACTION_LINKS = [
   `<a href="/account/12" rel="nofollow">Delete account</a>`,
   `<a href="/posts?id=7&_wpnonce=a1b2c3d4e5">Trash</a>`,
   `<a href="/old-settings">Settings</a>`,
+  // No action in the URL and no nofollow: the text alone says it.
+  `<a href="/account/session/end">Log out</a>`,
 ];
 const ACTION_PATHS = [
   "/logout",
@@ -38,6 +40,7 @@ const ACTION_PATHS = [
   "/confirm/abc123def456",
   "/account/12",
   "/posts",
+  "/account/session/end",
 ];
 
 interface Seen {
@@ -141,7 +144,7 @@ describe("the internal link probe never changes state (repo#2729)", () => {
     );
     expect(byPath.get("/missing-page")).toBe(404);
     expect(byPath.get("/old-settings")).toBe(302);
-    expect(assets.internalLinkProbe?.outOfScope).toBe(6);
+    expect(assets.internalLinkProbe?.outOfScope).toBe(7);
   });
 });
 
