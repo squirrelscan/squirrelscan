@@ -415,7 +415,12 @@ export async function downloadBinary(
       );
     }
 
-    const chunks: Uint8Array[] = [];
+    // Read into one buffer of the manifest's size: no second copy of a ~100 MB
+    // binary, and a body that runs past it (oversized or endless) stops here
+    // instead of growing until the total deadline.
+    const out = new Uint8Array(binary.size);
+    let received = 0;
+    let oversized = false;
     const bodyReader = response.body?.getReader();
     reader = bodyReader;
     const consume = async (): Promise<void> => {
@@ -424,7 +429,12 @@ export async function downloadBinary(
       while (true) {
         const { done, value } = await bodyReader.read();
         if (done) return;
-        chunks.push(value);
+        if (received + value.byteLength > out.byteLength) {
+          oversized = true;
+          return;
+        }
+        out.set(value, received);
+        received += value.byteLength;
         armStall();
       }
     };
@@ -438,7 +448,17 @@ export async function downloadBinary(
     // The download is done; the checksum below is not part of it.
     clearTimeout(stallTimer);
     clearTimeout(totalTimer);
-    const buffer = Bun.concatArrayBuffers(chunks);
+    if (oversized) {
+      return err(
+        commandError(
+          "DOWNLOAD_FAILED",
+          `Download is larger than the ${binary.size} bytes the release manifest lists`
+        )
+      );
+    }
+    // A short body fails the checksum below.
+    const buffer =
+      received === out.byteLength ? out.buffer : out.slice(0, received).buffer;
 
     // Verify SHA256
     const hash = await computeSHA256(buffer);
@@ -467,9 +487,9 @@ export async function downloadBinary(
   }
 }
 
-/** `30s`, `1 minute`, `20 minutes`. */
+/** `30s`, `90s`, `1 minute`, `20 minutes`. */
 function formatDuration(ms: number): string {
-  if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
+  if (ms < 60_000 || ms % 60_000 !== 0) return `${Math.round(ms / 1000)}s`;
   const minutes = Math.round(ms / 60_000);
   return `${minutes} minute${minutes === 1 ? "" : "s"}`;
 }

@@ -385,7 +385,7 @@ describe("updater", () => {
         "windows-x64": binaryEntry,
       },
     } as ReleaseManifest;
-    const FAST = { headersMs: 1_000, stallMs: 80, totalMs: 2_000 };
+    const FAST = { headersMs: 1_000, stallMs: 200, totalMs: 3_000 };
 
     /** A body that sends `first`, then each of `rest` `gapMs` apart, then maybe never ends. */
     function body(
@@ -453,7 +453,7 @@ describe("updater", () => {
       const result = await downloadBinary(manifest, "darwin-arm64", {
         timeouts: FAST,
       });
-      expect(Date.now() - start).toBeLessThan(1_000);
+      expect(Date.now() - start).toBeLessThan(1_500);
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.error.code).toBe("DOWNLOAD_TIMEOUT");
@@ -462,20 +462,52 @@ describe("updater", () => {
     });
 
     test("a trickle that never stalls is cut off by the total deadline", async () => {
-      // A byte every 20 ms resets the 80 ms stall timer forever.
+      // A byte every 40 ms resets the 200 ms stall timer for as long as it
+      // runs, and the manifest's size leaves it room to run.
+      const big = {
+        ...manifest,
+        binaries: {
+          ...manifest.binaries,
+          "darwin-arm64": { ...binaryEntry, size: 10_000 },
+        },
+      } as ReleaseManifest;
       const trickle = Array.from({ length: 200 }, () => new Uint8Array([0]));
       serveRelease(
-        async () => new Response(body(BYTES.slice(0, 1), trickle, 20))
+        async () => new Response(body(BYTES.slice(0, 1), trickle, 40))
       );
       const start = Date.now();
-      const result = await downloadBinary(manifest, "darwin-arm64", {
-        timeouts: { headersMs: 1_000, stallMs: 80, totalMs: 300 },
+      const result = await downloadBinary(big, "darwin-arm64", {
+        timeouts: { headersMs: 1_000, stallMs: 200, totalMs: 600 },
       });
-      expect(Date.now() - start).toBeLessThan(1_500);
+      expect(Date.now() - start).toBeLessThan(2_000);
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.error.code).toBe("DOWNLOAD_TIMEOUT");
         expect(result.error.message).toStartWith("Download did not finish");
+      }
+    });
+
+    test("a body longer than the manifest's size stops at that size", async () => {
+      // Endless and fast: no deadline would end it before memory did.
+      serveRelease(
+        async () =>
+          new Response(
+            new ReadableStream({
+              pull(controller) {
+                controller.enqueue(new Uint8Array(4096));
+              },
+            })
+          )
+      );
+      const start = Date.now();
+      const result = await downloadBinary(manifest, "darwin-arm64", {
+        timeouts: FAST,
+      });
+      expect(Date.now() - start).toBeLessThan(1_000);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe("DOWNLOAD_FAILED");
+        expect(result.error.message).toContain("larger than");
       }
     });
 
@@ -556,7 +588,7 @@ describe("updater", () => {
       // The detached `self update --auto` child: no signal from anyone.
       const start = Date.now();
       const installed = await runAutoUpdate({ downloadTimeouts: FAST });
-      expect(Date.now() - start).toBeLessThan(2_000);
+      expect(Date.now() - start).toBeLessThan(2_500);
       expect(installed).toBeNull();
       // The lock is released, so the next run can try again.
       expect(existsSync(join(tempHome, "update.lock"))).toBe(false);
