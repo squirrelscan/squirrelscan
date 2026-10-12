@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- New **Reliability** category with its first rule, `reliability/broken-resources`: a page can answer 200 while the script or stylesheet it depends on returns 404 or 500, usually because a deploy deleted the hashed bundle that cached HTML still references. A first-party script or stylesheet (same registrable domain as the site, so `cdn.example.com` counts for `www.example.com`) that answers 4xx or 5xx is an error; a third-party file, a font or a network failure is a warning; a 429, 430, 503 with `Retry-After` or a WAF challenge is reported as unverified, not broken. One finding per URL lists every page that references it, and a fetch the budget skipped or a cap dropped makes the result partial instead of a pass. Third-party files get one status request each (HEAD first, no body), at most 50 per kind per audit, with none of your custom request headers, never to a private, loopback, link-local or cloud metadata address or a name that resolves to one, at any redirect hop, and only while the rule is enabled. See [reliability/broken-resources](https://docs.squirrelscan.com/rules/reliability/broken-resources). squirrelscan/squirrelscan#703
+
 ## v0.0.111 (2026-10-13)
 
 Broken links have nowhere left to hide. Every audit, Quick included, now status-checks the internal link targets its crawl did not fetch, so a linked 404 shows up even when it is not in your sitemap or sits past the page budget. External links stay opt-in at Quick, and there are new flags for both.

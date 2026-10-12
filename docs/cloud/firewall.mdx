@@ -40,6 +40,7 @@ This table is the reference for which requests of a cloud audit carry your custo
 | Page request | Sent. Every page is a plain HTTP request | Sent on the plain HTTP request every page starts with. Not sent when a page that needs JavaScript is then rendered in the cloud browser | Not sent on the cloud browser render. Sent on the plain HTTP request that replaces a render the site refuses, or that starts when the render has no result after 18 s |
 | Subresources the cloud browser loads while it renders a page: scripts, stylesheets, images, and the requests its scripts make | No browser is used | Not sent | Not sent |
 | Asset checks: stylesheets, scripts, images and fonts on the audited host and its subdomains | Sent | Sent | Sent |
+| Status checks of scripts, stylesheets and fonts on other hosts ([reliability/broken-resources](/rules/reliability/broken-resources)) | Not sent | Not sent | Not sent |
 | Seed redirect probe, which checks where the audited address redirects before the crawl starts | Not sent | Not sent | Not sent |
 | `robots.txt`, sitemaps, `llms.txt` and the other root files | Sent | Sent | Sent |
 

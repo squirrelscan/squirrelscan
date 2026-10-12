@@ -87,6 +87,7 @@ describe("loadAllRules", () => {
       "video",
       "analytics",
       "eeat",
+      "reliability",
     ] as const;
 
     for (const category of expectedCategories) {

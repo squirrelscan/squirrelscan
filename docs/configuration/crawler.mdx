@@ -748,8 +748,11 @@ user_agent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit
 **Type:** `table` (map of header name → value)
 **Default:** `{}` (no custom headers)
 
-Custom HTTP request headers attached to **every** crawl request: pages, assets,
-`robots.txt`, sitemaps, `llms.txt`, and markdown probes. Use this to authorize
+Custom HTTP request headers attached to **every** crawl request: pages, assets
+on the audited host and its subdomains, `robots.txt`, sitemaps, `llms.txt`, and
+markdown probes. The status checks
+[reliability/broken-resources](/rules/reliability/broken-resources) sends to
+scripts, stylesheets and fonts on other hosts never carry them. Use this to authorize
 the crawler with schemes that require signed headers, such as
 [Web Bot Auth](/guides/web-bot-auth) (used by Shopify and Cloudflare).
 

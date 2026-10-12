@@ -3,10 +3,15 @@
 
 import { Effect } from "effect";
 
-import { SCRIPT_FETCH_LIMITS, SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
+import {
+  ASSET_FETCH_SKIPPED_ERROR,
+  SCRIPT_FETCH_LIMITS,
+  SQUIRRELSCAN_USER_AGENT,
+} from "@squirrelscan/utils/constants";
 import { fetchUndecoded, readBodyCapped } from "@squirrelscan/utils/response-body";
 import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 import type { FetchBudget, FetchOutcome } from "./fetch-budget";
+import { rateLimitedFlag, wafBlockedFlag } from "./lib/asset-status";
 import { normalizeEncoding } from "./resource-checker";
 
 export interface ScriptFetchResult {
@@ -25,6 +30,10 @@ export interface ScriptFetchResult {
    * identity/absent. Absent (`undefined`) when no response was seen. (#9)
    */
   contentEncoding?: string | null;
+  /** Throttled by the origin (429/430, or 503 with Retry-After) (#703). */
+  rateLimited?: boolean;
+  /** A WAF or bot challenge answered in place of the script (#703). */
+  wafBlocked?: boolean;
 }
 
 export interface ScriptFetcherOptions {
@@ -173,6 +182,8 @@ async function fetchScriptAttempt(
         sourceMapHeader,
         contentEncoding,
         error: `HTTP ${response.status}`,
+        rateLimited: rateLimitedFlag(response.status, response.headers),
+        wafBlocked: wafBlockedFlag(response.status, response.headers),
       };
     }
 
@@ -277,7 +288,7 @@ function fetchSingleScript(
   return Effect.promise(async () => {
     // #1252: skip before launching once the budget is spent or the host tarpits.
     if (options.budget?.shouldSkip(url)) {
-      return { ...emptyScriptResult(url), error: "skipped" };
+      return { ...emptyScriptResult(url), error: ASSET_FETCH_SKIPPED_ERROR };
     }
     const startedAt = Date.now();
     const result = await fetchSingleScriptAsync(url, options);

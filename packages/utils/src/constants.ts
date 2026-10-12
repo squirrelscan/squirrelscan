@@ -9,6 +9,10 @@ export const RESOURCE_SIZE_LIMITS = {
   JS_WARN_BYTES: 250 * 1024, // 250KB
   JS_ERROR_BYTES: 1 * 1024 * 1024, // 1MB
   MAX_RESOURCES_TO_CHECK: 500, // Limit to prevent resource exhaustion
+  // #703: third-party scripts, stylesheets and fonts are status-checked for
+  // reliability/broken-resources only. Capped per kind well below
+  // MAX_RESOURCES_TO_CHECK so an audit sends at most 150 extra third-party requests.
+  MAX_EXTERNAL_ASSETS_TO_CHECK: 50,
   CHECK_CONCURRENCY: 5,
   CHECK_TIMEOUT_MS: 10000,
   RETRY_DELAY_MS: 1000,
@@ -18,6 +22,17 @@ export const RESOURCE_SIZE_LIMITS = {
   // bounds the extra transfer at about 16 MB an audit.
   IMAGE_HEADER_BYTES: 32 * 1024,
 } as const;
+
+// The `error` an asset fetch records when the shared fetch budget skipped it
+// (budget spent or host tarpitting, #1252) instead of sending a request. Rules
+// read it as "not checked", never as a network failure (#703).
+export const ASSET_FETCH_SKIPPED_ERROR = "skipped";
+
+// The `error` an asset fetch records when the egress policy refused the URL or
+// one of its redirect hops (a third-party asset on a private, loopback,
+// link-local or metadata address, #703). The refused hop was never sent; rules
+// read it as "not checked".
+export const ASSET_FETCH_REFUSED_ERROR = "refused by the egress policy";
 
 // Sub-resource compression thresholds (#9). Compression helps from ~1KB up, but
 // a low bar turns every small uncompressed asset into a finding. 100KB matches

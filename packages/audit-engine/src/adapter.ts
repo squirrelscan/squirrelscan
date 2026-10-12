@@ -29,6 +29,7 @@ import {
 import {
   buildCollectedPageSignal,
   createRunner,
+  isRuleEnabled,
   isSiteIndexable,
   mergeRuleRunResult,
   type RunnerScope,
@@ -145,6 +146,8 @@ import {
 } from "./link-target-probe";
 import { fetchScriptContents, type ScriptFetchResult } from "./script-fetcher";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
+import { isNonPublicHostname } from "@squirrelscan/utils/non-public-host";
+import { memoizeResolveHost, resolveHostAddresses } from "@squirrelscan/utils/public-egress";
 import { getHostname, normalizeUrl } from "@squirrelscan/utils/url";
 import { isInScope } from "@squirrelscan/crawler/frontier";
 import { createRobotsEvaluator } from "@squirrelscan/crawler/robots";
@@ -522,10 +525,34 @@ export interface ResourceCheckOverrides {
    * freshness (#107). Defaults to false (cold audit) when unset.
    */
   incremental?: boolean;
+  /**
+   * The runtime's fetch already resolves each host once and connects to the
+   * address it validated (the hosted container's egress proxy). Third-party
+   * probes are then vetted but not pinned again (#703): the proxy rewrites a
+   * plain-http request's Host from its target, so a pinned one would lose its
+   * name. Defaults to false, the CLI, where the engine pins them itself.
+   */
+  egressPinnedByTransport?: boolean;
 }
 
 /** Most preloaded chunks fetched per audit, on top of the regular script fetch. */
 const PRELOAD_CHUNK_FETCH_LIMIT = 20;
+
+/** The one rule that reads the third-party asset pools (#703). */
+const BROKEN_RESOURCES_RULE_ID = "reliability/broken-resources";
+
+/**
+ * Referenced URLs each fetch cap left unfetched, per kind (#703): the count of
+ * URLs the pages reference minus the rows the fetch returned.
+ */
+export interface AssetCapDropped {
+  scripts: number;
+  css: number;
+  fonts: number;
+  externalScripts: number;
+  externalCss: number;
+  externalFonts: number;
+}
 
 /**
  * Pre-fetched resource data — collected between crawl and rules phases.
@@ -549,6 +576,22 @@ export interface PreFetchedAssets {
    * assets by hand have none.
    */
   preloadedScripts?: ScriptContentData[];
+  /**
+   * Third-party scripts, stylesheets and fonts the pages reference (#703),
+   * status-checked. Kept apart from `resourceSizes` and `scripts` so no size,
+   * compression or script rule sees them; only reliability/broken-resources reads
+   * them. Absent on hand-built assets.
+   */
+  externalAssets?: {
+    scripts: ResourceSizeData[];
+    css: ResourceSizeData[];
+    fonts: ResourceSizeData[];
+  };
+  /**
+   * Referenced URLs each fetch cap left unfetched (`maxScripts` / `maxResources`
+   * slicing), per kind (#703). Zero or absent means nothing was dropped.
+   */
+  assetCapDropped?: AssetCapDropped;
   pdfSizes: ResourceSizeData[];
   sitemapUrlStatuses: SitemapUrlStatusData[];
   /**
@@ -596,6 +639,10 @@ export interface SiteAssetOccurrences {
   preloads: Map<string, Set<string>>;
   pdfs: Map<string, Set<string>>;
   fonts: Map<string, Set<string>>;
+  /** Third-party copies of the above (#703): kept out of the same-site maps. */
+  externalCss: Map<string, Set<string>>;
+  externalScripts: Map<string, Set<string>>;
+  externalFonts: Map<string, Set<string>>;
   /** Scalars for the sitemap-coverage pass — v1's non-WAF parsed-page list. */
   coveragePages: Array<{ url: string; finalUrl?: string; statusCode: number }>;
   /** Every page absorbed, WAF and non-HTML included — v1's `siteContext.length`,
@@ -619,7 +666,7 @@ export interface SiteAssetOccurrences {
  */
 const MAX_TRACKED_INTERNAL_LINK_TARGETS = 50_000;
 
-function emptySiteAssetOccurrences(): SiteAssetOccurrences {
+export function emptySiteAssetOccurrences(): SiteAssetOccurrences {
   return {
     css: new Map(),
     images: new Map(),
@@ -627,6 +674,9 @@ function emptySiteAssetOccurrences(): SiteAssetOccurrences {
     preloads: new Map(),
     pdfs: new Map(),
     fonts: new Map(),
+    externalCss: new Map(),
+    externalScripts: new Map(),
+    externalFonts: new Map(),
     coveragePages: [],
     pageCount: 0,
     internalLinkTargets: new Map(),
@@ -755,6 +805,44 @@ export function createSiteAssetCollector(baseUrl: string): {
         }
       }
     },
+  };
+}
+
+/** A status-only third-party record (#703): no body, cache or compression fields. */
+function externalAssetRecord(
+  check: ResourceCheckResult,
+  sources: Map<string, Set<string>>,
+): ResourceSizeData {
+  return {
+    url: check.url,
+    status: check.status,
+    error: check.error,
+    contentType: check.contentType,
+    sizeBytes: check.sizeBytes,
+    sourcePages: Array.from(sources.get(check.url) ?? []),
+    rateLimited: check.rateLimited,
+    wafBlocked: check.wafBlocked,
+  };
+}
+
+/**
+ * Referenced URLs the fetch caps left unfetched, per kind (#703): referenced
+ * minus returned, floored at zero. Rows a budget skip returned still count as
+ * fetched here; the rule reads those from their `skipped` error instead.
+ */
+export function assetCapDroppedOf(
+  referenced: Pick<SiteAssetOccurrences, keyof AssetCapDropped>,
+  fetched: Record<keyof AssetCapDropped, readonly unknown[]>,
+): AssetCapDropped {
+  const dropped = (kind: keyof AssetCapDropped): number =>
+    Math.max(0, referenced[kind].size - fetched[kind].length);
+  return {
+    scripts: dropped("scripts"),
+    css: dropped("css"),
+    fonts: dropped("fonts"),
+    externalScripts: dropped("externalScripts"),
+    externalCss: dropped("externalCss"),
+    externalFonts: dropped("externalFonts"),
   };
 }
 
@@ -991,6 +1079,48 @@ export function fetchAssetsFromOccurrences(
         : [];
     const probeTargets = unfetchedTargets.slice(0, probeCap).map(([, target]) => target.url);
 
+    // Third-party copies feed reliability/broken-resources alone (#703), so
+    // they are requested only when that rule runs, and get a per-kind cap of
+    // their own, never above the caller's item cap.
+    const probeExternalAssets = isRuleEnabled(
+      BROKEN_RESOURCES_RULE_ID,
+      // The runner's own defaults (runner.ts), so the two never disagree.
+      config.rules?.enable ?? [],
+      config.rules?.disable ?? [],
+      (config.rule_options as Record<string, { enabled?: boolean }> | undefined)?.[
+        BROKEN_RESOURCES_RULE_ID
+      ],
+    );
+    const externalAssetLimit = probeExternalAssets
+      ? Math.min(
+          maxResources ?? RESOURCE_SIZE_LIMITS.MAX_EXTERNAL_ASSETS_TO_CHECK,
+          RESOURCE_SIZE_LIMITS.MAX_EXTERNAL_ASSETS_TO_CHECK,
+        )
+      : 0;
+    // Third-party status probes (#703) are not the site's own requests:
+    //  - They carry none of the audit's credentials. The custom and Web Bot
+    //    Auth headers (#494) go to the site's own host only; a probe sends
+    //    User-Agent and Accept, nothing else.
+    //  - They reach public addresses only, checked on every redirect hop, so a
+    //    page cannot point squirrel at the auditor's own network or a metadata
+    //    service. A site that is itself on a private network (`localhost:3000`)
+    //    may probe private hosts, never link-local or metadata ones. An unknown
+    //    base URL counts as public, the strict side. Each request connects to
+    //    the address that was vetted, so DNS rebinding cannot swap it.
+    //  - Status only: no body is read, and no prior-crawl cache is consulted.
+    const { customHeaders: _ownHostOnly, priorByUrl: _ownHostCache, ...probeShared } =
+      resourceCheckOptions;
+    const baseHost = getHostname(baseUrl).replace(/^\[|\]$/g, "");
+    const externalCheckOptions = {
+      ...probeShared,
+      statusOnly: true,
+      egress: {
+        allowPrivateNetwork: baseHost !== "" && isNonPublicHostname(baseHost),
+        resolve: memoizeResolveHost(resolveHostAddresses),
+        pin: overrides?.egressPinnedByTransport !== true,
+      },
+    };
+
     const resourceCheckStart = Date.now();
 
     const allResourceChecks = Effect.all(
@@ -1056,6 +1186,20 @@ export function fetchAssetsFromOccurrences(
           // The audited URL, which the crawl fetched: the HEAD control.
           ...(baseUrl ? { controlUrl: baseUrl } : {}),
         }),
+        // Third-party copies (#703): status only, through the HEAD-first checker, so
+        // no body is stored. Read by reliability/broken-resources alone.
+        externalCss: checkResourceSizes(
+          Array.from(resourceOccurrences.externalCss.keys()).slice(0, externalAssetLimit),
+          externalCheckOptions,
+        ),
+        externalScripts: checkResourceSizes(
+          Array.from(resourceOccurrences.externalScripts.keys()).slice(0, externalAssetLimit),
+          externalCheckOptions,
+        ),
+        externalFonts: checkResourceSizes(
+          Array.from(resourceOccurrences.externalFonts.keys()).slice(0, externalAssetLimit),
+          externalCheckOptions,
+        ),
       },
       { concurrency: 5 },
     );
@@ -1089,6 +1233,9 @@ export function fetchAssetsFromOccurrences(
               pdfs: [] as ResourceCheckResult[],
               sitemap: [] as ResourceCheckResult[],
               linkTargets: { results: [], headUnreliable: false } as LinkTargetProbe,
+              externalCss: [] as ResourceCheckResult[],
+              externalScripts: [] as ResourceCheckResult[],
+              externalFonts: [] as ResourceCheckResult[],
             });
           },
         )
@@ -1114,6 +1261,8 @@ export function fetchAssetsFromOccurrences(
           contentType: check.contentType,
           sizeBytes: check.sizeBytes,
           sourcePages: Array.from(resourceOccurrences.css.get(check.url) ?? []),
+          rateLimited: check.rateLimited,
+          wafBlocked: check.wafBlocked,
           contentEncoding: check.contentEncoding,
           transferBytes: check.transferBytes,
           cacheControl: check.cacheControl,
@@ -1129,6 +1278,8 @@ export function fetchAssetsFromOccurrences(
           contentType: check.contentType,
           sizeBytes: check.sizeBytes,
           sourcePages: Array.from(resourceOccurrences.images.get(check.url) ?? []),
+          rateLimited: check.rateLimited,
+          wafBlocked: check.wafBlocked,
           contentEncoding: check.contentEncoding,
           transferBytes: check.transferBytes,
           cacheControl: check.cacheControl,
@@ -1147,8 +1298,37 @@ export function fetchAssetsFromOccurrences(
           contentType: check.contentType,
           sizeBytes: check.sizeBytes,
           sourcePages: Array.from(resourceOccurrences.fonts.get(check.url) ?? []),
+          rateLimited: check.rateLimited,
+          wafBlocked: check.wafBlocked,
         })),
       },
+      // Absent, not empty, when the rule is off: nothing was measured.
+      ...(probeExternalAssets
+        ? {
+            externalAssets: {
+              scripts: resourceResults.externalScripts.map((check) =>
+                externalAssetRecord(check, resourceOccurrences.externalScripts),
+              ),
+              css: resourceResults.externalCss.map((check) =>
+                externalAssetRecord(check, resourceOccurrences.externalCss),
+              ),
+              fonts: resourceResults.externalFonts.map((check) =>
+                externalAssetRecord(check, resourceOccurrences.externalFonts),
+              ),
+            },
+          }
+        : {}),
+      assetCapDropped: assetCapDroppedOf(
+        probeExternalAssets
+          ? resourceOccurrences
+          : {
+              ...resourceOccurrences,
+              externalScripts: new Map(),
+              externalCss: new Map(),
+              externalFonts: new Map(),
+            },
+        resourceResults,
+      ),
       scripts: resourceResults.scripts.map((fetch) => ({
         url: fetch.url,
         status: fetch.status,
@@ -1157,6 +1337,8 @@ export function fetchAssetsFromOccurrences(
         sizeBytes: fetch.sizeBytes,
         content: fetch.content,
         sourcePages: Array.from(resourceOccurrences.scripts.get(fetch.url) ?? []),
+        rateLimited: fetch.rateLimited,
+        wafBlocked: fetch.wafBlocked,
         redirected: fetch.redirected,
         finalUrl: fetch.finalUrl,
         sourceMapHeader: fetch.sourceMapHeader,
@@ -1570,7 +1752,15 @@ export function runRulesOnStorage(
     }
 
     // Use pre-fetched resource data (no HTTP calls during rules phase)
-    const { resourceSizes, scripts, preloadedScripts, pdfSizes, sitemapUrlStatuses } = assets;
+    const {
+      resourceSizes,
+      scripts,
+      preloadedScripts,
+      externalAssets,
+      assetCapDropped,
+      pdfSizes,
+      sitemapUrlStatuses,
+    } = assets;
 
     // Differential cloaking probe (#118) — opt-in, bounded. Re-fetches suspicious
     // paths (orphan / recently-modified) with a googlebot UA + query variation and
@@ -1662,6 +1852,8 @@ export function runRulesOnStorage(
       resourceSizes,
       scripts,
       preloadedScripts,
+      externalAssets,
+      assetCapDropped,
       pdfSizes,
       sitemapUrlStatuses,
       cloakingProbes,
@@ -2318,7 +2510,15 @@ function buildStreamingSiteData(
       sitemapDiscovery.orphanPagesTotal = coverage.orphanPages.length;
     }
 
-    const { resourceSizes, scripts, preloadedScripts, pdfSizes, sitemapUrlStatuses } = assets;
+    const {
+      resourceSizes,
+      scripts,
+      preloadedScripts,
+      externalAssets,
+      assetCapDropped,
+      pdfSizes,
+      sitemapUrlStatuses,
+    } = assets;
 
     const cloakingProbes = yield* Effect.promise(() =>
       resolveCloakingProbes(
@@ -2389,6 +2589,8 @@ function buildStreamingSiteData(
       resourceSizes,
       scripts,
       preloadedScripts,
+      externalAssets,
+      assetCapDropped,
       pdfSizes,
       sitemapUrlStatuses,
       cloakingProbes,
@@ -3269,6 +3471,9 @@ interface ResourceOccurrenceMap {
   scripts: Map<string, Set<string>>;
   preloads: Map<string, Set<string>>;
   fonts: Map<string, Set<string>>;
+  externalCss: Map<string, Set<string>>;
+  externalScripts: Map<string, Set<string>>;
+  externalFonts: Map<string, Set<string>>;
 }
 
 /** A `<meta http-equiv="Content-Security-Policy">` is an enforced policy too. */
@@ -3301,6 +3506,9 @@ function collectResourceOccurrences(
     scripts: new Map<string, Set<string>>(),
     preloads: new Map<string, Set<string>>(),
     fonts: new Map<string, Set<string>>(),
+    externalCss: new Map<string, Set<string>>(),
+    externalScripts: new Map<string, Set<string>>(),
+    externalFonts: new Map<string, Set<string>>(),
   };
   absorbResourceOccurrences(target, pages, baseUrl);
   return target;
@@ -3309,7 +3517,7 @@ function collectResourceOccurrences(
 /** {@link collectResourceOccurrences}' body, accumulating into `target` so the
  * streamed pre-rules pass can feed it one page batch at a time (DOMs live) and
  * the whole-array entry point stays a one-shot call into the same code. */
-function absorbResourceOccurrences(
+export function absorbResourceOccurrences(
   target: ResourceOccurrenceMap,
   pages: Array<{
     url: string;
@@ -3321,7 +3529,8 @@ function absorbResourceOccurrences(
   baseUrl: string,
 ): void {
   const baseHost = getHostname(baseUrl).toLowerCase();
-  const { css, images, scripts, preloads, fonts } = target;
+  const { css, images, scripts, preloads, fonts, externalCss, externalScripts, externalFonts } =
+    target;
 
   for (const page of pages) {
     const pageUrl = page.finalUrl ?? page.url;
@@ -3331,10 +3540,10 @@ function absorbResourceOccurrences(
     const stylesheetRefs = extractStylesheets(doc, pageUrl);
     for (const sheet of stylesheetRefs) {
       if (!sheet.href || sheet.href.startsWith("data:")) continue;
-      if (!isSameDomainResource(sheet.href, baseHost)) continue;
-      const sources = css.get(sheet.href) ?? new Set<string>();
+      const sheets = isSameDomainResource(sheet.href, baseHost) ? css : externalCss;
+      const sources = sheets.get(sheet.href) ?? new Set<string>();
       sources.add(page.url);
-      css.set(sheet.href, sources);
+      sheets.set(sheet.href, sources);
     }
 
     for (const image of page.parsed.images) {
@@ -3352,20 +3561,20 @@ function absorbResourceOccurrences(
     }
 
     for (const fontUrl of extractFontUrls(doc, pageUrl)) {
-      if (!isSameDomainResource(fontUrl, baseHost)) continue;
-      const sources = fonts.get(fontUrl) ?? new Set<string>();
+      const fontMap = isSameDomainResource(fontUrl, baseHost) ? fonts : externalFonts;
+      const sources = fontMap.get(fontUrl) ?? new Set<string>();
       sources.add(page.url);
-      fonts.set(fontUrl, sources);
+      fontMap.set(fontUrl, sources);
     }
 
     // Extract external script URLs
     const scriptRefs = extractScripts(doc, pageUrl);
     for (const script of scriptRefs) {
       if (!script.src || script.src.startsWith("data:")) continue;
-      if (!isSameDomainScript(script.src, baseHost)) continue;
-      const sources = scripts.get(script.src) ?? new Set<string>();
+      const scriptMap = isSameDomainScript(script.src, baseHost) ? scripts : externalScripts;
+      const sources = scriptMap.get(script.src) ?? new Set<string>();
       sources.add(page.url);
-      scripts.set(script.src, sources);
+      scriptMap.set(script.src, sources);
     }
 
     // Preloaded chunks name the lazy third-party scripts a page loads. They go in

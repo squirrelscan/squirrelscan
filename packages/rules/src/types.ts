@@ -455,6 +455,28 @@ export interface SiteData {
   // <script src> names. Separate from `scripts` so the script rules' input is
   // unchanged; read by security/csp-blocks-own-resources only.
   preloadedScripts?: ScriptContentData[];
+  /**
+   * Third-party scripts, stylesheets and fonts the pages reference, status-checked
+   * (#703). Separate from `resourceSizes` and `scripts`, so the size, compression
+   * and script rules never see them. Undefined when the asset phase did not run.
+   */
+  externalAssets?: {
+    scripts: ResourceSizeData[];
+    css: ResourceSizeData[];
+    fonts: ResourceSizeData[];
+  };
+  /**
+   * Referenced URLs the asset fetch caps (`maxScripts`, `maxResources`) left
+   * unfetched, per kind (#703). Absent or zero means nothing was dropped.
+   */
+  assetCapDropped?: {
+    scripts?: number;
+    css?: number;
+    fonts?: number;
+    externalScripts?: number;
+    externalCss?: number;
+    externalFonts?: number;
+  };
   pdfSizes?: ResourceSizeData[];
   sitemapUrlStatuses?: SitemapUrlStatusData[];
   // Differential cloaking-probe results (#118). Undefined when the opt-in probe

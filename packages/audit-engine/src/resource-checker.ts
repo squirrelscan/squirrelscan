@@ -15,21 +15,39 @@ import type {
 } from "@squirrelscan/core-contracts";
 import { isCacheHitReason } from "@squirrelscan/core-contracts";
 import { calculateFreshness } from "@squirrelscan/crawler";
-import { RESOURCE_SIZE_LIMITS, SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
+import {
+  ASSET_FETCH_REFUSED_ERROR,
+  ASSET_FETCH_SKIPPED_ERROR,
+  RESOURCE_SIZE_LIMITS,
+  SQUIRRELSCAN_USER_AGENT,
+} from "@squirrelscan/utils/constants";
 import { isCompressibleContentType } from "@squirrelscan/utils/headers";
 import { isRateLimitedResponse } from "@squirrelscan/utils/rate-limit";
 import { decodedBody, fetchUndecoded } from "@squirrelscan/utils/response-body";
-import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
+import {
+  EgressRefusedError,
+  egressGuardedSend,
+  type EgressPolicy,
+} from "@squirrelscan/utils/public-egress";
+import { isHttpOrHttpsUrl, safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
+import { wafBlockedFlag } from "./lib/asset-status";
 import type { FetchBudget, FetchOutcome } from "./fetch-budget";
 import { parseImageHeader, type ImageHeaderInfo } from "./image-header";
 
 /**
  * Every request this module sends: redirects followed by hand (#1395), each hop
  * fetched undecoded so the runtime never inflates a Content-Encoding body
- * ahead of the capped reads below (#2717).
+ * ahead of the capped reads below (#2717). With an egress policy, each hop is
+ * checked against it before it is sent (#703).
  */
-function fetchResource(url: string, init: RequestInit) {
-  return safeRedirectFetch(url, init, fetchUndecoded);
+function fetchResource(url: string, init: RequestInit, options: ResourceCheckerOptions) {
+  if (!options.egress) return safeRedirectFetch(url, init, fetchUndecoded);
+  // Refused, not a network error to retry: safeRedirectFetch would throw a
+  // TypeError for a non-http(s) first hop before the guard ever saw it.
+  if (!isHttpOrHttpsUrl(url)) {
+    return Promise.reject(new EgressRefusedError("refused scheme"));
+  }
+  return safeRedirectFetch(url, init, egressGuardedSend(fetchUndecoded, options.egress));
 }
 
 export interface ResourceCheckResult {
@@ -72,6 +90,8 @@ export interface ResourceCheckResult {
    * report a live URL as 4xx.
    */
   rateLimited?: boolean;
+  /** A WAF or bot challenge answered in place of the file (#703). */
+  wafBlocked?: boolean;
   /**
    * Natural pixel size and animation read from the image's first bytes (#470).
    * Null when the pool does not read headers, the bytes were not a PNG, GIF,
@@ -128,6 +148,19 @@ export interface ResourceCheckerOptions {
    * whole file. Only the image pool sets it. Default off.
    */
   readImageHeader?: boolean;
+  /**
+   * #703: every hop of every request is checked against this policy before it
+   * is sent (see `@squirrelscan/utils/public-egress`). Set for URLs the audited
+   * site does not own; a refused URL is never requested and reads as
+   * ASSET_FETCH_REFUSED_ERROR. Absent → hosts are unrestricted, as the shared
+   * fetch paths are.
+   */
+  egress?: EgressPolicy;
+  /**
+   * #703: only the status is wanted. A HEAD below 400 answers without a GET,
+   * and a GET's body is cancelled unread rather than counted. Default off.
+   */
+  statusOnly?: boolean;
 }
 
 const DEFAULT_OPTIONS: ResourceCheckerOptions = {
@@ -309,7 +342,7 @@ async function measureUnrangedSize(
         method: "HEAD",
         headers,
         signal: controller.signal,
-      });
+      }, options);
       const length =
         response.status < 400 ? parseHeaderInt(response.headers.get("content-length")) : null;
       if (length !== null) return length;
@@ -320,7 +353,7 @@ async function measureUnrangedSize(
       method: "GET",
       headers,
       signal: controller.signal,
-    });
+    }, options);
     const declared = parseHeaderInt(response.headers.get("content-length"));
     if (!response.ok || declared !== null) {
       controller.abort();
@@ -492,11 +525,26 @@ async function checkSingleResourceAsync(
             ...conditional,
           },
           signal: controller.signal,
-        });
+        }, options);
 
         defaultResult.rateLimited =
           isRateLimitedResponse(headResponse.status, headResponse.headers.get("retry-after")) ||
           undefined;
+        defaultResult.wafBlocked = wafBlockedFlag(headResponse.status, headResponse.headers);
+
+        // A status probe is done once the HEAD answers below 400. An error
+        // status still takes the GET below, as some servers refuse HEAD alone.
+        if (options.statusOnly && headResponse.status < 400) {
+          clearTimeout(timeoutId);
+          const meta = extractMeta(headResponse);
+          return {
+            ...defaultResult,
+            status: headResponse.status,
+            contentType: meta.contentType,
+            sizeBytes: parseHeaderInt(headResponse.headers.get("content-length")),
+            redirectTarget: headFinalUrl !== url ? headFinalUrl : null,
+          };
+        }
 
         // 304 Not Modified → reuse prior body size (validator hit).
         if (headResponse.status === 304 && prior && prior.status != null) {
@@ -577,7 +625,9 @@ async function checkSingleResourceAsync(
             redirectTarget: headFinalUrl !== url ? headFinalUrl : null,
           };
         }
-      } catch {
+      } catch (error) {
+        // A refused hop is refused on the GET too: send neither.
+        if (error instanceof EgressRefusedError) throw error;
         // HEAD failed; fall through to GET
       }
     }
@@ -597,7 +647,7 @@ async function checkSingleResourceAsync(
         ...conditional,
       },
       signal: getController.signal,
-    });
+    }, options);
 
     // Servers that reject Range answer 416 (Range Not Satisfiable). That is a
     // Range-rejection, not the resource's real status — recording it surfaced
@@ -619,13 +669,14 @@ async function checkSingleResourceAsync(
           ...conditional,
         },
         signal: getController.signal,
-      }));
+      }, options));
     }
 
     // 304 Not Modified on the GET fallback → validator hit.
     defaultResult.rateLimited =
       isRateLimitedResponse(getResponse.status, getResponse.headers.get("retry-after")) ||
       undefined;
+    defaultResult.wafBlocked = wafBlockedFlag(getResponse.status, getResponse.headers);
 
     if (getResponse.status === 304 && prior && prior.status != null) {
       clearTimeout(timeoutId);
@@ -649,6 +700,18 @@ async function checkSingleResourceAsync(
     }
 
     const meta = extractMeta(getResponse);
+    if (options.statusOnly) {
+      // Headers are all a status probe wants: drop the body unread.
+      getResponse.body?.cancel().catch(() => {});
+      controller.abort();
+      clearTimeout(timeoutId);
+      return {
+        ...defaultResult,
+        status: getResponse.status,
+        contentType: meta.contentType,
+        redirectTarget: getFinalUrl !== url ? getFinalUrl : null,
+      };
+    }
     const contentRange = getResponse.headers.get("content-range");
     const sizeFromRange = parseContentRangeTotal(contentRange);
     const sizeFromLength = parseHeaderInt(
@@ -690,7 +753,7 @@ async function checkSingleResourceAsync(
             ...options.customHeaders,
           },
           signal: confirmController.signal,
-        });
+        }, options);
         if (readHeader) confirmController.abort();
         confirmResponse.body?.cancel().catch(() => {});
         if (confirmResponse.status < 400) {
@@ -803,6 +866,12 @@ async function checkSingleResourceAsync(
   } catch (error) {
     clearTimeout(timeoutId);
 
+    // Refused by the egress policy: the refused hop was never sent, and a retry
+    // would be refused the same way.
+    if (error instanceof EgressRefusedError) {
+      return { ...defaultResult, error: ASSET_FETCH_REFUSED_ERROR };
+    }
+
     if (
       retryCount < RESOURCE_SIZE_LIMITS.MAX_RETRIES &&
       (error as Error).name !== "AbortError"
@@ -838,7 +907,7 @@ function checkSingleResource(
       return {
         url,
         status: null,
-        error: "skipped",
+        error: ASSET_FETCH_SKIPPED_ERROR,
         contentType: null,
         sizeBytes: null,
         redirectTarget: null,
@@ -856,7 +925,11 @@ function checkSingleResource(
     }
     const startedAt = Date.now();
     const result = await checkSingleResourceAsync(url, options);
-    options.budget?.record(url, Date.now() - startedAt, resourceOutcome(result));
+    // A refusal is not a failing host (the refused hop was never sent), so it is
+    // recorded as an answer: only its latency can strike, from the hops that
+    // were sent before it. Never an error strike against the URL's host.
+    const outcome = result.error === ASSET_FETCH_REFUSED_ERROR ? "ok" : resourceOutcome(result);
+    options.budget?.record(url, Date.now() - startedAt, outcome);
     return result;
   });
 }

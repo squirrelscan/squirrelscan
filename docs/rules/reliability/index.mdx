@@ -1,0 +1,23 @@
+---
+title: "Reliability"
+description: "Runtime errors, broken resources and failed requests"
+---
+
+Reliability rules check that what a page asks the browser to load actually loads. They read the scripts, stylesheets and fonts the crawl already fetched, so a bundle that returns 404 after a deploy shows up even when the HTML that references it is a 200. The category sits in the Performance score group, since a page whose main script never loads is slow to become usable, and the rules need no browser render.
+
+## Rules
+
+<CardGroup cols={2}>
+  <Card title="Broken scripts, stylesheets and fonts" icon="circle-info" href="/rules/reliability/broken-resources">
+    squirrel reports first-party scripts and stylesheets that return 4xx or 5xx as errors, and third-party or font failures as warnings.
+  </Card>
+</CardGroup>
+
+## Disable all Reliability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["reliability/*"]
+```
+
+Every audit reports Reliability findings next to the performance, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.

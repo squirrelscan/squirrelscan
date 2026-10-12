@@ -16,8 +16,8 @@ import {
 } from "../../src/rules/categories";
 
 describe("CATEGORIES", () => {
-  test("contains all 23 categories", () => {
-    expect(Object.keys(CATEGORIES).length).toBe(23);
+  test("contains all 24 categories", () => {
+    expect(Object.keys(CATEGORIES).length).toBe(24);
   });
 
   test("each category has code, name, description, and priority", () => {
@@ -58,6 +58,7 @@ describe("CATEGORIES", () => {
       "eeat",
       "blocking",
       "gaps",
+      "reliability",
       "other",
     ];
 
@@ -70,7 +71,7 @@ describe("CATEGORIES", () => {
 describe("CATEGORY_CODES", () => {
   test("is an array of all category codes", () => {
     expect(Array.isArray(CATEGORY_CODES)).toBe(true);
-    expect(CATEGORY_CODES.length).toBe(23);
+    expect(CATEGORY_CODES.length).toBe(24);
   });
 
   test("matches CATEGORIES keys", () => {
@@ -125,6 +126,7 @@ describe("getCategoryName", () => {
       eeat: "E-E-A-T",
       blocking: "Blocking",
       gaps: "Keyword & Content Gaps",
+      reliability: "Reliability",
       other: "Other",
     };
 
@@ -269,7 +271,7 @@ describe("getCategoryPriority", () => {
 describe("getCategoriesSortedByPriority", () => {
   test("returns all categories", () => {
     const sorted = getCategoriesSortedByPriority();
-    expect(sorted.length).toBe(23);
+    expect(sorted.length).toBe(24);
   });
 
   test("returns categories in descending priority order", () => {

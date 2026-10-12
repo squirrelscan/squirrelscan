@@ -60,6 +60,7 @@ export const CATEGORIES: Record<string, CategoryInfo> = {
   ax: { code: "ax", name: "Agent Experience", description: "How ready a site is for AI agents to read, discover, and operate on it", priority: 20, group: "ai" },
   gaps: { code: "gaps", name: "Keyword & Content Gaps", description: "Keyword and content opportunities the site doesn't cover", priority: 15, group: "seo" },
   blocking: { code: "blocking", name: "Blocking", description: "Content, links, and trackers that ad blockers and privacy filters block", priority: 10, group: "security" },
+  reliability: { code: "reliability", name: "Reliability", description: "Runtime errors, broken resources and failed requests", priority: 72, group: "performance" },
   other: { code: "other", name: "Other", description: "Uncategorized or legacy rules", priority: 0, group: "seo" },
 };
 

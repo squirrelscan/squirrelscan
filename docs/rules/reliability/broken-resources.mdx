@@ -1,0 +1,93 @@
+---
+title: "Broken scripts, stylesheets and fonts: files that do not load"
+description: "A page whose script or stylesheet returns 404 or 500 looks fine to a crawler but renders unstyled or never runs its interactive parts. squirrel checks every script, stylesheet and font the crawl fetched."
+---
+
+## What this rule detects
+
+A page can answer 200 with its title and meta intact while the file that makes it work returns an error. The common cause is a deploy: cached HTML still references hashed bundles such as `/assets/app.3f9a1c.js`, and the new release deleted them. In a browser the page is unstyled or its buttons and menus never start.
+
+This rule reads the status of every script, stylesheet and font the pages reference. Files on the site's host or its subdomains are the ones the audit already fetches for its size and security checks. Files on any other host get one status request each (HEAD first, no body download), capped at 50 per kind (scripts, stylesheets, fonts) per audit. The rule does not render the page, so it runs in every audit, including HTTP-only ones. Images are not covered here: [images/broken-images](/rules/images/broken-images) reports them.
+
+## What squirrel checks
+
+The rule is site-wide. It emits one finding per resource URL, listing the status and every page that references it, rather than one per page.
+
+- **Error:** a first-party script or stylesheet answers 4xx or 5xx, including 502 and 504. First-party means the same registrable domain as the site, so a site on `www.example.com` owns `example.com` and `cdn.example.com`. Check name `broken-resources`, message `{count} first-party script or stylesheet(s) answer with an error status`.
+- **Warning:** a third-party script or stylesheet answers 4xx or 5xx, a font answers 4xx or 5xx, or a request fails at the network level (DNS, TLS, timeout). Check name `unreachable-resources`, message `{count} third-party or font resource(s), or resource(s) that failed at the network level, did not load`. Network failures are often transient, which is why they warn rather than fail.
+- **Not broken:** a resource that answers 429 or 430 (throttled), or 503 with a `Retry-After` header, is reported as unverified information. The origin asked squirrel to come back later, so the status says nothing about the file. A WAF or bot challenge answering in place of the file is unverified too, and so is a 401 or 407 from another host of the site's own domain (`static.example.com` for a site on `www.example.com`), since that status check sends no credentials. Check name `unverified-resources`. A bare 503 is an outage and stays an error or warning, as do 500, 502 and 504.
+- **Partial check:** when a fetch was skipped (the asset budget ran out, or a host was tarpitting), a fetch cap left referenced URLs unfetched (for files on other hosts, the 51st and later of a kind), or a kind of resource was not measured, the result says so with an information note named `unchecked-resources`. A pass in that case covers only the resources that were checked.
+- **Pass:** every checked resource answers below 400. Message: `All {count} checked script, stylesheet and font resource(s) load`.
+
+Only resources the pages reference are checked. Scripts, stylesheets and fonts on the site's host or its subdomains are fetched as the audit already does. Those on any other host, a third party or the apex of a site on `www`, are checked by status only: squirrel reads the response code and does not download the body. At most 50 of those are checked per kind per audit.
+
+Those status checks carry none of your [custom request headers](/configuration/crawler#headers), only squirrel's `User-Agent` and `Accept`. They are never sent to a private, loopback, link-local or cloud metadata address, or to a name that resolves to one, and the same test applies at every redirect hop, so a page cannot point squirrel at your own network. When the audited site is itself on a private network (`localhost`, an RFC 1918 address), its other private hosts are checked; link-local and metadata addresses are refused either way. A refused URL is counted in the `unchecked-resources` note, never reported as broken. Each request connects to the exact address that was checked, with the name kept as the `Host` header and the TLS server name (the certificate is still checked against the name), so a DNS server cannot answer one address for the check and another for the request.
+
+These requests are made only when this rule runs: disable it and squirrel sends none of them.
+
+## How to fix it
+
+Redeploy the missing file, or change the reference so the page points at a bundle that exists. Keep hashed assets from the previous release online for as long as cached HTML may still reference them. A cached page that points at a file the origin no longer serves fails the same way as a stale link.
+
+```html
+<!-- Points at a bundle the last deploy deleted -->
+<script src="/assets/app.3f9a1c.js"></script>
+```
+
+For a third-party script or font, check the provider's status page, or remove the reference if the service has gone.
+
+| | |
+|---|---|
+| **Rule ID** | `reliability/broken-resources` |
+| **Category** | [Reliability](/rules/reliability) |
+| **Scope** | Site-wide |
+| **Severity** | error for first-party scripts and stylesheets; warning for third-party and font failures |
+| **Weight** | 7/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["reliability/broken-resources"]
+```
+
+### Disable all Reliability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["reliability/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["reliability/broken-resources"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it.
+
+## Related rules
+
+- [images/broken-images](/rules/images/broken-images): broken image sources, reported in the Images category.
+- [perf/css-file-size](/rules/perf/css-file-size) and [perf/js-file-size](/rules/perf/js-file-size): the same kinds of files, weighed when they do load.
+- [links/broken-links](/rules/links/broken-links): the same idea for anchor targets.
+
+## References
+
+- [HTTP response status codes, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Reliability section of the report. Every failing script or stylesheet is listed with its URL, its status and the pages that reference it. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Reliability section looks like on a real site.
+  </Card>
+</CardGroup>

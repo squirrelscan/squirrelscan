@@ -21,6 +21,7 @@ import { rules as linksRules } from "./links";
 import { rules as localRules } from "./local";
 import { rules as mobileRules } from "./mobile";
 import { rules as perfRules } from "./performance";
+import { rules as reliabilityRules } from "./reliability";
 import { rules as schemaRules } from "./schema";
 import { rules as securityRules } from "./security";
 import { rules as socialRules } from "./social";
@@ -46,6 +47,7 @@ const builtInNamespaces: RuleNamespace[] = [
   { name: "ai", rules: aiRules },
   { name: "ax", rules: axRules },
   { name: "perf", rules: perfRules },
+  { name: "reliability", rules: reliabilityRules },
   { name: "social", rules: socialRules },
   { name: "crawl", rules: crawlRules },
   { name: "url", rules: urlRules },

@@ -199,6 +199,13 @@ export const CATEGORIES = {
     priority: 10,
     group: "security",
   },
+  reliability: {
+    code: "reliability",
+    name: "Reliability",
+    description: "Runtime errors, broken resources and failed requests",
+    priority: 72,
+    group: "performance",
+  },
   other: {
     code: "other",
     name: "Other",

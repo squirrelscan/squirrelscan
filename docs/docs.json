@@ -543,7 +543,14 @@
               "rules/perf/legacy-js",
               "rules/perf/duplicate-js",
               "rules/perf/critical-request-chains",
-              "rules/perf/browser-required"
+              "rules/perf/browser-required",
+              {
+                "group": "Reliability",
+                "pages": [
+                  "rules/reliability/index",
+                  "rules/reliability/broken-resources"
+                ]
+              }
             ]
           },
           {

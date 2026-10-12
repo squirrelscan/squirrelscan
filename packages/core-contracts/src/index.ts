@@ -247,10 +247,11 @@ export type RuleCategory =
   | "ax"
   | "blocking"
   | "gaps"
+  | "reliability"
   | "other";
 
 /**
- * Top-level rule groups (#626): a coarse layer above the 23 categories. Every
+ * Top-level rule groups (#626): a coarse layer above the 24 categories. Every
  * category maps to exactly one group. Kept in sync with the `group` field on
  * CATEGORIES in packages/rules/src/categories.ts (canonical) and its dep-free
  * mirror packages/report/src/categories.ts.
@@ -1524,6 +1525,16 @@ export interface ResourceSizeData {
   naturalHeight?: number | null;
   /** APNG, animated GIF/WebP or AVIF sequence; null when not settled. (#470) */
   animated?: boolean | null;
+  /**
+   * The origin throttled us (429/430, or 503 with `Retry-After`), so `status`
+   * describes our request rate, not the file (#703). Absent or false otherwise.
+   */
+  rateLimited?: boolean;
+  /**
+   * A WAF or bot challenge answered in place of the file (#703). Absent or
+   * false otherwise.
+   */
+  wafBlocked?: boolean;
 }
 
 export interface ScriptContentData {
@@ -1545,6 +1556,10 @@ export interface ScriptContentData {
    * that as unknown, NOT as uncompressed. (#9)
    */
   contentEncoding?: string | null;
+  /** Throttled by the origin: `status` is unverified, not a broken file (#703). */
+  rateLimited?: boolean;
+  /** A WAF or bot challenge answered in place of the script (#703). */
+  wafBlocked?: boolean;
 }
 
 export interface SitemapUrl {

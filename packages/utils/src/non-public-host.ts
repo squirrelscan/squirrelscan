@@ -109,6 +109,11 @@ function isIpLiteral(host: string): boolean {
   return host.includes(":") || /^\d{1,3}(\.\d{1,3}){3}$/.test(host);
 }
 
+/** A cloud instance-metadata service named directly (`metadata.google.internal`). */
+export function isCloudMetadataHostname(rawHost: string): boolean {
+  return METADATA_HOSTNAMES.has(normalizeHostname(rawHost));
+}
+
 /**
  * True when no public visitor (and no hosted runner) could reach this bare
  * hostname: loopback, RFC1918, link-local, CGNAT, ULA, the internal-only zones,

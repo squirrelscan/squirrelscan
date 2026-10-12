@@ -61,6 +61,7 @@ export * as schema from "./schema";
 export * as security from "./security";
 export * as integrity from "./integrity";
 export * as perf from "./performance";
+export * as reliability from "./reliability";
 export * as social from "./social";
 export * as crawl from "./crawl";
 export * as url from "./url";
@@ -80,6 +81,7 @@ export const RULE_MODULES = [
   "security",
   "integrity",
   "perf",
+  "reliability",
   "social",
   "crawl",
   "url",
