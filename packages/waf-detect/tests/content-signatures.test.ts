@@ -155,6 +155,13 @@ describe("block pages served without the provider's headers", () => {
     }
   });
 
+  test("a page repeating 'access denied' without a reference is read quickly", () => {
+    const html = `<html><body>${"<p>Access denied.</p>".repeat(600)}</body></html>`;
+    const started = performance.now();
+    expect(detectWafChallengePage(page(html, 200)).detected).toBe(false);
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+
   test("a page quoting an Akamai reference id is not a challenge", () => {
     const help = "<html><body><h1>Reading Akamai errors</h1><p>Example: Reference #18.9d367a83.1614887475.2b3c78d</p></body></html>";
     expect(detectWafChallengePage(page(help, 200)).detected).toBe(false);

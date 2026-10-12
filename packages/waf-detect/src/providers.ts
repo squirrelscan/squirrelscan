@@ -60,7 +60,7 @@ export const HEADER_PATTERNS: {
  * (`scripts/jsd/main.js`), so the bare directory says the site is on
  * Cloudflare, not that the page is a challenge (#666).
  */
-export const CLOUDFLARE_CHALLENGE_SCRIPT = /\/cdn-cgi\/challenge-platform\/(?:h\/[a-z]\/)?orchestrate\//i;
+export const CLOUDFLARE_CHALLENGE_SCRIPT = /\/cdn-cgi\/challenge-platform\/(?:h\/[\w-]+\/)?orchestrate\//i;
 
 /** Akamai's deny-page reference id, such as `Reference #18.9d367a83.1614887475.2b3c78d`. */
 const AKAMAI_REFERENCE_ID = /reference\s*#\s*\d+\.[0-9a-f]+\.\d+\.[0-9a-f]+/i;
@@ -92,6 +92,9 @@ export const CONTENT_PATTERNS: {
       /cf-browser-verification/i,
       /__cf_chl_/,
       /_cf_chl_opt/,
+      // Attribution only: JSD pages load from here too, so this says the site
+      // is on Cloudflare, never that the page is a challenge (that is
+      // CLOUDFLARE_CHALLENGE_SCRIPT, in CHALLENGE_MARKUP_PATTERNS).
       /\/cdn-cgi\/challenge-platform\//i,
     ],
     confidence: "high",
@@ -162,8 +165,8 @@ export const CHALLENGE_MARKUP_PATTERNS = [
   // and entity-encodes the reference ("Reference&#32;&#35;18&#46;..."), so the
   // combined text pattern below misses it; &#32;&#35; is Akamai-specific enough
   // to stand alone (#802). The plain reference id needs the denial before it: a
-  // troubleshooting page can quote one. The gap between them stays bounded so
-  // the scan stays linear over the 10 KB sample.
+  // troubleshooting page can quote one. The gap between them stays bounded: each
+  // "access denied" in the 10 KB sample costs at most a 2 KB scan.
   /reference&#32;&#35;\s*\d/i,
   new RegExp(`access denied[\\s\\S]{0,2000}?${AKAMAI_REFERENCE_ID.source}`, "i"),
   /_pxCaptcha/i,
