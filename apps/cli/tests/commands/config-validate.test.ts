@@ -11,12 +11,13 @@ import {
   test,
 } from "bun:test";
 import { runCommand } from "citty";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { config } from "@/cli/commands/config";
 import { getGlobalConfigPath, setGlobalConfigPath } from "@/config";
+
+import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
 
 /** Thrown in place of process.exit, so a command exit cannot kill the runner. */
 class ExitSignal extends Error {
@@ -25,7 +26,8 @@ class ExitSignal extends Error {
   }
 }
 
-const dir = mkdtempSync(join(tmpdir(), "squirrel-config-validate-"));
+// #626: the command reads credentials and settings; keep them in a scratch home.
+const dir = isolateSquirrelHome("squirrel-config-validate").root;
 let previousConfig: string | undefined;
 const originalExit = process.exit;
 let stdout: string[] = [];
@@ -39,7 +41,6 @@ beforeAll(() => {
 
 afterAll(() => {
   setGlobalConfigPath(previousConfig);
-  rmSync(dir, { recursive: true, force: true });
 });
 
 beforeEach(() => {
