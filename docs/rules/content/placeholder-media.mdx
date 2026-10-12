@@ -23,6 +23,12 @@ Three things are detected:
 
 A lazy-loaded image is judged on its real source (`data-src`, `data-lazy-src`, `data-original`), not on the stub in `src`. A stub named `placeholder.gif` in front of a real `data-src` is the normal lazy-load pattern and is not reported.
 
+When an image has responsive sources, the responsive source takes precedence over `src`:
+
+- An `img` with `srcset` is judged from the first URL in `srcset`; its `src` fallback is ignored.
+- An `img` inside `<picture>` is judged from the first URL in each `<source srcset>`; its `src` fallback is ignored.
+- Only the first URL from each `srcset` is checked. A placeholder in that selected URL is reported even when `src` points to a real image, while a real selected URL is not reported just because the fallback `src` is a placeholder.
+
 ### Overlap with the alt text rule
 
 Plain junk alt text (`image`, `photo`, `picture`, `img`) and an alt that repeats the filename are reported by [a11y/image-redundant-alt](/rules/a11y/image-redundant-alt). This rule leaves them alone so a page is not penalized twice for one cause. The only alt text it adds is the camera-default names, and only when the alt is not already the filename.
