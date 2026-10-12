@@ -1,0 +1,101 @@
+---
+title: "security.txt: how to publish a vulnerability disclosure contact"
+description: "Without a security.txt a researcher who finds a bug has no published route to report it. squirrel checks /.well-known/security.txt against RFC 9116 and flags catch-all HTML pages."
+---
+
+## What security.txt is
+
+`security.txt` is a plain-text file defined by [RFC 9116](https://www.rfc-editor.org/rfc/rfc9116) that tells security researchers how to report a vulnerability in your site. It lives at `/.well-known/security.txt`, and it names at least a contact and an expiry date.
+
+Without it, a researcher who finds a problem has to guess: a generic support inbox, a social media post, or nothing at all. The file costs one short text file and removes the guess.
+
+## What squirrel checks
+
+The rule requests `/.well-known/security.txt` and the legacy `/security.txt` once per site and reports on the result. It emits checks named `security-txt`, `security-txt-contact`, `security-txt-expires`, `security-txt-expires-duplicate`, `security-txt-location` and `security-txt-signed`.
+
+- **Warn, catch-all HTML.** The canonical path answers 200 with an HTML page. This is the common single-page-app trap: every unknown path returns the homepage. It is a warning, never a pass, because the file does not exist. Value: `html`.
+- **Warn, missing.** The canonical path answers 404 or 410, and the legacy path has no file either. Message: `No security.txt at /.well-known/security.txt (RFC 9116 vulnerability-disclosure contact)`. Value: `missing`.
+- **Warn, required field missing.** No `Contact:` line, or no `Expires:` line. A body longer than the 2 KB the crawler keeps is only partly read, so a field that is not found there is reported as info, not a warning.
+- **Warn, bad expiry.** `Expires:` is not an RFC 3339 date-time such as `2027-01-31T23:59:59Z` (RFC 9116 allows no other format, so `2027` or `Oct 1 2027` warn), or it is in the past. Message for a past date: `security.txt expired on {expires}`.
+- **Warn, duplicate expiry.** More than one `Expires:` line. RFC 9116 allows one. Message: `security.txt has {count} Expires fields; RFC 9116 allows one`.
+- **Info, legacy location.** The file is served only at `/security.txt`. RFC 9116 asks for `/.well-known/security.txt`, so the file still gets the field checks above.
+- **Info, unsigned.** The file has no PGP signature. Signing is optional under RFC 9116, so this is informational.
+- **Pass.** A file with a `Contact:` and an `Expires:` that is still in the future.
+- **Not checked.** The probe got no answer (a timeout, a refused connection, or a firewall), or the canonical path answered with a status that does not say whether the file exists: 401 or 403 (often a WAF or bot rule), 429, or a 5xx. Message for a status: `security.txt not checked: /.well-known/security.txt answered HTTP {status}, which does not say whether the file exists`. The rule says so instead of reporting the file missing.
+
+Field names are matched case-insensitively, and `#` comment lines are ignored.
+
+## How to fix it
+
+Create the file and serve it as plain text from `/.well-known/security.txt`:
+
+```text
+Contact: mailto:security@example.com
+Contact: https://example.com/security/report
+Expires: 2027-10-12T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://example.com/.well-known/security.txt
+Policy: https://example.com/security/policy
+```
+
+`Contact` and `Expires` are required. Set `Expires` about a year out and renew it before it lapses, since an expired file tells researchers the contact may be stale. Add a PGP-signed copy if you can; the signature proves the file came from you.
+
+If your site is a single-page app, serve the real file before the fallback route. Otherwise the homepage answers for this path and the rule will warn.
+
+| | |
+|---|---|
+| **Rule ID** | `security/security-txt` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/security-txt"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/security-txt"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [security/version-disclosure](/rules/security/version-disclosure): the other passive check on what the server tells a scanner.
+- [security/hsts](/rules/security/hsts): the transport header that protects the same site.
+- [security/csp](/rules/security/csp): the policy that limits what an attacker can run once a bug is found.
+
+Security findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [RFC 9116: A File Format to Aid in Security Vulnerability Disclosure](https://www.rfc-editor.org/rfc/rfc9116)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Security section of the report. The rule reports once for the site, with the path it read and the result. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Security section looks like on a real site.
+  </Card>
+</CardGroup>

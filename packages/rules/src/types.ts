@@ -399,6 +399,13 @@ export interface SiteData {
      * path takes the same judgement from ctx.collectedSignals.
      */
     rendered?: boolean;
+    /**
+     * The page record carries the version headers (X-Powered-By, X-AspNet-Version,
+     * X-AspNetMvc-Version, X-Generator), so their absence from `headers` means
+     * the server did not send them (#713). False or absent on a record stored
+     * before they were recorded, where absence proves nothing.
+     */
+    versionHeadersRecorded?: boolean;
   }>;
   robotsTxt: RobotsTxtData | null;
   sitemaps: SitemapDiscovery | null;

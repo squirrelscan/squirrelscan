@@ -1646,6 +1646,11 @@ export function createCrawler(
             xVercelCache: result.headers.xVercelCache ?? null,
             altSvc: result.headers.altSvc ?? null,
             acceptRanges: result.headers.acceptRanges ?? null,
+            // security/version-disclosure rule (#713).
+            xPoweredBy: result.headers.xPoweredBy ?? null,
+            xAspNetVersion: result.headers.xAspNetVersion ?? null,
+            xAspNetMvcVersion: result.headers.xAspNetMvcVersion ?? null,
+            xGenerator: result.headers.xGenerator ?? null,
             // security/cookie-flags rule (#748).
             setCookie: result.headers.setCookie ?? null,
           };

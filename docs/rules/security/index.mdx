@@ -22,7 +22,7 @@ Security is one of the four score groups on every report. This page covers trans
 
 ## Security rules
 
-HTTPS, headers, and safe link practices (20 rules).
+HTTPS, headers, and safe link practices (22 rules).
 
 <CardGroup cols={2}>
   <Card title="Content-Security-Policy: what to set and how to check it" icon="triangle-exclamation" href="/rules/security/csp">
@@ -70,6 +70,9 @@ HTTPS, headers, and safe link practices (20 rules).
   <Card title="Referrer-Policy: which value to send and what leaks" icon="circle-info" href="/rules/security/referrer-policy">
     unsafe-url sends the full URL, query string included, to every site you link to. squirrel reads the header and flags the leaky values.
   </Card>
+  <Card title="security.txt: how to publish a vulnerability disclosure contact" icon="circle-info" href="/rules/security/security-txt">
+    Without a security.txt a researcher who finds a bug has no published route to report it. squirrel checks the RFC 9116 file and flags catch-all HTML pages.
+  </Card>
   <Card title="Subresource Integrity: which scripts need an integrity hash" icon="triangle-exclamation" href="/rules/security/sri">
     Cross-origin scripts and stylesheets with no integrity hash can be swapped by a compromised CDN. squirrel lists every one, page by page.
   </Card>
@@ -78,6 +81,9 @@ HTTPS, headers, and safe link practices (20 rules).
   </Card>
   <Card title="Auth tokens in localStorage: why a stored JWT is exposed" icon="triangle-exclamation" href="/rules/security/token-storage">
     A JWT or session token in localStorage or sessionStorage is readable by any script on the page. squirrel finds the writes in your scripts and names the key.
+  </Card>
+  <Card title="Version-revealing headers: why Server and X-Powered-By should not name a version" icon="circle-info" href="/rules/security/version-disclosure">
+    A Server or X-Powered-By header with a version number tells a scanner which known vulnerabilities to try. squirrel flags each version it finds.
   </Card>
   <Card title="X-Content-Type-Options: nosniff and why it matters" icon="circle-info" href="/rules/security/x-content-type">
     Without nosniff a browser may execute an uploaded file as script because the bytes look like one. squirrel reads the header once per site.

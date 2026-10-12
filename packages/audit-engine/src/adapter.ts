@@ -1429,6 +1429,15 @@ export function fetchAssetsFromOccurrences(
  * this is the exact seam where a header field can be added to the storage
  * type but never surfaced to rules, as happened with Set-Cookie (#748).
  */
+/**
+ * Whether a stored page record carries the version headers (#713). The crawler
+ * writes them as `null` when not sent; a record stored before they existed has
+ * no key at all, and security/version-disclosure must not read that as "not sent".
+ */
+export function recordsVersionHeaders(page: PageRecord): boolean {
+  return page.headers?.xPoweredBy !== undefined;
+}
+
 export function buildHeadersMap(page: PageRecord): Record<string, string> {
   const headers: Record<string, string> = {};
   if (page.headers.contentType) headers["content-type"] = page.headers.contentType;
@@ -1448,6 +1457,12 @@ export function buildHeadersMap(page: PageRecord): Record<string, string> {
   if (page.headers.xVercelCache) headers["x-vercel-cache"] = page.headers.xVercelCache;
   if (page.headers.altSvc) headers["alt-svc"] = page.headers.altSvc;
   if (page.headers.acceptRanges) headers["accept-ranges"] = page.headers.acceptRanges;
+  // Version-revealing headers (security/version-disclosure, #713).
+  if (page.headers.xPoweredBy) headers["x-powered-by"] = page.headers.xPoweredBy;
+  if (page.headers.xAspNetVersion) headers["x-aspnet-version"] = page.headers.xAspNetVersion;
+  if (page.headers.xAspNetMvcVersion)
+    headers["x-aspnetmvc-version"] = page.headers.xAspNetMvcVersion;
+  if (page.headers.xGenerator) headers["x-generator"] = page.headers.xGenerator;
   // Set-Cookie — security/cookie-flags rule (#748).
   if (page.headers.setCookie) headers["set-cookie"] = page.headers.setCookie;
   // Security headers
@@ -1506,6 +1521,7 @@ export function runRulesOnStorage(
       redirectChain?: RedirectChain;
       sizeBytes?: number | null;
       rendered?: boolean;
+      versionHeadersRecorded?: boolean;
     }> = [];
     const wafBlockedPages: Array<{
       url: string;
@@ -1569,6 +1585,7 @@ export function runRulesOnStorage(
         redirectChain: page.redirectChain,
         sizeBytes: page.sizeBytes,
         rendered: isRenderedFetch(page.fetcherId),
+        versionHeadersRecorded: recordsVersionHeaders(page),
       });
       pageDataMap.set(page.normalizedUrl, { page, parsed, headers });
     }
@@ -2154,6 +2171,7 @@ type StreamParsedPage = {
   redirectChain?: RedirectChain;
   sizeBytes?: number | null;
   rendered?: boolean;
+  versionHeadersRecorded?: boolean;
 };
 
 /**
@@ -2289,6 +2307,7 @@ function createParsedUniverseAccumulator(): {
           headers,
           redirectChain: page.redirectChain,
           rendered: isRenderedFetch(page.fetcherId),
+          versionHeadersRecorded: recordsVersionHeaders(page),
         });
         // Scalars only — NOT the PageRecord (see StreamPageIdentity).
         pageDataMap.set(page.normalizedUrl, {

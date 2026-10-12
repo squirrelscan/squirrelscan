@@ -597,7 +597,9 @@
                   "rules/security/graphql-get-mutations",
                   "rules/security/third-party-cookies",
                   "rules/security/sri",
-                  "rules/security/cookie-flags"
+                  "rules/security/cookie-flags",
+                  "rules/security/security-txt",
+                  "rules/security/version-disclosure"
                 ]
               },
               {

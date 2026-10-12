@@ -214,9 +214,14 @@ describe("squirrel audit discovery probes (#409)", () => {
     expect(probesSent()).toHaveLength(PROBE_PATHS.length + 3);
   });
 
-  test("--rule-exclude ax sends none, with no other setting", async () => {
+  // security/security-txt (#713) reads the two security.txt paths, so excluding
+  // ax leaves exactly those sent; every ax path is still dropped.
+  test("--rule-exclude ax sends only the security.txt probes", async () => {
     await runAudit(["--rule-exclude", "ax"]);
-    expect(probesSent()).toEqual([]);
+    expect(probesSent()).toEqual([
+      "/.well-known/security.txt",
+      "/security.txt",
+    ]);
   });
 
   test("--rule-exclude ax/api-discovery drops only the API paths", async () => {

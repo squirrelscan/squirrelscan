@@ -34,13 +34,16 @@ describe("selectDiscoveryProbes (#409)", () => {
     expect(selectDiscoveryProbes({ enabled: false, rules: ALL })).toEqual([]);
   });
 
-  test("excluding the ax category sends none", () => {
+  // security/security-txt (#713) is a reader of the two security.txt paths, so
+  // they stay on when only ax is excluded.
+  test("excluding the ax category sends only the security.txt probes", () => {
+    const securityTxt = ["/.well-known/security.txt", "/security.txt"];
     expect(selectDiscoveryProbes({ enabled: true, rules: { enable: ["*"], disable: ["ax/*"] } })).toEqual(
-      [],
+      securityTxt,
     );
     // The legacy `ai` code is an alias of `ax`.
     expect(selectDiscoveryProbes({ enabled: true, rules: { enable: ["*"], disable: ["ai/*"] } })).toEqual(
-      [],
+      securityTxt,
     );
   });
 
@@ -92,7 +95,7 @@ describe("selectDiscoveryProbes (#409)", () => {
     expect(
       selectDiscoveryProbes({
         enabled: true,
-        rules: { enable: ["*"], disable: ["ax/*"] },
+        rules: { enable: ["*"], disable: ["ax/*", "security/*"] },
         additionalNamespaces: [{ name: "acme", rules: [pluginRule] }],
       }),
     ).toEqual(["/openapi.json"]);

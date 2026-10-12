@@ -18,8 +18,10 @@ import { newTabRule } from "./new-tab";
 import { permissionsPolicyRule } from "./permissions-policy";
 import { referrerPolicyRule } from "./referrer-policy";
 import { sriRule } from "./sri";
+import { securityTxtRule } from "./security-txt";
 import { thirdPartyCookiesRule } from "./third-party-cookies";
 import { tokenStorageRule } from "./token-storage";
+import { versionDisclosureRule } from "./version-disclosure";
 import { xContentTypeRule } from "./x-content-type";
 import { xFrameOptionsRule } from "./x-frame-options";
 
@@ -44,6 +46,8 @@ export const rules: Rule[] = [
   cookieFlagsRule,
   graphqlIntrospectionRule,
   graphqlGetMutationsRule,
+  securityTxtRule,
+  versionDisclosureRule,
 ];
 
 export {
@@ -62,9 +66,11 @@ export {
   newTabRule,
   permissionsPolicyRule,
   referrerPolicyRule,
+  securityTxtRule,
   sriRule,
   thirdPartyCookiesRule,
   tokenStorageRule,
+  versionDisclosureRule,
   xContentTypeRule,
   xFrameOptionsRule,
 };

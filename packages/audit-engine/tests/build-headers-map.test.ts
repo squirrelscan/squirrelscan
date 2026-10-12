@@ -8,7 +8,7 @@
 
 import { describe, expect, test } from "bun:test";
 import type { PageRecord } from "@squirrelscan/core-contracts";
-import { buildHeadersMap } from "../src/adapter";
+import { buildHeadersMap, recordsVersionHeaders } from "../src/adapter";
 
 function page(overrides: Partial<PageRecord["headers"]> = {}): PageRecord {
   return {
@@ -81,5 +81,37 @@ describe("buildHeadersMap", () => {
     const headers = buildHeadersMap(record);
     expect(headers["content-type"]).toBe("text/html");
     expect(headers["etag"]).toBe("abc");
+  });
+
+  // #713 — security/version-disclosure reads these from ctx.page.headers; before
+  // the passthrough only `server` reached rules.
+  test("version-revealing headers reach rules alongside server (#713)", () => {
+    const record = page({
+      server: "Apache/2.4.41 (Ubuntu)",
+      xPoweredBy: "PHP/7.4.3",
+      xAspNetVersion: "4.0.30319",
+      xAspNetMvcVersion: "5.2",
+      xGenerator: "WordPress 6.2.1",
+    });
+    const headers = buildHeadersMap(record);
+    expect(headers["server"]).toBe("Apache/2.4.41 (Ubuntu)");
+    expect(headers["x-powered-by"]).toBe("PHP/7.4.3");
+    expect(headers["x-aspnet-version"]).toBe("4.0.30319");
+    expect(headers["x-aspnetmvc-version"]).toBe("5.2");
+    expect(headers["x-generator"]).toBe("WordPress 6.2.1");
+  });
+
+  test("absent version-revealing headers stay out of the map", () => {
+    const headers = buildHeadersMap(page());
+    expect(headers["x-powered-by"]).toBeUndefined();
+    expect(headers["x-generator"]).toBeUndefined();
+  });
+
+  // A record the crawler wrote since #713 has the field, null when not sent; a
+  // record stored before has no key, and version-disclosure must not pass on it.
+  test("recordsVersionHeaders tells a not-sent header from a record that predates it", () => {
+    expect(recordsVersionHeaders(page({ xPoweredBy: null }))).toBe(true);
+    expect(recordsVersionHeaders(page({ xPoweredBy: "PHP/8.1.2" }))).toBe(true);
+    expect(recordsVersionHeaders(page())).toBe(false);
   });
 });

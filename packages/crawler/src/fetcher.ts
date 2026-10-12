@@ -630,6 +630,10 @@ function extractResponseHeaders(headers: Headers): ResponseHeaders {
     xVercelCache: headers.get("x-vercel-cache"),
     altSvc: headers.get("alt-svc"),
     acceptRanges: headers.get("accept-ranges"),
+    xPoweredBy: headers.get("x-powered-by"),
+    xAspNetVersion: headers.get("x-aspnet-version"),
+    xAspNetMvcVersion: headers.get("x-aspnetmvc-version"),
+    xGenerator: headers.get("x-generator"),
     setCookie: setCookies.length > 0 ? setCookies.join("\n") : null,
   };
 }

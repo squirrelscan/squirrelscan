@@ -372,6 +372,14 @@ export interface ResponseHeaders {
   altSvc: string | null;
   acceptRanges: string | null;
   /**
+   * Version-revealing headers (security/version-disclosure, #713). Optional for
+   * records that predate the rule; absent reads as "not sent".
+   */
+  xPoweredBy?: string | null;
+  xAspNetVersion?: string | null;
+  xAspNetMvcVersion?: string | null;
+  xGenerator?: string | null;
+  /**
    * Raw Set-Cookie header value(s), "\n"-joined when a page sets more than
    * one (via `Headers.getSetCookie()` — comma-joining is ambiguous with
    * commas embedded in a cookie's own Expires attribute).
@@ -1016,6 +1024,8 @@ export const WELL_KNOWN_PATHS = [
   "/.well-known/ai-plugin.json",
   "/.well-known/llms.txt",
   "/docs/llms.txt",
+  "/.well-known/security.txt",
+  "/security.txt",
 ] as const;
 
 export type WellKnownPath = (typeof WELL_KNOWN_PATHS)[number];
