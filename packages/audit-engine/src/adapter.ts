@@ -137,6 +137,12 @@ import {
 } from "@squirrelscan/utils/constants";
 import { checkExternalLinks, type ExternalCheckResult, type LinkCache } from "./external-checker";
 import { checkResourceSizes, type ResourceCheckResult } from "./resource-checker";
+import {
+  linkTextLooksLikeAnAction,
+  type LinkTargetProbe,
+  looksLikeAnAction,
+  probeLinkTargets,
+} from "./link-target-probe";
 import { fetchScriptContents, type ScriptFetchResult } from "./script-fetcher";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 import { getHostname, normalizeUrl } from "@squirrelscan/utils/url";
@@ -553,7 +559,13 @@ export interface PreFetchedAssets {
    */
   linkTargetStatuses?: SitemapUrlStatusData[];
   /** What the internal link probe covered: targets it could not reach, and how many it checked. */
-  internalLinkProbe?: { unfetched: number; probed: number; cap: number; outOfScope?: number };
+  internalLinkProbe?: {
+    unfetched: number;
+    probed: number;
+    cap: number;
+    outOfScope?: number;
+    headUnreliable?: boolean;
+  };
   /**
    * #1252: set only when the asset-fetch step degraded (total budget spent or a
    * host tarpitting) and some fetches were skipped. Undefined on a healthy run,
@@ -594,7 +606,7 @@ export interface SiteAssetOccurrences {
    * linked and how many pages link to it. Bounded at
    * MAX_TRACKED_INTERNAL_LINK_TARGETS distinct targets.
    */
-  internalLinkTargets: Map<string, { url: string; pages: number }>;
+  internalLinkTargets: Map<string, { url: string; pages: number; action?: boolean }>;
   /** Normalized URL of every page the crawl stored, non-HTML and 4xx included. */
   crawledUrls: Set<string>;
 }
@@ -698,15 +710,29 @@ export function createSiteAssetCollector(baseUrl: string): {
       // parsed scalars links/broken-links reads, normalized the way it does.
       for (const page of parsedPages) {
         const seen = new Set<string>();
+        const nofollowActions = nofollowActionTargets(page);
         for (const link of page.parsed.links) {
           if (!link.isInternal || !link.url || link.error) continue;
           const key = normalizeUrl(link.url);
+          // A link any page marks as an action (rel=nofollow on action text,
+          // such as "Log out") is never probed, wherever else it appears.
+          const action =
+            nofollowActions.has(key) ||
+            linkTextLooksLikeAnAction(
+              link.text ?? "",
+              link.isNofollow === true || (link.rel?.includes("nofollow") ?? false),
+            );
+          const entry = occurrences.internalLinkTargets.get(key);
+          if (entry && action) entry.action = true;
           if (seen.has(key)) continue;
           seen.add(key);
-          const entry = occurrences.internalLinkTargets.get(key);
           if (entry) entry.pages++;
           else if (occurrences.internalLinkTargets.size < MAX_TRACKED_INTERNAL_LINK_TARGETS) {
-            occurrences.internalLinkTargets.set(key, { url: link.url, pages: 1 });
+            occurrences.internalLinkTargets.set(key, {
+              url: link.url,
+              pages: 1,
+              ...(action ? { action } : {}),
+            });
           }
         }
       }
@@ -920,8 +946,9 @@ export function fetchAssetsFromOccurrences(
     // first, so a linked 404 is found even when the crawl did not follow links.
     // Held to what the crawl itself may request: inside the crawl scope
     // (include/exclude, allowed domains) and, when robots.txt is respected,
-    // allowed by it. Excluded paths like /logout are often on every page, so
-    // without this they would be the first requested.
+    // allowed by it, and never a link that looks like an action or carries a
+    // token (link-target-probe.ts). Excluded paths like /logout are often on
+    // every page, so without this they would be the first requested.
     const internalLinksEnabled = config.internal_links?.enabled !== false;
     const probeCap = config.internal_links?.max_targets ?? LINK_CHECK_LIMITS.internalTargetProbes;
     // The crawl's own user agent, so the request is UA-equivalent to the crawl
@@ -956,7 +983,7 @@ export function fetchAssetsFromOccurrences(
         ? Array.from(occurrences.internalLinkTargets.entries())
             .filter(([key, target]) => {
               if (occurrences.crawledUrls.has(key)) return false;
-              if (mayProbe(target.url)) return true;
+              if (!target.action && mayProbe(target.url)) return true;
               outOfScope++;
               return false;
             })
@@ -1010,18 +1037,23 @@ export function fetchAssetsFromOccurrences(
           orphanCandidates.slice(0, sitemapStatusLimit),
           resourceCheckOptions,
         ),
-        // Status only: the same cheap HEAD (then GET) path as the sitemap pool,
-        // with the crawl's UA and its own limit (the cloud's per-pool item cap
-        // would otherwise cut it below max_targets). Every target is on the
-        // audited host, so it is held to the crawl's per-host concurrency.
-        linkTargets: checkResourceSizes(probeTargets, {
-          ...resourceCheckOptions,
+        // Status only, and safe by construction (link-target-probe.ts): HEAD,
+        // GET only on 405/501, no credentials or custom headers, every
+        // redirect hop held to the same checks. The crawl's UA, its own limit
+        // (the cloud's per-pool item cap would otherwise cut it below
+        // max_targets), and the crawl's per-host concurrency: every target is
+        // on the audited host.
+        linkTargets: probeLinkTargets(probeTargets, {
+          userAgent: probeUserAgent,
+          timeoutMs: resourceCheckOptions.timeoutMs,
           concurrency: Math.max(
             1,
             Math.min(resourceCheckOptions.concurrency, config.crawler?.per_host_concurrency ?? 2),
           ),
-          userAgent: probeUserAgent,
-          maxResources: probeTargets.length,
+          mayRequest: mayProbe,
+          ...(fetchBudget ? { budget: fetchBudget } : {}),
+          // The audited URL, which the crawl fetched: the HEAD control.
+          ...(baseUrl ? { controlUrl: baseUrl } : {}),
         }),
       },
       { concurrency: 5 },
@@ -1055,7 +1087,7 @@ export function fetchAssetsFromOccurrences(
               preloads: [] as ScriptFetchResult[],
               pdfs: [] as ResourceCheckResult[],
               sitemap: [] as ResourceCheckResult[],
-              linkTargets: [] as ResourceCheckResult[],
+              linkTargets: { results: [], headUnreliable: false } as LinkTargetProbe,
             });
           },
         )
@@ -1160,7 +1192,7 @@ export function fetchAssetsFromOccurrences(
       })),
       ...(internalLinksEnabled
         ? {
-            linkTargetStatuses: resourceResults.linkTargets.map((check) => ({
+            linkTargetStatuses: resourceResults.linkTargets.results.map((check) => ({
               url: check.url,
               status: check.status,
               error: check.error,
@@ -1170,9 +1202,10 @@ export function fetchAssetsFromOccurrences(
               unfetched: unfetchedTargets.length,
               // Answered, not merely attempted: a fetch the budget skipped or
               // that failed outright says nothing about the target.
-              probed: resourceResults.linkTargets.filter((r) => typeof r.status === "number" && r.status > 0).length,
+              probed: resourceResults.linkTargets.results.filter((r) => typeof r.status === "number" && r.status > 0).length,
               cap: probeCap,
               outOfScope,
+              ...(resourceResults.linkTargets.headUnreliable ? { headUnreliable: true } : {}),
             },
           }
         : {}),
@@ -3030,45 +3063,33 @@ export function absorbExternalLinkOccurrences(
   }
 }
 
-/**
- * A link whose path or query reads like an action rather than a page (log out,
- * unsubscribe, remove from cart, delete), repo#2729. The internal link probe
- * never requests these: a status-only GET is still a GET, and a crawl that did
- * not follow links never would have. A crawl that follows links reaches them
- * through the crawler, which is unchanged.
- */
-const ACTION_PATH_SEGMENTS = new Set([
-  "logout",
-  "log-out",
-  "logoff",
-  "log-off",
-  "signout",
-  "sign-out",
-  "unsubscribe",
-  "optout",
-  "opt-out",
-]);
-/** Query words that turn a link into an action (`?action=delete`, `?remove=12`). */
-const ACTION_QUERY_WORDS = new Set([...ACTION_PATH_SEGMENTS, "delete", "remove", "destroy"]);
+// repo#2729: the internal link probe's action filter lives with the probe.
+export { looksLikeAnAction } from "./link-target-probe";
 
-export function looksLikeAnAction(url: string): boolean {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return true;
-  }
-  // Whole path segments only, so a page slug such as /how-to-remove-stains
-  // is still a page.
-  for (const segment of parsed.pathname.toLowerCase().split("/")) {
-    if (ACTION_PATH_SEGMENTS.has(segment.replace(/\.[a-z0-9]+$/, ""))) return true;
-  }
-  for (const [key, value] of parsed.searchParams) {
-    if (ACTION_QUERY_WORDS.has(key.toLowerCase()) || ACTION_QUERY_WORDS.has(value.toLowerCase())) {
-      return true;
+/**
+ * Normalized targets of the page's rel=nofollow links whose text is an action
+ * ("Log out", "Delete"), read from the DOM: the stored link scalars the
+ * collector reads carry no rel.
+ */
+function nofollowActionTargets(page: {
+  url: string;
+  finalUrl?: string;
+  parsed: ParsedPage;
+}): Set<string> {
+  const out = new Set<string>();
+  const doc = page.parsed.document;
+  if (!doc) return out;
+  for (const anchor of Array.from(doc.querySelectorAll("a[href]"))) {
+    const rel = (anchor.getAttribute("rel") ?? "").toLowerCase().split(/\s+/);
+    if (!rel.includes("nofollow")) continue;
+    if (!linkTextLooksLikeAnAction(anchor.textContent ?? "", true)) continue;
+    try {
+      out.add(normalizeUrl(new URL(anchor.getAttribute("href") ?? "", page.finalUrl ?? page.url).href));
+    } catch {
+      // An href that does not resolve is not a link the probe could request.
     }
   }
-  return false;
+  return out;
 }
 
 /**

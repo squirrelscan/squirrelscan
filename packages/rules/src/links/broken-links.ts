@@ -170,11 +170,15 @@ export const brokenLinksRule: Rule = {
       const probe = ctx.site?.internalLinkProbe;
       const why = !probe
         ? "this audit did not follow links and internal link checks were off"
-        : probe.probed > 0
-          ? `this audit did not follow links and status-checked only the ${probe.probed} most-linked targets`
-          : (probe.outOfScope ?? 0) > 0
-            ? "this audit did not follow links and the targets are outside the crawl scope, disallowed by robots.txt, or look like actions (log out, unsubscribe) the link check never requests"
-            : "this audit did not follow links and its internal link checks got no answer";
+        : probe.cap === 0
+          ? "this audit did not follow links and internal_links.max_targets is 0"
+          : probe.headUnreliable
+            ? "this audit did not follow links and the site answers status-only (HEAD) requests with errors on pages it serves, so the internal link checks could not be trusted"
+            : probe.probed > 0
+              ? `this audit did not follow links and status-checked only the ${probe.probed} most-linked targets`
+              : (probe.outOfScope ?? 0) > 0
+                ? "this audit did not follow links and the targets are outside the crawl scope, disallowed by robots.txt, or look like actions (log out, unsubscribe) or carry a token, which the link check never requests"
+                : "this audit did not follow links and its internal link checks got no answer";
       checks.push({
         name: "broken-links",
         status: "skipped",

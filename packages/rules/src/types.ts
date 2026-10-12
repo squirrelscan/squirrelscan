@@ -435,7 +435,14 @@ export interface SiteData {
    */
   linkTargetStatuses?: SitemapUrlStatusData[];
   /** What the internal link probe covered. Undefined when it did not run. */
-  internalLinkProbe?: { unfetched: number; probed: number; cap: number; outOfScope?: number };
+  internalLinkProbe?: {
+    unfetched: number;
+    probed: number;
+    cap: number;
+    outOfScope?: number;
+    /** The site's answer to a HEAD on a page it serves was 4xx/5xx, so no 4xx/5xx was trusted. */
+    headUnreliable?: boolean;
+  };
   resourceSizes?: {
     css: ResourceSizeData[];
     images: ResourceSizeData[];

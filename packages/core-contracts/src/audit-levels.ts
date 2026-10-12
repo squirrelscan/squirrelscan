@@ -78,6 +78,8 @@ export const AUDIT_SETTING_KEYS = [
  * mcp/tools/audit-tools.ts), the external link hint in report not-checked.ts,
  * and the docs (rules/links "Link checking defaults", guides/audit-levels).
  */
+// Typed `boolean`, not the literal `false`, so the summary's ternary below is
+// not narrowed to one branch.
 export const EXTERNAL_LINKS_DEFAULT_ON: boolean = false;
 
 export const AUDIT_LEVEL_PRESETS: Readonly<Record<AuditLevel, Readonly<AuditSettings>>> = {

@@ -294,6 +294,25 @@ describe("links/broken-links when the crawl did not follow links", () => {
     expect(checks[0]!.message).toContain("its internal link checks got no answer");
   });
 
+  test("max_targets = 0 and an unreliable HEAD each say why, not 'no answer'", () => {
+    const capped = brokenLinksRule.run(
+      ctx(pages, { linkDiscoveryOff: true, internalLinkProbe: { unfetched: 2, probed: 0, cap: 0 } }),
+    );
+    expect(capped.checks[0]!.message).toContain("internal_links.max_targets is 0");
+    const untrusted = brokenLinksRule.run(
+      ctx(pages, {
+        linkDiscoveryOff: true,
+        linkTargetStatuses: [
+          { url: `${BASE}/gone`, status: null, error: "head unreliable" },
+          { url: `${BASE}/blog/old`, status: null, error: "head unreliable" },
+        ],
+        internalLinkProbe: { unfetched: 2, probed: 0, cap: 200, headUnreliable: true },
+      }),
+    );
+    expect(named(untrusted.checks, "broken-links").map((c) => c.status)).toEqual(["skipped"]);
+    expect(untrusted.checks[0]!.message).toContain("could not be trusted");
+  });
+
   test("a probe that was throttled is rate-limited, not broken", () => {
     const { checks } = brokenLinksRule.run(
       ctx(pages, {

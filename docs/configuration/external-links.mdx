@@ -238,15 +238,48 @@ concurrency = 15
 
 ## Internal links
 
-The `[internal_links]` section controls the internal link check: a status-only request (`HEAD`, then `GET`) for each internal link target the crawl did not fetch, so [`links/broken-links`](/rules/links/broken-links) finds a linked 404 even when the crawl did not follow links (the Quick level, the Sitemap crawl strategy) or ran out of page budget. No render, no rules and no credits. It requests the audited site only, so it runs with `--offline` too, and it stays inside the crawl scope and, when the crawl respects it, robots.txt. It never requests a link that looks like an action (a `logout`, `sign-out` or `unsubscribe` path, or a query such as `?action=delete`).
+The `[internal_links]` section controls the internal link check: a status-only `HEAD` request for each internal link target the crawl did not fetch, so [`links/broken-links`](/rules/links/broken-links) finds a linked 404 even when the crawl did not follow links (the Quick level, the Sitemap crawl strategy) or ran out of page budget. No render, no rules and no credits. It requests the audited site only, so it runs with `--offline` too, and it stays inside the crawl scope and, when the crawl respects it, robots.txt. It never requests a link that looks like an action or carries a token, and never sends credentials; see [What the internal link check never requests](#what-the-internal-link-check-never-requests).
 
 ```toml
 [internal_links]
 enabled = true      # false, or --no-internal-links for one run, switches it off
-max_targets = 200   # most targets one audit checks, most-linked first
+max_targets = 200   # most targets one audit checks, most-linked first; 0 checks none
 ```
 
-With it off, or past `max_targets`, an audit that did not follow links reports the targets it could not see as **Not checked**.
+With it off, or past `max_targets`, an audit that did not follow links reports the targets it could not see as **Not checked**. `max_targets = 0` checks none, and reports them the same way; `enabled = false` is the way to switch it off.
+
+### What the internal link check never requests
+
+The internal link check requests links the crawl did not choose to follow, and a request to the wrong link can change something on your site: log a session out, unsubscribe an address, add to a cart, use up a confirmation token. So it is safe by construction.
+
+**It skips links that look like actions.** Each path segment, query key and query value is split into words on anything but letters and digits, and at camelCase humps. So `/users/sign_out`, `?route=account/logout`, `?task=user.logout`, `/logout;jsessionid=…`, `/account%2Flogout` and `?action=deleteItem` all count. How far a word reaches depends on how clearly it means an action:
+
+- `logout`, `logoff`, `signout`, `signoff` and `unsubscribe` count anywhere, even run together with other words (`/UserLogout.aspx`, `/dologout`), and so do `unsub` and `optout`.
+- The pairs log out, log off, sign out, sign off, opt out and add to (`/add-to-cart`) count in a path segment of up to four words, and in a query.
+- `delete`, `destroy`, `trash`, `revoke`, `deactivate`, `confirm`, `verify`, `activate`, `approve`, `unlock`, `purchase` and `callback` count in a path segment of up to three words (`/delete-your-account`), and in a query.
+- `remove`, `cancel`, `disable`, `reset`, `checkout`, `cart`, `basket`, `buy`, `vote`, `like`, `follow`, `subscribe`, `oauth`, `invite`, `accept` and `decline` count in a path segment of up to two words (`/cart`, `/remove-item`, `/password/reset`), and in a query.
+
+A longer slug that only mentions one of them is still a page and is checked: `/where-to-buy`, `/how-to-remove-stains`, `/blog/how-to-verify-your-domain`.
+
+**It skips links that carry a secret or a one-time value.**
+
+- A query key that has one of these words in it, or a path segment of up to two words that does: `token`, `nonce`, `wpnonce`, `csrf`, `xsrf`, `sig`, `signature`, `otp`, `apikey`, `secret`, `password` or `passwd`.
+- A query key that is exactly `code`, `key`, `hash`, `auth`, `session`, `sid`, `ticket` or `state`.
+- A session id anywhere (`jsessionid`, `phpsessid`, `sessionid`).
+- A query key or value that looks like a token: a long hex string, a long run of letters and digits with no separator, a long mixed-case base64 string, or a JWT.
+- A token in the path: a JWT always, and any other token-like segment when the URL also says `login`, `signin`, `magic`, `token`, `auth`, `session`, `password`, `email`, `invite`, `reset`, `verify`, `confirm`, `activate`, `unsubscribe` or `unsub` (`/magic-login/…`, `/login/token/…`). A plain id such as `/posts/<uuid>` is still checked.
+
+**It skips links the page marks as actions**: `rel="nofollow"` on text that is an action ("Log out", "Delete").
+
+**It sends no credentials**: no cookies, no `Authorization`, and none of the audit's custom request headers (`[crawler] headers`, `-H`), which can carry auth. It identifies itself with the crawl's `User-Agent`.
+
+**It uses `HEAD` only.** A `GET` asking for one byte (the body is discarded) is sent only when the server answers the `HEAD` with `405` or `501`, which say it does not support `HEAD`. Some servers answer `HEAD` with an error on pages they serve. So the check first sends `HEAD` to the audited URL, which the crawl already fetched. If that answer is an error, the targets' errors are not trusted. They are never reported as broken, and in an audit that did not follow links they are listed as **Not checked**.
+
+**It re-checks every redirect hop.** It does not follow a redirect to another host, out of the crawl scope, to a path robots.txt disallows, or to an action link; that redirect is the target's status. It follows at most 5 hops.
+
+**It stays polite.** It stays inside the crawl scope and, when the crawl respects it, robots.txt. It runs at the crawl's per-host concurrency, and checks at most `max_targets` targets an audit, each with one `HEAD` and the redirect hops that follow it.
+
+A skipped target is counted in the **Not checked** line of `links/broken-links` when the audit did not follow links, and is never reported as passing. To switch the check off completely, use `--no-internal-links` or `[internal_links] enabled = false`.
 
 ## How external link checking works
 

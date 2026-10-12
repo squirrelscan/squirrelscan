@@ -150,14 +150,16 @@ export const ExternalLinksConfigSchema = z.object({
   max_links: z.number().int().min(1).max(100_000).optional(),
 });
 
-// Internal link checks (repo#2729): a status-only request (HEAD, then GET) for
-// each internal link target the crawl did not fetch, so a linked 404 is found
-// even when the crawl did not follow links (Quick, sitemap scope) or ran out of
-// page budget. No render, no rules, no page charge. On by default.
+// Internal link checks (repo#2729): a status-only HEAD (GET only on 405/501)
+// for each internal link target the crawl did not fetch, so a linked 404 is
+// found even when the crawl did not follow links (Quick, sitemap scope) or ran
+// out of page budget. Never an action link, never credentials (audit-engine
+// link-target-probe.ts). No render, no rules, no page charge. On by default.
 export const InternalLinksConfigSchema = z.object({
   enabled: z.boolean().default(true),
   // Most targets one audit status-checks, most-linked first; the rest are
-  // reported as not checked. Unset = LINK_CHECK_LIMITS.internalTargetProbes.
+  // reported as not checked (0 checks none: use enabled = false to switch it
+  // off). Unset = LINK_CHECK_LIMITS.internalTargetProbes.
   max_targets: z.number().int().min(0).max(10_000).optional(),
 });
 
