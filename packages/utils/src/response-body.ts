@@ -83,6 +83,10 @@ export function isDecompressionError(error: unknown): boolean {
  * by hand must send every hop through here, while `redirect: "follow"` carries
  * it to each hop itself. The request is otherwise what fetch would have sent,
  * Accept-Encoding included.
+ *
+ * Read the body only through `decodedBody` or `readBodyCapped`. Anything else
+ * (`.text()`, `.json()`, `.arrayBuffer()`, a reader on `.body`, a `clone()`)
+ * gets the bytes still encoded, with no error to say so.
  */
 export async function fetchUndecoded(input: string, init: RequestInit = {}): Promise<Response> {
   if (!FETCH_RETURNS_RAW_BODY) return fetch(input, init);

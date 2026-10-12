@@ -182,6 +182,8 @@ async function fetchTolerant(url: string, init: RequestInit): Promise<Response> 
   } catch (error) {
     if (!isDecompressionError(error)) throw error;
     // `decompress: false` is a Bun fetch option returning the undecoded bytes.
+    // Plain fetch, not fetchUndecoded, on purpose: this body is read raw, as
+    // identity, which is the whole point of the fallback.
     return await fetch(url, { ...init, decompress: false } as RequestInit);
   }
 }
