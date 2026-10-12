@@ -1,3 +1,8 @@
+import type { Transform } from "node:stream";
+// A namespace import: a runtime whose node:zlib lacks a decoder (zstd is the
+// newest) still loads this module, and that coding fails to decode instead.
+import * as zlib from "node:zlib";
+
 import { truncateToBytes } from "./bytes";
 
 /** Default cap for small probe responses. */
@@ -108,16 +113,70 @@ function isZlibHeader(bytes: Uint8Array): boolean {
   return (cmf & 0x0f) === 8 && cmf >> 4 <= 7 && ((cmf << 8) | flg) % 31 === 0;
 }
 
-function decompressionFormat(coding: Coding, head: Uint8Array): string {
-  if (coding === "deflate") return isZlibHeader(head) ? "deflate" : "deflate-raw";
-  return coding === "br" ? "brotli" : coding;
+/** A gzip header longer than this (a runaway file name or comment) is not read. */
+const MAX_GZIP_HEADER_BYTES = 128 * 1024;
+
+/**
+ * Where the deflate data starts in a gzip member (RFC 1952), `null` while
+ * `head` is too short to say, or `-1` when it is not a gzip header.
+ */
+function gzipDataOffset(head: Uint8Array): number | null {
+  if (head.byteLength < 10) return head.byteLength >= 1 && head[0] !== 0x1f ? -1 : null;
+  if (head[0] !== 0x1f || head[1] !== 0x8b || head[2] !== 8) return -1;
+  const flags = head[3]!;
+  if (flags & 0xe0) return -1;
+  let at = 10;
+  if (flags & 0x04) {
+    if (head.byteLength < at + 2) return null;
+    at += 2 + (head[at]! | (head[at + 1]! << 8));
+  }
+  for (const flag of [0x08, 0x10]) {
+    if (!(flags & flag)) continue;
+    const nul = head.indexOf(0, at);
+    if (nul === -1) return head.byteLength > MAX_GZIP_HEADER_BYTES ? -1 : null;
+    at = nul + 1;
+  }
+  if (flags & 0x02) at += 2;
+  if (at > MAX_GZIP_HEADER_BYTES) return -1;
+  return head.byteLength >= at ? at : null;
+}
+
+function concatBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
+  if (a.byteLength === 0) return b;
+  const joined = new Uint8Array(a.byteLength + b.byteLength);
+  joined.set(a);
+  joined.set(b, a.byteLength);
+  return joined;
 }
 
 /**
- * Decode `raw` lazily: a chunk is inflated only when the reader asks for the
- * next one, and cancelling the result cancels `raw`. A failure of `raw`
- * itself (the request aborted at its deadline, the connection dropped) passes
- * through as it is; a failure to decode becomes a ContentDecodingError.
+ * The decoder for `coding`, given the bytes that open its data. gzip is read
+ * past its header as raw deflate, so it ends where the first member's data
+ * ends: bytes after it (the trailer, padding, junk a server appended, a second
+ * member) are ignored, as a browser does. Every node:zlib decoder already
+ * ignores trailing bytes once its stream is complete, where Bun's
+ * DecompressionStream rejects them and drops the output still buffered.
+ */
+function createDecoder(coding: Coding, opening: Uint8Array): Transform {
+  switch (coding) {
+    case "gzip":
+      return zlib.createInflateRaw();
+    case "deflate":
+      return isZlibHeader(opening) ? zlib.createInflate() : zlib.createInflateRaw();
+    case "br":
+      return zlib.createBrotliDecompress();
+    case "zstd":
+      return zlib.createZstdDecompress();
+  }
+}
+
+/**
+ * Decode `raw` lazily: input goes to the decoder only once its last chunk has
+ * been decoded and read, and node:zlib stops decoding while its output is
+ * unread, so nothing is inflated ahead of the reader. Cancelling the result
+ * cancels `raw`. A failure of `raw` itself (the request aborted at its
+ * deadline, the connection dropped) passes through as it is; a failure to
+ * decode becomes a ContentDecodingError.
  */
 function decodingStream(
   raw: ReadableStream<Uint8Array>,
@@ -137,58 +196,121 @@ function decodingStream(
   // Undefined until the first read. Null for an empty body, which has nothing
   // to decode: Bun's own decoding reads it as "", where a decoder would call
   // it truncated.
-  let decoded: ReadableStreamDefaultReader<Uint8Array> | null | undefined;
-  const start = async (): Promise<ReadableStreamDefaultReader<Uint8Array> | null> => {
-    // Enough of the body to tell zlib from raw deflate.
-    const head: Uint8Array[] = [];
-    let headBytes = 0;
-    while (headBytes < 2) {
+  let decoder: Transform | null | undefined;
+  let decodeFailure: { error: unknown } | null = null;
+  let finished = false;
+  let writing = false;
+  let inputDone = false;
+  let pending: Uint8Array | null = null;
+  let cancelled = false;
+  let wake: (() => void) | null = null;
+  const signal = () => {
+    const resolve = wake;
+    wake = null;
+    resolve?.();
+  };
+
+  const start = async (): Promise<Transform | null> => {
+    // Enough of the body to tell zlib from raw deflate, or to step over a
+    // gzip header.
+    let head: Uint8Array = new Uint8Array(0);
+    let dataAt: number | null = null;
+    while (dataAt === null) {
       const { done, value } = await readSource();
-      if (done) break;
-      if (value.byteLength === 0) continue;
-      head.push(value);
-      headBytes += value.byteLength;
+      if (done) {
+        if (head.byteLength === 0) return null;
+        // The body ended inside its opening: a cut-short gzip header is no
+        // header, and any other decoder reports the body truncated.
+        dataAt = coding === "gzip" ? -1 : 0;
+        break;
+      }
+      head = concatBytes(head, value);
+      if (coding === "gzip") dataAt = gzipDataOffset(head);
+      else if (head.byteLength >= 2) dataAt = 0;
     }
-    if (headBytes === 0) return null;
-    const opening = Uint8Array.of(head[0]![0]!, head[0]![1] ?? head[1]?.[0] ?? 0);
-    const format = decompressionFormat(coding, opening);
-    const rest = new ReadableStream<Uint8Array>(
-      {
-        async pull(controller) {
-          const replayed = head.shift();
-          if (replayed) {
-            controller.enqueue(replayed);
-            return;
-          }
-          const { done, value } = await readSource();
-          if (done) controller.close();
-          else controller.enqueue(value);
-        },
-        cancel: (reason) => source.cancel(reason),
-      },
-      { highWaterMark: 0 },
-    );
-    const decoder = new DecompressionStream(format as CompressionFormat);
-    return rest
-      .pipeThrough(decoder as unknown as ReadableWritablePair<Uint8Array, Uint8Array>)
-      .getReader();
+    if (dataAt === -1) throw new Error("no gzip header");
+    pending = head.subarray(dataAt);
+    const created = createDecoder(coding, head);
+    created.on("readable", signal);
+    created.on("end", () => {
+      finished = true;
+      signal();
+    });
+    created.on("error", (error) => {
+      decodeFailure ??= { error };
+      signal();
+    });
+    return created;
+  };
+
+  // Hands the decoder its next input. False when there was none to hand over
+  // (an empty chunk), so the caller must not wait on the decoder for it: Bun
+  // 1.3 never calls back a zero-length write.
+  const feed = async (into: Transform): Promise<boolean> => {
+    let chunk = pending;
+    pending = null;
+    if (!chunk) {
+      const next = await readSource();
+      if (next.done) {
+        inputDone = true;
+        into.end();
+        return true;
+      }
+      chunk = next.value;
+    }
+    if (chunk.byteLength === 0) return false;
+    writing = true;
+    into.write(chunk, () => {
+      writing = false;
+      signal();
+    });
+    return true;
+  };
+
+  const stop = (reason?: unknown): Promise<void> => {
+    cancelled = true;
+    decoder?.destroy();
+    return source.cancel(reason).catch(() => {});
   };
 
   return new ReadableStream<Uint8Array>(
     {
       async pull(controller) {
         try {
-          if (decoded === undefined) decoded = await start();
-          const next = decoded ? await decoded.read() : { done: true as const, value: undefined };
-          if (next.done) controller.close();
-          else controller.enqueue(next.value);
+          if (decoder === undefined) {
+            decoder = await start();
+            // Cancelled while the opening was read: nothing will read this one.
+            if (cancelled) return void decoder?.destroy();
+          }
+          if (decoder === null) return controller.close();
+          for (;;) {
+            const out = decoder.read() as Uint8Array | null;
+            if (out) return controller.enqueue(out);
+            if (decodeFailure) throw new ContentDecodingError(coding, decodeFailure.error);
+            if (finished) {
+              // Complete: whatever else the body holds is not read.
+              controller.close();
+              await stop();
+              return;
+            }
+            const progress = new Promise<void>((resolve) => {
+              wake = resolve;
+            });
+            if (!writing && !inputDone && !(await feed(decoder))) continue;
+            await progress;
+          }
         } catch (error) {
+          await stop();
           controller.error(
-            sourceFailure ? sourceFailure.error : new ContentDecodingError(coding, error),
+            sourceFailure
+              ? sourceFailure.error
+              : error instanceof ContentDecodingError
+                ? error
+                : new ContentDecodingError(coding, error),
           );
         }
       },
-      cancel: (reason) => (decoded ?? source).cancel(reason),
+      cancel: stop,
     },
     { highWaterMark: 0 },
   );

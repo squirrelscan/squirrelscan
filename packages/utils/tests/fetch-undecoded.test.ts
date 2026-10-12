@@ -83,6 +83,29 @@ beforeAll(async () => {
           return encoded(HTML, "x-squirrel");
         case "/stacked":
           return encoded(gzipSync(gzipSync(HTML)), "gzip, gzip");
+        case "/gzip-junk":
+          return encoded(
+            Buffer.concat([gzipSync(HTML), Buffer.from("\n<!-- appended -->\n")]),
+            "gzip",
+          );
+        case "/gzip-padded":
+          return encoded(Buffer.concat([gzipSync(HTML), Buffer.alloc(16)]), "gzip");
+        case "/gzip-members":
+          return encoded(Buffer.concat([gzipSync(HTML), gzipSync("<p>second member</p>")]), "gzip");
+        case "/gzip-named": {
+          // FEXTRA, FNAME and FCOMMENT set: the header is not 10 bytes long.
+          const header = Buffer.concat([
+            Buffer.from([0x1f, 0x8b, 8, 0x04 | 0x08 | 0x10, 0, 0, 0, 0, 0, 3, 2, 0, 0xab, 0xcd]),
+            Buffer.from("index.html\0a comment\0"),
+          ]);
+          return encoded(Buffer.concat([header, gzipSync(HTML).subarray(10)]), "gzip");
+        }
+        case "/br-junk":
+          return encoded(Buffer.concat([brotliCompressSync(HTML), Buffer.from("junk")]), "br");
+        case "/deflate-junk":
+          return encoded(Buffer.concat([deflateSync(HTML), Buffer.from("junk")]), "deflate");
+        case "/zstd-junk":
+          return encoded(Buffer.concat([zstdCompressSync(HTML), Buffer.from("junk")]), "zstd");
         case "/empty":
           return encoded(new Uint8Array(0), "gzip");
         case "/liar":
@@ -177,6 +200,22 @@ describe("readBodyCapped over fetchUndecoded", () => {
     });
   }
 
+  // Bytes after a complete stream are ignored, as Bun's own decoding and the
+  // browsers ignore them. gzip stops after its first member, as Chrome does.
+  for (const path of [
+    "/gzip-junk",
+    "/gzip-padded",
+    "/gzip-members",
+    "/gzip-named",
+    "/br-junk",
+    "/deflate-junk",
+    "/zstd-junk",
+  ]) {
+    test(`reads ${path} up to the end of its stream`, async () => {
+      expect(await readBodyCapped(await fetchUndecoded(`${origin}${path}`), 1_000_000)).toBe(HTML);
+    });
+  }
+
   for (const path of ["/identity", "/unknown"]) {
     test(`reads ${path} as it arrived`, async () => {
       expect(await readBodyCapped(await fetchUndecoded(`${origin}${path}`), 1_000_000)).toBe(HTML);
@@ -236,6 +275,13 @@ describe("readBodyCapped over fetchUndecoded", () => {
 });
 
 describe("decodedBody", () => {
+  test("cancelling a read in flight ends it and releases the body", async () => {
+    const reader = decodedBody(await fetchUndecoded(`${origin}/stall`))!.getReader();
+    const read = reader.read();
+    await reader.cancel("enough");
+    expect((await read).done).toBe(true);
+  });
+
   test("leaves a response that fetchUndecoded did not fetch alone", async () => {
     const res = encoded(HTML, "gzip");
     const body = res.body;
