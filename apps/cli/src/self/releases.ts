@@ -295,14 +295,37 @@ export function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-// Bounds time-to-headers only; the body of a ~100MB binary on a slow
-// connection can legitimately stream for minutes and must not be cut off.
-const DOWNLOAD_HEADERS_TIMEOUT_MS = 30_000;
+/**
+ * Deadlines for one binary download (#174). The headers bound alone let a
+ * stalled or trickling body hang forever, which left a detached `self update
+ * --auto` child waiting with the update lock held until the lock went stale.
+ */
+export interface DownloadTimeouts {
+  /** Request sent to response headers received. */
+  headersMs: number;
+  /** Longest gap between two body chunks before the download counts as stalled. */
+  stallMs: number;
+  /** The whole download, headers and body. */
+  totalMs: number;
+}
+
+/**
+ * A ~100 MB binary on a slow connection can legitimately stream for minutes, so
+ * the body is bounded by progress (a stall) and by a total that needs only
+ * about 85 KB/s. The total leaves room under the update lock's 30-minute
+ * staleness bound for the release check before the download and the install
+ * after it, so a live update does not have its lock taken over.
+ */
+export const DOWNLOAD_TIMEOUTS: DownloadTimeouts = {
+  headersMs: 30_000,
+  stallMs: 60_000,
+  totalMs: 20 * 60_000,
+};
 
 export async function downloadBinary(
   manifest: ReleaseManifest,
   platformArch: PlatformArch,
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal; timeouts?: DownloadTimeouts }
 ): Promise<Result<ArrayBuffer>> {
   if (!isValidReleaseVersion(manifest.version)) {
     return err(commandError("INVALID_RELEASE", "Release version is invalid"));
@@ -328,6 +351,7 @@ export async function downloadBinary(
   }
 
   const url = `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/v${manifest.version}/${binary.filename}`;
+  const timeouts = options?.timeouts ?? DOWNLOAD_TIMEOUTS;
 
   // Plain fetch, not requestAsync: the shared request layer replaces the
   // caller's AbortSignal with its own timeout controller, but the in-process
@@ -338,21 +362,83 @@ export async function downloadBinary(
   const onAbort = () => controller.abort();
   options?.signal?.addEventListener("abort", onAbort, { once: true });
   if (options?.signal?.aborted) controller.abort();
-  const headersTimeout = setTimeout(
-    () => controller.abort(),
-    DOWNLOAD_HEADERS_TIMEOUT_MS
-  );
 
+  // Which deadline fired, so the error says why the download stopped.
+  let timedOut: string | null = null;
+  const expire = (reason: string) => () => {
+    timedOut ??= reason;
+    controller.abort();
+  };
+  const totalTimer = setTimeout(
+    expire(
+      `Download did not finish within ${formatDuration(timeouts.totalMs)}`
+    ),
+    timeouts.totalMs
+  );
+  const headersTimer = setTimeout(
+    expire(
+      `Download timed out: no response within ${formatDuration(timeouts.headersMs)}`
+    ),
+    timeouts.headersMs
+  );
+  let stallTimer: ReturnType<typeof setTimeout> | undefined;
+  const armStall = () => {
+    clearTimeout(stallTimer);
+    stallTimer = setTimeout(
+      expire(
+        `Download stalled: no data for ${formatDuration(timeouts.stallMs)}`
+      ),
+      timeouts.stallMs
+    );
+  };
+  // The fetch and the body read each race the abort once, so a deadline ends
+  // the wait even on a body stream the fetch signal does not reach.
+  const aborted = new Promise<never>((_, reject) => {
+    const fail = () => reject(new Error("Download aborted"));
+    if (controller.signal.aborted) fail();
+    else controller.signal.addEventListener("abort", fail, { once: true });
+  });
+  aborted.catch(() => {});
+
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   try {
-    const response = await fetch(url, { signal: controller.signal });
-    clearTimeout(headersTimeout);
+    const response = await Promise.race([
+      fetch(url, { signal: controller.signal }),
+      aborted,
+    ]);
+    clearTimeout(headersTimer);
     if (!response.ok) {
+      // An error page's body is not read, so close it rather than leave it open.
+      response.body?.cancel().catch(() => {});
       return err(
         commandError("DOWNLOAD_FAILED", `Download failed: ${response.status}`)
       );
     }
 
-    const buffer = await response.arrayBuffer();
+    const chunks: Uint8Array[] = [];
+    const bodyReader = response.body?.getReader();
+    reader = bodyReader;
+    const consume = async (): Promise<void> => {
+      if (!bodyReader) return;
+      armStall();
+      while (true) {
+        const { done, value } = await bodyReader.read();
+        if (done) return;
+        chunks.push(value);
+        armStall();
+      }
+    };
+    // When a deadline wins, the read left pending ends with the cancel in
+    // `finally`; its outcome no longer matters.
+    const consumed = consume();
+    consumed.catch(() => {});
+    await Promise.race([consumed, aborted]);
+    // A body cut short by the abort can end as if complete: never verify it.
+    if (controller.signal.aborted) throw new Error("Download aborted");
+    // The download is done; the checksum below is not part of it.
+    clearTimeout(stallTimer);
+    clearTimeout(totalTimer);
+    const buffer = Bun.concatArrayBuffers(chunks);
 
     // Verify SHA256
     const hash = await computeSHA256(buffer);
@@ -367,11 +453,25 @@ export async function downloadBinary(
     if (options?.signal?.aborted) {
       return err(commandError("DOWNLOAD_ABORTED", "Download aborted"));
     }
+    if (timedOut) {
+      return err(commandError("DOWNLOAD_TIMEOUT", timedOut));
+    }
     return err(commandError("DOWNLOAD_FAILED", (error as Error).message));
   } finally {
-    clearTimeout(headersTimeout);
+    clearTimeout(totalTimer);
+    clearTimeout(headersTimer);
+    clearTimeout(stallTimer);
     options?.signal?.removeEventListener("abort", onAbort);
+    // Release a body a deadline or an abort left unread, so its socket closes.
+    reader?.cancel().catch(() => {});
   }
+}
+
+/** `30s`, `1 minute`, `20 minutes`. */
+function formatDuration(ms: number): string {
+  if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
+  const minutes = Math.round(ms / 60_000);
+  return `${minutes} minute${minutes === 1 ? "" : "s"}`;
 }
 
 async function computeSHA256(buffer: ArrayBuffer): Promise<string> {

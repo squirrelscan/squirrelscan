@@ -40,7 +40,11 @@ import {
   safeRealpath,
   samePath,
 } from "./paths";
-import { checkForUpdates, downloadBinary } from "./releases";
+import {
+  checkForUpdates,
+  downloadBinary,
+  type DownloadTimeouts,
+} from "./releases";
 import {
   loadSettings,
   updateSettings,
@@ -899,6 +903,8 @@ export async function runAutoUpdate(options?: {
   onStart?: () => void;
   /** Test seam for the PATH/bin-dir landing check. */
   landingDeps?: LandingDeps;
+  /** Test seam for the download deadlines (#174). */
+  downloadTimeouts?: DownloadTimeouts;
 }): Promise<string | null> {
   const settingsResult = loadSettings();
   if (!settingsResult.ok) return null;
@@ -1151,11 +1157,13 @@ async function performUpdate(
     signal?: AbortSignal;
     abortIfDismissed?: boolean;
     landingDeps?: LandingDeps;
+    downloadTimeouts?: DownloadTimeouts;
   }
 ): Promise<Result<UpdateLanding>> {
   const platformArch = detectPlatformArch();
   const downloadResult = await downloadBinary(manifest, platformArch, {
     signal: options?.signal,
+    timeouts: options?.downloadTimeouts,
   });
   if (!downloadResult.ok) return downloadResult;
 

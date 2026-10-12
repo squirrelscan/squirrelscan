@@ -364,6 +364,212 @@ describe("updater", () => {
     });
   });
 
+  // #174: the deadline used to stop at response headers, so a stalled or
+  // trickling body hung forever and a detached `self update --auto` child held
+  // the update lock until the machine rebooted.
+  describe("downloadBinary deadlines (#174)", () => {
+    const BYTES = new TextEncoder().encode("squirrel-binary-bytes");
+    const SHA = new Bun.CryptoHasher("sha256").update(BYTES).digest("hex");
+    const binaryEntry = {
+      filename: "squirrel",
+      sha256: SHA,
+      size: BYTES.length,
+    };
+    const manifest = {
+      version: "9.9.9",
+      binaries: {
+        "darwin-arm64": binaryEntry,
+        "darwin-x64": binaryEntry,
+        "linux-x64": binaryEntry,
+        "linux-arm64": binaryEntry,
+        "windows-x64": binaryEntry,
+      },
+    } as ReleaseManifest;
+    const FAST = { headersMs: 1_000, stallMs: 80, totalMs: 2_000 };
+
+    /** A body that sends `first`, then each of `rest` `gapMs` apart, then maybe never ends. */
+    function body(
+      first: Uint8Array,
+      rest: Uint8Array[] = [],
+      gapMs = 0,
+      close = false
+    ): ReadableStream<Uint8Array> {
+      return new ReadableStream({
+        async start(controller) {
+          controller.enqueue(first);
+          for (const chunk of rest) {
+            await new Promise((resolve) => setTimeout(resolve, gapMs));
+            controller.enqueue(chunk);
+          }
+          if (close) controller.close();
+        },
+      });
+    }
+
+    /** Stub fetch: the release download gets `response`, telemetry is captured. */
+    function serveRelease(response: () => Promise<Response>): {
+      events: Array<Record<string, unknown>>;
+    } {
+      const captured: { events: Array<Record<string, unknown>> } = {
+        events: [],
+      };
+      globalThis.fetch = (async (
+        url: string | URL | Request,
+        init?: RequestInit
+      ) => {
+        if (url.toString().includes("/releases/download/")) return response();
+        if (init?.body) {
+          captured.events.push(
+            JSON.parse(init.body as string) as Record<string, unknown>
+          );
+        }
+        return new Response("{}", { status: 200 });
+      }) as unknown as typeof fetch;
+      return captured;
+    }
+
+    test("a body that arrives in chunks is assembled and verified", async () => {
+      serveRelease(
+        async () =>
+          new Response(
+            body(
+              BYTES.slice(0, 5),
+              [BYTES.slice(5, 12), BYTES.slice(12)],
+              5,
+              true
+            )
+          )
+      );
+      const result = await downloadBinary(manifest, "darwin-arm64", {
+        timeouts: FAST,
+      });
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(new Uint8Array(result.data)).toEqual(BYTES);
+    });
+
+    test("a body that stops sending fails as a stall, not a hang", async () => {
+      serveRelease(async () => new Response(body(BYTES.slice(0, 4))));
+      const start = Date.now();
+      const result = await downloadBinary(manifest, "darwin-arm64", {
+        timeouts: FAST,
+      });
+      expect(Date.now() - start).toBeLessThan(1_000);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe("DOWNLOAD_TIMEOUT");
+        expect(result.error.message).toStartWith("Download stalled");
+      }
+    });
+
+    test("a trickle that never stalls is cut off by the total deadline", async () => {
+      // A byte every 20 ms resets the 80 ms stall timer forever.
+      const trickle = Array.from({ length: 200 }, () => new Uint8Array([0]));
+      serveRelease(
+        async () => new Response(body(BYTES.slice(0, 1), trickle, 20))
+      );
+      const start = Date.now();
+      const result = await downloadBinary(manifest, "darwin-arm64", {
+        timeouts: { headersMs: 1_000, stallMs: 80, totalMs: 300 },
+      });
+      expect(Date.now() - start).toBeLessThan(1_500);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe("DOWNLOAD_TIMEOUT");
+        expect(result.error.message).toStartWith("Download did not finish");
+      }
+    });
+
+    test("an error status closes its unread body", async () => {
+      let cancelled = false;
+      serveRelease(
+        async () =>
+          new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(new Uint8Array([1]));
+              },
+              cancel() {
+                cancelled = true;
+              },
+            }),
+            { status: 503 }
+          )
+      );
+      const result = await downloadBinary(manifest, "darwin-arm64", {
+        timeouts: FAST,
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("DOWNLOAD_FAILED");
+      expect(cancelled).toBe(true);
+    });
+
+    test("no response headers fails on the headers deadline", async () => {
+      serveRelease(() => new Promise<Response>(() => {}));
+      const result = await downloadBinary(manifest, "darwin-arm64", {
+        timeouts: { headersMs: 50, stallMs: 80, totalMs: 2_000 },
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe("DOWNLOAD_TIMEOUT");
+        expect(result.error.message).toStartWith("Download timed out");
+      }
+    });
+
+    test("a caller abort mid-body is still DOWNLOAD_ABORTED", async () => {
+      serveRelease(async () => new Response(body(BYTES.slice(0, 4))));
+      const controller = new AbortController();
+      const pending = downloadBinary(manifest, "darwin-arm64", {
+        signal: controller.signal,
+        timeouts: { headersMs: 1_000, stallMs: 5_000, totalMs: 10_000 },
+      });
+      setTimeout(() => controller.abort(), 20);
+      const result = await pending;
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("DOWNLOAD_ABORTED");
+    });
+
+    test("a stalled body during a background auto-update fails it cleanly", async () => {
+      spyOn(pathsModule, "isManagedInstall").mockReturnValue(true);
+      spyOn(os, "platform").mockReturnValue("linux");
+      spyOn(releasesModule, "checkForUpdates").mockResolvedValue({
+        ok: true,
+        data: {
+          available: true,
+          current_version: "0.0.1",
+          latest_version: "9.9.9",
+          release_url: null,
+          manifest,
+        },
+      } as Awaited<ReturnType<typeof releasesModule.checkForUpdates>>);
+      const captured = serveRelease(
+        async () => new Response(body(BYTES.slice(0, 4)))
+      );
+      updateSettings({
+        auto_update: true,
+        pending_update_notification: {
+          from_version: "0.0.1",
+          to_version: "9.9.9",
+          release_url: null,
+        },
+      });
+
+      // The detached `self update --auto` child: no signal from anyone.
+      const start = Date.now();
+      const installed = await runAutoUpdate({ downloadTimeouts: FAST });
+      expect(Date.now() - start).toBeLessThan(2_000);
+      expect(installed).toBeNull();
+      // The lock is released, so the next run can try again.
+      expect(existsSync(join(tempHome, "update.lock"))).toBe(false);
+      // The failure is recorded.
+      await waitForTelemetry();
+      const errors = captured.events.filter(
+        (e) => e.event === "update_auto_error"
+      );
+      expect(errors).toHaveLength(1);
+      expect(errors[0]?.error_type).toBe("DOWNLOAD_TIMEOUT");
+    });
+  });
+
   // #1085: the per-target-version failed-attempt counter that drives the loud
   // fallback box. maybeSpawnAutoUpdate needs an eligible (managed) install; on
   // POSIX it also spawns a detached updater child, so both are stubbed and the
