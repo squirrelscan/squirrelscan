@@ -116,6 +116,10 @@ export const brokenLinksRule: Rule = {
         name: "broken-links",
         status: "pass",
         message: "No broken internal links detected",
+        // What the pass covers (repo#2729). Its presence also tells a reader of
+        // the result that this engine reports unfetched targets as skipped, so
+        // a pass here was not vacuous.
+        details: { linkTargets: allTargets.size, unfetchedTargets: unfetchedTargets.size },
       });
     }
 

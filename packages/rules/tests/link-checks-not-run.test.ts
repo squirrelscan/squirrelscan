@@ -206,11 +206,14 @@ describe("links/broken-links when the crawl did not follow links", () => {
       ),
     );
     expect(named(checks, "broken-links").map((c) => c.status)).toEqual(["pass"]);
+    expect(checks[0]!.details).toEqual({ linkTargets: 2, unfetchedTargets: 0 });
   });
 
   test("links followed (Surface, Full): unfetched targets keep today's pass", () => {
-    // A followed crawl that ran out of budget is a different gap (#1146), left as is.
+    // A followed crawl that ran out of budget is a different gap (#1146), left as
+    // is; the pass says how much it covered.
     const { checks } = brokenLinksRule.run(ctx(pages));
     expect(named(checks, "broken-links").map((c) => c.status)).toEqual(["pass"]);
+    expect(checks[0]!.details).toEqual({ linkTargets: 4, unfetchedTargets: 2 });
   });
 });

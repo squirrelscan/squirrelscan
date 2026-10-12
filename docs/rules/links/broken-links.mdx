@@ -16,7 +16,7 @@ The rule is site-wide and compares link targets against pages the crawl actually
 - Skipped when there is no site data. Message: `Site data not available for broken link analysis`.
 - `broken-links` is skipped when the crawl did not follow links and some link targets were never fetched, with skip reason `link-targets-not-fetched`. Message: `9 of 40 internal link target(s) were not fetched because this audit did not follow links, so they were not checked for broken links`. It replaces the pass, and sits next to the failure when a target the crawl did fetch is broken. The report shows it as **Not checked**, and the score does not count it.
 - `broken-links` fails when a target returned 400 or above. Message: `7 broken internal link(s) (4xx/5xx)`. Each item reads `https://example.com/old-page (404)` and lists every page that links to it. Severity error, weight 7.
-- `broken-links` passes otherwise. Message: `No broken internal links detected`.
+- `broken-links` passes otherwise. Message: `No broken internal links detected`, with `details.linkTargets` (distinct internal link targets) and `details.unfetchedTargets` (those the crawl did not fetch) saying how much the pass covers.
 - `rate-limited-links` reports info for targets that returned a rate-limit status. Message: `3 internal link(s) rate-limited - status unverifiable`.
 
 Normalisation strips the fragment and the trailing slash and lowercases the scheme and host, but not the path, so a case difference in the path is treated as a different URL. A throttled response means the host limited the crawl, not that the page is missing, so those are separated out before the 400 test.
