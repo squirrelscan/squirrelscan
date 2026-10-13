@@ -154,7 +154,8 @@ const NAP_PHONE_RUN = /[0-9+()./\-\s]+/g;
  */
 const NAP_PHONE_TOKEN_MAX_CHARS = 40;
 
-const isSpace = (ch: string): boolean => /\s/.test(ch);
+const SPACE = /\s/;
+const isSpace = (ch: string): boolean => SPACE.test(ch);
 
 /** Characters that can lead or trail a run without being part of the number. */
 const NAP_PHONE_LEADING_JUNK = new Set([")", ".", "/", "-"]);
@@ -179,8 +180,13 @@ function trimPhoneEdges(text: string): string {
  * parentheses, `.`, `/`, `-` and spaces) are kept, so the label a button puts
  * next to the number ("Jetzt anrufen", "Call now") never becomes part of its
  * format (pub#741). When a run of those characters carries more digits than the
- * number (`... 980 0 24/7`), its trailing space-separated groups are dropped
- * until the key matches.
+ * number, its trailing space-separated groups are dropped until the key matches
+ * (`... 980 0 24/7`), and leading ones before a `+` that opens the number are
+ * dropped too (`24/7 +49 ...`, see {@link dropLeadingGroups}).
+ *
+ * The run is cut at {@link NAP_PHONE_TOKEN_MAX_CHARS} before matching. Only its
+ * end can be cut, and a cut inside the number shifts the last seven digits, so a
+ * truncated number never matches the key: the href payload is used instead.
  */
 export function napPhoneToken(text: string, key: string): string | null {
   for (const match of text.matchAll(NAP_PHONE_RUN)) {
@@ -188,13 +194,31 @@ export function napPhoneToken(text: string, key: string): string | null {
     let end = run.length;
     while (end > 0) {
       const token = trimPhoneEdges(run.slice(0, end));
-      if (token && napPhoneKey(token) === key) return token;
+      if (token && napPhoneKey(token) === key) return dropLeadingGroups(token, key);
       // Drop the last space-separated group and try again.
       end = token.length;
       while (end > 0 && !isSpace(run[end - 1]!)) end--;
     }
   }
   return null;
+}
+
+/**
+ * `token` from the space-separated group where the number itself starts. The
+ * key is the last seven digits, so it cannot tell `24/7 +49 6061 630 980 0` from
+ * `+49 6061 630 980 0`; the written form can. A `+` only ever opens an
+ * international number, so the last group that starts with one (and still
+ * carries the key) is the start. A number written without a `+` keeps any digit
+ * groups a label puts before it, since nothing in the text says where it starts:
+ * a leading `1` or `0` group is as likely to be the trunk prefix as a label.
+ */
+function dropLeadingGroups(token: string, key: string): string {
+  for (let i = token.length - 1; i > 0; i--) {
+    if (token[i] !== "+" || !isSpace(token[i - 1]!)) continue;
+    const rest = token.slice(i);
+    if (napPhoneKey(rest) === key) return rest;
+  }
+  return token;
 }
 
 /**

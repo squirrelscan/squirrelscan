@@ -133,6 +133,13 @@ describe("napPhoneToken", () => {
     ["+49 (0)6061 630 980 0Call now", KEY, NUMBER],
     ["Telefon: 060616309800", KEY, "060616309800"],
     ["+49 (0)6061 630 980 0 24/7", KEY, NUMBER],
+    // Label digits before the number: a `+` marks where the number starts.
+    ["Open 9-5 +49 (0)6061 630 980 0", KEY, NUMBER],
+    ["24/7 +49 6061 630 980 0", KEY, "+49 6061 630 980 0"],
+    // Without a `+` nothing marks the start, so a leading group is kept: it is
+    // as likely a trunk prefix as a label.
+    ["1 (555) 123-4567", napPhoneKey("5551234567")!, "1 (555) 123-4567"],
+    ["24/7 060616309800", KEY, "24/7 060616309800"],
     ["Call +1 (555) 123-4567 now", napPhoneKey("5551234567")!, "+1 (555) 123-4567"],
     ["Call 555.123.4567.", napPhoneKey("5551234567")!, "555.123.4567"],
     ["(02) 9222 3333", napPhoneKey("0292223333")!, "(02) 9222 3333"],
