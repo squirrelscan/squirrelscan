@@ -1,6 +1,6 @@
 ---
 title: "Critical request chains: the blocking head resources counted"
-description: "Blocking stylesheets and scripts in head, plus every CSS @import. squirrel counts each as a link in the chain before first paint."
+description: "Blocking stylesheets and scripts in head, plus every inline CSS @import a browser fetches. squirrel counts each as a link in the chain before first paint."
 ---
 
 ## What a critical request chain is
@@ -14,10 +14,10 @@ Depth matters more than count. Four independent blocking resources fetch in para
 The rule runs on every crawled page and emits one check:
 
 - `critical-request-chains`, at info status with the message `No <head> element found` when the page has no head.
-- `critical-request-chains`, warning with the message `N critical request chain(s) found` and listing up to ten members as items. A stylesheet reads `CSS: <href>`, a script `JS: <src>`, and every `@import` on the page is folded into one entry reading `N CSS @import(s) found (each adds a network round-trip)`. The details record the blocking CSS count, the blocking JS count, the import count, the number of preloads and any overflow.
+- `critical-request-chains`, warning with the message `N critical request chain(s) found` and listing up to ten members as items. A stylesheet reads `CSS: <href>`, a script `JS: <src>`, and the page's `@import`s are folded into one entry reading `N CSS @import(s) found (each adds a network round-trip)`. The details record the blocking CSS count, the blocking JS count, the import count, the number of preloads and any overflow.
 - `critical-request-chains`, passing with the message `No critical request chains detected`, with the preload count in the details.
 
-Three things are counted, all from `<head>` except the imports. A blocking stylesheet is a `link[rel="stylesheet"]` that is neither `media="print"` nor `disabled`. A blocking script is a classic `script[src]` with a non-empty `src` and neither `async` nor `defer`. A `type="module"` script is deferred by default, and a classic script with `nomodule` or a script whose `type` is not JavaScript never runs in a modern browser, so none of those count. Every `@import` in every `<style>` element on the page is counted, and the total contributes exactly one entry to the list rather than one entry each.
+Three things are counted, all from `<head>` except the imports. A blocking stylesheet is a `link[rel="stylesheet"]` that is neither `media="print"` nor `disabled`. A blocking script is a classic `script[src]` with a non-empty `src` and neither `async` nor `defer`. A `type="module"` script is deferred by default, and a classic script with `nomodule` or a script whose `type` is not JavaScript never runs in a modern browser, so none of those count. In every `<style>` element on the page, each `@import` a browser would fetch is counted, and the total contributes exactly one entry to the list rather than one entry each. Comments, strings and `url()` are read as single tokens, the way a browser reads them, so an `@import` inside a comment (`/* @import url(a.css); */`), a string or a `url()` is not an import. Neither is one that comes after any other rule, or one inside a block such as `@media`: a browser ignores those and never fetches them. Only `@charset` and, before the first import, `@layer` statements may come before an import. An `@import` with no URL is dropped too.
 
 The count is a count of blocking resources rather than a measured chain depth, since a static read of the HTML cannot see what a stylesheet fetches once parsed.
 

@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 
 import { parsePage } from "@squirrelscan/parser";
 
-import { fontDeliveryRule } from "../src/performance/font-delivery";
+import { fontDeliveryRule, mediaQueriesOf } from "../src/performance/font-delivery";
 import type { CheckResult, RuleContext } from "../src/types";
 
 const URL = "https://example.com/";
@@ -95,6 +95,33 @@ describe("perf/font-delivery", () => {
     expect(c.status).toBe("pass");
   });
 
+  test("warns: layer(print) names a cascade layer, not the print medium", () => {
+    const c = run(
+      makeCtx(
+        `<style>@import url("https://fonts.googleapis.com/css?family=Roboto") layer(print);</style>`,
+      ),
+    );
+    expect(c.status).toBe("warn");
+  });
+
+  test("passes: a font @import inside a CSS comment loads nothing (#725)", () => {
+    const c = run(
+      makeCtx(
+        `<style>/* @import url("https://fonts.googleapis.com/css?family=Roboto"); */ body{}</style>`,
+      ),
+    );
+    expect(c.status).toBe("pass");
+  });
+
+  test("passes: a font @import after another rule is never fetched (#725)", () => {
+    const c = run(
+      makeCtx(
+        `<style>body{} @import url("https://fonts.googleapis.com/css?family=Roboto");</style>`,
+      ),
+    );
+    expect(c.status).toBe("pass");
+  });
+
   test("warns: `not print` @import applies to screen (still blocking)", () => {
     const c = run(
       makeCtx(
@@ -102,5 +129,29 @@ describe("perf/font-delivery", () => {
       ),
     );
     expect(c.status).toBe("warn");
+  });
+});
+
+describe("perf/font-delivery on adversarial style text", () => {
+  test("drops layer() and supports(), nested parens included, and keeps the media", () => {
+    expect(mediaQueriesOf("layer(print) supports(selector(:has(a))) not print").trim()).toBe(
+      "not print",
+    );
+    expect(mediaQueriesOf("sublayer(x) print")).toBe("sublayer(x) print");
+  });
+
+  test("200 KB of unclosed layer(, comment openers or @import repeats runs well under the budget", () => {
+    const font = '@import url("https://fonts.googleapis.com/css?family=Roboto") ';
+    const started = performance.now();
+    for (const style of [
+      font + "layer(".repeat(34_000),
+      font + "supports(".repeat(23_000),
+      `${font};${"/*".repeat(100_000)}`,
+      "@import ".repeat(25_000),
+      `@import${" ".repeat(200_000)})`,
+    ]) {
+      run(makeCtx(`<style>${style}</style>`));
+    }
+    expect(performance.now() - started).toBeLessThan(1000);
   });
 });

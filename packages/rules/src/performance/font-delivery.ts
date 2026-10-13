@@ -2,6 +2,7 @@
 
 import { getHostname, querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 
+import { findCssImports } from "../shared/css-imports";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // Hosted font-CSS providers whose stylesheet sits in the critical request chain.
@@ -25,6 +26,43 @@ function isFontCssHost(url: string, base: string): boolean {
   }
   if (!host) return false;
   return FONT_CSS_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+}
+
+/**
+ * An `@import`'s conditions without its `layer(...)` and `supports(...)` parts,
+ * which name a cascade layer or a feature test, not a medium: `layer(print)` is
+ * not print-only. One pass with a depth count, never a regex such as
+ * `/layer\([^)]*\)/g`, which rescans to the end of an unclosed `layer(` at every
+ * occurrence (quadratic on site-controlled CSS).
+ */
+export function mediaQueriesOf(conditions: string): string {
+  let out = "";
+  let i = 0;
+  while (i < conditions.length) {
+    const prev = conditions[i - 1];
+    const atWord = prev === undefined || !/[-_a-z0-9]/.test(prev);
+    const fn = atWord
+      ? conditions.startsWith("layer(", i)
+        ? 6
+        : conditions.startsWith("supports(", i)
+          ? 9
+          : 0
+      : 0;
+    if (fn === 0) {
+      out += conditions[i];
+      i++;
+      continue;
+    }
+    let depth = 1;
+    i += fn;
+    while (i < conditions.length && depth > 0) {
+      if (conditions[i] === "(") depth++;
+      else if (conditions[i] === ")") depth--;
+      i++;
+    }
+    out += " ";
+  }
+  return out;
 }
 
 export const fontDeliveryRule: Rule = {
@@ -71,15 +109,14 @@ export const fontDeliveryRule: Rule = {
     }
 
     // @import of a font provider inside inline <style> — blocking + extra round-trip.
-    // Capture the URL and the trailing media condition (e.g. `... print;`).
+    // Only the imports a browser fetches count: not one in a comment or a string,
+    // nor one after another rule (#725). `media` is the trailing condition
+    // (e.g. `... print;`).
     for (const style of querySelectorAllOutsideNoscript(doc, "style")) {
-      const content = style.textContent || "";
-      const importRe = /@import\s+(?:url\()?\s*['"]?([^'")\s]+)['"]?\)?([^;]*);?/gi;
-      let match: RegExpExecArray | null;
-      while ((match = importRe.exec(content)) !== null) {
-        const url = match[1];
-        const media = (match[2] || "").toLowerCase();
-        if (!url || !isFontCssHost(url, ctx.page.url)) continue;
+      for (const cssImport of findCssImports(style.textContent || "")) {
+        const url = cssImport.url;
+        const media = mediaQueriesOf(cssImport.media.toLowerCase());
+        if (!isFontCssHost(url, ctx.page.url)) continue;
         // A print-only @import does not block screen render. `not print` DOES apply
         // to screen, so keep it; only skip a plain print (no not/screen/all).
         const printOnly =

@@ -4,6 +4,7 @@ import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 
+import { findCssImports } from "../shared/css-imports";
 import { scriptLoading } from "./cwv";
 
 export const criticalRequestChainsRule: Rule = {
@@ -48,15 +49,12 @@ export const criticalRequestChainsRule: Rule = {
         script.getAttribute("src") && scriptLoading(script) === "blocking"
     );
 
-    // Count CSS @import statements from inline styles
+    // Count the CSS @imports inline styles would fetch: not one inside a comment
+    // or a string, nor one a browser ignores for coming after another rule (#725).
     let importCount = 0;
     const styleElements = querySelectorAllOutsideNoscript(doc, "style");
     for (const style of styleElements) {
-      const content = style.textContent || "";
-      const imports = content.match(/@import\b/g);
-      if (imports) {
-        importCount += imports.length;
-      }
+      importCount += findCssImports(style.textContent || "").length;
     }
 
     // Check for preload hints

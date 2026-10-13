@@ -24,6 +24,7 @@ How it works:
 ### Fixed
 
 - `eeat/privacy-policy` no longer tells you to create a privacy policy your pages already link to. When the crawl did not fetch the policy, because its path is excluded (`/policies/**` on a Shopify storefront) or the page limit came first, the rule now reports `Privacy Policy linked but not crawled` as info. It warns `Privacy Policy link returns N` when the internal link probe saw that link answer 4xx or 5xx, and it still warns `No Privacy Policy page found` when nothing links to a policy. No extra requests are made. See [eeat/privacy-policy](https://docs.squirrelscan.com/rules/eeat/privacy-policy). #672
+- `perf/critical-request-chains` and `perf/font-delivery` count only the CSS `@import`s a browser fetches. An `@import` inside a comment (`/* @import url(a.css); */`), a string or a `url()` no longer counts as a network request, and neither does one after another rule or inside `@media`, which a browser ignores. The page the issue reported, with only a commented import, now passes. squirrelscan/squirrelscan#725
 
 ## v0.0.112 (2026-10-13)
 
