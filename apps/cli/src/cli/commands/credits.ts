@@ -136,8 +136,16 @@ export const credits = defineCommand({
           console.log(
             `  external links       ${String(perLink).padStart(3)} per link a cloud audit checks`
           );
+          // #2757: the one charge on the CLI's own checks: a firewall-blocked
+          // external link the dead-link service re-checks in a cloud browser.
           console.log(
-            "                           (internal links and the CLI's own checks are free)"
+            "                           (internal links and the CLI's own checks are free,"
+          );
+          console.log(
+            "                            except a firewall-blocked link re-checked in a"
+          );
+          console.log(
+            `                            cloud browser: ${priced.render?.cost ?? 2} per link)`
           );
         }
       }

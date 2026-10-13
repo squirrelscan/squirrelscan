@@ -681,7 +681,9 @@ export async function runCloudPrefetchFromPayloads(
  * null when cloud is off / logged out / the `links/dead-links` rule is not
  * enabled (its meta.cloud is the enable gate). Each call submits ≤200 urls.
  * A signed-in CLI's link checks are free (#2291: only a cloud audit pays per
- * external link); the server reports whatever it did charge as `charged`.
+ * external link), except a WAF-blocked link the service re-checks in a cloud
+ * browser, billed at the render rate (squirrelscan/repo#2757); the server
+ * reports whatever it did charge as `charged`.
  * Throwing (402/auth/network) is safe — the adapter falls back to local
  * per-link checks.
  */

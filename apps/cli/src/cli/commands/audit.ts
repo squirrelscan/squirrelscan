@@ -206,7 +206,11 @@ export function consentEstimateLine(est: CloudConsentEstimate): string {
       ? ` Balance: ${est.balance.toLocaleString("en-US")} credits.`
       : "";
   const pages = est.maxPages === 1 ? "page" : "pages";
-  return `About ${estimateAuditCap({ maxPages: est.maxPages })} credits: ${base} audit base + ${pagesEst} for up to ${est.maxPages} audited ${pages} (${AUDIT_PAGE_CREDITS} each, however the page is fetched), all analysis included${cap}.${bal}`;
+  // #2757: the one charge outside the estimate. At Surface and Full the
+  // cloud's dead-link check re-checks a firewall-blocked external link in a
+  // browser, billed at the render rate.
+  const escalation = ` An external link a firewall blocks is re-checked in a cloud browser at ${computeCost("render", 1)} credits each.`;
+  return `About ${estimateAuditCap({ maxPages: est.maxPages })} credits: ${base} audit base + ${pagesEst} for up to ${est.maxPages} audited ${pages} (${AUDIT_PAGE_CREDITS} each, however the page is fetched), all analysis included${cap}.${escalation}${bal}`;
 }
 
 /** #1169 / #2290 preflight: what the audit will cost and the page cap its credits can pay for. */
