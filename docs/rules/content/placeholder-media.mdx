@@ -23,11 +23,11 @@ Three things are detected:
 
 A lazy-loaded image is judged on its real source (`data-src`, `data-lazy-src`, `data-original`), not on the stub in `src`. A stub named `placeholder.gif` in front of a real `data-src` is the normal lazy-load pattern and is not reported.
 
-When an image has responsive sources, the responsive source takes precedence over `src`:
+When an image has responsive sources, they take precedence over `src` in the placeholder check. A real lazy-load source (`data-src`, `data-lazy-src`, `data-original`, `data-srcset`, `data-lazy-srcset`) still takes precedence over both.
 
-- An `img` with `srcset` is judged from the first URL in `srcset`; its `src` fallback is ignored.
-- An `img` inside `<picture>` is judged from the first URL in each `<source srcset>`; its `src` fallback is ignored.
-- Only the first URL from each `srcset` is checked. A placeholder in that selected URL is reported even when `src` points to a real image, while a real selected URL is not reported just because the fallback `src` is a placeholder.
+- Only the first URL of each `srcset` is checked: the first URL in the `<img>` element's own `srcset`, and the first URL in each `<source srcset>` when the `<img>` sits in a `<picture>`.
+- When the image has at least one of those URLs, `src` is not checked for a placeholder. A placeholder in `srcset` is reported even when `src` is a real image, and a placeholder `src` beside a real `srcset` is not reported.
+- When the image has more than one of those URLs, it is reported only when every one of them is a placeholder, and the finding names the first. A `<picture>` with one placeholder `<source>` and one real `<source>` is not reported.
 
 ### Overlap with the alt text rule
 
