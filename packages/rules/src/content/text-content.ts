@@ -200,6 +200,9 @@ const pageSeparatedTextCache = new WeakMap<object, string>();
  * judged the same (pub#739, pub#696). Read it NEXT TO the glued text rather
  * than instead of it: it also splits a word an author wrapped across inline
  * elements (`Goo<b>gle</b>` reads `Goo gle`).
+ *
+ * Cached on the document, so it assumes rules treat the DOM as read-only, as
+ * they must: a change made after the first call is not reflected.
  */
 export function getPageSeparatedText(doc: Document): string {
   const cached = pageSeparatedTextCache.get(doc);

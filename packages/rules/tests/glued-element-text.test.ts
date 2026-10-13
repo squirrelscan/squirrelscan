@@ -95,7 +95,8 @@ describe("getPageSeparatedText", () => {
   });
 
   test("a document without a body is empty", () => {
-    const doc = parsePage("<svg xmlns='http://www.w3.org/2000/svg'></svg>", URL).document!;
-    expect(typeof getPageSeparatedText(doc)).toBe("string");
+    const doc = parsePage("<html><body><p>Gone</p></body></html>", URL).document!;
+    doc.querySelector("body")!.remove();
+    expect(getPageSeparatedText(doc)).toBe("");
   });
 });
