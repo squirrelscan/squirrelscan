@@ -38,6 +38,7 @@ import type { Document } from "linkedom";
 
 import type { CheckItem } from "@squirrelscan/core-contracts";
 
+import { getPageSeparatedText } from "../content/text-content";
 import { isPrivacyPage } from "../shared/privacy-page";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
@@ -348,9 +349,15 @@ function buildVisibilityCheck(
  * Rendered page text plus the attributes a badge is commonly rendered into.
  * `content.textContent` drops `<svg>`, so a star-glyph SVG badge would otherwise
  * read as "no rating on the page".
+ *
+ * `content.textContent` also glues adjacent elements, so `<h3>Customer
+ * rating</h3><p>5/5</p>` reads `Customer rating5/5` and no pattern below finds a
+ * word boundary in it. The element-separated text is searched as well (pub#739).
+ * Both are kept: every test here asks whether a rating appears anywhere, so more
+ * text can only clear the check, never trip it.
  */
 function visibleText(ctx: RuleContext, doc: Document): string {
-  const parts = [ctx.parsed.content?.textContent ?? ""];
+  const parts = [ctx.parsed.content?.textContent ?? "", getPageSeparatedText(doc)];
   for (const el of doc.querySelectorAll("[alt], [aria-label], [title]")) {
     parts.push(
       el.getAttribute("alt") ?? "",

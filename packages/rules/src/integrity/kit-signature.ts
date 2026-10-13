@@ -52,6 +52,11 @@ export const kitSignatureRule: Rule = {
       url: ctx.page.url,
       title: ctx.parsed.meta.title ?? undefined,
       html: ctx.page.html,
+      // The body's `.textContent`, which glues adjacent elements ("CallSign
+      // in"). Kept glued on purpose (pub#739): every bundled string that reads
+      // `text` is a substring with no word boundary, which gluing cannot change,
+      // while separated text would split a brand an author wrapped across inline
+      // elements. packages/threat-intel/tests/signatures.test.ts pins the pair.
       text: ctx.parsed.content.textContent ?? undefined,
       scripts: scriptsForPage(ctx),
     };

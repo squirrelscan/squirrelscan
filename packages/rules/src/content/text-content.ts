@@ -6,7 +6,7 @@
 // concurrently, raced against them. This reads the same text without touching
 // the DOM, reusing the parser's iterative walk (stack-safe on deep DOMs).
 
-import type { Element } from "linkedom";
+import type { Document, Element } from "linkedom";
 
 import { collectTextExcluding, tagExcluder } from "@squirrelscan/parser/extractors";
 
@@ -183,6 +183,31 @@ export function getSeparatedText(element: Element, skipTags?: ReadonlySet<string
     " ",
     () => true,
   );
+}
+
+/** One `getPageSeparatedText` result per parsed document; GC'd with the document. */
+const pageSeparatedTextCache = new WeakMap<object, string>();
+
+/**
+ * The page body's `getSeparatedText`, whitespace collapsed to single spaces,
+ * computed once per parsed document however many rules ask for it.
+ *
+ * `ctx.parsed.content.textContent` is the parser's `.textContent` of the body,
+ * so it glues adjacent elements: `<h3>Customer rating</h3><p>5/5</p>` reads
+ * `Customer rating5/5`, where no `\b` falls between `rating` and `5`. A rule
+ * that looks for a short, word-bounded pattern in page copy reads this text as
+ * well, so the same markup with and without whitespace between its elements is
+ * judged the same (pub#739, pub#696). Read it NEXT TO the glued text rather
+ * than instead of it: it also splits a word an author wrapped across inline
+ * elements (`Goo<b>gle</b>` reads `Goo gle`).
+ */
+export function getPageSeparatedText(doc: Document): string {
+  const cached = pageSeparatedTextCache.get(doc);
+  if (cached !== undefined) return cached;
+  const body = doc.querySelector("body");
+  const text = body ? getSeparatedText(body).replace(/\s+/g, " ").trim() : "";
+  pageSeparatedTextCache.set(doc, text);
+  return text;
 }
 
 /**

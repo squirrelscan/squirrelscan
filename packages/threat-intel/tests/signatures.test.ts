@@ -211,3 +211,32 @@ describe("signature targets + regex flags", () => {
     expect(matchSignatures([sig], { url: "u", html: "malware()" })).toHaveLength(0);
   });
 });
+
+// pub#739: integrity/kit-signature passes the page's `content.textContent` as the
+// `text` corpus, and that text glues adjacent elements ("Discovery CallSign in").
+// Every bundled string that can read `text` is a case-insensitive substring
+// without a word boundary, so gluing cannot change a verdict. Pinned here with
+// the kit page's visible copy written both ways; a new `text` signature that
+// relies on `\b` across elements would have to read separated text instead.
+describe("bundled signatures: glued and spaced element text get the same matches", () => {
+  const signatures = loadSignatures();
+  const glued = "Discovery CallSign in with Google to confirm your Calendly discovery call.Sign in";
+  const spaced =
+    "Discovery Call Sign in with Google to confirm your Calendly discovery call. Sign in";
+
+  test("the kit page", () => {
+    const kit = kitPage();
+    const withText = (text: string) => matchSignatures(signatures, { ...kit, text });
+    expect(withText(glued)).toEqual(withText(spaced));
+    expect(withText(glued).some((h) => h.id === "calendly-kit")).toBe(true);
+  });
+
+  test("a legit Calendly page", () => {
+    const legit = legitCalendlyPage();
+    const copy = (sep: string) =>
+      ["Book a call via our Calendly integration", "Schedule on Calendly"].join(sep);
+    const withText = (text: string) => matchSignatures(signatures, { ...legit, text });
+    expect(withText(copy(""))).toEqual(withText(copy(" ")));
+    expect(withText(copy(""))).toHaveLength(0);
+  });
+});
