@@ -17,14 +17,63 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.112 (2026-10-13)
+
+Seven new rules, and a new category to hold two of them. squirrelscan now ships 308 rules across 22 categories. The new **Reliability** category catches the things that look fine until a visitor needs them: a deleted script bundle behind a page that still answers 200, or a form that quietly loses every submission. Also new: broken in-page anchors, `security.txt` and version-leaking headers, the web app manifest, and a misspelling check with its own MIT-licensed word list. The new checks that request other hosts go through a new egress guard, so a page cannot point squirrel at your own network.
+
 ### Added
 
-- New **Reliability** category with its first rule, `reliability/broken-resources`: a page can answer 200 while the script or stylesheet it depends on returns 404 or 500, usually because a deploy deleted the hashed bundle that cached HTML still references. A first-party script or stylesheet (same registrable domain as the site, so `cdn.example.com` counts for `www.example.com`) that answers 4xx or 5xx is an error; a third-party file, a font or a network failure is a warning; a 429, 430, 503 with `Retry-After` or a WAF challenge is reported as unverified, not broken. One finding per URL lists every page that references it, and a fetch the budget skipped or a cap dropped makes the result partial instead of a pass. Third-party files get one status request each (HEAD first, no body), at most 50 per kind per audit, with none of your custom request headers, never to a private, loopback, link-local or cloud metadata address or a name that resolves to one, at any redirect hop, and only while the rule is enabled. See [reliability/broken-resources](https://docs.squirrelscan.com/rules/reliability/broken-resources). squirrelscan/squirrelscan#703
-- New rule `links/broken-anchors`: a link to `#pricing`, or to `/docs/setup#install` on another crawled page, whose target id is gone still loads, and the reader lands at the top of the page instead of the section. The rule warns once per broken target and fragment, listing every page that links to it, and labels a broken skip link. It matches the way the browser does (percent-decoded, case-sensitive, `id` or `<a name>`), leaves out `#`, `#top`, purely numeric fragments such as `#0`, hash routes and text fragments, and reports a link into an unrendered client-side page as unconfirmed rather than broken. See [links/broken-anchors](https://docs.squirrelscan.com/rules/links/broken-anchors). squirrelscan/squirrelscan#706
-- Two new security rules. `security/security-txt` checks for an RFC 9116 `security.txt` at `/.well-known/security.txt` (and the legacy `/security.txt`): it warns when the file is missing (404 or 410), when the path answers with the site's HTML catch-all page, when `Contact` or `Expires` is missing, when `Expires` is not an RFC 3339 date-time, has passed, or appears twice; a 401, 403, 429 or 5xx is reported as not checked, never as missing. `security/version-disclosure` warns when `Server`, `X-Powered-By`, `X-AspNet-Version`, `X-AspNetMvc-Version` or `X-Generator` names a software version (`Apache/2.4.41`, `PHP/7.4.3`), one finding per value listing every page it was seen on; a product name alone (`Server: nginx`) is fine. See [security/security-txt](https://docs.squirrelscan.com/rules/security/security-txt) and [security/version-disclosure](https://docs.squirrelscan.com/rules/security/version-disclosure). squirrelscan/squirrelscan#713
-- New rule `mobile/web-app-manifest`: the manifest a page links (`<link rel="manifest">`) sets the home-screen icon, name and splash colours, and nothing shows on a desktop browser when it rots. The rule fetches each same-site manifest once, however many pages link it, and its same-origin icons. A manifest that answers 4xx/5xx or is not valid JSON is an error; a wrong content type, a missing `name`, `start_url` or `display`, a missing 192px or 512px PNG icon, a broken icon or one whose real size differs from its declared `sizes`, and a `theme_color` that differs from the pages' `theme-color` are warnings. Redirects off the site, rate limits and WAF challenges are reported as not checked. See [mobile/web-app-manifest](https://docs.squirrelscan.com/rules/mobile/web-app-manifest). squirrelscan/squirrelscan#710
-- New rule `reliability/broken-forms`: a form can look perfect and still lose every submission. A field with no `name` is never sent (warning), a first-party action the crawl found 404 or 410 is an error, and an action on a staging, preview or localhost host, or a `mailto:` action, warns (on a localhost or private-network audit those hosts are the site's own and are not reported; on a preview deployment only localhost and private-IP actions are). An action the crawl did not fetch is probed at most once per endpoint (25 per audit, 10 per site, the site's own first), `HEAD` then `GET`, never `POST`, only at the `active` or `aggressive` probe level, with no cookies or custom headers, no redirects followed, only on public addresses for a third party and only on the site's own hosts for a same-site action; a 404 to that probe warns that the endpoint may accept `POST` only. See [reliability/broken-forms](https://docs.squirrelscan.com/rules/reliability/broken-forms). squirrelscan/squirrelscan#707
-- New rule `content/common-misspellings`: looks every word on English pages (`<html lang="en">`) up in a bundled list of known misspellings, `recieve` for `receive`, and flags doubled function words such as "the the". A misspelling in a title, meta description or heading is a warning, one in body copy is advice; each names the correction, the page count and example pages with context. Code, URLs, emails, ALL CAPS, other languages, British or American variants, and names (a word the page capitalises mid-sentence) are left alone, and `ignore_words` takes your brand spellings. The list of about 520 misspellings is written for squirrelscan and MIT licensed. See [content/common-misspellings](https://docs.squirrelscan.com/rules/content/common-misspellings). squirrelscan/squirrelscan#709
+- New **Reliability** category, in the Performance score group, with its first rule, `reliability/broken-resources`. A page can answer 200 while the script or stylesheet it depends on returns 404 or 500, usually because a deploy deleted the hashed bundle that cached HTML still references.
+  - A first-party script or stylesheet that answers 4xx or 5xx is an error. First-party means the same registrable domain as the site, so `cdn.example.com` counts for `www.example.com`.
+  - A third-party file, a font or a network failure is a warning.
+  - A 429, 430, 503 with `Retry-After` or a WAF challenge is recorded as unverified, never as broken.
+  - One finding per URL lists every page that references it.
+  - A fetch the time budget skipped or a cap dropped is noted as a partial check, and the pass says how many resources it checked.
+  - Third-party files get a status-only check each: `HEAD` first, a `GET` only when the `HEAD` fails or answers 400 or above, and no body read. That is at most 50 per kind per audit, and only while the rule is enabled. These requests carry none of your custom request headers and go through the egress guard (see Security below).
+  - See [reliability/broken-resources](https://docs.squirrelscan.com/rules/reliability/broken-resources).
+- New rule `reliability/broken-forms`: a form can look perfect and still lose every submission.
+  - A field with no `name` is never sent (warning).
+  - A first-party action the crawl found 404 or 410 is an error.
+  - An action on a staging, preview or localhost host, or a `mailto:` action, warns. On a localhost or private-network audit those hosts are the site's own and are not reported; on a preview deployment only localhost and private-IP actions are.
+  - An action the crawl did not fetch is probed only at the `active` or `aggressive` probe level, at most once per endpoint (25 per audit, 10 per site, the site's own first). The probe sends `HEAD`, and a `GET` only when the `HEAD` is refused (405 or 501) or fails, never `POST`. It carries no cookies or custom headers and follows no redirects. A third-party action is probed only when the audit checks external links and only on public addresses; a same-site action only on the site's own hosts.
+  - A 404 to that probe warns that the endpoint may accept `POST` only.
+  - See [reliability/broken-forms](https://docs.squirrelscan.com/rules/reliability/broken-forms).
+- New rule `links/broken-anchors`: a link to `#pricing`, or to `/docs/setup#install` on another crawled page, whose target id is gone still loads, and the reader lands at the top of the page instead of the section.
+  - The rule warns once per broken target and fragment, lists every page that links to it, and labels a broken skip link.
+  - It matches the way the browser does: percent-decoded, case-sensitive, `id` or `<a name>`.
+  - It leaves out `#`, `#top`, purely numeric fragments such as `#0`, hash routes and text fragments.
+  - A link into an unrendered client-side page is recorded as unconfirmed rather than broken.
+  - See [links/broken-anchors](https://docs.squirrelscan.com/rules/links/broken-anchors).
+- Two new security rules.
+  - `security/security-txt` checks for an RFC 9116 `security.txt` at `/.well-known/security.txt`, and the legacy `/security.txt`. It warns when the file is missing (404 or 410), when the path answers with the site's HTML catch-all page, when `Contact` or `Expires` is missing, and when `Expires` is not an RFC 3339 date-time, has passed, or appears twice. A 401, 403, 429 or 5xx is recorded as not checked, never as missing.
+  - `security/version-disclosure` warns when `Server`, `X-Powered-By`, `X-AspNet-Version`, `X-AspNetMvc-Version` or `X-Generator` names a software version (`Apache/2.4.41`, `PHP/7.4.3`), one finding per value listing every page it was seen on. A product name alone (`Server: nginx`) is fine. On pages stored by an earlier version only `Server` is checked; re-run with `--refresh` for the rest.
+  - See [security/security-txt](https://docs.squirrelscan.com/rules/security/security-txt) and [security/version-disclosure](https://docs.squirrelscan.com/rules/security/version-disclosure).
+- New rule `mobile/web-app-manifest`: the manifest a page links (`<link rel="manifest">`) sets the home-screen icon, name and splash colours, and nothing shows on a desktop browser when it rots.
+  - The rule fetches each same-site manifest once, however many pages link it, and its same-origin icons.
+  - A manifest that answers 4xx or 5xx, or is not valid JSON, is an error.
+  - These are warnings: a wrong content type; a missing `name` (and `short_name`), `start_url` or `display`; a missing 192px or 512px PNG icon; a broken icon, or one whose real size differs from its declared `sizes`; a hex `theme_color` that differs from the pages' hex `theme-color`.
+  - Redirects off the site, rate limits and WAF challenges are recorded as not checked.
+  - See [mobile/web-app-manifest](https://docs.squirrelscan.com/rules/mobile/web-app-manifest).
+- New rule `content/common-misspellings`: every word on English pages (`<html lang="en">`) is looked up in a bundled list of known misspellings (`recieve` for `receive`), and doubled function words such as "the the" are flagged.
+  - A misspelling in a title, meta description or heading is a warning. One in body copy, and a doubled word, is info-level advice, which reports do not list yet.
+  - Each finding names the correction, the page count and example pages with context.
+  - Code, URLs, emails, ALL CAPS, other languages, British or American variants, and names (a word the page capitalises mid-sentence) are left alone. `ignore_words` takes your brand spellings.
+  - The list of about 520 misspellings was written for squirrelscan and is MIT licensed.
+  - See [content/common-misspellings](https://docs.squirrelscan.com/rules/content/common-misspellings).
+
+### Security
+
+- The new checks that send requests beyond the crawl go through an egress guard: the third-party status checks of `reliability/broken-resources`, the form action probes of `reliability/broken-forms`, and the manifest and icon fetches of `mobile/web-app-manifest`, which are held to the site's host and its subdomains on every redirect hop.
+  - The guard checks the address before every hop, so a public URL that redirects to a private one is refused before the private hop is sent.
+  - On a public site only public addresses are allowed, except the audited origin itself, which the crawl already requests. A private, loopback, link-local, CGNAT or reserved address, a name that is not public by itself (`localhost`, `*.internal`, a dotless host), and a name that resolves to such an address are all refused.
+  - A site addressed by a private IP or a local name (`localhost:3000`, `192.168.1.10`, `nas.local`) may reach private hosts, never link-local or cloud metadata addresses.
+  - Each guarded request connects to the address that was vetted, so DNS rebinding cannot swap it between the check and the request.
+  - The third-party status checks and the form probes carry no cookies and none of your custom request headers or Web Bot Auth headers. Manifest and icon fetches stay on the site's host and its subdomains and carry your custom request headers, like the other same-site asset checks.
+- Known limit: your custom request headers still go to subdomains of the audited host, not only the audited host itself (auditing `example.com` sends them to `cdn.example.com` too). Limiting them to the audited origin is planned.
+
+### Docs
+
+- The docs and README count 22 categories, and their per-category rule counts add up to 308. The dashboard crawl settings and the MCP pages describe the internal link checks setting and the `internal_links` and `external_links` switches.
 
 ## v0.0.111 (2026-10-13)
 
