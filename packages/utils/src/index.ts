@@ -77,6 +77,7 @@ export {
   emptyNapSignal,
   napAddressKey,
   napPhoneKey,
+  napPhoneToken,
   NAP_BUSINESS_SCHEMA_TYPES,
   NAP_MAX_ADDRESS_CHARS,
   NAP_MAX_PHONES_PER_PAGE,

@@ -144,6 +144,59 @@ export function napPhoneKey(raw: string): string | null {
   return digits.slice(-NAP_PHONE_KEY_DIGITS);
 }
 
+/** A run of the characters a phone number is written with. */
+const NAP_PHONE_RUN = /[0-9+()./\-\s]+/g;
+
+/**
+ * Longest run read as one number. A formatted number is well under this; the
+ * cap keeps the group-dropping loop below constant work per run on a page that
+ * puts a wall of digits in a `tel:` anchor.
+ */
+const NAP_PHONE_TOKEN_MAX_CHARS = 40;
+
+const isSpace = (ch: string): boolean => /\s/.test(ch);
+
+/** Characters that can lead or trail a run without being part of the number. */
+const NAP_PHONE_LEADING_JUNK = new Set([")", ".", "/", "-"]);
+const NAP_PHONE_TRAILING_JUNK = new Set(["(", ".", "/", "-"]);
+
+/** `text` without leading or trailing spaces and stray separators. */
+function trimPhoneEdges(text: string): string {
+  let start = 0;
+  let end = text.length;
+  while (start < end && (isSpace(text[start]!) || NAP_PHONE_LEADING_JUNK.has(text[start]!))) {
+    start++;
+  }
+  while (end > start && (isSpace(text[end - 1]!) || NAP_PHONE_TRAILING_JUNK.has(text[end - 1]!))) {
+    end--;
+  }
+  return text.slice(start, end);
+}
+
+/**
+ * The phone number inside `text` whose comparison key is `key`, exactly as the
+ * text writes it, or null. Only the number's own characters (digits, `+`,
+ * parentheses, `.`, `/`, `-` and spaces) are kept, so the label a button puts
+ * next to the number ("Jetzt anrufen", "Call now") never becomes part of its
+ * format (pub#741). When a run of those characters carries more digits than the
+ * number (`... 980 0 24/7`), its trailing space-separated groups are dropped
+ * until the key matches.
+ */
+export function napPhoneToken(text: string, key: string): string | null {
+  for (const match of text.matchAll(NAP_PHONE_RUN)) {
+    const run = trimPhoneEdges(trimPhoneEdges(match[0]).slice(0, NAP_PHONE_TOKEN_MAX_CHARS));
+    let end = run.length;
+    while (end > 0) {
+      const token = trimPhoneEdges(run.slice(0, end));
+      if (token && napPhoneKey(token) === key) return token;
+      // Drop the last space-separated group and try again.
+      end = token.length;
+      while (end > 0 && !isSpace(run[end - 1]!)) end--;
+    }
+  }
+  return null;
+}
+
 /**
  * Canonical comparison key for a postal address: lowercased, punctuation
  * flattened to single spaces, and street-type/directional abbreviations expanded
@@ -222,13 +275,13 @@ export function extractNapSignal(parsed: ParsedPage | null | undefined): NapSign
       continue;
     }
     signal.telLink = true;
-    // The href payload is the fallback display; the visible anchor text wins
-    // when it spells out the same number, since that is the citable rendering
-    // a directory (or an agent) copies off the page.
+    // The href payload is the fallback display; the number as the anchor text
+    // writes it wins when it spells out the same number, since that is the
+    // citable rendering a directory (or an agent) copies off the page. Only the
+    // number itself, never a "Call now" label beside it (pub#741).
     const payload = decodeTelPayload(link.value);
     const key = napPhoneKey(payload);
-    const text = link.text.trim();
-    addPhone(key, key && napPhoneKey(text) === key ? text : payload);
+    addPhone(key, (key && napPhoneToken(link.text, key)) || payload);
   }
 
   const raw = parsed.schema?.raw;
