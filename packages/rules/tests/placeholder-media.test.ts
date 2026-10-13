@@ -153,6 +153,24 @@ describe("placeholder-media other lazy-loaders and edge sources", () => {
     expect(c!.status).toBe("fail");
   });
 
+  test("a 1x1 src inside a <picture> with a real <source srcset> is not flagged (#742)", () => {
+    const [c] = run(
+      `<picture><source srcset="/img/real.jpg"><img src="${GIF_1X1}" alt="Hero shot of the lobby"></picture>`,
+    );
+    expect(c!.status).toBe("pass");
+  });
+
+  test("a lone 1x1 src with no srcset, <source> or lazy attribute is still flagged (#742)", () => {
+    const [c] = run(`<img src="${GIF_1X1}" alt="Hero shot of the lobby">`);
+    expect(c!.status).toBe("fail");
+    expect(c!.items?.[0]?.label).toBe("blank 1x1 image used as content");
+    // A <picture> whose <source> has no srcset gives the browser nothing else to show.
+    const [d] = run(
+      `<picture><source type="image/webp"><img src="${GIF_1X1}" alt="Hero shot of the lobby"></picture>`,
+    );
+    expect(d!.status).toBe("fail");
+  });
+
   test("a malformed data URI has no dimensions", () => {
     expect(dataUriDimensions("data:image/gif;base64,@@@")).toBeNull();
   });

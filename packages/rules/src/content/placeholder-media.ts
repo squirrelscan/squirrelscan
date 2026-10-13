@@ -142,7 +142,15 @@ export function findInImage(img: Element): PlaceholderMediaFinding[] {
   else bad = isPlaceholderSource(src) ? src : undefined;
   if (bad) {
     found.push({ kind: "placeholder-source", sample: bad });
-  } else if (!lazy && !srcset && !hasUnknownLazyUrl(img) && isOnePixel(src) && !isMarkedDecorative(img)) {
+  } else if (
+    // The same candidates as the placeholder check: a real <picture> <source>
+    // or srcset is what the browser shows, so a 1x1 `src` beside it is a stub (#742).
+    !lazy &&
+    alternates.length === 0 &&
+    !hasUnknownLazyUrl(img) &&
+    isOnePixel(src) &&
+    !isMarkedDecorative(img)
+  ) {
     found.push({ kind: "blank-pixel", sample: "1x1 inline image" });
   }
 

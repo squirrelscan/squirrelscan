@@ -18,7 +18,7 @@ The rule runs on every crawled page over the `<img>` elements outside `<noscript
 Three things are detected:
 
 - **Placeholder source.** `via.placeholder.com`, `placehold.it`, `placehold.co`, `dummyimage.com`, `lorempixel.com`, the random endpoints of `source.unsplash.com`, or the word `placeholder` in the image path or filename.
-- **Blank 1x1 inline image used as content.** A base64 GIF or PNG that is one pixel square, with no real `data-src` or `srcset` behind it. A tracking pixel, a spacer sized to one pixel, an image marked `aria-hidden`, `role="presentation"` or `alt=""` with a one-pixel size, and a lazy-load stub that carries a real `data-src` all stay clean.
+- **Blank 1x1 inline image used as content.** A base64 GIF or PNG that is one pixel square, with no real `data-src`, `srcset` or `<picture>` `<source srcset>` behind it. The responsive candidates are the same ones the placeholder check reads, so a 1x1 `src` in a `<picture>` whose `<source>` names a real image is a stub and is not reported. A tracking pixel, a spacer sized to one pixel, an image marked `aria-hidden`, `role="presentation"` or `alt=""` with a one-pixel size, and a lazy-load stub that carries a real `data-src` all stay clean.
 - **Camera-default alt text.** `DSC_0001`, `IMG_1234`, `DSCN0042` and similar, optionally with a file extension.
 
 A lazy-loaded image is judged on its real source (`data-src`, `data-lazy-src`, `data-original`), not on the stub in `src`. A stub named `placeholder.gif` in front of a real `data-src` is the normal lazy-load pattern and is not reported.
