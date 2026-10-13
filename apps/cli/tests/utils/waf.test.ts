@@ -48,13 +48,25 @@ describe("detectWafFromHeaders", () => {
     expect(result.provider).toBe("akamai");
   });
 
-  it("detects AWS WAF from x-amzn-requestid header", () => {
-    const headers = new Headers({ "x-amzn-requestid": "abc-123-def" });
+  it("detects AWS WAF from the action header it sets on a challenge", () => {
+    const headers = new Headers({ "x-amzn-waf-action": "challenge" });
     const result = detectWafFromHeaders(headers);
 
     expect(result.detected).toBe(true);
     expect(result.provider).toBe("aws-waf");
-    expect(result.confidence).toBe("medium");
+    expect(result.confidence).toBe("high");
+  });
+
+  // #750: API Gateway, Lambda and CloudFront headers say AWS, not AWS WAF.
+  it("does not call AWS infrastructure headers AWS WAF", () => {
+    const headers = new Headers({
+      "x-amzn-requestid": "abc-123-def",
+      "x-amz-apigw-id": "abc=",
+      "x-amz-cf-id": "Jq6RqZ3...",
+      "x-amz-cf-pop": "SYD62-P1",
+      via: "1.1 0123456789abcdef.cloudfront.net (CloudFront)",
+    });
+    expect(detectWafFromHeaders(headers).detected).toBe(false);
   });
 
   it("detects Sucuri from X-Sucuri-ID header", () => {
@@ -255,19 +267,18 @@ describe("detectWaf", () => {
     expect(result.provider).toBe("cloudflare");
   });
 
-  it("checks body if headers have low/medium confidence", () => {
-    const headers = new Headers({ "x-amzn-requestid": "abc" }); // medium confidence
+  it("reads the body when the headers name no provider", () => {
+    const headers = new Headers({ server: "nginx" });
     const body =
       "<html><body>Cloudflare Ray ID: 8d1f2a3b4c5d6e7f</body></html>";
     const result = detectWaf(headers, body);
 
-    // Should prefer cloudflare from body (high confidence) over aws-waf
     expect(result.detected).toBe(true);
     expect(result.provider).toBe("cloudflare");
   });
 
   it("merges indicators from headers and body", () => {
-    const headers = new Headers({ "x-amzn-requestid": "abc" });
+    const headers = new Headers({ "cf-ray": "abc123" });
     const body = "Cloudflare Ray ID: 8d1f2a3b4c5d6e7f";
     const result = detectWaf(headers, body);
 

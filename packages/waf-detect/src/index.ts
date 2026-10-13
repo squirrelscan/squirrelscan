@@ -1,5 +1,12 @@
 export type { WafProvider, WafDetectionResult, WafChallengeResult } from "./types";
-export { detectWaf, detectWafFromHeaders, detectWafFromContent, isLikelyWafBlock } from "./detect";
+export {
+  cookieNamesFromHeaders,
+  detectWaf,
+  detectWafFromContent,
+  detectWafFromCookies,
+  detectWafFromHeaders,
+  isLikelyWafBlock,
+} from "./detect";
 export { detectWafChallengePage } from "./challenge";
 export {
   getWafProviderName,
@@ -8,4 +15,5 @@ export {
   CHALLENGE_MARKUP_PATTERNS,
   CHALLENGE_TEXT_PATTERNS,
   CLOUDFLARE_CHALLENGE_SCRIPT,
+  PROVIDER_PRECEDENCE,
 } from "./providers";

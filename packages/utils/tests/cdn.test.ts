@@ -32,6 +32,14 @@ describe("detectCdnFromHeaders", () => {
     expect(detectCdnFromHeaders({ "x-amz-cf-id": "abc", server: "cloudflare" })).toBe("cloudflare");
   });
 
+  // #750: a DataDome block on Cloudflare is attributed to DataDome, and it
+  // still came through Cloudflare.
+  test("Cloudflare is still the CDN when a bot vendor behind it is the attributed provider", () => {
+    expect(detectCdnFromHeaders({ "cf-cache-status": "DYNAMIC", "x-datadome": "protected" })).toBe(
+      "cloudflare",
+    );
+  });
+
   test("no headers is no CDN", () => {
     expect(detectCdnFromHeaders({})).toBeNull();
   });

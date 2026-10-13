@@ -1,108 +1,146 @@
 import type { WafDetectionResult, WafProvider } from "./types";
-import { HEADER_PATTERNS, CONTENT_PATTERNS } from "./providers";
+import {
+  CONTENT_PATTERNS,
+  COOKIE_PATTERNS,
+  HEADER_PATTERNS,
+  PROVIDER_PRECEDENCE,
+} from "./providers";
+
+type Confidence = WafDetectionResult["confidence"];
 
 const NO_WAF: WafDetectionResult = {
   detected: false,
   provider: null,
   confidence: "low",
   indicators: [],
+  providers: [],
 };
 
-/** Detect WAF from response headers */
-export function detectWafFromHeaders(headers: Headers): WafDetectionResult {
-  const indicators: string[] = [];
-  let detectedProvider: WafProvider | null = null;
-  let confidence: "high" | "medium" | "low" = "low";
+const RANK: Record<Confidence, number> = { low: 0, medium: 1, high: 2 };
 
-  for (const {
-    provider,
-    headers: headerPatterns,
-    confidence: conf,
-  } of HEADER_PATTERNS) {
-    for (const { name, pattern } of headerPatterns) {
-      const value = headers.get(name);
-      if (value !== null) {
-        if (!pattern || pattern.test(value)) {
-          indicators.push(`header:${name}=${value.slice(0, 50)}`);
-          if (!detectedProvider) {
-            detectedProvider = provider;
-            confidence = conf;
-          }
-        }
+/** What one source (headers, cookies, body) said: each provider's best confidence, and why. */
+interface Signals {
+  confidence: Map<WafProvider, Confidence>;
+  indicators: string[];
+}
+
+function emptySignals(): Signals {
+  return { confidence: new Map(), indicators: [] };
+}
+
+function note(signals: Signals, provider: WafProvider, confidence: Confidence, indicator: string): void {
+  signals.indicators.push(indicator);
+  const prior = signals.confidence.get(provider);
+  if (prior === undefined || RANK[confidence] > RANK[prior]) {
+    signals.confidence.set(provider, confidence);
+  }
+}
+
+function merge(...all: Signals[]): Signals {
+  const merged = emptySignals();
+  for (const signals of all) {
+    merged.indicators.push(...signals.indicators);
+    for (const [provider, confidence] of signals.confidence) {
+      const prior = merged.confidence.get(provider);
+      if (prior === undefined || RANK[confidence] > RANK[prior]) {
+        merged.confidence.set(provider, confidence);
       }
     }
   }
+  return merged;
+}
 
-  if (!detectedProvider && indicators.length === 0) {
-    return NO_WAF;
-  }
-
+/** Attribute: the most specific provider with a signal (PROVIDER_PRECEDENCE), with its confidence. */
+function attribute(signals: Signals): WafDetectionResult {
+  if (signals.confidence.size === 0) return NO_WAF;
+  const providers = PROVIDER_PRECEDENCE.filter((provider) => signals.confidence.has(provider));
+  const provider = providers[0] ?? null;
   return {
     detected: true,
-    provider: detectedProvider,
-    confidence,
-    indicators,
+    provider,
+    confidence: provider ? (signals.confidence.get(provider) ?? "low") : "low",
+    indicators: signals.indicators,
+    providers,
   };
 }
 
-/** Detect WAF from response body (challenge/block pages) */
-export function detectWafFromContent(html: string): WafDetectionResult {
-  const indicators: string[] = [];
-  let detectedProvider: WafProvider | null = null;
-  let confidence: "high" | "medium" | "low" = "low";
+/**
+ * The cookie NAMES a response sets, values dropped: `set-cookie` values are
+ * sessions and tokens, and nothing downstream needs them (#750).
+ */
+export function cookieNamesFromHeaders(headers: Headers): string[] {
+  const names: string[] = [];
+  for (const cookie of headers.getSetCookie()) {
+    const name = cookie.slice(0, cookie.indexOf("=") < 0 ? cookie.length : cookie.indexOf("=")).trim();
+    if (name !== "" && !names.includes(name)) names.push(name);
+  }
+  return names;
+}
 
+function headerSignals(headers: Headers): Signals {
+  const signals = emptySignals();
+  for (const { provider, headers: headerPatterns, confidence } of HEADER_PATTERNS) {
+    for (const { name, pattern } of headerPatterns) {
+      const value = headers.get(name);
+      if (value !== null && (!pattern || pattern.test(value))) {
+        note(signals, provider, confidence, `header:${name}=${value.slice(0, 50)}`);
+      }
+    }
+  }
+  return signals;
+}
+
+function cookieSignals(names: readonly string[]): Signals {
+  const signals = emptySignals();
+  for (const { provider, names: patterns, confidence } of COOKIE_PATTERNS) {
+    for (const name of names) {
+      if (patterns.some((pattern) => pattern.test(name))) {
+        note(signals, provider, confidence, `cookie:${name}`);
+      }
+    }
+  }
+  return signals;
+}
+
+function contentSignals(html: string): Signals {
+  const signals = emptySignals();
   // Only check first 10KB to avoid performance issues
   const sample = html.slice(0, 10240);
-
-  for (const { provider, patterns, confidence: conf } of CONTENT_PATTERNS) {
+  for (const { provider, patterns, confidence } of CONTENT_PATTERNS) {
     for (const pattern of patterns) {
       if (pattern.test(sample)) {
-        indicators.push(`content:${pattern.source.slice(0, 30)}`);
-        if (!detectedProvider) {
-          detectedProvider = provider;
-          confidence = conf;
-        }
+        note(signals, provider, confidence, `content:${pattern.source.slice(0, 30)}`);
         break; // One match per provider is enough
       }
     }
   }
-
-  if (!detectedProvider && indicators.length === 0) {
-    return NO_WAF;
-  }
-
-  return {
-    detected: true,
-    provider: detectedProvider,
-    confidence,
-    indicators,
-  };
+  return signals;
 }
 
-/** Combined WAF detection from headers and optional body */
+/** Detect WAF from response headers, including the cookie names they set. */
+export function detectWafFromHeaders(headers: Headers): WafDetectionResult {
+  return attribute(merge(headerSignals(headers), cookieSignals(cookieNamesFromHeaders(headers))));
+}
+
+/** Detect WAF from cookie names alone (a stored response that kept names, not values). */
+export function detectWafFromCookies(names: readonly string[]): WafDetectionResult {
+  return attribute(cookieSignals(names));
+}
+
+/** Detect WAF from response body (challenge/block pages) */
+export function detectWafFromContent(html: string): WafDetectionResult {
+  return attribute(contentSignals(html));
+}
+
+/**
+ * Combined WAF detection from headers, the cookies they set, and an optional
+ * body. Every source is read and the most specific provider wins, so a
+ * DataDome block served through Cloudflare (`cf-ray` plus DataDome's cookie,
+ * header or markup) is attributed to DataDome, not Cloudflare (#750).
+ */
 export function detectWaf(headers: Headers, body?: string): WafDetectionResult {
-  const headerResult = detectWafFromHeaders(headers);
-
-  if (headerResult.detected && headerResult.confidence === "high") {
-    return headerResult;
-  }
-
-  if (body) {
-    const contentResult = detectWafFromContent(body);
-
-    if (contentResult.detected) {
-      if (!headerResult.detected || contentResult.confidence === "high") {
-        return {
-          detected: true,
-          provider: contentResult.provider ?? headerResult.provider,
-          confidence: contentResult.confidence,
-          indicators: [...headerResult.indicators, ...contentResult.indicators],
-        };
-      }
-    }
-  }
-
-  return headerResult;
+  const fromHeaders = merge(headerSignals(headers), cookieSignals(cookieNamesFromHeaders(headers)));
+  return attribute(body ? merge(fromHeaders, contentSignals(body)) : fromHeaders);
 }
 
 /**

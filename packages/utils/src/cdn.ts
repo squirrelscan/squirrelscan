@@ -24,5 +24,7 @@ export function detectCdnFromHeaders(
   headers: Headers | Readonly<Record<string, string>>,
 ): CdnProvider | null {
   const h = headers instanceof Headers ? headers : recordToHeaders(headers);
-  return detectWafFromHeaders(h).provider === "cloudflare" ? "cloudflare" : null;
+  // `providers`, not `provider`: a DataDome block served by Cloudflare is
+  // attributed to DataDome, and it still came through Cloudflare.
+  return detectWafFromHeaders(h).providers.includes("cloudflare") ? "cloudflare" : null;
 }
