@@ -71,7 +71,8 @@ function attribute(signals: Signals): WafDetectionResult {
 export function cookieNamesFromHeaders(headers: Headers): string[] {
   const names: string[] = [];
   for (const cookie of headers.getSetCookie()) {
-    const name = cookie.slice(0, cookie.indexOf("=") < 0 ? cookie.length : cookie.indexOf("=")).trim();
+    const end = cookie.indexOf("=");
+    const name = (end < 0 ? cookie : cookie.slice(0, end)).trim();
     if (name !== "" && !names.includes(name)) names.push(name);
   }
   return names;
@@ -146,6 +147,10 @@ export function detectWaf(headers: Headers, body?: string): WafDetectionResult {
 /**
  * Quick check if a 403 response is likely WAF-blocked.
  * Use for external link checking to distinguish "truly forbidden" from "bot blocked".
+ *
+ * Headers and body only, never cookies: a bot product sets its cookies on
+ * every response of a site it protects, so a genuine "forbidden" 403 there
+ * carries them too (#750).
  */
 export function isLikelyWafBlock(
   status: number,
@@ -155,6 +160,6 @@ export function isLikelyWafBlock(
   if (status !== 403) {
     return false;
   }
-  const result = detectWaf(headers, body);
-  return result.detected;
+  const signals = body ? merge(headerSignals(headers), contentSignals(body)) : headerSignals(headers);
+  return attribute(signals).detected;
 }

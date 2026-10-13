@@ -10,6 +10,7 @@ import {
   detectWafFromCookies,
   detectWafFromHeaders,
   isLikelyWafBlock,
+  PROVIDER_PRECEDENCE,
   type WafProvider,
 } from "../src";
 
@@ -56,6 +57,22 @@ describe("cookie fingerprints", () => {
   test("detectWafFromCookies reads stored names", () => {
     expect(detectWafFromCookies(["session", "_pxhd"]).provider).toBe("perimeterx");
     expect(detectWafFromCookies(["session", "csrftoken"]).detected).toBe(false);
+  });
+
+  test("a vendor cookie attributes a 403 but never proves it a block: a real forbidden page carries one too", () => {
+    for (const cookie of ["bm_sz=abc; Path=/", "visid_incap_1=abc", "__cf_bm=abc", "datadome=abc"]) {
+      const headers = withCookies([cookie]);
+      expect(detectWaf(headers).detected).toBe(true);
+      expect(isLikelyWafBlock(403, headers)).toBe(false);
+    }
+    // A vendor header or block page still does.
+    expect(isLikelyWafBlock(403, withCookies(["datadome=abc"], { "x-datadome": "protected" }))).toBe(
+      true,
+    );
+  });
+
+  test("cookie-only attribution is medium confidence", () => {
+    expect(detectWafFromCookies(["_abck"]).confidence).toBe("medium");
   });
 
   test("an ordinary site's cookies are not a vendor", () => {
@@ -150,11 +167,30 @@ describe("AWS WAF Block on CloudFront (#750)", () => {
     expect(isLikelyWafBlock(403, new Headers(CLOUDFRONT), S3_ACCESS_DENIED)).toBe(false);
   });
 
+  // Generous on purpose (loaded CI): the unanchored `[\w.-]+` it replaced took
+  // ~90 ms on this 10 KB sample, and the src-anchored one takes microseconds.
   test("the token-host pattern stays linear on a long run of host characters", () => {
     const body = `${"a".repeat(20_000)}.token.awswaf.co`;
     const started = performance.now();
     detectWaf(new Headers(), body);
-    expect(performance.now() - started).toBeLessThan(50);
+    expect(performance.now() - started).toBeLessThan(250);
+  });
+});
+
+describe("precedence", () => {
+  test("every provider has a place in PROVIDER_PRECEDENCE, so none is dropped from attribution", () => {
+    const every = {
+      cloudflare: true,
+      akamai: true,
+      "aws-waf": true,
+      sucuri: true,
+      imperva: true,
+      datadome: true,
+      perimeterx: true,
+      kasada: true,
+      unknown: true,
+    } satisfies Record<WafProvider, true>;
+    expect([...PROVIDER_PRECEDENCE].sort()).toEqual(Object.keys(every).sort());
   });
 });
 

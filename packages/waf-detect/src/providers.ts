@@ -65,8 +65,10 @@ export const HEADER_PATTERNS: {
 /**
  * Cookie NAMES each provider sets (`set-cookie`), read without the value: the
  * value is a session or a token, and nothing here needs it (#750). A vendor's
- * cookie names it as surely as its headers do, and a block page often carries
- * the cookie and no vendor header at all.
+ * cookie names it as surely as its headers do, so cookies ATTRIBUTE a
+ * response. They never prove a block: these products set them on every
+ * response of a site they protect, a real 403 included, so `isLikelyWafBlock`
+ * ignores them. Medium confidence for the same reason.
  */
 export const COOKIE_PATTERNS: {
   provider: WafProvider;
@@ -76,20 +78,20 @@ export const COOKIE_PATTERNS: {
   {
     provider: "cloudflare",
     names: [/^__cf_bm$/, /^cf_clearance$/, /^__cflb$/, /^_cfuvid$/],
-    confidence: "high",
+    confidence: "medium",
   },
-  { provider: "datadome", names: [/^datadome$/i], confidence: "high" },
+  { provider: "datadome", names: [/^datadome$/i], confidence: "medium" },
   // `_px3`, `_pxvid`, `_pxhd`, `_px2`, `_pxde`: the `_px` prefix is HUMAN's.
-  { provider: "perimeterx", names: [/^_px(?:\d|vid|hd|de|ff_)/], confidence: "high" },
-  { provider: "kasada", names: [/^KP_UIDz(?:-ssn)?$/], confidence: "high" },
+  { provider: "perimeterx", names: [/^_px(?:\d|vid|hd|de|ff_)/], confidence: "medium" },
+  { provider: "kasada", names: [/^KP_UIDz(?:-ssn)?$/], confidence: "medium" },
   // Bot Manager's sensor and session cookies, not Akamai's CDN.
-  { provider: "akamai", names: [/^_abck$/, /^ak_bmsc$/, /^bm_sz$/, /^bm_sv$/], confidence: "high" },
+  { provider: "akamai", names: [/^_abck$/, /^ak_bmsc$/, /^bm_sz$/, /^bm_sv$/], confidence: "medium" },
   {
     provider: "imperva",
     names: [/^incap_ses_/, /^visid_incap_/, /^nlbi_/, /^reese84$/],
-    confidence: "high",
+    confidence: "medium",
   },
-  { provider: "aws-waf", names: [/^aws-waf-token$/], confidence: "high" },
+  { provider: "aws-waf", names: [/^aws-waf-token$/], confidence: "medium" },
 ];
 
 /**
@@ -210,8 +212,13 @@ export const CONTENT_PATTERNS: {
   },
   {
     provider: "aws-waf",
-    // The challenge script AWS WAF injects, loaded from its token host.
-    patterns: [/\.token\.awswaf\.com\b/i, /\bAwsWafIntegration\b/],
+    // The challenge script AWS WAF injects, loaded from its token host. Matched
+    // where a script loads it (`src=`), like DataDome's captcha host, so the
+    // scan starts only at a src attribute and stays linear.
+    patterns: [
+      /src\s*=\s*["']?(?:https?:)?\/\/[\w.-]*\.token\.awswaf\.com\//i,
+      /\bAwsWafIntegration\b/,
+    ],
     confidence: "high",
   },
   {
