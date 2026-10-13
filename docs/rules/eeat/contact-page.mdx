@@ -14,10 +14,14 @@ More than one method matters because they fail differently. A form is easy to bu
 The rule is site-wide. It finds the contact page by a URL path matching one of the multilingual contact patterns, or by a page whose structured data declares the `ContactPage` type. It emits up to two checks:
 
 - Skipped when no pages were crawled. Message: `No pages available for analysis`.
-- `contact-page` warns when none is found. Message: `No Contact page found`, with `Create /contact page` as the value. No further checks run. Severity warning, weight 5.
-- `contact-page` passes when one is found. Message: `Contact page exists`, with the URL as the value.
+- `contact-page` passes when a crawled page is the contact page. Message: `Contact page exists`, with the URL as the value.
+- `contact-page` reports info when no crawled page is the contact page but a crawled page links to one the crawl did not fetch. Message: `Contact page linked but not crawled`, with the link target as the value and the linking page in the details. No further checks run, because the page was never read.
+- `contact-page` warns instead when the internal link probe requested that uncrawled target and got a 4xx or 5xx. Message: `Contact page link returns N`, where `N` is the status. A 401, a 403 or a rate limit is not read as broken and stays info.
+- `contact-page` warns when there is neither a crawled contact page nor a link to one. Message: `No Contact page found`, with `Create /contact page` as the value. No further checks run. Severity warning, weight 5.
 - `contact-methods` passes when the page carries both a `mailto:` and a `tel:` link. Message: `Contact page has multiple contact methods`, listing them.
 - `contact-methods` reports info when it carries exactly one. Message: `Contact page has limited contact methods`, with `Consider adding email, phone, and address` as the value.
+
+A crawl that excludes the contact page's path, or reaches its page limit first, never fetches it. A link whose href matches one of the contact patterns is evidence the page exists, not proof that it works, so the rule says it is linked but not crawled instead of advising you to create one. Anchor text alone does not count, and no extra requests are made: the only status the rule can report is one the internal link probe already recorded. To have the page and its contact methods checked, let the crawl fetch it.
 
 Only `mailto:` and `tel:` links count as methods. A contact form is not detected, so a page with a form and no direct address emits no methods check at all. The `ContactPoint` schema type is deliberately not used as a fallback, because it is usually an Organization property present on every page rather than a marker of this page.
 

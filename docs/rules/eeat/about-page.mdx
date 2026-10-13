@@ -15,10 +15,14 @@ The rule is site-wide. It looks for an About page in two ways: a URL path matchi
 
 - Skipped when no pages were crawled. Message: `No pages available for analysis`.
 - Pass when the page is found and has 200 words or more. Message: `About page exists with substantial content`, with the URL as the value. Severity warning, weight 5.
-- Info when it is found with fewer than 200 words. Message: `About page exists but has limited content`, with `84 words - consider expanding` as the value.
-- Warn when no About page was found. Message: `No About page found`, with `Create /about or /about-us page` as the value.
+- Info when it is found with fewer than 200 words. Message: `About page exists but has limited content`, with `N words - consider expanding` as the value.
+- Info when no crawled page is the About page but a crawled page links to one the crawl did not fetch. Message: `About page linked but not crawled`, with the link target as the value and the linking page in the details.
+- Warn instead when the internal link probe requested that uncrawled target and got a 4xx or 5xx. Message: `About page link returns N`, where `N` is the status. A 401, a 403 or a rate limit is not read as broken and stays info.
+- Warn when there is neither a crawled About page nor a link to one. Message: `No About page found`, with `Create /about or /about-us page` as the value.
 
 The schema fallback exists so a localised path the URL patterns do not recognise is still found.
+
+A crawl that excludes the About page's path, or reaches its page limit first, never fetches it. A link whose href matches one of the about patterns is evidence the page exists, not proof that it works, so the rule says it is linked but not crawled instead of advising you to create one. Anchor text alone does not count. No extra requests are made: the only status the rule can report is one the internal link probe already recorded, and the probe never requests a path the crawl scope or robots.txt excludes. To have the page checked, let the crawl fetch it. [eeat/privacy-policy](/rules/eeat/privacy-policy) and [eeat/contact-page](/rules/eeat/contact-page) treat their pages the same way.
 
 ## How to fix it
 

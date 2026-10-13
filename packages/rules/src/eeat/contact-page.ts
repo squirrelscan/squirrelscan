@@ -5,13 +5,18 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
 import { getPathname } from "@squirrelscan/utils";
 
+import { findLinkedUncrawledPage, linkedUncrawledCheck } from "../shared/linked-uncrawled-page";
+
+const isContactPath = (url: string): boolean =>
+  EEAT_PAGE_PATTERNS.contact.some((p) => p.test(getPathname(url)));
+
 export const contactPageRule: Rule = {
   meta: {
     id: "eeat/contact-page",
     name: "Contact Page",
     description: "Checks for contact page with multiple contact methods",
     solution:
-      "A contact page with multiple contact methods builds trust. Include: email address or contact form, phone number (if applicable), physical address, and social media links. Make contact information easy to find from any page. For local businesses, include business hours. Response time expectations are also helpful.",
+      "A contact page with multiple contact methods builds trust. Include: email address or contact form, phone number (if applicable), physical address, and social media links. Make contact information easy to find from any page. For local businesses, include business hours. Response time expectations are also helpful. A Contact page your pages link to but the crawl did not fetch (an excluded path, or past the page limit) is reported as linked but not crawled rather than missing, and its contact methods are not checked.",
     category: "eeat",
     scope: "site",
     severity: "warning",
@@ -39,16 +44,13 @@ export const contactPageRule: Rule = {
     // is a property value embedded in Organization schema (often via @graph)
     // that appears on the homepage / every page, so it is not a reliable
     // signal that THIS page is the contact page.
-    const contactPatterns = EEAT_PAGE_PATTERNS.contact;
-
     let contactPage: {
       url: string;
       links: (typeof pages)[0]["parsed"]["links"];
     } | null = null;
 
     for (const page of pages) {
-      const path = getPathname(page.url);
-      const matchesUrl = contactPatterns.some((p) => p.test(path));
+      const matchesUrl = isContactPath(page.url);
       const matchesSchema = page.parsed.schemas.hasType("ContactPage");
       if (matchesUrl || matchesSchema) {
         contactPage = { url: page.url, links: page.parsed.links };
@@ -57,12 +59,19 @@ export const contactPageRule: Rule = {
     }
 
     if (!contactPage) {
-      checks.push({
-        name: "contact-page",
-        status: "warn",
-        message: "No Contact page found",
-        value: "Create /contact page",
-      });
+      // pub#740: a Contact page the pages link to but the crawl never fetched
+      // is unverified, not missing. Its contact methods cannot be read.
+      const linked = ctx.site ? findLinkedUncrawledPage(ctx.site, { href: isContactPath }) : null;
+      checks.push(
+        linked
+          ? linkedUncrawledCheck("contact-page", "Contact page", linked)
+          : {
+              name: "contact-page",
+              status: "warn",
+              message: "No Contact page found",
+              value: "Create /contact page",
+            },
+      );
       return { checks };
     }
 
