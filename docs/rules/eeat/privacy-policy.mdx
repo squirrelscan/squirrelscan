@@ -14,13 +14,21 @@ Being reachable is part of the requirement. The convention is a footer link on e
 The rule is site-wide. It finds the privacy page by a known multilingual slug, or by a crawled page whose title or `h1` reads as a privacy policy, which catches unusual slugs and redirects. There is no standard schema type for a privacy page, so there is no schema fallback. It emits up to two checks:
 
 - Skipped when no pages were crawled. Message: `No pages available for analysis`.
-- `privacy-policy` warns when no page is found. Message: `No Privacy Policy page found`, with `Create /privacy-policy page` as the value. No further checks run. Severity warning, weight 5.
-- `privacy-policy` passes when one is found. Message: `Privacy Policy page exists`, with the URL as the value.
-- `privacy-linked` passes when the coverage percentage, rounded to a whole number, is 80 or above. Message: `Privacy policy linked from 94% of pages`.
-- `privacy-linked` reports info from 50. Message: `Privacy policy linked from 62% of pages`, with `Consider adding to all page footers` as the value.
-- `privacy-linked` warns below 50%. Message: `Privacy policy only linked from 12% of pages`, with `Add privacy link to footer on all pages` as the value.
+- `privacy-policy` passes when a crawled page is the policy. Message: `Privacy Policy page exists`, with the URL as the value.
+- `privacy-policy` reports info when no crawled page is the policy but a crawled page links to one the crawl did not fetch. Message: `Privacy Policy linked but not crawled`, with the link target as the value and the linking page in the details.
+- `privacy-policy` warns instead when the internal link probe requested that uncrawled target and got a 4xx or 5xx. Message: `Privacy Policy link returns N`, where `N` is the status. A 401, a 403 or a rate limit is not read as broken and stays info.
+- `privacy-policy` warns when there is neither a crawled policy nor a link to one. Message: `No Privacy Policy page found`, with `Create /privacy-policy page` as the value. No further checks run. Severity warning, weight 5.
+- `privacy-linked` passes when the coverage percentage, rounded to a whole number, is 80 or above. Message: `Privacy policy linked from N% of pages`.
+- `privacy-linked` reports info from 50. Message: `Privacy policy linked from N% of pages`, with `Consider adding to all page footers` as the value.
+- `privacy-linked` warns below 50%. Message: `Privacy policy only linked from N% of pages`, with `Add privacy link to footer on all pages` as the value.
 
 Coverage is measured by matching the link href against the known privacy slugs, not by anchor text. `legal/privacy-policy` is the rule that also reads anchor text.
+
+### Excluded and uncrawled policies
+
+A crawl that excludes the policy's path, such as `exclude = ["/policies/**"]` on a Shopify storefront, or that reaches its page limit first, never fetches the policy. A link is evidence the page exists, not proof that it works, so the rule says the policy is linked but not crawled instead of advising you to create one. It finds that link the same way `legal/privacy-policy` does: a link whose href matches a privacy slug anywhere on the site wins, then a link whose anchor text names a privacy policy. A target recognised only by its anchor text gets no `privacy-linked` check, because coverage counts slug links. A linked page the crawl did fetch was checked, and the rule judges it by its slug, title and `h1` as above.
+
+No extra requests are made for this. The only status the rule can report is one the internal link probe already recorded, and the probe never requests a path the crawl scope or robots.txt excludes. To have the policy checked, let the crawl fetch it.
 
 ## How to fix it
 

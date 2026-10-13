@@ -32,6 +32,13 @@ function isPrivacyHeading(text: string): boolean {
 // Anchor-text tokens that identify a link as pointing at a privacy policy.
 const PRIVACY_LINK_TEXT = ["privacy", "datenschutz", "privacidad"];
 
+// Does this anchor text name a privacy policy? The legal rule's historical,
+// deliberately loose test ("Manage Privacy Preferences" also passes it).
+export function isPrivacyLinkText(text: string): boolean {
+  const lower = text.toLowerCase();
+  return PRIVACY_LINK_TEXT.some((t) => lower.includes(t));
+}
+
 // Minimal page shape the helpers read — matches both SiteData.pages entries and
 // ad-hoc test fixtures.
 export interface PrivacyCandidatePage {
@@ -98,8 +105,7 @@ export function privacyLinkHref(page: PrivacyCandidatePage): string | null {
     if (resolved && isPrivacyPath(resolved)) return resolved;
   }
   for (const l of links) {
-    const text = (l.text || "").toLowerCase();
-    if (PRIVACY_LINK_TEXT.some((t) => text.includes(t))) {
+    if (isPrivacyLinkText(l.text || "")) {
       return resolveUrl(l.url, page.url) ?? l.url;
     }
   }

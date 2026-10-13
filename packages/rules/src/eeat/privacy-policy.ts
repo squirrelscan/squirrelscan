@@ -2,7 +2,13 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import { findPrivacyPage, pageLinksToPrivacyHref } from "../shared/privacy-page";
+import { findLinkedUncrawledPage, linkedUncrawledCheck } from "../shared/linked-uncrawled-page";
+import {
+  findPrivacyPage,
+  isPrivacyLinkText,
+  isPrivacyPath,
+  pageLinksToPrivacyHref,
+} from "../shared/privacy-page";
 
 export const privacyPolicyRule: Rule = {
   meta: {
@@ -10,7 +16,7 @@ export const privacyPolicyRule: Rule = {
     name: "Privacy Policy",
     description: "Checks for privacy policy page linked from footer",
     solution:
-      "A privacy policy is required by law in many jurisdictions (GDPR, CCPA) and signals trustworthiness. Link it from your footer on every page. Cover: what data you collect, how you use it, third-party sharing, user rights, and contact for privacy concerns. Keep it updated when practices change.",
+      "A privacy policy is required by law in many jurisdictions (GDPR, CCPA) and signals trustworthiness. Link it from your footer on every page. Cover: what data you collect, how you use it, third-party sharing, user rights, and contact for privacy concerns. Keep it updated when practices change. A policy your pages link to but the crawl did not fetch (an excluded path, or past the page limit) is reported as linked but not crawled rather than missing; crawl it to have it checked.",
     category: "eeat",
     scope: "site",
     severity: "warning",
@@ -37,22 +43,34 @@ export const privacyPolicyRule: Rule = {
     let linkedFromPages = 0;
     const privacyPage = findPrivacyPage(pages);
 
-    if (!privacyPage) {
+    if (privacyPage) {
       checks.push({
         name: "privacy-policy",
-        status: "warn",
-        message: "No Privacy Policy page found",
-        value: "Create /privacy-policy page",
+        status: "pass",
+        message: "Privacy Policy page exists",
+        value: privacyPage,
       });
-      return { checks };
+    } else {
+      // pub#672: a policy the pages link to but the crawl never fetched (an
+      // excluded `/policies/**`, or past the page budget) is unverified, not
+      // missing. Same link acceptance as legal/privacy-policy: slug, then text.
+      const linked = ctx.site
+        ? findLinkedUncrawledPage(ctx.site, { href: isPrivacyPath, text: isPrivacyLinkText })
+        : null;
+      if (!linked) {
+        checks.push({
+          name: "privacy-policy",
+          status: "warn",
+          message: "No Privacy Policy page found",
+          value: "Create /privacy-policy page",
+        });
+        return { checks };
+      }
+      checks.push(linkedUncrawledCheck("privacy-policy", "Privacy Policy", linked));
+      // Coverage below counts href-slug links only, so it cannot measure a
+      // policy recognised by its anchor text alone.
+      if (linked.matchedBy === "text") return { checks };
     }
-
-    checks.push({
-      name: "privacy-policy",
-      status: "pass",
-      message: "Privacy Policy page exists",
-      value: privacyPage,
-    });
 
     // Check how many pages link to it (href-slug only — the original metric, not
     // widened by anchor-text matching which belongs to the legal rule).

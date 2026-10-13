@@ -21,6 +21,10 @@ How it works:
 
 - The first-run credit notice and `squirrel credits` now name the one charge on the CLI's own link checks. At the surface and full levels, a signed-in audit sends its external links to the cloud's dead-link check, and a link a web application firewall blocks is re-checked in a cloud browser at 2 credits per link (at most 10 per 200 links checked; a link already rendered in the run is not charged again). The docs said the CLI's checks were never charged. See [Credits and pricing](https://docs.squirrelscan.com/cloud/credits#pricing). squirrelscan/repo#2757
 
+### Fixed
+
+- `eeat/privacy-policy` no longer tells you to create a privacy policy your pages already link to. When the crawl did not fetch the policy, because its path is excluded (`/policies/**` on a Shopify storefront) or the page limit came first, the rule now reports `Privacy Policy linked but not crawled` as info. It warns `Privacy Policy link returns N` when the internal link probe saw that link answer 4xx or 5xx, and it still warns `No Privacy Policy page found` when nothing links to a policy. No extra requests are made. See [eeat/privacy-policy](https://docs.squirrelscan.com/rules/eeat/privacy-policy). #672
+
 ## v0.0.112 (2026-10-13)
 
 Seven new rules, and a new category to hold two of them. squirrelscan now ships 308 rules across 22 categories. The new **Reliability** category catches the things that look fine until a visitor needs them: a deleted script bundle behind a page that still answers 200, or a form that quietly loses every submission. Also new: broken in-page anchors, `security.txt` and version-leaking headers, the web app manifest, and a misspelling check with its own MIT-licensed word list. The new checks that request other hosts go through a new egress guard, so a page cannot point squirrel at your own network.
