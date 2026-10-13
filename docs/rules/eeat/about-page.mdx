@@ -22,7 +22,7 @@ The rule is site-wide. It looks for an About page in two ways: a URL path matchi
 
 The schema fallback exists so a localised path the URL patterns do not recognise is still found.
 
-A crawl that excludes the About page's path, or reaches its page limit first, never fetches it. A link whose href matches one of the about patterns is evidence the page exists, not proof that it works, so the rule says it is linked but not crawled instead of advising you to create one. Anchor text alone does not count. No extra requests are made: the only status the rule can report is one the internal link probe already recorded, and the probe never requests a path the crawl scope or robots.txt excludes. To have the page checked, let the crawl fetch it. [eeat/privacy-policy](/rules/eeat/privacy-policy) and [eeat/contact-page](/rules/eeat/contact-page) treat their pages the same way.
+A crawl that excludes the About page's path, or reaches its page limit first, never fetches it. A link to the same host whose href matches one of the about patterns is evidence the page exists, not proof that it works, so the rule says it is linked but not crawled instead of advising you to create one. Anchor text alone does not count. No extra requests are made: the only status the rule can report is one the internal link probe already recorded, and the probe never requests a path the crawl scope or robots.txt excludes. To have the page checked, let the crawl fetch it. [eeat/privacy-policy](/rules/eeat/privacy-policy) and [eeat/contact-page](/rules/eeat/contact-page) treat their pages the same way.
 
 ## How to fix it
 

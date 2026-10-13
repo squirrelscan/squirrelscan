@@ -23,11 +23,12 @@ function html(title: string, body: string): string {
 }
 
 function siteCtx(
-  pagesHtml: { url: string; html: string }[],
+  pagesHtml: { url: string; html: string; finalUrl?: string }[],
   linkTargetStatuses?: SitemapUrlStatusData[],
 ): RuleContext {
   const pages: SiteData["pages"] = pagesHtml.map((p) => ({
     url: p.url,
+    ...(p.finalUrl ? { finalUrl: p.finalUrl } : {}),
     statusCode: 200,
     parsed: parsePage(p.html, p.url),
   }));
@@ -130,6 +131,25 @@ for (const c of cases) {
         siteCtx([home(link)], [{ url: target, status: 403, error: null }]),
       );
       expect(checks[0]?.status).toBe("info");
+    });
+
+    test("a link to another site's page at a matching slug is not this site's page", () => {
+      // e.g. a footer link to a social profile's /about or a partner's /contact.
+      const checks = run(
+        c.rule,
+        siteCtx([home(`<a href="https://social.example${c.path}">${c.linkText}</a>`)]),
+      );
+      expect(checks[0]).toMatchObject({ status: "warn", ...c.missing });
+    });
+
+    test("a target the crawl reached through a redirect counts as crawled", () => {
+      const checks = run(
+        c.rule,
+        siteCtx([home(link), { url: `${ORIGIN}/old`, finalUrl: target, html: html("Moved", "") }]),
+      );
+      // The crawl fetched it, so the rule's own page test judges it; it is never
+      // reported as linked but not crawled.
+      expect(checks[0]?.message).not.toContain("not crawled");
     });
 
     test("anchor text alone is not enough: the href must match a known slug", () => {

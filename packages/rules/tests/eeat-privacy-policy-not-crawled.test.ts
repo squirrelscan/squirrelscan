@@ -188,6 +188,22 @@ describe("eeat/privacy-policy: which links count", () => {
     expect(check(checks, "privacy-policy")?.message).toBe("No Privacy Policy page found");
   });
 
+  test("another site's privacy page is not this site's policy", () => {
+    // reCAPTCHA's notice links Google's policy; a social footer links its own.
+    const checks = run(
+      siteCtx([
+        home(
+          '<a href="https://policies.google.com/privacy">Privacy Policy</a><a href="https://social.example/privacy">Privacy</a>',
+        ),
+      ]),
+    );
+    expect(check(checks, "privacy-policy")).toMatchObject({
+      status: "warn",
+      message: "No Privacy Policy page found",
+      value: "Create /privacy-policy page",
+    });
+  });
+
   test("mailto: and javascript: links are never a policy page", () => {
     const checks = run(
       siteCtx([

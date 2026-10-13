@@ -38,19 +38,28 @@ export interface LinkedUncrawledPage {
   broken: boolean;
 }
 
-/** Only web links can be pages; `mailto:`, `tel:` and `javascript:` cannot. */
-function webUrl(href: string, base: string): string | null {
+/**
+ * The link's absolute URL when it points at another page of the same site, or
+ * null. Only web links can be pages (`mailto:`, `tel:` and `javascript:` cannot),
+ * and only same-host ones are this site's page: a footer link to
+ * `linkedin.com/company/acme/about` or reCAPTCHA's `policies.google.com/privacy`
+ * matches the slug patterns but is someone else's page, and must not stand in
+ * for a missing one (pub#745 review). Same host is the parser's own test for an
+ * internal link.
+ */
+function sameSiteUrl(href: string, pageUrl: string): string | null {
   try {
-    const url = new URL(href, base);
-    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : null;
+    const url = new URL(href, pageUrl);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    return url.hostname === new URL(pageUrl).hostname ? url.toString() : null;
   } catch {
     return null;
   }
 }
 
 /**
- * The first link on a crawled page that `matcher` recognises and whose target
- * the crawl did not fetch, or null. A target recognised by its href anywhere on
+ * The first same-site link on a crawled page that `matcher` recognises and whose
+ * target the crawl did not fetch, or null. A target recognised by its href anywhere on
  * the site wins over one recognised only by anchor text, so a cookie banner's
  * "Privacy settings" link earlier in the DOM never beats the real policy link.
  * A target the crawl DID fetch is skipped: that page was checked, and the rule's
@@ -71,7 +80,7 @@ export function findLinkedUncrawledPage(
   ): { url: string; linkedFrom: string } | null => {
     for (const page of site.pages) {
       for (const link of page.parsed?.links ?? []) {
-        const resolved = webUrl(link.url, page.url);
+        const resolved = sameSiteUrl(link.url, page.url);
         if (!resolved || crawled.has(normalizeUrl(resolved))) continue;
         if (accepts(link, resolved)) return { url: resolved, linkedFrom: page.url };
       }
