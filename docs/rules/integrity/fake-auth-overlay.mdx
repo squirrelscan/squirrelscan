@@ -13,7 +13,7 @@ The geometry is what gives it away: `position: fixed`, a very high `z-index`, wi
 
 The rule runs on every crawled page and emits at most one check named `fake-auth-overlay`. It examines every `<iframe>` with an inline `style` attribute and requires all four geometry conditions: `position` is `fixed` or `absolute`; `z-index` is at least 1000; width contains `100%` or `100vw` and height contains `100%` or `100vh`; and `top` or `left` is `0` or `0px`.
 
-A frame with that geometry fires only when it also carries auth intent. That means either its `id` or `class` matches `auth`, `login`, `signin`, `sign-in`, `oauth`, `verify` or `credential`, or its `src` matches the same list without `credential`, or it loads from a host that is not the site's own while the page separately shows auth copy or a password field.
+A frame with that geometry fires only when it also carries auth intent. That means either its `id` or `class` matches `auth`, `login`, `signin`, `sign-in`, `oauth`, `verify` or `credential`, or its `src` matches the same list without `credential`, or it loads from a host that is not the site's own while the page separately shows auth copy or a password field. The auth copy is read with a space at every element boundary as well as without, so whitespace between elements cannot decide whether it is seen.
 
 - Info when this is the only integrity signal on the page. Message: `Suspicious authentication overlay (single signal — review)`.
 - Fail when at least two distinct integrity signals fire on the page. Message: `Likely credential-harvesting overlay (3 corroborating integrity signals)`.

@@ -17,6 +17,7 @@ import { getDomain } from "tldts";
 
 import { getAttrCI } from "@squirrelscan/utils";
 
+import { getPageSeparatedText } from "../content/text-content";
 import type { RuleContext } from "../types";
 
 /** Distinct page-level compromise signals (one per page-scope rule). */
@@ -44,6 +45,23 @@ export interface PageSignalContext {
  * corroborating page signals. Below it, rules emit `info` only.
  */
 export const CORRELATION_THRESHOLD = 2;
+
+/**
+ * The lowercased title and page copy the auth and brand cues are read from.
+ * `content.textContent` glues adjacent elements, so `<h1>Welcome</h1><a>Sign
+ * in with Google</a>` reads `welcomesign in with google` and the word-bounded
+ * `sign in` test misses it (pub#696). The element-separated text is read too,
+ * so whitespace between elements cannot decide whether a cue is seen. Every
+ * test on this haystack asks whether a cue appears, so the extra text can only
+ * find a cue, never hide one.
+ */
+function authHaystack(ctx: PageSignalContext): string {
+  const doc = ctx.parsed.document;
+  const title = (ctx.parsed.meta.title ?? "").toLowerCase();
+  const text = (ctx.parsed.content.textContent ?? "").toLowerCase();
+  const separated = doc ? getPageSeparatedText(doc).toLowerCase() : "";
+  return `${title}\n${text}\n${separated}`;
+}
 
 // ── Brand impersonation ─────────────────────────────────────────────
 //
@@ -250,16 +268,18 @@ export function detectBrandImpersonation(
   const doc = ctx.parsed.document;
   if (!doc) return null;
 
-  const title = (ctx.parsed.meta.title ?? "").toLowerCase();
-  const text = (ctx.parsed.content.textContent ?? "").toLowerCase();
-  const haystack = `${title}\n${text}`;
+  const haystack = authHaystack(ctx);
 
   const self = selfHosts(ctx);
   const credDests = credentialDestinations(doc, ctx.page.url);
 
-  // A credential affordance must exist at all (password field or auth copy).
+  // A credential affordance must exist at all: a password field, auth copy, or
+  // a credential control of its own. Every link in `credDests` already carries
+  // its own sign-in label, so a missing page-wide word boundary cannot override
+  // the control's evidence (pub#696).
   const hasCredentialAffordance =
     doc.querySelector('input[type="password"]') !== null ||
+    credDests.length > 0 ||
     /\b(sign in|log in|login|enter your password|verify your account)\b/.test(
       haystack
     );
@@ -410,9 +430,7 @@ export function detectFakeAuthOverlay(
 
   // Page-level auth corroboration — required for the iframe-overlay branch so a
   // legitimate full-page app-shell / portal iframe doesn't trip it.
-  const haystack = `${(ctx.parsed.meta.title ?? "").toLowerCase()}\n${(
-    ctx.parsed.content.textContent ?? ""
-  ).toLowerCase()}`;
+  const haystack = authHaystack(ctx);
   const pageHasAuthAffordance =
     doc.querySelector('input[type="password"]') !== null ||
     /\b(sign in|log in|enter your password|verify your account)\b/.test(
