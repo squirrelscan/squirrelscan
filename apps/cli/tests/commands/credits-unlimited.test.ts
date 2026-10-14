@@ -184,9 +184,9 @@ describe("`squirrel credits` on a metered account (control)", () => {
     const text = output();
     expect(text).toContain("base + 2 per audited page");
     expect(text).toContain("per link a cloud audit checks");
-    expect(text).toContain("internal links and the CLI's own checks are free,");
-    // #2757: the render escalation is the one charge on the CLI's own checks.
-    expect(text).toContain("cloud browser: 2 per link");
+    // #785: the CLI's own link checks are free, with no exception.
+    expect(text).toContain("internal links and the CLI's own checks are free)");
+    expect(text).not.toContain("cloud browser");
     expect(text).not.toContain("per rendered page");
     // Neither per-page feature is itemized again below the headline.
     expect(text).not.toMatch(/^\s+audit_page\s/m);

@@ -19,6 +19,7 @@ How it works:
 
 ### Changed
 
+- `squirrel credits` and the first-run credit notice no longer name a 2-credit charge for a firewall-blocked link the cloud re-checks in a browser. The CLI's own link checks, the cloud's dead-link check included, are free, as the docs say. The pricing examples in the docs match. See [Credits and pricing](https://docs.squirrelscan.com/cloud/credits#pricing). #785
 - The first-run credit notice and `squirrel credits` now name the one charge on the CLI's own link checks. At the surface and full levels, a signed-in audit sends its external links to the cloud's dead-link check, and a link a web application firewall blocks is re-checked in a cloud browser at 2 credits per link (at most 10 per 200 links checked; a link already rendered in the run is not charged again). The docs said the CLI's checks were never charged. See [Credits and pricing](https://docs.squirrelscan.com/cloud/credits#pricing). squirrelscan/repo#2757
 - A signed-in audit no longer waits out a busy dead-link service batch by batch. squirrel sends the service up to 200 external links at a time, and any link left out of a reply is checked locally. When a reply answers none of its links, squirrel now stops asking and checks the rest locally straight away. Before, it sent every remaining batch and waited on each, about 100 seconds on a site with 1,000 external links. See [links/dead-links](https://docs.squirrelscan.com/rules/links/dead-links). #753
 

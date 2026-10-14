@@ -421,10 +421,8 @@ describe("consentEstimateLine (#191 up-front cost)", () => {
     expect(line).toContain("however the page is fetched");
     expect(line).toContain("up to 1000 credits/audit");
     expect(line).toContain("17,000"); // locale-formatted balance
-    // #2757: the one charge outside the estimate is named.
-    expect(line).toContain(
-      "An external link a firewall blocks is re-checked in a cloud browser at 2 credits each."
-    );
+    // #785: the CLI's own link checks are free, so no charge sits outside it.
+    expect(line).not.toContain("cloud browser");
   });
 
   test("omits the cap note when uncapped (max_credits_per_audit = 0)", () => {
