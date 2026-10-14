@@ -95,8 +95,9 @@ describe("withRequestDeadline (#1699)", () => {
         async () => new Response("hello"),
         (response) => response.text(),
       );
-      const timer = armed.mock.results[0]?.value;
-      expect(timer).toBeDefined();
+      const call = armed.mock.calls.findIndex((args) => args[1] === DEADLINE_MS);
+      expect(call).toBeGreaterThanOrEqual(0);
+      const timer = armed.mock.results[call]?.value;
       expect(cleared).toHaveBeenCalledWith(timer);
     } finally {
       armed.mockRestore();
