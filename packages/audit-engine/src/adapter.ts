@@ -1826,10 +1826,12 @@ export function runRulesOnStorage(
         // pub#770: nor one the external check refuses on its address.
         if (refusedWithoutLookup(link.href, staleRowEgress)) continue;
         // Nor any row this run did not write: an incremental crawl copies a
-        // reused page's link rows from earlier crawls, verdicts included, but
-        // never their appearances, which only this run's external phase
-        // writes. A copied row is a verdict this audit never made.
-        if (appearances.length === 0) continue;
+        // reused page's link rows from earlier crawls, verdicts and their
+        // checkedAt included. This run's external phase stamps every row it
+        // writes with the time it wrote it, so an older row is a verdict this
+        // audit never made (a link it refused after lookup, left out, or did
+        // not reach under the limit).
+        if ((link.checkedAt ?? 0) < (crawl?.startedAt ?? 0)) continue;
 
         externalLinksData.push({
           href: link.href,
@@ -2617,10 +2619,12 @@ function buildStreamingSiteData(
         // pub#770: nor one the external check refuses on its address.
         if (refusedWithoutLookup(link.href, staleRowEgress)) continue;
         // Nor any row this run did not write: an incremental crawl copies a
-        // reused page's link rows from earlier crawls, verdicts included, but
-        // never their appearances, which only this run's external phase
-        // writes. A copied row is a verdict this audit never made.
-        if (appearances.length === 0) continue;
+        // reused page's link rows from earlier crawls, verdicts and their
+        // checkedAt included. This run's external phase stamps every row it
+        // writes with the time it wrote it, so an older row is a verdict this
+        // audit never made (a link it refused after lookup, left out, or did
+        // not reach under the limit).
+        if ((link.checkedAt ?? 0) < (crawl?.startedAt ?? 0)) continue;
 
         externalLinksData.push({
           href: link.href,
@@ -3814,7 +3818,13 @@ export function checkCollectedExternalLinks(
     if (allAppearances.length > 0) {
       yield* storage
         .addLinkAppearancesBatch(crawlId, allAppearances)
-        .pipe(Effect.catchAll(() => Effect.void));
+        .pipe(
+          Effect.catchAll((error) =>
+            Effect.sync(() =>
+              logger.warn("could not record external link appearances", { error: String(error) }),
+            ),
+          ),
+        );
     }
 
     // Report progress
