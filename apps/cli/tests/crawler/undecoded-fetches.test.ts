@@ -1,7 +1,9 @@
-// squirrelscan/repo#2717: the CLI's own script fetcher, external link checker
-// and reachability probe fetch site-controlled URLs, and Bun's fetch inflates
-// a Content-Encoding body in full before any reader can stop it. Each turns
-// that decoding off and reads the body decoded, no further than its cap.
+// squirrelscan/repo#2717: the CLI's own script fetcher and reachability probe
+// fetch site-controlled URLs, and Bun's fetch inflates a Content-Encoding body
+// in full before any reader can stop it. Each turns that decoding off and
+// reads the body decoded, no further than its cap. (The external link check
+// runs on the engine's checker; the engine's undecoded-probe-fetches test
+// covers it.)
 
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
 import {
@@ -18,14 +20,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createGzip, gzipSync } from "node:zlib";
 
-import { checkExternalLinks } from "@/crawler/external-checker";
 import { fetchScriptContents } from "@/crawler/script-fetcher";
 import { closeGlobalContentStore } from "@/crawler/storage/content-store";
-import { LinkCacheStorage } from "@/crawler/storage/link-cache";
 import { requestOnceScoped } from "@/tools/request";
 
 const SCRIPT = `window.squirrel = ${JSON.stringify("nuts ".repeat(100))};`;
-const WAF_PAGE = `<!doctype html><title>Just a moment...</title><script>window._cf_chl_opt = {};</script>`;
 
 /** 1 GiB of spaces through gzip, never held whole: about 1 MB. */
 async function gzipBomb(): Promise<Buffer> {
@@ -50,7 +49,6 @@ let base: string;
 const cacheDir = mkdtempSync(join(tmpdir(), "squirrel-undecoded-"));
 const priorContentStorePath = process.env.SQUIRREL_CONTENT_STORE_PATH;
 process.env.SQUIRREL_CONTENT_STORE_PATH = join(cacheDir, "content.db");
-const linkCache = new LinkCacheStorage(join(cacheDir, "links.db"));
 
 beforeAll(async () => {
   bomb = new Uint8Array(await gzipBomb());
@@ -72,12 +70,6 @@ beforeAll(async () => {
           },
         });
       }
-      if (path === "/waf") {
-        return new Response(req.method === "HEAD" ? null : gzipSync(WAF_PAGE), {
-          status: 403,
-          headers: { "content-type": "text/html", "content-encoding": "gzip" },
-        });
-      }
       return new Response("not found", { status: 404 });
     },
   });
@@ -86,7 +78,6 @@ beforeAll(async () => {
 
 afterAll(() => {
   server.stop(true);
-  linkCache.close();
   closeGlobalContentStore();
   if (priorContentStorePath === undefined) {
     delete process.env.SQUIRREL_CONTENT_STORE_PATH;
@@ -143,18 +134,6 @@ describe("CLI fetches of site-controlled URLs (#2717)", () => {
     expect(Math.max(peak, process.memoryUsage().rss) - before).toBeLessThan(
       256 * 1024 * 1024
     );
-  });
-
-  test("an external link's HEAD and GET are undecoded, its 403 body read decoded", async () => {
-    const [result] = await Effect.runPromise(
-      checkExternalLinks([`${base}/waf`], linkCache)
-    );
-    expect(result?.wafBlocked).toBe(true);
-    expect(result?.wafProvider).toBe("cloudflare");
-    expect(sent).toEqual([
-      { path: "/waf", decompress: false },
-      { path: "/waf", decompress: false },
-    ]);
   });
 
   test("the reachability probe's request is undecoded", async () => {

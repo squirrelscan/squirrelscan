@@ -10,6 +10,7 @@ import {
   setAdapterLogger,
   STREAM_BATCH_BYTES,
   type AdapterLogger,
+  type ExternalCheckResult,
   type PageResultSink,
   type RuleCacheStats,
   type RuleCacheStore,
@@ -45,7 +46,6 @@ import { Duration, Effect, Stream } from "effect";
 
 import type { Config } from "@/config";
 import type { Crawler, CrawlerEvent } from "@/crawler/core/types";
-import type { ExternalCheckResult } from "@/crawler/external-checker";
 import type {
   CrawlStorage,
   PageRecord,

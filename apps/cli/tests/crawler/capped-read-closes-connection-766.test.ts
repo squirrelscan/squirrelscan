@@ -1,7 +1,8 @@
-// #766: the CLI's forked script fetcher and external checker must close their
-// connections once a capped read returns, and the localhost reachability check
-// once it has its status. Cancelling a body does not close
-// Bun's connection: it goes on downloading whatever the origin sends until the
+// #766: the CLI's forked script fetcher must close its connection once a
+// capped read returns, and the localhost reachability check once it has its
+// status. (The external link check runs on the engine's checker, covered by
+// the engine's own #766 test.) Cancelling a body does not close Bun's
+// connection: it goes on downloading whatever the origin sends until the
 // request's signal aborts, and each cleared its timeout without aborting.
 // Only a raw socket server can show this: Bun.serve hides when the client
 // hangs up.
@@ -12,20 +13,17 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { checkExternalLinks } from "@/crawler/external-checker";
 import { fetchScriptContents } from "@/crawler/script-fetcher";
 import { closeGlobalContentStore } from "@/crawler/storage/content-store";
-import { LinkCacheStorage } from "@/crawler/storage/link-cache";
 import { checkReachability } from "@/utils/reachability";
 
 /** Far longer than any test waits: a close before it is the read's doing. */
 const DEADLINE_MS = 10_000;
 
-// Throwaway stores so neither fetcher touches the user's real caches.
+// A throwaway content store so the script fetcher never touches the user's.
 const cacheDir = mkdtempSync(join(tmpdir(), "squirrel-766-"));
 const priorContentStorePath = process.env.SQUIRREL_CONTENT_STORE_PATH;
 process.env.SQUIRREL_CONTENT_STORE_PATH = join(cacheDir, "content.db");
-const linkCache = new LinkCacheStorage(join(cacheDir, "links.db"));
 
 const stops: Array<() => void> = [];
 afterEach(() => {
@@ -33,7 +31,6 @@ afterEach(() => {
 });
 
 afterAll(() => {
-  linkCache.close();
   closeGlobalContentStore();
   if (priorContentStorePath === undefined) {
     delete process.env.SQUIRREL_CONTENT_STORE_PATH;
@@ -122,20 +119,6 @@ describe("the CLI's requests close their connections (#766)", () => {
     );
     const delay = await lastCloseDelay(server, Date.now());
     expect(result?.error).toBe("script too large");
-    expect(delay).toBeGreaterThanOrEqual(0);
-    expect(delay).toBeLessThan(1_000);
-  });
-
-  test("the external checker's 403 interstitial read", async () => {
-    const server = endlessServer(
-      "HTTP/1.1 403 Forbidden\r\ncontent-type: text/html",
-      "/page"
-    );
-    const [result] = await Effect.runPromise(
-      checkExternalLinks([server.url], linkCache, { timeoutMs: DEADLINE_MS })
-    );
-    const delay = await lastCloseDelay(server, Date.now());
-    expect(result?.status).toBe(403);
     expect(delay).toBeGreaterThanOrEqual(0);
     expect(delay).toBeLessThan(1_000);
   });

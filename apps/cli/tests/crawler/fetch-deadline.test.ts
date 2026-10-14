@@ -1,14 +1,14 @@
 // #1729 — a request deadline must cover the BODY read, not just the headers.
 //
-// apps/cli/src/crawler/{script-fetcher,external-checker}.ts are FORKS of the
-// audit-engine fetchers, not re-exports, so the engine's regression test proves
-// nothing about them — and these forks are what the `squirrel` CLI actually
-// runs. Each of the three fetchers here cleared its timer where the response
-// resolved, i.e. when the HEADERS landed, leaving the body read with no time
-// bound at all. Sitemaps stall the crawl preamble; scripts and external links
-// are fetched during rules enrichment, after the crawl, so an origin that
-// answered 200 and then stalled its body gave an audit that had all its pages
-// and never finished.
+// apps/cli/src/crawler/script-fetcher.ts is a FORK of the audit-engine script
+// fetcher, not a re-export, so the engine's regression test proves nothing
+// about it, and the CLI's analyze pass runs it. It cleared its timer where the
+// response resolved, i.e. when the HEADERS landed, leaving the body read with
+// no time bound at all. Scripts are fetched during rules enrichment, after the
+// crawl, so an origin that answered 200 and then stalled its body gave an
+// audit that had all its pages and never finished. (The sitemap and external
+// link cases moved to the crawler and engine tests with the forks' removal,
+// #756.)
 
 import { afterAll, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
@@ -16,15 +16,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { fetchSitemap } from "@/crawl/sitemaps";
-import {
-  checkExternalLinks,
-  filterBrokenLinks,
-  filterWafBlockedLinks,
-} from "@/crawler/external-checker";
 import { fetchScriptContents } from "@/crawler/script-fetcher";
 import { closeGlobalContentStore } from "@/crawler/storage/content-store";
-import { LinkCacheStorage } from "@/crawler/storage/link-cache";
 
 const DEADLINE_MS = 300;
 /** SCRIPT_FETCH_LIMITS.RETRY_DELAY_MS * 2^0 - the first (and only) backoff. */
@@ -38,15 +31,6 @@ const server = Bun.serve({
   fetch(req) {
     const path = new URL(req.url).pathname;
 
-    // The external checker probes with HEAD first. Answer it with the status
-    // and no body so the stall below is reached on the GET, which is the read
-    // this regression is about.
-    if (req.method === "HEAD") {
-      return new Response(null, {
-        status: path.startsWith("/stall-403") ? 403 : 200,
-      });
-    }
-
     const stall = new ReadableStream({
       start(controller) {
         controller.enqueue(new TextEncoder().encode("// first chunk\n"));
@@ -58,45 +42,10 @@ const server = Bun.serve({
         headers: { "content-type": "application/javascript" },
       });
     }
-    if (path === "/stall-403") {
-      // A 403 is what sends the external checker into its WAF body read. No WAF
-      // headers here: the body is the ONLY evidence available.
-      return new Response(stall, {
-        status: 403,
-        headers: { "content-type": "text/html" },
-      });
-    }
-    if (path === "/stall-403-cf") {
-      // Same stalled body, but the headers alone identify the WAF.
-      return new Response(stall, {
-        status: 403,
-        headers: {
-          "content-type": "text/html",
-          "cf-ray": "8a1b2c3d4e5f6789-SYD",
-        },
-      });
-    }
-    if (path === "/stall-sitemap.xml") {
-      return new Response(stall, {
-        headers: { "content-type": "application/xml" },
-      });
-    }
     if (path === "/fast.js") {
       return new Response("console.log(1);", {
         headers: { "content-type": "application/javascript" },
       });
-    }
-    if (path === "/missing.xml") {
-      return new Response("nope", { status: 404 });
-    }
-    if (path === "/sitemap.xml") {
-      return new Response(
-        `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://example.com/one</loc></url>
-</urlset>`,
-        { headers: { "content-type": "application/xml" } }
-      );
     }
     return new Response("ok", { headers: { "content-type": "text/plain" } });
   },
@@ -104,16 +53,14 @@ const server = Bun.serve({
 
 const base = `http://localhost:${server.port}`;
 
-// Throwaway stores so neither fetcher touches the user's real caches, and so a
-// stale entry can never satisfy a request under test.
+// A throwaway content store so the fetcher never touches the user's real
+// cache, and a stale entry can never satisfy a request under test.
 const cacheDir = mkdtempSync(join(tmpdir(), "squirrel-deadline-"));
 const priorContentStorePath = process.env.SQUIRREL_CONTENT_STORE_PATH;
 process.env.SQUIRREL_CONTENT_STORE_PATH = join(cacheDir, "content.db");
-const linkCache = new LinkCacheStorage(join(cacheDir, "links.db"));
 
 afterAll(() => {
   server.stop(true);
-  linkCache.close();
   closeGlobalContentStore();
   // Restore the env, or the next test file in this process gets a store path
   // pointing at the directory removed below.
@@ -194,106 +141,4 @@ describe("CLI script fetcher retry deadline (#1729)", () => {
       globalThis.fetch = realFetch;
     }
   }, 15_000);
-});
-
-describe("CLI sitemap fetcher deadline (#1729)", () => {
-  test("a sitemap body that stalls after the headers times out", async () => {
-    const startedAt = Date.now();
-    const result = await Effect.runPromise(
-      fetchSitemap(`${base}/stall-sitemap.xml`, "test-agent", DEADLINE_MS)
-    );
-    const elapsed = Date.now() - startedAt;
-
-    expect(result.success).toBe(false);
-    expect(elapsed).toBeGreaterThanOrEqual(DEADLINE_MS - 50);
-    expect(elapsed).toBeLessThan(DEADLINE_MS * 8);
-  });
-
-  test("a sitemap that answers promptly is still parsed", async () => {
-    const result = await Effect.runPromise(
-      fetchSitemap(`${base}/sitemap.xml`, "test-agent", DEADLINE_MS)
-    );
-
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.urls.length).toBeGreaterThan(0);
-    }
-  });
-
-  test("each failure keeps its own reason instead of collapsing to one string", async () => {
-    // A body-deadline abort, an HTTP error and a connect failure used to be
-    // indistinguishable in the failed-sitemap report: every non-HTTP failure
-    // collapsed to a bare "Unexpected error".
-    const stalled = await Effect.runPromise(
-      fetchSitemap(`${base}/stall-sitemap.xml`, "test-agent", DEADLINE_MS)
-    );
-    const notFound = await Effect.runPromise(
-      fetchSitemap(`${base}/missing.xml`, "test-agent", DEADLINE_MS)
-    );
-
-    // The connect failure is injected rather than aimed at an unresolvable
-    // host: real DNS can outrun a short deadline, in which case the abort wins
-    // the race and the run reports a timeout — correctly, but it proves nothing
-    // about the connect path.
-    const realFetch = globalThis.fetch;
-    globalThis.fetch = ((_input: RequestInfo | URL, _init?: RequestInit) =>
-      Promise.reject(new TypeError("connection refused"))) as typeof fetch;
-    let unreachable;
-    try {
-      unreachable = await Effect.runPromise(
-        fetchSitemap(`${base}/sitemap.xml`, "test-agent", DEADLINE_MS)
-      );
-    } finally {
-      globalThis.fetch = realFetch;
-    }
-
-    expect(stalled.success).toBe(false);
-    expect(notFound.success).toBe(false);
-    expect(unreachable.success).toBe(false);
-    if (stalled.success || notFound.success || unreachable.success) return;
-
-    expect(stalled.error).toContain("Timed out");
-    expect(notFound.error).toBe("HTTP 404");
-    expect(unreachable.error).toBe("connection refused");
-    // None of the three collapse into the old catch-all.
-    expect(
-      new Set([stalled.error, notFound.error, unreachable.error]).size
-    ).toBe(3);
-  });
-});
-
-describe("CLI external checker deadline (#1729)", () => {
-  test("a 403 whose body stalls does not hang the WAF read", async () => {
-    const startedAt = Date.now();
-    const results = await Effect.runPromise(
-      checkExternalLinks([`${base}/stall-403`], linkCache, {
-        timeoutMs: DEADLINE_MS,
-      })
-    );
-    const elapsed = Date.now() - startedAt;
-
-    // The status is known from the headers. With no WAF signature in the
-    // headers and no body to read, this stays a plain 403 - the pre-existing
-    // ambiguity, unchanged by this fix.
-    expect(results[0]?.status).toBe(403);
-    expect(results[0]?.wafBlocked).toBeUndefined();
-    expect(elapsed).toBeLessThan(DEADLINE_MS * 8);
-  });
-
-  test("an unreadable 403 body still gets WAF detection from the headers", async () => {
-    const results = await Effect.runPromise(
-      checkExternalLinks([`${base}/stall-403-cf`], linkCache, {
-        timeoutMs: DEADLINE_MS,
-      })
-    );
-
-    // The deadline now cuts the WAF body read short, so giving up on detection
-    // there would report a live, bot-guarded link as broken. Headers are
-    // evidence in their own right: detection runs on them regardless.
-    expect(results[0]?.status).toBe(403);
-    expect(results[0]?.wafBlocked).toBe(true);
-    expect(results[0]?.wafProvider).toBe("cloudflare");
-    expect(filterBrokenLinks(results)).toEqual([]);
-    expect(filterWafBlockedLinks(results).length).toBe(1);
-  });
 });

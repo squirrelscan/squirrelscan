@@ -1,6 +1,7 @@
-// Tests for processors/discovery/discover-sitemaps.ts - Sitemap parsing
+// Sitemap parsing, fetching and discovery. Moved from the CLI's sitemap copy
+// (#756), which the crawl no longer ran, to the crawler's own code.
 
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { describe, it, expect, afterEach } from "bun:test";
 import { Effect } from "effect";
 
 import {
@@ -8,8 +9,7 @@ import {
   getUrlsFromSitemaps,
   fetchSitemapsRecursive,
   discoverSitemaps,
-} from "../../../../src/crawl/sitemaps";
-import { initRequestTool } from "../../../../src/tools/request";
+} from "../src/sitemaps";
 
 const originalFetch = globalThis.fetch;
 
@@ -35,11 +35,6 @@ const createFetchStub = (
   };
   return { fetchStub, calls };
 };
-
-beforeEach(() => {
-  // Use standard fetch for tests so we can mock globalThis.fetch
-  initRequestTool({ rateLimitPerSecond: 1000 });
-});
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
@@ -135,10 +130,9 @@ describe("parseSitemap", () => {
 
     const result = parseSitemap(content, "https://example.com/sitemap.xml");
 
-    // XML entities should be preserved as-is since we're using regex
-    expect(result.urls[0].loc).toBe(
-      "https://example.com/page?param=value&amp;other=123"
-    );
+    // The XML entity is decoded: the URL is what the sitemap means, not its
+    // escaped form (the CLI's regex copy kept `&amp;`).
+    expect(result.urls[0].loc).toBe("https://example.com/page?param=value&other=123");
   });
 
   it("handles empty sitemap", () => {

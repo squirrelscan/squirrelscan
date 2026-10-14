@@ -1,8 +1,10 @@
-// Tests for processors/discovery/fetch-robots.ts - Robots.txt parsing and fetching
+// robots.txt parsing, as the crawl reads it. Moved from the CLI's robots copy
+// (#756), which the crawl no longer ran; which URLs are allowed is the
+// crawler's evaluator, tested in packages/crawler/tests/robots-evaluator-756.
 
 import { describe, it, expect } from "bun:test";
 
-import { parseRobotsTxt, isUrlAllowed } from "../../../../src/crawl/robots";
+import { parseRobotsTxt } from "../src/robots-txt";
 
 describe("parseRobotsTxt", () => {
   it("parses simple robots.txt", () => {
@@ -133,115 +135,5 @@ Allow: /
     const result = parseRobotsTxt(content, "https://example.com/robots.txt");
 
     expect(result.sizeBytes).toBe(content.length);
-  });
-});
-
-describe("isUrlAllowed", () => {
-  const baseRobotsTxt = {
-    exists: true,
-    url: "https://example.com/robots.txt",
-    content: "",
-    sizeBytes: 0,
-    sitemaps: [],
-    errors: [],
-  };
-
-  it("allows all when robots.txt doesn't exist", () => {
-    const robotsTxt = { ...baseRobotsTxt, exists: false, rules: [] };
-    expect(isUrlAllowed(robotsTxt, "https://example.com/anything", "*")).toBe(
-      true
-    );
-  });
-
-  it("allows when no matching rules", () => {
-    const robotsTxt = { ...baseRobotsTxt, rules: [] };
-    expect(isUrlAllowed(robotsTxt, "https://example.com/page", "*")).toBe(true);
-  });
-
-  it("blocks disallowed paths", () => {
-    const robotsTxt = {
-      ...baseRobotsTxt,
-      rules: [
-        {
-          userAgent: "*",
-          rules: [{ type: "disallow" as const, path: "/private" }],
-        },
-      ],
-    };
-
-    expect(
-      isUrlAllowed(robotsTxt, "https://example.com/private/page", "*")
-    ).toBe(false);
-    expect(isUrlAllowed(robotsTxt, "https://example.com/public", "*")).toBe(
-      true
-    );
-  });
-
-  it("respects allow rules", () => {
-    const robotsTxt = {
-      ...baseRobotsTxt,
-      rules: [
-        {
-          userAgent: "*",
-          rules: [{ type: "allow" as const, path: "/allowed" }],
-        },
-      ],
-    };
-
-    expect(
-      isUrlAllowed(robotsTxt, "https://example.com/allowed/page", "*")
-    ).toBe(true);
-  });
-
-  it("matches specific user agents", () => {
-    const robotsTxt = {
-      ...baseRobotsTxt,
-      rules: [
-        {
-          userAgent: "Googlebot",
-          rules: [{ type: "disallow" as const, path: "/google-blocked" }],
-        },
-        {
-          userAgent: "*",
-          rules: [{ type: "disallow" as const, path: "/all-blocked" }],
-        },
-      ],
-    };
-
-    // Googlebot matches specific rule
-    expect(
-      isUrlAllowed(
-        robotsTxt,
-        "https://example.com/google-blocked",
-        "Googlebot/2.1"
-      )
-    ).toBe(false);
-
-    // Other bots only match wildcard
-    expect(
-      isUrlAllowed(robotsTxt, "https://example.com/google-blocked", "Bingbot")
-    ).toBe(true);
-
-    // All bots blocked by wildcard
-    expect(
-      isUrlAllowed(robotsTxt, "https://example.com/all-blocked", "Bingbot")
-    ).toBe(false);
-  });
-
-  it("handles root disallow", () => {
-    const robotsTxt = {
-      ...baseRobotsTxt,
-      rules: [
-        {
-          userAgent: "*",
-          rules: [{ type: "disallow" as const, path: "/" }],
-        },
-      ],
-    };
-
-    expect(isUrlAllowed(robotsTxt, "https://example.com/anything", "*")).toBe(
-      false
-    );
-    expect(isUrlAllowed(robotsTxt, "https://example.com/", "*")).toBe(false);
   });
 });
