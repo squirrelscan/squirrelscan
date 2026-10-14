@@ -31,7 +31,7 @@ afterEach(() => {
 /** Every path (with query) the server was asked for, since the last serve. */
 let requested: string[] = [];
 
-const TOKEN = "0123456789abcdef0123456789abcdef";
+const TOKEN = "0123456789abcdef0123456789abcdef"; // pragma: allowlist secret
 const UNSUBSCRIBE = `/unsubscribe?token=${TOKEN}`;
 const SIGNED = "/files/report.pdf?sig=Zm9vYmFyYmF6cXV4MTIzNDU2";
 
@@ -61,7 +61,7 @@ function serve(): { port: string; third: string } {
             [
               `<a href="${third}/partner">Partner</a>`,
               `<a href="${third}${UNSUBSCRIBE}">Manage email</a>`,
-              `<a href="${third}${SIGNED.replace("&", "&amp;")}">Report</a>`,
+              `<a href="${third}${SIGNED}">Report</a>`,
               `<a href="${third}/short">Short link</a>`,
               `<a href="${third}/moved">Moved</a>`,
               `<a href="${third}/account" rel="nofollow">Log out</a>`,
