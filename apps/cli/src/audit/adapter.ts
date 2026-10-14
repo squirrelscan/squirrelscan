@@ -636,11 +636,12 @@ export function fetchResourceAssets(
 
     const maxResources = overrides?.resourceCheckMaxItems;
     const resourceCheckOptions = {
-      // squirrelscan/repo#2764: the site's own assets may not reach a
-      // link-local or cloud metadata address (private networks are fine). The
-      // crawl's own host is sent as the crawl sends it; every other hop,
-      // subdomains included, is vetted. The engine's asset phase applies the
-      // same policy.
+      // squirrelscan/repo#2764: the site's own stylesheets, images, PDFs and
+      // sitemap URLs may not reach a link-local or cloud metadata address
+      // (private networks are fine). The crawl's own host is sent as the
+      // crawl sends it; every other hop, subdomains included, is vetted, as in
+      // the engine's asset phase. Scripts here go through the CLI's own script
+      // fetcher, which follows redirects natively: #768.
       egress: {
         allowPrivateNetwork: true,
         resolve: memoizeResolveHost(resolveHostAddresses),

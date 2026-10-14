@@ -102,9 +102,10 @@ export interface EgressPolicy {
   allowPrivateTarget?: (url: URL) => boolean;
   /**
    * Targets sent by name without a DNS check or pinning: the hosts the crawl
-   * itself requests (repo#2764). Checks that need no lookup still apply first
-   * (scheme, `allowHost`, a link-local or metadata IP literal, a metadata
-   * hostname). A hop that leaves them is vetted like any other. Vetting the
+   * itself requests (repo#2764). Checks that need no lookup still apply first:
+   * scheme, `allowHost`, an IP literal the policy refuses (always a
+   * link-local or metadata one), and a metadata hostname. A hop that leaves
+   * them is vetted like any other. Vetting the
    * site's own name would refuse a LAN site whose mDNS name also answers
    * link-local IPv6 addresses (`printer.local`), and pinning it would route
    * around `NO_PROXY`. Gets the hop's parsed URL.
