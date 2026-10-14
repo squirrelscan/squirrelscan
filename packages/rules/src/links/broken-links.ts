@@ -314,7 +314,7 @@ function notFetchedReason(causes: LinkTargetsNotFetched, cap: number): string {
   if (causes.overLimit) {
     parts.push(
       cap === 0
-        ? `${causes.overLimit} left out because internal_links.max_targets is 0`
+        ? `${causes.overLimit} because internal_links.max_targets is 0`
         : `${causes.overLimit} past the limit of ${targets(cap)}`,
     );
   }

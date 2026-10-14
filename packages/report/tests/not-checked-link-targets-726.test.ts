@@ -42,7 +42,7 @@ describe("the internal link Not checked hint follows the causes (pub#726)", () =
   test("targets skipped, none over the limit: no max_targets, no 'turn back on'", () => {
     // A crawl keeps to the same scope and robots.txt, so it says which it can reach.
     expect(lineFor({ notFetched: { skipped: 2 } })).toBe(
-      `Not checked: Broken Links. ${MESSAGE}. A Surface or Full audit, which follows links, fetches the ones inside the crawl scope and allowed by robots.txt.`,
+      `Not checked: Broken Links. ${MESSAGE}. A Surface or Full audit, which follows links, can reach the ones inside the crawl scope and allowed by robots.txt.`,
     );
   });
 

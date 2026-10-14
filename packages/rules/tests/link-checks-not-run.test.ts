@@ -376,6 +376,9 @@ describe("links/broken-links when the crawl did not follow links", () => {
     const skipped = named(checks, "broken-links").find((c) => c.status === "skipped")!;
     expect(skipped.value).toBe(2);
     expect(skipped.details?.notFetched).toEqual({ skipped: 1, noAnswer: 1 });
+    expect(skipped.message).toContain(
+      "(1 skipped as outside the crawl scope, disallowed by robots.txt, or an action or token link; 1 with no answer)",
+    );
   });
 
   test("an unreliable HEAD marks only the errors it set aside as not trusted", () => {
@@ -407,7 +410,7 @@ describe("links/broken-links when the crawl did not follow links", () => {
     const skipped = named(checks, "broken-links").find((c) => c.status === "skipped")!;
     expect(skipped.details?.notFetched).toEqual({ overLimit: 3, skipped: 2 });
     expect(skipped.message).toContain(
-      "left them out (3 left out because internal_links.max_targets is 0; 2 skipped as outside the crawl scope, disallowed by robots.txt, or action or token links)",
+      "left them out (3 because internal_links.max_targets is 0; 2 skipped as outside the crawl scope, disallowed by robots.txt, or action or token links)",
     );
   });
 
