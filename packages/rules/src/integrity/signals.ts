@@ -70,8 +70,12 @@ function authHaystack(ctx: PageSignalContext): string {
 /** One `authHaystack` per parsed document: several detectors read it. */
 const haystackCache = new WeakMap<object, string>();
 
-/** Characters that render as nothing (a soft hyphen, zero-width spaces and joiners). */
-const INVISIBLE = /[\u00ad\u200b-\u200d\u2060\ufeff]/g;
+/**
+ * Characters that render as nothing: soft hyphens, zero-width spaces and
+ * joiners, invisible operators, variation selectors and the rest of Unicode's
+ * default-ignorable set.
+ */
+const INVISIBLE = /\p{Default_Ignorable_Code_Point}/gu;
 
 /**
  * Text as a cue is matched against: lower case, the invisible characters
@@ -258,12 +262,19 @@ function credentialDestinations(
   }
 
   // Auth-labeled links: only links whose own text is a sign-in affordance.
+  const MAX_LABEL_CHARS = 300;
   // The label is read as written and with a break at every element inside it
   // (`Sign in with<br>Google`), whitespace and invisible characters collapsed.
   const AUTH_LABEL = /\b(sign in|log in|login|continue with|verify)\b/;
   const SIGN_IN_LABEL = /\b(sign in|log in|login)\b/;
   for (const a of doc.querySelectorAll("a[href]")) {
-    const labels = [readable(a.textContent ?? ""), readable(getSeparatedText(a))];
+    // A label is a few words. The parser nests an unclosed `<a>` inside the
+    // next, so on junk markup every anchor holds the rest of the page, and
+    // reading each in full again would grow with the square of their number.
+    const raw = a.textContent ?? "";
+    if (raw.length > MAX_LABEL_CHARS) continue;
+    const glued = readable(raw);
+    const labels = [glued, a.firstElementChild ? readable(getSeparatedText(a)) : glued];
     if (!labels.some((label) => AUTH_LABEL.test(label))) continue;
     const host = hrefHost(getAttrCI(a, "href"), base);
     if (!host) continue;
