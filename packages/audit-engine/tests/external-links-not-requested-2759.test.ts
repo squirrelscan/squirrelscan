@@ -405,9 +405,15 @@ for (const engine of ["v1", "v2"] as const) {
         (await Effect.runPromise(storage.getPages(firstId)))[0]?.normalizedUrl ?? home;
       const stale = `${third}${UNSUBSCRIBE}`;
       const staleByText = `${third}/account`;
+      // pub#770: and a link the check refuses for its address, and one this
+      // run never checks at all: neither may report the old verdict.
+      const staleRefused = "http://169.254.169.254/latest/meta-data/";
+      const staleUnchecked = `${third}/no-longer-linked`;
       for (const [href, anchorText] of [
         [stale, "Manage email"],
         [staleByText, "Log out"],
+        [staleRefused, "Status"],
+        [staleUnchecked, "Old partner"],
       ] as const) {
         await Effect.runPromise(
           storage.upsertLink(firstId, {
@@ -434,6 +440,8 @@ for (const engine of ["v1", "v2"] as const) {
       for (const c of checks.filter((c) => c.name === "broken-external-links")) {
         expect(c.items?.map((i) => i.id) ?? []).not.toContain(stale);
         expect(c.items?.map((i) => i.id) ?? []).not.toContain(staleByText);
+        expect(c.items?.map((i) => i.id) ?? []).not.toContain(staleRefused);
+        expect(c.items?.map((i) => i.id) ?? []).not.toContain(staleUnchecked);
       }
       const dead = ran.siteRuleResults.get("links/dead-links") ?? [];
       expect(dead.map((c) => c.message)).toEqual(["Checked 3 external link(s); none are dead"]);

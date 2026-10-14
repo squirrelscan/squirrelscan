@@ -1825,6 +1825,11 @@ export function runRulesOnStorage(
         if (isNotRequestedExternalLink(link.href, appearances.map((a) => a.anchorText ?? ""))) continue;
         // pub#770: nor one the external check refuses on its address.
         if (refusedWithoutLookup(link.href, staleRowEgress)) continue;
+        // Nor any row this run did not write: an incremental crawl copies a
+        // reused page's link rows from earlier crawls, verdicts included, but
+        // never their appearances, which only this run's external phase
+        // writes. A copied row is a verdict this audit never made.
+        if (appearances.length === 0) continue;
 
         externalLinksData.push({
           href: link.href,
@@ -2611,6 +2616,11 @@ function buildStreamingSiteData(
         if (isNotRequestedExternalLink(link.href, appearances.map((a) => a.anchorText ?? ""))) continue;
         // pub#770: nor one the external check refuses on its address.
         if (refusedWithoutLookup(link.href, staleRowEgress)) continue;
+        // Nor any row this run did not write: an incremental crawl copies a
+        // reused page's link rows from earlier crawls, verdicts included, but
+        // never their appearances, which only this run's external phase
+        // writes. A copied row is a verdict this audit never made.
+        if (appearances.length === 0) continue;
 
         externalLinksData.push({
           href: link.href,
@@ -3752,21 +3762,23 @@ export function checkCollectedExternalLinks(
 
     for (const result of results) {
       // Never requested: no row, so no line reads it as checked (pub#770).
-      if (result.refused) continue;
-      yield* storage
-        .upsertLink(crawlId, {
-          href: result.href,
-          isInternal: false,
-          status: result.status ?? undefined,
-          error: result.error ?? undefined,
-          checkedAt: Date.now(),
-          wafBlocked: result.wafBlocked,
-          wafProvider: result.wafProvider,
-          // #1829: persisted, not re-derived — the 503 + Retry-After case
-          // cannot be recovered from the status code the rules read.
-          rateLimited: result.rateLimited,
-        })
-        .pipe(Effect.catchAll(() => Effect.void));
+      // Its appearances are still written, like the not-requested links'.
+      if (!result.refused) {
+        yield* storage
+          .upsertLink(crawlId, {
+            href: result.href,
+            isInternal: false,
+            status: result.status ?? undefined,
+            error: result.error ?? undefined,
+            checkedAt: Date.now(),
+            wafBlocked: result.wafBlocked,
+            wafProvider: result.wafProvider,
+            // #1829: persisted, not re-derived — the 503 + Retry-After case
+            // cannot be recovered from the status code the rules read.
+            rateLimited: result.rateLimited,
+          })
+          .pipe(Effect.catchAll(() => Effect.void));
+      }
 
       // Collect link appearances for batch insert
       const occurrences = externalLinkOccurrences.get(result.href) ?? [];
