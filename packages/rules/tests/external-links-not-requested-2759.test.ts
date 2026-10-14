@@ -175,28 +175,20 @@ describe("links/broken-external-links: links never requested (repo#2759)", () =>
   });
 
   test("links refused for their address are listed too, never counted as working (pub#770)", () => {
+    const refusedLinks = [
+      { href: "http://192.168.1.1/admin", sourcePages: [`${BASE}/`], pageCount: 1 },
+    ];
     const { checks } = brokenExternalLinksRule.run(
-      ctx(
-        [
-          ok("https://partner.example/"),
-          {
-            href: "http://192.168.1.1/admin",
-            status: null,
-            error: null,
-            sourcePages: [`${BASE}/`],
-          } as ExternalLinkCheckData,
-        ],
-        {
-          found: 2,
-          checked: 2,
-          cap: 200,
-          refused: 1,
-          refusedLinks: [
-            { href: "http://192.168.1.1/admin", sourcePages: [`${BASE}/`], pageCount: 1 },
-          ],
-        },
-      ),
+      ctx([ok("https://partner.example/")], {
+        found: 2,
+        checked: 1,
+        cap: 1,
+        refused: 1,
+        refusedByUrl: 1,
+        refusedLinks,
+      }),
     );
+    // Not over the limit of 1 either: the refused link never took a slot.
     expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual([
       "broken-external-links:pass",
       "refused-external-links:info",
@@ -208,6 +200,27 @@ describe("links/broken-external-links: links never requested (repo#2759)", () =>
       items: [{ id: "http://192.168.1.1/admin", sourcePages: [`${BASE}/`] }],
       details: { refused: 1 },
     });
+  });
+
+  test("every link refused or left out: only those lines, no not-checked skip (pub#770)", () => {
+    const { checks } = brokenExternalLinksRule.run(
+      ctx([], {
+        found: 3,
+        checked: 0,
+        cap: 200,
+        notRequested: 2,
+        notRequestedLinks: sample,
+        refused: 1,
+        refusedByUrl: 1,
+        refusedLinks: [
+          { href: "http://192.168.1.1/admin", sourcePages: [`${BASE}/`], pageCount: 1 },
+        ],
+      }),
+    );
+    expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual([
+      "not-requested-external-links:info",
+      "refused-external-links:info",
+    ]);
   });
 
   test("nothing left out: no not-requested line", () => {

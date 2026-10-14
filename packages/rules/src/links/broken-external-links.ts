@@ -148,20 +148,28 @@ export const brokenExternalLinksRule: Rule = {
 
     const linkCheck = ctx.site?.externalLinkCheck;
     const notRequested = linkCheck ? notRequestedCheck(linkCheck) : null;
+    const refused = linkCheck ? refusedCheck(linkCheck) : null;
 
     if (externalLinks.length === 0) {
-      // Every external link was one the checker never requests: say that,
-      // and nothing about the rest, of which there are none.
-      if (notRequested && linkCheck && (linkCheck.notRequested ?? 0) >= linkCheck.found) {
-        checks.push(notRequested);
+      // Every external link was one the checker never requests, as an action
+      // or token link (repo#2759) or for its address (pub#770): say that, and
+      // nothing about the rest, of which there are none.
+      const neverRequested = (linkCheck?.notRequested ?? 0) + (linkCheck?.refused ?? 0);
+      if ((notRequested || refused) && linkCheck && neverRequested >= linkCheck.found) {
+        if (notRequested) checks.push(notRequested);
+        if (refused) checks.push(refused);
         return { checks };
       }
       if (notRequested) checks.push(notRequested);
+      if (refused) checks.push(refused);
       // No check results while the pages do link out: the checker never saw
       // them (rules re-run on a stored crawl by `squirrel analyze`, a check
       // phase that died early). Not a pass. The links never requested are
       // reported above, not counted here.
-      const found = Math.max(0, countExternalLinks(ctx.site?.pages) - (linkCheck?.notRequested ?? 0));
+      const found = Math.max(
+        0,
+        countExternalLinks(ctx.site?.pages) - (linkCheck?.notRequested ?? 0) - (linkCheck?.refused ?? 0),
+      );
       if (found > 0) {
         checks.push(
           notChecked(
@@ -263,7 +271,9 @@ export const brokenExternalLinksRule: Rule = {
     // next to the result for the ones that were. The ones never requested as
     // actions or token links (repo#2759) are not over any limit.
     const capped = linkCheck;
-    const eligible = capped ? capped.found - (capped.notRequested ?? 0) : 0;
+    // Neither the not-requested nor the links refused on their URL alone were
+    // eligible: they never took a slot under the limit.
+    const eligible = capped ? capped.found - (capped.notRequested ?? 0) - (capped.refusedByUrl ?? 0) : 0;
     const overCap = capped ? eligible - capped.checked : 0;
     if (capped && overCap > 0) {
       checks.push({
@@ -277,7 +287,6 @@ export const brokenExternalLinksRule: Rule = {
     }
 
     if (notRequested) checks.push(notRequested);
-    const refused = linkCheck ? refusedCheck(linkCheck) : null;
     if (refused) checks.push(refused);
 
     // Report WAF-blocked links as info (not broken, just unverifiable)

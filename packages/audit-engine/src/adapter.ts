@@ -160,6 +160,7 @@ import { isNonPublicHostname } from "@squirrelscan/utils/non-public-host";
 import {
   type EgressPolicy,
   memoizeResolveHost,
+  refusedWithoutLookup,
   resolveHostAddresses,
 } from "@squirrelscan/utils/public-egress";
 import { getHostname, normalizeUrl } from "@squirrelscan/utils/url";
@@ -1806,6 +1807,8 @@ export function runRulesOnStorage(
       rateLimited?: boolean;
     }> = [];
 
+    // Rows the external check would refuse on their address are left out.
+    const staleRowEgress = externalLinkEgress(crawl?.baseUrl ?? "");
     let linkQueryCount = 0;
     for (const link of allLinks) {
       if (!link.isInternal) {
@@ -1820,6 +1823,8 @@ export function runRulesOnStorage(
         // here, a verdict an earlier engine wrote and an incremental crawl
         // copied over with the page; it is not this audit's answer.
         if (isNotRequestedExternalLink(link.href, appearances.map((a) => a.anchorText ?? ""))) continue;
+        // pub#770: nor one the external check refuses on its address.
+        if (refusedWithoutLookup(link.href, staleRowEgress)) continue;
 
         externalLinksData.push({
           href: link.href,
@@ -2597,11 +2602,15 @@ function buildStreamingSiteData(
       rateLimited?: boolean;
     }> = [];
 
+    // Rows the external check would refuse on their address are left out.
+    const staleRowEgress = externalLinkEgress(crawl?.baseUrl ?? "");
     for (const link of allLinks) {
       if (!link.isInternal) {
         const appearances = linkAppearancesByHref.get(link.href) ?? [];
         // repo#2759: never requested this audit; see the v1 builder.
         if (isNotRequestedExternalLink(link.href, appearances.map((a) => a.anchorText ?? ""))) continue;
+        // pub#770: nor one the external check refuses on its address.
+        if (refusedWithoutLookup(link.href, staleRowEgress)) continue;
 
         externalLinksData.push({
           href: link.href,
@@ -3473,6 +3482,21 @@ function nofollowActionTargets(page: {
   return out;
 }
 
+/**
+ * The egress policy for an audit's external links (#767): public addresses
+ * only, private ones too when the audited site is itself on a private
+ * network, never link-local or cloud metadata; each hop pinned to the vetted
+ * address unless the transport pins.
+ */
+function externalLinkEgress(baseUrl: string, egressPinnedByTransport?: boolean): EgressPolicy {
+  const siteHost = getHostname(baseUrl).replace(/^\[|\]$/g, "");
+  return {
+    allowPrivateNetwork: siteHost !== "" && isNonPublicHostname(siteHost),
+    resolve: memoizeResolveHost(resolveHostAddresses),
+    pin: egressPinnedByTransport !== true,
+  };
+}
+
 /** Not-requested external links kept as a sample in the crawl stats, and source pages per link. */
 const NOT_REQUESTED_SAMPLE_LINKS = 50;
 const NOT_REQUESTED_SAMPLE_PAGES = 10;
@@ -3635,12 +3659,7 @@ export function checkCollectedExternalLinks(
     // on a private network), never link-local or cloud metadata, and connected
     // to the address that was vetted. No custom headers ever go with it.
     const crawl = yield* storage.getCrawl(crawlId).pipe(Effect.catchAll(() => Effect.succeed(null)));
-    const siteHost = getHostname(crawl?.baseUrl ?? "").replace(/^\[|\]$/g, "");
-    const egress: EgressPolicy = {
-      allowPrivateNetwork: siteHost !== "" && isNonPublicHostname(siteHost),
-      resolve: memoizeResolveHost(resolveHostAddresses),
-      pin: egressPinnedByTransport !== true,
-    };
+    const egress = externalLinkEgress(crawl?.baseUrl ?? "", egressPinnedByTransport);
 
     // Check external links using injected cache (or null for no caching)
     const cache = linkCache ?? null;
@@ -3651,7 +3670,18 @@ export function checkCollectedExternalLinks(
     // requested, locally or by the cloud's bulk checker: the URL itself can be
     // the credential. Same rules as the internal link probe, URL and link text
     // alike. Counted, sampled, and reported by links/broken-external-links.
-    const { requestable, notRequested } = splitNotRequestedExternalLinks(externalLinkOccurrences);
+    const { requestable: requestableOrRefused, notRequested } =
+      splitNotRequestedExternalLinks(externalLinkOccurrences);
+    // pub#770: an address the policy refuses on the URL alone (a private,
+    // link-local or metadata IP literal, `localhost`, a metadata name) is
+    // never requested either, so it takes no slot under `max_links` and is
+    // never stored as a row. Listed with the refusals the check itself makes.
+    const requestable: ExternalLinkOccurrences = new Map();
+    const refusedByUrl: string[] = [];
+    for (const [href, occs] of requestableOrRefused) {
+      if (refusedWithoutLookup(href, egress)) refusedByUrl.push(href);
+      else requestable.set(href, occs);
+    }
     const notRequestedHrefs = [...externalLinkOccurrences.keys()].filter((href) => !requestable.has(href));
 
     // repo#2729: a site can link out to tens of thousands of URLs, and in the
@@ -3667,6 +3697,7 @@ export function checkCollectedExternalLinks(
       ...(notRequested.count > 0
         ? { notRequested: notRequested.count, notRequestedLinks: notRequested.sample }
         : {}),
+      ...(refusedByUrl.length > 0 ? { refusedByUrl: refusedByUrl.length } : {}),
     };
     yield* storage
       .updateStats(crawlId, { externalLinkCheck })
@@ -3693,7 +3724,7 @@ export function checkCollectedExternalLinks(
     // metadata address on a public site's page) were never requested. Counted
     // and sampled like the not-requested ones, so the report can say so
     // rather than leave them out of every line.
-    const refusedHrefs = results.filter((r) => r.refused).map((r) => r.href);
+    const refusedHrefs = [...refusedByUrl, ...results.filter((r) => r.refused).map((r) => r.href)];
     if (refusedHrefs.length > 0) {
       const refusedOccurrences: ExternalLinkOccurrences = new Map(
         refusedHrefs.map((href) => [href, externalLinkOccurrences.get(href) ?? []]),
@@ -3706,7 +3737,13 @@ export function checkCollectedExternalLinks(
             refusedLinks: sampleExternalLinks(refusedOccurrences),
           },
         })
-        .pipe(Effect.catchAll(() => Effect.void));
+        .pipe(
+          Effect.catchAll((error) =>
+            Effect.sync(() =>
+              logger.warn("could not record refused external links", { error: String(error) }),
+            ),
+          ),
+        );
     }
 
     // Store results in per-crawl storage
@@ -3714,6 +3751,8 @@ export function checkCollectedExternalLinks(
     const allAppearances: LinkAppearanceRecord[] = [];
 
     for (const result of results) {
+      // Never requested: no row, so no line reads it as checked (pub#770).
+      if (result.refused) continue;
       yield* storage
         .upsertLink(crawlId, {
           href: result.href,

@@ -100,10 +100,12 @@ describe("the external link phase records the refused links", () => {
       ),
     );
     const stats = await Effect.runPromise(Effect.orDie(storage.getStats(crawlId)));
+    // Refused on the URL alone: never selected under the limit, never stored.
     expect(stats?.externalLinkCheck).toMatchObject({
       found: 2,
-      checked: 2,
+      checked: 0,
       refused: 2,
+      refusedByUrl: 2,
       refusedLinks: [
         {
           href: "http://192.168.1.1/admin?id=…",
@@ -113,5 +115,7 @@ describe("the external link phase records the refused links", () => {
         { href: "http://127.0.0.1:9/status", sourcePages: ["https://example.com/"], pageCount: 1 },
       ],
     });
+    const rows = await Effect.runPromise(Effect.orDie(storage.getLinks(crawlId)));
+    expect(rows.filter((l) => !l.isInternal)).toEqual([]);
   });
 });
