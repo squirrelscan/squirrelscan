@@ -294,3 +294,80 @@ describe("editor-summary malformed 2xx", () => {
     expect(reported).toBe(false);
   });
 });
+
+// squirrelscan/repo#2818: a link the service could not verify reaches the rules
+// as unverifiable (the WAF-blocked bucket), never as broken.
+describe("dead-links results the service could not verify", () => {
+  async function checkerAnswering(results: Array<Record<string, unknown>>) {
+    const config = getDefaultConfig();
+    config.cloud.enabled = true;
+    const siteContext = await Effect.runPromise(
+      buildSiteContext([pageRecord(HTML)])
+    );
+    return resolveDeadLinksBulkChecker({
+      client: {
+        deadLinks: async () => ({ results, charged: 0 }),
+      } as never,
+      config,
+      auditId: "audit-1",
+      siteContext,
+      onSpend: () => {},
+    });
+  }
+
+  test("a wafBlocked result keeps its flag and a known vendor; any other vendor reads unknown", async () => {
+    const base = {
+      ok: false,
+      status: null,
+      error: null,
+      redirectUrl: null,
+      fromCache: true,
+    };
+    const checker = await checkerAnswering([
+      {
+        ...base,
+        url: "https://external-one.com/a",
+        wafBlocked: true,
+        wafProvider: "akamai",
+      },
+      {
+        ...base,
+        url: "https://external-two.com/b",
+        wafBlocked: true,
+        wafProvider: "<script>",
+      },
+    ]);
+    const results = await checker!([
+      "https://external-one.com/a",
+      "https://external-two.com/b",
+    ]);
+    expect(results.get("https://external-one.com/a")).toMatchObject({
+      status: null,
+      error: null,
+      wafBlocked: true,
+      wafProvider: "akamai",
+    });
+    expect(results.get("https://external-two.com/b")).toMatchObject({
+      wafBlocked: true,
+      wafProvider: "unknown",
+    });
+  });
+
+  test("a result without the flag, from this or an older service, carries none", async () => {
+    const checker = await checkerAnswering([
+      {
+        url: "https://external-one.com/a",
+        ok: true,
+        status: 200,
+        error: null,
+        redirectUrl: null,
+        fromCache: false,
+      },
+    ]);
+    const result = (await checker!(["https://external-one.com/a"])).get(
+      "https://external-one.com/a"
+    );
+    expect(result?.wafBlocked).toBeUndefined();
+    expect(result?.wafProvider).toBeUndefined();
+  });
+});

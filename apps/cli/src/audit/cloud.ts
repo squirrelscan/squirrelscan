@@ -27,6 +27,7 @@ import {
   releaseSiteContextDocuments,
   renderedPageUrlsFrom,
   type CloudPrefetchResult,
+  type ExternalCheckResult,
 } from "@squirrelscan/audit-engine";
 import { computeCost } from "@squirrelscan/core-contracts";
 import { SERVICE_LIMITS } from "@squirrelscan/core-contracts/limits";
@@ -714,10 +715,38 @@ function buildDeadLinksBulkChecker(
           // to the status for 429/430 so a service that predates the field still
           // stops reporting throttled links as dead.
           rateLimited: r.rateLimited === true || isRateLimitStatus(r.status),
+          // squirrelscan/repo#2818: a link the service could not verify (bot
+          // protection, a timeout from its network, a first 404 awaiting its
+          // confirming check) is listed as unverifiable, never as broken.
+          ...(r.wafBlocked === true
+            ? { wafBlocked: true, wafProvider: knownWafProvider(r.wafProvider) }
+            : {}),
         },
       ])
     );
   };
+}
+
+type WafProvider = NonNullable<ExternalCheckResult["wafProvider"]>;
+
+/** The engine's vendor vocabulary, taken from its own type: no new dependency. */
+const WAF_PROVIDERS: ReadonlySet<string> = new Set<WafProvider>([
+  "cloudflare",
+  "akamai",
+  "aws-waf",
+  "sucuri",
+  "imperva",
+  "datadome",
+  "perimeterx",
+  "kasada",
+  "unknown",
+]);
+
+/** A vendor the service named, held to the engine's vocabulary: anything else reads as `unknown`. */
+function knownWafProvider(provider: string | undefined): WafProvider {
+  return provider !== undefined && WAF_PROVIDERS.has(provider)
+    ? (provider as WafProvider)
+    : "unknown";
 }
 
 /**

@@ -18,7 +18,7 @@ The rule is site-wide and reads the results of the external link check. It emits
 - `broken-external-links` passes when checking ran and the audited pages have no external links. Message: `No external links found to check`.
 - `broken-external-links` warns when links failed. Message: `4 broken external link(s): 3 with 404, 1 failed`, grouped by status code with `failed` covering fetch errors. Each item reads `https://other.example/page (404)` or `(Error: timeout)`, with the pages that link to it. Severity warning, weight 5.
 - `broken-external-links` passes otherwise. Message: `All 128 external link(s) are working`.
-- `waf-blocked-external-links` reports info for links refused by a firewall. Message: `6 external link(s) blocked by WAF - status unverifiable`, naming the provider where it is known.
+- `waf-blocked-external-links` reports info for links refused by a firewall. Message: `6 external link(s) blocked by WAF - status unverifiable`, naming the provider where it is known. When you are logged in, the same list also holds the links the cloud link checker could not verify: a timeout or failed connection from the checker's network, or a 404 seen once and waiting for a second check to confirm it. Each of these is shown with the provider `unknown` unless the checker identified one.
 - `rate-limited-external-links` reports info for throttled targets. Message: `2 external link(s) rate-limited - status unverifiable`.
 
 A link counts as broken when the fetch errored, or the status is 400 or above and it is neither a firewall-blocked 403 nor rate-limited.
