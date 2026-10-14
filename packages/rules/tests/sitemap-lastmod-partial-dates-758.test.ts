@@ -222,18 +222,25 @@ describe("crawl/sitemap-lastmod-drift: the page's date and a date-only lastmod a
     expect(late[0]!.items![0]!.meta).toMatchObject({ deltaDays: 9 });
   });
 
-  test("a lastmod outside the W3C format with no zone is not compared, on any machine", () => {
-    const prior = process.env.TZ;
+  test("a lastmod outside the W3C format reads the same on every machine", () => {
+    // Bun keeps the last zone set when TZ is deleted, so it is put back by
+    // assignment.
+    const original = process.env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
     try {
-      for (const zone of ["UTC", "Asia/Tokyo", "America/New_York"]) {
+      for (const zone of ["UTC", "Asia/Tokyo", "America/New_York", "Pacific/Kiritimati"]) {
         process.env.TZ = zone;
-        for (const lastmod of ["2024/09/10", "2024-9", "2024-09-1"]) {
+        // Read as written: the 10th, which agrees with a page dated that day.
+        expect(drift("2024/09/10", "2024-09-10T12:00:00Z").map((c) => c.status)).toEqual(["pass"]);
+        expect(drift("Tue, 10 Sep 2024", "2024-09-10T12:00:00Z").map((c) => c.status)).toEqual([
+          "pass",
+        ]);
+        // ISO-shaped but not a W3C form: not read, rather than guessed.
+        for (const lastmod of ["2024-9", "2024-09-1"]) {
           expect(drift(lastmod, "2024-09-10T12:00:00Z")[0]!.skipReason).toBe("No comparable dates");
         }
       }
     } finally {
-      if (prior === undefined) delete process.env.TZ;
-      else process.env.TZ = prior;
+      process.env.TZ = original;
     }
   });
 });
@@ -247,5 +254,22 @@ describe("crawl/sitemap-lastmod-churn counts the day the sitemap wrote (#772)", 
     const { checks } = sitemapLastmodChurnRule.run(siteWith([], urls));
     expect(checks[0]).toMatchObject({ status: "warn" });
     expect(checks[0]!.details).toMatchObject({ dates: ["2024-09-10"] });
+  });
+
+  test("a lastmod outside the W3C format counts on the day written, on every machine", () => {
+    const urls = Array.from({ length: 30 }, (_, i) => ({
+      loc: `https://example.com/p${i}`,
+      lastmod: "2024/09/10",
+    }));
+    const original = process.env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+    try {
+      for (const zone of ["UTC", "Asia/Tokyo", "America/New_York"]) {
+        process.env.TZ = zone;
+        const { checks } = sitemapLastmodChurnRule.run(siteWith([], urls));
+        expect(checks[0]!.details).toMatchObject({ dates: ["2024-09-10"], urlsWithLastmod: 30 });
+      }
+    } finally {
+      process.env.TZ = original;
+    }
   });
 });

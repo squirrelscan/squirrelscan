@@ -8,12 +8,7 @@ import type { SitemapData } from "@squirrelscan/core-contracts";
 import { flattenJsonLdNodes, normalizeUrl } from "@squirrelscan/utils";
 
 import { documentTypes, isArticleType, schemaDateString } from "../shared/schema-document";
-import {
-  looseDatePeriod,
-  periodGapMs,
-  w3cDatePeriod,
-  type DatePeriod,
-} from "@squirrelscan/utils/date-period";
+import { datePeriod, periodGapMs, type DatePeriod } from "@squirrelscan/utils/date-period";
 
 const MS_PER_DAY = 86_400_000;
 
@@ -43,7 +38,7 @@ interface PageDate {
   source: DateSource;
 }
 
-const isUsableDate = (value: string): boolean => looseDatePeriod(value) !== null;
+const isUsableDate = (value: string): boolean => datePeriod(value) !== null;
 
 /**
  * The `dateModified` of the JSON-LD node that describes THIS DOCUMENT.
@@ -99,7 +94,7 @@ function resolvePageDate(parsed: ParsedPage): PageDate | null {
 
   for (const candidate of candidates) {
     const value = candidate.value?.trim();
-    const period = looseDatePeriod(value);
+    const period = datePeriod(value);
     if (value && period !== null) return { value, period, source: candidate.source };
   }
   return null;
@@ -216,8 +211,8 @@ export const sitemapLastmodDriftRule: Rule = {
       // #758, #772: `2024`, `2024-09` and `2024-09-10` name a whole year,
       // month or day, and so may the page's date: two periods that overlap
       // agree, and two that do not are measured between their nearer ends.
-      const period = w3cDatePeriod(lastmod);
-      if (period === null) continue; // Unparseable lastmod is crawl/sitemap-valid's job.
+      const period = datePeriod(lastmod);
+      if (period === null) continue; // Not a date at all: nothing to compare.
 
       // No page-side date at all is content/freshness territory, not drift.
       const pageDate = resolvePageDate(page.parsed);

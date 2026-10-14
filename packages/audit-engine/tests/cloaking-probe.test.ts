@@ -83,10 +83,10 @@ describe("selectSuspiciousPaths", () => {
   });
 
   test("a lastmod of the current year or month is recent; an earlier month only near its end (#772)", () => {
-    const pick = (lastmod: string) =>
+    const pick = (lastmod: string, recentDays = 14) =>
       selectSuspiciousPaths([candidate({ lastmod })], {
         maxPages: 10,
-        recentDays: 14,
+        recentDays,
         hasSitemap: true,
         now: NOW,
       }).length;
@@ -95,8 +95,24 @@ describe("selectSuspiciousPaths", () => {
     expect(pick("2026")).toBe(1);
     expect(pick("2026-06")).toBe(1);
     expect(pick("2026-05")).toBe(0);
+    expect(pick("2026-05", 30)).toBe(1);
     expect(pick("2025")).toBe(0);
     expect(pick("2027")).toBe(0);
+  });
+
+  test("a page dated precisely outranks one stamped only with the year (#772)", () => {
+    const day = (offset: number) => new Date(NOW - offset * 86_400_000).toISOString().slice(0, 10);
+    const sel = selectSuspiciousPaths(
+      [
+        ...[1, 2, 3, 4, 5].map((i) =>
+          candidate({ url: `${SITE}/y${i}`, normalizedUrl: `${SITE}/y${i}`, lastmod: "2026" }),
+        ),
+        candidate({ url: `${SITE}/yesterday`, normalizedUrl: `${SITE}/yesterday`, lastmod: day(1) }),
+        candidate({ url: `${SITE}/today`, normalizedUrl: `${SITE}/today`, lastmod: day(0) }),
+      ],
+      { maxPages: 3, recentDays: 14, hasSitemap: true, now: NOW },
+    );
+    expect(sel.map((s) => s.url)).toEqual([`${SITE}/today`, `${SITE}/yesterday`, `${SITE}/y1`]);
   });
 
   test("skips non-2xx pages", () => {

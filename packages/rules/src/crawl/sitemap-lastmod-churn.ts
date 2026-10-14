@@ -2,7 +2,7 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import { w3cDatePeriod } from "@squirrelscan/utils/date-period";
+import { datePeriod } from "@squirrelscan/utils/date-period";
 
 const MIN_URLS_WITH_LASTMOD = 20;
 const MAX_DISTINCT_DAYS = 2;
@@ -14,7 +14,7 @@ const MAX_DISTINCT_DAYS = 2;
  * report a date the sitemap never wrote. Null when it is not a date.
  */
 function toDay(lastmod: string): string | "coarse" | null {
-  const period = w3cDatePeriod(lastmod);
+  const period = datePeriod(lastmod);
   if (!period) return null;
   return period.day ?? "coarse";
 }

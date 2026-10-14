@@ -13,7 +13,7 @@
 // inbound-link analysis that only exists once pages are parsed. OFF by default and
 // capped to `maxPages` so it never multiplies crawl cost.
 
-import { w3cDatePeriod } from "@squirrelscan/utils/date-period";
+import { datePeriod } from "@squirrelscan/utils/date-period";
 import { getPathname, normalizeUrl } from "@squirrelscan/utils/url";
 import { stripHtmlForText } from "@squirrelscan/utils";
 
@@ -99,7 +99,7 @@ export type ProbeFetch = (
  * changed today; read as 1 January it would never be recent.
  */
 export function parseLastmod(value: string | null, now: number = Date.now()): number | null {
-  const period = w3cDatePeriod(value);
+  const period = datePeriod(value);
   if (!period || period.start > now) return period ? period.start : null;
   return Math.min(period.end, now);
 }
@@ -109,13 +109,16 @@ export function parseLastmod(value: string | null, now: number = Date.now()): nu
  * from the sitemap — same heuristic as integrity/orphan-page) and recently
  * modified pages (sitemap lastmod within `recentDays`). Orphans rank first (the
  * stronger compromise signal), then most-recently-modified. Capped at `maxPages`.
+ * Recent pages are ranked by the START of their lastmod's period, so a page
+ * dated yesterday outranks one stamped only with the current year, which may
+ * name today but says least about when (#772).
  */
 export function selectSuspiciousPaths(
   candidates: CloakingCandidate[],
   opts: { maxPages: number; recentDays: number; hasSitemap: boolean; now: number },
 ): SelectedProbe[] {
   const orphans: SelectedProbe[] = [];
-  const recent: { probe: SelectedProbe; lastmodMs: number }[] = [];
+  const recent: { probe: SelectedProbe; rankMs: number }[] = [];
   const seen = new Set<string>();
 
   for (const c of candidates) {
@@ -139,12 +142,13 @@ export function selectSuspiciousPaths(
     if (isOrphan) {
       orphans.push({ url: c.url, reason: "orphan" });
     } else {
-      // lastmodMs is non-null here: isRecent requires it.
-      recent.push({ probe: { url: c.url, reason: "recent-lastmod" }, lastmodMs: lastmodMs! });
+      // The period is non-null here: isRecent requires it.
+      const rankMs = datePeriod(c.lastmod)!.start;
+      recent.push({ probe: { url: c.url, reason: "recent-lastmod" }, rankMs });
     }
   }
 
-  recent.sort((a, b) => b.lastmodMs - a.lastmodMs);
+  recent.sort((a, b) => b.rankMs - a.rankMs);
   return [...orphans, ...recent.map((r) => r.probe)].slice(0, Math.max(0, opts.maxPages));
 }
 
