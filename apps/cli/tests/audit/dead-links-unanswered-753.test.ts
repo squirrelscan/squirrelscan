@@ -78,10 +78,12 @@ async function checkLinks(urls: string[], pick: (urls: string[]) => string[]) {
   await Effect.runPromise(Effect.orDie(storage.init()));
   const crawlId = await Effect.runPromise(
     Effect.orDie(
+      // The audited site is local, as the link targets are: the external
+      // check's egress policy then allows private addresses (#2759).
       storage.createCrawl({
-        baseUrl: "https://example.com",
-        seedUrl: "https://example.com",
-        originalUrl: "https://example.com",
+        baseUrl: "http://localhost",
+        seedUrl: "http://localhost",
+        originalUrl: "http://localhost",
         startedAt: Date.now(),
         status: "running",
         config: {},

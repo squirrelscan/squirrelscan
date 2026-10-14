@@ -174,7 +174,10 @@ describe("engine fetches of site-controlled URLs", () => {
   }, 30_000);
 
   test("external links: HEAD and GET undecoded, a 403 interstitial read decoded", async () => {
-    const result = await Effect.runPromise(checkExternalLink(`${origin}/waf`, null));
+    // Loopback fixture: the policy a private site's audit uses.
+    const result = await Effect.runPromise(
+      checkExternalLink(`${origin}/waf`, null, { egress: { allowPrivateNetwork: true } }),
+    );
     expect(result.wafBlocked).toBe(true);
     expect(result.wafProvider).toBe("cloudflare");
     expect(sent.map((s) => s.path)).toEqual(["/waf", "/waf"]);

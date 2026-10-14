@@ -124,7 +124,13 @@ describe("runBulkChecker", () => {
 });
 
 describe("checkExternalLinks with a bulk checker", () => {
-  const OPTIONS = { concurrency: 25, timeoutMs: 5_000, userAgent: "squirrel-test" };
+  // The targets are on loopback: the policy a private site's audit uses.
+  const OPTIONS = {
+    concurrency: 25,
+    timeoutMs: 5_000,
+    userAgent: "squirrel-test",
+    egress: { allowPrivateNetwork: true },
+  };
 
   test("urls the service leaves out of a chunk are checked locally, with their local status", async () => {
     const origin = serveTargets();

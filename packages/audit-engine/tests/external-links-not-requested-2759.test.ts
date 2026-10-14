@@ -191,7 +191,13 @@ describe("splitNotRequestedExternalLinks", () => {
 });
 
 describe("checkExternalLinks redirects", () => {
-  const options = { concurrency: 2, timeoutMs: 5_000, userAgent: "squirrel-test" };
+  // The fixture is on loopback: the policy a private site's audit uses.
+  const options = {
+    concurrency: 2,
+    timeoutMs: 5_000,
+    userAgent: "squirrel-test",
+    egress: { allowPrivateNetwork: true },
+  };
 
   test("a redirect into an action or token link is not followed: the 3xx is the answer", async () => {
     const { third } = serve();

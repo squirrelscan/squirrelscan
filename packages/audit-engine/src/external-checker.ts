@@ -90,11 +90,18 @@ export interface ExternalCheckerOptions {
    * this policy before it is sent and connects to the address it was vetted
    * on (`@squirrelscan/utils/public-egress`). A refused first request leaves
    * the link unresolved, never broken; a refused redirect hop is not followed,
-   * and the redirect that pointed there is the link's answer. Absent: hosts
-   * are unrestricted, as they were before.
+   * and the redirect that pointed there is the link's answer. Absent: the
+   * strict default, {@link DEFAULT_EGRESS}, public addresses only. A caller
+   * auditing a private site passes `allowPrivateNetwork: true`.
    */
   egress?: EgressPolicy;
 }
+
+/**
+ * The policy when a caller gives none: fail closed. Public addresses only,
+ * never link-local or metadata, each hop pinned to the address vetted.
+ */
+export const DEFAULT_EGRESS: EgressPolicy = { allowPrivateNetwork: false };
 
 /** Max urls per bulk-checker call — mirrors SERVICE_LIMITS.deadLinksBatchUrls. */
 export const BULK_CHECK_CHUNK_SIZE = 200;
@@ -172,7 +179,7 @@ async function requestFollowingSafeRedirects(
   options: ExternalCheckerOptions,
   signal: AbortSignal,
 ): Promise<{ response: Response; redirectTarget: string | null }> {
-  const send = options.egress ? egressGuardedSend(fetchUndecoded, options.egress) : fetchUndecoded;
+  const send = egressGuardedSend(fetchUndecoded, options.egress ?? DEFAULT_EGRESS);
   let current = href;
   let previous: Response | null = null;
   for (let hop = 0; ; hop++) {

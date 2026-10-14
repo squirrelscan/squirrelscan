@@ -146,6 +146,19 @@ describe("every hop of the external check goes through the egress guard", () => 
     expect(cacheWrites).toEqual([]);
   });
 
+  test("with no policy given, the check fails closed: public addresses only", async () => {
+    const port = serve();
+    const [result] = await Effect.runPromise(
+      checkExternalLinks([`http://127.0.0.1:${port}/landed`], null, {
+        concurrency: 1,
+        timeoutMs: 5_000,
+        userAgent: "squirrel-test",
+      }),
+    );
+    expect(result).toMatchObject({ status: null, error: null });
+    expect(seen).toEqual([]);
+  });
+
   test("no request carries anything but User-Agent and Accept", async () => {
     const port = serve();
     await Effect.runPromise(

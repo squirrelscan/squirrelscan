@@ -154,6 +154,8 @@ describe("external checker deadline (#1729)", () => {
     const results = await Effect.runPromise(
       checkExternalLinks([`${base}/stall-403`], null, {
         timeoutMs: DEADLINE_MS,
+        // Loopback fixture: the policy a private site's audit uses.
+        egress: { allowPrivateNetwork: true },
       }),
     );
     const elapsed = Date.now() - startedAt;
@@ -168,7 +170,10 @@ describe("external checker deadline (#1729)", () => {
 
   test("an unreadable 403 body still gets WAF detection from the headers", async () => {
     const results = await Effect.runPromise(
-      checkExternalLinks([`${base}/stall-403-cf`], null, { timeoutMs: DEADLINE_MS }),
+      checkExternalLinks([`${base}/stall-403-cf`], null, {
+        timeoutMs: DEADLINE_MS,
+        egress: { allowPrivateNetwork: true },
+      }),
     );
 
     // The deadline now cuts the WAF body read short, so giving up on detection
