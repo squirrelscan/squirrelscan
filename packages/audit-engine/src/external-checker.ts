@@ -312,6 +312,9 @@ async function checkSingleUrlAsync(
     return { status: null, error: (error as Error).message || "Unknown error", redirectTarget: null };
   } finally {
     clearTimeout(timeoutId);
+    // Closes every connection this check opened (#766). Neither a capped read
+    // nor a cancelled body does: Bun keeps downloading until the signal aborts.
+    controller.abort();
   }
 }
 

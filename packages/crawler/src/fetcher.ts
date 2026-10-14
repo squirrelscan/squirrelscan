@@ -909,8 +909,10 @@ function fetchPageStandardOnce(
     if (!held) return;
     held.disarm();
     // Aborting, not just disarming. `release` runs only as this effect leaves,
-    // so nothing reads the held body afterwards: on the success path the stream
-    // is already drained and this is a no-op, and on every failure path —
+    // so nothing reads the held body afterwards. On the success path it is a
+    // no-op for a body read to the end, and it is what closes the connection
+    // when the capped read stopped short (#766): cancelling the stream does not,
+    // Bun goes on downloading until the signal aborts. On every failure path —
     // a terminal 403/429/5xx that fails the status guard before any read, or a
     // hop still held when the NEXT request fails — nobody ever consumes it.
     // Disarming alone parked that socket and its buffered chunks for the life

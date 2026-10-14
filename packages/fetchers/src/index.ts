@@ -296,6 +296,10 @@ export function createFetchDocumentFetcher(): DocumentFetcher {
         }
       } finally {
         clearTimeout(timeout);
+        // Closes the connection (#766): a capped read cancels its stream, but
+        // Bun keeps downloading the rest of the body until the signal aborts.
+        // A no-op for a body read to the end.
+        controller.abort();
       }
 
       if (!finalHeaders) {

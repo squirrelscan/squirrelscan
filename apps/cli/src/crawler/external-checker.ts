@@ -184,6 +184,9 @@ async function checkSingleUrlAsync(
     };
   } finally {
     clearTimeout(timeoutId);
+    // Closes the connection (#766): a capped read stops reading, but Bun
+    // keeps downloading the body until the signal aborts.
+    controller.abort();
   }
 }
 

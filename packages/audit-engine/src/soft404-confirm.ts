@@ -176,6 +176,9 @@ function defaultConfirmFetch(timeoutMs: number): ConfirmFetch {
       return { status: 0, body: "", error: e instanceof Error ? e.message : String(e) };
     } finally {
       clearTimeout(timer);
+      // Closes the connection (#766): a capped read stops reading, but Bun
+      // keeps downloading the body until the signal aborts.
+      controller.abort();
     }
   };
 }

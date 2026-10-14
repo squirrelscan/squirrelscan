@@ -54,12 +54,13 @@ describe("withRequestDeadline (#1699)", () => {
     }
   });
 
-  test("a normal response is read in full and the deadline is disarmed", async () => {
+  test("a normal response is read in full, and the request is released only once `use` returns", async () => {
     const server = Bun.serve({
       port: 0,
       fetch: () => new Response("hello", { headers: { "content-type": "text/plain" } }),
     });
     let signal: AbortSignal | undefined;
+    let abortedWhileReading: boolean | undefined;
     try {
       const body = await withRequestDeadline(
         DEADLINE_MS,
@@ -67,14 +68,17 @@ describe("withRequestDeadline (#1699)", () => {
           signal = s;
           return fetch(`http://localhost:${server.port}/`, { signal: s });
         },
-        (response) => response.text(),
+        async (response) => {
+          const text = await response.text();
+          abortedWhileReading = signal?.aborted;
+          return text;
+        },
       );
       expect(body).toBe("hello");
-
-      // Wait out the deadline. Still un-aborted ⇒ the timer was cleared;
-      // without the clearTimeout this flips to true here.
-      await Bun.sleep(DEADLINE_MS * 2);
-      expect(signal?.aborted).toBe(false);
+      expect(abortedWhileReading).toBe(false);
+      // Released (#766): aborting is what closes a connection whose body was
+      // not read to the end; for this one it is a no-op.
+      expect(signal?.aborted).toBe(true);
     } finally {
       server.stop(true);
     }

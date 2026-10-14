@@ -331,6 +331,11 @@ export function decodedBody(res: Response): ReadableStream<Uint8Array> | null {
  * limit. Retained chunks are copy-trimmed so oversized backing buffers cannot
  * remain pinned in memory. The cap applies to the DECODED body, and a body
  * from fetchUndecoded is inflated no further than the cap (#2717).
+ *
+ * Cancelling the stream does not close the connection: Bun goes on
+ * downloading the rest of the body until the request's signal aborts. The
+ * caller aborts it once the read returns (#766); for a body read to the end
+ * that is a no-op and the connection stays pooled.
  */
 export async function readBodyCapped(res: Response, maxBytes: number): Promise<string> {
   const stream = decodedBody(res);
