@@ -8,6 +8,7 @@ import { describe, expect, test } from "bun:test";
 import { EXTERNAL_LINKS_OVER_CAP_SKIP_REASON } from "@squirrelscan/core-contracts";
 
 import { brokenExternalLinksRule } from "../src/links/broken-external-links";
+import { deadLinksRule } from "../src/links/dead-links";
 import type { ExternalLinkCheckData, ParsedPage, RuleContext, SiteData } from "../src/types";
 
 const BASE = "https://example.com";
@@ -81,7 +82,7 @@ describe("links/broken-external-links: links never requested (repo#2759)", () =>
     );
     const overCap = checks.find((c) => c.skipReason === EXTERNAL_LINKS_OVER_CAP_SKIP_REASON);
     expect(overCap?.message).toBe(
-      "3 of 10 external link(s) were not checked: over this audit's limit of 5, which checks the most-linked first",
+      "3 of 8 external link(s) were not checked: over this audit's limit of 5, which checks the most-linked first",
     );
   });
 
@@ -108,6 +109,69 @@ describe("links/broken-external-links: links never requested (repo#2759)", () =>
       notRequested: 80,
       listed: 2,
     });
+  });
+
+  test("a sample entry linked from more pages than it lists carries the page count", () => {
+    const { checks } = brokenExternalLinksRule.run(
+      ctx([ok("https://partner.example/")], {
+        found: 2,
+        checked: 1,
+        cap: 200,
+        notRequested: 1,
+        notRequestedLinks: [
+          {
+            href: "https://mail.example/unsubscribe?token=…",
+            sourcePages: [`${BASE}/`],
+            pageCount: 40,
+          },
+        ],
+      }),
+    );
+    expect(checks.find((c) => c.name === "not-requested-external-links")?.items).toEqual([
+      { id: "https://mail.example/unsubscribe?token=…", sourcePages: [`${BASE}/`], pageCount: 40 },
+    ]);
+  });
+
+  test("no check results for the rest: the not-requested ones are listed, not counted as not checked", () => {
+    const pages = [
+      {
+        url: `${BASE}/`,
+        statusCode: 200,
+        parsed: {
+          links: [UNSUBSCRIBE, SIGNED, "https://partner.example/"].map((url) => ({
+            url,
+            isInternal: false,
+            text: "",
+            rel: null,
+          })),
+        } as unknown as ParsedPage,
+      },
+    ];
+    const context = ctx([], {
+      found: 3,
+      checked: 1,
+      cap: 200,
+      notRequested: 2,
+      notRequestedLinks: sample,
+    });
+    (context.site as { pages: unknown }).pages = pages;
+    const { checks } = brokenExternalLinksRule.run(context);
+    expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual([
+      "not-requested-external-links:info",
+      "broken-external-links:skipped",
+    ]);
+    expect(checks[1]!.message).toBe(
+      "No external link check results for the 1 external link(s) on the audited pages, so they were not checked",
+    );
+  });
+
+  test("links/dead-links says why nothing was verified when every link was left out", () => {
+    const { checks } = deadLinksRule.run(
+      ctx([], { found: 2, checked: 0, cap: 200, notRequested: 2, notRequestedLinks: sample }),
+    );
+    expect(checks.map((c) => c.message)).toEqual([
+      "No external links were verified: all 2 look like actions or carry a token, so they were not requested",
+    ]);
   });
 
   test("nothing left out: no not-requested line", () => {

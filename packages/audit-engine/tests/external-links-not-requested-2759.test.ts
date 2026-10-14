@@ -14,6 +14,8 @@ import type { CheckResult } from "@squirrelscan/core-contracts";
 import { createCrawler } from "@squirrelscan/crawler";
 
 import {
+  buildSiteContext,
+  runRulesOnStorage,
   runStreamingRules,
   splitNotRequestedExternalLinks,
   type ExternalLinkOccurrences,
@@ -71,6 +73,19 @@ function serve(): { port: string; third: string } {
           return new Response(null, { status: 301, headers: { location: "/partner" } });
         case "/loop":
           return new Response(null, { status: 302, headers: { location: "/loop" } });
+        case "/head-404":
+          // HEAD refused, so the checker falls back to GET, whose redirect
+          // leads into the unsubscribe link.
+          return req.method === "HEAD"
+            ? new Response(null, { status: 404 })
+            : new Response(null, { status: 302, headers: { location: UNSUBSCRIBE } });
+        case "/to-mailto":
+          return new Response(null, {
+            status: 302,
+            headers: { location: "mailto:list@example.com" },
+          });
+        case "/choices":
+          return new Response(null, { status: 300, headers: { location: "/partner" } });
         default:
           return html("A page");
       }
@@ -91,32 +106,65 @@ describe("splitNotRequestedExternalLinks", () => {
   test("action and token URLs, and action-worded links, are left out; pages stay", () => {
     const occurrences: ExternalLinkOccurrences = new Map([
       ["https://partner.example/pricing", [occurrence()]],
-      [`https://mail.example${UNSUBSCRIBE}`, [occurrence("Manage email")]],
+      [
+        `https://mail.example${UNSUBSCRIBE}`,
+        [occurrence("Manage email"), occurrence("Manage email")],
+      ],
       [`https://cdn.example${SIGNED}`, [occurrence("Report")]],
       [
         "https://auth.example/magic-login/eyJhbGciOiJIUzI1.eyJzdWIiOiIxMjM0.SflKxwRJSMeKKF2Q",
         [occurrence()],
       ],
       ["https://app.example/account", [occurrence("Log out")]],
-      ["https://shop.example/basket", [occurrence("Remove", true)]],
+      ["https://shop.example/basket", [occurrence()]],
       ["https://blog.example/how-to-verify-your-domain", [occurrence()]],
+      // rel=nofollow on an external link marks a paid or untrusted link, not
+      // an action: an affiliate "Buy on Amazon" is still checked.
+      ["https://www.amazon.example/dp/B00EXAMPLE", [occurrence("Buy on Amazon", true)]],
+      ["https://social.example/squirrelscan", [occurrence("Follow us", true)]],
     ]);
     const { requestable, notRequested } = splitNotRequestedExternalLinks(occurrences);
     expect([...requestable.keys()]).toEqual([
       "https://partner.example/pricing",
       "https://blog.example/how-to-verify-your-domain",
+      "https://www.amazon.example/dp/B00EXAMPLE",
+      "https://social.example/squirrelscan",
     ]);
     expect(notRequested.count).toBe(5);
+    // The sample masks every query value and token-like path segment, so a
+    // published report never carries the credential.
     expect(notRequested.sample.map((l) => l.href).sort()).toEqual(
       [
-        `https://mail.example${UNSUBSCRIBE}`,
-        `https://cdn.example${SIGNED}`,
-        "https://auth.example/magic-login/eyJhbGciOiJIUzI1.eyJzdWIiOiIxMjM0.SflKxwRJSMeKKF2Q",
+        "https://mail.example/unsubscribe?token=…",
+        "https://cdn.example/files/report.pdf?sig=…",
+        "https://auth.example/magic-login/…",
         "https://app.example/account",
         "https://shop.example/basket",
       ].sort(),
     );
-    expect(notRequested.sample[0]!.sourcePages).toEqual(["https://example.com/"]);
+    expect(notRequested.sample[0]).toMatchObject({
+      sourcePages: ["https://example.com/"],
+      pageCount: 1,
+    });
+  });
+
+  test("the sample keeps the 50 most-linked, each with 10 of its pages and the full page count", () => {
+    const occurrences: ExternalLinkOccurrences = new Map();
+    for (let i = 0; i < 60; i++) {
+      const pages = Array.from({ length: i === 0 ? 25 : 1 }, (_, p) => ({
+        ...occurrence(),
+        pageUrl: `https://example.com/p${p}`,
+      }));
+      occurrences.set(`https://mail.example/unsubscribe/${i}`, pages);
+    }
+    const { notRequested } = splitNotRequestedExternalLinks(occurrences);
+    expect(notRequested.count).toBe(60);
+    expect(notRequested.sample).toHaveLength(50);
+    expect(notRequested.sample[0]).toMatchObject({
+      href: "https://mail.example/unsubscribe/0",
+      pageCount: 25,
+    });
+    expect(notRequested.sample[0]!.sourcePages).toHaveLength(10);
   });
 });
 
@@ -139,6 +187,29 @@ describe("checkExternalLinks redirects", () => {
     const [result] = await Effect.runPromise(checkExternalLinks([`${third}/moved`], null, options));
     expect(result).toMatchObject({ status: 200, error: null, redirectTarget: `${third}/partner` });
     expect(requested).toEqual(["/moved", "/partner"]);
+  });
+
+  test("the GET fallback's redirect into an action link is not followed either", async () => {
+    const { third } = serve();
+    const [result] = await Effect.runPromise(
+      checkExternalLinks([`${third}/head-404`], null, options),
+    );
+    expect(result).toMatchObject({ status: 302, redirectTarget: `${third}${UNSUBSCRIBE}` });
+    expect(requested).toEqual(["/head-404", "/head-404"]);
+  });
+
+  test("a Location that is not http(s), and a 300, are answers, not hops", async () => {
+    const { third } = serve();
+    const results = await Effect.runPromise(
+      checkExternalLinks([`${third}/to-mailto`, `${third}/choices`], null, options),
+    );
+    const byHref = new Map(results.map((r) => [r.href, r]));
+    expect(byHref.get(`${third}/to-mailto`)).toMatchObject({
+      status: 302,
+      redirectTarget: "mailto:list@example.com",
+    });
+    expect(byHref.get(`${third}/choices`)).toMatchObject({ status: 300, redirectTarget: null });
+    expect(requested.sort()).toEqual(["/choices", "/to-mailto"]);
   });
 
   test("a redirect loop is still an error", async () => {
@@ -239,7 +310,99 @@ describe("an audit with external link checks on (repo#2759)", () => {
       "3 external link(s) were not requested because they look like actions (log out, unsubscribe) or carry a token or signature in the URL, so their status was not checked",
     );
     expect(info.items?.map((i) => i.id).sort()).toEqual(
-      notRequested.map((p) => `${third}${p}`).sort(),
+      [
+        `${third}/unsubscribe?token=…`,
+        `${third}/files/report.pdf?sig=…`,
+        `${third}/account`,
+      ].sort(),
     );
   });
 });
+
+for (const engine of ["v1", "v2"] as const) {
+  describe(`a re-audit (repo#2759, ${engine})`, () => {
+    test("an old verdict for a link now never requested is not reported, as broken or as working", async () => {
+      // An incremental crawl copies a reused page's link rows from the earlier
+      // crawl, verdicts included. Here an engine before #2759 had checked the
+      // unsubscribe link and stored a 404; the next audit must not report it.
+      const { port, third } = serve();
+      const home = `http://localhost:${port}/`;
+      const crawlerConfig = {
+        maxPages: 1,
+        concurrency: 1,
+        perHostConcurrency: 1,
+        delayMs: 0,
+        perHostDelayMs: 0,
+        timeoutMs: 5_000,
+        userAgent: "squirrel-test",
+        respectRobots: false,
+        incremental: true,
+        useCacheControl: false,
+      };
+      const config = {
+        rule_options: {},
+        rules: { enable: ["links/broken-external-links", "links/dead-links"] },
+        crawler: { max_pages: 1, exclude: [] },
+        external_links: { enabled: true, concurrency: 1, timeout_ms: 5_000, cache_ttl_days: 1 },
+        internal_links: { enabled: false },
+      } as unknown as Config;
+      const first = await Effect.runPromise(createCrawler({ config: crawlerConfig }));
+      const storage = first.storage;
+      const audit = async (crawler: typeof first) => {
+        const crawlId = await Effect.runPromise(crawler.start(home, home));
+        const pre = await Effect.runPromise(
+          runStreamingPreRules(storage, crawlId, config, {
+            externalLinks: { config: config.external_links, linkCache: null },
+          }),
+        );
+        const ran = await Effect.runPromise(
+          Effect.gen(function* () {
+            if (engine === "v1") {
+              const stored = yield* storage.getPages(crawlId);
+              const siteContext = yield* buildSiteContext(stored);
+              return yield* runRulesOnStorage(storage, crawlId, siteContext, config, pre.assets);
+            }
+            return yield* runStreamingRules(storage, crawlId, config, pre.assets);
+          }) as Effect.Effect<{ siteRuleResults: Map<string, CheckResult[]> }, never, never>,
+        );
+        return { crawlId, ran };
+      };
+
+      const { crawlId: firstId } = await audit(first);
+      const pageUrl =
+        (await Effect.runPromise(storage.getPages(firstId)))[0]?.normalizedUrl ?? home;
+      const stale = `${third}${UNSUBSCRIBE}`;
+      await Effect.runPromise(
+        storage.upsertLink(firstId, {
+          href: stale,
+          isInternal: false,
+          status: 404,
+          checkedAt: Date.now(),
+        }),
+      );
+      await Effect.runPromise(
+        storage.addLinkAppearancesBatch(firstId, [
+          {
+            href: stale,
+            pageUrl,
+            anchorText: "Manage email",
+            position: "content",
+            isNofollow: false,
+          },
+        ]),
+      );
+
+      requested = [];
+      const second = await Effect.runPromise(createCrawler({ config: crawlerConfig, storage }));
+      const { ran } = await audit(second);
+      expect(requested).not.toContain(UNSUBSCRIBE);
+      const checks = ran.siteRuleResults.get("links/broken-external-links") ?? [];
+      expect(checks.find((c) => c.status === "warn")).toBeUndefined();
+      for (const c of checks.filter((c) => c.name === "broken-external-links")) {
+        expect(c.items?.map((i) => i.id) ?? []).not.toContain(stale);
+      }
+      const dead = ran.siteRuleResults.get("links/dead-links") ?? [];
+      expect(dead.map((c) => c.message)).toEqual(["Checked 3 external link(s); none are dead"]);
+    });
+  });
+}

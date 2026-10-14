@@ -137,6 +137,8 @@ import {
   RESOURCE_SIZE_LIMITS,
   SQUIRRELSCAN_USER_AGENT,
 } from "@squirrelscan/utils/constants";
+import { maskLinkTokens } from "@squirrelscan/utils/link-actions";
+
 import { checkExternalLinks, type ExternalCheckResult, type LinkCache } from "./external-checker";
 import { checkResourceSizes, type ResourceCheckResult } from "./resource-checker";
 import {
@@ -1746,6 +1748,10 @@ export function runRulesOnStorage(
               .getLinkAppearances(crawlId, link.href)
               .pipe(Effect.catchAll(() => Effect.succeed([])));
         if (!hasBatchLinkMethod) linkQueryCount++;
+        // repo#2759: never requested this audit. A row for one can still be
+        // here, a verdict an earlier engine wrote and an incremental crawl
+        // copied over with the page; it is not this audit's answer.
+        if (isNotRequestedExternalLink(link.href, appearances.map((a) => a.anchorText ?? ""))) continue;
 
         externalLinksData.push({
           href: link.href,
@@ -2526,6 +2532,8 @@ function buildStreamingSiteData(
     for (const link of allLinks) {
       if (!link.isInternal) {
         const appearances = linkAppearancesByHref.get(link.href) ?? [];
+        // repo#2759: never requested this audit; see the v1 builder.
+        if (isNotRequestedExternalLink(link.href, appearances.map((a) => a.anchorText ?? ""))) continue;
 
         externalLinksData.push({
           href: link.href,
@@ -3402,22 +3410,36 @@ const NOT_REQUESTED_SAMPLE_LINKS = 50;
 const NOT_REQUESTED_SAMPLE_PAGES = 10;
 
 /**
+ * An external link the checker never requests (repo#2759): its URL looks like
+ * an action or carries a token, or some page's link text is plainly an action
+ * ("Log out", "Unsubscribe", "Delete account"). rel=nofollow does not widen it
+ * here as it does for internal links: on an external link it marks a paid or
+ * untrusted link ("Buy on Amazon", "Follow us"), not an action.
+ */
+export function isNotRequestedExternalLink(href: string, linkTexts: Iterable<string>): boolean {
+  if (looksLikeAnAction(href)) return true;
+  for (const text of linkTexts) if (linkTextLooksLikeAnAction(text, false)) return true;
+  return false;
+}
+
+/**
  * Split the external links into those the checker may request and those it
- * never requests (repo#2759): the URL looks like an action or carries a token
- * (`looksLikeAnAction`), or any page words the link as an action ("Log out",
- * or rel=nofollow on action text, `linkTextLooksLikeAnAction`). The second
- * come back as a count and a sample, most-linked first, then by URL.
+ * never requests ({@link isNotRequestedExternalLink}). The second come back as
+ * a count and a sample, most-linked first, then by URL, each with its first
+ * source pages, how many pages link it, and its URL with token-like values
+ * masked, so a published report never carries the credential.
  */
 export function splitNotRequestedExternalLinks(occurrences: ExternalLinkOccurrences): {
   requestable: ExternalLinkOccurrences;
-  notRequested: { count: number; sample: Array<{ href: string; sourcePages: string[] }> };
+  notRequested: {
+    count: number;
+    sample: Array<{ href: string; sourcePages: string[]; pageCount: number }>;
+  };
 } {
   const requestable: ExternalLinkOccurrences = new Map();
   const skipped: Array<{ href: string; pages: string[] }> = [];
   for (const [href, occs] of occurrences) {
-    const action =
-      looksLikeAnAction(href) || occs.some((o) => linkTextLooksLikeAnAction(o.text, o.isNofollow));
-    if (!action) {
+    if (!isNotRequestedExternalLink(href, occs.map((o) => o.text))) {
       requestable.set(href, occs);
       continue;
     }
@@ -3432,7 +3454,11 @@ export function splitNotRequestedExternalLinks(occurrences: ExternalLinkOccurren
       count: skipped.length,
       sample: skipped
         .slice(0, NOT_REQUESTED_SAMPLE_LINKS)
-        .map(({ href, pages }) => ({ href, sourcePages: pages.slice(0, NOT_REQUESTED_SAMPLE_PAGES) })),
+        .map(({ href, pages }) => ({
+          href: maskLinkTokens(href),
+          sourcePages: pages.slice(0, NOT_REQUESTED_SAMPLE_PAGES),
+          pageCount: pages.length,
+        })),
     },
   };
 }

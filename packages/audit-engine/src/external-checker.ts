@@ -24,7 +24,6 @@ import { looksLikeAnAction } from "@squirrelscan/utils/link-actions";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import { detectWaf, type WafProvider } from "@squirrelscan/waf-detect";
 
-
 // ============================================
 // LINK CACHE INTERFACE (implemented by CLI's LinkCacheStorage)
 // ============================================
@@ -135,8 +134,11 @@ interface CheckUrlResult {
   rateLimited?: boolean;
 }
 
-/** Redirect hops followed per request, as fetch's own `redirect: "follow"` would. */
+/** Redirects followed per request, a browser's limit. */
 const MAX_REDIRECTS = 20;
+
+/** The statuses fetch's own `redirect: "follow"` follows; 300 and 304 are answers. */
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 /**
  * One request, following redirects by hand: a hop whose Location is not
@@ -159,8 +161,7 @@ async function requestFollowingSafeRedirects(
       signal,
       redirect: "manual",
     });
-    const location =
-      response.status >= 300 && response.status < 400 ? response.headers.get("location") : null;
+    const location = REDIRECT_STATUSES.has(response.status) ? response.headers.get("location") : null;
     if (!location) {
       return { response, redirectTarget: current !== href ? current : null };
     }
@@ -176,7 +177,7 @@ async function requestFollowingSafeRedirects(
       return { response, redirectTarget: next };
     }
     response.body?.cancel().catch(() => {});
-    if (hop + 1 >= MAX_REDIRECTS) throw new Error("too many redirects");
+    if (hop >= MAX_REDIRECTS) throw new Error("too many redirects");
     current = next;
   }
 }
@@ -279,9 +280,22 @@ export function checkExternalLinks(
   return Effect.gen(function* () {
     if (urls.length === 0) return [];
 
-    const uniqueUrls = [...new Set(urls)];
     const results: ExternalCheckResult[] = [];
     let urlsToCheck: string[] = [];
+
+    // repo#2759: never requested, by the bulk checker or locally, and never
+    // answered from an old cached verdict either. The audit leaves these out
+    // before calling (checkCollectedExternalLinks reports them); this holds
+    // for any other caller. They come back unresolved.
+    const uniqueUrls: string[] = [];
+    for (const url of new Set(urls)) {
+      if (looksLikeAnAction(url)) {
+        results.push({ href: url, status: null, error: null, redirectTarget: null, fromCache: false });
+      } else {
+        uniqueUrls.push(url);
+      }
+    }
+    if (uniqueUrls.length === 0) return results;
 
     if (cache) {
       const cachedEntries = cache.getCachedBulk(uniqueUrls, opts.ttlSeconds);
@@ -306,18 +320,6 @@ export function checkExternalLinks(
     }
 
     if (urlsToCheck.length === 0) return results;
-
-    // repo#2759: never requested, by the bulk checker or locally. The audit
-    // leaves these out before calling (checkCollectedExternalLinks reports
-    // them); this holds for any other caller. They come back unresolved.
-    const actionUrls = urlsToCheck.filter((url) => looksLikeAnAction(url));
-    if (actionUrls.length > 0) {
-      for (const href of actionUrls) {
-        results.push({ href, status: null, error: null, redirectTarget: null, fromCache: false });
-      }
-      urlsToCheck = urlsToCheck.filter((url) => !looksLikeAnAction(url));
-      if (urlsToCheck.length === 0) return results;
-    }
 
     // Cloud bulk path: resolve local-cache misses via the bulk checker first.
     // Resolved urls are surfaced as-is and written into the local cache so the

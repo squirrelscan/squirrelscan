@@ -489,7 +489,7 @@ export interface SiteData {
     checked: number;
     cap: number;
     notRequested?: number;
-    notRequestedLinks?: Array<{ href: string; sourcePages: string[] }>;
+    notRequestedLinks?: Array<{ href: string; sourcePages: string[]; pageCount?: number }>;
   };
   /**
    * Status of internal link targets the crawl did not fetch, from the link

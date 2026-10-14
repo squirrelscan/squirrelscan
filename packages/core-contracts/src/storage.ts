@@ -253,14 +253,15 @@ export interface CrawlStats {
    * Set by the external-link phase when it ran; absent when it did not.
    * `notRequested` counts the links never requested because they look like an
    * action or carry a token (repo#2759), included in `found` but not
-   * `checked`; `notRequestedLinks` is a sample of them, most-linked first.
+   * `checked`; `notRequestedLinks` is a sample of them, most-linked first,
+   * each URL with its token-like values masked, `pageCount` the pages linking it.
    */
   externalLinkCheck?: {
     found: number;
     checked: number;
     cap: number;
     notRequested?: number;
-    notRequestedLinks?: Array<{ href: string; sourcePages: string[] }>;
+    notRequestedLinks?: Array<{ href: string; sourcePages: string[]; pageCount?: number }>;
   };
   /**
    * Root fetches (robots.txt, sitemaps, llms.txt, the Markdown probe) the site

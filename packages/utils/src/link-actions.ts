@@ -253,3 +253,30 @@ export function linkTextLooksLikeAnAction(text: string, nofollow: boolean): bool
   if (nofollow && ACTION_TEXT.test(label)) return true;
   return label.split(" ").length <= 4 && PLAIN_ACTION_TEXT.test(label);
 }
+
+/**
+ * `url` with every query value, and every token-like path segment, replaced
+ * by `…`, for a report that lists a link it never requested (repo#2759): the
+ * reader sees where it points, the report never carries the credential.
+ * Unparseable input comes back as `…`.
+ */
+export function maskLinkTokens(url: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return "…";
+  }
+  const path = parsed.pathname
+    .split("/")
+    .map((segment) => {
+      const decoded = decode(segment);
+      return decoded !== null && decoded.split(/[;,]/).some((piece) => looksLikeAToken(piece))
+        ? "…"
+        : segment;
+    })
+    .join("/");
+  const keys = [...new Set(parsed.searchParams.keys())];
+  const query = keys.length > 0 ? `?${keys.map((k) => `${encodeURIComponent(k)}=…`).join("&")}` : "";
+  return `${parsed.protocol}//${parsed.host}${path}${query}`;
+}

@@ -45,6 +45,20 @@ export const deadLinksRule: Rule = {
 
     // Zero external links is a real result, not a locked one (#656): no plan
     // could verify anything here, so the upsell must not advertise this rule.
+    // repo#2759: links that look like actions or carry a token are never sent.
+    const linkCheck = ctx.site?.externalLinkCheck;
+    const notRequested = linkCheck?.notRequested ?? 0;
+    if (externalLinks.length === 0 && linkCheck && notRequested > 0 && notRequested >= linkCheck.found) {
+      checks.push({
+        name: "dead-links",
+        status: "info",
+        message: `No external links were verified: all ${notRequested} look like actions or carry a token, so they were not requested`,
+        value: 0,
+        expected: 0,
+      });
+      return { checks };
+    }
+
     if (externalLinks.length === 0) {
       checks.push({
         name: "dead-links",

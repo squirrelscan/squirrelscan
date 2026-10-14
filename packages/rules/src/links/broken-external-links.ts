@@ -68,7 +68,14 @@ function notRequestedCheck(
     status: "info",
     message: `${count} external link(s) were not requested because they look like actions (log out, unsubscribe) or carry a token or signature in the URL, so their status was not checked`,
     value: count,
-    items: sample.map((l) => ({ id: l.href, sourcePages: l.sourcePages })),
+    // `href` arrives with its token-like values masked by the engine.
+    items: sample.map((l) => ({
+      id: l.href,
+      sourcePages: l.sourcePages,
+      ...(l.pageCount !== undefined && l.pageCount > l.sourcePages.length
+        ? { pageCount: l.pageCount }
+        : {}),
+    })),
     details: {
       notRequested: count,
       ...(sample.length < count ? { listed: sample.length } : {}),
@@ -120,10 +127,12 @@ export const brokenExternalLinksRule: Rule = {
         checks.push(notRequested);
         return { checks };
       }
+      if (notRequested) checks.push(notRequested);
       // No check results while the pages do link out: the checker never saw
       // them (rules re-run on a stored crawl by `squirrel analyze`, a check
-      // phase that died early). Not a pass.
-      const found = countExternalLinks(ctx.site?.pages);
+      // phase that died early). Not a pass. The links never requested are
+      // reported above, not counted here.
+      const found = Math.max(0, countExternalLinks(ctx.site?.pages) - (linkCheck?.notRequested ?? 0));
       if (found > 0) {
         checks.push(
           notChecked(
@@ -225,12 +234,13 @@ export const brokenExternalLinksRule: Rule = {
     // next to the result for the ones that were. The ones never requested as
     // actions or token links (repo#2759) are not over any limit.
     const capped = linkCheck;
-    const overCap = capped ? capped.found - (capped.notRequested ?? 0) - capped.checked : 0;
+    const eligible = capped ? capped.found - (capped.notRequested ?? 0) : 0;
+    const overCap = capped ? eligible - capped.checked : 0;
     if (capped && overCap > 0) {
       checks.push({
         name: "broken-external-links",
         status: "skipped",
-        message: `${overCap} of ${capped.found} external link(s) were not checked: over this audit's limit of ${capped.cap}, which checks the most-linked first`,
+        message: `${overCap} of ${eligible} external link(s) were not checked: over this audit's limit of ${capped.cap}, which checks the most-linked first`,
         skipReason: EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
         value: overCap,
         details: { externalLinksFound: capped.found, externalLinksChecked: capped.checked, cap: capped.cap },

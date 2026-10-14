@@ -304,18 +304,20 @@ These rules are a careful default, not a guarantee. The word lists are English, 
 
 ### What the external link check never requests
 
-An external link can carry its own credential: a newsletter's one-click unsubscribe link, a magic sign-in link, a signed download URL. Requesting it, even with `HEAD`, can use it up or act on it. So the external link check never requests a link that the internal link check would skip as an action or token link, using the same word lists, token shapes and link-text rules as [What the internal link check never requests](#what-the-internal-link-check-never-requests). A signed-in audit does not send such a link to the cloud's dead-link check either.
+An external link can carry its own credential: a newsletter's one-click unsubscribe link, a magic sign-in link, a signed download URL. Requesting it, even with `HEAD`, can use it up or act on it. So the external link check never requests a link that the internal link check would skip as an action or token link, using the same word lists and token shapes as [What the internal link check never requests](#what-the-internal-link-check-never-requests), and it skips a link whose text is plainly an action ("Log out", "Unsubscribe", "Delete account"). `rel="nofollow"` does not widen that here: on an external link it marks a paid or untrusted link such as "Buy on Amazon", not an action. A signed-in audit does not send these links to the cloud's dead-link check either.
 
-Redirects are followed by hand. A redirect into an action or token link, or to anything but `http` or `https`, is not followed, and that redirect is the link's status.
+When squirrel checks a link itself, it follows redirects by hand, at most 20. A redirect into an action or token link, or to anything but `http` or `https`, is not followed, and that redirect is the link's status. A link that a signed-in audit sends to the cloud's dead-link check is followed by that service.
 
-These links are listed in `links/broken-external-links` as not requested, never as working or broken, and they do not count against `max_links`.
+These links are listed in `links/broken-external-links` as not requested, never as working or broken, with their query values and token-like path segments masked, and they do not count against `max_links`.
+
+These rules are a careful default, not a guarantee: the word lists are English, and no list can recognize every link that acts on a `GET`. If your pages link to third-party URLs that change state when requested and read like pages, switch external link checks off with `--no-external-links` or `[external_links] enabled = false`.
 
 ### Status detection
 
 | Status | Meaning | Reported As |
 |--------|---------|-------------|
 | 200-299 | Success | Working link |
-| 300-399 | Redirect | Working (followed, unless it leads to an action or token link) |
+| 300-399 | Redirect | Working (followed, unless it leads to an action or token link, which is not requested) |
 | 400-499 | Client error | Broken link |
 | 500-599 | Server error | Broken link |
 | Timeout | No response | Broken link |
