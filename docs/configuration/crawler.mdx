@@ -752,7 +752,8 @@ Custom HTTP request headers attached to **every** crawl request: pages, assets
 on the audited host and its subdomains, `robots.txt`, sitemaps, `llms.txt`, and
 markdown probes. The status checks
 [reliability/broken-resources](/rules/reliability/broken-resources) sends to
-scripts, stylesheets and fonts on other hosts never carry them. Use this to authorize
+scripts, stylesheets and fonts on other hosts never carry them, and neither
+does the status check of a sitemap URL on another host. Use this to authorize
 the crawler with schemes that require signed headers, such as
 [Web Bot Auth](/guides/web-bot-auth) (used by Shopify and Cloudflare).
 

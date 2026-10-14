@@ -37,6 +37,10 @@ import {
   type ParsedPageCache,
 } from "@squirrelscan/parser";
 import { type RunnerScope } from "@squirrelscan/rules";
+import {
+  memoizeResolveHost,
+  resolveHostAddresses,
+} from "@squirrelscan/utils/public-egress";
 import { Duration, Effect, Stream } from "effect";
 
 import type { Config } from "@/config";
@@ -632,6 +636,13 @@ export function fetchResourceAssets(
 
     const maxResources = overrides?.resourceCheckMaxItems;
     const resourceCheckOptions = {
+      // squirrelscan/repo#2764: the site's own assets may be on a localhost or
+      // LAN address, never a link-local or cloud metadata one, on any
+      // redirect hop. Same policy as the engine's asset phase.
+      egress: {
+        allowPrivateNetwork: true,
+        resolve: memoizeResolveHost(resolveHostAddresses),
+      },
       concurrency:
         config.external_links?.concurrency ??
         RESOURCE_SIZE_LIMITS.CHECK_CONCURRENCY,
