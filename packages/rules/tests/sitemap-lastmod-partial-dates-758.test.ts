@@ -171,6 +171,25 @@ describe("crawl/sitemap-lastmod-churn with a year or year-month lastmod (#758)",
     expect(checks[0]!.details).toMatchObject({ newsUrlsWithLastmod: 30, coarseLastmods: 0 });
   });
 
+  test("a few coarse lastmods beside a news sitemap count as lastmods in the too-small message", () => {
+    const context = siteWith(
+      [],
+      urls(() => "2024-09", 5),
+    );
+    const discovered = context.site!.sitemaps!.discovered;
+    discovered.push({
+      ...discovered[0]!,
+      url: "https://example.com/news-sitemap.xml",
+      urls: urls(() => "2024-09-10T04:00:00Z", 30).map((u) => ({ ...u, loc: `${u.loc}-news` })),
+      isNewsSitemap: true,
+    } as (typeof discovered)[number]);
+    const { checks } = sitemapLastmodChurnRule.run(context);
+    expect(checks[0]!.skipReason).toBe("Too few URLs with lastmod");
+    expect(checks[0]!.message).toBe(
+      "Only 5 sitemap URL(s) carry a lastmod; sitemap is too small to judge lastmod churn",
+    );
+  });
+
   test("full datetimes still count, with the coarse ones left out of the sample", () => {
     const { checks } = sitemapLastmodChurnRule.run(
       siteWith([], [...urls(() => "2024-09-10T04:00:00Z"), ...urls(() => "2024", 5)]),
