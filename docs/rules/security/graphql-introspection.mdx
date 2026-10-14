@@ -28,7 +28,7 @@ One request per endpoint, a `GET` with the read-only introspection query in the 
 GET /graphql?query={__schema{types{name}}}
 ```
 
-The query asks for type names only. It carries no cookies and does not follow redirects, and at most 1 MB of the answer is read.
+The query asks for type names only. It carries no cookies and does not follow redirects, and at most 1 MB of the answer is read. The limit counts the answer after decompression, and a compressed answer is decompressed no further than the limit, so a gzip or brotli bomb is cut at the limit rather than decompressed in full.
 
 On an `aggressive` run only, one `POST` of the same query follows when the `GET` answer shows a GraphQL server but no schema, for example a server that blocks `GET` requests or asks for a JSON content type. The body is `{"query":"{__schema{types{name}}}"}` and nothing else. No `POST` is sent when the `GET` answer is not GraphQL, or when it already says introspection is disabled.
 

@@ -32,7 +32,7 @@ One request per endpoint, and only this one:
 GET /graphql?query=mutation{__typename}
 ```
 
-`mutation{__typename}` is a no-op. It selects only `__typename`, which the GraphQL executor answers without running any of your resolvers, and it names no field of your schema, so nothing can be written. The rule never sends a schema-specific mutation and never sends a `POST`, at any probing level. The request carries no cookies and does not follow redirects, and at most 64 KB of the answer is read.
+`mutation{__typename}` is a no-op. It selects only `__typename`, which the GraphQL executor answers without running any of your resolvers, and it names no field of your schema, so nothing can be written. The rule never sends a schema-specific mutation and never sends a `POST`, at any probing level. The request carries no cookies and does not follow redirects, and at most 64 KB of the answer is read, counted after decompression; a compressed answer is decompressed no further than that.
 
 ### Results
 
