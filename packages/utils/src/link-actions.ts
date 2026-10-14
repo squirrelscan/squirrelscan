@@ -154,11 +154,29 @@ export const CREDENTIAL_PARAM_NAMES: readonly string[] = [
  * last brackets (`config[api_key]`), with no list index (`api_key[]`,
  * `pwd[0]`), and no `-`, `_` or `.`, so `x_api_key`, `X-Api-Key` and
  * `session-id` match their entries too.
+ *
+ * One pass from the end, no regex over the brackets: a query key is the
+ * page's to write, and an anchored bracket pattern backtracks quadratically
+ * on a long run of `[]` or `[\` (#778).
  */
 function credentialParamKey(name: string): string {
-  const lower = name.toLowerCase().replace(/(?:\[\d*\])+$/, "");
-  const bracketed = /\[([^\]]+)\]$/.exec(lower);
-  return (bracketed ? bracketed[1]! : lower).replace(/[-_.]/g, "");
+  const lower = name.toLowerCase();
+  // Peel trailing list indexes, `[]` and `[0]`, right to left.
+  let end = lower.length;
+  while (end > 0 && lower[end - 1] === "]") {
+    let i = end - 2;
+    while (i >= 0 && lower[i]! >= "0" && lower[i]! <= "9") i--;
+    if (i < 0 || lower[i] !== "[") break;
+    end = i;
+  }
+  let key = lower.slice(0, end);
+  // The name inside the last brackets, when there is one.
+  if (key.endsWith("]")) {
+    const open = key.lastIndexOf("[", key.length - 2);
+    const inside = open === -1 ? "" : key.slice(open + 1, -1);
+    if (inside !== "" && !inside.includes("]")) key = inside;
+  }
+  return key.replace(/[-_.]/g, "");
 }
 
 const CREDENTIAL_PARAM_SET = new Set(CREDENTIAL_PARAM_NAMES.map(credentialParamKey));

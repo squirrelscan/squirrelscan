@@ -199,3 +199,37 @@ describe("an email address in a path segment is masked (#774)", () => {
     }
   });
 });
+
+describe("adversarial keys and paths stay linear (#778)", () => {
+  // An anchored bracket pattern backtracked quadratically on a long run of
+  // `[]` or `[\`: 40,000 characters took over two seconds. A linear pass over
+  // 200,000 takes a few milliseconds, so the bounds below leave room for a
+  // loaded machine and still fail long before a quadratic pass would finish.
+  const timed = (run: () => unknown) => {
+    const started = performance.now();
+    run();
+    return performance.now() - started;
+  };
+  const shapes = ["[]", "[\\", "[0]", "[", "]", "[a", "a@", "a."];
+
+  for (const shape of shapes) {
+    test(`a key or path of repeated ${JSON.stringify(shape)} at n, 2n and 4n`, () => {
+      const times = [25_000, 50_000, 100_000].map((count) => {
+        // A trailing character that ends no match, as an attacker's key would.
+        const text = `${shape.repeat(count)}x`;
+        const query = `https://x.test/p?${encodeURIComponent(text)}=1`;
+        const path = `https://x.test/${encodeURIComponent(text)}`;
+        return timed(() => {
+          isCredentialParam(text);
+          looksLikeAnAction(query);
+          looksLikeAnAction(path);
+          maskLinkTokens(query);
+          maskLinkTokens(path);
+        });
+      });
+      expect(times[0]!).toBeLessThan(500);
+      expect(times[1]!).toBeLessThan(1_000);
+      expect(times[2]!).toBeLessThan(2_000);
+    });
+  }
+});
