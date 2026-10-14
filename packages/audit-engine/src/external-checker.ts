@@ -175,10 +175,10 @@ const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
  * http(s), looks like an action or token link (repo#2759), or is refused by
  * the egress policy is not requested, and the 3xx that pointed there is the
  * answer. Every hop, the first included, goes through the same guarded send,
- * with no headers but User-Agent, Accept and the Accept-Encoding it decodes. `redirectTarget` is the last URL
- * requested when the chain was followed to its end, or the Location that was
- * not followed; null when the link answered without redirecting. A refused
- * first request throws EgressRefusedError.
+ * with no headers but User-Agent, Accept and the Accept-Encoding it decodes.
+ * `redirectTarget` is the last URL requested when the chain was followed to
+ * its end, or the Location that was not followed; null when the link answered
+ * without redirecting. A refused first request throws EgressRefusedError.
  */
 async function requestFollowingSafeRedirects(
   href: string,

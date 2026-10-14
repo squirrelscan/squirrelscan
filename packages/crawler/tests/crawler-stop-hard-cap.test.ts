@@ -296,6 +296,8 @@ describe("crawl-phase backstop stop() hard cap (#923)", () => {
         pagesAfterStop: pagesAfterStop.length,
         resumedStatus: resumed?.status,
         pagesAfterResume: pagesAfterResume.length,
+        stoppedStartedAt: stopped?.startedAt,
+        resumedStartedAt: resumed?.startedAt,
       };
     });
 
@@ -308,5 +310,10 @@ describe("crawl-phase backstop stop() hard cap (#923)", () => {
     // Resume drains the leftover frontier (the reset /a) and finishes cleanly.
     expect(out.resumedStatus).toBe("completed");
     expect(out.pagesAfterResume).toBe(2); // root + /a
+    // A resume keeps the crawl's start (pub#773): the rule data keeps only the
+    // external link rows checked at or after it, so moving it would drop the
+    // rows the run wrote before it was interrupted.
+    expect(out.stoppedStartedAt).toBeGreaterThan(0);
+    expect(out.resumedStartedAt).toBe(out.stoppedStartedAt);
   });
 });

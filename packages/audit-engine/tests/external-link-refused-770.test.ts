@@ -8,8 +8,15 @@ import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
 import { SQLiteStorage } from "@squirrelscan/crawler";
+import { refusedWithoutLookup } from "@squirrelscan/utils/public-egress";
 
-import { checkCollectedExternalLinks, type ExternalLinkOccurrences } from "../src/adapter";
+import {
+  absorbExternalLinkOccurrences,
+  checkCollectedExternalLinks,
+  parseHtmlForRules,
+  type ExternalLinkOccurrences,
+  type SiteContextPage,
+} from "../src/adapter";
 import {
   checkExternalLinks,
   type ExternalCheckResult,
@@ -117,5 +124,39 @@ describe("the external link phase records the refused links", () => {
     });
     const rows = await Effect.runPromise(Effect.orDie(storage.getLinks(crawlId)));
     expect(rows.filter((l) => !l.isInternal)).toEqual([]);
+  });
+});
+
+describe("only http(s) links reach the external check", () => {
+  test("a URL-refused link is always an address refusal, never a scheme or a URL that does not parse", () => {
+    // refusedWithoutLookup also refuses other schemes and unparseable URLs,
+    // which the refused-external-links line would misdescribe as a private,
+    // link-local or metadata address. Collection never yields them: the link
+    // extractor drops every explicit non-http(s) scheme and every href that
+    // does not resolve.
+    const url = "https://site.example.com/";
+    const html = `<html><body>
+      <a href="ftp://files.example.org/a.zip">ftp</a>
+      <a href="data:text/html,hi">data</a>
+      <a href="javascript:void(0)">js</a>
+      <a href="mailto:hi@example.org">mail</a>
+      <a href="tel:+15550100">tel</a>
+      <a href="file:///etc/hosts">file</a>
+      <a href="http://[::1">unparseable</a>
+      <a href="https://partner.example.org/ok">partner</a>
+      <a href="http://192.168.1.1/admin">router</a>
+    </body></html>`;
+    const collected: ExternalLinkOccurrences = new Map();
+    absorbExternalLinkOccurrences(collected, [
+      { page: { normalizedUrl: url, finalUrl: url, html } as never, parsed: parseHtmlForRules(html, url) },
+    ] as unknown as SiteContextPage[]);
+    expect([...collected.keys()].sort()).toEqual([
+      "http://192.168.1.1/admin",
+      "https://partner.example.org/ok",
+    ]);
+    const policy = { allowPrivateNetwork: false };
+    expect([...collected.keys()].filter((href) => refusedWithoutLookup(href, policy))).toEqual([
+      "http://192.168.1.1/admin",
+    ]);
   });
 });
