@@ -62,6 +62,12 @@ function linkTargetsHint(details: Record<string, unknown> | undefined): string {
     return HINTS[LINK_TARGETS_NOT_FETCHED_SKIP_REASON]!;
   }
   const causes = notFetched as Record<string, unknown>;
+  const present = Object.keys(causes).filter((key) => causes[key]);
+  // The check skipped them on purpose, and a crawl stays inside the same scope
+  // and robots.txt, so only the action and token links can still be reached.
+  if (present.length === 1 && present[0] === "skipped") {
+    return "A Surface or Full audit, which follows links, fetches the ones inside the crawl scope and allowed by robots.txt.";
+  }
   const steps: string[] = [];
   if (causes.off) {
     steps.push(

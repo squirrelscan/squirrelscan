@@ -157,7 +157,7 @@ for (const engine of ["v1", "v2"] as const) {
       const skipped = checks.find((c) => c.status === "skipped")!;
       expect(skipped.details?.notFetched).toEqual({ skipped: 2 });
       expect(lines).toEqual([
-        "Not checked: Broken Links. 2 of 7 internal link target(s) were not fetched because this audit did not follow links and its internal link checks never request targets outside the crawl scope, disallowed by robots.txt, or that look like actions (log out, unsubscribe) or carry a token, so they were not checked for broken links. Run a Surface or Full audit, which follows links, to check them.",
+        "Not checked: Broken Links. 2 of 7 internal link target(s) were not fetched because this audit did not follow links and its internal link checks never request targets outside the crawl scope, disallowed by robots.txt, or that look like actions (log out, unsubscribe) or carry a token, so they were not checked for broken links. A Surface or Full audit, which follows links, fetches the ones inside the crawl scope and allowed by robots.txt.",
       ]);
       // The answered 404 and 410 are still reported.
       expect(
@@ -174,7 +174,7 @@ for (const engine of ["v1", "v2"] as const) {
       expect(skipped.details?.notFetched).toEqual({ overLimit: 2, skipped: 2 });
       expect(lines).toHaveLength(1);
       expect(lines[0]).toContain(
-        "(2 past the limit of 1 target; 2 skipped as outside the crawl scope, disallowed by robots.txt, or an action or token link)",
+        "(2 past the limit of 1 target; 2 skipped as outside the crawl scope, disallowed by robots.txt, or action or token links)",
       );
       expect(lines[0]).toContain(
         "Raise internal_links.max_targets, or run a Surface or Full audit",

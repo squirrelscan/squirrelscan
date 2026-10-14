@@ -335,7 +335,7 @@ describe("links/broken-links when the crawl did not follow links", () => {
     const skipped = named(checks, "broken-links").find((c) => c.status === "skipped")!;
     expect(skipped.details?.notFetched).toEqual({ overLimit: 1, skipped: 2 });
     expect(skipped.message).toBe(
-      "3 of 7 internal link target(s) were not fetched because this audit did not follow links and its internal link checks covered only part of them (1 past the limit of 2 targets; 2 skipped as outside the crawl scope, disallowed by robots.txt, or an action or token link), so they were not checked for broken links",
+      "3 of 7 internal link target(s) were not fetched because this audit did not follow links and its internal link checks left them out (1 past the limit of 2 targets; 2 skipped as outside the crawl scope, disallowed by robots.txt, or action or token links), so they were not checked for broken links",
     );
   });
 
@@ -351,8 +351,77 @@ describe("links/broken-links when the crawl did not follow links", () => {
     const skipped = named(checks, "broken-links").find((c) => c.status === "skipped")!;
     expect(skipped.details?.notFetched).toEqual({ overLimit: 1, skipped: 2, noAnswer: 1 });
     expect(skipped.message).toContain(
-      "(1 past the limit of 2 targets; 2 skipped as outside the crawl scope, disallowed by robots.txt, or an action or token link; 1 with no answer)",
+      "(1 past the limit of 2 targets; 2 skipped as outside the crawl scope, disallowed by robots.txt, or action or token links; 1 with no answer)",
     );
+  });
+
+  test("one target linked in several forms counts once", () => {
+    // `/missing`, `/missing/` and `/missing#x` are one target, asked once.
+    const { checks } = brokenLinksRule.run(
+      ctx(
+        [
+          {
+            url: `${BASE}/`,
+            statusCode: 200,
+            internal: [`${BASE}/missing`, `${BASE}/missing/`, `${BASE}/missing#x`, `${BASE}/logout`],
+          },
+        ],
+        {
+          linkDiscoveryOff: true,
+          linkTargetStatuses: [{ url: `${BASE}/missing`, status: null, error: "timeout" }],
+          internalLinkProbe: { unfetched: 1, probed: 0, cap: 200, outOfScope: 1 },
+        },
+      ),
+    );
+    const skipped = named(checks, "broken-links").find((c) => c.status === "skipped")!;
+    expect(skipped.value).toBe(2);
+    expect(skipped.details?.notFetched).toEqual({ skipped: 1, noAnswer: 1 });
+  });
+
+  test("an unreliable HEAD marks only the errors it set aside as not trusted", () => {
+    const { checks } = brokenLinksRule.run(
+      ctx(issuePages, {
+        linkDiscoveryOff: true,
+        linkTargetStatuses: [
+          { url: `${BASE}/missing`, status: null, error: "head unreliable" },
+          { url: `${BASE}/moved`, status: null, error: "head unreliable" },
+          { url: `${BASE}/private`, status: null, error: "timeout" },
+        ],
+        internalLinkProbe: { unfetched: 3, probed: 0, cap: 200, outOfScope: 2, headUnreliable: true },
+      }),
+    );
+    const skipped = named(checks, "broken-links").find((c) => c.status === "skipped")!;
+    expect(skipped.details?.notFetched).toEqual({ skipped: 2, untrusted: 2, noAnswer: 1 });
+    expect(skipped.message).toContain(
+      "(2 skipped as outside the crawl scope, disallowed by robots.txt, or action or token links; 2 not trusted, because the site answers HEAD requests with errors on pages it serves; 1 with no answer)",
+    );
+  });
+
+  test("a limit of 0 with targets skipped too: both counted", () => {
+    const { checks } = brokenLinksRule.run(
+      ctx(issuePages, {
+        linkDiscoveryOff: true,
+        internalLinkProbe: { unfetched: 3, probed: 0, cap: 0, outOfScope: 2 },
+      }),
+    );
+    const skipped = named(checks, "broken-links").find((c) => c.status === "skipped")!;
+    expect(skipped.details?.notFetched).toEqual({ overLimit: 3, skipped: 2 });
+    expect(skipped.message).toContain(
+      "left them out (3 left out because internal_links.max_targets is 0; 2 skipped as outside the crawl scope, disallowed by robots.txt, or action or token links)",
+    );
+  });
+
+  test("an engine without a skip count: targets it never asked about are not blamed on the limit", () => {
+    const { checks } = brokenLinksRule.run(
+      ctx(issuePages, {
+        linkDiscoveryOff: true,
+        linkTargetStatuses: issueStatuses,
+        internalLinkProbe: { unfetched: 3, probed: 3, cap: 200 },
+      }),
+    );
+    const skipped = named(checks, "broken-links").find((c) => c.status === "skipped")!;
+    expect(skipped.details?.notFetched).toEqual({ noAnswer: 2 });
+    expect(skipped.message).not.toContain("max_targets");
   });
 
   test("a probe refused with 401/403 is unverifiable, not broken (a bot wall)", () => {

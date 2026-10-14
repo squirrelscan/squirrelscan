@@ -2,7 +2,10 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import { LINK_TARGETS_NOT_FETCHED_SKIP_REASON } from "@squirrelscan/core-contracts";
+import {
+  LINK_PROBE_HEAD_UNRELIABLE_ERROR,
+  LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
+} from "@squirrelscan/core-contracts";
 import { normalizeUrl } from "@squirrelscan/utils";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 
@@ -54,7 +57,10 @@ export const brokenLinksRule: Rule = {
 
     // repo#2729: statuses the link probe fetched for targets the crawl did not
     // (status-only HEAD/GET). A known status, the same as a crawled page's.
-    const probedStatuses = new Map<string, { status: number | null; rateLimited?: boolean }>();
+    const probedStatuses = new Map<
+      string,
+      { status: number | null; error?: string | null; rateLimited?: boolean }
+    >();
     for (const probe of ctx.site?.linkTargetStatuses ?? []) {
       probedStatuses.set(normalizeUrl(probe.url), probe);
     }
@@ -83,9 +89,12 @@ export const brokenLinksRule: Rule = {
     const unfetchedTargets = new Set<string>();
     const allTargets = new Set<string>();
     const probedTargets = new Set<string>();
-    // Of those, the ones the probe asked about and got no usable status for.
-    // The rest it never asked about (pub#726).
-    let unansweredTargets = 0;
+    // Of those, the ones the probe asked about and got no usable status for,
+    // split by whether it set an error aside as untrusted. The rest it never
+    // asked about (pub#726). Sets, like unfetchedTargets: `/a`, `/a/` and
+    // `/a#x` are one target.
+    const unansweredTargets = new Set<string>();
+    const untrustedTargets = new Set<string>();
 
     for (const [target, sources] of linkTargets) {
       // Normalize target URL to match crawler's normalization
@@ -112,7 +121,10 @@ export const brokenLinksRule: Rule = {
       }
       if (statusCode === undefined) {
         unfetchedTargets.add(normalizedTarget);
-        if (probedStatuses.has(normalizedTarget)) unansweredTargets++;
+        const attempt = probedStatuses.get(normalizedTarget);
+        if (attempt?.error === LINK_PROBE_HEAD_UNRELIABLE_ERROR)
+          untrustedTargets.add(normalizedTarget);
+        else if (attempt) unansweredTargets.add(normalizedTarget);
         continue;
       }
 
@@ -173,7 +185,8 @@ export const brokenLinksRule: Rule = {
     if (notFollowed) {
       const notFetched = notFetchedCauses(
         unfetchedTargets.size,
-        unansweredTargets,
+        unansweredTargets.size,
+        untrustedTargets.size,
         ctx.site?.internalLinkProbe,
       );
       checks.push({
@@ -246,27 +259,29 @@ type InternalLinkProbe = NonNullable<NonNullable<RuleContext["site"]>["internalL
 
 /**
  * Split the unfetched targets by cause. Targets the probe asked about without
- * an answer are untrusted when HEAD was unreliable, and unanswered otherwise.
- * For the ones it never asked about, its own counts say how far its eligible
- * targets ran past the limit and how many it skipped: past the limit up to
- * that excess, then skipped up to its count. Any left over (a target the
- * engine keyed differently, or a context without per-target statuses) is
- * counted as unanswered, the cause that claims least.
+ * a status are untrusted when it set an error aside because HEAD was
+ * unreliable, and unanswered otherwise. For the ones it never asked about, its
+ * own counts say how far its eligible targets ran past the limit and how many
+ * it skipped: past the limit up to that excess, then skipped up to its count.
+ * Any left over (a target the engine counted differently, or a context without
+ * per-target statuses) is counted as unanswered, the cause that claims least.
+ * The counts add up to `unfetched`.
  */
 function notFetchedCauses(
   unfetched: number,
   unanswered: number,
+  untrusted: number,
   probe: InternalLinkProbe | undefined,
 ): LinkTargetsNotFetched {
   if (!probe) return { off: unfetched };
-  const notAsked = Math.max(0, unfetched - unanswered);
+  const notAsked = Math.max(0, unfetched - unanswered - untrusted);
   const overLimit = Math.min(notAsked, Math.max(0, probe.unfetched - probe.cap));
   const skipped = Math.min(notAsked - overLimit, probe.outOfScope ?? 0);
-  const noStatus = unanswered + (notAsked - overLimit - skipped);
   const causes: LinkTargetsNotFetched = {
     overLimit,
     skipped,
-    ...(probe.headUnreliable ? { untrusted: noStatus } : { noAnswer: noStatus }),
+    untrusted,
+    noAnswer: unanswered + (notAsked - overLimit - skipped),
   };
   for (const key of Object.keys(causes) as (keyof LinkTargetsNotFetched)[]) {
     if (!causes[key]) delete causes[key];
@@ -290,7 +305,7 @@ function notFetchedReason(causes: LinkTargetsNotFetched, cap: number): string {
       case "skipped":
         return "its internal link checks never request targets outside the crawl scope, disallowed by robots.txt, or that look like actions (log out, unsubscribe) or carry a token";
       case "untrusted":
-        return "the site answers status-only (HEAD) requests with errors on pages it serves, so the internal link checks could not be trusted";
+        return "the internal link checks could not be trusted, as the site answers status-only (HEAD) requests with errors on pages it serves";
       default:
         return "its internal link checks got no answer";
     }
@@ -305,7 +320,7 @@ function notFetchedReason(causes: LinkTargetsNotFetched, cap: number): string {
   }
   if (causes.skipped) {
     parts.push(
-      `${causes.skipped} skipped as outside the crawl scope, disallowed by robots.txt, or an action or token link`,
+      `${causes.skipped} skipped as outside the crawl scope, disallowed by robots.txt, or ${causes.skipped === 1 ? "an action or token link" : "action or token links"}`,
     );
   }
   if (causes.untrusted) {
@@ -314,5 +329,5 @@ function notFetchedReason(causes: LinkTargetsNotFetched, cap: number): string {
     );
   }
   if (causes.noAnswer) parts.push(`${causes.noAnswer} with no answer`);
-  return `its internal link checks covered only part of them (${parts.join("; ")})`;
+  return `its internal link checks left them out (${parts.join("; ")})`;
 }

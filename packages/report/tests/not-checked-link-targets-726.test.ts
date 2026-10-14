@@ -40,14 +40,17 @@ function lineFor(details?: Record<string, unknown>): string {
 
 describe("the internal link Not checked hint follows the causes (pub#726)", () => {
   test("targets skipped, none over the limit: no max_targets, no 'turn back on'", () => {
+    // A crawl keeps to the same scope and robots.txt, so it says which it can reach.
     expect(lineFor({ notFetched: { skipped: 2 } })).toBe(
-      `Not checked: Broken Links. ${MESSAGE}. Run a Surface or Full audit, which follows links, to check them.`,
+      `Not checked: Broken Links. ${MESSAGE}. A Surface or Full audit, which follows links, fetches the ones inside the crawl scope and allowed by robots.txt.`,
     );
   });
 
-  test("no answer or untrusted: the same", () => {
-    for (const notFetched of [{ noAnswer: 2 }, { untrusted: 2 }]) {
-      expect(lineFor({ notFetched })).not.toContain("max_targets");
+  test("no answer, not trusted, or those with skipped targets: run an audit that follows links", () => {
+    for (const notFetched of [{ noAnswer: 2 }, { untrusted: 2 }, { skipped: 1, noAnswer: 1 }]) {
+      expect(lineFor({ notFetched })).toBe(
+        `Not checked: Broken Links. ${MESSAGE}. Run a Surface or Full audit, which follows links, to check them.`,
+      );
     }
   });
 

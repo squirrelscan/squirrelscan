@@ -22,6 +22,8 @@
 
 import { Effect } from "effect";
 
+import { LINK_PROBE_HEAD_UNRELIABLE_ERROR } from "@squirrelscan/core-contracts";
+
 import { isRateLimitedResponse } from "@squirrelscan/utils/rate-limit";
 import { fetchUndecoded } from "@squirrelscan/utils/response-body";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
@@ -169,7 +171,7 @@ export function probeLinkTargets(
       headUnreliable,
       results: results.map((r) =>
         r.status !== null && r.status >= 400
-          ? { url: r.url, status: null, error: "head unreliable" }
+          ? { url: r.url, status: null, error: LINK_PROBE_HEAD_UNRELIABLE_ERROR }
           : r,
       ),
     };

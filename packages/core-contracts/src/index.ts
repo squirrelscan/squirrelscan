@@ -150,6 +150,14 @@ export const EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON = "external-links-not-checke
 export const LINK_TARGETS_NOT_FETCHED_SKIP_REASON = "link-targets-not-fetched";
 
 /**
+ * `error` the internal link check records on a target whose 4xx/5xx it set
+ * aside because the site also answers status-only (HEAD) requests with errors
+ * on a page it serves (repo#2729). `links/broken-links` counts such a target
+ * as not trusted rather than unanswered (pub#726).
+ */
+export const LINK_PROBE_HEAD_UNRELIABLE_ERROR = "head unreliable";
+
+/**
  * `skipReason` of `links/broken-external-links` for the external links an audit
  * found but did not check because they were over its per-audit limit
  * (`externalLinkCheckCap`, repo#2729). The most-linked ones are checked first.
