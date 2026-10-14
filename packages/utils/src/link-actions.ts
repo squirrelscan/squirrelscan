@@ -28,8 +28,8 @@ const ANYWHERE_ACTION_WORDS = new Set(["unsub", "optout"]);
 
 /**
  * Two-word actions (`log-out`, `sign_off`, `opt out`, `add-to-cart`), in a
- * segment of at most four words or a query, and at any length inside one
- * camelCase name (`/MyAccountLogOut.aspx`): a name is not prose.
+ * segment of at most four words or a query. A file extension is not counted
+ * as a word (`/MyAccountLogOut.aspx` is four).
  */
 const ACTION_PAIRS = new Set([
   "log out",
@@ -43,9 +43,10 @@ const ACTION_PAIRS = new Set([
 /**
  * The sign-out pairs, which reach a segment of five words
  * (`/my-account-log-out-now`); a longer slug that mentions one
- * (`/how-to-log-out-of-every-device`) is still a page.
+ * (`/how-to-log-out-of-every-device`) is still a page. Not "sign off", which
+ * prose uses for an email's closing line (`/a-perfect-sign-off-email`).
  */
-const SIGN_OUT_PAIRS = new Set(["log out", "log off", "sign out", "sign off"]);
+const SIGN_OUT_PAIRS = new Set(["log out", "log off", "sign out"]);
 
 /** Action verbs, in a segment of at most three words (`/delete-your-account`) or a query. */
 const STRONG_ACTION_WORDS = new Set([
@@ -143,16 +144,33 @@ export const CREDENTIAL_PARAM_NAMES: readonly string[] = [
   "client_secret",
   "sessionid",
   "session_id",
+  "access_key",
+  "auth_key",
+  "private_key",
 ];
 
-const CREDENTIAL_PARAM_SET = new Set(CREDENTIAL_PARAM_NAMES);
+/**
+ * A parameter name as the list is matched: lower case, the name inside the
+ * last brackets (`config[api_key]`, `api_key[]`), and no `-`, `_` or `.`, so
+ * `x_api_key`, `X-Api-Key` and `session-id` match their entries too.
+ */
+function credentialParamKey(name: string): string {
+  const lower = name.toLowerCase().replace(/\[\]$/, "");
+  const bracketed = /\[([^\]]+)\]$/.exec(lower);
+  return (bracketed ? bracketed[1]! : lower).replace(/[-_.]/g, "");
+}
+
+const CREDENTIAL_PARAM_SET = new Set(CREDENTIAL_PARAM_NAMES.map(credentialParamKey));
 
 /** A JSON Web Token as a query value, whatever the parameter is called. */
 const JWT_VALUE = /^eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}$/;
 
-/** True for a query parameter that carries a credential, by its name or a JWT value. */
+/**
+ * True for a query parameter that carries a credential, by its name (matched
+ * as {@link credentialParamKey} describes) or a JWT value.
+ */
 export function isCredentialParam(name: string, value = ""): boolean {
-  return CREDENTIAL_PARAM_SET.has(name.toLowerCase()) || JWT_VALUE.test(value);
+  return CREDENTIAL_PARAM_SET.has(credentialParamKey(name)) || JWT_VALUE.test(value);
 }
 
 /** A session id in the URL, anywhere. */
@@ -188,6 +206,9 @@ const CREDENTIAL_CONTEXT_WORDS = new Set([
   "unsub",
 ]);
 
+/** A trailing file extension (`.aspx`, `.php`, `.do`), not a version (`.2`). */
+const FILE_EXTENSION = /\.[A-Za-z][A-Za-z0-9]{0,4}$/;
+
 function words(text: string): string[] {
   return text
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
@@ -222,9 +243,15 @@ function looksLikeAToken(value: string): boolean {
   );
 }
 
-/** Action words in one path segment, or (`inQuery`) one query key or value. */
-function hasActionWords(parts: string[], inQuery: boolean): boolean {
-  const reach = inQuery ? 1 : parts.length;
+/**
+ * Action words in one path segment, or (`inQuery`) one query key or value.
+ * `reach` is the segment's length in words, its file extension left out.
+ */
+function hasActionWords(
+  parts: string[],
+  inQuery: boolean,
+  reach = inQuery ? 1 : parts.length,
+): boolean {
   for (let i = 0; i < parts.length; i++) {
     const word = parts[i]!;
     if (RUN_TOGETHER_ACTIONS.some((verb) => word.includes(verb))) return true;
@@ -235,22 +262,6 @@ function hasActionWords(parts: string[], inQuery: boolean): boolean {
       const pair = `${word} ${parts[i + 1]}`;
       if (reach <= 4 && ACTION_PAIRS.has(pair)) return true;
       if (reach <= 5 && SIGN_OUT_PAIRS.has(pair)) return true;
-    }
-  }
-  return false;
-}
-
-/**
- * An action pair inside one camelCase name (`MyAccountLogOut`, `UserSignOff`),
- * however long: the split into words would otherwise put it past the pair
- * rule's reach. Names are what is left between separators.
- */
-function hasCamelCaseActionPair(text: string): boolean {
-  for (const name of text.split(/[^A-Za-z0-9]+/)) {
-    if (!/[a-z][A-Z]/.test(name)) continue;
-    const parts = words(name);
-    for (let i = 0; i + 1 < parts.length; i++) {
-      if (ACTION_PAIRS.has(`${parts[i]} ${parts[i + 1]}`)) return true;
     }
   }
   return false;
@@ -282,7 +293,8 @@ export function looksLikeAnAction(url: string): boolean {
     // segment's words, so `/logout;x=1` and `/account%2Flogout` still match.
     const parts = words(segment);
     allWords.push(...parts);
-    if (hasActionWords(parts, false) || hasCamelCaseActionPair(segment)) return true;
+    const reach = words(segment.replace(FILE_EXTENSION, "")).length;
+    if (hasActionWords(parts, false, reach)) return true;
     if (parts.some((w) => SESSION_ID_WORDS.has(w))) return true;
     if (parts.length <= 2 && parts.some((w) => SECRET_KEY_WORDS.has(w))) return true;
     for (const piece of segment.split(/[;,/]/)) {
@@ -297,10 +309,10 @@ export function looksLikeAnAction(url: string): boolean {
     if (SECRET_KEYS.has(key) || keyWords.some((w) => SECRET_KEY_WORDS.has(w) || SESSION_ID_WORDS.has(w))) {
       return true;
     }
-    if (isCredentialParam(rawKey, rawValue)) return true;
+    if (isCredentialParam(rawKey)) return true;
+    // A JWT value (isCredentialParam's other half) is a token here too.
     if (looksLikeAToken(rawKey) || looksLikeAToken(rawValue)) return true;
     if (hasActionWords(keyWords, true) || hasActionWords(valueWords, true)) return true;
-    if (hasCamelCaseActionPair(rawKey) || hasCamelCaseActionPair(rawValue)) return true;
   }
   // A token in the path is a credential when the URL says so; a bare id
   // (`/posts/<uuid>`) is still a page. A JWT is always a credential.
@@ -330,9 +342,22 @@ export function linkTextLooksLikeAnAction(text: string, nofollow: boolean): bool
   return label.split(" ").length <= 4 && PLAIN_ACTION_TEXT.test(label);
 }
 
-/** An email address anywhere in `value` (`user@example.com`, `a+b@x.co`). */
+/** File types a name like `logo@2x.png` ends in, which an address does not. */
+const ASSET_EXTENSIONS = new Set([
+  "png", "jpg", "jpeg", "gif", "webp", "avif", "svg", "ico", "bmp", "tif", "tiff",
+  "css", "js", "mjs", "json", "xml", "txt", "html", "htm", "pdf",
+  "woff", "ttf", "otf", "eot", "mp4", "webm", "mov", "mp3", "wav", "ogg", "zip", "gz",
+]);
+
+/**
+ * `value` ends in an email address (`user@example.com`; `a b@x.co`, as a `+`
+ * decodes): a host name after the `@` whose last label is letters and not a
+ * file type, so an asset name (`logo@2x.png`, `photo@large.jpg`) is kept.
+ */
 function containsAnEmail(value: string): boolean {
-  return /[^\s@/]+@[^\s@/]+\.[a-z]{2,}/i.test(value);
+  const match = /[^\s@]+@([a-z0-9-]+(?:\.[a-z0-9-]+)*\.([a-z]{2,24}))$/i.exec(value);
+  if (!match) return false;
+  return !ASSET_EXTENSIONS.has(match[2]!.toLowerCase()) && !/^\d+(?:\.\d+)?x\./i.test(match[1]!);
 }
 
 /** A UUID, or a value of 8+ characters mixing letters and digits that is not a file name. */

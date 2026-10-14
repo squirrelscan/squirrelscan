@@ -83,24 +83,33 @@ describe("the rules moved here unchanged", () => {
 });
 
 describe("a sign-out written as several words (#774)", () => {
-  test("inside a camelCase name, or a hyphenated segment of five words, is an action", () => {
+  test("a file extension is not a word, and the sign-out pairs reach five", () => {
     for (const path of [
       "/MyAccountLogOut.aspx",
       "/my-account-log-out-now",
+      "/my-account-log-out-now.aspx",
+      "/account/my-account-log-out-now.php",
+      "/PortalMyAccountLogOut.do",
       "/UserSignOut",
-      "/portal/AccountLogOff.do",
-      "/?next=MyAccountSignOut",
+      "/delete-your-account.php",
     ]) {
       expect(looksLikeAnAction(`https://x.test${path}`)).toBe(true);
     }
   });
 
-  test("a long slug that mentions one, and names that only contain the letters, are pages", () => {
+  test("a longer slug or name that mentions one, and look-alike names, are pages", () => {
     for (const path of [
       "/blog/how-to-log-out-of-every-device",
+      "/blog/HowToLogOutOfEveryDevice",
+      "/blog/how-to-log-out-of-every-device.html",
+      "/HowToAddToHomeScreen",
+      "/blog/a-perfect-sign-off-email",
       "/BlogOutreachTips",
       "/DesignOfficeIdeas",
+      "/SignOffice",
+      "/LogOutdoor",
       "/catalog-outlet",
+      "/where-to-buy.html",
     ]) {
       expect(looksLikeAnAction(`https://x.test${path}`)).toBe(false);
     }
@@ -108,11 +117,7 @@ describe("a sign-out written as several words (#774)", () => {
 });
 
 describe("credential query parameters (#774)", () => {
-  test("every name on the list makes the URL one that is never requested, in any case", () => {
-    for (const name of CREDENTIAL_PARAM_NAMES) {
-      expect(looksLikeAnAction(`https://x.test/page?${name}=abc`)).toBe(true);
-      expect(looksLikeAnAction(`https://x.test/page?${name.toUpperCase()}=abc`)).toBe(true);
-    }
+  test("the names from the issue, which main requested, are never requested", () => {
     for (const name of [
       "api_key",
       "x-api-key",
@@ -125,14 +130,34 @@ describe("credential query parameters (#774)", () => {
       "x-goog-credential",
     ]) {
       expect(CREDENTIAL_PARAM_NAMES).toContain(name);
+      expect(looksLikeAnAction(`https://x.test/page?${name}=abc`)).toBe(true);
+    }
+    expect(looksLikeAnAction("https://cdn.test/a.zip?X-Amz-Credential=AKIA%2F20260916")).toBe(true);
+  });
+
+  test("every name on the list counts, in any case, with its separators changed, or in brackets", () => {
+    for (const name of CREDENTIAL_PARAM_NAMES) {
+      expect(looksLikeAnAction(`https://x.test/page?${name.toUpperCase()}=abc`)).toBe(true);
+    }
+    for (const key of [
+      "x_api_key",
+      "X-Api-Key",
+      "session-id",
+      "api_key[]",
+      "pwd[]",
+      "config[api_key]",
+      "user[pwd]",
+    ]) {
+      expect(isCredentialParam(key)).toBe(true);
+      expect(looksLikeAnAction(`https://x.test/page?${encodeURIComponent(key)}=abc`)).toBe(true);
     }
   });
 
   test("a JWT value counts whatever the parameter is called; ordinary parameters do not", () => {
     const jwt = "eyJhbGciOiJIUzI1.eyJzdWIiOiIxMjM0.SflKxwRJSMeKKF2Q";
     expect(isCredentialParam("gift", jwt)).toBe(true);
-    expect(isCredentialParam("X-Amz-Credential")).toBe(true);
     expect(isCredentialParam("page", "2")).toBe(false);
+    expect(isCredentialParam("user[name]")).toBe(false);
     expect(looksLikeAnAction("https://x.test/search?q=api+key&page=2")).toBe(false);
   });
 });
@@ -148,5 +173,18 @@ describe("an email address in a path segment is masked (#774)", () => {
     expect(maskLinkTokens("https://medium.example/@writer/a-post")).toBe(
       "https://medium.example/@writer/a-post",
     );
+  });
+
+  test("an asset name with an @ in it is not an address", () => {
+    for (const path of [
+      "/img/logo@2x.png",
+      "/img/icon@3x.webp",
+      "/img/photo@large.jpg",
+      "/fonts/font@latin.woff2",
+      "/@user.name",
+      "/v1/repos/a@b.c/x",
+    ]) {
+      expect(maskLinkTokens(`https://cdn.example${path}`)).toBe(`https://cdn.example${path}`);
+    }
   });
 });
