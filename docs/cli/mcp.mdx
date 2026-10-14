@@ -42,7 +42,7 @@ The five entity tools read the local project store, so they need no account and 
 
 ## Billing a signed-in audit
 
-Logged out, `audit_website` and `quick_check` run on your machine, need no account and make no cloud call. Logged in, `audit_website` is billed the way [`squirrel audit`](/cli/audit) is: 50 credits for the audit plus 2 per audited page, at every [audit level](/guides/audit-levels). At surface and full it also has `squirrel audit`'s one link charge: an external link a web application firewall blocks is re-checked in a cloud browser at 2 credits (see [link render escalation](/cloud/credits#pricing)). `quick_check` always runs locally.
+Logged out, `audit_website` and `quick_check` run on your machine, need no account and make no cloud call. Logged in, `audit_website` is billed the way [`squirrel audit`](/cli/audit) is: 50 credits for the audit plus 2 per audited page, at every [audit level](/guides/audit-levels). The link checks it runs for itself are free. `quick_check` always runs locally.
 
 A tool call cannot ask you a question, so the first call returns the estimate instead of starting:
 

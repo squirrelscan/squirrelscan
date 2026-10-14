@@ -80,7 +80,7 @@ The page count is the one in the report's coverage line ("Coverage: audited 12 o
 
 Internal links (on the site you are auditing) are always free. The external-link charge applies to [cloud audits](/guides/cloud-audits) with external link checking turned on, which the surface and full [audit levels](/guides/audit-levels) do and quick does not.
 
-The links the CLI checks for an audit you run with `squirrel audit` are free too, with one exception. At the surface and full levels, a signed-in CLI audit sends its external links to the cloud's [dead-link check](/rules/links/dead-links). A link a web application firewall blocks is then re-checked in a cloud browser, billed as a [link render escalation](#pricing) at 2 credits per link. At most 10 are escalated for each batch of 200 links checked, and a link already rendered in the same run is not charged again. If your balance cannot cover an escalation, it is skipped and the link keeps its first result. Signed out, with `--offline`, or at the quick level, the CLI checks links on your machine and nothing is charged.
+The links the CLI checks for an audit you run with `squirrel audit` are free too. At the surface and full levels, a signed-in CLI audit sends its external links to the cloud's [dead-link check](/rules/links/dead-links), which answers the ones it can within a time limit and leaves the rest. The CLI checks every link the cloud left unanswered on your machine, so nothing is charged. Signed out, with `--offline`, or at the quick level, the CLI checks links on your machine and nothing is charged.
 
 The base includes everything else: AI page analysis ([`ai/llm-parsability`](/rules/ai/llm-parsability), [`ai/page-type-match`](/rules/ai/page-type-match)), [authority signals](/rules/eeat/authority-signals), the [Blocking check](/rules/adblock), [technology detection](/cloud/technologies), [site metadata](/cloud/site-metadata), the [editor's summary](/cloud/editor-summary), and publishing the report. None of these are charged separately.
 
@@ -93,7 +93,6 @@ Opt-in add-ons are the only extra charges:
 | Keyword gaps | 25 per audit | [`gaps/keywords`](/rules/gaps/keywords) (opt-in) |
 | Content gaps | 25 per audit | [`gaps/content`](/rules/gaps/content) (opt-in) |
 | Issue enrichment | 3 per issue | AI recommendations in the dashboard |
-| Link render escalation | 2 per link | signed-in CLI audits at surface and full: a WAF-blocked external link the [dead-link check](/rules/links/dead-links) retries in a cloud browser. Cloud audits never pay it: their 1-credit link check covers it |
 
 A 19-page audit costs **88 credits**: 50 base + 38 for its pages. A 100-page audit costs 250. A cloud audit of the same 19 pages that checks 7 distinct external links costs 95.
 
