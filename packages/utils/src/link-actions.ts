@@ -28,8 +28,8 @@ const ANYWHERE_ACTION_WORDS = new Set(["unsub", "optout"]);
 
 /**
  * Two-word actions (`log-out`, `sign_off`, `opt out`, `add-to-cart`), in a
- * segment of at most four words or a query. A file extension is not counted
- * as a word (`/MyAccountLogOut.aspx` is four).
+ * segment of at most four words or a query. A server-script extension is not
+ * counted as a word (`/MyAccountLogOut.aspx` is four).
  */
 const ACTION_PAIRS = new Set([
   "log out",
@@ -151,11 +151,12 @@ export const CREDENTIAL_PARAM_NAMES: readonly string[] = [
 
 /**
  * A parameter name as the list is matched: lower case, the name inside the
- * last brackets (`config[api_key]`, `api_key[]`), and no `-`, `_` or `.`, so
- * `x_api_key`, `X-Api-Key` and `session-id` match their entries too.
+ * last brackets (`config[api_key]`), with no list index (`api_key[]`,
+ * `pwd[0]`), and no `-`, `_` or `.`, so `x_api_key`, `X-Api-Key` and
+ * `session-id` match their entries too.
  */
 function credentialParamKey(name: string): string {
-  const lower = name.toLowerCase().replace(/\[\]$/, "");
+  const lower = name.toLowerCase().replace(/(?:\[\d*\])+$/, "");
   const bracketed = /\[([^\]]+)\]$/.exec(lower);
   return (bracketed ? bracketed[1]! : lower).replace(/[-_.]/g, "");
 }
@@ -206,8 +207,12 @@ const CREDENTIAL_CONTEXT_WORDS = new Set([
   "unsub",
 ]);
 
-/** A trailing file extension (`.aspx`, `.php`, `.do`), not a version (`.2`). */
-const FILE_EXTENSION = /\.[A-Za-z][A-Za-z0-9]{0,4}$/;
+/**
+ * A trailing server-script extension (`.aspx`, `.php`, `.do`): an endpoint's
+ * name, not a word of it. A static document's (`.html`, `.pdf`) still counts,
+ * so `/how-to-verify.html` keeps its verdict.
+ */
+const SCRIPT_EXTENSION = /\.(?:aspx|asp|ashx|php|jsp|jspx|do|action|cfm|cgi|pl)$/i;
 
 function words(text: string): string[] {
   return text
@@ -293,10 +298,10 @@ export function looksLikeAnAction(url: string): boolean {
     // segment's words, so `/logout;x=1` and `/account%2Flogout` still match.
     const parts = words(segment);
     allWords.push(...parts);
-    const reach = words(segment.replace(FILE_EXTENSION, "")).length;
+    const reach = words(segment.replace(SCRIPT_EXTENSION, "")).length;
     if (hasActionWords(parts, false, reach)) return true;
     if (parts.some((w) => SESSION_ID_WORDS.has(w))) return true;
-    if (parts.length <= 2 && parts.some((w) => SECRET_KEY_WORDS.has(w))) return true;
+    if (reach <= 2 && parts.some((w) => SECRET_KEY_WORDS.has(w))) return true;
     for (const piece of segment.split(/[;,/]/)) {
       if (looksLikeAToken(piece)) pathTokens.push(piece);
     }
@@ -342,22 +347,36 @@ export function linkTextLooksLikeAnAction(text: string, nofollow: boolean): bool
   return label.split(" ").length <= 4 && PLAIN_ACTION_TEXT.test(label);
 }
 
-/** File types a name like `logo@2x.png` ends in, which an address does not. */
+/**
+ * File types a name like `logo@2x.png` ends in. Not `.zip` or `.mov`, which
+ * are also top-level domains.
+ */
 const ASSET_EXTENSIONS = new Set([
   "png", "jpg", "jpeg", "gif", "webp", "avif", "svg", "ico", "bmp", "tif", "tiff",
   "css", "js", "mjs", "json", "xml", "txt", "html", "htm", "pdf",
-  "woff", "ttf", "otf", "eot", "mp4", "webm", "mov", "mp3", "wav", "ogg", "zip", "gz",
+  "woff", "woff2", "ttf", "otf", "eot", "mp4", "webm", "mp3", "wav", "ogg", "gz",
 ]);
 
 /**
- * `value` ends in an email address (`user@example.com`; `a b@x.co`, as a `+`
- * decodes): a host name after the `@` whose last label is letters and not a
- * file type, so an asset name (`logo@2x.png`, `photo@large.jpg`) is kept.
+ * An email address anywhere in `value`: `user@example.com`, `(a@x.co)`,
+ * `a b@x.co` (a `+` decodes to a space), `user@example.com.json` (an address
+ * with a file type after it), `user@münchen.de`. A host after the `@` whose
+ * last label is letters. An asset name (`logo@2x.png`, `photo@large.jpg`) is
+ * kept, and so are a handle (`/@writer`) and a version (`pkg@1.2.3`).
  */
 function containsAnEmail(value: string): boolean {
-  const match = /[^\s@]+@([a-z0-9-]+(?:\.[a-z0-9-]+)*\.([a-z]{2,24}))$/i.exec(value);
-  if (!match) return false;
-  return !ASSET_EXTENSIONS.has(match[2]!.toLowerCase()) && !/^\d+(?:\.\d+)?x\./i.test(match[1]!);
+  for (const match of value.matchAll(/[^\s@]@((?:[\p{L}\p{N}-]+\.)+[\p{L}\p{N}-]+)/giu)) {
+    const labels = match[1]!.split(".");
+    const type = labels.at(-1)!.toLowerCase();
+    if (ASSET_EXTENSIONS.has(type)) {
+      // `user@example.com.json` is an address; `logo@2x.png` a file name.
+      if (labels.length <= 2) continue;
+      labels.pop();
+    }
+    if (/^\d+(?:\.\d+)?x$/i.test(labels[0]!)) continue;
+    if (/^\p{L}{2,24}$/u.test(labels.at(-1)!)) return true;
+  }
+  return false;
 }
 
 /** A UUID, or a value of 8+ characters mixing letters and digits that is not a file name. */

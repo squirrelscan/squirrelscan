@@ -83,7 +83,7 @@ describe("the rules moved here unchanged", () => {
 });
 
 describe("a sign-out written as several words (#774)", () => {
-  test("a file extension is not a word, and the sign-out pairs reach five", () => {
+  test("a server-script extension is not a word, and the sign-out pairs reach five", () => {
     for (const path of [
       "/MyAccountLogOut.aspx",
       "/my-account-log-out-now",
@@ -92,6 +92,7 @@ describe("a sign-out written as several words (#774)", () => {
       "/PortalMyAccountLogOut.do",
       "/UserSignOut",
       "/delete-your-account.php",
+      "/my-password.php",
     ]) {
       expect(looksLikeAnAction(`https://x.test${path}`)).toBe(true);
     }
@@ -110,6 +111,8 @@ describe("a sign-out written as several words (#774)", () => {
       "/LogOutdoor",
       "/catalog-outlet",
       "/where-to-buy.html",
+      "/blog/how-to-verify.html",
+      "/guides/remove-stains.pdf",
     ]) {
       expect(looksLikeAnAction(`https://x.test${path}`)).toBe(false);
     }
@@ -147,6 +150,8 @@ describe("credential query parameters (#774)", () => {
       "pwd[]",
       "config[api_key]",
       "user[pwd]",
+      "api_key[0]",
+      "jwt[1]",
     ]) {
       expect(isCredentialParam(key)).toBe(true);
       expect(looksLikeAnAction(`https://x.test/page?${encodeURIComponent(key)}=abc`)).toBe(true);
@@ -170,6 +175,11 @@ describe("an email address in a path segment is masked (#774)", () => {
     expect(maskLinkTokens("https://m.example/u/user%40example.com")).toBe("https://m.example/u/…");
     expect(maskLinkTokens("https://m.example/u/user+tag@example.co.uk/")).toBe("https://m.example/u/…/");
     expect(maskLinkTokens("https://m.example/prefs;email=user@example.com")).toBe("https://m.example/…");
+    expect(maskLinkTokens("https://m.example/subscribers/user@example.com.json")).toBe(
+      "https://m.example/subscribers/…",
+    );
+    expect(maskLinkTokens("https://m.example/u/(user@example.com)")).toBe("https://m.example/u/…");
+    expect(maskLinkTokens("https://m.example/u/user@m%C3%BCnchen.de")).toBe("https://m.example/u/…");
     expect(maskLinkTokens("https://medium.example/@writer/a-post")).toBe(
       "https://medium.example/@writer/a-post",
     );
@@ -181,6 +191,7 @@ describe("an email address in a path segment is masked (#774)", () => {
       "/img/icon@3x.webp",
       "/img/photo@large.jpg",
       "/fonts/font@latin.woff2",
+      "/img/hero@1.5x.png",
       "/@user.name",
       "/v1/repos/a@b.c/x",
     ]) {
