@@ -157,7 +157,11 @@ import {
 import { fetchScriptContents, type ScriptFetchResult } from "./script-fetcher";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 import { isNonPublicHostname } from "@squirrelscan/utils/non-public-host";
-import { memoizeResolveHost, resolveHostAddresses } from "@squirrelscan/utils/public-egress";
+import {
+  type EgressPolicy,
+  memoizeResolveHost,
+  resolveHostAddresses,
+} from "@squirrelscan/utils/public-egress";
 import { getHostname, normalizeUrl } from "@squirrelscan/utils/url";
 import { isInScope } from "@squirrelscan/crawler/frontier";
 import { createRobotsEvaluator } from "@squirrelscan/crawler/robots";
@@ -3533,6 +3537,8 @@ export function checkCollectedExternalLinks(
   linkCache?: LinkCache | null,
   bulkChecker?: (urls: string[]) => Promise<Map<string, ExternalCheckResult>>,
   priorityHrefs?: readonly string[],
+  /** The transport resolves once and connects to what it validated (the hosted container). */
+  egressPinnedByTransport?: boolean,
 ): Effect.Effect<ExternalCheckResult[], never, never> {
   return Effect.gen(function* () {
     if (!config.enabled) {
@@ -3542,6 +3548,19 @@ export function checkCollectedExternalLinks(
     if (externalLinkOccurrences.size === 0) {
       return [];
     }
+
+    // An external link is the page's to name, so every local request and every
+    // redirect hop it leads to is held to the third-party probes' policy:
+    // public addresses only (private ones too when the audited site is itself
+    // on a private network), never link-local or cloud metadata, and connected
+    // to the address that was vetted. No custom headers ever go with it.
+    const crawl = yield* storage.getCrawl(crawlId).pipe(Effect.catchAll(() => Effect.succeed(null)));
+    const siteHost = getHostname(crawl?.baseUrl ?? "").replace(/^\[|\]$/g, "");
+    const egress: EgressPolicy = {
+      allowPrivateNetwork: siteHost !== "" && isNonPublicHostname(siteHost),
+      resolve: memoizeResolveHost(resolveHostAddresses),
+      pin: egressPinnedByTransport !== true,
+    };
 
     // Check external links using injected cache (or null for no caching)
     const cache = linkCache ?? null;
@@ -3588,6 +3607,7 @@ export function checkCollectedExternalLinks(
       timeoutMs: config.timeout_ms,
       userAgent: SQUIRRELSCAN_USER_AGENT,
       bulkChecker,
+      egress,
     });
 
     // Store results in per-crawl storage

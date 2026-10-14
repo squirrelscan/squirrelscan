@@ -239,6 +239,7 @@ export function runStreamingPreRules(
           options.externalLinks.linkCache ?? null,
           bulkChecker,
           options.externalLinks.priorityHrefs,
+          options.resourceOverrides?.egressPinnedByTransport,
         )
       : [];
 

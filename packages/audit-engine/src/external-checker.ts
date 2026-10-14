@@ -21,6 +21,11 @@ import {
   readBodyCapped,
 } from "@squirrelscan/utils/response-body";
 import { looksLikeAnAction } from "@squirrelscan/utils/link-actions";
+import {
+  EgressRefusedError,
+  egressGuardedSend,
+  type EgressPolicy,
+} from "@squirrelscan/utils/public-egress";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import { detectWaf, type WafProvider } from "@squirrelscan/waf-detect";
 
@@ -80,6 +85,15 @@ export interface ExternalCheckerOptions {
    * url.
    */
   bulkChecker?: (urls: string[]) => Promise<Map<string, ExternalCheckResult>>;
+  /**
+   * Every hop of every local request, the first included, is vetted against
+   * this policy before it is sent and connects to the address it was vetted
+   * on (`@squirrelscan/utils/public-egress`). A refused first request leaves
+   * the link unresolved, never broken; a refused redirect hop is not followed,
+   * and the redirect that pointed there is the link's answer. Absent: hosts
+   * are unrestricted, as they were before.
+   */
+  egress?: EgressPolicy;
 }
 
 /** Max urls per bulk-checker call — mirrors SERVICE_LIMITS.deadLinksBatchUrls. */
@@ -132,6 +146,8 @@ interface CheckUrlResult {
    * so its status is unverified rather than broken (#1829).
    */
   rateLimited?: boolean;
+  /** The egress policy refused the first request: nothing was sent, and nothing is cached. */
+  refused?: boolean;
 }
 
 /** Redirects followed per request, a browser's limit. */
@@ -142,10 +158,13 @@ const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 /**
  * One request, following redirects by hand: a hop whose Location is not
- * http(s) or looks like an action or token link is not requested, and the 3xx
- * that pointed there is the answer (repo#2759). `redirectTarget` is the last
- * URL requested when the chain was followed to its end, or the Location that
- * was not followed; null when the link answered without redirecting.
+ * http(s), looks like an action or token link (repo#2759), or is refused by
+ * the egress policy is not requested, and the 3xx that pointed there is the
+ * answer. Every hop, the first included, goes through the same guarded send,
+ * with no headers but User-Agent and Accept. `redirectTarget` is the last URL
+ * requested when the chain was followed to its end, or the Location that was
+ * not followed; null when the link answered without redirecting. A refused
+ * first request throws EgressRefusedError.
  */
 async function requestFollowingSafeRedirects(
   href: string,
@@ -153,14 +172,25 @@ async function requestFollowingSafeRedirects(
   options: ExternalCheckerOptions,
   signal: AbortSignal,
 ): Promise<{ response: Response; redirectTarget: string | null }> {
+  const send = options.egress ? egressGuardedSend(fetchUndecoded, options.egress) : fetchUndecoded;
   let current = href;
+  let previous: Response | null = null;
   for (let hop = 0; ; hop++) {
-    const response = await fetchUndecoded(current, {
-      method,
-      headers: { "User-Agent": options.userAgent, Accept: "*/*" },
-      signal,
-      redirect: "manual",
-    });
+    let response: Response;
+    try {
+      response = await send(current, {
+        method,
+        headers: { "User-Agent": options.userAgent, Accept: "*/*" },
+        signal,
+        redirect: "manual",
+      });
+    } catch (error) {
+      // Refused before it was sent: the redirect that pointed here answers.
+      if (previous && error instanceof EgressRefusedError) {
+        return { response: previous, redirectTarget: current };
+      }
+      throw error;
+    }
     const location = REDIRECT_STATUSES.has(response.status) ? response.headers.get("location") : null;
     if (!location) {
       return { response, redirectTarget: current !== href ? current : null };
@@ -178,6 +208,7 @@ async function requestFollowingSafeRedirects(
     }
     response.body?.cancel().catch(() => {});
     if (hop >= MAX_REDIRECTS) throw new Error("too many redirects");
+    previous = response;
     current = next;
   }
 }
@@ -205,7 +236,12 @@ async function checkSingleUrlAsync(
           redirectTarget: head.redirectTarget,
         };
       }
-    } catch {
+    } catch (error) {
+      // Refused by the egress policy: the GET would be refused too. Not
+      // checked, so unresolved: never broken.
+      if (error instanceof EgressRefusedError) {
+        return { status: null, error: null, redirectTarget: null, refused: true };
+      }
       // HEAD failed, try GET
     }
 
@@ -253,6 +289,9 @@ async function checkSingleUrlAsync(
 
     return { status: getResponse.status, error: null, redirectTarget };
   } catch (error) {
+    if (error instanceof EgressRefusedError) {
+      return { status: null, error: null, redirectTarget: null, refused: true };
+    }
     if ((error as Error).name === "AbortError") {
       return { status: null, error: "timeout", redirectTarget: null };
     }
@@ -378,7 +417,8 @@ export function checkExternalLinks(
       // reported as "unverifiable" for a week after the host recovered. Cache
       // the verified results only; throttled ones are re-checked next run.
       const cacheEntries: LinkCacheEntry[] = checkedResults
-        .filter((r) => !isRateLimited(r))
+        // Nor a refused one: nothing was asked.
+        .filter((r) => !isRateLimited(r) && !r.refused)
         .map((r) => ({
           href: r.href,
           status: r.status,
