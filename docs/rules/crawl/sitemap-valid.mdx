@@ -23,7 +23,7 @@ Both of those branches only run when there was no reportable robots.txt fetch fa
   - `Unknown sitemap format`: the XML has neither a `<urlset>` nor a `<sitemapindex>` root.
   - `Parse error: <reason>`: the XML did not parse.
   - `N <url> entries skipped: <loc> is not a single text value` (`1 <url> entry skipped: ...` for one; `<url>` and `<loc>` are the literal element names): an entry's `<loc>` holds markup or a raw `<`, or the entry has more than one `<loc>`. The other entries are still read, and the text around the markup is never used as the URL. A raw `<` reads as an unclosed tag, so the entries after it in the file can be lost too. In a sitemap index the error names `<sitemap>` entries instead.
-  - `N <lastmod> values ignored: not a single text value`, or the same for `<changefreq>` or `<priority>`: the field holds markup or a raw `<`, or is repeated within one entry. The field is dropped and its URL is still read.
+  - `N <lastmod> values ignored: not a single text value` (`1 <lastmod> value ignored: ...` for one), or the same for `<changefreq>` or `<priority>`: the field holds markup or a raw `<`, or is repeated within one entry. The field is dropped and its URL is still read.
   - `Not a sitemap: the URL returned an HTML page`: a sitemap named in robots.txt or in a sitemap index answered with a web page.
   - `Corrupt gzip body: <reason>`: a gzip file, or a response sent with `Content-Encoding: gzip`, does not decompress. A response sent as `br` or `deflate` reads `Corrupt br body: <reason>` or `Corrupt deflate body: <reason>`.
   - `Unsupported Content-Encoding: <coding>`: the response used a coding squirrel does not decode, such as `zstd`, or more than one coding.

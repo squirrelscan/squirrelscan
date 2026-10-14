@@ -163,6 +163,9 @@ export function parseSitemap(content: string, url: string): SitemapData {
       for (const entry of sitemapEntries(sitemapIndex.sitemap)) {
         const loc = fields.read(entry, "loc");
         if (loc) childSitemaps.push(decodeXmlEscapes(loc));
+        // Not stored, but read so a raw `<` in it, which can swallow the
+        // children after it, is reported rather than passed as valid.
+        fields.read(entry, "lastmod");
       }
       errors.push(...fields.errors());
 

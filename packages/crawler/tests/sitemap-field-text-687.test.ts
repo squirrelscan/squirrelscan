@@ -140,6 +140,16 @@ describe("one malformed entry does not discard the others (#687)", () => {
     expect(data.errors).toEqual(["1 <sitemap> entry skipped: <loc> is not a single text value"]);
   });
 
+  test("a raw < in a sitemap index lastmod is reported", () => {
+    const xml =
+      `<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` +
+      `<sitemap><loc>https://example.com/s1.xml</loc><lastmod>2024<01</lastmod></sitemap>` +
+      `<sitemap><loc>https://example.com/s2.xml</loc></sitemap></sitemapindex>`;
+    const data = parseSitemap(xml, "https://example.com/sitemap-index.xml");
+    expect(data.childSitemaps[0]).toBe("https://example.com/s1.xml");
+    expect(data.errors).toEqual(["1 <lastmod> value ignored: not a single text value"]);
+  });
+
   test("empty and text-only entries are still ignored without an error", () => {
     const data = parseSitemap(
       urlset(
