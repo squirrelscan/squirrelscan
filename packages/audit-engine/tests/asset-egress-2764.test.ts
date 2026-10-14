@@ -16,15 +16,15 @@ import { ASSET_FETCH_REFUSED_ERROR } from "@squirrelscan/utils/constants";
 
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
 
-const SECRET_HEADER = "x-squirrel-test-secret";
+const CUSTOM_HEADER = "x-squirrel-custom-header";
 
 const servers: Array<{ stop: (closeActive?: boolean) => void }> = [];
 afterEach(() => {
   for (const s of servers.splice(0)) s.stop(true);
 });
 
-/** Each request: path (with query), Host, and whether it carried the secret header. */
-let requests: Array<{ path: string; host: string; secret: boolean }> = [];
+/** Each request: path (with query), Host, and whether it carried the custom header. */
+let requests: Array<{ path: string; host: string; custom: boolean }> = [];
 
 /**
  * The audited site is `localhost`. Its sitemap lists one more page of its own
@@ -41,7 +41,7 @@ function serve(): { origin: string; foreign: string } {
       requests.push({
         path: `${url.pathname}${url.search}`,
         host: req.headers.get("host") ?? "",
-        secret: req.headers.has(SECRET_HEADER),
+        custom: req.headers.has(CUSTOM_HEADER),
       });
       const origin = `http://localhost:${url.port}`;
       const foreign = `http://127.0.0.1:${url.port}`;
@@ -120,7 +120,7 @@ async function assetsOf(origin: string) {
     rules: { enable: ["*"] },
     // The crawl fetches one page; the sitemap-status check takes up to
     // max_pages orphans, so every listed URL is checked.
-    crawler: { max_pages: 10, exclude: [], headers: { [SECRET_HEADER]: "s3cret" } },
+    crawler: { max_pages: 10, exclude: [], headers: { [CUSTOM_HEADER]: "audit-only-value" } },
     external_links: { enabled: false },
     internal_links: { enabled: false },
   } as unknown as Config;
@@ -136,12 +136,12 @@ describe("the asset phase's egress (repo#2764)", () => {
     const foreignHost = new URL(foreign).host;
     const toForeign = requests.filter((r) => r.host === foreignHost);
     expect(toForeign.map((r) => r.path)).toContain("/elsewhere");
-    expect(toForeign.some((r) => r.secret)).toBe(false);
+    expect(toForeign.some((r) => r.custom)).toBe(false);
 
     const ownOrphan = requests.filter((r) => r.path === "/orphan");
     expect(ownOrphan.length).toBeGreaterThan(0);
-    expect(ownOrphan.every((r) => r.secret)).toBe(true);
-    expect(requests.filter((r) => r.path === "/style.css").every((r) => r.secret)).toBe(true);
+    expect(ownOrphan.every((r) => r.custom)).toBe(true);
+    expect(requests.filter((r) => r.path === "/style.css").every((r) => r.custom)).toBe(true);
 
     // Both still checked, in the sitemap's order.
     expect(assets.sitemapUrlStatuses.map((s) => s.url)).toEqual([
