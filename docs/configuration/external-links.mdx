@@ -255,16 +255,17 @@ The internal link check requests links the crawl did not choose to follow, and a
 **It skips links that look like actions.** Each path segment, query key and query value is split into words on anything but letters and digits, and at camelCase humps. So `/users/sign_out`, `?route=account/logout`, `?task=user.logout`, `/logout;jsessionid=…`, `/account%2Flogout` and `?action=deleteItem` all count. How far a word reaches depends on how clearly it means an action:
 
 - `logout`, `logoff`, `signout`, `signoff` and `unsubscribe` count anywhere, even run together with other words (`/UserLogout.aspx`, `/dologout`), and so do `unsub` and `optout`.
-- The pairs log out, log off, sign out, sign off, opt out and add to (`/add-to-cart`) count in a path segment of up to four words, and in a query.
+- The pairs log out, log off, sign out, sign off, opt out and add to (`/add-to-cart`) count in a path segment of up to four words, inside one camelCase name of any length (`/MyAccountLogOut.aspx`), and in a query. The sign-out pairs (log out, log off, sign out, sign off) also count in a segment of five words (`/my-account-log-out-now`).
 - `delete`, `destroy`, `trash`, `revoke`, `deactivate`, `confirm`, `verify`, `activate`, `approve`, `unlock`, `purchase` and `callback` count in a path segment of up to three words (`/delete-your-account`), and in a query.
 - `remove`, `cancel`, `disable`, `reset`, `checkout`, `cart`, `basket`, `buy`, `vote`, `like`, `follow`, `subscribe`, `oauth`, `invite`, `accept` and `decline` count in a path segment of up to two words (`/cart`, `/remove-item`, `/password/reset`), and in a query.
 
-A longer slug that only mentions one of them is still a page and is checked: `/where-to-buy`, `/how-to-remove-stains`, `/blog/how-to-verify-your-domain`.
+A longer slug that only mentions one of them is still a page and is checked: `/where-to-buy`, `/how-to-remove-stains`, `/blog/how-to-verify-your-domain`, `/blog/how-to-log-out-of-every-device`.
 
 **It skips links that carry a secret or a one-time value.**
 
 - A query key that has one of these words in it, or a path segment of up to two words that does: `token`, `nonce`, `wpnonce`, `csrf`, `xsrf`, `sig`, `signature`, `otp`, `apikey`, `secret`, `password` or `passwd`.
 - A query key that is exactly `code`, `key`, `hash`, `auth`, `session`, `sid`, `ticket` or `state`.
+- A query key, in any case, that names a credential: `access_token`, `access-token`, `accesstoken`, `token`, `id_token`, `refresh_token`, `auth`, `auth_token`, `auth-token`, `authorization`, `jwt`, `sig`, `signature`, `x-amz-signature`, `x-amz-credential`, `x-amz-security-token`, `x-goog-signature`, `x-goog-credential`, `api_key`, `api-key`, `x-api-key`, `apikey`, `password`, `passwd`, `pwd`, `secret`, `client_secret`, `sessionid` or `session_id`.
 - A session id anywhere (`jsessionid`, `phpsessid`, `sessionid`).
 - A query key or value that looks like a token: a long hex string, a long run of letters and digits with no separator, a long mixed-case base64 string, or a JWT.
 - A token in the path: a JWT always, and any other token-like segment when the URL also says `login`, `signin`, `magic`, `token`, `auth`, `session`, `password`, `email`, `invite`, `reset`, `verify`, `confirm`, `activate`, `unsubscribe` or `unsub` (`/magic-login/…`, `/login/token/…`). A plain id such as `/posts/<uuid>` is still checked.
@@ -308,7 +309,7 @@ An external link can carry its own credential: a newsletter's one-click unsubscr
 
 When squirrel checks a link itself, it follows redirects by hand, at most 20. A redirect into an action or token link, or to anything but `http` or `https`, is not followed, and that redirect is the link's status. Every request it sends, the first and each redirect hop, goes only to a public address (or a private one when the audited site is itself on a private network), never to a link-local or cloud metadata address, and connects to the address it checked, so a DNS answer cannot change between the check and the request. A link whose own address is refused is not requested, never reported as working or broken, and listed in `links/broken-external-links` as `refused-external-links`. One refused on the URL alone (a private or metadata IP literal, a metadata hostname, `localhost` on a public site's audit) also takes no slot under `max_links`, and is never answered from the link cache or sent to the cloud's dead-link check. A redirect toward a refused address is not followed. Each request carries only squirrel's `User-Agent` and `Accept`, plus the `Accept-Encoding` it decodes, never your custom request headers.
 
-These links are listed in `links/broken-external-links` as not requested, never as working or broken, with their query values and token-like parts masked (a best effort), and they do not count against `max_links`.
+These links are listed in `links/broken-external-links` as not requested, never as working or broken, with their query values, token-like parts and email addresses masked (a best effort), and they do not count against `max_links`.
 
 These rules are a careful default, not a guarantee: the word lists are English, and no list can recognize every link that acts on a `GET`. If your pages link to third-party URLs that change state when requested and read like pages, switch external link checks off with `--no-external-links` or `[external_links] enabled = false`.
 

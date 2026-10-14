@@ -4,7 +4,13 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { linkTextLooksLikeAnAction, looksLikeAnAction, maskLinkTokens } from "../src/link-actions";
+import {
+  CREDENTIAL_PARAM_NAMES,
+  isCredentialParam,
+  linkTextLooksLikeAnAction,
+  looksLikeAnAction,
+  maskLinkTokens,
+} from "../src/link-actions";
 
 describe("maskLinkTokens", () => {
   test("every query value and token-like path segment is masked; the rest of the URL stays", () => {
@@ -73,5 +79,74 @@ describe("the rules moved here unchanged", () => {
     expect(looksLikeAnAction("https://example.com/blog/how-to-verify-your-domain")).toBe(false);
     expect(linkTextLooksLikeAnAction("Log out", false)).toBe(true);
     expect(linkTextLooksLikeAnAction("Buy on Amazon", false)).toBe(false);
+  });
+});
+
+describe("a sign-out written as several words (#774)", () => {
+  test("inside a camelCase name, or a hyphenated segment of five words, is an action", () => {
+    for (const path of [
+      "/MyAccountLogOut.aspx",
+      "/my-account-log-out-now",
+      "/UserSignOut",
+      "/portal/AccountLogOff.do",
+      "/?next=MyAccountSignOut",
+    ]) {
+      expect(looksLikeAnAction(`https://x.test${path}`)).toBe(true);
+    }
+  });
+
+  test("a long slug that mentions one, and names that only contain the letters, are pages", () => {
+    for (const path of [
+      "/blog/how-to-log-out-of-every-device",
+      "/BlogOutreachTips",
+      "/DesignOfficeIdeas",
+      "/catalog-outlet",
+    ]) {
+      expect(looksLikeAnAction(`https://x.test${path}`)).toBe(false);
+    }
+  });
+});
+
+describe("credential query parameters (#774)", () => {
+  test("every name on the list makes the URL one that is never requested, in any case", () => {
+    for (const name of CREDENTIAL_PARAM_NAMES) {
+      expect(looksLikeAnAction(`https://x.test/page?${name}=abc`)).toBe(true);
+      expect(looksLikeAnAction(`https://x.test/page?${name.toUpperCase()}=abc`)).toBe(true);
+    }
+    for (const name of [
+      "api_key",
+      "x-api-key",
+      "pwd",
+      "session_id",
+      "accesstoken",
+      "authorization",
+      "jwt",
+      "x-amz-credential",
+      "x-goog-credential",
+    ]) {
+      expect(CREDENTIAL_PARAM_NAMES).toContain(name);
+    }
+  });
+
+  test("a JWT value counts whatever the parameter is called; ordinary parameters do not", () => {
+    const jwt = "eyJhbGciOiJIUzI1.eyJzdWIiOiIxMjM0.SflKxwRJSMeKKF2Q";
+    expect(isCredentialParam("gift", jwt)).toBe(true);
+    expect(isCredentialParam("X-Amz-Credential")).toBe(true);
+    expect(isCredentialParam("page", "2")).toBe(false);
+    expect(looksLikeAnAction("https://x.test/search?q=api+key&page=2")).toBe(false);
+  });
+});
+
+describe("an email address in a path segment is masked (#774)", () => {
+  test("plain, encoded and with a plus sign; a handle stays", () => {
+    expect(maskLinkTokens("https://m.example/unsubscribe/user@example.com/77b1")).toBe(
+      "https://m.example/unsubscribe/…/77b1",
+    );
+    expect(maskLinkTokens("https://m.example/u/user%40example.com")).toBe("https://m.example/u/…");
+    expect(maskLinkTokens("https://m.example/u/user+tag@example.co.uk/")).toBe("https://m.example/u/…/");
+    expect(maskLinkTokens("https://m.example/prefs;email=user@example.com")).toBe("https://m.example/…");
+    expect(maskLinkTokens("https://medium.example/@writer/a-post")).toBe(
+      "https://medium.example/@writer/a-post",
+    );
   });
 });
