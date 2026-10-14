@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- The sitemap date checks read dates as the period they name, the same way on every machine. `crawl/sitemap-lastmod-drift` now reads the page's own date that way too, so a `dateModified` of `2024` agrees with a `lastmod` of `2024-09-10` where it used to warn 253 days ahead. A date with no time (`2024-12-31`) is the whole day, so it agrees with `2024-12` about the same page. A datetime with no time zone is read in UTC, and a `lastmod` in another format with no zone (`2024/09/10`, `2024-9`) is left out instead of read at the local time of the machine running the audit. `crawl/sitemap-lastmod-churn` counts the day a `lastmod` was written (`2024-09-10T23:30:00-05:00` is the 10th, not the UTC 11th). And the cloaking probe counts a `lastmod` of the current year or month as recent, where `2026` read as 1 January never was. See [crawl/sitemap-lastmod-drift](https://docs.squirrelscan.com/rules/crawl/sitemap-lastmod-drift). #772
+
 ## v0.0.113 (2026-10-15)
 
 A safety and accuracy release. The external link check no longer requests links that are actions or carry a credential, such as one-click unsubscribe links, magic sign-in links and signed downloads, and every request it sends, redirect hops included, goes only to a public address (or a private one when the audited site is private), never to a link-local or cloud metadata address. `squirrel audit`'s asset checks can no longer be pointed at a cloud metadata service, the GraphQL probes no longer let a compressed answer inflate past their read limit, and an audit now closes each connection once it has read what it needs, so an endless body no longer keeps downloading. Sitemap dates, bot-protection names and a dozen rules report more accurately too.

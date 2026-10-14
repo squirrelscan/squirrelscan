@@ -2,21 +2,21 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import { w3cDatePeriod } from "../shared/w3c-date-period";
+import { w3cDatePeriod } from "@squirrelscan/utils/date-period";
 
 const MIN_URLS_WITH_LASTMOD = 20;
 const MAX_DISTINCT_DAYS = 2;
 
 /**
- * The day a lastmod names, "coarse" for a bare year or year-month (#758),
- * which names no day: reading `2024` as 2024-01-01 would report a date the
- * sitemap never wrote. Null when it is not a date.
+ * The day a lastmod names, as written (#772): `2024-09-10T23:30:00-05:00` is
+ * the 10th, though it is the 11th in UTC. "coarse" for a bare year or
+ * year-month (#758), which names no day: reading `2024` as 2024-01-01 would
+ * report a date the sitemap never wrote. Null when it is not a date.
  */
 function toDay(lastmod: string): string | "coarse" | null {
   const period = w3cDatePeriod(lastmod);
   if (!period) return null;
-  if (period.precision !== "instant") return "coarse";
-  return new Date(period.start).toISOString().slice(0, 10);
+  return period.day ?? "coarse";
 }
 
 export const sitemapLastmodChurnRule: Rule = {

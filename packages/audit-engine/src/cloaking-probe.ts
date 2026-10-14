@@ -13,6 +13,7 @@
 // inbound-link analysis that only exists once pages are parsed. OFF by default and
 // capped to `maxPages` so it never multiplies crawl cost.
 
+import { w3cDatePeriod } from "@squirrelscan/utils/date-period";
 import { getPathname, normalizeUrl } from "@squirrelscan/utils/url";
 import { stripHtmlForText } from "@squirrelscan/utils";
 
@@ -91,11 +92,16 @@ export type ProbeFetch = (
 
 // ── selection ───────────────────────────────────────────────────────
 
-/** Parse a lastmod string to ms epoch, or null if absent/unparseable. */
-export function parseLastmod(value: string | null): number | null {
-  if (!value) return null;
-  const t = Date.parse(value);
-  return Number.isNaN(t) ? null : t;
+/**
+ * When a lastmod last says the page changed, as ms epoch, or null if absent or
+ * unparseable (#772): the END of the period it names, capped at `now`. A bare
+ * `2026` names the whole year, so with `now` inside it the page may have
+ * changed today; read as 1 January it would never be recent.
+ */
+export function parseLastmod(value: string | null, now: number = Date.now()): number | null {
+  const period = w3cDatePeriod(value);
+  if (!period || period.start > now) return period ? period.start : null;
+  return Math.min(period.end, now);
 }
 
 /**
@@ -121,7 +127,7 @@ export function selectSuspiciousPaths(
     // no sitemap at all, absence is meaningless → zero inbound links alone.
     const isOrphan = c.inboundCount === 0 && (opts.hasSitemap ? !c.inSitemap : true);
 
-    const lastmodMs = parseLastmod(c.lastmod);
+    const lastmodMs = parseLastmod(c.lastmod, opts.now);
     const isRecent =
       lastmodMs !== null &&
       lastmodMs <= opts.now &&
