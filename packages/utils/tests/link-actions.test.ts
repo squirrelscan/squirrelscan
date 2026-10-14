@@ -24,6 +24,26 @@ describe("maskLinkTokens", () => {
     );
   });
 
+  test("tokens as query keys, in matrix parameters, behind an encoded slash, and ids are masked", () => {
+    expect(maskLinkTokens("https://m.example/unsubscribe?0123456789abcdef0123456789abcdef")).toBe(
+      "https://m.example/unsubscribe?…=…",
+    );
+    expect(maskLinkTokens("https://m.example/logout;jsessionid=0123456789ABCDEF0123")).toBe(
+      "https://m.example/…",
+    );
+    expect(maskLinkTokens("https://m.example/a%2F0123456789abcdef0123/unsubscribe")).toBe(
+      "https://m.example/…/unsubscribe",
+    );
+    expect(
+      maskLinkTokens("https://m.example/unsubscribe/123e4567-e89b-12d3-a456-426614174000"),
+    ).toBe("https://m.example/unsubscribe/…");
+    expect(maskLinkTokens("https://m.example/u/Ab3dE9xY/")).toBe("https://m.example/u/…/");
+    // A file name keeps its name: it says where the link points.
+    expect(maskLinkTokens("https://cdn.example/report2024.pdf?sig=x")).toBe(
+      "https://cdn.example/report2024.pdf?sig=…",
+    );
+  });
+
   test("a URL that does not parse is fully masked", () => {
     expect(maskLinkTokens("not a url")).toBe("…");
   });

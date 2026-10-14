@@ -148,6 +148,28 @@ describe("splitNotRequestedExternalLinks", () => {
     });
   });
 
+  test("links that mask the same are one sample entry, with their pages merged", () => {
+    const occurrences: ExternalLinkOccurrences = new Map([
+      [
+        "https://mail.example/unsubscribe?u=1",
+        [{ ...occurrence(), pageUrl: "https://example.com/a" }],
+      ],
+      [
+        "https://mail.example/unsubscribe?u=2",
+        [{ ...occurrence(), pageUrl: "https://example.com/b" }],
+      ],
+    ]);
+    const { notRequested } = splitNotRequestedExternalLinks(occurrences);
+    expect(notRequested.count).toBe(2);
+    expect(notRequested.sample).toEqual([
+      {
+        href: "https://mail.example/unsubscribe?u=…",
+        sourcePages: ["https://example.com/a", "https://example.com/b"],
+        pageCount: 2,
+      },
+    ]);
+  });
+
   test("the sample keeps the 50 most-linked, each with 10 of its pages and the full page count", () => {
     const occurrences: ExternalLinkOccurrences = new Map();
     for (let i = 0; i < 60; i++) {
@@ -369,37 +391,43 @@ for (const engine of ["v1", "v2"] as const) {
       };
 
       const { crawlId: firstId } = await audit(first);
+      // What an engine before #2759 left: both links checked, a 404 each,
+      // with their appearances. One is left out now by its URL, one only by
+      // its link text ("Log out"). The next crawl copies the reused page's
+      // link rows; it does not copy their appearances.
       const pageUrl =
         (await Effect.runPromise(storage.getPages(firstId)))[0]?.normalizedUrl ?? home;
       const stale = `${third}${UNSUBSCRIBE}`;
-      await Effect.runPromise(
-        storage.upsertLink(firstId, {
-          href: stale,
-          isInternal: false,
-          status: 404,
-          checkedAt: Date.now(),
-        }),
-      );
-      await Effect.runPromise(
-        storage.addLinkAppearancesBatch(firstId, [
-          {
-            href: stale,
-            pageUrl,
-            anchorText: "Manage email",
-            position: "content",
-            isNofollow: false,
-          },
-        ]),
-      );
+      const staleByText = `${third}/account`;
+      for (const [href, anchorText] of [
+        [stale, "Manage email"],
+        [staleByText, "Log out"],
+      ] as const) {
+        await Effect.runPromise(
+          storage.upsertLink(firstId, {
+            href,
+            isInternal: false,
+            status: 404,
+            checkedAt: Date.now(),
+          }),
+        );
+        await Effect.runPromise(
+          storage.addLinkAppearancesBatch(firstId, [
+            { href, pageUrl, anchorText, position: "content", isNofollow: false },
+          ]),
+        );
+      }
 
       requested = [];
       const second = await Effect.runPromise(createCrawler({ config: crawlerConfig, storage }));
       const { ran } = await audit(second);
       expect(requested).not.toContain(UNSUBSCRIBE);
+      expect(requested).not.toContain("/account");
       const checks = ran.siteRuleResults.get("links/broken-external-links") ?? [];
       expect(checks.find((c) => c.status === "warn")).toBeUndefined();
       for (const c of checks.filter((c) => c.name === "broken-external-links")) {
         expect(c.items?.map((i) => i.id) ?? []).not.toContain(stale);
+        expect(c.items?.map((i) => i.id) ?? []).not.toContain(staleByText);
       }
       const dead = ran.siteRuleResults.get("links/dead-links") ?? [];
       expect(dead.map((c) => c.message)).toEqual(["Checked 3 external link(s); none are dead"]);

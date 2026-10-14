@@ -254,11 +254,21 @@ export function linkTextLooksLikeAnAction(text: string, nofollow: boolean): bool
   return label.split(" ").length <= 4 && PLAIN_ACTION_TEXT.test(label);
 }
 
+/** A UUID, or a value of 8+ characters mixing letters and digits that is not a file name. */
+function looksLikeAnId(value: string): boolean {
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) return true;
+  if (/\.[a-z0-9]{2,5}$/i.test(value)) return false;
+  return value.length >= 8 && /[0-9]/.test(value) && /[a-z]/i.test(value);
+}
+
 /**
- * `url` with every query value, and every token-like path segment, replaced
- * by `…`, for a report that lists a link it never requested (repo#2759): the
- * reader sees where it points, the report never carries the credential.
- * Unparseable input comes back as `…`.
+ * `url` as a report may show a link it never requested (repo#2759): every
+ * query value masked as `…`, a query key that looks like a token (or is over
+ * 40 characters) masked too, and a path segment masked when any part of it
+ * (split at `;`, `,`, `=` and an encoded `/`) is a token or id. The reader sees
+ * where the link points; the masking is a best effort, not a guarantee that no
+ * credential survives. Userinfo and the fragment are dropped. Unparseable
+ * input comes back as `…`.
  */
 export function maskLinkTokens(url: string): string {
   let parsed: URL;
@@ -267,16 +277,18 @@ export function maskLinkTokens(url: string): string {
   } catch {
     return "…";
   }
+  const secret = (piece: string) => looksLikeAToken(piece) || looksLikeAnId(piece);
   const path = parsed.pathname
     .split("/")
     .map((segment) => {
       const decoded = decode(segment);
-      return decoded !== null && decoded.split(/[;,]/).some((piece) => looksLikeAToken(piece))
-        ? "…"
-        : segment;
+      if (decoded === null) return "…";
+      return decoded.split(/[;,=/]/).some(secret) ? "…" : segment;
     })
     .join("/");
-  const keys = [...new Set(parsed.searchParams.keys())];
-  const query = keys.length > 0 ? `?${keys.map((k) => `${encodeURIComponent(k)}=…`).join("&")}` : "";
+  const keys = [...new Set(parsed.searchParams.keys())].map((key) =>
+    key.length > 40 || secret(key) ? "…" : encodeURIComponent(key),
+  );
+  const query = keys.length > 0 ? `?${[...new Set(keys)].map((k) => `${k}=…`).join("&")}` : "";
   return `${parsed.protocol}//${parsed.host}${path}${query}`;
 }

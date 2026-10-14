@@ -3427,7 +3427,7 @@ export function isNotRequestedExternalLink(href: string, linkTexts: Iterable<str
  * never requests ({@link isNotRequestedExternalLink}). The second come back as
  * a count and a sample, most-linked first, then by URL, each with its first
  * source pages, how many pages link it, and its URL with token-like values
- * masked, so a published report never carries the credential.
+ * masked (`maskLinkTokens`, a best effort) for a report that may be published.
  */
 export function splitNotRequestedExternalLinks(occurrences: ExternalLinkOccurrences): {
   requestable: ExternalLinkOccurrences;
@@ -3445,20 +3445,28 @@ export function splitNotRequestedExternalLinks(occurrences: ExternalLinkOccurren
     }
     skipped.push({ href, pages: [...new Set(occs.map((o) => o.pageUrl))] });
   }
-  skipped.sort(
+  // Masked first, so links that mask the same (`?u=1`, `?u=2`) are one entry
+  // with their pages merged: a report keys items by id and would drop one.
+  const byMasked = new Map<string, Set<string>>();
+  for (const { href, pages } of skipped) {
+    const masked = maskLinkTokens(href);
+    const merged = byMasked.get(masked) ?? new Set<string>();
+    for (const page of pages) merged.add(page);
+    byMasked.set(masked, merged);
+  }
+  const entries = [...byMasked].map(([href, pages]) => ({ href, pages: [...pages] }));
+  entries.sort(
     (a, b) => b.pages.length - a.pages.length || (a.href < b.href ? -1 : a.href > b.href ? 1 : 0),
   );
   return {
     requestable,
     notRequested: {
       count: skipped.length,
-      sample: skipped
-        .slice(0, NOT_REQUESTED_SAMPLE_LINKS)
-        .map(({ href, pages }) => ({
-          href: maskLinkTokens(href),
-          sourcePages: pages.slice(0, NOT_REQUESTED_SAMPLE_PAGES),
-          pageCount: pages.length,
-        })),
+      sample: entries.slice(0, NOT_REQUESTED_SAMPLE_LINKS).map(({ href, pages }) => ({
+        href,
+        sourcePages: pages.slice(0, NOT_REQUESTED_SAMPLE_PAGES),
+        pageCount: pages.length,
+      })),
     },
   };
 }
@@ -3545,6 +3553,7 @@ export function checkCollectedExternalLinks(
     // the credential. Same rules as the internal link probe, URL and link text
     // alike. Counted, sampled, and reported by links/broken-external-links.
     const { requestable, notRequested } = splitNotRequestedExternalLinks(externalLinkOccurrences);
+    const notRequestedHrefs = [...externalLinkOccurrences.keys()].filter((href) => !requestable.has(href));
 
     // repo#2729: a site can link out to tens of thousands of URLs, and in the
     // cloud each link is a credit, so an audit checks at most `max_links` of
@@ -3606,6 +3615,23 @@ export function checkCollectedExternalLinks(
       for (const occ of occurrences) {
         allAppearances.push({
           href: result.href,
+          pageUrl: occ.pageUrl,
+          anchorText: occ.text,
+          position: occ.position,
+          isNofollow: occ.isNofollow,
+        });
+      }
+    }
+
+    // repo#2759: the links never requested get their appearances too, though
+    // no row. An incremental crawl copies a reused page's link rows, earlier
+    // verdicts included, but not its appearances; with these the rule-data
+    // builders can tell such a row is a link this run never requested by its
+    // link text, not only by its URL, and leave it out.
+    for (const href of notRequestedHrefs) {
+      for (const occ of externalLinkOccurrences.get(href) ?? []) {
+        allAppearances.push({
+          href,
           pageUrl: occ.pageUrl,
           anchorText: occ.text,
           position: occ.position,
