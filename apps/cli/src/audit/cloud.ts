@@ -729,18 +729,23 @@ function buildDeadLinksBulkChecker(
 
 type WafProvider = NonNullable<ExternalCheckResult["wafProvider"]>;
 
-/** The engine's vendor vocabulary, taken from its own type: no new dependency. */
-const WAF_PROVIDERS: ReadonlySet<string> = new Set<WafProvider>([
-  "cloudflare",
-  "akamai",
-  "aws-waf",
-  "sucuri",
-  "imperva",
-  "datadome",
-  "perimeterx",
-  "kasada",
-  "unknown",
-]);
+/**
+ * The engine's vendor vocabulary, taken from its own type (no new dependency):
+ * a vendor added there fails to compile here until it is listed.
+ */
+const WAF_PROVIDERS: ReadonlySet<string> = new Set(
+  Object.keys({
+    cloudflare: true,
+    akamai: true,
+    "aws-waf": true,
+    sucuri: true,
+    imperva: true,
+    datadome: true,
+    perimeterx: true,
+    kasada: true,
+    unknown: true,
+  } satisfies Record<WafProvider, true>)
+);
 
 /** A vendor the service named, held to the engine's vocabulary: anything else reads as `unknown`. */
 function knownWafProvider(provider: string | undefined): WafProvider {
