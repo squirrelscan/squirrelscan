@@ -1,7 +1,7 @@
 ---
-title: "Link checking and monitoring"
+title: "Link checking"
 icon: "link"
-description: "What squirrelscan checks about your links, what Not checked means, and what is coming for monitoring"
+description: "What squirrelscan checks about your links, how it tells a broken link from a blocked one, what Not checked means, and what is coming"
 ---
 
 Broken links are easy to make and hard to notice: a page gets renamed, a section is restructured, a site you cite shuts down. squirrelscan checks the links on the pages it audits, so you hear about it before your visitors do.
@@ -17,9 +17,10 @@ This page covers what is checked today, how to read the results, and what is com
 | Quick level | On | Off, unless you pass `--external-links` |
 | Surface and Full levels | On | On |
 | Limit per audit | 200 targets the crawl did not fetch | The audit's page budget or 200 links, whichever is more |
-| Cost in a cloud audit | Free | 1 credit per distinct external link, at most one per page of the audit's budget |
+| Link check cost in the CLI | Free | Free |
+| Link check cost in a cloud audit | Free | 1 credit per distinct external link, at most one per page of the audit's budget |
 
-The full list of switches is in [Link checking defaults](/rules/links#link-checking-defaults).
+An audit itself costs 50 credits plus 2 per audited page, in the cloud or signed in from the CLI; signed out or with `--offline` it is free. In a cloud audit, external links add 1 credit each when external link checking is on. The full price list is in [Credits & Pricing](/cloud/credits), and every switch is in [Link checking defaults](/rules/links#link-checking-defaults).
 
 ## Internal links
 
@@ -39,18 +40,43 @@ The full rules are in [What the internal link check never requests](/configurati
 
 External links are checked at Surface and Full, and at Quick with `--external-links`. One audit checks at most its page budget or 200 distinct external links, whichever is more. The links on the most pages go first: the nav and footer links every page shares. The rest are listed as **Not checked**.
 
-- **In the CLI**, external links are checked from your machine.
-- **In a cloud audit**, they are checked by squirrelscan's link-check service, which shares its results across audits. Each distinct external link costs 1 credit, at most one per page of the audit's budget. External link checks are a website setting in the dashboard.
+Where the check runs depends on how you audit:
 
-## Links that cannot be verified
+- **A cloud audit** checks external links with squirrelscan's link checker, Perch, which shares what it learns across audits. Each distinct external link costs 1 credit, at most one per page of the audit's budget. External link checks are a website setting in the dashboard.
+- **A signed-in CLI audit at Surface or Full** sends its external links to the same checker, for free. Whatever Perch has not answered within a minute, the CLI checks itself from your machine.
+- **Signed out, or at Quick with `--external-links`**, the CLI checks external links from your machine. `--offline` skips them.
 
-Many sites refuse automated requests. A refusal says nothing about whether a person would reach the page, so squirrelscan keeps refusals apart from broken links where it can tell them apart:
+Like the internal check, the external check never requests a link that looks like an action or carries a token: a newsletter's one-click unsubscribe, a magic sign-in link, a signed download. It never follows a redirect into one either. See [What the external link check never requests](/configuration/external-links#what-the-external-link-check-never-requests).
 
-- **Throttled** (429, or a 503 with `Retry-After`): listed as rate-limited, status unverifiable, never broken.
+## How Perch tells broken from blocked
+
+Many sites refuse automated requests. A refusal says nothing about whether a person would reach the page. So Perch does not take the first answer at face value:
+
+- **A link that a site blocks for automated clients** is checked again with the network fingerprint of a real browser.
+- **A link is reported broken only after a confirmed failure:**
+  - a 404 or other client error: twice, at least ten minutes apart;
+  - a server error (5xx): three times, at least six hours from the first to the last.
+
+  Until then it is listed as status unverifiable, not broken. A link checked again by a later audit counts toward this too.
+- **A domain that no longer exists**, or has no address, is reported straight away. Two independent DNS resolvers have to agree. In our samples it is one of the most common kinds of dead external link.
+- **A page that answers 200 but whose title is just "404" or "Page not found"** (a soft 404) is broken, confirmed the same way as a 404.
+- **A link that still cannot be verified is listed as status unverifiable, never as broken.** This covers a firewall challenge, LinkedIn's 999, a plain 403 or 406, a timeout from our network, or a CDN error page. A rate limit is listed as rate-limited, never as broken.
+
+We replayed 1,631 external links the previous checker had already answered. It had stored 107 of them as broken and 239 more as refused (a 403, 429 or 503). Perch reports 67 broken. Of the 1,281 links the previous checker had found working, Perch called 6 broken (0.47%), and a hand check found all 6 really were gone.
+
+### When the CLI checks a link itself
+
+When the CLI checks a link from your machine (signed out, at Quick, or when Perch has not answered in time), it makes one plain check per link. That check keeps refusals apart from broken links where it can tell them apart:
+
+- **Throttled** (429 or 430, or a 503 with `Retry-After`): listed as rate-limited, status unverifiable, never broken.
 - **Blocked by a firewall** (a 403 with a recognisable web application firewall signature): listed as blocked, status unverifiable, never broken.
 - **An internal link that answers 401 or 403** to the status-only check: listed as refused, never broken.
 
-Some blocks carry no signature squirrelscan recognises, such as a plain 403, a 406, LinkedIn's 999, or a CDN error page. Those are still reported as broken today. If a link in the broken list loads in your browser, it is probably one of these. See **Coming soon** below.
+Some blocks carry no signature the single check recognises, such as a plain 403, a 406, LinkedIn's 999, or a CDN error page. In a check from your machine those, and a timeout, are still reported as broken. If a link in the broken list loads in your browser, it is probably one of these. A cloud audit, or a signed-in CLI audit at Surface or Full, avoids most of them, because Perch checks the link first.
+
+### The first check of a new link
+
+Perch needs about a minute for a link it has never seen, sometimes longer, because it spaces its requests to each site out. A cloud audit sends its external links to Perch while it crawls, so most are answered by the time the audit asks. Any link Perch has not answered in time gets a quicker single check from the cloud instead, and that check can still report a blocked link as broken. The next audit gets Perch's answer.
 
 ## Not checked
 
@@ -62,22 +88,15 @@ When a check did not run, squirrelscan says so rather than reporting the rule as
 | `external-links-over-cap` | The audit found more external links than its limit. The most-linked were checked. |
 | `link-targets-not-fetched` | The audit did not follow links, and some internal link targets were fetched neither by the crawl nor by the status-only check: it was off, over its limit, or the targets were skipped. |
 
-In the cloud's issue tracker, an open broken-link issue stays open while its link goes unchecked. It closes only when an audit that can see the link finds it working.
+In the cloud's issue tracker, an open broken-link issue stays open while an audit could not check links for one of the reasons above. A link listed as status unverifiable does not keep it open.
 
-## Coming soon: browser-grade verification
+## Coming soon: real-browser checks
 
 <Note>
-  Coming soon. This describes work in progress. Today's external link checks work as described above.
+  Coming soon. This describes work in progress. Today, a link Perch cannot get past is listed as status unverifiable.
 </Note>
 
-We are building a new way to verify external links. It treats a site that blocks bots the way a real visitor's browser would:
-
-- A link that a site blocks for automated clients is checked again the way a real browser would load it, before anything is reported.
-- A link is reported broken only after a second, confirmed failure.
-- A link that still cannot be verified is listed as **unverified**, never as broken.
-- A domain that no longer exists is reported as such, with the evidence.
-
-Cloud reports will label these results **Verified by Perch**.
+Some sites only let a full browser in. We are working on checking those links in a real browser, so fewer links end up unverifiable.
 
 ## Coming soon: link monitoring
 
@@ -91,5 +110,6 @@ For paid plans, a website on a recurring audit schedule will have its links re-c
 
 - [Link checking defaults](/rules/links#link-checking-defaults): every switch, per level and per surface.
 - [External and internal link configuration](/configuration/external-links): limits, timeouts and caching.
+- [Credits & Pricing](/cloud/credits): what a cloud audit and its external link checks cost.
 - [Audit levels](/guides/audit-levels): what each level checks and costs.
 - [Crawling rate-limited hosts](/guides/rate-limited-hosts): why a throttled link is never reported broken.
