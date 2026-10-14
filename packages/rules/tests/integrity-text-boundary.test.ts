@@ -82,3 +82,32 @@ test("an off-self iframe overlay is corroborated by glued auth copy", () => {
     expect(detectPageSignals(ctx).has("fake-auth-overlay")).toBe(true);
   }
 });
+
+// pub#749 review: whitespace and invisible characters inside the control's own
+// label, and links whose only cue is "verify" or "continue with".
+
+test("whitespace or an invisible character inside the label cannot split the cue", () => {
+  for (const label of [
+    "Sign in with\nGoogle",
+    "Sign in  with Google",
+    "Sign in&nbsp;with Google",
+    "Sign in with<br>Google",
+    "Sign in with<span> </span>Google",
+    "Sign​ in with Google",
+    "Sign in with Goo­gle",
+  ]) {
+    const ctx = context(`<a href="https://credential-fixture.invalid/signin">${label}</a>`);
+    expect([...detectPageSignals(ctx)]).toContain("brand-impersonation");
+  }
+});
+
+test("a link labelled only verify or continue with is not a credential affordance by itself", () => {
+  for (const anchor of [
+    '<a href="https://blog.example.org/post">Verify your Google account</a>',
+    '<a href="https://help.example.org/kb">Continue with Microsoft account</a>',
+  ]) {
+    const ctx = context(` ${anchor}`);
+    expect(detectPageSignals(ctx).has("brand-impersonation")).toBe(false);
+    expect(brandImpersonationRule.run(ctx).checks).toEqual([]);
+  }
+});

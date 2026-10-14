@@ -17,7 +17,7 @@ import { getDomain } from "tldts";
 
 import { getAttrCI } from "@squirrelscan/utils";
 
-import { getPageSeparatedText } from "../content/text-content";
+import { getPageSeparatedText, getSeparatedText } from "../content/text-content";
 import type { RuleContext } from "../types";
 
 /** Distinct page-level compromise signals (one per page-scope rule). */
@@ -57,10 +57,29 @@ export const CORRELATION_THRESHOLD = 2;
  */
 function authHaystack(ctx: PageSignalContext): string {
   const doc = ctx.parsed.document;
-  const title = (ctx.parsed.meta.title ?? "").toLowerCase();
-  const text = (ctx.parsed.content.textContent ?? "").toLowerCase();
-  const separated = doc ? getPageSeparatedText(doc).toLowerCase() : "";
-  return `${title}\n${text}\n${separated}`;
+  const cached = doc ? haystackCache.get(doc) : undefined;
+  if (cached !== undefined) return cached;
+  const title = readable(ctx.parsed.meta.title ?? "");
+  const text = readable(ctx.parsed.content.textContent ?? "");
+  const separated = doc ? readable(getPageSeparatedText(doc)) : "";
+  const haystack = `${title}\n${text}\n${separated}`;
+  if (doc) haystackCache.set(doc, haystack);
+  return haystack;
+}
+
+/** One `authHaystack` per parsed document: several detectors read it. */
+const haystackCache = new WeakMap<object, string>();
+
+/** Characters that render as nothing (a soft hyphen, zero-width spaces and joiners). */
+const INVISIBLE = /[\u00ad\u200b-\u200d\u2060\ufeff]/g;
+
+/**
+ * Text as a cue is matched against: lower case, the invisible characters
+ * gone and every run of whitespace (a newline, a double space, `&nbsp;`) one
+ * space, so none of them can split `sign in` or a brand phrase (pub#749).
+ */
+function readable(text: string): string {
+  return text.replace(INVISIBLE, "").replace(/\s+/g, " ").toLowerCase();
 }
 
 // ── Brand impersonation ─────────────────────────────────────────────
@@ -227,28 +246,32 @@ function hrefHost(raw: string | null, base: string): string | null {
 function credentialDestinations(
   doc: NonNullable<RuleContext["parsed"]["document"]>,
   base: string
-): { host: string; brandLabeled: string }[] {
-  const out: { host: string; brandLabeled: string }[] = [];
+): { host: string; brandLabeled: string; signIn: boolean }[] {
+  const out: { host: string; brandLabeled: string; signIn: boolean }[] = [];
 
   // Password-form actions (or the page URL when the action is empty → self-post).
   for (const form of doc.querySelectorAll("form")) {
     if (!form.querySelector('input[type="password"]')) continue;
     const action = getAttrCI(form, "action");
     const host = hrefHost(action, base) ?? hrefHost(base, base);
-    if (host) out.push({ host, brandLabeled: "" });
+    if (host) out.push({ host, brandLabeled: "", signIn: false });
   }
 
   // Auth-labeled links: only links whose own text is a sign-in affordance.
+  // The label is read as written and with a break at every element inside it
+  // (`Sign in with<br>Google`), whitespace and invisible characters collapsed.
   const AUTH_LABEL = /\b(sign in|log in|login|continue with|verify)\b/;
+  const SIGN_IN_LABEL = /\b(sign in|log in|login)\b/;
   for (const a of doc.querySelectorAll("a[href]")) {
-    const label = (a.textContent ?? "").toLowerCase();
-    if (!AUTH_LABEL.test(label)) continue;
+    const labels = [readable(a.textContent ?? ""), readable(getSeparatedText(a))];
+    if (!labels.some((label) => AUTH_LABEL.test(label))) continue;
     const host = hrefHost(getAttrCI(a, "href"), base);
     if (!host) continue;
     const brand =
-      BRAND_SPECS.find((s) => s.lexicon.some((p) => label.includes(p)))?.brand ??
-      "";
-    out.push({ host, brandLabeled: brand });
+      BRAND_SPECS.find((s) => s.lexicon.some((p) => labels.some((label) => label.includes(p))))
+        ?.brand ?? "";
+    const signIn = labels.some((label) => SIGN_IN_LABEL.test(label));
+    out.push({ host, brandLabeled: brand, signIn });
   }
 
   return out;
@@ -274,12 +297,12 @@ export function detectBrandImpersonation(
   const credDests = credentialDestinations(doc, ctx.page.url);
 
   // A credential affordance must exist at all: a password field, auth copy, or
-  // a credential control of its own. Every link in `credDests` already carries
-  // its own sign-in label, so a missing page-wide word boundary cannot override
-  // the control's evidence (pub#696).
+  // a control whose own label says sign in or log in, so a missing page-wide
+  // word boundary cannot override the control's evidence (pub#696). A link
+  // labelled only "verify" or "continue with" is not one by itself.
   const hasCredentialAffordance =
     doc.querySelector('input[type="password"]') !== null ||
-    credDests.length > 0 ||
+    credDests.some((d) => d.signIn) ||
     /\b(sign in|log in|login|enter your password|verify your account)\b/.test(
       haystack
     );
