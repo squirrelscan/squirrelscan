@@ -50,6 +50,38 @@ const HINTS: Record<string, string> = {
 const DEFAULT_HINT = "Run a Surface or Full audit to check them.";
 
 /**
+ * The internal link hint for a check that says why its targets were not
+ * fetched (`details.notFetched`, pub#726): turning the checks back on only
+ * when they were off, raising `internal_links.max_targets` only when the
+ * limit left targets out. A check from an older engine has no breakdown and
+ * keeps the full hint.
+ */
+function linkTargetsHint(details: Record<string, unknown> | undefined): string {
+  const notFetched = details?.notFetched;
+  if (typeof notFetched !== "object" || notFetched === null) {
+    return HINTS[LINK_TARGETS_NOT_FETCHED_SKIP_REASON]!;
+  }
+  const causes = notFetched as Record<string, unknown>;
+  const steps: string[] = [];
+  if (causes.off) {
+    steps.push(
+      "turn internal link checks back on (they are off with --no-internal-links or internal_links.enabled = false)",
+    );
+  }
+  if (causes.overLimit) steps.push("raise internal_links.max_targets");
+  steps.push("run a Surface or Full audit, which follows links,");
+  const text =
+    steps.length === 1 ? steps[0]! : `${steps.slice(0, -1).join(", ")}, or ${steps.at(-1)}`;
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)} to check them.`;
+}
+
+function hintFor(check: { skipReason?: string; details?: Record<string, unknown> }): string {
+  if (check.skipReason === LINK_TARGETS_NOT_FETCHED_SKIP_REASON)
+    return linkTargetsHint(check.details);
+  return (check.skipReason && HINTS[check.skipReason]) || DEFAULT_HINT;
+}
+
+/**
  * Rules with a check that did not run this audit, sorted by name (then id).
  * One entry per rule, from its first not-checked check. Info-severity rules
  * are left out: they summarize what another rule reports (links/dead-links
@@ -74,7 +106,7 @@ export function notCheckedRules(report: NotCheckedReportShape): NotCheckedRule[]
       check: check.name,
       reason: check.skipReason,
       message: check.message,
-      hint: HINTS[check.skipReason] ?? DEFAULT_HINT,
+      hint: hintFor(check),
     });
   }
   return out.sort((a, b) => a.name.localeCompare(b.name) || a.ruleId.localeCompare(b.ruleId));

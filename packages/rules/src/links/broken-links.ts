@@ -83,6 +83,9 @@ export const brokenLinksRule: Rule = {
     const unfetchedTargets = new Set<string>();
     const allTargets = new Set<string>();
     const probedTargets = new Set<string>();
+    // Of those, the ones the probe asked about and got no usable status for.
+    // The rest it never asked about (pub#726).
+    let unansweredTargets = 0;
 
     for (const [target, sources] of linkTargets) {
       // Normalize target URL to match crawler's normalization
@@ -109,6 +112,7 @@ export const brokenLinksRule: Rule = {
       }
       if (statusCode === undefined) {
         unfetchedTargets.add(normalizedTarget);
+        if (probedStatuses.has(normalizedTarget)) unansweredTargets++;
         continue;
       }
 
@@ -167,28 +171,22 @@ export const brokenLinksRule: Rule = {
     }
 
     if (notFollowed) {
-      const probe = ctx.site?.internalLinkProbe;
-      const why = !probe
-        ? "this audit did not follow links and internal link checks were off"
-        : probe.cap === 0
-          ? "this audit did not follow links and internal_links.max_targets is 0"
-          : probe.headUnreliable
-            ? "this audit did not follow links and the site answers status-only (HEAD) requests with errors on pages it serves, so the internal link checks could not be trusted"
-            : probe.probed > 0
-              ? `this audit did not follow links and status-checked only the ${probe.probed} most-linked targets`
-              : (probe.outOfScope ?? 0) > 0
-                ? "this audit did not follow links and the targets are outside the crawl scope, disallowed by robots.txt, or look like actions (log out, unsubscribe) or carry a token, which the link check never requests"
-                : "this audit did not follow links and its internal link checks got no answer";
+      const notFetched = notFetchedCauses(
+        unfetchedTargets.size,
+        unansweredTargets,
+        ctx.site?.internalLinkProbe,
+      );
       checks.push({
         name: "broken-links",
         status: "skipped",
-        message: `${unfetchedTargets.size} of ${allTargets.size} internal link target(s) were not fetched because ${why}, so they were not checked for broken links`,
+        message: `${unfetchedTargets.size} of ${allTargets.size} internal link target(s) were not fetched because this audit did not follow links and ${notFetchedReason(notFetched, ctx.site?.internalLinkProbe?.cap ?? 0)}, so they were not checked for broken links`,
         skipReason: LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
         value: unfetchedTargets.size,
         details: {
           linkTargets: allTargets.size,
           unfetchedTargets: unfetchedTargets.size,
           probedTargets: probedTargets.size,
+          notFetched,
         },
       });
     }
@@ -224,3 +222,97 @@ export const brokenLinksRule: Rule = {
     return { checks };
   },
 };
+
+/**
+ * Why the internal link targets nobody fetched were left out, as counts per
+ * cause (pub#726). Read by the report's "Not checked" hint, so it suggests
+ * raising `internal_links.max_targets` only when the limit left targets out.
+ * Only causes with a count are present.
+ */
+interface LinkTargetsNotFetched {
+  /** Internal link checks were off: no target was checked. */
+  off?: number;
+  /** Past the check's per-audit limit (`internal_links.max_targets`). */
+  overLimit?: number;
+  /** Never requested: outside the crawl scope, disallowed by robots.txt, or an action or token link. */
+  skipped?: number;
+  /** Asked, but the site answers HEAD with errors on pages it serves, so no answer was trusted. */
+  untrusted?: number;
+  /** Asked, and no status came back. */
+  noAnswer?: number;
+}
+
+type InternalLinkProbe = NonNullable<NonNullable<RuleContext["site"]>["internalLinkProbe"]>;
+
+/**
+ * Split the unfetched targets by cause. Targets the probe asked about without
+ * an answer are untrusted when HEAD was unreliable, and unanswered otherwise.
+ * For the ones it never asked about, its own counts say how far its eligible
+ * targets ran past the limit and how many it skipped: past the limit up to
+ * that excess, then skipped up to its count. Any left over (a target the
+ * engine keyed differently, or a context without per-target statuses) is
+ * counted as unanswered, the cause that claims least.
+ */
+function notFetchedCauses(
+  unfetched: number,
+  unanswered: number,
+  probe: InternalLinkProbe | undefined,
+): LinkTargetsNotFetched {
+  if (!probe) return { off: unfetched };
+  const notAsked = Math.max(0, unfetched - unanswered);
+  const overLimit = Math.min(notAsked, Math.max(0, probe.unfetched - probe.cap));
+  const skipped = Math.min(notAsked - overLimit, probe.outOfScope ?? 0);
+  const noStatus = unanswered + (notAsked - overLimit - skipped);
+  const causes: LinkTargetsNotFetched = {
+    overLimit,
+    skipped,
+    ...(probe.headUnreliable ? { untrusted: noStatus } : { noAnswer: noStatus }),
+  };
+  for (const key of Object.keys(causes) as (keyof LinkTargetsNotFetched)[]) {
+    if (!causes[key]) delete causes[key];
+  }
+  return causes;
+}
+
+const targets = (n: number): string => `${n} ${n === 1 ? "target" : "targets"}`;
+
+/** The "because ..." clause for the Not checked message: one cause in words, several with a count each. */
+function notFetchedReason(causes: LinkTargetsNotFetched, cap: number): string {
+  const present = (Object.keys(causes) as (keyof LinkTargetsNotFetched)[]).filter((k) => causes[k]);
+  if (present.length === 1) {
+    switch (present[0]) {
+      case "off":
+        return "internal link checks were off";
+      case "overLimit":
+        return cap === 0
+          ? "internal_links.max_targets is 0"
+          : `its internal link checks stop at ${targets(cap)}, most-linked first`;
+      case "skipped":
+        return "its internal link checks never request targets outside the crawl scope, disallowed by robots.txt, or that look like actions (log out, unsubscribe) or carry a token";
+      case "untrusted":
+        return "the site answers status-only (HEAD) requests with errors on pages it serves, so the internal link checks could not be trusted";
+      default:
+        return "its internal link checks got no answer";
+    }
+  }
+  const parts: string[] = [];
+  if (causes.overLimit) {
+    parts.push(
+      cap === 0
+        ? `${causes.overLimit} left out because internal_links.max_targets is 0`
+        : `${causes.overLimit} past the limit of ${targets(cap)}`,
+    );
+  }
+  if (causes.skipped) {
+    parts.push(
+      `${causes.skipped} skipped as outside the crawl scope, disallowed by robots.txt, or an action or token link`,
+    );
+  }
+  if (causes.untrusted) {
+    parts.push(
+      `${causes.untrusted} not trusted, because the site answers HEAD requests with errors on pages it serves`,
+    );
+  }
+  if (causes.noAnswer) parts.push(`${causes.noAnswer} with no answer`);
+  return `its internal link checks covered only part of them (${parts.join("; ")})`;
+}

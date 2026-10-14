@@ -204,7 +204,12 @@ describe("links/broken-links when the crawl did not follow links", () => {
     expect(skipped.message).toBe(
       "2 of 4 internal link target(s) were not fetched because this audit did not follow links and internal link checks were off, so they were not checked for broken links",
     );
-    expect(skipped.details).toEqual({ linkTargets: 4, unfetchedTargets: 2, probedTargets: 0 });
+    expect(skipped.details).toEqual({
+      linkTargets: 4,
+      unfetchedTargets: 2,
+      probedTargets: 0,
+      notFetched: { off: 2 },
+    });
   });
 
   test("a broken target it did fetch still fails, next to the not-checked skip", () => {
@@ -269,7 +274,84 @@ describe("links/broken-links when the crawl did not follow links", () => {
     );
     expect(named(checks, "broken-links").map((c) => c.status)).toEqual(["skipped"]);
     expect(checks[0]!.message).toBe(
-      "1 of 4 internal link target(s) were not fetched because this audit did not follow links and status-checked only the 1 most-linked targets, so they were not checked for broken links",
+      "1 of 4 internal link target(s) were not fetched because this audit did not follow links and its internal link checks stop at 1 target, most-linked first, so they were not checked for broken links",
+    );
+    expect(checks[0]!.details?.notFetched).toEqual({ overLimit: 1 });
+  });
+
+  // pub#726: the reason used to be picked in a fixed order, so any audit where
+  // the check answered one target blamed the limit, even with nothing over it.
+  // The fixture is the issue's: the home page links /about (crawled), three
+  // targets the check answered (/missing 404, /moved 410, /private 403) and two
+  // it skipped as actions (/logout, a token link); the limit is 200.
+  const issuePages: FixturePage[] = [
+    {
+      url: `${BASE}/`,
+      statusCode: 200,
+      internal: [
+        `${BASE}/about`,
+        `${BASE}/missing`,
+        `${BASE}/moved`,
+        `${BASE}/private`,
+        `${BASE}/logout`,
+        `${BASE}/account?token=0123456789abcdef01234567`,
+      ],
+    },
+    { url: `${BASE}/about`, statusCode: 200, internal: [`${BASE}/`] },
+  ];
+  const issueStatuses = [
+    { url: `${BASE}/missing`, status: 404, error: null },
+    { url: `${BASE}/moved`, status: 410, error: null },
+    { url: `${BASE}/private`, status: 403, error: null },
+  ];
+
+  test("targets skipped as actions, limit not reached: the line names the skip, not the limit", () => {
+    const { checks } = brokenLinksRule.run(
+      ctx(issuePages, {
+        linkDiscoveryOff: true,
+        linkTargetStatuses: issueStatuses,
+        internalLinkProbe: { unfetched: 3, probed: 3, cap: 200, outOfScope: 2 },
+      }),
+    );
+    const skipped = named(checks, "broken-links").find((c) => c.status === "skipped")!;
+    expect(skipped.message).toBe(
+      "2 of 7 internal link target(s) were not fetched because this audit did not follow links and its internal link checks never request targets outside the crawl scope, disallowed by robots.txt, or that look like actions (log out, unsubscribe) or carry a token, so they were not checked for broken links",
+    );
+    expect(skipped.message).not.toContain("max_targets");
+    expect(skipped.details?.notFetched).toEqual({ skipped: 2 });
+    // The two answered 4xx still fail beside it.
+    expect(named(checks, "broken-links").map((c) => c.status)).toEqual(["fail", "skipped"]);
+  });
+
+  test("over the limit: the line names the limit", () => {
+    // Limit 2: the probe answered /missing and /moved; /private was past it.
+    const { checks } = brokenLinksRule.run(
+      ctx(issuePages, {
+        linkDiscoveryOff: true,
+        linkTargetStatuses: issueStatuses.slice(0, 2),
+        internalLinkProbe: { unfetched: 3, probed: 2, cap: 2, outOfScope: 2 },
+      }),
+    );
+    const skipped = named(checks, "broken-links").find((c) => c.status === "skipped")!;
+    expect(skipped.details?.notFetched).toEqual({ overLimit: 1, skipped: 2 });
+    expect(skipped.message).toBe(
+      "3 of 7 internal link target(s) were not fetched because this audit did not follow links and its internal link checks covered only part of them (1 past the limit of 2 targets; 2 skipped as outside the crawl scope, disallowed by robots.txt, or an action or token link), so they were not checked for broken links",
+    );
+  });
+
+  test("every cause at once gets a count each", () => {
+    const { checks } = brokenLinksRule.run(
+      ctx(issuePages, {
+        linkDiscoveryOff: true,
+        // /moved was asked and never answered; /private was past the limit of 2.
+        linkTargetStatuses: [issueStatuses[0]!, { url: `${BASE}/moved`, status: null, error: "timeout" }],
+        internalLinkProbe: { unfetched: 3, probed: 1, cap: 2, outOfScope: 2 },
+      }),
+    );
+    const skipped = named(checks, "broken-links").find((c) => c.status === "skipped")!;
+    expect(skipped.details?.notFetched).toEqual({ overLimit: 1, skipped: 2, noAnswer: 1 });
+    expect(skipped.message).toContain(
+      "(1 past the limit of 2 targets; 2 skipped as outside the crawl scope, disallowed by robots.txt, or an action or token link; 1 with no answer)",
     );
   });
 

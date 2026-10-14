@@ -162,7 +162,12 @@ for (const engine of ["v1", "v2"] as const) {
       });
       expect(stats?.linkDiscoveryOff).toBe(true);
       expect(statuses(internal)).toEqual(["skipped:link-targets-not-fetched"]);
-      expect(internal[0]!.details).toEqual({ linkTargets: 3, unfetchedTargets: 1, probedTargets: 0 });
+      expect(internal[0]!.details).toEqual({
+        linkTargets: 3,
+        unfetchedTargets: 1,
+        probedTargets: 0,
+        notFetched: { off: 1 },
+      });
       expect(internal[0]!.message).toContain("internal link checks were off");
       expect(statuses(external)).toEqual(["skipped:external-links-not-checked"]);
       expect(external[0]!.details).toEqual({ externalLinksFound: 2 });
