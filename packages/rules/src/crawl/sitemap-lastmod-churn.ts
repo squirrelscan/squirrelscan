@@ -2,13 +2,21 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { w3cDatePeriod } from "../shared/w3c-date-period";
+
 const MIN_URLS_WITH_LASTMOD = 20;
 const MAX_DISTINCT_DAYS = 2;
 
-function toDay(lastmod: string): string | null {
-  const date = new Date(lastmod);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString().slice(0, 10);
+/**
+ * The day a lastmod names, "coarse" for a bare year or year-month (#758),
+ * which names no day: reading `2024` as 2024-01-01 would report a date the
+ * sitemap never wrote. Null when it is not a date.
+ */
+function toDay(lastmod: string): string | "coarse" | null {
+  const period = w3cDatePeriod(lastmod);
+  if (!period) return null;
+  if (period.precision !== "instant") return "coarse";
+  return new Date(period.start).toISOString().slice(0, 10);
 }
 
 export const sitemapLastmodChurnRule: Rule = {
@@ -47,12 +55,18 @@ export const sitemapLastmodChurnRule: Rule = {
     // different message from "your sitemap has no lastmod at all", and the operator needs to tell them
     // apart to know whether anything is wrong.
     let newsUrlsWithLastmod = 0;
+    // A year or month names no day, so it cannot show day-level stamping.
+    let coarseLastmods = 0;
 
     for (const sitemap of sitemaps.discovered) {
       for (const sitemapUrl of sitemap.urls) {
         if (!sitemapUrl.lastmod) continue;
         const day = toDay(sitemapUrl.lastmod);
         if (!day) continue;
+        if (day === "coarse") {
+          if (!sitemap.isNewsSitemap) coarseLastmods++;
+          continue;
+        }
         // A Google News sitemap carries roughly the last 48 hours of articles by specification, so its
         // lastmod values ALWAYS collapse onto one or two days. Pooling them in accused every publisher
         // with a news sitemap of build-stamping their lastmod - observed on a live site whose regular
@@ -73,15 +87,22 @@ export const sitemapLastmodChurnRule: Rule = {
       // Distinguish "too small to judge" from "everything we saw was a news sitemap". The second is not
       // a finding about the site at all, and reporting it as one sends the operator looking for a bug
       // in a sitemap that is behaving exactly as specified.
-      const newsOnly = urlsWithLastmod === 0 && newsUrlsWithLastmod > 0;
+      const newsOnly = urlsWithLastmod === 0 && newsUrlsWithLastmod > 0 && coarseLastmods === 0;
+      const coarseOnly = urlsWithLastmod < MIN_URLS_WITH_LASTMOD && coarseLastmods > 0;
       checks.push({
         name: "sitemap-lastmod-churn",
         status: "skipped",
         message: newsOnly
           ? `Only news-sitemap URLs carry a lastmod (${newsUrlsWithLastmod}); news sitemaps hold ~48 hours of articles by design, so their lastmod values are excluded from this check`
-          : `Only ${urlsWithLastmod} sitemap URL(s) carry a lastmod; sitemap is too small to judge lastmod churn`,
-        skipReason: newsOnly ? "Only news-sitemap lastmod values" : "Too few URLs with lastmod",
-        details: { urlsWithLastmod, newsUrlsWithLastmod },
+          : coarseOnly
+            ? `${coarseLastmods} sitemap lastmod value(s) name only a year or month, which says nothing about the day a page changed; ${urlsWithLastmod} name a day, too few to judge lastmod churn`
+            : `Only ${urlsWithLastmod} sitemap URL(s) carry a lastmod; sitemap is too small to judge lastmod churn`,
+        skipReason: newsOnly
+          ? "Only news-sitemap lastmod values"
+          : coarseOnly
+            ? "Lastmod values name only a year or month"
+            : "Too few URLs with lastmod",
+        details: { urlsWithLastmod, newsUrlsWithLastmod, coarseLastmods },
       });
       return { checks };
     }
@@ -104,6 +125,7 @@ export const sitemapLastmodChurnRule: Rule = {
           dates: offendingDates,
           sitemaps: sources,
           newsUrlsExcluded: newsUrlsWithLastmod,
+          coarseLastmodsExcluded: coarseLastmods,
         },
       });
       return { checks };
@@ -118,6 +140,7 @@ export const sitemapLastmodChurnRule: Rule = {
         urlsWithLastmod,
         sitemaps: sources,
         newsUrlsExcluded: newsUrlsWithLastmod,
+        coarseLastmodsExcluded: coarseLastmods,
       },
     });
 

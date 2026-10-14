@@ -15,6 +15,7 @@ The rule is site-wide. It walks every `<lastmod>` in every discovered sitemap, p
 
 - Skipped when no sitemap was discovered. Message: `No sitemap to validate`.
 - Skipped when fewer than 20 non-news URLs carry a parseable `lastmod`. Message: `Only 8 sitemap URL(s) carry a lastmod; sitemap is too small to judge lastmod churn`.
+- Skipped with different wording when fewer than 20 URLs carry a `lastmod` that names a day, and some name only a year or a month (`2024`, `2024-09`, which the W3C Datetime format allows). Those say nothing about the day a page changed, so they are left out of the sample rather than read as their first day. Message: `N sitemap lastmod value(s) name only a year or month, which says nothing about the day a page changed; M name a day, too few to judge lastmod churn`.
 - Skipped with different wording when every `lastmod` came from a news sitemap. Message: `Only news-sitemap URLs carry a lastmod (140); news sitemaps hold ~48 hours of articles by design, so their lastmod values are excluded from this check`.
 - Warn when the values collapse onto two distinct days or fewer. Message: `412 sitemap URL(s) with lastmod collapse onto 1 distinct day(s): 2026-09-08 (from https://example.com/sitemap.xml)`, with each date listed as an item carrying its count. Severity warning, weight 4.
 - Pass otherwise. Message: `412 sitemap URL(s) with lastmod spread across 96 distinct days`.

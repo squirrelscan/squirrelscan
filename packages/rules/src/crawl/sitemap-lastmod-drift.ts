@@ -8,6 +8,7 @@ import type { SitemapData } from "@squirrelscan/core-contracts";
 import { flattenJsonLdNodes, normalizeUrl } from "@squirrelscan/utils";
 
 import { documentTypes, isArticleType, schemaDateString } from "../shared/schema-document";
+import { w3cDatePeriod } from "../shared/w3c-date-period";
 
 const MS_PER_DAY = 86_400_000;
 
@@ -213,8 +214,10 @@ export const sitemapLastmodDriftRule: Rule = {
       }
       if (!lastmod) continue;
 
-      const lastmodMs = parseDate(lastmod);
-      if (lastmodMs === null) continue; // Unparseable lastmod is crawl/sitemap-valid's job.
+      // #758: `2024` and `2024-09` name a whole year or month, so a page date
+      // inside it agrees, and one outside it is measured from the nearer end.
+      const period = w3cDatePeriod(lastmod);
+      if (period === null) continue; // Unparseable lastmod is crawl/sitemap-valid's job.
 
       // No page-side date at all is content/freshness territory, not drift.
       const pageDate = resolvePageDate(page.parsed);
@@ -226,7 +229,13 @@ export const sitemapLastmodDriftRule: Rule = {
       // not rounded: rounding moved the real thresholds half a day past the
       // documented ones (a 7.5-day gap warned, and was quoted back to the user
       // as "8 day(s)" under a message reading "more than 7 day(s)").
-      const deltaDays = Math.floor(Math.abs(pageDate.ms - lastmodMs) / MS_PER_DAY);
+      const gapMs =
+        pageDate.ms > period.end
+          ? pageDate.ms - period.end
+          : pageDate.ms < period.start
+            ? period.start - pageDate.ms
+            : 0;
+      const deltaDays = Math.floor(gapMs / MS_PER_DAY);
       const drift: Drift = {
         url: page.url,
         lastmod,
@@ -235,8 +244,8 @@ export const sitemapLastmodDriftRule: Rule = {
         deltaDays,
       };
 
-      if (pageDate.ms > lastmodMs && deltaDays > opts.behind_days) behind.push(drift);
-      else if (lastmodMs > pageDate.ms && deltaDays > opts.ahead_days) ahead.push(drift);
+      if (pageDate.ms > period.end && deltaDays > opts.behind_days) behind.push(drift);
+      else if (pageDate.ms < period.start && deltaDays > opts.ahead_days) ahead.push(drift);
     }
 
     if (comparedPages === 0) {
