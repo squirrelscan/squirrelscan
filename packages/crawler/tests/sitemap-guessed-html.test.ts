@@ -208,9 +208,10 @@ describe("what counts as a web page rather than a sitemap", () => {
     expect(decoded.data.urlCount).toBe(1);
   });
 
-  test("a sitemap root with a broken entry is a broken sitemap, not a page, whatever the Content-Type", () => {
-    // A bare-number lastmod reaches the extractor as a number and fails there.
-    const entry = `<urlset xmlns="${NS}"><url><loc>https://example.com/</loc><lastmod>2024</lastmod></url></urlset>`;
+  test("a sitemap root with a broken body is a broken sitemap, not a page, whatever the Content-Type", () => {
+    // Cut off mid-tag, so the XML parser itself fails. (This used a bare-year
+    // lastmod until #687 made that parse.)
+    const entry = `<urlset xmlns="${NS}"><url><loc>https://example.com/</loc></url><url><lo`;
     for (const body of [
       `<?xml version="1.0"?>${entry}`,
       `<?xml version="1.0"?><!DOCTYPE urlset [<!ENTITY a "x>y">]>\n${entry}`,
