@@ -189,3 +189,60 @@ describe("the probe request turns the runtime's decoding off (#722)", () => {
     expect(gzipped.checks).toEqual(plain.checks);
   });
 });
+
+describe("a capped probe closes its connection (#722)", () => {
+  test("an endless answer stops crossing the wire once the cap is read, not at the timeout", async () => {
+    // A raw socket server: Bun.serve hides when the client hangs up, and only
+    // a server that counts what it wrote and sees the close can tell a
+    // cancelled reader (Bun keeps downloading) from a closed connection.
+    const chunk = Buffer.alloc(64 * 1024, 0x20);
+    let closedAt = 0;
+    const pump = (socket: { write(data: Uint8Array): number }) => {
+      while (socket.write(chunk) === chunk.byteLength) {
+        // Keep writing until the socket pushes back; `drain` resumes.
+      }
+    };
+    const listener = Bun.listen<{ started: boolean }>({
+      hostname: "127.0.0.1",
+      port: 0,
+      socket: {
+        open(socket) {
+          socket.data = { started: false };
+        },
+        data(socket) {
+          if (socket.data.started) return;
+          socket.data.started = true;
+          socket.write(
+            "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\nconnection: close\r\n\r\n",
+          );
+          pump(socket);
+        },
+        drain(socket) {
+          pump(socket);
+        },
+        close() {
+          closedAt = Date.now();
+        },
+      },
+    });
+    try {
+      const outcome = await sendGraphqlProbe(
+        budget(),
+        `http://127.0.0.1:${listener.port}/graphql`,
+        {
+          op: "noop-mutation",
+          method: "GET",
+        },
+      );
+      const returnedAt = Date.now();
+      expect("response" in outcome && outcome.response.truncated).toBe(true);
+      while (closedAt === 0 && Date.now() - returnedAt < 5_000) await Bun.sleep(10);
+      expect(closedAt).toBeGreaterThan(0);
+      // The probe timeout is 10 s; a reader cancel alone kept the transfer
+      // going until then.
+      expect(closedAt - returnedAt).toBeLessThan(2_000);
+    } finally {
+      listener.stop(true);
+    }
+  }, 20_000);
+});
