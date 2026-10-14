@@ -258,6 +258,8 @@ export function linkTextLooksLikeAnAction(text: string, nofollow: boolean): bool
 function looksLikeAnId(value: string): boolean {
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) return true;
   if (/\.[a-z0-9]{2,5}$/i.test(value)) return false;
+  // A slug with a word in it (`top-10-tips`, `iphone-15-pro`) names a page.
+  if (/[-_]/.test(value) && value.split(/[-_]/).some((part) => /^[a-z]{3,}$/i.test(part))) return false;
   return value.length >= 8 && /[0-9]/.test(value) && /[a-z]/i.test(value);
 }
 

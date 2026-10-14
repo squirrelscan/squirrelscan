@@ -44,6 +44,24 @@ describe("maskLinkTokens", () => {
     );
   });
 
+  test("ordinary paths and slugs keep their shape", () => {
+    for (const path of [
+      "/blog/2024/10/post-title",
+      "/p/12345",
+      "/en-us/",
+      "/blog/top-10-tips/logout",
+      "/iphone-15-pro",
+    ]) {
+      expect(maskLinkTokens(`https://site.example${path}`)).toBe(`https://site.example${path}`);
+    }
+    expect(maskLinkTokens(`https://site.example/a?${"k".repeat(41)}=1`)).toBe(
+      "https://site.example/a?…=…",
+    );
+    expect(maskLinkTokens("https://site.example/%E0%A4%A/logout")).toBe(
+      "https://site.example/…/logout",
+    );
+  });
+
   test("a URL that does not parse is fully masked", () => {
     expect(maskLinkTokens("not a url")).toBe("…");
   });
