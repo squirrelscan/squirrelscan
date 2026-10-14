@@ -15,6 +15,7 @@
     "./validation": "./src/validation.ts",
     "./headers": "./src/headers.ts",
     "./safe-fetch": "./src/safe-fetch.ts",
+    "./link-actions": "./src/link-actions.ts",
     "./response-body": "./src/response-body.ts",
     "./user-agent": "./src/user-agent.ts",
     "./client-redirects": "./src/client-redirects.ts",

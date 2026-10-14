@@ -251,8 +251,17 @@ export interface CrawlStats {
    * External link checking this run (repo#2729): distinct external links the
    * pages carry, how many were checked, and the per-audit limit that capped it.
    * Set by the external-link phase when it ran; absent when it did not.
+   * `notRequested` counts the links never requested because they look like an
+   * action or carry a token (repo#2759), included in `found` but not
+   * `checked`; `notRequestedLinks` is a sample of them, most-linked first.
    */
-  externalLinkCheck?: { found: number; checked: number; cap: number };
+  externalLinkCheck?: {
+    found: number;
+    checked: number;
+    cap: number;
+    notRequested?: number;
+    notRequestedLinks?: Array<{ href: string; sourcePages: string[] }>;
+  };
   /**
    * Root fetches (robots.txt, sitemaps, llms.txt, the Markdown probe) the site
    * REFUSED with a 401/403/429 or a bot-challenge 503, capped at

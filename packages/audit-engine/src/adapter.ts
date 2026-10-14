@@ -3397,6 +3397,46 @@ function nofollowActionTargets(page: {
   return out;
 }
 
+/** Not-requested external links kept as a sample in the crawl stats, and source pages per link. */
+const NOT_REQUESTED_SAMPLE_LINKS = 50;
+const NOT_REQUESTED_SAMPLE_PAGES = 10;
+
+/**
+ * Split the external links into those the checker may request and those it
+ * never requests (repo#2759): the URL looks like an action or carries a token
+ * (`looksLikeAnAction`), or any page words the link as an action ("Log out",
+ * or rel=nofollow on action text, `linkTextLooksLikeAnAction`). The second
+ * come back as a count and a sample, most-linked first, then by URL.
+ */
+export function splitNotRequestedExternalLinks(occurrences: ExternalLinkOccurrences): {
+  requestable: ExternalLinkOccurrences;
+  notRequested: { count: number; sample: Array<{ href: string; sourcePages: string[] }> };
+} {
+  const requestable: ExternalLinkOccurrences = new Map();
+  const skipped: Array<{ href: string; pages: string[] }> = [];
+  for (const [href, occs] of occurrences) {
+    const action =
+      looksLikeAnAction(href) || occs.some((o) => linkTextLooksLikeAnAction(o.text, o.isNofollow));
+    if (!action) {
+      requestable.set(href, occs);
+      continue;
+    }
+    skipped.push({ href, pages: [...new Set(occs.map((o) => o.pageUrl))] });
+  }
+  skipped.sort(
+    (a, b) => b.pages.length - a.pages.length || (a.href < b.href ? -1 : a.href > b.href ? 1 : 0),
+  );
+  return {
+    requestable,
+    notRequested: {
+      count: skipped.length,
+      sample: skipped
+        .slice(0, NOT_REQUESTED_SAMPLE_LINKS)
+        .map(({ href, pages }) => ({ href, sourcePages: pages.slice(0, NOT_REQUESTED_SAMPLE_PAGES) })),
+    },
+  };
+}
+
 /**
  * The external links an audit checks under a `max_links` limit (repo#2729):
  * all of them when there is no limit or they fit. Otherwise `priority` first
@@ -3473,22 +3513,28 @@ export function checkCollectedExternalLinks(
     const cache = linkCache ?? null;
     const ttlSeconds = config.cache_ttl_days * 24 * 60 * 60;
 
+    // repo#2759: a link that looks like an action or carries a token (a
+    // third-party unsubscribe or magic link, a signed download URL) is never
+    // requested, locally or by the cloud's bulk checker: the URL itself can be
+    // the credential. Same rules as the internal link probe, URL and link text
+    // alike. Counted, sampled, and reported by links/broken-external-links.
+    const { requestable, notRequested } = splitNotRequestedExternalLinks(externalLinkOccurrences);
+
     // repo#2729: a site can link out to tens of thousands of URLs, and in the
     // cloud each link is a credit, so an audit checks at most `max_links` of
     // them: the most-linked first (nav and footer links every page shares),
     // then by URL so the choice is stable. The rest are counted and reported as
     // not checked.
-    const hrefs = selectExternalLinksToCheck(
-      externalLinkOccurrences,
-      config.max_links,
-      priorityHrefs,
-    );
+    const hrefs = selectExternalLinksToCheck(requestable, config.max_links, priorityHrefs);
     yield* storage
       .updateStats(crawlId, {
         externalLinkCheck: {
           found: externalLinkOccurrences.size,
           checked: hrefs.length,
-          cap: config.max_links ?? externalLinkOccurrences.size,
+          cap: config.max_links ?? requestable.size,
+          ...(notRequested.count > 0
+            ? { notRequested: notRequested.count, notRequestedLinks: notRequested.sample }
+            : {}),
         },
       })
       .pipe(

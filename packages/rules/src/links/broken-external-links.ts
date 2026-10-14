@@ -48,6 +48,34 @@ function notChecked(message: string, found: number): CheckResult {
   };
 }
 
+/**
+ * repo#2759: external links the checker never requested because they look
+ * like an action (log out, unsubscribe, delete) or carry a token or signature
+ * in the URL, where the request itself could act on the credential. Neither a
+ * finding nor a pass: their status is simply unknown, and they are listed so
+ * the reader can check them by hand. Info, not a "not checked" skip, which
+ * would hold this rule's open issues open on every site with a permanent
+ * unsubscribe link.
+ */
+function notRequestedCheck(
+  linkCheck: NonNullable<SiteData["externalLinkCheck"]>,
+): CheckResult | null {
+  const count = linkCheck.notRequested ?? 0;
+  if (count === 0) return null;
+  const sample = linkCheck.notRequestedLinks ?? [];
+  return {
+    name: "not-requested-external-links",
+    status: "info",
+    message: `${count} external link(s) were not requested because they look like actions (log out, unsubscribe) or carry a token or signature in the URL, so their status was not checked`,
+    value: count,
+    items: sample.map((l) => ({ id: l.href, sourcePages: l.sourcePages })),
+    details: {
+      notRequested: count,
+      ...(sample.length < count ? { listed: sample.length } : {}),
+    },
+  };
+}
+
 export const brokenExternalLinksRule: Rule = {
   meta: {
     id: "links/broken-external-links",
@@ -82,7 +110,16 @@ export const brokenExternalLinksRule: Rule = {
       return { checks };
     }
 
+    const linkCheck = ctx.site?.externalLinkCheck;
+    const notRequested = linkCheck ? notRequestedCheck(linkCheck) : null;
+
     if (externalLinks.length === 0) {
+      // Every external link was one the checker never requests: say that,
+      // and nothing about the rest, of which there are none.
+      if (notRequested && linkCheck && (linkCheck.notRequested ?? 0) >= linkCheck.found) {
+        checks.push(notRequested);
+        return { checks };
+      }
       // No check results while the pages do link out: the checker never saw
       // them (rules re-run on a stored crawl by `squirrel analyze`, a check
       // phase that died early). Not a pass.
@@ -185,19 +222,22 @@ export const brokenExternalLinksRule: Rule = {
     }
 
     // repo#2729: links over this audit's limit were never requested. Say so,
-    // next to the result for the ones that were.
-    const capped = ctx.site?.externalLinkCheck;
-    if (capped && capped.found > capped.checked) {
-      const unchecked = capped.found - capped.checked;
+    // next to the result for the ones that were. The ones never requested as
+    // actions or token links (repo#2759) are not over any limit.
+    const capped = linkCheck;
+    const overCap = capped ? capped.found - (capped.notRequested ?? 0) - capped.checked : 0;
+    if (capped && overCap > 0) {
       checks.push({
         name: "broken-external-links",
         status: "skipped",
-        message: `${unchecked} of ${capped.found} external link(s) were not checked: over this audit's limit of ${capped.cap}, which checks the most-linked first`,
+        message: `${overCap} of ${capped.found} external link(s) were not checked: over this audit's limit of ${capped.cap}, which checks the most-linked first`,
         skipReason: EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
-        value: unchecked,
+        value: overCap,
         details: { externalLinksFound: capped.found, externalLinksChecked: capped.checked, cap: capped.cap },
       });
     }
+
+    if (notRequested) checks.push(notRequested);
 
     // Report WAF-blocked links as info (not broken, just unverifiable)
     if (wafBlockedLinks.length > 0) {

@@ -302,12 +302,20 @@ These rules are a careful default, not a guarantee. The word lists are English, 
    - Detects WAF/bot protection (Cloudflare, Akamai, etc.)
    - WAF-blocked 403s reported separately from broken links
 
+### What the external link check never requests
+
+An external link can carry its own credential: a newsletter's one-click unsubscribe link, a magic sign-in link, a signed download URL. Requesting it, even with `HEAD`, can use it up or act on it. So the external link check never requests a link that the internal link check would skip as an action or token link, using the same word lists, token shapes and link-text rules as [What the internal link check never requests](#what-the-internal-link-check-never-requests). A signed-in audit does not send such a link to the cloud's dead-link check either.
+
+Redirects are followed by hand. A redirect into an action or token link, or to anything but `http` or `https`, is not followed, and that redirect is the link's status.
+
+These links are listed in `links/broken-external-links` as not requested, never as working or broken, and they do not count against `max_links`.
+
 ### Status detection
 
 | Status | Meaning | Reported As |
 |--------|---------|-------------|
 | 200-299 | Success | Working link |
-| 300-399 | Redirect | Working (followed) |
+| 300-399 | Redirect | Working (followed, unless it leads to an action or token link) |
 | 400-499 | Client error | Broken link |
 | 500-599 | Server error | Broken link |
 | Timeout | No response | Broken link |

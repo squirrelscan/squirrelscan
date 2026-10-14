@@ -480,9 +480,17 @@ export interface SiteData {
   /**
    * External link checking this audit (repo#2729): distinct external links
    * found, how many were checked, and the per-audit limit. Undefined when the
-   * check did not run, or for callers that do not record it.
+   * check did not run, or for callers that do not record it. `notRequested`:
+   * links never requested because they look like an action or carry a token
+   * (repo#2759), counted in `found` but not `checked`, with a sample.
    */
-  externalLinkCheck?: { found: number; checked: number; cap: number };
+  externalLinkCheck?: {
+    found: number;
+    checked: number;
+    cap: number;
+    notRequested?: number;
+    notRequestedLinks?: Array<{ href: string; sourcePages: string[] }>;
+  };
   /**
    * Status of internal link targets the crawl did not fetch, from the link
    * probe (repo#2729). Undefined when internal link checks were off.
