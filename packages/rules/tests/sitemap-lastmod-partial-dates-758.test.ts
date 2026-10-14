@@ -89,6 +89,14 @@ describe("w3cDatePeriod", () => {
       end: instant,
       precision: "instant",
     });
+    // December rolls into the next year; a leap February ends on the 29th.
+    expect(w3cDatePeriod("2024-12")?.end).toBe(Date.UTC(2025, 0, 1) - 1);
+    expect(w3cDatePeriod("2024-02")?.end).toBe(Date.UTC(2024, 1, 29, 23, 59, 59, 999));
+    // Years below 100 are not read as 19xx.
+    const early = w3cDatePeriod("0099")!;
+    expect(new Date(early.start).getUTCFullYear()).toBe(99);
+    expect(early.end).toBeGreaterThan(early.start);
+    expect(w3cDatePeriod("2024-00")).toBeNull();
     expect(w3cDatePeriod("2024-13")).toBeNull();
     expect(w3cDatePeriod("not a date")).toBeNull();
   });
@@ -140,11 +148,27 @@ describe("crawl/sitemap-lastmod-churn with a year or year-month lastmod (#758)",
         ),
       );
       expect(checks.map((c) => c.status)).toEqual(["skipped"]);
-      expect(checks[0]!.message).not.toContain("2024-01-01");
-      expect(checks[0]!.message).not.toContain("2024-09-01");
       expect(checks[0]!.skipReason).toBe("Lastmod values name only a year or month");
       expect(checks[0]!.details).toMatchObject({ coarseLastmods: 30, urlsWithLastmod: 0 });
     }
+  });
+
+  test("too few lastmods in all is still too small, not too coarse", () => {
+    const { checks } = sitemapLastmodChurnRule.run(
+      siteWith([], [...urls(() => "2024-09-10T04:00:00Z", 3), ...urls(() => "2024", 2)]),
+    );
+    expect(checks[0]!.skipReason).toBe("Too few URLs with lastmod");
+  });
+
+  test("a news sitemap's year-month lastmods are counted as news, as before", () => {
+    const context = siteWith(
+      [],
+      urls(() => "2024-09"),
+    );
+    (context.site!.sitemaps!.discovered[0] as { isNewsSitemap?: boolean }).isNewsSitemap = true;
+    const { checks } = sitemapLastmodChurnRule.run(context);
+    expect(checks[0]!.skipReason).toBe("Only news-sitemap lastmod values");
+    expect(checks[0]!.details).toMatchObject({ newsUrlsWithLastmod: 30, coarseLastmods: 0 });
   });
 
   test("full datetimes still count, with the coarse ones left out of the sample", () => {

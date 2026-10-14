@@ -63,16 +63,16 @@ export const sitemapLastmodChurnRule: Rule = {
         if (!sitemapUrl.lastmod) continue;
         const day = toDay(sitemapUrl.lastmod);
         if (!day) continue;
-        if (day === "coarse") {
-          if (!sitemap.isNewsSitemap) coarseLastmods++;
-          continue;
-        }
         // A Google News sitemap carries roughly the last 48 hours of articles by specification, so its
         // lastmod values ALWAYS collapse onto one or two days. Pooling them in accused every publisher
         // with a news sitemap of build-stamping their lastmod - observed on a live site whose regular
         // sitemap was unreachable, leaving the news sitemap as the entire sample.
         if (sitemap.isNewsSitemap) {
           newsUrlsWithLastmod++;
+          continue;
+        }
+        if (day === "coarse") {
+          coarseLastmods++;
           continue;
         }
         urlsWithLastmod++;
@@ -88,7 +88,8 @@ export const sitemapLastmodChurnRule: Rule = {
       // a finding about the site at all, and reporting it as one sends the operator looking for a bug
       // in a sitemap that is behaving exactly as specified.
       const newsOnly = urlsWithLastmod === 0 && newsUrlsWithLastmod > 0 && coarseLastmods === 0;
-      const coarseOnly = urlsWithLastmod < MIN_URLS_WITH_LASTMOD && coarseLastmods > 0;
+      // Too coarse, not too small: counting them would have been enough.
+      const coarseOnly = coarseLastmods > 0 && urlsWithLastmod + coarseLastmods >= MIN_URLS_WITH_LASTMOD;
       checks.push({
         name: "sitemap-lastmod-churn",
         status: "skipped",
