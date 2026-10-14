@@ -40,18 +40,16 @@ import { type RunnerScope } from "@squirrelscan/rules";
 import { Duration, Effect, Stream } from "effect";
 
 import type { Config } from "@/config";
-import type { ExternalLinksConfig } from "@/config";
 import type { Crawler, CrawlerEvent } from "@/crawler/core/types";
+import type { ExternalCheckResult } from "@/crawler/external-checker";
 import type {
   CrawlStorage,
   PageRecord,
   LinkRecord,
   ImageRecord,
-  LinkAppearanceRecord,
   ImageAppearanceRecord,
 } from "@/crawler/storage/types";
 import type {
-  LinkPosition,
   Page,
   PageRaw,
   ParsedPageData,
@@ -71,10 +69,6 @@ import type {
 
 import { RESOURCE_SIZE_LIMITS, SQUIRRELSCAN_USER_AGENT } from "@/constants";
 import {
-  checkExternalLinks,
-  type ExternalCheckResult,
-} from "@/crawler/external-checker";
-import {
   checkResourceSizes,
   type ResourceCheckResult,
 } from "@/crawler/resource-checker";
@@ -82,7 +76,6 @@ import {
   fetchScriptContents,
   type ScriptFetchResult,
 } from "@/crawler/script-fetcher";
-import { getGlobalLinkCache } from "@/crawler/storage/link-cache";
 import { logger } from "@/utils/logger";
 import { getHostname, normalizeUrl } from "@/utils/url";
 import { detectWafChallengePage } from "@/utils/waf";
@@ -867,7 +860,7 @@ export type { StreamingRulePhase };
 
 /**
  * Streamed pre-rules phase (#1913) — the batched walk that replaces
- * `buildSiteContext` + {@link checkExternalLinksOnStorage} +
+ * `buildSiteContext` + `checkExternalLinksOnStorage` +
  * {@link fetchResourceAssets} over a whole-crawl page array. Same delegating
  * seam as {@link runStreamingRules}.
  */
@@ -967,192 +960,16 @@ export function subscribeToCrawlerEvents(
 // EXTERNAL LINK CHECKING
 // ============================================
 
-export interface ExternalLinkCheckProgress {
-  checked: number;
-  total: number;
-  fromCache: number;
-}
-
 /**
  * Cloud bulk link checker (wired from the credit-gated /v1/services/dead-links
  * endpoint by the audit controller). The map is keyed by the exact requested
- * url; urls it omits fall back to per-link local checks.
+ * url; urls it omits fall back to per-link local checks. The engine's
+ * `runBulkChecker` calls it in chunks, and stops after a chunk it answers
+ * none of (pub#753).
  */
 export type ExternalBulkChecker = (
   urls: string[]
 ) => Promise<Map<string, ExternalCheckResult>>;
-
-// Max urls per bulk-checker call — mirrors SERVICE_LIMITS.deadLinksBatchUrls.
-const BULK_CHECK_CHUNK_SIZE = 200;
-
-/**
- * Run the bulk checker over local-cache misses in chunks. Never throws: a
- * failing chunk ends the bulk pass and the unresolved remainder takes the
- * per-link local path.
- */
-async function runBulkChecker(
-  bulkChecker: ExternalBulkChecker,
-  urls: string[]
-): Promise<Map<string, ExternalCheckResult>> {
-  const resolved = new Map<string, ExternalCheckResult>();
-  for (let i = 0; i < urls.length; i += BULK_CHECK_CHUNK_SIZE) {
-    try {
-      const chunk = await bulkChecker(urls.slice(i, i + BULK_CHECK_CHUNK_SIZE));
-      for (const [url, result] of chunk) resolved.set(url, result);
-    } catch {
-      break; // cloud unavailable — remaining urls fall back to local checks
-    }
-  }
-  return resolved;
-}
-
-/**
- * Check all external links from site context
- * Results are stored in the crawl storage for use by rules
- *
- * @param siteContext - Pre-parsed site context (eliminates redundant parsing)
- * @param bulkChecker - Optional cloud bulk checker, tried FIRST for every url
- *   the local cache misses. Its answers are seeded into the local cache so the
- *   per-link checker serves them without opening a socket; a bulk failure
- *   degrades silently to the existing per-link local path.
- */
-export function checkExternalLinksOnStorage(
-  storage: CrawlStorage,
-  crawlId: string,
-  siteContext: SiteContextPage[],
-  config: ExternalLinksConfig,
-  onProgress?: (progress: ExternalLinkCheckProgress) => void,
-  bulkChecker?: ExternalBulkChecker
-): Effect.Effect<ExternalCheckResult[], never, never> {
-  return Effect.gen(function* () {
-    if (!config.enabled) {
-      return [];
-    }
-
-    // Extract all external links from site context (no DOM parsing needed)
-    interface ExternalLinkOccurrence {
-      pageUrl: string;
-      text: string;
-      position: LinkPosition;
-      isNofollow: boolean;
-    }
-    const externalLinkOccurrences = new Map<string, ExternalLinkOccurrence[]>();
-
-    for (const { page, parsed } of siteContext) {
-      if (!parsed || !parsed.document) continue; // Skip non-HTML or failed parses
-
-      // Extract links from pre-parsed document (no additional parsing)
-      // We need position info which isn't stored in parsedData
-      const links = extractLinks(parsed.document, page.finalUrl);
-
-      for (const link of links) {
-        if (!link.isInternal && link.href) {
-          const occurrences = externalLinkOccurrences.get(link.href) ?? [];
-          occurrences.push({
-            pageUrl: page.normalizedUrl,
-            text: link.text,
-            position: link.position,
-            isNofollow: link.isNofollow,
-          });
-          externalLinkOccurrences.set(link.href, occurrences);
-        }
-      }
-    }
-
-    if (externalLinkOccurrences.size === 0) {
-      return [];
-    }
-
-    // Check external links using global cache
-    const cache = getGlobalLinkCache();
-    const ttlSeconds = config.cache_ttl_days * 24 * 60 * 60;
-    const allUrls = Array.from(externalLinkOccurrences.keys());
-
-    // Cloud bulk path: resolve local-cache misses via the cloud checker first,
-    // seeding its answers (checkedAt = now) into the local cache so the
-    // per-link checker below serves them as cache hits — only urls the cloud
-    // didn't answer get per-link local fetches.
-    if (bulkChecker) {
-      const locallyCached = cache.getCachedBulk(allUrls, ttlSeconds);
-      const misses = allUrls.filter((url) => !locallyCached.has(url));
-      if (misses.length > 0) {
-        const resolved = yield* Effect.promise(() =>
-          runBulkChecker(bulkChecker, misses)
-        );
-        if (resolved.size > 0) {
-          cache.setCachedBulk(
-            Array.from(resolved.entries()).map(([url, result]) => ({
-              href: url,
-              status: result.status,
-              error: result.error,
-              redirectTarget: result.redirectTarget,
-              checkedAt: Date.now(),
-              wafBlocked: result.wafBlocked,
-              wafProvider: result.wafProvider,
-            }))
-          );
-        }
-      }
-    }
-
-    const results = yield* checkExternalLinks(allUrls, cache, {
-      ttlSeconds,
-      concurrency: config.concurrency,
-      timeoutMs: config.timeout_ms,
-      userAgent: SQUIRRELSCAN_USER_AGENT,
-    });
-
-    // Store results in per-crawl storage
-    // Collect all appearances for batch insert
-    const allAppearances: LinkAppearanceRecord[] = [];
-
-    for (const result of results) {
-      yield* storage
-        .upsertLink(crawlId, {
-          href: result.href,
-          isInternal: false,
-          status: result.status ?? undefined,
-          error: result.error ?? undefined,
-          checkedAt: Date.now(),
-          wafBlocked: result.wafBlocked,
-          wafProvider: result.wafProvider,
-          // #1829: persisted, not re-derived — the 503 + Retry-After case
-          // cannot be recovered from the status code the rules read.
-          rateLimited: result.rateLimited,
-        })
-        .pipe(Effect.catchAll(() => Effect.void));
-
-      // Collect link appearances for batch insert
-      const occurrences = externalLinkOccurrences.get(result.href) ?? [];
-      for (const occ of occurrences) {
-        allAppearances.push({
-          href: result.href,
-          pageUrl: occ.pageUrl,
-          anchorText: occ.text,
-          position: occ.position,
-          isNofollow: occ.isNofollow,
-        });
-      }
-    }
-
-    // Batch insert all appearances in one transaction
-    if (allAppearances.length > 0) {
-      yield* storage
-        .addLinkAppearancesBatch(crawlId, allAppearances)
-        .pipe(Effect.catchAll(() => Effect.void));
-    }
-
-    // Report progress
-    const fromCache = results.filter((r) => r.fromCache).length;
-    onProgress?.({
-      checked: results.length,
-      total: externalLinkOccurrences.size,
-      fromCache,
-    });
-
-    return results;
-  });
-}
 
 // ============================================
 // HELPERS

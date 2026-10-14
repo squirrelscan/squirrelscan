@@ -11,7 +11,7 @@ Verifying external links means at least one HTTP request per link, and often mor
 
 The cloud service moves that work behind a cache shared across every audit. A link any recent audit checked comes back immediately: a working link stays cached for three to thirty days, following the caching headers its server sends, and a dead one for one hour to three days. A link the service has not seen yet is queued, paced per site, and retried with a browser-like client when a plain request is refused. This rule is the gate that turns it on: enabling it routes the audit's external-link phase through the service instead of fetching each link locally.
 
-For an audit you run with the CLI, the service replies within about a minute, sooner if 20 seconds pass without a new answer. A link it has not answered by then is left out of its reply, and squirrel checks that link locally, from your machine, as it would if you were logged out. A link the service could not verify, behind a bot wall, a challenge page or a rate limit, comes back without a dead verdict and is not counted as dead.
+For an audit you run with the CLI, the service replies within about a minute, sooner if 20 seconds pass without a new answer. A link it has not answered by then is left out of its reply, and squirrel checks that link locally, from your machine, as it would if you were logged out. squirrel asks about up to 200 links at a time: if a reply answers none of them, it stops asking and checks the rest of the audit's external links locally straight away, so a busy service costs one wait rather than one per batch. A link the service could not verify, behind a bot wall, a challenge page or a rate limit, comes back without a dead verdict and is not counted as dead.
 
 ## What squirrel checks
 

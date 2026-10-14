@@ -64,9 +64,10 @@ export interface ExternalCheckerOptions {
   /**
    * Optional cloud bulk checker (e.g. the credit-gated /v1/services/dead-links
    * endpoint). When present it is tried FIRST for every url the local cache
-   * misses; urls it resolves skip the per-link local fetch. Any throw falls
-   * back to the existing per-link local path for the remaining urls. The map
-   * is keyed by the exact requested url.
+   * misses; urls it resolves skip the per-link local fetch. Any throw, or a
+   * chunk answered with none of its urls, falls back to the existing per-link
+   * local path for the remaining urls. The map is keyed by the exact requested
+   * url.
    */
   bulkChecker?: (urls: string[]) => Promise<Map<string, ExternalCheckResult>>;
 }
@@ -76,8 +77,8 @@ export const BULK_CHECK_CHUNK_SIZE = 200;
 
 /**
  * Run a bulk checker over `urls` in chunks, accumulating whatever it resolves.
- * Never throws: a failing chunk stops the bulk pass and the unresolved
- * remainder takes the per-link local path.
+ * Never throws: a failing chunk, or one that answers none of its urls, stops
+ * the bulk pass and the unresolved remainder takes the per-link local path.
  */
 export async function runBulkChecker(
   bulkChecker: (urls: string[]) => Promise<Map<string, ExternalCheckResult>>,
@@ -86,12 +87,20 @@ export async function runBulkChecker(
 ): Promise<Map<string, ExternalCheckResult>> {
   const resolved = new Map<string, ExternalCheckResult>();
   for (let i = 0; i < urls.length; i += chunkSize) {
+    const requested = urls.slice(i, i + chunkSize);
+    let chunk: Map<string, ExternalCheckResult>;
     try {
-      const chunk = await bulkChecker(urls.slice(i, i + chunkSize));
-      for (const [url, result] of chunk) resolved.set(url, result);
+      chunk = await bulkChecker(requested);
     } catch {
       break; // cloud unavailable — remaining urls fall back to local checks
     }
+    for (const [url, result] of chunk) resolved.set(url, result);
+    // pub#753: a service that answered nothing for a whole chunk (overloaded,
+    // or out of time on links it has not seen) will most likely do the same
+    // for the next one, and each such chunk costs its full wait. Stop asking:
+    // the remaining urls go to the local checker straight away. A chunk that
+    // answers even one of its urls keeps the pass going.
+    if (!requested.some((url) => chunk.has(url))) break;
   }
   return resolved;
 }
