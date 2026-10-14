@@ -659,35 +659,54 @@ describe("memoizeResolveHost", () => {
   });
 });
 
-describe("trustTarget: the audited site's own hosts are sent as the crawl sends them (repo#2764)", () => {
+describe("trustTarget: the hosts the crawl requests are sent as it sends them (repo#2764)", () => {
   // An mDNS name answers link-local IPv6 next to its LAN address, so vetting
   // the site's own name would refuse every one of its assets.
-  const lan = table({
-    "printer.local": ["192.168.1.5", "fe80::1"],
-    "meta.example.net": ["169.254.169.254"],
-  });
-  const policy: EgressPolicy = {
+  const lan = () =>
+    table({
+      "printer.local": ["192.168.1.5", "fe80::1"],
+      "imds.printer.local": ["169.254.169.254"],
+      "meta.example.net": ["169.254.169.254"],
+    });
+  const policy = (resolve: ResolveHost, trusted = ["printer.local"]): EgressPolicy => ({
     allowPrivateNetwork: true,
-    resolve: lan,
-    trustTarget: (url) => url.hostname === "printer.local",
-  };
+    resolve,
+    trustTarget: (url) => trusted.includes(url.hostname),
+  });
 
-  test("a trusted host is neither vetted nor resolved", async () => {
-    expect(await refused("http://printer.local/style.css", policy)).toBe(false);
-    expect(lan.asked).not.toContain("printer.local");
+  test("a trusted host is neither resolved nor refused", async () => {
+    const resolve = lan();
+    expect(await refused("http://printer.local/style.css", policy(resolve))).toBe(false);
+    expect(resolve.asked).not.toContain("printer.local");
   });
 
   test("without trust, the same name is refused for its link-local answer", async () => {
     expect(
-      await refused("http://printer.local/style.css", { ...policy, trustTarget: undefined }),
+      await refused("http://printer.local/style.css", { ...policy(lan()), trustTarget: undefined }),
     ).toBe(true);
   });
 
+  test("a subdomain is not trusted with its parent: one pointed at metadata is refused", async () => {
+    expect(await refused("http://imds.printer.local/latest/meta-data/", policy(lan()))).toBe(true);
+  });
+
+  test("trust never reaches a metadata hostname or a link-local or metadata literal", async () => {
+    const trustEverything: EgressPolicy = {
+      allowPrivateNetwork: true,
+      resolve: lan(),
+      trustTarget: () => true,
+    };
+    expect(await refused("http://metadata.google.internal/", trustEverything)).toBe(true);
+    expect(await refused("http://169.254.169.254/latest/meta-data/", trustEverything)).toBe(true);
+    expect(await refused("http://[fe80::1]/x.png", trustEverything)).toBe(true);
+  });
+
   test("a hop that leaves the trusted hosts is vetted as before", async () => {
-    expect(await refused("http://169.254.169.254/latest/meta-data/", policy)).toBe(true);
-    expect(await refused("http://meta.example.net/", policy)).toBe(true);
-    expect(await refused("http://metadata.google.internal/", policy)).toBe(true);
-    expect(await refused("http://[fe80::1]/x.png", policy)).toBe(true);
+    const p = policy(lan());
+    expect(await refused("http://169.254.169.254/latest/meta-data/", p)).toBe(true);
+    expect(await refused("http://meta.example.net/", p)).toBe(true);
+    expect(await refused("http://metadata.google.internal/", p)).toBe(true);
+    expect(await refused("http://[fe80::1]/x.png", p)).toBe(true);
   });
 
   test("a trusted host is sent unpinned, by its name", async () => {
@@ -695,7 +714,7 @@ describe("trustTarget: the audited site's own hosts are sent as the crawl sends 
     const send = egressGuardedSend(async (url) => {
       sent.push(url);
       return new Response("ok");
-    }, policy);
+    }, policy(lan()));
     await send("http://printer.local/style.css", {});
     expect(sent).toEqual(["http://printer.local/style.css"]);
   });

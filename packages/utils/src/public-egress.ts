@@ -101,9 +101,10 @@ export interface EgressPolicy {
    */
   allowPrivateTarget?: (url: URL) => boolean;
   /**
-   * Targets sent as they are, neither vetted nor pinned: the audited site's
-   * own hosts, which the crawl itself already requests that way (repo#2764).
-   * A redirect hop that leaves them is vetted like any other. Vetting the
+   * Targets sent by name without a DNS check or pinning: the hosts the crawl
+   * itself requests (repo#2764). Checks that need no lookup still apply first
+   * (scheme, `allowHost`, a link-local or metadata IP literal, a metadata
+   * hostname). A hop that leaves them is vetted like any other. Vetting the
    * site's own name would refuse a LAN site whose mDNS name also answers
    * link-local IPv6 addresses (`printer.local`), and pinning it would route
    * around `NO_PROXY`. Gets the hop's parsed URL.
@@ -282,7 +283,8 @@ function raceAbort<T>(promise: Promise<T>, signal: AbortSignal | null | undefine
 
 /**
  * Where an allowed request connects: `null` for an IP literal, which is already
- * the address; otherwise the vetted address to connect to in place of the name.
+ * the address, or for a trusted target (`trustTarget`), sent by its name;
+ * otherwise the vetted address to connect to in place of the name.
  */
 export interface VettedTarget {
   /** The URL with its host replaced by the first vetted address (IPv6 bracketed). */
@@ -362,7 +364,6 @@ export async function vetEgressTarget(
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     throw new EgressRefusedError(`refused scheme ${parsed.protocol}`);
   }
-  if (policy.trustTarget?.(parsed)) return null;
   // URL.hostname keeps IPv6 literals bracketed and IPv4 literals canonical.
   const host = parsed.hostname.replace(/^\[|\]$/g, "");
   if (policy.allowHost && !policy.allowHost(host)) {
@@ -375,6 +376,8 @@ export async function vetEgressTarget(
     return null;
   }
   if (isCloudMetadataHostname(host)) throw new EgressRefusedError("refused metadata host");
+  // After the checks that need no lookup, so no trust reaches a metadata name.
+  if (policy.trustTarget?.(parsed)) return null;
   if (!allowPrivate && isNonPublicHostname(host)) {
     throw new EgressRefusedError("refused non-public host");
   }

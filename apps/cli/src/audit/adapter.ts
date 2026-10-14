@@ -636,15 +636,21 @@ export function fetchResourceAssets(
 
     const maxResources = overrides?.resourceCheckMaxItems;
     const resourceCheckOptions = {
-      // squirrelscan/repo#2764: a redirect that leaves the site's own host
-      // and subdomains may not reach a link-local or cloud metadata address
-      // (private networks are fine). The engine's asset phase applies the
+      // squirrelscan/repo#2764: the site's own assets may not reach a
+      // link-local or cloud metadata address (private networks are fine). The
+      // crawl's own host is sent as the crawl sends it; every other hop,
+      // subdomains included, is vetted. The engine's asset phase applies the
       // same policy.
       egress: {
         allowPrivateNetwork: true,
         resolve: memoizeResolveHost(resolveHostAddresses),
-        trustTarget: (url: URL) =>
-          isSameDomainResource(url.href, getHostname(baseUrl).toLowerCase()),
+        trustTarget: (url: URL) => {
+          try {
+            return url.host.toLowerCase() === new URL(baseUrl).host.toLowerCase();
+          } catch {
+            return false;
+          }
+        },
       },
       concurrency:
         config.external_links?.concurrency ??

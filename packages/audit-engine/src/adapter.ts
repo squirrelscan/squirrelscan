@@ -1026,19 +1026,19 @@ export function fetchAssetsFromOccurrences(
           })
         : undefined;
 
-    // repo#2764: a redirect from one of the site's own assets may not leave
-    // the site for a link-local or cloud metadata address. An open redirect
-    // on the site (`/go?u=http://169.254.169.254/`) used as a stylesheet,
-    // script, image or sitemap URL would otherwise send the auditor's machine
-    // there. The site's own hosts (its host, its subdomains, and the crawl's
-    // host scope: the www/apex pair and `project.domains`) are requested as
-    // the crawl requests them; any other hop is vetted, private networks
-    // allowed (a LAN or dev-server audit), and connects to the address it was
-    // vetted on.
+    // repo#2764: the site's own assets may not reach a link-local or cloud
+    // metadata address. An open redirect on the site
+    // (`/go?u=http://169.254.169.254/`), or a subdomain pointed at one, used
+    // as a stylesheet, script, image or sitemap URL would otherwise send the
+    // auditor's machine there. The hosts the crawl itself requests are sent
+    // as it sends them; every other hop, subdomains included, is vetted
+    // (private networks allowed: a LAN or dev-server audit) and connects to
+    // the address it was vetted on.
     const resolveOnce = memoizeResolveHost(resolveHostAddresses);
     const ownSiteHost = getHostname(baseUrl).toLowerCase();
-    const isOwnSiteUrl = (url: string): boolean => {
-      if (isSameDomainResource(url, ownSiteHost)) return true;
+    // The crawl's own host scope: the base host, its www/apex pair and
+    // `project.domains`. These are requested as the crawl requests them.
+    const inCrawlHostScope = (url: string): boolean => {
       if (!baseUrl) return false;
       try {
         return isInScope(url, {
@@ -1051,11 +1051,16 @@ export function fetchAssetsFromOccurrences(
         return false;
       }
     };
+    // The site's own for headers and pools: that scope plus subdomains. A
+    // subdomain is still vetted: the crawl never requests it, and its name can
+    // point anywhere (`imds.example.com A 169.254.169.254`).
+    const isOwnSiteUrl = (url: string): boolean =>
+      isSameDomainResource(url, ownSiteHost) || inCrawlHostScope(url);
     const ownSiteEgress: EgressPolicy = {
       allowPrivateNetwork: true,
       resolve: resolveOnce,
       pin: overrides?.egressPinnedByTransport !== true,
-      trustTarget: (url) => isOwnSiteUrl(url.href),
+      trustTarget: (url) => inCrawlHostScope(url.href),
     };
 
     const resourceCheckOptions = {
