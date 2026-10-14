@@ -646,7 +646,9 @@ export function fetchResourceAssets(
         resolve: memoizeResolveHost(resolveHostAddresses),
         trustTarget: (url: URL) => {
           try {
-            return url.host.toLowerCase() === new URL(baseUrl).host.toLowerCase();
+            return (
+              url.host.toLowerCase() === new URL(baseUrl).host.toLowerCase()
+            );
           } catch {
             return false;
           }
