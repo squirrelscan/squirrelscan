@@ -1,8 +1,10 @@
 // #766: the CLI's forked script fetcher and external checker must close their
-// connections once a capped read returns. Cancelling a body does not close
+// connections once a capped read returns, and the localhost reachability check
+// once it has its status. Cancelling a body does not close
 // Bun's connection: it goes on downloading whatever the origin sends until the
-// request's signal aborts. Only a raw socket server can show this: Bun.serve
-// hides when the client hangs up.
+// request's signal aborts, and each cleared its timeout without aborting.
+// Only a raw socket server can show this: Bun.serve hides when the client
+// hangs up.
 
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
@@ -14,6 +16,7 @@ import { checkExternalLinks } from "@/crawler/external-checker";
 import { fetchScriptContents } from "@/crawler/script-fetcher";
 import { closeGlobalContentStore } from "@/crawler/storage/content-store";
 import { LinkCacheStorage } from "@/crawler/storage/link-cache";
+import { checkReachability } from "@/utils/reachability";
 
 /** Far longer than any test waits: a close before it is the read's doing. */
 const DEADLINE_MS = 10_000;
@@ -105,7 +108,7 @@ async function lastCloseDelay(
   return Math.max(...server.closes()) - returnedAt;
 }
 
-describe("the CLI's capped reads close their connections (#766)", () => {
+describe("the CLI's requests close their connections (#766)", () => {
   test("the script fetcher, over its size cap", async () => {
     const server = endlessServer(
       "HTTP/1.1 200 OK\r\ncontent-type: application/javascript",
@@ -133,6 +136,18 @@ describe("the CLI's capped reads close their connections (#766)", () => {
     );
     const delay = await lastCloseDelay(server, Date.now());
     expect(result?.status).toBe(403);
+    expect(delay).toBeGreaterThanOrEqual(0);
+    expect(delay).toBeLessThan(1_000);
+  });
+
+  test("the localhost reachability check", async () => {
+    const server = endlessServer(
+      "HTTP/1.1 200 OK\r\ncontent-type: text/html",
+      "/"
+    );
+    const result = await checkReachability(server.url);
+    const delay = await lastCloseDelay(server, Date.now());
+    expect(result.reachable).toBe(true);
     expect(delay).toBeGreaterThanOrEqual(0);
     expect(delay).toBeLessThan(1_000);
   });

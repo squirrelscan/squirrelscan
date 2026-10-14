@@ -3,7 +3,7 @@
 // share disarmed the abort the moment the headers landed, so an origin that
 // answered 200 and then stalled its body hung the caller forever.
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import { safeFetchWithDeadline, withRequestDeadline } from "../src/deadline";
 
@@ -81,6 +81,26 @@ describe("withRequestDeadline (#1699)", () => {
       expect(signal?.aborted).toBe(true);
     } finally {
       server.stop(true);
+    }
+  });
+
+  test("the deadline timer is cleared once `use` returns", async () => {
+    // The release abort makes a late timer harmless to the request, but a
+    // pending timer still holds the process open until it fires.
+    const armed = spyOn(globalThis, "setTimeout");
+    const cleared = spyOn(globalThis, "clearTimeout");
+    try {
+      await withRequestDeadline(
+        DEADLINE_MS,
+        async () => new Response("hello"),
+        (response) => response.text(),
+      );
+      const timer = armed.mock.results[0]?.value;
+      expect(timer).toBeDefined();
+      expect(cleared).toHaveBeenCalledWith(timer);
+    } finally {
+      armed.mockRestore();
+      cleared.mockRestore();
     }
   });
 

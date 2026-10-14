@@ -130,6 +130,9 @@ async function probeOne(url: string, options: LinkTargetProbeOptions): Promise<L
     };
   } finally {
     clearTimeout(timer);
+    // Closes the connection (#766): a cancelled body does not, Bun keeps
+    // downloading it until the signal aborts, and a GET may ignore its Range.
+    controller.abort();
   }
 }
 

@@ -886,6 +886,10 @@ async function checkSingleResourceAsync(
       return { ...defaultResult, error: "timeout" };
     }
     return { ...defaultResult, error: (error as Error).message || "error" };
+  } finally {
+    // Closes every connection this check opened (#766). A body cancelled or
+    // left unread does not: Bun keeps downloading it until the signal aborts.
+    controller.abort();
   }
 }
 

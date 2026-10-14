@@ -393,7 +393,14 @@ async function send(
   egress: EgressPolicy,
 ): Promise<Sent | null> {
   if (!budget.allows("quiet")) return null;
-  const signal = AbortSignal.any([budget.signal(), AbortSignal.timeout(PROBE_TIMEOUT_MS)]);
+  // Aborted once the request is done (#766): cancelling a body does not close
+  // the connection in Bun, which keeps downloading it until the signal fires.
+  const done = new AbortController();
+  const signal = AbortSignal.any([
+    budget.signal(),
+    AbortSignal.timeout(PROBE_TIMEOUT_MS),
+    done.signal,
+  ]);
   const refused: Sent = {
     status: null,
     error: null,
@@ -443,6 +450,8 @@ async function send(
       retryAfter: null,
       challenge: false,
     };
+  } finally {
+    done.abort();
   }
 }
 

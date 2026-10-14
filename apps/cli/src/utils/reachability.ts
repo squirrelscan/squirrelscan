@@ -214,6 +214,9 @@ async function attemptReachability(url: string): Promise<ReachabilityResult> {
       return { reachable: false, error: message };
     } finally {
       clearTimeout(timeout);
+      // Closes the connection (#766): the cancelled body does not, Bun keeps
+      // downloading it until the signal aborts.
+      controller.abort();
     }
   }
 

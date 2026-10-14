@@ -1,9 +1,10 @@
-// #766: the engine's capped reads must close their connections once they
-// return. Cancelling a body does not close Bun's connection: it goes on
-// downloading whatever the origin sends until the request's signal aborts, so
-// a capped read of an endless body kept the socket open, and kept receiving,
-// until the request deadline. Only a raw socket server can show this: Bun.serve
-// hides when the client hangs up.
+// #766: the engine's requests must close their connections once they are
+// done with a body, read to a cap or cancelled unread. Cancelling a body does
+// not close Bun's connection: it goes on downloading whatever the origin sends
+// until the request's signal aborts, and each of these cleared its timeout
+// without aborting, so an endless body kept the socket open, and kept
+// receiving, for as long as the origin kept sending. Only a raw socket server
+// can show this: Bun.serve hides when the client hangs up.
 
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
@@ -12,6 +13,8 @@ import { parsePage } from "@squirrelscan/parser";
 
 import { runCloakingProbe } from "../src/cloaking-probe";
 import { checkExternalLinks } from "../src/external-checker";
+import { probeLinkTargets } from "../src/link-target-probe";
+import { checkResourceSizes } from "../src/resource-checker";
 import { fetchScriptContents } from "../src/script-fetcher";
 import { confirmSoft404Candidates } from "../src/soft404-confirm";
 
@@ -30,10 +33,11 @@ interface Endless {
 }
 
 /**
- * Answers GET with `head` and a body that never ends. HEAD gets `head` with an
- * empty body and keeps its connection, which is not counted.
+ * Answers GET with `head` and a body that never ends, whatever its Range. HEAD
+ * gets `headHead` (default `head`) with an empty body and keeps its
+ * connection, which is not counted.
  */
-function endlessServer(head: string): Endless {
+function endlessServer(head: string, headHead = head): Endless {
   const chunk = Buffer.alloc(64 * 1024, 0x20);
   const bodies: Array<{ closedAt: number }> = [];
   const pump = (socket: { write(data: Uint8Array): number }) => {
@@ -51,7 +55,7 @@ function endlessServer(head: string): Endless {
       data(socket, data) {
         if (socket.data.body) return;
         if (data.toString("latin1").startsWith("HEAD ")) {
-          socket.write(`${head}\r\ncontent-length: 0\r\n\r\n`);
+          socket.write(`${headHead}\r\ncontent-length: 0\r\n\r\n`);
           return;
         }
         socket.data.body = { closedAt: 0 };
@@ -85,7 +89,7 @@ async function lastCloseDelay(server: Endless, returnedAt: number): Promise<numb
   return Math.max(...server.closes()) - returnedAt;
 }
 
-describe("the engine's capped reads close their connections (#766)", () => {
+describe("the engine's requests close their connections (#766)", () => {
   test("the external link checker's 403 interstitial read", async () => {
     const server = endlessServer("HTTP/1.1 403 Forbidden\r\ncontent-type: text/html");
     const [result] = await Effect.runPromise(
@@ -140,6 +144,41 @@ describe("the engine's capped reads close their connections (#766)", () => {
     const delay = await lastCloseDelay(server, Date.now());
     expect(probe?.defaultStatus).toBe(200);
     expect(server.closes()).toHaveLength(2);
+    expect(delay).toBeGreaterThanOrEqual(0);
+    expect(delay).toBeLessThan(1_000);
+  });
+
+  test("the link target probe's GET, when HEAD is refused and Range ignored", async () => {
+    const server = endlessServer(
+      "HTTP/1.1 200 OK\r\ncontent-type: text/html",
+      "HTTP/1.1 405 Method Not Allowed",
+    );
+    const probe = await Effect.runPromise(
+      probeLinkTargets([server.url], {
+        userAgent: "squirrel-test",
+        timeoutMs: DEADLINE_MS,
+        concurrency: 1,
+        mayRequest: () => true,
+      }),
+    );
+    const delay = await lastCloseDelay(server, Date.now());
+    expect(probe.results[0]?.status).toBe(200);
+    expect(delay).toBeGreaterThanOrEqual(0);
+    expect(delay).toBeLessThan(1_000);
+  });
+
+  test("the resource checker, sizing from a Content-Length it never reads", async () => {
+    // Range ignored, so the declared length is the size and the body is left
+    // unread.
+    const server = endlessServer(
+      "HTTP/1.1 200 OK\r\ncontent-type: text/css\r\ncontent-length: 1000000000000",
+      "HTTP/1.1 405 Method Not Allowed",
+    );
+    const [result] = await Effect.runPromise(
+      checkResourceSizes([server.url], { timeoutMs: DEADLINE_MS }),
+    );
+    const delay = await lastCloseDelay(server, Date.now());
+    expect(result?.sizeBytes).toBe(1_000_000_000_000);
     expect(delay).toBeGreaterThanOrEqual(0);
     expect(delay).toBeLessThan(1_000);
   });

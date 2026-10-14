@@ -22,9 +22,10 @@ import type { RefusalLog } from "./refusals";
  *
  * The request is then aborted (#766). Cancelling a body does not close Bun's
  * connection: it goes on downloading whatever the origin sends until the
- * request's signal aborts, so a capped read of an endless body would hold the
- * socket open, and keep receiving, until the deadline. Aborting a request
- * whose body was read to the end is a no-op; the connection stays pooled.
+ * request's signal aborts, and with the deadline disarmed nothing else would
+ * abort it, so a capped read of an endless body held the socket open, and kept
+ * receiving, for as long as the origin kept sending. Aborting a request whose
+ * body was read to the end is a no-op; the connection stays pooled.
  */
 export async function withRequestDeadline<T>(
   timeoutMs: number,

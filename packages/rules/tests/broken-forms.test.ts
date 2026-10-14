@@ -78,6 +78,8 @@ interface Call {
   raw: string;
   /** The Host header it carried. */
   host: string | null;
+  /** The request's signal. */
+  signal: AbortSignal | null;
 }
 let calls: Call[] = [];
 let answer: (url: string, method: string) => Response | "throw" = (_url, _method) =>
@@ -96,7 +98,7 @@ beforeEach(() => {
     if (host) logical.host = host;
     const url = logical.href;
     const method = (init?.method ?? "GET").toUpperCase();
-    calls.push({ url, method, raw, host });
+    calls.push({ url, method, raw, host, signal: init?.signal ?? null });
     const res = answer(url, method);
     if (res === "throw") throw new TypeError("fetch failed");
     return res;
@@ -560,6 +562,25 @@ describe("reliability/broken-forms: action reachability", () => {
     expect(text).not.toContain("](https://evil.example");
   });
 });
+describe("reliability/broken-forms: probe connections (#766)", () => {
+  test("every probe request is aborted once answered, so a cancelled body stops downloading", async () => {
+    // Cancelling a body does not close Bun's connection: it keeps downloading
+    // until the request's signal aborts, which the 10 s timeout alone left
+    // running. A body that never ends shows whether the signal was released.
+    const endless = () =>
+      new ReadableStream<Uint8Array>({
+        pull(controller) {
+          controller.enqueue(new Uint8Array(64 * 1024));
+        },
+      });
+    answer = (_url, method) =>
+      method === "HEAD" ? new Response(null, { status: 405 }) : new Response(endless());
+    await rule.run(ctx(site([{ url: HOME, html: CONTACT(`<input name="a">`) }]), budget("active")));
+    expect(calls.map((c) => c.method)).toEqual(["HEAD", "GET"]);
+    expect(calls.every((c) => c.signal?.aborted === true)).toBe(true);
+  });
+});
+
 describe("reliability/broken-forms: category and registration", () => {
   test("the rule is in the reliability category and registered", () => {
     expect(brokenFormsRule.meta.category).toBe("reliability");

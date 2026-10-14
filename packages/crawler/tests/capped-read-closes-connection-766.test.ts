@@ -1,10 +1,11 @@
 // #766: a capped body read must close its connection once it returns.
 //
 // Cancelling a body does not close Bun's connection: it goes on downloading
-// whatever the origin sends until the request's signal aborts. A capped read
-// of an endless body therefore kept the socket open, and kept receiving, until
-// the request deadline. Only a raw socket server can show this: Bun.serve
-// hides when the client hangs up, and these servers see the close.
+// whatever the origin sends until the request's signal aborts. The deadline is
+// disarmed once the read returns, so nothing aborted it: a capped read of an
+// endless body kept the socket open, and kept receiving, for as long as the
+// origin kept sending. Only a raw socket server can show this: Bun.serve hides
+// when the client hangs up, and these servers see the close.
 
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
@@ -74,6 +75,19 @@ const HTML_HEAD = "HTTP/1.1 200 OK\r\ncontent-type: text/html; charset=utf-8";
 describe("a capped read closes its connection (#766)", () => {
   test("safeFetchWithDeadline: the shared probe helper", async () => {
     const server = endlessServer("HTTP/1.1 200 OK\r\ncontent-type: text/plain");
+    const body = await safeFetchWithDeadline(server.url, {}, DEADLINE_MS, (response) =>
+      readBodyCapped(response, 64 * 1024),
+    );
+    const delay = await closeDelay(server, Date.now());
+    expect(body.length).toBe(64 * 1024);
+    expect(delay).toBeGreaterThanOrEqual(0);
+    expect(delay).toBeLessThan(1_000);
+  });
+
+  test("safeFetchWithDeadline: a body with a Content-Length past the cap", async () => {
+    const server = endlessServer(
+      "HTTP/1.1 200 OK\r\ncontent-type: text/plain\r\ncontent-length: 1000000000000",
+    );
     const body = await safeFetchWithDeadline(server.url, {}, DEADLINE_MS, (response) =>
       readBodyCapped(response, 64 * 1024),
     );
