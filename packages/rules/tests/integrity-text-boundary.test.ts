@@ -119,22 +119,41 @@ test("an invisible operator or combining joiner inside the label cannot split th
   }
 });
 
-test("nested unclosed anchors stay near linear (n, 2n, 4n)", () => {
+test("a label padded past the length cap is still read", () => {
+  // Padding glued straight onto the cue, with no space, hides it on main too:
+  // that is the hidden-decoy case, tracked separately.
+  const padding = "pad ".repeat(100);
+  for (const anchor of [
+    `<a href="https://credential-fixture.invalid/signin"><style>/*${padding}*/</style>Sign in with Google</a>`,
+    `<a href="https://credential-fixture.invalid/signin"><svg><title>${padding}</title></svg>Sign in with Google</a>`,
+    `<a href="https://credential-fixture.invalid/signin">Sign in with Google <span class="sr-only">${padding}</span></a>`,
+  ]) {
+    expect([...detectPageSignals(context(anchor))]).toContain("brand-impersonation");
+  }
+});
+
+test("nested unclosed anchors cost no more than reading their text", () => {
   // The parser nests an unclosed <a> inside the next, so every anchor holds
-  // the rest of the page. Reading each label in full again grew with the
-  // square of their number: 2,000 took 1.5 to 3.6 s, past the rule's time
-  // budget, so junk anchors could hide a real signal. Now about 150 ms.
-  const elapsed = (count: number) => {
-    const ctx = context(`${'<a href="https://x.invalid/">x'.repeat(count)}`);
-    let best = Number.POSITIVE_INFINITY;
-    for (let run = 0; run < 2; run++) {
+  // the rest of the page and reading each label is quadratic however it is
+  // done. Reading each one in full twice more took 2,000 of them from about
+  // 150 ms to 1.5 to 3.6 s, past the rule's time budget. Measured against a
+  // bare textContent loop over the same anchors, so both see the same load.
+  const ctx = context(`${'<a href="https://x.invalid/">x'.repeat(2_000)}`);
+  const doc = ctx.parsed.document!;
+  const best = (run: () => void) => {
+    let fastest = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < 2; i++) {
       const started = performance.now();
-      detectBrandImpersonation(ctx);
-      best = Math.min(best, performance.now() - started);
+      run();
+      fastest = Math.min(fastest, performance.now() - started);
     }
-    return best;
+    return fastest;
   };
-  expect(elapsed(500)).toBeLessThan(400);
-  expect(elapsed(1_000)).toBeLessThan(700);
-  expect(elapsed(2_000)).toBeLessThan(1_200);
+  const baseline = best(() => {
+    for (const a of doc.querySelectorAll("a[href]")) void a.textContent;
+  });
+  const detector = best(() => {
+    detectBrandImpersonation(ctx);
+  });
+  expect(detector).toBeLessThan(3 * baseline + 100);
 });

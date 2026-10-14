@@ -271,10 +271,12 @@ function credentialDestinations(
     // A label is a few words. The parser nests an unclosed `<a>` inside the
     // next, so on junk markup every anchor holds the rest of the page, and
     // reading each in full again would grow with the square of their number.
+    // A long label is still read, as before, without the extra passes: a kit
+    // can pad one with a `<style>` or hidden text.
     const raw = a.textContent ?? "";
-    if (raw.length > MAX_LABEL_CHARS) continue;
-    const glued = readable(raw);
-    const labels = [glued, a.firstElementChild ? readable(getSeparatedText(a)) : glued];
+    const short = raw.length <= MAX_LABEL_CHARS;
+    const glued = short ? readable(raw) : raw.toLowerCase();
+    const labels = [glued, short && a.firstElementChild ? readable(getSeparatedText(a)) : glued];
     if (!labels.some((label) => AUTH_LABEL.test(label))) continue;
     const host = hrefHost(getAttrCI(a, "href"), base);
     if (!host) continue;
