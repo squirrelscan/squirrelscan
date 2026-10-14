@@ -348,6 +348,32 @@ export async function assertEgressAllowed(
 }
 
 /**
+ * True when `policy` refuses `url` on what the URL itself says, with no DNS
+ * lookup: a non-http(s) scheme, a host outside `allowHost`, a refused IP
+ * literal, a metadata hostname, or a non-public name the policy does not
+ * allow. A caller can then skip work that would answer for the URL without a
+ * request (a cache, a remote service) as surely as the request itself is
+ * refused (pub#770). False is not an approval: the name is still vetted on
+ * the request.
+ */
+export function refusedWithoutLookup(url: string, policy: EgressPolicy): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return true;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return true;
+  const host = parsed.hostname.replace(/^\[|\]$/g, "");
+  if (policy.allowHost && !policy.allowHost(host)) return true;
+  const allowPrivate = policy.allowPrivateNetwork || policy.allowPrivateTarget?.(parsed) === true;
+  if (isIP(host) !== 0) return refusesAddress(host, allowPrivate);
+  if (isCloudMetadataHostname(host)) return true;
+  if (policy.trustTarget?.(parsed)) return false;
+  return !allowPrivate && isNonPublicHostname(host);
+}
+
+/**
  * {@link assertEgressAllowed}, returning where the request must connect so the
  * address it was vetted on is the address it uses (see the header comment).
  */

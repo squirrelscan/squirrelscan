@@ -3513,10 +3513,32 @@ export function splitNotRequestedExternalLinks(occurrences: ExternalLinkOccurren
     }
     skipped.push({ href, pages: [...new Set(occs.map((o) => o.pageUrl))] });
   }
-  // Masked first, so links that mask the same (`?u=1`, `?u=2`) are one entry
-  // with their pages merged: a report keys items by id and would drop one.
+  return {
+    requestable,
+    notRequested: { count: skipped.length, sample: sampleLinkPages(skipped) },
+  };
+}
+
+/** {@link sampleLinkPages} over collected occurrences. */
+function sampleExternalLinks(
+  occurrences: ExternalLinkOccurrences,
+): Array<{ href: string; sourcePages: string[]; pageCount: number }> {
+  return sampleLinkPages(
+    [...occurrences].map(([href, occs]) => ({ href, pages: [...new Set(occs.map((o) => o.pageUrl))] })),
+  );
+}
+
+/**
+ * The report sample of links the checker did not request: most-linked first,
+ * then by URL, each URL masked (`maskLinkTokens`), and links that mask the
+ * same (`?u=1`, `?u=2`) merged into one entry with their pages combined, since
+ * a report keys items by id and would drop one.
+ */
+function sampleLinkPages(
+  links: Array<{ href: string; pages: string[] }>,
+): Array<{ href: string; sourcePages: string[]; pageCount: number }> {
   const byMasked = new Map<string, Set<string>>();
-  for (const { href, pages } of skipped) {
+  for (const { href, pages } of links) {
     const masked = maskLinkTokens(href);
     const merged = byMasked.get(masked) ?? new Set<string>();
     for (const page of pages) merged.add(page);
@@ -3526,17 +3548,11 @@ export function splitNotRequestedExternalLinks(occurrences: ExternalLinkOccurren
   entries.sort(
     (a, b) => b.pages.length - a.pages.length || (a.href < b.href ? -1 : a.href > b.href ? 1 : 0),
   );
-  return {
-    requestable,
-    notRequested: {
-      count: skipped.length,
-      sample: entries.slice(0, NOT_REQUESTED_SAMPLE_LINKS).map(({ href, pages }) => ({
-        href,
-        sourcePages: pages.slice(0, NOT_REQUESTED_SAMPLE_PAGES),
-        pageCount: pages.length,
-      })),
-    },
-  };
+  return entries.slice(0, NOT_REQUESTED_SAMPLE_LINKS).map(({ href, pages }) => ({
+    href,
+    sourcePages: pages.slice(0, NOT_REQUESTED_SAMPLE_PAGES),
+    pageCount: pages.length,
+  }));
 }
 
 /**
@@ -3644,17 +3660,16 @@ export function checkCollectedExternalLinks(
     // then by URL so the choice is stable. The rest are counted and reported as
     // not checked.
     const hrefs = selectExternalLinksToCheck(requestable, config.max_links, priorityHrefs);
+    const externalLinkCheck = {
+      found: externalLinkOccurrences.size,
+      checked: hrefs.length,
+      cap: config.max_links ?? requestable.size,
+      ...(notRequested.count > 0
+        ? { notRequested: notRequested.count, notRequestedLinks: notRequested.sample }
+        : {}),
+    };
     yield* storage
-      .updateStats(crawlId, {
-        externalLinkCheck: {
-          found: externalLinkOccurrences.size,
-          checked: hrefs.length,
-          cap: config.max_links ?? requestable.size,
-          ...(notRequested.count > 0
-            ? { notRequested: notRequested.count, notRequestedLinks: notRequested.sample }
-            : {}),
-        },
-      })
+      .updateStats(crawlId, { externalLinkCheck })
       .pipe(
         // Without the stat the over-limit "Not checked" line cannot be shown,
         // so say so rather than read as a complete check.
@@ -3673,6 +3688,26 @@ export function checkCollectedExternalLinks(
       bulkChecker,
       egress,
     });
+
+    // pub#770: the links the egress policy refused (a private, link-local or
+    // metadata address on a public site's page) were never requested. Counted
+    // and sampled like the not-requested ones, so the report can say so
+    // rather than leave them out of every line.
+    const refusedHrefs = results.filter((r) => r.refused).map((r) => r.href);
+    if (refusedHrefs.length > 0) {
+      const refusedOccurrences: ExternalLinkOccurrences = new Map(
+        refusedHrefs.map((href) => [href, externalLinkOccurrences.get(href) ?? []]),
+      );
+      yield* storage
+        .updateStats(crawlId, {
+          externalLinkCheck: {
+            ...externalLinkCheck,
+            refused: refusedHrefs.length,
+            refusedLinks: sampleExternalLinks(refusedOccurrences),
+          },
+        })
+        .pipe(Effect.catchAll(() => Effect.void));
+    }
 
     // Store results in per-crawl storage
     // Collect all appearances for batch insert

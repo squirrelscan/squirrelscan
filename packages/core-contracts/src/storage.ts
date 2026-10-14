@@ -262,6 +262,9 @@ export interface CrawlStats {
     cap: number;
     notRequested?: number;
     notRequestedLinks?: Array<{ href: string; sourcePages: string[]; pageCount?: number }>;
+    /** pub#770: links never requested because the egress policy refuses their address. */
+    refused?: number;
+    refusedLinks?: Array<{ href: string; sourcePages: string[]; pageCount?: number }>;
   };
   /**
    * Root fetches (robots.txt, sitemaps, llms.txt, the Markdown probe) the site

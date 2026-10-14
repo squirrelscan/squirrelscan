@@ -24,6 +24,7 @@ import { looksLikeAnAction } from "@squirrelscan/utils/link-actions";
 import {
   EgressRefusedError,
   egressGuardedSend,
+  refusedWithoutLookup,
   type EgressPolicy,
 } from "@squirrelscan/utils/public-egress";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
@@ -69,6 +70,12 @@ export interface ExternalCheckResult {
    * so its status is unverified rather than broken (#1829).
    */
   rateLimited?: boolean;
+  /**
+   * Never requested: the egress policy refuses its address (a private,
+   * link-local or metadata one for a public site's audit). Unresolved, never
+   * broken (pub#770).
+   */
+  refused?: boolean;
 }
 
 export interface ExternalCheckerOptions {
@@ -333,10 +340,24 @@ export function checkExternalLinks(
     // answered from an old cached verdict either. The audit leaves these out
     // before calling (checkCollectedExternalLinks reports them); this holds
     // for any other caller. They come back unresolved.
+    // pub#770: an address the egress policy refuses on the URL alone is
+    // refused here too, before the cache and the bulk checker, either of
+    // which would otherwise answer for it: a verdict another audit (a private
+    // site's) cached, or a remote service asked about it.
+    const egress = opts.egress ?? DEFAULT_EGRESS;
     const uniqueUrls: string[] = [];
     for (const url of new Set(urls)) {
       if (looksLikeAnAction(url)) {
         results.push({ href: url, status: null, error: null, redirectTarget: null, fromCache: false });
+      } else if (refusedWithoutLookup(url, egress)) {
+        results.push({
+          href: url,
+          status: null,
+          error: null,
+          redirectTarget: null,
+          fromCache: false,
+          refused: true,
+        });
       } else {
         uniqueUrls.push(url);
       }
@@ -448,6 +469,7 @@ export function checkExternalLinks(
         wafBlocked: r.wafBlocked,
         wafProvider: r.wafProvider,
         rateLimited: r.rateLimited,
+        ...(r.refused ? { refused: true } : {}),
       });
     }
 

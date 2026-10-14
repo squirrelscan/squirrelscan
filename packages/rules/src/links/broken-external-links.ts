@@ -83,6 +83,35 @@ function notRequestedCheck(
   };
 }
 
+/**
+ * pub#770: external links never requested because the egress policy refuses
+ * their address: a private, loopback, link-local or cloud metadata one named
+ * on a public site's page. Their status is unknown, so they are neither broken
+ * nor working; listed (masked) so the reader can see what the page points at.
+ */
+function refusedCheck(linkCheck: NonNullable<SiteData["externalLinkCheck"]>): CheckResult | null {
+  const count = linkCheck.refused ?? 0;
+  if (count === 0) return null;
+  const sample = linkCheck.refusedLinks ?? [];
+  return {
+    name: "refused-external-links",
+    status: "info",
+    message: `${count} external link(s) point at a private, link-local or cloud metadata address, so they were not requested and their status was not checked`,
+    value: count,
+    items: sample.map((l) => ({
+      id: l.href,
+      sourcePages: l.sourcePages,
+      ...(l.pageCount !== undefined && l.pageCount > l.sourcePages.length
+        ? { pageCount: l.pageCount }
+        : {}),
+    })),
+    details: {
+      refused: count,
+      ...(sample.length < count ? { listed: sample.length } : {}),
+    },
+  };
+}
+
 export const brokenExternalLinksRule: Rule = {
   meta: {
     id: "links/broken-external-links",
@@ -248,6 +277,8 @@ export const brokenExternalLinksRule: Rule = {
     }
 
     if (notRequested) checks.push(notRequested);
+    const refused = linkCheck ? refusedCheck(linkCheck) : null;
+    if (refused) checks.push(refused);
 
     // Report WAF-blocked links as info (not broken, just unverifiable)
     if (wafBlockedLinks.length > 0) {

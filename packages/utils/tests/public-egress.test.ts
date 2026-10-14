@@ -12,6 +12,7 @@ import {
   isLinkLocalOrMetadataAddress,
   isNonPublicAddress,
   memoizeResolveHost,
+  refusedWithoutLookup,
   type EgressPolicy,
   type ResolveHost,
 } from "../src/public-egress";
@@ -717,5 +718,38 @@ describe("trustTarget: the hosts the crawl requests are sent as it sends them (r
     }, policy(lan()));
     await send("http://printer.local/style.css", {});
     expect(sent).toEqual(["http://printer.local/style.css"]);
+  });
+});
+
+describe("refusedWithoutLookup: what the URL alone settles (pub#770)", () => {
+  const publicSite: EgressPolicy = { allowPrivateNetwork: false };
+  const privateSite: EgressPolicy = { allowPrivateNetwork: true };
+
+  test("refused on a public site's audit without any lookup", () => {
+    for (const url of [
+      "http://127.0.0.1:3000/",
+      "http://10.0.0.5/admin",
+      "http://[::1]/",
+      "http://169.254.169.254/latest/meta-data/",
+      "http://metadata.google.internal/",
+      "http://localhost:8080/",
+      "http://printer.local/",
+      "ftp://example.com/file",
+      "not a url",
+    ]) {
+      expect(refusedWithoutLookup(url, publicSite)).toBe(true);
+    }
+  });
+
+  test("a public name is left to the request's own vetting", () => {
+    expect(refusedWithoutLookup("https://partner.example/pricing", publicSite)).toBe(false);
+  });
+
+  test("a private site's audit allows private addresses, never link-local or metadata", () => {
+    expect(refusedWithoutLookup("http://10.0.0.5/admin", privateSite)).toBe(false);
+    expect(refusedWithoutLookup("http://localhost:8080/", privateSite)).toBe(false);
+    expect(refusedWithoutLookup("http://169.254.169.254/", privateSite)).toBe(true);
+    expect(refusedWithoutLookup("http://[fe80::1]/", privateSite)).toBe(true);
+    expect(refusedWithoutLookup("http://metadata.google.internal/", privateSite)).toBe(true);
   });
 });

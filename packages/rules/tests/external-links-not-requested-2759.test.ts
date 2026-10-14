@@ -174,6 +174,42 @@ describe("links/broken-external-links: links never requested (repo#2759)", () =>
     ]);
   });
 
+  test("links refused for their address are listed too, never counted as working (pub#770)", () => {
+    const { checks } = brokenExternalLinksRule.run(
+      ctx(
+        [
+          ok("https://partner.example/"),
+          {
+            href: "http://192.168.1.1/admin",
+            status: null,
+            error: null,
+            sourcePages: [`${BASE}/`],
+          } as ExternalLinkCheckData,
+        ],
+        {
+          found: 2,
+          checked: 2,
+          cap: 200,
+          refused: 1,
+          refusedLinks: [
+            { href: "http://192.168.1.1/admin", sourcePages: [`${BASE}/`], pageCount: 1 },
+          ],
+        },
+      ),
+    );
+    expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual([
+      "broken-external-links:pass",
+      "refused-external-links:info",
+    ]);
+    expect(checks[0]!.message).toBe("All 1 external link(s) are working");
+    expect(checks[1]).toMatchObject({
+      message:
+        "1 external link(s) point at a private, link-local or cloud metadata address, so they were not requested and their status was not checked",
+      items: [{ id: "http://192.168.1.1/admin", sourcePages: [`${BASE}/`] }],
+      details: { refused: 1 },
+    });
+  });
+
   test("nothing left out: no not-requested line", () => {
     const { checks } = brokenExternalLinksRule.run(
       ctx([ok("https://partner.example/")], { found: 1, checked: 1, cap: 200 }),
