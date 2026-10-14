@@ -100,6 +100,15 @@ export interface EgressPolicy {
    * metadata addresses are refused regardless. Gets the hop's parsed URL.
    */
   allowPrivateTarget?: (url: URL) => boolean;
+  /**
+   * Targets sent as they are, neither vetted nor pinned: the audited site's
+   * own hosts, which the crawl itself already requests that way (repo#2764).
+   * A redirect hop that leaves them is vetted like any other. Vetting the
+   * site's own name would refuse a LAN site whose mDNS name also answers
+   * link-local IPv6 addresses (`printer.local`), and pinning it would route
+   * around `NO_PROXY`. Gets the hop's parsed URL.
+   */
+  trustTarget?: (url: URL) => boolean;
 }
 
 /** Thrown before a request the egress policy refuses. Nothing was sent. */
@@ -353,6 +362,7 @@ export async function vetEgressTarget(
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     throw new EgressRefusedError(`refused scheme ${parsed.protocol}`);
   }
+  if (policy.trustTarget?.(parsed)) return null;
   // URL.hostname keeps IPv6 literals bracketed and IPv4 literals canonical.
   const host = parsed.hostname.replace(/^\[|\]$/g, "");
   if (policy.allowHost && !policy.allowHost(host)) {

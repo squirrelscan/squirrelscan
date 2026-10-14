@@ -636,12 +636,15 @@ export function fetchResourceAssets(
 
     const maxResources = overrides?.resourceCheckMaxItems;
     const resourceCheckOptions = {
-      // squirrelscan/repo#2764: the site's own assets may be on a localhost or
-      // LAN address, never a link-local or cloud metadata one, on any
-      // redirect hop. Same policy as the engine's asset phase.
+      // squirrelscan/repo#2764: a redirect that leaves the site's own host
+      // and subdomains may not reach a link-local or cloud metadata address
+      // (private networks are fine). The engine's asset phase applies the
+      // same policy.
       egress: {
         allowPrivateNetwork: true,
         resolve: memoizeResolveHost(resolveHostAddresses),
+        trustTarget: (url: URL) =>
+          isSameDomainResource(url.href, getHostname(baseUrl).toLowerCase()),
       },
       concurrency:
         config.external_links?.concurrency ??

@@ -1026,17 +1026,36 @@ export function fetchAssetsFromOccurrences(
           })
         : undefined;
 
-    // repo#2764: the site's own assets may come from a localhost or LAN
-    // address (an audit of a dev server, split-horizon DNS), but never from a
-    // link-local or cloud metadata one. An open redirect on the site
-    // (`/go?u=http://169.254.169.254/`) used as a stylesheet, script, image or
-    // sitemap URL would otherwise send the auditor's machine there. Every hop
-    // is vetted, and connects to the address it was vetted on.
+    // repo#2764: a redirect from one of the site's own assets may not leave
+    // the site for a link-local or cloud metadata address. An open redirect
+    // on the site (`/go?u=http://169.254.169.254/`) used as a stylesheet,
+    // script, image or sitemap URL would otherwise send the auditor's machine
+    // there. The site's own hosts (its host, its subdomains, and the crawl's
+    // host scope: the www/apex pair and `project.domains`) are requested as
+    // the crawl requests them; any other hop is vetted, private networks
+    // allowed (a LAN or dev-server audit), and connects to the address it was
+    // vetted on.
     const resolveOnce = memoizeResolveHost(resolveHostAddresses);
+    const ownSiteHost = getHostname(baseUrl).toLowerCase();
+    const isOwnSiteUrl = (url: string): boolean => {
+      if (isSameDomainResource(url, ownSiteHost)) return true;
+      if (!baseUrl) return false;
+      try {
+        return isInScope(url, {
+          baseUrl,
+          include: [],
+          exclude: [],
+          allowedDomains: config.project?.domains ?? [],
+        }).allowed;
+      } catch {
+        return false;
+      }
+    };
     const ownSiteEgress: EgressPolicy = {
       allowPrivateNetwork: true,
       resolve: resolveOnce,
       pin: overrides?.egressPinnedByTransport !== true,
+      trustTarget: (url) => isOwnSiteUrl(url.href),
     };
 
     const resourceCheckOptions = {
@@ -1191,12 +1210,14 @@ export function fetchAssetsFromOccurrences(
     // audited host and its subdomains are checked as the third-party probes
     // are: none of the audit's custom headers (Web Bot Auth signatures,
     // Authorization, cookies), no prior-crawl cache, public addresses only.
-    const sitemapTargets = orphanCandidates.slice(0, sitemapStatusLimit);
-    const ownSiteHost = baseHost.toLowerCase();
-    const ownSitemapTargets = sitemapTargets.filter((url) => isSameDomainResource(url, ownSiteHost));
-    const foreignSitemapTargets = sitemapTargets.filter(
-      (url) => !isSameDomainResource(url, ownSiteHost),
+    // One cap for the pool as a whole: each half would otherwise get the
+    // checker's own default cap.
+    const sitemapTargets = orphanCandidates.slice(
+      0,
+      Math.min(sitemapStatusLimit, maxResources ?? RESOURCE_SIZE_LIMITS.MAX_RESOURCES_TO_CHECK),
     );
+    const ownSitemapTargets = sitemapTargets.filter((url) => isOwnSiteUrl(url));
+    const foreignSitemapTargets = sitemapTargets.filter((url) => !isOwnSiteUrl(url));
 
     const resourceCheckStart = Date.now();
 
