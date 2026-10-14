@@ -77,20 +77,24 @@ function decodeXmlEscapes(value: string): string {
 }
 
 /**
- * The text of one sitemap field, or undefined when it holds none.
+ * The text of one sitemap field, or undefined when it is not one text value.
  *
- * The parser keeps every text node a string (`parseTagValue: false`), so this
- * sees a string, an element object when the field carries attributes (its text
- * is `#text`), or something that is not one text value at all: markup nested
- * inside the field, or the field repeated within one entry (#687).
+ * The parser keeps every text node a string (`parseTagValue: false`), so a
+ * field is a string, or an element object when it carries attributes (its
+ * text under `#text`, absent when empty). Anything else is not one text value:
+ * a child element, including a raw `<` in a URL that the parser reads as a
+ * tag and that can swallow the entries after it, or the field repeated within
+ * one entry (an array). Text around a child element is never the value (#687).
  */
 function fieldText(value: unknown): string | undefined {
   if (typeof value === "string") return value.trim();
-  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-    const text = (value as Record<string, unknown>)["#text"];
-    if (typeof text === "string") return text.trim();
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  let text = "";
+  for (const [key, part] of Object.entries(value)) {
+    if (key === "#text" && typeof part === "string") text = part;
+    else if (!key.startsWith("@_")) return undefined;
   }
-  return undefined;
+  return text.trim();
 }
 
 /** The entries of one sitemap element (`<url>` or `<sitemap>`), each as a field map. */
@@ -102,12 +106,38 @@ function sitemapEntries(value: unknown): Record<string, unknown>[] {
   );
 }
 
+type SitemapField = "loc" | "lastmod" | "changefreq" | "priority";
+
 /**
- * Recorded once per sitemap for the entries skipped because their `<loc>` is
- * not one text value. The other entries are still read (#687).
+ * Reads entry fields through {@link fieldText} and counts, per field, the ones
+ * present but not one text value. {@link errors} turns the counts into one
+ * error per field for the sitemap, so one bad entry costs only itself (#687):
+ * an entry without a readable `<loc>` is skipped, any other bad field is
+ * dropped and its URL kept.
  */
-function unreadableLocError(element: "url" | "sitemap", count: number): string {
-  return `${count} <${element}> ${count === 1 ? "entry" : "entries"} skipped: <loc> is not a single text value`;
+function createFieldReader(element: "url" | "sitemap") {
+  const unreadable = new Map<SitemapField, number>();
+  return {
+    read(entry: Record<string, unknown>, field: SitemapField): string | undefined {
+      if (entry[field] === undefined) return undefined;
+      const text = fieldText(entry[field]);
+      if (text === undefined) unreadable.set(field, (unreadable.get(field) ?? 0) + 1);
+      return text;
+    },
+    errors(): string[] {
+      const errors: string[] = [];
+      for (const field of ["loc", "lastmod", "changefreq", "priority"] as const) {
+        const count = unreadable.get(field);
+        if (!count) continue;
+        errors.push(
+          field === "loc"
+            ? `${count} <${element}> ${count === 1 ? "entry" : "entries"} skipped: <loc> is not a single text value`
+            : `${count} <${field}> ${count === 1 ? "value" : "values"} ignored: not a single text value`,
+        );
+      }
+      return errors;
+    },
+  };
 }
 
 export function parseSitemap(content: string, url: string): SitemapData {
@@ -129,13 +159,12 @@ export function parseSitemap(content: string, url: string): SitemapData {
     if (parsed.sitemapindex) {
       const sitemapIndex = parsed.sitemapindex as { sitemap?: unknown };
       const childSitemaps: string[] = [];
-      let unreadable = 0;
+      const fields = createFieldReader("sitemap");
       for (const entry of sitemapEntries(sitemapIndex.sitemap)) {
-        const loc = fieldText(entry.loc);
-        if (loc === undefined && entry.loc !== undefined) unreadable++;
+        const loc = fields.read(entry, "loc");
         if (loc) childSitemaps.push(decodeXmlEscapes(loc));
       }
-      if (unreadable > 0) errors.push(unreadableLocError("sitemap", unreadable));
+      errors.push(...fields.errors());
 
       return {
         url,
@@ -150,28 +179,24 @@ export function parseSitemap(content: string, url: string): SitemapData {
     if (parsed.urlset) {
       const urlset = parsed.urlset as { "@_xmlns:news"?: string; url?: unknown };
       const urls: SitemapUrl[] = [];
-      let unreadable = 0;
+      const fields = createFieldReader("url");
 
-      // One entry's bad field never costs the others: a field that is not one
-      // text value is dropped, and an entry without a readable <loc> is skipped
-      // and counted.
       for (const entry of sitemapEntries(urlset.url)) {
-        const rawLoc = fieldText(entry.loc);
-        if (rawLoc === undefined && entry.loc !== undefined) unreadable++;
+        const rawLoc = fields.read(entry, "loc");
         if (!rawLoc) continue;
         const loc = decodeXmlEscapes(rawLoc);
 
-        const priorityText = fieldText(entry.priority);
+        const priorityText = fields.read(entry, "priority");
         const priority = priorityText ? Number.parseFloat(priorityText) : undefined;
 
         urls.push({
           loc,
-          lastmod: fieldText(entry.lastmod),
-          changefreq: fieldText(entry.changefreq),
+          lastmod: fields.read(entry, "lastmod"),
+          changefreq: fields.read(entry, "changefreq"),
           priority: Number.isNaN(priority ?? Number.NaN) ? undefined : priority,
         });
       }
-      if (unreadable > 0) errors.push(unreadableLocError("url", unreadable));
+      errors.push(...fields.errors());
 
       return {
         url,

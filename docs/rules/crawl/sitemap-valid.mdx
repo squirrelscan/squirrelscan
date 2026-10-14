@@ -22,7 +22,8 @@ Both of those branches only run when there was no reportable robots.txt fetch fa
 - `sitemap-syntax` fails when any discovered sitemap recorded parse errors. Message: `N error(s) in M sitemap(s)`, listing each sitemap with its first error. It passes otherwise with `Sitemap XML syntax is valid`. The error is one of:
   - `Unknown sitemap format`: the XML has neither a `<urlset>` nor a `<sitemapindex>` root.
   - `Parse error: <reason>`: the XML did not parse.
-  - `N <url> entries skipped: <loc> is not a single text value` (`1 <url> entry skipped: ...` for one): an entry's `<loc>` holds nested markup, or the entry has more than one `<loc>`. The other entries in the file are still read. In a sitemap index the error names `<sitemap>` entries instead.
+  - `N <url> entries skipped: <loc> is not a single text value` (`1 <url> entry skipped: ...` for one; `<url>` and `<loc>` are the literal element names): an entry's `<loc>` holds markup or a raw `<`, or the entry has more than one `<loc>`. The other entries are still read, and the text around the markup is never used as the URL. A raw `<` reads as an unclosed tag, so the entries after it in the file can be lost too. In a sitemap index the error names `<sitemap>` entries instead.
+  - `N <lastmod> values ignored: not a single text value`, or the same for `<changefreq>` or `<priority>`: the field holds markup or a raw `<`, or is repeated within one entry. The field is dropped and its URL is still read.
   - `Not a sitemap: the URL returned an HTML page`: a sitemap named in robots.txt or in a sitemap index answered with a web page.
   - `Corrupt gzip body: <reason>`: a gzip file, or a response sent with `Content-Encoding: gzip`, does not decompress. A response sent as `br` or `deflate` reads `Corrupt br body: <reason>` or `Corrupt deflate body: <reason>`.
   - `Unsupported Content-Encoding: <coding>`: the response used a coding squirrel does not decode, such as `zstd`, or more than one coding.
@@ -33,7 +34,7 @@ Both of those branches only run when there was no reportable robots.txt fetch fa
 
 The URL count stored on a top-level index is the aggregated total across its children, which is why an index is measured against its child count rather than that total. Severity error, weight 8.
 
-Field values are read as the text the sitemap wrote, so a bare-year `<lastmod>2024</lastmod>`, which the W3C Datetime format allows, is kept as `2024`. A `<lastmod>`, `<changefreq>` or `<priority>` that holds nested markup is ignored, and its URL is still read.
+Field values are read as the text the sitemap wrote, so a bare-year `<lastmod>2024</lastmod>`, which the W3C Datetime format allows, is kept as `2024`. A field that is not one text value is dropped and reported as above.
 
 Gzip-compressed sitemap files, such as a `sitemap.xml.gz` served as `application/gzip`, are decompressed before parsing. squirrel asks for gzip-compressed responses and decodes them itself, within the same 50 MB limit. A common location that squirrel only guessed, such as `/sitemap.xml` when neither robots.txt nor a sitemap index names it, counts as no sitemap when it answers with an HTML page or with a body that is not XML. A response labelled `text/html` that does not parse counts as a page unless it opens with a `<urlset>` or `<sitemapindex>` root. A server that answers every path with a page is not reported for sitemaps it never published.
 
@@ -47,7 +48,7 @@ Gzip-compressed sitemap files, such as a `sitemap.xml.gz` served as `application
 </sitemapindex>
 ```
 
-Shard past 50,000 entries behind an index. For parse errors, look for unescaped ampersands and raw angle brackets in URLs, which is what hand-built or string-concatenated sitemaps usually get wrong.
+Shard past 50,000 entries behind an index. For parse errors and skipped entries, look for unescaped ampersands and raw angle brackets in URLs, which is what hand-built or string-concatenated sitemaps usually get wrong. Escape them as `&amp;` and `&lt;`.
 
 | | |
 |---|---|
