@@ -88,19 +88,18 @@ export async function runBulkChecker(
   const resolved = new Map<string, ExternalCheckResult>();
   for (let i = 0; i < urls.length; i += chunkSize) {
     const requested = urls.slice(i, i + chunkSize);
-    let chunk: Map<string, ExternalCheckResult>;
     try {
-      chunk = await bulkChecker(requested);
+      const chunk = await bulkChecker(requested);
+      for (const [url, result] of chunk) resolved.set(url, result);
+      // pub#753: a service that answered nothing for a whole chunk (overloaded,
+      // or out of time on links it has not seen) will most likely do the same
+      // for the next one, and each such chunk costs its full wait. Stop asking:
+      // the remaining urls go to the local checker straight away. A chunk that
+      // answers even one of its urls keeps the pass going.
+      if (!requested.some((url) => chunk.has(url))) break;
     } catch {
       break; // cloud unavailable — remaining urls fall back to local checks
     }
-    for (const [url, result] of chunk) resolved.set(url, result);
-    // pub#753: a service that answered nothing for a whole chunk (overloaded,
-    // or out of time on links it has not seen) will most likely do the same
-    // for the next one, and each such chunk costs its full wait. Stop asking:
-    // the remaining urls go to the local checker straight away. A chunk that
-    // answers even one of its urls keeps the pass going.
-    if (!requested.some((url) => chunk.has(url))) break;
   }
   return resolved;
 }
