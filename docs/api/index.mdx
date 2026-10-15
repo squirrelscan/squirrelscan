@@ -50,6 +50,15 @@ Internal server-to-server callbacks (`/v1/*/internal/*`), webhook receivers
 change without notice.
 </Note>
 
+<Note>
+The cloud services the CLI calls during an audit (`/v1/services/*`) are not
+part of the public contract either. One of them, the dead-link check
+(`/v1/services/dead-links`), belongs to an audit run: it bills each link it
+checks to that run. From 2026-11-12 a call to it that names no run is refused
+with `426 RUN_REQUIRED`. To check links, run an audit (`POST /v1/agent-runs`)
+with external link checks on, or a signed-in `squirrel audit`.
+</Note>
+
 ## Error envelope
 
 All errors use one stable, typed shape:
