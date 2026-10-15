@@ -54,7 +54,7 @@ Like the internal check, the external check never requests a link that looks lik
 Many sites refuse automated requests. A refusal says nothing about whether a person would reach the page. So Perch does not take the first answer at face value:
 
 - **A link is reported broken only after the failure is confirmed.** Until then it is listed as status unverifiable, not broken. A link checked again by a later audit counts toward this too.
-- **A domain that no longer exists** is reported as dead. In our samples it is one of the most common kinds of dead external link.
+- **A domain that no longer exists** is reported as dead.
 - **A page that answers 200 but whose title is just "404" or "Page not found"** (a soft 404) counts as broken.
 - **A link that still cannot be verified is listed as status unverifiable, never as broken.** This covers firewall challenges, bot walls and CDN error pages. A rate limit is listed as rate-limited, never as broken.
 
@@ -74,7 +74,7 @@ When the CLI checks a link itself (signed out, at Quick, or when Perch has not a
 - **Throttled** (429 or 430, or a 503 with `Retry-After`): listed as rate-limited, status unverifiable, never broken.
 - **An internal link that answers 401 or 403** to the status-only check, or that answered the crawl with a bot-wall challenge: listed as refused, never broken.
 
-A real 404 or 410, a plain 503, a domain that does not exist and a refused connection are still broken, and so are a storage bucket's 403 for a missing file and an HTTP sign-in prompt. A site can still answer a check from your machine with an error it would never show a person, so a link in the broken list may load fine in your browser. Signed in, Perch's confirmed answers avoid most of these.
+For an external link, a real 404 or 410, a plain 503, a domain that does not exist and a refused connection are still broken, and so are a storage bucket's 403 for a missing file and an HTTP sign-in prompt. A site can still answer a check from your machine with an error it would never show a person, so a link in the broken list may load fine in your browser. Signed in, Perch's confirmed answers avoid most of these.
 
 ## Not checked
 
@@ -84,7 +84,7 @@ When a check did not run, squirrelscan says so rather than reporting the rule as
 |---|---|
 | `external-links-not-checked` | External link checking was off: the Quick level without `--external-links`, `--offline`, `--no-external-links`, `[external_links] enabled = false`, or a website or run that switched it off. |
 | `external-links-over-cap` | The audit found more external links than its limit. The most-linked were checked. |
-| `link-targets-not-fetched` | The audit did not follow links, and some internal link targets were fetched neither by the crawl nor by the status-only check: it was off, over its limit, or the targets were skipped. |
+| `link-targets-not-fetched` | The audit did not follow links, and some internal link targets were fetched neither by the crawl nor by the status-only check: it was off, over its limit, skipped the targets, got no answer, or could not be trusted because the site answers status-only requests with errors. |
 
 In the cloud's issue tracker, an open broken-link issue stays open while an audit could not check links for one of the reasons above. A link listed as status unverifiable does not keep it open.
 
@@ -94,7 +94,7 @@ In the cloud's issue tracker, an open broken-link issue stays open while an audi
   Coming soon. This describes work in progress. Today, a link Perch cannot get past is listed as status unverifiable.
 </Note>
 
-Some sites only let a full browser in. We are working on getting past those too, so fewer links end up unverifiable.
+Some sites still refuse every check we can make today. We are working on those too, so fewer links end up unverifiable.
 
 ## Coming soon: link monitoring
 
