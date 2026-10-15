@@ -1499,6 +1499,9 @@ export async function runAudit(
             resourceCheckTimeoutMs: options.resourceCheckTimeoutMs,
             // Sub-resource cache reuse (#107): mirrors the crawler's incremental flag.
             incremental: incrementalEnabled,
+            // --offline: nothing goes to a host outside the audited site, the
+            // third-party asset checks included (pub#807).
+            ...(options.offline ? { ownSiteOnly: true } : {}),
           },
           ...(externalLinksEnabled
             ? {

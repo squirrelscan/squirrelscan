@@ -46,7 +46,7 @@ squirrel audit <url> [options]
 | `--render` | | Force cloud browser rendering for this run: alias of `--render-mode all` ([uses credits](/guides/browser-rendering); requires login) | auto |
 | `--render-mode` | | Render strategy: `off` (HTTP only) · `auto` (render only client-rendered pages) · `all` (render every page). Overrides `[cloud].render` | the level's: `auto` for quick, `all` for surface and full |
 | `--http` | | Force plain HTTP for this run: alias of `--render-mode off` (never render in the cloud; pages cost the same either way) | auto |
-| `--offline` | | Run fully offline: skip cloud features, publishing, and telemetry. External links are not checked; internal link targets still are | `false` |
+| `--offline` | | Run fully offline: skip cloud features, publishing, and telemetry. Nothing is requested from a host outside the audited site: external links and third-party scripts, stylesheets and fonts are not checked. Internal link targets still are | `false` |
 | `--external-links` | | Check links to other sites this run, at any level. Cannot be combined with `--offline` or `--no-external-links` | the level's: on at every level |
 | `--no-external-links` | | Do not check links to other sites this run. The report shows them as **Not checked** | the level's |
 | `--no-internal-links` | | Do not status-check internal link targets the crawl did not fetch (one `HEAD` request each, on by default at every level). See [Link checking defaults](/rules/links#link-checking-defaults) | checked |
@@ -264,8 +264,11 @@ For finer control, `--render-mode auto` renders **only** pages that need it (cli
 ### Fully offline audit
 
 Run an audit with zero network calls beyond the site being audited: no cloud
-analysis, no publishing, no update checks, no telemetry. Results are stored in
-the local database as usual:
+analysis, no publishing, no update checks, no telemetry. External links are not
+checked, and neither are the third-party scripts, stylesheets and fonts the
+pages load, or sitemap URLs on another host. `reliability/broken-resources`
+reports the third-party ones as not measured. Results are stored in the local
+database as usual:
 
 ```bash
 squirrel audit https://example.com --offline
