@@ -14,7 +14,7 @@ This page covers what is checked today, how to read the results, and what is com
 |---|---|---|
 | What | Links to pages on your own site | Links to other sites |
 | Rules | [`links/broken-links`](/rules/links/broken-links) | [`links/broken-external-links`](/rules/links/broken-external-links), [`links/dead-links`](/rules/links/dead-links) |
-| Quick level | On | On |
+| Quick level | On | On in the CLI; in a cloud audit, only when the website's setting is on |
 | Surface and Full levels | On | On |
 
 Each audit checks up to a per-audit limit of links, the most-linked first. The limits and every switch are in [Link checking defaults](/rules/links#link-checking-defaults).
@@ -35,7 +35,7 @@ The full rules are in [What the internal link check never requests](/configurati
 
 ## External links
 
-External links are checked at every level, Quick included. The links on the most pages go first: the nav and footer links every page shares. Links past the audit's limit are listed as **Not checked**.
+External links are checked at Surface and Full, and at Quick in the CLI. A Quick cloud audit checks them only when the website's **External link checks** setting is on; the cloud defaults follow separately. The links on the most pages go first: the nav and footer links every page shares. Links past the audit's limit are listed as **Not checked**.
 
 Where the check runs depends on how you audit:
 
