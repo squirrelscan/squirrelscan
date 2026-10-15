@@ -150,6 +150,26 @@ export const brokenLinksRule: Rule = {
     // broken-link issues on every such run. Say they were not checked instead.
     const notFollowed = ctx.site?.linkDiscoveryOff === true && unfetchedTargets.size > 0;
 
+    // What the result covers (repo#2729), on every broken-links row (pub#794):
+    // comparing two audits' broken links has to tell a target that was fixed
+    // from one this audit never fetched, and `notFetched` says which unfetched
+    // targets were left out by design (`skipped`), the same on every run with
+    // the same settings. Its presence on a pass also tells a reader that this
+    // engine reports unfetched targets, so the pass was not vacuous.
+    const notFetched = notFetchedCauses(
+      unfetchedTargets.size,
+      unansweredTargets.size,
+      untrustedTargets.size,
+      ctx.site?.internalLinkProbe,
+    );
+    // A fresh object per row: a fail and a skip can both be emitted.
+    const coverage = () => ({
+      linkTargets: allTargets.size,
+      unfetchedTargets: unfetchedTargets.size,
+      probedTargets: probedTargets.size,
+      notFetched: { ...notFetched },
+    });
+
     if (brokenLinks.length > 0) {
       checks.push({
         name: "broken-links",
@@ -165,42 +185,25 @@ export const brokenLinksRule: Rule = {
             ...(b.probed ? { probed: true } : {}),
           },
         })),
+        details: coverage(),
       });
     } else if (!notFollowed) {
       checks.push({
         name: "broken-links",
         status: "pass",
         message: "No broken internal links detected",
-        // What the pass covers (repo#2729). Its presence also tells a reader of
-        // the result that this engine reports unfetched targets as skipped, so
-        // a pass here was not vacuous.
-        details: {
-          linkTargets: allTargets.size,
-          unfetchedTargets: unfetchedTargets.size,
-          probedTargets: probedTargets.size,
-        },
+        details: coverage(),
       });
     }
 
     if (notFollowed) {
-      const notFetched = notFetchedCauses(
-        unfetchedTargets.size,
-        unansweredTargets.size,
-        untrustedTargets.size,
-        ctx.site?.internalLinkProbe,
-      );
       checks.push({
         name: "broken-links",
         status: "skipped",
         message: `${unfetchedTargets.size} of ${allTargets.size} internal link target(s) were not fetched because this audit did not follow links and ${notFetchedReason(notFetched, ctx.site?.internalLinkProbe?.cap ?? 0)}, so they were not checked for broken links`,
         skipReason: LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
         value: unfetchedTargets.size,
-        details: {
-          linkTargets: allTargets.size,
-          unfetchedTargets: unfetchedTargets.size,
-          probedTargets: probedTargets.size,
-          notFetched,
-        },
+        details: coverage(),
       });
     }
 
@@ -265,7 +268,7 @@ type InternalLinkProbe = NonNullable<NonNullable<RuleContext["site"]>["internalL
  * it skipped: past the limit up to that excess, then skipped up to its count.
  * Any left over (a target the engine counted differently, or a context without
  * per-target statuses) is counted as unanswered, the cause that claims least.
- * The counts add up to `unfetched`.
+ * The counts add up to `unfetched`; with nothing unfetched the object is empty.
  */
 function notFetchedCauses(
   unfetched: number,
@@ -273,16 +276,20 @@ function notFetchedCauses(
   untrusted: number,
   probe: InternalLinkProbe | undefined,
 ): LinkTargetsNotFetched {
-  if (!probe) return { off: unfetched };
-  const notAsked = Math.max(0, unfetched - unanswered - untrusted);
-  const overLimit = Math.min(notAsked, Math.max(0, probe.unfetched - probe.cap));
-  const skipped = Math.min(notAsked - overLimit, probe.outOfScope ?? 0);
-  const causes: LinkTargetsNotFetched = {
-    overLimit,
-    skipped,
-    untrusted,
-    noAnswer: unanswered + (notAsked - overLimit - skipped),
-  };
+  let causes: LinkTargetsNotFetched;
+  if (!probe) {
+    causes = { off: unfetched };
+  } else {
+    const notAsked = Math.max(0, unfetched - unanswered - untrusted);
+    const overLimit = Math.min(notAsked, Math.max(0, probe.unfetched - probe.cap));
+    const skipped = Math.min(notAsked - overLimit, probe.outOfScope ?? 0);
+    causes = {
+      overLimit,
+      skipped,
+      untrusted,
+      noAnswer: unanswered + (notAsked - overLimit - skipped),
+    };
+  }
   for (const key of Object.keys(causes) as (keyof LinkTargetsNotFetched)[]) {
     if (!causes[key]) delete causes[key];
   }

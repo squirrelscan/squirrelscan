@@ -25,8 +25,17 @@ The rule is site-wide and compares link targets against pages the crawl actually
 
   `details.notFetched` carries the same counts (`off`, `overLimit`, `skipped`, `untrusted`, `noAnswer`, each present only when not zero), and they add up to `N`. It replaces the pass, and sits next to the failure when a target the crawl did fetch is broken. The report shows it as **Not checked**, and the score does not count it. Its advice suggests turning internal link checks back on only when they were off, and raising `internal_links.max_targets` only when the limit left targets out. When every unfetched target was skipped, it says that a Surface or Full audit, which follows links, can reach the ones inside the crawl scope and allowed by robots.txt.
 - `broken-links` fails when a target returned 400 or above. Message: `7 broken internal link(s) (4xx/5xx)`. Each item reads `https://example.com/old-page (404)` and lists every page that links to it. Severity error, weight 7.
-- `broken-links` passes otherwise. Message: `No broken internal links detected`, with `details.linkTargets` (distinct internal link targets), `details.probedTargets` (those the internal link check fetched) and `details.unfetchedTargets` (those nothing fetched) saying how much the pass covers.
+- `broken-links` passes otherwise. Message: `No broken internal links detected`.
 - `rate-limited-links` reports info for targets that returned a rate-limit status. Message: `3 internal link(s) rate-limited - status unverifiable`.
+
+Every `broken-links` row, whether it fails, passes or is not checked, carries the same `details` about what the audit covered:
+
+- `linkTargets`: distinct internal link targets on the audited pages.
+- `probedTargets`: targets the internal link check got a status for.
+- `unfetchedTargets`: targets that neither the crawl nor the internal link check fetched, so their status is unknown.
+- `notFetched`: why those targets were left out, as counts that add up to `unfetchedTargets`. `off` means internal link checks were off. `overLimit` means past `internal_links.max_targets`. `skipped` means never requested by design: outside the crawl scope, disallowed by robots.txt, or an action or token link. `untrusted` means the site answers HEAD requests with errors on pages it serves. `noAnswer` means no status came back. Each count is present only when it is not zero, so a row with nothing unfetched has an empty `notFetched`.
+
+Read these before comparing two audits' broken links. A link missing from this audit's failure was fixed only if this audit fetched it. A target that was broken last time and unfetched this time is unknown, not fixed. Targets counted as `skipped` are left out the same way on every audit with the same settings and the same links, so a row whose unfetched targets are all `skipped` checked everything it could.
 
 Normalisation strips the fragment and the trailing slash and lowercases the scheme and host, but not the path, so a case difference in the path is treated as a different URL. A throttled response means the host limited the crawl, not that the page is missing, so those are separated out before the 400 test.
 

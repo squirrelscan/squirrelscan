@@ -150,6 +150,19 @@ export const EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON = "external-links-not-checke
 export const LINK_TARGETS_NOT_FETCHED_SKIP_REASON = "link-targets-not-fetched";
 
 /**
+ * `details` keys `links/broken-links` sets on every row it emits (pub#794): how
+ * many distinct internal link targets the pages link, how many nothing fetched,
+ * how many the internal link check answered, and why the unfetched ones were
+ * left out. They describe what the audit covered, not any one broken link.
+ */
+export const LINK_COVERAGE_DETAIL_KEYS = [
+  "linkTargets",
+  "unfetchedTargets",
+  "probedTargets",
+  "notFetched",
+] as const;
+
+/**
  * `error` the internal link check records on a target whose 4xx/5xx it set
  * aside because the site also answers status-only (HEAD) requests with errors
  * on a page it serves (repo#2729). `links/broken-links` counts such a target

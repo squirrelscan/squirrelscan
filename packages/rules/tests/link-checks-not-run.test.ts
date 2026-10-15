@@ -238,7 +238,12 @@ describe("links/broken-links when the crawl did not follow links", () => {
       ),
     );
     expect(named(checks, "broken-links").map((c) => c.status)).toEqual(["pass"]);
-    expect(checks[0]!.details).toEqual({ linkTargets: 2, unfetchedTargets: 0, probedTargets: 0 });
+    expect(checks[0]!.details).toEqual({
+      linkTargets: 2,
+      unfetchedTargets: 0,
+      probedTargets: 0,
+      notFetched: {},
+    });
   });
 
   test("links followed (Surface, Full): unfetched targets keep today's pass", () => {
@@ -246,7 +251,12 @@ describe("links/broken-links when the crawl did not follow links", () => {
     // is; the pass says how much it covered.
     const { checks } = brokenLinksRule.run(ctx(pages));
     expect(named(checks, "broken-links").map((c) => c.status)).toEqual(["pass"]);
-    expect(checks[0]!.details).toEqual({ linkTargets: 4, unfetchedTargets: 2, probedTargets: 0 });
+    expect(checks[0]!.details).toEqual({
+      linkTargets: 4,
+      unfetchedTargets: 2,
+      probedTargets: 0,
+      notFetched: { off: 2 },
+    });
   });
 
   test("the link probe's statuses count as known: a probed 404 fails, a probed 200 passes", () => {
@@ -479,5 +489,99 @@ describe("links/broken-links when the crawl did not follow links", () => {
     );
     expect(named(checks, "broken-links").map((c) => c.status)).toEqual(["pass"]);
     expect(named(checks, "rate-limited-links").map((c) => c.status)).toEqual(["info"]);
+  });
+});
+
+// pub#794: comparing two audits' broken links (a "new broken links" alert after a
+// scheduled audit) has to tell a target that was fixed from one this audit did
+// not fetch. Every broken-links row says what it covered, the fail row too.
+describe("links/broken-links coverage on every row", () => {
+  // The home page links /about, /missing, /moved and /private, and two targets
+  // the check never requests (/logout, a token link). With "/": 7 targets.
+  const home: FixturePage = {
+    url: `${BASE}/`,
+    statusCode: 200,
+    internal: [
+      `${BASE}/about`,
+      `${BASE}/missing`,
+      `${BASE}/moved`,
+      `${BASE}/private`,
+      `${BASE}/logout`,
+      `${BASE}/account?token=0123456789abcdef01234567`,
+    ],
+  };
+  const about: FixturePage = { url: `${BASE}/about`, statusCode: 200, internal: [`${BASE}/`] };
+
+  test("a fail that fetched every target says so: nothing unfetched", () => {
+    const { checks } = brokenLinksRule.run(
+      ctx([
+        { url: `${BASE}/`, statusCode: 200, internal: [`${BASE}/about`, `${BASE}/gone`] },
+        { url: `${BASE}/about`, statusCode: 200, internal: [`${BASE}/`] },
+        { url: `${BASE}/gone`, statusCode: 404 },
+      ]),
+    );
+    const results = named(checks, "broken-links");
+    expect(results.map((c) => c.status)).toEqual(["fail"]);
+    expect(results[0]!.details).toEqual({
+      linkTargets: 3,
+      unfetchedTargets: 0,
+      probedTargets: 0,
+      notFetched: {},
+    });
+  });
+
+  test("a fail with targets left unfetched counts them, by cause", () => {
+    // Links followed: the crawl fetched /missing (404) and /about. The probe
+    // answered /moved (410), /private was past its limit of 1, and /logout and
+    // the token link are never requested.
+    const { checks } = brokenLinksRule.run(
+      ctx([home, about, { url: `${BASE}/missing`, statusCode: 404 }], {
+        linkTargetStatuses: [{ url: `${BASE}/moved`, status: 410, error: null }],
+        internalLinkProbe: { unfetched: 2, probed: 1, cap: 1, outOfScope: 2 },
+      }),
+    );
+    const results = named(checks, "broken-links");
+    expect(results.map((c) => c.status)).toEqual(["fail"]);
+    expect(results[0]!.items?.map((i) => i.id)).toEqual([`${BASE}/missing`, `${BASE}/moved`]);
+    expect(results[0]!.details).toEqual({
+      linkTargets: 7,
+      unfetchedTargets: 3,
+      probedTargets: 1,
+      notFetched: { overLimit: 1, skipped: 2 },
+    });
+  });
+
+  test("a pass whose only unfetched targets were skipped by design says so", () => {
+    // The same on every run with the same settings: action and token links are
+    // never requested, so they never count against a clean pass.
+    const { checks } = brokenLinksRule.run(
+      ctx(
+        [
+          { url: `${BASE}/`, statusCode: 200, internal: [`${BASE}/about`, ...home.internal!.slice(4)] },
+          about,
+        ],
+        { linkTargetStatuses: [], internalLinkProbe: { unfetched: 0, probed: 0, cap: 200, outOfScope: 2 } },
+      ),
+    );
+    const results = named(checks, "broken-links");
+    expect(results.map((c) => c.status)).toEqual(["pass"]);
+    expect(results[0]!.details).toEqual({
+      linkTargets: 4,
+      unfetchedTargets: 2,
+      probedTargets: 0,
+      notFetched: { skipped: 2 },
+    });
+  });
+
+  test("a fail beside a not-checked skip carries the same coverage, in its own object", () => {
+    // Links not followed, checks off: /missing was fetched (a sitemap 404), the rest not.
+    const { checks } = brokenLinksRule.run(
+      ctx([home, about, { url: `${BASE}/missing`, statusCode: 404 }], { linkDiscoveryOff: true }),
+    );
+    const [fail, skipped] = named(checks, "broken-links");
+    expect([fail!.status, skipped!.status]).toEqual(["fail", "skipped"]);
+    expect(fail!.details).toEqual(skipped!.details!);
+    expect(fail!.details).not.toBe(skipped!.details);
+    expect(fail!.details?.notFetched).not.toBe(skipped!.details?.notFetched);
   });
 });

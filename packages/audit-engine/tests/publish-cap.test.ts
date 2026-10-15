@@ -628,6 +628,56 @@ describe("capReportForPublish: the sample and its counts", () => {
     expect(check.message).toBe(skip.message);
   });
 
+  test("broken-links coverage survives the full sample and a counts-only row (pub#794)", () => {
+    // Comparing two audits' broken links reads what each covered; the large
+    // reports that get a counts row are the ones it matters most on.
+    const coverage = {
+      linkTargets: 2_400,
+      unfetchedTargets: 7,
+      probedTargets: 40,
+      notFetched: { overLimit: 5, skipped: 2 },
+    };
+    const fail: CheckResult = {
+      name: "broken-links",
+      status: "fail",
+      message: "1500 broken internal link(s) (4xx/5xx)",
+      items: Array.from({ length: 1_500 }, (_, k) => ({
+        id: `${pageUrl(k)}/gone`,
+        sourcePages: [pageUrl(k)],
+        meta: { statusCode: 404, linkedFrom: 1 },
+      })),
+      details: coverage,
+    };
+    const input: Report = {
+      ruleResults: {
+        "links/broken-links": { meta: meta(SITE_RULES[2]!, "site"), checks: [fail] },
+      },
+    };
+    const full = capReportForPublish(input).ruleResults["links/broken-links"]!.checks[0]!;
+    expect(full.items!.length).toBeGreaterThan(0);
+    expect(full.details).toMatchObject(coverage);
+
+    // The smallest body that still carries the check holds it as counts only.
+    const kept = (maxBytes: number): CheckResult | undefined => {
+      try {
+        return capReportForPublish(input, { maxBytes }).ruleResults["links/broken-links"]?.checks[0];
+      } catch (err) {
+        if (err instanceof PublishedReportTooLargeError) return undefined;
+        throw err;
+      }
+    };
+    let lo = REPORT_CAPS.envelopeBytes;
+    let hi = REPORT_CAPS.envelopeBytes + 64 * 1024;
+    while (hi - lo > 1) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (kept(mid)) hi = mid;
+      else lo = mid;
+    }
+    const counts = kept(hi)!;
+    expect(counts.items).toBeUndefined();
+    expect(counts.details).toMatchObject({ ...coverage, additional: 1_500 });
+  });
+
   test("pages named by more items than a check may carry are all counted", () => {
     const items = Array.from({ length: 1_500 }, (_, k) => ({ id: pageUrl(k) }));
     const input: Report = {

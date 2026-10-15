@@ -172,6 +172,52 @@ describe("diff reports", () => {
     expect(diff.changed[0].changeType).toBe("regression");
   });
 
+  // pub#794: the broken-links fail row says what the audit covered. Those
+  // counts change whenever a page's links do, and are not part of any one
+  // broken link, so they must not mark every broken link as changed.
+  test("broken-links coverage counts do not change the issues they sit beside", () => {
+    const brokenLinks = (
+      unfetchedTargets: number,
+      other?: Record<string, unknown>
+    ) =>
+      makeReport({
+        "links/broken-links": makeRuleResult("links/broken-links", [
+          {
+            name: "broken-links",
+            status: "fail",
+            message: "1 broken internal link(s) (4xx/5xx)",
+            items: [
+              {
+                id: "https://example.com/gone",
+                sourcePages: ["https://example.com/"],
+                meta: { statusCode: 404, linkedFrom: 1 },
+              },
+            ],
+            details: {
+              linkTargets: 40 + unfetchedTargets,
+              unfetchedTargets,
+              probedTargets: 3,
+              notFetched: unfetchedTargets
+                ? { overLimit: unfetchedTargets }
+                : {},
+              ...other,
+            },
+          },
+        ]),
+      });
+
+    const diff = diffReports(brokenLinks(0), brokenLinks(5));
+    expect(diff.added).toEqual([]);
+    expect(diff.removed).toEqual([]);
+    expect(diff.changed).toEqual([]);
+    const [issue] = buildIssueInstances(brokenLinks(5, { additional: 2 }));
+    expect(issue?.meta).toEqual({
+      additional: 2,
+      statusCode: 404,
+      linkedFrom: 1,
+    });
+  });
+
   // #1535: missing robots.txt moved from "warn" to "fail". A report scored
   // before that fix still has "warn" on disk; diffing it against a re-audit
   // of the SAME still-missing robots.txt must not read as a status change.

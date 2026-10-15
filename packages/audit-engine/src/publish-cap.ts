@@ -49,7 +49,7 @@ import type {
   ResolutionSignal,
   RuleMetaLite,
 } from "@squirrelscan/core-contracts";
-import { NOT_CHECKED_SKIP_REASONS } from "@squirrelscan/core-contracts";
+import { LINK_COVERAGE_DETAIL_KEYS, NOT_CHECKED_SKIP_REASONS } from "@squirrelscan/core-contracts";
 import type { CompactResolutionSignal } from "@squirrelscan/core-contracts/resolution";
 import { clampItemString } from "@squirrelscan/core-contracts/clamp";
 import { ENTITY_MAP_PUBLISH_LIMITS, type EntityMap } from "@squirrelscan/core-contracts/entity-map";
@@ -592,7 +592,11 @@ interface SampleCaps {
   countsOnly: boolean;
 }
 
-/** The `details` keys that carry a class's true totals and identity. */
+/**
+ * The `details` keys that carry a class's true totals and identity, and what
+ * links/broken-links covered (pub#794): a reader comparing two audits' broken
+ * links needs those counts most on the large reports a counts row comes from.
+ */
 const COUNT_KEYS = [
   "aggregated",
   "occurrences",
@@ -600,6 +604,7 @@ const COUNT_KEYS = [
   "additional",
   "checksTruncated",
   "foldKey",
+  ...LINK_COVERAGE_DETAIL_KEYS,
 ] as const;
 
 function additionalOf(check: CheckResult): number {
