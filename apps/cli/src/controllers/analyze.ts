@@ -461,10 +461,13 @@ export function analyzeStoredCrawl(
 /**
  * The config an analyze runs with. The crawl may be any project's (the latest
  * across all of them, or `--id`), while `config` is the squirrel.toml found
- * from this directory. So the crawl's own recorded scope and limits decide
+ * from this directory. So the crawl's own recorded scope and page limit decide
  * what is checked, as they did in the audit, with the strict side for a row
- * recorded without them (no extra domains). No custom request headers are
- * sent: this directory's belong to its own site.
+ * recorded without them (no extra domains). The page limit is the one the
+ * crawl started with (a resumed audit keeps it). Per-host politeness stays as
+ * configured here: the crawl records what its pool resolved to (a rendered or
+ * loopback crawl's), not the limits the audit's own checks ran with. No custom
+ * request headers are sent: this directory's belong to its own site.
  */
 export function configForCrawl(config: Config, crawl: CrawlMetadata): Config {
   // Rows recorded before a field existed read back without it.
@@ -474,10 +477,6 @@ export function configForCrawl(config: Config, crawl: CrawlMetadata): Config {
     crawler: {
       ...config.crawler,
       max_pages: recorded?.maxPages ?? config.crawler.max_pages,
-      per_host_concurrency:
-        recorded?.perHostConcurrency ?? config.crawler.per_host_concurrency,
-      per_host_delay_ms:
-        recorded?.perHostDelayMs ?? config.crawler.per_host_delay_ms,
       include: recorded?.include ?? config.crawler.include,
       exclude: recorded?.exclude ?? config.crawler.exclude,
       respect_robots: recorded?.respectRobots ?? config.crawler.respect_robots,

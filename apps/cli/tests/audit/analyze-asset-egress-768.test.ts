@@ -241,16 +241,19 @@ describe("the config squirrel analyze runs with", () => {
   const crawlWith = (config: Partial<CrawlMetadata["config"]>) =>
     ({ config }) as unknown as CrawlMetadata;
 
-  test("the crawl's own scope and limits, and none of this directory's custom headers", () => {
+  test("the crawl's own scope and page limit, this directory's politeness, and none of its custom headers", () => {
     const config = getDefaultConfig();
     config.crawler.headers = { Authorization: "Bearer project-a" };
+    config.crawler.per_host_concurrency = 1;
+    config.crawler.per_host_delay_ms = 500;
     config.project.domains = ["project-a.example"];
     const out = configForCrawl(
       config,
       crawlWith({
         maxPages: 50,
-        perHostConcurrency: 1,
-        perHostDelayMs: 250,
+        // What a rendered crawl's pool resolved to, not the configured limits.
+        perHostConcurrency: 6,
+        perHostDelayMs: 0,
         include: ["/docs/*"],
         exclude: ["/admin/*"],
         respectRobots: true,
@@ -259,8 +262,9 @@ describe("the config squirrel analyze runs with", () => {
     );
     expect(out.crawler.headers).toEqual({});
     expect(out.crawler.max_pages).toBe(50);
+    // Politeness stays as configured: never looser than this directory asks.
     expect(out.crawler.per_host_concurrency).toBe(1);
-    expect(out.crawler.per_host_delay_ms).toBe(250);
+    expect(out.crawler.per_host_delay_ms).toBe(500);
     expect(out.crawler.include).toEqual(["/docs/*"]);
     expect(out.crawler.exclude).toEqual(["/admin/*"]);
     expect(out.crawler.respect_robots).toBe(true);

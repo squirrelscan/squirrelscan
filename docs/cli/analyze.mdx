@@ -20,9 +20,9 @@ squirrel analyze [options]
 
 ## What it fetches
 
-`analyze` does not crawl again, but some rules read more than the stored pages. Like `squirrel audit`, it fetches the stylesheets, images, fonts, scripts, PDFs and web app manifest the pages reference. It status-checks the sitemap URLs the crawl did not fetch, on any host, and the [internal link targets](/configuration/external-links#internal-links) the crawl did not fetch. While `reliability/broken-resources` is on, it also status-checks the third-party scripts, stylesheets and fonts the pages load. Every asset and link check, and every redirect those follow, is held to the same rules as the audit's, so none of them connects to a link-local or cloud metadata address. It does not check external links.
+`analyze` does not crawl again, but some rules read more than the stored pages. Like `squirrel audit`, it fetches the stylesheets, images, fonts, scripts, PDFs and web app manifest the pages reference. It status-checks the sitemap URLs the crawl did not fetch, on any host, and the [internal link targets](/configuration/external-links#internal-links) the crawl did not fetch. While `reliability/broken-resources` is on, it also status-checks the third-party scripts, stylesheets and fonts the pages load. Every asset and link check, and every redirect those follow, is held to the same rules as the audit's, so no redirect or other host leads them to a link-local or cloud metadata address. It does not check external links.
 
-The crawl you analyze may belong to another project than the `squirrel.toml` in your directory. `analyze` uses the crawl's own scope and limits (`include`, `exclude`, robots.txt, domains, page limit), and it sends none of your `[crawler] headers`.
+The crawl you analyze may belong to a different project from the `squirrel.toml` in your directory. `analyze` uses the crawl's own scope and page limit (`include`, `exclude`, robots.txt, domains, `max_pages`) and your per-host politeness settings, and it sends none of your `[crawler] headers`.
 
 To turn the internal link checks off, set `[internal_links] enabled = false`. To turn the third-party checks off:
 
