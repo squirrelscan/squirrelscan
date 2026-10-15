@@ -2108,7 +2108,9 @@ export async function runAudit(
       const spendLines = [
         // render misses + render_cached hits, at the actual server debit #279.
         ...foldRenderSpendLines(renderCharges),
-        ...(deadLinksUnits > 0
+        // A batch can be charged with no answers (a settle that could not
+        // run keeps its reservation), so credits alone keep the line (#801).
+        ...(deadLinksUnits > 0 || deadLinksCredits > 0
           ? [
               {
                 // Pricing v12 (#801): the cloud's link checks bill the run

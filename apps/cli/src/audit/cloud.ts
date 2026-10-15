@@ -700,9 +700,13 @@ function buildDeadLinksBulkChecker(
     // Only successful calls are counted client-side: the server refunds a
     // total provider failure, which throws above and is never counted here.
     // Prefer the server's own figure; an older server omits it, and charged
-    // nothing for a run then. Units are the links it answered: the rest are
-    // checked here, free.
-    onSpend?.(res.results.length, res.charged ?? 0);
+    // nothing for a run then. Units are the links it answered (a status, an
+    // error, or unverifiable); a link it never requested comes back with
+    // none of those, and the rest are checked here, free.
+    const answered = res.results.filter(
+      (r) => r.status !== null || r.error != null || r.wafBlocked === true
+    ).length;
+    onSpend?.(answered, res.charged ?? 0);
     return new Map(
       res.results.map((r) => [
         r.url,

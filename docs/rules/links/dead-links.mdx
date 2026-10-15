@@ -26,7 +26,7 @@ A link counts as dead on the same basis as `links/broken-external-links`: a fetc
 
 ## How to fix it
 
-Log in with `squirrel auth login` to use the service. A signed-in CLI audit pays 1 credit per distinct external link the service answers, at most one per page of the audit's page limit, the same as a cloud audit. Its estimate before the audit includes them, so an audit under `[cloud] max_credits_per_audit` asks nothing more; with no per-audit cap, a spend prompt appears in a terminal when the links alone would pass `[cloud] confirm_threshold`. A link the service leaves unanswered is checked on your machine for free. Being logged out falls back to local per-link checking.
+Log in with `squirrel auth login` to use the service. A signed-in CLI audit pays 1 credit per distinct external link the service answers, at most one per page of the audit's page limit, the same as a cloud audit. Its estimate before the audit includes them. An audit that has the cloud's spend disclosure accepted under `[cloud] max_credits_per_audit` (the default for a signed-in audit) asks nothing more; one without a per-audit cap, or one that chose its rendering with `--http`, `--render` or `[cloud] rendering`, still gets a spend prompt in a terminal when the links alone would pass `[cloud] confirm_threshold`. A link the service leaves unanswered is checked on your machine for free. Being logged out falls back to local per-link checking.
 
 The findings themselves are on `links/broken-external-links`. Fix them there.
 

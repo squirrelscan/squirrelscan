@@ -346,7 +346,11 @@ describe("login implies cloud consent (#368)", () => {
       })
     );
     // No blocking prompt — cloud on by default, prefetch confirm skipped (capped).
-    expect(decision).toEqual({ mode: "browser", consented: true });
+    expect(decision).toEqual({
+      mode: "browser",
+      consented: true,
+      disclosed: true,
+    });
     expect(updates).toEqual([{ cloud_spend_ack: true }]);
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain("100 credits"); // 50 base + computeCost("render", 25)
@@ -394,7 +398,11 @@ describe("login implies cloud consent (#368)", () => {
       })
     );
     // Uncapped ⇒ the prefetch confirm still guards unbounded spend.
-    expect(decision).toEqual({ mode: "browser", consented: false });
+    expect(decision).toEqual({
+      mode: "browser",
+      consented: false,
+      disclosed: true,
+    });
     expect(lines[0]).toContain("70 credits"); // 50 base + 2 × 10
     expect(lines[0]).not.toContain("Disable with");
     // Ack is still persisted; a later capped run then skips the confirm.
@@ -405,7 +413,11 @@ describe("login implies cloud consent (#368)", () => {
     const decision = await resolveCloudRendering(
       opts({ spendAck: null, persist: () => ({ ok: false }) })
     );
-    expect(decision).toEqual({ mode: "browser", consented: false });
+    expect(decision).toEqual({
+      mode: "browser",
+      consented: false,
+      disclosed: true,
+    });
   });
 });
 
@@ -516,7 +528,7 @@ describe("the one-time link pricing notice (#801)", () => {
       registers: true,
       externalLinks: true,
       shown: false,
-      spendAcknowledged: true,
+      disclosedThisRun: false,
       ...over,
     });
 
@@ -527,8 +539,26 @@ describe("the one-time link pricing notice (#801)", () => {
     expect(due({ registers: false })).toBe(false);
   });
 
-  test("not for a first-time user, whose consent line already prices the links", () => {
-    expect(due({ spendAcknowledged: false })).toBe(false);
+  test("not when this run printed the cost line, which already prices the links", () => {
+    expect(due({ disclosedThisRun: true })).toBe(false);
+  });
+
+  test("a run that skips the cost line (--http, --render, a config render, a decline) still gets the notice", async () => {
+    // Only the first-time disclosure says `disclosed`; every other way through
+    // resolveCloudRendering leaves the notice owed.
+    const first = await resolveCloudRendering(opts({ spendAck: undefined }));
+    expect(first.disclosed).toBe(true);
+    for (const over of [
+      { args: { http: true } },
+      { args: { render: true } },
+      { configRendering: "browser" as const },
+      { consent: "declined" as const },
+      { spendAck: true },
+    ]) {
+      const decision = await resolveCloudRendering(opts(over));
+      expect(decision.disclosed).toBeUndefined();
+      expect(due({ disclosedThisRun: decision.disclosed === true })).toBe(true);
+    }
   });
 
   test("the consent line that priced the links also marks the notice shown", async () => {

@@ -231,14 +231,14 @@ export function linkPricingNoticeDue(opts: {
   registers: boolean;
   externalLinks: boolean;
   shown: boolean;
-  /** The user acknowledged the spend disclosure before (under the old, free terms). */
-  spendAcknowledged: boolean;
+  /** This run printed the cost line, which already prices the links. */
+  disclosedThisRun: boolean;
 }): boolean {
   return (
     opts.registers &&
     opts.externalLinks &&
     !opts.shown &&
-    opts.spendAcknowledged
+    !opts.disclosedThisRun
   );
 }
 
@@ -657,6 +657,8 @@ export interface CloudRenderingDecision {
   /** User accepted the cost-disclosing prompt AND a per-audit cap bounds it →
    * caller may skip the prefetch confirm. False for legacy/uncapped/--render. */
   consented: boolean;
+  /** The cost line was printed this run (#801: it prices the links too). */
+  disclosed?: boolean;
 }
 
 /**
@@ -745,8 +747,9 @@ export async function resolveCloudRendering(opts: {
       logger.debug(
         "could not persist cloud_spend_ack; will re-notify next run"
       );
-      return { mode: "browser", consented: false };
+      return { mode: "browser", consented: false, disclosed: true };
     }
+    return { mode: "browser", consented: capped, disclosed: true };
   }
   return { mode: "browser", consented: capped };
 }
@@ -1982,29 +1985,6 @@ export const audit = defineCommand({
         }
       }
 
-      // #801: from pricing v12 the cloud bills a signed-in audit's link checks;
-      // every earlier release said they were free. Said once, on the first
-      // audit that will be billed for them.
-      if (
-        linkPricingNoticeDue({
-          registers: resolveRegisterDecision({
-            signedIn,
-            offline: !!args.offline,
-            nonPublicHost: !!nonPublicHost,
-          }),
-          externalLinks: cloudLinkChecks,
-          shown: effectiveSettings?.link_pricing_notice_shown === true,
-          // A first-time user is shown the consent line, which already
-          // prices the links: the "now cost credits" notice is for the ones
-          // who saw the old, free terms.
-          spendAcknowledged: effectiveSettings?.cloud_spend_ack === true,
-        })
-      ) {
-        log(fmt.dim(LINK_PRICING_NOTICE));
-        // Non-fatal: a failed write just shows the notice again next run.
-        updateSettings({ link_pricing_notice_shown: true });
-      }
-
       // Resolve the render strategy (#294). `off`/`auto`/`all` is funneled into
       // the existing http/browser consent decision (off→http, auto|all→browser)
       // so the spend-consent flow is unchanged; the auto-vs-all *strategy* is
@@ -2046,35 +2026,60 @@ export const audit = defineCommand({
             ? levelRender
             : undefined;
 
-      const { mode: cloudRendering, consented: cloudConsented } =
-        await resolveCloudRendering({
-          // Mirror the resolved on/off into the existing flag inputs so
-          // --render-mode and [cloud].render route through the unchanged path.
-          args: {
-            ...args,
-            http: explicitRenderMode === "off",
-            render:
-              explicitRenderMode === "auto" || explicitRenderMode === "all",
-          },
-          configRendering:
-            explicitRenderMode === "off"
-              ? "http"
-              : explicitRenderMode
-                ? "browser"
-                : config.cloud.rendering,
-          signedIn,
-          consent: effectiveSettings?.cloud_render_consent,
-          spendAck: effectiveSettings?.cloud_spend_ack,
-          log,
-          // Cost shown up front so the user can decline before the crawl.
-          estimate: {
-            maxPages,
-            balance: startingBalance,
-            maxCredits: config.cloud.max_credits_per_audit,
-            unlimited: unlimitedCredits,
-            externalLinks: cloudLinkChecks,
-          },
-        });
+      const {
+        mode: cloudRendering,
+        consented: cloudConsented,
+        disclosed: costDisclosed,
+      } = await resolveCloudRendering({
+        // Mirror the resolved on/off into the existing flag inputs so
+        // --render-mode and [cloud].render route through the unchanged path.
+        args: {
+          ...args,
+          http: explicitRenderMode === "off",
+          render: explicitRenderMode === "auto" || explicitRenderMode === "all",
+        },
+        configRendering:
+          explicitRenderMode === "off"
+            ? "http"
+            : explicitRenderMode
+              ? "browser"
+              : config.cloud.rendering,
+        signedIn,
+        consent: effectiveSettings?.cloud_render_consent,
+        spendAck: effectiveSettings?.cloud_spend_ack,
+        log,
+        // Cost shown up front so the user can decline before the crawl.
+        estimate: {
+          maxPages,
+          balance: startingBalance,
+          maxCredits: config.cloud.max_credits_per_audit,
+          unlimited: unlimitedCredits,
+          externalLinks: cloudLinkChecks,
+        },
+      });
+
+      // #801: from pricing v12 the cloud bills a signed-in audit's link checks;
+      // every earlier release said they were free. Said once, on the first
+      // audit that will be billed for them, unless this run's cost line (which
+      // prices them) was just printed. Every rendering choice reaches here:
+      // --http, --render, a config render setting or a stored decline skip the
+      // cost line, never this notice.
+      if (
+        linkPricingNoticeDue({
+          registers: resolveRegisterDecision({
+            signedIn,
+            offline: !!args.offline,
+            nonPublicHost: !!nonPublicHost,
+          }),
+          externalLinks: cloudLinkChecks,
+          shown: effectiveSettings?.link_pricing_notice_shown === true,
+          disclosedThisRun: costDisclosed === true,
+        })
+      ) {
+        log(fmt.dim(LINK_PRICING_NOTICE));
+        // Non-fatal: a failed write just shows the notice again next run.
+        updateSettings({ link_pricing_notice_shown: true });
+      }
 
       const startTime = Date.now();
       // #271 phase 6: capture the runner context once (env reads) and reuse it for
