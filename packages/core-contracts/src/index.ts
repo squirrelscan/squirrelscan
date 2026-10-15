@@ -1471,6 +1471,14 @@ export interface ContactLinkData {
   value: string;
   /** The anchor's visible text — how the page actually renders the contact. */
   text: string;
+  /**
+   * Set on an email address Cloudflare's email obfuscation rewrote to a
+   * `/cdn-cgi/l/email-protection` link (pub#811). Carried as the `mailto:` it
+   * stands for, with `value` decoded from the link's payload, or empty when
+   * the payload did not decode to an address. Such links are not in
+   * {@link LinkData}: they are not pages.
+   */
+  obfuscated?: "cloudflare";
 }
 
 export interface ImageData {

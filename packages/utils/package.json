@@ -16,6 +16,7 @@
     "./headers": "./src/headers.ts",
     "./safe-fetch": "./src/safe-fetch.ts",
     "./link-actions": "./src/link-actions.ts",
+    "./cloudflare-email": "./src/cloudflare-email.ts",
     "./response-body": "./src/response-body.ts",
     "./user-agent": "./src/user-agent.ts",
     "./client-redirects": "./src/client-redirects.ts",

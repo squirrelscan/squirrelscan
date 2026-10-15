@@ -28,6 +28,8 @@ export {
 
 export { isNonPublicHostname, isNonPublicUrl, nonPublicHostLabel } from "./non-public-host";
 
+export { decodeCloudflareEmail, isCloudflareEmailProtectionUrl } from "./cloudflare-email";
+
 export {
   getAttrCI,
   hasAttrCI,

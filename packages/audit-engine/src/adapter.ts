@@ -138,6 +138,7 @@ import {
   SQUIRRELSCAN_USER_AGENT,
 } from "@squirrelscan/utils/constants";
 import { maskLinkTokens } from "@squirrelscan/utils/link-actions";
+import { isCloudflareEmailProtectionUrl } from "@squirrelscan/utils/cloudflare-email";
 
 import { checkExternalLinks, type ExternalCheckResult, type LinkCache } from "./external-checker";
 import { checkResourceSizes, type ResourceCheckResult } from "./resource-checker";
@@ -809,6 +810,10 @@ export function createSiteAssetCollector(baseUrl: string): {
         const nofollowActions = nofollowActionTargets(page);
         for (const link of page.parsed.links) {
           if (!link.isInternal || !link.url || link.error) continue;
+          // pub#811: an obfuscated email address, never requested. The parser
+          // leaves these out of `links`; a parse stored before it did not.
+          // links/broken-links skips them the same way.
+          if (isCloudflareEmailProtectionUrl(link.url)) continue;
           const key = normalizeUrl(link.url);
           // A link any page words as an action ("Log out", or rel=nofollow on
           // action text) is never probed, wherever else it appears.

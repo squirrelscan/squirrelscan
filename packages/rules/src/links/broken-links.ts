@@ -6,7 +6,7 @@ import {
   LINK_PROBE_HEAD_UNRELIABLE_ERROR,
   LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
 } from "@squirrelscan/core-contracts";
-import { normalizeUrl } from "@squirrelscan/utils";
+import { isCloudflareEmailProtectionUrl, normalizeUrl } from "@squirrelscan/utils";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 
 export const brokenLinksRule: Rule = {
@@ -37,14 +37,27 @@ export const brokenLinksRule: Rule = {
 
     // Collect all link targets and their sources
     const linkTargets = new Map<string, string[]>();
+    // pub#811: Cloudflare's email obfuscation rewrites `mailto:` links to
+    // `/cdn-cgi/l/email-protection#<hex>`, which answers an error status but
+    // is an email address, not a page. The parser carries them as contact
+    // links; a parse stored before it did still has them here. Counted either
+    // way, so the skip is visible.
+    let emailProtectionLinks = 0;
 
     for (const page of pages) {
       for (const link of page.parsed.links) {
         if (link.isInternal && link.url) {
+          if (isCloudflareEmailProtectionUrl(link.url)) {
+            emailProtectionLinks++;
+            continue;
+          }
           const sources = linkTargets.get(link.url) || [];
           sources.push(page.url);
           linkTargets.set(link.url, sources);
         }
+      }
+      for (const contact of page.parsed.contactLinks ?? []) {
+        if (contact.obfuscated === "cloudflare") emailProtectionLinks++;
       }
     }
 
@@ -191,6 +204,7 @@ export const brokenLinksRule: Rule = {
       unfetchedTargets: unfetchedTargets.size,
       probedTargets: probedTargets.size,
       notFetched: { ...notFetched },
+      ...(emailProtectionLinks > 0 ? { emailProtectionLinks } : {}),
     });
 
     if (brokenLinks.length > 0) {

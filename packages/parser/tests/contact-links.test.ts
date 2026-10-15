@@ -8,7 +8,9 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { extractCrawlableUrls, extractLinks } from "../src/extractors/links";
 import { parsePage } from "../src/html";
+import { parseDocument } from "../src/index";
 
 const URL = "https://example.com/contact";
 
@@ -79,5 +81,85 @@ describe("parsePage — contactLinks", () => {
     ).join("");
     const parsed = parsePage(page(anchors), URL);
     expect(parsed.contactLinks).toHaveLength(32);
+  });
+});
+
+// pub#811: Cloudflare's email obfuscation rewrites a `mailto:` link to
+// `/cdn-cgi/l/email-protection#<hex>` (and an address in the text to an anchor
+// carrying `data-cfemail`). Not a page: it is a contact affordance like the
+// `mailto:` it replaced, so it is carried here and kept out of the link graph.
+describe("parsePage — Cloudflare email-protection links (pub#811)", () => {
+  /** Cloudflare's encoding: a key byte, then each UTF-8 byte XOR the key, all hex. */
+  const encode = (text: string, key = 0x5a): string =>
+    [key, ...new TextEncoder().encode(text).map((b) => b ^ key)]
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+
+  test("an obfuscated mailto link is a contact link with the decoded address", () => {
+    const parsed = parsePage(
+      page(
+        `<a href="/cdn-cgi/l/email-protection#${encode("hi@example.com?subject=Hello")}">[email&#160;protected]</a>` +
+          `<a href="/about">about</a>`,
+      ),
+      URL,
+    );
+    expect(parsed.contactLinks).toEqual([
+      { scheme: "mailto", value: "hi@example.com", text: "[email\u00a0protected]", obfuscated: "cloudflare" },
+    ]);
+    expect(parsed.links.map((l) => l.url)).toEqual(["https://example.com/about"]);
+  });
+
+  test("an obfuscated address in the text reads its data-cfemail, on the anchor or inside it", () => {
+    const parsed = parsePage(
+      page(
+        `<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="${encode("a@example.com")}">[email&#160;protected]</a>` +
+          `<a href="/cdn-cgi/l/email-protection"><span class="__cf_email__" data-cfemail="${encode("b@example.com", 0x13)}">[email&#160;protected]</span></a>`,
+      ),
+      URL,
+    );
+    expect(parsed.contactLinks?.map((c) => [c.scheme, c.value, c.obfuscated])).toEqual([
+      ["mailto", "a@example.com", "cloudflare"],
+      ["mailto", "b@example.com", "cloudflare"],
+    ]);
+    expect(parsed.links).toEqual([]);
+  });
+
+  test("a payload that does not decode to an address is still a contact link, with no value", () => {
+    const parsed = parsePage(
+      page(`<a href="/cdn-cgi/l/email-protection#abcd">[email&#160;protected]</a>`),
+      URL,
+    );
+    expect(parsed.contactLinks).toEqual([
+      { scheme: "mailto", value: "", text: "[email\u00a0protected]", obfuscated: "cloudflare" },
+    ]);
+    expect(parsed.links).toEqual([]);
+  });
+
+  test("one on another host is not an external link either", () => {
+    const html = page(
+      `<a href="https://other.example/cdn-cgi/l/email-protection#${encode("x@other.example")}">mail</a>` +
+        `<a href="https://other.example/page">page</a>`,
+    );
+    const parsed = parsePage(html, URL);
+    expect(parsed.links.map((l) => l.url)).toEqual(["https://other.example/page"]);
+    expect(parsed.contactLinks?.map((c) => c.value)).toEqual(["x@other.example"]);
+    const doc = parseDocument(html);
+    expect(extractLinks(doc, URL).map((l) => l.href)).toEqual(["https://other.example/page"]);
+  });
+
+  test("the crawl never queues one", () => {
+    const doc = parseDocument(
+      page(`<a href="/cdn-cgi/l/email-protection#abcd">mail</a><a href="/about">about</a>`),
+    );
+    expect(extractCrawlableUrls(doc, URL)).toEqual(["https://example.com/about"]);
+    expect(extractLinks(doc, URL).map((l) => l.href)).toEqual(["https://example.com/about"]);
+  });
+
+  test("other /cdn-cgi/ links are links: an image-resizing URL is a real resource", () => {
+    const parsed = parsePage(page(`<a href="/cdn-cgi/image/width=1200/a.jpg">full size</a>`), URL);
+    expect(parsed.links.map((l) => l.url)).toEqual([
+      "https://example.com/cdn-cgi/image/width=1200/a.jpg",
+    ]);
+    expect(parsed.contactLinks).toEqual([]);
   });
 });

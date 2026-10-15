@@ -6,7 +6,9 @@ import { clampItemString } from "@squirrelscan/core-contracts/clamp";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import {
   coerceSchemelessUrl,
+  decodeCloudflareEmail,
   getAttrCI,
+  isCloudflareEmailProtectionUrl,
   querySelectorAllOutsideNoscript,
   shouldSkipUrl,
 } from "@squirrelscan/utils";
@@ -179,6 +181,8 @@ export function extractLinks(doc: Document, baseUrl: string): LinkData[] {
     try {
       const normalizedHref = coerceSchemelessUrl(href.trim());
       const url = new URL(normalizedHref, baseUrl).toString();
+      // pub#811: an obfuscated email address, carried in `contactLinks`.
+      if (isCloudflareEmailProtectionUrl(url)) continue;
       const text = (anchor as Element).textContent?.trim() ?? "";
       const isInternal = new URL(url).hostname === baseUrlObj.hostname;
       // Whether the anchor sat in sitewide chrome (#109). This extractor is the
@@ -213,16 +217,26 @@ const MAX_CONTACT_LINKS = 32;
  * declared contact details though, so site rules that compare contact data across
  * pages (local/nap-consistency) need them somewhere, and re-walking the DOM is
  * not an option for a site rule — by then only the ParsedPage survives.
+ *
+ * pub#811: so are Cloudflare email-protection links, the `mailto:` links (and
+ * addresses in the text) Cloudflare's email obfuscation rewrote. Each is
+ * carried as the `mailto:` it stands for, flagged `obfuscated`.
  */
 export function extractContactLinks(doc: Document): ContactLinkData[] {
   const contacts: ContactLinkData[] = [];
 
-  for (const anchor of doc.querySelectorAll('a[href^="tel:" i], a[href^="mailto:" i]')) {
+  for (const anchor of doc.querySelectorAll(
+    'a[href^="tel:" i], a[href^="mailto:" i], a[href*="/cdn-cgi/l/email-protection" i]',
+  )) {
     if (contacts.length >= MAX_CONTACT_LINKS) break;
     const href = (anchor as Element).getAttribute("href");
     if (!href) continue;
 
     const trimmed = href.trim();
+    if (isCloudflareEmailProtectionUrl(trimmed)) {
+      contacts.push(cloudflareEmailContact(anchor as Element, trimmed));
+      continue;
+    }
     const colon = trimmed.indexOf(":");
     const scheme = trimmed.slice(0, colon).toLowerCase();
     if (scheme !== "tel" && scheme !== "mailto") continue;
@@ -236,6 +250,28 @@ export function extractContactLinks(doc: Document): ContactLinkData[] {
   }
 
   return contacts;
+}
+
+/**
+ * A Cloudflare email-protection anchor as the `mailto:` it stands for. The
+ * payload is the link's `#<hex>` (a rewritten `mailto:` link) or a
+ * `data-cfemail` on the anchor or inside it (a rewritten address in the text).
+ */
+function cloudflareEmailContact(anchor: Element, href: string): ContactLinkData {
+  const hash = href.indexOf("#");
+  const payload =
+    (hash >= 0 ? href.slice(hash + 1) : "") ||
+    anchor.getAttribute("data-cfemail") ||
+    anchor.querySelector("[data-cfemail]")?.getAttribute("data-cfemail") ||
+    "";
+  const decoded = decodeCloudflareEmail(payload.trim());
+  return {
+    scheme: "mailto",
+    // The same params as a plain `mailto:` are stripped (`?subject=…`).
+    value: decoded?.includes("@") ? (decoded.split(/[?;]/)[0] ?? "") : "",
+    text: anchor.textContent?.trim() ?? "",
+    obfuscated: "cloudflare",
+  };
 }
 
 // Extract images from parsed document

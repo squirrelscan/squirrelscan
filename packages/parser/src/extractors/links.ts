@@ -3,7 +3,11 @@
 
 import type { Document, Element } from "linkedom";
 
-import { coerceSchemelessUrl, hasNonCrawlableUrlScheme } from "@squirrelscan/utils";
+import {
+  coerceSchemelessUrl,
+  hasNonCrawlableUrlScheme,
+  isCloudflareEmailProtectionUrl,
+} from "@squirrelscan/utils";
 import { Effect } from "effect";
 
 // Trace stubs (CLI wraps with rich logger)
@@ -127,6 +131,9 @@ export function extractLinks(doc: Document, baseUrl: string): ExtractedLink[] {
     try {
       const resolvedUrl = new URL(normalizedHref, baseUrl);
       const url = resolvedUrl.toString();
+      // pub#811: an obfuscated email address, not a page: never crawled or
+      // checked, on this site or another (`extractContactLinks` carries it).
+      if (isCloudflareEmailProtectionUrl(url)) continue;
       const text = element.textContent?.trim() ?? "";
       const isInternal = resolvedUrl.hostname === baseUrlObj.hostname;
       const position = detectLinkPosition(element);
