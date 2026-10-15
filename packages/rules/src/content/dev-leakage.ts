@@ -11,6 +11,7 @@ import { getDomain } from "tldts";
 import type { Element } from "linkedom";
 
 import { SCAN_TRUNCATED_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+import { isNonPublicHostname } from "@squirrelscan/utils/non-public-host";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import { getRenderedProseText } from "./text-content";
@@ -74,6 +75,7 @@ const MAX_SAMPLE_LENGTH = 120;
 export type DevLeakageKind =
   | "localhost"
   | "private-ip"
+  | "local-name"
   | "dev-subdomain"
   | "preview-host"
   | "insecure-self-link";
@@ -166,6 +168,29 @@ export function isPrivateIpHost(host: string): boolean {
   return a === 172 && b >= 16 && b <= 31;
 }
 
+/**
+ * Zones reachable outside public DNS, so a name under one is not a local
+ * address: `.onion` (Tor, RFC 7686) and `.alt` (non-DNS namespaces, RFC 9476).
+ */
+const NON_DNS_ZONES = ["onion", "alt"] as const;
+
+/**
+ * pub#813: a name only a local machine or network resolves: a Valet or Herd
+ * site (`myapp.test`), `staging.example`, `x.invalid`, `box.local`, `nas.lan`,
+ * `db.internal`, a `.localdomain` or `.home` name, or a single-label host
+ * (`intranet`). The one local/private classifier decides (`isNonPublicHostname`,
+ * which also keeps these links from being requested), minus `.onion` and
+ * `.alt`. Address literals are left to the address families above.
+ */
+export function isLocalOnlyName(host: string): boolean {
+  let end = host.length;
+  while (end > 0 && host.charCodeAt(end - 1) === 0x2e) end--;
+  const name = host.slice(0, end).toLowerCase();
+  if (name.includes(":") || name.startsWith("[") || ipv4Octets(name)) return false;
+  if (NON_DNS_ZONES.some((zone) => name === zone || name.endsWith(`.${zone}`))) return false;
+  return isNonPublicHostname(name);
+}
+
 /** True for the platform's own bare domain, e.g. `pages.dev` itself. */
 export function isPreviewSuffix(host: string): boolean {
   return PREVIEW_HOST_SUFFIXES.some((s) => host === s);
@@ -221,6 +246,9 @@ export function looksLikeOwnPreview(host: string, apexLabel: string): boolean {
 /** True for a host that means "this audit is not of a production origin". */
 export function isNonProductionSeedHost(host: string): boolean {
   if (isLoopbackHost(host) || isPrivateIpHost(host) || isPreviewHost(host)) return true;
+  // pub#813: an audit of `myapp.test` or `box.local` is of a local site, and
+  // its links to other local names are its own.
+  if (isLocalOnlyName(host)) return true;
   // A seed that is a tier of its OWN apex: auditing `staging.example.com` is
   // auditing staging, and every internal link on it is a staging link.
   //
@@ -243,6 +271,9 @@ export function classifyHost(
     return { kind: "preview-host", own: looksLikeOwnPreview(host, site.apexLabel) };
   }
   if (isDevSubdomainOf(host, site.apex)) return { kind: "dev-subdomain", own: true };
+  // Not `own`: a developer's local site could be this site's or anyone's, so it
+  // warns rather than fails, like a stranger's preview.
+  if (isLocalOnlyName(host)) return { kind: "local-name", own: false };
   return null;
 }
 
@@ -469,6 +500,9 @@ export function scanDevHostsInText(
       // Cloudflare, `abc123.pages.dev` names something that will stop resolving.
       // The attribute path has no such reading, so this lives here.
       if (classified.kind === "preview-host" && isPreviewSuffix(m.host)) continue;
+      // A local name in copy counts only written as a URL: `config.local` and
+      // `app.test` are file names as often as hosts (pub#813).
+      if (classified.kind === "local-name" && m.scheme === undefined) continue;
       add(classified.kind, classified.own, m);
       if (hits.length >= MAX_HITS_PER_KIND * 2) {
         truncated = true;

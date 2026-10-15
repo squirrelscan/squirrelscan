@@ -38,6 +38,7 @@ import { fetchUndecoded } from "@squirrelscan/utils/response-body";
 
 import {
   classifyHost,
+  isLocalOnlyName,
   isLoopbackHost,
   isNonProductionSeedHost,
   isPrivateIpHost,
@@ -285,7 +286,9 @@ const TUNNEL_SUFFIXES = ["ngrok.io", "ngrok.app", "ngrok-free.app", "trycloudfla
 
 function localityOf(host: string | null): Locality {
   if (!host) return "production";
-  if (isLoopbackHost(host) || isPrivateIpHost(host)) return "network";
+  // pub#813: a local-only name (`myapp.test`, `box.local`) is the user's own
+  // machine or network too.
+  if (isLoopbackHost(host) || isPrivateIpHost(host) || isLocalOnlyName(host)) return "network";
   if (TUNNEL_SUFFIXES.some((suffix) => host === suffix || host.endsWith(`.${suffix}`))) {
     return "network";
   }
