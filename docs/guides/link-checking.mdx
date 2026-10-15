@@ -45,7 +45,12 @@ Where the check runs depends on how you audit:
 
 ### What it costs
 
-A link Perch checks costs 1 credit: 1 per distinct external link it answers for the audit, at most 1 per page of the audit's page limit. That is the same for a cloud audit and a signed-in CLI audit. Everything else is free: internal links, every link a signed-out audit checks, a link checked from your machine at Quick with `--external-links`, and a link Perch could not answer in time, which the CLI checks itself. The audit's estimate includes the link checks before it starts. See [Credits and pricing](/cloud/credits).
+External link checks cost credits, at most 1 per page of the audit's page limit:
+
+- **A cloud audit** pays 1 credit for each distinct external link it checks, whatever the answer. A link the audit has already paid for is not charged again.
+- **A signed-in CLI audit** pays 1 credit for each distinct external link Perch answers. A link Perch leaves unanswered is not charged: the CLI checks it from your machine for free.
+
+Everything else is free: internal links, every link a signed-out audit checks, and a link checked from your machine at Quick with `--external-links`. The audit's estimate includes the link checks before it starts. See [Credits and pricing](/cloud/credits).
 
 Like the internal check, the external check never requests a link that looks like an action or carries a token: a newsletter's one-click unsubscribe, a magic sign-in link, a signed download. It never follows a redirect into one either. See [What the external link check never requests](/configuration/external-links#what-the-external-link-check-never-requests).
 
@@ -86,7 +91,7 @@ When a check did not run, squirrelscan says so rather than reporting the rule as
 | `external-links-over-cap` | The audit found more external links than its limit. The most-linked were checked. |
 | `link-targets-not-fetched` | The audit did not follow links, and some internal link targets were fetched neither by the crawl nor by the status-only check: it was off, over its limit, skipped the targets, got no answer, or could not be trusted because the site answers status-only requests with errors. |
 
-In the cloud's issue tracker, an open broken-link issue stays open while an audit could not check links for one of the reasons above. A link listed as status unverifiable does not keep it open.
+In the cloud's issue tracker, an open broken-link issue stays open while an audit could not check links for one of the reasons above.
 
 ## Coming soon: getting past the last walls
 
