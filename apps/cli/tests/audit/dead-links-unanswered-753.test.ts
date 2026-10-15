@@ -71,6 +71,7 @@ async function checkLinks(urls: string[], pick: (urls: string[]) => string[]) {
     config,
     auditId: "audit-1",
     externalLinkCount: urls.length,
+    getRunId: () => "run-1",
   });
   expect(checker).not.toBeNull();
 

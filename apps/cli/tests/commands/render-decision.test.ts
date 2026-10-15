@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   consentEstimateLine,
+  linkPricingNoticeDue,
   estimateBalanceAfter,
   formatCloudSpendSummary,
   phaseTimingsFromError,
@@ -9,6 +10,7 @@ import {
   resolveExplicitRenderMode,
   validateAuditFlags,
 } from "../../src/cli/commands/audit";
+import { LINK_PRICING_NOTICE } from "../../src/lib/upgrade";
 
 describe("phaseTimingsFromError (#871)", () => {
   test("extracts phaseTimingsMs from a well-formed CommandError.details", () => {
@@ -421,8 +423,23 @@ describe("consentEstimateLine (#191 up-front cost)", () => {
     expect(line).toContain("however the page is fetched");
     expect(line).toContain("up to 1000 credits/audit");
     expect(line).toContain("17,000"); // locale-formatted balance
-    // #785: the CLI's own link checks are free, so no charge sits outside it.
     expect(line).not.toContain("cloud browser");
+    // No external link reserve unless the audit's links go to the cloud.
+    expect(line).not.toContain("external links");
+  });
+
+  test("#801: an audit whose links the cloud checks reserves one link per page", () => {
+    const line = consentEstimateLine({
+      maxPages: 25,
+      balance: 17000,
+      maxCredits: 1000,
+      externalLinks: true,
+    });
+    // 50 base + 2 × 25 pages + 1 × 25 links.
+    expect(line).toContain("About 125 credits");
+    expect(line).toContain(
+      "up to 25 for external links (1 each the cloud checks, at most 1 per page)"
+    );
   });
 
   test("omits the cap note when uncapped (max_credits_per_audit = 0)", () => {
@@ -488,5 +505,47 @@ describe("validateAuditFlags", () => {
     expect(validateAuditFlags({ offline: true })).toBeNull();
     expect(validateAuditFlags({ noPublish: true })).toBeNull();
     expect(validateAuditFlags({})).toBeNull();
+  });
+});
+
+describe("the one-time link pricing notice (#801)", () => {
+  test("only for an audit that registers and checks external links, once", () => {
+    expect(
+      linkPricingNoticeDue({
+        registers: true,
+        externalLinks: true,
+        shown: false,
+      })
+    ).toBe(true);
+    expect(
+      linkPricingNoticeDue({
+        registers: true,
+        externalLinks: true,
+        shown: true,
+      })
+    ).toBe(false);
+    expect(
+      linkPricingNoticeDue({
+        registers: true,
+        externalLinks: false,
+        shown: false,
+      })
+    ).toBe(false);
+    expect(
+      linkPricingNoticeDue({
+        registers: false,
+        externalLinks: true,
+        shown: false,
+      })
+    ).toBe(false);
+  });
+
+  test("names the price and the way out, and never offers --offline (which checks no links)", () => {
+    expect(LINK_PRICING_NOTICE).toContain(
+      "1 per external link the cloud checks for this audit"
+    );
+    expect(LINK_PRICING_NOTICE).toContain("at most 1 per audited page");
+    expect(LINK_PRICING_NOTICE).toContain("--no-external-links");
+    expect(LINK_PRICING_NOTICE).not.toContain("--offline");
   });
 });

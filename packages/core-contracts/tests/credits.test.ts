@@ -1,5 +1,5 @@
-// Pricing v11 (#2290, #2291): 50 base + 2 per audited page, plus 1 per external
-// link a cloud audit checks. These pin the shared pricing every surface quotes
+// Pricing v12 (#2290, #2291, #801): 50 base + 2 per audited page, plus 1 per
+// external link the cloud checks for an audit, cloud or signed-in CLI. These pin the shared pricing every surface quotes
 // from (CLI preflight, dashboard estimate, the API's run cap and gate).
 
 import { describe, expect, test } from "bun:test";
@@ -16,9 +16,9 @@ import {
   minimumAuditCredits,
 } from "../src/credits";
 
-describe("pricing v11", () => {
-  test("the version moved with the price", () => {
-    expect(CREDIT_PRICING_VERSION).toBe(11);
+describe("pricing v12", () => {
+  test("the version moved with the price: v12 bills a signed-in CLI's cloud link checks (#801)", () => {
+    expect(CREDIT_PRICING_VERSION).toBe(12);
   });
 
   test("50 base, 2 per audited page, 1 per external link", () => {
@@ -32,8 +32,9 @@ describe("pricing v11", () => {
     expect(computeCost("render_cached", 3)).toBe(6);
   });
 
-  test("a signed-in CLI's own link checks stay free", () => {
+  test("a link-check call with no audit run stays free; an audit's bills external_link", () => {
     expect(computeCost("dead_links", 500)).toBe(0);
+    expect(computeCost("external_link", 5)).toBe(5);
   });
 });
 

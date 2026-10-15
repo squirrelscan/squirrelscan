@@ -51,8 +51,8 @@ Balance: 2340 credits (2000 monthly + 340 purchased)
 Pricing:
   audit                 50 base + 2 per audited page
                            (analysis, tech detection, publishing included)
-  external links         1 per link a cloud audit checks
-                           (internal links and the CLI's own checks are free)
+  external links         1 per link the cloud checks for an audit, at most 1 per page
+                           (internal links, and links checked from your machine, are free)
   content_gaps          25 per run
   issue_enrich           3 per issue
   keyword_gaps          25 per run
@@ -70,15 +70,17 @@ Every signed-in audit has one flat price:
 |------|------|-------|
 | Audit base | 50 per audit | covers every included service below |
 | Audited page | 2 per page | every page the report shows as audited, however it was fetched: plain HTTP, a [cloud browser render](/cloud/rendering), the local or cloud render cache, a `304 Not Modified`, or a plain fetch after a render failed |
-| External link check | 1 per link | cloud audits only: each distinct external destination the cloud checks, whatever status it returns |
+| External link check | 1 per link | each distinct external destination the cloud checks for an audit, cloud or signed-in CLI, whatever status it returns, at most 1 per audited page |
 
 A page is charged once per audit. Rendering it, serving it from a cache, or retrying a request never adds a second charge, and the same external link on twenty pages is one check. Run the audit again and it is charged again: it is a new audit.
 
 The page count is the one in the report's coverage line ("Coverage: audited 12 of 12 known pages"), or its page count when there is no coverage line. A URL the crawl fetched but could not audit, such as a `404` kept for its broken-link finding or a `500`, is not an audited page. A cloud render paid for one while the audit ran is refunded when the audit completes, so an audit's page charge always matches the pages its report shows. A re-audit is only charged for the pages it fetched itself: pages a [smart audit](/configuration#smart-audits) carries forward from an earlier audit are not charged again.
 
-Internal links (on the site you are auditing) are always free. The external-link charge applies to [cloud audits](/guides/cloud-audits) with external link checking turned on, which the surface and full [audit levels](/guides/audit-levels) do and quick does not.
+Internal links (on the site you are auditing) are always free. The external-link charge applies to any audit with external link checking turned on, which the surface and full [audit levels](/guides/audit-levels) do and quick does not: a [cloud audit](/guides/cloud-audits), and a signed-in `squirrel audit`.
 
-The links the CLI checks for an audit you run with `squirrel audit` are free too. At the surface and full levels, a signed-in CLI audit sends its external links to the cloud's [dead-link check](/rules/links/dead-links), which answers the ones it can within a time limit and leaves the rest. The CLI checks every link the cloud left unanswered on your machine, so nothing is charged. Signed out, with `--offline`, or at the quick level, the CLI checks links on your machine and nothing is charged.
+A signed-in `squirrel audit` sends its external links to the cloud's [dead-link check](/rules/links/dead-links), which answers the ones it can within a time limit, and pays 1 credit for each distinct link the cloud answers, at most 1 per audited page. The CLI checks every link the cloud left unanswered on your machine, and those are free. Its estimate before the audit includes the link reserve. Signed out, or at the quick level, the CLI checks links on your machine and nothing is charged; `--offline` checks no external links at all.
+
+Signed-in CLI link checks were free before this change. A CLI from before it still gets free cloud link checks until 2026-11-12; from then it checks its links on your machine until you run `squirrel self update`.
 
 The base includes everything else: AI page analysis ([`ai/llm-parsability`](/rules/ai/llm-parsability), [`ai/page-type-match`](/rules/ai/page-type-match)), [authority signals](/rules/eeat/authority-signals), the [Blocking check](/rules/adblock), [technology detection](/cloud/technologies), [site metadata](/cloud/site-metadata), the [editor's summary](/cloud/editor-summary), and publishing the report. None of these are charged separately.
 

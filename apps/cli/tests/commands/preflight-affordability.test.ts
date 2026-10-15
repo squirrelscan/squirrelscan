@@ -139,3 +139,43 @@ describe("computePreflightAffordability (#1169, #2290)", () => {
     expect(r.maxPages).toBe(0);
   });
 });
+
+describe("computePreflightAffordability with cloud link checks (#801)", () => {
+  test("each page of the cap also reserves one external link: 19 pages → 107", () => {
+    const r = computePreflightAffordability({
+      balance: 500,
+      maxPages: 19,
+      maxCreditsPerAudit: 1000,
+      topUpUrl: TOP_UP,
+      cloudExternalLinks: true,
+    });
+    expect(r.estimate).toBe(50 + 19 * 3);
+    expect(r.clamped).toBe(false);
+  });
+
+  test("the balance fits fewer pages when each carries a link, and the notice names the link price", () => {
+    const r = computePreflightAffordability({
+      balance: 80,
+      maxPages: 100,
+      maxCreditsPerAudit: 0,
+      topUpUrl: TOP_UP,
+      cloudExternalLinks: true,
+    });
+    // (80 - 50) / 3 = 10 pages, where pages alone would fit 15.
+    expect(r.maxPages).toBe(10);
+    expect(r.limitedBy).toBe("balance");
+    expect(r.noticeLines[0]).toContain("up to 1 per page for external links");
+  });
+
+  test("a balance that covers a page but not its link fits no page at all", () => {
+    const r = computePreflightAffordability({
+      balance: 52,
+      maxPages: 10,
+      maxCreditsPerAudit: 0,
+      topUpUrl: TOP_UP,
+      cloudExternalLinks: true,
+    });
+    expect(r.maxPages).toBe(0);
+    expect(r.limitedBy).toBe("balance");
+  });
+});

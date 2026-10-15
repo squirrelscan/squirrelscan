@@ -19,6 +19,7 @@ import {
   computeCost,
   CREDIT_PRICING_VERSION,
   estimateAuditCap,
+  externalLinkBudget,
   minimumAuditCredits,
 } from "@squirrelscan/core-contracts";
 import { AUDIT_LEVEL_PRESETS } from "@squirrelscan/core-contracts/audit-levels";
@@ -110,6 +111,8 @@ import {
   AUDIT_BASE_CREDITS,
   AUDIT_PAGE_CREDITS,
   AUDIT_PRICING_LINE,
+  EXTERNAL_LINK_CREDITS,
+  LINK_PRICING_NOTICE,
   MIN_AUDIT_CREDITS,
   offerPitchLines,
   proPitchLines,
@@ -191,6 +194,8 @@ export interface CloudConsentEstimate {
   maxCredits: number;
   /** Unmetered plan (enterprise): the balance sentence reads "unlimited". */
   unlimited?: boolean;
+  /** The audit's external links go to the cloud link checker (pricing v12, #801). */
+  externalLinks?: boolean;
 }
 
 /** The single up-front spend disclosure (pricing v11, #2290): flat audit base
@@ -207,7 +212,27 @@ export function consentEstimateLine(est: CloudConsentEstimate): string {
       ? ` Balance: ${est.balance.toLocaleString("en-US")} credits.`
       : "";
   const pages = est.maxPages === 1 ? "page" : "pages";
-  return `About ${estimateAuditCap({ maxPages: est.maxPages })} credits: ${base} audit base + ${pagesEst} for up to ${est.maxPages} audited ${pages} (${AUDIT_PAGE_CREDITS} each, however the page is fetched), all analysis included${cap}.${bal}`;
+  const links = est.externalLinks
+    ? ` + up to ${computeCost("external_link", externalLinkBudget(est.maxPages))} for external links (${EXTERNAL_LINK_CREDITS} each the cloud checks, at most 1 per page)`
+    : "";
+  const total = estimateAuditCap({
+    maxPages: est.maxPages,
+    cloudExternalLinks: est.externalLinks === true,
+  });
+  return `About ${total} credits: ${base} audit base + ${pagesEst} for up to ${est.maxPages} audited ${pages} (${AUDIT_PAGE_CREDITS} each, however the page is fetched)${links}, all analysis included${cap}.${bal}`;
+}
+
+/**
+ * #801: whether this audit prints the one-time notice that a signed-in audit's
+ * cloud link checks now cost credits: it registers (so it is billed), it checks
+ * external links, and the notice has not been shown on this machine.
+ */
+export function linkPricingNoticeDue(opts: {
+  registers: boolean;
+  externalLinks: boolean;
+  shown: boolean;
+}): boolean {
+  return opts.registers && opts.externalLinks && !opts.shown;
 }
 
 /** #1169 / #2290 preflight: what the audit will cost and the page cap its credits can pay for. */
@@ -257,17 +282,30 @@ export function computePreflightAffordability(opts: {
    * a real answer to a clamped audit, but only once it has a date on it.
    */
   resetAt?: string | null;
+  /**
+   * The audit's external links go to the cloud link checker (pricing v12,
+   * #801): each page of the cap also reserves one external link's credit.
+   */
+  cloudExternalLinks?: boolean;
 }): PreflightAffordability {
   const base = computeCost("audit_base", 1);
+  const links = opts.cloudExternalLinks === true;
   const budget = clampAuditPages({
     maxPages: opts.maxPages,
     balance: opts.balance,
     unlimited: opts.unlimited,
     cap: opts.maxCreditsPerAudit,
+    cloudExternalLinks: links,
   });
-  const pagesCost = computeCost("audit_page", budget.maxPages);
+  const pagesCost =
+    computeCost("audit_page", budget.maxPages) +
+    (links && budget.maxPages > 0
+      ? computeCost("external_link", externalLinkBudget(budget.maxPages))
+      : 0);
   const estimate = base + pagesCost;
-  const pricing = `${base} base + ${AUDIT_PAGE_CREDITS} per audited page`;
+  const pricing = links
+    ? `${base} base + ${AUDIT_PAGE_CREDITS} per audited page + up to ${EXTERNAL_LINK_CREDITS} per page for external links`
+    : `${base} base + ${AUDIT_PAGE_CREDITS} per audited page`;
   const requested = budget.requestedMaxPages.toLocaleString("en-US");
   const covered = budget.maxPages.toLocaleString("en-US");
   const stopsAt = budget.maxPages === 1 ? "1 page" : `${covered} pages`;
@@ -1895,15 +1933,21 @@ export const audit = defineCommand({
           topUpUrl: upgradeOffer?.url ?? upgradeUrl("cli-audit"),
           unlimited: unlimitedCredits,
           resetAt: creditsResetAt,
+          // #801: the cloud bills this audit's link checks, so each page of
+          // the cap reserves one external link's credit too.
+          cloudExternalLinks: auditLevel.settings.externalLinks,
         });
         if (preflight.maxPages === 0) {
-          // Only the user's own cap can get here: canStartCloudAudit already
-          // guaranteed the balance covers one page. Their cap forbids any
-          // charged audit at all, so run the free local audit instead.
+          // The user's own cap forbids any charged audit at all, or (#801) the
+          // balance covers a page but not its external link: run the free
+          // local audit instead.
+          const needed = minimumAuditCredits(auditLevel.settings.externalLinks);
           log("");
           log(
             fmt.yellow(
-              `⚠ [cloud] max_credits_per_audit = ${config.cloud.max_credits_per_audit} is below the ${MIN_AUDIT_CREDITS} credits a one-page audit needs, running local-only.`
+              preflight.limitedBy === "balance"
+                ? `⚠ Your balance of ${startingBalance.toLocaleString("en-US")} credits is below the ${needed} credits a one-page audit with external link checks needs, running local-only.`
+                : `⚠ [cloud] max_credits_per_audit = ${config.cloud.max_credits_per_audit} is below the ${needed} credits a one-page audit needs, running local-only.`
             )
           );
           signedIn = false;
@@ -1919,6 +1963,25 @@ export const audit = defineCommand({
           log(fmt.yellow(preflight.noticeLines[0]!));
           log(fmt.dim(preflight.noticeLines[1]!));
         }
+      }
+
+      // #801: from pricing v12 the cloud bills a signed-in audit's link checks;
+      // every earlier release said they were free. Said once, on the first
+      // audit that will be billed for them.
+      if (
+        linkPricingNoticeDue({
+          registers: resolveRegisterDecision({
+            signedIn,
+            offline: !!args.offline,
+            nonPublicHost: !!nonPublicHost,
+          }),
+          externalLinks: auditLevel.settings.externalLinks,
+          shown: effectiveSettings?.link_pricing_notice_shown === true,
+        })
+      ) {
+        log(fmt.dim(LINK_PRICING_NOTICE));
+        // Non-fatal: a failed write just shows the notice again next run.
+        updateSettings({ link_pricing_notice_shown: true });
       }
 
       // Resolve the render strategy (#294). `off`/`auto`/`all` is funneled into
@@ -1988,6 +2051,7 @@ export const audit = defineCommand({
             balance: startingBalance,
             maxCredits: config.cloud.max_credits_per_audit,
             unlimited: unlimitedCredits,
+            externalLinks: auditLevel.settings.externalLinks,
           },
         });
 

@@ -30,7 +30,7 @@ const PRO = getPlan("starter");
 export const AUDIT_BASE_CREDITS = computeCost("audit_base", 1);
 /** What every audited page costs, however it was fetched (#2290). */
 export const AUDIT_PAGE_CREDITS = computeCost("audit_page", 1);
-/** What one external link checked by a cloud audit costs (#2291). */
+/** What one external link the cloud checks for an audit costs, cloud or signed-in CLI (#2291, #801). */
 export const EXTERNAL_LINK_CREDITS = computeCost("external_link", 1);
 /** Cheapest possible audit (base + one page): a balance under this can buy no cloud audit at all. */
 export const MIN_AUDIT_CREDITS = minimumAuditCredits();
@@ -81,7 +81,14 @@ export function proPitchLines(
 }
 
 /** What an audit costs, stated in the same words everywhere. */
-export const AUDIT_PRICING_LINE = `A signed-in audit costs ${AUDIT_BASE_CREDITS} credits base plus ${AUDIT_PAGE_CREDITS} per audited page; a cloud audit also pays ${EXTERNAL_LINK_CREDITS} per external link it checks.`;
+export const AUDIT_PRICING_LINE = `A signed-in audit costs ${AUDIT_BASE_CREDITS} credits base plus ${AUDIT_PAGE_CREDITS} per audited page, plus ${EXTERNAL_LINK_CREDITS} per external link the cloud checks for it (at most 1 per page).`;
+
+/**
+ * The one-time notice the first signed-in audit with external link checks
+ * prints after pricing v12 (#801): a CLI audit's cloud link checks used to be
+ * free, and every earlier release said so.
+ */
+export const LINK_PRICING_NOTICE = `Link checks now cost credits: ${EXTERNAL_LINK_CREDITS} per external link the cloud checks for this audit, at most 1 per audited page, the same as a cloud audit. Links it can't answer in time are checked from this machine for free. Skip link checks with --no-external-links.`;
 
 /**
  * The upgrade pitch built from the SERVER's offer (#2183).

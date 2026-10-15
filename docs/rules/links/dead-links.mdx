@@ -3,7 +3,7 @@ title: "Cloud dead-link checking: the shared external link cache"
 description: "Checking every external link from your machine is slow and rude to the sites you link to. The cloud service checks against a shared cache instead."
 ---
 
-<Note>**Cloud rule** - requires login (`squirrel auth login`). **Free for audits you run with the CLI.** In a [cloud audit](/guides/cloud-audits) with external link checking on, each distinct external link costs 1 credit, retries and browser escalation included. Internal links are always free. Skipped when not logged in (external links are then checked locally as usual). See [Credits and pricing](/cloud/credits).</Note>
+<Note>**Cloud rule** - requires login (`squirrel auth login`). In an audit with external link checking on, a [cloud audit](/guides/cloud-audits) or a signed-in `squirrel audit`, each distinct external link the service checks costs 1 credit, at most one per audited page, retries and browser escalation included. Links the CLI checks on your machine are free. Internal links are always free. Skipped when not logged in (external links are then checked locally as usual). See [Credits and pricing](/cloud/credits).</Note>
 
 ## What the cloud dead-links service is
 
@@ -26,7 +26,7 @@ A link counts as dead on the same basis as `links/broken-external-links`: a fetc
 
 ## How to fix it
 
-Log in with `squirrel auth login` to use the service. The CLI's checks are free, so they do not produce a separate spend prompt; a cloud audit pays 1 credit per distinct external link it checks. Being logged out falls back to local per-link checking.
+Log in with `squirrel auth login` to use the service. A signed-in CLI audit pays 1 credit per distinct external link the service answers, at most one per audited page, the same as a cloud audit; its estimate before the audit includes them, and in a terminal a spend prompt appears when the links alone would pass `[cloud] confirm_threshold`. A link the service leaves unanswered is checked on your machine for free. Being logged out falls back to local per-link checking.
 
 The findings themselves are on `links/broken-external-links`. Fix them there.
 

@@ -2,7 +2,7 @@
 // Credit costs for cloud-enriched features. Bump CREDIT_PRICING_VERSION
 // whenever any cost or unit changes so consumers can detect drift.
 
-export const CREDIT_PRICING_VERSION = 11;
+export const CREDIT_PRICING_VERSION = 12;
 
 export interface CreditPrice {
   cost: number;
@@ -10,12 +10,15 @@ export interface CreditPrice {
   unit: "page" | "url" | "run" | "report" | "issue";
 }
 
-// Pricing v11 (#2290, #2291): an audit costs `audit_base` (50cr, debited at run
-// registration/dispatch) + `audit_page` (2cr per audited page, however the page
-// was obtained: plain HTTP, a browser render, the local or remote cache, a 304,
-// or a fallback after a failed render) + `external_link` (1cr per distinct
-// external destination OUR CLOUD checks during a cloud audit). Internal link
-// checks are free, and so are the checks a signed-in CLI runs for itself.
+// Pricing v12 (#2290, #2291, #801): an audit costs `audit_base` (50cr, debited
+// at run registration/dispatch) + `audit_page` (2cr per audited page, however
+// the page was obtained: plain HTTP, a browser render, the local or remote
+// cache, a 304, or a fallback after a failed render) + `external_link` (1cr per
+// distinct external destination our cloud link checker answers during an
+// audit, cloud or signed-in CLI, at most one per page of the page cap).
+// Internal link checks are free, and so are the checks the CLI runs from the
+// user's own machine (signed out, or a link the cloud did not answer). v11
+// left a signed-in CLI's cloud link checks free.
 // Every other service that runs inside an audit is folded into the base at cost
 // 0. The cost-0 keys STAY: the ledger keeps per-feature units for COGS
 // analytics, and the idempotency-keyed 0-debit rows keep the replay dedup that
@@ -29,8 +32,9 @@ export const CREDIT_COSTS = {
   // once, when its render is submitted; every other page is settled when the
   // run completes. Never stacked with a `render` charge for the same audit.
   audit_page: { cost: 2, per: 1, unit: "page" },
-  // One distinct external destination checked by the cloud during a cloud
-  // audit (#2291), whatever status it returns. HEAD/GET fallback, browser
+  // One distinct external destination the cloud checks during an audit
+  // (#2291), whatever status it returns: a cloud audit's, or a signed-in CLI
+  // audit's billed to its registered run (#801). HEAD/GET fallback, browser
   // escalation and retries never multiply it.
   external_link: { cost: 1, per: 1, unit: "url" },
   // A STANDALONE render: a render call that belongs to no in-flight audit run.
@@ -55,10 +59,11 @@ export const CREDIT_COSTS = {
   adblock_detect: { cost: 0, per: 1, unit: "run" },
   privacy_block: { cost: 0, per: 1, unit: "run" },
   site_metadata: { cost: 0, per: 1, unit: "run" },
-  // HEAD/GET link checks a signed-in CLI sends to the cloud dead-links service
-  // are free (#2291); a WAF-blocked link the service escalates to a browser
-  // render still bills as a standalone `render`. A cloud audit's checks bill
-  // `external_link` per destination instead, escalation included.
+  // Link checks sent to the cloud dead-links service with NO audit run (a CLI
+  // from before #801, or a caller outside an audit) are free; a WAF-blocked
+  // link the service escalates to a browser render still bills as a standalone
+  // `render`. An audit's checks, cloud or CLI, bill `external_link` per
+  // destination instead, escalation included.
   dead_links: { cost: 0, per: 100, unit: "url" },
   tech_detect: { cost: 0, per: 1, unit: "run" },
   editor_summary: { cost: 0, per: 1, unit: "run" },
@@ -86,9 +91,8 @@ export const EXTERNAL_LINK_BUDGET_PER_PAGE = 1;
 export interface AuditCostInput {
   maxPages: number;
   /**
-   * The cloud will check this audit's external links: a cloud audit with
-   * external link checking on. A CLI audit's link checks are free, so a CLI
-   * estimate leaves this unset.
+   * The cloud will check this audit's external links: an audit with external
+   * link checking on, cloud or signed-in CLI (#801).
    */
   cloudExternalLinks?: boolean;
 }

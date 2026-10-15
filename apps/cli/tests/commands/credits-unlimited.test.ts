@@ -183,9 +183,15 @@ describe("`squirrel credits` on a metered account (control)", () => {
     await runCredits();
     const text = output();
     expect(text).toContain("base + 2 per audited page");
-    expect(text).toContain("per link a cloud audit checks");
-    // #785: the CLI's own link checks are free, with no exception.
-    expect(text).toContain("internal links and the CLI's own checks are free)");
+    // #801: an audit's cloud link checks pay, CLI or cloud; what the CLI
+    // checks from the user's machine does not.
+    expect(text).toContain(
+      "per link the cloud checks for an audit, at most 1 per page"
+    );
+    expect(text).toContain(
+      "internal links, and links checked from your machine, are free)"
+    );
+    expect(text).not.toContain("the CLI's own checks are free");
     expect(text).not.toContain("cloud browser");
     expect(text).not.toContain("per rendered page");
     // Neither per-page feature is itemized again below the headline.

@@ -1429,7 +1429,7 @@ export async function runAudit(
       // Cloud bulk dead-link checks (shared global cache) when authed and
       // the links/dead-links rule is enabled; null → plain local checking.
       // Gated behind the SAME spend confirmation as STEP 2.4 prefetch so the
-      // dead_links charge (which happens here, before that confirm) can't be
+      // link-check charge (which happens here, before that confirm) can't be
       // a surprise: when the estimate exceeds [cloud].confirm_threshold and a
       // TTY confirm callback exists, the user is prompted first; a decline
       // falls back to local per-link checks.
@@ -1531,6 +1531,10 @@ export async function runAudit(
                       client: deadLinksClient,
                       config: mergedConfig,
                       auditId: crawlId,
+                      // #801: the cloud bills the checks to the registered run;
+                      // no run, no cloud checks (local, free).
+                      getRunId: options.getRunId,
+                      maxPages: mergedConfig.crawler.max_pages,
                       externalLinkCount: externalLinkUrls.size,
                       getBalance: deadLinksClient
                         ? async () =>
@@ -2101,11 +2105,12 @@ export async function runAudit(
         ...(deadLinksUnits > 0
           ? [
               {
-                service: "dead-links",
-                feature: "dead_links",
+                // Pricing v12 (#801): the cloud's link checks bill the run
+                // `external_link`, 1 per distinct link it answered.
+                service: "external links",
+                feature: "external_link",
                 units: deadLinksUnits,
-                // Accumulated per call — the server rounds ceil(urls/100)
-                // per call, so recomputing from total units would undercount.
+                // Accumulated per call: the server's own `charged` figure.
                 credits: deadLinksCredits,
               },
             ]

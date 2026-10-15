@@ -29,7 +29,7 @@ import {
   type CloudPrefetchResult,
   type ExternalCheckResult,
 } from "@squirrelscan/audit-engine";
-import { computeCost } from "@squirrelscan/core-contracts";
+import { computeCost, externalLinkBudget } from "@squirrelscan/core-contracts";
 import { SERVICE_LIMITS } from "@squirrelscan/core-contracts/limits";
 import {
   buildEditorSummaryRequest,
@@ -681,27 +681,27 @@ export async function runCloudPrefetchFromPayloads(
  * Build the cloud dead-links bulk checker for the external-links phase, or
  * null when cloud is off / logged out / the `links/dead-links` rule is not
  * enabled (its meta.cloud is the enable gate). Each call submits ≤200 urls.
- * A signed-in CLI's link checks are free (#2291: only a cloud audit pays per
- * external link), except a WAF-blocked link the service re-checks in a cloud
- * browser, billed at the render rate (squirrelscan/repo#2757); the server
- * reports whatever it did charge as `charged`.
+ * Pricing v12 (#801): each call carries the audit's registered run, and the
+ * server bills it 1 credit per distinct external link it answers, at most one
+ * per page of the run's page cap, the same as a cloud audit. What it leaves
+ * unanswered is checked locally and costs nothing. The server reports what it
+ * charged as `charged`.
  * Throwing (402/auth/network) is safe — the adapter falls back to local
  * per-link checks.
  */
 function buildDeadLinksBulkChecker(
   client: CloudServicesClient,
   auditId: string,
+  runId: string,
   onSpend?: (units: number, credits: number) => void
 ): ExternalBulkChecker {
   return async (urls) => {
-    const res = await client.deadLinks({ auditId, urls });
+    const res = await client.deadLinks({ auditId, urls, runId });
     // Only successful calls are counted client-side: the server refunds a
     // total provider failure, which throws above and is never counted here.
-    // Prefer the server's own figure; an older server omits it.
-    onSpend?.(
-      urls.length,
-      res.charged ?? computeCost("dead_links", urls.length)
-    );
+    // Prefer the server's own figure; an older server omits it, and charged
+    // nothing for a run then.
+    onSpend?.(urls.length, res.charged ?? 0);
     return new Map(
       res.results.map((r) => [
         r.url,
@@ -769,13 +769,15 @@ function countExternalLinks(siteContext: SiteContextPage[]): number {
 /**
  * Resolve the cloud dead-links bulk checker for the external-links phase,
  * applying the SAME spend-confirmation gate as the STEP 2.4 cloud prefetch so
- * the user is never surprise-charged for `dead_links`.
+ * the user is never surprise-charged for its link checks (`external_link`,
+ * pricing v12, #801).
  *
  * The dead-links charge happens in STEP 1.5, which runs BEFORE the prefetch
  * confirm in STEP 2.4 and lives outside its estimate + max_credits_per_audit
  * cap. Rather than reordering the external-links phase (its results feed rules
- * and storage), we gate the checker here: estimate `dead_links` credits from
- * the external link count, and when a TTY confirm callback exists and the
+ * and storage), we gate the checker here: estimate `external_link` credits
+ * from the external link count (at most one per page of the cap), and when a
+ * TTY confirm callback exists and the
  * estimate exceeds `confirm_threshold`, prompt BEFORE the phase. A decline (or
  * cloud off / logged out / rule not enabled) returns null → the adapter falls
  * back to plain local per-link checks, preserving the never-fail invariant.
@@ -805,6 +807,19 @@ export async function resolveDeadLinksBulkChecker(opts: {
    * dead-links spend into `report.cloudSpend`.
    */
   onSpend?: (units: number, credits: number) => void;
+  /**
+   * The audit's registered run (#801), which the cloud bills the checks to.
+   * Waits for registration. No run (an org API key, which cannot register
+   * one, or a failed registration) means no cloud link checks: the links are
+   * checked locally and nothing is charged.
+   */
+  getRunId?: () =>
+    | string
+    | undefined
+    | null
+    | Promise<string | undefined | null>;
+  /** The audit's page cap: the cloud bills at most one external link per page. */
+  maxPages?: number;
 }): Promise<ExternalBulkChecker | null> {
   const { client, config, auditId, confirm } = opts;
   if (!client || !config.cloud.enabled) return null;
@@ -817,7 +832,21 @@ export async function resolveDeadLinksBulkChecker(opts: {
     opts.externalLinkCount ?? countExternalLinks(opts.siteContext ?? []);
   if (linkCount === 0) return null;
 
-  const estimate = computeCost("dead_links", linkCount);
+  const runId = (await opts.getRunId?.()) ?? null;
+  if (!runId) {
+    logger.debug(
+      "dead-links: no registered run to bill the checks to; checking links locally"
+    );
+    return null;
+  }
+
+  // At most one billed link per page of the cap, the same rule the server
+  // applies to the run.
+  const billable =
+    opts.maxPages !== undefined && opts.maxPages > 0
+      ? Math.min(linkCount, externalLinkBudget(opts.maxPages))
+      : linkCount;
+  const estimate = computeCost("external_link", billable);
 
   // Mirror the prefetch confirm gate: only prompt above the threshold, and only
   // when a confirm callback is available (TTY). Non-TTY/--yes proceeds silently,
@@ -839,7 +868,7 @@ export async function resolveDeadLinksBulkChecker(opts: {
     if (!proceed) return null;
   }
 
-  return buildDeadLinksBulkChecker(client, auditId, opts.onSpend);
+  return buildDeadLinksBulkChecker(client, auditId, runId, opts.onSpend);
 }
 
 // ── Cloud technology detection (credited, report-only) ─────────────

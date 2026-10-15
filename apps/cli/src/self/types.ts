@@ -162,6 +162,10 @@ export const UserSettingsSchema = z.object({
   // null/undefined ⇒ not shown yet; "true" once shown so we don't repeat it.
   auto_publish_notice_shown: z.boolean().nullable().optional(),
 
+  // #801: one-time notice that a signed-in audit's cloud link checks now cost
+  // credits (pricing v12). null/undefined ⇒ not shown yet.
+  link_pricing_notice_shown: z.boolean().nullable().optional(),
+
   // #2182: ISO timestamp of the FIRST report this install put in the dashboard,
   // written by both publish paths (auto-publish in `audit`, and `report
   // --publish`). Its only job is to answer "has this user ever published"

@@ -111,8 +111,8 @@ export const credits = defineCommand({
       }
       console.log("");
       console.log("Pricing:");
-      // Pricing v11 (#2290, #2291): flat headline (base + per audited page,
-      // plus external links a cloud audit checks); cost-0 features are
+      // Pricing v12 (#2290, #2291, #801): flat headline (base + per audited
+      // page, plus external links the cloud checks for an audit); cost-0 features are
       // included in the base, so only itemize what still charges. Read off
       // the SERVER's price list, so an older server (v10: per rendered page)
       // still prints its own terms.
@@ -134,12 +134,12 @@ export const credits = defineCommand({
         const perLink = priced.external_link?.cost;
         if (perLink != null) {
           console.log(
-            `  external links       ${String(perLink).padStart(3)} per link a cloud audit checks`
+            `  external links       ${String(perLink).padStart(3)} per link the cloud checks for an audit, at most 1 per page`
           );
-          // #785: the CLI's own link checks, the cloud's dead-link check
-          // included, are free.
+          // #801: a signed-in CLI audit's cloud link checks pay too; what the
+          // CLI checks from the user's machine, and internal links, do not.
           console.log(
-            "                           (internal links and the CLI's own checks are free)"
+            "                           (internal links, and links checked from your machine, are free)"
           );
         }
       }

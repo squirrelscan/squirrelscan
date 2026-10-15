@@ -277,6 +277,19 @@ describe("signed in, audit_website is a billed cloud audit", () => {
     );
   });
 
+  test("#801: a surface estimate reserves one external link per page and names its price", async () => {
+    const out = await call("audit_website", { ...AUDIT, level: "surface" });
+    const body = JSON.parse(out.text);
+    expect(body.status).toBe("confirmation_required");
+    // 50 base + 3 per page (2 for the page, up to 1 for its external link).
+    expect(body.estimate.credits).toBe(50 + body.estimate.pages * 3);
+    expect(body.estimate.creditsPerExternalLink).toBe(1);
+    expect(body.next).toContain(
+      "1 per external link the cloud checks, at most 1 per page"
+    );
+    expect(registered()).toBe(false);
+  });
+
   test("surface with confirm registers too", async () => {
     const out = await call("audit_website", {
       ...AUDIT,
