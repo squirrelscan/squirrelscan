@@ -1683,6 +1683,8 @@ export function runRulesOnStorage(
     const wafBlockedPageSet = new Set<string>();
     const rateLimitedPages: Array<{ url: string; status: number }> = [];
     const rateLimitedPageSet = new Set<string>();
+    // Pages the crawl fetched that site.pages leaves out (pub#798).
+    const fetchedTargets: NonNullable<SiteData["fetchedTargets"]> = [];
 
     // Build page data structures needed for site context
     const pageDataMap = new Map<
@@ -1695,7 +1697,14 @@ export function runRulesOnStorage(
     >();
 
     for (const { page, parsed } of siteContext) {
-      if (!parsed) continue; // Skip non-HTML or failed parses
+      if (!parsed) {
+        // Skip non-HTML or failed parses. One that answered is still a known
+        // status for a link to it (pub#798); 4xx/5xx join site.pages below.
+        if (page.status >= 200 && page.status < 400) {
+          fetchedTargets.push({ url: page.normalizedUrl, status: page.status });
+        }
+        continue;
+      }
       // Throttled pages describe our request rate, not the page (#1829).
       // Excluded from page-level scoring exactly as a WAF challenge page is:
       // grading a 429 body would file a soft-404 / noindex / slow-page finding
@@ -1703,6 +1712,7 @@ export function runRulesOnStorage(
       if (isRateLimitStatus(page.status)) {
         rateLimitedPages.push({ url: page.normalizedUrl, status: page.status });
         rateLimitedPageSet.add(page.normalizedUrl);
+        fetchedTargets.push({ url: page.normalizedUrl, status: page.status, rateLimited: true });
         continue;
       }
       const wafChallenge = detectWafChallengePage({
@@ -1725,6 +1735,7 @@ export function runRulesOnStorage(
           provider: wafChallenge.provider,
         });
         wafBlockedPageSet.add(page.normalizedUrl);
+        fetchedTargets.push({ url: page.normalizedUrl, status: page.status, wafChallenge: true });
         continue;
       }
 
@@ -2040,6 +2051,7 @@ export function runRulesOnStorage(
       externalLinkCheck: crawl?.stats?.externalLinkCheck,
       linkTargetStatuses: assets.linkTargetStatuses,
       internalLinkProbe: assets.internalLinkProbe,
+      fetchedTargets,
       resourceSizes,
       scripts,
       preloadedScripts,
@@ -2372,6 +2384,8 @@ interface ParsedUniverse {
   rateLimitedPages: Array<{ url: string; status: number }>;
   rateLimitedPageSet: Set<string>;
   pageDataMap: Map<string, StreamPageIdentity>;
+  /** Pages the crawl fetched that site.pages leaves out (pub#798). */
+  fetchedTargets: NonNullable<SiteData["fetchedTargets"]>;
 }
 
 /**
@@ -2405,6 +2419,7 @@ function createParsedUniverseAccumulator(): {
   const rateLimitedPages: Array<{ url: string; status: number }> = [];
   const rateLimitedPageSet = new Set<string>();
   const pageDataMap: ParsedUniverse["pageDataMap"] = new Map();
+  const fetchedTargets: ParsedUniverse["fetchedTargets"] = [];
   // v1's second loop tests `!pageDataMap.has(url)` against the map as it stands
   // AFTER the whole first loop. Batching means a later batch can still add to
   // that map, so the error-page decision is deferred to `build`.
@@ -2426,11 +2441,19 @@ function createParsedUniverseAccumulator(): {
           });
         }
 
-        if (!parsed) continue; // non-HTML / failed parse — v1 skips these too
+        if (!parsed) {
+          // non-HTML / failed parse — v1 skips these too, keeping the status
+          // of one that answered for links to it (pub#798).
+          if (page.status >= 200 && page.status < 400) {
+            fetchedTargets.push({ url: page.normalizedUrl, status: page.status });
+          }
+          continue;
+        }
         // Mirrors v1's rate-limit exclusion (#1829); the golden diff gates drift.
         if (isRateLimitStatus(page.status)) {
           rateLimitedPages.push({ url: page.normalizedUrl, status: page.status });
           rateLimitedPageSet.add(page.normalizedUrl);
+          fetchedTargets.push({ url: page.normalizedUrl, status: page.status, rateLimited: true });
           continue;
         }
         const wafChallenge = detectWafChallengePage({
@@ -2445,6 +2468,7 @@ function createParsedUniverseAccumulator(): {
         if (wafChallenge.detected) {
           wafBlockedPages.push({ url: page.normalizedUrl, provider: wafChallenge.provider });
           wafBlockedPageSet.add(page.normalizedUrl);
+          fetchedTargets.push({ url: page.normalizedUrl, status: page.status, wafChallenge: true });
           continue;
         }
 
@@ -2512,6 +2536,7 @@ function createParsedUniverseAccumulator(): {
         rateLimitedPages,
         rateLimitedPageSet,
         pageDataMap,
+        fetchedTargets,
       };
     },
   };
@@ -2576,6 +2601,7 @@ function buildStreamingSiteData(
   parsedPages: StreamParsedPage[],
   pageDataMap: ParsedUniverse["pageDataMap"],
   totalPageCount: number,
+  fetchedTargets: ParsedUniverse["fetchedTargets"] = [],
 ): Effect.Effect<
   {
     siteDataForPageRules: SiteData;
@@ -2800,6 +2826,7 @@ function buildStreamingSiteData(
       externalLinkCheck: crawl?.stats?.externalLinkCheck,
       linkTargetStatuses: assets.linkTargetStatuses,
       internalLinkProbe: assets.internalLinkProbe,
+      fetchedTargets,
       resourceSizes,
       scripts,
       preloadedScripts,
@@ -3159,8 +3186,14 @@ export function runStreamingRules(
     const runner = createRunner(config, effectiveScope);
 
     // Pass 1: DOM-free scalar universe (one batch of DOMs live at a time).
-    const { parsedPages, pageDataMap, totalPageCount, wafBlockedPages, rateLimitedPages } =
-      yield* phase("universe", () => streamParsedUniverse(storage, crawlId, batchSize));
+    const {
+      parsedPages,
+      pageDataMap,
+      totalPageCount,
+      wafBlockedPages,
+      rateLimitedPages,
+      fetchedTargets,
+    } = yield* phase("universe", () => streamParsedUniverse(storage, crawlId, batchSize));
 
     // Steps 2+3: site-fetch phase + soft-404 verdict map.
     const { siteDataForPageRules, soft404Map } = yield* phase("site-fetch", () =>
@@ -3172,6 +3205,7 @@ export function runStreamingRules(
         parsedPages,
         pageDataMap,
         totalPageCount,
+        fetchedTargets,
       ),
     );
 

@@ -37,6 +37,7 @@ function ctx(
       | "linkTargetStatuses"
       | "internalLinkProbe"
       | "externalLinkCheck"
+      | "fetchedTargets"
     >
   > = {},
 ): RuleContext {
@@ -583,5 +584,76 @@ describe("links/broken-links coverage on every row", () => {
     expect(fail!.details).toEqual(skipped!.details!);
     expect(fail!.details).not.toBe(skipped!.details);
     expect(fail!.details?.notFetched).not.toBe(skipped!.details?.notFetched);
+  });
+});
+
+// pub#798: a linked page the crawl did fetch, but that `pages` leaves out (not
+// HTML, rate limited, or a bot-wall challenge), has an answer from the crawl.
+// It used to count as unfetched with no answer, so a site linking its own PDF
+// never read as fully checked.
+describe("links/broken-links and pages the crawl fetched outside site.pages", () => {
+  const home: FixturePage = {
+    url: `${BASE}/`,
+    statusCode: 200,
+    internal: [`${BASE}/report.pdf`, `${BASE}/busy`, `${BASE}/walled`, `${BASE}/gone.pdf`],
+  };
+
+  test("a non-HTML page that answered, a throttled one and a walled one are none of them unfetched", () => {
+    const { checks } = brokenLinksRule.run(
+      ctx([home, { url: `${BASE}/gone.pdf`, statusCode: 404 }], {
+        fetchedTargets: [
+          { url: `${BASE}/report.pdf`, status: 200 },
+          { url: `${BASE}/busy`, status: 429, rateLimited: true },
+          { url: `${BASE}/walled`, status: 403, wafChallenge: true },
+        ],
+        linkTargetStatuses: [],
+        internalLinkProbe: { unfetched: 0, probed: 0, cap: 200, outOfScope: 0 },
+      }),
+    );
+    const rows = named(checks, "broken-links") as Array<{
+      status: string;
+      items?: Array<{ id: string }>;
+      details?: Record<string, unknown>;
+    }>;
+    // The non-HTML 404 is still broken; the PDF that answered 200 is not.
+    expect(rows.map((c) => c.status)).toEqual(["fail"]);
+    expect(rows[0]!.items?.map((i) => i.id)).toEqual([`${BASE}/gone.pdf`]);
+    expect(rows[0]!.details).toEqual({
+      linkTargets: 4,
+      unfetchedTargets: 0,
+      probedTargets: 0,
+      notFetched: {},
+    });
+    const rateLimited = checks.find((c) => c.name === "rate-limited-links");
+    expect(rateLimited?.items?.map((i) => [i.id, i.meta?.statusCode])).toEqual([
+      [`${BASE}/busy`, 429],
+    ]);
+    const refused = checks.find((c) => c.name === "refused-links");
+    expect(refused?.message).toBe(
+      "1 internal link(s) answered the crawl with a bot-wall challenge - status unverifiable",
+    );
+    expect(refused?.items?.map((i) => [i.id, i.meta])).toEqual([
+      [`${BASE}/walled`, { statusCode: 403, wafChallenge: true }],
+    ]);
+  });
+
+  test("a walled target next to a probe's 403 shares one row that names both", () => {
+    const { checks } = brokenLinksRule.run(
+      ctx([{ url: `${BASE}/`, statusCode: 200, internal: [`${BASE}/walled`, `${BASE}/private`] }], {
+        fetchedTargets: [{ url: `${BASE}/walled`, status: 503, wafChallenge: true }],
+        linkTargetStatuses: [{ url: `${BASE}/private`, status: 403, error: null }],
+        internalLinkProbe: { unfetched: 1, probed: 1, cap: 200, outOfScope: 0 },
+      }),
+    );
+    const refused = checks.find((c) => c.name === "refused-links");
+    expect(refused?.message).toBe(
+      "2 internal link(s) refused the link check (401/403) or answered the crawl with a bot-wall challenge - status unverifiable",
+    );
+  });
+
+  test("without fetchedTargets (an older engine) such a link still counts as unfetched", () => {
+    const { checks } = brokenLinksRule.run(ctx([{ url: `${BASE}/`, statusCode: 200, internal: [`${BASE}/report.pdf`] }]));
+    const [row] = named(checks, "broken-links") as Array<{ details?: Record<string, unknown> }>;
+    expect(row!.details?.unfetchedTargets).toBe(1);
   });
 });

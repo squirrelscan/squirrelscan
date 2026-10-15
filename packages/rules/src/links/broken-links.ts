@@ -65,6 +65,17 @@ export const brokenLinksRule: Rule = {
       probedStatuses.set(normalizeUrl(probe.url), probe);
     }
 
+    // pub#798: pages the crawl fetched that are not in `pages` (not HTML, rate
+    // limited, or a bot-wall challenge). A link to one has an answer from the
+    // crawl, so it is never counted as unfetched.
+    const fetchedOutside = new Map<
+      string,
+      NonNullable<NonNullable<RuleContext["site"]>["fetchedTargets"]>[number]
+    >();
+    for (const fetched of ctx.site?.fetchedTargets ?? []) {
+      fetchedOutside.set(normalizeUrl(fetched.url), fetched);
+    }
+
     const brokenLinks: {
       url: string;
       sources: string[];
@@ -79,10 +90,12 @@ export const brokenLinksRule: Rule = {
     // repo#2729: a probed 401/403 is a bot wall or an auth wall refusing a
     // status-only request, not a missing page. The crawl keeps challenge pages
     // out of this rule; the probe's refusals are kept out the same way.
+    // pub#798: so is a target the crawl itself got a bot-wall challenge for.
     const refusedLinks: {
       url: string;
       sources: string[];
       statusCode: number;
+      wafChallenge?: boolean;
     }[] = [];
 
     // Distinct targets neither the crawl nor the probe fetched: status unknown.
@@ -102,6 +115,19 @@ export const brokenLinksRule: Rule = {
       allTargets.add(normalizedTarget);
       let statusCode = crawledPages.get(normalizedTarget);
       let probed = false;
+      if (statusCode === undefined) {
+        const fetched = fetchedOutside.get(normalizedTarget);
+        if (fetched?.rateLimited) {
+          rateLimitedLinks.push({ url: target, sources, statusCode: fetched.status });
+          continue;
+        }
+        if (fetched?.wafChallenge) {
+          refusedLinks.push({ url: target, sources, statusCode: fetched.status, wafChallenge: true });
+          continue;
+        }
+        // Not HTML, and it answered 2xx/3xx: a known status, not broken.
+        if (fetched) statusCode = fetched.status;
+      }
       if (statusCode === undefined) {
         const probe = probedStatuses.get(normalizedTarget);
         if (probe?.rateLimited) {
@@ -208,15 +234,25 @@ export const brokenLinksRule: Rule = {
     }
 
     if (refusedLinks.length > 0) {
+      const challenged = refusedLinks.some((b) => b.wafChallenge);
+      const refusedByProbe = refusedLinks.some((b) => !b.wafChallenge);
+      const why =
+        challenged && refusedByProbe
+          ? "refused the link check (401/403) or answered the crawl with a bot-wall challenge"
+          : challenged
+            ? "answered the crawl with a bot-wall challenge"
+            : "refused the link check (401/403)";
       checks.push({
         name: "refused-links",
         status: "info",
-        message: `${refusedLinks.length} internal link(s) refused the link check (401/403) - status unverifiable`,
+        message: `${refusedLinks.length} internal link(s) ${why} - status unverifiable`,
         items: refusedLinks.map((b) => ({
           id: b.url,
           label: `${b.url} (${b.statusCode})`,
           sourcePages: b.sources,
-          meta: { statusCode: b.statusCode, probed: true },
+          meta: b.wafChallenge
+            ? { statusCode: b.statusCode, wafChallenge: true }
+            : { statusCode: b.statusCode, probed: true },
         })),
       });
     }

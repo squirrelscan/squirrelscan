@@ -125,14 +125,17 @@ for (const engine of ["v1", "streaming"] as const) {
       const rows = checks.filter((c) => c.name === "broken-links");
       expect(rows.map((c) => c.status)).toEqual(["fail"]);
       expect(rows[0]!.items?.map((i) => i.id)).toEqual([`${BASE}/missing`]);
-      // /, /about, /pricing and /missing. /pricing answered 429, so its status
-      // is unknown, and nothing it links is one of the rule's targets.
+      // /, /about, /pricing and /missing. Nothing /pricing's 429 body links is
+      // one of the rule's targets. /pricing itself is rate limited: listed as
+      // such, not unfetched (pub#798).
       expect(rows[0]!.details).toEqual({
         linkTargets: 4,
-        unfetchedTargets: 1,
+        unfetchedTargets: 0,
         probedTargets: 0,
-        notFetched: { noAnswer: 1 },
+        notFetched: {},
       });
+      const rateLimited = checks.find((c) => c.name === "rate-limited-links");
+      expect(rateLimited?.items?.map((i) => i.id)).toEqual([`${BASE}/pricing`]);
     });
   });
 }
