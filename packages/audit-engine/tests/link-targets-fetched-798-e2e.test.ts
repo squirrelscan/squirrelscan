@@ -74,6 +74,7 @@ const home = `<!doctype html><html lang="en"><head><title>Home</title></head><bo
   "/gone.pdf",
   "/busy",
   "/walled",
+  "/loop",
 ]
   .map((href) => `<a href="${href}">${href}</a>`)
   .join("")}</body></html>`;
@@ -88,6 +89,20 @@ const PAGES = [
     "<!doctype html><html><head><title>Slow down</title></head><body>Too many requests</body></html>",
   ),
   pageRecord("/walled", 403, CHALLENGE, "text/html", "cloudflare"),
+  // A redirect the crawl could not follow (a loop): stored as the 3xx, no answer.
+  {
+    ...pageRecord("/loop", 301, "", "application/octet-stream"),
+    redirectChain: {
+      sourceUrl: `${BASE}/loop`,
+      finalUrl: `${BASE}/loop`,
+      hops: [],
+      chainLength: 10,
+      isLoop: true,
+      endsInError: true,
+      httpsToHttp: false,
+      httpToHttps: false,
+    },
+  } as unknown as PageRecord,
 ];
 
 async function brokenLinks(engine: "v1" | "streaming"): Promise<CheckResult[]> {
@@ -138,11 +153,12 @@ for (const engine of ["v1", "streaming"] as const) {
       // The PDF that answered 404 is still broken; the one that answered 200 is not.
       expect(rows.map((c) => c.status)).toEqual(["fail"]);
       expect(rows[0]!.items?.map((i) => i.id)).toEqual([`${BASE}/gone.pdf`]);
+      // Only the redirect loop has no answer.
       expect(rows[0]!.details).toEqual({
-        linkTargets: 4,
-        unfetchedTargets: 0,
+        linkTargets: 5,
+        unfetchedTargets: 1,
         probedTargets: 0,
-        notFetched: {},
+        notFetched: { noAnswer: 1 },
       });
       const rateLimited = checks.find((c) => c.name === "rate-limited-links");
       expect(rateLimited?.items?.map((i) => i.id)).toEqual([`${BASE}/busy`]);

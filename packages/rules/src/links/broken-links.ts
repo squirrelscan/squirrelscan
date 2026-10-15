@@ -1,6 +1,6 @@
 // links/broken-links - Broken link detection
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+import type { CheckResult, FetchedTarget, Rule, RuleContext, RuleResult } from "../types";
 
 import {
   LINK_PROBE_HEAD_UNRELIABLE_ERROR,
@@ -68,10 +68,7 @@ export const brokenLinksRule: Rule = {
     // pub#798: pages the crawl fetched that are not in `pages` (not HTML, rate
     // limited, or a bot-wall challenge). A link to one has an answer from the
     // crawl, so it is never counted as unfetched.
-    const fetchedOutside = new Map<
-      string,
-      NonNullable<NonNullable<RuleContext["site"]>["fetchedTargets"]>[number]
-    >();
+    const fetchedOutside = new Map<string, FetchedTarget>();
     for (const fetched of ctx.site?.fetchedTargets ?? []) {
       fetchedOutside.set(normalizeUrl(fetched.url), fetched);
     }

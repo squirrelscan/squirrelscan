@@ -1699,8 +1699,9 @@ export function runRulesOnStorage(
     for (const { page, parsed } of siteContext) {
       if (!parsed) {
         // Skip non-HTML or failed parses. One that answered is still a known
-        // status for a link to it (pub#798); 4xx/5xx join site.pages below.
-        if (page.status >= 200 && page.status < 400) {
+        // status for a link to it (pub#798); 4xx/5xx join site.pages below. A
+        // 3xx is stored only when its redirect never resolved: no answer.
+        if (answeredOutsidePages(page)) {
           fetchedTargets.push({ url: page.normalizedUrl, status: page.status });
         }
         continue;
@@ -2369,6 +2370,17 @@ type StreamParsedPage = {
  * whole point is bounding residency (#1860). `parsed` is the SAME object the
  * matching `parsedPages` entry holds, so it costs nothing extra.
  */
+/**
+ * A stored page left out of `site.pages` (it did not parse as HTML) that still
+ * answered a link to it (pub#798): a 2xx, or a 3xx whose redirect chain did not
+ * end in an error. The crawler stores a 3xx only when following it failed (a
+ * loop, a missing Location, the hop cap), and that is no answer.
+ */
+function answeredOutsidePages(page: Pick<PageRecord, "status" | "redirectChain">): boolean {
+  if (page.status < 200 || page.status >= 400) return false;
+  return page.status < 300 || page.redirectChain?.endsInError !== true;
+}
+
 interface StreamPageIdentity {
   normalizedUrl: string;
   status: number;
@@ -2444,7 +2456,7 @@ function createParsedUniverseAccumulator(): {
         if (!parsed) {
           // non-HTML / failed parse — v1 skips these too, keeping the status
           // of one that answered for links to it (pub#798).
-          if (page.status >= 200 && page.status < 400) {
+          if (answeredOutsidePages(page)) {
             fetchedTargets.push({ url: page.normalizedUrl, status: page.status });
           }
           continue;
@@ -2601,7 +2613,7 @@ function buildStreamingSiteData(
   parsedPages: StreamParsedPage[],
   pageDataMap: ParsedUniverse["pageDataMap"],
   totalPageCount: number,
-  fetchedTargets: ParsedUniverse["fetchedTargets"] = [],
+  fetchedTargets: ParsedUniverse["fetchedTargets"],
 ): Effect.Effect<
   {
     siteDataForPageRules: SiteData;

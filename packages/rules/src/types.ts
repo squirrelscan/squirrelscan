@@ -423,6 +423,14 @@ export interface WebAppManifestData {
   icons: WebAppManifestIconCheck[];
 }
 
+/** A page the crawl fetched that `SiteData.pages` leaves out (pub#798). */
+export interface FetchedTarget {
+  url: string;
+  status: number;
+  rateLimited?: boolean;
+  wafChallenge?: boolean;
+}
+
 export interface SiteData {
   baseUrl: string;
   /**
@@ -510,16 +518,12 @@ export interface SiteData {
   linkTargetStatuses?: SitemapUrlStatusData[];
   /**
    * Pages the crawl fetched that are not in `pages`, so a link to one still has
-   * a known answer (pub#798): a page that is not HTML (a PDF) and answered
-   * 2xx/3xx, one that answered with rate limiting (429/430), and a bot-wall
-   * challenge. Absent on older callers.
+   * a known answer (pub#798): one that did not parse as HTML (a PDF, or an
+   * empty or corrupt body) and answered 2xx, or a 3xx whose redirect resolved;
+   * one that answered with rate limiting (429/430); and a bot-wall challenge.
+   * Absent on older callers.
    */
-  fetchedTargets?: Array<{
-    url: string;
-    status: number;
-    rateLimited?: boolean;
-    wafChallenge?: boolean;
-  }>;
+  fetchedTargets?: FetchedTarget[];
   /** What the internal link probe covered. Undefined when it did not run. */
   internalLinkProbe?: {
     unfetched: number;
