@@ -11,7 +11,7 @@ That is exactly how injected phishing and spam pages survive. A legitimate unlis
 
 ## What squirrel checks
 
-The rule is site-wide. It builds the set of sitemap URLs from every discovered sitemap, counts inbound internal links for every crawled page, then evaluates each page. The homepage is never flagged, and neither is the page the crawl started on, even when it is not `/` (a root that redirects to `/en/` or to a sign-in page), and pages whose status code is outside 200 to 299 are ignored.
+The rule is site-wide. It builds the set of sitemap URLs from every discovered sitemap, counts inbound internal links for every crawled page, then evaluates each page. The homepage is never flagged, and neither is the page the audit started from: the URL you gave and where its redirects landed (a root that redirects to `/en/` or to a sign-in page). Pages whose status code is outside 200 to 299 are ignored.
 
 A page is hidden when it has zero inbound internal links and, if the site has a sitemap at all, is absent from it. When the site has no sitemap, absence from it means nothing, so zero inbound links alone qualifies. Each hidden page is then correlated with the page-level integrity signals for that page.
 

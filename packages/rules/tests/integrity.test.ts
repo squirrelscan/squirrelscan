@@ -506,12 +506,10 @@ describe("integrity/orphan-page", () => {
     ];
     const control = find(run(orphanPageRule, siteCtx(pages)), "orphan-page");
     expect(control?.status).toBe("fail");
-    const entry = find(
-      run(orphanPageRule, siteCtx(pages, { entryUrls: [landing, `${SITE}/`] })),
-      "orphan-page"
-    );
-    expect(entry?.status).not.toBe("fail");
-    expect((entry?.items ?? []).map((i) => i.id)).not.toContain(landing);
+    expect((control?.items ?? []).map((i) => i.id)).toEqual([landing]);
+    const result = run(orphanPageRule, siteCtx(pages, { entryUrls: [landing, `${SITE}/`] }));
+    expect(find(result, "orphan-page")?.status).toBe("pass");
+    expect(find(result, "orphan-page-review")).toBeUndefined();
   });
 
   test("hidden kit page (no sitemap entry, no inbound links) + signals → fail", () => {

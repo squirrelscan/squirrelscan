@@ -91,16 +91,9 @@ export const orphanPageRule: Rule = {
     const baseUrl = ctx.site?.baseUrl ?? "";
     const normalizedBase = baseUrl ? normalizeUrl(baseUrl) : "";
     // Where the crawl started (#788). A root that redirects to `/en/` or to a
-    // sign-in page lands the crawl on a page nothing links to, and it is the
-    // site's front door, not a hidden one.
-    const entryPages = new Set<string>();
-    for (const url of ctx.site?.entryUrls ?? []) {
-      try {
-        entryPages.add(normalizeUrl(url));
-      } catch {
-        /* ignore unparsable */
-      }
-    }
+    // sign-in page lands the crawl on a page that is often linked from nowhere,
+    // and it is the site's front door, not a hidden one.
+    const entryPages = new Set((ctx.site?.entryUrls ?? []).map((url) => normalizeUrl(url)));
 
     // Per-page integrity-signal count for escalation. Streaming (#1021): read the
     // signals captured at page-time; v1: detect them on demand for each hidden page.

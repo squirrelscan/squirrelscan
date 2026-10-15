@@ -409,6 +409,30 @@ describe("probeSiteForCloaking", () => {
     );
     expect(probes).toEqual([]);
   });
+
+  test("never probes the page the crawl started on, even when the root redirected to it (#788)", async () => {
+    const landing = `${SITE}/v3/signin/identifier?continue=x`;
+    const site = {
+      baseUrl: SITE,
+      pages: [
+        { url: landing, statusCode: 200, parsed: { links: [] } },
+        { url: `${SITE}/help`, statusCode: 200, parsed: { links: [] } },
+      ],
+      sitemapUrls: [],
+    };
+    const opts = {
+      maxPages: 10,
+      recentDays: 14,
+      queryVariation: false,
+      googlebotUserAgent: GOOGLEBOT,
+      defaultUserAgent: DEFAULT_UA,
+      now: NOW,
+    };
+    const urls = async (entryUrls?: string[]) =>
+      (await probeSiteForCloaking({ ...site, entryUrls }, opts, stubFetch({}))).map((p) => p.url);
+    expect(await urls()).toEqual([landing, `${SITE}/help`]);
+    expect(await urls([landing, `${SITE}/`])).toEqual([`${SITE}/help`]);
+  });
 });
 
 describe("resolveCloakingProbes", () => {

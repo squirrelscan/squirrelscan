@@ -334,6 +334,8 @@ export interface CloakingProbePage {
 
 export interface CloakingProbeSiteInput {
   baseUrl: string;
+  /** Where the crawl started (seed after redirects + the URL given); never probed (#788). */
+  entryUrls?: string[];
   pages: CloakingProbePage[];
   /** Flat list of sitemap URLs (loc + optional lastmod). */
   sitemapUrls: { loc: string; lastmod?: string }[];
@@ -376,10 +378,12 @@ export function probeSiteForCloaking(
   }
 
   const normalizedBase = input.baseUrl ? normalizeUrl(input.baseUrl) : "";
+  const entryPages = new Set((input.entryUrls ?? []).map((u) => normalizeUrl(u)));
   const candidates: CloakingCandidate[] = [];
   for (const p of input.pages) {
     const n = normalizeUrl(p.url);
-    if (n === normalizedBase || getPathname(p.url) === "/") continue; // never the homepage
+    // Never the homepage, nor the page the crawl started on (integrity/orphan-page).
+    if (n === normalizedBase || getPathname(p.url) === "/" || entryPages.has(n)) continue;
     candidates.push({
       url: p.url,
       normalizedUrl: n,
