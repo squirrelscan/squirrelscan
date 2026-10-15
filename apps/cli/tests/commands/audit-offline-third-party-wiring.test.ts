@@ -125,7 +125,11 @@ describe("squirrel audit --offline and third-party assets (pub#807)", () => {
     expect(hosts).toContain("example.com");
     expect(
       hosts.filter(
-        (h) => h.endsWith("example.org") || h.endsWith("example.net")
+        (h) =>
+          h === "example.org" ||
+          h.endsWith(".example.org") ||
+          h === "example.net" ||
+          h.endsWith(".example.net")
       )
     ).toEqual([]);
   });
