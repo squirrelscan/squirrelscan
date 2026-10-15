@@ -786,7 +786,12 @@ export function createSiteAssetCollector(baseUrl: string): {
 
       // Internal link targets for the link probe (repo#2729), from the same
       // parsed scalars links/broken-links reads, normalized the way it does.
+      // Not a rate-limited page's (#1829): the rule never sees its links, and
+      // the rule splits its unfetched targets by this probe's counts, so a
+      // target only a 429 body links would be called skipped in place of one
+      // the rule could not check (pub#794).
       for (const page of parsedPages) {
+        if (isRateLimitStatus(page.statusCode)) continue;
         const seen = new Set<string>();
         const nofollowActions = nofollowActionTargets(page);
         for (const link of page.parsed.links) {
