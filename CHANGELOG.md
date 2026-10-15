@@ -23,7 +23,7 @@ How it works:
 
 ### Fixed
 
-- `squirrel audit --offline` no longer status-checks anything on another site: the third-party scripts, stylesheets and fonts the pages load, and sitemap URLs on another host, are left alone. `reliability/broken-resources` reports the third-party resources as not measured on an offline run, and `crawl/sitemap-4xx` says how many sitemap URLs on another host it skipped. The crawl itself can still reach another host when the site sends it there, through a redirect or a sitemap that robots.txt lists on another host. See [audit](https://docs.squirrelscan.com/cli/audit). #807
+- `squirrel audit --offline` no longer status-checks anything on another site: the third-party scripts, stylesheets and fonts the pages load, and sitemap URLs on another site, are left alone. `reliability/broken-resources` reports the third-party resources as not measured on an offline run, and `crawl/sitemap-4xx` says how many sitemap URLs on another site it skipped. Requests to the audited site can still end up on another host when the site sends them there: a page or asset redirect, or a sitemap that robots.txt lists on another host. See [audit](https://docs.squirrelscan.com/cli/audit). #807
 
 ## v0.0.114 (2026-10-15)
 

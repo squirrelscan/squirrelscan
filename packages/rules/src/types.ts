@@ -569,7 +569,7 @@ export interface SiteData {
   };
   pdfSizes?: ResourceSizeData[];
   sitemapUrlStatuses?: SitemapUrlStatusData[];
-  // Sitemap URLs on another host an own-site-only audit (`--offline`) left
+  // Sitemap URLs on another site an own-site-only audit (`--offline`) left
   // unchecked (pub#807). Absent or zero means none were dropped.
   sitemapOffSiteSkipped?: number;
   // Web app manifests the pages link (`<link rel="manifest">`), one entry per

@@ -18,7 +18,8 @@ The rule is site-wide and reads the status codes the crawl recorded for sitemap 
 - `sitemap-4xx` warns when entries returned a status from 400 to 499. Message: `9 sitemap URL(s) return 4XX`, with each URL listed alongside its status and any fetch error. Severity warning, weight 6.
 - `sitemap-4xx` passes otherwise. Message: `No 4XX pages found in sitemap URLs checked`.
 - `sitemap-rate-limited` reports info for entries the host throttled. Message: `5 sitemap URL(s) rate-limited - status unverifiable`.
-- `sitemap-off-site-not-checked` reports info when a `squirrel audit --offline` run left sitemap URLs on another host unchecked. Message: `{count} sitemap URL(s) on another host not checked this audit`.
+- `sitemap-4xx` is skipped when a `squirrel audit --offline` run had only sitemap URLs on another site to check. Message: `No sitemap URL on the audited site to check`.
+- `sitemap-off-site-not-checked` reports info when a `squirrel audit --offline` run left sitemap URLs on another site unchecked. Message: `{count} sitemap URL(s) on another site not checked this audit`.
 
 Rate-limit responses are separated deliberately. A 429, a 430 or a 503 carrying `Retry-After` sits inside or near the 4XX band but says the host throttled the audit, not that the URL is dead, so those entries are excluded from the warn list and reported on their own.
 

@@ -46,7 +46,7 @@ squirrel audit <url> [options]
 | `--render` | | Force cloud browser rendering for this run: alias of `--render-mode all` ([uses credits](/guides/browser-rendering); requires login) | auto |
 | `--render-mode` | | Render strategy: `off` (HTTP only) · `auto` (render only client-rendered pages) · `all` (render every page). Overrides `[cloud].render` | the level's: `auto` for quick, `all` for surface and full |
 | `--http` | | Force plain HTTP for this run: alias of `--render-mode off` (never render in the cloud; pages cost the same either way) | auto |
-| `--offline` | | Run fully offline: skip cloud features, publishing, and telemetry. Nothing on another site is checked: external links, third-party scripts, stylesheets and fonts, and sitemap URLs on another host are skipped. Internal link targets still are checked | `false` |
+| `--offline` | | Run fully offline: skip cloud features, publishing, and telemetry. Nothing on another site is checked: external links, third-party scripts, stylesheets and fonts, and sitemap URLs on another site are skipped. Internal link targets still are checked. See [Fully offline audit](#fully-offline-audit) for what a redirect can still reach | `false` |
 | `--external-links` | | Check links to other sites this run, at any level. Cannot be combined with `--offline` or `--no-external-links` | the level's: on at every level |
 | `--no-external-links` | | Do not check links to other sites this run. The report shows them as **Not checked** | the level's |
 | `--no-internal-links` | | Do not status-check internal link targets the crawl did not fetch (one `HEAD` request each, on by default at every level). See [Link checking defaults](/rules/links#link-checking-defaults) | checked |
@@ -266,11 +266,12 @@ For finer control, `--render-mode auto` renders **only** pages that need it (cli
 Run an audit with no cloud and no checks of other sites: no cloud analysis, no
 publishing, no update checks, no telemetry. External links are not checked, and
 neither are the third-party scripts, stylesheets and fonts the pages load, or
-sitemap URLs on another host. `reliability/broken-resources` reports the
+sitemap URLs on another site. `reliability/broken-resources` reports the
 third-party ones as not measured, and `crawl/sitemap-4xx` says how many sitemap
-URLs on another host it skipped. The crawl itself can still reach another host
-when the site sends it there, through a redirect or a sitemap that robots.txt
-lists on another host. Results are stored in the local database as usual:
+URLs on another site it skipped. Requests to the audited site can still end up
+on another host when the site sends them there: a page or asset redirect, or a
+sitemap that robots.txt lists on another host. Results are stored in the local
+database as usual:
 
 ```bash
 squirrel audit https://example.com --offline

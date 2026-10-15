@@ -620,7 +620,7 @@ export interface PreFetchedAssets {
   pdfSizes: ResourceSizeData[];
   sitemapUrlStatuses: SitemapUrlStatusData[];
   /**
-   * Sitemap URLs on another host an own-site-only audit left unchecked
+   * Sitemap URLs on another site an own-site-only audit left unchecked
    * (pub#807), so crawl/sitemap-4xx can say so instead of passing. Absent or
    * zero means none were dropped.
    */
@@ -1239,16 +1239,19 @@ export function fetchAssetsFromOccurrences(
     // Authorization, cookies), no prior-crawl cache, public addresses only.
     // One cap for the pool as a whole: each half would otherwise get the
     // checker's own default cap.
-    const sitemapTargets = orphanCandidates.slice(
+    // pub#807: an own-site-only audit checks no sitemap URL on another site. They
+    // are left out before the cap, so they take none of its slots.
+    const sitemapCandidates =
+      overrides?.ownSiteOnly === true
+        ? orphanCandidates.filter((url) => isOwnSiteUrl(url))
+        : orphanCandidates;
+    const sitemapOffSiteSkipped = orphanCandidates.length - sitemapCandidates.length;
+    const sitemapTargets = sitemapCandidates.slice(
       0,
       Math.min(sitemapStatusLimit, maxResources ?? RESOURCE_SIZE_LIMITS.MAX_RESOURCES_TO_CHECK),
     );
     const ownSitemapTargets = sitemapTargets.filter((url) => isOwnSiteUrl(url));
-    // pub#807: an own-site-only audit sends nothing to another host.
-    const offSiteSitemapTargets = sitemapTargets.filter((url) => !isOwnSiteUrl(url));
-    const foreignSitemapTargets = overrides?.ownSiteOnly === true ? [] : offSiteSitemapTargets;
-    const sitemapOffSiteSkipped =
-      offSiteSitemapTargets.length - foreignSitemapTargets.length;
+    const foreignSitemapTargets = sitemapTargets.filter((url) => !isOwnSiteUrl(url));
 
     const resourceCheckStart = Date.now();
 
