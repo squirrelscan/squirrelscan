@@ -56,5 +56,11 @@ describe("the unverifiable external links row (pub#783)", () => {
       "https://stalls.example/ (unverified)",
       "https://pending.example/ (unverified)",
     ]);
+    // The meta a consumer reads is unchanged.
+    expect(row.items?.map((i) => i.meta)).toEqual([
+      { wafProvider: "cloudflare" },
+      { wafProvider: "unknown" },
+      { wafProvider: undefined },
+    ]);
   });
 });

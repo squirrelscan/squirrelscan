@@ -303,7 +303,7 @@ These rules are a careful default, not a guarantee. The word lists are English, 
 3. **User agent**
    - Uses browser-like headers and user agent
    - Detects WAF/bot protection (Cloudflare, Akamai, etc.)
-   - WAF-blocked 403s reported separately from broken links
+   - Sign-in and bot walls (401, 403, 405, 406, 999), challenge pages and timeouts listed as unverifiable, apart from broken links
 
 ### What the external link check never requests
 
@@ -322,10 +322,13 @@ These rules are a careful default, not a guarantee: the word lists are English, 
 | 200-299 | Success | Working link |
 | 301, 302, 303, 307, 308 | Redirect | Followed to the end; one into an action or token link is not followed, and the link counts as working |
 | 300, 304, other 3xx | Answer | Working |
-| 400-499 | Client error | Broken link |
-| 500-599 | Server error | Broken link |
-| Timeout | No response | Broken link |
+| 400-499 | Client error | Broken link, except a sign-in or bot wall (401, 403, 405, 406), listed as unverifiable, and 429 or 430, listed as rate-limited |
+| 500-599 | Server error | Broken link, except a challenge page served as a 503, listed as unverifiable, and a 503 with `Retry-After`, listed as rate-limited |
+| 999 | LinkedIn's wall | Unverifiable |
+| Timeout | No response | Unverifiable, never broken |
 | DNS failure | Domain not found | Broken link |
+
+This is how squirrel reads a link it checks itself. A storage bucket's 403 for a missing file, an HTTP sign-in prompt and a 405 that does not allow `GET` are the site's own answers and stay broken; [links/broken-external-links](/rules/links/broken-external-links) has the details.
 
 ### Caching behavior
 
@@ -527,9 +530,9 @@ curl -I https://example.com  # Test external access
 **Solution:** External link checker automatically:
 - Falls back to GET requests when HEAD fails
 - Detects WAF/bot protection (Cloudflare, Akamai, etc.)
-- Reports WAF-blocked 403s as "unverifiable" (not broken)
+- Lists walls, challenge pages and timeouts as unverifiable (not broken)
 
-If a site truly blocks bot traffic, the link will be reported as WAF-blocked with the provider name.
+If a site truly blocks bot traffic, the link is listed as unverifiable under `waf-blocked-external-links`, with the vendor in its label when one was named.
 
 ---
 
