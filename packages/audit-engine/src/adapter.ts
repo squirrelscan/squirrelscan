@@ -2007,6 +2007,7 @@ export function runRulesOnStorage(
         crawl?.seedUrl,
         crawl?.originalUrl,
       ]),
+      entryUrls: [crawl?.seedUrl, crawl?.originalUrl].filter((url): url is string => !!url),
       robotsTxt: robotsData,
       // What the site refused, so a rule says "refused" not "absent".
       refusedFetches: crawl?.stats?.refusedFetches,
@@ -2766,6 +2767,7 @@ function buildStreamingSiteData(
         crawl?.seedUrl,
         crawl?.originalUrl,
       ]),
+      entryUrls: [crawl?.seedUrl, crawl?.originalUrl].filter((url): url is string => !!url),
       robotsTxt: robotsData,
       // What the site refused, so a rule says "refused" not "absent".
       refusedFetches: crawl?.stats?.refusedFetches,

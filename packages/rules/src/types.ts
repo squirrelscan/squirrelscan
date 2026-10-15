@@ -425,6 +425,13 @@ export interface WebAppManifestData {
 
 export interface SiteData {
   baseUrl: string;
+  /**
+   * Where the crawl started: the URL it was given and where that URL's
+   * redirects resolved (the crawl's `originalUrl` and `seedUrl`). The entry
+   * page is the site's front door even when it is not `/`, as when the root
+   * redirects to `/en/` or a sign-in page (#788). Absent on older callers.
+   */
+  entryUrls?: string[];
   pages: Array<{
     url: string;
     finalUrl?: string;

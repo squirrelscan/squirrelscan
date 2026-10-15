@@ -142,6 +142,7 @@ function pageCtx(
 
 function siteCtx(pages: SiteData["pages"], opts?: {
   sitemapLocs?: string[];
+  entryUrls?: string[];
   options?: Record<string, unknown>;
   crawlLimits?: { pagesCrawled: number; maxPages: number };
 }): RuleContext {
@@ -150,6 +151,7 @@ function siteCtx(pages: SiteData["pages"], opts?: {
     pages,
     robotsTxt: null,
     ...(opts?.crawlLimits ? { crawlLimits: opts.crawlLimits } : {}),
+    ...(opts?.entryUrls ? { entryUrls: opts.entryUrls } : {}),
     sitemaps: opts?.sitemapLocs
       ? {
           discovered: [
@@ -490,6 +492,28 @@ describe("integrity/template-discontinuity", () => {
 // ── orphan-page rule (site-scope) ────────────────────────────────────
 
 describe("integrity/orphan-page", () => {
+  test("the page the crawl started on is never hidden, even when the root redirected to it (#788)", () => {
+    // A root that redirects to a sign-in page (or /en/) lands the crawl on a
+    // page nothing links to. Google's own sign-in page carries its anti-abuse
+    // script inline, which reads as obfuscated, so it escalated to a fail.
+    const landing = `${SITE}/v3/signin/identifier?continue=x&dsh=S1`;
+    const html = `<!doctype html><html><head><title>Sign in</title>
+      <script>${obfuscatedPayload()}</script></head><body><p>Sign in</p></body></html>`;
+    const pages = [
+      pageEntry(landing, html),
+      pageEntry(`${SITE}/help`, themed("Help", `${CLEAN_BODY}<a href="/privacy">Privacy</a>`)),
+      pageEntry(`${SITE}/privacy`, themed("Privacy", `${CLEAN_BODY}<a href="/help">Help</a>`)),
+    ];
+    const control = find(run(orphanPageRule, siteCtx(pages)), "orphan-page");
+    expect(control?.status).toBe("fail");
+    const entry = find(
+      run(orphanPageRule, siteCtx(pages, { entryUrls: [landing, `${SITE}/`] })),
+      "orphan-page"
+    );
+    expect(entry?.status).not.toBe("fail");
+    expect((entry?.items ?? []).map((i) => i.id)).not.toContain(landing);
+  });
+
   test("hidden kit page (no sitemap entry, no inbound links) + signals → fail", () => {
     // Sitemap lists only the legit pages; kit page is absent + nothing links it.
     const pages = fullSitePages();
