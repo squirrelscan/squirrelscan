@@ -1,18 +1,18 @@
 // pub#753, through the CLI's own dead-links checker: the urls the service
-// leaves out of its answer are checked locally and stored with their local
-// status, and a chunk answered with none of its urls stops the CLI sending
-// further chunks. An empty answer is never stored as "all links fine".
+// leaves out of its answer are checked locally with their local status, and a
+// chunk answered with none of its urls stops the CLI sending further chunks.
+// An empty answer is never "all links fine".
+//
+// The link targets are on loopback, named by a public-looking name that
+// resolves there: the engine never sends the service a link whose URL names a
+// non-public host (pub#775). An audit of a local site checks those locally.
 
-import {
-  checkCollectedExternalLinks,
-  type ExternalLinkOccurrences,
-} from "@squirrelscan/audit-engine";
+import { checkExternalLinks } from "@squirrelscan/audit-engine";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
 import { resolveDeadLinksBulkChecker } from "@/audit/cloud";
 import { getDefaultConfig } from "@/config";
-import { SQLiteStorage } from "@/crawler/storage/sqlite";
 
 // The engine sends the service at most this many urls per call.
 const CHUNK = 200;
@@ -39,7 +39,7 @@ function serveTargets(): string {
     },
   });
   servers.push(server);
-  return `http://127.0.0.1:${server.port}`;
+  return `http://targets.example:${server.port}`;
 }
 
 /** A dead-links client that answers whichever urls `pick` names, as live. */
@@ -74,54 +74,22 @@ async function checkLinks(urls: string[], pick: (urls: string[]) => string[]) {
   });
   expect(checker).not.toBeNull();
 
-  const storage = new SQLiteStorage(":memory:");
-  await Effect.runPromise(Effect.orDie(storage.init()));
-  const crawlId = await Effect.runPromise(
-    Effect.orDie(
-      // The audited site is local, as the link targets are: the external
-      // check's egress policy then allows private addresses (#2759).
-      storage.createCrawl({
-        baseUrl: "http://localhost",
-        seedUrl: "http://localhost",
-        originalUrl: "http://localhost",
-        startedAt: Date.now(),
-        status: "running",
-        config: {},
-        stats: {},
-      } as never)
-    )
+  // An audit of a local site: private addresses allowed, and the targets'
+  // name resolves to the fixture.
+  const results = await Effect.runPromise(
+    checkExternalLinks(urls, null, {
+      concurrency: 25,
+      timeoutMs: config.external_links.timeout_ms,
+      userAgent: "squirrel-test",
+      bulkChecker: checker!,
+      egress: { allowPrivateNetwork: true, resolve: async () => ["127.0.0.1"] },
+    })
   );
-  const occurrences: ExternalLinkOccurrences = new Map();
-  for (const url of urls) {
-    occurrences.set(url, [
-      {
-        pageUrl: "https://example.com/",
-        text: "link",
-        position: "content",
-        isNofollow: false,
-      },
-    ]);
-  }
-
-  await Effect.runPromise(
-    checkCollectedExternalLinks(
-      storage,
-      crawlId,
-      occurrences,
-      { ...config.external_links, enabled: true, concurrency: 25 },
-      undefined,
-      null,
-      checker!
-    )
-  );
-  const stored = await Effect.runPromise(
-    Effect.orDie(storage.getLinks(crawlId))
-  );
-  return { calls, stored: new Map(stored.map((l) => [l.href, l])) };
+  return { calls, checked: new Map(results.map((r) => [r.href, r])) };
 }
 
 describe("dead-links answers that leave urls out (pub#753)", () => {
-  test("the unanswered urls of a chunk are checked locally and stored with their local status", async () => {
+  test("the unanswered urls of a chunk are checked locally, with their local status", async () => {
     const origin = serveTargets();
     const [answered, gone, unanswered] = [
       `${origin}/ok-1`,
@@ -129,15 +97,15 @@ describe("dead-links answers that leave urls out (pub#753)", () => {
       `${origin}/ok-2`,
     ];
 
-    const { calls, stored } = await checkLinks(
+    const { calls, checked } = await checkLinks(
       [answered, gone, unanswered],
       () => [answered]
     );
 
     expect(calls).toHaveLength(1);
-    expect(stored.get(answered)?.status).toBe(200);
-    expect(stored.get(gone)?.status).toBe(404);
-    expect(stored.get(unanswered)?.status).toBe(200);
+    expect(checked.get(answered)?.status).toBe(200);
+    expect(checked.get(gone)?.status).toBe(404);
+    expect(checked.get(unanswered)?.status).toBe(200);
     expect(new Set(requested)).toEqual(new Set(["/gone-1", "/ok-2"]));
   });
 
@@ -147,12 +115,12 @@ describe("dead-links answers that leave urls out (pub#753)", () => {
       i % 10 === 0 ? `${origin}/gone-${i}` : `${origin}/ok-${i}`
     );
 
-    const { calls, stored } = await checkLinks(urls, () => []);
+    const { calls, checked } = await checkLinks(urls, () => []);
 
     expect(calls).toHaveLength(1);
-    expect(stored.size).toBe(urls.length);
+    expect(checked.size).toBe(urls.length);
     for (const url of urls) {
-      expect(stored.get(url)?.status).toBe(url.includes("/gone-") ? 404 : 200);
+      expect(checked.get(url)?.status).toBe(url.includes("/gone-") ? 404 : 200);
     }
     expect(new Set(requested).size).toBe(urls.length);
   });

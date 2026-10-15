@@ -47,7 +47,11 @@ export interface LinkCacheEntry {
   // "unverifiable" long after the host recovered.
 }
 
-/** Injectable link cache — CLI provides SQLite-backed cache; cloud passes null (no caching). */
+/**
+ * Injectable link cache — CLI provides SQLite-backed cache; cloud passes null (no caching).
+ * Shared by every audit on the machine, so it is read and written only under a
+ * public-only egress policy (pub#775, {@link isPublicOnlyEgress}).
+ */
 export interface LinkCache {
   getCachedBulk(urls: string[], ttlSeconds: number): Map<string, LinkCacheEntry>;
   setCachedBulk(entries: LinkCacheEntry[]): void;
@@ -90,6 +94,12 @@ export interface ExternalCheckerOptions {
    * chunk answered with none of its urls, falls back to the existing per-link
    * local path for the remaining urls. The map is keyed by the exact requested
    * url.
+   *
+   * pub#775: never sent a url whose host is non-public by the URL alone (a
+   * private IP literal, `localhost`, a `.local` or single-label name), whatever
+   * {@link egress} allows: those take the local path. A url it answers with
+   * its non-public refusal ({@link BULK_NON_PUBLIC_REFUSAL}) takes the local
+   * path too, so the refusal is never recorded as the link's verdict.
    */
   bulkChecker?: (urls: string[]) => Promise<Map<string, ExternalCheckResult>>;
   /**
@@ -109,6 +119,29 @@ export interface ExternalCheckerOptions {
  * never link-local or metadata, each hop pinned to the address vetted.
  */
 export const DEFAULT_EGRESS: EgressPolicy = { allowPrivateNetwork: false };
+
+/**
+ * True when `policy` only ever reaches public addresses, so a verdict it
+ * produced holds for any audit. One that allows private addresses (an audit of
+ * a private site) may have reached the auditor's own network through a public
+ * name or a redirect, and the shared link cache would hand that verdict to a
+ * public site's audit (pub#775): its checks neither read nor write the cache.
+ */
+export function isPublicOnlyEgress(policy: EgressPolicy): boolean {
+  return !policy.allowPrivateNetwork && !policy.allowPrivateTarget && !policy.trustTarget;
+}
+
+/**
+ * The `error` prefix of the cloud dead-links service's answer for a link it
+ * would not request because the link, or a redirect it led to, is not on a
+ * public address (`blocked_non_public_host:<reason>`). A refusal, not a
+ * verdict on the link: it takes the local check (pub#775).
+ */
+export const BULK_NON_PUBLIC_REFUSAL = "blocked_non_public_host";
+
+function isBulkNonPublicRefusal(result: ExternalCheckResult): boolean {
+  return result.status === null && (result.error?.startsWith(BULK_NON_PUBLIC_REFUSAL) ?? false);
+}
 
 /** Max urls per bulk-checker call — mirrors SERVICE_LIMITS.deadLinksBatchUrls. */
 export const BULK_CHECK_CHUNK_SIZE = 200;
@@ -367,8 +400,10 @@ export function checkExternalLinks(
     }
     if (uniqueUrls.length === 0) return results;
 
-    if (cache) {
-      const cachedEntries = cache.getCachedBulk(uniqueUrls, opts.ttlSeconds);
+    // pub#775: a private site's checks stay out of the cache every audit shares.
+    const sharedCache = isPublicOnlyEgress(egress) ? cache : null;
+    if (sharedCache) {
+      const cachedEntries = sharedCache.getCachedBulk(uniqueUrls, opts.ttlSeconds);
       for (const url of uniqueUrls) {
         const cached = cachedEntries.get(url);
         if (cached) {
@@ -396,15 +431,21 @@ export function checkExternalLinks(
     // next run is a pure local hit; the unresolved remainder (or everything,
     // if the bulk checker failed) takes the per-link local path below.
     if (opts.bulkChecker) {
-      const bulkResolved = yield* Effect.promise(() =>
-        runBulkChecker(opts.bulkChecker!, urlsToCheck)
-      );
+      // pub#775: a public service, so never sent a link whose URL names a
+      // non-public host, whatever this audit's policy allows. Those take the
+      // local check, which a private site's audit may make.
+      const bulkUrls = urlsToCheck.filter((url) => !refusedWithoutLookup(url, DEFAULT_EGRESS));
+      const bulkResolved =
+        bulkUrls.length > 0
+          ? yield* Effect.promise(() => runBulkChecker(opts.bulkChecker!, bulkUrls))
+          : new Map<string, ExternalCheckResult>();
       if (bulkResolved.size > 0) {
         const stillToCheck: string[] = [];
         const bulkCacheEntries: LinkCacheEntry[] = [];
         for (const url of urlsToCheck) {
           const resolved = bulkResolved.get(url);
-          if (resolved) {
+          // Its refusal of a non-public address is no answer: checked locally.
+          if (resolved && !isBulkNonPublicRefusal(resolved)) {
             results.push({ ...resolved, href: url });
             // #1829: never cache a throttled verdict — see the per-link cache
             // write below for why.
@@ -423,8 +464,8 @@ export function checkExternalLinks(
             stillToCheck.push(url);
           }
         }
-        if (cache && bulkCacheEntries.length > 0) {
-          cache.setCachedBulk(bulkCacheEntries);
+        if (sharedCache && bulkCacheEntries.length > 0) {
+          sharedCache.setCachedBulk(bulkCacheEntries);
         }
         urlsToCheck = stillToCheck;
       }
@@ -442,7 +483,7 @@ export function checkExternalLinks(
       concurrency: opts.concurrency,
     });
 
-    if (cache) {
+    if (sharedCache) {
       // #1829: a throttled result is a fact about the MOMENT, not the link. The
       // TTL is 7 days by default, so caching one 429 would keep a live link
       // reported as "unverifiable" for a week after the host recovered. Cache
@@ -459,7 +500,7 @@ export function checkExternalLinks(
           wafBlocked: r.wafBlocked,
           wafProvider: r.wafProvider,
         }));
-      if (cacheEntries.length > 0) cache.setCachedBulk(cacheEntries);
+      if (cacheEntries.length > 0) sharedCache.setCachedBulk(cacheEntries);
     }
 
     for (const r of checkedResults) {

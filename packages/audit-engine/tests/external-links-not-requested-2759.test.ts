@@ -248,11 +248,15 @@ describe("checkExternalLinks redirects", () => {
   });
 
   test("an action URL handed to it directly is not requested, by the bulk checker or locally", async () => {
-    const { third } = serve();
+    // A public name for the fixture: the bulk checker never gets a non-public
+    // host (pub#775), so a loopback address would not reach it at all.
+    const { port } = serve();
+    const third = `http://third.example:${port}`;
     const bulkAsked: string[][] = [];
     const results = await Effect.runPromise(
       checkExternalLinks([`${third}${UNSUBSCRIBE}`, `${third}/partner`], null, {
         ...options,
+        egress: { allowPrivateNetwork: true, resolve: async () => ["127.0.0.1"] },
         bulkChecker: async (urls) => {
           bulkAsked.push(urls);
           return new Map<string, ExternalCheckResult>();
