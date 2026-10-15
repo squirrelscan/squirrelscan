@@ -2,6 +2,7 @@
 // Converts crawler storage data to the format expected by rules and reports
 
 import {
+  fetchResourceAssets as fetchResourceAssetsCore,
   generateReportFromStorage as generateReportFromStorageCore,
   resolveStreamBatch,
   runRulesOnStorage as runRulesOnStorageCore,
@@ -12,6 +13,8 @@ import {
   type AdapterLogger,
   type ExternalCheckResult,
   type PageResultSink,
+  type PreFetchedAssets,
+  type ResourceCheckOverrides,
   type RuleCacheStats,
   type RuleCacheStore,
   type RuleTally,
@@ -26,10 +29,7 @@ import {
   extractLinks,
   extractMeta,
   extractOG,
-  extractScripts,
-  extractStylesheets,
   extractTwitter,
-  isSameDomainScript,
   parseDocument,
   parseSchemas,
   schemaCollectionFromJSON,
@@ -38,11 +38,7 @@ import {
   type ParsedPageCache,
 } from "@squirrelscan/parser";
 import { type RunnerScope } from "@squirrelscan/rules";
-import {
-  memoizeResolveHost,
-  resolveHostAddresses,
-} from "@squirrelscan/utils/public-egress";
-import { Duration, Effect, Stream } from "effect";
+import { Effect, Stream } from "effect";
 
 import type { Config } from "@/config";
 import type { Crawler, CrawlerEvent } from "@/crawler/core/types";
@@ -67,22 +63,10 @@ import type {
   AuditReport,
   CheckResult,
   ResourceSizeData,
-  ScriptContentData,
   SitemapUrlStatusData,
 } from "@/types";
 
-import { RESOURCE_SIZE_LIMITS, SQUIRRELSCAN_USER_AGENT } from "@/constants";
-import {
-  checkResourceSizes,
-  type ResourceCheckResult,
-} from "@/crawler/resource-checker";
-import {
-  fetchScriptContents,
-  type ScriptFetchResult,
-} from "@/crawler/script-fetcher";
 import { logger } from "@/utils/logger";
-import { getHostname, normalizeUrl } from "@/utils/url";
-import { detectWafChallengePage } from "@/utils/waf";
 
 // ============================================
 // SHARED CORE WIRING (#145)
@@ -450,393 +434,18 @@ export interface RuleExecutionResult {
   sitemapUrlStatuses: SitemapUrlStatusData[];
 }
 
-/**
- * Run all rules using site context
- *
- * @param siteContext - Pre-parsed site context (eliminates redundant parsing)
- */
-export interface ResourceCheckOverrides {
-  resourceCheckMaxItems?: number;
-  resourceCheckTimeoutMs?: number;
-  /** Total time budget for all resource checks combined (CSS + images + scripts + sitemap). */
-  resourceCheckBudgetMs?: number;
-  /**
-   * Whether this audit is incremental (not a --refresh full re-fetch). When
-   * true, prior-crawl sub-resource records are reused under browser-like
-   * freshness (#107). Defaults to false (cold audit) when unset.
-   */
-  incremental?: boolean;
-}
+// The asset phase lives once in @squirrelscan/audit-engine: the same fetchers,
+// the same egress policy and the same internal link probe as `squirrel audit`.
+// `squirrel analyze` used to run a fork of it whose script fetches followed
+// redirects natively, so no hop was checked (#768), and which never ran the
+// internal link probe (#799).
+export type { PreFetchedAssets, ResourceCheckOverrides };
 
 /**
- * Pre-fetched resource data — collected between crawl and rules phases.
- * Eliminates all HTTP requests during rules phase.
+ * Fetch all resource metadata and content the rules need, between the crawl
+ * and the rules: HEAD for sizes, GET for scripts, the internal link probe.
  */
-export interface PreFetchedAssets {
-  resourceSizes: {
-    css: ResourceSizeData[];
-    images: ResourceSizeData[];
-  };
-  scripts: ScriptContentData[];
-  pdfSizes: ResourceSizeData[];
-  sitemapUrlStatuses: SitemapUrlStatusData[];
-}
-
-/**
- * Fetch all resource metadata and content needed by rules.
- * Runs between crawl and rules phases — HEAD for sizes, GET for scripts.
- *
- * This replaces inline resource fetching that previously happened inside runRulesOnStorage().
- */
-export function fetchResourceAssets(
-  storage: CrawlStorage,
-  crawlId: string,
-  siteContext: SiteContextPage[],
-  config: Config,
-  overrides?: ResourceCheckOverrides
-): Effect.Effect<PreFetchedAssets, never, never> {
-  return Effect.gen(function* () {
-    const assetsSpan = logger.traceStart("fetchResourceAssets");
-
-    // Build parsedPages from siteContext (same filtering as runRulesOnStorage)
-    const parsedPages: Array<{
-      url: string;
-      finalUrl?: string;
-      statusCode: number;
-      parsed: ParsedPage;
-    }> = [];
-
-    for (const { page, parsed } of siteContext) {
-      if (!parsed) continue;
-      const wafChallenge = detectWafChallengePage({
-        status: page.status,
-        headers: {
-          server: page.headers.server,
-          cfCacheStatus: page.headers.cfCacheStatus,
-          xCache: page.headers.xCache,
-        },
-        html: page.html,
-      });
-      if (wafChallenge.detected) continue;
-
-      parsedPages.push({
-        url: page.normalizedUrl,
-        finalUrl: page.finalUrl,
-        statusCode: page.status,
-        parsed,
-      });
-    }
-
-    const crawl = yield* storage
-      .getCrawl(crawlId)
-      .pipe(Effect.catchAll(() => Effect.succeed(null)));
-    const baseUrl = crawl?.baseUrl ?? "";
-
-    // Load sitemaps for orphan page status checks
-    const sitemaps = yield* storage
-      .getSitemaps(crawlId)
-      .pipe(Effect.catchAll(() => Effect.succeed([])));
-
-    const sitemapUrlsMap = new Map<
-      string,
-      Array<{
-        loc: string;
-        lastmod?: string;
-        changefreq?: string;
-        priority?: number;
-      }>
-    >();
-    for (const sitemap of sitemaps) {
-      const urls = yield* storage
-        .getSitemapUrls(crawlId, sitemap.url)
-        .pipe(Effect.catchAll(() => Effect.succeed([])));
-      sitemapUrlsMap.set(
-        sitemap.url,
-        urls.map((u) => ({
-          loc: u.loc,
-          lastmod: u.lastmod,
-          changefreq: u.changefreq,
-          priority: u.priority,
-        }))
-      );
-    }
-
-    const sitemapDiscovery = {
-      discovered: sitemaps.map((s) => ({
-        url: s.url,
-        type: s.type,
-        urls: sitemapUrlsMap.get(s.url) ?? [],
-        childSitemaps: s.childSitemaps,
-        errors: s.errors,
-        urlCount: s.urlCount,
-      })),
-      sources: { robotsTxt: [] as string[], commonLocations: [] as string[] },
-      totalUrls: sitemaps.reduce((sum, s) => sum + s.urlCount, 0),
-      orphanPages: [] as string[],
-      missingPages: [] as string[],
-      failed: [],
-    };
-
-    if (sitemapDiscovery.discovered.length > 0) {
-      const coverage = computeSitemapCoverageData(
-        parsedPages.map((page) => ({
-          url: page.url,
-          finalUrl: page.finalUrl,
-          statusCode: page.statusCode,
-        })),
-        sitemapDiscovery
-      );
-      sitemapDiscovery.orphanPages = coverage.orphanPages;
-      sitemapDiscovery.missingPages = coverage.missingPages;
-    }
-
-    // Collect resource URLs from parsed pages
-    const resourceOccurrences = collectResourceOccurrences(
-      parsedPages,
-      baseUrl
-    );
-
-    // Collect PDF URLs from parsed page links
-    const pdfUrls = new Map<string, Set<string>>();
-    let baseOrigin: string | null = null;
-    try {
-      baseOrigin = baseUrl ? new URL(baseUrl).origin : null;
-    } catch {
-      // ignore
-    }
-    for (const page of parsedPages) {
-      for (const link of page.parsed.links) {
-        if (!link.url) continue;
-        if (!link.url.toLowerCase().endsWith(".pdf")) continue;
-        try {
-          const linkOrigin = new URL(link.url).origin;
-          if (baseOrigin && linkOrigin === baseOrigin) {
-            const sources = pdfUrls.get(link.url) ?? new Set<string>();
-            sources.add(page.url);
-            pdfUrls.set(link.url, sources);
-          }
-        } catch {
-          // Skip malformed URLs
-        }
-      }
-    }
-
-    // Prior-crawl sub-resource records for browser-like cache reuse (#107).
-    // Empty on a cold audit. Gate mirrors the page hot-path: incremental (not
-    // --refresh) AND use_cache_control on.
-    const cacheReuseEnabled =
-      (overrides?.incremental ?? false) &&
-      (config.crawler?.use_cache_control ?? true);
-    const priorResources = cacheReuseEnabled
-      ? yield* storage
-          .getCachedResources(crawlId)
-          .pipe(Effect.catchAll(() => Effect.succeed([])))
-      : [];
-    const priorByUrl = new Map(priorResources.map((r) => [r.url, r]));
-
-    const maxResources = overrides?.resourceCheckMaxItems;
-    const resourceCheckOptions = {
-      // squirrelscan/repo#2764: the site's own stylesheets, images, PDFs and
-      // sitemap URLs may not reach a link-local or cloud metadata address
-      // (private networks are fine). The crawl's own host is sent as the
-      // crawl sends it; every other hop, subdomains included, is vetted, as in
-      // the engine's asset phase. Scripts here go through the CLI's own script
-      // fetcher, which follows redirects natively: #768.
-      egress: {
-        allowPrivateNetwork: true,
-        resolve: memoizeResolveHost(resolveHostAddresses),
-        trustTarget: (url: URL) => {
-          try {
-            return (
-              url.host.toLowerCase() === new URL(baseUrl).host.toLowerCase()
-            );
-          } catch {
-            return false;
-          }
-        },
-      },
-      concurrency:
-        config.external_links?.concurrency ??
-        RESOURCE_SIZE_LIMITS.CHECK_CONCURRENCY,
-      timeoutMs:
-        overrides?.resourceCheckTimeoutMs ??
-        config.external_links?.timeout_ms ??
-        RESOURCE_SIZE_LIMITS.CHECK_TIMEOUT_MS,
-      userAgent: SQUIRRELSCAN_USER_AGENT,
-      priorByUrl,
-      ...(config.crawler?.max_staleness_seconds != null
-        ? { maxStalenessSeconds: config.crawler.max_staleness_seconds }
-        : {}),
-      ...(maxResources != null ? { maxResources } : {}),
-    };
-
-    const scriptFetchOptions: Parameters<typeof fetchScriptContents>[1] = {
-      pageCount: siteContext.length,
-      ...(maxResources != null ? { maxScripts: maxResources } : {}),
-      ...(overrides?.resourceCheckTimeoutMs != null
-        ? { timeoutMs: overrides.resourceCheckTimeoutMs }
-        : {}),
-    };
-
-    const sitemapStatusLimit = Math.min(
-      sitemapDiscovery.orphanPages.length,
-      maxResources ?? config.crawler?.max_pages ?? 500
-    );
-
-    const pdfCheckLimit = Math.min(pdfUrls.size, maxResources ?? 50);
-
-    const resourceCheckStart = Date.now();
-
-    const allResourceChecks = Effect.all(
-      {
-        // verifyCompression only on the two pools perf/asset-compression reads
-        // (#9) — the pdf and sitemap checks below never report on compression,
-        // so they keep the cheap HEAD path and pay nothing for it. Only the
-        // image pool reads headers, for images/responsive-size (#470).
-        css: checkResourceSizes(Array.from(resourceOccurrences.css.keys()), {
-          ...resourceCheckOptions,
-          verifyCompression: true,
-        }),
-        images: checkResourceSizes(
-          Array.from(resourceOccurrences.images.keys()),
-          {
-            ...resourceCheckOptions,
-            verifyCompression: true,
-            readImageHeader: true,
-          }
-        ),
-        scripts: fetchScriptContents(
-          Array.from(resourceOccurrences.scripts.keys()),
-          scriptFetchOptions
-        ),
-        pdfs: checkResourceSizes(
-          Array.from(pdfUrls.keys()).slice(0, pdfCheckLimit),
-          resourceCheckOptions
-        ),
-        sitemap: checkResourceSizes(
-          sitemapDiscovery.orphanPages.slice(0, sitemapStatusLimit),
-          resourceCheckOptions
-        ),
-      },
-      { concurrency: 5 }
-    );
-
-    const budgetMs = overrides?.resourceCheckBudgetMs;
-    const resourceResults = budgetMs
-      ? yield* Effect.catchAll(
-          Effect.timeoutFail(allResourceChecks, {
-            duration: Duration.millis(budgetMs),
-            onTimeout: () =>
-              new Error(
-                `Resource checks exceeded ${Math.round(budgetMs / 1000)}s budget`
-              ),
-          }),
-          (err) => {
-            logger.warn(
-              "resource check budget exceeded, using partial results",
-              { error: String(err) }
-            );
-            return Effect.succeed({
-              css: [] as ResourceCheckResult[],
-              images: [] as ResourceCheckResult[],
-              scripts: [] as ScriptFetchResult[],
-              pdfs: [] as ResourceCheckResult[],
-              sitemap: [] as ResourceCheckResult[],
-            });
-          }
-        )
-      : yield* allResourceChecks;
-
-    logger.trace("resource checks", {
-      css: resourceResults.css.length,
-      images: resourceResults.images.length,
-      scripts: resourceResults.scripts.length,
-      pdfs: resourceResults.pdfs.length,
-      sitemap: resourceResults.sitemap.length,
-      elapsed: `${Date.now() - resourceCheckStart}ms`,
-    });
-
-    const result: PreFetchedAssets = {
-      resourceSizes: {
-        css: resourceResults.css.map((check) => ({
-          url: check.url,
-          status: check.status,
-          error: check.error,
-          contentType: check.contentType,
-          sizeBytes: check.sizeBytes,
-          sourcePages: Array.from(resourceOccurrences.css.get(check.url) ?? []),
-          contentEncoding: check.contentEncoding,
-          transferBytes: check.transferBytes,
-          cacheControl: check.cacheControl,
-          etag: check.etag,
-          lastModified: check.lastModified,
-          vary: check.vary,
-          cacheReason: check.cacheReason,
-        })),
-        images: resourceResults.images.map((check) => ({
-          url: check.url,
-          status: check.status,
-          error: check.error,
-          contentType: check.contentType,
-          sizeBytes: check.sizeBytes,
-          sourcePages: Array.from(
-            resourceOccurrences.images.get(check.url) ?? []
-          ),
-          contentEncoding: check.contentEncoding,
-          transferBytes: check.transferBytes,
-          cacheControl: check.cacheControl,
-          etag: check.etag,
-          lastModified: check.lastModified,
-          vary: check.vary,
-          cacheReason: check.cacheReason,
-          naturalWidth: check.naturalWidth,
-          naturalHeight: check.naturalHeight,
-          animated: check.animated,
-        })),
-      },
-      scripts: resourceResults.scripts.map((fetch) => ({
-        url: fetch.url,
-        status: fetch.status,
-        error: fetch.error,
-        contentType: fetch.contentType,
-        sizeBytes: fetch.sizeBytes,
-        content: fetch.content,
-        sourcePages: Array.from(
-          resourceOccurrences.scripts.get(fetch.url) ?? []
-        ),
-        redirected: fetch.redirected,
-        finalUrl: fetch.finalUrl,
-        sourceMapHeader: fetch.sourceMapHeader,
-        contentEncoding: fetch.contentEncoding,
-      })),
-      pdfSizes: resourceResults.pdfs.map((check) => ({
-        url: check.url,
-        status: check.status,
-        error: check.error,
-        contentType: check.contentType,
-        sizeBytes: check.sizeBytes,
-        sourcePages: Array.from(pdfUrls.get(check.url) ?? []),
-      })),
-      sitemapUrlStatuses: resourceResults.sitemap.map((check) => ({
-        url: check.url,
-        status: check.status,
-        error: check.error,
-        // #1829: a throttled sitemap URL is unverified, not 4xx. Carried through
-        // to crawl/sitemap-4xx, which would otherwise report it as dead.
-        rateLimited: check.rateLimited,
-      })),
-    };
-
-    logger.traceEnd(assetsSpan, {
-      cssCount: result.resourceSizes.css.length,
-      imageCount: result.resourceSizes.images.length,
-      scriptCount: result.scripts.length,
-      pdfCount: result.pdfSizes.length,
-    });
-
-    return result;
-  });
-}
+export const fetchResourceAssets = fetchResourceAssetsCore;
 
 /**
  * Streamed twin of {@link runRulesOnStorage} — the live CLI rules path (#1913).
@@ -997,149 +606,6 @@ export type ExternalBulkChecker = (
 // ============================================
 // HELPERS
 // ============================================
-
-interface ResourceOccurrenceMap {
-  css: Map<string, Set<string>>;
-  images: Map<string, Set<string>>;
-  scripts: Map<string, Set<string>>;
-}
-
-function isSameDomainResource(url: string, baseHost: string): boolean {
-  const host = getHostname(url).toLowerCase();
-  if (!host || !baseHost) return false;
-  if (host === baseHost) return true;
-  return host.endsWith(`.${baseHost}`);
-}
-
-function collectResourceOccurrences(
-  pages: Array<{
-    url: string;
-    finalUrl?: string;
-    parsed: ParsedPage;
-  }>,
-  baseUrl: string
-): ResourceOccurrenceMap {
-  const baseHost = getHostname(baseUrl).toLowerCase();
-  const css = new Map<string, Set<string>>();
-  const images = new Map<string, Set<string>>();
-  const scripts = new Map<string, Set<string>>();
-
-  for (const page of pages) {
-    const pageUrl = page.finalUrl ?? page.url;
-    const doc = page.parsed.document;
-    if (!doc) continue;
-
-    const stylesheetRefs = extractStylesheets(doc, pageUrl);
-    for (const sheet of stylesheetRefs) {
-      if (!sheet.href || sheet.href.startsWith("data:")) continue;
-      if (!isSameDomainResource(sheet.href, baseHost)) continue;
-      const sources = css.get(sheet.href) ?? new Set<string>();
-      sources.add(page.url);
-      css.set(sheet.href, sources);
-    }
-
-    for (const image of page.parsed.images) {
-      if (!image.src || image.src.startsWith("data:")) continue;
-      let resolved = image.src;
-      try {
-        resolved = new URL(image.src, pageUrl).toString();
-      } catch {
-        // Ignore invalid URLs
-      }
-      if (!isSameDomainResource(resolved, baseHost)) continue;
-      const sources = images.get(resolved) ?? new Set<string>();
-      sources.add(page.url);
-      images.set(resolved, sources);
-    }
-
-    // Extract external script URLs
-    const scriptRefs = extractScripts(doc, pageUrl);
-    for (const script of scriptRefs) {
-      if (!script.src || script.src.startsWith("data:")) continue;
-      if (!isSameDomainScript(script.src, baseHost)) continue;
-      const sources = scripts.get(script.src) ?? new Set<string>();
-      sources.add(page.url);
-      scripts.set(script.src, sources);
-    }
-  }
-
-  return { css, images, scripts };
-}
-
-function computeSitemapCoverageData(
-  pages: Array<{
-    url: string;
-    finalUrl?: string;
-    statusCode: number;
-  }>,
-  sitemaps: {
-    discovered: Array<{
-      urls: Array<{ loc: string }>;
-    }>;
-  }
-): { orphanPages: string[]; missingPages: string[] } {
-  const sitemapUrlMap = new Map<string, string>();
-
-  for (const sitemap of sitemaps.discovered) {
-    for (const url of sitemap.urls) {
-      try {
-        const normalized = normalizeUrl(url.loc);
-        if (!sitemapUrlMap.has(normalized)) {
-          sitemapUrlMap.set(normalized, url.loc);
-        }
-      } catch {
-        // Ignore invalid URLs
-      }
-    }
-  }
-
-  const crawledUrls = new Set<string>();
-  for (const page of pages) {
-    try {
-      crawledUrls.add(normalizeUrl(page.url));
-    } catch {
-      // Ignore invalid URLs
-    }
-    if (page.finalUrl && page.finalUrl !== page.url) {
-      try {
-        crawledUrls.add(normalizeUrl(page.finalUrl));
-      } catch {
-        // Ignore invalid URLs
-      }
-    }
-  }
-
-  const orphanPages: string[] = [];
-  for (const [normalized, original] of sitemapUrlMap.entries()) {
-    if (!crawledUrls.has(normalized)) {
-      orphanPages.push(original);
-    }
-  }
-
-  const missingPages: string[] = [];
-  for (const page of pages) {
-    if (page.statusCode !== 200) continue;
-    const candidates = [page.url, page.finalUrl].filter(
-      (candidate): candidate is string => !!candidate
-    );
-    let inSitemap = false;
-    for (const candidate of candidates) {
-      try {
-        if (sitemapUrlMap.has(normalizeUrl(candidate))) {
-          inSitemap = true;
-          break;
-        }
-      } catch {
-        // Ignore invalid URLs
-      }
-    }
-    if (!inSitemap) {
-      missingPages.push(page.url);
-    }
-  }
-
-  return { orphanPages, missingPages };
-}
 
 function isHtmlContentType(contentType: string | null): boolean {
   if (!contentType) return false;

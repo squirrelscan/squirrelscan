@@ -18,6 +18,10 @@ squirrel analyze [options]
 |--------|-------------|---------|
 | `--id` | Crawl ID to analyze | Latest crawl |
 
+## What it fetches
+
+`analyze` does not crawl again, but some rules read more than the stored pages. Like `squirrel audit`, it fetches the stylesheets, images, scripts and PDFs the pages reference. It also status-checks the sitemap URLs and the [internal link targets](/configuration/external-links#internal-links) the crawl did not fetch. Every request and every redirect it follows is held to the same rules as the audit's, so it never connects to a link-local or cloud metadata address. External links are not checked.
+
 ## Examples
 
 ### Analyze latest crawl

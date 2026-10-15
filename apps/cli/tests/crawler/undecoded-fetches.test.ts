@@ -1,9 +1,8 @@
-// squirrelscan/repo#2717: the CLI's own script fetcher and reachability probe
-// fetch site-controlled URLs, and Bun's fetch inflates a Content-Encoding body
-// in full before any reader can stop it. Each turns that decoding off and
-// reads the body decoded, no further than its cap. (The external link check
-// runs on the engine's checker; the engine's undecoded-probe-fetches test
-// covers it.)
+// squirrelscan/repo#2717: the CLI's reachability probe fetches a
+// site-controlled URL, and Bun's fetch inflates a Content-Encoding body in full
+// before any reader can stop it. It turns that decoding off and reads the body
+// decoded, no further than its cap. (Scripts and external links are fetched by
+// the engine; its undecoded-probe-fetches test covers them.)
 
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
 import {
@@ -15,55 +14,22 @@ import {
   test,
 } from "bun:test";
 import { Effect } from "effect";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { createGzip, gzipSync } from "node:zlib";
+import { gzipSync } from "node:zlib";
 
-import { fetchScriptContents } from "@/crawler/script-fetcher";
-import { closeGlobalContentStore } from "@/crawler/storage/content-store";
 import { requestOnceScoped } from "@/tools/request";
 
 const SCRIPT = `window.squirrel = ${JSON.stringify("nuts ".repeat(100))};`;
 
-/** 1 GiB of spaces through gzip, never held whole: about 1 MB. */
-async function gzipBomb(): Promise<Buffer> {
-  const gzip = createGzip({ level: 6 });
-  const out: Buffer[] = [];
-  gzip.on("data", (chunk: Buffer) => out.push(chunk));
-  const ended = new Promise((resolve) => gzip.on("end", resolve));
-  const chunk = Buffer.alloc(16 * 1024 * 1024, 0x20);
-  for (let i = 0; i < 64; i++) {
-    if (!gzip.write(chunk))
-      await new Promise((resolve) => gzip.once("drain", resolve));
-  }
-  gzip.end();
-  await ended;
-  return Buffer.concat(out);
-}
-
-let bomb: Uint8Array<ArrayBuffer>;
 let server: ReturnType<typeof Bun.serve>;
 let base: string;
 
-const cacheDir = mkdtempSync(join(tmpdir(), "squirrel-undecoded-"));
-const priorContentStorePath = process.env.SQUIRREL_CONTENT_STORE_PATH;
-process.env.SQUIRREL_CONTENT_STORE_PATH = join(cacheDir, "content.db");
-
-beforeAll(async () => {
-  bomb = new Uint8Array(await gzipBomb());
+beforeAll(() => {
   server = Bun.serve({
     port: 0,
     fetch(req) {
       const path = new URL(req.url).pathname;
-      if (path === "/moved.js") {
-        return new Response(null, {
-          status: 302,
-          headers: { location: "/app.js" },
-        });
-      }
-      if (path === "/app.js" || path === "/bomb.js") {
-        return new Response(path === "/app.js" ? gzipSync(SCRIPT) : bomb, {
+      if (path === "/app.js") {
+        return new Response(gzipSync(SCRIPT), {
           headers: {
             "content-type": "application/javascript",
             "content-encoding": "gzip",
@@ -78,13 +44,6 @@ beforeAll(async () => {
 
 afterAll(() => {
   server.stop(true);
-  closeGlobalContentStore();
-  if (priorContentStorePath === undefined) {
-    delete process.env.SQUIRREL_CONTENT_STORE_PATH;
-  } else {
-    process.env.SQUIRREL_CONTENT_STORE_PATH = priorContentStorePath;
-  }
-  rmSync(cacheDir, { recursive: true, force: true });
 });
 
 const real = globalThis.fetch;
@@ -109,33 +68,6 @@ afterEach(() => {
 });
 
 describe("CLI fetches of site-controlled URLs (#2717)", () => {
-  test("a script is fetched undecoded and read decoded", async () => {
-    const [result] = await Effect.runPromise(
-      fetchScriptContents([`${base}/moved.js`])
-    );
-    expect(result?.content).toBe(SCRIPT);
-    expect(result?.contentEncoding).toBe("gzip");
-    expect(sent).toEqual([{ path: "/moved.js", decompress: false }]);
-  });
-
-  test("a script that inflates to 1 GiB is refused at the size limit, not inflated", async () => {
-    Bun.gc(true);
-    const before = process.memoryUsage().rss;
-    let peak = before;
-    const sampler = setInterval(() => {
-      peak = Math.max(peak, process.memoryUsage().rss);
-    }, 1);
-    const [result] = await Effect.runPromise(
-      fetchScriptContents([`${base}/bomb.js`])
-    );
-    clearInterval(sampler);
-    expect(result?.error).toBe("script too large");
-    // The read used to be an unbounded `.text()` of the inflated gigabyte.
-    expect(Math.max(peak, process.memoryUsage().rss) - before).toBeLessThan(
-      256 * 1024 * 1024
-    );
-  });
-
   test("the reachability probe's request is undecoded", async () => {
     const text = await Effect.runPromise(
       requestOnceScoped(`${base}/app.js`, { method: "GET" }, (res) =>
