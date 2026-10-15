@@ -162,7 +162,14 @@ function withoutElementPrefix(value: unknown, prefix: string): unknown {
   const out: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value)) {
     const name = key.startsWith(`${prefix}:`) ? key.slice(prefix.length + 1) : key;
-    out[name] = withoutElementPrefix(child, prefix);
+    // The parser refuses an element named `__proto__`; `ns0:__proto__` is
+    // another name to it, so the bare one would reach here and replace the
+    // copy's prototype. Refused the same way.
+    if (name === "__proto__") throw new Error('[SECURITY] Invalid name: "__proto__"');
+    const stripped = withoutElementPrefix(child, prefix);
+    // `<ns0:loc>` beside `<loc>` is two of the same element, as the parser
+    // reports a repeat: kept as a list, so a doubled field is still flagged.
+    out[name] = Object.hasOwn(out, name) ? [out[name], stripped].flat() : stripped;
   }
   return out;
 }
@@ -175,6 +182,8 @@ function withoutElementPrefix(value: unknown, prefix: string): unknown {
  * unknown format.
  */
 function unprefixedRoot(parsed: Record<string, unknown>): Record<string, unknown> {
+  // An unprefixed root is read as before, whatever else the document holds.
+  if ("urlset" in parsed || "sitemapindex" in parsed) return parsed;
   for (const [key, element] of Object.entries(parsed)) {
     const colon = key.indexOf(":");
     if (colon <= 0 || element === null || typeof element !== "object") continue;
@@ -258,7 +267,10 @@ export function parseSitemap(content: string, url: string): SitemapData {
         urlCount: urls.length,
         // Namespace, not filename: `google-news-sitemap.xml` is convention, and a news sitemap served
         // from any path still declares xmlns:news. See SitemapData.isNewsSitemap for why it matters.
-        isNewsSitemap: typeof urlset["@_xmlns:news"] === "string",
+        // A root prefixed `news:` and bound to the sitemap namespace is not news.
+        isNewsSitemap:
+          typeof urlset["@_xmlns:news"] === "string" &&
+          !SITEMAP_NAMESPACES.has(urlset["@_xmlns:news"].trim()),
       };
     }
 

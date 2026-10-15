@@ -77,4 +77,52 @@ describe("a sitemap with a namespace-prefixed root (#759)", () => {
     expect(decoded.data.errors).toEqual([]);
     expect(decoded.data.urls.map((u) => u.loc)).toEqual(["https://example.com/a"]);
   });
+
+  test("every sitemap namespace it accepts reads, in either scheme and Google's older ones", () => {
+    for (const ns of [
+      "https://www.sitemaps.org/schemas/sitemap/0.9",
+      "http://www.google.com/schemas/sitemap/0.84",
+      "http://www.google.com/schemas/sitemap/0.9",
+    ]) {
+      const result = parseSitemap(
+        `<p:urlset xmlns:p="${ns}"><p:url><p:loc>https://example.com/a</p:loc></p:url></p:urlset>`,
+        URL_,
+      );
+      expect(result.urls.map((u) => u.loc)).toEqual(["https://example.com/a"]);
+    }
+  });
+
+  test("a prefixed __proto__ element is refused like the unprefixed one", () => {
+    const evil = (name: string) =>
+      `<ns0:urlset xmlns:ns0="${NS}"><${name}><ns0:url><ns0:loc>https://e.com/evil</ns0:loc></ns0:url></${name}></ns0:urlset>`;
+    expect(parseSitemap(evil("ns0:__proto__"), URL_).urls).toEqual([]);
+    expect(parseSitemap(evil("ns0:__proto__"), URL_).errors[0]).toContain("Invalid name");
+  });
+
+  test("an element written both prefixed and not is a repeat, flagged as one", () => {
+    const result = parseSitemap(
+      `<ns0:urlset xmlns:ns0="${NS}" xmlns="${NS}"><ns0:url><ns0:loc>https://example.com/a</ns0:loc><loc>https://example.com/b</loc></ns0:url><ns0:url><ns0:loc>https://example.com/c</ns0:loc></ns0:url><url><loc>https://example.com/d</loc></url></ns0:urlset>`,
+      URL_,
+    );
+    expect(result.urls.map((u) => u.loc)).toEqual(["https://example.com/c", "https://example.com/d"]);
+    expect(result.errors.join(" ")).toContain("skipped");
+  });
+
+  test("an unprefixed root is read as before when a prefixed one sits beside it", () => {
+    const result = parseSitemap(
+      `<urlset xmlns="${NS}"><url><loc>https://example.com/a</loc></url></urlset><x:sitemapindex xmlns:x="${NS}"><x:sitemap><x:loc>https://example.com/s.xml</x:loc></x:sitemap></x:sitemapindex>`,
+      URL_,
+    );
+    expect(result.type).toBe("urlset");
+    expect(result.urls.map((u) => u.loc)).toEqual(["https://example.com/a"]);
+  });
+
+  test("a root prefixed news: and bound to the sitemap namespace is not a news sitemap", () => {
+    const result = parseSitemap(
+      `<news:urlset xmlns:news="${NS}"><news:url><news:loc>https://example.com/a</news:loc></news:url></news:urlset>`,
+      URL_,
+    );
+    expect(result.isNewsSitemap).toBe(false);
+    expect(result.urls.map((u) => u.loc)).toEqual(["https://example.com/a"]);
+  });
 });
