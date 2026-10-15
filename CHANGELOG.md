@@ -19,7 +19,7 @@ How it works:
 
 ## v0.0.113 (2026-10-15)
 
-A safety and accuracy release. The external link check no longer requests links that are actions or carry a credential, such as one-click unsubscribe links, magic sign-in links and signed downloads, and every request it sends, redirect hops included, goes only to a public address (or a private one when the audited site is private), never to a link-local or cloud metadata address. `squirrel audit`'s asset checks can no longer be pointed at a cloud metadata service, the GraphQL probes no longer let a compressed answer inflate past their read limit, and an audit now closes each connection once it has read what it needs, so an endless body no longer keeps downloading. Sitemap dates, bot-protection names, and a dozen rule messages are more accurate too.
+A safety and accuracy release. The external link check no longer requests links that are actions or carry a credential, such as one-click unsubscribe links, magic sign-in links and signed downloads, and every request it sends, redirect hops included, goes only to a public address (or a private one when the audited site is private), never to a link-local or cloud metadata address. `squirrel audit`'s asset checks can no longer be pointed at a cloud metadata service, the GraphQL probes no longer let a compressed answer inflate past their read limit, and an audit now closes each connection once it has read what it needs, so an endless body no longer keeps downloading. Sitemap dates, bot-protection names and a dozen rules report more accurately too.
 
 ### Security
 
@@ -45,16 +45,17 @@ A safety and accuracy release. The external link check no longer requests links 
 - The GraphQL probes behind `security/graphql-introspection` and `security/graphql-get-mutations` no longer let a site answer with a compression bomb.
   - Their requests went out with the runtime's own decompression on, and Bun inflates a gzip or brotli body in full as it arrives, before the probe's read limit applied. A probed endpoint could cost an audit gigabytes of memory.
   - They now fetch with that decompression off, like every other request an audit sends, and decompress the answer no further than the probe's limit (1 MB for introspection, 64 KB for the mutation probe).
+  - Each probe also closes its connection once its answer is read, where an endless answer used to keep downloading until the 10-second timeout.
   - Findings are unchanged. See [security/graphql-introspection](https://docs.squirrelscan.com/rules/security/graphql-introspection).
 - `integrity/brand-impersonation` and `integrity/fake-auth-overlay` no longer lose a signal to how a page's markup is spaced.
   - An off-brand "Sign in with Google" link right after `<h1>Welcome</h1>` used to read as `welcomesign in with google`, so the sign-in cue was missed and a correlated overlay dropped from fail to info.
-  - The cues are now also read from element-separated text, with invisible characters removed and whitespace collapsed, so a newline, `&nbsp;`, a `<br>` or a zero-width space inside the link's label no longer hides it either.
+  - The cues are now also read from element-separated text, with invisible characters removed and whitespace collapsed, so a newline, `&nbsp;`, a `<br>` or a zero-width space inside a link's label of up to 300 characters no longer hides it either. A longer label is read as before, lowercased only.
   - For `integrity/brand-impersonation`, a link whose own label says sign in or log in now counts as a credential affordance, like a password field.
   - See [integrity/brand-impersonation](https://docs.squirrelscan.com/rules/integrity/brand-impersonation).
 
 ### Changed
 
-- The first-run credit notice and `squirrel credits` no longer mention a charge for the CLI's own link checks. A signed-in audit's external links go to the cloud's dead-link check for free, and any link it leaves unanswered is checked on your machine. See [Credits and pricing](https://docs.squirrelscan.com/cloud/credits#pricing).
+- A signed-in audit's link checks are free, a firewall-blocked link included: [Credits and pricing](https://docs.squirrelscan.com/cloud/credits#pricing) no longer lists a 2-credit charge for one. At the surface and full levels, a signed-in audit's external links go to the cloud's dead-link check, and any link it leaves unanswered is checked on your machine.
 - A signed-in audit no longer waits out a busy dead-link service batch by batch. squirrel sends the service up to 200 external links at a time, and any link left out of a reply is checked locally. When a reply answers none of its links, squirrel now stops asking and checks the rest locally straight away. Before, it sent every remaining batch and waited on each, about 100 seconds on a site with 1,000 external links. See [links/dead-links](https://docs.squirrelscan.com/rules/links/dead-links).
 
 ### Fixed
