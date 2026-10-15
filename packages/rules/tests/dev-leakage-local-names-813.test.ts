@@ -55,6 +55,7 @@ describe("content/dev-leakage — links to local-only names (pub#813)", () => {
       "nas.lan",
       "box.local",
       "db.internal",
+      "router.home.arpa",
       "intranet",
     ]) {
       expect(classifyHost(host, site)).toEqual({ kind: "local-name", own: false });
@@ -72,6 +73,13 @@ describe("content/dev-leakage — links to local-only names (pub#813)", () => {
     for (const host of ["testing.com", "my.local.example.com", "lan.dev", "home.com", "example.com"]) {
       expect(classifyHost(host, site)).toBeNull();
     }
+  });
+
+  test("a single-label host: a link warns, a mention in copy cannot match (no dot)", () => {
+    const check = run('<a href="http://intranet/tickets">File a ticket</a>');
+    expect(check.status).toBe("warn");
+    expect(check.message).toContain("http://intranet/tickets");
+    expect(findDevHostsInText("File it at http://intranet/tickets today.", site)).toEqual([]);
   });
 
   test("an images or script src on a local name is reported too", () => {

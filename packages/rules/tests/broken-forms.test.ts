@@ -590,3 +590,37 @@ describe("reliability/broken-forms: category and registration", () => {
     expect(loadAllRules().has("reliability/broken-forms")).toBe(true);
   });
 });
+
+// pub#813: a local-only name (`myapp.test`, `box.local`, a single-label host) is
+// a development address on a production page, and the user's own network when
+// it is what the audit is of.
+describe("reliability/broken-forms: local-only names (pub#813)", () => {
+  test("on a production site, a .test or single-label action warns as non-production, with no request", async () => {
+    const html = doc(`
+      <form action="http://myapp.test/lead" method="post"><input name="a"></form>
+      <form action="http://intranet/submit" method="post"><input name="a"></form>`);
+    const result = await rule.run(ctx(site([{ url: HOME, html }]), budget("aggressive")));
+    const warned = labels(check(result.checks, "non-production-form-action")).join("\n");
+    expect(warned).toContain("myapp.test");
+    expect(warned).toContain("intranet");
+    expect(calls).toHaveLength(0);
+  });
+
+  for (const origin of ["http://myapp.test", "http://intranet"]) {
+    test(`auditing ${origin}: its own and other local-name actions are not non-production warnings`, async () => {
+      const page = `${origin}/`;
+      const html = doc(`
+        <form action="/subscribe" method="post"><input name="a"></form>
+        <form action="http://api.test/lead" method="post"><input name="a"></form>
+        <form action="http://wiki/submit" method="post"><input name="a"></form>`);
+      const localSite = {
+        baseUrl: origin,
+        pages: [{ url: page, statusCode: 200, parsed: parsePage(html, page) }],
+        robotsTxt: null,
+        sitemaps: null,
+      } as unknown as SiteData;
+      const result = await rule.run(ctx(localSite, budget("passive")));
+      expect(check(result.checks, "non-production-form-action")).toBeUndefined();
+    });
+  }
+});
