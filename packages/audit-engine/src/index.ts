@@ -201,9 +201,6 @@ export { checkResourceSizes, normalizeEncoding, varyForbidsReuse } from "./resou
 export type { ResourceCheckResult, ResourceCheckerOptions } from "./resource-checker";
 export type { ScriptFetchResult } from "./script-fetcher";
 export type { ExternalCheckResult, LinkCache, LinkCacheEntry } from "./external-checker";
-// The per-link checker under an explicit egress policy; an audit goes through
-// checkCollectedExternalLinks, which builds the policy from the audited site.
-export { checkExternalLinks } from "./external-checker";
 
 // SiteQuery factory (#1022) — streaming-engine aggregate view over a crawl.
 export { createSiteQuery } from "./site-query";

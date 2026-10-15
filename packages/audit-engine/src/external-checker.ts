@@ -121,14 +121,20 @@ export interface ExternalCheckerOptions {
 export const DEFAULT_EGRESS: EgressPolicy = { allowPrivateNetwork: false };
 
 /**
- * True when `policy` only ever reaches public addresses, so a verdict it
- * produced holds for any audit. One that allows private addresses (an audit of
+ * True when `policy` only ever reaches public addresses, and any host, so a
+ * verdict it produced holds for any audit. One that allows private addresses (an audit of
  * a private site) may have reached the auditor's own network through a public
  * name or a redirect, and the shared link cache would hand that verdict to a
  * public site's audit (pub#775): its checks neither read nor write the cache.
  */
 export function isPublicOnlyEgress(policy: EgressPolicy): boolean {
-  return !policy.allowPrivateNetwork && !policy.allowPrivateTarget && !policy.trustTarget;
+  return (
+    !policy.allowPrivateNetwork &&
+    !policy.allowPrivateTarget &&
+    !policy.trustTarget &&
+    // A host-restricted check stops where others would not: its verdict is its own.
+    !policy.allowHost
+  );
 }
 
 /**
@@ -140,7 +146,7 @@ export function isPublicOnlyEgress(policy: EgressPolicy): boolean {
 export const BULK_NON_PUBLIC_REFUSAL = "blocked_non_public_host";
 
 function isBulkNonPublicRefusal(result: ExternalCheckResult): boolean {
-  return result.status === null && (result.error?.startsWith(BULK_NON_PUBLIC_REFUSAL) ?? false);
+  return result.status === null && (result.error?.startsWith(`${BULK_NON_PUBLIC_REFUSAL}:`) ?? false);
 }
 
 /** Max urls per bulk-checker call — mirrors SERVICE_LIMITS.deadLinksBatchUrls. */

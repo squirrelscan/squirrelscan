@@ -7,6 +7,7 @@
     "./smart-audits": "./src/smart-audits.ts",
     "./publish-cap": "./src/publish-cap.ts",
     "./published-checks": "./src/published-checks.ts",
+    "./external-checker": "./src/external-checker.ts",
     "./entity-map": "./src/entity-map/index.ts",
     "./entity-map/collect": "./src/entity-map/collect.ts"
   },

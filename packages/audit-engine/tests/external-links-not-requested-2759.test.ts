@@ -11,10 +11,11 @@ import { Effect } from "effect";
 
 import type { Config } from "@squirrelscan/config";
 import type { CheckResult } from "@squirrelscan/core-contracts";
-import { createCrawler } from "@squirrelscan/crawler";
+import { createCrawler, SQLiteStorage } from "@squirrelscan/crawler";
 
 import {
   buildSiteContext,
+  checkCollectedExternalLinks,
   runRulesOnStorage,
   runStreamingRules,
   splitNotRequestedExternalLinks,
@@ -270,6 +271,60 @@ describe("checkExternalLinks redirects", () => {
   });
 });
 
+describe("the cloud's dead-links service and not-requested links (repo#2759)", () => {
+  test("a public site's action and token links, by URL or by link text, are never sent to it", async () => {
+    const storage = new SQLiteStorage(":memory:");
+    await Effect.runPromise(Effect.orDie(storage.init()));
+    const crawlId = await Effect.runPromise(
+      Effect.orDie(
+        storage.createCrawl({
+          baseUrl: "https://example.com",
+          seedUrl: "https://example.com",
+          originalUrl: "https://example.com",
+          startedAt: Date.now(),
+          status: "running",
+          config: {},
+          stats: {},
+        } as never),
+      ),
+    );
+    const third = "https://third.example";
+    const occurrences: ExternalLinkOccurrences = new Map();
+    for (const [path, text] of [
+      ["/partner", "Our partner"],
+      [UNSUBSCRIBE, "Unsubscribe"],
+      [SIGNED, "Report"],
+      ["/account", "Log out"],
+    ] as const) {
+      occurrences.set(`${third}${path}`, [
+        { pageUrl: "https://example.com/", text, position: "content" as const, isNofollow: false },
+      ]);
+    }
+    const bulkAsked: string[] = [];
+    await Effect.runPromise(
+      checkCollectedExternalLinks(
+        storage,
+        crawlId,
+        occurrences,
+        { enabled: true, concurrency: 1, timeout_ms: 2_000, cache_ttl_days: 1 } as never,
+        undefined,
+        null,
+        // Answers everything it is asked, so nothing is checked locally.
+        async (urls) => {
+          bulkAsked.push(...urls);
+          return new Map(
+            urls.map((url) => [
+              url,
+              { href: url, status: 200, error: null, redirectTarget: null, fromCache: false },
+            ]),
+          );
+        },
+      ),
+    );
+    expect(bulkAsked).toEqual([`${third}/partner`]);
+  });
+});
+
 describe("an audit with external link checks on (repo#2759)", () => {
   test("records zero requests to third-party action and token links, and reports them as not requested", async () => {
     const { port, third } = serve();
@@ -305,8 +360,9 @@ describe("an audit with external link checks on (repo#2759)", () => {
         externalLinks: {
           config: config.external_links,
           linkCache: null,
-          // The cloud's dead-links service stands in here: it must never be
-          // asked about them either.
+          // The cloud's dead-links service stands in here. These links are on
+          // loopback, so it is never asked about any of them (pub#775); the
+          // test below shows the not-requested ones stay out on a public name.
           bulkChecker: async (urls) => {
             bulkAsked.push(...urls);
             return new Map<string, ExternalCheckResult>();

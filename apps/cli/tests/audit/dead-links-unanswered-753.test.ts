@@ -7,7 +7,7 @@
 // resolves there: the engine never sends the service a link whose URL names a
 // non-public host (pub#775). An audit of a local site checks those locally.
 
-import { checkExternalLinks } from "@squirrelscan/audit-engine";
+import { checkExternalLinks } from "@squirrelscan/audit-engine/external-checker";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 

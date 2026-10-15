@@ -194,11 +194,12 @@ describe("checkExternalLinks with a bulk checker", () => {
   });
 });
 
-describe("the dead-links summary after an unanswered chunk", () => {
-  // The page's external links are on loopback, so they are never sent to the
-  // service (pub#775): every one is checked locally, and the summary reports
-  // those results, never all links fine.
-  test("reports the locally checked results, never all links fine", async () => {
+describe("a local site's external links and the dead-links service", () => {
+  // pub#775: the page's external links are on loopback, so the service is
+  // never sent one; every one is checked locally, and the summary reports those
+  // results, never all links fine (pub#753). The unanswered-chunk path itself is
+  // covered by the checkExternalLinks tests above.
+  test("are never sent to it, and the summary reports the local results", async () => {
     const port = new URL(serveTargets()).port;
     const home = `http://localhost:${port}/`;
     const { calls, checker } = service(() => []);
