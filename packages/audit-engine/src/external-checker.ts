@@ -28,7 +28,7 @@ import {
   type EgressPolicy,
 } from "@squirrelscan/utils/public-egress";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
-import { detectWaf, type WafProvider } from "@squirrelscan/waf-detect";
+import { detectWaf, detectWafChallengePage, type WafProvider } from "@squirrelscan/waf-detect";
 
 // ============================================
 // LINK CACHE INTERFACE (implemented by CLI's LinkCacheStorage)
@@ -201,6 +201,23 @@ interface CheckUrlResult {
   rateLimited?: boolean;
   /** The egress policy refused the first request: nothing was sent, and nothing is cached. */
   refused?: boolean;
+  /** Out of time: unverifiable this run, and not cached, so the next run asks again (pub#800). */
+  timedOut?: boolean;
+}
+
+/**
+ * What a site answers a request it takes for a robot's: a sign-in or bot wall
+ * (401, 403), a method or content refusal bot rules send (405, 406), and
+ * LinkedIn's 999. Asked from this machine, none of them says the page is gone,
+ * so a link answering one is unverifiable, never broken (pub#800). The cloud
+ * link checker takes the same statuses to a browser-grade check.
+ */
+const BOT_WALL_STATUSES = new Set([401, 403, 405, 406, 999]);
+
+/** A cached answer from before pub#800, which counted a wall or a timeout as broken: asked again. */
+function staleWallVerdict(entry: LinkCacheEntry): boolean {
+  if (entry.wafBlocked) return false;
+  return (entry.status !== null && BOT_WALL_STATUSES.has(entry.status)) || entry.error === "timeout";
 }
 
 /** Redirects followed per request, a browser's limit. */
@@ -302,7 +319,11 @@ async function checkSingleUrlAsync(
     const getResponse = get.response;
     const redirectTarget = get.redirectTarget;
 
-    if (getResponse.status === 403) {
+    // pub#800: a wall says nothing about the page behind it, whether or not
+    // its vendor can be named, so it is listed as unverifiable. A 503 is a
+    // wall only when it is a challenge page; otherwise it is the site's own
+    // error (or, with Retry-After, throttling, below).
+    if (BOT_WALL_STATUSES.has(getResponse.status) || getResponse.status === 503) {
       let body: string | undefined;
       try {
         // Capped, and decoded no further than the cap (#2717): the WAF
@@ -310,20 +331,32 @@ async function checkSingleUrlAsync(
         body = await readBodyCapped(getResponse, DEFAULT_MAX_BODY_BYTES);
       } catch {
         // The body never arrived: the deadline above fired mid-read, or the
-        // connection dropped. Do NOT give up on detection here — falling
-        // through reports a live, bot-guarded link as broken. Most WAFs are
-        // identifiable from their response headers alone (cf-ray, x-sucuri-id,
-        // a provider `server` value), so run detection on the headers we DO
-        // have. `detectWaf` treats an absent body as headers-only (#1729).
+        // connection dropped. Most WAFs are identifiable from their response
+        // headers alone (cf-ray, x-sucuri-id, a provider `server` value), so
+        // run detection on the headers we DO have. `detectWaf` treats an
+        // absent body as headers-only (#1729).
       }
-      const wafResult = detectWaf(getResponse.headers, body);
-      if (wafResult.detected) {
+      const headers = getResponse.headers;
+      const challenge =
+        getResponse.status !== 503 ||
+        headers.get("cf-mitigated") === "challenge" ||
+        detectWafChallengePage({
+          status: 503,
+          headers: {
+            server: headers.get("server"),
+            cfCacheStatus: headers.get("cf-cache-status"),
+            xCache: headers.get("x-cache"),
+          },
+          html: body ?? null,
+        }).detected;
+      if (challenge) {
+        const wafResult = detectWaf(headers, body);
         return {
-          status: 403,
+          status: getResponse.status,
           error: null,
           redirectTarget,
           wafBlocked: true,
-          wafProvider: wafResult.provider ?? "unknown",
+          wafProvider: wafResult.detected ? (wafResult.provider ?? "unknown") : "unknown",
         };
       }
     }
@@ -346,7 +379,16 @@ async function checkSingleUrlAsync(
       return { status: null, error: null, redirectTarget: null, refused: true };
     }
     if ((error as Error).name === "AbortError") {
-      return { status: null, error: "timeout", redirectTarget: null };
+      // pub#800: a site that stalls robots looks exactly like a dead one from
+      // here, so out of time is unverifiable, never broken. Not cached.
+      return {
+        status: null,
+        error: null,
+        redirectTarget: null,
+        wafBlocked: true,
+        wafProvider: "unknown",
+        timedOut: true,
+      };
     }
     return { status: null, error: (error as Error).message || "Unknown error", redirectTarget: null };
   } finally {
@@ -412,7 +454,7 @@ export function checkExternalLinks(
       const cachedEntries = sharedCache.getCachedBulk(uniqueUrls, opts.ttlSeconds);
       for (const url of uniqueUrls) {
         const cached = cachedEntries.get(url);
-        if (cached) {
+        if (cached && !staleWallVerdict(cached)) {
           results.push({
             href: cached.href,
             status: cached.status,
@@ -495,8 +537,9 @@ export function checkExternalLinks(
       // reported as "unverifiable" for a week after the host recovered. Cache
       // the verified results only; throttled ones are re-checked next run.
       const cacheEntries: LinkCacheEntry[] = checkedResults
-        // Nor a refused one: nothing was asked.
-        .filter((r) => !isRateLimited(r) && !r.refused)
+        // Nor a refused one: nothing was asked. Nor one that ran out of time:
+        // like throttling, a fact about the moment (pub#800).
+        .filter((r) => !isRateLimited(r) && !r.refused && !r.timedOut)
         .map((r) => ({
           href: r.href,
           status: r.status,
@@ -542,7 +585,8 @@ export function filterBrokenLinks(
 ): ExternalCheckResult[] {
   return results.filter((r) => {
     if (r.error) return true;
-    if (r.status === 403 && r.wafBlocked) return false;
+    // Unverifiable, whatever its status: a wall or a timeout (pub#800).
+    if (r.wafBlocked) return false;
     // Rate limiting means the status is UNVERIFIED, not that the link is dead
     // (#1829). Checked before the >= 400 test, which 429/430 would otherwise
     // satisfy.

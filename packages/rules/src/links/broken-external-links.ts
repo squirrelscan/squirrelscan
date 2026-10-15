@@ -189,12 +189,13 @@ export const brokenExternalLinksRule: Rule = {
     }
 
     // Find broken external links (4xx, 5xx, or errors)
-    // Excludes WAF-blocked 403s and rate-limited targets, neither of which is
+    // Excludes unverifiable and rate-limited targets, neither of which is
     // evidence the link is dead.
     const brokenLinks = externalLinks.filter((link) => {
       if (link.error) return true;
-      // WAF-blocked 403s are not truly broken - they're just inaccessible to bots
-      if (link.status === 403 && link.wafBlocked) return false;
+      // A bot or sign-in wall, whatever its status, or a timeout: not truly
+      // broken, just not verifiable from where it was checked (pub#800).
+      if (link.wafBlocked) return false;
       // #1829: 429/430 (and a Retry-After 503) mean the host throttled US. The
       // link's real status is unknown, so it is reported below as info rather
       // than counted here. Must precede the >= 400 test, which they satisfy.

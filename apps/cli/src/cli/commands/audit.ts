@@ -44,6 +44,7 @@ import {
   parseHeaders,
   redactHeaders,
 } from "@/audit/headers";
+import { localUnverifiedLinksNotice } from "@/audit/local-link-notice";
 import {
   generateConsoleReport,
   generateTextReport,
@@ -2559,6 +2560,11 @@ export const audit = defineCommand({
           log(`⚠ ${label} failed (${f.detail})`);
         }
       }
+      const unverifiedNotice = localUnverifiedLinksNotice(report, {
+        signedIn,
+        hasAccount: Boolean(accountLabel),
+      });
+      if (unverifiedNotice) log(fmt.yellow(`⚠ ${unverifiedNotice}`));
       log("");
 
       // Audit is stored in SQLite database
