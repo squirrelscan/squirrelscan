@@ -140,6 +140,54 @@ function createFieldReader(element: "url" | "sitemap") {
   };
 }
 
+/**
+ * Namespaces a sitemap's elements may be bound to. The protocol's own, in
+ * either scheme, and Google's earlier one, which old generators still write.
+ */
+const SITEMAP_NAMESPACES = new Set([
+  "http://www.sitemaps.org/schemas/sitemap/0.9",
+  "https://www.sitemaps.org/schemas/sitemap/0.9",
+  "http://www.google.com/schemas/sitemap/0.84",
+  "http://www.google.com/schemas/sitemap/0.9",
+]);
+
+/**
+ * `value` with the `prefix:` taken off every element name in it, so a sitemap
+ * written as `<ns0:urlset><ns0:url><ns0:loc>` reads as the unprefixed form
+ * (#759). Attributes, and elements in any other prefix, are left as they are.
+ */
+function withoutElementPrefix(value: unknown, prefix: string): unknown {
+  if (Array.isArray(value)) return value.map((item) => withoutElementPrefix(item, prefix));
+  if (value === null || typeof value !== "object") return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    const name = key.startsWith(`${prefix}:`) ? key.slice(prefix.length + 1) : key;
+    out[name] = withoutElementPrefix(child, prefix);
+  }
+  return out;
+}
+
+/**
+ * A root written with a prefix bound to a sitemap namespace
+ * (`<ns0:urlset xmlns:ns0="http://www.sitemaps.org/schemas/sitemap/0.9">`,
+ * as Python's ElementTree writes one), read as the unprefixed root. A root
+ * whose prefix is bound to any other namespace is left alone, so it stays an
+ * unknown format.
+ */
+function unprefixedRoot(parsed: Record<string, unknown>): Record<string, unknown> {
+  for (const [key, element] of Object.entries(parsed)) {
+    const colon = key.indexOf(":");
+    if (colon <= 0 || element === null || typeof element !== "object") continue;
+    const prefix = key.slice(0, colon);
+    const name = key.slice(colon + 1);
+    if (name !== "urlset" && name !== "sitemapindex") continue;
+    const namespace = (element as Record<string, unknown>)[`@_xmlns:${prefix}`];
+    if (typeof namespace !== "string" || !SITEMAP_NAMESPACES.has(namespace.trim())) continue;
+    return { [name]: withoutElementPrefix(element, prefix) };
+  }
+  return parsed;
+}
+
 export function parseSitemap(content: string, url: string): SitemapData {
   const errors: string[] = [];
   const parser = new XMLParser({
@@ -154,7 +202,7 @@ export function parseSitemap(content: string, url: string): SitemapData {
   });
 
   try {
-    const parsed = parser.parse(content) as Record<string, unknown>;
+    const parsed = unprefixedRoot(parser.parse(content) as Record<string, unknown>);
 
     if (parsed.sitemapindex) {
       const sitemapIndex = parsed.sitemapindex as { sitemap?: unknown };

@@ -20,7 +20,7 @@ The rule is site-wide. It emits up to five checks:
 Both of those branches only run when there was no reportable robots.txt fetch failure. When a sitemap named in robots.txt failed to fetch and discovery found nothing, the fetch failure is the only check returned.
 
 - `sitemap-syntax` fails when any discovered sitemap recorded parse errors. Message: `N error(s) in M sitemap(s)`, listing each sitemap with its first error. It passes otherwise with `Sitemap XML syntax is valid`. The error is one of:
-  - `Unknown sitemap format`: the XML has neither a `<urlset>` nor a `<sitemapindex>` root.
+  - `Unknown sitemap format`: the XML has neither a `<urlset>` nor a `<sitemapindex>` root. A root written with a prefix (`<ns0:urlset>`, as Python's ElementTree writes one) counts when that prefix is bound to the sitemap namespace; a prefix bound to any other namespace does not.
   - `Parse error: <reason>`: the XML did not parse.
   - `N <url> entries skipped: <loc> is not a single text value` (`1 <url> entry skipped: ...` for one; `<url>` and `<loc>` are the literal element names): an entry's `<loc>` holds markup or a raw `<`, or the entry has more than one `<loc>`. The other entries are still read, and the text around the markup is never used as the URL. A raw `<` reads as an unclosed tag, so the entries after it in the file can be lost too. In a sitemap index the error names `<sitemap>` entries instead.
   - `N <lastmod> values ignored: not a single text value` (`1 <lastmod> value ignored: ...` for one), or the same for `<changefreq>` or `<priority>`: the field holds markup or a raw `<`, or is repeated within one entry. The field is dropped and its URL is still read.
