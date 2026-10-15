@@ -51,6 +51,23 @@ function serve(): string {
             status: 403,
             headers: { server: "AmazonS3", "x-amz-request-id": "TESTREQUESTID" },
           });
+        case "/403-s3-behind-cdn":
+          // CloudFront in front of S3 with a response-headers policy that strips
+          // S3's own headers: only the XML error body says what it is.
+          return new Response("<?xml version=\"1.0\"?><Error><Code>NoSuchKey</Code></Error>", {
+            status: 403,
+            headers: { "content-type": "application/xml", "x-amz-cf-id": "TESTCFID" },
+          });
+        case "/403-cdn-waf":
+          return new Response("<html><body>Request blocked.</body></html>", {
+            status: 403,
+            headers: { "content-type": "text/html", "x-amz-cf-id": "TESTCFID" },
+          });
+        case "/401-ntlm":
+          return new Response("auth", {
+            status: 401,
+            headers: { "www-authenticate": "Bearer, NTLM" },
+          });
         case "/401-basic":
           return new Response("auth", { status: 401, headers: { "www-authenticate": 'Basic realm="staff"' } });
         case "/405-post-only":
@@ -169,10 +186,19 @@ describe("local link checks: walls and timeouts are unverifiable (pub#800)", () 
 
   test("the site's own refusals stay broken: an object store's 403, HTTP auth, a 405 that allows no GET", async () => {
     const base = serve();
-    const urls = [`${base}/403-s3`, `${base}/401-basic`, `${base}/405-post-only`];
+    const urls = [
+      `${base}/403-s3`,
+      `${base}/403-s3-behind-cdn`,
+      `${base}/401-basic`,
+      `${base}/401-ntlm`,
+      `${base}/405-post-only`,
+    ];
     const results = await check(urls);
     for (const url of urls) expect(results.get(url)!.wafBlocked).toBeUndefined();
-    expect(filterBrokenLinks([...results.values()]).length).toBe(3);
+    expect(filterBrokenLinks([...results.values()]).length).toBe(5);
+    // The same CDN's own block page is still a wall.
+    const waf = (await check([`${base}/403-cdn-waf`])).get(`${base}/403-cdn-waf`)!;
+    expect(waf.wafBlocked).toBe(true);
   });
 
   test("a HEAD refused with 405 and a GET answering 404 is a 404", async () => {

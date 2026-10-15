@@ -231,21 +231,25 @@ function staleWallVerdict(entry: LinkCacheEntry): boolean {
  * A wall status that, from these headers, is the site's own answer rather than
  * a robot check, so it stays broken (pub#800 review):
  * - an object store's 403 for a key it will not list (S3, GCS), which is how a
- *   deleted download answers;
- * - an HTTP authentication challenge (`WWW-Authenticate: Basic` or `Digest`),
- *   which a person meets too;
+ *   deleted download answers: by its headers, or by its XML error body when a
+ *   CDN in front (CloudFront) strips them;
+ * - an HTTP authentication challenge (`WWW-Authenticate` naming Basic, Digest,
+ *   Negotiate or NTLM, in any position), which a person meets too;
  * - a 405 whose `Allow` header leaves out GET: the link points at an endpoint
  *   nobody can open.
  */
-function realRefusal(status: number, headers: Headers): boolean {
+function realRefusal(status: number, headers: Headers, body: string | undefined): boolean {
   if (status === 403) {
     return (
       headers.has("x-amz-request-id") ||
       /^amazons3$/i.test(headers.get("server") ?? "") ||
-      headers.has("x-guploader-uploadid")
+      headers.has("x-guploader-uploadid") ||
+      /<Code>(?:AccessDenied|NoSuchKey)<\/Code>/.test(body ?? "")
     );
   }
-  if (status === 401) return /^\s*(basic|digest)\b/i.test(headers.get("www-authenticate") ?? "");
+  if (status === 401) {
+    return /\b(?:basic|digest|negotiate|ntlm)\b/i.test(headers.get("www-authenticate") ?? "");
+  }
   if (status === 405) {
     const allow = headers.get("allow");
     return allow !== null && !/\bGET\b/i.test(allow);
@@ -382,7 +386,7 @@ async function checkSingleUrlAsync(
           },
           html: body ?? null,
         }).detected;
-      if (challenge && !realRefusal(getResponse.status, headers)) {
+      if (challenge && !realRefusal(getResponse.status, headers, body)) {
         const wafResult = detectWaf(headers, body);
         return {
           status: getResponse.status,
