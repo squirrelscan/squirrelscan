@@ -133,8 +133,7 @@ export const PRIVATE_TARGET_SKIP_REASON = "private-target";
 
 /**
  * `skipReason` of `links/broken-external-links` (and `links/dead-links`) when
- * external link checking did not run for the audit (repo#2729): the Quick
- * level (see `EXTERNAL_LINKS_DEFAULT_ON`), `--offline`,
+ * external link checking did not run for the audit (repo#2729): `--offline`,
  * `external_links.enabled = false`, or a website or run that switched it off.
  * An evaluation gap, not a pass: the external links on the pages were never
  * requested, so "no broken external links" would be a claim nothing tested.

@@ -270,11 +270,11 @@ export function parseResolvedAuditSettings(value: unknown): ResolvedAuditSetting
 /**
  * The cloud's old four scan depths, kept so existing websites and API callers keep
  * working. Each is the set of settings it resolved to before audit levels existed
- * (pages, engine coverage mode, cloud checks, rendering, external links), so
- * migrating a website to these values changes nothing it does or costs. External
- * links follow `EXTERNAL_LINKS_DEFAULT_ON`, which keeps them off as the cloud did
- * until it turns them on everywhere (repo#2729). They are `custom` settings by
- * construction, except where they happen to equal a level.
+ * (pages, engine coverage mode, cloud checks, rendering), so migrating a website
+ * to these values changes nothing it crawls. External links follow
+ * `EXTERNAL_LINKS_DEFAULT_ON`, on everywhere since repo#2729, so a legacy site
+ * checks them, and pays for them, unless its owner turned them off. They are
+ * `custom` settings by construction, except where they happen to equal a level.
  */
 export const LEGACY_CLOUD_DEPTH_PROFILES = ["fast", "surface", "deep", "full"] as const;
 export type LegacyCloudDepthProfile = (typeof LEGACY_CLOUD_DEPTH_PROFILES)[number];

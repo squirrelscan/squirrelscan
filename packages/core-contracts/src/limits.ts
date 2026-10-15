@@ -708,8 +708,8 @@ export const COVERAGE_PAGE_LIMITS = {
 } as const satisfies Record<CoverageMode, number>;
 
 /**
- * Link checking bounds (repo#2729). Internal link checks are on at every level
- * and external ones are meant to be (`EXTERNAL_LINKS_DEFAULT_ON`), so each
+ * Link checking bounds (repo#2729). Internal and external link checks are on at
+ * every level (`EXTERNAL_LINKS_DEFAULT_ON`), so each
  * needs a ceiling an audit can never exceed.
  *
  * - `externalPerAuditMin`: an audit requests at most `max(pages, this)` distinct
