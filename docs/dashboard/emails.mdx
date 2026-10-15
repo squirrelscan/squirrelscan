@@ -56,7 +56,7 @@ Two cases send the ordinary audit email instead. A scheduled run that fails send
 
 On the Pro and Team plans. Arrives after a [scheduled audit](/cloud/scheduled-audits) of the website finds a link that the previous scheduled audit checked and found fine, and that is now dead: internal links, and external links while [external link checking](/dashboard/audit-settings#external-link-checking) is on. A link the checker could not verify, such as one behind a bot wall, a rate-limited one, or a first failure still waiting for its confirming check, never counts. One email per run names up to 10 of the links and links to the report for the rest.
 
-It has its own **Broken link alerts** switch under **Website → Settings → Alerts**, on by default, separate from external link checking and from the schedule. It also rides the website's **Email notifications** toggle, and it compares scheduled audits only, so a website with no recurring audits gets none.
+It has its own **Broken link alerts** switch under **Website → Settings → Alerts**, on by default, separate from external link checking and from the schedule. It also rides the website's **Email notifications** toggle, and it compares scheduled audits only: a website with no recurring audits gets none, and its first scheduled audit has nothing to compare against, so alerts start from the second.
 
 **How to stop it:** turn off **Broken link alerts** for that website, the **Email notifications** toggle, or **Account alerts** in **Settings → Email** for every website.
 
