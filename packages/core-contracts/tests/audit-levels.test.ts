@@ -44,7 +44,7 @@ describe("the three levels", () => {
         crawlStrategy: "seed-and-sitemap",
         cloudChecks: false,
         render: "auto",
-        externalLinks: false,
+        externalLinks: true,
         probe: "passive",
       },
       surface: {
@@ -276,9 +276,9 @@ describe("the old cloud depths", () => {
     }
   });
 
-  test("they keep external links off, as the cloud did, until the default turns on (repo#2729)", () => {
+  test("they check external links now that the default is on (repo#2729)", () => {
     for (const p of LEGACY_CLOUD_DEPTH_PROFILES) {
-      expect(legacyCloudDepthSettings(p).settings.externalLinks).toBe(false);
+      expect(legacyCloudDepthSettings(p).settings.externalLinks).toBe(true);
     }
   });
 
@@ -295,9 +295,8 @@ describe("AUDIT_LEVEL_COPY quick summary", () => {
     const summary = AUDIT_LEVEL_COPY.quick.summary;
     expect(summary).toContain("25 pages");
     expect(summary).toContain("rendered in the cloud");
-    expect(summary).toContain("with internal link checks");
-    expect(summary).not.toContain("external");
-    expect(summary).toContain("Costs credits: 50 plus 2 per page, up to 100");
+    expect(summary).toContain("with internal and external link checks");
+    expect(summary).toContain("Costs credits: 50, plus 2 per page and 1 per external link checked, up to 125");
     expect(summary).not.toMatch(/no credits|local rules only|free/i);
   });
 });
@@ -305,8 +304,8 @@ describe("AUDIT_LEVEL_COPY quick summary", () => {
 // repo#2729: one constant holds the external link default, so turning it on
 // later is a one-line change that every surface follows.
 describe("EXTERNAL_LINKS_DEFAULT_ON", () => {
-  test("is off for now", () => {
-    expect(EXTERNAL_LINKS_DEFAULT_ON).toBe(false);
+  test("is on", () => {
+    expect(EXTERNAL_LINKS_DEFAULT_ON).toBe(true);
   });
 
   test("is what Quick and every old cloud depth use; Surface and Full check them always", () => {

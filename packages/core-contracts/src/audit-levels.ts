@@ -69,8 +69,8 @@ export const AUDIT_SETTING_KEYS = [
 
 /**
  * Whether Quick and the old cloud depths check external links by default
- * (repo#2729). Off until the shared link checker lands: one line turns them
- * on. Surface and Full always check them. Internal link checks are a separate
+ * (repo#2729). On since the shared link checker (Perch) landed: one line turns
+ * them off again. Surface and Full always check them. Internal link checks are a separate
  * setting (`[internal_links]`) and are on at every level.
  *
  * The quick summary below follows it. Copy that names Quick's default by hand
@@ -80,7 +80,7 @@ export const AUDIT_SETTING_KEYS = [
  */
 // Typed `boolean`, not the literal `false`, so the summary's ternary below is
 // not narrowed to one branch.
-export const EXTERNAL_LINKS_DEFAULT_ON: boolean = false;
+export const EXTERNAL_LINKS_DEFAULT_ON: boolean = true;
 
 export const AUDIT_LEVEL_PRESETS: Readonly<Record<AuditLevel, Readonly<AuditSettings>>> = {
   quick: {

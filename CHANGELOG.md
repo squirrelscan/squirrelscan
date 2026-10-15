@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- **Quick audits check external links too.** Every audit level now checks the links that leave your site, Quick included. A Quick audit in the CLI checks them from your machine, for free. A cloud Quick audit pays 1 credit per distinct external link it checks, at most one per page, so a 25-page Quick audit's estimate goes from up to 100 credits to up to 125. A website on a scheduled cloud audit at Quick, or on an older scan depth, that never set its external link checks starts paying for them on its next run. Skip them with `--no-external-links`, `[external_links] enabled = false`, or the website's **External link checks** setting. `--offline` still skips them. See [Link checking defaults](https://docs.squirrelscan.com/rules/links#link-checking-defaults).
+
 ## v0.0.114 (2026-10-15)
 
 A pricing correction, and a release about trusting your link results. Version 0.0.113 said a signed-in audit's link checks were free. For the links the cloud checks, that was wrong, and this release puts it right: a signed-in audit now pays for its cloud link checks the same way a cloud audit does. Links squirrel checks on your machine stay free, and so do internal links. Beyond pricing, a link that meets a sign-in or bot wall is listed as unverifiable instead of broken, broken internal links say exactly what each audit covered, an audit of a site on your own network keeps what it finds there on your machine, and `squirrel analyze` fetches what its rules read the same guarded way `squirrel audit` does.
