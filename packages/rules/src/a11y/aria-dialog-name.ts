@@ -117,11 +117,21 @@ export const ariaDialogNameRule: Rule = {
     const isNamed = (el: Element) => hasAccessibleName(el, doc);
     // pub#671: a dialog out of the accessibility tree (marked aria-hidden or
     // hidden while closed, or inside a hidden ancestor) is not reported. It
-    // needs a name when it opens.
+    // needs a name when it opens. A native <dialog> is served closed and
+    // opened by script, so its own closed state does not take it out of the
+    // check (#462), whichever path it takes; hidden any other way, it is out.
     const visibility = createStaticVisibility({ ariaHidden: true });
+    const nativeVisibility = createStaticVisibility({
+      ariaHidden: true,
+      closedDialogsShown: true,
+    });
+    const dialogVisibility = {
+      visibility: (el: Element) =>
+        (el.tagName.toLowerCase() === "dialog" ? nativeVisibility : visibility).visibility(el),
+    };
 
     // Check ARIA dialogs — fail if unnamed
-    const aria = sortUnnamedControls<CheckItem>(visibility);
+    const aria = sortUnnamedControls<CheckItem>(dialogVisibility);
     unnamedDialogItems(
       ariaDialogs,
       (dialog) => {
@@ -169,12 +179,7 @@ export const ariaDialogNameRule: Rule = {
     }
 
     // Check native <dialog> — warn if unnamed (browser provides implicit role)
-    // A native <dialog> is served closed and opened by script, so its own
-    // closed state does not take it out of the check (#462); hidden any other
-    // way, it is out.
-    const native = sortUnnamedControls<CheckItem>(
-      createStaticVisibility({ ariaHidden: true, closedDialogsShown: true })
-    );
+    const native = sortUnnamedControls<CheckItem>(nativeVisibility);
     unnamedDialogItems(
       nativeDialogs,
       (dialog) => describeDialog(dialog, "dialog", "dialog"),

@@ -152,6 +152,15 @@ describe("a11y/aria-dialog-name: the reporter's closed modal (pub#671)", () => {
     }
   });
 
+  test("a native <dialog> with an explicit dialog role is checked closed too, on the ARIA path", () => {
+    expect(statuses(ariaDialogNameRule, '<dialog role="dialog">Body</dialog>')).toEqual({
+      "aria-dialog-name": "fail",
+    });
+    expect(statuses(ariaDialogNameRule, '<div hidden><dialog role="dialog">Body</dialog></div>')).toEqual({
+      "aria-dialog-name": "pass",
+    });
+  });
+
   test("an item keeps its ordinal id when an earlier same-named dialog is hidden", () => {
     const rows = run(
       ariaDialogNameRule,

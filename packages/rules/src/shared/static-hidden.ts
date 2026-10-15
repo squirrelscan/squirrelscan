@@ -15,6 +15,8 @@
 
 import { getAttrCI, hasAttrCI } from "@squirrelscan/utils";
 
+import type { CheckResult } from "../types";
+
 export type StaticVisibility = { state: "shown" } | { state: "hidden" } | { state: "unknown" };
 
 /** Item label for a control reported as unconfirmed. */
@@ -387,13 +389,7 @@ export function unconfirmedRow(
   check: string,
   what: string,
   items: Array<string | { id: string; snippet?: string }>,
-): {
-  name: string;
-  status: "warn";
-  message: string;
-  items: Array<{ id: string; snippet?: string; label: string }>;
-  details?: { additional: number };
-} {
+): CheckResult {
   return {
     name: `${check}-unconfirmed`,
     status: "warn",
