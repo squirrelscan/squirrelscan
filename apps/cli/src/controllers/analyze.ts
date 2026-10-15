@@ -18,7 +18,7 @@ import {
   fetchResourceAssets,
 } from "@/audit/adapter";
 import { entityMapSite, storeEntityMap } from "@/audit/entity-map";
-import { loadConfig } from "@/config";
+import { loadConfig, type Config } from "@/config";
 import {
   type Result,
   ok,
@@ -291,7 +291,12 @@ export async function runAnalyze(
     onProgress({ phase: "rules" });
 
     const assets = await Effect.runPromise(
-      fetchResourceAssets(storage, crawlId, siteContext, config)
+      fetchResourceAssets(
+        storage,
+        crawlId,
+        siteContext,
+        assetPhaseConfig(config, crawl)
+      )
     );
 
     logger.debug("running rules on crawl", crawlId);
@@ -436,4 +441,30 @@ export async function runAnalyze(
       );
     }
   }
+}
+
+/**
+ * The config the asset phase runs with (#768, #799). The crawl may be any
+ * project's (the latest across all of them, or `--id`), while `config` is the
+ * squirrel.toml found from this directory. So the crawl's own scope decides
+ * which internal link targets are checked, as it did in the audit, and no
+ * custom headers are sent: this directory's belong to its own site.
+ */
+export function assetPhaseConfig(config: Config, crawl: CrawlMetadata): Config {
+  // Rows recorded before a field existed read back without it.
+  const recorded = crawl.config as Partial<CrawlMetadata["config"]> | undefined;
+  return {
+    ...config,
+    crawler: {
+      ...config.crawler,
+      include: recorded?.include ?? config.crawler.include,
+      exclude: recorded?.exclude ?? config.crawler.exclude,
+      respect_robots: recorded?.respectRobots ?? config.crawler.respect_robots,
+      headers: {},
+    },
+    project: {
+      ...config.project,
+      domains: recorded?.allowedDomains ?? config.project.domains,
+    },
+  };
 }

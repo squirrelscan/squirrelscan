@@ -319,7 +319,7 @@ function fetchSingleScript(
   url: string,
   options: ScriptFetcherOptions
 ): Effect.Effect<ScriptFetchResult, never, never> {
-  // No caching in package version — CLI wraps with content-store caching
+  // No cache: every audit, and `squirrel analyze`, fetches its scripts afresh.
   return Effect.promise(async () => {
     // #1252: skip before launching once the budget is spent or the host tarpits.
     if (options.budget?.shouldSkip(url)) {

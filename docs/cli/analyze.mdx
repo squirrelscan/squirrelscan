@@ -20,7 +20,9 @@ squirrel analyze [options]
 
 ## What it fetches
 
-`analyze` does not crawl again, but some rules read more than the stored pages. Like `squirrel audit`, it fetches the stylesheets, images, scripts and PDFs the pages reference. It also status-checks the sitemap URLs and the [internal link targets](/configuration/external-links#internal-links) the crawl did not fetch. Every request and every redirect it follows is held to the same rules as the audit's, so it never connects to a link-local or cloud metadata address. External links are not checked.
+`analyze` does not crawl again, but some rules read more than the stored pages. Like `squirrel audit`, it fetches the stylesheets, images, fonts, scripts, PDFs and web app manifest the pages reference. It also status-checks the sitemap URLs and the [internal link targets](/configuration/external-links#internal-links) the crawl did not fetch, within the crawl's own scope. While `reliability/broken-resources` is on, it status-checks the third-party scripts, stylesheets and fonts the pages load too. Every request and every redirect it follows is held to the same rules as the audit's, so it never connects to a link-local or cloud metadata address. It sends no custom request headers, and it does not check external links.
+
+To turn the internal link checks off, set `[internal_links] enabled = false`. To turn the third-party checks off, disable `reliability/broken-resources`.
 
 ## Examples
 

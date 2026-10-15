@@ -12,10 +12,15 @@ import { ASSET_FETCH_REFUSED_ERROR } from "@squirrelscan/utils/constants";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import type { PageRecord } from "@/crawler/storage/types";
+import type { CrawlMetadata, PageRecord } from "@/crawler/storage/types";
 
-import { buildSiteContext, fetchResourceAssets } from "@/audit/adapter";
+import {
+  buildSiteContext,
+  fetchResourceAssets,
+  runRulesOnStorage,
+} from "@/audit/adapter";
 import { getDefaultConfig } from "@/config";
+import { assetPhaseConfig } from "@/controllers/analyze";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
 
 const SCRIPT = "window.squirrel = 1;";
@@ -119,14 +124,38 @@ function analyzeAssets(scripts: string[], config = getDefaultConfig()) {
       yield* storage.upsertPage(crawlId, page(`${base}/`, scripts));
       const stored = yield* storage.getPages(crawlId);
       const siteContext = yield* buildSiteContext(stored);
-      return yield* fetchResourceAssets(storage, crawlId, siteContext, config);
+      const assets = yield* fetchResourceAssets(
+        storage,
+        crawlId,
+        siteContext,
+        config
+      );
+      const ran = yield* runRulesOnStorage(
+        storage,
+        crawlId,
+        siteContext,
+        {
+          ...config,
+          rules: { ...config.rules, enable: ["links/broken-links"] },
+        },
+        assets
+      );
+      const brokenLinks = (ran.ruleResultsMap.get("links/broken-links")
+        ?.checks ?? []) as Array<{
+        status: string;
+        details?: Record<string, unknown>;
+      }>;
+      return { assets, brokenLinks };
     }).pipe(Effect.orDie)
   );
 }
 
 describe("squirrel analyze's asset fetches (pub#768)", () => {
   test("a script that redirects to a metadata address is refused; the site's own scripts load", async () => {
-    const assets = await analyzeAssets([...Object.keys(REDIRECTS), "/app.js"]);
+    const { assets } = await analyzeAssets([
+      ...Object.keys(REDIRECTS),
+      "/app.js",
+    ]);
 
     const byUrl = new Map(assets.scripts.map((s) => [s.url, s]));
     for (const path of Object.keys(REDIRECTS)) {
@@ -149,18 +178,62 @@ describe("squirrel analyze's asset fetches (pub#768)", () => {
 
 describe("squirrel analyze's internal link check (pub#799)", () => {
   test("it status-checks a linked target the stored crawl did not fetch", async () => {
-    const assets = await analyzeAssets([]);
+    const { assets, brokenLinks } = await analyzeAssets([]);
     expect(assets.linkTargetStatuses?.map((t) => [t.url, t.status])).toEqual([
       [`${base}/missing`, 404],
     ]);
     expect(assets.internalLinkProbe).toMatchObject({ unfetched: 1, probed: 1 });
+    // The rule reports the 404, and no target as unchecked.
+    expect(brokenLinks.map((c) => [c.status, c.details?.notFetched])).toEqual([
+      ["fail", {}],
+    ]);
   });
 
-  test("with internal link checks off, it checks none", async () => {
+  test("with internal link checks off, it checks none, and says so", async () => {
     const config = getDefaultConfig();
     config.internal_links = { ...config.internal_links, enabled: false };
-    const assets = await analyzeAssets([], config);
+    const { assets, brokenLinks } = await analyzeAssets([], config);
     expect(assets.linkTargetStatuses).toBeUndefined();
     expect(assets.internalLinkProbe).toBeUndefined();
+    expect(brokenLinks.map((c) => [c.status, c.details?.notFetched])).toEqual([
+      ["pass", { off: 1 }],
+    ]);
+  });
+});
+
+describe("the config analyze's asset phase runs with", () => {
+  const crawlConfig = (config: Partial<CrawlMetadata["config"]>) =>
+    ({ config }) as unknown as CrawlMetadata;
+
+  test("the crawl's own scope, and none of this directory's custom headers", () => {
+    const config = getDefaultConfig();
+    config.crawler.headers = { Authorization: "Bearer project-a" };
+    config.crawler.exclude = [];
+    const out = assetPhaseConfig(
+      config,
+      crawlConfig({
+        include: ["/docs/*"],
+        exclude: ["/admin/*"],
+        respectRobots: true,
+        allowedDomains: ["cdn.example.com"],
+      })
+    );
+    expect(out.crawler.headers).toEqual({});
+    expect(out.crawler.include).toEqual(["/docs/*"]);
+    expect(out.crawler.exclude).toEqual(["/admin/*"]);
+    expect(out.crawler.respect_robots).toBe(true);
+    expect(out.project.domains).toEqual(["cdn.example.com"]);
+    // The loaded config itself is untouched.
+    expect(config.crawler.headers).toEqual({
+      Authorization: "Bearer project-a",
+    });
+  });
+
+  test("a crawl recorded without those fields keeps the loaded config's", () => {
+    const config = getDefaultConfig();
+    config.crawler.exclude = ["/private/*"];
+    const out = assetPhaseConfig(config, crawlConfig({}));
+    expect(out.crawler.exclude).toEqual(["/private/*"]);
+    expect(out.crawler.headers).toEqual({});
   });
 });
