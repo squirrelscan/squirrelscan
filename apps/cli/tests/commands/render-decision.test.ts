@@ -509,42 +509,55 @@ describe("validateAuditFlags", () => {
 });
 
 describe("the one-time link pricing notice (#801)", () => {
-  test("only for an audit that registers and checks external links, once", () => {
-    expect(
-      linkPricingNoticeDue({
-        registers: true,
-        externalLinks: true,
-        shown: false,
-      })
-    ).toBe(true);
-    expect(
-      linkPricingNoticeDue({
-        registers: true,
-        externalLinks: true,
-        shown: true,
-      })
-    ).toBe(false);
-    expect(
-      linkPricingNoticeDue({
-        registers: true,
-        externalLinks: false,
-        shown: false,
-      })
-    ).toBe(false);
-    expect(
-      linkPricingNoticeDue({
-        registers: false,
-        externalLinks: true,
-        shown: false,
-      })
-    ).toBe(false);
+  const due = (
+    over: Partial<Parameters<typeof linkPricingNoticeDue>[0]> = {}
+  ) =>
+    linkPricingNoticeDue({
+      registers: true,
+      externalLinks: true,
+      shown: false,
+      spendAcknowledged: true,
+      ...over,
+    });
+
+  test("only for an audit that registers and has the cloud check its links, once", () => {
+    expect(due()).toBe(true);
+    expect(due({ shown: true })).toBe(false);
+    expect(due({ externalLinks: false })).toBe(false);
+    expect(due({ registers: false })).toBe(false);
   });
 
-  test("names the price and the way out, and never offers --offline (which checks no links)", () => {
+  test("not for a first-time user, whose consent line already prices the links", () => {
+    expect(due({ spendAcknowledged: false })).toBe(false);
+  });
+
+  test("the consent line that priced the links also marks the notice shown", async () => {
+    const updates: Partial<Record<string, unknown>>[] = [];
+    await resolveCloudRendering(
+      opts({
+        spendAck: undefined,
+        estimate: {
+          maxPages: 25,
+          balance: 1000,
+          maxCredits: 1000,
+          externalLinks: true,
+        },
+        persist: (u) => (updates.push(u), { ok: true }),
+      })
+    );
+    expect(updates).toEqual([
+      { cloud_spend_ack: true, link_pricing_notice_shown: true },
+    ]);
+  });
+
+  test("names the price, its cap and the way out, and never offers --offline (which checks no links)", () => {
     expect(LINK_PRICING_NOTICE).toContain(
       "1 per external link the cloud checks for this audit"
     );
-    expect(LINK_PRICING_NOTICE).toContain("at most 1 per audited page");
+    expect(LINK_PRICING_NOTICE).toContain(
+      "at most 1 per page of the audit's page limit"
+    );
+    expect(LINK_PRICING_NOTICE).not.toContain("audited page");
     expect(LINK_PRICING_NOTICE).toContain("--no-external-links");
     expect(LINK_PRICING_NOTICE).not.toContain("--offline");
   });

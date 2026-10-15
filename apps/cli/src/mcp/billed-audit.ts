@@ -101,7 +101,7 @@ export type McpAuditPlan =
 
 const PRICING = `${AUDIT_BASE_CREDITS} base + ${AUDIT_PAGE_CREDITS} per audited page`;
 /** #801: the same, for a level whose external links the cloud checks. */
-const PRICING_WITH_LINKS = `${PRICING} + ${EXTERNAL_LINK_CREDITS} per external link the cloud checks, at most 1 per page`;
+const PRICING_WITH_LINKS = `${PRICING} + ${EXTERNAL_LINK_CREDITS} per external link the cloud checks, at most 1 per page of the page limit`;
 
 /**
  * One billed run from register to its terminal PATCH. `running` is the
@@ -259,7 +259,11 @@ export async function planMcpAudit(input: {
     };
   }
 
-  const links = level.auditLevel.settings.externalLinks;
+  // #801: only a level with the cloud checks on sends its links to the cloud
+  // (quick with externalLinks checks them on this machine, free).
+  const links =
+    level.auditLevel.settings.externalLinks &&
+    level.auditLevel.settings.cloudChecks;
   const pricing = links ? PRICING_WITH_LINKS : PRICING;
   const preflight = computePreflightAffordability({
     balance: balance.balance.total,
@@ -332,6 +336,7 @@ export async function planMcpAudit(input: {
       balance: balance.balance.total,
       maxCredits: config.cloud.max_credits_per_audit,
       unlimited,
+      externalLinks: links,
     },
     persist: () => ({ ok: true }),
   });
@@ -484,9 +489,18 @@ export function billedAuditSummary(
     return `Cloud audit run ${billed.run.runId} did not complete (${report.status}${report.statusReason ? `: ${report.statusReason}` : ""}), so it was closed as failed: no page charge, and the audit base is refunded.`;
   }
   const pages = auditedPageCount(report);
-  const credits = AUDIT_BASE_CREDITS + pages * AUDIT_PAGE_CREDITS;
+  // #801: what the cloud billed the run for its link checks, as the server
+  // reported it batch by batch.
+  const linkCredits = (report.cloudSpend?.lines ?? [])
+    .filter((line) => line.feature === "external_link")
+    .reduce((sum, line) => sum + line.credits, 0);
+  const credits = AUDIT_BASE_CREDITS + pages * AUDIT_PAGE_CREDITS + linkCredits;
+  const links =
+    linkCredits > 0
+      ? ` (${linkCredits.toLocaleString("en-US")} of them for external link checks)`
+      : "";
   return [
-    `Billed cloud audit, run ${billed.run.runId}: ${pages} audited ${pages === 1 ? "page" : "pages"}, about ${credits} credits (${PRICING}). The page charge settles when the run closes.`,
+    `Billed cloud audit, run ${billed.run.runId}: ${pages} audited ${pages === 1 ? "page" : "pages"}, about ${credits} credits${links} (${linkCredits > 0 ? PRICING_WITH_LINKS : PRICING}). The page charge settles when the run closes.`,
     ...billed.notices,
   ].join("\n");
 }

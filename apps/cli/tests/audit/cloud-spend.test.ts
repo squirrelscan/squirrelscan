@@ -152,6 +152,40 @@ describe("dead-links bulk checker spend accounting", () => {
     expect(spend).toEqual([[2, 2]]);
   });
 
+  test("#801: units are the links the cloud answered; the rest are checked here, free", async () => {
+    const spend: Array<[number, number]> = [];
+    const config = getDefaultConfig();
+    config.cloud.enabled = true;
+    const siteContext = await Effect.runPromise(
+      buildSiteContext([pageRecord(HTML)])
+    );
+    const checker = await resolveDeadLinksBulkChecker({
+      client: {
+        // Answers only the first url, as the server does past its deadline.
+        deadLinks: async (req: { urls: string[] }) => ({
+          results: req.urls.slice(0, 1).map((url) => ({
+            url,
+            status: 200,
+            error: null,
+            redirectUrl: null,
+            fromCache: false,
+          })),
+          charged: 1,
+        }),
+      } as never,
+      config,
+      auditId: "audit-1",
+      siteContext,
+      getRunId: () => "run-1",
+      onSpend: (units, credits) => spend.push([units, credits]),
+    });
+    await checker!([
+      "https://external-one.com/a",
+      "https://external-two.com/b",
+    ]);
+    expect(spend).toEqual([[1, 1]]);
+  });
+
   test("#801: no registered run (an API key, a failed register) means no cloud checks", async () => {
     const calls: string[][] = [];
     const checker = await makeChecker({

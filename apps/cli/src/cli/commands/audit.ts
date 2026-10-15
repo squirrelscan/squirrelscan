@@ -231,8 +231,15 @@ export function linkPricingNoticeDue(opts: {
   registers: boolean;
   externalLinks: boolean;
   shown: boolean;
+  /** The user acknowledged the spend disclosure before (under the old, free terms). */
+  spendAcknowledged: boolean;
 }): boolean {
-  return opts.registers && opts.externalLinks && !opts.shown;
+  return (
+    opts.registers &&
+    opts.externalLinks &&
+    !opts.shown &&
+    opts.spendAcknowledged
+  );
 }
 
 /** #1169 / #2290 preflight: what the audit will cost and the page cap its credits can pay for. */
@@ -728,7 +735,12 @@ export async function resolveCloudRendering(opts: {
         }`
       )
     );
-    const saved = persist({ cloud_spend_ack: true });
+    // #801: the line just priced the links, so the one-time link notice is
+    // not owed on top of it.
+    const saved = persist({
+      cloud_spend_ack: true,
+      ...(estimate.externalLinks ? { link_pricing_notice_shown: true } : {}),
+    });
     if (!saved.ok) {
       logger.debug(
         "could not persist cloud_spend_ack; will re-notify next run"
@@ -1910,6 +1922,11 @@ export const audit = defineCommand({
       // never for a local/private host, which does not register — left in, a
       // low-balance user auditing localhost got a top-up warning for money
       // nothing was going to take.
+      // #801: the cloud checks (and bills) this audit's external links only
+      // when the level checks them AND has the cloud checks on: quick with
+      // --external-links checks them on this machine, free.
+      const cloudLinkChecks =
+        auditLevel.settings.externalLinks && auditLevel.settings.cloudChecks;
       let creditClamp:
         | {
             requestedMaxPages: number;
@@ -1935,13 +1952,13 @@ export const audit = defineCommand({
           resetAt: creditsResetAt,
           // #801: the cloud bills this audit's link checks, so each page of
           // the cap reserves one external link's credit too.
-          cloudExternalLinks: auditLevel.settings.externalLinks,
+          cloudExternalLinks: cloudLinkChecks,
         });
         if (preflight.maxPages === 0) {
           // The user's own cap forbids any charged audit at all, or (#801) the
           // balance covers a page but not its external link: run the free
           // local audit instead.
-          const needed = minimumAuditCredits(auditLevel.settings.externalLinks);
+          const needed = minimumAuditCredits(cloudLinkChecks);
           log("");
           log(
             fmt.yellow(
@@ -1975,8 +1992,12 @@ export const audit = defineCommand({
             offline: !!args.offline,
             nonPublicHost: !!nonPublicHost,
           }),
-          externalLinks: auditLevel.settings.externalLinks,
+          externalLinks: cloudLinkChecks,
           shown: effectiveSettings?.link_pricing_notice_shown === true,
+          // A first-time user is shown the consent line, which already
+          // prices the links: the "now cost credits" notice is for the ones
+          // who saw the old, free terms.
+          spendAcknowledged: effectiveSettings?.cloud_spend_ack === true,
         })
       ) {
         log(fmt.dim(LINK_PRICING_NOTICE));
@@ -2051,7 +2072,7 @@ export const audit = defineCommand({
             balance: startingBalance,
             maxCredits: config.cloud.max_credits_per_audit,
             unlimited: unlimitedCredits,
-            externalLinks: auditLevel.settings.externalLinks,
+            externalLinks: cloudLinkChecks,
           },
         });
 

@@ -88,7 +88,7 @@ export const AUDIT_PRICING_LINE = `A signed-in audit costs ${AUDIT_BASE_CREDITS}
  * prints after pricing v12 (#801): a CLI audit's cloud link checks used to be
  * free, and every earlier release said so.
  */
-export const LINK_PRICING_NOTICE = `Link checks now cost credits: ${EXTERNAL_LINK_CREDITS} per external link the cloud checks for this audit, at most 1 per audited page, the same as a cloud audit. Links it can't answer in time are checked from this machine for free. Skip link checks with --no-external-links.`;
+export const LINK_PRICING_NOTICE = `Link checks now cost credits: ${EXTERNAL_LINK_CREDITS} per external link the cloud checks for this audit, at most 1 per page of the audit's page limit, the same as a cloud audit. Links it can't answer in time are checked from this machine for free. Skip link checks with --no-external-links.`;
 
 /**
  * The upgrade pitch built from the SERVER's offer (#2183).

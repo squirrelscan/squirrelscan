@@ -290,6 +290,18 @@ describe("signed in, audit_website is a billed cloud audit", () => {
     expect(registered()).toBe(false);
   });
 
+  test("#801: quick with externalLinks checks its links on this machine, so it quotes none", async () => {
+    const out = await call("audit_website", {
+      ...AUDIT,
+      level: "quick",
+      externalLinks: true,
+    });
+    const body = JSON.parse(out.text);
+    expect(body.status).toBe("confirmation_required");
+    expect(body.estimate.creditsPerExternalLink).toBeUndefined();
+    expect(body.estimate.credits).toBe(50 + body.estimate.pages * 2);
+  });
+
   test("surface with confirm registers too", async () => {
     const out = await call("audit_website", {
       ...AUDIT,

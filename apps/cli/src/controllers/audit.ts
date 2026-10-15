@@ -205,7 +205,8 @@ export interface RunAuditOptions extends AuditOptions {
     balance: PreflightBalance
   ) => Promise<boolean>;
   /** User accepted the cost-disclosing consent prompt under a cap → skip the
-   * post-crawl prefetch confirm. Uncapped spend (dead-links) is still gated. */
+   * post-crawl prefetch confirm, and the link-check confirm (#801: its charge
+   * is in the capped estimate). Tech/editor keep their own gates. */
   cloudConsented?: boolean;
   /**
    * Concrete fetch mode for this run, already resolved by the caller from
@@ -1542,7 +1543,12 @@ export async function runAudit(
                               (await deadLinksClient.getBalance()).balance
                             )
                         : undefined,
-                      confirm: options.confirmCloudSpend,
+                      // #801: the link charge is in the consented, capped
+                      // estimate now (one per page of the limit), so a
+                      // consented run is not stopped mid-audit to confirm it.
+                      confirm: options.cloudConsented
+                        ? undefined
+                        : options.confirmCloudSpend,
                       onSpend: (units, credits) => {
                         deadLinksUnits += units;
                         deadLinksCredits += credits;
