@@ -62,11 +62,29 @@ const NAMED_ZONES: Record<string, number> = {
   pst: -480,
   pdt: -420,
 };
+/** An English month name or its usual abbreviation, nothing longer (`Junk` is not June). */
+const MONTH_WORD =
+  "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)";
 /** A month and year written out (`September 2024`, `Sep. 2024`). */
-const MONTH_YEAR = /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?\s+(\d{4})$/i;
+const MONTH_YEAR = new RegExp(`^${MONTH_WORD}\\.?,?\\s+(\\d{4})$`, "i");
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 /** A month named anywhere in a value. */
-const MONTH_NAME = /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/i;
+const MONTH_NAME = new RegExp(`\\b${MONTH_WORD}\\b`, "i");
+/** A time of day (`12:00`, `08:30:15.5`): its numbers are not part of the date. */
+const TIME_OF_DAY = /\d{1,2}:\d{2}(?::\d{2}(?:[.,]\d+)?)?/g;
+/**
+ * A zone anywhere in a value: a zone name as a word, or a numeric offset
+ * after a space. `Date` applies one wherever it sits, so a value with a zone
+ * that is not at its end (`Sep 10 2024 EST 12:00`) cannot be read the same on
+ * every machine and is not read at all.
+ */
+const ZONE_TOKEN =
+  /(?:^|[\s,])(?:z|ut|utc|gmt|[ecmp][sd]t)(?=$|[\s,.]|[+-]\d)|(?:^|\s)(?:gmt|utc|ut)?[+-]\d{1,2}(?::?\d{2})?(?=$|\s)/i;
+/**
+ * Longer than any written date. A page or sitemap can put any text here, and
+ * no pattern below should ever run over a megabyte of it.
+ */
+const MAX_DATE_CHARS = 200;
 /** A year and month with a slash or a dot (`2024/09`, `2024.9`), which `Date` reads as the 1st. */
 const YEAR_SLASH_MONTH = /^(\d{4})[/.](0?[1-9]|1[0-2])$/;
 
@@ -155,14 +173,24 @@ function w3cForm(value: string): DatePeriod | null {
 function writtenForm(value: string): DatePeriod | null {
   if (ISO_SHAPED.test(value)) return null;
   const monthYear = MONTH_YEAR.exec(value);
-  if (monthYear) return wholeMonth(Number(monthYear[2]), MONTHS.indexOf(monthYear[1]!.toLowerCase()));
+  if (monthYear) return wholeMonth(Number(monthYear[2]), monthIndex(monthYear[1]!));
   const yearMonth = YEAR_SLASH_MONTH.exec(value);
   if (yearMonth) return wholeMonth(Number(yearMonth[1]), Number(yearMonth[2]) - 1);
-  // A year, a month and a day: three numbers, or a month name and two.
-  const numbers = value.match(/\d+/g)?.length ?? 0;
-  if (numbers < 3 && !(numbers === 2 && MONTH_NAME.test(value))) return null;
+  // A whole date: a four-digit year, and a month and a day, as three numbers
+  // or a month name and two. A time's numbers do not count (`Sep 10 12:00`
+  // has no year, and `Date` would make one up).
+  const numbers = (value.replace(TIME_OF_DAY, " ").match(/\d+/g) ?? []).map(Number);
+  const named = MONTH_NAME.exec(value);
+  if (!numbers.some((n) => n >= 1000 && n <= 9999)) return null;
+  if (numbers.length < 3 && !(numbers.length === 2 && named)) return null;
   const local = new Date(value);
   if (Number.isNaN(local.getTime())) return null;
+  // `Date` rolls an impossible date over (`2024/09/31` to 1 October): the
+  // month and day it settled on must be ones the value wrote.
+  const monthWritten = named
+    ? monthIndex(named[1]!) === local.getMonth()
+    : numbers.includes(local.getMonth() + 1);
+  if (!monthWritten || !numbers.includes(local.getDate())) return null;
   const wall = utcTime(
     local.getFullYear(),
     local.getMonth(),
@@ -175,6 +203,32 @@ function writtenForm(value: string): DatePeriod | null {
   if (wall === null) return null;
   const day = isoDay(wall);
   return /\d:\d/.test(value) ? { start: wall, end: wall, precision: "instant", day } : wholeDay(wall, day);
+}
+
+/** The 0-based month a month word names. */
+function monthIndex(word: string): number {
+  return MONTHS.indexOf(word.slice(0, 3).toLowerCase());
+}
+
+/**
+ * `text` with every parenthesised comment replaced by a space, as `Date`
+ * ignores them, nested ones included. One pass: a pattern for this rescans
+ * the rest of the text from every unclosed `(`.
+ */
+function withoutComments(text: string): string {
+  let out = "";
+  let depth = 0;
+  for (const char of text) {
+    if (char === "(") {
+      if (depth === 0) out += " ";
+      depth++;
+    } else if (char === ")" && depth > 0) {
+      depth--;
+    } else if (depth === 0) {
+      out += char;
+    }
+  }
+  return out;
 }
 
 /** `period` moved back by a zone's offset: a time written in that zone, in UTC. */
@@ -203,18 +257,25 @@ export function w3cDatePeriod(value: string | null | undefined): DatePeriod | nu
  */
 export function datePeriod(value: string | null | undefined): DatePeriod | null {
   const trimmed = value?.trim();
-  if (!trimmed) return null;
+  if (!trimmed || trimmed.length > MAX_DATE_CHARS) return null;
   const exact = w3cForm(trimmed);
   if (exact) return exact;
-  const bare = trimmed.replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
+  const bare = withoutComments(trimmed).replace(/\s+/g, " ").trim();
   const numeric = NUMERIC_ZONE.exec(bare);
   const named = numeric ? null : NAMED_ZONE.exec(bare);
   const zone = numeric ?? named;
-  if (!zone) return w3cForm(bare) ?? writtenForm(bare);
-  const offsetMinutes = numeric
-    ? (numeric[1] === "-" ? -1 : 1) * (Number(numeric[2]) * 60 + Number(numeric[3] ?? 0))
-    : (NAMED_ZONES[named![1]!.toLowerCase()] ?? 0);
+  if (!zone) return ZONE_TOKEN.test(bare) ? null : (w3cForm(bare) ?? writtenForm(bare));
+  let offsetMinutes = NAMED_ZONES[named?.[1]?.toLowerCase() ?? ""] ?? 0;
+  if (numeric) {
+    const hours = Number(numeric[2]);
+    const minutes = Number(numeric[3] ?? 0);
+    // A real offset: at most 14 hours, in quarter hours.
+    if (hours > 14 || minutes % 15 !== 0 || minutes > 45) return null;
+    offsetMinutes = (numeric[1] === "-" ? -1 : 1) * (hours * 60 + minutes);
+  }
   const zoneless = bare.slice(0, zone.index).trim();
+  // A second zone left in the value: `Date` would apply that one.
+  if (ZONE_TOKEN.test(zoneless)) return null;
   const written = w3cForm(zoneless) ?? writtenForm(zoneless);
   return written ? inZone(written, offsetMinutes) : null;
 }

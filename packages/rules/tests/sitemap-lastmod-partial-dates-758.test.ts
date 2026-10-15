@@ -273,3 +273,20 @@ describe("crawl/sitemap-lastmod-churn counts the day the sitemap wrote (#772)", 
     }
   });
 });
+
+describe("crawl/sitemap-lastmod-churn counts lastmods it cannot read (#780 review)", () => {
+  test("a sitemap of ISO-shaped non-W3C values says so instead of reporting no lastmod", () => {
+    const urls = Array.from({ length: 30 }, (_, i) => ({
+      loc: `https://example.com/p${i}`,
+      lastmod: "2024-9-10",
+    }));
+    const { checks } = sitemapLastmodChurnRule.run(siteWith([], urls));
+    expect(checks[0]).toMatchObject({
+      status: "skipped",
+      skipReason: "Lastmod values are not readable dates",
+      message:
+        "30 sitemap lastmod value(s) are not dates squirrel can read the same way on every machine; 0 name a day, too few to judge lastmod churn",
+      details: { unreadableLastmods: 30, urlsWithLastmod: 0 },
+    });
+  });
+});

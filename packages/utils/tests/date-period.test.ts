@@ -130,6 +130,61 @@ describe("datePeriod", () => {
   });
 });
 
+describe("datePeriod refuses what it cannot read the same everywhere (#780 review)", () => {
+  test("a zone that is not at the end, or a second zone", () => {
+    for (const value of [
+      "Sep 10 2024 EST 12:00",
+      "12:00 PM EST, Sep 10 2024",
+      "12:00 Sep 10 2024 +0200",
+      "Sep 10 2024 12:00 GMT EST",
+    ]) {
+      expect(inEveryZone(() => datePeriod(value))).toEqual(ZONES.map(() => null));
+    }
+  });
+
+  test("a date with no year, an impossible date, an offset no zone has, a word that only starts like a month", () => {
+    for (const value of [
+      "Sep 10 12:00",
+      "10 Sep 12:00",
+      "2024/09/31",
+      "Sep 31 2024",
+      "Feb 30, 2024",
+      "2024/09/10 24:00",
+      "2024/01/32",
+      "Sep 10 2024 12:00 +99",
+      "Sep 10 2024 12:00 -0560",
+      "Junk 2024",
+      "Marketing 10 2024",
+      "Mayday 10, 2024",
+    ]) {
+      expect(inEveryZone(() => datePeriod(value))).toEqual(ZONES.map(() => null));
+    }
+    expect(datePeriod("Sept 2024")?.precision).toBe("month");
+    expect(datePeriod("June 10, 2024")?.day).toBe("2024-06-10");
+    expect(datePeriod("Sep 10 2024 12:00 +05:30")?.start).toBe(Date.UTC(2024, 8, 10, 6, 30));
+  });
+
+  test("page-controlled text stays cheap at n, 2n and 4n (no backtracking)", () => {
+    // A run of `(` made the old comment pattern rescan the rest of the value
+    // from every one. Values over 200 characters are not read at all, and
+    // nothing under that can cost much.
+    const shapes = ["(", "1:11 ", "Sep ", "+0", "12:00 GMT", " ", "2024-", "a(b"];
+    for (const shape of shapes) {
+      for (const count of [50_000, 100_000, 200_000]) {
+        const value = `${shape.repeat(count)}x`;
+        const started = performance.now();
+        datePeriod(value);
+        w3cDatePeriod(value);
+        expect(performance.now() - started).toBeLessThan(250);
+      }
+      const short = shape.repeat(Math.floor(199 / shape.length));
+      const started = performance.now();
+      datePeriod(short);
+      expect(performance.now() - started).toBeLessThan(250);
+    }
+  });
+});
+
 describe("periodGapMs", () => {
   test("0 when the periods overlap, else between their nearer ends", () => {
     const year = datePeriod("2024")!;
