@@ -362,7 +362,7 @@ describe("an audit with external link checks on (repo#2759)", () => {
           linkCache: null,
           // The cloud's dead-links service stands in here. These links are on
           // loopback, so it is never asked about any of them (pub#775); the
-          // test below shows the not-requested ones stay out on a public name.
+          // test above shows the not-requested ones stay out on a public name.
           bulkChecker: async (urls) => {
             bulkAsked.push(...urls);
             return new Map<string, ExternalCheckResult>();

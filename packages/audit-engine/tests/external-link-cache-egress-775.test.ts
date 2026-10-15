@@ -19,6 +19,7 @@ import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 import {
   checkExternalLinks,
   filterBrokenLinks,
+  isPublicOnlyEgress,
   type ExternalCheckResult,
   type LinkCacheEntry,
 } from "../src/external-checker";
@@ -128,6 +129,18 @@ describe("a private site's audit and the shared link cache", () => {
     await run([PUBLIC], { egress: policy(false), bulkChecker: bulk.bulkChecker }, cache);
     expect(cache.asked).toEqual([[PUBLIC]]);
     expect(cache.written.map((e) => [e.href, e.status])).toEqual([[PUBLIC, 404]]);
+  });
+});
+
+describe("which policies may share the cache", () => {
+  test("only one held to public addresses on any host", () => {
+    expect(isPublicOnlyEgress({ allowPrivateNetwork: false })).toBe(true);
+    expect(isPublicOnlyEgress({ allowPrivateNetwork: true })).toBe(false);
+    expect(isPublicOnlyEgress({ allowPrivateNetwork: false, allowPrivateTarget: () => true })).toBe(
+      false,
+    );
+    expect(isPublicOnlyEgress({ allowPrivateNetwork: false, trustTarget: () => true })).toBe(false);
+    expect(isPublicOnlyEgress({ allowPrivateNetwork: false, allowHost: () => true })).toBe(false);
   });
 });
 
