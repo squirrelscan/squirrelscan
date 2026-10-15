@@ -31,57 +31,64 @@ function report(unverified: number): Pick<AuditReport, "ruleResults"> {
   } as unknown as Pick<AuditReport, "ruleResults">;
 }
 
-describe("localUnverifiedLinksNotice (pub#800)", () => {
-  test("signed out, with unverified links: says why and how to get an answer", () => {
-    expect(
-      localUnverifiedLinksNotice(report(3), {
-        signedIn: false,
-        hasAccount: false,
-      })
-    ).toBe(
-      "3 external links could not be verified from this machine (bot protection or a timeout), so they are listed as unverified, not broken. Sign in with `squirrel auth login` to check them with squirrelscan's cloud link checker."
+const SIGNED_OUT = { signedIn: false, hasAccount: false, cloudLevel: false };
+
+describe("localUnverifiedLinksNotice (pub#800, pub#823)", () => {
+  test("signed out, with unverified links: says why, and that a signed-in Surface or Full audit checks them for credits", () => {
+    expect(localUnverifiedLinksNotice(report(3), SIGNED_OUT)).toBe(
+      "3 external links could not be verified from this machine (bot protection or a timeout), so they are listed as unverified, not broken. Sign in with `squirrel auth login` and run a Surface or Full audit (Surface is the default once signed in) to check them with squirrelscan's cloud link checker, at 1 credit per link it checks (at most 1 per page)."
     );
-    expect(
-      localUnverifiedLinksNotice(report(1), {
-        signedIn: false,
-        hasAccount: false,
-      })
-    ).toContain(
-      "1 external link could not be verified from this machine (bot protection or a timeout), so it is listed"
+    expect(localUnverifiedLinksNotice(report(1), SIGNED_OUT)).toBe(
+      "1 external link could not be verified from this machine (bot protection or a timeout), so it is listed as unverified, not broken. Sign in with `squirrel auth login` and run a Surface or Full audit (Surface is the default once signed in) to check it with squirrelscan's cloud link checker, at 1 credit per link it checks (at most 1 per page)."
     );
+  });
+
+  test("signed out at Surface (the level is not what kept the cloud away): still names signing in", () => {
+    const notice = localUnverifiedLinksNotice(report(2), {
+      ...SIGNED_OUT,
+      cloudLevel: true,
+    });
+    expect(notice).toContain("Sign in with `squirrel auth login`");
+    expect(notice).toContain("1 credit per link it checks");
   });
 
   test("a saved account the audit could not use this run is not told to sign in", () => {
     const notice = localUnverifiedLinksNotice(report(2), {
       signedIn: false,
       hasAccount: true,
+      cloudLevel: true,
     });
     expect(notice).toContain(
-      "An audit that can use the cloud (signed in, with enough credits) checks them"
+      "A Surface or Full audit that can use the cloud (signed in, with enough credits) checks them with squirrelscan's cloud link checker, at 1 credit per link it checks (at most 1 per page)."
     );
     expect(notice).not.toContain("squirrel auth login");
   });
 
-  test("nothing when signed in, or when no link came back unverified", () => {
+  test("signed in at Quick: names --level surface or full and the credit cost", () => {
+    const notice = localUnverifiedLinksNotice(report(4), {
+      signedIn: true,
+      hasAccount: true,
+      cloudLevel: false,
+    });
+    expect(notice).toBe(
+      "4 external links could not be verified from this machine (bot protection or a timeout), so they are listed as unverified, not broken. A Quick audit checks links only from this machine: run `squirrel audit --level surface` (or `--level full`) to check them with squirrelscan's cloud link checker, at 1 credit per link it checks (at most 1 per page)."
+    );
+    expect(notice).not.toContain("squirrel auth login");
+  });
+
+  test("nothing when signed in at a level the cloud checked links for, or when no link came back unverified", () => {
     expect(
       localUnverifiedLinksNotice(report(3), {
         signedIn: true,
         hasAccount: true,
+        cloudLevel: true,
       })
     ).toBeNull();
-    expect(
-      localUnverifiedLinksNotice(report(0), {
-        signedIn: false,
-        hasAccount: false,
-      })
-    ).toBeNull();
+    expect(localUnverifiedLinksNotice(report(0), SIGNED_OUT)).toBeNull();
     expect(
       localUnverifiedLinksNotice(
         { ruleResults: {} } as Pick<AuditReport, "ruleResults">,
-        {
-          signedIn: false,
-          hasAccount: false,
-        }
+        { signedIn: true, hasAccount: true, cloudLevel: false }
       )
     ).toBeNull();
   });

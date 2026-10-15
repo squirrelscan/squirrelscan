@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- The notice a CLI audit prints when some external links could not be verified from your machine now says what gets them checked by squirrelscan's cloud link checker: a signed-in Surface or Full audit, at 1 credit per link it checks (at most 1 per page). Signing in alone is not enough, since a Quick audit checks links from your machine either way. A signed-in Quick audit now gets the notice too, naming `--level surface`. The `--external-links` help no longer suggests that some level skips external links. See [Link checking](https://docs.squirrelscan.com/guides/link-checking#checking-links-from-the-cli-without-signing-in).
+
 ## v0.0.115 (2026-10-15)
 
 Quick audits in the CLI now check the links that leave your site, as Surface and Full already do. At Quick they are checked from your machine and the link checks cost no credits. `squirrel audit --offline` stops checking anything on another site, and the inbound-link rules stop flagging the page a crawl starts on. Cloud audit defaults are unchanged in this release.

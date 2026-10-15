@@ -1101,12 +1101,14 @@ export const audit = defineCommand({
       description:
         "Run fully offline: skip cloud features, publishing, telemetry, and checks of other sites",
     },
-    // repo#2729: internal link checks are on at every level, external ones at
-    // Surface and Full. Read from rawArgs like --publish / --no-publish.
+    // repo#2729: internal and external link checks are on at every level
+    // (pub#823). --external-links turns external ones back on over
+    // `[external_links] enabled = false`. Read from rawArgs like --publish /
+    // --no-publish.
     "external-links": {
       type: "boolean",
       description:
-        "Check links to other sites this run, at any level, even where the level does not",
+        "Check links to other sites this run, even where the config turns them off",
     },
     "no-external-links": {
       type: "boolean",
@@ -2653,6 +2655,8 @@ export const audit = defineCommand({
       const unverifiedNotice = localUnverifiedLinksNotice(report, {
         signedIn,
         hasAccount: Boolean(accountLabel),
+        // pub#823: Quick checks links only from this machine, signed in too.
+        cloudLevel: auditLevel.settings.cloudChecks,
       });
       if (unverifiedNotice) log(fmt.yellow(`⚠ ${unverifiedNotice}`));
       log("");

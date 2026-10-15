@@ -75,7 +75,7 @@ Sign in with `squirrel auth login`, and a Surface or Full audit (the signed-in d
 
 When the CLI checks a link itself (signed out, at Quick, or when Perch has not answered in time), it keeps walls apart from broken links:
 
-- **A sign-in or bot wall** (a 401, 403, 405, 406 or LinkedIn's 999), a challenge page served as a 503, or a site that never answers in time: listed as status unverifiable under `waf-blocked-external-links`, never broken. A signed-out audit with such links says so and suggests signing in.
+- **A sign-in or bot wall** (a 401, 403, 405, 406 or LinkedIn's 999), a challenge page served as a 503, or a site that never answers in time: listed as status unverifiable under `waf-blocked-external-links`, never broken. An audit that checked such links only from your machine says so after it finishes, with what gets them checked by Perch and what that costs: signed out, sign in and run a Surface or Full audit; signed in at Quick, run `--level surface` or `--level full`.
 - **Throttled** (429 or 430, or a 503 with `Retry-After`): listed as rate-limited, status unverifiable, never broken.
 - **An internal link that answers 401 or 403** to the status-only check, or that answered the crawl with a bot-wall challenge: listed as refused, never broken.
 
