@@ -6,9 +6,9 @@
 // response resolved, i.e. when the HEADERS landed, leaving the body read with
 // no time bound at all. Scripts are fetched during rules enrichment, after the
 // crawl, so an origin that answered 200 and then stalled its body gave an
-// audit that had all its pages and never finished. (The sitemap and external
-// link cases moved to the crawler and engine tests with the forks' removal,
-// #756.)
+// audit that had all its pages and never finished. (With the forks' removal,
+// #756, the sitemap cases moved to the crawler's tests, and the external link
+// cases were dropped: the engine's fetch-deadline test covers them.)
 
 import { afterAll, describe, expect, test } from "bun:test";
 import { Effect } from "effect";

@@ -52,9 +52,6 @@ beforeAll(() => {
         });
       }
       if (path === "/empty") return new Response(null, { status: 204 });
-      if (path === "/robots.txt") {
-        return stalledBody(200, { "content-type": "text/plain" });
-      }
       return stalledBody(200, { "content-type": "text/html" });
     },
   });

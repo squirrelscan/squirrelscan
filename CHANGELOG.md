@@ -19,7 +19,7 @@ How it works:
 
 ### Changed
 
-- Internal: the CLI no longer carries its own copies of the external link checker and of the sitemap and robots.txt parsers. Nothing had run them since audits moved to the shared engine and crawler, so a fix to one could look covered by a test of the other. Their tests now run against the shared code: the sitemap fetch deadline, sitemap parsing and robots.txt rules in the crawler and utils packages. What an audit does is unchanged. #756
+- Internal: the CLI no longer carries its own copies of the external link checker and of the sitemap and robots.txt fetchers. Nothing had run them since audits moved to the shared engine and crawler, so a fix to one could look covered by a test of the other. Their tests now run against the crawler and utils packages (the sitemap fetch deadline, sitemap parsing, robots.txt parsing and allow rules), or were dropped where an engine test already covers them. What an audit does is unchanged. #756
 
 ### Fixed
 
