@@ -56,7 +56,9 @@ describe("localUnverifiedLinksNotice (pub#800)", () => {
       signedIn: false,
       hasAccount: true,
     });
-    expect(notice).toContain("A signed-in audit with credits checks them");
+    expect(notice).toContain(
+      "An audit that can use the cloud (signed in, with enough credits) checks them"
+    );
     expect(notice).not.toContain("squirrel auth login");
   });
 

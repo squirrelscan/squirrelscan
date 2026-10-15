@@ -44,6 +44,19 @@ function serve(): string {
           });
         case "/503-mitigated":
           return new Response("", { status: 503, headers: { "cf-mitigated": "challenge" } });
+        case "/503-retry":
+          return new Response("busy", { status: 503, headers: { "retry-after": "120" } });
+        case "/403-s3":
+          return new Response("<Error><Code>AccessDenied</Code></Error>", {
+            status: 403,
+            headers: { server: "AmazonS3", "x-amz-request-id": "TESTREQUESTID" },
+          });
+        case "/401-basic":
+          return new Response("auth", { status: 401, headers: { "www-authenticate": 'Basic realm="staff"' } });
+        case "/405-post-only":
+          return new Response("method", { status: 405, headers: { allow: "POST, OPTIONS" } });
+        case "/head-405-get-404":
+          return new Response("gone", { status: req.method === "HEAD" ? 405 : 404 });
         case "/stall":
           await Bun.sleep(3_000);
           return new Response("late");
@@ -80,15 +93,29 @@ function serve999(): string {
 function check(
   urls: string[],
   cache: LinkCache | null = null,
+  extra: { timeoutMs?: number; bulkChecker?: (urls: string[]) => Promise<Map<string, ExternalCheckResult>> } = {},
 ): Promise<Map<string, ExternalCheckResult>> {
   return Effect.runPromise(
     checkExternalLinks(urls, cache, {
       concurrency: 4,
-      timeoutMs: 500,
+      // Generous, so a loaded machine never turns a prompt answer into a
+      // timeout; the stall test passes its own.
+      timeoutMs: extra.timeoutMs ?? 2_000,
       userAgent: "squirrel-test",
       egress: { allowPrivateNetwork: true },
+      ...(extra.bulkChecker ? { bulkChecker: extra.bulkChecker } : {}),
     }),
   ).then((results) => new Map(results.map((r) => [r.href, r])));
+}
+
+/** A cache that remembers what was written and answers with `entries`. */
+function memoryCache(entries: LinkCacheEntry[] = []): LinkCache & { written: LinkCacheEntry[] } {
+  const written: LinkCacheEntry[] = [];
+  return {
+    written,
+    getCachedBulk: (urls) => new Map(entries.filter((e) => urls.includes(e.href)).map((e) => [e.href, e])),
+    setCachedBulk: (more) => written.push(...more),
+  };
 }
 
 describe("local link checks: walls and timeouts are unverifiable (pub#800)", () => {
@@ -126,17 +153,53 @@ describe("local link checks: walls and timeouts are unverifiable (pub#800)", () 
     expect(filterBrokenLinks([...results.values()]).map((r) => r.href)).toEqual([`${base}/503`]);
   });
 
-  test("a timeout is unverifiable, not broken, and is not cached", async () => {
+  test("a timeout is unverifiable, not broken", async () => {
     const base = serve();
-    const written: LinkCacheEntry[] = [];
-    const cache: LinkCache = {
-      getCachedBulk: () => new Map(),
-      setCachedBulk: (entries) => written.push(...entries),
-    };
-    const r = (await check([`${base}/stall`, `${base}/200`], cache)).get(`${base}/stall`)!;
+    const r = (await check([`${base}/stall`], null, { timeoutMs: 500 })).get(`${base}/stall`)!;
     expect(r).toMatchObject({ status: null, error: null, wafBlocked: true, wafProvider: "unknown" });
     expect(filterBrokenLinks([r])).toEqual([]);
-    expect(written.map((e) => e.href)).toEqual([`${base}/200`]);
+  });
+
+  test("a non-challenge 503 with Retry-After is still rate limited", async () => {
+    const base = serve();
+    const r = (await check([`${base}/503-retry`])).get(`${base}/503-retry`)!;
+    expect(r).toMatchObject({ status: 503, rateLimited: true });
+    expect(r.wafBlocked).toBeUndefined();
+  });
+
+  test("the site's own refusals stay broken: an object store's 403, HTTP auth, a 405 that allows no GET", async () => {
+    const base = serve();
+    const urls = [`${base}/403-s3`, `${base}/401-basic`, `${base}/405-post-only`];
+    const results = await check(urls);
+    for (const url of urls) expect(results.get(url)!.wafBlocked).toBeUndefined();
+    expect(filterBrokenLinks([...results.values()]).length).toBe(3);
+  });
+
+  test("a HEAD refused with 405 and a GET answering 404 is a 404", async () => {
+    const base = serve();
+    const r = (await check([`${base}/head-405-get-404`])).get(`${base}/head-405-get-404`)!;
+    expect(r.status).toBe(404);
+    expect(filterBrokenLinks([r])).toHaveLength(1);
+  });
+
+  test("walls and timeouts are not cached, so a signed-in run asks the cloud next time", async () => {
+    const base = serve();
+    const cache = memoryCache();
+    await check([`${base}/403`, `${base}/stall`, `${base}/404`, `${base}/200`], cache, { timeoutMs: 500 });
+    expect(cache.written.map((e) => e.href).sort()).toEqual([`${base}/200`, `${base}/404`].sort());
+
+    // An unverifiable answer from the cloud bulk checker is not cached either.
+    const fromCloud = memoryCache();
+    await check([`${base}/x`], fromCloud, {
+      bulkChecker: async (urls) =>
+        new Map(
+          urls.map((url) => [
+            url,
+            { href: url, status: null, error: null, redirectTarget: null, fromCache: false, wafBlocked: true },
+          ]),
+        ),
+    });
+    expect(fromCloud.written).toEqual([]);
   });
 
   test("404, 410, a plain 500 and a refused connection stay broken", async () => {
@@ -152,22 +215,34 @@ describe("local link checks: walls and timeouts are unverifiable (pub#800)", () 
 
   test("a cached wall or timeout counted broken before is asked again", async () => {
     const base = serve();
+    const before = Date.parse("2026-10-15T00:00:00Z");
     const stale: LinkCacheEntry[] = [
-      { href: `${base}/405`, status: 405, error: null, redirectTarget: null, checkedAt: Date.now() },
-      { href: `${base}/stall`, status: null, error: "timeout", redirectTarget: null, checkedAt: Date.now() },
-      { href: `${base}/404`, status: 404, error: null, redirectTarget: null, checkedAt: Date.now() },
+      { href: `${base}/405`, status: 405, error: null, redirectTarget: null, checkedAt: before },
+      { href: `${base}/stall`, status: null, error: "timeout", redirectTarget: null, checkedAt: before },
+      { href: `${base}/404`, status: 404, error: null, redirectTarget: null, checkedAt: before },
     ];
-    const cache: LinkCache = {
-      getCachedBulk: () => new Map(stale.map((e) => [e.href, e])),
-      setCachedBulk: () => {},
-    };
     const results = await check(
       stale.map((e) => e.href),
-      cache,
+      memoryCache(stale),
+      { timeoutMs: 500 },
     );
     expect(results.get(`${base}/405`)).toMatchObject({ fromCache: false, wafBlocked: true });
     expect(results.get(`${base}/stall`)).toMatchObject({ fromCache: false, wafBlocked: true });
     // A real answer from the cache is still used as-is.
     expect(results.get(`${base}/404`)).toMatchObject({ fromCache: true, status: 404 });
+  });
+
+  test("a wall status cached after the change is a real answer, used as-is", async () => {
+    const base = serve();
+    const later: LinkCacheEntry = {
+      href: `${base}/403`,
+      status: 403,
+      error: null,
+      redirectTarget: null,
+      checkedAt: Date.parse("2026-12-01T00:00:00Z"),
+    };
+    const r = (await check([later.href], memoryCache([later]))).get(later.href)!;
+    expect(r).toMatchObject({ fromCache: true, status: 403 });
+    expect(r.wafBlocked).toBeUndefined();
   });
 });

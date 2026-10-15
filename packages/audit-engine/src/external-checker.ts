@@ -201,8 +201,6 @@ interface CheckUrlResult {
   rateLimited?: boolean;
   /** The egress policy refused the first request: nothing was sent, and nothing is cached. */
   refused?: boolean;
-  /** Out of time: unverifiable this run, and not cached, so the next run asks again (pub#800). */
-  timedOut?: boolean;
 }
 
 /**
@@ -214,10 +212,45 @@ interface CheckUrlResult {
  */
 const BOT_WALL_STATUSES = new Set([401, 403, 405, 406, 999]);
 
+/**
+ * A cached wall or timeout written before this was counted broken by a client
+ * from before pub#800, and is asked again. After it, a cached wall status is a
+ * real answer (a cloud-confirmed broken 403, say): walls and timeouts are no
+ * longer cached at all. A month past the change, so an older client still in
+ * use for a while, and the cache's 7-day default life, are both covered.
+ */
+const WALL_VERDICT_CUTOFF_MS = Date.parse("2026-11-16T00:00:00Z");
+
 /** A cached answer from before pub#800, which counted a wall or a timeout as broken: asked again. */
 function staleWallVerdict(entry: LinkCacheEntry): boolean {
-  if (entry.wafBlocked) return false;
+  if (entry.wafBlocked || entry.checkedAt >= WALL_VERDICT_CUTOFF_MS) return false;
   return (entry.status !== null && BOT_WALL_STATUSES.has(entry.status)) || entry.error === "timeout";
+}
+
+/**
+ * A wall status that, from these headers, is the site's own answer rather than
+ * a robot check, so it stays broken (pub#800 review):
+ * - an object store's 403 for a key it will not list (S3, GCS), which is how a
+ *   deleted download answers;
+ * - an HTTP authentication challenge (`WWW-Authenticate: Basic` or `Digest`),
+ *   which a person meets too;
+ * - a 405 whose `Allow` header leaves out GET: the link points at an endpoint
+ *   nobody can open.
+ */
+function realRefusal(status: number, headers: Headers): boolean {
+  if (status === 403) {
+    return (
+      headers.has("x-amz-request-id") ||
+      /^amazons3$/i.test(headers.get("server") ?? "") ||
+      headers.has("x-guploader-uploadid")
+    );
+  }
+  if (status === 401) return /^\s*(basic|digest)\b/i.test(headers.get("www-authenticate") ?? "");
+  if (status === 405) {
+    const allow = headers.get("allow");
+    return allow !== null && !/\bGET\b/i.test(allow);
+  }
+  return false;
 }
 
 /** Redirects followed per request, a browser's limit. */
@@ -349,7 +382,7 @@ async function checkSingleUrlAsync(
           },
           html: body ?? null,
         }).detected;
-      if (challenge) {
+      if (challenge && !realRefusal(getResponse.status, headers)) {
         const wafResult = detectWaf(headers, body);
         return {
           status: getResponse.status,
@@ -387,7 +420,6 @@ async function checkSingleUrlAsync(
         redirectTarget: null,
         wafBlocked: true,
         wafProvider: "unknown",
-        timedOut: true,
       };
     }
     return { status: null, error: (error as Error).message || "Unknown error", redirectTarget: null };
@@ -496,8 +528,9 @@ export function checkExternalLinks(
           if (resolved && !isBulkNonPublicRefusal(resolved)) {
             results.push({ ...resolved, href: url });
             // #1829: never cache a throttled verdict — see the per-link cache
-            // write below for why.
-            if (!isRateLimited(resolved)) {
+            // write below for why. Nor an unverifiable one (pub#800): asked
+            // again next run, which may be signed in where this one was not.
+            if (!isRateLimited(resolved) && !resolved.wafBlocked) {
               bulkCacheEntries.push({
                 href: url,
                 status: resolved.status,
@@ -537,9 +570,10 @@ export function checkExternalLinks(
       // reported as "unverifiable" for a week after the host recovered. Cache
       // the verified results only; throttled ones are re-checked next run.
       const cacheEntries: LinkCacheEntry[] = checkedResults
-        // Nor a refused one: nothing was asked. Nor one that ran out of time:
-        // like throttling, a fact about the moment (pub#800).
-        .filter((r) => !isRateLimited(r) && !r.refused && !r.timedOut)
+        // Nor a refused one: nothing was asked. Nor an unverifiable one, a
+        // wall or a timeout: like throttling, a fact about the moment, and the
+        // next run may ask the cloud link checker instead (pub#800).
+        .filter((r) => !isRateLimited(r) && !r.refused && !r.wafBlocked)
         .map((r) => ({
           href: r.href,
           status: r.status,

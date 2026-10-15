@@ -12,7 +12,8 @@ const UNVERIFIED_CHECK = "waf-blocked-external-links";
  * The summary notice for links checked only from this machine that came back
  * unverifiable, or null: none came back so, or the audit ran signed in and
  * the cloud link checker had its turn. `hasAccount` is a saved login or token
- * the audit could not use this run (no credits, an outage).
+ * the audit could not use this run (too few credits, a spend cap below the
+ * minimum, an outage).
  */
 export function localUnverifiedLinksNotice(
   report: Pick<AuditReport, "ruleResults">,
@@ -27,7 +28,7 @@ export function localUnverifiedLinksNotice(
   const links = count === 1 ? "1 external link" : `${count} external links`;
   const verb = count === 1 ? "it is" : "they are";
   const next = account.hasAccount
-    ? "A signed-in audit with credits checks them with squirrelscan's cloud link checker."
+    ? "An audit that can use the cloud (signed in, with enough credits) checks them with squirrelscan's cloud link checker."
     : "Sign in with `squirrel auth login` to check them with squirrelscan's cloud link checker.";
   return `${links} could not be verified from this machine (bot protection or a timeout), so ${verb} listed as unverified, not broken. ${next}`;
 }
