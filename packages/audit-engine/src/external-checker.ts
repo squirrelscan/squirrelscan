@@ -534,7 +534,7 @@ export function checkExternalLinks(
             // #1829: never cache a throttled verdict — see the per-link cache
             // write below for why. Nor an unverifiable one (pub#800): asked
             // again next run, which may be signed in where this one was not.
-            if (!isRateLimited(resolved) && !resolved.wafBlocked) {
+            if (cacheableVerdict(resolved)) {
               bulkCacheEntries.push({
                 href: url,
                 status: resolved.status,
@@ -577,7 +577,7 @@ export function checkExternalLinks(
         // Nor a refused one: nothing was asked. Nor an unverifiable one, a
         // wall or a timeout: like throttling, a fact about the moment, and the
         // next run may ask the cloud link checker instead (pub#800).
-        .filter((r) => !isRateLimited(r) && !r.refused && !r.wafBlocked)
+        .filter((r) => cacheableVerdict(r))
         .map((r) => ({
           href: r.href,
           status: r.status,
@@ -632,6 +632,21 @@ export function filterBrokenLinks(
     if (r.status && r.status >= 400) return true;
     return false;
   });
+}
+
+/**
+ * Whether a verdict goes into the link cache: a real answer about the link.
+ * Not throttling (#1829), not a request that was never sent (pub#770), and not
+ * an unverifiable one, a wall or a timeout (pub#800): each is a fact about the
+ * moment, and the next audit, maybe signed in, asks again.
+ */
+export function cacheableVerdict(result: {
+  status: number | null;
+  rateLimited?: boolean;
+  refused?: boolean;
+  wafBlocked?: boolean;
+}): boolean {
+  return !isRateLimited(result) && result.refused !== true && result.wafBlocked !== true;
 }
 
 /** True when this result reflects throttling rather than the target's real state. */
