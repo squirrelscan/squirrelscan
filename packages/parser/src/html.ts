@@ -224,23 +224,31 @@ const MAX_CONTACT_LINKS = 32;
  */
 export function extractContactLinks(doc: Document): ContactLinkData[] {
   const contacts: ContactLinkData[] = [];
+  // Obfuscated addresses get a cap of their own, so a footer of them cannot
+  // push out the `tel:` links local/nap-consistency compares.
+  let plain = 0;
+  let obfuscated = 0;
 
   for (const anchor of doc.querySelectorAll(
     'a[href^="tel:" i], a[href^="mailto:" i], a[href*="/cdn-cgi/l/email-protection" i]',
   )) {
-    if (contacts.length >= MAX_CONTACT_LINKS) break;
+    if (plain >= MAX_CONTACT_LINKS && obfuscated >= MAX_CONTACT_LINKS) break;
     const href = (anchor as Element).getAttribute("href");
     if (!href) continue;
 
     const trimmed = href.trim();
     if (isCloudflareEmailProtectionUrl(trimmed)) {
+      if (obfuscated >= MAX_CONTACT_LINKS) continue;
+      obfuscated++;
       contacts.push(cloudflareEmailContact(anchor as Element, trimmed));
       continue;
     }
+    if (plain >= MAX_CONTACT_LINKS) continue;
     const colon = trimmed.indexOf(":");
     const scheme = trimmed.slice(0, colon).toLowerCase();
     if (scheme !== "tel" && scheme !== "mailto") continue;
 
+    plain++;
     contacts.push({
       scheme,
       // `?subject=…` / `;phone-context=…` are routing params, not the address.

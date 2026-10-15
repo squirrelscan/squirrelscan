@@ -155,6 +155,18 @@ describe("parsePage — Cloudflare email-protection links (pub#811)", () => {
     expect(extractLinks(doc, URL).map((l) => l.href)).toEqual(["https://example.com/about"]);
   });
 
+  test("obfuscated addresses have a cap of their own, so they never push out tel: links", () => {
+    const obfuscated = Array.from(
+      { length: 40 },
+      (_, i) => `<a href="/cdn-cgi/l/email-protection#${encode(`a${i}@example.com`)}">mail</a>`,
+    ).join("");
+    const parsed = parsePage(page(`${obfuscated}<a href="tel:+15551234567">call</a>`), URL);
+    expect(parsed.contactLinks?.filter((c) => c.obfuscated)).toHaveLength(32);
+    expect(parsed.contactLinks?.filter((c) => !c.obfuscated)).toEqual([
+      { scheme: "tel", value: "+15551234567", text: "call" },
+    ]);
+  });
+
   test("other /cdn-cgi/ links are links: an image-resizing URL is a real resource", () => {
     const parsed = parsePage(page(`<a href="/cdn-cgi/image/width=1200/a.jpg">full size</a>`), URL);
     expect(parsed.links.map((l) => l.url)).toEqual([
