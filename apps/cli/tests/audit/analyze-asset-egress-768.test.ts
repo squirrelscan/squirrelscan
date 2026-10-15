@@ -7,20 +7,27 @@
 //
 // pub#799: the copy never ran the internal link check either, so every target
 // the stored crawl did not fetch read as "internal link checks were off".
+//
+// The crawl analyze reads can be any project's, while its config is the
+// squirrel.toml found from the current directory: both phases run with the
+// crawl's own scope, and with none of that directory's custom headers.
 
 import { ASSET_FETCH_REFUSED_ERROR } from "@squirrelscan/utils/constants";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  test,
+} from "bun:test";
 import { Effect } from "effect";
 
 import type { CrawlMetadata, PageRecord } from "@/crawler/storage/types";
 
-import {
-  buildSiteContext,
-  fetchResourceAssets,
-  runRulesOnStorage,
-} from "@/audit/adapter";
+import { buildSiteContext } from "@/audit/adapter";
 import { getDefaultConfig } from "@/config";
-import { assetPhaseConfig } from "@/controllers/analyze";
+import { analyzeStoredCrawl, configForCrawl } from "@/controllers/analyze";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
 
 const SCRIPT = "window.squirrel = 1;";
@@ -32,12 +39,16 @@ const REDIRECTS: Record<string, string> = {
   "/link-local-v6.js": "http://[fe80::1]/x.js",
 };
 
+const NOT_FOUND_PAGE = `<!doctype html><html lang="en"><head><title>Page not found</title></head><body><h1>Page not found</h1><p>Sorry, the page you are looking for does not exist.</p></body></html>`;
+
 let server: ReturnType<typeof Bun.serve>;
 let base: string;
 
 const real = globalThis.fetch;
 /** Every URL a request was sent to, after any pinning. */
 const sent: string[] = [];
+/** Paths the site was asked for, with the Authorization header each carried. */
+const received: Array<{ path: string; authorization: string | null }> = [];
 
 beforeAll(() => {
   server = Bun.serve({
@@ -45,11 +56,17 @@ beforeAll(() => {
     port: 0,
     fetch(req) {
       const path = new URL(req.url).pathname;
+      received.push({ path, authorization: req.headers.get("authorization") });
       const location = REDIRECTS[path];
       if (location) {
         return new Response(null, { status: 302, headers: { location } });
       }
       if (path === "/missing") return new Response("gone", { status: 404 });
+      if (path === "/oops") {
+        return new Response(NOT_FOUND_PAGE, {
+          headers: { "content-type": "text/html" },
+        });
+      }
       return new Response(SCRIPT, {
         headers: { "content-type": "application/javascript" },
       });
@@ -70,12 +87,12 @@ afterAll(() => {
   server.stop(true);
 });
 
-function page(url: string, scripts: string[]): PageRecord {
-  const html = `<!doctype html><html><head><title>Home</title>${scripts
-    .map((src) => `<script src="${src}"></script>`)
-    .join(
-      ""
-    )}</head><body><p>Home</p><a href="/missing">Old page</a></body></html>`;
+afterEach(() => {
+  sent.length = 0;
+  received.length = 0;
+});
+
+function pageRecord(url: string, html: string): PageRecord {
   return {
     url,
     normalizedUrl: url,
@@ -88,7 +105,7 @@ function page(url: string, scripts: string[]): PageRecord {
     fetchedAt: Date.now(),
     etag: null,
     lastModified: null,
-    contentHash: "hash-home",
+    contentHash: `hash-${url}`,
     html,
     parsedData: null,
     headers: { contentType: "text/html" },
@@ -106,8 +123,20 @@ function page(url: string, scripts: string[]): PageRecord {
   } as unknown as PageRecord;
 }
 
-/** The asset phase `squirrel analyze` runs, over a stored crawl of one page. */
-function analyzeAssets(scripts: string[], config = getDefaultConfig()) {
+function home(scripts: string[]): string {
+  const tags = scripts.map((src) => `<script src="${src}"></script>`).join("");
+  return `<!doctype html><html lang="en"><head><title>Home</title>${tags}</head><body><p>Home</p><a href="/missing">Old page</a></body></html>`;
+}
+
+/**
+ * Analyze a stored crawl of the home page (and `extra` pages), as `squirrel
+ * analyze` does: the asset phase, then the rules, with `config` as loaded.
+ */
+function analyze(
+  scripts: string[],
+  config = getDefaultConfig(),
+  extra: PageRecord[] = []
+) {
   const storage = new SQLiteStorage(":memory:");
   return Effect.runPromise(
     Effect.gen(function* () {
@@ -121,26 +150,22 @@ function analyzeAssets(scripts: string[], config = getDefaultConfig()) {
         config: {} as never,
         stats: {} as never,
       } as never);
-      yield* storage.upsertPage(crawlId, page(`${base}/`, scripts));
-      const stored = yield* storage.getPages(crawlId);
-      const siteContext = yield* buildSiteContext(stored);
-      const assets = yield* fetchResourceAssets(
-        storage,
-        crawlId,
-        siteContext,
-        config
+      yield* storage.upsertPage(crawlId, pageRecord(`${base}/`, home(scripts)));
+      for (const page of extra) yield* storage.upsertPage(crawlId, page);
+      const crawl = (yield* storage.getCrawl(crawlId))!;
+      const siteContext = yield* buildSiteContext(
+        yield* storage.getPages(crawlId)
       );
-      const ran = yield* runRulesOnStorage(
+      const { assets, ruleResults } = yield* analyzeStoredCrawl(
         storage,
-        crawlId,
+        crawl,
         siteContext,
         {
           ...config,
           rules: { ...config.rules, enable: ["links/broken-links"] },
-        },
-        assets
+        }
       );
-      const brokenLinks = (ran.ruleResultsMap.get("links/broken-links")
+      const brokenLinks = (ruleResults.ruleResultsMap.get("links/broken-links")
         ?.checks ?? []) as Array<{
         status: string;
         details?: Record<string, unknown>;
@@ -152,10 +177,7 @@ function analyzeAssets(scripts: string[], config = getDefaultConfig()) {
 
 describe("squirrel analyze's asset fetches (pub#768)", () => {
   test("a script that redirects to a metadata address is refused; the site's own scripts load", async () => {
-    const { assets } = await analyzeAssets([
-      ...Object.keys(REDIRECTS),
-      "/app.js",
-    ]);
+    const { assets } = await analyze([...Object.keys(REDIRECTS), "/app.js"]);
 
     const byUrl = new Map(assets.scripts.map((s) => [s.url, s]));
     for (const path of Object.keys(REDIRECTS)) {
@@ -174,11 +196,25 @@ describe("squirrel analyze's asset fetches (pub#768)", () => {
     }
     expect(sent.some((url) => url.includes("/metadata-ip.js"))).toBe(true);
   });
+
+  test("this directory's custom headers go to no request, assets or rules", async () => {
+    const config = getDefaultConfig();
+    config.crawler.headers = { Authorization: "Bearer project-a" };
+    // A page the crawl stored that reads as a soft 404: the rules phase
+    // fetches it again to confirm, with the crawl's headers.
+    await analyze(["/app.js"], config, [
+      pageRecord(`${base}/oops`, NOT_FOUND_PAGE),
+    ]);
+    const paths = received.map((r) => r.path);
+    expect(paths).toContain("/app.js");
+    expect(paths).toContain("/oops");
+    expect(received.filter((r) => r.authorization !== null)).toEqual([]);
+  });
 });
 
 describe("squirrel analyze's internal link check (pub#799)", () => {
   test("it status-checks a linked target the stored crawl did not fetch", async () => {
-    const { assets, brokenLinks } = await analyzeAssets([]);
+    const { assets, brokenLinks } = await analyze([]);
     expect(assets.linkTargetStatuses?.map((t) => [t.url, t.status])).toEqual([
       [`${base}/missing`, 404],
     ]);
@@ -192,7 +228,7 @@ describe("squirrel analyze's internal link check (pub#799)", () => {
   test("with internal link checks off, it checks none, and says so", async () => {
     const config = getDefaultConfig();
     config.internal_links = { ...config.internal_links, enabled: false };
-    const { assets, brokenLinks } = await analyzeAssets([], config);
+    const { assets, brokenLinks } = await analyze([], config);
     expect(assets.linkTargetStatuses).toBeUndefined();
     expect(assets.internalLinkProbe).toBeUndefined();
     expect(brokenLinks.map((c) => [c.status, c.details?.notFetched])).toEqual([
@@ -201,17 +237,20 @@ describe("squirrel analyze's internal link check (pub#799)", () => {
   });
 });
 
-describe("the config analyze's asset phase runs with", () => {
-  const crawlConfig = (config: Partial<CrawlMetadata["config"]>) =>
+describe("the config squirrel analyze runs with", () => {
+  const crawlWith = (config: Partial<CrawlMetadata["config"]>) =>
     ({ config }) as unknown as CrawlMetadata;
 
-  test("the crawl's own scope, and none of this directory's custom headers", () => {
+  test("the crawl's own scope and limits, and none of this directory's custom headers", () => {
     const config = getDefaultConfig();
     config.crawler.headers = { Authorization: "Bearer project-a" };
-    config.crawler.exclude = [];
-    const out = assetPhaseConfig(
+    config.project.domains = ["project-a.example"];
+    const out = configForCrawl(
       config,
-      crawlConfig({
+      crawlWith({
+        maxPages: 50,
+        perHostConcurrency: 1,
+        perHostDelayMs: 250,
         include: ["/docs/*"],
         exclude: ["/admin/*"],
         respectRobots: true,
@@ -219,6 +258,9 @@ describe("the config analyze's asset phase runs with", () => {
       })
     );
     expect(out.crawler.headers).toEqual({});
+    expect(out.crawler.max_pages).toBe(50);
+    expect(out.crawler.per_host_concurrency).toBe(1);
+    expect(out.crawler.per_host_delay_ms).toBe(250);
     expect(out.crawler.include).toEqual(["/docs/*"]);
     expect(out.crawler.exclude).toEqual(["/admin/*"]);
     expect(out.crawler.respect_robots).toBe(true);
@@ -229,11 +271,13 @@ describe("the config analyze's asset phase runs with", () => {
     });
   });
 
-  test("a crawl recorded without those fields keeps the loaded config's", () => {
+  test("a crawl recorded without those fields: the loaded scope, but no extra domains", () => {
     const config = getDefaultConfig();
     config.crawler.exclude = ["/private/*"];
-    const out = assetPhaseConfig(config, crawlConfig({}));
+    config.project.domains = ["project-a.example"];
+    const out = configForCrawl(config, crawlWith({}));
     expect(out.crawler.exclude).toEqual(["/private/*"]);
+    expect(out.project.domains).toEqual([]);
     expect(out.crawler.headers).toEqual({});
   });
 });

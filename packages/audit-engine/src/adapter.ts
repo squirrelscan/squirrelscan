@@ -1019,8 +1019,9 @@ export function fetchAssetsFromOccurrences(
     // bounds CSS + images + scripts + PDFs + sitemap fetches together. Once the
     // budget is spent or a host escalates its latency (activera.com.au), the
     // REMAINING fetches skip fast instead of re-hitting a tarpit for minutes.
-    // Unset (the CLI) → undefined → fetch as today. One budget for both fetchers so a slow origin is detected across
-    // resource types, not per-category.
+    // Unset (the CLI) → undefined → fetch as today. One budget for both
+    // fetchers so a slow origin is detected across resource types, not
+    // per-category.
     const budgetMs = overrides?.resourceCheckBudgetMs;
     const fetchBudget: FetchBudget | undefined =
       budgetMs && budgetMs > 0
