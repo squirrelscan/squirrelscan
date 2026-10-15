@@ -98,6 +98,8 @@ Cloud analysis that works from pages the CLI has already crawled is unaffected, 
 
 To get a shareable report for a site you are developing, audit it once it is on a public URL, such as a preview deployment.
 
+Type a local host without a scheme and it is audited over `http://`, since most dev servers and local boxes serve plain http: `squirrel audit myapp.test` audits `http://myapp.test/`, and the same goes for `localhost:3000`, `192.168.1.10` and `box.local`. That covers every host the list at the end of [Transport and delivery rules do not apply](#transport-and-delivery-rules-do-not-apply) counts as local. Any other host without a scheme is audited over `https://`. Type the scheme to choose it yourself, for example `squirrel audit https://myapp.test` for a Valet or Herd site you have secured.
+
 ### Transport and delivery rules do not apply
 
 A dev server is plain HTTP on purpose, usually speaks HTTP/1.1, and sends no production caching or compression headers. Those things are decided by the server or CDN in front of the production site, not by your code, so the rules that judge them have nothing to say about a local or private host. On such a host they are skipped:

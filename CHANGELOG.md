@@ -20,6 +20,7 @@ How it works:
 ### Fixed
 
 - The notice a CLI audit prints when some external links could not be verified from your machine now says what gets them checked by squirrelscan's cloud link checker: a signed-in Surface or Full audit, at 1 credit per link it checks (at most 1 per page). Signing in alone is not enough, since a Quick audit checks links from your machine either way. A signed-in Quick audit now gets the notice too, naming `--level surface`. The `--external-links` help no longer suggests that some level skips external links. See [Link checking](https://docs.squirrelscan.com/guides/link-checking#checking-links-from-the-cli-without-signing-in).
+- `squirrel audit myapp.test`, typed without a scheme, now audits `http://myapp.test/` instead of `https://myapp.test/`. Laravel Valet and Herd serve `.test` sites over plain http unless the site is secured, so the audit used to fail to connect. Every host the CLI treats as local or private now defaults to `http://` the way `localhost` and private addresses already did: `box.local`, `nas.lan`, `db.internal` and the other local-only names. A public host still defaults to `https://`, and a scheme you type is kept. See [Local audits](https://docs.squirrelscan.com/guides/local-audits-cli#local-and-private-hosts-stay-local).
 
 ## v0.0.115 (2026-10-15)
 
