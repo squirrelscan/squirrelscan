@@ -24,6 +24,7 @@ How it works:
 ### Fixed
 
 - `squirrel audit --offline` no longer status-checks anything on another site: the third-party scripts, stylesheets and fonts the pages load, and sitemap URLs on another site, are left alone. `reliability/broken-resources` reports the third-party resources as not measured on an offline run, and `crawl/sitemap-4xx` says how many sitemap URLs on another site it skipped. Requests to the audited site can still end up on another host when the site sends them there: a page or asset redirect, or a sitemap that robots.txt lists on another host. See [audit](https://docs.squirrelscan.com/cli/audit). #807
+- `links/orphan-pages` no longer reports the page the crawl started on as an orphan. When a site's root redirects to a deeper page (`/en/`, or a sign-in page), the redirect leads there, and often no link does, so the site's front door read as a page with too few incoming links. `integrity/orphan-page` already exempted it. See [links/orphan-pages](https://docs.squirrelscan.com/rules/links/orphan-pages). #796
 
 ## v0.0.114 (2026-10-15)
 

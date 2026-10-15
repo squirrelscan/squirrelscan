@@ -11,7 +11,7 @@ Some pages are orphaned on purpose. A campaign landing page or a page reachable 
 
 ## What squirrel checks
 
-The rule is site-wide. It counts inbound internal links for every crawled page, counting only links that are internal, resolvable and not `rel="nofollow"`. The homepage is never flagged, and neither is any URL matching an exclusion pattern.
+The rule is site-wide. It counts inbound internal links for every crawled page, counting only links that are internal, resolvable and not `rel="nofollow"`. The homepage is never flagged, and neither is the page the audit started from: the URL you gave and where its redirects landed (a root that redirects to `/en/` or to a sign-in page). Nor is any URL matching an exclusion pattern.
 
 - Skipped when fewer than two pages were crawled. Message: `Insufficient pages for orphan analysis`.
 - Warn when any page has fewer inbound links than `minInboundLinks`. Message: `6 orphan page(s) with <2 incoming links`. The value lists up to five paths with a `+N more` suffix, and every URL is listed as an item. Severity warning, weight 5.

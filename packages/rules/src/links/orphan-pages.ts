@@ -51,21 +51,28 @@ function buildOrphanCheck(orphans: string[], minLinks: number): CheckResult {
 // legacy path reads as `page.url` — so homepage/exclude/output all match.
 // `noindexUrls` holds stored urls of noindex pages to leave out (pub#457): a page
 // kept out of the index needs no links to be found by search engines. Their own
-// outgoing links still count toward other pages.
+// outgoing links still count toward other pages. `entryUrls` are where the crawl
+// started (pub#796): a root that redirects to `/en/` or a sign-in page lands the
+// crawl on a page the redirect, not a link, leads to, the site's front door.
 function collectOrphans(
   entries: Iterable<[string, number]>,
   minLinks: number,
   excludePatterns: string[],
   baseUrl: string,
-  noindexUrls: ReadonlySet<string>
+  noindexUrls: ReadonlySet<string>,
+  entryUrls: readonly string[]
 ): string[] {
   const normalizedBase = normalizeUrl(baseUrl);
+  const entryPages = new Set(entryUrls.map((entry) => normalizeUrl(entry)));
   const orphans: string[] = [];
   for (const [url, count] of entries) {
     const normalizedUrl = normalizeUrl(url);
 
-    // Skip homepage
-    const isHomepage = normalizedUrl === normalizedBase || getPathname(url) === "/";
+    // Skip the homepage, and the page the crawl started on
+    const isHomepage =
+      normalizedUrl === normalizedBase ||
+      getPathname(url) === "/" ||
+      entryPages.has(normalizedUrl);
     const isExcluded = matchesExcludePattern(url, excludePatterns);
 
     if (isHomepage || isExcluded || noindexUrls.has(url)) {
@@ -138,7 +145,8 @@ export const orphanPagesRule: Rule = {
           minLinks,
           excludePatterns,
           ctx.site?.baseUrl || "",
-          noindexUrls
+          noindexUrls,
+          ctx.site?.entryUrls ?? []
         );
         checks.push(buildOrphanCheck(orphans, minLinks));
         return { checks };
@@ -216,7 +224,8 @@ export const orphanPagesRule: Rule = {
       minLinks,
       excludePatterns,
       ctx.site?.baseUrl || "",
-      noindexUrls
+      noindexUrls,
+      ctx.site?.entryUrls ?? []
     );
 
     // Report results

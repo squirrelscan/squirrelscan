@@ -25,7 +25,7 @@ const LANDING = `${BASE}/v3/signin/identifier?continue=x`;
 
 const CONFIG = {
   rule_options: {},
-  rules: { enable: ["integrity/orphan-page"] },
+  rules: { enable: ["integrity/orphan-page", "links/orphan-pages"] },
 } as unknown as Config;
 
 const EMPTY_ASSETS: PreFetchedAssets = {
@@ -79,7 +79,11 @@ const PAGES = [
   pageRecord(`${BASE}/privacy`, ["/help"]),
 ];
 
-async function orphanChecks(seedUrl: string, engine: "v1" | "streaming"): Promise<CheckResult[]> {
+async function orphanChecks(
+  seedUrl: string,
+  engine: "v1" | "streaming",
+  ruleId = "integrity/orphan-page",
+): Promise<CheckResult[]> {
   const storage = new SQLiteStorage(":memory:");
   return run(
     Effect.gen(function* () {
@@ -115,7 +119,7 @@ async function orphanChecks(seedUrl: string, engine: "v1" | "streaming"): Promis
         const siteContext = yield* buildSiteContext(stored);
         result = yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, EMPTY_ASSETS);
       }
-      return (result.ruleResultsMap.get("integrity/orphan-page")?.checks ?? []) as CheckResult[];
+      return (result.ruleResultsMap.get(ruleId)?.checks ?? []) as CheckResult[];
     }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie))),
   );
 }
@@ -131,6 +135,25 @@ for (const engine of ["v1", "streaming"] as const) {
     test("the page the root redirected to is the front door, not a hidden page", async () => {
       const checks = await orphanChecks(LANDING, engine);
       expect(checks.map((c) => [c.name, c.status])).toEqual([["orphan-page", "pass"]]);
+    });
+  });
+
+  // pub#796: links/orphan-pages had the same homepage-only exemption. /help and
+  // /privacy link each other once, under the default two inbound links.
+  describe(`pub#796 links/orphan-pages entry page through the real adapter (${engine})`, () => {
+    test("control: a landing page the crawl did not start on is an orphan", async () => {
+      const checks = await orphanChecks(`${BASE}/`, engine, "links/orphan-pages");
+      expect(checks[0]?.items?.map((i) => i.id).sort()).toEqual(
+        [LANDING, `${BASE}/help`, `${BASE}/privacy`].sort(),
+      );
+    });
+
+    test("the page the root redirected to is not an orphan", async () => {
+      const checks = await orphanChecks(LANDING, engine, "links/orphan-pages");
+      expect(checks[0]?.items?.map((i) => i.id).sort()).toEqual([
+        `${BASE}/help`,
+        `${BASE}/privacy`,
+      ]);
     });
   });
 }
