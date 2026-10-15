@@ -14,7 +14,7 @@ This page covers what is checked today, how to read the results, and what is com
 |---|---|---|
 | What | Links to pages on your own site | Links to other sites |
 | Rules | [`links/broken-links`](/rules/links/broken-links) | [`links/broken-external-links`](/rules/links/broken-external-links), [`links/dead-links`](/rules/links/dead-links) |
-| Quick level | On | Off, unless you pass `--external-links` |
+| Quick level | On | On |
 | Surface and Full levels | On | On |
 
 Each audit checks up to a per-audit limit of links, the most-linked first. The limits and every switch are in [Link checking defaults](/rules/links#link-checking-defaults).
@@ -35,13 +35,13 @@ The full rules are in [What the internal link check never requests](/configurati
 
 ## External links
 
-External links are checked at Surface and Full, and at Quick with `--external-links`. The links on the most pages go first: the nav and footer links every page shares. Links past the audit's limit are listed as **Not checked**.
+External links are checked at every level, Quick included. The links on the most pages go first: the nav and footer links every page shares. Links past the audit's limit are listed as **Not checked**.
 
 Where the check runs depends on how you audit:
 
 - **A cloud audit** checks external links with squirrelscan's link checker, Perch, which shares what it learns across audits. External link checks are a website setting in the dashboard.
 - **A signed-in CLI audit at Surface or Full** sends its external links to the same checker. Whatever Perch has not answered in time, the CLI checks itself from your machine.
-- **Signed out, or at Quick with `--external-links`**, the CLI checks external links from your machine. `--offline` skips them.
+- **Signed out, or at Quick**, the CLI checks external links from your machine. `--offline` and `--no-external-links` skip them.
 
 ### What it costs
 
@@ -50,7 +50,7 @@ External link checks cost credits, at most 1 per page of the audit's page limit:
 - **A cloud audit** pays 1 credit for each distinct external link it checks, whatever the answer. A link the audit has already paid for is not charged again.
 - **A signed-in CLI audit** pays 1 credit for each distinct external link Perch answers. A link Perch leaves unanswered is not charged: the CLI checks it from your machine for free.
 
-Everything else is free: internal links, every link a signed-out audit checks, and a link checked from your machine at Quick with `--external-links`. The audit's estimate includes the link checks before it starts. See [Credits and pricing](/cloud/credits).
+Everything else is free: internal links, every link a signed-out audit checks, and a Quick CLI audit's external links, checked from your machine. The audit's estimate includes the link checks before it starts. See [Credits and pricing](/cloud/credits).
 
 Like the internal check, the external check never requests a link that looks like an action or carries a token: a newsletter's one-click unsubscribe, a magic sign-in link, a signed download. It never follows a redirect into one either. See [What the external link check never requests](/configuration/external-links#what-the-external-link-check-never-requests).
 
@@ -87,7 +87,7 @@ When a check did not run, squirrelscan says so rather than reporting the rule as
 
 | Reason | What happened |
 |---|---|
-| `external-links-not-checked` | External link checking was off: the Quick level without `--external-links`, `--offline`, `--no-external-links`, `[external_links] enabled = false`, or a website or run that switched it off. |
+| `external-links-not-checked` | External link checking was off: `--offline`, `--no-external-links`, `[external_links] enabled = false`, or a website or run that switched it off. |
 | `external-links-over-cap` | The audit found more external links than its limit. The most-linked were checked. |
 | `link-targets-not-fetched` | The audit did not follow links, and some internal link targets were fetched neither by the crawl nor by the status-only check: it was off, over its limit, skipped the targets, got no answer, or could not be trusted because the site answers status-only requests with errors. |
 
