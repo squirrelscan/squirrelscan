@@ -11,20 +11,20 @@ Most of them are per website and ride a single toggle. A few are account level a
 On top of that, [**Settings → Email**](#email-settings-and-unsubscribing) has four account-wide switches: product news, tips and onboarding, scheduled audit digests, and account alerts. They belong to you rather than to a website or an organization, and they follow your account if your email address changes.
 
 <Note>
-  The per-website switch and alert address are under **Website → Settings → Alerts** in the dashboard. The account-wide switches are under **Settings → Email**.
+  The per-website switches and alert address are under **Website → Settings → Alerts** in the dashboard. The account-wide switches are under **Settings → Email**.
 </Note>
 
 ## Per-website emails
 
 These follow the website's **Email notifications** toggle. Turn it off and none of them arrive for that site.
 
-They go to your account address unless the website has its own. Set one in the **Alert email** field under **Website → Settings → Alerts**, for example to send a client's site reports straight to the client. Audit complete, audit failed and the digest then go to that address instead. Clear the field and save to send them to your account address again. Account-level emails never use this address.
+They go to your account address unless the website has its own. Set one in the **Alert email** field under **Website → Settings → Alerts**, for example to send a client's site reports straight to the client. Audit complete, audit failed, the digest and broken link alerts then go to that address instead. Clear the field and save to send them to your account address again. Account-level emails never use this address.
 
 ### Audit complete
 
 Arrives when an audit of the website finishes and its report reaches the cloud. That covers dashboard runs, scheduled runs, and CLI, API and GitHub audits that publish their report. It carries the health score and the error, warning and passing counts. The button opens the dashboard rather than that specific report, so you pick the run from the website's audit history.
 
-A scheduled run normally sends the [digest](#scheduled-audit-digest) instead, so you get one email about a run, not two.
+A scheduled run normally sends the [digest](#scheduled-audit-digest) instead, so a run never sends both a completion email and a digest.
 
 **How to stop it:** turn off **Settings → Alerts** for that website (the email's **Alert settings for this website** link opens it), or **Account alerts** in **Settings → Email** for every website (linked from the email's footer, and the email's [one-click unsubscribe](#email-settings-and-unsubscribing) does the same).
 
@@ -46,11 +46,31 @@ Arrives after a [scheduled audit](/cloud/scheduled-audits) completes, including 
 | Nothing changed | The comparison ran and found nothing | The health score and the same three counts, all at zero |
 | First audit | There is no earlier audit to compare against | That run's own error and warning counts and pages crawled, with no claim about change |
 
-Every variant carries the health score, a link to the full report, and a link that pauses the schedule without a login.
+Every variant carries the health score, a link to the full report, and a link that pauses the schedule without a login. On Pro and Team, a run that finds newly broken links also sends a [broken link alert](#new-broken-links).
 
 Two cases send the ordinary audit email instead. A scheduled run that fails sends the failure email, and a run whose comparison cannot be built falls back to the completion email rather than guessing at what changed.
 
 **How to stop it:** the pause link in the email, the **Settings → Alerts** toggle, setting the website's schedule to **Disabled**, or **Scheduled audit digests** in **Settings → Email**, which the email's [one-click unsubscribe](#email-settings-and-unsubscribing) switches off for you. With digests switched off there, a scheduled run sends no completion email in their place: the audits keep running and their results stay in the dashboard.
+
+### New broken links
+
+Arrives when a [scheduled audit](/cloud/scheduled-audits) of the website finds links broken that the previous scheduled audit checked and did not find broken. Internal links that answer a 404 or 410 count, and so do external links the link checker confirmed broken. These never send it:
+- a link the checker could not verify, because the site blocked the check, rate limited it or timed out;
+- a link the previous scheduled audit could not verify, since it may have been broken then;
+- an internal link behind a sign-in (401 or 403), or one that answered a server error once.
+
+The alert compares with the previous scheduled audit's report, so that report has to vouch for each link:
+- **Internal links** alert only when the previous scheduled audit found no broken internal links and fetched every internal link it found. A site that already has broken internal links gets internal alerts again once a scheduled audit finds none, so fix the ones the report lists. Links the audit never requests count as not fetched: sign-out and other action links, and paths outside the crawl's include and exclude rules or disallowed by robots.txt. So a site with any of those gets no internal alerts for now.
+- **External links** need the previous scheduled audit to have checked every external link it found (none over the audit's link limit) and its report to list every one it found broken. A report keeps only a handful of each kind, so a site that already had more than that gets no external alert until a scheduled audit lists them all.
+- A report that lists only some of the links it could not verify sends no alert of that kind either.
+
+A link on a page the previous audit did not crawl counts as new, for example when a crawl that stops at the audit's page limit reaches different pages each time. When this audit found more than its report keeps, the alert says "at least".
+
+The email lists up to 10 of the newly broken links and links to the run's report, which keeps a sample of each kind of broken link, each with a page it is on and how many pages link to it. One audit sends at most one of these, and the first scheduled audit never sends one, because there is nothing to compare it with. It arrives alongside that run's [digest](#scheduled-audit-digest): the digest reports the whole run, this one only the links that just broke. Like the other alert emails it is held to one an hour and five a day per account, and one over the limit still reaches the dashboard bell. The same alert appears in the dashboard bell, in `list_notifications` over [MCP](/developers/mcp), and, for an organization's websites, on the `notification.created` [webhook](/cloud/webhooks#event-types).
+
+Broken link alerts are on Pro and Team, switched on for every website until you turn them off. On the Free plan the switch shows as an upgrade.
+
+**How to stop it:** turn off **Broken link alerts** under **Website → Settings → Alerts** for that website. The website's **Email notifications** toggle there stops it too, along with the other per-website emails. For every website at once, switch off **Account alerts** in **Settings → Email**, which the email's [one-click unsubscribe](#email-settings-and-unsubscribing) also does.
 
 ## Account-level emails
 
@@ -89,7 +109,7 @@ Opening a ticket from [support](/dashboard/support) sends a confirmation with yo
 
 ## How often emails can arrive
 
-Notification emails that also write a dashboard bell entry, which is audit complete, audit failed and the digest, are rate limited per account and per email type: at most one an hour, and at most five in any rolling 24 hours. Over the limit the email is dropped, but the notification still appears in the dashboard bell, in `list_notifications` over [MCP](/developers/mcp), and on any [webhooks](/cloud/webhooks) that carry it. Nothing is lost, it just does not land in your inbox.
+Notification emails that also write a dashboard bell entry, which is audit complete, audit failed, the digest and new broken links, are rate limited per account and per email type: at most one an hour, and at most five in any rolling 24 hours. Over the limit the email is dropped, but the notification still appears in the dashboard bell, in `list_notifications` over [MCP](/developers/mcp), and on any [webhooks](/cloud/webhooks) that carry it. Nothing is lost, it just does not land in your inbox.
 
 The low-credit warning and the pause notice are not on that counter. Each has its own limit instead: once per low-balance crossing, and roughly once per organization in any rolling 24 hours.
 
@@ -104,13 +124,13 @@ Several notification types never email at all and are in-app only, including iss
 | Product news | Announcements and new features |
 | Tips and onboarding | The welcome email and other getting-started emails |
 | Scheduled audit digests | The digest after each [scheduled audit](/cloud/scheduled-audits) |
-| Account alerts | Audit complete, audit failed, recurring audits paused, low credits, and credits added to your organization |
+| Account alerts | Audit complete, audit failed, new broken links, recurring audits paused, low credits, and credits added to your organization |
 
 Billing emails, sign-in and security emails, and replies to your support requests are not on the list. They arrive whatever the switches say.
 
 Every product news email carries an unsubscribe link, which switches off **Product news** and nothing else. The link asks you to confirm first, because mail scanners open every link in an email and must not unsubscribe anyone by doing so. If you subscribed to updates without an account, the link takes your address off the mailing list instead.
 
-Digest and alert emails carry a one-click unsubscribe as well, the **Unsubscribe** button your mail app shows next to the sender. It switches off only the switch that email belongs to: **Scheduled audit digests** for a digest, **Account alerts** for audit complete, audit failed, recurring audits paused, low credits and credits added. Product news and the other switches stay as they are, and you can turn it back on in **Settings → Email**. The audit and paused-schedule emails also link to **Settings → Email** from their footer.
+Digest and alert emails carry a one-click unsubscribe as well, the **Unsubscribe** button your mail app shows next to the sender. It switches off only the switch that email belongs to: **Scheduled audit digests** for a digest, **Account alerts** for audit complete, audit failed, new broken links, recurring audits paused, low credits and credits added. Product news and the other switches stay as they are, and you can turn it back on in **Settings → Email**. The audit and paused-schedule emails also link to **Settings → Email** from their footer.
 
 The one-click unsubscribe is only on mail sent to your account's own address. Mail that goes to a website's own alert address follows that website's **Settings → Alerts** toggle instead, so turn it off there.
 

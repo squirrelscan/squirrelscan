@@ -121,9 +121,11 @@ There are three variants, and the subject line tells you which one you have:
 
 Every variant carries the health score, how often the audit runs, a link to the full report, and the pause link below.
 
-The digest replaces the audit completion email for that run, so a scheduled audit never sends you two emails about the same thing. Where a digest is withheld the ordinary audit email covers the run instead: a run that fails sends the failure email, and a run whose comparison could not be built sends the completion email rather than guessing at what changed.
+The digest replaces the audit completion email for that run, so a scheduled audit never sends both a digest and a completion email. Where a digest is withheld the ordinary audit email covers the run instead: a run that fails sends the failure email, and a run whose comparison could not be built sends the completion email rather than guessing at what changed.
 
-The digest follows the website's **Settings → Alerts** toggle and your account-wide **Scheduled audit digests** switch in **Settings → Email**. Turn either off and the schedule keeps running without mailing you; with the account switch off, a scheduled run sends no completion email in the digest's place either.
+On Pro and Team, a scheduled run that finds links broken since the previous scheduled audit also sends a [broken link alert](/dashboard/emails#new-broken-links), which lists just those links. It has its own switch under **Website → Settings → Alerts**, and the website's email notifications toggle there stops it too.
+
+The digest follows the website's **Settings → Alerts** toggle and your account-wide **Scheduled audit digests** switch in **Settings → Email**. Turn either off and the schedule keeps running without sending a digest; with the account switch off, a scheduled run sends no completion email in the digest's place either. A broken link alert follows its own switch and **Account alerts** instead.
 
 ## Pausing from the email
 
