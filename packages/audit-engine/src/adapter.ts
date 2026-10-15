@@ -620,6 +620,12 @@ export interface PreFetchedAssets {
   pdfSizes: ResourceSizeData[];
   sitemapUrlStatuses: SitemapUrlStatusData[];
   /**
+   * Sitemap URLs on another host an own-site-only audit left unchecked
+   * (pub#807), so crawl/sitemap-4xx can say so instead of passing. Absent or
+   * zero means none were dropped.
+   */
+  sitemapOffSiteSkipped?: number;
+  /**
    * Status of internal link targets the crawl did not fetch (repo#2729): one
    * HEAD (then GET) per target, most-linked first, read by links/broken-links as
    * known statuses. Optional: absent when internal link checks were off, and on
@@ -1239,8 +1245,10 @@ export function fetchAssetsFromOccurrences(
     );
     const ownSitemapTargets = sitemapTargets.filter((url) => isOwnSiteUrl(url));
     // pub#807: an own-site-only audit sends nothing to another host.
-    const foreignSitemapTargets =
-      overrides?.ownSiteOnly === true ? [] : sitemapTargets.filter((url) => !isOwnSiteUrl(url));
+    const offSiteSitemapTargets = sitemapTargets.filter((url) => !isOwnSiteUrl(url));
+    const foreignSitemapTargets = overrides?.ownSiteOnly === true ? [] : offSiteSitemapTargets;
+    const sitemapOffSiteSkipped =
+      offSiteSitemapTargets.length - foreignSitemapTargets.length;
 
     const resourceCheckStart = Date.now();
 
@@ -1472,7 +1480,15 @@ export function fetchAssetsFromOccurrences(
               ),
             },
           }
-        : {}),
+        : overrides?.ownSiteOnly === true &&
+            resourceOccurrences.externalScripts.size +
+              resourceOccurrences.externalCss.size +
+              resourceOccurrences.externalFonts.size ===
+              0
+          ? // pub#807: pages that reference no third-party resource leave
+            // nothing unmeasured, so the rule need not say there was.
+            { externalAssets: { scripts: [], css: [], fonts: [] } }
+          : {}),
       assetCapDropped: assetCapDroppedOf(
         probeExternalAssets
           ? resourceOccurrences
@@ -1528,6 +1544,7 @@ export function fetchAssetsFromOccurrences(
         // to crawl/sitemap-4xx, which would otherwise report it as dead.
         rateLimited: check.rateLimited,
       })),
+      ...(sitemapOffSiteSkipped > 0 ? { sitemapOffSiteSkipped } : {}),
       ...(internalLinksEnabled
         ? {
             linkTargetStatuses: resourceResults.linkTargets.results.map((check) => ({
@@ -2064,6 +2081,7 @@ export function runRulesOnStorage(
       externalLinkCheck: crawl?.stats?.externalLinkCheck,
       linkTargetStatuses: assets.linkTargetStatuses,
       internalLinkProbe: assets.internalLinkProbe,
+      sitemapOffSiteSkipped: assets.sitemapOffSiteSkipped,
       fetchedTargets,
       resourceSizes,
       scripts,
@@ -2850,6 +2868,7 @@ function buildStreamingSiteData(
       externalLinkCheck: crawl?.stats?.externalLinkCheck,
       linkTargetStatuses: assets.linkTargetStatuses,
       internalLinkProbe: assets.internalLinkProbe,
+      sitemapOffSiteSkipped: assets.sitemapOffSiteSkipped,
       fetchedTargets,
       resourceSizes,
       scripts,

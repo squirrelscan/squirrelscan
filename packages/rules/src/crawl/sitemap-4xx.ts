@@ -35,6 +35,21 @@ export const sitemap4xxRule: Rule = {
       return { checks };
     }
 
+    // pub#807: an own-site-only audit leaves sitemap URLs on another host
+    // unchecked. Said on its own row, so a clean pass does not read as covering them.
+    const offSiteSkipped = ctx.site?.sitemapOffSiteSkipped ?? 0;
+    const offSiteRow: CheckResult[] =
+      offSiteSkipped > 0
+        ? [
+            {
+              name: "sitemap-off-site-not-checked",
+              status: "info",
+              message: `${offSiteSkipped} sitemap URL(s) on another host not checked this audit`,
+              details: { total: offSiteSkipped },
+            },
+          ]
+        : [];
+
     const statuses = ctx.site?.sitemapUrlStatuses ?? [];
     if (statuses.length === 0) {
       checks.push({
@@ -42,6 +57,7 @@ export const sitemap4xxRule: Rule = {
         status: "pass",
         message: "No sitemap URL checks available",
       });
+      checks.push(...offSiteRow);
       return { checks };
     }
 
@@ -103,6 +119,7 @@ export const sitemap4xxRule: Rule = {
       });
     }
 
+    checks.push(...offSiteRow);
     return { checks };
   },
 };
