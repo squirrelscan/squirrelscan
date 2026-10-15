@@ -17,15 +17,24 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.115 (2026-10-15)
+
+Quick audits in the CLI now check the links that leave your site, as Surface and Full already do. At Quick they are checked from your machine and the link checks cost no credits. `squirrel audit --offline` stops checking anything on another site, and the inbound-link rules stop flagging the page a crawl starts on. Cloud audit defaults are unchanged in this release.
+
 ### Changed
 
-- **Quick audits check external links too.** Every audit level now checks the links that leave your site, Quick included. A Quick audit in the CLI checks them from your machine, for free. A cloud Quick audit pays 1 credit per distinct external link it checks, at most one per page, so a 25-page Quick audit's estimate goes from up to 100 credits to up to 125. A website on a scheduled cloud audit at Quick, or on an older scan depth, that never set its external link checks starts paying for them on its next run. Skip them with `--no-external-links`, `[external_links] enabled = false`, or the website's **External link checks** setting. `--offline` still skips them. See [Link checking defaults](https://docs.squirrelscan.com/rules/links#link-checking-defaults).
-- `links/broken-external-links` no longer calls every link it could not verify "blocked by WAF". Many are not a firewall: a timeout, a CDN error page or a 404 waiting for its confirming check lands in the same list. The row now reads `{count} external link(s) could not be verified - status unverifiable`, and each item reads `(unverified)`, with a vendor added when the checker named one. The check name, `waf-blocked-external-links`, is unchanged. See [broken external links](https://docs.squirrelscan.com/rules/links/broken-external-links). #783
+- **Quick audits in the CLI check external links too.** Every audit level now checks the links that leave your site, Quick included.
+  - A Quick audit checks them from your machine, signed in or not, and the link checks cost no credits.
+  - A Quick audit now also requests the pages your site links to on other sites, signed out included, so it can take a little longer.
+  - Skip them with `--no-external-links` or `[external_links] enabled = false`. `--offline` still skips them.
+  - Cloud audits keep their current link check settings for now. Any change to the cloud defaults will be announced separately.
+  - See [Link checking defaults](https://docs.squirrelscan.com/rules/links#link-checking-defaults).
+- `links/broken-external-links` no longer calls every link it could not verify "blocked by WAF". Many are not a firewall: a timeout, a CDN error page or a 404 waiting for its confirming check lands in the same list. The row now reads `{count} external link(s) could not be verified - status unverifiable`, and each item reads `(unverified)`, with a vendor added when the checker named one. The check name, `waf-blocked-external-links`, is unchanged. See [broken external links](https://docs.squirrelscan.com/rules/links/broken-external-links).
 
 ### Fixed
 
-- `squirrel audit --offline` no longer status-checks anything on another site: the third-party scripts, stylesheets and fonts the pages load, and sitemap URLs on another site, are left alone. `reliability/broken-resources` reports the third-party resources as not measured on an offline run, and `crawl/sitemap-4xx` says how many sitemap URLs on another site it skipped. Requests to the audited site can still end up on another host when the site sends them there: a page or asset redirect, or a sitemap that robots.txt lists on another host. See [audit](https://docs.squirrelscan.com/cli/audit). #807
-- `links/orphan-pages`, `links/weak-internal-links` and `links/no-contextual-inbound` no longer report the page the crawl started on. When a site's root redirects to a deeper page (`/en/`, or a sign-in page), the redirect leads there, and often no link does, or only the logo in every header does, so the site's front door read as a page with too few incoming links. `integrity/orphan-page` already exempted it. See [links/orphan-pages](https://docs.squirrelscan.com/rules/links/orphan-pages). #796
+- `squirrel audit --offline` no longer status-checks anything on another site: the third-party scripts, stylesheets and fonts the pages load, and sitemap URLs on another site, are left alone. `reliability/broken-resources` reports the third-party resources as not measured on an offline run, and `crawl/sitemap-4xx` says how many sitemap URLs on another site it skipped. Requests to the audited site can still end up on another host when the site sends them there: a page or asset redirect, or a sitemap that robots.txt lists on another host. See [audit](https://docs.squirrelscan.com/cli/audit).
+- `links/orphan-pages`, `links/weak-internal-links` and `links/no-contextual-inbound` no longer report the page the crawl started on. When a site's root redirects to a deeper page (`/en/`, or a sign-in page), the redirect leads there, and often no link does, or only the logo in every header does, so the site's front door read as a page with too few incoming links. `integrity/orphan-page` already exempted it. See [links/orphan-pages](https://docs.squirrelscan.com/rules/links/orphan-pages).
 
 ## v0.0.114 (2026-10-15)
 
