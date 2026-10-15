@@ -53,6 +53,9 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     // Free on purpose: custom headers are how you audit a staging site behind
     // auth, which is evaluation, not a paid job.
     customHeaders: true,
+    // Pro and up (squirrelscan/repo#2772): alerts about new broken links are
+    // ongoing monitoring, not evaluation.
+    brokenLinkAlerts: false,
     // #1020 ladder: matches Screaming Frog's free-tier crawl cap and today's
     // `full` coverage preset ceiling. Held at 500 through #1028's raise: free
     // audits run on the 4 GiB container class, and a 10,000-page audit retains
@@ -87,6 +90,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     maxScheduledWebsites: -1,
     scheduleFrequencies: SCHEDULE_FREQUENCIES,
     customHeaders: true,
+    brokenLinkAlerts: true,
     // #1028 ladder: unchanged at 2,000. Pro is a single-seat plan for ordinary
     // sites; Team is where the raised ceiling is the product.
     maxPagesPerAudit: 2000,
@@ -117,6 +121,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     maxScheduledWebsites: -1,
     scheduleFrequencies: SCHEDULE_FREQUENCIES,
     customHeaders: true,
+    brokenLinkAlerts: true,
     // #1028 ladder: Team is where large-site auditing lives. 10,000 is the
     // measured ceiling of the paid standard-4 container class (#1869): a
     // 10,000-page audit retains ~4.4 GB, which fits 8/12 GiB and does not fit
@@ -165,6 +170,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     maxScheduledWebsites: -1,
     scheduleFrequencies: SCHEDULE_FREQUENCIES,
     customHeaders: true,
+    brokenLinkAlerts: true,
     // At least Team's ceiling, never below it (#1028) — a contracted plan that
     // audited fewer pages than the tier under it would be a pricing bug. Kept
     // as its own literal rather than a reference to Team's so a Team-tier

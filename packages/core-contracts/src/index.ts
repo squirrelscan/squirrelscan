@@ -1873,6 +1873,17 @@ export interface PlanDefinition {
    */
   customHeaders: boolean;
   /**
+   * Per-website broken link alerts (squirrelscan/repo#2772): after a cloud
+   * audit, an alert lists the broken links that were not in the previous
+   * audit. Only links confirmed broken count, never ones that could not be
+   * verified. A website on a plan with the flag has them on until its owner
+   * turns them off; the cloud settings route refuses to switch them on for a
+   * plan without it (403 `upgrade_required`). A feature flag only: it changes
+   * no price and no credit charge. Read off a server that predates it (absent
+   * over the wire), it is `undefined`, which reads as false.
+   */
+  brokenLinkAlerts: boolean;
+  /**
    * Credits are not metered for this plan: no debit is ever rejected for
    * insufficient funds and `credit_balances` is never mutated. Every debit,
    * credit, refund and grant is still WRITTEN to `credit_ledger` exactly as it

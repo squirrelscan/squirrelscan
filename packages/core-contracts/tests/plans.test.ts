@@ -28,6 +28,14 @@ describe("plan definitions", () => {
     }
   });
 
+  test("broken link alerts are a paid-plan flag: every paid plan has them, free does not", () => {
+    // squirrelscan/repo#2772: a flag only, no price or credit change.
+    expect(PLANS.free.brokenLinkAlerts).toBe(false);
+    for (const id of ALL_PLAN_IDS.filter((plan) => plan !== "free")) {
+      expect(PLANS[id].brokenLinkAlerts).toBe(true);
+    }
+  });
+
   test("enterprise is the only unmetered plan", () => {
     const unmetered = ALL_PLAN_IDS.filter((id) => PLANS[id].unlimitedCredits);
     expect(unmetered).toEqual(["enterprise"]);
