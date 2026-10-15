@@ -45,9 +45,9 @@ const ISO_SHAPED = /^[+-]?\d{4,6}-\d/;
  * GMT-05:00`, `23:00 +2`). After a time only: in `10-09-2024` the `-2024` is
  * not a zone.
  */
-const NUMERIC_ZONE = /(?<=\d:\d{2}(?::\d{2}(?:\.\d+)?)?\s*(?:[AP]\.?M\.?)?\s*)(?:(?:GMT|UTC|UT)\s*)?([+-])(\d{1,2})(?::?(\d{2}))?$/i;
+const NUMERIC_ZONE = /\d:\d{2}(?::\d{2}(?:\.\d+)?)?\s*(?:[AP]\.?M\.?)?\s*((?:(?:GMT|UTC|UT)\s*)?([+-])(\d{1,2})(?::?(\d{2}))?)$/i;
 /** Zone names `Date` understands, at the end, with their offsets in minutes. */
-const NAMED_ZONE = /(?:(?<=\d)|\b)(z|ut|utc|gmt|[ecmp][sd]t)$/i;
+const NAMED_ZONE = /(?:^|[^a-z])(z|ut|utc|gmt|[ecmp][sd]t)$/i;
 const NAMED_ZONES: Record<string, number> = {
   z: 0,
   ut: 0,
@@ -73,13 +73,16 @@ const MONTH_NAME = new RegExp(`\\b${MONTH_WORD}\\b`, "i");
 /** A time of day (`12:00`, `08:30:15.5`): its numbers are not part of the date. */
 const TIME_OF_DAY = /\d{1,2}:\d{2}(?::\d{2}(?:[.,]\d+)?)?/g;
 /**
- * A zone anywhere in a value: a zone name as a word, or a numeric offset
- * after a space. `Date` applies one wherever it sits, so a value with a zone
- * that is not at its end (`Sep 10 2024 EST 12:00`) cannot be read the same on
- * every machine and is not read at all.
+ * A zone anywhere in a value: a zone name or a numeric offset with no letter
+ * or digit against it (`EST;`, `"GMT"`, `,+0200`), or an offset glued to a
+ * time (`12:00+0200`). `Date` applies one wherever it sits, whatever
+ * punctuation wraps it, so a value with a zone that is not at its end
+ * (`Sep 10 2024 EST 12:00`) cannot be read the same on every machine and is
+ * not read at all. No lookbehind here or in the zone patterns above: JSC runs
+ * those in its slow interpreter, quadratic even under the length cap.
  */
 const ZONE_TOKEN =
-  /(?:^|[\s,])(?:z|ut|utc|gmt|[ecmp][sd]t)(?=$|[\s,.]|[+-]\d)|(?:^|\s)(?:gmt|utc|ut)?[+-]\d{1,2}(?::?\d{2})?(?=$|\s)/i;
+  /(?:^|[^a-z])(?:z|ut|utc|gmt|[ecmp][sd]t)(?![a-z])|(?:^|[^\da-z])(?:gmt|utc|ut)?[+-]\d{1,2}(?::?\d{2})?(?!\d)|\d:\d{2}(?::\d{2}(?:[.,]\d+)?)?\s?(?:[ap]\.?m\.?\s?)?[+-]\d/i;
 /**
  * Longer than any written date. A page or sitemap can put any text here, and
  * no pattern below should ever run over a megabyte of it.
@@ -267,13 +270,13 @@ export function datePeriod(value: string | null | undefined): DatePeriod | null 
   if (!zone) return ZONE_TOKEN.test(bare) ? null : (w3cForm(bare) ?? writtenForm(bare));
   let offsetMinutes = NAMED_ZONES[named?.[1]?.toLowerCase() ?? ""] ?? 0;
   if (numeric) {
-    const hours = Number(numeric[2]);
-    const minutes = Number(numeric[3] ?? 0);
+    const hours = Number(numeric[3]);
+    const minutes = Number(numeric[4] ?? 0);
     // A real offset: at most 14 hours, in quarter hours.
     if (hours > 14 || minutes % 15 !== 0 || minutes > 45) return null;
-    offsetMinutes = (numeric[1] === "-" ? -1 : 1) * (hours * 60 + minutes);
+    offsetMinutes = (numeric[2] === "-" ? -1 : 1) * (hours * 60 + minutes);
   }
-  const zoneless = bare.slice(0, zone.index).trim();
+  const zoneless = bare.slice(0, zone.index + zone[0].length - zone[1]!.length).trim();
   // A second zone left in the value: `Date` would apply that one.
   if (ZONE_TOKEN.test(zoneless)) return null;
   const written = w3cForm(zoneless) ?? writtenForm(zoneless);

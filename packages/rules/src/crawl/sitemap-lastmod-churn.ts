@@ -66,7 +66,8 @@ export const sitemapLastmodChurnRule: Rule = {
         if (!sitemapUrl.lastmod) continue;
         const day = toDay(sitemapUrl.lastmod);
         if (!day) {
-          unreadableLastmods++;
+          // A news sitemap's lastmods are left out whatever they hold.
+          if (!sitemap.isNewsSitemap) unreadableLastmods++;
           continue;
         }
         // A Google News sitemap carries roughly the last 48 hours of articles by specification, so its
@@ -112,7 +113,7 @@ export const sitemapLastmodChurnRule: Rule = {
               ? `${unreadableLastmods} sitemap lastmod value(s) are not dates squirrel can read the same way on every machine; ${urlsWithLastmod} name a day, too few to judge lastmod churn`
               : // Year and month values carry a lastmod too: counting only the
               // day-level ones read "Only 0" for a sitemap of coarse values.
-                `Only ${urlsWithLastmod + coarseLastmods} sitemap URL(s) carry a lastmod; sitemap is too small to judge lastmod churn`,
+                `Only ${urlsWithLastmod + coarseLastmods + unreadableLastmods} sitemap URL(s) carry a lastmod; sitemap is too small to judge lastmod churn`,
         skipReason: newsOnly
           ? "Only news-sitemap lastmod values"
           : coarseOnly

@@ -164,6 +164,46 @@ describe("datePeriod refuses what it cannot read the same everywhere (#780 revie
     expect(datePeriod("Sep 10 2024 12:00 +05:30")?.start).toBe(Date.UTC(2024, 8, 10, 6, 30));
   });
 
+  test("a zone wrapped in any punctuation, or glued to a time, is refused in every zone", () => {
+    const tokens = ["EST", "GMT", "UTC", "Z", "+0200", "-0500"];
+    const punctuation = `!"#$%&'*,-./:;<=>?@[\\]^_\`{|}~`.split("");
+    const differing: string[] = [];
+    for (const token of tokens) {
+      for (const mark of punctuation) {
+        for (const value of [
+          `Sep 10 2024 12:00 ${mark}${token}${mark}`,
+          `${mark}${token}${mark} Sep 10 2024 12:00`,
+          `Sep 10 2024 ${mark}${token}${mark} 12:00`,
+        ]) {
+          const reads = inEveryZone(() => datePeriod(value)?.start ?? null);
+          if (new Set(reads).size > 1) differing.push(value);
+        }
+      }
+    }
+    for (const value of ["12:00+0200 Sep 10 2024", "12:00-0500 Sep 10 2024", "12:00Z Sep 10 2024", "Sep 10 2024 12:00+0200 PM"]) {
+      expect(inEveryZone(() => datePeriod(value))).toEqual(ZONES.map(() => null));
+    }
+    expect(differing).toEqual([]);
+  });
+
+  test("hostile values under the length cap stay cheap (no lookbehind)", () => {
+    // JSC runs a lookbehind in its slow interpreter: the old zone patterns
+    // took 1.2 ms on 400 digits and grew with the square of the length.
+    for (const shape of ["1", "+1", "1:00:00.0", "0", "12:00 ", "-0"]) {
+      for (const length of [100, 199]) {
+        const value = `${shape.repeat(Math.ceil(length / shape.length)).slice(0, length - 1)}x`;
+        let best = Number.POSITIVE_INFINITY;
+        for (let run = 0; run < 3; run++) {
+          const started = performance.now();
+          for (let i = 0; i < 200; i++) datePeriod(value);
+          best = Math.min(best, performance.now() - started);
+        }
+        // 200 calls: well under 0.25 ms each.
+        expect(best).toBeLessThan(50);
+      }
+    }
+  });
+
   test("page-controlled text stays cheap at n, 2n and 4n (no backtracking)", () => {
     // A run of `(` made the old comment pattern rescan the rest of the value
     // from every one. Values over 200 characters are not read at all, and
