@@ -663,6 +663,8 @@ export function checkExternalLinks(
 
     if (urlsToCheck.length === 0) return results;
 
+    // Shared by the concurrent checks below; each update runs to completion on
+    // the one JS thread, so no count is lost.
     let answered = results.length;
     const checkEffects = urlsToCheck.map((href) =>
       Effect.promise(async () => {

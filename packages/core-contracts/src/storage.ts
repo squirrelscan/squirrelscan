@@ -258,6 +258,11 @@ export interface CrawlStats {
    */
   externalLinkCheck?: {
     found: number;
+    /**
+     * The links selected to check under the limit. Includes any the time budget
+     * then ran out on (`outOfTime`), so `found - checked` stays the over-limit
+     * count the rules report.
+     */
     checked: number;
     cap: number;
     notRequested?: number;
