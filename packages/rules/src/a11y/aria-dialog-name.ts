@@ -3,6 +3,12 @@
 import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { fieldSnippet } from "../shared/form-fields";
+import {
+  createStaticVisibility,
+  sortUnnamedControls,
+  unconfirmedRow,
+  type UnnamedControls,
+} from "../shared/static-hidden";
 
 // Classes kept in an id-less dialog's descriptor: enough to tell a page's
 // drawers and popups apart without echoing a utility-class soup.
@@ -39,21 +45,22 @@ function describeDialog(el: Element, withId: string, withoutId: string): string 
 }
 
 /**
- * One item per unnamed dialog, with its start tag as the snippet. The item id
- * is the finding's identity across rescans, so it depends only on the markup:
- * a descriptor two dialogs share gets an ordinal from the second one on, in
- * document order, counted over EVERY dialog of the kind, named or not. Naming
- * one drawer then leaves the other drawers' ids alone. An ordinal that would
- * repeat an id already given out is skipped.
+ * One item per unnamed dialog, with its start tag as the snippet, filed into
+ * `unnamed` by whether the dialog is in the accessibility tree (pub#671). The
+ * item id is the finding's identity across rescans, so it depends only on the
+ * markup: a descriptor two dialogs share gets an ordinal from the second one
+ * on, in document order, counted over EVERY dialog of the kind, named or not,
+ * hidden or not. Naming or opening one drawer then leaves the other drawers'
+ * ids alone. An ordinal that would repeat an id already given out is skipped.
  */
 function unnamedDialogItems(
   dialogs: Iterable<Element>,
   describe: (el: Element) => string,
-  isNamed: (el: Element) => boolean
-): CheckItem[] {
+  isNamed: (el: Element) => boolean,
+  unnamed: UnnamedControls<CheckItem>
+): void {
   const seen = new Map<string, number>();
   const used = new Set<string>();
-  const items: CheckItem[] = [];
   for (const el of dialogs) {
     const descriptor = describe(el);
     let count = seen.get(descriptor) ?? 0;
@@ -64,9 +71,8 @@ function unnamedDialogItems(
     } while (used.has(id));
     seen.set(descriptor, count);
     used.add(id);
-    if (!isNamed(el)) items.push({ id, snippet: fieldSnippet(el) });
+    if (!isNamed(el)) unnamed.add(el, { id, snippet: fieldSnippet(el) });
   }
-  return items;
 }
 
 export const ariaDialogNameRule: Rule = {
@@ -75,7 +81,7 @@ export const ariaDialogNameRule: Rule = {
     name: "ARIA Dialog Name",
     description: "Checks that dialog elements have accessible names",
     solution:
-      "Elements with role='dialog' or role='alertdialog' (and native <dialog>) must have an accessible name. Add aria-label with a descriptive label, or use aria-labelledby pointing to a visible heading inside the dialog. A title attribute also works but is less preferred. Without a name, screen reader users won't know the purpose of the dialog.",
+      "Elements with role='dialog' or role='alertdialog' (and native <dialog>) must have an accessible name. Add aria-label with a descriptive label, or use aria-labelledby pointing to a visible heading inside the dialog. A title attribute also works but is less preferred. Without a name, screen reader users won't know the purpose of the dialog. A dialog hidden by the hidden attribute, aria-hidden or an inline style='display:none' while closed is not reported, but it needs a name before it opens; a closed native <dialog> is still checked, since pages open it with script. squirrel does not read <style> blocks or stylesheets, so a dialog hidden only by a class rule is still reported.",
     category: "a11y",
     scope: "page",
     verdictScope: "page",
@@ -109,16 +115,23 @@ export const ariaDialogNameRule: Rule = {
     }
 
     const isNamed = (el: Element) => hasAccessibleName(el, doc);
+    // pub#671: a dialog out of the accessibility tree (marked aria-hidden or
+    // hidden while closed, or inside a hidden ancestor) is not reported. It
+    // needs a name when it opens.
+    const visibility = createStaticVisibility({ ariaHidden: true });
 
     // Check ARIA dialogs — fail if unnamed
-    const unnamed = unnamedDialogItems(
+    const aria = sortUnnamedControls<CheckItem>(visibility);
+    unnamedDialogItems(
       ariaDialogs,
       (dialog) => {
         const role = dialog.getAttribute("role") || "dialog";
         return describeDialog(dialog, role, `${dialog.tagName.toLowerCase()}[role="${role}"]`);
       },
-      isNamed
+      isNamed,
+      aria
     );
+    const unnamed = aria.failures;
 
     if (unnamed.length > 0) {
       checks.push({
@@ -129,21 +142,46 @@ export const ariaDialogNameRule: Rule = {
         details:
           unnamed.length > 10 ? { additional: unnamed.length - 10 } : undefined,
       });
-    } else if (ariaDialogs.length > 0) {
+    }
+    if (aria.unconfirmed.length > 0) {
+      checks.push(
+        unconfirmedRow(
+          "aria-dialog-name",
+          "ARIA dialog(s) without accessible names",
+          aria.unconfirmed
+        )
+      );
+    }
+    if (unnamed.length === 0 && aria.unconfirmed.length === 0 && ariaDialogs.length > 0) {
       checks.push({
         name: "aria-dialog-name",
         status: "pass",
-        message: `All ${ariaDialogs.length} ARIA dialog(s) have accessible names`,
-        details: { dialogsChecked: ariaDialogs.length },
+        ...(aria.hidden > 0
+          ? {
+              message: "All ARIA dialogs in the accessibility tree have accessible names",
+              details: { dialogsChecked: ariaDialogs.length, hiddenWithoutName: aria.hidden },
+            }
+          : {
+              message: `All ${ariaDialogs.length} ARIA dialog(s) have accessible names`,
+              details: { dialogsChecked: ariaDialogs.length },
+            }),
       });
     }
 
     // Check native <dialog> — warn if unnamed (browser provides implicit role)
-    const unnamedNative = unnamedDialogItems(
+    // A native <dialog> is served closed and opened by script, so its own
+    // closed state does not take it out of the check (#462); hidden any other
+    // way, it is out.
+    const native = sortUnnamedControls<CheckItem>(
+      createStaticVisibility({ ariaHidden: true, closedDialogsShown: true })
+    );
+    unnamedDialogItems(
       nativeDialogs,
       (dialog) => describeDialog(dialog, "dialog", "dialog"),
-      isNamed
+      isNamed,
+      native
     );
+    const unnamedNative = native.failures;
 
     if (unnamedNative.length > 0) {
       checks.push({
@@ -156,12 +194,29 @@ export const ariaDialogNameRule: Rule = {
             ? { additional: unnamedNative.length - 10 }
             : undefined,
       });
-    } else if (nativeDialogs.length > 0) {
+    }
+    if (native.unconfirmed.length > 0) {
+      checks.push(
+        unconfirmedRow(
+          "dialog-name",
+          "native <dialog>(s) without accessible names",
+          native.unconfirmed
+        )
+      );
+    }
+    if (unnamedNative.length === 0 && native.unconfirmed.length === 0 && nativeDialogs.length > 0) {
       checks.push({
         name: "dialog-name",
         status: "pass",
-        message: `All ${nativeDialogs.length} native <dialog>(s) have accessible names`,
-        details: { dialogsChecked: nativeDialogs.length },
+        ...(native.hidden > 0
+          ? {
+              message: "All native <dialog>s in the accessibility tree have accessible names",
+              details: { dialogsChecked: nativeDialogs.length, hiddenWithoutName: native.hidden },
+            }
+          : {
+              message: `All ${nativeDialogs.length} native <dialog>(s) have accessible names`,
+              details: { dialogsChecked: nativeDialogs.length },
+            }),
       });
     }
 

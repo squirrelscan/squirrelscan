@@ -2,6 +2,7 @@
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 import { commandRoles } from "./aria-data";
 
 function hasAccessibleName(el: Element): boolean {
@@ -42,7 +43,7 @@ export const ariaCommandNameRule: Rule = {
     name: "ARIA Command Name",
     description: "Checks that command elements have accessible names",
     solution:
-      "Command elements (buttons, links, menu items) must have accessible names. Add text content, aria-label, aria-labelledby, or title attribute. For icon-only buttons, use aria-label to describe the action (e.g., aria-label='Close').",
+      "Command elements (buttons, links, menu items) must have accessible names. Add text content, aria-label, aria-labelledby, or title attribute. For icon-only buttons, use aria-label to describe the action (e.g., aria-label='Close'). An element hidden by the hidden attribute, aria-hidden, a closed dialog or an inline style='display:none' is out of the accessibility tree and is not reported, but it needs a name before it is shown. squirrel does not read <style> blocks or stylesheets, so an element hidden only by a class rule is still reported.",
     category: "a11y",
     scope: "page",
     verdictScope: "page",
@@ -55,7 +56,8 @@ export const ariaCommandNameRule: Rule = {
     if (!doc) return { checks: [] };
     const checks: CheckResult[] = [];
 
-    const missingNames: string[] = [];
+    // pub#671: a control out of the accessibility tree is not reported.
+    const unnamed = sortUnnamedControls<string>();
 
     // Check elements with command roles
     for (const role of commandRoles) {
@@ -63,7 +65,7 @@ export const ariaCommandNameRule: Rule = {
       for (const el of elements) {
         if (!hasAccessibleName(el)) {
           const tagName = el.tagName.toLowerCase();
-          missingNames.push(`${tagName}[role="${role}"]`);
+          unnamed.add(el, `${tagName}[role="${role}"]`);
         }
       }
     }
@@ -75,7 +77,7 @@ export const ariaCommandNameRule: Rule = {
       if (btn.hasAttribute("role")) continue;
       if (!hasAccessibleName(btn)) {
         const type = btn.getAttribute("type") || "submit";
-        missingNames.push(`button[type="${type}"]`);
+        unnamed.add(btn, `button[type="${type}"]`);
       }
     }
 
@@ -86,10 +88,11 @@ export const ariaCommandNameRule: Rule = {
       if (!hasAccessibleName(link)) {
         const href = link.getAttribute("href") || "";
         const shortHref = href.length > 30 ? href.slice(0, 30) + "..." : href;
-        missingNames.push(`a[href="${shortHref}"]`);
+        unnamed.add(link, `a[href="${shortHref}"]`);
       }
     }
 
+    const missingNames = unnamed.failures;
     if (missingNames.length > 0) {
       checks.push({
         name: "aria-command-name",
@@ -101,11 +104,27 @@ export const ariaCommandNameRule: Rule = {
             ? { additional: missingNames.length - 10 }
             : undefined,
       });
-    } else {
+    }
+    if (unnamed.unconfirmed.length > 0) {
+      checks.push(
+        unconfirmedRow(
+          "aria-command-name",
+          "command element(s) without accessible names",
+          unnamed.unconfirmed
+        )
+      );
+    }
+    if (missingNames.length === 0 && unnamed.unconfirmed.length === 0) {
       checks.push({
         name: "aria-command-name",
         status: "pass",
-        message: "All command elements have accessible names",
+        ...(unnamed.hidden > 0
+          ? {
+              message:
+                "All command elements in the accessibility tree have accessible names",
+              details: { hiddenWithoutName: unnamed.hidden },
+            }
+          : { message: "All command elements have accessible names" }),
       });
     }
 
