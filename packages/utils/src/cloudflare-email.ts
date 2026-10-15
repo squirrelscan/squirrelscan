@@ -9,7 +9,8 @@ const EMAIL_PROTECTION_PATH = "/cdn-cgi/l/email-protection";
 
 /** True when `url` (absolute, or relative to any base) is a Cloudflare email-protection link, on any host. */
 export function isCloudflareEmailProtectionUrl(url: string): boolean {
-  if (!url) return false;
+  // Every link on every page comes through here: parse only the few that can match.
+  if (!url || !/\/cdn-cgi\//i.test(url)) return false;
   let pathname: string;
   try {
     pathname = new URL(url, "http://base.invalid").pathname.toLowerCase();
@@ -20,6 +21,12 @@ export function isCloudflareEmailProtectionUrl(url: string): boolean {
 }
 
 /**
+ * Longest payload decoded: an address is at most 254 characters, so with its
+ * key byte and a few `?subject=` bytes 1,024 hex digits is ample.
+ */
+const MAX_PAYLOAD_HEX = 1024;
+
+/**
  * The text a Cloudflare email-protection payload (the link's `#<hex>`, or a
  * `data-cfemail` value) stands for, decoded the way Cloudflare's script does
  * it: the first byte is a key each following byte is XORed with, and the
@@ -27,7 +34,8 @@ export function isCloudflareEmailProtectionUrl(url: string): boolean {
  * decode as UTF-8, or decodes to a control character.
  */
 export function decodeCloudflareEmail(hex: string): string | null {
-  if (hex.length < 4 || hex.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(hex)) return null;
+  if (hex.length < 4 || hex.length > MAX_PAYLOAD_HEX || hex.length % 2 !== 0) return null;
+  if (!/^[0-9a-f]+$/i.test(hex)) return null;
   const key = Number.parseInt(hex.slice(0, 2), 16);
   const bytes = new Uint8Array(hex.length / 2 - 1);
   for (let i = 0; i < bytes.length; i++) {

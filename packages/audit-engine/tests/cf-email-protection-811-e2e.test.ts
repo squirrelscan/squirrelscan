@@ -29,9 +29,17 @@ let requested: string[] = [];
 const html = (body: string) =>
   `<!doctype html><html lang="en"><head><title>Fixture</title></head><body>${body}</body></html>`;
 
+/** Cloudflare's encoding: a key byte, then each UTF-8 byte XOR the key, all hex. */
+const encode = (text: string, key = 0x5a): string =>
+  [key, ...new TextEncoder().encode(text).map((b) => b ^ key)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
+const MAILTO_PAYLOAD = encode("hello@example.com");
+
 const FOOTER =
-  `<footer><a href="/cdn-cgi/l/email-protection#5a323f3636351a3f223b372a363f74393537">[email&#160;protected]</a> ` +
-  `<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="315958715449505c415d541f525e5c">[email&#160;protected]</a></footer>`;
+  `<footer><a href="/cdn-cgi/l/email-protection#${MAILTO_PAYLOAD}">[email&#160;protected]</a> ` +
+  `<a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="${encode("hi@example.com", 0x31)}">[email&#160;protected]</a></footer>`;
 
 function serveSite(): string {
   requested = [];
@@ -173,7 +181,7 @@ async function storedParseAudit(engine: "v1" | "v2") {
     links: [
       { url: `${origin}/about`, text: "About", isInternal: true },
       {
-        url: `${origin}/cdn-cgi/l/email-protection#5a323f3636351a3f223b372a363f74393537`,
+        url: `${origin}/cdn-cgi/l/email-protection#${MAILTO_PAYLOAD}`,
         text: "[email protected]",
         isInternal: true,
       },

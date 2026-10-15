@@ -48,5 +48,7 @@ describe("decodeCloudflareEmail", () => {
     expect(decodeCloudflareEmail("00ff")).toBeNull();
     // Decodes to a control character.
     expect(decodeCloudflareEmail("0001")).toBeNull();
+    // Longer than any address.
+    expect(decodeCloudflareEmail(encode(`${"a".repeat(600)}@example.com`))).toBeNull();
   });
 });
