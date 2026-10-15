@@ -16,7 +16,7 @@ function report(unverified: number): Pick<AuditReport, "ruleResults"> {
           {
             name: "waf-blocked-external-links",
             status: "info",
-            message: `${unverified} external link(s) blocked by WAF - status unverifiable`,
+            message: `${unverified} external link(s) could not be verified - status unverifiable`,
             items: Array.from({ length: unverified }, (_, i) => ({
               id: `https://walled.example/${i}`,
             })),

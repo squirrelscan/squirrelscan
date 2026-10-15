@@ -204,7 +204,7 @@ export const brokenExternalLinksRule: Rule = {
       return false;
     });
 
-    // Find WAF-blocked links (status unverifiable)
+    // Links nobody could verify either way (status unverifiable)
     const wafBlockedLinks = externalLinks.filter((link) => link.wafBlocked);
 
     // Same bucket, different cause: throttled targets (#1829).
@@ -290,15 +290,21 @@ export const brokenExternalLinksRule: Rule = {
     if (notRequested) checks.push(notRequested);
     if (refused) checks.push(refused);
 
-    // Report WAF-blocked links as info (not broken, just unverifiable)
+    // Report unverifiable links as info, not broken. Not all of them met a
+    // firewall: a timeout, a CDN origin error or a first 404 still waiting for
+    // its confirming check land here too (pub#783), so the message says
+    // unverifiable and the label names a vendor only when one was identified.
     if (wafBlockedLinks.length > 0) {
       checks.push({
         name: "waf-blocked-external-links",
         status: "info",
-        message: `${wafBlockedLinks.length} external link(s) blocked by WAF - status unverifiable`,
+        message: `${wafBlockedLinks.length} external link(s) could not be verified - status unverifiable`,
         items: wafBlockedLinks.map((l) => ({
           id: l.href,
-          label: `${l.href} (${l.wafProvider ?? "WAF"})`,
+          label:
+            l.wafProvider && l.wafProvider !== "unknown"
+              ? `${l.href} (unverified: ${l.wafProvider})`
+              : `${l.href} (unverified)`,
           sourcePages: l.sourcePages,
           meta: { wafProvider: l.wafProvider },
         })),
@@ -306,7 +312,7 @@ export const brokenExternalLinksRule: Rule = {
     }
 
     // Report rate-limited links as info (not broken, just unverifiable),
-    // mirroring the WAF bucket above (#1829).
+    // mirroring the unverifiable bucket above (#1829).
     if (rateLimitedLinks.length > 0) {
       checks.push({
         name: "rate-limited-external-links",
