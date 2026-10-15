@@ -11,7 +11,7 @@ It is the band just above an orphan. Nothing is broken, and the single link make
 
 ## What squirrel checks
 
-The rule is site-wide and reads the same dofollow inbound counts as `links/orphan-pages`. The homepage is never flagged, and neither is any URL matching an exclusion pattern. It emits a single check named `weak-internal-links`:
+The rule is site-wide and reads the same dofollow inbound counts as `links/orphan-pages`. The homepage is never flagged, and neither is the page the audit started from (the URL you gave and where its redirects landed) or any URL matching an exclusion pattern. It emits a single check named `weak-internal-links`:
 
 - Skipped when fewer than two pages were crawled. Message: `Insufficient pages for internal link analysis`.
 - Warn when any page has exactly one inbound internal link. Message: `12 page(s) have only 1 internal link`. Severity warning, weight 3.

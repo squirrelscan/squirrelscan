@@ -214,3 +214,46 @@ describe("links/no-contextual-inbound — a capped crawl", () => {
     expect(ids(result)).toEqual(["https://example.com/legal"]);
   });
 });
+
+// pub#796: a root that redirects to `/en/` lands the crawl on `/en/`, which the
+// redirect leads to rather than a link: the site's front door. All three
+// inbound-link rules skip it, as they skip the homepage.
+describe("the page the crawl started on is never flagged (pub#796)", () => {
+  const EN = "https://example.com/en/";
+  // /en/ is reached only from every page's logo (chrome): three raw links and
+  // no contextual one, so with no exemption it is flagged as chrome-only.
+  const pages: PageSpec[] = [
+    { url: EN, links: [body("/en/a"), chrome("/en/")] },
+    { url: "https://example.com/en/a", links: [body("/en/b"), chrome("/en/")] },
+    { url: "https://example.com/en/b", links: [body("/en/a"), chrome("/en/")] },
+    { url: "https://example.com/en/c", links: [body("/en/a"), body("/en/b")] },
+  ];
+  const withEntry = (c: RuleContext): RuleContext => ({
+    ...c,
+    site: { ...c.site!, entryUrls: [EN, "https://example.com/"] },
+  });
+
+  test("no-contextual-inbound: control flags the landing page; with entryUrls it does not", () => {
+    expect(ids(check(noContextualInboundRule, ctx(pages)))).toContain(EN);
+    expect(ids(check(noContextualInboundRule, withEntry(ctx(pages))))).not.toContain(EN);
+  });
+
+  test("weak-internal-links: a landing page linked once is not weak once it is the entry", () => {
+    const once: PageSpec[] = [
+      { url: EN, links: [body("/en/a")] },
+      { url: "https://example.com/en/a", links: [body("/en/")] },
+    ];
+    expect(ids(check(weakInternalLinksRule, ctx(once)))).toContain(EN);
+    expect(ids(check(weakInternalLinksRule, withEntry(ctx(once))))).not.toContain(EN);
+  });
+
+  test("orphan-pages: an unlinked landing page is not an orphan once it is the entry", () => {
+    const unlinked: PageSpec[] = [
+      { url: EN, links: [body("/en/a"), body("/en/b")] },
+      { url: "https://example.com/en/a", links: [body("/en/b")] },
+      { url: "https://example.com/en/b", links: [body("/en/a")] },
+    ];
+    expect(ids(check(orphanPagesRule, ctx(unlinked)))).toContain(EN);
+    expect(ids(check(orphanPagesRule, withEntry(ctx(unlinked))))).not.toContain(EN);
+  });
+});

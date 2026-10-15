@@ -18,7 +18,7 @@ The rule is site-wide. For each crawled page it counts internal, resolvable, dof
 - Warn for pages with zero contextual inbound links. Message: `9 page(s) are linked only from sitewide chrome`. The value lists up to five paths with a `+N more` suffix, and every URL is listed as an item. Severity warning, weight 4.
 - Pass otherwise. Message: `All pages have at least one contextual inbound link`.
 
-A page is only considered when its raw inbound count is at or above `minInboundLinks`, default 2. Below that it is already reported by `links/orphan-pages`, and the two thresholds should be kept in sync when either is tuned. The homepage is skipped, since it is linked from every header by design.
+A page is only considered when its raw inbound count is at or above `minInboundLinks`, default 2. Below that it is already reported by `links/orphan-pages`, and the two thresholds should be kept in sync when either is tuned. The homepage is skipped, since it is linked from every header by design, and so is the page the audit started from: the URL you gave and where its redirects landed (a root that redirects to `/en/`).
 
 Crawls stored before the chrome flag existed report every link as contextual, so an old crawl passes rather than producing a site-wide false alarm.
 
@@ -26,7 +26,7 @@ Crawls stored before the chrome flag existed report every link as contextual, so
 
 Link to the page from the body of the content it belongs with, using anchor text that describes it. A category page that introduces its members in prose, rather than only listing them, produces contextual links as a side effect.
 
-A whole site that links only through chrome reports every page that is not the homepage, is not excluded, and has at least `minInboundLinks` raw inbound links. That is accurate rather than a false positive, and it usually means the content does not cross-reference itself.
+A whole site that links only through chrome reports every page that is not the homepage or the page the audit started from, is not excluded, and has at least `minInboundLinks` raw inbound links. That is accurate rather than a false positive, and it usually means the content does not cross-reference itself.
 
 | | |
 |---|---|

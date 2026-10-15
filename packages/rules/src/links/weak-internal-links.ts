@@ -1,4 +1,5 @@
 import { logger } from "../logger";
+import { frontDoorTest } from "../shared/front-door";
 // links/weak-internal-links - Pages with minimal internal link support
 
 import { z } from "zod";
@@ -50,15 +51,14 @@ function buildWeakLinksCheck(weakPages: string[]): CheckResult {
 function collectWeakPages(
   entries: Iterable<[string, number]>,
   excludePatterns: string[],
-  baseUrl: string
+  baseUrl: string,
+  entryUrls: readonly string[]
 ): string[] {
-  const normalizedBase = normalizeUrl(baseUrl);
+  const isFrontDoor = frontDoorTest(baseUrl, entryUrls);
   const weakPages: string[] = [];
   for (const [url, count] of entries) {
-    const normalizedUrl = normalizeUrl(url);
-
-    // Skip homepage
-    const isHomepage = normalizedUrl === normalizedBase || getPathname(url) === "/";
+    // Skip the homepage, and the page the crawl started on (pub#796)
+    const isHomepage = isFrontDoor(url);
     const isExcluded = matchesExcludePattern(url, excludePatterns);
 
     if (isHomepage || isExcluded) {
@@ -111,7 +111,8 @@ export const weakInternalLinksRule: Rule = {
       const weakPages = collectWeakPages(
         counts,
         excludePatterns,
-        ctx.site?.baseUrl || ""
+        ctx.site?.baseUrl || "",
+        ctx.site?.entryUrls ?? []
       );
       checks.push(buildWeakLinksCheck(weakPages));
       return { checks };
@@ -176,7 +177,8 @@ export const weakInternalLinksRule: Rule = {
           ]
       ),
       excludePatterns,
-      ctx.site?.baseUrl || ""
+      ctx.site?.baseUrl || "",
+      ctx.site?.entryUrls ?? []
     );
 
     // Report results

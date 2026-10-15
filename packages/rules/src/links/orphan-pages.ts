@@ -9,6 +9,7 @@ import type { SiteQuery } from "@squirrelscan/core-contracts";
 import { matchesExcludePattern } from "@squirrelscan/utils";
 import { getPathname, normalizeUrl } from "@squirrelscan/utils";
 
+import { frontDoorTest } from "../shared/front-door";
 import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
 
 const SKIP_CHECK: CheckResult = {
@@ -62,17 +63,11 @@ function collectOrphans(
   noindexUrls: ReadonlySet<string>,
   entryUrls: readonly string[]
 ): string[] {
-  const normalizedBase = normalizeUrl(baseUrl);
-  const entryPages = new Set(entryUrls.map((entry) => normalizeUrl(entry)));
+  const isFrontDoor = frontDoorTest(baseUrl, entryUrls);
   const orphans: string[] = [];
   for (const [url, count] of entries) {
-    const normalizedUrl = normalizeUrl(url);
-
     // Skip the homepage, and the page the crawl started on
-    const isHomepage =
-      normalizedUrl === normalizedBase ||
-      getPathname(url) === "/" ||
-      entryPages.has(normalizedUrl);
+    const isHomepage = isFrontDoor(url);
     const isExcluded = matchesExcludePattern(url, excludePatterns);
 
     if (isHomepage || isExcluded || noindexUrls.has(url)) {

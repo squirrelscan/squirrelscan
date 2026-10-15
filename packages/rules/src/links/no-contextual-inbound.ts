@@ -19,7 +19,9 @@
 //     (`minInboundLinks`, the same default 2) — i.e. exactly when orphan-pages
 //     stays silent. Keep the two thresholds in sync when tuning.
 //   * THE HOMEPAGE. Reached from every page's header/footer by design; it has no
-//     contextual-equity problem. Skipped, exactly as orphan-pages skips it.
+//     contextual-equity problem. Skipped, exactly as orphan-pages skips it, and
+//     so is the page the crawl started on (pub#796), the front door a root
+//     redirect leads to.
 //   * A CHROME-ONLY CRAWL. Not special-cased: if a whole site links only through
 //     chrome, every one of its pages genuinely lacks contextual support. The
 //     `value` sample is capped so the finding stays readable; `details.total`
@@ -49,6 +51,7 @@ import { matchesExcludePattern } from "@squirrelscan/utils";
 import { getPathname, normalizeUrl } from "@squirrelscan/utils";
 
 import { logger } from "../logger";
+import { frontDoorTest } from "../shared/front-door";
 
 const SKIP_CHECK: CheckResult = {
   name: "no-contextual-inbound",
@@ -99,15 +102,14 @@ function collectChromeOnlyPages(
   entries: Iterable<[string, InboundCounts]>,
   minInboundLinks: number,
   excludePatterns: string[],
-  baseUrl: string
+  baseUrl: string,
+  entryUrls: readonly string[]
 ): string[] {
-  const normalizedBase = normalizeUrl(baseUrl);
+  const isFrontDoor = frontDoorTest(baseUrl, entryUrls);
   const flagged: string[] = [];
   for (const [url, counts] of entries) {
-    const normalizedUrl = normalizeUrl(url);
-
-    // Skip homepage — same test orphan-pages uses.
-    const isHomepage = normalizedUrl === normalizedBase || getPathname(url) === "/";
+    // Skip the front door: the same test orphan-pages uses.
+    const isHomepage = isFrontDoor(url);
     const isExcluded = matchesExcludePattern(url, excludePatterns);
 
     if (isHomepage || isExcluded) {
@@ -193,7 +195,8 @@ export const noContextualInboundRule: Rule = {
             entries,
             minInboundLinks,
             excludePatterns,
-            ctx.site?.baseUrl || ""
+            ctx.site?.baseUrl || "",
+            ctx.site?.entryUrls ?? []
           )
         )
       );
@@ -257,7 +260,8 @@ export const noContextualInboundRule: Rule = {
       ),
       minInboundLinks,
       excludePatterns,
-      ctx.site?.baseUrl || ""
+      ctx.site?.baseUrl || "",
+      ctx.site?.entryUrls ?? []
     );
 
     checks.push(buildCheck(flagged));
