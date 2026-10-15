@@ -19,6 +19,7 @@ The rule is a summary. The per-link findings belong to `links/broken-external-li
 
 - Skipped when external link checking did not run for the audit (`--offline`, `--no-external-links`, or external link checks off), with skip reason `external-links-not-checked`. Message: `External link checking was off for this audit, so external links were not verified`. It is not listed among the cloud checks a cloud audit would unlock, because turning external link checks on is what runs it.
 - Info when the site has no external links. Message: `No external links found to verify`, with a value of 0.
+- Info when a cloud audit's link check ran out of time before answering any of the links it selected. Message: `No external links were verified: the link check ran out of time before reaching any of the N selected`, with a value of 0. `links/broken-external-links` reports those links as not checked.
 - Info when every external link was one squirrel never requests because it looks like an action or carries a token. Message: `No external links were verified: all N look like actions or carry a token, so they were not requested`, with a value of 0. See [What the external link check never requests](/configuration/external-links#what-the-external-link-check-never-requests).
 - Info otherwise, with one of two wordings: `Checked 128 external link(s); none are dead` or `Checked 128 external link(s); 4 dead`. When some targets were throttled, `; 2 rate-limited (status unverifiable)` is appended.
 

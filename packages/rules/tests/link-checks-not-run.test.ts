@@ -178,6 +178,39 @@ describe("links/broken-external-links when external link checking did not run", 
     );
   });
 
+  // repo#2613: a check with a time budget (the cloud's) reports the links it
+  // ran out of time on as not checked, next to the result for the rest.
+  test("links the check ran out of time on are not checked, next to the result for the rest", () => {
+    const { checks } = brokenExternalLinksRule.run(
+      ctx([{ url: `${BASE}/`, statusCode: 200 }], {
+        externalLinks: [
+          { href: "https://a.example/", status: 200, error: null, sourcePages: [`${BASE}/`] },
+        ],
+        externalLinkCheck: { found: 5, checked: 5, cap: 200, outOfTime: 4 },
+      }),
+    );
+    expect(checks.map((c) => `${c.status}:${c.skipReason ?? ""}`)).toEqual([
+      "pass:",
+      "skipped:external-links-out-of-time",
+    ]);
+    expect(checks[1]!.message).toBe(
+      "4 of 5 external link(s) were not checked: the link check ran out of time before reaching them",
+    );
+  });
+
+  test("a check that ran out of time before any answer says so, not 'no results'", () => {
+    const site = { externalLinks: [], externalLinkCheck: { found: 3, checked: 3, cap: 200, outOfTime: 3 } };
+    const page = { url: `${BASE}/`, statusCode: 200, external: ["https://a.example/"] };
+    const { checks } = brokenExternalLinksRule.run(ctx([page], site));
+    expect(checks.map((c) => `${c.status}:${c.skipReason ?? ""}`)).toEqual([
+      "skipped:external-links-out-of-time",
+    ]);
+    const dead = deadLinksRule.run(ctx([page], site)).checks;
+    expect(dead[0]!.message).toBe(
+      "No external links were verified: the link check ran out of time before reaching any of the 3 selected",
+    );
+  });
+
   test("links/dead-links skips with the same reason (kept off the locked upsell)", () => {
     const { checks } = deadLinksRule.run(ctx([{ url: `${BASE}/`, statusCode: 200 }]));
     expect(checks[0]!.status).toBe("skipped");

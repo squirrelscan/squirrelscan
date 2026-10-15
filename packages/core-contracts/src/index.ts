@@ -177,6 +177,13 @@ export const LINK_PROBE_HEAD_UNRELIABLE_ERROR = "head unreliable";
 export const EXTERNAL_LINKS_OVER_CAP_SKIP_REASON = "external-links-over-cap";
 
 /**
+ * `skipReason` of `links/broken-external-links` for the external links an audit
+ * selected to check but did not get answers for before the check's time budget
+ * ran out (repo#2613). Set by a caller that gives the check a budget (the cloud).
+ */
+export const EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON = "external-links-out-of-time";
+
+/**
  * Skip reasons that mean "this check did not run for the audit", which every
  * report renders as a visible "Not checked" line instead of leaving the rule
  * looking clean (repo#2729), and which never resolve an open finding.
@@ -185,6 +192,7 @@ export const NOT_CHECKED_SKIP_REASONS: ReadonlySet<string> = new Set([
   EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
   LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
   EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
+  EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON,
 ]);
 
 export type RuleScope = "page" | "site";

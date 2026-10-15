@@ -35,6 +35,7 @@ export type {
   PreFetchedAssets,
   ResourceCheckOverrides,
   ExternalLinkCheckProgress,
+  ExternalLinkCheckLimits,
   ExternalLinkOccurrences,
   SiteAssetOccurrences,
   BuildV1ReportOptions,

@@ -31,6 +31,8 @@ External links are checked at every [audit level](/guides/audit-levels) in the C
 
 One audit requests at most its page budget or 200 distinct external links, whichever is more, starting with the links on the most pages (the nav and footer links every page shares). The rest are reported in a second `broken-external-links` check, skipped with reason `external-links-over-cap`. Message: `40 of 240 external link(s) were not checked: over this audit's limit of 200, which checks the most-linked first`. The second number leaves out the links never requested as actions or token links, or refused on their URL alone, which are not over any limit; `details.externalLinksFound` counts every external link. Set `[external_links] max_links` to change the limit. A cloud audit is charged for at most one external link per page of its budget, whatever the limit.
 
+A cloud audit also gives the link check a time budget, and waits only so long on any one request. Links still without an answer when either runs out are reported in a `broken-external-links` check skipped with reason `external-links-out-of-time`. Message: `N of M external link(s) were not checked: the link check ran out of time before reaching them`, where M is the number of links the check selected. They are neither broken nor working, and an open broken external link finding stays open until an audit checks them. The CLI sets no time budget.
+
 ## How to fix it
 
 Replace the link with a working equivalent, point it at an archived copy, or remove it. For a reference that matters to the argument, host your own copy of the material rather than depending on someone else's uptime.

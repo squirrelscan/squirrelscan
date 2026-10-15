@@ -59,6 +59,19 @@ export const deadLinksRule: Rule = {
       return { checks };
     }
 
+    // repo#2613: links were selected, but the check ran out of time before any
+    // was answered. Nothing was verified; that is not "no links".
+    if (externalLinks.length === 0 && linkCheck?.outOfTime) {
+      checks.push({
+        name: "dead-links",
+        status: "info",
+        message: `No external links were verified: the link check ran out of time before reaching any of the ${linkCheck.outOfTime} selected`,
+        value: 0,
+        expected: 0,
+      });
+      return { checks };
+    }
+
     if (externalLinks.length === 0) {
       checks.push({
         name: "dead-links",

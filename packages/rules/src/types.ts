@@ -510,6 +510,8 @@ export interface SiteData {
     /** Of those, the ones refused on the URL alone, before any were selected under the limit. */
     refusedByUrl?: number;
     refusedLinks?: Array<{ href: string; sourcePages: string[]; pageCount?: number }>;
+    /** repo#2613: of the `checked` links, the ones the check ran out of time on. */
+    outOfTime?: number;
   };
   /**
    * Status of internal link targets the crawl did not fetch, from the link

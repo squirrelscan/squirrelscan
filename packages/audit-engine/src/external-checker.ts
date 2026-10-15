@@ -112,6 +112,86 @@ export interface ExternalCheckerOptions {
    * auditing a private site passes `allowPrivateNetwork: true`.
    */
   egress?: EgressPolicy;
+  /**
+   * repo#2613: when the whole check must be over, in epoch ms. No bulk call or
+   * local check starts after it, and none still in flight is waited on past
+   * it. The links it did not reach are left out of the results, so the caller
+   * can report them as not checked. Absent: no deadline.
+   */
+  deadlineAt?: number;
+  /**
+   * repo#2613: the longest one bulk call or one local check is waited on,
+   * whatever its own timeout says (a stalled body read can outlive a request
+   * timeout). A backstop, so set it above both a bulk call's normal latency and
+   * {@link timeoutMs}: an abandoned bulk call ends the bulk pass like one that
+   * failed, and an abandoned local check is left out of the results like one
+   * the deadline cut, while its request may still be running. Absent, zero or
+   * not finite: no limit.
+   */
+  maxWaitMs?: number;
+  /**
+   * repo#2613: called each time a bulk call or a local check settles, with how
+   * many of the links have an answer so far (`done`, cache hits included) out
+   * of `total`. Without it a long check says nothing until it ends, and a
+   * watchdog cannot tell it from a hang.
+   */
+  onProgress?: (progress: { done: number; total: number; fromCache: number }) => void;
+  /** The clock {@link deadlineAt} is read against. Absent: `Date.now`. */
+  now?: () => number;
+}
+
+/** What {@link waitAtMost} resolves when the wait ran out first. */
+const NOT_ANSWERED = Symbol("not answered");
+
+/** The longest delay `setTimeout` honours; past it, the timer fires at once. */
+const MAX_TIMER_MS = 2 ** 31 - 1;
+
+/**
+ * `work`, or {@link NOT_ANSWERED} once `ms` pass without it settling (repo#2613).
+ * Resolves rather than rejects, and leaves `work` running: a request whose own
+ * abort is ignored cannot be stopped from here, only stopped being waited on.
+ * Its later rejection, if any, is swallowed.
+ */
+function waitAtMost<T>(work: Promise<T>, ms: number): Promise<T | typeof NOT_ANSWERED> {
+  if (ms >= MAX_TIMER_MS) return work;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<typeof NOT_ANSWERED>((resolve) => {
+    timer = setTimeout(() => resolve(NOT_ANSWERED), Math.max(0, ms));
+  });
+  return Promise.race([work, timeout]).finally(() => {
+    clearTimeout(timer);
+    work.catch(() => {});
+  });
+}
+
+/** A limit in ms, or `Infinity` for one that is absent, zero or less, or not a number. */
+function limitMs(value: number | undefined): number {
+  return value !== undefined && Number.isFinite(value) && value > 0
+    ? value
+    : Number.POSITIVE_INFINITY;
+}
+
+/**
+ * How long the next call may be waited on under {@link ExternalCheckerOptions}'
+ * deadline and per-call limit: `Infinity` with neither, zero or less once the
+ * deadline has passed.
+ */
+function waitAllowance(opts: Pick<ExternalCheckerOptions, "deadlineAt" | "maxWaitMs" | "now">): number {
+  const now = opts.now ?? Date.now;
+  const untilDeadline =
+    opts.deadlineAt === undefined || !Number.isFinite(opts.deadlineAt)
+      ? Number.POSITIVE_INFINITY
+      : opts.deadlineAt - now();
+  return Math.min(untilDeadline, limitMs(opts.maxWaitMs));
+}
+
+/** A progress callback that throws is the caller's bug, never the check's. */
+function tell(callback: () => void): void {
+  try {
+    callback();
+  } catch {
+    // ignored: progress is a report, and a failing report must not fail the check
+  }
 }
 
 /**
@@ -156,18 +236,36 @@ export const BULK_CHECK_CHUNK_SIZE = 200;
  * Run a bulk checker over `urls` in chunks, accumulating whatever it resolves.
  * Never throws: a failing chunk, or one that answers none of its urls, stops
  * the bulk pass and the unresolved remainder takes the per-link local path.
+ *
+ * repo#2613: `limits` bounds the pass. A chunk not answered within the
+ * allowance is abandoned and ends the pass, like a failed one. No chunk is sent
+ * once the deadline has passed, nor when the time left is shorter than the
+ * slowest chunk so far: the service may charge for a chunk whose answer would
+ * then be thrown away. `onChunk` is told after every chunk that settles, with
+ * how many urls are resolved so far.
  */
 export async function runBulkChecker(
   bulkChecker: (urls: string[]) => Promise<Map<string, ExternalCheckResult>>,
   urls: string[],
-  chunkSize: number = BULK_CHECK_CHUNK_SIZE
+  chunkSize: number = BULK_CHECK_CHUNK_SIZE,
+  limits: Pick<ExternalCheckerOptions, "deadlineAt" | "maxWaitMs" | "now"> & {
+    onChunk?: (resolvedSoFar: number) => void;
+  } = {}
 ): Promise<Map<string, ExternalCheckResult>> {
+  const now = limits.now ?? Date.now;
   const resolved = new Map<string, ExternalCheckResult>();
+  let slowestChunkMs = 0;
   for (let i = 0; i < urls.length; i += chunkSize) {
     const requested = urls.slice(i, i + chunkSize);
+    const allowance = waitAllowance(limits);
+    if (allowance <= 0 || allowance < slowestChunkMs) break;
     try {
-      const chunk = await bulkChecker(requested);
+      const sentAt = now();
+      const chunk = await waitAtMost(bulkChecker(requested), allowance);
+      if (chunk === NOT_ANSWERED) break;
+      slowestChunkMs = Math.max(slowestChunkMs, now() - sentAt);
       for (const [url, result] of chunk) resolved.set(url, result);
+      tell(() => limits.onChunk?.(resolved.size));
       // pub#753: a service that answered nothing for a whole chunk (overloaded,
       // or out of time on links it has not seen) will most likely do the same
       // for the next one, and each such chunk costs its full wait. Stop asking:
@@ -435,13 +533,6 @@ async function checkSingleUrlAsync(
   }
 }
 
-function checkSingleUrl(
-  href: string,
-  options: ExternalCheckerOptions
-): Effect.Effect<CheckUrlResult, never, never> {
-  return Effect.promise(() => checkSingleUrlAsync(href, options));
-}
-
 export function checkExternalLinks(
   urls: string[],
   cache: LinkCache | null,
@@ -510,6 +601,12 @@ export function checkExternalLinks(
 
     if (urlsToCheck.length === 0) return results;
 
+    // repo#2613: how far along the check is, for a caller whose watchdog would
+    // otherwise hear nothing until it ends.
+    const total = results.length + urlsToCheck.length;
+    const fromCache = results.filter((r) => r.fromCache).length;
+    const report = (done: number) => tell(() => opts.onProgress?.({ done, total, fromCache }));
+
     // Cloud bulk path: resolve local-cache misses via the bulk checker first.
     // Resolved urls are surfaced as-is and written into the local cache so the
     // next run is a pure local hit; the unresolved remainder (or everything,
@@ -519,9 +616,17 @@ export function checkExternalLinks(
       // non-public host, whatever this audit's policy allows. Those take the
       // local check, which a private site's audit may make.
       const bulkUrls = urlsToCheck.filter((url) => !refusedWithoutLookup(url, DEFAULT_EGRESS));
+      const answeredBefore = results.length;
       const bulkResolved =
         bulkUrls.length > 0
-          ? yield* Effect.promise(() => runBulkChecker(opts.bulkChecker!, bulkUrls))
+          ? yield* Effect.promise(() =>
+              runBulkChecker(opts.bulkChecker!, bulkUrls, BULK_CHECK_CHUNK_SIZE, {
+                deadlineAt: opts.deadlineAt,
+                maxWaitMs: opts.maxWaitMs,
+                now: opts.now,
+                onChunk: (resolvedSoFar) => report(answeredBefore + resolvedSoFar),
+              })
+            )
           : new Map<string, ExternalCheckResult>();
       if (bulkResolved.size > 0) {
         const stillToCheck: string[] = [];
@@ -558,15 +663,27 @@ export function checkExternalLinks(
 
     if (urlsToCheck.length === 0) return results;
 
+    let answered = results.length;
     const checkEffects = urlsToCheck.map((href) =>
-      checkSingleUrl(href, opts).pipe(
-        Effect.map((result) => ({ href, ...result }))
-      )
+      Effect.promise(async () => {
+        // repo#2613: past the deadline nothing more is requested, and a check
+        // that outlives its allowance is no longer waited on. Either way the
+        // link is left out of the results, for the caller to report as not
+        // checked rather than as broken.
+        const allowance = waitAllowance(opts);
+        if (allowance <= 0) return null;
+        const result = await waitAtMost(checkSingleUrlAsync(href, opts), allowance);
+        if (result !== NOT_ANSWERED) answered += 1;
+        report(answered);
+        return result === NOT_ANSWERED ? null : { href, ...result };
+      })
     );
 
-    const checkedResults = yield* Effect.all(checkEffects, {
-      concurrency: opts.concurrency,
-    });
+    const checkedResults = (
+      yield* Effect.all(checkEffects, {
+        concurrency: opts.concurrency,
+      })
+    ).filter((r) => r !== null);
 
     if (sharedCache) {
       // #1829: a throttled result is a fact about the MOMENT, not the link. The

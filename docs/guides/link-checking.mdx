@@ -89,6 +89,7 @@ When a check did not run, squirrelscan says so rather than reporting the rule as
 |---|---|
 | `external-links-not-checked` | External link checking was off: `--offline`, `--no-external-links`, `[external_links] enabled = false`, or a website or run that switched it off. |
 | `external-links-over-cap` | The audit found more external links than its limit. The most-linked were checked. |
+| `external-links-out-of-time` | A cloud audit's link check ran out of time, or waited too long on one request, before these links were answered. |
 | `link-targets-not-fetched` | The audit did not follow links, and some internal link targets were fetched neither by the crawl nor by the status-only check: it was off, over its limit, skipped the targets, got no answer, or could not be trusted because the site answers status-only requests with errors. |
 
 In the cloud's issue tracker, an open broken-link issue stays open while an audit could not check links for one of the reasons above.

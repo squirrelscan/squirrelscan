@@ -3485,6 +3485,25 @@ export interface ExternalLinkCheckProgress {
 }
 
 /**
+ * How long the external link check may take (repo#2613). Absent fields mean no
+ * limit, which is what every caller had before.
+ */
+export interface ExternalLinkCheckLimits {
+  /**
+   * The check's wall-clock budget, from when the links are sent. The links it
+   * has not reached by then are not requested; they are counted in the stats
+   * as `outOfTime` and reported as not checked, never as broken. Zero or less,
+   * or not a number: no budget.
+   */
+  budgetMs?: number;
+  /**
+   * The longest one bulk call or one local check is waited on: a backstop for
+   * a request whose own timeout does not hold, so set it above both.
+   */
+  maxWaitMs?: number;
+}
+
+/**
  * Check all external links from site context
  * Results are stored in the crawl storage for use by rules
  *
@@ -3761,6 +3780,7 @@ export function checkCollectedExternalLinks(
   priorityHrefs?: readonly string[],
   /** The transport resolves once and connects to what it validated (the hosted container). */
   egressPinnedByTransport?: boolean,
+  limits?: ExternalLinkCheckLimits,
 ): Effect.Effect<ExternalCheckResult[], never, never> {
   return Effect.gen(function* () {
     if (!config.enabled) {
@@ -3836,14 +3856,27 @@ export function checkCollectedExternalLinks(
       userAgent: SQUIRRELSCAN_USER_AGENT,
       bulkChecker,
       egress,
+      // repo#2613: a long check reports as it goes, and stops at its budget. A
+      // budget of zero or less, or not a number, is no budget, as elsewhere.
+      ...(limits?.budgetMs !== undefined && Number.isFinite(limits.budgetMs) && limits.budgetMs > 0
+        ? { deadlineAt: Date.now() + limits.budgetMs }
+        : {}),
+      ...(limits?.maxWaitMs !== undefined ? { maxWaitMs: limits.maxWaitMs } : {}),
+      onProgress: (progress) =>
+        onProgress?.({ checked: progress.done, total: hrefs.length, fromCache: progress.fromCache }),
     });
+
+    // repo#2613: the links the budget ran out on were never answered. They are
+    // left out of the results (so out of the stored rows), counted here, and
+    // reported as not checked, never as broken or as passing.
+    const outOfTime = hrefs.length - results.length;
 
     // pub#770: the links the egress policy refused (a private, link-local or
     // metadata address on a public site's page) were never requested. Counted
     // and sampled like the not-requested ones, so the report can say so
     // rather than leave them out of every line.
     const refusedHrefs = [...refusedByUrl, ...results.filter((r) => r.refused).map((r) => r.href)];
-    if (refusedHrefs.length > 0) {
+    if (refusedHrefs.length > 0 || outOfTime > 0) {
       const refusedOccurrences: ExternalLinkOccurrences = new Map(
         refusedHrefs.map((href) => [href, externalLinkOccurrences.get(href) ?? []]),
       );
@@ -3851,14 +3884,18 @@ export function checkCollectedExternalLinks(
         .updateStats(crawlId, {
           externalLinkCheck: {
             ...externalLinkCheck,
-            refused: refusedHrefs.length,
-            refusedLinks: sampleExternalLinks(refusedOccurrences),
+            ...(refusedHrefs.length > 0
+              ? { refused: refusedHrefs.length, refusedLinks: sampleExternalLinks(refusedOccurrences) }
+              : {}),
+            ...(outOfTime > 0 ? { outOfTime } : {}),
           },
         })
         .pipe(
           Effect.catchAll((error) =>
             Effect.sync(() =>
-              logger.warn("could not record refused external links", { error: String(error) }),
+              logger.warn("could not record refused or unreached external links", {
+                error: String(error),
+              }),
             ),
           ),
         );

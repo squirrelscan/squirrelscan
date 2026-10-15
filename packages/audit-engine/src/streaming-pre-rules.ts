@@ -38,6 +38,7 @@ import {
   createSiteAssetCollector,
   fetchAssetsFromOccurrences,
   releaseSiteContextDocuments,
+  type ExternalLinkCheckLimits,
   type ExternalLinkCheckProgress,
   type ExternalLinkOccurrences,
   type PreFetchedAssets,
@@ -85,6 +86,13 @@ export interface StreamPreRulesOptions {
      * so a capped run still re-checks them and can tell they were fixed.
      */
     priorityHrefs?: readonly string[];
+    /**
+     * How long the check may take (repo#2613): a wall-clock budget, past which
+     * the links not yet reached are reported as not checked, and the longest
+     * one call is waited on. Unset: no limit. `onProgress` is called as the
+     * check goes, not only when it ends, so a watchdog sees it working.
+     */
+    limits?: ExternalLinkCheckLimits;
   };
   /**
    * Site URL to collect cloud-prefetch payloads for. Omit when the run has no
@@ -240,6 +248,7 @@ export function runStreamingPreRules(
           bulkChecker,
           options.externalLinks.priorityHrefs,
           options.resourceOverrides?.egressPinnedByTransport,
+          options.externalLinks.limits,
         )
       : [];
 

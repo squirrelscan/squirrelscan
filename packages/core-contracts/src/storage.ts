@@ -267,6 +267,12 @@ export interface CrawlStats {
     /** Of those, the ones refused on the URL alone, before any were selected under the limit. */
     refusedByUrl?: number;
     refusedLinks?: Array<{ href: string; sourcePages: string[]; pageCount?: number }>;
+    /**
+     * repo#2613: of the `checked` links, the ones the check's time budget ran
+     * out on before they were answered. Never requested or never waited on,
+     * so not checked; absent when the check finished.
+     */
+    outOfTime?: number;
   };
   /**
    * Root fetches (robots.txt, sitemaps, llms.txt, the Markdown probe) the site

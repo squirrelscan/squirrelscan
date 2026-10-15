@@ -12,6 +12,7 @@
 
 import {
   EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
+  EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON,
   EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
   LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
   NOT_CHECKED_SKIP_REASONS,
@@ -45,6 +46,8 @@ const HINTS: Record<string, string> = {
     "Turn internal link checks back on (they are off with --no-internal-links or internal_links.enabled = false), raise internal_links.max_targets, or run a Surface or Full audit, which follows links, to check them.",
   [EXTERNAL_LINKS_OVER_CAP_SKIP_REASON]:
     "Raise the limit with external_links.max_links, or audit more pages, to check them.",
+  [EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON]:
+    "Run the audit again to check them.",
 };
 
 const DEFAULT_HINT = "Run a Surface or Full audit to check them.";

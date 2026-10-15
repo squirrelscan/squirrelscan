@@ -3,6 +3,7 @@
 
 import {
   EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
+  EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON,
   EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
 } from "@squirrelscan/core-contracts";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
@@ -112,6 +113,45 @@ function refusedCheck(linkCheck: NonNullable<SiteData["externalLinkCheck"]>): Ch
   };
 }
 
+/**
+ * repo#2729: links over this audit's limit were never requested. Said next to
+ * the result for the ones that were. The ones never requested as actions or
+ * token links (repo#2759), or refused on their URL alone, never took a slot
+ * under the limit, so they are not over it.
+ */
+function overCapCheck(linkCheck: NonNullable<SiteData["externalLinkCheck"]>): CheckResult | null {
+  const eligible = linkCheck.found - (linkCheck.notRequested ?? 0) - (linkCheck.refusedByUrl ?? 0);
+  const overCap = eligible - linkCheck.checked;
+  if (overCap <= 0) return null;
+  return {
+    name: "broken-external-links",
+    status: "skipped",
+    message: `${overCap} of ${eligible} external link(s) were not checked: over this audit's limit of ${linkCheck.cap}, which checks the most-linked first`,
+    skipReason: EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
+    value: overCap,
+    details: { externalLinksFound: linkCheck.found, externalLinksChecked: linkCheck.checked, cap: linkCheck.cap },
+  };
+}
+
+/**
+ * repo#2613: external links the audit selected to check but got no answer for
+ * before the check's time budget ran out. A "not checked" skip, like the links
+ * over the limit: their status is unknown, so they hold this rule's open
+ * issues open rather than resolving them.
+ */
+function outOfTimeCheck(linkCheck: NonNullable<SiteData["externalLinkCheck"]>): CheckResult | null {
+  const count = linkCheck.outOfTime ?? 0;
+  if (count === 0) return null;
+  return {
+    name: "broken-external-links",
+    status: "skipped",
+    message: `${count} of ${linkCheck.checked} external link(s) were not checked: the link check ran out of time before reaching them`,
+    skipReason: EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON,
+    value: count,
+    details: { externalLinksChecked: linkCheck.checked, outOfTime: count },
+  };
+}
+
 export const brokenExternalLinksRule: Rule = {
   meta: {
     id: "links/broken-external-links",
@@ -162,6 +202,16 @@ export const brokenExternalLinksRule: Rule = {
       }
       if (notRequested) checks.push(notRequested);
       if (refused) checks.push(refused);
+      // repo#2613: the check ran out of time before answering any of them. Say
+      // that, rather than the generic "no results" below, which reads as a
+      // check that never ran.
+      const outOfTime = linkCheck ? outOfTimeCheck(linkCheck) : null;
+      if (outOfTime) {
+        checks.push(outOfTime);
+        const overCap = linkCheck ? overCapCheck(linkCheck) : null;
+        if (overCap) checks.push(overCap);
+        return { checks };
+      }
       // No check results while the pages do link out: the checker never saw
       // them (rules re-run on a stored crawl by `squirrel analyze`, a check
       // phase that died early). Not a pass. The links never requested are
@@ -268,24 +318,12 @@ export const brokenExternalLinksRule: Rule = {
       });
     }
 
-    // repo#2729: links over this audit's limit were never requested. Say so,
-    // next to the result for the ones that were. The ones never requested as
-    // actions or token links (repo#2759) are not over any limit.
-    const capped = linkCheck;
-    // Neither the not-requested nor the links refused on their URL alone were
-    // eligible: they never took a slot under the limit.
-    const eligible = capped ? capped.found - (capped.notRequested ?? 0) - (capped.refusedByUrl ?? 0) : 0;
-    const overCap = capped ? eligible - capped.checked : 0;
-    if (capped && overCap > 0) {
-      checks.push({
-        name: "broken-external-links",
-        status: "skipped",
-        message: `${overCap} of ${eligible} external link(s) were not checked: over this audit's limit of ${capped.cap}, which checks the most-linked first`,
-        skipReason: EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
-        value: overCap,
-        details: { externalLinksFound: capped.found, externalLinksChecked: capped.checked, cap: capped.cap },
-      });
-    }
+    // repo#2613 first: a report shows one "Not checked" line per rule, and a
+    // check that ran out of time is the news; the limit is the same every run.
+    const outOfTime = linkCheck ? outOfTimeCheck(linkCheck) : null;
+    if (outOfTime) checks.push(outOfTime);
+    const overCap = linkCheck ? overCapCheck(linkCheck) : null;
+    if (overCap) checks.push(overCap);
 
     if (notRequested) checks.push(notRequested);
     if (refused) checks.push(refused);
