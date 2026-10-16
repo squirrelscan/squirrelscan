@@ -2,7 +2,7 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import { flattenJsonLdNodes } from "@squirrelscan/utils";
+import { flattenJsonLdNodes, indexJsonLdIds, resolveJsonLdRef } from "@squirrelscan/utils";
 
 export const breadcrumbSchemaRule: Rule = {
   meta: {
@@ -38,6 +38,7 @@ export const breadcrumbSchemaRule: Rule = {
       'script[type="application/ld+json"]'
     );
     let breadcrumbSchema: Record<string, unknown> | null = null;
+    const pageNodes: Record<string, unknown>[] = [];
 
     for (const script of schemaScripts) {
       // Flattened per script, so a Yoast / Rank Math `@graph` wrapper is
@@ -46,6 +47,7 @@ export const breadcrumbSchemaRule: Rule = {
       // mis-split a pretty-printed block (#1099). Unparseable JSON yields an
       // empty list, which is what the old try/catch was for.
       const schemas = flattenJsonLdNodes(script.textContent || "");
+      pageNodes.push(...schemas);
 
       for (const schema of schemas) {
         const type = schema["@type"];
@@ -80,11 +82,21 @@ export const breadcrumbSchemaRule: Rule = {
       return { checks };
     }
 
+    // pub#869: a ListItem may be a node reference (`{"@id": …}`) to a node
+    // elsewhere on the page; read the node it names. A dangling reference, a
+    // null or a string is judged as written: an item with no position or name.
+    const ids = indexJsonLdIds(pageNodes, ctx.page.url);
+
     // Validate items
     let hasValidItems = true;
     let lastPosition = 0;
 
-    for (const item of items) {
+    for (const entry of items as unknown[]) {
+      const resolved = resolveJsonLdRef(entry, ids, ctx.page.url);
+      const item =
+        resolved && typeof resolved === "object" && !Array.isArray(resolved)
+          ? (resolved as Record<string, unknown>)
+          : {};
       const position = item["position"];
       const name = item["name"];
 
@@ -99,7 +111,7 @@ export const breadcrumbSchemaRule: Rule = {
           message: "Breadcrumb positions not sequential",
         });
       }
-      lastPosition = position;
+      lastPosition = position as number;
     }
 
     if (hasValidItems) {

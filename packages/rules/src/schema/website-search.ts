@@ -2,7 +2,7 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import { flattenJsonLdNodes } from "@squirrelscan/utils";
+import { flattenJsonLdNodes, indexJsonLdIds, resolveJsonLdRef } from "@squirrelscan/utils";
 
 export const websiteSearchSchemaRule: Rule = {
   meta: {
@@ -31,6 +31,7 @@ export const websiteSearchSchemaRule: Rule = {
       'script[type="application/ld+json"]'
     );
     let websiteSchema: Record<string, unknown> | null = null;
+    const pageNodes: Record<string, unknown>[] = [];
 
     for (const script of schemaScripts) {
       // Flattened per script, so a Yoast / Rank Math `@graph` wrapper is
@@ -39,6 +40,7 @@ export const websiteSearchSchemaRule: Rule = {
       // mis-split a pretty-printed block (#1099). Unparseable JSON yields an
       // empty list, which is what the old try/catch was for.
       const schemas = flattenJsonLdNodes(script.textContent || "");
+      pageNodes.push(...schemas);
 
       for (const schema of schemas) {
         const type = schema["@type"];
@@ -82,9 +84,12 @@ export const websiteSearchSchemaRule: Rule = {
       return { checks };
     }
 
-    const actions = Array.isArray(potentialAction)
-      ? potentialAction
-      : [potentialAction];
+    // pub#869: an action written as a node reference (`{"@id": …}`) is read
+    // from the node it names; a dangling one is judged as written.
+    const ids = indexJsonLdIds(pageNodes, ctx.page.url);
+    const actions = (Array.isArray(potentialAction) ? potentialAction : [potentialAction])
+      .map((a: unknown) => resolveJsonLdRef(a, ids, ctx.page.url))
+      .filter((a): a is Record<string, unknown> => !!a && typeof a === "object" && !Array.isArray(a));
     const searchAction = actions.find((a) => a["@type"] === "SearchAction");
 
     if (!searchAction) {

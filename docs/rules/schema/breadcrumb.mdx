@@ -20,6 +20,8 @@ The rule reads every `script[type="application/ld+json"]` on the page and keeps 
 
 The sequence check only runs on positions that are JavaScript numbers. A `position` written as the string `"1"` is accepted as present by `breadcrumb-valid` but skipped by `breadcrumb-order`, so a string-numbered list never reports as out of order. Every property test is a truthiness test rather than a presence test, so a property present but empty, `0` or `false` counts as missing. A `position` of `0` and a `name` of `""` therefore both read as missing.
 
+An `itemListElement` entry that is a node reference, `{"@id": "…#crumb-1"}`, is read from the `ListItem` node with that `@id` anywhere in the page's JSON-LD, in the same `@graph` or another script. A relative `@id` resolves against the page URL. A reference to a node the page does not have counts as an item missing its position and name.
+
 ## How to fix it
 
 ```html

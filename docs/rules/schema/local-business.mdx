@@ -24,6 +24,8 @@ The address and location checks are mutually exclusive, so at most one of them a
 
 The whole rule is skipped, with the reason shown in the report, when the site profile says the site is not a local business.
 
+An `address` written as a node reference, `{"@id": "…#address"}`, is read from the `PostalAddress` node with that `@id` anywhere in the page's JSON-LD. A relative `@id` resolves against the page URL. A reference to a node the page does not have counts as an incomplete address.
+
 ## How to fix it
 
 ```html

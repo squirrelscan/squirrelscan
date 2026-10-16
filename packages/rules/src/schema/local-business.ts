@@ -3,7 +3,7 @@
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { LOCAL_BUSINESS_TYPES, type LocalBusinessType } from "@squirrelscan/utils/constants";
-import { flattenJsonLdNodes } from "@squirrelscan/utils";
+import { flattenJsonLdNodes, indexJsonLdIds, resolveJsonLdRef } from "@squirrelscan/utils";
 
 // "address" is intentionally NOT required here — service-area businesses
 // (#700) legitimately have no public street address; the address-vs-areaServed
@@ -125,7 +125,13 @@ export const localBusinessSchemaRule: Rule = {
     // Check address completeness — unchanged from pre-#700 behavior when an
     // address IS present (an informal string address still reports missing
     // structured subfields, same as before this rule accepted areaServed).
-    const rawAddress = businessSchema["address"];
+    // pub#869: an address written as a node reference (`{"@id": …}`) is read
+    // from the PostalAddress node it names; a dangling one is judged as written.
+    const ids = indexJsonLdIds(nodes, ctx.page.url);
+    const resolve = (value: unknown) => resolveJsonLdRef(value, ids, ctx.page.url);
+    const rawAddress = Array.isArray(businessSchema["address"])
+      ? (businessSchema["address"] as unknown[]).map(resolve)
+      : resolve(businessSchema["address"]);
     // An empty candidates array (`address: []`) counts as no address (#724) so
     // the SAB location check below offers the address-vs-areaServed guidance.
     const hasAddress = Array.isArray(rawAddress) ? rawAddress.length > 0 : Boolean(rawAddress);
