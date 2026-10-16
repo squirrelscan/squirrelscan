@@ -103,3 +103,23 @@ export function didRedirect(
     finalUrl !== undefined && requestTarget(url) !== requestTarget(finalUrl);
   return landedElsewhere || hasObservedRedirect(chain);
 }
+
+/**
+ * The URL whose markup a page rule reads: the end of an HTTP redirect chain the
+ * crawl watched, else the page URL. The crawl stores a redirect target's
+ * response under the source URL, so a rule comparing the markup with the page
+ * URL judges the target's tags against the pre-redirect URL (pub#827,
+ * pub#864). Only an all-HTTP chain with an observed 3xx counts, since its
+ * response is certainly the stored document; a client-side hop (a render that
+ * navigated) or an unparseable end keeps the page URL.
+ */
+export function documentUrl(page: { url: string; redirectChain?: RedirectChain }): string {
+  const chain = page.redirectChain;
+  if (!chain || !hasObservedRedirect(chain)) return page.url;
+  if (!chain.hops.every((hop) => hop.type === "http")) return page.url;
+  try {
+    return new URL(chain.finalUrl).href;
+  } catch {
+    return page.url;
+  }
+}

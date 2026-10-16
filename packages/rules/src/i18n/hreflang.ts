@@ -2,7 +2,7 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import { hasObservedRedirect } from "../shared/redirect-evidence";
+import { documentUrl } from "../shared/redirect-evidence";
 
 export const hreflangRule: Rule = {
   meta: {
@@ -99,20 +99,3 @@ export const hreflangRule: Rule = {
     return { checks };
   },
 };
-
-/**
- * The URL whose markup the rule reads: the end of an HTTP redirect chain the
- * crawl watched, else the page URL. Only an all-HTTP chain with an observed
- * 3xx counts, since its response is certainly the stored document; a client-
- * side hop (a render that navigated) or an unparseable end keeps the page URL.
- */
-function documentUrl(page: RuleContext["page"]): string {
-  const chain = page.redirectChain;
-  if (!chain || !hasObservedRedirect(chain)) return page.url;
-  if (!chain.hops.every((hop) => hop.type === "http")) return page.url;
-  try {
-    return new URL(chain.finalUrl).href;
-  } catch {
-    return page.url;
-  }
-}
