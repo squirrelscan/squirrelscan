@@ -1202,6 +1202,68 @@ describe("capReportForPublish: tallies", () => {
   }, SLOW);
 });
 
+describe("capReportForPublish: rule page counts (repo#2935)", () => {
+  /** A rule with one class per entry of `classes`, each failing on its own pages. */
+  function rule(classes: Array<{ name: string; pages: number[] }>): Report {
+    const checks: CheckResult[] = classes.flatMap(({ name, pages }) =>
+      pages.map((i) => ({ name, status: "fail" as const, message: `${name} fails`, pageUrl: pageUrl(i) })),
+    );
+    return { ruleResults: { "perf/cache-headers": { meta: meta(PAGE_RULES[0]!, "page"), checks } } };
+  }
+  const range = (from: number, to: number) => Array.from({ length: to - from }, (_, i) => from + i);
+
+  test("two disjoint classes count every page, where the samples can only show the larger", () => {
+    const capped = capReportForPublish(
+      rule([
+        { name: "cache-control", pages: range(0, 46) },
+        { name: "cache-headers-missing", pages: range(46, 50) },
+      ]),
+    );
+    expect(capped.rulePageCounts).toEqual({ "perf/cache-headers": 50 });
+    // What a reader of the rows alone gets: the largest class, 46.
+    const largest = Math.max(
+      ...capped.ruleResults["perf/cache-headers"]!.checks.map((c) =>
+        Math.max((c.details?.pagesTruncated as number | undefined) ?? 0, c.pages?.length ?? 1),
+      ),
+    );
+    expect(largest).toBe(46);
+  });
+
+  test("classes on the same pages need no count, and none is published", () => {
+    const capped = capReportForPublish(
+      rule([
+        { name: "cache-control", pages: range(0, 40) },
+        { name: "cache-headers-missing", pages: range(10, 20) },
+      ]),
+    );
+    expect(capped.rulePageCounts).toBeUndefined();
+  });
+
+  test("a count on the input is never trusted", () => {
+    const input = {
+      ...rule([{ name: "cache-control", pages: range(0, 30) }]),
+      rulePageCounts: { "perf/cache-headers": 9_999, "made/up": 1 },
+    };
+    expect(capReportForPublish(input).rulePageCounts).toBeUndefined();
+  });
+
+  test("on a real-shaped report, each count is the union of its rule's failing pages", () => {
+    const input = report(300);
+    const capped = capReportForPublish(input);
+    const removed = new Set(input.pages!.filter((p) => p.statusCode === 404).map((p) => p.url));
+    for (const [ruleId, count] of Object.entries(capped.rulePageCounts ?? {})) {
+      const pages = new Set<string>();
+      for (const c of input.ruleResults[ruleId]!.checks) {
+        if ((c.status === "fail" || c.status === "warn") && c.pageUrl && !removed.has(c.pageUrl)) {
+          pages.add(c.pageUrl);
+        }
+      }
+      expect({ ruleId, count }).toEqual({ ruleId, count: pages.size });
+    }
+    expect(Object.keys(capped.rulePageCounts ?? {}).length).toBeGreaterThan(0);
+  });
+});
+
 describe("capReportForPublish: determinism", () => {
   test("the same report caps to the same bytes, whatever order it was built in", () => {
     const input = report(200);

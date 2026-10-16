@@ -566,6 +566,15 @@ export interface AuditReport {
    */
   checkTallies?: CheckTallies;
   /**
+   * The distinct pages a rule fails or warns on, counted BEFORE the publish
+   * capper sampled `ruleResults` (repo#2935), for each rule whose issue classes
+   * reach pages its largest class does not. A reader adding up a rule's
+   * sampled classes can only take the largest as a floor; this is the exact
+   * union. Present on capped published reports only, and only for the rules
+   * that need it.
+   */
+  rulePageCounts?: Record<string, number>;
+  /**
    * Set when the report is a capped published summary (repo#2656): every issue
    * class carries a sample plus its true counts, and the full per-page detail
    * lives elsewhere. Absent on local reports and on reports published before
