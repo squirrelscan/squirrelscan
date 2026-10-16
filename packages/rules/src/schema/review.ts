@@ -62,7 +62,11 @@ export const reviewSchemaRule: Rule = {
       if (schema["review"]) {
         const r = schema["review"];
         for (const entry of Array.isArray(r) ? r : [r]) {
-          reviewSet.add(resolve(entry) as Record<string, unknown>);
+          // A null or bare string in `review` is not a review to judge.
+          const node = resolve(entry);
+          if (node && typeof node === "object" && !Array.isArray(node)) {
+            reviewSet.add(node as Record<string, unknown>);
+          }
         }
       }
 

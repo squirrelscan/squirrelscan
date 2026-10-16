@@ -95,6 +95,19 @@ describe("schema/faq — entries that are not objects (pub#817 review)", () => {
   });
 });
 
+describe("schema/review — entries that are not objects (pub#817 review)", () => {
+  test("a null or a bare string in review is skipped, not a crash", () => {
+    const product = {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      name: "p",
+      review: [null, "great", { "@type": "Review", author: "a", reviewRating: { ratingValue: 5 } }],
+    };
+    const out = run(reviewRule, product);
+    expect(out["individual-reviews"]).toStartWith("pass:");
+  });
+});
+
 describe("schema/product and schema/review — @id references (pub#817)", () => {
   test("a Product's offers referenced by @id are read from the Offer node", () => {
     const graph = {
