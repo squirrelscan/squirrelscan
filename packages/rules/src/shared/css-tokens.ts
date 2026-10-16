@@ -32,6 +32,43 @@ export function skipComment(css: string, start: number): number {
   return end === -1 ? css.length : end + 2;
 }
 
+/**
+ * `css` with its comments removed, as a browser's tokenizer drops them: no
+ * space is left behind, so `.a`, a comment, then `.b` reads `.a.b` (pub#684). Quoted strings
+ * and escapes are copied through untouched, so a `/*` inside a string is text.
+ */
+export function stripComments(css: string): string {
+  if (!css.includes("/*")) return css;
+  let out = "";
+  let i = 0;
+  while (i < css.length) {
+    const ch = css[i];
+    if (ch === "\\") {
+      out += css.slice(i, i + 2);
+      i += 2;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      const end = skipString(css, i);
+      out += css.slice(i, end);
+      i = end;
+      continue;
+    }
+    if (ch === "/" && css[i + 1] === "*") {
+      i = skipComment(css, i);
+      // A comment still separates tokens: `.a/**` + `/b` is `.a` then `b`,
+      // never the class `.ab`. Joining two name characters would merge them,
+      // so a space keeps them apart (a selector that then reads as complex is
+      // the safe reading).
+      if (isNameChar(out[out.length - 1]) && isNameChar(css[i])) out += " ";
+      continue;
+    }
+    out += ch;
+    i++;
+  }
+  return out;
+}
+
 /** A character that continues a CSS name: `myurl(` is not `url(`. */
 export function isNameChar(ch: string | undefined): boolean {
   return ch !== undefined && (/[-_a-zA-Z0-9\\]/.test(ch) || ch.charCodeAt(0) >= 0x80);

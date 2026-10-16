@@ -13,7 +13,7 @@ import type { Document, Element } from "linkedom";
 
 import { SCAN_TRUNCATED_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 
-import { skipComment, skipString, stepBlocks } from "../shared/css-tokens";
+import { skipComment, skipString, stepBlocks, stripComments } from "../shared/css-tokens";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 import { getTextExcludingScripts } from "./text-content";
 
@@ -525,7 +525,9 @@ export function parseRules(css: string, maxRules: number): RawRule[] {
       continue;
     }
 
-    const prelude = css.slice(preludeStart, i).trim();
+    // pub#684: comments are dropped, as a browser does, so a section comment
+    // before a rule (or inside its selector) does not make it look complex.
+    const prelude = stripComments(css.slice(preludeStart, i)).trim();
     // `@media`, `@supports`, `@layer`, `@keyframes`: descend, marking everything
     // inside as conditional rather than skipping past it.
     if (prelude.startsWith("@")) {
