@@ -1731,9 +1731,11 @@ export async function runAudit(
       // has already run.
       // Spilling as we go means a run killed mid-phase leaves rows behind where
       // it used to leave none, so re-running rules over the same crawl would
-      // append a second copy of every check. Unreachable today (see
-      // `clearRuleResults`), and a no-op on every normal run, but it keeps the
-      // invariant next to the code that now depends on it.
+      // append a second copy of every check. An audit never re-runs rules over
+      // a crawl (see `clearRuleResults`), so this is a no-op on every normal
+      // run, but it keeps the invariant next to the code that depends on it.
+      // `squirrel analyze`, which does re-run them, replaces the crawl's
+      // results in one transaction instead (#844).
       await Effect.runPromise(
         sqliteStorage
           .clearRuleResults(crawlId)

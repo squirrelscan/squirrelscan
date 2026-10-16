@@ -2437,11 +2437,13 @@ export class SQLiteStorage implements CrawlStorage {
    * Since the rules phase spills its checks as it produces them, a run killed
    * part way through leaves rows behind where it used to leave none, and running
    * rules again over the same crawl_id would append a second copy of every
-   * check. No path reaches that today (a resume calls `clearCrawlData` before
-   * re-crawling, and every other path takes a fresh crawl id), and a half-written
-   * crawl is stuck at `crawled`, which the report refuses. This makes the
-   * invariant local to the phase that now depends on it rather than an
-   * inference across three call sites.
+   * check. An audit does not re-run rules over a crawl (a resume calls
+   * `clearCrawlData` before re-crawling, and every other path takes a fresh
+   * crawl id), and a half-written crawl is stuck at `crawled`, which the report
+   * refuses. This makes the invariant local to the phase that now depends on it
+   * rather than an inference across three call sites. `squirrel analyze` does
+   * re-run rules over a stored crawl; it replaces the results through
+   * `saveRuleResultsBatch(..., { replace: true })` (#844).
    */
   clearRuleResults(crawlId: string): Effect.Effect<void, StorageError, never> {
     return Effect.try({
@@ -3897,13 +3899,21 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
+  /**
+   * Insert a batch of rule results in one transaction. `replace` first deletes
+   * the crawl's existing rule results in the same transaction, so re-running
+   * the rules over a stored crawl (`squirrel analyze`, #844) leaves exactly one
+   * set, and a failed write leaves the old set in place.
+   */
   saveRuleResultsBatch(
     crawlId: string,
-    pageResults: Map<string, { ruleId: string; checks: CheckResult[] }[]>
+    pageResults: Map<string, { ruleId: string; checks: CheckResult[] }[]>,
+    options: { replace?: boolean } = {}
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
+        const clear = db.prepare("DELETE FROM rule_results WHERE crawl_id = ?");
         const stmt = db.prepare(`
           INSERT INTO rule_results (
             crawl_id, page_url, rule_id, check_name, status, message,
@@ -3914,6 +3924,7 @@ export class SQLiteStorage implements CrawlStorage {
 
         const timestamp = Date.now();
         const transaction = db.transaction(() => {
+          if (options.replace) clear.run(crawlId);
           for (const [pageUrl, results] of pageResults) {
             for (const { ruleId, checks } of results) {
               for (const check of checks) {
