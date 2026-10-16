@@ -4,14 +4,14 @@ import type { DocumentFetcher } from "@squirrelscan/fetchers";
 import type { Stream, Effect } from "effect";
 
 import type {
-  CrawlWarningCode,
+  CrawlerEvent,
   DiscoveryProbe,
   RedirectChain,
 } from "@squirrelscan/core-contracts";
 
 import type { AuditLevel } from "@squirrelscan/core-contracts/audit-levels";
 
-import type { CrawlStorage, CrawlStats, StorageError } from "../storage/types";
+import type { CrawlStorage, StorageError } from "../storage/types";
 import type { TlsEvent } from "../fetcher";
 
 // ============================================
@@ -219,181 +219,27 @@ export const DEFAULT_CRAWLER_CONFIG: CrawlerConfig = {
 // CRAWLER EVENTS
 // ============================================
 
-export type CrawlerEvent =
-  | CrawlerStartedEvent
-  | CrawlerPageFetchingEvent
-  | CrawlerPageFetchedEvent
-  | CrawlerPageFailedEvent
-  | CrawlerPageSkippedEvent
-  | CrawlerPageUnchangedEvent
-  | CrawlerUrlDiscoveredEvent
-  | CrawlerUrlEnqueuedEvent
-  | CrawlerProgressEvent
-  | CrawlerPausedEvent
-  | CrawlerResumedEvent
-  | CrawlerRateLimitedEvent
-  | CrawlerCompletedEvent
-  | CrawlerWarningEvent
-  | CrawlerErrorEvent;
-
-export interface CrawlerStartedEvent {
-  type: "started";
-  crawlId: string;
-  baseUrl: string;
-  timestamp: number;
-}
-
-export interface CrawlerPageFetchingEvent {
-  type: "page:fetching";
-  url: string;
-  depth: number;
-  timestamp: number;
-}
-
-export interface CrawlerPageFetchedEvent {
-  type: "page:fetched";
-  url: string;
-  status: number;
-  loadTimeMs: number;
-  sizeBytes: number;
-  depth: number;
-  timestamp: number;
-  /** Browser render cost only, set only for browser-queue-rendered pages (#826). */
-  renderTimeMs?: number;
-  /** Queue delivery lag + browser-pool acquisition + concurrency-slot wait, set only for browser-queue-rendered pages (#826). */
-  queueWaitMs?: number;
-}
-
-export interface CrawlerPageFailedEvent {
-  type: "page:failed";
-  url: string;
-  error: string;
-  retryable: boolean;
-  depth: number;
-  timestamp: number;
-}
-
-export interface CrawlerPageSkippedEvent {
-  type: "page:skipped";
-  url: string;
-  reason: string;
-  depth: number;
-  timestamp: number;
-}
-
-export interface CrawlerPageUnchangedEvent {
-  type: "page:unchanged";
-  url: string;
-  reason:
-    | "304"
-    | "hash_match"
-    | "etag_match"
-    // Served from cache without any request (origin freshness honored)
-    | "max-age"
-    | "s-maxage"
-    | "expires"
-    | "immutable"
-    // Served stale from cache while a background revalidation refreshes it
-    | "stale-while-revalidate";
-  depth: number;
-  timestamp: number;
-}
-
-export interface CrawlerUrlDiscoveredEvent {
-  type: "url:discovered";
-  url: string;
-  fromUrl: string;
-  depth: number;
-  timestamp: number;
-}
-
-export interface CrawlerUrlEnqueuedEvent {
-  type: "url:enqueued";
-  url: string;
-  priority: number;
-  source: "seed" | "sitemap" | "discovered" | "carried";
-  depth: number;
-  timestamp: number;
-}
-
-export interface CrawlerProgressEvent {
-  type: "progress";
-  fetched: number;
-  pending: number;
-  failed: number;
-  skipped: number;
-  unchanged: number;
-  total: number;
-  bytesTotal: number;
-  avgLoadTimeMs: number;
-  timestamp: number;
-}
-
-export interface CrawlerPausedEvent {
-  type: "paused";
-  reason: string;
-  timestamp: number;
-}
-
-export interface CrawlerResumedEvent {
-  type: "resumed";
-  timestamp: number;
-}
-
-/**
- * A host is throttling us and the crawl is waiting it out (#1829).
- *
- * Distinct from `paused`, which means the USER paused the crawl. Emitted once
- * per backoff wait so the CLI progress line and the cloud phase timeline can
- * say why a crawl went quiet instead of looking wedged. `backoffMs` of 0 with
- * `exhausted: true` means the host spent its whole budget and its remaining
- * URLs are being recorded as rate-limited without further requests.
- */
-export interface CrawlerRateLimitedEvent {
-  type: "rate-limited";
-  /** Host key being backed off from. */
-  host: string;
-  /** URL whose response triggered this backoff. */
-  url: string;
-  /** How long the crawl will wait before the next request to this host. */
-  backoffMs: number;
-  /** Minimum wait the origin asked for, when it sent `Retry-After`. */
-  retryAfterMs?: number;
-  /** Rate-limit responses seen for this URL so far (1-based). */
-  attempt: number;
-  /** The host gave up its backoff budget; remaining URLs are not fetched. */
-  exhausted: boolean;
-  timestamp: number;
-}
-
-export interface CrawlerCompletedEvent {
-  type: "completed";
-  stats: CrawlStats;
-  durationMs: number;
-  timestamp: number;
-}
-
-/**
- * Something a human should see that did not stop the crawl (#1899).
- *
- * `code` is the machine key and lives in core-contracts, because THIS UNION IS A
- * DUPLICATE of the one there: a consumer outside this package reads that copy,
- * so an event added to one and not the other type-checks locally and is invisible
- * to every consumer. Both must move together.
- */
-export interface CrawlerWarningEvent {
-  type: "warning";
-  code: CrawlWarningCode;
-  message: string;
-  timestamp: number;
-}
-
-export interface CrawlerErrorEvent {
-  type: "error";
-  error: string;
-  fatal: boolean;
-  timestamp: number;
-}
+// One declaration, in core-contracts (#251). Re-exported, never restated: a copy
+// here once drifted from it, so an event added to one side type-checked locally
+// and was invisible to every consumer reading the other.
+export type {
+  CrawlerCompletedEvent,
+  CrawlerErrorEvent,
+  CrawlerEvent,
+  CrawlerPageFailedEvent,
+  CrawlerPageFetchedEvent,
+  CrawlerPageFetchingEvent,
+  CrawlerPageSkippedEvent,
+  CrawlerPageUnchangedEvent,
+  CrawlerPausedEvent,
+  CrawlerProgressEvent,
+  CrawlerRateLimitedEvent,
+  CrawlerResumedEvent,
+  CrawlerStartedEvent,
+  CrawlerUrlDiscoveredEvent,
+  CrawlerUrlEnqueuedEvent,
+  CrawlerWarningEvent,
+} from "@squirrelscan/core-contracts";
 
 // ============================================
 // CRAWLER ERROR

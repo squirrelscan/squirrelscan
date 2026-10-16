@@ -64,6 +64,7 @@ import type {
   CacheHitReason,
   CacheStats,
   CheckProvenance,
+  CrawlStats,
   HreflangAlternate,
   RslLicenseDoc,
   SecurityHeaders,
@@ -947,129 +948,192 @@ export interface ReportTechnologies {
 
 // RedirectHop and RedirectChain are now in ./storage.ts (re-exported above)
 
+/**
+ * Every event a crawl emits. This is the one declaration (#251): the crawler
+ * package re-exports these types rather than restating them, so an event added
+ * here is visible to the crawler's emit sites and to every consumer at once.
+ */
 export type CrawlerEvent =
-  | { type: "started"; crawlId: string; baseUrl: string; timestamp: number }
-  | { type: "page:fetching"; url: string; depth: number; timestamp: number }
-  | {
-      type: "page:fetched";
-      url: string;
-      status: number;
-      loadTimeMs: number;
-      ttfbMs?: number;
-      sizeBytes: number;
-      depth: number;
-      fetcherId?: string;
-      rendered?: boolean;
-      timestamp: number;
-      /** Browser render cost only, set only for browser-queue-rendered pages (#826). */
-      renderTimeMs?: number;
-      /** Queue delivery lag + browser-pool acquisition + concurrency-slot wait, set only for browser-queue-rendered pages (#826). */
-      queueWaitMs?: number;
-    }
-  | {
-      type: "page:failed";
-      url: string;
-      error: string;
-      retryable: boolean;
-      depth: number;
-      timestamp: number;
-    }
-  | {
-      type: "page:skipped";
-      url: string;
-      reason: string;
-      depth: number;
-      timestamp: number;
-    }
-  | {
-      type: "page:unchanged";
-      url: string;
-      reason:
-        | "304"
-        | "hash_match"
-        | "etag_match"
-        | "max-age"
-        | "s-maxage"
-        | "expires"
-        | "immutable"
-        | "stale-while-revalidate";
-      depth: number;
-      timestamp: number;
-    }
-  | {
-      type: "url:discovered";
-      url: string;
-      fromUrl: string;
-      depth: number;
-      timestamp: number;
-    }
-  | {
-      type: "url:enqueued";
-      url: string;
-      priority: number;
-      source: "seed" | "sitemap" | "discovered" | "carried";
-      depth: number;
-      timestamp: number;
-    }
-  | {
-      type: "progress";
-      fetched: number;
-      pending: number;
-      failed: number;
-      skipped: number;
-      unchanged: number;
-      total: number;
-      bytesTotal: number;
-      avgLoadTimeMs: number;
-      timestamp: number;
-    }
-  | { type: "paused"; reason: string; timestamp: number }
-  | { type: "resumed"; timestamp: number }
-  | {
-      /**
-       * A host is throttling the crawl and it is waiting the host out (#1829).
-       * Distinct from `paused`, which means the user paused it.
-       */
-      type: "rate-limited";
-      host: string;
-      url: string;
-      backoffMs: number;
-      retryAfterMs?: number;
-      attempt: number;
-      exhausted: boolean;
-      timestamp: number;
-    }
-  | {
-      type: "completed";
-      stats: {
-        pagesFetched: number;
-        pagesFailed: number;
-        pagesSkipped: number;
-        pagesUnchanged: number;
-        bytesTotal: number;
-        avgLoadTimeMs: number;
-      };
-      durationMs: number;
-      timestamp: number;
-    }
-  | {
-      /**
-       * The crawl found something a human should see and carried on anyway.
-       * Non-fatal by construction — `error` is the other case — so a consumer
-       * that ignores this type loses information but never correctness.
-       *
-       * Added for squirrelscan/repo#1899, where a crawl audited the wrong half
-       * of an apex/www pair and said nothing: `logger.warn` reaches a terminal
-       * or a container's stdout, neither of which is where a hosted run is
-       * investigated weeks later. This rides the event stream the run already
-       * records.
-       */
-      type: "warning";
-      code: CrawlWarningCode;
-      message: string;
-      timestamp: number;
-    }
-  | { type: "error"; error: string; fatal: boolean; timestamp: number };
+  | CrawlerStartedEvent
+  | CrawlerPageFetchingEvent
+  | CrawlerPageFetchedEvent
+  | CrawlerPageFailedEvent
+  | CrawlerPageSkippedEvent
+  | CrawlerPageUnchangedEvent
+  | CrawlerUrlDiscoveredEvent
+  | CrawlerUrlEnqueuedEvent
+  | CrawlerProgressEvent
+  | CrawlerPausedEvent
+  | CrawlerResumedEvent
+  | CrawlerRateLimitedEvent
+  | CrawlerCompletedEvent
+  | CrawlerWarningEvent
+  | CrawlerErrorEvent;
+
+export interface CrawlerStartedEvent {
+  type: "started";
+  crawlId: string;
+  baseUrl: string;
+  timestamp: number;
+}
+
+export interface CrawlerPageFetchingEvent {
+  type: "page:fetching";
+  url: string;
+  depth: number;
+  timestamp: number;
+}
+
+export interface CrawlerPageFetchedEvent {
+  type: "page:fetched";
+  url: string;
+  status: number;
+  loadTimeMs: number;
+  ttfbMs?: number;
+  sizeBytes: number;
+  depth: number;
+  fetcherId?: string;
+  rendered?: boolean;
+  timestamp: number;
+  /** Browser render cost only, set only for browser-queue-rendered pages (#826). */
+  renderTimeMs?: number;
+  /** Queue delivery lag + browser-pool acquisition + concurrency-slot wait, set only for browser-queue-rendered pages (#826). */
+  queueWaitMs?: number;
+}
+
+export interface CrawlerPageFailedEvent {
+  type: "page:failed";
+  url: string;
+  error: string;
+  retryable: boolean;
+  depth: number;
+  timestamp: number;
+}
+
+export interface CrawlerPageSkippedEvent {
+  type: "page:skipped";
+  url: string;
+  reason: string;
+  depth: number;
+  timestamp: number;
+}
+
+export interface CrawlerPageUnchangedEvent {
+  type: "page:unchanged";
+  url: string;
+  reason:
+    | "304"
+    | "hash_match"
+    | "etag_match"
+    // Served from cache without any request (origin freshness honored)
+    | "max-age"
+    | "s-maxage"
+    | "expires"
+    | "immutable"
+    // Served stale from cache while a background revalidation refreshes it
+    | "stale-while-revalidate";
+  depth: number;
+  timestamp: number;
+}
+
+export interface CrawlerUrlDiscoveredEvent {
+  type: "url:discovered";
+  url: string;
+  fromUrl: string;
+  depth: number;
+  timestamp: number;
+}
+
+export interface CrawlerUrlEnqueuedEvent {
+  type: "url:enqueued";
+  url: string;
+  priority: number;
+  source: "seed" | "sitemap" | "discovered" | "carried";
+  depth: number;
+  timestamp: number;
+}
+
+export interface CrawlerProgressEvent {
+  type: "progress";
+  fetched: number;
+  pending: number;
+  failed: number;
+  skipped: number;
+  unchanged: number;
+  total: number;
+  bytesTotal: number;
+  avgLoadTimeMs: number;
+  timestamp: number;
+}
+
+export interface CrawlerPausedEvent {
+  type: "paused";
+  reason: string;
+  timestamp: number;
+}
+
+export interface CrawlerResumedEvent {
+  type: "resumed";
+  timestamp: number;
+}
+
+/**
+ * A host is throttling the crawl and it is waiting the host out (#1829).
+ *
+ * Distinct from `paused`, which means the USER paused the crawl. Emitted once
+ * per backoff wait so the CLI progress line and the cloud phase timeline can
+ * say why a crawl went quiet instead of looking wedged. `backoffMs` of 0 with
+ * `exhausted: true` means the host spent its whole budget and its remaining
+ * URLs are being recorded as rate-limited without further requests.
+ */
+export interface CrawlerRateLimitedEvent {
+  type: "rate-limited";
+  /** Host key being backed off from. */
+  host: string;
+  /** URL whose response triggered this backoff. */
+  url: string;
+  /** How long the crawl will wait before the next request to this host. */
+  backoffMs: number;
+  /** Minimum wait the origin asked for, when it sent `Retry-After`. */
+  retryAfterMs?: number;
+  /** Rate-limit responses seen for this URL so far (1-based). */
+  attempt: number;
+  /** The host gave up its backoff budget; remaining URLs are not fetched. */
+  exhausted: boolean;
+  timestamp: number;
+}
+
+export interface CrawlerCompletedEvent {
+  type: "completed";
+  stats: CrawlStats;
+  durationMs: number;
+  timestamp: number;
+}
+
+/**
+ * The crawl found something a human should see and carried on anyway.
+ * Non-fatal by construction — `error` is the other case — so a consumer
+ * that ignores this type loses information but never correctness.
+ *
+ * Added for squirrelscan/repo#1899, where a crawl audited the wrong half
+ * of an apex/www pair and said nothing: `logger.warn` reaches a terminal
+ * or a container's stdout, neither of which is where a hosted run is
+ * investigated weeks later. This rides the event stream the run already
+ * records.
+ */
+export interface CrawlerWarningEvent {
+  type: "warning";
+  code: CrawlWarningCode;
+  message: string;
+  timestamp: number;
+}
+
+export interface CrawlerErrorEvent {
+  type: "error";
+  error: string;
+  fatal: boolean;
+  timestamp: number;
+}
 
 /**
  * Stable keys for {@link CrawlerEvent} warnings, so a consumer can branch or
