@@ -3,7 +3,7 @@ title: "Cloud dead-link checking: the shared external link cache"
 description: "Checking every external link from your machine is slow and rude to the sites you link to. The cloud service checks against a shared cache instead."
 ---
 
-<Note>**Cloud rule** - requires login (`squirrel auth login`). In an audit with external link checking on, a [cloud audit](/guides/cloud-audits) or a signed-in `squirrel audit`, each distinct external link the service checks costs 1 credit, at most one per page of the audit's page limit, retries and browser escalation included. Links the CLI checks on your machine are free. Internal links are always free. Skipped when not logged in (external links are then checked locally as usual). See [Credits and pricing](/cloud/credits).</Note>
+<Note>**Cloud rule** - requires login (`squirrel auth login`). In an audit with external link checking on, a [cloud audit](/guides/cloud-audits) or a signed-in `squirrel audit`, each distinct external link the service verifies (it works, redirects or is broken) costs 1 credit, at most one per page of the audit's page limit, retries and browser escalation included. A link it cannot verify costs nothing. Links the CLI checks on your machine are free. Internal links are always free. Skipped when not logged in (external links are then checked locally as usual). See [Credits and pricing](/cloud/credits).</Note>
 
 ## What the cloud dead-links service is
 
@@ -27,7 +27,7 @@ A link counts as dead on the same basis as `links/broken-external-links`: a fetc
 
 ## How to fix it
 
-Log in with `squirrel auth login` to use the service. A signed-in CLI audit pays 1 credit per distinct external link the service answers, at most one per page of the audit's page limit, the same as a cloud audit. Its estimate before the audit includes them. An audit that has the cloud's spend disclosure accepted under `[cloud] max_credits_per_audit` (the default for a signed-in audit) asks nothing more; one without a per-audit cap, one that declined the cloud rendering prompt before, or one that chose its rendering with `--http`, `--render`, `--render-mode`, `[cloud] render` or `[cloud] rendering`, still gets a spend prompt in a terminal when the links alone would pass `[cloud] confirm_threshold`. A link the service leaves unanswered is checked on your machine for free. Being logged out falls back to local per-link checking.
+Log in with `squirrel auth login` to use the service. A signed-in CLI audit pays 1 credit per distinct external link the service verifies, at most one per page of the audit's page limit, the same as a cloud audit. Its estimate before the audit includes them. An audit that has the cloud's spend disclosure accepted under `[cloud] max_credits_per_audit` (the default for a signed-in audit) asks nothing more; one without a per-audit cap, one that declined the cloud rendering prompt before, or one that chose its rendering with `--http`, `--render`, `--render-mode`, `[cloud] render` or `[cloud] rendering`, still gets a spend prompt in a terminal when the links alone would pass `[cloud] confirm_threshold`. A link the service leaves unanswered is checked on your machine for free. Being logged out falls back to local per-link checking.
 
 The findings themselves are on `links/broken-external-links`. Fix them there.
 
