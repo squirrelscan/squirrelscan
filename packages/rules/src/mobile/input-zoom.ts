@@ -558,7 +558,8 @@ export const inputZoomRule: Rule = {
       "Give text fields, selects and textareas a font size of at least 16px at phone widths (1rem on a 16px root), for example Tailwind's `text-base md:text-sm` instead of `text-sm`. iOS Safari zooms the page in when a field under 16px is focused, which shifts the layout and pushes the submit button off screen. Do not stop the zoom with `maximum-scale=1` or `user-scalable=no` in the viewport tag: that also stops everyone who needs to zoom from doing so.",
     category: "mobile",
     scope: "page",
-    verdictScope: "template",
+    // Reads each page's own fields and style blocks: pages of one template can differ.
+    verdictScope: "page",
     severity: "warning",
     weight: 3,
   },
