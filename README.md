@@ -26,13 +26,14 @@ Combine your coding agent with a deterministic and extensible audit tool.
 ## Features
 
 - **[Built for coding agents](https://docs.squirrelscan.com/developers/agents)** - Skills for Claude Code, Cursor, Codex and any coding agent run the audit, fix and re-audit loop. Connect over the CLI, the hosted or local MCP server, or the API.
-- **[Fixes, not just flags](https://docs.squirrelscan.com/guides/fix-your-site-with-an-ai-agent)** - Findings come with the fix, in LLM-optimized output your agent can apply.
+- **[Enriched fixes for you and your coding agent](https://docs.squirrelscan.com/guides/fix-your-site-with-an-ai-agent)** - Every finding says how to fix it, in LLM-optimized output your agent can apply, and every rule has its own docs page. Signed in, the report adds an editor's summary of what to fix first and the technology stack the site runs on.
 - **[300+ rules, 22 categories](https://docs.squirrelscan.com/rules)** - Audit coverage across SEO, accessibility, performance, security, content and more.
 - **[Agent experience](https://docs.squirrelscan.com/rules/ax)** - Audit how well AI agents can read, discover and act on your site: llms.txt, AGENTS.md, Markdown responses, and what AI crawlers are served.
 - **[Link checking and monitoring](https://docs.squirrelscan.com/guides/link-checking)** - Perch, the cloud link checker, tells a broken link from a blocked one and confirms a failure before reporting it. On Pro and Team, scheduled audits email you when a link breaks.
 - **[Security and site integrity](https://docs.squirrelscan.com/rules/integrity)** - Detect phishing kits, injected pages, leaked credentials and missing security headers.
 - **[Entity map](https://docs.squirrelscan.com/guides/entity-map)** - Your site's JSON-LD collapsed into one graph: one identity, or a new one on every page.
-- **[Cloud audits](https://docs.squirrelscan.com/guides/cloud-audits)** - Browser rendering for JavaScript-heavy sites, AI page analysis, scheduled audits, an issue tracker and shareable reports.
+- **[Browser rendering in the cloud](https://docs.squirrelscan.com/guides/browser-rendering)** - Signed in, pages are rendered in a real browser in the cloud, so single-page apps and JavaScript-heavy sites are audited as visitors see them, at no extra cost per page.
+- **[Cloud audits](https://docs.squirrelscan.com/guides/cloud-audits)** - AI page analysis, scheduled audits, a per-website issue tracker and shareable reports.
 - **[Smart crawling](https://docs.squirrelscan.com/crawl)** - Fast and memory efficient, incremental with ETag, Last-Modified and content hashing, and resumable from checkpoints.
 - **[Crawl history and changes](https://docs.squirrelscan.com/cli/report)** - Track site evolution, compare crawls, spot regressions.
 - **[Developer-first CLI](https://docs.squirrelscan.com/cli)** - Single binary, zero dependencies, shell completions, self-update.
