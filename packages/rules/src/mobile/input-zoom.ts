@@ -25,6 +25,8 @@ const MIN_FIELD_PX = 16;
  * iOS Safari's own size for an unstyled field: WebKit's iOS stylesheet sets
  * `font: 11px system-ui` on `input`, `textarea` and `select`, so a field no
  * author rule sizes zooms too. Fields do not inherit the page's font size.
+ * Source: https://github.com/WebKit/WebKit/blob/main/Source/WebCore/css/html.css
+ * (the zoom scale is `16 / fontSize`, `UIProcess/API/ios/WKWebViewIOS.mm`).
  */
 const IOS_DEFAULT_FIELD_PX = 11;
 /** The initial `medium` size, which `rem`, `em` and `%` on the root resolve against. */
@@ -584,13 +586,17 @@ export const inputZoomRule: Rule = {
     // A page with no text field has nothing to zoom into.
     if (fields.length === 0) return { checks: [] };
 
-    const blocks: StyleBlock[] = [...doc.querySelectorAll("style")].map((el) => {
+    const blocks: StyleBlock[] = [];
+    for (const el of doc.querySelectorAll("style")) {
+      // A print sheet never styles the screen, and a `<noscript>` or
+      // `<template>` sheet is not live in a browser running scripts.
       const media = (el.getAttribute("media") || "").trim().toLowerCase();
-      return {
+      if (media === "print" || el.closest("noscript, template") !== null) continue;
+      blocks.push({
         text: el.textContent || "",
         conditional: media !== "" && media !== "all" && media !== "screen",
-      };
-    });
+      });
+    }
     const styles = readStyleRules(blocks);
     // A stylesheet linked (or preloaded as a style and switched on by script)
     // or imported may size the fields or the root, and outrank `<style>` rules.

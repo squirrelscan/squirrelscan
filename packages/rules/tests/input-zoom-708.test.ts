@@ -134,7 +134,7 @@ describe("mobile/input-zoom (#708)", () => {
     for (const [head, body] of [
       ["<style>input, select, textarea { font: inherit }</style>", "<input>"],
       ["<style>input { all: unset }</style>", "<input>"],
-      ['<style media="print">input { font-size: 12px }</style>', "<input>"],
+      ['<style media="(max-width: 600px)">input { font-size: 12px }</style>', "<input>"],
       ["<style>input { font-size: 100% }</style>", "<input>"],
     ] as const) {
       const check = only(run(head, body));
@@ -217,6 +217,31 @@ describe("mobile/input-zoom (#708)", () => {
     const check = only(run("", fields + disabled));
     expect(check.status).toBe("info");
     expect(check.details).toMatchObject({ fields: 205, under16px: 0, notRead: 5 });
+  });
+
+  test("past 2,000 text fields the rest are counted unchecked", () => {
+    const fields = Array.from(
+      { length: 2_100 },
+      (_, i) => `<input name="f${i}" style="font-size:16px">`,
+    ).join("");
+    const check = only(run("", fields));
+    expect(check.details).toMatchObject({ fields: 2_100, under16px: 0, notRead: 1_900 });
+  });
+
+  test("a print, <noscript> or <template> style block does not size a field", () => {
+    for (const head of [
+      '<style media="print">input { font-size: 16px }</style>',
+      "<noscript><style>input { font-size: 16px }</style></noscript>",
+      "<template><style>input { font-size: 16px }</style></template>",
+    ]) {
+      // The field keeps iOS's own 11px, as with no style block at all.
+      const check = only(run(head, '<input name="q">'));
+      expect([head, check.status, check.items]).toEqual([
+        head,
+        "warn",
+        [{ id: 'input type="text" name="q"', label: "11px (iOS default)" }],
+      ]);
+    }
   });
 
   test('a <style media="screen"> or "all" block applies like a plain one', () => {
