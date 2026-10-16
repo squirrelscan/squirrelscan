@@ -15,7 +15,7 @@ The rule runs on every crawled page over every `link[rel="alternate"][hreflang]`
 
 - Info when the page has no hreflang tags. Message: `No hreflang tags found (not required for single-language sites)`. No further checks run.
 - `hreflang-xdefault` warns when no tag has `hreflang="x-default"`. Message: `No x-default hreflang found`.
-- `hreflang-self` warns when no tag's resolved href equals the page URL exactly. Message: `No self-referencing hreflang found`.
+- `hreflang-self` warns when no tag's resolved href equals the page URL exactly. Message: `No self-referencing hreflang found`. For a URL that answers with an HTTP redirect, the page URL is the one the redirect ended on, since that is the page whose tags are read: `/en/old-slug` redirecting to `/en/new-slug` passes when `/en/new-slug` references itself.
 - `hreflang` passes, listing the language codes found. Message: `4 hreflang tag(s) found`.
 
 The final pass check is always emitted alongside any warnings, so a page can report both a missing `x-default` and a count of its tags. The self-reference comparison is on the fully resolved URL, so a self-tag that differs by a trailing slash or a query string does not count. Language codes are not validated, and the return links from the other versions cannot be checked from this page. Severity info, weight 3.
