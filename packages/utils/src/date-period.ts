@@ -92,9 +92,13 @@ const MAX_DATE_CHARS = 200;
  * Two times joined by a dash (`12:00-14:00`, `9:00 - 12:30`): a range, not a
  * time and a zone. Read as one, `Sep 10 2024 12:00-14:00` would be 12:00 at
  * offset -14:00 (#793). Which end of it a value means cannot be known, so a
- * value with one is not read.
+ * value with one is not read. A first time with seconds (`12:00:00-05:00`) is
+ * a time and its zone, as before: a range is not written to the second. The
+ * leading `[^\d:]` keeps the minutes and seconds of such a time (`00:00-05:00`)
+ * from reading as a range of their own; no lookbehind, which JSC runs slowly.
  */
-const TIME_RANGE = /\d{1,2}:\d{2}(?::\d{2})?\s*(?:[ap]\.?m\.?\s*)?[-\u2013\u2014]\s*\d{1,2}:\d{2}/i;
+const TIME_RANGE =
+  /(?:^|[^\d:])\d{1,2}:\d{2}(?!:\d)\s*(?:[ap]\.?m\.?\s*)?[-\u2013\u2014]\s*\d{1,2}:\d{2}/i;
 /** A year and month with a slash or a dot (`2024/09`, `2024.9`), which `Date` reads as the 1st. */
 const YEAR_SLASH_MONTH = /^(\d{4})[/.](0?[1-9]|1[0-2])$/;
 
@@ -216,8 +220,8 @@ function writtenFields(value: string): {
 
 /**
  * A value outside the W3C format, read as written: the fields `Date` reads
- * from it with no zone (see {@link writtenFields}), as UTC. A day when no time is written, a month for a month
- * and year written out. Null for a value `Date` cannot read, one shaped like
+ * from it with no zone (see {@link writtenFields}), as UTC. A day when no time
+ * is written, a month for a month and year written out. Null for a value `Date` cannot read, one shaped like
  * an ISO date (which `Date` may read in UTC instead), and one that does not
  * write a whole date (`Tuesday 2024`), whose missing fields `Date` makes up.
  */

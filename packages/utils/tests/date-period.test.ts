@@ -241,6 +241,12 @@ describe("datePeriod: time ranges and the DST gap (#793)", () => {
     expect(datePeriod("Sep 10 2024 12:00 -0500")?.start).toBe(Date.UTC(2024, 8, 10, 17));
     expect(datePeriod("2024-09-10T12:00-05:00")?.start).toBe(Date.UTC(2024, 8, 10, 17));
     expect(datePeriod("2024-09-10T12:00-05:00 (updated)")?.start).toBe(Date.UTC(2024, 8, 10, 17));
+    // A first time with seconds is a time and its zone, not a range.
+    expect(datePeriod("Sep 10 2024 12:00:00-05:00")?.start).toBe(Date.UTC(2024, 8, 10, 17));
+    expect(datePeriod("2024-09-10 12:00:00-05:00")?.start).toBe(Date.UTC(2024, 8, 10, 17));
+    // A range written to the second on both sides is still not read.
+    expect(datePeriod("Sep 10 2024 12:00:00 - 14:00:00")).toBeNull();
+    expect(datePeriod("Sep 10 2024 12:00:00-14:00:00")).toBeNull();
   });
 
   test("a local time a daylight-saving zone skips reads as written, in every zone", () => {
@@ -249,6 +255,30 @@ describe("datePeriod: time ranges and the DST gap (#793)", () => {
     const expected = { start: Date.UTC(2024, 2, 10, 2, 30), end: Date.UTC(2024, 2, 10, 2, 30), precision: "instant", day: "2024-03-10" };
     expect(inEveryZone(() => datePeriod("2024/03/10 02:30"))).toEqual(ZONES.map(() => expected));
     expect(inEveryZone(() => datePeriod("Mar 10 2024 2:30 AM"))).toEqual(ZONES.map(() => expected));
+  });
+
+  test("written forms read the same fields in every zone", () => {
+    const instant = (h: number, m = 0) => ({
+      start: Date.UTC(2024, 8, 10, h, m),
+      end: Date.UTC(2024, 8, 10, h, m),
+      precision: "instant",
+      day: "2024-09-10",
+    });
+    const wholeDay = {
+      start: Date.UTC(2024, 8, 10),
+      end: Date.UTC(2024, 8, 11) - 1,
+      precision: "day",
+      day: "2024-09-10",
+    };
+    for (const [value, expected] of [
+      ["10 Sep 2024 12:00 PM", instant(12)],
+      ["Tuesday, September 10, 2024", wholeDay],
+      ["Tue, 10 Sep 2024 23:30:00", instant(23, 30)],
+      ["September 10, 2024 11:00 PM", instant(23)],
+      ["2024/09/10 08:05", instant(8, 5)],
+    ] as const) {
+      expect(inEveryZone(() => datePeriod(value))).toEqual(ZONES.map(() => expected));
+    }
   });
 });
 

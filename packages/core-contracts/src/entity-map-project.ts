@@ -259,22 +259,28 @@ function edgesFor(
   rank: ReadonlyMap<string, number>,
   limits: EntityMapLimits,
 ): EntityMapEdge[] {
-  const candidates = edges.filter(
-    (edge) => rank.has(edge.source) && (edge.dangling || rank.has(edge.target)),
-  );
-  if (candidates.length <= limits.maxEdges) return candidates;
-  const score = (edge: EntityMapEdge): number =>
-    edge.dangling
-      ? rank.get(edge.source)!
-      : Math.max(rank.get(edge.source)!, rank.get(edge.target)!);
+  // Each surviving edge with its score, in one pass: the rank of its less
+  // important end, or of its source alone when it dangles.
+  const candidates: Array<{ edge: EntityMapEdge; score: number }> = [];
+  for (const edge of edges) {
+    const source = rank.get(edge.source);
+    if (source === undefined) continue;
+    if (edge.dangling) {
+      candidates.push({ edge, score: source });
+      continue;
+    }
+    const target = rank.get(edge.target);
+    if (target !== undefined) candidates.push({ edge, score: Math.max(source, target) });
+  }
+  if (candidates.length <= limits.maxEdges) return candidates.map(({ edge }) => edge);
   const kept = new Set(
     candidates
-      .map((edge, index) => ({ index, score: score(edge) }))
+      .map(({ score }, index) => ({ index, score }))
       .sort((a, b) => a.score - b.score || a.index - b.index)
       .slice(0, Math.max(0, limits.maxEdges))
       .map(({ index }) => index),
   );
-  return candidates.filter((_, index) => kept.has(index));
+  return candidates.filter((_, index) => kept.has(index)).map(({ edge }) => edge);
 }
 
 /**
