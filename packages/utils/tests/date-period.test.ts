@@ -233,6 +233,9 @@ describe("datePeriod: time ranges and the DST gap (#793)", () => {
       "Sep 10 2024 09:00-12:00",
       "2024/09/10 9:00 - 12:30",
       "Sep 10 2024 9:00 AM-11:00 AM",
+      "Sep 10 2024 12:00-12:20",
+      "Sep 10 2024 13:00-15:00",
+      "Sep 10 2024 11:00 AM-1:00 PM",
       "10 Sep 2024 12:00\u201314:00",
     ]) {
       expect(inEveryZone(() => datePeriod(value))).toEqual([null, null, null, null]);
@@ -244,6 +247,15 @@ describe("datePeriod: time ranges and the DST gap (#793)", () => {
     // A first time with seconds is a time and its zone, not a range.
     expect(datePeriod("Sep 10 2024 12:00:00-05:00")?.start).toBe(Date.UTC(2024, 8, 10, 17));
     expect(datePeriod("2024-09-10 12:00:00-05:00")?.start).toBe(Date.UTC(2024, 8, 10, 17));
+    // The same shape with a second time that can only be an offset is one.
+    expect(datePeriod("Sep 10 2024 12:00-05:00")?.start).toBe(Date.UTC(2024, 8, 10, 17));
+    expect(datePeriod("Sep 10 2024 12:00 -05:00")?.start).toBe(Date.UTC(2024, 8, 10, 17));
+    expect(datePeriod("Sep 10 2024 11:30 PM -05:30")?.start).toBe(Date.UTC(2024, 8, 11, 5));
+    // 12 AM is 00:00, 12 PM is 12:00: a second time after it is a range.
+    expect(datePeriod("Sep 10 2024 12:30 AM-05:00")).toBeNull();
+    expect(datePeriod("Sep 10 2024 12:30 PM-05:00")?.start).toBe(Date.UTC(2024, 8, 10, 17, 30));
+    // Every pair is weighed: a range anywhere in the value refuses it.
+    expect(datePeriod("Sep 10 2024 9:00-12:00 or 18:00-05:00")).toBeNull();
     // A range written to the second on both sides is still not read.
     expect(datePeriod("Sep 10 2024 12:00:00 - 14:00:00")).toBeNull();
     expect(datePeriod("Sep 10 2024 12:00:00-14:00:00")).toBeNull();

@@ -901,7 +901,14 @@ describe("edges past maxEdges (#405)", () => {
     ]);
   });
 
-  test("under the cap every edge is kept, in map order", () => {
+  test("a cap of 0 keeps no edges and counts every one as dropped", () => {
+    const none = { ...ENTITY_MAP_PUBLISH_LIMITS, maxEdges: 0 };
+    const slim = projectEntityMap(map(nodes, edges), none, "publish");
+    expect(slim.edges).toEqual([]);
+    expect(slim.truncated?.edges).toBe(edges.length);
+  });
+
+    test("under the cap every edge is kept, in map order", () => {
     const slim = projectEntityMap(map(nodes, edges), ENTITY_MAP_PUBLISH_LIMITS, "publish");
     expect(pairs(slim)).toEqual(edges.map((e) => `${e.source}>${e.target}`));
   });
