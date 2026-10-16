@@ -69,6 +69,10 @@ describe("crawl/pagination — the first page (pub#826)", () => {
     expect(canonicalCheck(`${B}/blog?page=1&tag=a&sort=new`, `${B}/blog?sort=new&tag=a`)?.status).toBe("pass");
     // A trailing slash and a fragment do not make it another resource.
     expect(canonicalCheck(`${B}/blog/page/1/`, `${B}/blog/`)?.status).toBe("pass");
+    expect(canonicalCheck(`${B}/blog?page=1`, `${B}/blog#top`)?.status).toBe("pass");
+    // Another scheme or host is another resource.
+    expect(canonicalCheck(`${B}/blog?page=1`, "http://example.com/blog")?.status).toBe("warn");
+    expect(canonicalCheck(`${B}/blog?page=1`, "https://www.example.com/blog")?.status).toBe("warn");
   });
 
   test("upper-case keys, repeated params and mixed markers are read the same way", () => {
@@ -76,6 +80,21 @@ describe("crawl/pagination — the first page (pub#826)", () => {
     expect(canonicalCheck(`${B}/blog?page=1&page=1`, `${B}/blog`)?.status).toBe("pass");
     expect(canonicalCheck(`${B}/blog?page=1&page=2`, `${B}/blog`)?.status).toBe("warn");
     expect(canonicalCheck(`${B}/blog?page=1&offset=20`, `${B}/blog`)?.status).toBe("warn");
+  });
+
+  test("a page marked paginated only by rel=next is a first page: its own canonical passes", () => {
+    const url = `${B}/blog`;
+    const html = `<!doctype html><html lang="en"><head><title>Blog</title><link rel="canonical" href="${url}"><link rel="next" href="${B}/blog?page=2"></head><body><h1>Blog</h1></body></html>`;
+    const ctx = {
+      page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
+      parsed: parsePage(html, url),
+      options: {},
+    } as unknown as RuleContext;
+    const checks = paginationRule.run(ctx).checks;
+    // No page marker on the URL, so pagination-canonical does not run; the
+    // rel links are reported as before.
+    expect(checks.find((c) => c.name === "pagination-canonical")).toBeUndefined();
+    expect(checks.find((c) => c.name === "pagination-links")?.status).toBe("info");
   });
 
   test("a self-referencing canonical passes on any page", () => {

@@ -101,7 +101,6 @@ const PAGINATION_PARAMS = new Set(["page", "p", "pg", "offset", "start"]);
 /** `url` with its pagination markers removed: the params above, and a trailing `/page/N`. */
 function unpaginated(url: URL): URL {
   const out = new URL(url.href);
-  out.hash = "";
   for (const key of [...out.searchParams.keys()]) {
     if (PAGINATION_PARAMS.has(key.toLowerCase())) out.searchParams.delete(key);
   }
