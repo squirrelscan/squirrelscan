@@ -1,5 +1,6 @@
 // squirrelscan credits - cloud credit balance + pricing
 
+import { ENRICHMENT } from "@squirrelscan/core-contracts/limits";
 import { defineCommand } from "citty";
 
 import { fmt } from "@/cli/format";
@@ -148,8 +149,8 @@ export const credits = defineCommand({
           ([feature, price]) =>
             price.cost > 0 &&
             // #861: AI issue enrichment keeps its price in the shared table,
-            // but the cloud has it switched off, so it is not for sale.
-            feature !== "issue_enrich" &&
+            // but while the cloud has it switched off it is not for sale.
+            (feature !== "issue_enrich" || ENRICHMENT.enabled) &&
             (auditBase == null ||
               (feature !== "audit_base" &&
                 feature !== "audit_page" &&

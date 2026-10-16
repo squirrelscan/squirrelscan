@@ -84,6 +84,7 @@ describe("`squirrel credits` pricing (#861)", () => {
     const output = await runCredits();
     expect(output).toContain("Pricing:");
     expect(output).not.toContain("issue_enrich");
+    expect(output).not.toContain("per issue");
   });
 
   test("still lists the opt-in add-ons", async () => {
