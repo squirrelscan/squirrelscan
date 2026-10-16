@@ -25,15 +25,18 @@ Combine your coding agent with a deterministic and extensible audit tool.
 
 ## Features
 
-- **300+ Rules, 22 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
-- **Fast crawler** - Highly optimized memory efficient crawler
-- **Agent Experience** - Audit agent experience to assist agents in using your site
-- **Security Audit** - Detect phishing kits, leaked credentials, and more
-- **Smart Incremental Crawling** - ETag, Last-Modified, content hashing. Resume from checkpoints.
-- **Developer-First CLI** - Single binary, zero dependencies, shell completions, self-update
-- **Crawl History & Changes** - Track site evolution, compare crawls, spot regressions
-- **Multiple Output Formats** - Console, JSON, HTML, Markdown, Text, LLM, XML
-- **MCP Connection** - Connect your agent to local or cloud MCP to run audits, fixes, etc.
+- **[Built for coding agents](https://docs.squirrelscan.com/developers/agents)** - Skills for Claude Code, Cursor, Codex and any coding agent run the audit, fix and re-audit loop. Connect over the CLI, the hosted or local MCP server, or the API.
+- **[Fixes, not just flags](https://docs.squirrelscan.com/guides/fix-your-site-with-an-ai-agent)** - Findings come with the fix, in LLM-optimized output your agent can apply.
+- **[300+ rules, 22 categories](https://docs.squirrelscan.com/rules)** - Audit coverage across SEO, accessibility, performance, security, content and more.
+- **[Agent experience](https://docs.squirrelscan.com/rules/ax)** - Audit how well AI agents can read, discover and act on your site: llms.txt, AGENTS.md, Markdown responses, and what AI crawlers are served.
+- **[Link checking and monitoring](https://docs.squirrelscan.com/guides/link-checking)** - Perch, the cloud link checker, tells a broken link from a blocked one and confirms a failure before reporting it. On Pro and Team, scheduled audits email you when a link breaks.
+- **[Security and site integrity](https://docs.squirrelscan.com/rules/integrity)** - Detect phishing kits, injected pages, leaked credentials and missing security headers.
+- **[Entity map](https://docs.squirrelscan.com/guides/entity-map)** - Your site's JSON-LD collapsed into one graph: one identity, or a new one on every page.
+- **[Cloud audits](https://docs.squirrelscan.com/guides/cloud-audits)** - Browser rendering for JavaScript-heavy sites, AI page analysis, scheduled audits, an issue tracker and shareable reports.
+- **[Smart crawling](https://docs.squirrelscan.com/crawl)** - Fast and memory efficient, incremental with ETag, Last-Modified and content hashing, and resumable from checkpoints.
+- **[Crawl history and changes](https://docs.squirrelscan.com/cli/report)** - Track site evolution, compare crawls, spot regressions.
+- **[Developer-first CLI](https://docs.squirrelscan.com/cli)** - Single binary, zero dependencies, shell completions, self-update.
+- **[Multiple output formats](https://docs.squirrelscan.com/cli/report#output-formats)** - Console, JSON, HTML, Markdown, Text, LLM, XML.
 
 ## Rule categories
 
