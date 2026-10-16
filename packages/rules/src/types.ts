@@ -374,6 +374,12 @@ export interface ExternalLinkCheckData {
   /** Detected WAF provider if wafBlocked is true */
   wafProvider?: string;
   /**
+   * Why a `wafBlocked` link is unverifiable (pub#821): `blocked`,
+   * `unreachable`, or `awaiting-confirmation` for a first 404 the cloud link
+   * checker has not confirmed yet. Absent when the checker did not say.
+   */
+  unverifiedReason?: "blocked" | "unreachable" | "awaiting-confirmation";
+  /**
    * The target answered with rate limiting (429/430, or 503 + `Retry-After`),
    * so its status is unverified rather than broken (#1829). Link rules must
    * report these as info, never as dead links.

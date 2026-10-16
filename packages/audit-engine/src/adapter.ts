@@ -78,6 +78,7 @@ import type {
   ScriptContentData,
   SitemapUrlStatusData,
   SiteQuery,
+  UnverifiedReason,
 } from "@squirrelscan/core-contracts";
 import {
   CLOUD_RESOURCE_CHECK,
@@ -1867,6 +1868,8 @@ export function runRulesOnStorage(
       sourcePages: string[];
       wafBlocked?: boolean;
       wafProvider?: string;
+      /** pub#821: why a `wafBlocked` link is unverifiable. */
+      unverifiedReason?: UnverifiedReason;
       /** Throttled: status unverified rather than broken (#1829). */
       rateLimited?: boolean;
     }> = [];
@@ -1908,6 +1911,7 @@ export function runRulesOnStorage(
           wafBlocked: link.wafBlocked,
           rateLimited: link.rateLimited,
           wafProvider: link.wafProvider,
+          ...(link.unverifiedReason ? { unverifiedReason: link.unverifiedReason } : {}),
         });
       }
     }
@@ -2698,6 +2702,8 @@ function buildStreamingSiteData(
       sourcePages: string[];
       wafBlocked?: boolean;
       wafProvider?: string;
+      /** pub#821: why a `wafBlocked` link is unverifiable. */
+      unverifiedReason?: UnverifiedReason;
       /** Throttled: status unverified rather than broken (#1829). */
       rateLimited?: boolean;
     }> = [];
@@ -2729,6 +2735,7 @@ function buildStreamingSiteData(
           wafBlocked: link.wafBlocked,
           rateLimited: link.rateLimited,
           wafProvider: link.wafProvider,
+          ...(link.unverifiedReason ? { unverifiedReason: link.unverifiedReason } : {}),
         });
       }
     }
@@ -3921,6 +3928,8 @@ export function checkCollectedExternalLinks(
             checkedAt: Date.now(),
             wafBlocked: result.wafBlocked,
             wafProvider: result.wafProvider,
+            // pub#821: why it is unverifiable, for the item label.
+            unverifiedReason: result.unverifiedReason,
             // #1829: persisted, not re-derived — the 503 + Retry-After case
             // cannot be recovered from the status code the rules read.
             rateLimited: result.rateLimited,

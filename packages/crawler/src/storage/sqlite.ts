@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 import { Effect } from "effect";
 
 import type { CheckResult } from "@squirrelscan/core-contracts";
-import { isCacheHitReason } from "@squirrelscan/core-contracts";
+import { isCacheHitReason, parseUnverifiedReason } from "@squirrelscan/core-contracts";
 import { urlHostKey } from "@squirrelscan/utils/url";
 
 import type {
@@ -73,7 +73,7 @@ export interface ContentStoreAdapter {
 // Schema version - increment when schema changes.
 // Exported so migration tests can assert "this DB reached the CURRENT version" rather than pinning a
 // literal, which turned every schema bump into two unrelated test failures.
-export const SCHEMA_VERSION = 33;
+export const SCHEMA_VERSION = 34;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -493,6 +493,11 @@ const MIGRATIONS: Record<number, string[]> = {
   // nullable: a row written before this reads as "no alternates", which
   // exempts nothing and is the behaviour before #489. Local sqlite only.
   33: [`ALTER TABLE page_features ADD COLUMN hreflang_alternates TEXT`],
+  // Version 34: why an external link is unverifiable (squirrelscan/squirrelscan#821):
+  // blocked, unreachable or awaiting a confirming check, so a re-rendered report
+  // and `squirrel analyze` keep the label. ADDITIVE and nullable: a row written
+  // before this reads as plainly unverified. Local sqlite only.
+  34: [`ALTER TABLE links ADD COLUMN unverified_reason TEXT`],
 };
 
 // Every `pages` column but the two that hold a page's body, for
@@ -579,6 +584,7 @@ const LINKS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   { name: "waf_blocked", type: "INTEGER" },
   { name: "waf_provider", type: "TEXT" },
   { name: "rate_limited", type: "INTEGER" },
+  { name: "unverified_reason", type: "TEXT" },
 ];
 
 const SITEMAP_URL_STATUSES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
@@ -729,6 +735,7 @@ CREATE TABLE IF NOT EXISTS links (
   waf_blocked INTEGER,
   waf_provider TEXT,
   rate_limited INTEGER,
+  unverified_reason TEXT,
   PRIMARY KEY (crawl_id, href),
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
@@ -2501,8 +2508,8 @@ export class SQLiteStorage implements CrawlStorage {
       try: () => {
         const db = this.getDb();
         const stmt = db.prepare(`
-          INSERT OR REPLACE INTO links (crawl_id, href, is_internal, status, error, checked_at, waf_blocked, waf_provider, rate_limited)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT OR REPLACE INTO links (crawl_id, href, is_internal, status, error, checked_at, waf_blocked, waf_provider, rate_limited, unverified_reason)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         stmt.run(
           crawlId,
@@ -2513,7 +2520,8 @@ export class SQLiteStorage implements CrawlStorage {
           link.checkedAt ?? null,
           link.wafBlocked ? 1 : null,
           link.wafProvider ?? null,
-          link.rateLimited ? 1 : null
+          link.rateLimited ? 1 : null,
+          link.unverifiedReason ?? null
         );
       },
       catch: (e) => StorageError.write(e),
@@ -2722,6 +2730,7 @@ export class SQLiteStorage implements CrawlStorage {
       wafBlocked: (row.waf_blocked as number | null) === 1 ? true : undefined,
       rateLimited: (row.rate_limited as number | null) === 1 ? true : undefined,
       wafProvider: (row.waf_provider as string | null) ?? undefined,
+      unverifiedReason: parseUnverifiedReason(row.unverified_reason),
     };
   }
 
