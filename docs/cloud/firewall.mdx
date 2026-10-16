@@ -50,7 +50,7 @@ Every **Rendering** setting therefore sends the headers on the requests for your
 
 ### Which renders carry them \{#which-renders-carry-them\}
 
-A cloud browser render carries the headers when the page is on the audited address's host or its `www` twin, with the audited address's scheme and port. For an audit of `https://staging.example.com/`, that is every page on `https://staging.example.com` and `https://www.staging.example.com`. A page on another subdomain, or on `http://` for a site audited over `https://`, is rendered without them, so a secret never travels over plain `http://` for a site you audit over `https://`.
+A cloud browser render carries the headers when the page is on the audited address's host or its `www` twin, with the audited address's scheme and port. For an audit of `https://staging.example.com/`, that is every page on `https://staging.example.com` and `https://www.staging.example.com`. A page on another subdomain, or on `http://` for a site audited over `https://`, is rendered without them, so a secret never travels over plain `http://` for a site you audit over `https://`. A site you audit over `http://` gets them over `http://`, unencrypted, as its plain requests do, so audit a gated site over `https://`.
 
 Inside the browser, the headers go only to the origin of the page being rendered: the page itself, and the scripts, stylesheets, images and API calls it loads from that origin. A redirect to another origin drops them, and a redirect back to the page's origin carries them again, because that is the origin they are for. If the browser cannot attach them to one of those requests, the render is dropped and the page is fetched over plain HTTP instead, never rendered without them.
 
