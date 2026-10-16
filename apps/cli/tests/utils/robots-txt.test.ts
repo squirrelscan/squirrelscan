@@ -180,7 +180,7 @@ describe("isRobotsTxtDisallowed", () => {
     ).toBe(false);
   });
 
-  it("first matching rule wins", () => {
+  it("the longest matching rule wins, whatever the order (pub#556)", () => {
     const robotsTxt: RobotsTxtData = {
       exists: true,
       url: "https://example.com/robots.txt",
@@ -199,9 +199,13 @@ describe("isRobotsTxtDisallowed", () => {
       errors: [],
     };
 
-    // /admin/public/ starts with /admin/, so disallow rule matches first
+    // Allow: /admin/public/ is longer than Disallow: /admin/, so it wins,
+    // as it does for Google.
     expect(
       isRobotsTxtDisallowed("https://example.com/admin/public/page", robotsTxt)
+    ).toBe(false);
+    expect(
+      isRobotsTxtDisallowed("https://example.com/admin/private", robotsTxt)
     ).toBe(true);
 
     // But if allow comes first for a different path structure
