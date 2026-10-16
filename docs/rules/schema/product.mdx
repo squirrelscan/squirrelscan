@@ -19,7 +19,7 @@ The rule reads every `script[type="application/ld+json"]` on the page and keeps 
 - `product-offer-details`: warns with the message `Product Offer missing price or availability` when the offer lacks either property.
 - `product-reviews`: emitted only when `review` or `aggregateRating` is present, passing with the message `Product has review/rating data`.
 
-When `offers` is an array only the first entry is checked, so a product with several offers is judged on one of them. Every property test is a truthiness test rather than a presence test, so a property present but empty, `0` or `false` counts as missing. A price of `0` is therefore treated as missing, and so is an `image` of `""`.
+When `offers` is an array only the first entry is checked, so a product with several offers is judged on one of them. An offer written as a node reference (`{"@id": "…#offer"}`) is read from the node with that `@id` anywhere in the page's JSON-LD. Every property test is a truthiness test rather than a presence test, so a property present but empty, `0` or `false` counts as missing. A price of `0` is therefore treated as missing, and so is an `image` of `""`.
 
 ## How to fix it
 

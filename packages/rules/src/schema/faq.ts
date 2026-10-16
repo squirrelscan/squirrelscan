@@ -2,7 +2,7 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import { flattenJsonLdNodes } from "@squirrelscan/utils";
+import { flattenJsonLdNodes, indexJsonLdIds, resolveJsonLdRef } from "@squirrelscan/utils";
 
 export const faqSchemaRule: Rule = {
   meta: {
@@ -27,6 +27,9 @@ export const faqSchemaRule: Rule = {
       'script[type="application/ld+json"]'
     );
     let faqSchema: Record<string, unknown> | null = null;
+    // pub#817: every node on the page, so a `mainEntity` reference to a
+    // Question elsewhere in the `@graph`, or in another script, resolves.
+    const pageNodes: Record<string, unknown>[] = [];
 
     for (const script of schemaScripts) {
       // Flattened per script, so a Yoast / Rank Math `@graph` wrapper is
@@ -35,6 +38,7 @@ export const faqSchemaRule: Rule = {
       // mis-split a pretty-printed block (#1099). Unparseable JSON yields an
       // empty list, which is what the old try/catch was for.
       const schemas = flattenJsonLdNodes(script.textContent || "");
+      pageNodes.push(...schemas);
 
       for (const schema of schemas) {
         const type = schema["@type"];
@@ -69,7 +73,10 @@ export const faqSchemaRule: Rule = {
       return { checks };
     }
 
-    const questions = Array.isArray(mainEntity) ? mainEntity : [mainEntity];
+    const ids = indexJsonLdIds(pageNodes, ctx.page.url);
+    const questions = (Array.isArray(mainEntity) ? mainEntity : [mainEntity]).map(
+      (q) => resolveJsonLdRef(q, ids, ctx.page.url) as Record<string, unknown>
+    );
 
     if (questions.length === 0) {
       checks.push({
