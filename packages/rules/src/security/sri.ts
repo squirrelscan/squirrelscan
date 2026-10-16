@@ -1,8 +1,30 @@
 // security/sri - Subresource Integrity on cross-origin scripts/styles
 
+import { z } from "zod";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
+// A bare hostname: labels of letters, digits and hyphens, an optional
+// terminal dot, no scheme, port or path.
+const HOSTNAME = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*\.?$/i;
+
+/** A hostname compared without case or a terminal dot: `A.com.` is `a.com`. */
+function hostKey(host: string): string {
+  return host.toLowerCase().replace(/\.$/, "");
+}
+
+export const optionsSchema = z.object({
+  exempt_hosts: z
+    .array(
+      z
+        .string()
+        .regex(HOSTNAME, "must be a hostname such as static.example.com, with no scheme, port or path")
+    )
+    .default([])
+    .describe("Extra hostnames whose scripts and stylesheets update in place, exempt from the check"),
+});
 
 // A handful of widely-deployed third-party SDKs that explicitly document SRI
 // as unsupported: their script content changes server-side (fraud detection,
@@ -25,6 +47,23 @@ const SRI_EXEMPT_HOSTNAMES = new Set([
   "ssl.google-analytics.com",
   "connect.facebook.net",
 ]);
+
+// Hosts that serve both kinds of file: only the paths the platform updates in
+// place are exempt (pub#546). Shopify injects its own `/shopifycloud/` and
+// `/storefront/` scripts into every store, so the owner cannot pin them, while
+// theme and app assets elsewhere on `cdn.shopify.com` are versioned and can
+// carry a hash.
+const SRI_EXEMPT_PATH_PREFIXES = new Map<string, readonly string[]>([
+  ["cdn.shopify.com", ["/shopifycloud/", "/storefront/"]],
+]);
+
+/** Whether the resource at `url` is one its vendor updates in place. */
+function isSriExempt(url: URL, extraHosts: ReadonlySet<string>): boolean {
+  const host = hostKey(url.hostname);
+  if (SRI_EXEMPT_HOSTNAMES.has(host) || extraHosts.has(host)) return true;
+  const prefixes = SRI_EXEMPT_PATH_PREFIXES.get(host);
+  return prefixes?.some((prefix) => url.pathname.startsWith(prefix)) ?? false;
+}
 
 /**
  * Resolve a possibly-relative/protocol-relative resource URL against the page
@@ -66,17 +105,20 @@ export const sriRule: Rule = {
     name: "Subresource Integrity",
     description: "Checks that cross-origin scripts and stylesheets use Subresource Integrity (SRI)",
     solution:
-      'Cross-origin scripts and stylesheets can be tampered with in transit or at the source (a compromised CDN or third-party host), and the browser has no way to detect it without help. Add an integrity attribute with a sha256/sha384/sha512 hash of the expected file, plus crossorigin="anonymous": <script src="..." integrity="sha384-..." crossorigin="anonymous"></script>. Most CDNs (jsDelivr, cdnjs, unpkg) publish the hash alongside the URL. This only works for pinned/versioned assets — scripts that update themselves server-side (analytics, payment SDKs, CAPTCHAs) intentionally don\'t support it.',
+      'Cross-origin scripts and stylesheets can be tampered with in transit or at the source (a compromised CDN or third-party host), and the browser has no way to detect it without help. Add an integrity attribute with a sha256/sha384/sha512 hash of the expected file, plus crossorigin="anonymous": <script src="..." integrity="sha384-..." crossorigin="anonymous"></script>. Most CDNs (jsDelivr, cdnjs, unpkg) publish the hash alongside the URL. This only works for pinned/versioned assets — scripts that update themselves server-side (analytics, payment SDKs, CAPTCHAs) intentionally don\'t support it: list such a host in the exempt_hosts option rather than pinning a hash that will go stale.',
     category: "security",
     scope: "page",
     verdictScope: "template",
     severity: "warning",
     weight: 5,
+    optionsSchema,
   },
 
   run(ctx: RuleContext): RuleResult {
     const doc = ctx.parsed.document;
     if (!doc) return { checks: [] };
+    const opts = optionsSchema.parse(ctx.options);
+    const extraHosts = new Set(opts.exempt_hosts.map(hostKey));
 
     const pageUrl = resolveUrl(ctx.page.url, ctx.page.url);
     const pageOrigin = pageUrl?.origin ?? "";
@@ -90,7 +132,7 @@ export const sriRule: Rule = {
       const resolved = crossOriginResource(src, ctx.page.url, pageOrigin);
       if (!resolved) continue;
       crossOriginTotal++;
-      if (SRI_EXEMPT_HOSTNAMES.has(resolved.hostname.toLowerCase())) continue;
+      if (isSriExempt(resolved, extraHosts)) continue;
       if (!script.getAttribute("integrity")) {
         flagged.push({ type: "script", url: src });
       }
@@ -106,7 +148,7 @@ export const sriRule: Rule = {
       const resolved = crossOriginResource(href, ctx.page.url, pageOrigin);
       if (!resolved) continue;
       crossOriginTotal++;
-      if (SRI_EXEMPT_HOSTNAMES.has(resolved.hostname.toLowerCase())) continue;
+      if (isSriExempt(resolved, extraHosts)) continue;
       if (!link.getAttribute("integrity")) {
         flagged.push({ type: "stylesheet", url: href });
       }
