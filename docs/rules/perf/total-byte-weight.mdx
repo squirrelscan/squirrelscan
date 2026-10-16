@@ -40,7 +40,7 @@ The HTML size is the response size the crawler recorded for the page: the `Conte
 
 ### Limits
 
-If a resource cannot be sized, for example a HEAD response with no `Content-Length`, it adds nothing to the page's weight and the rule says so: the message ends with the number of resources that could not be sized, and the details carry `unsizedResources`. Treat the weight as a lower bound in that case.
+If a resource cannot be sized, for example a HEAD response with no `Content-Length`, it adds nothing to the page's weight and the rule says so: the message gives the number of resources that could not be sized, right after the threshold counts, and the details carry `unsizedResources`. Treat the weight as a lower bound in that case.
 
 Fonts are the woff, woff2, ttf, otf and eot files a page names directly: a `<link rel="preload" as="font">`, or a `url()` source in an `@font-face` rule inside an inline `<style>`. Only same-site files are sized, so a font, stylesheet or image served from another host, such as a CDN, is not counted. A font that only an external stylesheet declares is not found, because stylesheet files are not read, so a site that loads all its fonts from a `.css` file adds nothing for fonts. Resource checks run under a time budget, so on a very large crawl some resources may go unmeasured.
 
