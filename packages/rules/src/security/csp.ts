@@ -106,7 +106,8 @@ export const cspRule: Rule = {
     // CSP3: a nonce or hash in the list makes browsers ignore 'unsafe-inline',
     // and 'strict-dynamic' ignores it along with every host and scheme source
     // (#441). Read from the directive's own list only: tokens after a comma
-    // belong to a comma-joined second policy, maybe to another directive.
+    // belong to a comma-joined second policy, maybe to another directive. On
+    // purpose this still warns when that second policy is itself strict.
     const ownSources = sourceTokens(scriptSrc.split(",", 1)[0] ?? "");
     const strictDynamic = ownSources.has("'strict-dynamic'");
     const inlineIgnored = strictDynamic || [...ownSources].some(isNonceOrHashSource);
@@ -196,7 +197,11 @@ function isAnyHostSource(token: string): boolean {
   return host === "*";
 }
 
-/** A nonce-source or hash-source, such as `'nonce-r4nd0m'` or `'sha256-…'`. */
+/**
+ * A nonce-source or hash-source, such as `'nonce-r4nd0m'` or `'sha256-…'`.
+ * `token` comes from `sourceTokens`, already lowercased, so the base64 class
+ * needs no upper-case letters.
+ */
 function isNonceOrHashSource(token: string): boolean {
   // base64-value: one or more base64 characters, then at most two `=`.
   return /^'(?:nonce|sha256|sha384|sha512)-[a-z0-9+/_-]+={0,2}'$/.test(token);
