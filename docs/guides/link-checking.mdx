@@ -47,8 +47,10 @@ Where the check runs depends on how you audit:
 
 External link checks cost credits, at most 1 per page of the audit's page limit:
 
-- **A cloud audit** pays 1 credit for each distinct external link it checks, whatever the answer. A link the audit has already paid for is not charged again.
-- **A signed-in CLI audit** pays 1 credit for each distinct external link Perch answers. A link Perch leaves unanswered is not charged: the CLI checks it from your machine for free.
+- **A cloud audit** pays 1 credit for each distinct external link Perch can verify: one that works, redirects or is broken. A link it cannot verify, such as one behind a bot wall or a throttle, costs nothing, and the report lists it as unverified. A link the audit has already paid for is not charged again.
+- **A signed-in CLI audit** pays the same way, for each distinct external link Perch verifies. A link Perch leaves unanswered is not charged either: the CLI checks it from your machine for free.
+
+A link to another of your own domains, such as `example.co.uk` linking to `example.com`, is an external link. It is checked, reported and charged like any other. Only the audited site's own host and its `www` twin are internal.
 
 Everything else is free: internal links, every link a signed-out audit checks, and a Quick CLI audit's external links, checked from your machine. The audit's estimate includes the link checks before it starts. See [Credits and pricing](/cloud/credits).
 
