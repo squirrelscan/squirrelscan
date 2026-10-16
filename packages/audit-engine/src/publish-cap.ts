@@ -266,11 +266,13 @@ export function buildCheckTallies(
  * sample leaves out cannot be told apart across classes, so a reader can only
  * take the largest class as a floor: two disjoint classes of 46 and 4 pages
  * read 46. This is the union, from the full report before sampling: the pages
- * of the rule's page-attributed fail and warn checks (a per-page check's
- * `pageUrl`, a folded aggregate's `pages`), replays included, as an issue
- * tracker counts a rule's pages. `classes` are the originals of each class as
- * foldRule keys them. An input aggregate that was itself already sampled makes
- * its rule's count a floor too.
+ * of this run's page-attributed fail and warn checks (a per-page check's
+ * `pageUrl`, a folded aggregate's `pages`). Replays are left out, as the
+ * tallies leave them out (the server's merge replaces them from its own
+ * store), so a reader that adds replayed pages back knows the count is then a
+ * floor. `classes` are the originals of each class as foldRule keys them. A
+ * rule with an input aggregate that was itself already sampled gets no count:
+ * its union would be a floor too, and a published count is exact.
  */
 function rulePageCount(classes: Iterable<CheckResult[]>): number | undefined {
   const union = new Set<string>();
@@ -278,6 +280,10 @@ function rulePageCount(classes: Iterable<CheckResult[]>): number | undefined {
   for (const originals of classes) {
     const pages = new Set<string>();
     for (const check of originals) {
+      // An input aggregate that was itself already sampled hides pages this
+      // union cannot see: no exact count, so none is published.
+      const truncated = check.details?.pagesTruncated;
+      if (typeof truncated === "number" && truncated > (check.pages?.length ?? 0)) return undefined;
       if (check.pageUrl) pages.add(check.pageUrl);
       for (const page of check.pages ?? []) pages.add(page);
     }
@@ -619,10 +625,15 @@ function foldRule(ruleId: string, rule: { meta: CappableRuleMeta; checks: CheckR
       .slice(0, REPORT_CAPS.classesPerRule)
       .sort((a, b) => a.order - b.order);
   }
-  // A class is one status (foldGroupKey): its first member says which.
+  // A class is one status and one provenance (foldGroupKey): its first member
+  // says which. Replays are left out, as the tallies leave them out: the
+  // server's merge replaces them from its own store.
   const pageCount = rulePageCount(
     [...classes.values()]
-      .filter((entry) => entry.members[0]!.status === "fail" || entry.members[0]!.status === "warn")
+      .filter((entry) => {
+        const first = entry.members[0]!;
+        return (first.status === "fail" || first.status === "warn") && !isReplayedCheck(first);
+      })
       .map((entry) => entry.originals),
   );
   return {

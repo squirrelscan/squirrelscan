@@ -24,7 +24,7 @@ How it works:
 ### Changed
 
 - `squirrel credits` no longer lists `issue_enrich` (3 per issue) in its pricing. AI issue enrichment is switched off in squirrelscan's cloud, so nothing is sold or charged under it today. The other add-ons, keyword and content gaps, are listed as before. See [Credits and pricing](https://docs.squirrelscan.com/cloud/credits).
-- A published report now carries the exact number of pages a rule fails or warns on when its issues reach different pages, in a new top-level `rulePageCounts` field of the JSON. Each issue lists a sample of its pages beside its own true count, but the pages two issues of one rule leave out cannot be told apart. So a rule with one issue on 46 pages and another on 4 different pages could only be counted as at least 46. The count is taken before the report is sampled, and it is listed only for the rules that need it. See [Output formats via URL](https://docs.squirrelscan.com/reports#output-formats-via-url).
+- A published report now carries the exact number of pages a rule fails or warns on when its issues reach different pages, in a new top-level `rulePageCounts` field of the JSON. Each issue lists a sample of its pages beside its own true count, but the pages two issues of one rule leave out cannot be told apart. So a rule with one issue on 46 pages and another on 4 different pages could only be counted as at least 46. The count is taken before the report is sampled, over this run's checks (findings carried over from an earlier audit are left out, as in the check tallies), and it is listed only for the rules that need it. See [Output formats via URL](https://docs.squirrelscan.com/reports#output-formats-via-url).
 
 ### Fixed
 

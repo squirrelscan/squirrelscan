@@ -566,9 +566,10 @@ export interface AuditReport {
    */
   checkTallies?: CheckTallies;
   /**
-   * The distinct pages a rule fails or warns on, counted BEFORE the publish
-   * capper sampled `ruleResults` (repo#2935), for each rule whose issue classes
-   * reach pages its largest class does not. A reader adding up a rule's
+   * The distinct pages a rule fails or warns on this run (replays left out, as
+   * in `checkTallies`), counted BEFORE the publish capper sampled `ruleResults`
+   * (repo#2935), for each rule whose issue classes reach pages its largest
+   * class does not. A reader adding up a rule's
    * sampled classes can only take the largest as a floor; this is the exact
    * union. Present on capped published reports only, and only for the rules
    * that need it.

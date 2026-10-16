@@ -1239,6 +1239,30 @@ describe("capReportForPublish: rule page counts (repo#2935)", () => {
     expect(capped.rulePageCounts).toBeUndefined();
   });
 
+  test("replayed findings are left out of the count, as the tallies leave them out", () => {
+    const input = rule([
+      { name: "cache-control", pages: range(0, 46) },
+      { name: "cache-headers-missing", pages: range(46, 50) },
+    ]);
+    // The 4-page class was carried over from an earlier audit.
+    for (const c of input.ruleResults["perf/cache-headers"]!.checks) {
+      if (c.name === "cache-headers-missing") c.provenance = "carried";
+    }
+    expect(capReportForPublish(input).rulePageCounts).toBeUndefined();
+  });
+
+  test("a rule with an input aggregate that was already sampled publishes no count", () => {
+    const input = rule([{ name: "cache-headers-missing", pages: range(600, 604) }]);
+    input.ruleResults["perf/cache-headers"]!.checks.push({
+      name: "cache-control",
+      status: "fail",
+      message: "cache-control fails",
+      pages: range(0, 100).map(pageUrl),
+      details: { aggregated: true, occurrences: 600, pagesTruncated: 600 },
+    });
+    expect(capReportForPublish(input).rulePageCounts).toBeUndefined();
+  });
+
   test("a count on the input is never trusted", () => {
     const input = {
       ...rule([{ name: "cache-control", pages: range(0, 30) }]),
@@ -1254,7 +1278,8 @@ describe("capReportForPublish: rule page counts (repo#2935)", () => {
     for (const [ruleId, count] of Object.entries(capped.rulePageCounts ?? {})) {
       const pages = new Set<string>();
       for (const c of input.ruleResults[ruleId]!.checks) {
-        if ((c.status === "fail" || c.status === "warn") && c.pageUrl && !removed.has(c.pageUrl)) {
+        const replayed = c.provenance === "carried" || c.provenance === "unrendered";
+        if ((c.status === "fail" || c.status === "warn") && c.pageUrl && !removed.has(c.pageUrl) && !replayed) {
           pages.add(c.pageUrl);
         }
       }
