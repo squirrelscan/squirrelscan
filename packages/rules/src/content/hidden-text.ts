@@ -205,15 +205,7 @@ const INTERACTIVE_ROLES = new Set([
 const INTERACTIVE_TAGS = new Set(["dialog", "details", "summary", "nav", "menu"]);
 
 /** Never walked into: not indexable content, or handled by other rules. */
-const SKIPPED_TAGS = new Set([
-  "script",
-  "style",
-  "noscript",
-  "template",
-  "iframe",
-  "svg",
-  "canvas",
-]);
+const SKIPPED_TAGS = new Set(["script", "style", "noscript", "template", "iframe", "svg", "canvas"]);
 
 /** Attribute prefixes used by toggle libraries (Bootstrap, Radix, Headless UI, Alpine). */
 const TOGGLE_ATTR_RE =
@@ -1168,10 +1160,7 @@ export const hiddenTextRule: Rule = {
     // one finding instead of one per descendant.
     const stack: Element[] = [...body.children].reverse() as Element[];
     const backdrops = new Map<Element, Rgba | null>();
-    backdrops.set(
-      body as Element,
-      pageBackdrop(doc.documentElement as Element, body as Element, index),
-    );
+    backdrops.set(body as Element, pageBackdrop(doc.documentElement as Element, body as Element, index));
 
     while (stack.length > 0) {
       const el = stack.pop() as Element;
@@ -1259,7 +1248,9 @@ export const hiddenTextRule: Rule = {
       // techniques apply and something below re-declares them, the payload
       // shrinks to this element's own text nodes — which is also why the
       // `.grid { font-size: 0 }` whitespace hack (no direct text) never reports.
-      const hidesSubtree = techniques.some((t) => t.kind !== "font-size" && t.kind !== "color")
+      const hidesSubtree = techniques.some(
+        (t) => t.kind !== "font-size" && t.kind !== "color",
+      )
         ? true
         : !techniques.some((t) => descendantDeclares(el, index, t.kind));
       const chars = hidesSubtree ? textLength(el) : directTextLength(el);

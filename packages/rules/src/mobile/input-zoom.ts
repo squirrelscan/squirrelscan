@@ -32,6 +32,8 @@ const DEFAULT_ROOT_PX = 16;
 const PT_TO_PX = 4 / 3;
 /** Fields judged per page; a page with more is checked on the first ones. */
 const MAX_FIELDS = 200;
+/** Fields checked for focusability per page, so a page of 100,000 inputs stays cheap. */
+const MAX_SCANNED_FIELDS = 2_000;
 /** Stylesheet text and rules read per page. */
 const MAX_STYLE_CHARS = 400_000;
 const MAX_STYLE_RULES = 4_000;
@@ -560,13 +562,18 @@ export const inputZoomRule: Rule = {
     const doc = ctx.parsed.document;
     if (!doc) return { checks: [] };
 
-    // The fields a visitor can focus, up to the cap; the rest are counted.
+    // The fields a visitor can focus, up to the cap; the focusable rest are
+    // counted as not read. Past the scan cap, fields are counted unchecked.
     const fields: Element[] = [];
     let overCap = 0;
+    let scanned = 0;
     for (const el of doc.querySelectorAll("input, select, textarea")) {
       if (!isTextEntry(el)) continue;
-      if (fields.length >= MAX_FIELDS) overCap++;
-      else if (canFocus(el)) fields.push(el);
+      scanned++;
+      const unchecked = scanned > MAX_SCANNED_FIELDS;
+      if (!unchecked && !canFocus(el)) continue;
+      if (unchecked || fields.length >= MAX_FIELDS) overCap++;
+      else fields.push(el);
     }
     // A page with no text field has nothing to zoom into.
     if (fields.length === 0) return { checks: [] };

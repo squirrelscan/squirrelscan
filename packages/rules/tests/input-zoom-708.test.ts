@@ -208,6 +208,26 @@ describe("mobile/input-zoom (#708)", () => {
     ]);
   });
 
+  test("past 200 fields the focusable rest are counted as not read, the unfocusable ones not at all", () => {
+    const fields = Array.from(
+      { length: 205 },
+      (_, i) => `<input name="f${i}" style="font-size:16px">`,
+    ).join("");
+    const disabled = Array.from({ length: 10 }, (_, i) => `<input disabled name="d${i}">`).join("");
+    const check = only(run("", fields + disabled));
+    expect(check.status).toBe("info");
+    expect(check.details).toMatchObject({ fields: 205, under16px: 0, notRead: 5 });
+  });
+
+  test('a <style media="screen"> or "all" block applies like a plain one', () => {
+    for (const media of ["screen", "all"]) {
+      const check = only(
+        run(`<style media="${media}">input { font-size: 14px }</style>`, "<input>"),
+      );
+      expect([media, check.status]).toEqual([media, "warn"]);
+    }
+  });
+
   test("a stylesheet preloaded and switched on by script counts as external CSS", () => {
     const check = only(
       run(
