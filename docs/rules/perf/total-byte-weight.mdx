@@ -11,7 +11,7 @@ Images are usually the largest share and the easiest to cut, through a modern fo
 
 ## What squirrel checks
 
-The rule scores each crawled page on its own weight and reports the heaviest one. A page's weight is its HTML document, which already holds its inline CSS and JavaScript, plus the external CSS, script, image and font files it loads. The 1,600 KB and 5,000 KB thresholds describe one page load, so nothing is summed across the site and the result does not depend on how many pages were crawled.
+The rule scores each crawled page on its own weight and reports the heaviest one. A page's weight is its HTML document, which already holds its inline CSS and JavaScript, plus the external CSS, script, image and font files it loads. The 1,600 KB and 5,000 KB thresholds describe one page load, so the score sums nothing across the site and the result does not depend on how many pages were crawled. The site figures below are information only.
 
 A resource shared by several pages counts toward every page that loads it, and counts once within a page, by URL. The rule emits one check named `total-byte-weight`, scored on the heaviest page:
 
@@ -24,6 +24,15 @@ The message names the heaviest page and its weight, and how many pages are over 
 When the crawl produced no resource-size record and no script record at all, the rule estimates the first page instead, at 30 KB per stylesheet, 50 KB per script and 100 KB per image. An empty record still counts as present, so a crawl that collected the containers but measured nothing reports each page by its HTML only. In that case the message opens `Estimated heaviest page:` and the details record that it is an estimate.
 
 The details carry the heaviest page's URL and weight, the number of pages analyzed, the number over each threshold, and that page's breakdown: the HTML total, inline code included, and the external CSS, JavaScript, image and font totals. A bucket with nothing in it is left out.
+
+### Site total and average page weight
+
+Two site figures show how heavy the site is overall and how a change moves the whole site, which the heaviest page alone does not. They are information only: neither changes whether the check passes, warns or fails.
+
+- **Site total** (`siteTotalKb`): every scored page's HTML, plus each external resource those pages load, counted once however many pages share it.
+- **Average page** (`pageAverageKb`): the mean of the per-page weights the score uses, so a shared stylesheet counts toward every page that loads it.
+
+Both are in KB and appear in the details and at the end of the message, after any `(heavy page)` or `(very heavy)`: `Heaviest page: https://example.com/gallery 2010KB (1 over 1600KB, 0 over 5000KB) (heavy page). Not scored: site total 2020KB across 2 pages, shared files counted once; average page 1010KB`. A resource that could not be sized adds nothing to either. When the rule falls back to the estimate, it reports neither.
 
 ### Size basis
 

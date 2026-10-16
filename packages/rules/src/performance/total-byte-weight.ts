@@ -125,8 +125,10 @@ export const totalByteWeightRule: Rule = {
 
     // Attribute each external resource to the pages that load it. A resource
     // shared by several pages counts toward each of them; keying by URL within a
-    // page counts it once per page.
+    // page counts it once per page. `siteResources` keeps each sized resource
+    // once, for the site total (#568).
     const unsized = new Set<string>();
+    const siteResources = new Map<string, number>();
     const attribute = (
       kind: "css" | "js" | "images" | "fonts",
       list:
@@ -153,6 +155,7 @@ export const totalByteWeightRule: Rule = {
             bucket.set(res.url, 0);
           } else {
             bucket.set(res.url, size);
+            siteResources.set(res.url, size);
           }
         }
       }
@@ -239,6 +242,25 @@ export const totalByteWeightRule: Rule = {
     if (isEstimate) details.estimated = true;
     if (unsized.size > 0) details.unsizedResources = unsized.size;
 
+    // Site figures, for information only (#568): they never change the
+    // verdict, which is the heaviest page's. The total counts each page's HTML
+    // and each shared resource once; the average is the mean page weight. An
+    // estimate has nothing measured to add up, so it reports neither.
+    let siteNote = "";
+    if (!isEstimate && scored.length > 0) {
+      let siteBytes = 0;
+      for (const page of scored) siteBytes += page.parts.html;
+      for (const size of siteResources.values()) siteBytes += size;
+      const averageKb =
+        scored.reduce((sum, page) => sum + page.kb, 0) / scored.length;
+      details.siteTotalKb = `${(siteBytes / 1024).toFixed(0)}KB`;
+      details.pageAverageKb = `${averageKb.toFixed(0)}KB`;
+      const pageCount = `${scored.length} page${scored.length === 1 ? "" : "s"}`;
+      siteNote =
+        `. Not scored: site total ${details.siteTotalKb} across ${pageCount}, ` +
+        `shared files counted once; average page ${details.pageAverageKb}`;
+    }
+
     const label = isEstimate ? "Estimated heaviest page" : "Heaviest page";
     const where = heaviest
       ? `${heaviest.rec.url} ${heaviestKb.toFixed(0)}KB`
@@ -255,7 +277,7 @@ export const totalByteWeightRule: Rule = {
       checks.push({
         name: "total-byte-weight",
         status: "pass",
-        message,
+        message: `${message}${siteNote}`,
         value,
         expected: `< ${opts.warn_threshold_kb}KB`,
         details,
@@ -264,7 +286,7 @@ export const totalByteWeightRule: Rule = {
       checks.push({
         name: "total-byte-weight",
         status: "warn",
-        message: `${message} (heavy page)`,
+        message: `${message} (heavy page)${siteNote}`,
         value,
         expected: `< ${opts.warn_threshold_kb}KB`,
         details,
@@ -273,7 +295,7 @@ export const totalByteWeightRule: Rule = {
       checks.push({
         name: "total-byte-weight",
         status: "fail",
-        message: `${message} (very heavy)`,
+        message: `${message} (very heavy)${siteNote}`,
         value,
         expected: `< ${opts.error_threshold_kb}KB`,
         details,
