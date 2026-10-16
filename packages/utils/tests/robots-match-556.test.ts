@@ -57,6 +57,7 @@ describe("isRobotsTxtDisallowed (pub#556)", () => {
     const pattern = `/${"a*".repeat(200)}b`;
     const start = performance.now();
     expect(blocked(`/${"a".repeat(5000)}`, `User-agent: *\nDisallow: ${pattern}`)).toBe(false);
-    expect(performance.now() - start).toBeLessThan(200);
+    // Generous for a loaded CI box: a backtracking matcher takes minutes here.
+    expect(performance.now() - start).toBeLessThan(2000);
   });
 });

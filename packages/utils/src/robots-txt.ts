@@ -6,7 +6,6 @@ import type { RobotsTxtData, RobotsRule } from "@squirrelscan/core-contracts";
 
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 
-
 /**
  * Check if a URL is disallowed by robots.txt rules, the way Google reads them
  * (pub#556), so every rule that asks "is this page blocked" gets one answer:
