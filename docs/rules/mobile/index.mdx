@@ -11,6 +11,9 @@ Mobile rules check whether a page works on a phone: the viewport tag that decide
   <Card title="Font size under 12px: text too small to read on a phone" icon="triangle-exclamation" href="/rules/mobile/font-size">
     Body text below about 16px is hard to read on a phone without zooming. squirrel checks inline styles for sizes under 12px.
   </Card>
+  <Card title="Form fields under 16px: why iOS Safari zooms in when one is focused" icon="triangle-exclamation" href="/rules/mobile/input-zoom">
+    A text field under 16px makes an iPhone zoom the page in when it is focused. squirrel reads field sizes from inline styles and style blocks.
+  </Card>
   <Card title="Horizontal scroll on mobile: the usual causes" icon="triangle-exclamation" href="/rules/mobile/horizontal-scroll">
     A page a phone can scroll sideways is a page that does not fit. squirrel looks for fixed widths, tables and fixed-width iframes.
   </Card>

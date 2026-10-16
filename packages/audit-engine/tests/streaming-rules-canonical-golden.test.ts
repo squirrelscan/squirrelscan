@@ -35,302 +35,297 @@ afterAll(() => {
 });
 
 describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
-  test(
-    "v2 streaming snapshot is byte-identical to the v1 baseline (zero divergences)",
-    async () => {
-      const model = buildGoldenBaselineModel();
-      const dbPath = join(tmpDir, "canonical.sqlite");
-      const { storage } = await writeCrawlToStorage(model, dbPath);
-      await run(storage.close()); // each capture opens its own fresh connection
+  test("v2 streaming snapshot is byte-identical to the v1 baseline (zero divergences)", async () => {
+    const model = buildGoldenBaselineModel();
+    const dbPath = join(tmpDir, "canonical.sqlite");
+    const { storage } = await writeCrawlToStorage(model, dbPath);
+    await run(storage.close()); // each capture opens its own fresh connection
 
-      const config = getGoldenBaselineConfig();
-      const v1 = await captureEngineBaseline(dbPath, config);
-      const v2 = await captureStreamingBaseline(dbPath, config);
+    const config = getGoldenBaselineConfig();
+    const v1 = await captureEngineBaseline(dbPath, config);
+    const v2 = await captureStreamingBaseline(dbPath, config);
 
-      // The gate: readable, rule-grouped divergence report must be empty.
-      const diff = diffBaselines(v1, v2);
-      if (!diff.identical) {
-        // Surface the (capped) divergence report so a failure is actionable.
-        throw new Error(
-          `v1↔v2 divergence: ${diff.totalDivergences} total\n` +
-            diff.divergences.map((d) => `  [${d.kind}] ${d.ruleId}: ${d.detail}`).join("\n"),
-        );
-      }
-      expect(diff).toEqual({ identical: true, divergences: [], totalDivergences: 0 });
-      // Byte-identical serialization is the strongest form of the same claim.
-      expect(serializeBaseline(v2)).toBe(serializeBaseline(v1));
-
-      // Pinned canonical stats (v1 == v2) — proves the fixture is the real,
-      // rich, at-scale one, not a degenerate crawl. Exact pins double as a
-      // rule-surface drift tripwire (see golden-baseline.test.ts for the same fixture).
-      expect(v1.meta.pageCount).toBeGreaterThanOrEqual(GOLDEN_BASELINE_PAGE_COUNT);
-      // 48 -> 49 (#1353). Every earlier +500 landed on a category whose score was
-      // already far enough from a rounding boundary to absorb it; this one is not.
-      // content/dev-leakage passes on all 500 pages, which lifts the content
-      // category's pass ratio just past the point where the weighted overall
-      // rounds up. A MOVE here is only correct alongside a deliberate rule
-      // addition — if this number shifts on its own, a rule started failing.
-      // 49 -> 50 (pub#487): crawl/indexability-conflicts no longer warns on
-      // robots.txt Allow plus noindex, the supported way to deindex a page.
-      // 50 -> 51: security/token-storage passes on all 500 pages, which lifts the
-      // security score just past the point where the weighted overall rounds up,
-      // the same shape as 48 -> 49 above. main alone is 50 (verified with the rule
-      // removed), so the move comes from this deliberate rule addition.
-      expect(v1.healthScore.overall).toBe(51);
-      // 97711 -> 98211: content/hidden-text emits one page check across the 500
-      // fixture pages that have a document, and passes on every one of them. The
-      // overall score is unmoved.
-      // 98211 -> 98212: content/thin-vs-site-norm is site-scoped, so it adds
-      // exactly ONE check for the whole crawl (#1362).
-      // 98212 -> 98213: schema/coverage-outlier, likewise site-scoped, adds its
-      // own single whole-crawl check (#1363).
-      // 98213 -> 98214: url/slug-convention, likewise site-scoped, adds its own
-      // single whole-crawl check (#1365).
-      // 98214 -> 98215: core/canonical-form-drift, likewise site-scoped, adds its
-      // own single whole-crawl check (#1366).
-      // 98215 -> 98216: content/title-pattern-outlier, likewise site-scoped, adds
-      // its own single whole-crawl check (#1361).
-      // Unmoved by schema/rating-scope (#106): it is page-scoped but speaks ONLY
-      // when a page carries an AggregateRating, and the fixture emits no JSON-LD
-      // at all — so it contributes a tally key below without a single finding.
-      // 98216 -> 98217: crawl/sitemap-lastmod-churn, likewise site-scoped, adds
-      // its own single whole-crawl check (#105).
-      // 98217 -> 98218: crawl/sitemap-lastmod-drift, likewise site-scoped, adds
-      // its own single whole-crawl check (#107).
-      // Unmoved by content/date-agreement (#108): like schema/rating-scope it is
-      // page-scoped but speaks ONLY when a page carries a date on a
-      // document-describing schema node, and the fixture emits no JSON-LD at all —
-      // so it contributes a tally key below without a single finding.
-      // 98218 -> 98219: links/no-contextual-inbound, likewise site-scoped, adds
-      // its own single whole-crawl check (#109). It PASSES on this fixture: the
-      // only chrome link the renderer emits is the header nav's link to `/`, and
-      // the homepage is exempt, so every other page's contextual count equals its
-      // raw count.
-      // 98219 -> 98220: social/asset-divergence, likewise site-scoped, adds its
-      // own single whole-crawl check (#1371). healthScore.overall is UNMOVED at
-      // 48: one weight-3 warning check in a 5-rule category cannot dominate it.
-      // 98220 -> 98221: perf/asset-compression, likewise site-scoped, adds its
-      // own single whole-crawl check (#9). That check is `skipped` here — the
-      // harness supplies empty resourceSizes/scripts pools, so the rule has no
-      // sub-resource to judge — which is why the pass/warn/fail tallies and
-      // healthScore.overall (48) are all UNMOVED and only the raw count shifts.
-      // 98221 -> 98721: content/placeholder-text is page-scoped and always
-      // speaks, so like content/hidden-text it emits one check across the 500
-      // fixture pages that have a document (#1350). All 500 PASS, which is why
-      // healthScore.overall is still 48: the synthetic site writes real copy.
-      // 98721 -> 99221: content/unrendered-markup (#1352) is the same shape and
-      // adds the same 500 — one check on each page with a document, the other
-      // 18 having none. All 500 pass too: the fixture's copy carries no literal
-      // markdown, so healthScore.overall was still 48 at that point.
-      // 99221 -> 99721: content/dev-leakage (#1353) is the same shape again and
-      // adds the same 500. All 500 pass: the fixture's origin is
-      // `http://synthetic.example.com`, which is neither a dev host nor HTTPS, so
-      // neither the host families nor the http-self-link kind can fire.
-      // 99721 -> 99734: the thirteen schema/entity-* rules (#2093), site-scoped,
-      // each adding exactly one whole-crawl check. +13 and not one more is the
-      // property worth reading here: it proves every one of them emits a single
-      // capped finding rather than a finding per entity, which is what stops any
-      // of them dominating the schema category score. The harness supplies no
-      // entity map, so all thirteen are `skipped` — which is also why the
-      // pass/warn/fail tallies and healthScore.overall (48) are UNMOVED.
-      // 99734 -> 100234: content/placeholder-contact (#1356) is page-scoped and
-      // always speaks, the same shape as content/placeholder-text, so it adds one
-      // check on each of the 500 pages with a document. All 500 pass: the synthetic
-      // site's contact details are real-looking, so healthScore.overall is UNMOVED.
-      // 100234 -> 100734: content/placeholder-media is page-scoped and always
-      // speaks, so it adds one check on each of the 500 pages with a document
-      // (the other 18 have none).
-      // 100734 -> 101234: security/csp-blocks-own-resources is page-scoped and
-      // always speaks, so it adds one check on each of the 500 pages with a
-      // document. All 500 pass: the synthetic site serves no CSP header, and a
-      // page with no enforced policy passes (security/csp owns a missing one).
-      // 101234 -> 101734: security/token-storage is page-scoped and always speaks,
-      // so it adds one check on each of the 500 pages with a document. All 500
-      // pass: the synthetic site writes nothing to web storage.
-      // 101734 -> 101736: security/graphql-introspection and
-      // security/graphql-get-mutations are site-scoped probing rules. This gate
-      // runs with no probe budget (passive), so each adds one skipped check and
-      // sends nothing. The overall score is unmoved.
-      // 101736 -> 101737: reliability/broken-resources is site-scoped and adds
-      // one whole-crawl check (#703). It is info: the harness's empty assets
-      // carry no fonts or third-party lists, so the rule reports those kinds as
-      // not measured. healthScore.overall is unmoved at 51.
-      // 101737 -> 101738: links/broken-anchors is site-scoped and adds one
-      // whole-crawl check (#706). It passes: no anchor link on the synthetic
-      // site names a missing id, so healthScore.overall is unmoved at 51.
-      // 101738 -> 101740: security/security-txt and security/version-disclosure
-      // are site-scoped and each add one whole-crawl check (#713). security-txt is
-      // info (not checked): the harness sends no discovery probes. version-disclosure
-      // is skipped: the synthetic page records carry no X-Powered-By field, which
-      // is how a crawl stored before the rule reads. Neither scores, so
-      // healthScore.overall is unmoved at 51.
-      // 101740 -> 101741: mobile/web-app-manifest is site-scoped and adds one
-      // whole-crawl check (#710). It is info (not checked): the harness's empty
-      // assets carry no manifest data. healthScore.overall is unmoved at 51.
-      // 101741 -> 101742: reliability/broken-forms is site-scoped and adds one
-      // whole-crawl check (#707). It is the info "No forms detected": the
-      // synthetic pages carry no form, so healthScore.overall is unmoved at 51.
-      // 101742 -> 101743: content/common-misspellings is site-scoped and adds one
-      // whole-crawl check (#709). It passes: the synthetic copy has no listed
-      // misspelling or doubled word, so healthScore.overall is unmoved at 51.
-      expect(v1.findings.length).toBe(101743);
-      // Tripwire: EXTENDING a rule must never add a tally key, so a change here
-      // is only correct alongside a deliberate new rule id. 266 -> 267 is
-      // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
-      // schema/coverage-outlier, 269 -> 270 url/slug-convention, 270 -> 271
-      // core/canonical-form-drift, 271 -> 272 content/title-pattern-outlier,
-      // 272 -> 273 schema/rating-scope, 273 -> 274 crawl/sitemap-lastmod-churn,
-      // 274 -> 275 crawl/sitemap-lastmod-drift, 275 -> 276
-      // content/date-agreement, 276 -> 277 links/no-contextual-inbound,
-      // 277 -> 278 social/asset-divergence, 278 -> 279 perf/asset-compression,
-      // 279 -> 280 content/placeholder-text, 280 -> 281
-      // content/unrendered-markup, 281 -> 282 content/dev-leakage, 282 -> 295
-      // the thirteen schema/entity-* rules (#2093: entity-identity,
-      // entity-split-identity, entity-dangling, entity-conflicts,
-      // entity-id-format, entity-type-drift, entity-authors,
-      // entity-publisher-mismatch, entity-local-business-per-page,
-      // entity-website-missing, entity-organization-missing,
-      // entity-sameas-missing, entity-orphan), 295 -> 296
-      // content/placeholder-contact, 296 -> 297 content/placeholder-media, 297 -> 298
-      // security/csp-blocks-own-resources, 298 -> 299 security/token-storage,
-      // 299 -> 301 security/graphql-introspection and security/graphql-get-mutations,
-      // 301 -> 302 reliability/broken-resources, 302 -> 303 links/broken-anchors,
-      // 303 -> 305 security/security-txt and security/version-disclosure,
-      // 305 -> 306 mobile/web-app-manifest,
-      // 306 -> 307 reliability/broken-forms,
-      // 307 -> 308 content/common-misspellings;
-      // anything else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(308);
-      expect(v1.perRuleTally.find((t) => t.ruleId === "reliability/broken-forms")).toEqual({
-        ruleId: "reliability/broken-forms",
-        pass: 0,
-        warn: 0,
-        fail: 0,
-        info: 1,
-        skipped: 0,
-        total: 1,
-      });
-      expect(v1.perRuleTally.find((t) => t.ruleId === "mobile/web-app-manifest")).toEqual({
-        ruleId: "mobile/web-app-manifest",
-        pass: 0,
-        warn: 0,
-        fail: 0,
-        info: 1,
-        skipped: 0,
-        total: 1,
-      });
-      expect(v1.perRuleTally.find((t) => t.ruleId === "content/common-misspellings")).toEqual({
-        ruleId: "content/common-misspellings",
-        pass: 1,
-        warn: 0,
-        fail: 0,
-        info: 0,
-        skipped: 0,
-        total: 1,
-      });
-      expect(v1.perRuleTally.find((t) => t.ruleId === "links/broken-anchors")).toEqual({
-        ruleId: "links/broken-anchors",
-        pass: 1,
-        warn: 0,
-        fail: 0,
-        info: 0,
-        skipped: 0,
-        total: 1,
-      });
-      expect(v1.perRuleTally.find((t) => t.ruleId === "reliability/broken-resources")).toEqual({
-        ruleId: "reliability/broken-resources",
-        pass: 0,
-        warn: 0,
-        fail: 0,
-        info: 1,
-        skipped: 0,
-        total: 1,
-      });
-      for (const [ruleId, outcome] of [
-        ["security/security-txt", "info"],
-        ["security/version-disclosure", "skipped"],
-      ] as const) {
-        expect(v1.perRuleTally.find((t) => t.ruleId === ruleId)).toEqual({
-          ruleId,
-          pass: 0,
-          warn: 0,
-          fail: 0,
-          info: 0,
-          skipped: 0,
-          [outcome]: 1,
-          total: 1,
-        });
-      }
-      // Passive: both GraphQL probing rules skip without sending a request.
-      for (const ruleId of ["security/graphql-introspection", "security/graphql-get-mutations"]) {
-        expect(v1.perRuleTally.find((t) => t.ruleId === ruleId)).toEqual({
-          ruleId,
-          pass: 0,
-          warn: 0,
-          fail: 0,
-          info: 0,
-          skipped: 1,
-          total: 1,
-        });
-      }
-      const cspBlocks = v1.perRuleTally.find(
-        (t) => t.ruleId === "security/csp-blocks-own-resources",
+    // The gate: readable, rule-grouped divergence report must be empty.
+    const diff = diffBaselines(v1, v2);
+    if (!diff.identical) {
+      // Surface the (capped) divergence report so a failure is actionable.
+      throw new Error(
+        `v1↔v2 divergence: ${diff.totalDivergences} total\n` +
+          diff.divergences.map((d) => `  [${d.kind}] ${d.ruleId}: ${d.detail}`).join("\n"),
       );
-      expect(cspBlocks).toEqual({
-        ruleId: "security/csp-blocks-own-resources",
-        pass: 500,
+    }
+    expect(diff).toEqual({ identical: true, divergences: [], totalDivergences: 0 });
+    // Byte-identical serialization is the strongest form of the same claim.
+    expect(serializeBaseline(v2)).toBe(serializeBaseline(v1));
+
+    // Pinned canonical stats (v1 == v2) — proves the fixture is the real,
+    // rich, at-scale one, not a degenerate crawl. Exact pins double as a
+    // rule-surface drift tripwire (see golden-baseline.test.ts for the same fixture).
+    expect(v1.meta.pageCount).toBeGreaterThanOrEqual(GOLDEN_BASELINE_PAGE_COUNT);
+    // 48 -> 49 (#1353). Every earlier +500 landed on a category whose score was
+    // already far enough from a rounding boundary to absorb it; this one is not.
+    // content/dev-leakage passes on all 500 pages, which lifts the content
+    // category's pass ratio just past the point where the weighted overall
+    // rounds up. A MOVE here is only correct alongside a deliberate rule
+    // addition — if this number shifts on its own, a rule started failing.
+    // 49 -> 50 (pub#487): crawl/indexability-conflicts no longer warns on
+    // robots.txt Allow plus noindex, the supported way to deindex a page.
+    // 50 -> 51: security/token-storage passes on all 500 pages, which lifts the
+    // security score just past the point where the weighted overall rounds up,
+    // the same shape as 48 -> 49 above. main alone is 50 (verified with the rule
+    // removed), so the move comes from this deliberate rule addition.
+    expect(v1.healthScore.overall).toBe(51);
+    // 97711 -> 98211: content/hidden-text emits one page check across the 500
+    // fixture pages that have a document, and passes on every one of them. The
+    // overall score is unmoved.
+    // 98211 -> 98212: content/thin-vs-site-norm is site-scoped, so it adds
+    // exactly ONE check for the whole crawl (#1362).
+    // 98212 -> 98213: schema/coverage-outlier, likewise site-scoped, adds its
+    // own single whole-crawl check (#1363).
+    // 98213 -> 98214: url/slug-convention, likewise site-scoped, adds its own
+    // single whole-crawl check (#1365).
+    // 98214 -> 98215: core/canonical-form-drift, likewise site-scoped, adds its
+    // own single whole-crawl check (#1366).
+    // 98215 -> 98216: content/title-pattern-outlier, likewise site-scoped, adds
+    // its own single whole-crawl check (#1361).
+    // Unmoved by schema/rating-scope (#106): it is page-scoped but speaks ONLY
+    // when a page carries an AggregateRating, and the fixture emits no JSON-LD
+    // at all — so it contributes a tally key below without a single finding.
+    // 98216 -> 98217: crawl/sitemap-lastmod-churn, likewise site-scoped, adds
+    // its own single whole-crawl check (#105).
+    // 98217 -> 98218: crawl/sitemap-lastmod-drift, likewise site-scoped, adds
+    // its own single whole-crawl check (#107).
+    // Unmoved by content/date-agreement (#108): like schema/rating-scope it is
+    // page-scoped but speaks ONLY when a page carries a date on a
+    // document-describing schema node, and the fixture emits no JSON-LD at all —
+    // so it contributes a tally key below without a single finding.
+    // 98218 -> 98219: links/no-contextual-inbound, likewise site-scoped, adds
+    // its own single whole-crawl check (#109). It PASSES on this fixture: the
+    // only chrome link the renderer emits is the header nav's link to `/`, and
+    // the homepage is exempt, so every other page's contextual count equals its
+    // raw count.
+    // 98219 -> 98220: social/asset-divergence, likewise site-scoped, adds its
+    // own single whole-crawl check (#1371). healthScore.overall is UNMOVED at
+    // 48: one weight-3 warning check in a 5-rule category cannot dominate it.
+    // 98220 -> 98221: perf/asset-compression, likewise site-scoped, adds its
+    // own single whole-crawl check (#9). That check is `skipped` here — the
+    // harness supplies empty resourceSizes/scripts pools, so the rule has no
+    // sub-resource to judge — which is why the pass/warn/fail tallies and
+    // healthScore.overall (48) are all UNMOVED and only the raw count shifts.
+    // 98221 -> 98721: content/placeholder-text is page-scoped and always
+    // speaks, so like content/hidden-text it emits one check across the 500
+    // fixture pages that have a document (#1350). All 500 PASS, which is why
+    // healthScore.overall is still 48: the synthetic site writes real copy.
+    // 98721 -> 99221: content/unrendered-markup (#1352) is the same shape and
+    // adds the same 500 — one check on each page with a document, the other
+    // 18 having none. All 500 pass too: the fixture's copy carries no literal
+    // markdown, so healthScore.overall was still 48 at that point.
+    // 99221 -> 99721: content/dev-leakage (#1353) is the same shape again and
+    // adds the same 500. All 500 pass: the fixture's origin is
+    // `http://synthetic.example.com`, which is neither a dev host nor HTTPS, so
+    // neither the host families nor the http-self-link kind can fire.
+    // 99721 -> 99734: the thirteen schema/entity-* rules (#2093), site-scoped,
+    // each adding exactly one whole-crawl check. +13 and not one more is the
+    // property worth reading here: it proves every one of them emits a single
+    // capped finding rather than a finding per entity, which is what stops any
+    // of them dominating the schema category score. The harness supplies no
+    // entity map, so all thirteen are `skipped` — which is also why the
+    // pass/warn/fail tallies and healthScore.overall (48) are UNMOVED.
+    // 99734 -> 100234: content/placeholder-contact (#1356) is page-scoped and
+    // always speaks, the same shape as content/placeholder-text, so it adds one
+    // check on each of the 500 pages with a document. All 500 pass: the synthetic
+    // site's contact details are real-looking, so healthScore.overall is UNMOVED.
+    // 100234 -> 100734: content/placeholder-media is page-scoped and always
+    // speaks, so it adds one check on each of the 500 pages with a document
+    // (the other 18 have none).
+    // 100734 -> 101234: security/csp-blocks-own-resources is page-scoped and
+    // always speaks, so it adds one check on each of the 500 pages with a
+    // document. All 500 pass: the synthetic site serves no CSP header, and a
+    // page with no enforced policy passes (security/csp owns a missing one).
+    // 101234 -> 101734: security/token-storage is page-scoped and always speaks,
+    // so it adds one check on each of the 500 pages with a document. All 500
+    // pass: the synthetic site writes nothing to web storage.
+    // 101734 -> 101736: security/graphql-introspection and
+    // security/graphql-get-mutations are site-scoped probing rules. This gate
+    // runs with no probe budget (passive), so each adds one skipped check and
+    // sends nothing. The overall score is unmoved.
+    // 101736 -> 101737: reliability/broken-resources is site-scoped and adds
+    // one whole-crawl check (#703). It is info: the harness's empty assets
+    // carry no fonts or third-party lists, so the rule reports those kinds as
+    // not measured. healthScore.overall is unmoved at 51.
+    // 101737 -> 101738: links/broken-anchors is site-scoped and adds one
+    // whole-crawl check (#706). It passes: no anchor link on the synthetic
+    // site names a missing id, so healthScore.overall is unmoved at 51.
+    // 101738 -> 101740: security/security-txt and security/version-disclosure
+    // are site-scoped and each add one whole-crawl check (#713). security-txt is
+    // info (not checked): the harness sends no discovery probes. version-disclosure
+    // is skipped: the synthetic page records carry no X-Powered-By field, which
+    // is how a crawl stored before the rule reads. Neither scores, so
+    // healthScore.overall is unmoved at 51.
+    // 101740 -> 101741: mobile/web-app-manifest is site-scoped and adds one
+    // whole-crawl check (#710). It is info (not checked): the harness's empty
+    // assets carry no manifest data. healthScore.overall is unmoved at 51.
+    // 101741 -> 101742: reliability/broken-forms is site-scoped and adds one
+    // whole-crawl check (#707). It is the info "No forms detected": the
+    // synthetic pages carry no form, so healthScore.overall is unmoved at 51.
+    // 101742 -> 101743: content/common-misspellings is site-scoped and adds one
+    // whole-crawl check (#709). It passes: the synthetic copy has no listed
+    // misspelling or doubled word, so healthScore.overall is unmoved at 51.
+    expect(v1.findings.length).toBe(101743);
+    // Tripwire: EXTENDING a rule must never add a tally key, so a change here
+    // is only correct alongside a deliberate new rule id. 266 -> 267 is
+    // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
+    // schema/coverage-outlier, 269 -> 270 url/slug-convention, 270 -> 271
+    // core/canonical-form-drift, 271 -> 272 content/title-pattern-outlier,
+    // 272 -> 273 schema/rating-scope, 273 -> 274 crawl/sitemap-lastmod-churn,
+    // 274 -> 275 crawl/sitemap-lastmod-drift, 275 -> 276
+    // content/date-agreement, 276 -> 277 links/no-contextual-inbound,
+    // 277 -> 278 social/asset-divergence, 278 -> 279 perf/asset-compression,
+    // 279 -> 280 content/placeholder-text, 280 -> 281
+    // content/unrendered-markup, 281 -> 282 content/dev-leakage, 282 -> 295
+    // the thirteen schema/entity-* rules (#2093: entity-identity,
+    // entity-split-identity, entity-dangling, entity-conflicts,
+    // entity-id-format, entity-type-drift, entity-authors,
+    // entity-publisher-mismatch, entity-local-business-per-page,
+    // entity-website-missing, entity-organization-missing,
+    // entity-sameas-missing, entity-orphan), 295 -> 296
+    // content/placeholder-contact, 296 -> 297 content/placeholder-media, 297 -> 298
+    // security/csp-blocks-own-resources, 298 -> 299 security/token-storage,
+    // 299 -> 301 security/graphql-introspection and security/graphql-get-mutations,
+    // 301 -> 302 reliability/broken-resources, 302 -> 303 links/broken-anchors,
+    // 303 -> 305 security/security-txt and security/version-disclosure,
+    // 305 -> 306 mobile/web-app-manifest,
+    // 306 -> 307 reliability/broken-forms,
+    // 307 -> 308 content/common-misspellings,
+    // 308 -> 309 mobile/input-zoom;
+    // anything else means a rule id leaked in, so fix that rather than this number.
+    expect(v1.perRuleTally.length).toBe(309);
+    expect(v1.perRuleTally.find((t) => t.ruleId === "reliability/broken-forms")).toEqual({
+      ruleId: "reliability/broken-forms",
+      pass: 0,
+      warn: 0,
+      fail: 0,
+      info: 1,
+      skipped: 0,
+      total: 1,
+    });
+    expect(v1.perRuleTally.find((t) => t.ruleId === "mobile/web-app-manifest")).toEqual({
+      ruleId: "mobile/web-app-manifest",
+      pass: 0,
+      warn: 0,
+      fail: 0,
+      info: 1,
+      skipped: 0,
+      total: 1,
+    });
+    expect(v1.perRuleTally.find((t) => t.ruleId === "content/common-misspellings")).toEqual({
+      ruleId: "content/common-misspellings",
+      pass: 1,
+      warn: 0,
+      fail: 0,
+      info: 0,
+      skipped: 0,
+      total: 1,
+    });
+    expect(v1.perRuleTally.find((t) => t.ruleId === "links/broken-anchors")).toEqual({
+      ruleId: "links/broken-anchors",
+      pass: 1,
+      warn: 0,
+      fail: 0,
+      info: 0,
+      skipped: 0,
+      total: 1,
+    });
+    expect(v1.perRuleTally.find((t) => t.ruleId === "reliability/broken-resources")).toEqual({
+      ruleId: "reliability/broken-resources",
+      pass: 0,
+      warn: 0,
+      fail: 0,
+      info: 1,
+      skipped: 0,
+      total: 1,
+    });
+    for (const [ruleId, outcome] of [
+      ["security/security-txt", "info"],
+      ["security/version-disclosure", "skipped"],
+    ] as const) {
+      expect(v1.perRuleTally.find((t) => t.ruleId === ruleId)).toEqual({
+        ruleId,
+        pass: 0,
         warn: 0,
         fail: 0,
         info: 0,
         skipped: 0,
-        total: 500,
+        [outcome]: 1,
+        total: 1,
       });
-      // Each +500 above is only "all passes" if nothing warned. healthScore
-      // staying at 48 does not prove that — a handful of weight-5 warnings in a
-      // 20-rule category would not move it — so pin the tally directly.
-      const unrendered = v1.perRuleTally.find((t) => t.ruleId === "content/unrendered-markup");
-      expect(unrendered).toEqual({
-        ruleId: "content/unrendered-markup",
-        pass: 500,
+    }
+    // Passive: both GraphQL probing rules skip without sending a request.
+    for (const ruleId of ["security/graphql-introspection", "security/graphql-get-mutations"]) {
+      expect(v1.perRuleTally.find((t) => t.ruleId === ruleId)).toEqual({
+        ruleId,
+        pass: 0,
         warn: 0,
         fail: 0,
         info: 0,
-        skipped: 0,
-        total: 500,
+        skipped: 1,
+        total: 1,
       });
-      const placeholderContact = v1.perRuleTally.find(
-        (t) => t.ruleId === "content/placeholder-contact",
-      );
-      expect(placeholderContact).toEqual({
-        ruleId: "content/placeholder-contact",
-        pass: 500,
-        warn: 0,
-        fail: 0,
-        info: 0,
-        skipped: 0,
-        total: 500,
-      });
-      const tokenStorage = v1.perRuleTally.find((t) => t.ruleId === "security/token-storage");
-      expect(tokenStorage).toEqual({
-        ruleId: "security/token-storage",
-        pass: 500,
-        warn: 0,
-        fail: 0,
-        info: 0,
-        skipped: 0,
-        total: 500,
-      });
-      const devLeakage = v1.perRuleTally.find((t) => t.ruleId === "content/dev-leakage");
-      expect(devLeakage).toEqual({
-        ruleId: "content/dev-leakage",
-        pass: 500,
-        warn: 0,
-        fail: 0,
-        info: 0,
-        skipped: 0,
-        total: 500,
-      });
-    },
-    180_000,
-  );
+    }
+    const cspBlocks = v1.perRuleTally.find((t) => t.ruleId === "security/csp-blocks-own-resources");
+    expect(cspBlocks).toEqual({
+      ruleId: "security/csp-blocks-own-resources",
+      pass: 500,
+      warn: 0,
+      fail: 0,
+      info: 0,
+      skipped: 0,
+      total: 500,
+    });
+    // Each +500 above is only "all passes" if nothing warned. healthScore
+    // staying at 48 does not prove that — a handful of weight-5 warnings in a
+    // 20-rule category would not move it — so pin the tally directly.
+    const unrendered = v1.perRuleTally.find((t) => t.ruleId === "content/unrendered-markup");
+    expect(unrendered).toEqual({
+      ruleId: "content/unrendered-markup",
+      pass: 500,
+      warn: 0,
+      fail: 0,
+      info: 0,
+      skipped: 0,
+      total: 500,
+    });
+    const placeholderContact = v1.perRuleTally.find(
+      (t) => t.ruleId === "content/placeholder-contact",
+    );
+    expect(placeholderContact).toEqual({
+      ruleId: "content/placeholder-contact",
+      pass: 500,
+      warn: 0,
+      fail: 0,
+      info: 0,
+      skipped: 0,
+      total: 500,
+    });
+    const tokenStorage = v1.perRuleTally.find((t) => t.ruleId === "security/token-storage");
+    expect(tokenStorage).toEqual({
+      ruleId: "security/token-storage",
+      pass: 500,
+      warn: 0,
+      fail: 0,
+      info: 0,
+      skipped: 0,
+      total: 500,
+    });
+    const devLeakage = v1.perRuleTally.find((t) => t.ruleId === "content/dev-leakage");
+    expect(devLeakage).toEqual({
+      ruleId: "content/dev-leakage",
+      pass: 500,
+      warn: 0,
+      fail: 0,
+      info: 0,
+      skipped: 0,
+      total: 500,
+    });
+  }, 180_000);
 });

@@ -19,6 +19,7 @@ How it works:
 
 ### Added
 
+- New rule `mobile/input-zoom`: a text field, select or textarea under 16px makes iOS Safari zoom the page in when it is focused. The rule reads field sizes from inline styles and `<style>` blocks, lists each small field with its size and where it came from (an unstyled field on a page with no external stylesheet gets iOS's own 11px), and counts a field it cannot read plainly (an external stylesheet, a media query, conflicting rules, a relative unit) as not read rather than guessing. A page that blocks zoom in its viewport tag to hide the problem still gets the warning. See [mobile/input-zoom](https://docs.squirrelscan.com/rules/mobile/input-zoom).
 - `crawl/sitemap-valid` reports `<lastmod>` values outside the W3C Datetime format the sitemap protocol requires, such as `2024/09/10`, `2024-9` or `Tue, 10 Sep 2024 12:00:00 GMT` (`sitemap-lastmod-format`), with a sample of URLs and values. A datetime with no zone (`2024-09-10T12:00:00`) is named as missing its zone (`sitemap-lastmod-zone`). A search engine may ignore a lastmod it cannot read. See [crawl/sitemap-valid](https://docs.squirrelscan.com/rules/crawl/sitemap-valid).
 - `[rules] time_budget_ms` in `squirrel.toml` sets how long one rule may run on one page before it is abandoned (default 1000 ms; `0` turns the budget off; values below 1000 are refused for now). Raise it if rules time out on ordinary pages on a slow or busy machine, such as a shared CI runner. See [Rule time budget](https://docs.squirrelscan.com/rules#rule-time-budget).
 
