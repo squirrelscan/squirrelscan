@@ -33,6 +33,7 @@ Thanks to @WilliamK112, whose pull requests are behind the `content/hidden-text`
 - The npm package's postinstall download follows at most three redirects, refuses a redirect to anything but HTTPS, and resolves a relative `Location` against the URL that sent it.
 - A plan id that names an Object built-in, such as `constructor` or `__proto__`, now reads as the Free plan like any other unknown id, instead of picking up an inherited property.
 - `content/hidden-text` now applies a `<style>` rule that has a CSS comment before or inside its selector, such as a `/* Section */` comment between rules in a hand-written stylesheet. Comments are dropped from the selector, as a browser does, so text hidden by such a rule is reported. See [content/hidden-text](https://docs.squirrelscan.com/rules/content/hidden-text).
+- `security/csp-blocks-own-resources` no longer warns about a host whose URL appears only inside one of the page's scripts. SDKs ship fallback URLs that load only behind a feature flag, so the page may never request them. Such hosts are listed in an informational `csp-chunk-only-hosts` note. A host the page's HTML loads, or that a vendor it uses needs, is still a warning. See [security/csp-blocks-own-resources](https://docs.squirrelscan.com/rules/security/csp-blocks-own-resources).
 
 ## v0.0.117 (2026-10-17)
 

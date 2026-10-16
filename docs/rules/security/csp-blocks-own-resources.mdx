@@ -11,14 +11,14 @@ A Content-Security-Policy (CSP) lists the hosts a page may load scripts, frames,
 
 ## What squirrel checks
 
-The rule runs on every crawled page and reads that page's own policy, so a route with a different header is judged by its own header. It emits a single check named `csp-blocks-own-resources`:
+The rule runs on every crawled page and reads that page's own policy, so a route with a different header is judged by its own header. It emits a check named `csp-blocks-own-resources`, followed by an informational `csp-chunk-only-hosts` note when hosts were named only inside the page's scripts (see [Third-party scripts inside your own chunks](#third-party-scripts-inside-your-own-chunks)):
 
 - Pass when the page has no enforced policy. Message: `No enforced Content-Security-Policy to check (security/csp covers a missing policy)`. A missing CSP stays with [security/csp](/rules/security/csp), and a `Content-Security-Policy-Report-Only` header blocks nothing, so it is not checked.
 - Pass when every resource is allowed. Message: `The page's CSP allows the resources it references and the vendor hosts it uses`.
 - Fail when a blocked host belongs to a vendor category the table knows: analytics, ads, payments, captcha, form or booking.
 - Warn when the blocked hosts are all something else.
 
-The message names the directive and the hosts to add, for example `The page's CSP blocks 3 hosts it depends on (connect-src: add analytics.google.com, www.google.com, stats.g.doubleclick.net)`. Each blocked host is listed as an item with the directive, the host, and where it was found (`html`, `chunk` or `vendor`).
+The message names the directive and the hosts to add, for example `The page's CSP blocks 3 hosts it depends on (connect-src: add analytics.google.com, www.google.com, stats.g.doubleclick.net)`. Each blocked host is listed as an item with the directive, the host, and where it was found (`html` or `vendor`).
 
 Policies come from the `Content-Security-Policy` response header and from `<meta http-equiv="Content-Security-Policy">` tags. When a header carries several comma-separated policies, every one of them has to allow the resource.
 
@@ -39,7 +39,7 @@ A directive the policy does not set allows everything. Elements inside `<noscrip
 
 ### Third-party scripts inside your own chunks
 
-The audit fetches a page's preloaded chunks only when a crawled page enforces a CSP, at most 20 extra per audit, and no other rule reads them. A bundler's lazy chunk can name a third-party script that no HTML tag mentions. squirrel fetches the same-site scripts and the chunks a page preloads, and looks in each for a quoted `https://` URL ending in `.js` or `.mjs` with script-loading code beside it (`createElement("script")`, `.src =`, `import()`, `importScripts`). If that host is not allowed by `script-src`, it is reported. URLs in comments or links that nothing loads are ignored, a script a chunk injects is not reported when the policy uses nonces (the chunk may copy the page's nonce onto it), and chunks are scanned up to 2 MB each. This is a best-effort heuristic: a URL in a minified config object next to unrelated script-loading code can be reported, which is why a chunk finding warns unless the host is a known vendor.
+The audit fetches a page's preloaded chunks only when a crawled page enforces a CSP, at most 20 extra per audit, and no other rule reads them. A bundler's lazy chunk can name a third-party script that no HTML tag mentions. squirrel fetches the same-site scripts and the chunks a page preloads, and looks in each for a quoted `https://` URL ending in `.js` or `.mjs` with script-loading code beside it (`createElement("script")`, `.src =`, `import()`, `importScripts`). If that host is not allowed by `script-src`, it is listed in a separate informational check, `csp-chunk-only-hosts`: `{count} host(s) the page's CSP would block appear only as URLs inside the page's scripts, which may never load them ({directive}: {hosts})`, with each item marked `found: "chunk"`. It is a note, not a warning, because a URL in a script is not proof the page loads it: SDKs ship fallback URLs that load only behind a feature flag, such as a session replay module. A host that the HTML loads, or that a vendor the page uses needs, is still a warning, and is not repeated in the note. URLs in comments or links that nothing loads are ignored, a script a chunk injects is not listed when the policy uses nonces (the chunk may copy the page's nonce onto it), and chunks are scanned up to 2 MB each.
 
 ### Vendor hosts the HTML never names
 
