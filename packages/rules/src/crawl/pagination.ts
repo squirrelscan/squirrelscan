@@ -54,7 +54,10 @@ export const paginationRule: Rule = {
         /[?&](page|p|pg|offset|start)=/i.test(canonicalParsed.href) ||
         /\/page\/\d+\/?$/.test(canonicalParsed.pathname);
 
-      if (!canonicalIsPaginated && isPaginated) {
+      // pub#826: page 1 of a list is the same content as its unpaginated URL,
+      // so a canonical pointing there is correct. Only page 2 and later must
+      // canonicalize to themselves.
+      if (!canonicalIsPaginated && isPaginated && !isFirstPage(url)) {
         checks.push({
           name: "pagination-canonical",
           status: "warn",
@@ -89,6 +92,28 @@ export const paginationRule: Rule = {
     return { checks };
   },
 };
+
+/**
+ * True for the first page of a list in any of the spellings this rule
+ * recognises: `?page=1` (or `p`, `pg`), an empty or `0` page value (0-indexed
+ * lists), `?offset=0` / `?start=0`, and `/page/1`.
+ */
+function isFirstPage(url: URL): boolean {
+  // Every pagination marker on the URL has to say "first page": `/page/1?page=2`
+  // is page 2.
+  const path = url.pathname.match(/\/page\/(\d+)\/?$/);
+  if (path && !/^0*[01]$/.test(path[1] ?? "")) return false;
+  for (const [key, value] of url.searchParams) {
+    const name = key.toLowerCase();
+    const v = value.trim();
+    if (name === "page" || name === "p" || name === "pg") {
+      if (v !== "" && !/^0*[01]$/.test(v)) return false;
+    } else if (name === "offset" || name === "start") {
+      if (v !== "" && !/^0+$/.test(v)) return false;
+    }
+  }
+  return true;
+}
 
 function extractPageNumber(url: string): string {
   // Try query param

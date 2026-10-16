@@ -14,7 +14,7 @@ Pointing every page's canonical at page 1 tells search engines the rest do not e
 The rule runs on every crawled page. A page counts as paginated when its URL carries a `page`, `p`, `pg`, `offset` or `start` query parameter, or when its path ends in `/page/<number>`. It also looks for `link[rel="next"]` and `link[rel="prev"]` in the head.
 
 - Skipped when the page is neither paginated nor carrying pagination links. Message: `Page does not appear to be paginated`.
-- `pagination-canonical` warns when a paginated page has a canonical that is not itself paginated. Message: `Paginated page canonicalizes to non-paginated URL`, with the value `Page 3 → https://example.com/blog`. It passes otherwise with `Paginated page has appropriate canonical`. This check only runs when a canonical tag is present.
+- `pagination-canonical` warns when a paginated page has a canonical that is not itself paginated. Message: `Paginated page canonicalizes to non-paginated URL`, with the value `Page 3 → https://example.com/blog`. It passes otherwise with `Paginated page has appropriate canonical`. The first page of a list is exempt: `?page=1`, an empty or `0` page value, `?offset=0`, `?start=0` or `/page/1` holds the same content as the unpaginated URL, so a canonical pointing there is correct and passes. This check only runs when a canonical tag is present.
 - `pagination-links` reports info when `rel="next"` or `rel="prev"` is present. Message: `Pagination links present`, with `prev, next` as the value.
 - `pagination-links` reports info when the page is paginated with neither link. Message: `No rel=next/prev links (optional)`.
 

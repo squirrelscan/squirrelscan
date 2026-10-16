@@ -24,6 +24,7 @@ How it works:
 ### Fixed
 
 - `i18n/hreflang` no longer reports "No self-referencing hreflang found" on a URL that answers with an HTTP redirect to a page that references itself. The crawl reads the redirect target's tags, so the self reference is now compared with the URL the redirect ended on. A redirected page's other hreflang findings, such as a missing `x-default`, are about the target's tags and stay. See [i18n/hreflang](https://docs.squirrelscan.com/rules/i18n/hreflang).
+- `crawl/pagination` no longer warns that `/blog?page=1` canonicalizes to `/blog`. Page 1 of a list is the same content as the unpaginated URL, so that canonical is correct. Page 2 and later still have to canonicalize to themselves. See [crawl/pagination](https://docs.squirrelscan.com/rules/crawl/pagination).
 - The HTML, markdown and text reports now say how many items a check left out, not only how many they list. A published report keeps 5 items per issue, so an issue with 1,147 items used to read "5 items" there. It now reads "5 items, 1,142 more not listed" (the text format prints `... and 1,142 more items not listed` after the list). An issue the report keeps no items for at all, as on a very large site, says "1,500 items not listed" where it used to say nothing. The count comes from the check's `details.additional`, which the JSON and LLM formats already reported. A check with nothing left out reads as before. See [Output formats via URL](https://docs.squirrelscan.com/reports#output-formats-via-url).
 
 ## v0.0.116 (2026-10-16)
