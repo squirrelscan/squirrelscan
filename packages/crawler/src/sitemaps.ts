@@ -1,7 +1,7 @@
 import { brotliDecompressSync, gunzipSync, inflateRawSync, inflateSync } from "node:zlib";
 
 import { Effect } from "effect";
-import { XMLParser } from "fast-xml-parser";
+import { XMLParser, XMLValidator } from "fast-xml-parser";
 
 import type {
   RobotsTxtData,
@@ -197,6 +197,58 @@ function unprefixedRoot(parsed: Record<string, unknown>): Record<string, unknown
   return parsed;
 }
 
+/** Prefix for a sitemap that is not well-formed XML (#760). */
+export const SITEMAP_NOT_WELL_FORMED_ERROR = "XML is not well formed";
+
+/**
+ * Why `content` is not well-formed XML, or null when it is (#760). The parser
+ * reads past a mismatched closing tag (`</lox>` for `</loc>`), an element left
+ * open, or a raw `&`, so a file a strict consumer rejects still yielded its
+ * URLs with no error. The validator from the same package reports them, in
+ * one linear pass. The URLs the parser reads are kept either way.
+ */
+function wellFormednessError(content: string): string | null {
+  // Whitespace before the XML declaration is outside the spec too, but it is a
+  // common generator quirk that every reader of a sitemap tolerates, and the
+  // walk already reads past it, so it is not reported.
+  const body = content.trimStart();
+  // A file that declares its own entities is not checked: the validator
+  // misreads a quoted `>` in the subset and rejects a long entity name, so a
+  // valid one would fail. Rare in a sitemap, and the parser refuses the
+  // entities anyway.
+  if (hasInternalSubset(body)) return null;
+  const result = XMLValidator.validate(body);
+  if (result === true) return null;
+  // Positions in the body as served: past the whitespace taken off the front.
+  const skippedLines = content.slice(0, content.length - body.length).split("\n");
+  const lineOffset = skippedLines.length - 1;
+  const lastSkipped = skippedLines[lineOffset]!.length;
+  const at = (line: number, col: number) =>
+    [line + lineOffset, line === 1 ? col + lastSkipped : col] as const;
+  const { msg, line, col } = result.err;
+  const message = msg.replace(/opened in line (\d+), col (\d+)/g, (_match, l: string, c: string) => {
+    const [openLine, openCol] = at(Number(l), Number(c));
+    return `opened in line ${openLine}, col ${openCol}`;
+  });
+  const [errLine, errCol] = at(line, col);
+  return `${SITEMAP_NOT_WELL_FORMED_ERROR}: ${message} (line ${errLine}, column ${errCol})`;
+}
+
+/**
+ * Whether `text` has a DOCTYPE with an internal subset (`<!DOCTYPE urlset [`).
+ * A scan, not a regex: each DOCTYPE is read up to its first `>` or `[` once,
+ * so a body of repeated `<!DOCTYPE` costs its length, not its square.
+ */
+function hasInternalSubset(text: string): boolean {
+  for (let at = text.indexOf("<!DOCTYPE"); at !== -1; ) {
+    let i = at + 9;
+    while (i < text.length && text[i] !== ">" && text[i] !== "[") i++;
+    if (text[i] === "[") return true;
+    at = text.indexOf("<!DOCTYPE", i);
+  }
+  return false;
+}
+
 export function parseSitemap(content: string, url: string): SitemapData {
   const errors: string[] = [];
   const parser = new XMLParser({
@@ -212,6 +264,10 @@ export function parseSitemap(content: string, url: string): SitemapData {
 
   try {
     const parsed = unprefixedRoot(parser.parse(content) as Record<string, unknown>);
+    // Checked once a sitemap root is found: anything else is already an error.
+    const notWellFormed =
+      parsed.sitemapindex || parsed.urlset ? wellFormednessError(content) : null;
+    if (notWellFormed) errors.push(notWellFormed);
 
     if (parsed.sitemapindex) {
       const sitemapIndex = parsed.sitemapindex as { sitemap?: unknown };
@@ -479,7 +535,10 @@ export function decodeSitemapBody(
   }
 
   const data = parseSitemap(text, url);
-  if (opening === "sitemap" || data.errors.length === 0) return { data };
+  // A well-formedness error (#760) does not make a parsed sitemap a page: its
+  // URLs were read, and are kept.
+  const readable = data.errors.every((error) => error.startsWith(SITEMAP_NOT_WELL_FORMED_ERROR));
+  if (opening === "sitemap" || readable) return { data };
   // A page that opens with something other than a doctype (a fragment, a
   // script) still says what it is in its Content-Type.
   if (isHtmlContentType(contentType)) {

@@ -19,6 +19,7 @@ How it works:
 
 ### Added
 
+- `crawl/sitemap-valid` reports `<lastmod>` values outside the W3C Datetime format the sitemap protocol requires, such as `2024/09/10`, `2024-9` or `Tue, 10 Sep 2024 12:00:00 GMT` (`sitemap-lastmod-format`), with a sample of URLs and values. A datetime with no zone (`2024-09-10T12:00:00`) is named as missing its zone (`sitemap-lastmod-zone`). A search engine may ignore a lastmod it cannot read. See [crawl/sitemap-valid](https://docs.squirrelscan.com/rules/crawl/sitemap-valid).
 - `[rules] time_budget_ms` in `squirrel.toml` sets how long one rule may run on one page before it is abandoned (default 1000 ms; `0` turns the budget off; values below 1000 are refused for now). Raise it if rules time out on ordinary pages on a slow or busy machine, such as a shared CI runner. See [Rule time budget](https://docs.squirrelscan.com/rules#rule-time-budget).
 
 ### Changed
@@ -30,6 +31,7 @@ How it works:
 
 ### Fixed
 
+- `crawl/sitemap-valid` no longer passes a sitemap that is not well-formed XML. A mismatched closing tag (`</lox>` for `</loc>`), an element left open or a raw `&` in a `<loc>` or other element text now gets a syntax error that names the problem and where it is: `XML is not well formed: <reason> (line <L>, column <C>)`. The URLs squirrel can still read are kept.
 - The XML report now states the scan scope, like every other format. Inside `<site>`, `<scan-scope origin="cli" crawled="42" max-pages="100" capped="false"/>` says where the audit ran, how many pages it crawled, the page limit in force and whether that limit stopped the crawl. `requested-max-pages` is added when the requested limit was lowered, and `stop-reason="time"` when the crawl time budget ended the crawl. A report from before scan scope existed renders as before. The XML examples in the docs now match what the renderer writes. See [Reports](https://docs.squirrelscan.com/reports).
 - Dates outside the W3C format are read more carefully by the sitemap `lastmod` checks (`crawl/sitemap-lastmod-drift`, `crawl/sitemap-lastmod-churn`) and the cloaking probe. A time range such as `Sep 10 2024 12:00-14:00` used to be read as 12:00 at offset -14:00. A value with a time range is now not read. A local time that daylight saving skips, such as `2024/03/10 02:30`, now reads as written on every machine. It used to come out an hour off on a machine in a zone that skips it.
 - A published entity map that has more edges than the publish cap (1,500) now keeps the edges between its best-ranked entities. It used to keep the alphabetically first 1,500, which left late-alphabet entities unconnected. A dangling reference ranks with the entity that makes it, so a problem entity's dangling edges are kept with it.
