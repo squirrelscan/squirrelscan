@@ -74,8 +74,8 @@ export const faqSchemaRule: Rule = {
     }
 
     const ids = indexJsonLdIds(pageNodes, ctx.page.url);
-    const questions = (Array.isArray(mainEntity) ? mainEntity : [mainEntity]).map(
-      (q) => resolveJsonLdRef(q, ids, ctx.page.url) as Record<string, unknown>
+    const questions: unknown[] = (Array.isArray(mainEntity) ? mainEntity : [mainEntity]).map(
+      (q) => resolveJsonLdRef(q, ids, ctx.page.url)
     );
 
     if (questions.length === 0) {
@@ -91,7 +91,13 @@ export const faqSchemaRule: Rule = {
     let validQuestions = 0;
     let invalidQuestions = 0;
 
-    for (const q of questions) {
+    for (const entry of questions) {
+      // A `null` or a bare string in `mainEntity` is not a Question.
+      if (!entry || typeof entry !== "object") {
+        invalidQuestions++;
+        continue;
+      }
+      const q = entry as Record<string, unknown>;
       const type = q["@type"];
       const hasName = !!q["name"];
       const hasAnswer = !!q["acceptedAnswer"];

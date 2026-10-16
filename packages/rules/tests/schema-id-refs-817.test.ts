@@ -88,6 +88,13 @@ describe("schema/faq — mainEntity @id references (pub#817)", () => {
   });
 });
 
+describe("schema/faq — entries that are not objects (pub#817 review)", () => {
+  test("a null or a bare string in mainEntity is an invalid question, not a crash", () => {
+    const faq = { "@context": "https://schema.org", "@type": "FAQPage", mainEntity: [null, "What?", question("q1")] };
+    expect(run(faqRule, faq)).toMatchObject({ "faq-questions": "warn: 2 question(s) missing required properties" });
+  });
+});
+
 describe("schema/product and schema/review — @id references (pub#817)", () => {
   test("a Product's offers referenced by @id are read from the Offer node", () => {
     const graph = {
