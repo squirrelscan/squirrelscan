@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- `squirrel credits` no longer lists `issue_enrich` (3 per issue) in its pricing. AI issue enrichment is switched off in squirrelscan's cloud, so nothing is sold or charged under it today. The other add-ons, keyword and content gaps, are listed as before. See [Credits and pricing](https://docs.squirrelscan.com/cloud/credits).
+
 ### Fixed
 
 - `i18n/hreflang` no longer reports "No self-referencing hreflang found" on a URL that answers with an HTTP redirect to a page that references itself. The crawl reads the redirect target's tags, so the self reference is now compared with the URL the redirect ended on. A redirected page's other hreflang findings, such as a missing `x-default`, are about the target's tags and stay. See [i18n/hreflang](https://docs.squirrelscan.com/rules/i18n/hreflang).
