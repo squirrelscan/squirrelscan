@@ -5,4 +5,4 @@ Makefile
 wrangler.jsonc
 package.json
 bun.lock
-scripts/
+/scripts/

@@ -109,13 +109,30 @@ function decodeEntity(_entity: string, name: string): string {
   return valid ? String.fromCodePoint(code) : "\ufffd";
 }
 
+/** Inline HTML tags (`<kbd>`, `</kbd>`) dropped, their text kept; `\<` stays escaped. */
+function stripTags(text: string): string {
+  let out = "";
+  let inTag = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i]!;
+    if (ch === "\\" && i + 1 < text.length) {
+      if (!inTag) out += ch + text[i + 1];
+      i += 1;
+    } else if (ch === "<") inTag = true;
+    else if (ch === ">" && inTag) inTag = false;
+    else if (!inTag) out += ch;
+  }
+  return out;
+}
+
 /** Markdown outside a code span, reduced to the text it renders. */
 function renderProse(markdown: string): string {
   return (
-    markdown
-      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
-      .replace(/!?\[([^\]]*)\]\[[^\]]*\]/g, "$1")
-      .replace(/<[^<>]*>/g, "")
+    stripTags(
+      markdown
+        .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+        .replace(/!?\[([^\]]*)\]\[[^\]]*\]/g, "$1")
+    )
       .replace(/(\*\*|\*|~~)(?=\S)(.*?\S)\1/g, "$2")
       // `_` and `__` only emphasise at a word boundary: `per_host_delay` stays as written.
       .replace(/(?<![\p{L}\p{N}])(__|_)(?=\S)(.*?\S)\1(?![\p{L}\p{N}])/gu, "$2")
@@ -247,9 +264,12 @@ function redirectSources(root: string): string[] {
   const sources: string[] = [];
   const config = join(root, "docs.json");
   if (existsSync(config)) {
-    const parsed = JSON.parse(readFileSync(config, "utf8")) as {
-      redirects?: Array<{ source?: string }>;
-    };
+    let parsed: { redirects?: Array<{ source?: string }> };
+    try {
+      parsed = JSON.parse(readFileSync(config, "utf8"));
+    } catch (e) {
+      throw new Error(`docs.json: ${(e as Error).message}`);
+    }
     for (const r of parsed.redirects ?? [])
       if (r.source) sources.push(r.source);
   }
@@ -284,20 +304,44 @@ function redirected(path: string, sources: string[]): boolean {
 }
 
 const OPTIONS_HEADING = /^##\s+Options\s*$/;
-const BROKEN_OPTION_CELL = /\|\s*(unknown|`undefined`)\s*(?=\|)/;
 
-/** Options table rows on a rule page that print `unknown` or `` `undefined` ``. */
+function cells(row: string): string[] {
+  return row
+    .trim()
+    .replace(/^\||\|$/g, "")
+    .split("|")
+    .map((cell) => cell.trim());
+}
+
+/**
+ * Options table rows on a rule page whose Type cell is `unknown` or whose Default
+ * cell is `` `undefined` ``. Other columns, such as a description that mentions
+ * an `unknown` value, are not read.
+ */
 export function brokenOptionRows(source: string): number[] {
   const rows: number[] = [];
   let inOptions = false;
+  let columns: { type: number; value: number } | null = null;
   for (const { text, line } of proseLines(source)) {
-    if (/^#{1,2}\s/.test(text)) inOptions = OPTIONS_HEADING.test(text);
-    else if (
-      inOptions &&
-      text.trimStart().startsWith("|") &&
-      BROKEN_OPTION_CELL.test(text)
-    )
-      rows.push(line);
+    if (/^#{1,2}\s/.test(text)) {
+      inOptions = OPTIONS_HEADING.test(text);
+      columns = null;
+    } else if (!inOptions || !text.trimStart().startsWith("|")) {
+      if (text.trim() === "") columns = null;
+    } else if (columns === null) {
+      const header = cells(text).map((cell) => cell.toLowerCase());
+      columns = {
+        type: header.indexOf("type"),
+        value: header.indexOf("default"),
+      };
+    } else if (!/^[\s|:-]+$/.test(text)) {
+      const row = cells(text);
+      if (
+        row[columns.type] === "unknown" ||
+        row[columns.value] === "`undefined`"
+      )
+        rows.push(line);
+    }
   }
   return rows;
 }
@@ -368,7 +412,7 @@ export function checkDocs(
           file: page.file,
           line: row,
           message:
-            "Options row prints `unknown` or `undefined`: write its type and default from the rule's schema",
+            "Options row prints `unknown` (Type) or `undefined` (Default): write its type and default from the rule's schema",
         });
       }
     }
