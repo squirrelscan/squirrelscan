@@ -72,7 +72,7 @@ Every category rolls up into one of four top-level groups, and each group gets i
 | Group | What it covers |
 |-------|----------------|
 | **SEO** | Crawlability, core SEO, content, links, structured data, images, social, accessibility, mobile, URLs, internationalization, E-E-A-T, local, video, analytics |
-| **Performance** | Page speed and loading performance |
+| **Performance** | Page speed and loading performance, and reliability: broken links, scripts, stylesheets, fonts and forms |
 | **Security** | HTTPS and headers, site integrity, legal compliance, blocked content |
 | **Agents** | Agent experience: how ready the site is for AI agents to read, discover, and operate on it |
 
@@ -495,14 +495,14 @@ squirrel report --category core,links,images
 **Available categories:**
 - `core` - Core SEO elements (title, meta, canonical)
 - `content` - Content quality (word count, headings, duplicates)
-- `links` - Link analysis (broken, internal, external)
+- `links` - Link analysis (internal, external, redirects, anchor text)
 - `images` - Image optimization (alt text, formats, dimensions)
 - `schema` - Structured data (JSON-LD validation)
 - `security` - Security headers (HTTPS, CSP, HSTS)
 - `a11y` - Accessibility (ARIA, contrast, focus)
 - `i18n` - Internationalization (lang, hreflang)
 - `perf` - Performance (LCP, CLS, lazy loading)
-- `reliability` - Reliability (scripts, stylesheets and fonts that fail to load)
+- `reliability` - Reliability (broken internal, external and anchor links, scripts, stylesheets and fonts that fail to load, broken forms)
 - `social` - Social media (Open Graph, Twitter Cards)
 - `crawl` - Crawlability (robots, sitemaps, indexability)
 - `url` - URL structure (length, keywords, parameters)
@@ -513,6 +513,8 @@ squirrel report --category core,links,images
 - `analytics` - Analytics tracking (GTM, consent)
 - `eeat` - E-E-A-T signals (author, expertise, trust)
 - `blocking` - Ad-blocker & privacy-filter impact (`adblock` still accepted)
+
+A report keeps the categories its rules had when it was stored. The broken-link rules (`links/broken-links`, `links/broken-external-links`, `links/broken-anchors`) moved from `links` to `reliability`, so `--category links` still finds them in a report stored before the move, and `--category reliability` finds them in newer ones.
 
 ### Combined filters
 

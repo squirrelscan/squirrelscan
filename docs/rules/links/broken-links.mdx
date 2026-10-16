@@ -57,7 +57,7 @@ Fix the source, not just the page. The report lists which pages carry each broke
 | | |
 |---|---|
 | **Rule ID** | `links/broken-links` |
-| **Category** | [Links](/rules/links) |
+| **Category** | [Reliability](/rules/reliability) |
 | **Scope** | Site-wide |
 | **Severity** | error |
 | **Weight** | 7/10 |
@@ -78,6 +78,8 @@ disable = ["links/broken-links"]
 disable = ["links/*"]
 ```
 
+This rule is in the Reliability category but keeps its `links/` id, so `links/*` selects it and `reliability/*` does not.
+
 ### Enable only this rule
 
 ```toml squirrel.toml
@@ -94,7 +96,7 @@ enable = ["links/broken-links"]
 - [crawl/soft-404](/rules/crawl/soft-404): pages that answer 200 while showing an error.
 - [crawl/sitemap-4xx](/rules/crawl/sitemap-4xx): dead URLs you are also submitting in a sitemap.
 
-Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+Reliability findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
 
 {/* glossary:backlinks:start */}
 
@@ -109,13 +111,13 @@ Glossary: [Broken link](/glossary/broken-link), [HTTP status code](/glossary/htt
 
 ## Check your site
 
-Run `squirrel audit https://example.com` and open the Links section of the report. Every broken link is listed with its status code and the pages that link to it. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+Run `squirrel audit https://example.com` and open the Reliability section of the report. Every broken link is listed with its status code and the pages that link to it. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
 
 <CardGroup cols={2}>
   <Card title="Install squirrel" icon="terminal" href="/quickstart">
     One command to install, one to run your first audit.
   </Card>
   <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
-    What the Links section looks like on a real site.
+    What the Reliability section looks like on a real site.
   </Card>
 </CardGroup>

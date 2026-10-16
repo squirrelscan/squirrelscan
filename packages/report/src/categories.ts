@@ -13,6 +13,12 @@ export interface CategoryInfo {
   description: string;
   priority: number;
   group: RuleGroup; // top-level group this category rolls up into (#626)
+  /**
+   * Badge a rule by this category's name rather than its group's (pub#842).
+   * For a category whose findings are not about its group: a broken link or
+   * form is a reliability problem, though it is scored under Performance.
+   */
+  badgeByCategory?: true;
 }
 
 export interface GroupInfo {
@@ -60,7 +66,7 @@ export const CATEGORIES: Record<string, CategoryInfo> = {
   ax: { code: "ax", name: "Agent Experience", description: "How ready a site is for AI agents to read, discover, and operate on it", priority: 20, group: "ai" },
   gaps: { code: "gaps", name: "Keyword & Content Gaps", description: "Keyword and content opportunities the site doesn't cover", priority: 15, group: "seo" },
   blocking: { code: "blocking", name: "Blocking", description: "Content, links, and trackers that ad blockers and privacy filters block", priority: 10, group: "security" },
-  reliability: { code: "reliability", name: "Reliability", description: "Runtime errors, broken resources and failed requests", priority: 72, group: "performance" },
+  reliability: { code: "reliability", name: "Reliability", description: "Runtime errors, broken resources, broken links and failed requests", priority: 72, group: "performance", badgeByCategory: true },
   other: { code: "other", name: "Other", description: "Uncategorized or legacy rules", priority: 0, group: "seo" },
 };
 
@@ -143,6 +149,25 @@ export function getGroupName(group: string): string {
 /** Full display title for a group code (e.g. "ai" → "Agent Experience"); unknown → the raw code. */
 export function getGroupTitle(group: string): string {
   return GROUPS[group as RuleGroup]?.title ?? group;
+}
+
+/**
+ * The label on a rule's badge (pub#842): its group's name, or its category's
+ * for a category badged by its own name ("Reliability", scored under
+ * Performance). Unknown category → `other`'s group.
+ */
+export function getBadgeName(category: string): string {
+  const info = CATEGORIES[normalizeCategoryCode(category)];
+  if (info?.badgeByCategory) return info.name;
+  return getGroupName(getCategoryGroup(normalizeCategoryCode(category)));
+}
+
+/** The badge's tooltip: the group's full title, or which group a category-badged rule is scored under. */
+export function getBadgeTitle(category: string): string {
+  const info = CATEGORIES[normalizeCategoryCode(category)];
+  const group = getCategoryGroup(normalizeCategoryCode(category));
+  if (info?.badgeByCategory) return `${info.name}, scored under ${getGroupTitle(group)}`;
+  return getGroupTitle(group);
 }
 
 export function isValidGroup(code: string): boolean {

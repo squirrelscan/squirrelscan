@@ -1,10 +1,10 @@
 ---
 title: "Reliability audit rules: broken scripts, fonts and forms"
 sidebarTitle: "Reliability"
-description: "Audit rules for what fails to load: scripts, stylesheets and fonts that return errors, and forms whose fields or actions lose submissions."
+description: "Audit rules for what fails to load: scripts, stylesheets and fonts that return errors, broken links, and forms whose fields or actions lose submissions."
 ---
 
-Reliability rules check that what a page asks the browser to load actually loads, and that a form's submission reaches a handler. They read the scripts, stylesheets and fonts the crawl already fetched, so a bundle that returns 404 after a deploy shows up even when the HTML that references it is a 200. The category sits in the Performance score group, since a page whose main script never loads is slow to become usable, and the rules need no browser render.
+Reliability rules check that what a page asks the browser to load actually loads, that a form's submission reaches a handler, and that the links on a page lead somewhere. They read the scripts, stylesheets and fonts the crawl already fetched, so a bundle that returns 404 after a deploy shows up even when the HTML that references it is a 200. The category sits in the Performance score group, since a page whose main script never loads is slow to become usable, and the rules need no browser render.
 
 ## Run only these rules
 

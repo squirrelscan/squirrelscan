@@ -27,7 +27,14 @@ import {
   ruleCarriedPageCount,
 } from "../affected-pages";
 import { cacheHitRatePercent, cacheReasonsLabel } from "../cache-stats";
-import { getCategoryGroup, getGroupName, getGroupTitle, severityLabel } from "../categories";
+import {
+  getBadgeName,
+  getBadgeTitle,
+  getCategoryGroup,
+  getGroupName,
+  getGroupTitle,
+  severityLabel,
+} from "../categories";
 import {
   REPORT_COLLAPSE_THRESHOLD,
   REPORT_ITEMS_COLLAPSE_THRESHOLD,
@@ -892,7 +899,7 @@ function IssueRow({ rule, totalPages }: { rule: FlatIssue; totalPages: number })
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold">{rule.name}</span>
-            <GTag group={rule.group} />
+            <GTag group={rule.group} category={rule.categoryCode} />
             {r.fullyCarried && (
               <Badge color="neutral" appearance="tag" className="carried-badge">
                 carried
@@ -1068,7 +1075,7 @@ function PassedRules({ rules }: { rules: PassedRule[] }) {
               className="flex flex-wrap items-center gap-2 border-b border-border py-2 last:border-b-0"
             >
               <span className="font-semibold">{r.name}</span>
-              <GTag group={getCategoryGroup(r.categoryCode)} />
+              <GTag group={getCategoryGroup(r.categoryCode)} category={r.categoryCode} />
               <span className="text-xs text-muted-foreground">{r.categoryName}</span>
               <code className="font-mono text-xs text-muted-foreground">{r.id}</code>
               <span className="text-xs text-muted-foreground sm:ml-auto">{passedRuleScope(r)}</span>
@@ -1109,9 +1116,13 @@ const GROUP_TAG_CSS = Object.entries(GROUP_COLORS)
   .join("");
 
 /** Light GroupBadge for rows repeated many times. */
-const GTag = ({ group }: { group: string }) => (
-  <span className="gtag" data-g={group} title={getGroupTitle(group)}>
-    {getGroupName(group)}
+const GTag = ({ group, category }: { group: string; category?: string }) => (
+  <span
+    className="gtag"
+    data-g={group}
+    title={category ? getBadgeTitle(category) : getGroupTitle(group)}
+  >
+    {category ? getBadgeName(category) : getGroupName(group)}
   </span>
 );
 

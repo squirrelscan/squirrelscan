@@ -48,7 +48,7 @@ Fix the source, not just the page. The report lists which pages carry each link,
 | | |
 |---|---|
 | **Rule ID** | `links/broken-anchors` |
-| **Category** | [Links](/rules/links) |
+| **Category** | [Reliability](/rules/reliability) |
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 4/10 |
@@ -69,6 +69,8 @@ disable = ["links/broken-anchors"]
 disable = ["links/*"]
 ```
 
+This rule is in the Reliability category but keeps its `links/` id, so `links/*` selects it and `reliability/*` does not.
+
 ### Enable only this rule
 
 ```toml squirrel.toml
@@ -84,7 +86,7 @@ enable = ["links/broken-anchors"]
 - [a11y/skip-link](/rules/a11y/skip-link): whether the page offers a way past repeated navigation at all.
 - [links/redirect-chains](/rules/links/redirect-chains): internal links that resolve, but through a redirect.
 
-Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+Reliability findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
 
 {/* glossary:backlinks:start */}
 
@@ -99,7 +101,7 @@ Glossary: [Broken link](/glossary/broken-link), [Fragment link](/glossary#anchor
 
 ## Check your website
 
-Run `squirrel audit https://example.com` and open the Links section of the report. Each broken anchor is listed with the link and the pages that carry it. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+Run `squirrel audit https://example.com` and open the Reliability section of the report. Each broken anchor is listed with the link and the pages that carry it. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
 
 <CardGroup cols={2}>
   <Card title="Install squirrel" icon="terminal" href="/quickstart">

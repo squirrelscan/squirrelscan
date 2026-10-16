@@ -32,6 +32,8 @@ These carry the highest severity and weight in the category.
 
 ## Rules
 
+Broken internal links, broken external links and broken anchor links are reported under [Reliability](/rules/reliability): a dead link is a problem for the visitor more than for a search engine. Their ids keep the `links/` prefix, so `links/*` still selects them.
+
 | Rule | What it flags | Severity | Scope |
 |---|---|---|---|
 | [Broken anchor links: #fragments that point at nothing](/rules/links/broken-anchors) | A link to #pricing whose target id is gone still loads, and the reader lands at the top of the page. squirrel checks every in-page anchor against the element it names. | warning | Site-wide |
