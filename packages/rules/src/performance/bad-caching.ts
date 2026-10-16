@@ -6,6 +6,11 @@
 // or ship a compressible body without compression. A site that gets these
 // wrong on most pages pays for it on every repeat visit and behind every CDN,
 // so this is a site-scope signal, not a per-page nit.
+//
+// Freshness and compression are SCORED by the per-page rules, perf/cache-headers
+// and perf/compression, which list every page and its fix. Here they are info:
+// the site-wide share is still reported, but one missing server setting costs
+// the score once, not once per rule (pub#633). Validators are this rule's own.
 
 import { z } from "zod";
 
@@ -178,11 +183,11 @@ export const badCachingRule: Rule = {
     const compressionRatio =
       compressibleTotal > 0 ? compressibleCompressed / compressibleTotal : 1;
 
-    // --- Freshness lifetime coverage ---
+    // --- Freshness lifetime coverage (info: perf/cache-headers scores it) ---
     if (cachePolicyRatio < opts.min_freshness_ratio) {
       checks.push({
         name: "bad-caching-freshness",
-        status: cachePolicyRatio < 0.25 ? "fail" : "warn",
+        status: "info",
         message: `${total - withCachePolicy}/${total} pages set no caching policy (no freshness lifetime and no validator)`,
         value: `${Math.round(cachePolicyRatio * 100)}%`,
         expected: `≥ ${Math.round(opts.min_freshness_ratio * 100)}% with Cache-Control max-age, Expires, or a validator to revalidate against`,
@@ -192,7 +197,7 @@ export const badCachingRule: Rule = {
     } else {
       checks.push({
         name: "bad-caching-freshness",
-        status: "pass",
+        status: "info",
         message: `${withCachePolicy}/${total} pages declare a caching policy`,
         value: `${Math.round(cachePolicyRatio * 100)}%`,
       });
@@ -200,8 +205,9 @@ export const badCachingRule: Rule = {
 
     // --- Validator coverage ---
     // Warns, never fails (pub#600). A page with no lifetime and no validator
-    // already counts against the freshness check above for the same header,
-    // and a page WITH a lifetime only loses a cheap revalidation after it
+    // is usually charged by perf/cache-headers for the same header (no
+    // Cache-Control, or no-cache with nothing to revalidate against), and a
+    // page WITH a lifetime only loses a cheap revalidation after it
     // expires. Cloudflare also removes HTML ETags through features that are
     // on by default, so a fail here lands on origins configured correctly.
     // The cap is unconditional: visitors pay the same full transfer whoever
@@ -235,12 +241,13 @@ export const badCachingRule: Rule = {
       });
     }
 
-    // --- Compression coverage (compressible responses only) ---
+    // --- Compression coverage (compressible responses only; info:
+    // perf/compression scores it) ---
     if (compressibleTotal > 0) {
       if (compressionRatio < opts.min_compression_ratio) {
         checks.push({
           name: "bad-caching-compression",
-          status: compressionRatio < 0.5 ? "fail" : "warn",
+          status: "info",
           message: `${compressibleTotal - compressibleCompressed}/${compressibleTotal} compressible pages served without gzip/Brotli`,
           value: `${Math.round(compressionRatio * 100)}%`,
           expected: `≥ ${Math.round(opts.min_compression_ratio * 100)}% of text responses compressed`,
@@ -253,7 +260,7 @@ export const badCachingRule: Rule = {
       } else {
         checks.push({
           name: "bad-caching-compression",
-          status: "pass",
+          status: "info",
           message: `${compressibleCompressed}/${compressibleTotal} compressible pages compressed`,
           value: `${Math.round(compressionRatio * 100)}%`,
         });
