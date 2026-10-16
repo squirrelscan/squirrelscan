@@ -20,6 +20,7 @@ How it works:
 ### Fixed
 
 - WAF detection ends a quoted `<code>`, `<kbd>` or `<samp>` where the browser does, at the end of its block, so an unclosed `<code>` no longer hides a block page's wording (an Imperva incident line, a Cloudflare ray id) for the rest of the page. A block nested inside a code block, as Expressive Code and Starlight write each line, still reads as quoted.
+- `core/charset` now sees the charset of the `Content-Type` response header in a real audit. The crawler kept only the media type, so a page declared UTF-8 by its header alone failed with `No charset declaration found`, and a header that contradicted the page's meta (`iso-8859-1` against `utf-8`) was never reported. The crawl now stores the header's charset beside the media type. A page an earlier version stored and the crawl cache reuses is read as before until it is fetched again. See [core/charset](https://docs.squirrelscan.com/rules/core/charset).
 
 ## v0.0.117 (2026-10-17)
 

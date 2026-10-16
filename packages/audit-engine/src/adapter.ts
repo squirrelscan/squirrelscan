@@ -1621,7 +1621,14 @@ export function recordsVersionHeaders(page: PageRecord): boolean {
 
 export function buildHeadersMap(page: PageRecord): Record<string, string> {
   const headers: Record<string, string> = {};
-  if (page.headers.contentType) headers["content-type"] = page.headers.contentType;
+  if (page.headers.contentType) {
+    // The stored media type plus the charset parameter it was sent with
+    // (pub#674); a record without one reads as before.
+    const charset = page.headers.contentTypeCharset;
+    headers["content-type"] = charset
+      ? `${page.headers.contentType}; charset=${charset}`
+      : page.headers.contentType;
+  }
   if (page.headers.contentEncoding) headers["content-encoding"] = page.headers.contentEncoding;
   if (page.headers.cacheControl) headers["cache-control"] = page.headers.cacheControl;
   if (page.headers.expires) headers["expires"] = page.headers.expires;

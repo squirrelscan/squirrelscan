@@ -114,4 +114,17 @@ describe("buildHeadersMap", () => {
     expect(recordsVersionHeaders(page({ xPoweredBy: "PHP/8.1.2" }))).toBe(true);
     expect(recordsVersionHeaders(page())).toBe(false);
   });
+
+  // pub#674: the store keeps the media type and the charset apart; rules read
+  // them joined, as the server sent them. A record stored before the field
+  // existed has no key and reads as before.
+  test("content-type carries the stored charset; a record without one reads as before", () => {
+    expect(buildHeadersMap(page({ contentType: "text/html", contentTypeCharset: "UTF-8" }))["content-type"]).toBe(
+      "text/html; charset=UTF-8"
+    );
+    expect(buildHeadersMap(page({ contentType: "text/html", contentTypeCharset: null }))["content-type"]).toBe("text/html");
+    expect(buildHeadersMap(page({ contentType: "text/html" }))["content-type"]).toBe("text/html");
+    // No media type, no content-type at all, charset or not.
+    expect(buildHeadersMap(page({ contentTypeCharset: "utf-8" }))["content-type"]).toBeUndefined();
+  });
 });

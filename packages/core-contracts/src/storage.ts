@@ -377,7 +377,14 @@ export interface CrawlerConfigSnapshot {
 // ============================================
 
 export interface ResponseHeaders {
+  /** The media type of the Content-Type header only, lowercased (`text/html`). */
   contentType: string | null;
+  /**
+   * The `charset` parameter of the Content-Type header, as sent with quotes
+   * dropped (pub#674), so core/charset can read a header-only declaration.
+   * Optional for records that predate it; absent reads as "no charset".
+   */
+  contentTypeCharset?: string | null;
   contentEncoding: string | null;
   cacheControl: string | null;
   /**

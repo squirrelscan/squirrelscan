@@ -22,7 +22,7 @@ The rule runs on every crawled page and reads all three sources: any `<meta>` wi
 - Warning with the message `Non-UTF-8 charset declared: <value>` and the expectation `UTF-8` for anything else.
 - Failing with the message `No charset declaration found` and the expectation `<meta charset="UTF-8">` when none of the three declared anything.
 
-One limit applies today: audits do not yet pass the header's charset through to the rule ([#674](https://github.com/squirrelscan/squirrelscan/issues/674)). Until they do, a page that declares UTF-8 only in its `Content-Type` header reports `No charset declaration found`, and a header that conflicts with the page is not detected. Declaring the charset in the markup avoids both.
+The header's charset reaches the rule however the page was fetched, plain HTTP or cloud browser rendering. A page stored by an earlier squirrel version, which recorded only the media type, and reused from the local crawl cache is read without the header's charset until it is fetched again.
 
 The `charset` and `http-equiv` attribute names are matched case-insensitively, so React's `charSet` and `httpEquiv` output is recognised. The UTF-8 test accepts `utf8` and `utf-8` in any case, and a quoted header value such as `charset="utf-8"` is read without its quotes. Two different non-UTF-8 labels, such as `iso-8859-1` in the header and `windows-1252` in the page, are not reported as a conflict, because the labels can name the same encoding; the page gets the Non-UTF-8 warning for the header's value. The position check allows a `<title>` before the charset meta, which is a common template ordering, even though the standard's advice is to put the charset first.
 

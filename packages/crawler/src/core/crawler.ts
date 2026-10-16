@@ -62,6 +62,7 @@ import type {
 
 import { createHostBackoff, type HostBackoffRegistry } from "../host-backoff";
 import {
+  contentTypeCharset,
   crawlErrorToFailureDetail,
   CrawlError,
   fetchPageWithRetry,
@@ -1621,6 +1622,13 @@ export function createCrawler(
               // deemed the content unchanged, so the hash represents current
               // content and is safe to trust.
               if (result.sourceHash) cachedPage.sourceHash = result.sourceHash;
+              // The response WAS fetched, so its Content-Type charset is current:
+              // a record stored before pub#674 has none, and the charset can
+              // change while the body does not.
+              cachedPage.headers = {
+                ...cachedPage.headers,
+                contentTypeCharset: contentTypeCharset(result.headers.contentType),
+              };
               yield* reuseCachedPage(crawlId, entry, cachedPage, "hash_match", {
                 cacheFresh: false,
               });
@@ -1631,6 +1639,9 @@ export function createCrawler(
           // Build page record - use headers from result
           const headers: ResponseHeaders = {
             contentType: result.contentType,
+            // `contentType` is the media type only; the charset rides beside it
+            // so core/charset sees a header-only declaration (pub#674).
+            contentTypeCharset: contentTypeCharset(result.headers.contentType),
             contentEncoding: result.headers.contentEncoding ?? null,
             cacheControl: result.headers.cacheControl ?? null,
             expires: result.headers.expires ?? null,
