@@ -109,6 +109,58 @@ describe("validateReportData", () => {
 });
 
 describe("loadReport - slim JSON reconstruction", () => {
+  test("reads the category from the issue's category name, so a rule filed outside its id prefix keeps it (pub#836)", () => {
+    const issue = (ruleId: string, category: string) => ({
+      ruleId,
+      name: ruleId,
+      description: "",
+      category,
+      severity: "error",
+      checks: [
+        {
+          name: "c",
+          status: "fail",
+          message: "m",
+          affectedPages: ["https://example.com/"],
+        },
+      ],
+    });
+    const slim = {
+      meta: {
+        version: "0.0.117",
+        baseUrl: "https://example.com",
+        timestamp: new Date().toISOString(),
+        totalPages: 1,
+      },
+      score: { overall: 80, grade: "B", categories: [] },
+      summary: { passed: 0, warnings: 0, failed: 3 },
+      issues: [
+        // A new export: broken links are a Reliability rule with a links/ id.
+        issue("links/broken-links", "Reliability"),
+        // An export from before the move keeps Links.
+        issue("links/broken-external-links", "Links"),
+        // A name nothing knows falls back to the id prefix.
+        issue("links/orphan-pages", "Something Else"),
+      ],
+    };
+    const dir = mkdtempSync(join(tmpdir(), "squirrel-slim-"));
+    const path = join(dir, "report.json");
+    try {
+      writeFileSync(path, JSON.stringify(slim));
+      const result = loadReport(path);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        const category = (id: string) =>
+          result.data.ruleResults[id]?.meta.category;
+        expect(category("links/broken-links")).toBe("reliability");
+        expect(category("links/broken-external-links")).toBe("links");
+        expect(category("links/orphan-pages")).toBe("links");
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("reconstructs stable adblock/* rule IDs under the blocking category", () => {
     // Slim JSON keeps stable rule IDs (adblock/*) while the category was
     // renamed to "blocking"; reconstruction must normalize the legacy prefix

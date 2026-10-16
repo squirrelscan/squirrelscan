@@ -137,10 +137,11 @@ interface SlimJsonReport {
     description: string;
     solution?: string;
     /**
-     * Display name (e.g. "Blocking"), informational only. Reconstruction
-     * (`convertSlimReport`) derives the canonical category CODE from the
-     * `ruleId` prefix, not from this field — keep that in mind when consuming
-     * slim JSON externally. `subcategory` below is the code ("ad" | "privacy").
+     * Display name (e.g. "Blocking"). Reconstruction (`convertSlimReport`)
+     * maps it back to the category CODE, falling back to the `ruleId` prefix
+     * for a name it does not know: a rule's id prefix need not be its
+     * category (pub#836: `links/broken-links` is Reliability). `subcategory`
+     * below is the code ("ad" | "privacy").
      */
     category: string;
     /** Top-level group code (#626), e.g. "seo" — which group the issue rolls up into. */
