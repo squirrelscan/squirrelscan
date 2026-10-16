@@ -35,4 +35,21 @@ export const SECURITY_FINGERPRINTS: TechFingerprint[] = [
       { type: "html", pattern: /cf-turnstile/i },
     ],
   },
+  // pub#646: curated, not generated. The generated set's source data is not in
+  // the repository, so a fix there could not survive a regeneration, which
+  // skips any id defined here. `X-CDN` reads `Imperva` as well as `Incapsula`,
+  // as waf-detect already accepts (pub#643).
+  {
+    id: "imperva-incapsula",
+    name: "Imperva / Incapsula",
+    category: "security",
+    website: "https://www.imperva.com",
+    icon: "imperva-incapsula",
+    detectors: [
+      { type: "header", name: "X-CDN", pattern: /\b(?:Incapsula|Imperva)\b/i },
+      { type: "header", name: "X-Iinfo", pattern: /.+/i },
+      { type: "script-url", pattern: /\/_Incapsula_Resource/i },
+    ],
+    confidence: "high",
+  },
 ];
