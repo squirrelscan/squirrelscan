@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- The HTML, markdown and text reports now say how many items a check left out, not only how many they list. A published report keeps 5 items per issue, so an issue with 1,147 items used to read "5 items" there. It now reads "5 items, 1,142 more not listed" (the text format prints `... and 1,142 more items not listed` after the list). An issue the report keeps no items for at all, as on a very large site, says "1,500 items not listed" where it used to say nothing. The count comes from the check's `details.additional`, which the JSON and LLM formats already reported. A check with nothing left out reads as before. See [Output formats via URL](https://docs.squirrelscan.com/reports#output-formats-via-url).
+
 ## v0.0.116 (2026-10-16)
 
 A release about link results and local sites. Cloudflare email-protection links no longer count as broken links, a public page's leftover link to a local-only name is flagged again, a `.test` or `.local` site typed without a scheme is audited over http, and the external link check shows its progress as it runs.

@@ -60,6 +60,8 @@ import {
   ruleCarriedPageCount,
   isPageUrl,
   isRedundantPageItem,
+  itemsNotListed,
+  itemsNotListedLine,
 } from "../affected-pages";
 import { getAuditFailureNotice, reportFailureReasonCode } from "../failure-notice";
 import { lockedRulesMessage } from "../locked-rules";
@@ -965,6 +967,7 @@ function IssuesByGroup({ categories }: { categories: GroupedCategory[] }) {
                               (item) => !isRedundantPageItem(item),
                             );
                             const hasVisibleItems = visibleItems && visibleItems.length > 0;
+                            const notListed = itemsNotListed(check);
                             // (#1652) A check on pages no audit has ever rendered
                             // gets its own note FIRST — the carried notes below all
                             // say or imply "previous crawls", which for these pages
@@ -1007,6 +1010,9 @@ function IssuesByGroup({ categories }: { categories: GroupedCategory[] }) {
                                       <summary>
                                         {visibleItems!.length} item
                                         {visibleItems!.length > 1 ? "s" : ""}
+                                        {notListed > 0
+                                          ? `, ${notListed.toLocaleString("en-US")} more not listed`
+                                          : ""}
                                       </summary>
                                       <div className="pages-list">
                                         {visibleItems!.map((item, i) => {
@@ -1068,6 +1074,11 @@ function IssuesByGroup({ categories }: { categories: GroupedCategory[] }) {
                                         })}
                                       </div>
                                     </details>
+                                  )}
+                                  {!hasVisibleItems && notListed > 0 && (
+                                    <div className="pages-truncated-note">
+                                      {itemsNotListedLine(notListed)}
+                                    </div>
                                   )}
                                 </div>
                               </div>

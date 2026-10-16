@@ -8,7 +8,7 @@ import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
 import { getScoreGrade } from "../scoring";
 import { REPORT_TEXT_WRAP_WIDTH } from "../constants";
 import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
-import { affectedPages } from "../affected-pages";
+import { affectedPages, itemsNotListed, itemsNotListedLine } from "../affected-pages";
 import {
   ENTITY_CONSOLE_LIMIT,
   ENTITY_EMPTY_MESSAGE,
@@ -337,6 +337,9 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
           if (hasMore) write(`        ... and ${count - sample.length} more`);
         }
 
+        // repo#2661: a capped report keeps a sample of items, or none for a
+        // counts-only class; say how many it left out.
+        const left = itemsNotListed(check);
         if (check.items && check.items.length > 0) {
           for (const item of check.items) {
             const label = item.label ?? item.id;
@@ -346,6 +349,9 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
               for (const src of item.sourcePages) write(`            from: ${pathOnly(src)}`);
             }
           }
+          if (left > 0) write(`        ... and ${left.toLocaleString("en-US")} more items not listed`);
+        } else if (left > 0) {
+          write(`        ${itemsNotListedLine(left)}`);
         }
       }
       write("");

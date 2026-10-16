@@ -30,12 +30,20 @@ import {
   ruleAffectedPageCount,
   ruleCarriedPageCount,
   isRedundantPageItem,
+  itemsNotListed,
+  itemsNotListedLine,
 } from "../affected-pages";
 import { formatReportDate } from "../utils";
 import { getPathname } from "../url";
 import { lockedRulesMessage } from "../locked-rules";
 import { privateTargetLine } from "../private-target";
 import { notCheckedLines } from "../not-checked";
+
+/** repo#2661: ", N more not listed" when the report left items out of a check. */
+function notListedSuffix(check: Parameters<typeof itemsNotListed>[0]): string {
+  const left = itemsNotListed(check);
+  return left > 0 ? `, ${left.toLocaleString("en-US")} more not listed` : "";
+}
 
 export interface MarkdownRenderOptions {
   version?: string;
@@ -477,7 +485,7 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
         const visibleItems = check.items?.filter((item) => !isRedundantPageItem(item));
         if (visibleItems && visibleItems.length > 0) {
           lines.push(
-            `<details><summary><strong>${check.name}:</strong> ${visibleItems.length} item(s)</summary>`,
+            `<details><summary><strong>${check.name}:</strong> ${visibleItems.length} item(s)${notListedSuffix(check)}</summary>`,
           );
           lines.push("");
           for (const item of visibleItems) {
@@ -504,6 +512,9 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
           }
           lines.push("");
           lines.push("</details>");
+          lines.push("");
+        } else if (itemsNotListed(check) > 0) {
+          lines.push(`**${check.name}:** ${itemsNotListedLine(itemsNotListed(check))}`);
           lines.push("");
         }
       }
