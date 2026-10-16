@@ -245,15 +245,36 @@ function takeProblems(buckets: EntityMapNode[][], budget: number): EntityMapNode
   return taken;
 }
 
-/** Keep only edges whose source survived; a dangling edge keeps regardless. */
+/**
+ * The edges between surviving nodes; a dangling edge keeps regardless of its
+ * target. `rank` is each surviving node's position in the sample, most
+ * important first. Over `maxEdges`, the edges kept are the best ranked, not the
+ * map's alphabetical prefix (#405): an edge ranks by its less important end, so
+ * edges between high-reach nodes come first, and a dangling edge by its source
+ * alone, so a dangling reference ranks with the problem node that makes it.
+ * Ties keep map order, and the kept edges come back in map order.
+ */
 function edgesFor(
   edges: EntityMapEdge[],
-  keys: Set<string>,
+  rank: ReadonlyMap<string, number>,
   limits: EntityMapLimits,
 ): EntityMapEdge[] {
-  return edges
-    .filter((edge) => keys.has(edge.source) && (edge.dangling || keys.has(edge.target)))
-    .slice(0, limits.maxEdges);
+  const candidates = edges.filter(
+    (edge) => rank.has(edge.source) && (edge.dangling || rank.has(edge.target)),
+  );
+  if (candidates.length <= limits.maxEdges) return candidates;
+  const score = (edge: EntityMapEdge): number =>
+    edge.dangling
+      ? rank.get(edge.source)!
+      : Math.max(rank.get(edge.source)!, rank.get(edge.target)!);
+  const kept = new Set(
+    candidates
+      .map((edge, index) => ({ index, score: score(edge) }))
+      .sort((a, b) => a.score - b.score || a.index - b.index)
+      .slice(0, Math.max(0, limits.maxEdges))
+      .map(({ index }) => index),
+  );
+  return candidates.filter((_, index) => kept.has(index));
 }
 
 /**
@@ -281,7 +302,9 @@ function edgesFor(
  *      there is one of them per page and they say nothing about the site.
  *
  * Edges follow the nodes they connect; a dangling edge is kept regardless of
- * its target, because the missing target IS the finding. `pages` is dropped: it
+ * its target, because the missing target IS the finding. Past `maxEdges`, the
+ * edges kept are ranked by where their endpoints sit in the sample above (see
+ * `edgesFor`), not cut at the map's alphabetical order. `pages` is dropped: it
  * is the largest array in the document, neither consumer reads it, and
  * `summary.pagesTotal` / `pagesWithoutEntities` already carry what a reader
  * needs from it.
@@ -403,11 +426,12 @@ function project(
   limits: EntityMapLimits,
   reason: EntityMapTruncation["reason"],
 ): EntityMap {
+  // Sample order, before the nodes are sorted for output: it ranks the edges.
+  const rank = new Map(selected.map((node, index) => [node.key, index]));
   const kept = selected
     .map((node) => clampNode(node, limits))
     .sort((a, b) => compareKeys(a.key, b.key));
-  const keys = new Set(kept.map((node) => node.key));
-  const edges = edgesFor(map.edges, keys, limits).map((edge) => clampEdge(edge, limits));
+  const edges = edgesFor(map.edges, rank, limits).map((edge) => clampEdge(edge, limits));
   return {
     ...map,
     site: clampString(map.site, limits),
