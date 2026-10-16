@@ -289,7 +289,11 @@ function stylesTheElement(selector: string): boolean {
   );
 }
 
-/** Whether a selector the engine cannot run at all could still be aimed at the field. */
+/**
+ * Whether a selector the engine cannot run at all could still be aimed at the
+ * field. Generous on purpose: a yes only turns the field into "not read", so an
+ * attribute or universal selector is always a yes.
+ */
 function mentions(selector: string, field: Element): boolean {
   if (/[[*]/.test(selector)) return true;
   const lower = selector.toLowerCase();
@@ -359,7 +363,8 @@ function canFocus(field: Element): boolean {
       inSummary = false;
     }
     const style = n.getAttribute("style");
-    if (style && hidesElement(readDeclarations(style).decls)) return false;
+    if (style && /display|visibility/i.test(style) && hidesElement(readDeclarations(style).decls))
+      return false;
   }
   return true;
 }
