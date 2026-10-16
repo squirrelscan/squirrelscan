@@ -19,7 +19,7 @@ Fields do not take the page's font size. iOS Safari gives every `input`, `textar
 
 A field is only judged when its size can be read plainly. It is counted as not read, and never guessed, when:
 
-- the page links an external stylesheet (or preloads one as a style, or imports one), or a `<style>` block nests rules (CSS nesting), and the size would come from a `<style>` rule or the browser default: a rule the audit cannot see may outrank it, a utility class such as `text-sm` defined in an external sheet included. An inline `style` size is still judged; `rem` is not, because the unseen rules may set the root size;
+- the page links an external stylesheet (or preloads one as a style, or imports one), or a `<style>` block nests rules (CSS nesting), and the size would come from a `<style>` rule or the browser default: a rule the audit cannot see may outrank it, a utility class such as `text-sm` defined in an external sheet included. An inline `style` size is still judged, the one size an unseen rule can beat only with `!important` on a field's font size, which is rare; `rem` is not judged, because the unseen rules may set the root size;
 - the rule that would size it sits inside `@media`, `@supports` or `@layer`, or in a `<style media="…">` block, because the phone-width size is the one that matters;
 - two rules that match it set different sizes, which needs specificity to order, or the root size is set by rules that disagree;
 - its size is relative (`em`, `%`, `inherit`, `var()`, `calc()`, `font: inherit`, `all: unset`), or comes from a `font` shorthand the rule does not parse (it reads style, weight and stretch keywords, a size, a line height and a family list);
