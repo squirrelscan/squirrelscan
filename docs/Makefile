@@ -2,6 +2,7 @@
 
 validate:
 	bun x tangly check --strict
+	bun scripts/check-links.ts
 
 dev:
 	bun x tangly dev

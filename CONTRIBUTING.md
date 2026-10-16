@@ -23,6 +23,13 @@ Documentation source lives in `docs/`. Run `bun run docs:check` after editing li
 navigation, or MDX content, and `bun run docs:build` before submitting structural or
 configuration changes.
 
+`docs:check` (and `make validate` in `docs/`) runs `tangly check --strict`, then
+`docs/scripts/check-links.ts`, because tangly does not check internal links. The
+script fails on a link to a page that does not exist, a `#anchor` the target page
+does not render, a missing anchor from `docs/scripts/required-anchors.json` (the
+cloud app links to those sections, so keep a heading's `{#id}` when you rename it),
+and a rule page `## Options` row that prints `unknown` or `undefined`.
+
 ## Issues
 
 Every issue carries a `## Acceptance Criteria` checklist: the observable outcomes that mean it is done. The issue templates include the section. If a report arrives without one, maintainers add it at triage.
