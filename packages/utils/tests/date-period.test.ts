@@ -225,6 +225,33 @@ describe("datePeriod refuses what it cannot read the same everywhere (#780 revie
   });
 });
 
+describe("datePeriod: time ranges and the DST gap (#793)", () => {
+  test("a time range is not read as a time and a zone", () => {
+    // Read as a zone, `12:00-14:00` was 12:00 at offset -14:00 (02:00Z on the 11th).
+    for (const value of [
+      "Sep 10 2024 12:00-14:00",
+      "Sep 10 2024 09:00-12:00",
+      "2024/09/10 9:00 - 12:30",
+      "Sep 10 2024 9:00 AM-11:00 AM",
+      "10 Sep 2024 12:00\u201314:00",
+    ]) {
+      expect(inEveryZone(() => datePeriod(value))).toEqual([null, null, null, null]);
+    }
+    // A numeric zone with no colon is still a zone, and W3C values are untouched.
+    expect(datePeriod("Sep 10 2024 12:00 -0500")?.start).toBe(Date.UTC(2024, 8, 10, 17));
+    expect(datePeriod("2024-09-10T12:00-05:00")?.start).toBe(Date.UTC(2024, 8, 10, 17));
+    expect(datePeriod("2024-09-10T12:00-05:00 (updated)")?.start).toBe(Date.UTC(2024, 8, 10, 17));
+  });
+
+  test("a local time a daylight-saving zone skips reads as written, in every zone", () => {
+    // 02:30 on 10 March 2024 does not exist in America/New_York; read at local
+    // time, `Date` moved it to 03:30 there and nowhere else.
+    const expected = { start: Date.UTC(2024, 2, 10, 2, 30), end: Date.UTC(2024, 2, 10, 2, 30), precision: "instant", day: "2024-03-10" };
+    expect(inEveryZone(() => datePeriod("2024/03/10 02:30"))).toEqual(ZONES.map(() => expected));
+    expect(inEveryZone(() => datePeriod("Mar 10 2024 2:30 AM"))).toEqual(ZONES.map(() => expected));
+  });
+});
+
 describe("periodGapMs", () => {
   test("0 when the periods overlap, else between their nearer ends", () => {
     const year = datePeriod("2024")!;
