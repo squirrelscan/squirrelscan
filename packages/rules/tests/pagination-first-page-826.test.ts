@@ -56,6 +56,28 @@ describe("crawl/pagination — the first page (pub#826)", () => {
     }
   });
 
+  test("a first page canonicalizing anywhere but its unpaginated URL still warns", () => {
+    expect(canonicalCheck(`${B}/blog?page=1`, `${B}/other-section`)?.status).toBe("warn");
+    expect(canonicalCheck(`${B}/blog?page=1`, `${B}/`)?.status).toBe("warn");
+    expect(canonicalCheck(`${B}/blog/page/1`, `${B}/news`)?.status).toBe("warn");
+    // Other query params belong to the resource: they must match.
+    expect(canonicalCheck(`${B}/blog?tag=css&page=1`, `${B}/blog?tag=css`)?.status).toBe("pass");
+    expect(canonicalCheck(`${B}/blog?tag=css&page=1`, `${B}/blog`)?.status).toBe("warn");
+    // Pairs are compared as pairs, and a key's values in order.
+    expect(canonicalCheck(`${B}/blog?page=1&tag=a%26type%3Db`, `${B}/blog?tag=a&type=b`)?.status).toBe("warn");
+    expect(canonicalCheck(`${B}/blog?page=1&tag=a&tag=b`, `${B}/blog?tag=b&tag=a`)?.status).toBe("warn");
+    expect(canonicalCheck(`${B}/blog?page=1&tag=a&sort=new`, `${B}/blog?sort=new&tag=a`)?.status).toBe("pass");
+    // A trailing slash and a fragment do not make it another resource.
+    expect(canonicalCheck(`${B}/blog/page/1/`, `${B}/blog/`)?.status).toBe("pass");
+  });
+
+  test("upper-case keys, repeated params and mixed markers are read the same way", () => {
+    expect(canonicalCheck(`${B}/blog?PAGE=1`, `${B}/blog`)?.status).toBe("pass");
+    expect(canonicalCheck(`${B}/blog?page=1&page=1`, `${B}/blog`)?.status).toBe("pass");
+    expect(canonicalCheck(`${B}/blog?page=1&page=2`, `${B}/blog`)?.status).toBe("warn");
+    expect(canonicalCheck(`${B}/blog?page=1&offset=20`, `${B}/blog`)?.status).toBe("warn");
+  });
+
   test("a self-referencing canonical passes on any page", () => {
     expect(canonicalCheck(`${B}/blog?page=2`, `${B}/blog?page=2`)?.status).toBe("pass");
     expect(canonicalCheck(`${B}/blog?page=1`, `${B}/blog?page=1`)?.status).toBe("pass");

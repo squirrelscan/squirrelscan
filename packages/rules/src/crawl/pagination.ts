@@ -55,9 +55,12 @@ export const paginationRule: Rule = {
         /\/page\/\d+\/?$/.test(canonicalParsed.pathname);
 
       // pub#826: page 1 of a list is the same content as its unpaginated URL,
-      // so a canonical pointing there is correct. Only page 2 and later must
-      // canonicalize to themselves.
-      if (!canonicalIsPaginated && isPaginated && !isFirstPage(url)) {
+      // so a canonical pointing at that URL is correct. Only page 2 and later
+      // must canonicalize to themselves. A first page canonicalizing anywhere
+      // else still warns.
+      const firstPageToBase =
+        isFirstPage(url) && sameResource(canonicalParsed, unpaginated(url));
+      if (!canonicalIsPaginated && isPaginated && !firstPageToBase) {
         checks.push({
           name: "pagination-canonical",
           status: "warn",
@@ -93,9 +96,39 @@ export const paginationRule: Rule = {
   },
 };
 
+const PAGINATION_PARAMS = new Set(["page", "p", "pg", "offset", "start"]);
+
+/** `url` with its pagination markers removed: the params above, and a trailing `/page/N`. */
+function unpaginated(url: URL): URL {
+  const out = new URL(url.href);
+  out.hash = "";
+  for (const key of [...out.searchParams.keys()]) {
+    if (PAGINATION_PARAMS.has(key.toLowerCase())) out.searchParams.delete(key);
+  }
+  out.pathname = out.pathname.replace(/\/page\/\d+\/?$/, "/");
+  return out;
+}
+
+/** Same origin, path (trailing slash ignored) and query, fragment ignored. */
+function sameResource(a: URL, b: URL): boolean {
+  const path = (u: URL) => u.pathname.replace(/\/+$/, "") || "/";
+  // Keys sorted, each key's values in their own order (a server may read the
+  // first), and every pair re-encoded so `a%26b=c` is not `a&b=c`.
+  const query = (u: URL) =>
+    JSON.stringify(
+      [...new Set(u.searchParams.keys())]
+        .sort()
+        .map((key) => [key, u.searchParams.getAll(key)]),
+    );
+  return a.origin === b.origin && path(a) === path(b) && query(a) === query(b);
+}
+
 /**
  * True for the first page of a list in any of the spellings this rule
- * recognises: `?page=1` (or `p`, `pg`), an empty or `0` page value (0-indexed
+ * recognises. `p` is one of them, as the rule's pagination detection already
+ * counts it, though WordPress also uses `?p=` for a post id; a `?p=1` page is
+ * exempt only when its canonical is the same URL without it.
+ * The spellings: `?page=1` (or `p`, `pg`), an empty or `0` page value (0-indexed
  * lists), `?offset=0` / `?start=0`, and `/page/1`.
  */
 function isFirstPage(url: URL): boolean {
