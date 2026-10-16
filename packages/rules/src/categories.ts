@@ -202,7 +202,7 @@ export const CATEGORIES = {
   reliability: {
     code: "reliability",
     name: "Reliability",
-    description: "Runtime errors, broken resources and failed requests",
+    description: "Runtime errors, broken resources, broken links and failed requests",
     priority: 72,
     group: "performance",
   },

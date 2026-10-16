@@ -113,6 +113,23 @@ describe("resolveRulesConfig", () => {
 });
 
 describe("isCategoryExcluded", () => {
+  test("a category holding rules filed outside their id prefix is reached through those ids (pub#836)", () => {
+    // links/broken-links is a Reliability rule: including it reaches the
+    // Reliability score, and excluding all of reliability/* does not stop it.
+    expect(
+      isCategoryExcluded("reliability", {
+        enable: ["links/broken-links"],
+        disable: [],
+      })
+    ).toBe(false);
+    expect(
+      isCategoryExcluded("reliability", { enable: ["links/*"], disable: [] })
+    ).toBe(false);
+    expect(
+      isCategoryExcluded("reliability", { enable: ["core/*"], disable: [] })
+    ).toBe(true);
+  });
+
   test("category covered by disable/* pattern → excluded", () => {
     expect(
       isCategoryExcluded("images", { enable: ["*"], disable: ["images/*"] })

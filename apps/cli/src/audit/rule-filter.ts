@@ -5,6 +5,9 @@
 // falling back to matchesRulePattern's bare-token = exact-rule-id semantics
 // (which would silently match zero rules for a typo'd category name).
 
+import { loadAllRules } from "@squirrelscan/rules";
+import { matchesRulePattern } from "@squirrelscan/utils/rule-pattern";
+
 import {
   isValidCategory,
   normalizeCategoryCode,
@@ -143,6 +146,24 @@ function patternTouchesCategory(pattern: string, category: string): boolean {
   );
 }
 
+let filedOutsidePrefix: Map<string, string[]> | null = null;
+
+/** Ids of the rules in `category` whose id prefix names another category. */
+function idsFiledOutsidePrefix(category: string): string[] {
+  if (!filedOutsidePrefix) {
+    filedOutsidePrefix = new Map();
+    for (const rule of loadAllRules().values()) {
+      const code = normalizeCategoryCode(rule.meta.category);
+      const prefix = normalizeCategoryCode(rule.meta.id.split("/")[0] ?? "");
+      if (code === prefix) continue;
+      const ids = filedOutsidePrefix.get(code) ?? [];
+      ids.push(rule.meta.id);
+      filedOutsidePrefix.set(code, ids);
+    }
+  }
+  return filedOutsidePrefix.get(normalizeCategoryCode(category)) ?? [];
+}
+
 /** True when the resolved enable/disable patterns leave `category` with zero
  * rules that could run — disable wins over enable (mirrors isRuleEnabled's
  * precedence), and an enable list that never mentions the category means
@@ -155,7 +176,13 @@ export function isCategoryExcluded(
   category: string,
   resolved: { enable: string[]; disable: string[] }
 ): boolean {
-  const touches = (p: string) => patternTouchesCategory(p, category);
+  // pub#836: a rule can be filed under a category its id prefix does not
+  // name (`links/broken-links` is a Reliability rule), so a pattern reaches
+  // the category through that rule's id too.
+  const foreign = idsFiledOutsidePrefix(category);
+  const touches = (p: string) =>
+    patternTouchesCategory(p, category) ||
+    foreign.some((id) => matchesRulePattern(id, p));
   if (resolved.disable.some(touches)) return true;
   if (resolved.enable.length === 0) return true;
   return !resolved.enable.some(touches);

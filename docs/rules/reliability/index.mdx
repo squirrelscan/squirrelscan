@@ -1,9 +1,9 @@
 ---
 title: "Reliability"
-description: "Runtime errors, broken resources and failed requests"
+description: "Runtime errors, broken resources, broken links and failed requests"
 ---
 
-Reliability rules check that what a page asks the browser to load actually loads, and that a form's submission reaches a handler. They read the scripts, stylesheets and fonts the crawl already fetched, so a bundle that returns 404 after a deploy shows up even when the HTML that references it is a 200. The category sits in the Performance score group, since a page whose main script never loads is slow to become usable, and the rules need no browser render.
+Reliability rules check that what a page asks the browser to load actually loads, that a form's submission reaches a handler, and that the links on a page lead somewhere. They read the scripts, stylesheets and fonts the crawl already fetched, so a bundle that returns 404 after a deploy shows up even when the HTML that references it is a 200. The category sits in the Performance score group, since a page whose main script never loads is slow to become usable, and the rules need no browser render. Reports badge these rules **Reliability**, not Performance.
 
 ## Rules
 
@@ -14,13 +14,29 @@ Reliability rules check that what a page asks the browser to load actually loads
   <Card title="Forms that lose submissions" icon="circle-info" href="/rules/reliability/broken-forms">
     squirrel reports form fields with no name, and form actions that answer 404, point at a staging host or use mailto:.
   </Card>
+  <Card title="Broken internal links: 404s inside your own site" icon="circle-exclamation" href="/rules/links/broken-links">
+    An internal link to a page that returns 404 or 500 is a dead end you control. squirrel cross-references every internal link against the crawl.
+  </Card>
+  <Card title="Broken external links: link rot on pages you cannot fix" icon="triangle-exclamation" href="/rules/links/broken-external-links">
+    External links die without warning when the other site changes. squirrel checks each one and separates dead links from unverifiable ones.
+  </Card>
+  <Card title="Broken anchor links: #fragments that point at nothing" icon="circle-exclamation" href="/rules/links/broken-anchors">
+    A link to #pricing whose target id is gone still loads, and the reader lands at the top of the page. squirrel checks every in-page anchor against its element.
+  </Card>
 </CardGroup>
 
 ## Disable all Reliability rules
 
 ```toml squirrel.toml
 [rules]
-disable = ["reliability/*"]
+disable = [
+  "reliability/*",
+  "links/broken-links",
+  "links/broken-external-links",
+  "links/broken-anchors",
+]
 ```
+
+The three broken-link rules keep their `links/` ids, so `reliability/*` alone does not select them.
 
 Every audit reports Reliability findings next to the performance, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.

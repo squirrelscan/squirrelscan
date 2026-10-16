@@ -159,7 +159,9 @@ export const brokenExternalLinksRule: Rule = {
     description: "Detects external links returning 4xx/5xx errors or timeouts",
     solution:
       "Broken external links hurt user experience and credibility. Regularly audit external links using automated tools. Remove or replace broken links with working alternatives. Consider using archived versions (archive.org) if the original content is gone. For important resources, consider hosting your own copies of critical documentation or linking to more stable sources.",
-    category: "links",
+    // pub#836/#843: a dead link is a reliability problem, scored under
+    // Performance; the id keeps its `links/` prefix so configs keep working.
+    category: "reliability",
     scope: "site",
     severity: "warning",
     weight: 5,

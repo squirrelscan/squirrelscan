@@ -4,7 +4,7 @@ description: "The Performance score group: page speed and loading behavior"
 icon: "gauge"
 ---
 
-Performance is one of the four score groups on every report, alongside SEO, Security and Agents. It measures page speed and loading behaviour: the markup patterns behind LCP, CLS and INP, render blocking, resource weight, caching, compression and delivery. The group holds two categories: Performance, whose rules mostly run against the HTML and response headers, with a few that need [browser rendering](/guides/browser-rendering) for measurements only a real browser can take; and [Reliability](/rules/reliability), which checks that the scripts and stylesheets a page references actually load and that its forms can be submitted.
+Performance is one of the four score groups on every report, alongside SEO, Security and Agents. It measures page speed and loading behaviour: the markup patterns behind LCP, CLS and INP, render blocking, resource weight, caching, compression and delivery. The group holds two categories: Performance, whose rules mostly run against the HTML and response headers, with a few that need [browser rendering](/guides/browser-rendering) for measurements only a real browser can take; and [Reliability](/rules/reliability), which checks that the scripts and stylesheets a page references actually load, that its forms can be submitted and that its links are not broken. Reliability rules carry a **Reliability** badge on reports, not a Performance one.
 
 See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
 
@@ -15,7 +15,7 @@ See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an
     Page speed and loading performance (30 rules)
   </Card>
   <Card title="Reliability" icon="folder" href="/rules/reliability">
-    Runtime errors, broken resources and failed requests (2 rules)
+    Runtime errors, broken resources, broken links and failed requests (5 rules)
   </Card>
 </CardGroup>
 

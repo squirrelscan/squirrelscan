@@ -52,7 +52,7 @@ import { CACHE_STATS_NOTE, cacheHitRatePercent, cacheReasonsLabel } from "../cac
 import { formatBytes, formatHumanDateTime, sanitizeUrl } from "../utils";
 import { getDocsUrl } from "../docs";
 import { getPathname } from "../url";
-import { getGroupName, getGroupTitle, severityLabel } from "../categories";
+import { getBadgeName, getBadgeTitle, getGroupName, getGroupTitle, severityLabel } from "../categories";
 import {
   affectedPages,
   ruleAffectedPageCount,
@@ -882,14 +882,14 @@ function IssuesByGroup({ categories }: { categories: GroupedCategory[] }) {
                       <summary className="rule-summary">
                         <span
                           className="group-label"
-                          title={getGroupTitle(groupCode)}
+                          title={getBadgeTitle(rule.categoryCode)}
                           style={{
                             color: getGroupColor(groupCode).text,
                             background: getGroupColor(groupCode).bg,
                             borderColor: getGroupColor(groupCode).border,
                           }}
                         >
-                          {getGroupName(groupCode)}
+                          {getBadgeName(rule.categoryCode)}
                         </span>
                         <span className="rule-name">{rule.name}</span>
                         {/* className keeps the raw severity (drives the .rule-severity.info

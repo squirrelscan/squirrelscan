@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- Broken links are reported as a reliability problem, not an SEO one. `links/broken-links`, `links/broken-external-links` and `links/broken-anchors` move from the Links category to Reliability, so they no longer count toward the SEO score. Reliability rolls up into the Performance score, which now carries them. Their badge on the HTML report reads **Reliability**, as do the badges of `reliability/broken-resources` and `reliability/broken-forms`, which used to read Performance. The rule ids keep their `links/` prefix, so configs, `links/*` patterns, `rule_options` and docs links keep working. `reliability/*` does not select the three rules, so list them by id to disable them with it. `squirrel report --category reliability` now includes them, and a report stored before this release keeps them under `links`. See [Reliability](https://docs.squirrelscan.com/rules/reliability).
+
 ## v0.0.116 (2026-10-16)
 
 A release about link results and local sites. Cloudflare email-protection links no longer count as broken links, a public page's leftover link to a local-only name is flagged again, a `.test` or `.local` site typed without a scheme is audited over http, and the external link check shows its progress as it runs.
