@@ -101,7 +101,7 @@ export type McpAuditPlan =
 
 const PRICING = `${AUDIT_BASE_CREDITS} base + ${AUDIT_PAGE_CREDITS} per audited page`;
 /** #801: the same, for a level whose external links the cloud checks. */
-const PRICING_WITH_LINKS = `${PRICING} + ${EXTERNAL_LINK_CREDITS} per external link the cloud checks, at most 1 per page of the page limit`;
+const PRICING_WITH_LINKS = `${PRICING} + ${EXTERNAL_LINK_CREDITS} per external link the cloud verifies, at most 1 per page of the page limit`;
 
 /**
  * One billed run from register to its terminal PATCH. `running` is the

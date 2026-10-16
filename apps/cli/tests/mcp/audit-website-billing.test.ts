@@ -285,7 +285,7 @@ describe("signed in, audit_website is a billed cloud audit", () => {
     expect(body.estimate.credits).toBe(50 + body.estimate.pages * 3);
     expect(body.estimate.creditsPerExternalLink).toBe(1);
     expect(body.next).toContain(
-      "1 per external link the cloud checks, at most 1 per page"
+      "1 per external link the cloud verifies, at most 1 per page"
     );
     expect(registered()).toBe(false);
   });
