@@ -17,12 +17,17 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- `[rules] time_budget_ms` in `squirrel.toml` sets how long one rule may run on one page before it is abandoned (default 1000 ms; `0` turns the budget off; values below 1000 are refused for now). Raise it if rules time out on ordinary pages on a slow or busy machine, such as a shared CI runner. See [Rule time budget](https://docs.squirrelscan.com/rules#rule-time-budget).
+
 ### Changed
 
 - `squirrel credits` no longer lists `issue_enrich` (3 per issue) in its pricing. AI issue enrichment is switched off in squirrelscan's cloud, so nothing is sold or charged under it today. The other add-ons, keyword and content gaps, are listed as before. See [Credits and pricing](https://docs.squirrelscan.com/cloud/credits).
 
 ### Fixed
 
+- An audit could stop partway through its rules, print no report and exit 0. That happened when work right after a fast rule ran longer than the rule time budget (1 second) without a break, because the budget's timer kept running after the rule finished and stopped that work instead. The timer is now cleared after every rule. A rule that ends just past its own deadline can still do this, which is tracked in [#880](https://github.com/squirrelscan/squirrelscan/issues/880).
 - `i18n/hreflang` no longer reports "No self-referencing hreflang found" on a URL that answers with an HTTP redirect to a page that references itself. The crawl reads the redirect target's tags, so the self reference is now compared with the URL the redirect ended on. A redirected page's other hreflang findings, such as a missing `x-default`, are about the target's tags and stay. See [i18n/hreflang](https://docs.squirrelscan.com/rules/i18n/hreflang).
 - `crawl/pagination` no longer warns that `/blog?page=1` canonicalizes to `/blog`. Page 1 of a list is the same content as the unpaginated URL, so that canonical is correct. Page 2 and later still have to canonicalize to themselves. See [crawl/pagination](https://docs.squirrelscan.com/rules/crawl/pagination).
 - `schema/faq` no longer reports every question of a Yoast-style FAQ as missing its name and answer. When `mainEntity` lists node references (`{"@id": "…#q1"}`) to `Question` nodes elsewhere in the page's JSON-LD, the rule now reads the nodes they name. `schema/product` does the same for `offers`, and `schema/review` for `review` entries and `aggregateRating`, judging a review both referenced and present as its own node once. A reference to a node the page does not have is still reported. See [schema/faq](https://docs.squirrelscan.com/rules/schema/faq).

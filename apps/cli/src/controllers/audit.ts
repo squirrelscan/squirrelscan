@@ -2391,10 +2391,14 @@ export function mergeOptionsToConfig(
     smart_audits: options.smartAudits ?? config.smart_audits,
     // --rule-include/--rule-exclude (#1066): same merge the CLI command uses to
     // pre-validate --fail-on against excluded categories (resolveRulesConfig).
-    rules: resolveRulesConfig(config.rules, {
-      enable: options.ruleInclude ?? [],
-      disable: options.ruleExclude ?? [],
-    }),
+    // The rest of `[rules]`, such as `time_budget_ms` (#578), passes through.
+    rules: {
+      ...config.rules,
+      ...resolveRulesConfig(config.rules, {
+        enable: options.ruleInclude ?? [],
+        disable: options.ruleExclude ?? [],
+      }),
+    },
     crawler: {
       ...config.crawler,
       // Same clamp as the commands, through the same helper so the five cannot

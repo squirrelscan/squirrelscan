@@ -94,6 +94,27 @@ const slot: { fn?: () => unknown } = {};
 const context = vm.createContext(slot);
 const callSlot = new vm.Script("fn()");
 
+// Bun (1.3.14) leaves the watchdog armed after `runInContext` returns, until the
+// current macrotask ends. Code that then runs past the deadline in the same task
+// (the rest of the page loop, a chain of microtasks) was terminated: uncatchably,
+// so the process drained its event loop and exited 0 with no report, and one fast
+// rule followed by a slow stretch of anything ended the audit (#578). A no-op call
+// with the longest timeout moves the deadline out of reach; a call without a
+// timeout, or `runInThisContext`, does not. tests/rule-time-budget-disarm-578.test.ts
+// pins it in a child process. Still open: a rule that ends just AFTER its deadline
+// can have the termination land in the caller instead of in this catch (#880).
+const DISARMED_TIMEOUT_MS = 2 ** 31 - 1;
+const noop = () => undefined;
+
+function disarm(): void {
+  slot.fn = noop;
+  try {
+    callSlot.runInContext(context, { timeout: DISARMED_TIMEOUT_MS });
+  } catch {
+    // Never replace the rule's own result or error with this call's.
+  }
+}
+
 /**
  * Call `fn` and return its result, or throw {@link RuleTimeoutError} if its
  * synchronous execution exceeds `budgetMs`. Errors `fn` throws pass through
@@ -115,7 +136,11 @@ export function runWithinBudget<T>(fn: () => T, budgetMs: number): T {
     }
     throw e;
   } finally {
-    slot.fn = undefined;
-    active = false;
+    try {
+      disarm();
+    } finally {
+      slot.fn = undefined;
+      active = false;
+    }
   }
 }

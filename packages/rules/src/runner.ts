@@ -53,6 +53,10 @@ export interface RulesConfig {
     // site-metadata profile (guards against misclassification suppressing real
     // issues). Default false — `appliesWhen` gating engages normally.
     ignore_applicability?: boolean;
+    // `[rules] time_budget_ms` (#578): the per-page rule time budget, overriding
+    // RULE_TIME_BUDGET_MS. `0` turns it off. `RunnerOptions.ruleTimeBudgetMs`
+    // wins over it.
+    time_budget_ms?: number;
   };
 }
 
@@ -252,7 +256,8 @@ export class RuleRunner {
   private config: RulesConfig;
   // Only affects site rules — page rules are sync CPU and run sequentially (#379)
   private ruleConcurrency: number;
-  private readonly ruleTimeBudgetMs: number;
+  /** The per-page rule time budget this run uses, in ms; `0` means off. */
+  readonly ruleTimeBudgetMs: number;
   private readonly siteRuleBudgetCapMs: number;
   // Safe only because page rules run sequentially (see the note on `ruleConcurrency`):
   // the check-then-set on this map and the in-place `details.pages++` here and in
@@ -298,7 +303,10 @@ export class RuleRunner {
       1,
       options.ruleConcurrency ?? DEFAULT_RULE_CONCURRENCY
     );
-    this.ruleTimeBudgetMs = options.ruleTimeBudgetMs ?? RULE_TIME_BUDGET_MS;
+    this.ruleTimeBudgetMs =
+      options.ruleTimeBudgetMs ??
+      options.config.rules?.time_budget_ms ??
+      RULE_TIME_BUDGET_MS;
     this.siteRuleBudgetCapMs = options.siteRuleBudgetCapMs ?? SITE_RULE_BUDGET_CAP_MS;
 
     // Load all rules (plus any caller-supplied namespaces — plugins / tests)

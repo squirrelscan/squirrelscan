@@ -3319,6 +3319,9 @@ export function runStreamingRules(
             htmlBytes: page.sizeBytes,
             // links/broken-anchors: an unrendered client shell's ids are unconfirmed.
             rendered: isRenderedFetch(page.fetcherId),
+            // The extractors are rules' per-page work, so they share the rules'
+            // budget, including a `[rules] time_budget_ms` override (#578).
+            budgetMs: runner.ruleTimeBudgetMs,
           }),
           "collected-signal",
         );
