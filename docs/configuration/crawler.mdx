@@ -798,8 +798,9 @@ Set them per-website under **Settings → Crawl → Custom request headers**. Pl
 HTTP requests carry them. For pages rendered in the cloud browser, by cloud
 audits and by signed-in CLI audits, see
 [rendering and custom headers](/cloud/firewall#rendering-and-custom-headers).
-Use `--http` (or **Rendering: Off** for a cloud audit) when the site is only
-reachable with the headers.
+A signed-in CLI audit's cloud renders never carry `-H` headers, so use
+`--http` when the site is only reachable with them. A cloud audit's renders
+carry the website's custom headers.
 
 ---
 

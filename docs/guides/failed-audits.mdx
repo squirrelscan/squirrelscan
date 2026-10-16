@@ -107,7 +107,7 @@ Every cause below refers to the same sequence of requests. These terms are used 
 |---|---|---|---|
 | 1. Seed redirect probe | `GET` of the audited address, following its HTTP redirects and any meta refresh or script redirect in the page, for up to 10 steps | Not sent. Only the `User-Agent` | 10 s per step, 30 s in all |
 | 2. Root files | `robots.txt`, `llms.txt`, sitemaps and the other root files | Sent | Shares 45 s with step 1. Sitemaps have a limit of their own |
-| 3. Entry page | The page the crawl starts from: the audited address, or where step 1 landed when that is on the same site | Depends on the rendering setting: see [rendering and custom headers](/cloud/firewall#rendering-and-custom-headers) | 30 s per attempt (with Rendering Off, per redirect hop) |
+| 3. Entry page | The page the crawl starts from: the audited address, or where step 1 landed when that is on the same site | Sent, on a cloud browser render too, when the page is on the audited host or its `www` twin: see [rendering and custom headers](/cloud/firewall#rendering-and-custom-headers) | 30 s per attempt (with Rendering Off, per redirect hop) |
 | 4. Entry retry | One more plain `GET` of the entry page, only when step 3 timed out (or, with Rendering Auto or All, got no response at all), no page has been stored yet, and enough of the page's overall time limit remains | Sent | 60 s per redirect hop |
 
 Step 1 decides the crawl's base. When the seed redirect probe lands on the same site, the crawl starts there. When it lands on a different site, the crawl keeps the audited address and fetches it in step 3, which follows the same redirects again: if they still end on the other site, the audit fails as a [redirect to another site](#offsite-redirect). Step 1 never sends your custom request headers, so a site that only lets requests with those headers through always redirects or refuses in step 1. That on its own does not fail the audit.
@@ -125,7 +125,7 @@ Which request serves the entry page depends on the website's **Rendering** setti
 Which of these requests carry your custom request headers, under each setting, is set out in [rendering and custom headers](/cloud/firewall#rendering-and-custom-headers).
 
 <Warning>
-  A site that is only reachable with a header, such as one behind Cloudflare Access or Vercel deployment protection, needs **Rendering: Off**, the setting in which every page request carries your custom request headers (see [rendering and custom headers](/cloud/firewall#rendering-and-custom-headers)). A render that lands on a sign-in page on another site is not a refusal, so it is not replaced by a plain `GET`, and the audit fails as a redirect to another site. See [access gateways](#access-gateway).
+  A site that is only reachable with a header, such as one behind Cloudflare Access or Vercel deployment protection, works under every rendering setting: the cloud browser sends your custom request headers to the page's own origin (see [which renders carry them](/cloud/firewall#which-renders-carry-them)). When headers are set and a render still lands on a known gateway's sign-in page, the page is replaced by a plain `GET` with the headers. If that lands on the sign-in page too, the audit fails as a redirect to another site. See [access gateways](#access-gateway).
 </Warning>
 
 On a plain request, custom request headers are removed at the first redirect to a different origin, and stay removed for the rest of that redirect chain. Only `User-Agent`, `Accept`, `Accept-Language` and `Upgrade-Insecure-Requests` are kept. A redirect from `http://` to `https://`, or from `example.com` to `www.example.com`, is enough to drop them, so audit the exact origin that serves the page. A browser render follows redirects inside the browser, including a page's own script redirects, and reports where it landed.
@@ -470,8 +470,8 @@ Each `location` line is one hop. The last one shows where the audited address en
 
 **What the crawler observed.** The seed redirect probe never sends your custom request headers, so on a gated site it always lands on the sign-in page or gets the `401`. That alone does not fail the audit: when the sign-in page is on another site, the crawl keeps the audited address and fetches it again with the headers. The audit fails as a redirect when that entry page request also lands on the sign-in page, which happens when:
 
-- no header the gateway accepts is set,
-- the page was rendered in the cloud browser (Rendering is Auto or All) rather than fetched with a request that carries the headers (see [rendering and custom headers](/cloud/firewall#rendering-and-custom-headers)), or
+- no header the gateway accepts is set, or the token or secret in it has expired,
+- the gateway's policy does not cover this hostname, or
 - the audited address redirected to another origin before reaching the gateway, which removes the headers (for example `http://` to `https://`, or `example.com` to `www.example.com`).
 
 **Gateways and the way through.**
@@ -500,9 +500,8 @@ The first request, without credentials, shows what the gateway does: a `302` wit
 **What to do.**
 
 1. Set the headers the gateway accepts under **Settings → Crawl → Custom request headers**, using the gateway's section in [Firewall and WAF exceptions](/cloud/firewall).
-2. Set **Rendering** to **Off** in the same page's audit level card, so the entry page and every other page are fetched with a plain request that carries the headers. The audit then reads the HTML your server sends, without running JavaScript.
-3. Audit the exact origin the second `curl` used, with the same scheme and host.
-4. Run the audit and work through the [verification checklist](/cloud/firewall#verification-checklist).
+2. Audit the exact origin the second `curl` used, with the same scheme and host. Rendering can stay on: the cloud browser sends the headers to that origin too.
+3. Run the audit and work through the [verification checklist](/cloud/firewall#verification-checklist).
 
 For a gateway with no header route, audit from somewhere the gateway already lets through: the CLI on a network the gateway admits, such as an office network or VPN, or the CLI against a local build of the same site (`squirrel audit http://localhost:3000`). Signed in, the CLI renders pages in the cloud browser by default; add `--http` when the audit depends on headers passed with `-H` (see [rendering and custom headers](/cloud/firewall#rendering-and-custom-headers)).
 
