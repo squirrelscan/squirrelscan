@@ -108,6 +108,10 @@ describe("anchors a page renders", () => {
     expect(slugify(renderedText("The ``a `b` c`` span"))).toBe(
       "the-a-b-c-span"
     );
+    expect(slugify(renderedText("Tags <kbd>Ctrl</kbd> here"))).toBe(
+      "tags-ctrl-here"
+    );
+    expect(renderedText("a <b<i>> c")).not.toMatch(/[<>]/);
   });
 
   test("a marker only becomes the id at the end of the heading", () => {
@@ -157,6 +161,20 @@ describe("checkDocs", () => {
     expect(messages(root)).toEqual([
       "rules/perf/lcp.mdx:3: dead link ./cls",
       "rules/perf/lcp.mdx:3: dead link /rules/performance/lcp",
+    ]);
+  });
+
+  test("checks a nested section named scripts, and matches redirect patterns", () => {
+    const root = docs({
+      "guides/scripts/index.mdx": "# Scripts\n\n[gone](/nowhere)\n",
+      _redirects:
+        "/old/* /new/:splat 301\n/blog/:slug/amp /blog/:slug 301\n/v*/notes /notes 301\n",
+      "index.mdx":
+        "[a](/old/x/y) [b](/blog/hello/amp) [c](/v2/notes) [d](/blog/a/b/amp)\n",
+    });
+    expect(messages(root)).toEqual([
+      "index.mdx:1: dead link /blog/a/b/amp",
+      "guides/scripts/index.mdx:3: dead link /nowhere",
     ]);
   });
 

@@ -1,5 +1,5 @@
 {
-  "$comment": "Anchors that links from outside the docs point at: the cloud's failure explanations (run page, failure email, bell, MCP) link to these sections. check-links.ts fails if one disappears, so rename a heading's text freely but keep its {#id}, and add an anchor here when the cloud starts linking to it.",
+  "$comment": "Anchors that links from outside the docs point at: the cloud's failure explanations (run page, failure email, bell, MCP; FAILURE_DOCS_ANCHORS and the firewall anchors in the cloud's failure-explanation module) link to these sections. check-links.ts fails if one disappears, so rename a heading's text freely but keep its {#id}, and add an anchor here when the cloud starts linking to it.",
   "anchors": [
     "/guides/failed-audits#request-sequence",
     "/guides/failed-audits#access-gateway",

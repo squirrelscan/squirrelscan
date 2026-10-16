@@ -8,8 +8,9 @@
  *   markdown links and images (`[text](target)`), reference definitions
  *   (`[ref]: target`) and JSX `href="target"`, absolute (`/rules/perf/lcp`),
  *   relative (`./lcp`) or same-page (`#how-to-fix`), resolved the way a browser
- *   resolves them from the page's URL. External links (with a scheme), code and
- *   MDX comments are not checked.
+ *   resolves them from the page's URL. External links (with a scheme), targets
+ *   built from a JSX expression (containing `{`), code and MDX comments are not
+ *   checked.
  * - A page is `<route>.mdx`, `<route>.md` or `<route>/index.mdx`; `/x/index` and
  *   `/x.md` reach the same page as `/x`. A redirect is a source in docs.json or
  *   `_redirects`.
@@ -40,15 +41,19 @@ export interface DocsProblem {
   message: string;
 }
 
-const SKIP_DIRS = new Set(["node_modules", "dist", "scripts"]);
+const SKIP_DIRS = new Set(["node_modules", "dist"]);
+// This script's own directory, at the docs root only: a docs section that happens
+// to be called `scripts` deeper down is still checked.
+const SKIP_TOP_LEVEL = new Set(["scripts"]);
 // Any host will do: links are resolved against the page URL, then only the path and hash are read.
 const ORIGIN = "https://docs.invalid";
 
-function walk(dir: string, out: string[] = []): string[] {
+function walk(dir: string, top: boolean, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
     if (name.startsWith(".") || SKIP_DIRS.has(name)) continue;
+    if (top && SKIP_TOP_LEVEL.has(name)) continue;
     const path = join(dir, name);
-    if (statSync(path).isDirectory()) walk(path, out);
+    if (statSync(path).isDirectory()) walk(path, false, out);
     else out.push(path);
   }
   return out;
@@ -110,7 +115,7 @@ function renderProse(markdown: string): string {
     markdown
       .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
       .replace(/!?\[([^\]]*)\]\[[^\]]*\]/g, "$1")
-      .replace(/<[^>]+>/g, "")
+      .replace(/<[^<>]*>/g, "")
       .replace(/(\*\*|\*|~~)(?=\S)(.*?\S)\1/g, "$2")
       // `_` and `__` only emphasise at a word boundary: `per_host_delay` stays as written.
       .replace(/(?<![\p{L}\p{N}])(__|_)(?=\S)(.*?\S)\1(?![\p{L}\p{N}])/gu, "$2")
@@ -118,6 +123,9 @@ function renderProse(markdown: string): string {
       // Astro's smartypants turns `---` and `--` into dashes, which the slug drops.
       .replace(/---|--/g, "")
       .replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z][a-z0-9]*);/gi, decodeEntity)
+      // Any `<` or `>` still here (a stray one, an unescaped `\<`, a decoded
+      // `&lt;`) is punctuation, which the slug drops anyway.
+      .replace(/[<>]/g, "")
   );
 }
 
@@ -190,6 +198,8 @@ export function anchorsOf(source: string): Set<string> {
     if (!heading) continue;
     const content = heading[2]!.replace(/\s+#+$/, "");
     const explicit = EXPLICIT_ID.exec(content)?.[1];
+    // rehype-slug skips a heading that already has an id, so an explicit id takes
+    // no part in the repeat count below.
     if (explicit) {
       ids.add(explicit);
       continue;
@@ -253,12 +263,24 @@ function redirectSources(root: string): string[] {
   return sources;
 }
 
+/** A redirect source as a pattern: `*` matches anything, a `:name` placeholder one path segment. */
+function sourcePattern(source: string): RegExp {
+  const body = normalizeRoute(source)
+    .split(/(\*|:[A-Za-z_]\w*)/)
+    .map((part) =>
+      part === "*"
+        ? ".*"
+        : part.startsWith(":")
+          ? "[^/]+"
+          : part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+    )
+    .join("");
+  return new RegExp(`^${body}$`);
+}
+
 function redirected(path: string, sources: string[]): boolean {
-  return sources.some((source) =>
-    source.endsWith("/*")
-      ? path.startsWith(source.slice(0, -1))
-      : normalizeRoute(source) === normalizeRoute(path)
-  );
+  const route = normalizeRoute(path);
+  return sources.some((source) => sourcePattern(source).test(route));
 }
 
 const OPTIONS_HEADING = /^##\s+Options\s*$/;
@@ -285,7 +307,9 @@ export function checkDocs(
   root: string,
   requiredAnchors: string[] = []
 ): DocsProblem[] {
-  const files = walk(root).map((f) => relative(root, f).split("\\").join("/"));
+  const files = walk(root, true).map((f) =>
+    relative(root, f).split("\\").join("/")
+  );
   const pages = new Map<string, { file: string; source: string }>();
   for (const file of files) {
     if (file.endsWith(".mdx") || file.endsWith(".md")) {
