@@ -135,7 +135,7 @@ export const credits = defineCommand({
         const perLink = priced.external_link?.cost;
         if (perLink != null) {
           console.log(
-            `  external links       ${String(perLink).padStart(3)} per link the cloud checks for an audit, at most 1 per page`
+            `  external links       ${String(perLink).padStart(3)} per link the cloud verifies for an audit, at most 1 per page`
           );
           // #801: a signed-in CLI audit's cloud link checks pay too; what the
           // CLI checks from the user's machine, and internal links, do not.

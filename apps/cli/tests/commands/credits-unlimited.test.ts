@@ -186,7 +186,7 @@ describe("`squirrel credits` on a metered account (control)", () => {
     // #801: an audit's cloud link checks pay, CLI or cloud; what the CLI
     // checks from the user's machine does not.
     expect(text).toContain(
-      "per link the cloud checks for an audit, at most 1 per page"
+      "per link the cloud verifies for an audit, at most 1 per page"
     );
     expect(text).toContain(
       "internal links, and links checked from your machine, are free)"
