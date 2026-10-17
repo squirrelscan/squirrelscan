@@ -1,4 +1,4 @@
-import { logger } from "./logger";
+import { logger, profileRules } from "./logger";
 // Rule runner - executes rules with context
 
 import { PRIVATE_TARGET_SKIP_REASON } from "@squirrelscan/core-contracts";
@@ -479,7 +479,7 @@ export class RuleRunner {
       return { meta: rule.meta, checks: fanned };
     }
 
-    const ruleStart = performance.now();
+    const ruleStart = profileRules ? performance.now() : 0;
     let ruleError: unknown = null;
     let ruleCheckCount = 0;
 
@@ -487,6 +487,10 @@ export class RuleRunner {
     // output and logging are identical regardless of run() being sync or async.
     const finalize = (ruleChecks: CheckResult[]): RuleRunResult => {
       ruleCheckCount = ruleChecks.length;
+      // pub#274: the logger drops this line unless SQUIRREL_RULE_PROFILE is set,
+      // but its arguments (three filters and the payload) would still be built
+      // on every rule invocation, so build them only when profiling.
+      if (!profileRules) return { meta: rule.meta, checks: ruleChecks };
       const passed = ruleChecks.filter((c) => c.status === "pass").length;
       const failed = ruleChecks.filter((c) => c.status === "fail").length;
       const warned = ruleChecks.filter((c) => c.status === "warn").length;
