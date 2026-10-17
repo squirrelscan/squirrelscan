@@ -84,7 +84,7 @@ export interface PageStyles {
 const MENTIONS_HIDING = /display|visibility|\ball\b/i;
 /** A rule body that may start an animation. */
 const MAY_ANIMATE = /animation|\\/i;
-const CDO_CDC = /^(?:[\t\n\f\r ]*(?:<!--|-->))+[\t\n\f\r ]*/;
+const LEADING_CSS_SPACE = /^[\t\n\f\r ]+/;
 /** Style text that may matter here at all. */
 const MAY_MATTER = /display|visibility|\ball\b|animation|@import|\\/i;
 const UNICODE_SPACE = /[\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]/;
@@ -458,6 +458,19 @@ function addTo<T>(index: Map<string, T[]>, key: string, entry: T): void {
   else index.set(key, [entry]);
 }
 
+/**
+ * A prelude without the `<!--` and `-->` tokens a browser drops at the top
+ * level of a sheet (old pages wrap a `<style>` body in them).
+ */
+function dropCdoCdc(prelude: string): string {
+  let rest = prelude.replace(LEADING_CSS_SPACE, "");
+  for (;;) {
+    if (rest.startsWith("<!--")) rest = rest.slice(4).replace(LEADING_CSS_SPACE, "");
+    else if (rest.startsWith("-->")) rest = rest.slice(3).replace(LEADING_CSS_SPACE, "");
+    else return rest;
+  }
+}
+
 /** Whether a browser applies this `<style>`: no type, or exactly `text/css`. */
 function styleTypeApplies(type: string | null): boolean {
   return type === null || type === "" || asciiLower(type) === "text/css";
@@ -546,9 +559,7 @@ export function readPageStyles(doc: Document): PageStyles {
       // it sets reaches whatever element runs the animation.
       if (rule.conditional && hasKeyframes) animatesVisibility ||= visibility;
       if (rule.conditional && KEYFRAME_SELECTOR.test(rule.selector)) continue;
-      // Old pages wrap a sheet in `<!--` … `-->`; at the top level a browser
-      // drops those tokens.
-      const selector = rule.conditional ? rule.selector : rule.selector.replace(CDO_CDC, "");
+      const selector = rule.conditional ? rule.selector : dropCdoCdc(rule.selector);
       const selectors = splitSelectorList(selector).map(parseSelector);
       if (animates) {
         for (const s of selectors) {

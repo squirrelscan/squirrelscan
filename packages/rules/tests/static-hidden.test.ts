@@ -240,3 +240,43 @@ describe("static-hidden: <style> reading is bounded", () => {
     expect(performance.now() - started).toBeLessThan(1000);
   });
 });
+
+// Review on pub#921: random selectors and declarations through the reader.
+// It must never throw, and every element gets an answer quickly.
+describe("static-hidden: <style> fuzz", () => {
+  const PIECES = [
+    ".a", ".A", "#t", "#T", "b", "B", "i", "*", "[x]", "[x=y]", "[x='1']", ":hover", ":not(.a)",
+    ":is(b)", "::before", " ", ">", "+", "~", ",", "\\", "\\31 ", "\\\n", "&", "|", "-", "--", "2",
+    "{", "}", "(", ")", "[", "]", ";", ":", "!", "\"", "'", "/*", "*/", "<!--", "-->", "@media screen{",
+    "@keyframes k{", "from", "to", "50%", "@layer x;", "@import url(a);", "@namespace x;", "@\\6d edia",
+    "display:none", "display:block", "display:contents", "display:revert", "visibility:hidden",
+    "visibility:visible", "visibility:revert-layer", "animation:k 1s", "all:initial", "!important", "var(--x)",
+  ];
+  const ELEMENTS = [
+    `<b id="t" class="a">x</b>`, `<i class="A a" x="y">x</i>`, `<b style="display:none">x</b>`,
+    `<div style="visibility:hidden"><b>x</b></div>`, `<svg><rect x="1"/></svg>`, `<template><b>x</b></template>`,
+    `<b hidden>x</b>`, `<dialog><b>x</b></dialog>`, `<i style="animation:k 1s">x</i>`,
+  ];
+
+  test("500 random sheets: no throw, every element answered", () => {
+    let seed = 678;
+    const next = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed / 2147483648;
+    };
+    const pick = <T>(list: T[]) => list[Math.floor(next() * list.length)] as T;
+    const started = performance.now();
+    for (let round = 0; round < 500; round++) {
+      const css = Array.from({ length: 1 + Math.floor(next() * 40) }, () => pick(PIECES)).join("");
+      const body = Array.from({ length: 1 + Math.floor(next() * 6) }, () => pick(ELEMENTS)).join("");
+      const { document } = parseHTML(
+        `<!doctype html><html><head><style>${css}</style></head><body>${body}</body></html>`,
+      );
+      const resolver = createStaticVisibility({ ariaHidden: round % 2 === 0 });
+      for (const el of document.querySelectorAll("*")) {
+        expect(["shown", "hidden", "unknown"]).toContain(resolver.visibility(el as unknown as Element).state);
+      }
+    }
+    expect(performance.now() - started).toBeLessThan(10_000);
+  });
+});
