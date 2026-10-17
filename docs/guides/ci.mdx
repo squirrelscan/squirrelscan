@@ -106,3 +106,22 @@ and exposed as `SQUIRRELSCAN_API_KEY`:
 When `SQUIRRELSCAN_API_KEY` is set, the CLI uses it automatically (the older
 `SQUIRREL_API_TOKEN` name still works as a back-compat alias). Without either,
 the audit still runs deterministically; it just skips cloud enrichment.
+
+## What an API-key audit costs
+
+An audit signed in with an org API key is not registered as a cloud run, so it
+is billed differently from a `squirrel auth login` audit:
+
+- **No audit or page charge.** It pays no 50-credit audit base and no
+  per-page charge.
+- **Links checked on the runner, free.** Its external links are always checked
+  from the CI machine, never by the cloud's [link checker](/guides/link-checking),
+  and cost nothing. Expect more false positives from sites that block
+  automated traffic.
+- **Cloud renders are billed.** A page it renders in the cloud is billed as a
+  standalone render, 2 credits per page. An HTTP-only audit (`--http`) renders
+  nothing.
+
+This is deliberate. A CI audit gates a build, and the full billed audit is a
+signed-in `squirrel audit` or a [cloud audit](/guides/cloud-audits). See
+[Credits and pricing](/cloud/credits).

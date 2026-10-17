@@ -83,6 +83,10 @@ A signed-in `squirrel audit` sends its external links to the cloud's [dead-link 
 
 Signed-in CLI link checks were free before v0.0.114. A CLI from before it still gets free cloud link checks until 2026-11-12; from then it checks its links on your machine until you run `squirrel self update`.
 
+An audit signed in with an org API key (CI) is not registered as a cloud run: it pays no audit base, no page charge and nothing for its links, which it checks on the runner. Pages it renders in the cloud are billed as standalone renders, 2 credits each. See [What an API-key audit costs](/guides/ci#what-an-api-key-audit-costs).
+
+A dead-link check called directly, outside an audit (`POST /v1/services/dead-links` with no run), costs 1 credit for each distinct link it verifies, counted as an audit counts them (by scheme, host and path, so the same page with a different query string or fragment is one link). A link it cannot verify or does not answer costs nothing.
+
 The base includes everything else: AI page analysis ([`ai/llm-parsability`](/rules/ai/llm-parsability), [`ai/page-type-match`](/rules/ai/page-type-match)), [authority signals](/rules/eeat/authority-signals), the [Blocking check](/rules/adblock), [technology detection](/cloud/technologies), [site metadata](/cloud/site-metadata), the [editor's summary](/cloud/editor-summary), and publishing the report. None of these are charged separately.
 
 Rendering does not change the price. An HTTP-only (`--http`) audit costs the same per page as a rendered one, so pick the render mode for accuracy, not to save credits.

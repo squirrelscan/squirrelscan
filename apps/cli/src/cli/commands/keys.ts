@@ -121,6 +121,13 @@ const keysCreate = defineCommand({
     console.log(
       `  Expires: ${key.expiresAt ? new Date(key.expiresAt).toLocaleDateString() : "never"}`
     );
+    // repo#2868: an API-key audit is not a registered run, so it is billed
+    // differently from a logged-in one. Say so where the key is made.
+    console.log(
+      fmt.dim(
+        "  Audits signed in with this key pay no audit or page charge and check links on the runner; cloud renders cost 2 credits each: docs.squirrelscan.com/guides/ci#what-an-api-key-audit-costs"
+      )
+    );
 
     if (shellTarget) {
       await appendExportToShellRc(shellTarget, key.token);
