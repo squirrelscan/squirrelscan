@@ -22,6 +22,7 @@ Thanks to @WilliamK112, whose pull requests are behind the `content/hidden-text`
 ### Changed
 
 - The crawler's `page:fetched` event now carries each page's `ttfbMs` and `fetcherId`, and no longer declares a `rendered` field, which the crawler never set and nothing read.
+- The rule runner builds its per-rule timing line only when `SQUIRREL_RULE_PROFILE` is set, instead of building it on every rule run and throwing it away. Measured on a 300-page crawl of the docs site, which makes 53,450 rule runs, the difference is not measurable: about 5 ms of work against 38 s of rule time. With `SQUIRREL_RULE_PROFILE=1` the `[rule-profile]` lines are unchanged.
 
 ### Fixed
 
