@@ -60,7 +60,7 @@ Like the internal check, the external check never requests a link that looks lik
 
 Many sites refuse automated requests. A refusal says nothing about whether a person would reach the page. So Perch does not take the first answer at face value:
 
-- **A link is reported broken only after the failure is confirmed.** Until then it is listed as status unverifiable, not broken, and an item the link checker marks as waiting reads `(unverified: awaiting confirmation)`, likely broken rather than blocked. The cloud link checker does not send that mark yet. A link checked again by a later audit counts toward this too.
+- **A link is reported broken only after the failure is confirmed.** Until then it is listed as status unverifiable, not broken, and an item the link checker marks as waiting reads `(unverified: awaiting confirmation)`, likely broken rather than blocked. A link checked again by a later audit counts toward this too.
 - **A domain that no longer exists** is reported as dead.
 - **A page that answers 200 but whose title is just "404" or "Page not found"** (a soft 404) counts as broken.
 - **A link that still cannot be verified is listed as status unverifiable, never as broken.** This covers firewall challenges, bot walls and CDN error pages. A rate limit is listed as rate-limited, never as broken.
