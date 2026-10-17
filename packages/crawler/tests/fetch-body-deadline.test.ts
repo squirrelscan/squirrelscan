@@ -148,10 +148,35 @@ describe("standard fetch body deadline (#1729)", () => {
     }
   });
 
-  test("a terminal status released without a read still cancels the connection", async () => {
-    // A 403 fails `applyStatusGuards` BEFORE any body read, so the held
-    // response is released without one. Disarming the timer alone left the
-    // stalled body and its socket parked for the life of the process.
+  test("a 403 challenge body is sampled before the status guard", async () => {
+    const challenge =
+      '<!doctype html><html><head><title>Just a moment...</title></head><body><div id="cf-browser-verification">Checking your browser</div></body></html>';
+    const server = Bun.serve({
+      port: 0,
+      fetch: () =>
+        new Response(challenge, {
+          status: 403,
+          headers: { "content-type": "text/html" },
+        }),
+    });
+    try {
+      const result = await Effect.runPromise(
+        Effect.either(fetchPage(`http://localhost:${server.port}/`, FETCH_OPTIONS)),
+      );
+
+      expect(result._tag).toBe("Left");
+      if (result._tag === "Left") {
+        expect(result.left.type).toBe("blocked");
+        expect(result.left.message).toBe("Blocked by Cloudflare challenge (403)");
+      }
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("a stalled 403 challenge probe is classified as a timeout", async () => {
+    // A 403 body is sampled for challenge proof before the status guard. If
+    // that prefix stalls, the request deadline must still cancel the socket.
     const seen = { aborted: false };
     const server = serveStalling(seen, 403);
     try {
@@ -160,7 +185,7 @@ describe("standard fetch body deadline (#1729)", () => {
       );
 
       expect(result._tag).toBe("Left");
-      if (result._tag === "Left") expect(result.left.type).toBe("blocked");
+      if (result._tag === "Left") expect(result.left.type).toBe("timeout");
 
       await settle();
       expect(seen.aborted).toBe(true);
