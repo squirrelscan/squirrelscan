@@ -148,7 +148,9 @@ function hasPageLevelCaptchaScript(doc: Document): boolean {
 // switches itself off (`enabled: false`) is not protection.
 const UUID_KEY = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const SITE_KEY_FORMATS: Record<string, string> = {
-  // Production keys start 0x4; the documented test keys are 1x/2x/3x + zeros.
+  // Production keys start 0x4. Cloudflare documents the test keys
+  // 1x00000000000000000000AA (passes), 2x00000000000000000000AB (blocks) and
+  // 3x00000000000000000000FF (forces a challenge).
   turnstile: "(?:0x4[\\w-]{10,60}|[123]x0{20}[A-F]{2})",
   recaptcha: "6L[\\w-]{38}",
   hcaptcha: UUID_KEY,
@@ -212,6 +214,9 @@ function hasPageLevelCaptchaConfig(doc: Document): boolean {
   for (const script of doc.querySelectorAll("script:not([src])")) {
     const content = script.textContent || "";
     if (!content) continue;
+    // A flat key has no object of its own to carry an off switch. Known gap:
+    // a sibling `<provider>Enabled: false` is not read, so such a page reads
+    // as protected.
     if (FLAT_SITE_KEY.test(content)) return true;
     let seen = 0;
     for (const match of content.matchAll(PROVIDER_OBJECT_START)) {

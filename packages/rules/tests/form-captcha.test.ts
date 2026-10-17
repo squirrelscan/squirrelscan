@@ -295,7 +295,7 @@ describe("security/form-captcha: a site key in the page's config", () => {
 
   test.each([
     ["Nuxt runtime config (the issue's page)", '<script>window.__NUXT__={};window.__NUXT__.config={public:{turnstile:{siteKey:"0x4AAAAAADPN4lRzZ4X3GkuZ"},baseUrl:"https://one-dot.de"}}</script>'],
-    ["a JSON data script", '<script id="__NEXT_DATA__" type="application/json">{"runtimeConfig":{"recaptchaSiteKey":"6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"}}</script>'],
+    ["a JSON data script", '<script id="__NEXT_DATA__" type="application/json">{"runtimeConfig":{"recaptchaSiteKey":"6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"}}</script>'], // pragma: allowlist secret
     ["hCaptcha with a lowercase sitekey", '<script>var cfg = { "hcaptcha": { "sitekey": "10000000-ffff-ffff-ffff-000000000001" } };</script>'],
     ["an underscore name", '<script>window.env = { TURNSTILE_SITE_KEY: "0x4AAAAAAAxyz123" };</script>'],
     ["an env-style name", '<script>window.env = { NUXT_PUBLIC_TURNSTILE_SITE_KEY: "1x00000000000000000000AA" };</script>'],
@@ -313,6 +313,7 @@ describe("security/form-captcha: a site key in the page's config", () => {
     ["prose naming a provider", '<script>console.log("We use Turnstile; see the siteKey docs");</script>'],
     ["a provider key with no site key", '<script>window.cfg = { turnstile: { enabled: true, theme: "auto" } };</script>'],
     ["an empty key", '<script>window.cfg = { turnstile: { siteKey: "" } };</script>'],
+    ["a flat key in the wrong format", '<script>window.env = { recaptchaSiteKey: "your-site-key-here" };</script>'],
     ["a translated label, not a key", '<script type="application/json">{"messages":{"recaptcha":{"siteKey":"Site-Key"}}}</script>'],
     ["a provider switched off", '<script>window.cfg = { turnstile: { enabled: false, siteKey: "0x4AAAAAAAxyz123" } };</script>'],
     ["a provider switched off after its key", '<script>window.cfg = { hcaptcha: { sitekey: "10000000-ffff-ffff-ffff-000000000001", disabled: true } };</script>'],
