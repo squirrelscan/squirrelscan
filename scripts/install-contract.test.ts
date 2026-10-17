@@ -1207,6 +1207,85 @@ describe("by-hand install after a killed self install (#2023)", () => {
   }, 15_000);
 });
 
+// --- release metadata validation (#167) ----------------------------------
+describe("release metadata validation (#167)", () => {
+  test.each([
+    ["v1.2.3", true],
+    ["1.2.3-beta.1", true],
+    ["../v1.2.3", false],
+    ["v1.2.3/asset", false],
+    ["v1.2.3?download=1", false],
+  ])("version %p is accepted: %p", async (version, accepted) => {
+    const { code } = await runWithCurlShim(`valid_release_version ${JSON.stringify(version)}`);
+    expect(code === 0).toBe(accepted);
+  });
+
+  test.each([
+    ["squirrel-1.2.3-linux-x64", true],
+    ["manifest.json", true],
+    ["../squirrel", false],
+    ["nested/squirrel", false],
+    ["-squirrel", false],
+  ])("filename %p is accepted: %p", async (filename, accepted) => {
+    const { code } = await runWithCurlShim(`valid_release_filename ${JSON.stringify(filename)}`);
+    expect(code === 0).toBe(accepted);
+  });
+
+  test("rejects invalid URL metadata before invoking curl", async () => {
+    const invalidVersion = await runWithCurlShim(
+      'fetch_release_asset "../v1.2.3" manifest.json /tmp/unused manifest',
+    );
+    expect(invalidVersion.code).toBe(1);
+    expect(invalidVersion.calls).toHaveLength(0);
+    expect(invalidVersion.stderr).toContain("Invalid release version");
+
+    const invalidFilename = await runWithCurlShim(
+      'fetch_release_asset v1.2.3 "../squirrel" /tmp/unused binary',
+    );
+    expect(invalidFilename.code).toBe(1);
+    expect(invalidFilename.calls).toHaveLength(0);
+    expect(invalidFilename.stderr).toContain("Invalid release asset filename");
+  });
+
+  test("rejects an invalid manifest checksum before downloading the binary", async () => {
+    const manifest =
+      '{"version":"1.2.3","binaries":{"linux-x64":{"filename":"squirrel-linux-x64","sha256":"not-a-sha256"}}}';
+    const { calls, code, stderr } = await runWithCurlShim(
+      "USE_JQ=true; download_and_install v1.2.3 linux-x64 /tmp/squirrel-invalid-sha-bin",
+      { body: manifest },
+    );
+    expect(code).toBe(1);
+    expect(calls).toHaveLength(1);
+    expect(stderr).toContain("Invalid SHA256 in release manifest");
+  });
+
+  test("compares valid SHA256 values case-insensitively", async () => {
+    const lower = "ab".repeat(32);
+    const upper = lower.toUpperCase();
+    const manifest = JSON.stringify({
+      version: "1.2.3",
+      binaries: { "linux-x64": { filename: "squirrel-linux-x64", sha256: upper } },
+    });
+    const script = `
+      fetch_release_asset() {
+        if [ "$2" = manifest.json ]; then
+          printf '%s' ${JSON.stringify(manifest)} > "$3"
+        else
+          printf '#!/bin/bash\\nexit 1\\n' > "$3"
+        fi
+        DOWNLOAD_SOURCE=github.com
+      }
+      compute_sha256() { printf '%s' ${JSON.stringify(lower)}; }
+      USE_JQ=true
+      download_and_install v1.2.3 linux-x64 /tmp/squirrel-uppercase-sha-bin
+    `;
+    const { code, stderr } = await runWithCurlShim(script);
+    expect(code).toBe(1); // the synthetic binary fails after checksum verification
+    expect(stderr).toContain(`Checksum verified: ${lower.slice(0, 16)}...`);
+    expect(stderr).not.toContain("Checksum mismatch");
+  });
+});
+
 // --- the mirror fallback (#2064) ------------------------------------------
 // GitHub release-asset URLs redirect to release-assets.githubusercontent.com,
 // which some networks cannot reach. Every asset now has a second source at
