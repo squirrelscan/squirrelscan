@@ -11,14 +11,17 @@ Each family points at a different break in the publishing pipeline. Filler copy 
 
 ## What squirrel checks
 
-The rule runs on every crawled page over the prose in `<body>`, excluding scripts, styles and code-like elements. It emits a single check named `placeholder-content`:
+The rule runs on every crawled page over the prose in `<body>`, excluding scripts, styles and code-like elements, and over the page's `<title>`. It emits a check named `placeholder-content` for the body, and a second one named `placeholder-title` only when the title shows a value:
 
 - Skipped when there is no parsed document. Message: `No document available`.
 - Skipped when there is no `<body>`. Message: `No body element to read visible text from`.
 - Pass when nothing matched. Message: `No placeholder or template leftovers in visible text`.
 - Warn or fail otherwise. Message: `3 placeholder occurrence(s) in visible text: lorem ipsum filler (lorem)`, naming each family with the marker token that matched rather than a passage excerpt. Each family is listed as an item with its own count and samples.
+- `placeholder-title` warns when a whole segment of the title is exactly `undefined`, `null` or `NaN`, the way `${title} | Acme` renders when the value is missing, and fails when the title holds `[object X]` anywhere. Segments are split at ` | `, ` - `, ` – `, ` — `, ` · `, ` • `, ` » `, ` › `, ` / ` and ` :: `. Message: `Title shows a JavaScript value: {value}` or `Title shows a stringified object: {value}`, with the title as the value. A page whose `<h1>` or one of whose `<code>` elements is exactly that word is about it, as MDN's `undefined - JavaScript | MDN` is, and is not reported. A clean title adds no row.
 
 Six families are detected, reported under these labels: `lorem ipsum filler`, `theme boilerplate`, `unrendered template syntax`, `stringified object in copy`, `JavaScript value in copy` and `source-comment marker`. The status is fail when lorem ipsum, unrendered template syntax or a stringified object was found, because none of those has an innocent reading, and warn for the other three. Severity for the rule is warning, weight 6. The rule is skipped on soft 404 pages.
+
+This rule is the one that reports a stringified value in the title. [core/meta-title](/rules/core/meta-title) judges whether the title is there and how long it is, not what it says.
 
 ## How to fix it
 

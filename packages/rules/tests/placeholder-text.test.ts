@@ -6,6 +6,7 @@
 // more weight than any of the detection cases.
 
 import { describe, expect, test } from "bun:test";
+import { parsePage } from "@squirrelscan/parser";
 import { parseHTML } from "@squirrelscan/parser/dom";
 
 import { findPlaceholders, normalizeProse, placeholderTextRule } from "../src/content/placeholder-text";
@@ -480,5 +481,61 @@ describe("getRenderedProseText", () => {
     expect(prose("<tr><td>Author</td><td>undefined</td></tr>")).toBe(
       "\n\nAuthor\n\nundefined\n\n",
     );
+  });
+});
+
+// pub#215: the body walk never reads the head, and a broken <title> is the one
+// a reader sees in search results and the browser tab.
+describe("placeholderTextRule — the title", () => {
+  const titled = (title: string, body = "<h1>Acme anvils</h1><p>Forged in Ohio.</p>") => {
+    const html = `<html><head><title>${title}</title></head><body>${body}</body></html>`;
+    const ctx = {
+      page: { url: "https://example.com/", html, statusCode: 200, loadTime: 0, headers: {} },
+      parsed: parsePage(html, "https://example.com/"),
+      options: {},
+    } as unknown as RuleContext;
+    return placeholderTextRule.run(ctx).checks as Array<{ name: string; status: string; message: string }>;
+  };
+  const titleCheck = (title: string, body?: string) => titled(title, body).find((c) => c.name === "placeholder-title");
+
+  test.each([
+    ["undefined | Acme", "warn: Title shows a JavaScript value: undefined"],
+    ["Acme - null", "warn: Title shows a JavaScript value: null"],
+    ["Shop \u00b7 NaN \u00b7 Acme", "warn: Title shows a JavaScript value: NaN"],
+    ["undefined", "warn: Title shows a JavaScript value: undefined"],
+    ["Acme | undefined |", "warn: Title shows a JavaScript value: undefined"],
+    ["| null", "warn: Title shows a JavaScript value: null"],
+    ["[object Object] | Acme", "fail: Title shows a stringified object: [object Object]"],
+    ["Acme anvils [object Promise]", "fail: Title shows a stringified object: [object Promise]"],
+  ])("%s is reported", (title, expected) => {
+    const c = titleCheck(title);
+    expect(c && `${c.status}: ${c.message}`).toBe(expected);
+  });
+
+  test.each([
+    ["the word inside a segment", "Why undefined breaks your build | Acme"],
+    ["another case", "Undefined | Acme"],
+    ["a hyphenated word", "non-null assertions | Acme"],
+    ["a clean title", "Acme anvils | Forged in Ohio"],
+  ])("not reported: %s", (_name, title) => {
+    expect(titleCheck(title)).toBeUndefined();
+  });
+
+  test("a page about the word is not reported: MDN's undefined page", () => {
+    const mdn = "<h1>undefined</h1><p>The <code>undefined</code> global property represents the primitive value <code>undefined</code>.</p>";
+    expect(titleCheck("undefined - JavaScript | MDN", mdn)).toBeUndefined();
+    // Named in a <code> element alone is enough too.
+    expect(titleCheck("null - JavaScript | MDN", "<h1>The null value</h1><p>See <code>null</code>.</p>")).toBeUndefined();
+    // Each value is judged on its own: the page is about undefined, not null.
+    expect(titleCheck("undefined | null | Acme", mdn)?.message).toBe("Title shows a JavaScript value: null");
+  });
+
+  test("reported once, by this rule's own check, beside the body result", () => {
+    const checks = titled("undefined | Acme");
+    expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual(["placeholder-content:pass", "placeholder-title:warn"]);
+  });
+
+  test("a clean title adds no row", () => {
+    expect(titled("Acme anvils").map((c) => c.name)).toEqual(["placeholder-content"]);
   });
 });

@@ -440,6 +440,65 @@ function findMarkers(text: string): PlaceholderFinding | undefined {
 }
 
 /* -------------------------------------------------------------------------- */
+/* 6. The title                                                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The separators titles are built with: `Page | Site`, `Page - Site`,
+ * `Page – Site`, `Page · Site`, `Site » Page`, `Site :: Page`. Each needs a
+ * space on both sides, so a hyphenated word is not split.
+ */
+const TITLE_SEPARATOR_RE = / (?:[|\-\u2013\u2014\u00b7\u2022\u00bb\u203a/]|::) /;
+
+/** The bare JavaScript values, as a whole title segment. Case-sensitive, like the body family. */
+const TITLE_JS_VALUES = new Set(["undefined", "null", "NaN"]);
+
+export interface TitlePlaceholder {
+  kind: "stringified-object" | "js-artifact";
+  sample: string;
+}
+
+/**
+ * A stringified value in `<title>` (pub#215): `[object Object]` anywhere, or
+ * `undefined`, `null` or `NaN` as a whole segment, the way `${title} | Acme`
+ * renders when `title` is missing. The body walk never reads the head, and a
+ * broken title is the one users see in search results and browser tabs.
+ *
+ * A page ABOUT the word is not reported: when its `<h1>` or one of its
+ * `<code>` elements is exactly that word, the title names the subject, as
+ * MDN's `undefined - JavaScript | MDN` does.
+ */
+export function findTitlePlaceholder(
+  title: string,
+  doc: NonNullable<RuleContext["parsed"]["document"]>,
+): TitlePlaceholder | undefined {
+  const text = normalizeProse(title).replace(/\n/g, " ").trim();
+  const object = text.match(OBJECT_TAG_RE)?.[0];
+  if (object) return { kind: "stringified-object", sample: object };
+
+  // Padded, so a separator at either end still splits: `Acme | undefined |`.
+  const values = new Set(
+    ` ${text} `
+      .split(TITLE_SEPARATOR_RE)
+      .map((segment) => segment.trim())
+      .filter((segment) => TITLE_JS_VALUES.has(segment)),
+  );
+  if (values.size === 0) return undefined;
+
+  // Each value is judged on its own: a page about `undefined` can still print
+  // a missing `null`.
+  const subjects = new Set<string>();
+  const h1 = doc.querySelector("h1")?.textContent?.trim();
+  if (h1) subjects.add(h1);
+  for (const code of doc.querySelectorAll("code")) {
+    const word = code.textContent?.trim();
+    if (word && values.has(word)) subjects.add(word);
+  }
+  const value = [...values].find((v) => !subjects.has(v));
+  return value ? { kind: "js-artifact", sample: value } : undefined;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Aggregation                                                                */
 /* -------------------------------------------------------------------------- */
 
@@ -531,6 +590,25 @@ export const placeholderTextRule: Rule = {
       return { checks };
     }
 
+    // The title is judged on its own check, and only reported: a pass row on
+    // every page would dilute the body finding on the pages that have one.
+    const title = ctx.parsed.meta?.title;
+    const inTitle = title ? findTitlePlaceholder(title, doc) : undefined;
+    const titleCheck: CheckResult[] = inTitle
+      ? [
+          {
+            name: "placeholder-title",
+            status: CERTAIN_KINDS.has(inTitle.kind) ? "fail" : "warn",
+            message:
+              inTitle.kind === "js-artifact"
+                ? `Title shows a JavaScript value: ${inTitle.sample}`
+                : `Title shows a stringified object: ${inTitle.sample}`,
+            value: truncate(title!.trim()),
+            expected: "A title with the value it was meant to print",
+          },
+        ]
+      : [];
+
     const body = doc.querySelector("body");
     if (!body) {
       checks.push({
@@ -539,6 +617,7 @@ export const placeholderTextRule: Rule = {
         message: "No body element to read visible text from",
         skipReason: "no-body",
       });
+      checks.push(...titleCheck);
       return { checks };
     }
 
@@ -554,6 +633,7 @@ export const placeholderTextRule: Rule = {
         status: "pass",
         message: "No placeholder or template leftovers in visible text",
       });
+      checks.push(...titleCheck);
       return { checks };
     }
 
@@ -580,6 +660,7 @@ export const placeholderTextRule: Rule = {
         kinds: found.map((f) => ({ kind: f.kind, count: f.count, samples: f.samples })),
       },
     });
+    checks.push(...titleCheck);
     return { checks };
   },
 };
