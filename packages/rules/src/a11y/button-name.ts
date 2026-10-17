@@ -121,7 +121,7 @@ export const buttonNameRule: Rule = {
       checks.push({
         name: "button-name-unconfirmed",
         status: "warn",
-        message: `${unconfirmed.length} button(s) without accessible names may be hidden by an inline style (unconfirmed)`,
+        message: `${unconfirmed.length} button(s) without accessible names may be hidden by a style (unconfirmed)`,
         items: unconfirmed.slice(0, 10),
         details:
           unconfirmed.length > 10

@@ -186,7 +186,7 @@ export const ariaHiddenFocusRule: Rule = {
       checks.push({
         name: "aria-hidden-focus-unconfirmed",
         status: "warn",
-        message: `${unconfirmed.length} focusable element(s) inside aria-hidden may be hidden by an inline style (unconfirmed)`,
+        message: `${unconfirmed.length} focusable element(s) inside aria-hidden may be hidden by a style (unconfirmed)`,
         items: unconfirmed.slice(0, 10),
         details: unconfirmed.length > 10 ? { additional: unconfirmed.length - 10 } : undefined,
       });

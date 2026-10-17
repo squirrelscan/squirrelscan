@@ -1,8 +1,9 @@
-// shared/static-hidden: markup plus a strict inline-style reader (pub#664,
-// pub#665). `<style>` blocks and stylesheets are not read at all. The
-// CHROMIUM table pins the one invariant that matters: wherever Chromium shows
-// the element, the check never answers "hidden" (that would silently drop a
-// real failure). It may be more cautious ("unknown") or miss a hide.
+// shared/static-hidden: markup, a strict inline-style reader and the narrow
+// subset of `<style>` rules shared/page-styles.ts decides (pub#664, pub#665,
+// pub#678). External stylesheets are not read. The CHROMIUM table pins the one
+// invariant that matters: wherever Chromium shows the element, the check never
+// answers "hidden" (that would silently drop a real failure). It may be more
+// cautious ("unknown") or miss a hide.
 
 import { describe, expect, test } from "bun:test";
 
@@ -44,8 +45,33 @@ describe("static-hidden: markup", () => {
     expect(seen.state).toBe("hidden");
   });
 
-  test("<style> blocks are not read", () => {
-    expect(verdict('<style>.x{display:none}</style><b id="t" class="x"></b>')).toBe("shown");
+  test("a <style> rule it can decide hides the element (pub#678)", () => {
+    expect(verdict('<style>.x{display:none}</style><b id="t" class="x"></b>')).toBe("hidden");
+    expect(verdict('<style>.x{visibility:hidden}</style><div class="x"><b id="t"></b></div>')).toBe("hidden");
+  });
+
+  test("with an external stylesheet, hiding from a <style> rule is not settled", () => {
+    const external = '<link rel="stylesheet" href="/site.css">';
+    expect(verdict(`${external}<style>.x{display:none}</style><b id="t" class="x"></b>`)).toBe("unknown");
+    // An inline style still settles it, as before.
+    expect(verdict(`${external}<b id="t" style="display:none"></b>`)).toBe("hidden");
+    // And a <style> rule that shows the element still counts.
+    expect(verdict(`${external}<style>.f{display:flex}</style><div hidden class="f"><b id="t"></b></div>`)).toBe(
+      "shown",
+    );
+  });
+
+  test("a rule it cannot decide makes the elements it could reach unknown, and only those", () => {
+    const css = "<style>.x{display:none}@media (min-width:1px){.x{display:block}}</style>";
+    expect(verdict(`${css}<b id="t" class="x"></b>`)).toBe("unknown");
+    expect(verdict(`${css}<b id="t" class="y"></b>`)).toBe("shown");
+  });
+
+  test("inherited visibility is settled once every stylesheet was read", () => {
+    expect(verdict('<div style="visibility:hidden"><b id="t"></b></div>')).toBe("hidden");
+    expect(verdict('<link rel="stylesheet" href="/site.css"><div style="visibility:hidden"><b id="t"></b></div>')).toBe(
+      "unknown",
+    );
   });
 });
 
@@ -99,8 +125,9 @@ describe("static-hidden: the inline-style reader", () => {
  * reviewer: `chromium` is "hidden" when `#t` or an ancestor computes
  * `display:none`, or `#t` computes `visibility:hidden` or `collapse`. Each
  * `html` is the body of `<!doctype html><html><head></head><body>…</body></html>`.
- * `stylesheetOverride` marks a stylesheet rule this check does not read
- * showing the element again: a documented limitation.
+ * The `style: …` rows (pub#678) are the `<style>` adversarial set: invalid
+ * selector lists, ignored `type` and `media`, url() and block tokens, escapes,
+ * NBSP, cascade order, external sheets, `@import`, `@layer` and nesting.
  *
  * To regenerate or add rows: write one HTML page holding an
  * `<iframe srcdoc="…">` per row (the body above, attribute-escaped), plus a
@@ -115,20 +142,101 @@ const CHROMIUM: Array<{
   name: string;
   html: string;
   chromium: "hidden" | "shown";
-  stylesheetOverride?: boolean;
 }> = await Bun.file(new URL("fixtures/static-hidden-chromium.json", import.meta.url)).json();
 
 describe("static-hidden: never hidden where Chromium shows the element", () => {
   for (const row of CHROMIUM) {
     test(`${row.name} (Chromium: ${row.chromium})`, () => {
-      const seen = verdict(row.html);
-      if (row.stylesheetOverride) {
-        // Documented limitation: stylesheets are not read, so a stylesheet
-        // rule that shows the element again is not seen.
-        expect(seen).toBe("hidden");
-      } else if (row.chromium === "shown") {
-        expect(seen).not.toBe("hidden");
-      }
+      if (row.chromium === "shown") expect(verdict(row.html)).not.toBe("hidden");
     });
   }
+});
+
+// pub#678: the <style> reader is bounded on hostile input. Past a bound it
+// stops reading, and stylesheet-based hiding is no longer settled.
+describe("static-hidden: <style> reading is bounded", () => {
+  const timed = (body: string) => {
+    const started = performance.now();
+    const seen = verdict(body);
+    return { seen, ms: performance.now() - started };
+  };
+
+  test("a stylesheet past the size bound is not read", () => {
+    const big = `.pad{color:red}`.repeat(20_000);
+    const { seen, ms } = timed(`<style>${big}.x{display:none}</style><b id="t" class="x"></b>`);
+    expect(seen).toBe("shown");
+    expect(ms).toBeLessThan(2000);
+  });
+
+  test("more rules than the bound: not read", () => {
+    const rules = Array.from({ length: 6000 }, (_, i) => `.r${i}{display:none}`).join("");
+    const { seen, ms } = timed(`<style>${rules}.x{display:none}</style><b id="t" class="x"></b>`);
+    expect(seen).toBe("shown");
+    expect(ms).toBeLessThan(2000);
+  });
+
+  test("an 11 KB nested stylesheet is dropped at the first nested rule", () => {
+    const nested = `${".a{display:block;".repeat(700)}${"}".repeat(700)}`;
+    expect(nested.length).toBeGreaterThan(11_000);
+    const { seen, ms } = timed(`<style>${nested}.x{display:none}</style><b id="t" class="x"></b>`);
+    expect(seen).not.toBe("hidden");
+    expect(ms).toBeLessThan(2000);
+  });
+
+  test("an over-long selector is not read", () => {
+    const long = `.x${".y".repeat(600)}`;
+    expect(verdict(`<style>${long}{display:none}</style><b id="t" class="x"></b>`)).not.toBe("hidden");
+  });
+
+  test("4,000 rules against 2,000 controls stays fast", () => {
+    const rules = Array.from({ length: 4000 }, (_, i) => `.r${i}{display:${i % 2 ? "none" : "block"}}`).join("");
+    const buttons = Array.from({ length: 2000 }, (_, i) => `<button class="r${i} c${i}"></button>`).join("");
+    const { document } = parseHTML(`<!doctype html><html><head><style>${rules}</style></head><body>${buttons}</body></html>`);
+    const resolver = createStaticVisibility({ ariaHidden: false });
+    const started = performance.now();
+    let hidden = 0;
+    for (const button of document.querySelectorAll("button")) {
+      if (resolver.visibility(button as unknown as Element).state === "hidden") hidden++;
+    }
+    expect(hidden).toBe(1000);
+    expect(performance.now() - started).toBeLessThan(2000);
+  });
+
+  test("hundreds of case variants of one class stay fast", () => {
+    const variants = Array.from({ length: 400 }, (_, i) =>
+      [..."xxxxxxxxxx"].map((ch, bit) => ((i >> bit) & 1 ? ch.toUpperCase() : ch)).join(""),
+    );
+    const rules = Array.from({ length: 100 }, () => ".xxxxxxxxxx:hover{display:block}").join("");
+    const { seen, ms } = timed(
+      `<style>${rules}</style><b id="t" class="${variants.join(" ")}" style="display:none"></b>`,
+    );
+    expect(seen).toBe("hidden");
+    expect(ms).toBeLessThan(500);
+  });
+
+  test("a page that needs too many rule checks stops settling, quickly", () => {
+    const rules = Array.from({ length: 4990 }, (_, i) => `.c.d${i}{display:none}`).join("");
+    const buttons = Array.from({ length: 2000 }, () => `<button class="c"></button>`).join("");
+    const { document } = parseHTML(`<!doctype html><html><head><style>${rules}</style></head><body>${buttons}</body></html>`);
+    const started = performance.now();
+    const states = new Set<string>();
+    for (let round = 0; round < 7; round++) {
+      const resolver = createStaticVisibility({ ariaHidden: false });
+      for (const button of document.querySelectorAll("button")) {
+        states.add(resolver.visibility(button as unknown as Element).state);
+      }
+    }
+    expect([...states].sort()).toEqual(["shown", "unknown"]);
+    expect(performance.now() - started).toBeLessThan(2000);
+  });
+
+  test("a control under thousands of nested elements stays fast", () => {
+    const depth = 4000;
+    const html = `<style>div{display:block}</style>${"<div>".repeat(depth)}<button id="t"></button>${"</div>".repeat(depth)}`;
+    const { document } = parseHTML(`<!doctype html><html><head></head><body>${html}</body></html>`);
+    const resolver = createStaticVisibility({ ariaHidden: false });
+    const started = performance.now();
+    expect(resolver.visibility(document.querySelector("#t") as unknown as Element).state).toBe("shown");
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
 });

@@ -81,8 +81,8 @@ describe("a11y/button-name: the six repro fixtures (pub#665)", () => {
     });
   }
 
-  test("css hides with a <style> block, which is not read: it still fails", () => {
-    expect(statuses(fixture(CASES.css))).toEqual({ "button-name": "fail" });
+  test("css hides with a <style> block: not reported (pub#678)", () => {
+    expect(statuses(fixture(CASES.css))).toEqual({ "button-name": "pass" });
     // The same hiding written inline is read.
     expect(statuses(fixture('<div style="display:none"><button></button></div>'))).toEqual({
       "button-name": "pass",
@@ -99,10 +99,14 @@ describe("a11y/button-name: what counts as hidden", () => {
     ]) {
       expect(statuses(fixture(body))).toEqual({ "button-name": "pass" });
     }
-    // Inherited visibility can be undone by a stylesheet rule: unconfirmed.
+    // Inherited visibility is settled when the page loads no stylesheet this
+    // check does not read; with one, an external rule could undo it.
     expect(statuses(fixture('<div style="visibility:hidden"><button></button></div>'))).toEqual({
-      "button-name-unconfirmed": "warn",
+      "button-name": "pass",
     });
+    expect(
+      statuses(fixture('<link rel="stylesheet" href="/site.css"><div style="visibility:hidden"><button></button></div>')),
+    ).toEqual({ "button-name-unconfirmed": "warn" });
   });
 
   test("off-screen, transparent, sr-only and disabled buttons are not treated as hidden", () => {
@@ -136,7 +140,7 @@ describe("a11y/button-name: inline styles the check cannot read exactly", () => 
         name: "button-name-unconfirmed",
         status: "warn",
         message:
-          "1 button(s) without accessible names may be hidden by an inline style (unconfirmed)",
+          "1 button(s) without accessible names may be hidden by a style (unconfirmed)",
         items: [expect.objectContaining({ id: "button.zoom-in" })],
       }),
     ]);

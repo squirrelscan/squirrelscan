@@ -74,19 +74,29 @@ for (const { rule, check } of RULES) {
       });
     }
 
-    test("an inline visibility:hidden ancestor, or an inline style it cannot read: unconfirmed, not a failure", () => {
+    test("an inline style it cannot read, or an inherited visibility an external stylesheet could undo: unconfirmed", () => {
       for (const body of [
-        `<div style="visibility:hidden">${BAD}</div>`,
         `<div style="display:var(--d)">${BAD}</div>`,
+        `<link rel="stylesheet" href="/site.css"><div style="visibility:hidden">${BAD}</div>`,
       ]) {
         expect(statuses(rule, body)).toEqual({ [`${check}-unconfirmed`]: "warn" });
       }
     });
 
-    test("hiding by a <style> block is not read yet (pub#678): still fails", () => {
+    test("hiding by a <style> block it can decide: not reported (pub#678)", () => {
+      for (const body of [
+        `<style>.closed{display:none}</style><div class="closed">${BAD}</div>`,
+        `<style>.closed{visibility:hidden}</style><div class="closed">${BAD}</div>`,
+        `<div style="visibility:hidden">${BAD}</div>`,
+      ]) {
+        const result = statuses(rule, body);
+        expect(Object.values(result)).not.toContain("fail");
+        expect(Object.values(result)).not.toContain("warn");
+      }
+      // With an external stylesheet it is unconfirmed, not a failure.
       expect(
-        statuses(rule, `<style>.closed{display:none}</style><div class="closed">${BAD}</div>`)[check],
-      ).toBe("fail");
+        statuses(rule, `<link rel="stylesheet" href="/x.css"><style>.closed{display:none}</style><div class="closed">${BAD}</div>`),
+      ).toEqual({ [`${check}-unconfirmed`]: "warn" });
     });
 
     test("off-screen and transparent controls are not treated as hidden", () => {
@@ -121,7 +131,7 @@ describe("details and messages", () => {
         name: "aria-command-name-unconfirmed",
         status: "warn",
         message:
-          "1 command element(s) without accessible names may be hidden by an inline style (unconfirmed)",
+          "1 command element(s) without accessible names may be hidden by a style (unconfirmed)",
         items: [expect.objectContaining({ id: 'button[type="submit"]' })],
       }),
     ]);

@@ -1,27 +1,37 @@
-// Whether an element is out of the accessibility tree, as far as its markup
-// and its own inline `style` attributes say (pub#664, pub#665). Shared by
-// a11y/aria-hidden-focus and a11y/button-name, so both agree on what is hidden.
+// Whether an element is out of the accessibility tree, as far as its markup,
+// its inline `style` attributes and the page's own `<style>` blocks say
+// (pub#664, pub#665, pub#671, pub#678). Shared by the a11y naming rules and
+// a11y/aria-hidden-focus, so they agree on what is hidden.
 //
 // Read: the `hidden` attribute (not `hidden="until-found"`), a closed
 // `<dialog>` and an unopened `popover` (the user-agent stylesheet hides all
 // three), a `<template>` ancestor, `aria-hidden="true"` when the caller asks,
-// and an inline `style` that plainly sets `display:none` or `visibility:hidden`.
+// an inline `style` that plainly sets `display` or `visibility`, and the
+// narrow subset of `<style>` rules that shared/page-styles.ts can decide.
 //
-// Not read: `<style>` blocks and external stylesheets. A selector-based CSS
-// reader kept finding new ways to call a visible control hidden, which
-// silently drops a real failure, so hiding by class or selector is not
-// evaluated here at all. An inline style the strict reader below cannot read
-// exactly makes the answer "unknown", reported as unconfirmed, never "hidden".
+// Not read: external stylesheets. When a page has one, hiding that comes from
+// a `<style>` block is "unknown", since an external rule could show the
+// element again. Anything the readers cannot settle exactly makes the answer
+// "unknown", reported as unconfirmed, never "hidden".
 
 import { getAttrCI, hasAttrCI } from "@squirrelscan/utils";
 
 import type { CheckResult } from "../types";
 
+import {
+  cascade,
+  type Declared,
+  type DisplayValue,
+  pageStylesFor,
+  readDeclarations,
+  type VisibilityValue,
+} from "./page-styles";
+
 export type StaticVisibility = { state: "shown" } | { state: "hidden" } | { state: "unknown" };
 
 /** Item label for a control reported as unconfirmed. */
 export const UNCONFIRMED_LABEL =
-  "an inline style on it or an ancestor sets display or visibility in a form squirrel does not read";
+  "a style on it or an ancestor sets display or visibility in a way squirrel cannot settle";
 
 export interface StaticVisibilityOptions {
   /** Count `aria-hidden="true"` on the element or an ancestor as hidden. */
@@ -49,81 +59,67 @@ interface InlineStyle {
   visibility?: "hidden" | "visible" | "inherit" | "unknown";
 }
 
-/**
- * `display` values a browser accepts that show the element. Anything else,
- * the two-keyword syntax included, is left "unknown" rather than guessed.
- */
-const SHOWN_DISPLAY = new Set(
-  (
-    "block inline inline-block flex inline-flex grid inline-grid contents flow-root list-item " +
-    "table inline-table table-row table-cell table-caption table-column table-column-group " +
-    "table-header-group table-footer-group table-row-group initial inherit unset"
-  ).split(" "),
-);
-
-/** Anything but plain printable ASCII and CSS whitespace. */
-const NOT_PLAIN_ASCII = /[^\x20-\x7e\t\n\r\f]/;
-/**
- * Characters that start tokens the reader does not follow: escapes, comments,
- * strings, functions (`var()`, `url()`), blocks and at-rules.
- */
-const NOT_PLAIN_CSS = /[\\"'(){}[\]/*@<>]/;
-const MENTIONS_HIDING = /display|visibility|\ball\b/i;
-
 function asciiLower(text: string): string {
   return text.replace(/[A-Z]+/g, (m) => m.toLowerCase());
 }
 
-/** A declaration's value without a trailing `!important`, and whether it had one. */
-function splitImportant(value: string): { value: string; important: boolean } {
-  if (!value.endsWith("important")) return { value, important: false };
-  const head = value.slice(0, -"important".length).trimEnd();
-  if (!head.endsWith("!")) return { value, important: false };
-  return { value: head.slice(0, -1).trimEnd(), important: true };
+/**
+ * Reads `display` and `visibility` from an inline `style`, strictly (see
+ * readDeclarations in shared/page-styles.ts): anything but plainly written
+ * declarations reads as "unknown" for both.
+ */
+export function readInlineStyle(style: string | null): InlineStyle {
+  const decls = readDeclarations(style);
+  if (decls === "unknown") return { display: "unknown", visibility: "unknown" };
+  return {
+    ...(decls.display ? { display: decls.display.value } : {}),
+    ...(decls.visibility ? { visibility: decls.visibility.value } : {}),
+  };
 }
 
 /**
- * Reads `display` and `visibility` from an inline `style`, strictly. Only
- * plainly written declarations count (`display: none`, `visibility:hidden
- * !important`); a style that mentions either property in any other form
- * (escapes, comments, functions, non-ASCII, `!` elsewhere, the `all`
- * shorthand, an unlisted keyword) reads as "unknown" for both.
+ * The author `display` and `visibility` of `el`: its inline style and the
+ * page's `<style>` rules, in cascade order. A value only a `<style>` rule
+ * gives that hides the element is "unknown" when the page also loads an
+ * external stylesheet, which could show it again.
  */
-export function readInlineStyle(style: string | null): InlineStyle {
-  if (!style || !MENTIONS_HIDING.test(style)) return {};
-  const unknown: InlineStyle = { display: "unknown", visibility: "unknown" };
-  if (NOT_PLAIN_ASCII.test(style) || NOT_PLAIN_CSS.test(style)) return unknown;
-
-  const out: InlineStyle = {};
-  const important = { display: false, visibility: false };
-  for (const part of style.split(";")) {
-    const colon = part.indexOf(":");
-    if (colon === -1) {
-      if (MENTIONS_HIDING.test(part)) return unknown;
-      continue;
-    }
-    const prop = asciiLower(part.slice(0, colon).trim());
-    if (prop === "all") return unknown;
-    if (prop !== "display" && prop !== "visibility") continue;
-    const split = splitImportant(asciiLower(part.slice(colon + 1).trim()));
-    if (split.value.includes("!") || split.value === "") return unknown;
-    // Within one style attribute, !important beats normal, then the last wins.
-    if (important[prop] && !split.important) continue;
-    important[prop] = split.important;
-    const v = split.value;
-    if (prop === "display") {
-      // `revert` is left out on purpose: Chromium shows a `hidden` element
-      // with `display:revert`, where the specs suggest it stays hidden.
-      if (v === "none") out.display = "none";
-      else if (SHOWN_DISPLAY.has(v)) out.display = "shown";
-      else return unknown;
-    } else if (v === "hidden" || v === "collapse") out.visibility = "hidden";
-    else if (v === "visible" || v === "initial") out.visibility = "visible";
-    else if (v === "inherit" || v === "unset" || v === "revert" || v === "revert-layer") {
-      out.visibility = "inherit";
-    } else return unknown;
+function authorStyle(el: Element): {
+  display?: DisplayValue | "unknown";
+  visibility?: VisibilityValue | "unknown";
+  /** The page's stylesheets were all read, so inherited values are settled. */
+  complete: boolean;
+} {
+  const decls = readDeclarations(getAttrCI(el, "style"));
+  const styles = pageStylesFor(el.ownerDocument);
+  if (decls === "unknown") {
+    return { display: "unknown", visibility: "unknown", complete: styles?.complete ?? false };
   }
-  return out;
+  if (!styles) {
+    return {
+      ...(decls.display ? { display: decls.display.value } : {}),
+      ...(decls.visibility ? { visibility: decls.visibility.value } : {}),
+      complete: false,
+    };
+  }
+  const settle = <V extends string>(
+    result: { value: V; source: "inline" | "sheet" } | "unknown" | undefined,
+    hides: V,
+  ): V | "unknown" | undefined => {
+    if (result === undefined || result === "unknown") return result;
+    if (result.source === "sheet" && result.value === hides && !styles.complete) return "unknown";
+    return result.value;
+  };
+  return {
+    display: settle(
+      cascade(el, styles, "display", decls.display as Declared<DisplayValue> | undefined),
+      "none" as DisplayValue,
+    ),
+    visibility: settle(
+      cascade(el, styles, "visibility", decls.visibility as Declared<VisibilityValue> | undefined),
+      "hidden" as VisibilityValue,
+    ),
+    complete: styles.complete,
+  };
 }
 
 function tagOf(el: Element): string {
@@ -242,12 +238,17 @@ interface Context {
   /** An ancestor-or-self may hide the subtree, but that is not settled. */
   displayUnknown: boolean;
   /**
-   * An ancestor set `visibility:hidden` (or a form the reader cannot read).
-   * A stylesheet rule can make any descendant visible again, so inherited
-   * hiding is never taken as settled; a plain inline `visibility:visible`
-   * clears it for that subtree.
+   * An ancestor set `visibility:hidden` (or a form the reader cannot read)
+   * and the page loads a stylesheet this module does not read, which can make
+   * any descendant visible again, so the inherited hiding is not settled. A
+   * plain `visibility:visible` clears it for that subtree.
    */
   visibilityUnknown: boolean;
+  /**
+   * An ancestor set `visibility:hidden` and every stylesheet on the page was
+   * read: descendants inherit it, settled, unless they set `visible` again.
+   */
+  visibilityHidden: boolean;
   /**
    * An ancestor-or-self is a container whose descendants a browser may move
    * out (treeMayDiffer). A hidden element at or below it hides its own
@@ -266,6 +267,7 @@ const ROOT: Context = {
   removed: false,
   displayUnknown: false,
   visibilityUnknown: false,
+  visibilityHidden: false,
   treeUnreliable: false,
   foreign: false,
 };
@@ -282,14 +284,28 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
 
   const resolve = (el: Element, parent: Context): Resolved => {
     if (parent.removed) return { verdict: HIDDEN, children: parent };
-    const inline = readInlineStyle(getAttrCI(el, "style"));
+    const author = authorStyle(el);
+    // SVG and MathML presentation attributes (`<rect visibility="visible">`)
+    // sit under author CSS but over inheritance; they are not read here.
+    const inForeign = parent.foreign || tagOf(el) === "svg" || tagOf(el) === "math";
+    if (inForeign) {
+      if (author.display === undefined && hasAttrCI(el, "display")) author.display = "unknown";
+      if (author.visibility === undefined && hasAttrCI(el, "visibility")) author.visibility = "unknown";
+    }
     const ariaHidden =
       options.ariaHidden && asciiLower(getAttrCI(el, "aria-hidden") ?? "") === "true";
     // An author `display` beats the user-agent rule.
     const display = ariaHidden
       ? "none"
-      : (inline.display ??
+      : (author.display ??
         (uaHidden(el, parent.foreign, options.closedDialogsShown === true) ? "none" : "shown"));
+
+    // This element's computed visibility: its own value, else its parent's.
+    const own = author.visibility;
+    const visibilityHidden =
+      own === "hidden" || ((own === undefined || own === "inherit") && parent.visibilityHidden);
+    const visibilityUnknown =
+      own === "unknown" || ((own === undefined || own === "inherit") && parent.visibilityUnknown);
 
     const treeUnreliable = parent.treeUnreliable || treeMayDiffer(el);
     const foreign = parent.foreign || tagOf(el) === "svg" || tagOf(el) === "math";
@@ -299,28 +315,33 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
       children = { ...ROOT, removed: true };
     } else if (display === "none") {
       children = treeUnreliable
-        ? { removed: false, displayUnknown: true, visibilityUnknown: true, treeUnreliable, foreign }
+        ? {
+            removed: false,
+            displayUnknown: true,
+            visibilityUnknown: true,
+            visibilityHidden: false,
+            treeUnreliable,
+            foreign,
+          }
         : { ...ROOT, removed: true };
     } else {
+      // With every stylesheet read, a hidden ancestor's visibility is settled
+      // for its descendants; otherwise an unread rule could show them again.
       children = {
         removed: false,
         displayUnknown: parent.displayUnknown || display === "unknown",
-        visibilityUnknown:
-          inline.visibility === "visible"
-            ? false
-            : parent.visibilityUnknown ||
-              inline.visibility === "hidden" ||
-              inline.visibility === "unknown",
+        visibilityUnknown: visibilityUnknown || (visibilityHidden && !author.complete),
+        visibilityHidden: visibilityHidden && author.complete,
         treeUnreliable,
         foreign,
       };
     }
 
     let verdict: StaticVisibility;
-    if (display === "none" || inline.visibility === "hidden") verdict = HIDDEN;
+    if (display === "none" || own === "hidden") verdict = HIDDEN;
     else if (display === "unknown" || parent.displayUnknown) verdict = UNKNOWN;
-    else if (inline.visibility === "unknown") verdict = UNKNOWN;
-    else if (inline.visibility !== "visible" && parent.visibilityUnknown) verdict = UNKNOWN;
+    else if (visibilityHidden) verdict = HIDDEN;
+    else if (visibilityUnknown) verdict = UNKNOWN;
     else verdict = SHOWN;
     return { verdict, children };
   };
@@ -349,7 +370,7 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
 /**
  * A naming rule's unnamed controls, sorted by whether the rule applies to them
  * (pub#665, pub#671): out of the accessibility tree they are only counted,
- * possibly hidden by an inline style they are unconfirmed, and the rest fail.
+ * possibly hidden by a style they are unconfirmed, and the rest fail.
  */
 export interface UnnamedControls<T> {
   /** Files one unnamed control under the finding it belongs to. */
@@ -383,7 +404,7 @@ export function sortUnnamedControls<T>(
 
 /**
  * The warn row for controls an inline style may hide, named `<check>-unconfirmed`.
- * `what` completes "N <what> may be hidden by an inline style (unconfirmed)".
+ * `what` completes "N <what> may be hidden by a style (unconfirmed)".
  */
 export function unconfirmedRow(
   check: string,
@@ -393,7 +414,7 @@ export function unconfirmedRow(
   return {
     name: `${check}-unconfirmed`,
     status: "warn",
-    message: `${items.length} ${what} may be hidden by an inline style (unconfirmed)`,
+    message: `${items.length} ${what} may be hidden by a style (unconfirmed)`,
     items: items
       .slice(0, 10)
       .map((item) => ({ ...(typeof item === "string" ? { id: item } : item), label: UNCONFIRMED_LABEL })),
