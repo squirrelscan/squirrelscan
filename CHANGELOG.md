@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- WAF detection ends a quoted `<code>`, `<kbd>` or `<samp>` where the browser does, at the end of its block, so an unclosed `<code>` no longer hides a block page's wording (an Imperva incident line, a Cloudflare ray id) for the rest of the page. A block nested inside a code block, as Expressive Code and Starlight write each line, still reads as quoted.
+
 ## v0.0.117 (2026-10-17)
 
 A release about reading pages the way browsers and search engines do. The new `mobile/input-zoom` rule finds the form fields that make iOS Safari zoom in, so squirrelscan now ships 309 rules. A strict CSP built on a nonce or `'strict-dynamic'` is no longer called weak, the rules that ask whether robots.txt blocks a page read it the way Google does, a sitemap with a mismatched tag or a raw `&` gets caught, and the FAQ, product and review checks follow JSON-LD `@id` references to the nodes they name. A site missing compression or caching headers is scored for each once instead of twice, `squirrel analyze` stops stacking a second copy of every result, and a signed-in audit no longer pays for a link the cloud could not verify.

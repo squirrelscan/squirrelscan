@@ -263,6 +263,28 @@ describe("a signature counts where it acts, not where a page quotes it (#693)", 
     expect(detectWafFromContent("<script/>window._cf_chl_opt={}</script>").provider).toBe("cloudflare");
   });
 
+  test("an unclosed <code> stops hiding wording at its block's end (pub#904)", () => {
+    const stray =
+      "<html><body><p>Error details: <code>403</p><p>Request unsuccessful. Incapsula incident ID: 1234000280151781213-1234</p></body></html>";
+    expect(detectWafFromContent(stray).provider).toBe("imperva");
+    // Closed properly, the quoted line stays a quote.
+    const quoted =
+      "<html><body><pre><code>Request unsuccessful. Incapsula incident ID: 1234000280151781213-1234</code></pre></body></html>";
+    expect(detectWafFromContent(quoted).detected).toBe(false);
+    // A block nested inside the quote closes itself, not the quote.
+    const nested =
+      "<html><body><pre><code><div>log</div>Request unsuccessful. Incapsula incident ID: 1234000280151781213-1234</code></pre></body></html>";
+    expect(detectWafFromContent(nested).detected).toBe(false);
+    // Expressive Code (Starlight) wraps every line of a code block in a block.
+    const expressive =
+      '<html><body><figure><pre><code><div class="ec-line"><div class="code">Request unsuccessful. Incapsula incident ID: 1234000280151781213-1234</div></div>' +
+      '<div class="ec-line"><div class="code">Cloudflare Ray ID: <span>8d1f2a3b4c5d6e7f</span></div></div></code></pre></figure></body></html>';
+    expect(detectWafFromContent(expressive)).toMatchObject({ detected: false, provider: null });
+    // The same for an unclosed <kbd> in a list item.
+    const kbd = "<html><body><li><kbd>Ctrl</li><li>Cloudflare Ray ID: <strong>8d1f2a3b4c5d6e7f</strong></li></body></html>";
+    expect(detectWafFromContent(kbd).provider).toBe("cloudflare");
+  });
+
   test("the scan stays linear on hostile markup", () => {
     const html = `<html><body>${"<code><pre ".repeat(2_000)}${'<a href="'.repeat(2_000)}</body></html>`;
     const started = performance.now();

@@ -26,6 +26,17 @@ export interface SignatureViews {
 const QUOTE_ELEMENTS = new Set(["code", "kbd", "samp"]);
 
 /**
+ * Block-level end tags that close any quote element still open inside them, as
+ * the HTML parser closes an unclosed `<code>` at its parent's end (pub#904): a
+ * stray `<code>` must not hide a block page's wording for the rest of the page.
+ */
+const QUOTE_CLOSING_BLOCKS = new Set([
+  "address", "article", "aside", "blockquote", "body", "dd", "div", "dl", "dt", "figure",
+  "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6", "header", "html", "li", "main",
+  "nav", "ol", "p", "pre", "section", "table", "td", "th", "tr", "ul",
+]);
+
+/**
  * Raw-text and RCDATA elements (HTML Standard 13.2.5): their content is never
  * parsed as tags. `textarea` and `xmp` hold quoted text; `iframe`, `noembed`,
  * `noframes` and `title` hold text a page shows (an iframe's is fallback text,
@@ -82,6 +93,9 @@ export function signatureViews(html: string): SignatureViews {
   // Open quote elements: `<pre><code>` nests, and a stray close tag does not
   // go below zero.
   let quoteDepth = 0;
+  // Blocks opened inside the open quote, so a block nested in a `<code>`
+  // closes itself and not the quote around it.
+  let blocksInQuote = 0;
   let cursor = 0;
 
   while (cursor < html.length) {
@@ -113,8 +127,14 @@ export function signatureViews(html: string): SignatureViews {
     const tag = html.slice(lt, end + 1);
     cursor = end + 1;
 
+    if (quoteDepth > 0 && QUOTE_CLOSING_BLOCKS.has(name)) {
+      if (!closing) blocksInQuote++;
+      else if (blocksInQuote > 0) blocksInQuote--;
+      else quoteDepth = 0;
+    }
     if (QUOTE_ELEMENTS.has(name)) {
       quoteDepth = closing ? Math.max(0, quoteDepth - 1) : quoteDepth + 1;
+      if (quoteDepth === 0) blocksInQuote = 0;
       text.push(" ");
       continue;
     }
