@@ -17,12 +17,21 @@ How it works:
 
 ## [Unreleased]
 
+Thanks to @WilliamK112, whose pull requests are behind the `content/hidden-text`, crawler event, plan lookup and npm install fixes below, and who also kept the `squirrel analyze` tests from scanning a developer's real project databases and made CI check that the compiled CLI carries the rules version it was built from.
+
+### Changed
+
+- The crawler's `page:fetched` event now carries each page's `ttfbMs` and `fetcherId`, and no longer declares a `rendered` field, which the crawler never set and nothing read.
+
 ### Fixed
 
 - WAF detection ends a quoted `<code>`, `<kbd>` or `<samp>` where the browser does, at the end of its block, so an unclosed `<code>` no longer hides a block page's wording (an Imperva incident line, a Cloudflare ray id) for the rest of the page. A block nested inside a code block, as Expressive Code and Starlight write each line, still reads as quoted.
 - `core/charset` now sees the charset of the `Content-Type` response header in a real audit. The crawler kept only the media type, so a page declared UTF-8 by its header alone failed with `No charset declaration found`, and a header that contradicted the page's meta (`iso-8859-1` against `utf-8`) was never reported. The crawl now stores the header's charset beside the media type. A page an earlier version stored and the crawl cache reuses is read as before until it is fetched again. See [core/charset](https://docs.squirrelscan.com/rules/core/charset).
 - `core/canonical` and `crawl/pagination` judge a URL that answers with an HTTP redirect by the URL it ended on, as `i18n/hreflang` already does. `/en/old-slug` redirecting to `/en/new-slug`, whose canonical is `/en/new-slug`, no longer reads "Canonical points to different URL", and a paginated URL that redirects is tested, and its relative canonical resolved, at its target. See [core/canonical](https://docs.squirrelscan.com/rules/core/canonical).
 - `schema/breadcrumb`, `schema/local-business`, `schema/website-search` and `schema/rating-scope` follow JSON-LD node references (`{"@id": …}`) to the node they name, as `schema/faq`, `schema/product` and `schema/review` already do. A breadcrumb whose items are references no longer reports items missing their position and name, a business whose address is a reference no longer reads as an incomplete address, a referenced `SearchAction` is found, and a referenced rating is read for the entity that carries it. See [schema/breadcrumb](https://docs.squirrelscan.com/rules/schema/breadcrumb).
+- `content/hidden-text` reads a CSS comment as a space. A comment before a property or its colon (`/* hide */ display: none`) used to stay in the property name, so the declaration was never recognised, in `<style>` rules and inline `style` attributes alike. Text or links hidden that way are now reported. A comment inside a value also separates its tokens.
+- The npm package's postinstall download follows at most three redirects, refuses a redirect to anything but HTTPS, and resolves a relative `Location` against the URL that sent it.
+- A plan id that names an Object built-in, such as `constructor` or `__proto__`, now reads as the Free plan like any other unknown id, instead of picking up an inherited property.
 
 ## v0.0.117 (2026-10-17)
 
