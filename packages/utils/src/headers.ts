@@ -1,3 +1,5 @@
+import { TECH_DETECT_HEADER_NAMES } from "./constants";
+
 // Shared validation for user-supplied HTTP request headers (#494, #532).
 // These values are replayed onto outbound crawl/render requests, so a CR/LF/NUL
 // in a value would enable header injection / request splitting — reject them.
@@ -62,6 +64,24 @@ export function headersForRedirect(
 // cookie instead, which is how `Headers` natively keeps repeated Set-Cookie
 // entries distinct. Any other malformed header value is skipped rather than
 // throwing, so one bad header can't take down the whole rehydration.
+/**
+ * Lays the headers the crawler kept for technology detection (pub#871) over a
+ * header map built from a stored page. A record that carries them, even as
+ * null (none sent), speaks for every header detection reads: one the response
+ * stopped sending is dropped from the map, so an older curated value a reused
+ * record still holds cannot bring a removed technology back. A record stored
+ * before they existed (undefined) leaves the map as it is.
+ */
+export function overlayTechHeaders(
+  map: Record<string, string>,
+  techHeaders: Record<string, string> | null | undefined,
+): Record<string, string> {
+  if (techHeaders === undefined) return map;
+  for (const name of TECH_DETECT_HEADER_NAMES) delete map[name];
+  delete map["set-cookie"];
+  return Object.assign(map, techHeaders);
+}
+
 /** Rehydrate a Headers object from a stored header record (e.g. a DocumentFetcher response). */
 export function recordToHeaders(record: Record<string, string>): Headers {
   const headers = new Headers();

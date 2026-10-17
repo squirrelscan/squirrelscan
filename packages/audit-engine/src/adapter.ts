@@ -157,6 +157,7 @@ import {
   type WebAppManifestOccurrences,
 } from "./web-app-manifest";
 import { fetchScriptContents, type ScriptFetchResult } from "./script-fetcher";
+import { overlayTechHeaders } from "@squirrelscan/utils/headers";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 import { isNonPublicHostname } from "@squirrelscan/utils/non-public-host";
 import {
@@ -1619,6 +1620,15 @@ export function recordsVersionHeaders(page: PageRecord): boolean {
   return page.headers?.xPoweredBy !== undefined;
 }
 
+/**
+ * The header map technology detection reads: the rule-facing map plus the
+ * headers the crawler keeps for detection (pub#871), which a crawl reusing an
+ * unchanged page refreshes.
+ */
+export function buildTechHeadersMap(page: PageRecord): Record<string, string> {
+  return overlayTechHeaders(buildHeadersMap(page), page.headers.techHeaders);
+}
+
 export function buildHeadersMap(page: PageRecord): Record<string, string> {
   const headers: Record<string, string> = {};
   if (page.headers.contentType) {
@@ -2184,7 +2194,7 @@ export function runRulesOnStorage(
     // parsed pages v1 already holds. Passive; no request is made. The entry page
     // is chosen by URL and collected first, not by map insertion order.
     const endpointCollector = createEndpointCollector({
-      headersOf: buildHeadersMap,
+      headersOf: buildTechHeadersMap,
       entryUrl: siteDataForPageRules.baseUrl,
     });
     for (const { page, parsed } of entryFirst(pageDataMap.values(), siteDataForPageRules.baseUrl)) {
@@ -3354,7 +3364,7 @@ export function runStreamingRules(
       },
     };
     const endpointCollector = createEndpointCollector({
-      headersOf: buildHeadersMap,
+      headersOf: buildTechHeadersMap,
       entryUrl: siteDataForPageRules.baseUrl,
     });
     const streamed = yield* phase("page-rules", () =>

@@ -1628,6 +1628,8 @@ export function createCrawler(
               cachedPage.headers = {
                 ...cachedPage.headers,
                 contentTypeCharset: contentTypeCharset(result.headers.contentType),
+                // Likewise the headers technology detection reads (pub#871).
+                techHeaders: result.headers.techHeaders ?? null,
               };
               yield* reuseCachedPage(crawlId, entry, cachedPage, "hash_match", {
                 cacheFresh: false,
@@ -1664,6 +1666,8 @@ export function createCrawler(
             xGenerator: result.headers.xGenerator ?? null,
             // security/cookie-flags rule (#748).
             setCookie: result.headers.setCookie ?? null,
+            // Technology detection in a local audit (pub#871).
+            techHeaders: result.headers.techHeaders ?? null,
           };
 
           const securityHeaders: SecurityHeaders = {

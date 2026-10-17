@@ -422,6 +422,15 @@ export interface ResponseHeaders {
    * rule (#748).
    */
   setCookie?: string | null;
+  /**
+   * The response headers technology detection reads (`TECH_DETECT_HEADER_NAMES`
+   * in @squirrelscan/utils), by lower-cased name, each value cut to
+   * `TECH_DETECT_HEADER_MAX_CHARS` (pub#871). A header detection only tests for
+   * presence (`TECH_DETECT_PRESENCE_HEADERS`) holds "1", and `set-cookie` holds
+   * the cookie names (`name=`, one per line), never their values. Optional for
+   * records that predate it; absent reads as "none sent".
+   */
+  techHeaders?: Record<string, string> | null;
 }
 
 export interface PageRecord {

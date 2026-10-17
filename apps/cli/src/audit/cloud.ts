@@ -45,6 +45,7 @@ import {
   type RuleCloudSpec,
 } from "@squirrelscan/rules";
 import { hasUnsafeUrlScheme } from "@squirrelscan/utils";
+import { overlayTechHeaders } from "@squirrelscan/utils/headers";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 
 import type { ExternalBulkChecker, SiteContextPage } from "@/audit/adapter";
@@ -925,13 +926,32 @@ function extractMetaTags(html: string): Record<string, string> {
   return out;
 }
 
-/** Map the crawler's curated response/security headers to a lowercase header map. */
+/**
+ * The cookie names a Set-Cookie value sets, one `name=` per line, for a record
+ * stored before the crawler kept them in `techHeaders`. Technology fingerprints
+ * match the name only, and the value (a session id) never leaves the machine.
+ */
+function setCookieNames(setCookie: string | null | undefined): string | null {
+  if (!setCookie) return null;
+  const names = setCookie
+    .split("\n")
+    .map((cookie) => cookie.split("=", 1)[0]?.trim() ?? "")
+    .filter(Boolean)
+    .map((name) => `${name}=`);
+  return names.length > 0 ? names.join("\n") : null;
+}
+
+/** Map the crawler's stored response/security headers to a lowercase header map. */
 function buildHeaderMap(page: SiteContextPage["page"]): Record<string, string> {
   const out: Record<string, string> = {};
   const put = (k: string, v: string | null | undefined) => {
     if (v) out[k] = v;
   };
   const h = page.headers;
+  put("set-cookie", setCookieNames(h.setCookie));
+  put("x-powered-by", h.xPoweredBy);
+  put("x-aspnet-version", h.xAspNetVersion);
+  put("x-generator", h.xGenerator);
   put("content-type", h.contentType);
   put("server", h.server);
   put("x-cache", h.xCache);
@@ -946,7 +966,10 @@ function buildHeaderMap(page: SiteContextPage["page"]): Record<string, string> {
   // CSP often allowlists vendor script origins (stripe, sentry, …) — a useful
   // detection signal carried in the curated security headers.
   put("content-security-policy", page.securityHeaders.csp);
-  return out;
+  // The headers stored for technology detection (pub#871) go last: a crawl
+  // that reuses an unchanged page refreshes them, not the curated fields, and
+  // they hold presence markers and cookie names in place of raw values.
+  return overlayTechHeaders(out, h.techHeaders);
 }
 
 /** Scripts the resource-fetch phase pulled (url always; content when fetched). */

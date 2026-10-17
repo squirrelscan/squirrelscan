@@ -146,7 +146,7 @@ class SmallestKeys {
 
 /**
  * Build the collector. `headersOf` turns a stored page into the lowercase header
- * map technology detection reads (the adapter's `buildHeadersMap`); it is passed
+ * map technology detection reads (the adapter's `buildTechHeadersMap`); it is passed
  * in so this module does not import the adapter.
  *
  * Technology detection runs on the first page collected fresh, and on up to

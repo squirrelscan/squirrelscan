@@ -506,3 +506,96 @@ export type FeedbackCategory = (typeof FEEDBACK_CATEGORIES)[number];
 
 export const FEEDBACK_SOURCES = ["website", "dashboard", "cli", "api", "mcp"] as const;
 export type FeedbackSource = (typeof FEEDBACK_SOURCES)[number];
+
+// Response headers technology detection reads (pub#871): the tech-detect
+// fingerprints and the WAF providers the technologies section reports. A local
+// audit detects from the page records the crawler stores, so the crawler keeps
+// these beside its curated headers (Set-Cookie as cookie names only, see
+// `techHeaders` in core-contracts). audit-engine's tests fail when a
+// fingerprint or WAF provider names a header missing here.
+export const TECH_DETECT_HEADER_NAMES = [
+  "cdn-pullzone",
+  "cf-cache-status",
+  "cf-ray",
+  "fly-request-id",
+  "server",
+  "vary",
+  "via",
+  "x-akamai-request-id",
+  "x-akamai-transformed",
+  "x-amz-cf-id",
+  "x-amz-cf-pop",
+  "x-amz-request-id",
+  "x-amzn-waf-action",
+  "x-aspnet-version",
+  "x-backend-server",
+  "x-cdn",
+  "x-datadome",
+  "x-dd-b",
+  "x-drupal-cache",
+  "x-ec-debug",
+  "x-fastly-request-id",
+  "x-generator",
+  "x-ghost-cache-status",
+  "x-github-request-id",
+  "x-id",
+  "x-id-fe",
+  "x-iinfo",
+  "x-ik-request-id",
+  "x-kpsdk-cd",
+  "x-kpsdk-ct",
+  "x-kpsdk-r",
+  "x-nf-request-id",
+  "x-powered-by",
+  "x-provided-by",
+  "x-px-gt",
+  "x-px-pp",
+  "x-render-origin-server",
+  "x-served-by",
+  "x-shopify-stage",
+  "x-sucuri-cache",
+  "x-sucuri-id",
+  "x-umbraco-version",
+  "x-varnish",
+  "x-vercel-cache",
+  "x-vercel-id",
+] as const;
+/** Longest value kept per header in TECH_DETECT_HEADER_NAMES. */
+export const TECH_DETECT_HEADER_MAX_CHARS = 512;
+/**
+ * The listed headers detection only tests for presence: request ids and bot
+ * protection tokens. The crawler keeps "1" for them, not the value, so a token
+ * is never stored or sent on. audit-engine's tests fail when a reader starts
+ * to match one of them by value.
+ */
+export const TECH_DETECT_PRESENCE_HEADERS: ReadonlySet<string> = new Set([
+  "cdn-pullzone",
+  "cf-cache-status",
+  "cf-ray",
+  "fly-request-id",
+  "x-akamai-request-id",
+  "x-akamai-transformed",
+  "x-amz-cf-id",
+  "x-amz-cf-pop",
+  "x-amz-request-id",
+  "x-amzn-waf-action",
+  "x-datadome",
+  "x-dd-b",
+  "x-ec-debug",
+  "x-fastly-request-id",
+  "x-github-request-id",
+  "x-iinfo",
+  "x-ik-request-id",
+  "x-kpsdk-cd",
+  "x-kpsdk-ct",
+  "x-kpsdk-r",
+  "x-nf-request-id",
+  "x-px-gt",
+  "x-px-pp",
+  "x-render-origin-server",
+  "x-shopify-stage",
+  "x-sucuri-cache",
+  "x-sucuri-id",
+  "x-vercel-cache",
+  "x-vercel-id",
+]);
