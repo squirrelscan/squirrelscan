@@ -45,7 +45,10 @@ import {
   type RuleCloudSpec,
 } from "@squirrelscan/rules";
 import { hasUnsafeUrlScheme } from "@squirrelscan/utils";
-import { overlayTechHeaders } from "@squirrelscan/utils/headers";
+import {
+  overlayTechHeaders,
+  techCookieNames,
+} from "@squirrelscan/utils/headers";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 
 import type { ExternalBulkChecker, SiteContextPage } from "@/audit/adapter";
@@ -932,13 +935,7 @@ function extractMetaTags(html: string): Record<string, string> {
  * match the name only, and the value (a session id) never leaves the machine.
  */
 function setCookieNames(setCookie: string | null | undefined): string | null {
-  if (!setCookie) return null;
-  const names = setCookie
-    .split("\n")
-    .map((cookie) => cookie.split("=", 1)[0]?.trim() ?? "")
-    .filter(Boolean)
-    .map((name) => `${name}=`);
-  return names.length > 0 ? names.join("\n") : null;
+  return setCookie ? techCookieNames(setCookie.split("\n")) : null;
 }
 
 /** Map the crawler's stored response/security headers to a lowercase header map. */

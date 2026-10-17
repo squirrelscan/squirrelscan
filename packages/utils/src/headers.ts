@@ -1,4 +1,8 @@
-import { TECH_DETECT_HEADER_NAMES } from "./constants";
+import {
+  TECH_DETECT_HEADER_MAX_CHARS,
+  TECH_DETECT_HEADER_NAMES,
+  TECH_DETECT_MAX_COOKIE_NAMES,
+} from "./constants";
 
 // Shared validation for user-supplied HTTP request headers (#494, #532).
 // These values are replayed onto outbound crawl/render requests, so a CR/LF/NUL
@@ -53,24 +57,14 @@ export function headersForRedirect(
   return result;
 }
 
-// A DocumentFetcher's `headers["set-cookie"]` is "\n"-joined, one real
-// Set-Cookie header per line (packages/fetchers/src/index.ts's headersToRecord)
-// because repeated Set-Cookie headers are
-// the one case `Headers` never combines, so they have to be flattened into a
-// single record string somehow. Rehydrating that joined string back into a
-// Headers object via `headers.set("set-cookie", joined)` — or via the
-// `new Headers(record)` constructor, which hits the same code path — THROWS
-// (a raw "\n" is not a legal single header value). Split and `append()` each
-// cookie instead, which is how `Headers` natively keeps repeated Set-Cookie
-// entries distinct. Any other malformed header value is skipped rather than
-// throwing, so one bad header can't take down the whole rehydration.
 /**
  * Lays the headers the crawler kept for technology detection (pub#871) over a
  * header map built from a stored page. A record that carries them, even as
  * null (none sent), speaks for every header detection reads: one the response
  * stopped sending is dropped from the map, so an older curated value a reused
  * record still holds cannot bring a removed technology back. A record stored
- * before they existed (undefined) leaves the map as it is.
+ * before they existed (undefined) leaves the map as it is. `map` is changed in
+ * place and returned: pass a map built for the call.
  */
 export function overlayTechHeaders(
   map: Record<string, string>,
@@ -82,6 +76,37 @@ export function overlayTechHeaders(
   return Object.assign(map, techHeaders);
 }
 
+/**
+ * The names of the cookies some Set-Cookie values set, as technology
+ * detection reads them: `name=`, one per line, null for none (pub#871). A
+ * name ends at the first `=` or `;`, so an attribute never joins it. Names
+ * are kept whole, at most TECH_DETECT_MAX_COOKIE_NAMES of them, and a name
+ * over TECH_DETECT_HEADER_MAX_CHARS is left out rather than cut.
+ */
+export function techCookieNames(setCookies: Iterable<string>): string | null {
+  const names: string[] = [];
+  for (const cookie of setCookies) {
+    const name = /^[^=;]*/.exec(cookie)?.[0]?.trim() ?? "";
+    if (name === "" || name.length > TECH_DETECT_HEADER_MAX_CHARS || names.includes(`${name}=`)) {
+      continue;
+    }
+    names.push(`${name}=`);
+    if (names.length === TECH_DETECT_MAX_COOKIE_NAMES) break;
+  }
+  return names.length > 0 ? names.join("\n") : null;
+}
+
+// A DocumentFetcher's `headers["set-cookie"]` is "\n"-joined, one real
+// Set-Cookie header per line (packages/fetchers/src/index.ts's headersToRecord)
+// because repeated Set-Cookie headers are
+// the one case `Headers` never combines, so they have to be flattened into a
+// single record string somehow. Rehydrating that joined string back into a
+// Headers object via `headers.set("set-cookie", joined)` — or via the
+// `new Headers(record)` constructor, which hits the same code path — THROWS
+// (a raw "\n" is not a legal single header value). Split and `append()` each
+// cookie instead, which is how `Headers` natively keeps repeated Set-Cookie
+// entries distinct. Any other malformed header value is skipped rather than
+// throwing, so one bad header can't take down the whole rehydration.
 /** Rehydrate a Headers object from a stored header record (e.g. a DocumentFetcher response). */
 export function recordToHeaders(record: Record<string, string>): Headers {
   const headers = new Headers();

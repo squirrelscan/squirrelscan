@@ -12,9 +12,10 @@ import { ALL_FINGERPRINTS } from "@squirrelscan/tech-detect";
 import {
   TECH_DETECT_HEADER_MAX_CHARS,
   TECH_DETECT_HEADER_NAMES,
+  TECH_DETECT_MAX_COOKIE_NAMES,
   TECH_DETECT_PRESENCE_HEADERS,
 } from "@squirrelscan/utils/constants";
-import { overlayTechHeaders } from "@squirrelscan/utils/headers";
+import { overlayTechHeaders, techCookieNames } from "@squirrelscan/utils/headers";
 import { HEADER_PATTERNS } from "@squirrelscan/waf-detect";
 
 import { buildTechHeadersMap } from "../src/adapter";
@@ -197,5 +198,24 @@ describe("overlayTechHeaders (pub#871)", () => {
       etag: "x",
       server: "Vercel",
     });
+  });
+});
+
+describe("techCookieNames (pub#871)", () => {
+  test("a name ends at = or ;, so attributes never join it", () => {
+    expect(techCookieNames(["sid=abc; Path=/", "foo; Secure", " bar = 1"])).toBe(
+      "sid=\nfoo=\nbar=",
+    );
+  });
+  test("names are listed once, none for no cookies", () => {
+    expect(techCookieNames(["a=1", "a=2"])).toBe("a=");
+    expect(techCookieNames([])).toBeNull();
+    expect(techCookieNames(["=1", ";x"])).toBeNull();
+  });
+  test("names are kept whole: an over-long one is left out, and the count is capped", () => {
+    const long = "x".repeat(TECH_DETECT_HEADER_MAX_CHARS + 1);
+    expect(techCookieNames([`${long}=1`, "ok=1"])).toBe("ok=");
+    const many = Array.from({ length: TECH_DETECT_MAX_COOKIE_NAMES + 10 }, (_, i) => `c${i}=1`);
+    expect(techCookieNames(many)?.split("\n")).toHaveLength(TECH_DETECT_MAX_COOKIE_NAMES);
   });
 });

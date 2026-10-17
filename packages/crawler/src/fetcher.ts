@@ -22,7 +22,7 @@ import {
   TECH_DETECT_HEADER_NAMES,
   TECH_DETECT_PRESENCE_HEADERS,
 } from "@squirrelscan/utils/constants";
-import { headersForRedirect } from "@squirrelscan/utils/headers";
+import { headersForRedirect, techCookieNames } from "@squirrelscan/utils/headers";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import {
   DEFAULT_MAX_DOCUMENT_BODY_BYTES,
@@ -660,13 +660,9 @@ function extractTechHeaders(headers: Headers, setCookies: string[]): Record<stri
     out[name] = TECH_DETECT_PRESENCE_HEADERS.has(name) ? "1" : value.slice(0, TECH_DETECT_HEADER_MAX_CHARS);
     any = true;
   }
-  const cookieNames = setCookies
-    .map((cookie) => cookie.split("=", 1)[0]?.trim() ?? "")
-    .filter(Boolean)
-    .map((name) => `${name}=`)
-    .join("\n");
+  const cookieNames = techCookieNames(setCookies);
   if (cookieNames) {
-    out["set-cookie"] = cookieNames.slice(0, TECH_DETECT_HEADER_MAX_CHARS);
+    out["set-cookie"] = cookieNames;
     any = true;
   }
   return any ? out : null;

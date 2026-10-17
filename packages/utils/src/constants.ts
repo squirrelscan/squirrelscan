@@ -562,11 +562,14 @@ export const TECH_DETECT_HEADER_NAMES = [
 ] as const;
 /** Longest value kept per header in TECH_DETECT_HEADER_NAMES. */
 export const TECH_DETECT_HEADER_MAX_CHARS = 512;
+/** Most cookie names kept for detection from one response's Set-Cookie headers. */
+export const TECH_DETECT_MAX_COOKIE_NAMES = 50;
 /**
  * The listed headers detection only tests for presence: request ids and bot
  * protection tokens. The crawler keeps "1" for them, not the value, so a token
- * is never stored or sent on. audit-engine's tests fail when a reader starts
- * to match one of them by value.
+ * is never stored or sent on. A test fails when a reader starts to match one
+ * of them by value, or a new presence-only reader is not listed
+ * (packages/audit-engine/tests/tech-detect-header-names-871.test.ts).
  */
 export const TECH_DETECT_PRESENCE_HEADERS: ReadonlySet<string> = new Set([
   "cdn-pullzone",
