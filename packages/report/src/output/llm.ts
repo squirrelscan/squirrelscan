@@ -490,6 +490,9 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
           }
           lines.push(itemLine);
         }
+      } else if (itemsLeftOut > 0) {
+        // pub#866: a check that keeps no items still says how many it has.
+        lines.push(`${indent(2)}Items (0/${itemsLeftOut}): none listed`);
       }
 
       lines.push(`${indent(1)}</rule>`);

@@ -261,6 +261,8 @@ export {
   ruleCarriedPageCount,
   isPageUrl,
   isRedundantPageItem,
+  itemsNotListed,
+  itemsNotListedLine,
 } from "./affected-pages";
 export type { AffectedPages, RuleAffectedRollup } from "./affected-pages";
 

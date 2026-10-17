@@ -13,6 +13,8 @@ import {
   getGroupName,
   getSubcategoryName,
   groupTechnologies,
+  itemsNotListed,
+  itemsNotListedLine,
   techChangeSummary,
   ENTITY_CONSOLE_LIMIT,
   ENTITY_EMPTY_MESSAGE,
@@ -291,7 +293,9 @@ export function generateConsoleReport(
               );
             }
           }
-          // Show structured items (preferred)
+          // Show structured items (preferred). pub#866: the "more" count adds
+          // the items the audit left out of the list to those past the preview.
+          const notListed = itemsNotListed(check);
           if (check.items && check.items.length > 0) {
             const maxItems = 5;
             const itemsToShow = check.items.slice(0, maxItems);
@@ -316,13 +320,16 @@ export function generateConsoleReport(
                 }
               }
             }
-            if (check.items.length > maxItems) {
+            const more = Math.max(0, check.items.length - maxItems) + notListed;
+            if (more > 0) {
               log(
                 box.line(
-                  `     ${fmt.dim(`... +${check.items.length - maxItems} more`)}`
+                  `     ${fmt.dim(`... +${more.toLocaleString("en-US")} more`)}`
                 )
               );
             }
+          } else if (notListed > 0) {
+            log(box.line(`     ${fmt.dim(itemsNotListedLine(notListed))}`));
           }
           // Legacy check.value omitted - message already contains relevant info
         }

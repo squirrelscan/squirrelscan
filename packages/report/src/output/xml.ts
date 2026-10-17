@@ -5,7 +5,7 @@ import type { AuditReport } from "../types";
 import { getScoreGrade } from "../scoring";
 import { getGroupName } from "../categories";
 import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
-import { affectedPages } from "../affected-pages";
+import { affectedPages, itemsNotListed } from "../affected-pages";
 import { domainAgeYears } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import { entityPageTotal, stableIdPercent } from "../entities";
@@ -203,8 +203,11 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
           lines.push(`${indent(4)}</affected-pages>`);
         }
 
+        // pub#866: `not-listed` counts the items the report left out of the list.
+        const left = itemsNotListed(check);
+        const notListed = left > 0 ? ` not-listed="${left}"` : "";
         if (check.items && check.items.length > 0) {
-          lines.push(`${indent(4)}<items count="${check.items.length}">`);
+          lines.push(`${indent(4)}<items count="${check.items.length}"${notListed}>`);
           for (const item of check.items) {
             lines.push(`${indent(5)}<item id="${escapeXml(item.id)}">`);
             if (item.label && item.label !== item.id) lines.push(`${indent(6)}<label>${escapeXml(item.label)}</label>`);
@@ -221,6 +224,8 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
             lines.push(`${indent(5)}</item>`);
           }
           lines.push(`${indent(4)}</items>`);
+        } else if (left > 0) {
+          lines.push(`${indent(4)}<items count="0"${notListed}/>`);
         }
 
         lines.push(`${indent(3)}</check>`);
