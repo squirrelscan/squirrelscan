@@ -25,7 +25,7 @@ A field is only judged when its size can be read plainly. It is counted as not r
 - its size is relative (`em`, `%`, `inherit`, `var()`, `calc()`, `font: inherit`, `all: unset`), or comes from a `font` shorthand the rule does not parse (it reads style, weight and stretch keywords, a size, a line height and a family list);
 - a rule uses a selector the audit cannot run as a browser would, such as `input:focus` or `:scope`;
 - a `<style>` rule hides it or a wrapper around it (`display: none`, `visibility: hidden`);
-- the page's style blocks are past the rule's reading budget (400,000 characters or 4,000 rules), or the page is past 20,000 selector matches.
+- it is past one of the rule's reading budgets, which keep a hostile page from stalling the audit: style blocks past 400,000 characters, 4,000 rules or 256 blocks, a selector longer than 256 characters, an inline `style` longer than 4,096 characters, a field nested more than 128 elements deep, or past 10,000 selector tests or 250 ms of them on the page.
 
 It emits a single check named `input-zoom`:
 

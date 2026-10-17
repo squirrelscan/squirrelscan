@@ -392,4 +392,135 @@ describe("mobile/input-zoom (#708)", () => {
     expect(performance.now() - started).toBeLessThan(5000);
     expect(check.status).toBe("info");
   });
+
+  describe("hostile pages: every path is capped", () => {
+    // The page is parsed outside the timing: only the rule's own work is bounded.
+    function timed(head: string, body: string): { ms: number; check: CheckResult } {
+      const html = `<!doctype html><html><head><title>x</title>${head}</head><body><form>${body}</form></body></html>`;
+      const url = "https://shop.example/x";
+      const ctx = {
+        page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
+        parsed: parsePage(html, url),
+        options: {},
+      } as unknown as RuleContext;
+      const started = performance.now();
+      const checks = (inputZoomRule.run(ctx) as { checks: CheckResult[] }).checks;
+      return { ms: performance.now() - started, check: only(checks) };
+    }
+
+    const cases: Array<[string, () => [string, string], Record<string, number>]> = [
+      [
+        "50,000 inputs",
+        () => ["", '<input name="q">'.repeat(50_000)],
+        { fields: 50_000, under16px: 200 },
+      ],
+      [
+        "a 5 MB stylesheet",
+        () => [
+          `<style>${"input.a{font-size:14px}".repeat(230_000)}</style>`,
+          "<input>".repeat(300),
+        ],
+        { notRead: 300 },
+      ],
+      [
+        "20,000 nested @media blocks",
+        () => [
+          `<style>${"@media (min-width:1px){".repeat(20_000)}input{font-size:14px}${"}".repeat(20_000)}</style>`,
+          "<input>",
+        ],
+        { notRead: 1 },
+      ],
+      [
+        "fields 3,000 elements deep",
+        () => ["", `${"<div>".repeat(3_000)}${"<input>".repeat(2_000)}${"</div>".repeat(3_000)}`],
+        { notRead: 2_000 },
+      ],
+      [
+        "3,000 hiding rules over a deep wrapper",
+        () => [
+          `<style>${Array.from({ length: 3_000 }, (_, i) => `.h${i} div{display:none}`).join("")}</style>`,
+          `${'<div class="x">'.repeat(100)}${"<input>".repeat(200)}${"</div>".repeat(100)}`,
+        ],
+        { fields: 200 },
+      ],
+      [
+        "1,400 rules with 250-character selectors spend the match budget",
+        () => [
+          `<style>${Array.from({ length: 1_400 }, (_, i) => `${"div ".repeat(60)}.z${i} input{font-size:14px}`).join("")}</style>`,
+          "<input>".repeat(200),
+        ],
+        { fields: 200 },
+      ],
+      [
+        "3,000 descendant selectors on fields 120 deep",
+        () => [
+          `<style>${Array.from({ length: 3_000 }, (_, i) => `.q${i} div input{font-size:14px}`).join("")}</style>`,
+          `${"<div>".repeat(120)}${"<input>".repeat(200)}${"</div>".repeat(120)}`,
+        ],
+        { fields: 200 },
+      ],
+      [
+        "3,000 :has() selectors over a 20,000-element form",
+        () => [
+          `<style>${Array.from({ length: 3_000 }, (_, i) => `form:has(.k${i}) input{font-size:14px}`).join("")}</style>`,
+          `${"<p>t</p>".repeat(20_000)}${"<input>".repeat(200)}`,
+        ],
+        { fields: 200 },
+      ],
+      [
+        "a 100,000-digit font size",
+        () => [`<style>input{font-size:${"1".repeat(100_000)}}</style>`, "<input>"],
+        { notRead: 1 },
+      ],
+      [
+        "a 300 KB selector",
+        () => [
+          `<style>${"div ".repeat(75_000)}input{font-size:14px}</style>`,
+          "<input>".repeat(200),
+        ],
+        { notRead: 200 },
+      ],
+      [
+        "a 1 MB wrapper style",
+        () => [
+          "",
+          `<div style="${"color:red;".repeat(100_000)}">${'<input style="font-size:14px">'.repeat(2_000)}</div>`,
+        ],
+        { notRead: 2_000 },
+      ],
+      [
+        "500 KB field styles",
+        () => ["", `<input style="${"color:red;".repeat(50_000)}font-size:14px">`.repeat(200)],
+        { notRead: 200 },
+      ],
+      [
+        "20,000 style blocks",
+        () => ["<style>input{font-size:14px}</style>".repeat(20_000), "<input>"],
+        { notRead: 1 },
+      ],
+      [
+        "a 100,000-token font shorthand",
+        () => [
+          `<style>input{font:${"italic ".repeat(50_000)}14px a${" a".repeat(50_000)}}</style>`,
+          "<input>",
+        ],
+        { notRead: 1 },
+      ],
+    ];
+    for (const [name, make, expected] of cases) {
+      test(name, () => {
+        const [head, body] = make();
+        const { ms, check } = timed(head, body);
+        expect(ms).toBeLessThan(1000);
+        expect(check.details).toMatchObject(expected);
+        expect((check.items ?? []).length).toBeLessThanOrEqual(20);
+      });
+    }
+
+    test("a 1 MB name attribute is cut in the item", () => {
+      const { check } = timed("", `<input name="${"n".repeat(1_000_000)}" style="font-size:12px">`);
+      expect(check.status).toBe("warn");
+      expect(check.items![0]!.id.length).toBeLessThan(120);
+    });
+  });
 });
