@@ -169,12 +169,15 @@ const NESTED_SITE_KEY = Object.fromEntries(
     new RegExp(`(?<![a-z0-9])site_?key["']?\\s*:\\s*["']${key}["']`, "i"),
   ]),
 );
-const FLAT_SITE_KEY = new RegExp(
-  Object.entries(SITE_KEY_FORMATS)
-    .map(([provider, key]) => `(?<![a-z0-9])${provider}_?site_?key["']?\\s*[:=]\\s*["']${key}["']`)
-    .join("|"),
-  "i",
-);
+const FLAT_SITE_KEYS = Object.entries(SITE_KEY_FORMATS).map(([provider, key]) => ({
+  key: new RegExp(`(?<![a-z0-9])${provider}_?site_?key["']?\\s*[:=]\\s*["']${key}["']`, "i"),
+  // A sibling switch for the same provider: `recaptchaEnabled: false`,
+  // `TURNSTILE_ENABLED = "false"`, `hcaptchaDisabled: true`.
+  off: new RegExp(
+    `(?<![a-z0-9])${provider}_?(?:(?:enabled?|active)["']?\\s*[:=]\\s*(?:false|0|["']false["'])|disabled["']?\\s*[:=]\\s*(?:true|1|["']true["']))`,
+    "i",
+  ),
+}));
 const PROVIDER_SWITCHED_OFF =
   /(?<![a-z0-9])(?:enabled?|active)["']?\s*:\s*(?:false|0|["']false["'])|(?<![a-z0-9])disabled["']?\s*:\s*(?:true|1|["']true["'])/i;
 /** How far one provider object is read, and how many are read per script. */
@@ -214,10 +217,9 @@ function hasPageLevelCaptchaConfig(doc: Document): boolean {
   for (const script of doc.querySelectorAll("script:not([src])")) {
     const content = script.textContent || "";
     if (!content) continue;
-    // A flat key has no object of its own to carry an off switch. Known gap:
-    // a sibling `<provider>Enabled: false` is not read, so such a page reads
-    // as protected.
-    if (FLAT_SITE_KEY.test(content)) return true;
+    // A flat key has no object of its own: a sibling switch for the same
+    // provider anywhere in the script turns it off.
+    if (FLAT_SITE_KEYS.some(({ key, off }) => key.test(content) && !off.test(content))) return true;
     let seen = 0;
     for (const match of content.matchAll(PROVIDER_OBJECT_START)) {
       if (++seen > PROVIDER_OBJECTS_PER_SCRIPT) break;
