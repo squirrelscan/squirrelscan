@@ -57,7 +57,7 @@ Ordered by how much a failure usually costs you, not by how many rules each one 
 | Images | 15 | Alt text, modern formats, responsive `srcset`, intrinsic dimensions and aspect-ratio mismatches, lazy loading above versus below the fold, file weight |
 | Structured Data | 25 | JSON-LD validity and rich-result eligibility for Article, Product, FAQ, Review, Breadcrumb, Organization, LocalBusiness, Video and site search, plus thirteen site-wide checks on the entity map: whether the site declares one identity for itself or a new one on every page, and rating markup that is not about the page it sits on |
 | Accessibility | 61 | WCAG coverage: ARIA roles and names, form labels and autocomplete tokens, colour contrast, heading order, landmarks, tables and lists, focus visibility, touch targets, captions |
-| Mobile | 7 | Viewport configuration, tap-target size, legible font sizes, horizontal scroll, blocked zoom, intrusive interstitials, the web app manifest and its icons |
+| Mobile | 8 | Viewport configuration, tap-target size, legible font sizes, horizontal scroll, blocked zoom, form fields small enough to zoom the page on focus, intrusive interstitials, the web app manifest and its icons |
 | Social Media | 5 | Open Graph and Twitter Card completeness, image dimensions, canonical URL match, social profile links, site-chrome assets that disagree across pages |
 | URL Structure | 9 | Length, casing, hyphenation, stop words, query parameters, special characters, trailing-slash consistency, site-wide convention consistency |
 | E-E-A-T | 15 | Experience, expertise, authority and trust signals: author bylines and credentials, about and contact pages, citations, editorial policy, disclaimers, YMYL detection |
