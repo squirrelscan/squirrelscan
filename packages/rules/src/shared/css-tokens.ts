@@ -33,8 +33,9 @@ export function skipComment(css: string, start: number): number {
 }
 
 /**
- * `css` with its comments removed, as a browser's tokenizer drops them: no
- * space is left behind, so `.a`, a comment, then `.b` reads `.a.b` (pub#684). Quoted strings
+ * `css` with its comments removed, as a browser's tokenizer drops them
+ * (pub#684): `.a`, a comment, then `.b` reads `.a.b`. A space is left only
+ * where two name characters would otherwise join into one name. Quoted strings
  * and escapes are copied through untouched, so a `/*` inside a string is text.
  */
 export function stripComments(css: string): string {

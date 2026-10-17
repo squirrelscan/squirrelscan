@@ -32,7 +32,7 @@ Thanks to @WilliamK112, whose pull requests are behind the `content/hidden-text`
 - `content/hidden-text` reads a CSS comment as a space. A comment before a property or its colon (`/* hide */ display: none`) used to stay in the property name, so the declaration was never recognised, in `<style>` rules and inline `style` attributes alike. Text or links hidden that way are now reported. A comment inside a value also separates its tokens.
 - The npm package's postinstall download follows at most three redirects, refuses a redirect to anything but HTTPS, and resolves a relative `Location` against the URL that sent it.
 - A plan id that names an Object built-in, such as `constructor` or `__proto__`, now reads as the Free plan like any other unknown id, instead of picking up an inherited property.
-- `content/hidden-text` now applies a `<style>` rule that has a CSS comment before or inside its selector, such as a `/* Section */` comment between rules in a hand-written stylesheet. Comments are dropped from the selector, as a browser does, so text hidden by such a rule is reported. On a 7,061-page corpus no page's finding changed. See [content/hidden-text](https://docs.squirrelscan.com/rules/content/hidden-text).
+- `content/hidden-text` now applies a `<style>` rule that has a CSS comment before or inside its selector, such as a `/* Section */` comment between rules in a hand-written stylesheet. Comments are dropped from the selector, as a browser does, so text hidden by such a rule is reported. See [content/hidden-text](https://docs.squirrelscan.com/rules/content/hidden-text).
 
 ## v0.0.117 (2026-10-17)
 
