@@ -8,7 +8,7 @@
 import { describe, expect, test } from "bun:test";
 import { parseHTML } from "@squirrelscan/parser/dom";
 
-import { hiddenTextRule, parseColor, parseLengthPx } from "../src/content/hidden-text";
+import { hiddenTextRule, parseColor, parseDeclarations, parseLengthPx } from "../src/content/hidden-text";
 import type { ParsedPage, RuleContext } from "../src/types";
 
 function ctx(html: string, options: Record<string, unknown> = {}): RuleContext {
@@ -412,6 +412,26 @@ describe("content/hidden-text — cascade and idiom guards", () => {
 });
 
 describe("content/hidden-text — CSS parsing", () => {
+  test("comments around a declaration property do not hide it", () => {
+    for (const declaration of ["/* hide */ display:none", "display/* hide */:none"]) {
+      expect(parseDeclarations(declaration).get("display")).toBe("none");
+    }
+  });
+
+  test("a comment inside a declaration value separates its tokens", () => {
+    expect(parseDeclarations("width:1/**/2px").get("width")).toBe("1 2px");
+  });
+
+  test("a comment before display:none does not conceal hidden stylesheet or inline content", () => {
+    for (const html of [
+      `<html><head><style>.promo { /* hide */ display: none }</style></head>
+        <body><div class="promo">${PAYLOAD}</div></body></html>`,
+      `<html><body><div style="/* hide */ display: none">${PAYLOAD}</div></body></html>`,
+    ]) {
+      expect(run(html).status).toBe("warn");
+    }
+  });
+
   test("a semicolon inside a data URL does not manufacture a declaration", () => {
     const html = `<html><body><div style='background-image:url("data:image/svg+xml;display:none;base64,PHN2Zz48L3N2Zz4=")'>${PAYLOAD}</div></body></html>`;
     expect(run(html).status).toBe("pass");

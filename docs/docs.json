@@ -426,6 +426,7 @@
                   "rules/mobile/viewport-zoom",
                   "rules/mobile/tap-targets",
                   "rules/mobile/font-size",
+                  "rules/mobile/input-zoom",
                   "rules/mobile/horizontal-scroll",
                   "rules/mobile/interstitials",
                   "rules/mobile/web-app-manifest"

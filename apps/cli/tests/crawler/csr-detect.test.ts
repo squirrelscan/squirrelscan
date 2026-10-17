@@ -1,12 +1,12 @@
-// Tests for the quick-mode HTTP-first hybrid CSR-shell detector (#294).
+// Tests for the quick-mode HTTP-first hybrid CSR-shell detector (#294), which
+// lives in @squirrelscan/fetchers (the CLI copy was a re-export shim, #700).
 // Bias: low false positives — SSR/static pages must NOT be flagged.
-
-import { describe, expect, test } from "bun:test";
 
 import {
   extractVisibleText,
   looksClientRendered,
-} from "../../src/crawl/csr-detect";
+} from "@squirrelscan/fetchers";
+import { describe, expect, test } from "bun:test";
 
 const CONTENT_PAGE = `<!doctype html><html><head><title>About</title></head>
 <body>

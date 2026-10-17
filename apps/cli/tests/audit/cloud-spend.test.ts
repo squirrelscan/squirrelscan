@@ -455,6 +455,46 @@ describe("dead-links results the service could not verify", () => {
     });
   });
 
+  test("pub#821: the reason a result is unverifiable is kept when known and dropped otherwise", async () => {
+    const base = {
+      ok: false,
+      status: null,
+      error: null,
+      redirectUrl: null,
+      fromCache: false,
+      wafBlocked: true,
+      wafProvider: "unknown",
+    };
+    const checker = await checkerAnswering([
+      {
+        ...base,
+        url: "https://external-one.com/a",
+        unverifiedReason: "awaiting-confirmation",
+      },
+      {
+        ...base,
+        url: "https://external-two.com/b",
+        unverifiedReason: "<script>",
+      },
+      { ...base, url: "https://external-three.com/c" },
+    ]);
+    const results = await checker!([
+      "https://external-one.com/a",
+      "https://external-two.com/b",
+      "https://external-three.com/c",
+    ]);
+    expect(results.get("https://external-one.com/a")?.unverifiedReason).toBe(
+      "awaiting-confirmation"
+    );
+    expect(
+      results.get("https://external-two.com/b")?.unverifiedReason
+    ).toBeUndefined();
+    expect(results.get("https://external-two.com/b")?.wafBlocked).toBe(true);
+    expect(
+      results.get("https://external-three.com/c")?.unverifiedReason
+    ).toBeUndefined();
+  });
+
   test("a result without the flag, from this or an older service, carries none", async () => {
     const checker = await checkerAnswering([
       {

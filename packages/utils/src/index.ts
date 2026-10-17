@@ -72,6 +72,8 @@ export {
   hasRichResultSchema,
   getRichResultTypes,
   flattenJsonLdNodes,
+  indexJsonLdIds,
+  resolveJsonLdRef,
 } from "./schema-rich-results";
 
 export {

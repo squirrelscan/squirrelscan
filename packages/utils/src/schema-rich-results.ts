@@ -66,6 +66,85 @@ export function flattenJsonLdNodes(raw: string): Record<string, unknown>[] {
 }
 
 /**
+ * The page's JSON-LD nodes by `@id`, for resolving node references
+ * (`{"@id": …}`) within one page (pub#817). Nodes nested in ordinary
+ * properties count too (an Offer written inline on one Product can be
+ * referenced from another). The first full node with an id wins; an id only a
+ * bare reference or a minimal `{"@id", "@type"}` stub carries maps to the
+ * first of those, so a stub and the references to it are one object. Ids are
+ * resolved against `baseUrl`, so `#q1` and `https://site/page#q1` match.
+ */
+export function indexJsonLdIds(
+  nodes: readonly Record<string, unknown>[],
+  baseUrl?: string,
+): Map<string, Record<string, unknown>> {
+  const full = new Map<string, Record<string, unknown>>();
+  const stubs = new Map<string, Record<string, unknown>>();
+  let seen = 0;
+  const visit = (value: unknown, depth: number): void => {
+    if (depth > MAX_GRAPH_DEPTH || seen >= MAX_INDEXED_OBJECTS) return;
+    if (Array.isArray(value)) {
+      for (const entry of value) visit(entry, depth + 1);
+      return;
+    }
+    if (!value || typeof value !== "object") return;
+    seen++;
+    const node = value as Record<string, unknown>;
+    const id = node["@id"];
+    if (typeof id === "string" && id !== "") {
+      const key = jsonLdIdKey(id, baseUrl);
+      const target = isJsonLdReference(node) ? stubs : full;
+      if (!target.has(key)) target.set(key, node);
+    }
+    for (const [key, child] of Object.entries(node)) {
+      if (key === "@id" || key === "@type" || key === "@context") continue;
+      if (child && typeof child === "object") visit(child, depth + 1);
+    }
+  };
+  for (const node of nodes) visit(node, 0);
+  for (const [key, stub] of stubs) if (!full.has(key)) full.set(key, stub);
+  return full;
+}
+
+/** Objects {@link indexJsonLdIds} looks at, a bound on a hostile page. */
+const MAX_INDEXED_OBJECTS = 20_000;
+
+/** An `@id` as an index key: resolved against the page URL when that parses. */
+function jsonLdIdKey(id: string, baseUrl: string | undefined): string {
+  try {
+    return new URL(id, baseUrl).href;
+  } catch {
+    return id;
+  }
+}
+
+/**
+ * True for a node reference: an object whose only keys are `@id` and,
+ * optionally, `@type` and `@context`. Yoast writes
+ * `mainEntity: [{"@id": "…#q1"}]` and the node itself elsewhere in the `@graph`.
+ */
+function isJsonLdReference(value: Record<string, unknown>): boolean {
+  if (typeof value["@id"] !== "string") return false;
+  return Object.keys(value).every((key) => key === "@id" || key === "@type" || key === "@context");
+}
+
+/**
+ * `value` with a node reference replaced by the node it names on the page,
+ * when there is one. Anything else, a dangling reference included, comes back
+ * as it was, so a rule judging it still sees what the markup says.
+ */
+export function resolveJsonLdRef(
+  value: unknown,
+  ids: ReadonlyMap<string, Record<string, unknown>>,
+  baseUrl?: string,
+): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const node = value as Record<string, unknown>;
+  if (!isJsonLdReference(node)) return value;
+  return ids.get(jsonLdIdKey(node["@id"] as string, baseUrl)) ?? value;
+}
+
+/**
  * How deep a `@graph` chain is followed.
  *
  * Real markup is one or two levels: a document wrapping a `@graph`, whose

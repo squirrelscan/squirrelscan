@@ -719,9 +719,18 @@ describe("render-block fallback (#490)", () => {
       isRenderBlocked({
         url: REQ.url,
         status: 200,
-        html: "<html><body>Just a moment... __cf_chl_opt = {}; cf-browser-verification</body></html>",
+        // The markers where a challenge page carries them, a script and an
+        // element id: printed as body text they are a page quoting them (#693).
+        html: '<html><head><title>Just a moment...</title></head><body><div id="cf-browser-verification"></div><script>window.__cf_chl_opt = {};</script></body></html>',
       })
     ).toBe(true);
+    expect(
+      isRenderBlocked({
+        url: REQ.url,
+        status: 200,
+        html: "<html><body>Just a moment... __cf_chl_opt = {}; cf-browser-verification</body></html>",
+      })
+    ).toBe(false);
   });
 
   test("isRenderBlocked: a WAF/bot-challenge interstitial is a block", () => {

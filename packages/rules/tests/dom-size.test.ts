@@ -49,7 +49,7 @@ describe("perf/dom-size dom-max-children", () => {
     expect(check?.value).toBe(61);
   });
 
-  test("a document with no body element does not throw", () => {
+  test("a document with no body element is skipped, not measured", () => {
     const doc = { documentElement: parseHTML("<html></html>").document.documentElement, body: null };
     const ctx = {
       ...makeCtx("<html></html>"),
@@ -57,8 +57,66 @@ describe("perf/dom-size dom-max-children", () => {
     };
     const result = domSizeRule.run(ctx);
     if (result instanceof Promise) throw new Error("unexpected async rule");
-    const check = result.checks.find((c) => c.name === "dom-max-children");
-    expect(check?.status).toBe("pass");
-    expect(check?.value).toBe(0);
+    expect(result.checks).toEqual([
+      {
+        name: "dom-total-nodes",
+        status: "skipped",
+        message: "No body element found",
+        skipReason: "Invalid document structure",
+      },
+    ]);
+  });
+});
+
+describe("perf/dom-size on a document with no root", () => {
+  test.each(["", "just text", "<!-- only a comment -->"])("%j is skipped, not a rule error", (html) => {
+    const result = domSizeRule.run(makeCtx(html));
+    if (result instanceof Promise) throw new Error("unexpected async rule");
+    expect(result.checks).toEqual([
+      {
+        name: "dom-total-nodes",
+        status: "skipped",
+        message: "No document root found",
+        skipReason: "Invalid document structure",
+      },
+    ]);
+  });
+});
+
+// pub#548: total nodes and depth are measured from <body> too, so the three
+// checks agree on what they measure, as Lighthouse's DOM size audit does.
+describe("perf/dom-size total nodes and depth", () => {
+  const check = (html: string, name: string, options: Record<string, unknown> = {}) => {
+    const result = domSizeRule.run({ ...makeCtx(html), options });
+    if (result instanceof Promise) throw new Error("unexpected async rule");
+    return result.checks.find((c) => c.name === name);
+  };
+
+  test("a 70-link head with a small body reports the body's numbers", () => {
+    const head = Array.from(
+      { length: 70 },
+      (_, i) => `<link rel="alternate" hreflang="l${i}" href="http://127.0.0.1:8766/l${i}/">`,
+    ).join("");
+    const html = page(head, "<h1>Hello</h1><p>Small <b>body</b>.</p>");
+    // <h1>, <p>, <b>: the body's descendants, not the 72 head nodes.
+    expect(check(html, "dom-total-nodes")).toMatchObject({ status: "pass", value: 3 });
+    // <body> 1, <p> 2, <b> 3.
+    expect(check(html, "dom-depth")).toMatchObject({ status: "pass", value: 3 });
+    // A head that would cross the line on its own does not.
+    expect(check(html, "dom-total-nodes", { warn_threshold: 50 })?.status).toBe("pass");
+  });
+
+  test("a deep body is still reported at the threshold", () => {
+    const nest = (n: number) => `${"<div>".repeat(n)}x${"</div>".repeat(n)}`;
+    // body (1) + 31 divs = 32 levels: at the limit, passes; one more warns.
+    expect(check(page("", nest(31)), "dom-depth")).toMatchObject({ status: "pass", value: 32 });
+    expect(check(page("", nest(32)), "dom-depth")).toMatchObject({ status: "warn", value: 33 });
+  });
+
+  test("the node thresholds read the body count", () => {
+    const items = (n: number) => `<ul>${"<li>x</li>".repeat(n - 1)}</ul>`;
+    expect(check(page("", items(1499)), "dom-total-nodes")).toMatchObject({ status: "pass", value: 1499 });
+    expect(check(page("", items(1500)), "dom-total-nodes")).toMatchObject({ status: "warn", value: 1500 });
+    expect(check(page("", items(3000)), "dom-total-nodes")).toMatchObject({ status: "fail", value: 3000 });
   });
 });

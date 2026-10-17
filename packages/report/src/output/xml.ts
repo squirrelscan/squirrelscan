@@ -44,6 +44,22 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   lines.push(`${indent(2)}<url>${escapeXml(report.baseUrl)}</url>`);
   lines.push(`${indent(2)}<pages-crawled>${report.totalPages}</pages-crawled>`);
   lines.push(`${indent(2)}<audit-date>${escapeXml(report.timestamp)}</audit-date>`);
+  // Scan scope (#350, as in every other renderer since #1180): where the audit
+  // ran, the page limit in force, and whether it bound, so a consumer diffing two
+  // reports can tell a site that shrank from a crawl that was capped.
+  // `requested-max-pages` only when the request was clamped (#1909), and
+  // `stop-reason` only when the crawl time budget ended it. Absent on a report
+  // from before #1180.
+  if (report.scanScope) {
+    const s = report.scanScope;
+    const cap = s.maxPages !== undefined ? ` max-pages="${s.maxPages}"` : "";
+    const requested =
+      s.requestedMaxPages !== undefined ? ` requested-max-pages="${s.requestedMaxPages}"` : "";
+    const stop = s.stopReason ? ` stop-reason="${escapeXml(s.stopReason)}"` : "";
+    lines.push(
+      `${indent(2)}<scan-scope origin="${escapeXml(s.origin)}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}/>`,
+    );
+  }
   lines.push(`${indent(1)}</site>`);
 
   // Refused off-site seed redirect (#1418): the seed left its own registrable

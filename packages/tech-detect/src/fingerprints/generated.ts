@@ -2654,19 +2654,6 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     confidence: "high",
   },
   {
-    id: "imperva-incapsula",
-    name: "Imperva / Incapsula",
-    category: "security",
-    website: "https://www.imperva.com",
-    icon: "imperva-incapsula",
-    detectors: [
-      { type: "header", name: "X-CDN", pattern: new RegExp("Incapsula", "i") },
-      { type: "header", name: "X-Iinfo", pattern: new RegExp(".+", "i") },
-      { type: "script-url", pattern: new RegExp("/_Incapsula_Resource", "i") },
-    ],
-    confidence: "high",
-  },
-  {
     id: "datadome",
     name: "DataDome",
     category: "security",

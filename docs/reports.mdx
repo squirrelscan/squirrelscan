@@ -383,22 +383,17 @@ squirrel report -f xml -o report.xml
 **Format Structure:**
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
-<audit version="0.0.13">
+<squirrelscan-audit version="0.0.117">
   <site>
     <url>https://example.com</url>
-    <crawled>42</crawled>
-    <date>2025-01-18T10:30:00Z</date>
+    <pages-crawled>42</pages-crawled>
+    <audit-date>2025-01-18T10:30:00.000Z</audit-date>
+    <scan-scope origin="cli" crawled="42" max-pages="100" capped="false"/>
   </site>
-  <score>
-    <overall>87</overall>
-    <grade>B</grade>
-    <categories>
-      <category>
-        <name>Core SEO</name>
-        <score>100</score>
-      </category>
-    </categories>
-  </score>
+  <health-score overall="87" grade="B">
+    <category name="Core SEO" score="100"/>
+  </health-score>
+  <summary passed="180" warnings="6" failed="2"/>
   <issues>
     <rule id="content/word-count" severity="warning" category="Content" group="seo">
       <name>Word Count</name>
@@ -413,8 +408,10 @@ squirrel report -f xml -o report.xml
       </check>
     </rule>
   </issues>
-</audit>
+</squirrelscan-audit>
 ```
+
+`<scan-scope>` says where the audit ran (`origin`: `cli`, `ci` or `cloud`), how many pages it crawled, the page limit in force (`max-pages`), and whether that limit stopped the crawl (`capped`). `requested-max-pages` appears only when the limit you asked for was lowered, and `stop-reason="time"` only when the crawl time budget ended the crawl. A report from before scan scope existed has no `<scan-scope>`. A white-label report's root element is `<audit>`.
 
 **Key Features:**
 - **2-space indentation** for readability
@@ -693,7 +690,7 @@ Published reports support multiple output formats. Append a file extension to th
 | XML | [/SJEItpldwW.xml](https://reports.squirrelscan.com/SJEItpldwW.xml) | Enterprise integration |
 | LLM | [/SJEItpldwW.llm](https://reports.squirrelscan.com/SJEItpldwW.llm) | Coding agents, token-efficient |
 
-Every format is the same capped summary, the JSON included: each issue keeps up to 10 example pages and 5 items beside its true counts, which the JSON carries in a sampled check's `details` (`pagesTruncated` for pages, `occurrences` for per-page checks, `additional` for items left out). The HTML, markdown and text formats print that count beside the items they list, for example `1 item, 37 more not listed`, or on its own (`1,500 items not listed`) for an issue that lists none. A capped report says so in its top-level `detail` field, and every format of a capped report prints one line saying where the full list is. See [size cap on large sites](#size-cap-on-large-sites).
+Every format is the same capped summary, the JSON included: each issue keeps up to 10 example pages and 5 items beside its true counts, which the JSON carries in a sampled check's `details` (`pagesTruncated` for pages, `occurrences` for per-page checks, `additional` for items left out). The HTML, markdown and text formats print that count beside the items they list, for example `1 item, 37 more not listed`, or on its own (`1,500 items not listed`) for an issue that lists none. When a rule's issues reach different pages, the JSON's top-level `rulePageCounts` gives that rule's exact page count, which adding up its sampled issues cannot. A capped report says so in its top-level `detail` field, and every format of a capped report prints one line saying where the full list is. See [size cap on large sites](#size-cap-on-large-sites).
 
 Without an extension, the format is determined by the `Accept` header. Browsers receive HTML, while tools like `curl` can request specific formats:
 

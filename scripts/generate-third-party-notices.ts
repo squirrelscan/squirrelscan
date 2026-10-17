@@ -3,6 +3,8 @@
 import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { dirname, join, parse, resolve } from "node:path";
 
+import { bundledPackages, isSilentBundler, silentBundlerError } from "./third-party-bundled";
+
 interface PackageJson {
   name?: string;
   version?: string;
@@ -113,36 +115,16 @@ const noticeTexts = new Map<string, { filename: string; text: string; packages: 
 const visitedDirectories = new Set<string>();
 
 /**
- * Packages a dependency ships INSIDE its own files rather than as a dependency:
- * `@modelcontextprotocol/server` bundles ajv 8 and friends into its dist, so
- * they reach the CLI binary without ever appearing in the dependency walk
- * (#570). Their bundler leaves the source path in region comments
- * (`node_modules/.pnpm/ajv@8.18.0/node_modules/ajv/...`), which is how they are
- * found. The license text cannot be read from node_modules (nothing is
- * installed), so it is committed under `scripts/third-party-embedded/`, one
+ * Packages a dependency ships INSIDE its own files rather than as a dependency
+ * are found by `bundledPackages` (scripts/third-party-bundled.ts). Their license
+ * text cannot be read from node_modules (nothing is installed), so it is
+ * committed under `scripts/third-party-embedded/`, one
  * `<name with / as __>@<version>/` directory with the package's `package.json`
  * fields and license file, and a bundled package without one is an error.
  */
 const embeddedDirectory = join(root, "scripts", "third-party-embedded");
 const embeddedMissing: string[] = [];
-const BUNDLED_SOURCE = /node_modules\/\.pnpm\/((?:@[^/+]+\+)?[^/@]+)@(\d[^/_]*)/g;
-
-function bundledPackages(directory: string): Set<string> {
-  const found = new Set<string>();
-  for (const file of new Bun.Glob("**/*.{js,mjs,cjs}").scanSync(directory)) {
-    if (file.includes("node_modules/")) continue;
-    let text: string;
-    try {
-      text = readFileSync(join(directory, file), "utf8");
-    } catch {
-      continue;
-    }
-    for (const match of text.matchAll(BUNDLED_SOURCE)) {
-      found.add(`${match[1]!.replace("+", "/")}@${match[2]}`);
-    }
-  }
-  return found;
-}
+const silentBundlers: string[] = [];
 
 function recordNotice(realDirectory: string, pkg: PackageJson): void {
   const id = `${pkg.name}@${pkg.version ?? "unknown"}`;
@@ -197,7 +179,9 @@ function visit(directory: string): void {
     }
     recordNotice(realDirectory, pkg);
     const id = `${pkg.name}@${pkg.version ?? "unknown"}`;
-    for (const bundled of [...bundledPackages(realDirectory)].sort()) {
+    const bundledHere = bundledPackages(realDirectory);
+    if (isSilentBundler(pkg.name, bundledHere)) silentBundlers.push(id);
+    for (const bundled of [...bundledHere].sort()) {
       const committed = join(embeddedDirectory, bundled.replace("/", "__"));
       if (!existsSync(join(committed, "package.json"))) {
         embeddedMissing.push(`${bundled} (bundled in ${id})`);
@@ -261,6 +245,12 @@ const targets = [join(root, "THIRD_PARTY_NOTICES.md"), join(root, "npm", "THIRD_
 // A stale/partial node_modules yields versions the lockfile does not pin, so
 // the notices generated from it are wrong no matter what the committed file
 // says. Fail on that directly instead of reporting it as out-of-date notices.
+const silentError = silentBundlerError(silentBundlers);
+if (silentError) {
+  console.error(silentError);
+  process.exit(1);
+}
+
 if (embeddedMissing.length > 0) {
   console.error("Packages bundled inside a dependency have no committed license text:");
   for (const missing of embeddedMissing.sort()) console.error(`  ${missing}`);

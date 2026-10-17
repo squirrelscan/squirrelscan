@@ -751,39 +751,6 @@ export interface CWVHints {
 }
 
 // ============================================
-// ENHANCED LINK TYPES (Phase 4)
-// ============================================
-
-export interface EnhancedLinkData extends LinkData {
-  rel?: string[];
-  isNofollow: boolean;
-  isSponsored: boolean;
-  isUgc: boolean;
-  hasNoopener: boolean;
-  target?: string;
-  anchorType: "text" | "image" | "empty" | "generic";
-}
-
-export interface InternalLinkAnalysis {
-  totalInternalLinks: number;
-  totalExternalLinks: number;
-  orphanPages: string[];
-  deepPages: { url: string; depth: number }[]; // > 3 clicks
-  crawlDepth: Map<string, number>;
-  linkEquity: Map<string, number>; // incoming link count
-  pagesWithFewLinks: { url: string; count: number }[];
-  pagesWithManyLinks: { url: string; count: number }[];
-}
-
-export interface AnchorTextAnalysis {
-  genericAnchors: { url: string; text: string }[];
-  emptyAnchors: string[];
-  imageOnlyLinks: string[];
-  keywordRichAnchors: { url: string; text: string }[];
-  anchorDistribution: Map<string, number>;
-}
-
-// ============================================
 // ENHANCED IMAGE TYPES (Phase 4)
 // ============================================
 

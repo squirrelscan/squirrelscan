@@ -239,6 +239,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-bun
       - run: bun run build
+      - name: Verify compiled rules version
+        run: |
+          expected=$(bun -e 'import { fingerprintRuleSources } from "./apps/cli/src/audit/rules-fingerprint"; console.log(fingerprintRuleSources(process.cwd(), undefined, { strict: true }))')
+          # An empty value would make `grep -F ""` match any file.
+          if ! [[ "$expected" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Could not compute the rules fingerprint for this checkout: '$expected'" >&2
+            exit 1
+          fi
+          if ! grep -aFq "$expected" apps/cli/build/squirrelscan; then
+            echo "Compiled CLI does not embed the rules version for this checkout: $expected" >&2
+            exit 1
+          fi
+          echo "Compiled CLI embeds rules version $expected"
 
   psl-freshness:
     name: Public suffix data freshness

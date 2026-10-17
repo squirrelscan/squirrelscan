@@ -137,19 +137,35 @@ const DASH = "(?:-|\\u2013|&#8211;|&ndash;)";
  * provider's own infrastructure emits. Never the provider's name or a phrase a
  * page could print while talking about it: a blog post that mentions Imperva is
  * not behind Imperva (#667).
+ *
+ * Each entry names the view it is read in (#693, see views.ts): a script or
+ * resource signature in `markup`, tags and inline scripts only, so a tutorial
+ * that prints the tag is not attributed; block-page wording in `text`, page
+ * text without code, so a support page quoting an incident line in a code
+ * block is not either. Wording is text by nature: block pages print it in a
+ * `<p>`, and CloudFront's in a `<pre>`.
  */
 export const CONTENT_PATTERNS: {
   provider: WafProvider;
+  view: "markup" | "text";
   patterns: RegExp[];
   confidence: "high" | "medium";
 }[] = [
   {
     provider: "cloudflare",
+    view: "text",
     patterns: [
       // The legacy "I'm Under Attack" interstitial's line, in full.
       /checking your browser before accessing/i,
       // Error pages print the ray id after the label; the label alone is prose.
       /cloudflare ray id:?\s*(?:<[^>]*>\s*)*[0-9a-f]{6,}\b/i,
+    ],
+    confidence: "high",
+  },
+  {
+    provider: "cloudflare",
+    view: "markup",
+    patterns: [
       /cf-browser-verification/i,
       /__cf_chl_/,
       /_cf_chl_opt/,
@@ -162,6 +178,7 @@ export const CONTENT_PATTERNS: {
   },
   {
     provider: "akamai",
+    view: "text",
     patterns: [
       AKAMAI_REFERENCE_ID,
       // Akamai deny/challenge pages entity-encode the reference line in the
@@ -175,6 +192,7 @@ export const CONTENT_PATTERNS: {
   },
   {
     provider: "sucuri",
+    view: "text",
     // The block page's title and heading, in full.
     patterns: [
       new RegExp(`sucuri website ?firewall\\s*${DASH}\\s*(?:cloudproxy\\s*${DASH}\\s*)?access denied`, "i"),
@@ -184,13 +202,21 @@ export const CONTENT_PATTERNS: {
   },
   {
     provider: "imperva",
-    // The block page's incident line carries its id, and Imperva serves its
-    // own scripts and block iframe from /_Incapsula_Resource.
-    patterns: [IMPERVA_INCIDENT_LINE, /\/_Incapsula_Resource\b/i],
+    view: "text",
+    // The block page's incident line carries its id.
+    patterns: [IMPERVA_INCIDENT_LINE],
+    confidence: "high",
+  },
+  {
+    provider: "imperva",
+    view: "markup",
+    // Imperva serves its own scripts and block iframe from /_Incapsula_Resource.
+    patterns: [/\/_Incapsula_Resource\b/i],
     confidence: "high",
   },
   {
     provider: "datadome",
+    view: "markup",
     // The tag's host, a script from the captcha host, and the key the tag is
     // configured with. Hosts are matched where a script loads them (`src=`).
     patterns: [
@@ -202,6 +228,7 @@ export const CONTENT_PATTERNS: {
   },
   {
     provider: "perimeterx",
+    view: "markup",
     patterns: [
       /px-captcha/i,
       /_pxCaptcha/,
@@ -212,6 +239,7 @@ export const CONTENT_PATTERNS: {
   },
   {
     provider: "aws-waf",
+    view: "markup",
     // The challenge script AWS WAF injects, loaded from its token host. Matched
     // where a script loads it (`src=`), like DataDome's captcha host, so the
     // scan starts only at a src attribute and stays linear.
@@ -223,6 +251,7 @@ export const CONTENT_PATTERNS: {
   },
   {
     provider: "aws-waf",
+    view: "text",
     // CloudFront's own error page for a request AWS WAF blocked: a Block action
     // answers a plain 403 with no WAF header, and this page is all it carries.
     // Medium: CloudFront prints the same page for a geo restriction. An S3
@@ -232,6 +261,7 @@ export const CONTENT_PATTERNS: {
   },
   {
     provider: "kasada",
+    view: "markup",
     // KPSDK is Kasada's client object; its script is ips.js under two UUIDs.
     patterns: [
       /\bwindow\.KPSDK\b/,
@@ -246,23 +276,26 @@ export const CONTENT_PATTERNS: {
  * Markup only a challenge or block page carries. With a challenge status or a
  * WAF's own headers or markup it marks the page as a challenge, even at 200.
  */
-export const CHALLENGE_MARKUP_PATTERNS = [
-  /cf-browser-verification/i,
-  /__cf_chl_/i,
-  /_cf_chl_opt/,
-  CLOUDFLARE_CHALLENGE_SCRIPT,
-  IMPERVA_INCIDENT_LINE,
+export const CHALLENGE_MARKUP_SIGNATURES: { view: "markup" | "text"; pattern: RegExp }[] = [
+  { view: "markup", pattern: /cf-browser-verification/i },
+  { view: "markup", pattern: /__cf_chl_/i },
+  { view: "markup", pattern: /_cf_chl_opt/ },
+  { view: "markup", pattern: CLOUDFLARE_CHALLENGE_SCRIPT },
+  { view: "text", pattern: IMPERVA_INCIDENT_LINE },
   // Akamai's real deny page tag-breaks the heading (<H1>Access Denied</H1>)
   // and entity-encodes the reference ("Reference&#32;&#35;18&#46;..."), so the
   // combined text pattern below misses it; &#32;&#35; is Akamai-specific enough
   // to stand alone (#802). The plain reference id needs the denial before it: a
   // troubleshooting page can quote one. The gap between them stays bounded: each
   // "access denied" in the 10 KB sample costs at most a 2 KB scan.
-  /reference&#32;&#35;\s*\d/i,
-  new RegExp(`access denied[\\s\\S]{0,2000}?${AKAMAI_REFERENCE_ID.source}`, "i"),
-  /_pxCaptcha/i,
-  /px-captcha/i,
+  { view: "text", pattern: /reference&#32;&#35;\s*\d/i },
+  { view: "text", pattern: new RegExp(`access denied[\\s\\S]{0,2000}?${AKAMAI_REFERENCE_ID.source}`, "i") },
+  { view: "markup", pattern: /_pxCaptcha/i },
+  { view: "markup", pattern: /px-captcha/i },
 ];
+
+/** The challenge markup patterns alone; each is read in its view (#693). */
+export const CHALLENGE_MARKUP_PATTERNS = CHALLENGE_MARKUP_SIGNATURES.map(({ pattern }) => pattern);
 
 /**
  * What a challenge page says, which an ordinary page can say too ("just a

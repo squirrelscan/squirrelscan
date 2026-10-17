@@ -92,6 +92,28 @@ export interface DeadLinksRequest {
   runId?: string;
 }
 
+/**
+ * Why a link could not be verified (pub#821): bot protection refused the check
+ * (`blocked`), it timed out or failed to connect from the checker's network
+ * (`unreachable`), or it answered 404 once and waits for a second check to
+ * confirm it (`awaiting-confirmation`), a likely-broken link rather than a
+ * blocked one.
+ */
+export type UnverifiedReason = "blocked" | "unreachable" | "awaiting-confirmation";
+
+export const UNVERIFIED_REASONS: readonly UnverifiedReason[] = [
+  "blocked",
+  "unreachable",
+  "awaiting-confirmation",
+];
+
+/** `value` as an {@link UnverifiedReason}, or undefined for anything else (untrusted input). */
+export function parseUnverifiedReason(value: unknown): UnverifiedReason | undefined {
+  return typeof value === "string" && (UNVERIFIED_REASONS as readonly string[]).includes(value)
+    ? (value as UnverifiedReason)
+    : undefined;
+}
+
 export interface DeadLinkResult {
   url: string;
   ok: boolean;
@@ -122,6 +144,12 @@ export interface DeadLinkResult {
   wafBlocked?: boolean;
   /** The bot-protection vendor when the checker named one (`cloudflare`, `akamai`, ...), else `unknown`. */
   wafProvider?: string;
+  /**
+   * Why the link is unverifiable, with `wafBlocked` (pub#821). Optional so
+   * older service responses, and a value this client does not know, keep
+   * parsing: the link then reads as plainly unverified.
+   */
+  unverifiedReason?: UnverifiedReason;
 }
 
 export interface DeadLinksResponse {

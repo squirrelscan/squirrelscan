@@ -450,7 +450,7 @@ describe("consentEstimateLine (#191 up-front cost)", () => {
     // 50 base + 2 × 25 pages + 1 × 25 links.
     expect(line).toContain("About 125 credits");
     expect(line).toContain(
-      "up to 25 for external links (1 each the cloud checks, at most 1 per page)"
+      "up to 25 for external links (1 each the cloud verifies, at most 1 per page)"
     );
   });
 
@@ -582,7 +582,7 @@ describe("the one-time link pricing notice (#801)", () => {
 
   test("names the price, its cap and the way out, and never offers --offline (which checks no links)", () => {
     expect(LINK_PRICING_NOTICE).toContain(
-      "1 per external link the cloud checks for this audit"
+      "1 per external link the cloud verifies for this audit"
     );
     expect(LINK_PRICING_NOTICE).toContain(
       "at most 1 per page of the audit's page limit"

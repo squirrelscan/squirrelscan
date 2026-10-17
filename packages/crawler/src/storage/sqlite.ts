@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 import { Effect } from "effect";
 
 import type { CheckResult } from "@squirrelscan/core-contracts";
-import { isCacheHitReason } from "@squirrelscan/core-contracts";
+import { isCacheHitReason, parseUnverifiedReason } from "@squirrelscan/core-contracts";
 import { urlHostKey } from "@squirrelscan/utils/url";
 
 import type {
@@ -73,7 +73,7 @@ export interface ContentStoreAdapter {
 // Schema version - increment when schema changes.
 // Exported so migration tests can assert "this DB reached the CURRENT version" rather than pinning a
 // literal, which turned every schema bump into two unrelated test failures.
-export const SCHEMA_VERSION = 33;
+export const SCHEMA_VERSION = 34;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -493,6 +493,11 @@ const MIGRATIONS: Record<number, string[]> = {
   // nullable: a row written before this reads as "no alternates", which
   // exempts nothing and is the behaviour before #489. Local sqlite only.
   33: [`ALTER TABLE page_features ADD COLUMN hreflang_alternates TEXT`],
+  // Version 34: why an external link is unverifiable (squirrelscan/squirrelscan#821):
+  // blocked, unreachable or awaiting a confirming check, so a re-rendered report
+  // and `squirrel analyze` keep the label. ADDITIVE and nullable: a row written
+  // before this reads as plainly unverified. Local sqlite only.
+  34: [`ALTER TABLE links ADD COLUMN unverified_reason TEXT`],
 };
 
 // Every `pages` column but the two that hold a page's body, for
@@ -579,6 +584,7 @@ const LINKS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   { name: "waf_blocked", type: "INTEGER" },
   { name: "waf_provider", type: "TEXT" },
   { name: "rate_limited", type: "INTEGER" },
+  { name: "unverified_reason", type: "TEXT" },
 ];
 
 const SITEMAP_URL_STATUSES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
@@ -729,6 +735,7 @@ CREATE TABLE IF NOT EXISTS links (
   waf_blocked INTEGER,
   waf_provider TEXT,
   rate_limited INTEGER,
+  unverified_reason TEXT,
   PRIMARY KEY (crawl_id, href),
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
@@ -2430,11 +2437,13 @@ export class SQLiteStorage implements CrawlStorage {
    * Since the rules phase spills its checks as it produces them, a run killed
    * part way through leaves rows behind where it used to leave none, and running
    * rules again over the same crawl_id would append a second copy of every
-   * check. No path reaches that today (a resume calls `clearCrawlData` before
-   * re-crawling, and every other path takes a fresh crawl id), and a half-written
-   * crawl is stuck at `crawled`, which the report refuses. This makes the
-   * invariant local to the phase that now depends on it rather than an
-   * inference across three call sites.
+   * check. An audit does not re-run rules over a crawl (a resume calls
+   * `clearCrawlData` before re-crawling, and every other path takes a fresh
+   * crawl id), and a half-written crawl is stuck at `crawled`, which the report
+   * refuses. This makes the invariant local to the phase that now depends on it
+   * rather than an inference across three call sites. `squirrel analyze` does
+   * re-run rules over a stored crawl; it replaces the results through
+   * `saveRuleResultsBatch(..., { replace: true })` (#844).
    */
   clearRuleResults(crawlId: string): Effect.Effect<void, StorageError, never> {
     return Effect.try({
@@ -2501,8 +2510,8 @@ export class SQLiteStorage implements CrawlStorage {
       try: () => {
         const db = this.getDb();
         const stmt = db.prepare(`
-          INSERT OR REPLACE INTO links (crawl_id, href, is_internal, status, error, checked_at, waf_blocked, waf_provider, rate_limited)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT OR REPLACE INTO links (crawl_id, href, is_internal, status, error, checked_at, waf_blocked, waf_provider, rate_limited, unverified_reason)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         stmt.run(
           crawlId,
@@ -2513,7 +2522,8 @@ export class SQLiteStorage implements CrawlStorage {
           link.checkedAt ?? null,
           link.wafBlocked ? 1 : null,
           link.wafProvider ?? null,
-          link.rateLimited ? 1 : null
+          link.rateLimited ? 1 : null,
+          link.unverifiedReason ?? null
         );
       },
       catch: (e) => StorageError.write(e),
@@ -2722,6 +2732,7 @@ export class SQLiteStorage implements CrawlStorage {
       wafBlocked: (row.waf_blocked as number | null) === 1 ? true : undefined,
       rateLimited: (row.rate_limited as number | null) === 1 ? true : undefined,
       wafProvider: (row.waf_provider as string | null) ?? undefined,
+      unverifiedReason: parseUnverifiedReason(row.unverified_reason),
     };
   }
 
@@ -3888,13 +3899,21 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
+  /**
+   * Insert a batch of rule results in one transaction. `replace` first deletes
+   * the crawl's existing rule results in the same transaction, so re-running
+   * the rules over a stored crawl (`squirrel analyze`, #844) leaves exactly one
+   * set, and a failed write leaves the old set in place.
+   */
   saveRuleResultsBatch(
     crawlId: string,
-    pageResults: Map<string, { ruleId: string; checks: CheckResult[] }[]>
+    pageResults: Map<string, { ruleId: string; checks: CheckResult[] }[]>,
+    options: { replace?: boolean } = {}
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
+        const clear = db.prepare("DELETE FROM rule_results WHERE crawl_id = ?");
         const stmt = db.prepare(`
           INSERT INTO rule_results (
             crawl_id, page_url, rule_id, check_name, status, message,
@@ -3905,6 +3924,7 @@ export class SQLiteStorage implements CrawlStorage {
 
         const timestamp = Date.now();
         const transaction = db.transaction(() => {
+          if (options.replace) clear.run(crawlId);
           for (const [pageUrl, results] of pageResults) {
             for (const { ruleId, checks } of results) {
               for (const check of checks) {

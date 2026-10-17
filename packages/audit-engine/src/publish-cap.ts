@@ -21,7 +21,9 @@
 //     "(+N more pages)", so folding an aggregate again stacks the suffix.
 //     Each class's page sample leads with the page it hits hardest, and its
 //     items are ranked by how many pages they are on. Top-level `siteChecks`
-//     entries that repeat a site check of `ruleResults` are left out.
+//     entries that repeat a site check of `ruleResults` are left out. A rule
+//     whose classes reach pages its largest class does not gets its distinct
+//     page count in `rulePageCounts` (repo#2935).
 //  3. Sample each class at REPORT_CAPS.tiers[0] and measure. Over budget, fill
 //     breadth first: every class gets a counts row, then a small sample, then
 //     the full one, highest priority first, while the budget lasts. If the
@@ -119,6 +121,8 @@ export interface CappableReport {
   sitemapUrlStatuses?: unknown;
   rulesCache?: unknown;
   checkTallies?: unknown;
+  /** Never trusted from the input: the capper counts its own (repo#2935). */
+  rulePageCounts?: unknown;
   detail?: unknown;
 }
 
@@ -131,6 +135,7 @@ export type CappedReport<T extends CappableReport> = Omit<
   | "entityMap"
   | "rulesCache"
   | "checkTallies"
+  | "rulePageCounts"
   | "detail"
   | "resolutionSignal"
   | "resolutionSignalCompact"
@@ -141,6 +146,8 @@ export type CappedReport<T extends CappableReport> = Omit<
   siteChecks: CheckResult[];
   entityMap?: EntityMap;
   checkTallies: CheckTallies;
+  /** Absent when no rule needs one (see {@link rulePageCount}). */
+  rulePageCounts?: Record<string, number>;
   detail: PublishedReportDetail;
   resolutionSignalCompact?: CompactResolutionSignal;
   pageStatuses?: Array<{ url: string; status: number }>;
@@ -248,6 +255,44 @@ export function buildCheckTallies(
   return out;
 }
 
+// ── Rule page counts ────────────────────────────────────────────
+
+/**
+ * The distinct pages a rule fails or warns on this run (squirrelscan/repo#2935),
+ * when its issue classes reach pages its largest class does not; undefined
+ * when the largest class holds every page.
+ *
+ * The published rows sample every class with its true count, but the pages a
+ * sample leaves out cannot be told apart across classes, so a reader can only
+ * take the largest class as a floor: two disjoint classes of 46 and 4 pages
+ * read 46. This is the union, from the full report before sampling: the pages
+ * of this run's page-attributed fail and warn checks (a per-page check's
+ * `pageUrl`, a folded aggregate's `pages`). Replays are left out, as the
+ * tallies leave them out (the server's merge replaces them from its own
+ * store), so a reader that adds replayed pages back knows the count is then a
+ * floor. `classes` are the originals of each class as foldRule keys them. A
+ * rule with an input aggregate that was itself already sampled gets no count:
+ * its union would be a floor too, and a published count is exact.
+ */
+function rulePageCount(classes: Iterable<CheckResult[]>): number | undefined {
+  const union = new Set<string>();
+  let largest = 0;
+  for (const originals of classes) {
+    const pages = new Set<string>();
+    for (const check of originals) {
+      // An input aggregate that was itself already sampled hides pages this
+      // union cannot see: no exact count, so none is published.
+      const truncated = check.details?.pagesTruncated;
+      if (typeof truncated === "number" && truncated > (check.pages?.length ?? 0)) return undefined;
+      if (check.pageUrl) pages.add(check.pageUrl);
+      for (const page of check.pages ?? []) pages.add(page);
+    }
+    for (const page of pages) union.add(page);
+    largest = Math.max(largest, pages.size);
+  }
+  return union.size > largest ? union.size : undefined;
+}
+
 // ── Issue classes ───────────────────────────────────────────────
 
 /** What `foldGroup` appends to an aggregate's message. */
@@ -290,6 +335,8 @@ interface FoldedRule {
   kept: ClassUnit[];
   /** True class total, reconciled with any total an earlier cap recorded. */
   total: number;
+  /** The rule's distinct failing pages, when its classes cannot add up to it ({@link rulePageCount}). */
+  pageCount?: number;
 }
 
 function occurrencesOf(check: CheckResult): number {
@@ -578,7 +625,24 @@ function foldRule(ruleId: string, rule: { meta: CappableRuleMeta; checks: CheckR
       .slice(0, REPORT_CAPS.classesPerRule)
       .sort((a, b) => a.order - b.order);
   }
-  return { id: ruleId, meta: capMeta(rule.meta), kept, total };
+  // A class is one status and one provenance (foldGroupKey): its first member
+  // says which. Replays are left out, as the tallies leave them out: the
+  // server's merge replaces them from its own store.
+  const pageCount = rulePageCount(
+    [...classes.values()]
+      .filter((entry) => {
+        const first = entry.members[0]!;
+        return (first.status === "fail" || first.status === "warn") && !isReplayedCheck(first);
+      })
+      .map((entry) => entry.originals),
+  );
+  return {
+    id: ruleId,
+    meta: capMeta(rule.meta),
+    kept,
+    total,
+    ...(pageCount !== undefined ? { pageCount } : {}),
+  };
 }
 
 // ── Sampling ────────────────────────────────────────────────────
@@ -1133,6 +1197,8 @@ export function capReportForPublish<T extends CappableReport>(
 
   // 2. Every rule's classes folded once, in rule-id order.
   const rules = ruleIds.map((id) => foldRule(id, live[id]!));
+  const rulePageCounts: Record<string, number> = {};
+  for (const rule of rules) if (rule.pageCount !== undefined) rulePageCounts[rule.id] = rule.pageCount;
   // Top-level `siteChecks` repeats the site checks of `ruleResults` (9,137 of
   // 9,138 entries over 187 real reports), and nothing reads it but the schema
   // bounds and the publish counts, so a copy of a check `ruleResults` already
@@ -1156,6 +1222,7 @@ export function capReportForPublish<T extends CappableReport>(
     entityMap: _entityMap,
     rulesCache: _rulesCache,
     checkTallies: _checkTallies,
+    rulePageCounts: _rulePageCounts,
     detail: _detail,
     resolutionSignal: _resolutionSignal,
     resolutionSignalCompact: _resolutionSignalCompact,
@@ -1182,6 +1249,7 @@ export function capReportForPublish<T extends CappableReport>(
         }
       : {}),
     checkTallies,
+    ...(Object.keys(rulePageCounts).length > 0 ? { rulePageCounts } : {}),
   });
   const { map: entityMap, failed: entityMapFailed } = slimEntityMap(report.entityMap);
   const tiers = REPORT_CAPS.tiers;

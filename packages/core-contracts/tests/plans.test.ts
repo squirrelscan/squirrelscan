@@ -95,6 +95,12 @@ describe("getPlan", () => {
   test("still falls back to free for an unknown id", () => {
     expect(getPlan("platinum").id).toBe("free");
   });
+
+  test("falls back to free for Object.prototype property names (#223)", () => {
+    for (const id of ["constructor", "__proto__", "toString"]) {
+      expect(getPlan(id)).toBe(PLANS.free);
+    }
+  });
 });
 
 describe("planAtLeast", () => {

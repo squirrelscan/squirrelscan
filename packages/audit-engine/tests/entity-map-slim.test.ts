@@ -859,3 +859,57 @@ describe("problem nodes survive the publish sample", () => {
     expect(slimEntityMapForViewer(clipped).nodes.map((n) => n.key)).not.toContain("id:person");
   });
 });
+
+// pub#405: past `maxEdges` the edges kept used to be the map's alphabetical
+// prefix, so late-alphabet entities published unconnected.
+describe("edges past maxEdges (#405)", () => {
+  const TWO_EDGES = { ...ENTITY_MAP_PUBLISH_LIMITS, maxEdges: 2 };
+  const thing = (key: string, occurrences: number, extra: Partial<EntityMapNode> = {}) =>
+    node(key, occurrences, { types: ["Product"], ...extra });
+  // Map order, as the builder sorts edges: (source, target, predicate).
+  const nodes = [
+    thing("id:a0", 1),
+    thing("id:a1", 1),
+    thing("id:a2", 1),
+    thing("id:a3", 1),
+    thing("id:s1", 5),
+    thing("id:s2", 5),
+    thing("id:zdangle", 1, { danglingRefs: 1 }),
+    thing("id:zhub", 10),
+  ];
+  const edges = [
+    edge("id:a0", "id:a1"),
+    edge("id:a1", "id:a2"),
+    edge("id:a2", "id:a3"),
+    edge("id:zdangle", "id:missing", true),
+    edge("id:zhub", "id:s1"),
+    edge("id:zhub", "id:s2"),
+  ];
+  const pairs = (m: EntityMap) => m.edges.map((e) => `${e.source}>${e.target}`);
+
+  test("keeps the edges between the best-ranked nodes, not the alphabetical prefix", () => {
+    const slim = projectEntityMap(map(nodes, edges), TWO_EDGES, "publish");
+    expect(pairs(slim)).not.toEqual(["id:a0>id:a1", "id:a1>id:a2"]);
+    expect(pairs(slim)).toEqual(["id:zdangle>id:missing", "id:zhub>id:s1"]);
+    expect(slim.truncated?.edges).toBe(4);
+  });
+
+  test("a dangling edge from a problem node is not starved by the ranking", () => {
+    const one = { ...ENTITY_MAP_PUBLISH_LIMITS, maxEdges: 1 };
+    expect(pairs(projectEntityMap(map(nodes, edges), one, "publish"))).toEqual([
+      "id:zdangle>id:missing",
+    ]);
+  });
+
+  test("a cap of 0 keeps no edges and counts every one as dropped", () => {
+    const none = { ...ENTITY_MAP_PUBLISH_LIMITS, maxEdges: 0 };
+    const slim = projectEntityMap(map(nodes, edges), none, "publish");
+    expect(slim.edges).toEqual([]);
+    expect(slim.truncated?.edges).toBe(edges.length);
+  });
+
+    test("under the cap every edge is kept, in map order", () => {
+    const slim = projectEntityMap(map(nodes, edges), ENTITY_MAP_PUBLISH_LIMITS, "publish");
+    expect(pairs(slim)).toEqual(edges.map((e) => `${e.source}>${e.target}`));
+  });
+});

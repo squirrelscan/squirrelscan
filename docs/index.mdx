@@ -106,40 +106,46 @@ Same audit engine, same report, four front doors: your terminal, your coding age
 
 <Columns cols={2}>
   <Card
+    title="Built for coding agents"
+    icon="bot"
+    href="/developers/agents"
+  >
+    Skills for Claude Code, Cursor, Codex and any coding agent run the audit, fix and re-audit loop. Connect over the CLI, the hosted or local MCP server, or the API.
+  </Card>
+  <Card
+    title="Enriched fixes for you and your coding agent"
+    icon="wand-sparkles"
+    href="/guides/fix-your-site-with-an-ai-agent"
+  >
+    Every finding says how to fix it, in LLM-optimized output your agent can apply, and every rule has its own docs page. Signed in, the report adds an editor's summary of what to fix first and the technology stack the site runs on.
+  </Card>
+  <Card
     title="300+ rules, 22 categories"
     icon="list-check"
+    href="/rules"
   >
-    Comprehensive coverage across SEO, accessibility, performance, and security.
+    Audit coverage across SEO, accessibility, performance, security, content and more.
   </Card>
   <Card
-    title="Fast crawler"
-    icon="bolt"
-  >
-    Highly optimised, memory efficient crawler.
-  </Card>
-  <Card
-    title="Agent Experience"
+    title="Agent experience"
     icon="microchip"
+    href="/rules/ax"
   >
-    Audit agent experience to assist agents in using your site.
+    Audit how well AI agents can read, discover and act on your site: llms.txt, AGENTS.md, Markdown responses, and what AI crawlers are served.
   </Card>
   <Card
-    title="Security audit"
+    title="Link checking and monitoring"
+    icon="link"
+    href="/guides/link-checking"
+  >
+    Perch, the cloud link checker, tells a broken link from a blocked one and confirms a failure before reporting it. On Pro and Team, scheduled audits email you when a link breaks.
+  </Card>
+  <Card
+    title="Security and site integrity"
     icon="shield-check"
+    href="/rules/integrity"
   >
-    Detect phishing kits, leaked credentials, and more.
-  </Card>
-  <Card
-    title="Smart incremental crawling"
-    icon="rotate"
-  >
-    ETag, Last-Modified, content hashing. Resume from checkpoints.
-  </Card>
-  <Card
-    title="Developer-first CLI"
-    icon="terminal"
-  >
-    Single binary, zero dependencies, shell completions, self-update.
+    Detect phishing kits, injected pages, leaked credentials and missing security headers.
   </Card>
   <Card
     title="Entity map"
@@ -149,22 +155,46 @@ Same audit engine, same report, four front doors: your terminal, your coding age
     Your site's JSON-LD collapsed into one graph: one identity, or a new one on every page.
   </Card>
   <Card
+    title="Browser rendering in the cloud"
+    icon="monitor"
+    href="/guides/browser-rendering"
+  >
+    Signed in, pages are rendered in a real browser in the cloud, so single-page apps and JavaScript-heavy sites are audited as visitors see them, at no extra cost per page.
+  </Card>
+  <Card
+    title="Cloud audits"
+    icon="cloud"
+    href="/guides/cloud-audits"
+  >
+    AI page analysis, scheduled audits, a per-website issue tracker and shareable reports.
+  </Card>
+  <Card
+    title="Smart crawling"
+    icon="bolt"
+    href="/crawl"
+  >
+    Fast and memory efficient, incremental with ETag, Last-Modified and content hashing, and resumable from checkpoints.
+  </Card>
+  <Card
     title="Crawl history and changes"
     icon="clock-rotate-left"
+    href="/cli/report"
   >
     Track site evolution, compare crawls, spot regressions.
   </Card>
   <Card
-    title="Multiple output formats"
-    icon="files"
+    title="Developer-first CLI"
+    icon="terminal"
+    href="/cli"
   >
-    Console, JSON, HTML, Markdown, Text, LLM, XML.
+    Single binary, zero dependencies, shell completions, self-update.
   </Card>
   <Card
-    title="MCP connection"
-    icon="plug"
+    title="Multiple output formats"
+    icon="files"
+    href="/cli/report#output-formats"
   >
-    Connect your agent to local or cloud MCP to run audits, fixes, etc.
+    Console, JSON, HTML, Markdown, Text, LLM, XML.
   </Card>
 </Columns>
 
@@ -239,7 +269,7 @@ squirrelscan runs **300+ rules** across **22 categories**, plus opt-in cloud gap
 | **Images** | 15 | Alt text, modern formats, responsive `srcset`, intrinsic dimensions and aspect-ratio mismatches, lazy loading above versus below the fold, file weight |
 | **Structured Data** | 25 | JSON-LD validity and rich-result eligibility for Article, Product, FAQ, Review, Breadcrumb, Organization, LocalBusiness, Video and site search, plus thirteen site-wide checks on the [entity map](/guides/entity-map): whether the site declares one identity for itself or a new one on every page, plus pages missing the markup their same-type siblings have and rating markup that is not about the page it sits on |
 | **Accessibility** | 61 | WCAG coverage: ARIA roles and names, form labels and autocomplete tokens, colour contrast, heading order, landmarks, tables and lists, focus visibility, touch targets, captions |
-| **Mobile** | 7 | Viewport configuration, tap-target size, legible font sizes, horizontal scroll, blocked zoom, intrusive interstitials, the web app manifest and its icons |
+| **Mobile** | 8 | Viewport configuration, tap-target size, legible font sizes, horizontal scroll, blocked zoom, form fields small enough to zoom the page on focus, intrusive interstitials, the web app manifest and its icons |
 | **Social Media** | 5 | Open Graph and Twitter Card completeness, image dimensions, canonical URL match, social profile links, site-chrome assets that disagree across pages |
 | **URL Structure** | 9 | Length, casing, hyphenation, stop words, query parameters, special characters, trailing-slash consistency, site-wide convention consistency |
 | **E-E-A-T** | 15 | Experience, expertise, authority and trust signals: author bylines and credentials, about and contact pages, citations, editorial policy, disclaimers, YMYL detection |

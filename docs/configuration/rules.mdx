@@ -80,6 +80,20 @@ Disable specific rules:
 disable = ["content/word-count", "images/modern-format"]
 ```
 
+### `time_budget_ms`
+
+**Type:** `integer` (milliseconds: `0`, or `1000` or more)
+**Default:** unset (1000 ms)
+
+How long one rule may run on one page before it is abandoned and reported as a rule error. A site rule gets this much per page of the site, capped at 60 seconds, or at the budget itself if you set it above that. `0` turns the budget off. A value below 1000 is refused for now: a rule that finishes just past a tight budget can stop the audit ([#880](https://github.com/squirrelscan/squirrelscan/issues/880)).
+
+The budget is a backstop against content built to make a pattern match very slowly, not a performance setting: ordinary pages take a few milliseconds per rule. Raise it if rules time out on ordinary pages on a slow or busy machine. See [Rule time budget](/rules#rule-time-budget) for what a timed-out rule reports.
+
+```toml
+[rules]
+time_budget_ms = 3000
+```
+
 ---
 
 ## Rule categories

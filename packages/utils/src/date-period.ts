@@ -88,6 +88,40 @@ const ZONE_TOKEN =
  * no pattern below should ever run over a megabyte of it.
  */
 const MAX_DATE_CHARS = 200;
+/**
+ * A time, a dash, and a second time (`12:00-14:00`, `9:00 - 12:30`,
+ * `12:00-05:00`). The leading `[^\d:]` keeps the minutes and seconds of a time
+ * with seconds (`12:00:00-05:00`) from matching as a pair of their own, and a
+ * first time with seconds never matches: a range is not written to the second.
+ * No lookbehind, which JSC runs slowly.
+ */
+const TIME_DASH_TIME =
+  /(?:^|[^\d:])(\d{1,2}):(\d{2})(?!:\d)\s*(?:([ap])\.?m\.?\s*)?([-\u2013\u2014])\s*(\d{1,2}):(\d{2})(\s*[ap]\.?m)?/gi;
+
+/**
+ * Whether `value` writes a time range (#793). Read as a time and a zone,
+ * `Sep 10 2024 12:00-14:00` was 12:00 at offset -14:00, and which end of a
+ * range a value means cannot be known, so a value with one is not read. The
+ * same shape is also a time and its offset (`12:00-05:00`, `12:00 -05:00`), so
+ * the pair is a range when the second time cannot be that: an en or em dash,
+ * an AM/PM after it, an hour past 14 or minutes off the quarter hour, or a
+ * time later than the first. An overnight range (`22:00-02:00`) reads as an
+ * offset; that is the trade.
+ */
+function hasTimeRange(value: string): boolean {
+  for (const match of value.matchAll(TIME_DASH_TIME)) {
+    const [, h1, m1, meridiem, dash, h2, m2, laterMeridiem] = match;
+    const secondHours = Number(h2);
+    const secondMinutes = Number(m2);
+    if (dash !== "-" || laterMeridiem) return true;
+    if (secondHours > 14 || secondMinutes % 15 !== 0) return true;
+    let firstHours = Number(h1) % 24;
+    if (meridiem) firstHours = (firstHours % 12) + (meridiem.toLowerCase() === "p" ? 12 : 0);
+    if (secondHours * 60 + secondMinutes > firstHours * 60 + Number(m1)) return true;
+  }
+  return false;
+}
+
 /** A year and month with a slash or a dot (`2024/09`, `2024.9`), which `Date` reads as the 1st. */
 const YEAR_SLASH_MONTH = /^(\d{4})[/.](0?[1-9]|1[0-2])$/;
 
@@ -166,12 +200,54 @@ function w3cForm(value: string): DatePeriod | null {
 }
 
 /**
- * A value outside the W3C format, read as written: `Date` reads one with no
- * zone at local time, so its local fields are what was written, and they are
- * read again here as UTC. A day when no time is written, a month for a month
- * and year written out. Null for a value `Date` cannot read, one shaped like
- * an ISO date (which `Date` may read in UTC instead), and one that does not
- * write a whole date (`Tuesday 2024`), whose missing fields `Date` makes up.
+ * `value`, which writes no zone, as `Date` reads it in UTC, or null. Read with
+ * no zone, `Date` uses the host's local time and shifts a time that local time
+ * skips (`2024/03/10 02:30` in America/New_York is 03:30), so the fields would
+ * come out an hour off on that machine only (#793). Falls back to the local
+ * reading, whose fields are what was written, for a form `Date` reads only
+ * without a zone.
+ */
+function writtenFields(value: string): {
+  year: number;
+  month: number;
+  day: number;
+  hours: number;
+  minutes: number;
+  seconds: number;
+  ms: number;
+} | null {
+  const utc = new Date(`${value} UTC`);
+  if (!Number.isNaN(utc.getTime())) {
+    return {
+      year: utc.getUTCFullYear(),
+      month: utc.getUTCMonth(),
+      day: utc.getUTCDate(),
+      hours: utc.getUTCHours(),
+      minutes: utc.getUTCMinutes(),
+      seconds: utc.getUTCSeconds(),
+      ms: utc.getUTCMilliseconds(),
+    };
+  }
+  const local = new Date(value);
+  if (Number.isNaN(local.getTime())) return null;
+  return {
+    year: local.getFullYear(),
+    month: local.getMonth(),
+    day: local.getDate(),
+    hours: local.getHours(),
+    minutes: local.getMinutes(),
+    seconds: local.getSeconds(),
+    ms: local.getMilliseconds(),
+  };
+}
+
+/**
+ * A value outside the W3C format, read as written: the fields `Date` reads
+ * from it with no zone (see {@link writtenFields}), as UTC. A day when no time
+ * is written, a month for a month and year written out. Null for a value
+ * `Date` cannot read, one shaped like an ISO date (which `Date` may read in UTC
+ * instead), and one that does not write a whole date (`Tuesday 2024`), whose
+ * missing fields `Date` makes up.
  */
 function writtenForm(value: string): DatePeriod | null {
   if (ISO_SHAPED.test(value)) return null;
@@ -186,22 +262,22 @@ function writtenForm(value: string): DatePeriod | null {
   const named = MONTH_NAME.exec(value);
   if (!numbers.some((n) => n >= 1000 && n <= 9999)) return null;
   if (numbers.length < 3 && !(numbers.length === 2 && named)) return null;
-  const local = new Date(value);
-  if (Number.isNaN(local.getTime())) return null;
+  const fields = writtenFields(value);
+  if (!fields) return null;
   // `Date` rolls an impossible date over (`2024/09/31` to 1 October): the
   // month and day it settled on must be ones the value wrote.
   const monthWritten = named
-    ? monthIndex(named[1]!) === local.getMonth()
-    : numbers.includes(local.getMonth() + 1);
-  if (!monthWritten || !numbers.includes(local.getDate())) return null;
+    ? monthIndex(named[1]!) === fields.month
+    : numbers.includes(fields.month + 1);
+  if (!monthWritten || !numbers.includes(fields.day)) return null;
   const wall = utcTime(
-    local.getFullYear(),
-    local.getMonth(),
-    local.getDate(),
-    local.getHours(),
-    local.getMinutes(),
-    local.getSeconds(),
-    local.getMilliseconds(),
+    fields.year,
+    fields.month,
+    fields.day,
+    fields.hours,
+    fields.minutes,
+    fields.seconds,
+    fields.ms,
   );
   if (wall === null) return null;
   const day = isoDay(wall);
@@ -264,6 +340,11 @@ export function datePeriod(value: string | null | undefined): DatePeriod | null 
   const exact = w3cForm(trimmed);
   if (exact) return exact;
   const bare = withoutComments(trimmed).replace(/\s+/g, " ").trim();
+  // A W3C value with a comment (`2024-09-10T12:00-05:00 (updated)`) is read as
+  // one before the range check, which would take its `12:00-05:00` for a range.
+  const exactBare = w3cForm(bare);
+  if (exactBare) return exactBare;
+  if (hasTimeRange(bare)) return null;
   const numeric = NUMERIC_ZONE.exec(bare);
   const named = numeric ? null : NAMED_ZONE.exec(bare);
   const zone = numeric ?? named;

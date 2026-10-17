@@ -332,6 +332,8 @@ export const brokenExternalLinksRule: Rule = {
     // firewall: a timeout, a CDN origin error or a first 404 still waiting for
     // its confirming check land here too (pub#783), so the message says
     // unverifiable and the label names a vendor only when one was identified.
+    // pub#821: a first 404 awaiting its confirming check is a likely-broken
+    // link rather than a blocked one, and its label says so.
     if (wafBlockedLinks.length > 0) {
       checks.push({
         name: "waf-blocked-external-links",
@@ -340,11 +342,15 @@ export const brokenExternalLinksRule: Rule = {
         items: wafBlockedLinks.map((l) => ({
           id: l.href,
           label:
-            l.wafProvider && l.wafProvider !== "unknown"
-              ? `${l.href} (unverified: ${l.wafProvider})`
-              : `${l.href} (unverified)`,
+            l.unverifiedReason === "awaiting-confirmation"
+              ? `${l.href} (unverified: awaiting confirmation)`
+              : l.wafProvider && l.wafProvider !== "unknown"
+                ? `${l.href} (unverified: ${l.wafProvider})`
+                : `${l.href} (unverified)`,
           sourcePages: l.sourcePages,
-          meta: { wafProvider: l.wafProvider },
+          meta: l.unverifiedReason
+            ? { wafProvider: l.wafProvider, unverifiedReason: l.unverifiedReason }
+            : { wafProvider: l.wafProvider },
         })),
       });
     }

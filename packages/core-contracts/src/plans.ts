@@ -195,7 +195,7 @@ export const SELF_SERVE_PLAN_IDS: readonly PlanId[] = (Object.keys(PLANS) as Pla
 // Accepts a raw string (DB columns are plain text) and falls back to the free
 // plan for any unknown id — callers never need to cast or null-check.
 export function getPlan(planId: string): PlanDefinition {
-  return PLANS[planId as PlanId] ?? PLANS.free;
+  return Object.hasOwn(PLANS, planId) ? PLANS[planId as PlanId] : PLANS.free;
 }
 
 // Tier hierarchy: free < starter < team < enterprise. Keep in sync with PlanId —

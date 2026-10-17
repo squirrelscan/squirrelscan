@@ -7,14 +7,15 @@ import { describe, expect, test } from "bun:test";
 
 import { parsePage } from "@squirrelscan/parser";
 
+import { checkRuleOptions } from "../src/rule-options-check";
 import { sriRule } from "../src/security/sri";
 import type { RuleContext } from "../src/types";
 
-function ctx(html: string, url = "https://example.com/"): RuleContext {
+function ctx(html: string, url = "https://example.com/", options: Record<string, unknown> = {}): RuleContext {
   return {
     page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: parsePage(html, url),
-    options: {},
+    options,
   } as unknown as RuleContext;
 }
 
@@ -147,5 +148,59 @@ describe("security/sri wording is count-independent (#231)", () => {
     );
     expect(one?.message).toBe("1 cross-origin resource(s) without Subresource Integrity");
     expect(two?.message).toBe("2 cross-origin resource(s) without Subresource Integrity");
+  });
+});
+
+
+describe("security/sri platform scripts and exempt_hosts (pub#546)", () => {
+  const flaggedIds = (html: string, options: Record<string, unknown> = {}) =>
+    (sriCheck(sriRule.run(ctx(page(html), "https://www.store.example/", options)).checks)?.items ?? []).map((i) => i.id);
+
+  test("Shopify's own /shopifycloud/ and /storefront/ scripts are not reported", () => {
+    const html = `
+      <script src="https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/loader.init-shop-cart-sync.de.esm.js"></script>
+      <script src="https://cdn.shopify.com/storefront/standard-actions.js"></script>
+    `;
+    const check = sriCheck(sriRule.run(ctx(page(html), "https://www.store.example/")).checks);
+    expect(check?.status).toBe("pass");
+  });
+
+  test("a theme or app asset elsewhere on cdn.shopify.com is still reported", () => {
+    const theme = "https://cdn.shopify.com/s/files/1/0000/0001/t/2/assets/theme.js?v=123456";
+    const app = "https://cdn.shopify.com/extensions/0a1b2c3d/app/assets/widget-latest.js";
+    expect(flaggedIds(`<script src="${theme}"></script><script src="${app}"></script>`)).toEqual([theme, app]);
+  });
+
+  test("a prefix only matches from the start of the path", () => {
+    const url = "https://cdn.shopify.com/s/files/shopifycloud/x.js";
+    expect(flaggedIds(`<script src="${url}"></script>`)).toEqual([url]);
+  });
+
+  test("a versioned third-party script without integrity is still reported", () => {
+    const url = "https://cdn.jsdelivr.net/npm/x@1.2.3/x.js";
+    expect(flaggedIds(`<script src="${url}"></script>`)).toEqual([url]);
+  });
+
+  test("a host listed in exempt_hosts is not reported; one not listed is", () => {
+    const klaviyo = "https://static.klaviyo.com/onsite/js/abc/klaviyo.js";
+    const plausible = "https://plausible.io/js/script.pageview-props.revenue.tagged-events.js";
+    const html = `<script src="${klaviyo}"></script><link rel="stylesheet" href="https://Static.Klaviyo.com/a.css"><script src="${plausible}"></script>`;
+    // Scripts are listed before stylesheets.
+    expect(flaggedIds(html)).toEqual([klaviyo, plausible, "https://Static.Klaviyo.com/a.css"]);
+    expect(flaggedIds(html, { exempt_hosts: ["STATIC.klaviyo.com"] })).toEqual([plausible]);
+    // A terminal dot names the same host, on either side.
+    expect(flaggedIds(html, { exempt_hosts: ["static.klaviyo.com.", "plausible.io"] })).toEqual([]);
+    expect(flaggedIds(`<script src="https://js.stripe.com./v3/"></script>`)).toEqual([]);
+  });
+
+  test("exempt_hosts accepts bare hostnames only, and config validation names the bad entry", () => {
+    expect(checkRuleOptions({ "security/sri": { exempt_hosts: ["static.klaviyo.com", "static.klaviyo.com."] } })).toEqual([]);
+    for (const bad of ["https://static.klaviyo.com", "static.klaviyo.com/onsite", "static.klaviyo.com:443", "*.klaviyo.com", ""]) {
+      const problems = checkRuleOptions({ "security/sri": { exempt_hosts: [bad] } });
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toMatchObject({ kind: "invalid-value", key: "exempt_hosts" });
+      expect(problems[0]?.message).toContain('[rule_options."security/sri"] exempt_hosts.0: must be a hostname');
+    }
+    expect(checkRuleOptions({ "security/sri": { exempt_hosts: "static.klaviyo.com" } })[0]?.kind).toBe("invalid-value");
   });
 });

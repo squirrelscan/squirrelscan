@@ -6,10 +6,18 @@ import type { RobotsTxtData, RobotsRule } from "@squirrelscan/core-contracts";
 
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 
-import { getPathname } from "./url";
-
 /**
- * Check if a URL is disallowed by robots.txt rules
+ * Check if a URL is disallowed by robots.txt rules, the way Google reads them
+ * (pub#556), so every rule that asks "is this page blocked" gets one answer:
+ *
+ * - the groups for `userAgent` (matched without case, several merged), else
+ *   the `*` groups;
+ * - of the rules whose path matches, the longest wins, and Allow wins a tie;
+ * - `*` in a rule matches any run of characters and a trailing `$` anchors
+ *   the end;
+ * - the path includes the query string;
+ * - the rule and the URL are compared with their percent-encoding
+ *   normalised, so `/café` matches `/caf%C3%A9` and `/%66oo` matches `/foo`.
  *
  * @param url - URL to check
  * @param robotsTxt - Parsed robots.txt data
@@ -23,33 +31,83 @@ export function isRobotsTxtDisallowed(
 ): boolean {
   if (!robotsTxt?.exists) return false;
 
-  const pathname = getPathname(url);
-  if (!pathname) return false;
-
-  // Find matching user-agent rules (priority: exact match > wildcard *)
-  let matchedRules = robotsTxt.rules.find(
-    (r: { userAgent: string }) => r.userAgent === userAgent
-  );
-
-  // Fallback to wildcard if specific user-agent not found
-  if (!matchedRules) {
-    matchedRules = robotsTxt.rules.find(
-      (r: { userAgent: string }) => r.userAgent === "*"
-    );
+  let target: string;
+  try {
+    const parsed = new URL(url);
+    target = normalizeRobotsPath(parsed.pathname + parsed.search);
+  } catch {
+    return false;
   }
 
-  if (!matchedRules) return false;
+  const agent = userAgent.toLowerCase();
+  let groups = robotsTxt.rules.filter((r) => r.userAgent.toLowerCase() === agent);
+  if (groups.length === 0) groups = robotsTxt.rules.filter((r) => r.userAgent === "*");
+  if (groups.length === 0) return false;
 
-  // Check disallow/allow rules in order
-  // First matching rule wins
-  for (const rule of matchedRules.rules) {
-    if (pathname.startsWith(rule.path)) {
-      return rule.type === "disallow";
+  let best: { length: number; allow: boolean } | null = null;
+  for (const group of groups) {
+    for (const rule of group.rules) {
+      if (!rule.path) continue;
+      const pattern = normalizeRobotsPath(rule.path);
+      if (!robotsPathMatches(pattern, target)) continue;
+      const length = pattern.length;
+      const allow = rule.type === "allow";
+      if (!best || length > best.length || (length === best.length && allow && !best.allow)) {
+        best = { length, allow };
+      }
     }
   }
+  return best !== null && !best.allow;
+}
 
-  // Default: allowed
-  return false;
+/**
+ * A rule path or URL path in one spelling: non-ASCII characters, controls,
+ * spaces and the quote and angle-bracket characters percent-encoded as UTF-8
+ * (as the URL parser encodes a path), `%XX` escapes of unreserved characters decoded, and every other
+ * escape upper-cased. `*` and `$` are ASCII, so a pattern keeps its operators.
+ */
+function normalizeRobotsPath(path: string): string {
+  let encoded = "";
+  for (const ch of path) {
+    const code = ch.charCodeAt(0);
+    if (code > 0x20 && code < 0x7f && !'"<>`'.includes(ch)) {
+      encoded += ch;
+      continue;
+    }
+    try {
+      encoded += encodeURIComponent(ch);
+    } catch {
+      encoded += ch; // a lone surrogate cannot be encoded
+    }
+  }
+  return encoded.replace(/%([0-9a-fA-F]{2})/g, (_, hex: string) => {
+    const char = String.fromCharCode(Number.parseInt(hex, 16));
+    return /[A-Za-z0-9\-._~]/.test(char) ? char : `%${hex.toUpperCase()}`;
+  });
+}
+
+/**
+ * Whether a robots.txt path pattern matches `path` from its start. `*` is any
+ * run of characters and a trailing `$` anchors the end. Greedy leftmost
+ * matching of the literal pieces is exact for `*`-only patterns and linear in
+ * the path, so a site's pattern full of `*` cannot make it backtrack.
+ */
+function robotsPathMatches(pattern: string, path: string): boolean {
+  const anchored = pattern.endsWith("$");
+  const parts = (anchored ? pattern.slice(0, -1) : pattern).split("*");
+  const first = parts[0] ?? "";
+  if (!path.startsWith(first)) return false;
+  let pos = first.length;
+  if (parts.length === 1) return anchored ? path.length === pos : true;
+  for (let i = 1; i < parts.length - 1; i++) {
+    const part = parts[i] ?? "";
+    const at = path.indexOf(part, pos);
+    if (at === -1) return false;
+    pos = at + part.length;
+  }
+  const last = parts[parts.length - 1] ?? "";
+  if (anchored) return path.length - last.length >= pos && path.endsWith(last);
+  return path.indexOf(last, pos) !== -1;
 }
 
 /**

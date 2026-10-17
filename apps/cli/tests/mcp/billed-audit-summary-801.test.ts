@@ -52,7 +52,7 @@ describe("billedAuditSummary counts the link checks the cloud billed (#801)", ()
       "about 61 credits (3 of them for external link checks)"
     );
     expect(line).toContain(
-      "1 per external link the cloud checks, at most 1 per page of the page limit"
+      "1 per external link the cloud verifies, at most 1 per page of the page limit"
     );
   });
 });

@@ -655,6 +655,43 @@ function normalizeContentType(value: string | null): string | null {
   return value.split(";")[0]?.trim().toLowerCase() ?? null;
 }
 
+/**
+ * The `charset` parameter of a Content-Type value, unquoted (pub#674):
+ * `text/html; charset="UTF-8"` gives `UTF-8`. Parameters split on `;` outside
+ * quoted strings, and a quoted value drops its escapes (RFC 9110 5.6.4). Only a
+ * token (RFC 9110 5.6.2) of at most 40 characters counts as a label.
+ */
+export function contentTypeCharset(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const params: string[] = [];
+  let current = "";
+  let quoted = false;
+  for (let i = 0; i < value.length; i++) {
+    const ch = value[i]!;
+    if (quoted && ch === "\\" && i + 1 < value.length) {
+      current += ch + value[++i];
+      continue;
+    }
+    if (ch === '"') quoted = !quoted;
+    if (ch === ";" && !quoted) {
+      params.push(current);
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  params.push(current);
+  for (const param of params.slice(1)) {
+    const eq = param.indexOf("=");
+    if (eq === -1 || param.slice(0, eq).trim().toLowerCase() !== "charset") continue;
+    let label = param.slice(eq + 1).trim();
+    const quotedLabel = /^"((?:[^"\\]|\\.)*)"$/.exec(label);
+    if (quotedLabel) label = quotedLabel[1]!.replace(/\\(.)/g, "$1");
+    return /^[A-Za-z0-9!#$%&'*+.^_`|~-]{1,40}$/.test(label) ? label : null;
+  }
+  return null;
+}
+
 function normalizeServerTimingValue(value: string): string {
   return value.replace(/(?<!,)\s+(?=[!#$%&'*+\-.^_`|~0-9A-Za-z]+;)/g, ",");
 }

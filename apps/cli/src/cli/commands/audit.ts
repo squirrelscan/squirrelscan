@@ -213,7 +213,7 @@ export function consentEstimateLine(est: CloudConsentEstimate): string {
       : "";
   const pages = est.maxPages === 1 ? "page" : "pages";
   const links = est.externalLinks
-    ? ` + up to ${computeCost("external_link", externalLinkBudget(est.maxPages))} for external links (${EXTERNAL_LINK_CREDITS} each the cloud checks, at most 1 per page)`
+    ? ` + up to ${computeCost("external_link", externalLinkBudget(est.maxPages))} for external links (${EXTERNAL_LINK_CREDITS} each the cloud verifies, at most 1 per page)`
     : "";
   const total = estimateAuditCap({
     maxPages: est.maxPages,

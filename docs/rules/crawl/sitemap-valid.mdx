@@ -11,7 +11,7 @@ The protocol caps a single file at 50,000 entries and 50 MB uncompressed. Those 
 
 ## What squirrel checks
 
-The rule is site-wide. It emits up to five checks:
+The rule is site-wide. It emits these checks:
 
 - `sitemap-fetch-failed` fails when a sitemap named in robots.txt could not be fetched, excluding ones the walk never requested. Message: `1 sitemap(s) from robots.txt failed to fetch`, listing each URL with its error.
 - `sitemap-valid` reports info when discovery was truncated with nothing found. Message: `Sitemap discovery did not complete, so no sitemap was validated`.
@@ -22,6 +22,7 @@ Both of those branches only run when there was no reportable robots.txt fetch fa
 - `sitemap-syntax` fails when any discovered sitemap recorded parse errors. Message: `N error(s) in M sitemap(s)`, listing each sitemap with its first error. It passes otherwise with `Sitemap XML syntax is valid`. The error is one of:
   - `Unknown sitemap format`: the XML has neither a `<urlset>` nor a `<sitemapindex>` root. A root written with a prefix (`<ns0:urlset>`, as Python's ElementTree writes one) counts when that prefix is bound to the sitemap namespace; a prefix bound to any other namespace does not.
   - `Parse error: <reason>`: the XML did not parse.
+  - `XML is not well formed: <reason> (line <L>, column <C>)`: the file parses, but a strict XML reader would reject it: a closing tag that does not match the element it closes (`</lox>` for `</loc>`), an element left open, or a raw `&` in a `<loc>` or other element text that is not an escape such as `&amp;`. Only the first such problem is named, with its position in the file as served. The URLs squirrel can still read are kept. Whitespace before the `<?xml` declaration is not reported, and a file that declares its own entities in a `<!DOCTYPE ... [ ]>` is not checked.
   - `N <url> entries skipped: <loc> is not a single text value` (`1 <url> entry skipped: ...` for one; `<url>` and `<loc>` are the literal element names): an entry's `<loc>` holds markup or a raw `<`, or the entry has more than one `<loc>`. The other entries are still read, and the text around the markup is never used as the URL. A raw `<` reads as an unclosed tag, so the entries after it in the file can be lost too. In a sitemap index the error names `<sitemap>` entries instead.
   - `N <lastmod> values ignored: not a single text value` (`1 <lastmod> value ignored: ...` for one), or the same for `<changefreq>` or `<priority>`: the field holds markup or a raw `<`, or is repeated within one entry. The field is dropped and its URL is still read.
   - `Not a sitemap: the URL returned an HTML page`: a sitemap named in robots.txt or in a sitemap index answered with a web page.
@@ -29,6 +30,8 @@ Both of those branches only run when there was no reportable robots.txt fetch fa
   - `Unsupported Content-Encoding: <coding>`: the response used a coding squirrel does not decode, such as `zstd`, or more than one coding.
   - `Sitemap exceeds the 50 MB uncompressed size limit`: the response, or the body at any stage of decompressing it, is over 52,428,800 bytes. squirrel stops at the limit, so a gzip bomb cannot exhaust memory.
 - `sitemap-size` warns when a URL set holds more than 50,000 URLs, or an index holds more than 50,000 child sitemaps. Message: `1 sitemap(s) exceed the 50,000-entry protocol limit`. It passes otherwise with `All sitemaps within URL limits`.
+- `sitemap-lastmod-format` warns when a `<lastmod>` is not in the W3C Datetime format the protocol requires (`2024`, `2024-09`, `2024-09-10`, or a datetime with a `T` and a zone such as `2024-09-10T12:00:00Z` or `2024-09-10T12:00:00+02:00`). Message: `N sitemap lastmod value(s) are not in W3C Datetime format`, listing each URL with `lastmod "<value>"`, up to 50, with the exact count in `total`. Values such as `2024/09/10`, `2024-9`, `2024-09-31` and `Tue, 10 Sep 2024 12:00:00 GMT` count. It is left out when every lastmod is in the W3C format, or when no URL has one.
+- `sitemap-lastmod-zone` warns for a datetime with the zone left off (`2024-09-10T12:00:00`). It reads as a date, just not one in a known zone. Message: `N sitemap lastmod datetime(s) have no time zone`, listing URLs and values the same way.
 - `sitemap-orphans` reports info for sitemap URLs the crawl did not reach. Message: `N URL(s) in sitemap not found during crawl`, with `N` exact even past the 10,000-URL list the audit engine hands the rule. It lists the first 50 URLs, and past 50, `additional` and `pagesTruncated` record the rest.
 - `sitemap-missing` reports info for crawled pages the sitemap does not list. Message: `7 crawled page(s) not in sitemap`.
 
@@ -48,7 +51,7 @@ Gzip-compressed sitemap files, such as a `sitemap.xml.gz` served as `application
 </sitemapindex>
 ```
 
-Shard past 50,000 entries behind an index. For parse errors and skipped entries, look for unescaped ampersands and raw angle brackets in URLs, which is what hand-built or string-concatenated sitemaps usually get wrong. Escape them as `&amp;` and `&lt;`.
+Shard past 50,000 entries behind an index. For parse errors, well-formedness errors and skipped entries, look for unescaped ampersands and raw angle brackets in URLs, which is what hand-built or string-concatenated sitemaps usually get wrong. Escape them as `&amp;` and `&lt;`. Write `<lastmod>` as `YYYY-MM-DD`, or as a full datetime with its zone (`2024-09-10T12:00:00+00:00`), which is what a date library's ISO 8601 output gives once a zone is attached.
 
 | | |
 |---|---|

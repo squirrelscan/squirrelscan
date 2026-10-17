@@ -1731,9 +1731,11 @@ export async function runAudit(
       // has already run.
       // Spilling as we go means a run killed mid-phase leaves rows behind where
       // it used to leave none, so re-running rules over the same crawl would
-      // append a second copy of every check. Unreachable today (see
-      // `clearRuleResults`), and a no-op on every normal run, but it keeps the
-      // invariant next to the code that now depends on it.
+      // append a second copy of every check. An audit never re-runs rules over
+      // a crawl (see `clearRuleResults`), so this is a no-op on every normal
+      // run, but it keeps the invariant next to the code that depends on it.
+      // `squirrel analyze`, which does re-run them, replaces the crawl's
+      // results in one transaction instead (#844).
       await Effect.runPromise(
         sqliteStorage
           .clearRuleResults(crawlId)
@@ -2391,10 +2393,14 @@ export function mergeOptionsToConfig(
     smart_audits: options.smartAudits ?? config.smart_audits,
     // --rule-include/--rule-exclude (#1066): same merge the CLI command uses to
     // pre-validate --fail-on against excluded categories (resolveRulesConfig).
-    rules: resolveRulesConfig(config.rules, {
-      enable: options.ruleInclude ?? [],
-      disable: options.ruleExclude ?? [],
-    }),
+    // The rest of `[rules]`, such as `time_budget_ms` (#578), passes through.
+    rules: {
+      ...config.rules,
+      ...resolveRulesConfig(config.rules, {
+        enable: options.ruleInclude ?? [],
+        disable: options.ruleExclude ?? [],
+      }),
+    },
     crawler: {
       ...config.crawler,
       // Same clamp as the commands, through the same helper so the five cannot

@@ -173,6 +173,11 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 101742 -> 101743: content/common-misspellings is site-scoped and adds one
       // whole-crawl check (#709). It passes: the synthetic copy has no listed
       // misspelling or doubled word, so healthScore.overall is unmoved at 51.
+      // Unmoved by pub#215/#216: content/mojibake now reads the rendered prose
+      // content/placeholder-text reads, and the synthetic copy has no <template>
+      // or code-editor markup and no mojibake for it to change; the new
+      // placeholder-title check adds a row only for a broken title, and every
+      // synthetic title is real copy.
       expect(v1.findings.length).toBe(101743);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
@@ -198,9 +203,10 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 303 -> 305 security/security-txt and security/version-disclosure,
       // 305 -> 306 mobile/web-app-manifest,
       // 306 -> 307 reliability/broken-forms,
-      // 307 -> 308 content/common-misspellings;
+      // 307 -> 308 content/common-misspellings,
+      // 308 -> 309 mobile/input-zoom;
       // anything else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(308);
+      expect(v1.perRuleTally.length).toBe(309);
       expect(v1.perRuleTally.find((t) => t.ruleId === "reliability/broken-forms")).toEqual({
         ruleId: "reliability/broken-forms",
         pass: 0,

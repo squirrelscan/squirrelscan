@@ -51,7 +51,7 @@ Balance: 2340 credits (2000 monthly + 340 purchased)
 Pricing:
   audit                 50 base + 2 per audited page
                            (analysis, tech detection, publishing included)
-  external links         1 per link the cloud checks for an audit, at most 1 per page
+  external links         1 per link the cloud verifies for an audit, at most 1 per page
                            (internal links, and links checked from your machine, are free)
   content_gaps          25 per run
   keyword_gaps          25 per run
@@ -69,17 +69,19 @@ Every signed-in audit has one flat price:
 |------|------|-------|
 | Audit base | 50 per audit | covers every included service below |
 | Audited page | 2 per page | every page the report shows as audited, however it was fetched: plain HTTP, a [cloud browser render](/cloud/rendering), the local or cloud render cache, a `304 Not Modified`, or a plain fetch after a render failed |
-| External link check | 1 per link | each distinct external destination the cloud checks for an audit, cloud or signed-in CLI, whatever status it returns, at most 1 per page of the audit's page limit |
+| External link check | 1 per link | each distinct external destination the cloud verifies for an audit (it works, redirects or is broken), cloud or signed-in CLI, at most 1 per page of the audit's page limit. A link it cannot verify, or does not answer in time, costs nothing (see below) |
 
 A page is charged once per audit. Rendering it, serving it from a cache, or retrying a request never adds a second charge, and the same external link on twenty pages is one check. Run the audit again and it is charged again: it is a new audit.
 
 The page count is the one in the report's coverage line ("Coverage: audited 12 of 12 known pages"), or its page count when there is no coverage line. A URL the crawl fetched but could not audit, such as a `404` kept for its broken-link finding or a `500`, is not an audited page. A cloud render paid for one while the audit ran is refunded when the audit completes, so an audit's page charge always matches the pages its report shows. A re-audit is only charged for the pages it fetched itself: pages a [smart audit](/configuration#smart-audits) carries forward from an earlier audit are not charged again.
 
-Internal links (on the site you are auditing) are always free. The external-link charge applies to any audit that sends its external links to the cloud: a [cloud audit](/guides/cloud-audits) with external link checking turned on, which every [audit level](/guides/audit-levels) does unless the website or the run switches it off, and a signed-in `squirrel audit` at surface or full. A quick `squirrel audit` checks its external links on your machine, for free.
+Internal links (on the site you are auditing: its own host and its `www` twin) are always free. A link to another of your domains, such as `example.co.uk` linking to `example.com`, is an external link and is charged like one. The external-link charge applies to any audit that sends its external links to the cloud: a [cloud audit](/guides/cloud-audits) with external link checking turned on, which every [audit level](/guides/audit-levels) does unless the website or the run switches it off, and a signed-in `squirrel audit` at surface or full. A quick `squirrel audit` checks its external links on your machine, for free.
 
-A signed-in `squirrel audit` sends its external links to the cloud's [dead-link check](/rules/links/dead-links), which answers the ones it can within a time limit, and pays 1 credit for each distinct link the cloud answers, at most 1 per page of the audit's page limit. The CLI checks every link the cloud left unanswered on your machine, and those are free. Its estimate before the audit includes the link reserve. Signed out, or at the quick level, the CLI checks links on your machine and nothing is charged; `--offline` checks no external links at all.
+An external link costs a credit only when the cloud verifies it: it works, redirects or is broken. A link it cannot verify costs nothing: one behind a bot wall, a throttled one, one the run's limit on deeper checks for its site left unverified, or a 404 waiting for its confirming check. The report lists those as unverified. A link it does not answer in time costs nothing either. An audit reserves its link credits up front, and the reserve is settled down to the links the cloud verified.
 
-Signed-in CLI link checks were free before this change. A CLI from before it still gets free cloud link checks until 2026-11-12; from then it checks its links on your machine until you run `squirrel self update`.
+A signed-in `squirrel audit` sends its external links to the cloud's [dead-link check](/rules/links/dead-links), which answers the ones it can within a time limit, and pays 1 credit for each distinct link the cloud verifies, at most 1 per page of the audit's page limit. A link the cloud answers as unverifiable costs nothing, as above. The CLI checks every link the cloud left unanswered on your machine, and those are free. Its estimate before the audit includes the link reserve. Signed out, or at the quick level, the CLI checks links on your machine and nothing is charged; `--offline` checks no external links at all.
+
+Signed-in CLI link checks were free before v0.0.114. A CLI from before it still gets free cloud link checks until 2026-11-12; from then it checks its links on your machine until you run `squirrel self update`.
 
 The base includes everything else: AI page analysis ([`ai/llm-parsability`](/rules/ai/llm-parsability), [`ai/page-type-match`](/rules/ai/page-type-match)), [authority signals](/rules/eeat/authority-signals), the [Blocking check](/rules/adblock), [technology detection](/cloud/technologies), [site metadata](/cloud/site-metadata), the [editor's summary](/cloud/editor-summary), and publishing the report. None of these are charged separately.
 

@@ -78,4 +78,27 @@ describe("PAGES_ALTER_COLUMNS drift guard (#921)", () => {
     const missing = [...migrationCols].filter((c) => !reconciledCols.has(c));
     expect(missing).toEqual([]);
   });
+
+  // And `links`: `rate_limited` (migration 24) and `unverified_reason`
+  // (migration 34, pub#821) are written by every upsertLink, so a
+  // version-collided DB without them fails the whole external-link phase.
+  test("every 'ALTER TABLE links ADD COLUMN' in MIGRATIONS is in LINKS_ALTER_COLUMNS", () => {
+    const src = readFileSync(new URL("../src/storage/sqlite.ts", import.meta.url), "utf8");
+
+    const migrationCols = new Set<string>();
+    for (const m of src.matchAll(/ALTER TABLE links ADD COLUMN\s+(\w+)/g)) {
+      migrationCols.add(m[1]!);
+    }
+
+    const listBlock = src.match(/LINKS_ALTER_COLUMNS[^[]*\[([\s\S]*?)\];/);
+    expect(listBlock).not.toBeNull();
+    const reconciledCols = new Set<string>();
+    for (const m of listBlock![1]!.matchAll(/name:\s*"(\w+)"/g)) {
+      reconciledCols.add(m[1]!);
+    }
+
+    expect(migrationCols.has("unverified_reason")).toBe(true);
+    const missing = [...migrationCols].filter((c) => !reconciledCols.has(c));
+    expect(missing).toEqual([]);
+  });
 });

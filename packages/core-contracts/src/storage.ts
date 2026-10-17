@@ -5,6 +5,7 @@ import type { Effect } from "effect";
 
 import type { AuditFailureDetail } from "./failure-reason";
 import type { RefusedFetch } from "./refused-fetch";
+import type { UnverifiedReason } from "./services";
 
 // ============================================
 // SHARED DOMAIN TYPES (used by storage + report)
@@ -376,7 +377,14 @@ export interface CrawlerConfigSnapshot {
 // ============================================
 
 export interface ResponseHeaders {
+  /** The media type of the Content-Type header only, lowercased (`text/html`). */
   contentType: string | null;
+  /**
+   * The `charset` parameter of the Content-Type header, as sent with quotes
+   * dropped (pub#674), so core/charset can read a header-only declaration.
+   * Optional for records that predate it; absent reads as "no charset".
+   */
+  contentTypeCharset?: string | null;
   contentEncoding: string | null;
   cacheControl: string | null;
   /**
@@ -517,6 +525,8 @@ export interface LinkRecord {
   checkedAt?: number;
   wafBlocked?: boolean;
   wafProvider?: string;
+  /** Why a `wafBlocked` link is unverifiable (pub#821), when the checker said. */
+  unverifiedReason?: UnverifiedReason;
   /**
    * The target answered with rate limiting (429/430, or 503 + `Retry-After`),
    * so its real status is unknown (#1829). Persisted rather than re-derived

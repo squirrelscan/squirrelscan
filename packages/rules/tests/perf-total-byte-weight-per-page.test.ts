@@ -255,6 +255,55 @@ describe("perf/total-byte-weight per-page scoring", () => {
       expect(kb).toBe(Math.round(byteLength(doc) / KB));
     });
 
+    // #568: site figures, for information only.
+    test(`${name}: the site total counts a shared resource once, and the average is the mean page weight`, () => {
+      const f: Fixture = {
+        htmlSizes: [10 * KB, 20 * KB],
+        css: [{ url: `${BASE}/s.css`, size: 100 * KB, pages: [pageUrl(0), pageUrl(1)] }],
+        images: [{ url: `${BASE}/a.png`, size: 300 * KB, pages: [pageUrl(0)] }],
+        fonts: [{ url: `${BASE}/nolen.woff2`, size: null, pages: [pageUrl(1)] }],
+      };
+      const { status, kb, details, message } = run(build(f));
+      // p0 = 10 + 100 + 300, p1 = 20 + 100; the total holds s.css once.
+      expect(kb).toBe(410);
+      expect(details.siteTotalKb).toBe("430KB");
+      expect(details.pageAverageKb).toBe("265KB");
+      expect(status).toBe("pass");
+      expect(message).toEndWith(
+        ". Not scored: site total 430KB across 2 pages, shared files counted once; average page 265KB",
+      );
+    });
+
+    test(`${name}: the site figures never change the verdict`, () => {
+      // 6000 KB across the site, over the 5000 KB error threshold, still passes.
+      const many = run(build({ htmlSizes: Array.from({ length: 600 }, () => 10 * KB) }));
+      expect(many.status).toBe("pass");
+      expect(many.details.siteTotalKb).toBe("6000KB");
+      expect(many.details.pageAverageKb).toBe("10KB");
+
+      // A heavy page keeps its own suffix before the site note.
+      const heavy = run(
+        build({
+          htmlSizes: [10 * KB, 10 * KB],
+          images: [{ url: `${BASE}/big.png`, size: 2000 * KB, pages: [pageUrl(0)] }],
+        }),
+      );
+      expect(heavy.status).toBe("warn");
+      expect(heavy.message).toContain("(heavy page). Not scored: site total 2020KB across 2 pages");
+      expect(heavy.details.pageAverageKb).toBe("1010KB");
+    });
+
+    test(`${name}: an estimate reports no site figures`, () => {
+      const ctx = build({ htmlSizes: [10 * KB, 10 * KB] });
+      delete ctx.site!.resourceSizes;
+      delete ctx.site!.scripts;
+      const { details, message } = run(ctx);
+      expect(details.estimated).toBe(true);
+      expect(details.siteTotalKb).toBeUndefined();
+      expect(details.pageAverageKb).toBeUndefined();
+      expect(message).not.toContain("Not scored");
+    });
+
     test(`${name}: a page with no recorded HTML size is weighed by its inline code`, () => {
       const doc = inlineDoc(300 * KB, 100 * KB);
       const { kb, details } = run(build({ htmlSizes: [0], docs: [doc] }));

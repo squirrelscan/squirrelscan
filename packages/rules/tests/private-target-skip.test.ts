@@ -232,6 +232,10 @@ describe("runner private-target gate: site rules", () => {
       expect(checks(id).length).toBeGreaterThan(0);
       expect(checks(id).some(isPrivateSkip)).toBe(false);
     }
-    expect(checks("perf/bad-caching").some((c) => c.status === "fail")).toBe(true);
+    // It judged the pages. The freshness check is info since pub#633
+    // (perf/cache-headers scores it), so read the verdict from its message.
+    expect(
+      checks("perf/bad-caching").find((c) => c.name === "bad-caching-freshness")?.message
+    ).toContain("set no caching policy");
   });
 });

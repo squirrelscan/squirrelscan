@@ -2,7 +2,7 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import { flattenJsonLdNodes } from "@squirrelscan/utils";
+import { flattenJsonLdNodes, indexJsonLdIds, resolveJsonLdRef } from "@squirrelscan/utils";
 
 const REQUIRED_PROPS = ["name", "image"];
 
@@ -29,6 +29,8 @@ export const productSchemaRule: Rule = {
       'script[type="application/ld+json"]'
     );
     let productSchema: Record<string, unknown> | null = null;
+    // pub#817: every node on the page, so an `offers` reference resolves.
+    const pageNodes: Record<string, unknown>[] = [];
 
     for (const script of schemaScripts) {
       // Flattened per script, so a Yoast / Rank Math `@graph` wrapper is
@@ -37,6 +39,7 @@ export const productSchemaRule: Rule = {
       // mis-split a pretty-printed block (#1099). Unparseable JSON yields an
       // empty list, which is what the old try/catch was for.
       const schemas = flattenJsonLdNodes(script.textContent || "");
+      pageNodes.push(...schemas);
 
       for (const schema of schemas) {
         const type = schema["@type"];
@@ -92,7 +95,11 @@ export const productSchemaRule: Rule = {
         value: "Add Offer with price and availability",
       });
     } else {
-      const offer = Array.isArray(offers) ? offers[0] : offers;
+      const offer = resolveJsonLdRef(
+        Array.isArray(offers) ? offers[0] : offers,
+        indexJsonLdIds(pageNodes, ctx.page.url),
+        ctx.page.url
+      );
       const hasPrice = offer && (offer as Record<string, unknown>)["price"];
       const hasAvailability =
         offer && (offer as Record<string, unknown>)["availability"];

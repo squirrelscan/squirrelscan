@@ -124,6 +124,20 @@ export const ProjectConfigSchema = z.object({
 export const RulesConfigSchema = z.object({
   enable: z.array(z.string()).default(["*"]),
   disable: z.array(z.string()).default([]),
+  /**
+   * Wall-clock budget (ms) for one rule on one page; a site rule gets this much
+   * per page, capped at 60 s. A backstop against a pattern that matches slowly
+   * on hostile content. Unset = the engine default (1000); 0 turns it off (#578).
+   * Lower than the default is refused: a rule that ends just past its deadline
+   * can stop the audit (#880), and a lower budget makes that common.
+   */
+  time_budget_ms: z
+    .number()
+    .int()
+    .refine((ms) => ms === 0 || ms >= 1000, {
+      message: "time_budget_ms must be 0 (off) or at least 1000",
+    })
+    .optional(),
 });
 
 export const PluginCapabilitySchema = z.enum(["rules", "listeners"]);

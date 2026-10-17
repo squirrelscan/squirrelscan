@@ -17,6 +17,8 @@ A page robots.txt blocks that also carries `noindex` is a real conflict, because
 
 The rule is site-wide. For each crawled page it tests robots.txt against the URL and runs the shared indexability test over the page's head and headers.
 
+squirrel decides whether robots.txt blocks a URL the way Google does: it reads the group for Googlebot, or the `*` group when there is none, takes the longest `Allow` or `Disallow` rule whose path matches (an `Allow` wins a tie), treats `*` in a rule as any run of characters and a trailing `$` as the end of the URL, and matches against the path with its query string, with percent-encoding normalised on both sides (`/café` matches `/caf%C3%A9`). `crawl/robots-meta-conflict` and `crawl/indexability-conflicts` share this one decision, so they always agree on which pages are blocked.
+
 - Skipped when there is no robots.txt or no pages. Message: `Insufficient data (no robots.txt or pages)`.
 - `robots-block-without-noindex` reports info for pages robots.txt blocks that are otherwise indexable. Message: `12 page(s) blocked by robots.txt without noindex`. The affected URLs are listed on the finding.
 - `conflicts` passes when no page is blocked without noindex. Message: `No indexability conflicts detected`.

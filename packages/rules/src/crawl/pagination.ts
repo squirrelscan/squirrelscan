@@ -2,6 +2,8 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { documentUrl } from "../shared/redirect-evidence";
+
 export const paginationRule: Rule = {
   meta: {
     id: "crawl/pagination",
@@ -21,11 +23,10 @@ export const paginationRule: Rule = {
     const doc = ctx.parsed.document;
     if (!doc) return { checks: [] };
 
-    // Detect if this is a paginated page
-    const url = new URL(ctx.page.url);
-    const isPaginatedByParam = /[?&](page|p|pg|offset|start)=/i.test(
-      ctx.page.url
-    );
+    // Detect if this is a paginated page, by the URL it ended on (pub#864).
+    const pageUrl = documentUrl(ctx.page);
+    const url = new URL(pageUrl);
+    const isPaginatedByParam = /[?&](page|p|pg|offset|start)=/i.test(pageUrl);
     const isPaginatedByPath = /\/page\/\d+\/?$/.test(url.pathname);
     const isPaginated = isPaginatedByParam || isPaginatedByPath;
 
@@ -49,7 +50,7 @@ export const paginationRule: Rule = {
 
     if (isPaginated && canonicalUrl) {
       // Check if canonical points to page 1
-      const canonicalParsed = new URL(canonicalUrl, ctx.page.url);
+      const canonicalParsed = new URL(canonicalUrl, pageUrl);
       const canonicalIsPaginated =
         /[?&](page|p|pg|offset|start)=/i.test(canonicalParsed.href) ||
         /\/page\/\d+\/?$/.test(canonicalParsed.pathname);
@@ -65,7 +66,7 @@ export const paginationRule: Rule = {
           name: "pagination-canonical",
           status: "warn",
           message: "Paginated page canonicalizes to non-paginated URL",
-          value: `Page ${extractPageNumber(ctx.page.url)} → ${canonicalUrl}`,
+          value: `Page ${extractPageNumber(pageUrl)} → ${canonicalUrl}`,
         });
       } else {
         checks.push({

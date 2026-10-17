@@ -326,22 +326,17 @@ See [OUTPUT-FORMAT.md](https://github.com/squirrelscan/skills/blob/main/skills/a
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
-<audit version="0.0.13">
+<squirrelscan-audit version="0.0.117">
   <site>
     <url>https://example.com</url>
-    <crawled>42</crawled>
-    <date>2025-01-18T10:30:00Z</date>
+    <pages-crawled>42</pages-crawled>
+    <audit-date>2025-01-18T10:30:00.000Z</audit-date>
+    <scan-scope origin="cli" crawled="42" max-pages="100" capped="false"/>
   </site>
-  <score>
-    <overall>87</overall>
-    <grade>B</grade>
-    <categories>
-      <category>
-        <name>Core SEO</name>
-        <score>100</score>
-      </category>
-    </categories>
-  </score>
+  <health-score overall="87" grade="B">
+    <category name="Core SEO" score="100"/>
+  </health-score>
+  <summary passed="180" warnings="6" failed="2"/>
   <issues>
     <rule id="content/word-count" severity="warning" category="Content" group="seo">
       <name>Word Count</name>
@@ -356,8 +351,10 @@ See [OUTPUT-FORMAT.md](https://github.com/squirrelscan/skills/blob/main/skills/a
       </check>
     </rule>
   </issues>
-</audit>
+</squirrelscan-audit>
 ```
+
+`<scan-scope>` says where the audit ran (`origin`: `cli`, `ci` or `cloud`), how many pages it crawled, the page limit in force (`max-pages`), and whether that limit stopped the crawl (`capped`). `requested-max-pages` appears only when the limit you asked for was lowered, and `stop-reason="time"` only when the crawl time budget ended the crawl. A report from before scan scope existed has no `<scan-scope>`. A white-label report's root element is `<audit>`.
 
 **Comparison: LLM vs XML**
 

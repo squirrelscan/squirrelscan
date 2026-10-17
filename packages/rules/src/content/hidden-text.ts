@@ -388,20 +388,23 @@ function isZeroLength(raw: string): boolean {
  * carries both inside a quoted string and a `url()`, and naive splitting there
  * manufactures declarations that were never written. A `;` inside a `(`, `[` or
  * `{` block or an unquoted `url(…)`, or written as `\;`, is part of a value, as
- * in a browser (pub#679).
+ * in a browser (pub#679). Comments become spaces, so they cannot become part of
+ * a property name or join otherwise separate value tokens (pub#896).
  */
 export function parseDeclarations(css: string): Declarations {
   const decls: Declarations = new Map();
   let i = 0;
-  let chunkStart = 0;
+  let start = 0;
+  let chunk: string[] = [];
   const closers: string[] = [];
 
-  const flush = (end: number): void => {
-    const chunk = css.slice(chunkStart, end);
+  const flush = (): void => {
+    const declaration = chunk.join("");
+    chunk = [];
     let colon = -1;
     let d = 0;
-    for (let k = 0; k < chunk.length; k++) {
-      const c = chunk[k];
+    for (let k = 0; k < declaration.length; k++) {
+      const c = declaration[k];
       if (c === "(") d++;
       else if (c === ")") d--;
       else if (c === ":" && d === 0) {
@@ -410,9 +413,9 @@ export function parseDeclarations(css: string): Declarations {
       }
     }
     if (colon === -1) return;
-    const prop = chunk.slice(0, colon).trim().toLowerCase();
+    const prop = declaration.slice(0, colon).trim().toLowerCase();
     if (!prop) return;
-    const value = chunk
+    const value = declaration
       .slice(colon + 1)
       .replace(/!\s*important/gi, "")
       .trim()
@@ -433,23 +436,27 @@ export function parseDeclarations(css: string): Declarations {
       continue;
     }
     if (ch === "/" && css[i + 1] === "*") {
+      chunk.push(css.slice(start, i), " ");
       i = skipComment(css, i);
+      start = i;
       continue;
     }
     if (ch === ";" && closers.length === 0) {
-      flush(i);
-      chunkStart = i + 1;
+      chunk.push(css.slice(start, i));
+      flush();
       i++;
+      start = i;
       continue;
     }
     i = stepBlocks(css, i, closers);
   }
-  flush(css.length);
+  chunk.push(css.slice(start));
+  flush();
   return decls;
 }
 
 /** One style rule lifted out of a sheet, with whether an at-rule encloses it. */
-interface RawRule {
+export interface RawRule {
   selector: string;
   body: string;
   /**
@@ -473,7 +480,7 @@ interface RawRule {
  * browser tokenizes them, so a `{`, `}` or `;` inside one is not structure:
  * `.a{background:url(}.b{display:none}.c{)}` declares no `.b` rule (pub#679).
  */
-function parseRules(css: string, maxRules: number): RawRule[] {
+export function parseRules(css: string, maxRules: number): RawRule[] {
   const rules: RawRule[] = [];
   let i = 0;
   let preludeStart = 0;

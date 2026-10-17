@@ -29,7 +29,11 @@ import {
   type CloudPrefetchResult,
   type ExternalCheckResult,
 } from "@squirrelscan/audit-engine";
-import { computeCost, externalLinkBudget } from "@squirrelscan/core-contracts";
+import {
+  computeCost,
+  externalLinkBudget,
+  parseUnverifiedReason,
+} from "@squirrelscan/core-contracts";
 import { SERVICE_LIMITS } from "@squirrelscan/core-contracts/limits";
 import {
   buildEditorSummaryRequest,
@@ -724,7 +728,13 @@ function buildDeadLinksBulkChecker(
           // protection, a timeout from its network, a first 404 awaiting its
           // confirming check) is listed as unverifiable, never as broken.
           ...(r.wafBlocked === true
-            ? { wafBlocked: true, wafProvider: knownWafProvider(r.wafProvider) }
+            ? {
+                wafBlocked: true,
+                wafProvider: knownWafProvider(r.wafProvider),
+                // pub#821: why, when the service says and the value is one
+                // this client knows.
+                unverifiedReason: parseUnverifiedReason(r.unverifiedReason),
+              }
             : {}),
         },
       ])

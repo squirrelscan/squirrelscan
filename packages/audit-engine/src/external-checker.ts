@@ -28,6 +28,7 @@ import {
   type EgressPolicy,
 } from "@squirrelscan/utils/public-egress";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
+import type { UnverifiedReason } from "@squirrelscan/core-contracts";
 import { detectWaf, detectWafChallengePage, type WafProvider } from "@squirrelscan/waf-detect";
 
 // ============================================
@@ -69,6 +70,12 @@ export interface ExternalCheckResult {
   fromCache: boolean;
   wafBlocked?: boolean;
   wafProvider?: WafProvider;
+  /**
+   * Why a `wafBlocked` link is unverifiable (pub#821): a wall or challenge is
+   * `blocked`, running out of time is `unreachable`, and the cloud link
+   * checker adds `awaiting-confirmation` for a first 404.
+   */
+  unverifiedReason?: UnverifiedReason;
   /**
    * The target answered with rate limiting (429/430, or 503 + `Retry-After`),
    * so its status is unverified rather than broken (#1829).
@@ -292,6 +299,8 @@ interface CheckUrlResult {
   redirectTarget: string | null;
   wafBlocked?: boolean;
   wafProvider?: WafProvider;
+  /** pub#821: why a `wafBlocked` answer is unverifiable. */
+  unverifiedReason?: UnverifiedReason;
   /**
    * The target answered with rate limiting (429/430, or 503 + `Retry-After`),
    * so its status is unverified rather than broken (#1829).
@@ -492,6 +501,7 @@ async function checkSingleUrlAsync(
           redirectTarget,
           wafBlocked: true,
           wafProvider: wafResult.detected ? (wafResult.provider ?? "unknown") : "unknown",
+          unverifiedReason: "blocked",
         };
       }
     }
@@ -522,6 +532,7 @@ async function checkSingleUrlAsync(
         redirectTarget: null,
         wafBlocked: true,
         wafProvider: "unknown",
+        unverifiedReason: "unreachable",
       };
     }
     return { status: null, error: (error as Error).message || "Unknown error", redirectTarget: null };
@@ -718,6 +729,7 @@ export function checkExternalLinks(
         fromCache: false,
         wafBlocked: r.wafBlocked,
         wafProvider: r.wafProvider,
+        ...(r.unverifiedReason ? { unverifiedReason: r.unverifiedReason } : {}),
         rateLimited: r.rateLimited,
         ...(r.refused ? { refused: true } : {}),
       });

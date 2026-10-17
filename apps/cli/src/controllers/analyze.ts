@@ -6,11 +6,13 @@ import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/
 import { Effect } from "effect";
 import { existsSync, readdirSync } from "node:fs";
 
+import type { SQLiteStorage } from "@/crawler/storage/sqlite";
 import type {
   CrawlStorage,
   CrawlMetadata,
   CrawlStatus,
 } from "@/crawler/storage/types";
+import type { CheckResult } from "@/types";
 
 import {
   runRulesOnStorage,
@@ -309,52 +311,7 @@ export async function runAnalyze(
       analyzeStoredCrawl(storage, crawl, siteContext, config, entityMap)
     );
 
-    // Save rule results to storage using batch method for efficiency
-    // Use pageRuleResults which has proper rule IDs (e.g., "core/meta-title")
-    const batchResults = new Map<
-      string,
-      { ruleId: string; checks: import("@/types").CheckResult[] }[]
-    >();
-    for (const [url, ruleChecksMap] of ruleResults.pageRuleResults) {
-      const pageResultsList: {
-        ruleId: string;
-        checks: import("@/types").CheckResult[];
-      }[] = [];
-      for (const [ruleId, checks] of ruleChecksMap) {
-        pageResultsList.push({ ruleId, checks });
-      }
-      batchResults.set(url, pageResultsList);
-    }
-
-    // Add site-scope rule results (empty page_url convention)
-    const siteResultsList: {
-      ruleId: string;
-      checks: import("@/types").CheckResult[];
-    }[] = [];
-    for (const [ruleId, checks] of ruleResults.siteRuleResults) {
-      siteResultsList.push({ ruleId, checks });
-    }
-    if (siteResultsList.length > 0) {
-      batchResults.set("", siteResultsList);
-    }
-
-    // Use batch save if available on storage (SQLiteStorage)
-    if ("saveRuleResultsBatch" in storage) {
-      await Effect.runPromise(
-        (
-          storage as import("@/crawler/storage/sqlite").SQLiteStorage
-        ).saveRuleResultsBatch(crawlId, batchResults)
-      );
-    } else {
-      // Fallback to individual saves
-      for (const [url, results] of batchResults) {
-        for (const { ruleId, checks } of results) {
-          await Effect.runPromise(
-            storage.saveRuleResults(crawlId, url, ruleId, checks)
-          );
-        }
-      }
-    }
+    await saveAnalyzeRuleResults(storage, crawlId, ruleResults);
 
     // The map built above is written to the project store, exactly as
     // `squirrel audit` does, so re-analyzing a crawl refreshes its entity rows
@@ -418,6 +375,66 @@ export async function runAnalyze(
     if (storage) {
       await Effect.runPromise(
         storage.close().pipe(Effect.catchAll(() => Effect.void))
+      );
+    }
+  }
+}
+
+/**
+ * Store an analyze run's rule results in place of the crawl's previous ones
+ * (#844). `squirrel analyze` re-runs the rules over a stored crawl, so a plain
+ * insert appended a second copy of every check and the report then merged the
+ * two, showing the old items. On SQLite the delete and the inserts are one
+ * transaction, so a failed write keeps the previous results.
+ */
+export async function saveAnalyzeRuleResults(
+  storage: CrawlStorage,
+  crawlId: string,
+  ruleResults: {
+    pageRuleResults: Map<string, Map<string, CheckResult[]>>;
+    siteRuleResults: Map<string, CheckResult[]>;
+  }
+): Promise<void> {
+  // Use pageRuleResults which has proper rule IDs (e.g., "core/meta-title")
+  const batchResults = new Map<
+    string,
+    { ruleId: string; checks: CheckResult[] }[]
+  >();
+  for (const [url, ruleChecksMap] of ruleResults.pageRuleResults) {
+    const pageResultsList: { ruleId: string; checks: CheckResult[] }[] = [];
+    for (const [ruleId, checks] of ruleChecksMap) {
+      pageResultsList.push({ ruleId, checks });
+    }
+    batchResults.set(url, pageResultsList);
+  }
+
+  // Add site-scope rule results (empty page_url convention)
+  const siteResultsList: { ruleId: string; checks: CheckResult[] }[] = [];
+  for (const [ruleId, checks] of ruleResults.siteRuleResults) {
+    siteResultsList.push({ ruleId, checks });
+  }
+  if (siteResultsList.length > 0) {
+    batchResults.set("", siteResultsList);
+  }
+
+  if ("saveRuleResultsBatch" in storage) {
+    await Effect.runPromise(
+      (storage as SQLiteStorage).saveRuleResultsBatch(crawlId, batchResults, {
+        replace: true,
+      })
+    );
+    return;
+  }
+  // Fallback for a storage without the batch writer: clear, then save each.
+  if ("clearRuleResults" in storage) {
+    await Effect.runPromise(
+      (storage as SQLiteStorage).clearRuleResults(crawlId)
+    );
+  }
+  for (const [url, results] of batchResults) {
+    for (const { ruleId, checks } of results) {
+      await Effect.runPromise(
+        storage.saveRuleResults(crawlId, url, ruleId, checks)
       );
     }
   }
