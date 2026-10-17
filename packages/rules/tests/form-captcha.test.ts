@@ -286,3 +286,50 @@ describe("security/form-captcha — explicit-render Turnstile/CAPTCHA loaders (#
     expect(formCaptchaCheck(checks)?.items?.length).toBe(2);
   });
 });
+
+// pub#919: a client-rendered widget (`@nuxtjs/turnstile`, a React reCAPTCHA
+// component) mounts after hydration; the static HTML holds only the site key
+// the runtime will render with.
+describe("security/form-captcha: a site key in the page's config", () => {
+  const run = (head: string, body = CONTACT_FORM) => formCaptchaCheck(formCaptchaRule.run(ctx(page(head, body))).checks)?.status;
+
+  test.each([
+    ["Nuxt runtime config (the issue's page)", '<script>window.__NUXT__={};window.__NUXT__.config={public:{turnstile:{siteKey:"0x4AAAAAADPN4lRzZ4X3GkuZ"},baseUrl:"https://one-dot.de"}}</script>'],
+    ["a JSON data script", '<script id="__NEXT_DATA__" type="application/json">{"runtimeConfig":{"recaptchaSiteKey":"6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"}}</script>'],
+    ["hCaptcha with a lowercase sitekey", '<script>var cfg = { "hcaptcha": { "sitekey": "10000000-ffff-ffff-ffff-000000000001" } };</script>'],
+    ["an underscore name", '<script>window.env = { TURNSTILE_SITE_KEY: "0x4AAAAAAAxyz123" };</script>'],
+    ["an env-style name", '<script>window.env = { NUXT_PUBLIC_TURNSTILE_SITE_KEY: "1x00000000000000000000AA" };</script>'],
+    ["a sub-object before the key", '<script>window.cfg = { turnstile: { options: { theme: "auto" }, siteKey: "0x4AAAAAAAxyz123" } };</script>'],
+    [
+      "switched-off defaults, then the live config",
+      '<script>var defaults = { turnstile: { enabled: false, siteKey: "1x00000000000000000000AA" } }; var live = { turnstile: { siteKey: "0x4AAAAAAAxyz123" } };</script>',
+    ],
+    ["a flag inside a sub-object is not the provider's own", '<script>window.cfg = { turnstile: { siteKey: "0x4AAAAAAAxyz123", retry: { enabled: false } } };</script>'],
+  ])("%s protects the single public form", (_name, head) => {
+    expect(run(head)).toBe("pass");
+  });
+
+  test.each([
+    ["prose naming a provider", '<script>console.log("We use Turnstile; see the siteKey docs");</script>'],
+    ["a provider key with no site key", '<script>window.cfg = { turnstile: { enabled: true, theme: "auto" } };</script>'],
+    ["an empty key", '<script>window.cfg = { turnstile: { siteKey: "" } };</script>'],
+    ["a translated label, not a key", '<script type="application/json">{"messages":{"recaptcha":{"siteKey":"Site-Key"}}}</script>'],
+    ["a provider switched off", '<script>window.cfg = { turnstile: { enabled: false, siteKey: "0x4AAAAAAAxyz123" } };</script>'],
+    ["a provider switched off after its key", '<script>window.cfg = { hcaptcha: { sitekey: "10000000-ffff-ffff-ffff-000000000001", disabled: true } };</script>'],
+    [
+      "a provider switched off after a sub-object",
+      '<script>window.cfg = { turnstile: { siteKey: "0x4AAAAAAAxyz123", options: { theme: "auto" }, enabled: false } };</script>',
+    ],
+    [
+      "an object too long to read to its end",
+      `<script>window.cfg = { turnstile: { siteKey: "0x4AAAAAAAxyz123", options: { message: "${"x".repeat(4100)}" }, enabled: false } };</script>`,
+    ],
+  ])("%s is not protection", (_name, head) => {
+    expect(run(head)).toBe("warn");
+  });
+
+  test("two public forms with only a page-level config still warn, like the other page-level signals", () => {
+    const second = CONTACT_FORM.replace('id="contact-form"', 'id="newsletter-form"');
+    expect(run('<script>window.__NUXT__={config:{public:{turnstile:{siteKey:"0x4AAAAAADPN4lRzZ4X3GkuZ"}}}}</script>', CONTACT_FORM + second)).toBe("warn");
+  });
+});
