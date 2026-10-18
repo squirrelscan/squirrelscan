@@ -175,6 +175,10 @@ describe("a credential in the fragment (squirrelscan/repo#2824)", () => {
       "https://app.example/#state=xyz&code=4%2F0Adeu5BW",
       "https://app.example/share#k=0123456789abcdef0123456789abcdef",
       "https://app.example/doc#X-Amz-Signature=deadbeef",
+      // A hash route carrying a query.
+      "https://app.example/#/cb?access_token=abc123",
+      // The query's key list applies as is: `state`, like `?state=open`.
+      "https://app.example/#state=open",
     ]) {
       expect([url, looksLikeAnAction(url)]).toEqual([url, true]);
     }
