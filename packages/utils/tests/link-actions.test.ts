@@ -167,6 +167,37 @@ describe("credential query parameters (#774)", () => {
   });
 });
 
+describe("a credential in the fragment (squirrelscan/repo#2824)", () => {
+  test("an OAuth implicit-flow fragment or a token value in one is never requested", () => {
+    for (const url of [
+      "https://app.example/callback#access_token=abc123&token_type=bearer&expires_in=3600",
+      "https://app.example/cb#id_token=eyJhbGciOiJIUzI1.eyJzdWIiOiIxMjM0.SflKxwRJSMeKKF2Q",
+      "https://app.example/#state=xyz&code=4%2F0Adeu5BW",
+      "https://app.example/share#k=0123456789abcdef0123456789abcdef",
+      "https://app.example/doc#X-Amz-Signature=deadbeef",
+    ]) {
+      expect([url, looksLikeAnAction(url)]).toEqual([url, true]);
+    }
+  });
+
+  test("an anchor, a hash route and ordinary state in the fragment are pages", () => {
+    for (const url of [
+      "https://docs.example/guide#install",
+      "https://app.example/#/settings/profile",
+      "https://shop.example/search#q=running+shoes&page=2",
+      "https://shop.example/item#tab=reviews",
+    ]) {
+      expect([url, looksLikeAnAction(url)]).toEqual([url, false]);
+    }
+  });
+
+  test("the listed form of such a link drops the fragment", () => {
+    expect(maskLinkTokens("https://app.example/callback#access_token=abc123")).toBe(
+      "https://app.example/callback",
+    );
+  });
+});
+
 describe("an email address in a path segment is masked (#774)", () => {
   test("plain, encoded and with a plus sign; a handle stays", () => {
     expect(maskLinkTokens("https://m.example/unsubscribe/user@example.com/77b1")).toBe(

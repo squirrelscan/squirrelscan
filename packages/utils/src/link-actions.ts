@@ -291,8 +291,29 @@ function hasActionWords(
 }
 
 /**
+ * Whether a fragment written as `key=value` pairs (`#access_token=…`,
+ * `#id_token=…`) carries a secret: a key that names one, as in a query, or a
+ * value that looks like a token. A plain anchor (`#pricing`) or a hash route
+ * without pairs (`#/settings`) carries none.
+ */
+function fragmentCarriesCredential(hash: string): boolean {
+  const fragment = hash.startsWith("#") ? hash.slice(1) : hash;
+  if (!fragment.includes("=")) return false;
+  for (const [rawKey, rawValue] of new URLSearchParams(fragment)) {
+    const key = rawKey.toLowerCase();
+    const keyWords = words(rawKey);
+    if (SECRET_KEYS.has(key) || keyWords.some((w) => SECRET_KEY_WORDS.has(w) || SESSION_ID_WORDS.has(w))) {
+      return true;
+    }
+    if (isCredentialParam(rawKey) || looksLikeAToken(rawValue)) return true;
+  }
+  return false;
+}
+
+/**
  * A link whose path or query reads like an action rather than a page, or that
- * carries a secret or a one-time token. The internal link probe never
+ * carries a secret or a one-time token (in its query, path, userinfo or a
+ * `key=value` fragment). The internal link probe never
  * requests these: a status-only request is still a request, and a crawl that
  * did not follow links never would have. A crawl that follows links reaches
  * pages through the crawler, which is unchanged.
@@ -337,6 +358,10 @@ export function looksLikeAnAction(url: string): boolean {
     if (looksLikeAToken(rawKey) || looksLikeAToken(rawValue)) return true;
     if (hasActionWords(keyWords, true) || hasActionWords(valueWords, true)) return true;
   }
+  // A credential in the fragment (an OAuth implicit-flow redirect,
+  // `#access_token=…&token_type=bearer`) is never sent with a request, but the
+  // URL is still the credential, and stored or listed it would leak.
+  if (fragmentCarriesCredential(parsed.hash)) return true;
   // A token in the path is a credential when the URL says so; a bare id
   // (`/posts/<uuid>`) is still a page. A JWT is always a credential.
   if (pathTokens.some((t) => t.includes("."))) return true;
