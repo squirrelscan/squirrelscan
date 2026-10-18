@@ -575,6 +575,16 @@ export interface AuditReport {
    */
   rulePageCounts?: Record<string, number>;
   /**
+   * Every target each link rule reported broken, and every one it could not
+   * verify, as hash sets (repo#2861), keyed by rule id: built by the publish
+   * capper from the full rows, BEFORE it sampled them, and kept whole at every
+   * tier. A broken link alert reads them to tell a link that broke since the
+   * previous audit from one that was already broken, which a sampled list
+   * cannot. Present on capped published reports only, for the rules in
+   * {@link LINK_TARGET_SET_RULES} that ran. Never rendered as data.
+   */
+  linkTargetSets?: Record<string, LinkTargetSets>;
+  /**
    * Set when the report is a capped published summary (repo#2656): every issue
    * class carries a sample plus its true counts, and the full per-page detail
    * lives elsewhere. Absent on local reports and on reports published before
@@ -693,6 +703,47 @@ export interface CheckTally {
 
 /** `ruleId` → `checkName` → {@link CheckTally}. */
 export type CheckTallies = Record<string, Record<string, CheckTally>>;
+
+/**
+ * A set of link targets as hashes (repo#2861): `linkTargetHash` from
+ * `@squirrelscan/utils/link-target-set`, 8 bytes each, sorted, base64url.
+ */
+export interface LinkTargetSet {
+  hashes: string;
+  /** Distinct targets the rows listed; more than `hashes` holds when not complete. */
+  count: number;
+  /** `hashes` holds every target the rule found: none left out by the rule or the cap. */
+  complete: boolean;
+}
+
+/** One link rule's targets: the ones it reported broken, and the ones it could not verify. */
+export interface LinkTargetSets {
+  broken: LinkTargetSet;
+  unverified: LinkTargetSet;
+}
+
+/**
+ * The link rules a report carries target sets for, and which of their checks
+ * list the broken targets and which the ones they could not verify (walled
+ * off, rate limited, refused, not requested).
+ */
+export const LINK_TARGET_SET_RULES: Readonly<
+  Record<string, { broken: string; unverified: readonly string[] }>
+> = {
+  "links/broken-links": {
+    broken: "broken-links",
+    unverified: ["refused-links", "rate-limited-links"],
+  },
+  "links/broken-external-links": {
+    broken: "broken-external-links",
+    unverified: [
+      "waf-blocked-external-links",
+      "rate-limited-external-links",
+      "refused-external-links",
+      "not-requested-external-links",
+    ],
+  },
+};
 
 /**
  * The stamp on a capped published report (repo#2656). It tells a viewer that
