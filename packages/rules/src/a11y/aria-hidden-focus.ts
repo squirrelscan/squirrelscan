@@ -2,6 +2,7 @@
 
 import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { UNCONFIRMED_CHECK_SUFFIX } from "@squirrelscan/core-contracts/resolution";
 import { getAttrCI, hasAttrCI } from "@squirrelscan/utils";
 
 import { createStaticVisibility, UNCONFIRMED_LABEL } from "../shared/static-hidden";
@@ -94,7 +95,7 @@ export const ariaHiddenFocusRule: Rule = {
     name: "ARIA Hidden Focus",
     description: "Ensures aria-hidden elements do not contain focusable content",
     solution:
-      "Elements with aria-hidden='true' should not contain focusable content. When an element is hidden from assistive technology but still focusable, keyboard users can tab to it but screen reader users won't know what they're interacting with. Either remove aria-hidden, add the inert attribute to the hidden container (which takes its whole subtree out of focus), or make each focusable child non-focusable with tabindex='-1'. A control hidden by the hidden attribute, a closed dialog or an inline style='display:none' or 'visibility:hidden' is not focusable and is not reported. squirrel does not read <style> blocks or stylesheets, so a control hidden only by a class or selector rule is still reported, and one whose inline style it cannot read exactly is reported as unconfirmed.",
+      "Elements with aria-hidden='true' should not contain focusable content. When an element is hidden from assistive technology but still focusable, keyboard users can tab to it but screen reader users won't know what they're interacting with. Either remove aria-hidden, add the inert attribute to the hidden container (which takes its whole subtree out of focus), or make each focusable child non-focusable with tabindex='-1'. A control hidden by the hidden attribute, a closed dialog or an inline style='display:none' or 'visibility:hidden' is not focusable and is not reported. A <style> rule squirrel can decide (a plain selector, no media query) counts too. A control a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet) is reported as unconfirmed. External stylesheets are not read, so a control hidden only by one is still reported.",
     category: "a11y",
     scope: "page",
     verdictScope: "page",
@@ -184,7 +185,7 @@ export const ariaHiddenFocusRule: Rule = {
 
     if (unconfirmed.length > 0) {
       checks.push({
-        name: "aria-hidden-focus-unconfirmed",
+        name: `aria-hidden-focus${UNCONFIRMED_CHECK_SUFFIX}`,
         status: "warn",
         message: `${unconfirmed.length} focusable element(s) inside aria-hidden may be hidden by a style (unconfirmed)`,
         items: unconfirmed.slice(0, 10),

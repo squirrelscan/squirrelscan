@@ -14,6 +14,7 @@
 // element again. Anything the readers cannot settle exactly makes the answer
 // "unknown", reported as unconfirmed, never "hidden".
 
+import { UNCONFIRMED_CHECK_SUFFIX } from "@squirrelscan/core-contracts/resolution";
 import { getAttrCI, hasAttrCI } from "@squirrelscan/utils";
 
 import type { CheckResult } from "../types";
@@ -412,7 +413,7 @@ export function unconfirmedRow(
   items: Array<string | { id: string; snippet?: string }>,
 ): CheckResult {
   return {
-    name: `${check}-unconfirmed`,
+    name: `${check}${UNCONFIRMED_CHECK_SUFFIX}`,
     status: "warn",
     message: `${items.length} ${what} may be hidden by a style (unconfirmed)`,
     items: items

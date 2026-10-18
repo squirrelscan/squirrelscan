@@ -31,6 +31,7 @@ import {
   resolutionCheckKey,
   resolutionUrlHash,
   SCAN_TRUNCATED_SKIP_REASON,
+  UNCONFIRMED_CHECK_SUFFIX,
 } from "@squirrelscan/core-contracts/resolution";
 import { byteLength } from "@squirrelscan/utils/bytes";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
@@ -88,6 +89,14 @@ interface ResolutionEvidence {
  * the merge falls back to its pre-signal behaviour, which resolves a prior on a
  * crawled page (here the outcome the verdict wanted anyway).
  *
+ * An unconfirmed row is evaluation evidence for its base check (pub#935): a rule
+ * emits `<check>-unconfirmed` (`UNCONFIRMED_CHECK_SUFFIX`) in place of `<check>`
+ * for what it could not settle on a page, so that page counts as evaluated, and
+ * not failing, for `<check>` too. The other way round, a page the rule
+ * evaluated `<check>` on without an unconfirmed row has nothing unconfirmed, so
+ * it is evaluated for `<check>-unconfirmed`. As with the noindex verdict this is
+ * attached only to a key this run emits, so it never creates a key of its own.
+ *
  * Another is a gap rather than a verdict: `skipReason: "scan-truncated"` (pub#501)
  * means the rule stopped at a work cap before it had seen the whole page. That page
  * is not evaluated, and its key is emitted even when no other page evaluated the
@@ -119,6 +128,9 @@ function collectResolutionEvidence(
   // (normalized URL), merged into `evaluated` once every key is known.
   const keyRule = new Map<string, string>();
   const notApplicable = new Map<string, Set<string>>();
+  // (pub#935) Base key -> pages a `<check>-unconfirmed` row evaluated, merged into
+  // `evaluated` for that base key once every key is known.
+  const unconfirmedOf = new Map<string, Set<string>>();
   // (#2063) Keyed on the QUERY-PRESERVING page identity, the same key the merge
   // stores findings under. A consumer on an older release hashed these
   // query-blind; it recognizes both spellings (see merge-core's resolutionHashes),
@@ -204,6 +216,15 @@ function collectResolutionEvidence(
       // must never resolve.
       const ev = evaluated.get(key)!;
       for (const url of pageUrls) ev.add(normalized(url));
+      if (check.name.endsWith(UNCONFIRMED_CHECK_SUFFIX)) {
+        const base = resolutionCheckKey(ruleId, check.name.slice(0, -UNCONFIRMED_CHECK_SUFFIX.length));
+        let pages = unconfirmedOf.get(base);
+        if (!pages) {
+          pages = new Set<string>();
+          unconfirmedOf.set(base, pages);
+        }
+        for (const url of pageUrls) pages.add(normalized(url));
+      }
       if (check.status !== "pass") {
         for (const url of pageUrls) {
           // Past the per-check cap the budget pass clips to at most the cap
@@ -230,10 +251,28 @@ function collectResolutionEvidence(
     }
   }
 
-  // Noindex-gated pages are clean for every key of their rule (see the header).
+  // A page the rule evaluated `<check>` on, and that has no `<check>-unconfirmed`
+  // row, has nothing unconfirmed for it either: evaluated, and not failing, for
+  // the unconfirmed key too, so a prior unconfirmed row resolves once the
+  // control is named (pub#935). Taken before the merge below adds the
+  // unconfirmed pages to the base keys.
+  const baseEvaluated = new Map<string, Set<string>>();
+  for (const key of evaluated.keys()) {
+    if (!key.endsWith(UNCONFIRMED_CHECK_SUFFIX)) continue;
+    const base = evaluated.get(key.slice(0, -UNCONFIRMED_CHECK_SUFFIX.length));
+    if (base) baseEvaluated.set(key, new Set(base));
+  }
+
+  // Noindex-gated pages are clean for every key of their rule (see the header),
+  // a page an unconfirmed row evaluated is evaluated for its base check, and a
+  // page its base check evaluated is evaluated for its unconfirmed key.
   for (const [key, ev] of evaluated) {
     const skipped = notApplicable.get(keyRule.get(key)!);
     if (skipped) for (const url of skipped) ev.add(url);
+    const unconfirmed = unconfirmedOf.get(key);
+    if (unconfirmed) for (const url of unconfirmed) ev.add(url);
+    const base = baseEvaluated.get(key);
+    if (base) for (const url of base) ev.add(url);
   }
 
   // Each failing set in URL order, so where a count cap cuts it and which page

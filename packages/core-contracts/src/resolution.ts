@@ -189,6 +189,18 @@ export const SCAN_TRUNCATED_SKIP_REASON = "scan-truncated";
  */
 export const NOT_APPLICABLE_SKIP_REASON = "noindex";
 
+/**
+ * Suffix of a check that reports what its rule could not settle on a page:
+ * `<check>-unconfirmed` (pub#921). A rule emits it IN PLACE of `<check>` for
+ * the controls a style may hide, so the row is evaluation evidence for
+ * `<check>` too: the rule evaluated `<check>` on that page and found nothing it
+ * could confirm. The signal counts the page as evaluated for `<check>`
+ * (pub#935), so the previous audit's `<check>` fail there resolves instead of
+ * being carried forever beside the new unconfirmed row. A page the rule
+ * reported neither for is still not evaluated.
+ */
+export const UNCONFIRMED_CHECK_SUFFIX = "-unconfirmed";
+
 /** Signal map key — same `ruleId|checkName` shape the merge core keys on. */
 export function resolutionCheckKey(ruleId: string, checkName: string): string {
   return `${ruleId}|${checkName}`;
