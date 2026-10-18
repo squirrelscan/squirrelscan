@@ -28,6 +28,7 @@ import { normalizePageUrl } from "@squirrelscan/utils/url";
 
 import { findingKey } from "../src/merge-core";
 import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
+import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 class MemStore implements SmartAuditStore {
   findings = new Map<string, PageFindingRecord>();
@@ -54,6 +55,8 @@ class MemStore implements SmartAuditStore {
     return 0;
   }
 }
+
+describeSitePagesContract("unconfirmed-resolves-prior-935.test.ts MemStore", () => new MemStore());
 
 const A = "https://example.com/a";
 const B = "https://example.com/b";
