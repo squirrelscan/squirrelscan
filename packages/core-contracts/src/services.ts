@@ -150,6 +150,17 @@ export interface DeadLinkResult {
    * parsing: the link then reads as plainly unverified.
    */
   unverifiedReason?: UnverifiedReason;
+  /**
+   * The checker refused to request the link because its name resolved to a
+   * non-public address (or a redirect led to one), so it said nothing about
+   * the link. Sent with `wafBlocked` and `unverifiedReason: "unreachable"`, so
+   * a client that predates this field reads the link as unverifiable. A
+   * client that reads it checks the link itself: an audit of a site on a
+   * private network can reach it, and a public site's audit refuses it
+   * locally as well. The refusal itself is never a broken link. Optional so
+   * older service responses keep parsing.
+   */
+  egressRefused?: boolean;
 }
 
 export interface DeadLinksResponse {

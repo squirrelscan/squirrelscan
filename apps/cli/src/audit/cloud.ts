@@ -29,6 +29,7 @@ import {
   type CloudPrefetchResult,
   type ExternalCheckResult,
 } from "@squirrelscan/audit-engine";
+import { BULK_NON_PUBLIC_REFUSAL } from "@squirrelscan/audit-engine/external-checker";
 import {
   computeCost,
   externalLinkBudget,
@@ -711,38 +712,66 @@ function buildDeadLinksBulkChecker(
     // nothing for a run then. Units are the links it answered (a status, an
     // error, or unverifiable); a link it never requested comes back with
     // none of those, and the rest are checked here, free.
+    // A link the service refused to request (`egressRefused`) was not
+    // answered: it is checked here, like an unanswered one.
     const answered = res.results.filter(
-      (r) => r.status !== null || r.error != null || r.wafBlocked === true
+      (r) =>
+        r.egressRefused !== true &&
+        (r.status !== null || r.error != null || r.wafBlocked === true)
     ).length;
     onSpend?.(answered, res.charged ?? 0);
     return new Map(
       res.results.map((r) => [
         r.url,
-        {
-          href: r.url,
-          status: r.status,
-          error: r.error ?? null,
-          redirectTarget: r.redirectUrl ?? null,
-          fromCache: r.fromCache,
-          // #1829: honour the service's verdict when it sends one, and fall back
-          // to the status for 429/430 so a service that predates the field still
-          // stops reporting throttled links as dead.
-          rateLimited: r.rateLimited === true || isRateLimitStatus(r.status),
-          // squirrelscan/repo#2818: a link the service could not verify (bot
-          // protection, a timeout from its network, a first 404 awaiting its
-          // confirming check) is listed as unverifiable, never as broken.
-          ...(r.wafBlocked === true
-            ? {
-                wafBlocked: true,
-                wafProvider: knownWafProvider(r.wafProvider),
-                // pub#821: why, when the service says and the value is one
-                // this client knows.
-                unverifiedReason: parseUnverifiedReason(r.unverifiedReason),
-              }
-            : {}),
-        },
+        r.egressRefused === true
+          ? egressRefusedResult(r.url, r.fromCache)
+          : {
+              href: r.url,
+              status: r.status,
+              error: r.error ?? null,
+              redirectTarget: r.redirectUrl ?? null,
+              fromCache: r.fromCache,
+              // #1829: honour the service's verdict when it sends one, and fall back
+              // to the status for 429/430 so a service that predates the field still
+              // stops reporting throttled links as dead.
+              rateLimited:
+                r.rateLimited === true || isRateLimitStatus(r.status),
+              // squirrelscan/repo#2818: a link the service could not verify (bot
+              // protection, a timeout from its network, a first 404 awaiting its
+              // confirming check) is listed as unverifiable, never as broken.
+              ...(r.wafBlocked === true
+                ? {
+                    wafBlocked: true,
+                    wafProvider: knownWafProvider(r.wafProvider),
+                    // pub#821: why, when the service says and the value is one
+                    // this client knows.
+                    unverifiedReason: parseUnverifiedReason(r.unverifiedReason),
+                  }
+                : {}),
+            },
       ])
     );
+  };
+}
+
+/**
+ * A link the service refused to request because it resolved to a non-public
+ * address. Handed to the engine as its non-public refusal, which the engine
+ * reads as no answer and checks locally under the audit's own egress policy:
+ * an audit of a site on a private network reaches the link, a public site's
+ * audit refuses it there too. Never cached, and the refusal is never itself
+ * a broken link (squirrelscan/repo#2873).
+ */
+function egressRefusedResult(
+  url: string,
+  fromCache: boolean
+): ExternalCheckResult {
+  return {
+    href: url,
+    status: null,
+    error: `${BULK_NON_PUBLIC_REFUSAL}:egress-refused`,
+    redirectTarget: null,
+    fromCache,
   };
 }
 
