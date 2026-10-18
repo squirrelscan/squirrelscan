@@ -220,8 +220,11 @@ function detailNumber(details: unknown, key: string): number {
 
 /**
  * A row that lists fewer targets than it found, before the capper samples
- * anything: the rule's own sample (`details.listed`, a `value` or
- * `details.totalBroken` past its items), or the per-check item cap.
+ * anything: the rule's own sample (`details.listed`, `details.totalBroken` past
+ * its items, or a `value` past them: the refused and not-requested external
+ * rows count their links in `value`), an input aggregate's `additional`, or the
+ * per-check item cap. A row whose `value` is something else only reads as
+ * partial, which fails safe: an incomplete set never says a target is absent.
  */
 function listsPartially(check: CheckResult): boolean {
   const items = check.items?.length ?? 0;

@@ -1428,6 +1428,44 @@ describe("capReportForPublish: link target sets (repo#2861)", () => {
     expect(has(set, `${SITE}/old-gone`)).toBe(true);
   });
 
+  test("four full sets are priced in the body: a full report still fits its ceiling", () => {
+    // A row lists at most REPORT_LIMITS.maxItemsPerCheck items (one more reads
+    // as capped), so a set fed by one row holds up to 999 targets; two rows of
+    // a rule fill it towards LINK_TARGET_SET_MAX_HASHES.
+    const full = (prefix: string) => [targets(999, `${prefix}a-`), targets(999, `${prefix}b-`)];
+    const [goneA, goneB] = full(`${SITE}/gone-`);
+    const [walledA, walledB] = full(`${SITE}/walled-`);
+    const [deadA, deadB] = full("https://vendor.test/dead-");
+    const [wafA, wafB] = full("https://vendor.test/walled-");
+    const input = report(300);
+    input.ruleResults["links/broken-links"] = {
+      meta: linkMeta("links/broken-links"),
+      checks: [
+        row("broken-links", "fail", goneA!, { pageUrl: `${SITE}/x` }),
+        row("broken-links", "fail", goneB!, { pageUrl: `${SITE}/y` }),
+        row("refused-links", "info", walledA!),
+        row("rate-limited-links", "info", walledB!),
+      ],
+    };
+    input.ruleResults["links/broken-external-links"] = {
+      meta: linkMeta("links/broken-external-links"),
+      checks: [
+        row("broken-external-links", "warn", deadA!, { pageUrl: `${SITE}/x` }),
+        row("broken-external-links", "warn", deadB!, { pageUrl: `${SITE}/y` }),
+        row("waf-blocked-external-links", "info", wafA!),
+        row("rate-limited-external-links", "info", wafB!),
+      ],
+    };
+    const capped = capReportForPublish(input);
+    expect(bytesOf(capped)).toBeLessThanOrEqual(PUBLISHED_REPORT_MAX_BYTES - REPORT_CAPS.envelopeBytes);
+    for (const sets of Object.values(capped.linkTargetSets!)) {
+      expect(sets.broken).toMatchObject({ count: 1998, complete: true });
+      expect(sets.unverified).toMatchObject({ count: 1998, complete: true });
+    }
+    // The sets are part of what the fill measures, not added on top of it.
+    expect(bytesOf(capped.linkTargetSets)).toBeGreaterThan(80_000);
+  }, SLOW);
+
   test("kept whole when the fill reduces the report, and never taken from the input", () => {
     const rules: RuleSpec[] = Array.from({ length: 60 }, (_, r) => ({
       id: `content/many-${String(r).padStart(2, "0")}`,

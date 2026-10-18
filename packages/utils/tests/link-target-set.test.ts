@@ -24,7 +24,8 @@ describe("linkTargetHash", () => {
 
   test("is the same on every run (a fixed function, not seeded per process)", () => {
     expect(linkTargetHash("https://example.com/")).toBe(linkTargetHash("https://example.com/"));
-    expect(linkTargetHash("")).toBe("cbf29ce484222325");
+    // The FNV-1a 64 offset basis: the hash of nothing.
+    expect(linkTargetHash("")).toBe("cbf29ce484222325"); // pragma: allowlist secret
   });
 });
 

@@ -15,7 +15,9 @@
 // purpose: a link that only changed its tracking parameters (`?utm_source=`)
 // is the same link, and two links that differ by a real query read as one,
 // which can only make a target read as listed. That, and a hash collision, is
-// a missed alert, never a false one.
+// a missed alert, never a false one. FNV-1a is not collision-resistant against
+// a site that crafts its own URLs to collide: the worst such a site can do is
+// hold back an alert about its own broken links.
 //
 // Pure and dependency-free beyond the url helpers: runs in the CLI, the cloud
 // container and the API Worker alike.
@@ -31,11 +33,12 @@ const FNV_PRIME = 0x100000001b3n;
 const MASK64 = 0xffffffffffffffffn;
 const HASH_BYTES = 8;
 const BASE64URL = /^[A-Za-z0-9_-]*$/;
+const UTF8 = new TextEncoder();
 
 /** 64-bit FNV-1a over the UTF-8 bytes of `text`, as 16 hex digits. */
 function fnv1a64(text: string): string {
   let h = FNV_OFFSET;
-  for (const byte of new TextEncoder().encode(text)) {
+  for (const byte of UTF8.encode(text)) {
     h ^= BigInt(byte);
     h = (h * FNV_PRIME) & MASK64;
   }
@@ -66,8 +69,9 @@ function fromBase64Url(text: string): Uint8Array | null {
 /**
  * The set of `urls`, hashed, de-duplicated and sorted (so the same targets give
  * the same bytes). `count` is how many distinct targets there were; `complete`
- * is false when the hashes leave some out (over `maxHashes`) or the caller says
- * its list was already partial.
+ * is false when the hashes leave some out (over `maxHashes`, the lowest hashes
+ * kept) or the caller says its list was already partial. A reader can say a
+ * target is NOT in the set only when it is complete.
  */
 export function encodeLinkTargetSet(
   urls: Iterable<string>,
