@@ -9,6 +9,7 @@ import { describe, expect, test } from "bun:test";
 
 import { parseHTML } from "@squirrelscan/parser/dom";
 
+import { parseSelector } from "../src/shared/page-styles";
 import { createStaticVisibility, readInlineStyle } from "../src/shared/static-hidden";
 
 /** The verdict for `#t` in a page whose body is `body`. */
@@ -55,9 +56,11 @@ describe("static-hidden: markup", () => {
     expect(verdict(`${external}<style>.x{display:none}</style><b id="t" class="x"></b>`)).toBe("unknown");
     // An inline style still settles it, as before.
     expect(verdict(`${external}<b id="t" style="display:none"></b>`)).toBe("hidden");
-    // And a <style> rule that shows the element still counts.
+    // A <style> rule that shows an element the browser hides by default is not
+    // settled either: an external `[hidden]{display:none!important}` beats it
+    // (pub#938, Chromium rows "an external [hidden] !important ...").
     expect(verdict(`${external}<style>.f{display:flex}</style><div hidden class="f"><b id="t"></b></div>`)).toBe(
-      "shown",
+      "unknown",
     );
   });
 
@@ -101,10 +104,39 @@ describe("static-hidden: the inline-style reader", () => {
       "display:",
       "all:initial",
       "visibility:nope",
-      "content:'x';display:none",
     ]) {
       expect(readInlineStyle(style)).toEqual(unknown);
     }
+  });
+
+  // pub#938: the block is cut into declarations first. Only a `display`,
+  // `visibility` or `all` declaration can hide, so a custom property or any
+  // other property is skipped whatever its value holds.
+  test("only display, visibility and all declarations are read", () => {
+    const unknown = { display: "unknown", visibility: "unknown" };
+    expect(readInlineStyle("content:'x';display:none")).toEqual({ display: "none" });
+    expect(readInlineStyle("--font-display:swap;--gap:calc(1rem + 2px)")).toEqual({});
+    expect(
+      readInlineStyle(
+        "--wp--custom--typography--presets--6--name: Display; --font: var(--text-display-shorthand)",
+      ),
+    ).toEqual({});
+    expect(readInlineStyle("font-family:var(--wp--preset--font-family--display) !important")).toEqual({});
+    expect(readInlineStyle("--x:'a;display:none';color:red")).toEqual({});
+    expect(readInlineStyle("--x:(;display:none);display:block")).toEqual({ display: "shown" });
+    // An escape outside a string can spell a name or a `url(`: not read.
+    expect(readInlineStyle("--a\\;display:none")).toEqual(unknown);
+    expect(readInlineStyle("display:none;--x:u\\72l(();display:block")).toEqual(unknown);
+    expect(readInlineStyle("content:'\\201C';display:none")).toEqual({ display: "none" });
+    expect(readInlineStyle("--d:none;display:var(--d)")).toEqual(unknown);
+    expect(readInlineStyle("d\\69splay:none")).toEqual(unknown);
+    expect(readInlineStyle("c\\olor:red;display:block")).toEqual(unknown);
+    expect(readInlineStyle("*display:none")).toEqual(unknown);
+    expect(readInlineStyle("/* c */ display:none")).toEqual(unknown);
+    // A string a newline cuts: the browser reads the rest differently.
+    expect(readInlineStyle("content:'a\nb';display:none")).toEqual(unknown);
+    expect(readInlineStyle("content:'a")).toEqual({});
+    expect(readInlineStyle("content:'a;display:none")).toEqual(unknown);
   });
 
   test("!important beats a later normal declaration; otherwise the last wins", () => {
@@ -278,5 +310,98 @@ describe("static-hidden: <style> fuzz", () => {
       }
     }
     expect(performance.now() - started).toBeLessThan(10_000);
+  });
+});
+
+// pub#938: two side effects of reading `<style>` blocks (pub#921). A
+// design-token block (`:root { --font-display: swap; … }`) made every element
+// unknown, and a `<style>` rule that shows a `hidden` control overrode the
+// `[hidden] { display: none !important }` an external sheet may hold.
+describe("static-hidden: custom properties and shows over unread sheets (pub#938)", () => {
+  const external = '<link rel="stylesheet" href="/site.css">';
+  /** The WordPress global styles block github.blog serves, cut down. */
+  const wordpress =
+    "<style>:root{--wp--preset--color--black:#000000;" +
+    '--wp--preset--font-family--display:"Mona Sans", sans-serif;' +
+    "--wp--custom--typography--presets--6--name:Display;" +
+    "--wp--custom--typography--presets--6--size:clamp(2.5rem, 5vw, 4rem);" +
+    "--font:var(--text-display-shorthand);--wp--style--global--content-size:768px}" +
+    ".has-display-font-family{font-family:var(--wp--preset--font-family--display) !important}</style>";
+
+  test("a :root block of custom properties leaves every element settled", () => {
+    const tokens = "<style>:root{--font-display:swap;--gap:calc(1rem + 2px)}</style>";
+    expect(verdict(`${tokens}<button id="t" class="x"></button>`)).toBe("shown");
+    expect(verdict(`${tokens}<div><p><b id="t">x</b></p></div>`)).toBe("shown");
+    expect(verdict(`${tokens}<b id="t" hidden>x</b>`)).toBe("hidden");
+  });
+
+  test("the WordPress global styles shape, with and without an external sheet", () => {
+    for (const head of [wordpress, `${external}${wordpress}`]) {
+      expect(verdict(`${head}<button id="t" class="has-display-font-family"></button>`)).toBe("shown");
+      expect(verdict(`${head}<main><nav><button id="t"></button></nav></main>`)).toBe("shown");
+    }
+    // A real hide on the same page is still read.
+    expect(verdict(`${wordpress}<style>.drawer{display:none}</style><div class="drawer"><b id="t"></b></div>`)).toBe(
+      "hidden",
+    );
+    expect(
+      verdict(`${external}${wordpress}<style>.drawer{display:none}</style><div class="drawer"><b id="t"></b></div>`),
+    ).toBe("unknown");
+  });
+
+  test("a :root display or visibility the reader cannot settle still reaches the page", () => {
+    expect(verdict('<style>:root{display:var(--d)}</style><b id="t">x</b>')).toBe("unknown");
+    expect(verdict('<style>:root{visibility:var(--v)}</style><b id="t">x</b>')).toBe("unknown");
+  });
+
+  test(":root reaches <html> alone: a child that sets visibility itself is settled", () => {
+    // `:root` is a pseudo-class, so the rule is not decided; before pub#938 it
+    // reached every element, `#t` included.
+    const html = '<style>:root{visibility:hidden}</style><div style="visibility:visible"><b id="t">x</b></div>';
+    expect(verdict(html)).toBe("shown");
+    expect(verdict('<style>:root{visibility:hidden}</style><div><b id="t">x</b></div>')).toBe("unknown");
+    expect(parseSelector(":root")).toEqual({
+      kind: "complex",
+      subject: { tag: "html", id: null, classes: [], attrs: [] },
+    });
+    expect(parseSelector(":root.dark")).toEqual({
+      kind: "complex",
+      subject: { tag: "html", id: null, classes: ["dark"], attrs: [] },
+    });
+    // Not the subject: `:root .x` styles `.x`, wherever it sits.
+    expect(parseSelector(":root .x")).toEqual({
+      kind: "complex",
+      subject: { tag: null, id: null, classes: ["x"], attrs: [] },
+    });
+    expect(parseSelector(":not(:root)")).toEqual({
+      kind: "complex",
+      subject: { tag: null, id: null, classes: [], attrs: [] },
+    });
+  });
+
+  test("a <style> show over the user-agent hide is unconfirmed while a sheet is unread", () => {
+    const show = "<style>button{display:inline-flex}dialog{display:block}[popover]{display:block}</style>";
+    expect(verdict(`${external}${show}<button id="t" hidden></button>`)).toBe("unknown");
+    expect(verdict(`${external}${show}<dialog id="t"></dialog>`)).toBe("unknown");
+    expect(verdict(`${external}${show}<div id="t" popover></div>`)).toBe("unknown");
+    // An inline show that is not `!important` loses to an external `!important` too.
+    expect(verdict(`${external}<button id="t" hidden style="display:inline-flex"></button>`)).toBe("unknown");
+    // An inline `!important` show outranks every stylesheet rule.
+    expect(verdict(`${external}<button id="t" hidden style="display:inline-flex !important"></button>`)).toBe(
+      "shown",
+    );
+    // With every sheet read, the show is settled (Chromium shows it).
+    expect(verdict(`${show}<button id="t" hidden></button>`)).toBe("shown");
+    expect(verdict('<button id="t" hidden style="display:inline-flex"></button>')).toBe("shown");
+    // Nothing the user agent hides: a show changes nothing.
+    expect(verdict(`${external}${show}<button id="t"></button>`)).toBe("shown");
+  });
+
+  test("a custom property naming animation does not make <html> animated", () => {
+    const keyframes = "<style>@keyframes in{from{visibility:hidden}}:root{--wp--preset--animation:fade 1s}</style>";
+    expect(verdict(`${keyframes}<b id="t">x</b>`)).toBe("shown");
+    expect(verdict('<style>@keyframes in{from{visibility:hidden}}.a{animation:in 1s}</style><b id="t" class="a">x</b>')).toBe(
+      "unknown",
+    );
   });
 });

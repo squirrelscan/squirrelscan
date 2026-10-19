@@ -2,6 +2,8 @@
 
 import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { UNCONFIRMED_CHECK_SUFFIX } from "@squirrelscan/core-contracts/resolution";
+
 import { createStaticVisibility, UNCONFIRMED_LABEL } from "../shared/static-hidden";
 
 function hasAccessibleName(el: Element): boolean {
@@ -119,7 +121,7 @@ export const buttonNameRule: Rule = {
 
     if (unconfirmed.length > 0) {
       checks.push({
-        name: "button-name-unconfirmed",
+        name: `button-name${UNCONFIRMED_CHECK_SUFFIX}`,
         status: "warn",
         message: `${unconfirmed.length} button(s) without accessible names may be hidden by a style (unconfirmed)`,
         items: unconfirmed.slice(0, 10),

@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- The accessibility checks that skip hidden controls no longer report every unnamed control on a page as unconfirmed because of a `:root` block of design tokens. A custom property whose name or value mentions `display` (such as `--font-display: swap`, or the "Display" typography preset WordPress writes into its global styles) next to a `calc()` or `var()` made the whole page unreadable, so `a11y/button-name`, `a11y/aria-labels`, `a11y/aria-command-name`, `a11y/aria-hidden-focus` and the other naming checks warned where they should fail. squirrel now reads a style block one declaration at a time, and only a `display`, `visibility` or `all` declaration can hide; a `:root` rule reaches `<html>` alone. A control with the `hidden` attribute, in a closed `<dialog>` or an unopened `popover` that a `<style>` rule or a plain inline style shows again is now unconfirmed, not a failure, on a page that also loads an external stylesheet, since a rule such as `[hidden] { display: none !important }` there keeps it hidden. An inline `display` with `!important` still counts. See [button-name](https://docs.squirrelscan.com/rules/a11y/button-name).
+
 ## v0.0.118 (2026-10-20)
 
 A release about reading pages more the way a browser does. The accessibility checks that skip hidden controls now read the page's own `<style>` blocks, so a control a `<style>` rule hides, such as a closed modal, is skipped as a browser skips it, and accessibility scores move with it. A local audit detects technologies from more of its response headers, a charset sent only in the `Content-Type` header counts, a redirected page's canonical is judged at its target, four more schema rules follow `@id` references, a CAPTCHA widget rendered client-side is recognised, and the link checks never request a link whose fragment carries a sign-in token.

@@ -18,7 +18,7 @@
 import { getAttrCI } from "@squirrelscan/utils";
 
 import { parseRules } from "../content/hidden-text";
-import { stripComments } from "./css-tokens";
+import { skipComment, stepBlocks, stripComments } from "./css-tokens";
 
 /** One declared value and whether it was `!important`. */
 export interface Declared<V extends string> {
@@ -82,8 +82,8 @@ export interface PageStyles {
 }
 
 const MENTIONS_HIDING = /display|visibility|\ball\b/i;
-/** A rule body that may start an animation. */
-const MAY_ANIMATE = /animation|\\/i;
+/** A rule body that may set either property or start an animation, read further. */
+const MAY_SET = /display|visibility|\ball\b|animation|\\/i;
 const LEADING_CSS_SPACE = /^[\t\n\f\r ]+/;
 /** Style text that may matter here at all. */
 const MAY_MATTER = /display|visibility|\ball\b|animation|@import|\\/i;
@@ -224,6 +224,8 @@ export function parseSelector(sel: string): ParsedSelector {
   let complex = false;
   let pseudoElement = false;
   let anySubject = false;
+  // `:root` in the subject compound: only the document element, `<html>`, matches it.
+  let root = false;
   // A type selector (`div` or `*`) may only open a compound.
   let typed = false;
   let i = 0;
@@ -248,6 +250,7 @@ export function parseSelector(sel: string): ParsedSelector {
       compound = emptyCompound();
       pseudoElement = false;
       anySubject = false;
+      root = false;
       typed = false;
       i = j;
       continue;
@@ -285,6 +288,7 @@ export function parseSelector(sel: string): ParsedSelector {
       // `:is()`, `:where()`, `:not()`, `:has()` and friends: their arguments
       // can widen the match to anything.
       if (asciiLower(value) !== "not" && sel[end] === "(") anySubject = true;
+      if (!doubled && asciiLower(value) === "root" && sel[end] !== "(") root = true;
       i = sel[end] === "(" ? skipBlock(sel, end) : end;
       continue;
     }
@@ -307,6 +311,10 @@ export function parseSelector(sel: string): ParsedSelector {
   }
 
   if (pseudoElement) return { kind: "pseudo-element" };
+  // pub#938: `:root` reaches `<html>` alone, not every element (a design-token
+  // block is usually `:root { … }`). A type selector already in the compound
+  // stays: `div:root` matches nothing in HTML, and is kept as written.
+  if (root && compound.tag === null) compound.tag = "html";
   if (complex) return { kind: "complex", subject: anySubject ? null : compound };
   const specificity =
     (compound.id ? 1 : 0) * 1_000_000 +
@@ -379,52 +387,157 @@ function splitImportant(value: string): { value: string; important: boolean } {
   return { value: head.slice(0, -1).trimEnd(), important: true };
 }
 
-/**
- * Reads `display` and `visibility` from a declaration block (an inline
- * `style` or a rule's body), strictly. Only plainly written declarations
- * count (`display: none`, `visibility:hidden !important`); a block that
- * mentions either property in any other form (escapes, comments, functions,
- * non-ASCII, `!` elsewhere, the `all` shorthand, an unlisted keyword) reads
- * as "unknown" for both.
- */
-export function readDeclarations(style: string | null): Declarations {
-  if (!style) return {};
-  // An escape can spell either property (`d\69splay`).
-  if (style.includes("\\")) return "unknown";
-  if (!MENTIONS_HIDING.test(style)) return {};
-  if (NOT_PLAIN_ASCII.test(style) || NOT_PLAIN_CSS.test(style)) return "unknown";
+/** A property name a browser reads as one plain identifier. */
+const PLAIN_PROPERTY = /^-?[_a-zA-Z][-_a-zA-Z0-9]*$/;
 
-  const out: { display?: Declared<DisplayValue>; visibility?: Declared<VisibilityValue> } = {};
-  for (const part of style.split(";")) {
-    const colon = part.indexOf(":");
-    if (colon === -1) {
-      if (MENTIONS_HIDING.test(part)) return "unknown";
+/** Index just past the string opening at `start`; -1 when a raw newline or the end cuts it. */
+function skipWholeString(text: string, start: number): number {
+  const quote = text[start];
+  let i = start + 1;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === "\\") {
+      i += 2;
       continue;
     }
-    const prop = asciiLower(part.slice(0, colon).trim());
-    if (prop === "all") return "unknown";
-    if (prop !== "display" && prop !== "visibility") continue;
-    const split = splitImportant(asciiLower(part.slice(colon + 1).trim()));
-    if (split.value.includes("!") || split.value === "") return "unknown";
-    // Within one block, !important beats normal, then the last wins.
-    if (out[prop]?.important && !split.important) continue;
-    const v = split.value;
-    if (prop === "display") {
-      // `revert` is left out on purpose: Chromium shows a `hidden` element
-      // with `display:revert`, where the specs suggest it stays hidden.
-      if (v === "none") out.display = { value: "none", important: split.important };
-      else if (SHOWN_DISPLAY.has(v)) out.display = { value: "shown", important: split.important };
-      else return "unknown";
-    } else if (v === "hidden" || v === "collapse") {
-      out.visibility = { value: "hidden", important: split.important };
-    } else if (v === "visible" || v === "initial") {
-      out.visibility = { value: "visible", important: split.important };
-    } else if (v === "inherit" || v === "unset" || v === "revert") {
-      // `revert-layer` is left out: it falls back to the page's own rules.
-      out.visibility = { value: "inherit", important: split.important };
-    } else return "unknown";
+    if (ch === quote) return i + 1;
+    if (ch === "\n" || ch === "\r" || ch === "\f") return -1;
+    i++;
   }
+  return -1;
+}
+
+/**
+ * A declaration block cut into its declarations the way a browser's tokenizer
+ * cuts it: a `;` inside a string, a comment, a `(`, `[` or `{` block or an
+ * unquoted `url(…)` is part of a value. null when a string runs past a
+ * newline or the end, where a browser recovers differently, and for an escape
+ * outside a string: it can spell a property name (`d\69splay`) or a `url(`
+ * (`u\72l(`), whose token ends at its first `)` whatever opened inside it.
+ */
+function splitDeclarationBlock(block: string): Array<{ text: string; colon: number }> | null {
+  const out: Array<{ text: string; colon: number }> = [];
+  const closers: string[] = [];
+  let start = 0;
+  let colon = -1;
+  let i = 0;
+  while (i < block.length) {
+    const ch = block[i] as string;
+    if (ch === "\\") return null;
+    if (ch === '"' || ch === "'") {
+      const end = skipWholeString(block, i);
+      if (end === -1) return null;
+      i = end;
+      continue;
+    }
+    if (ch === "/" && block[i + 1] === "*") {
+      i = skipComment(block, i);
+      continue;
+    }
+    if (closers.length === 0 && ch === ":" && colon === -1) colon = i - start;
+    if (closers.length === 0 && ch === ";") {
+      out.push({ text: block.slice(start, i), colon });
+      start = i + 1;
+      colon = -1;
+      i++;
+      continue;
+    }
+    i = stepBlocks(block, i, closers);
+  }
+  out.push({ text: block.slice(start), colon });
   return out;
+}
+
+/**
+ * Reads `display` and `visibility` from a declaration block (an inline
+ * `style` or a rule's body), strictly, and whether the block may start an
+ * animation. The block is cut into declarations first (pub#938): a custom
+ * property (`--font-display: swap`) and any other property cannot set either
+ * one, so what their values hold does not matter. A `display` or
+ * `visibility` declaration counts only when plainly written (`display: none`,
+ * `visibility:hidden !important`); one in any other form (escapes, comments,
+ * functions, non-ASCII, `!` elsewhere, an unlisted keyword), the `all`
+ * shorthand, a property name that is not a plain identifier and could be
+ * either one, or an escape outside a string makes the block "unknown" for both.
+ */
+export function scanDeclarations(style: string | null): {
+  decls: Declarations;
+  mayAnimate: boolean;
+} {
+  if (!style || !MAY_SET.test(style)) return { decls: {}, mayAnimate: false };
+  const parts = splitDeclarationBlock(style);
+  if (!parts) return { decls: "unknown", mayAnimate: true };
+
+  let unknown = false;
+  let mayAnimate = false;
+  const out: { display?: Declared<DisplayValue>; visibility?: Declared<VisibilityValue> } = {};
+  for (const { text, colon } of parts) {
+    if (colon === -1) {
+      // No property at all: a browser drops it. Without its comments it may still name one.
+      const bare = stripComments(text);
+      if (MENTIONS_HIDING.test(bare)) unknown = true;
+      if (/animation/i.test(bare)) mayAnimate = true;
+      continue;
+    }
+    const name = stripComments(text.slice(0, colon)).trim();
+    // A custom property sets nothing but itself, whatever its value holds.
+    if (name.startsWith("--")) continue;
+    if (/animation/i.test(name)) mayAnimate = true;
+    if (!PLAIN_PROPERTY.test(name)) {
+      if (MENTIONS_HIDING.test(name)) unknown = true;
+      continue;
+    }
+    const prop = asciiLower(name);
+    if (prop === "all") unknown = true;
+    if (unknown || (prop !== "display" && prop !== "visibility")) continue;
+    // The declaration as written, name and value, is read strictly.
+    if (NOT_PLAIN_ASCII.test(text) || NOT_PLAIN_CSS.test(text)) {
+      unknown = true;
+      continue;
+    }
+    const read = readHidingDeclaration(out, prop, text.slice(colon + 1));
+    if (!read) unknown = true;
+  }
+  return { decls: unknown ? "unknown" : out, mayAnimate };
+}
+
+/** {@link scanDeclarations} for what a block sets alone. */
+export function readDeclarations(style: string | null): Declarations {
+  return scanDeclarations(style).decls;
+}
+
+/**
+ * Reads one plainly written `display` or `visibility` value into `out`; false
+ * when it is not a value this module reads.
+ */
+function readHidingDeclaration(
+  out: { display?: Declared<DisplayValue>; visibility?: Declared<VisibilityValue> },
+  prop: "display" | "visibility",
+  raw: string,
+): boolean {
+  const split = splitImportant(asciiLower(raw.trim()));
+  if (split.value.includes("!") || split.value === "") return false;
+  // Within one block, !important beats normal, then the last wins.
+  if (out[prop]?.important && !split.important) return true;
+  const v = split.value;
+  let value: DisplayValue | VisibilityValue;
+  if (prop === "display") {
+    // `revert` is left out on purpose: Chromium shows a `hidden` element
+    // with `display:revert`, where the specs suggest it stays hidden.
+    if (v === "none") value = "none";
+    else if (SHOWN_DISPLAY.has(v)) value = "shown";
+    else return false;
+  } else if (v === "hidden" || v === "collapse") {
+    value = "hidden";
+  } else if (v === "visible" || v === "initial") {
+    value = "visible";
+  } else if (v === "inherit" || v === "unset" || v === "revert") {
+    // `revert-layer` is left out: it falls back to the page's own rules.
+    value = "inherit";
+  } else return false;
+  if (prop === "display") out.display = { value: value as DisplayValue, important: split.important };
+  else out.visibility = { value: value as VisibilityValue, important: split.important };
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -547,12 +660,12 @@ export function readPageStyles(doc: Document): PageStyles {
     if (rules.length >= budget) return INCOMPLETE;
 
     for (const rule of rules) {
-      const animates = MAY_ANIMATE.test(rule.body);
-      if (!animates && !MENTIONS_HIDING.test(rule.body)) continue;
+      if (!MAY_SET.test(rule.body)) continue;
       if (rule.selector.length > MAX_SELECTOR_CHARS) return INCOMPLETE;
       // A nested rule (`& .x { … }`) could style any descendant.
       if (rule.body.includes("{")) return INCOMPLETE;
-      const decls = readDeclarations(rule.body);
+      const { decls, mayAnimate: animates } = scanDeclarations(rule.body);
+      if (!animates && decls !== "unknown" && !decls.display && !decls.visibility) continue;
       const display = decls === "unknown" || decls.display !== undefined;
       const visibility = decls === "unknown" || decls.visibility !== undefined;
       // An `@keyframes` frame styles an animation step, not an element. What

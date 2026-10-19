@@ -89,17 +89,26 @@ function authorStyle(el: Element): {
   visibility?: VisibilityValue | "unknown";
   /** The page's stylesheets were all read, so inherited values are settled. */
   complete: boolean;
+  /** The `display` comes from an inline `!important`, which no stylesheet rule outranks. */
+  displayInlineImportant: boolean;
 } {
   const decls = readDeclarations(getAttrCI(el, "style"));
   const styles = pageStylesFor(el.ownerDocument);
   if (decls === "unknown") {
-    return { display: "unknown", visibility: "unknown", complete: styles?.complete ?? false };
+    return {
+      display: "unknown",
+      visibility: "unknown",
+      complete: styles?.complete ?? false,
+      displayInlineImportant: false,
+    };
   }
+  const inlineImportant = decls.display?.important === true;
   if (!styles) {
     return {
       ...(decls.display ? { display: decls.display.value } : {}),
       ...(decls.visibility ? { visibility: decls.visibility.value } : {}),
       complete: false,
+      displayInlineImportant: inlineImportant,
     };
   }
   const settle = <V extends string>(
@@ -110,16 +119,16 @@ function authorStyle(el: Element): {
     if (result.source === "sheet" && result.value === hides && !styles.complete) return "unknown";
     return result.value;
   };
+  const display = cascade(el, styles, "display", decls.display as Declared<DisplayValue> | undefined);
   return {
-    display: settle(
-      cascade(el, styles, "display", decls.display as Declared<DisplayValue> | undefined),
-      "none" as DisplayValue,
-    ),
+    display: settle(display, "none" as DisplayValue),
     visibility: settle(
       cascade(el, styles, "visibility", decls.visibility as Declared<VisibilityValue> | undefined),
       "hidden" as VisibilityValue,
     ),
     complete: styles.complete,
+    displayInlineImportant:
+      inlineImportant && typeof display === "object" && display.source === "inline",
   };
 }
 
@@ -295,11 +304,21 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
     }
     const ariaHidden =
       options.ariaHidden && asciiLower(getAttrCI(el, "aria-hidden") ?? "") === "true";
-    // An author `display` beats the user-agent rule.
-    const display = ariaHidden
-      ? "none"
-      : (author.display ??
-        (uaHidden(el, parent.foreign, options.closedDialogsShown === true) ? "none" : "shown"));
+    const uaHides = uaHidden(el, parent.foreign, options.closedDialogsShown === true);
+    // An author `display` beats the user-agent rule. One that shows what the
+    // user-agent rule hides is not settled while a stylesheet is unread
+    // (pub#938): frameworks ship `[hidden] { display: none !important }`,
+    // which only an inline `!important` outranks.
+    let display = ariaHidden ? "none" : (author.display ?? (uaHides ? "none" : "shown"));
+    if (
+      display === "shown" &&
+      uaHides &&
+      author.display !== undefined &&
+      !author.complete &&
+      !author.displayInlineImportant
+    ) {
+      display = "unknown";
+    }
 
     // This element's computed visibility: its own value, else its parent's.
     const own = author.visibility;
