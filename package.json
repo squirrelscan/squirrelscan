@@ -47,6 +47,7 @@
     "smol-toml": "^1.9.0",
     "svgo": "^4.1.0",
     "@cloudflare/vite-plugin": "^1.62.2",
+    "vite": "^8.3.3",
     "ip-address": "^10.7.2",
     "proxy-addr": "^2.0.8",
     "tinypool": "^2.1.2",
