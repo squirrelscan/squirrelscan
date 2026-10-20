@@ -20,6 +20,12 @@ import {
   fetchResourceAssets,
 } from "@/audit/adapter";
 import { entityMapSite, storeEntityMap } from "@/audit/entity-map";
+import {
+  auditMayRetire,
+  retainRecentAudits,
+  RetentionReclaimError,
+  type RetentionOutcome,
+} from "@/audit/retention";
 import { loadConfig, type Config } from "@/config";
 import {
   type Result,
@@ -29,6 +35,7 @@ import {
   ErrorCodes,
 } from "@/controllers/types";
 import { createStorage } from "@/crawler/storage";
+import { deriveCrawlRunStatus } from "@/reports/reconstruct";
 import { retiredAuditReason } from "@/reports/retired";
 import { getProjectsPath } from "@/self/paths";
 import { configureLogger, logger } from "@/utils/logger";
@@ -43,6 +50,8 @@ export type AnalyzeProgressCallback = (progress: AnalyzeProgress) => void;
 
 export interface AnalyzeOptions {
   crawlId?: string; // defaults to latest
+  /** Called when the post-analyze retention pass retired something (#955). */
+  onRetention?: (outcome: RetentionOutcome) => void;
   configPath?: string;
   onProgress?: AnalyzeProgressCallback;
 }
@@ -91,12 +100,17 @@ export function pickLatestAnalyzeReadyCrawl(
   return best;
 }
 
+/** A crawl, the open store it lives in, and the project directory of that store. */
+interface FoundCrawl {
+  storage: CrawlStorage;
+  crawl: CrawlMetadata;
+  project: string;
+}
+
 /**
  * Find a crawl by ID across all project databases
  */
-async function findCrawlById(
-  crawlId: string
-): Promise<{ storage: CrawlStorage; crawl: CrawlMetadata } | null> {
+async function findCrawlById(crawlId: string): Promise<FoundCrawl | null> {
   const projectsPath = getProjectsPath();
   if (!existsSync(projectsPath)) return null;
 
@@ -117,7 +131,7 @@ async function findCrawlById(
       );
 
       if (crawl) {
-        const result = { storage: projectStorage, crawl };
+        const result = { storage: projectStorage, crawl, project };
         projectStorage = null; // Don't close, we're returning it
         return result;
       }
@@ -139,15 +153,12 @@ async function findCrawlById(
 /**
  * Find the most recent crawl across all projects
  */
-async function findLatestCrawl(): Promise<{
-  storage: CrawlStorage;
-  crawl: CrawlMetadata;
-} | null> {
+async function findLatestCrawl(): Promise<FoundCrawl | null> {
   const projectsPath = getProjectsPath();
   if (!existsSync(projectsPath)) return null;
 
   const projects = readdirSync(projectsPath);
-  let result: { storage: CrawlStorage; crawl: CrawlMetadata } | null = null;
+  let result: FoundCrawl | null = null;
 
   for (const project of projects) {
     let projectStorage: CrawlStorage | null = null;
@@ -172,7 +183,7 @@ async function findLatestCrawl(): Promise<{
               result.storage.close().pipe(Effect.catchAll(() => Effect.void))
             );
           }
-          result = { storage: projectStorage, crawl };
+          result = { storage: projectStorage, crawl, project };
           projectStorage = null; // Don't close, we're returning it
         }
       }
@@ -210,6 +221,7 @@ export async function runAnalyze(
 
     let crawlId: string;
     let baseUrl: string;
+    let project: string;
 
     if (options.crawlId) {
       // Find the crawl by ID across all projects
@@ -225,6 +237,7 @@ export async function runAnalyze(
       storage = found.storage;
       crawlId = found.crawl.id;
       baseUrl = found.crawl.baseUrl;
+      project = found.project;
     } else {
       // Find the most recent crawl
       const found = await findLatestCrawl();
@@ -239,6 +252,7 @@ export async function runAnalyze(
       storage = found.storage;
       crawlId = found.crawl.id;
       baseUrl = found.crawl.baseUrl;
+      project = found.project;
     }
 
     // Check crawl status
@@ -330,6 +344,17 @@ export async function runAnalyze(
       storage.updateCrawl(crawlId, { status: "analyzed" })
     );
 
+    await retainAfterAnalyze({
+      storage,
+      crawl,
+      crawlId,
+      pages,
+      project,
+      byId: Boolean(options.crawlId),
+      config,
+      onRetention: options.onRetention,
+    });
+
     // Calculate stats
     const allChecks = [
       ...Array.from(ruleResults.pageResults.values()).flat(),
@@ -376,6 +401,70 @@ export async function runAnalyze(
       await Effect.runPromise(
         storage.close().pipe(Effect.catchAll(() => Effect.void))
       );
+    }
+  }
+}
+
+/**
+ * `[storage] keep_audits` retention after an analyze (#955).
+ *
+ * `squirrel analyze` is the step that finishes an audit in the split pipeline
+ * (`crawl`, `analyze`, `report`), so it applies the same window as the end of
+ * `squirrel audit`, abandoned-crawl pass included. Same gates too: a crawl
+ * whose own outcome is blocked or failed never retires history, and the window
+ * is only applied to the project this directory's config names, or, with no
+ * name configured, to the latest crawl's own project but never to an `--id` one. Records the outcome on the crawl,
+ * as the audit does, so a later pass can tell a real audit from one that
+ * learned nothing. Never fails the analyze.
+ */
+async function retainAfterAnalyze(args: {
+  storage: CrawlStorage;
+  crawl: CrawlMetadata;
+  crawlId: string;
+  pages: ReadonlyArray<{ status: number }>;
+  project: string;
+  /** The crawl was named with `--id` rather than picked as the latest. */
+  byId: boolean;
+  config: Config;
+  onRetention?: (outcome: RetentionOutcome) => void;
+}): Promise<void> {
+  const { storage, crawl, crawlId, pages, project, byId, config } = args;
+  if (!("retireCrawlsDetailed" in storage)) return;
+  const sqlite = storage as SQLiteStorage;
+  const status = deriveCrawlRunStatus(crawl, pages).status;
+  try {
+    await Effect.runPromise(
+      sqlite
+        .setReportStatus(crawlId, status ?? "completed", { keepBuilding: true })
+        .pipe(Effect.catchAll(() => Effect.void))
+    );
+    if (!auditMayRetire(status)) {
+      logger.debug("retention skipped: audit status", status ?? "unknown");
+      return;
+    }
+    // Analyze can open any project's crawl (`--id`), and another project's
+    // history is not this directory's window to cut. With no project name in
+    // the config, only the latest-crawl form applies it: that is the project
+    // the user just crawled.
+    const configured = config.project.name;
+    if (configured ? configured !== project : byId) {
+      logger.debug("retention skipped: crawl is in another project", project);
+      return;
+    }
+    const retention = await retainRecentAudits(sqlite, {
+      keep: config.storage.keep_audits,
+      currentCrawlId: crawlId,
+    });
+    if (retention) {
+      logger.info(
+        `retired ${retention.retired} crawl(s) beyond keep_audits=${retention.keep}, freeing ${retention.freedBytes} bytes${retention.vacuumed ? " (database rebuilt)" : ""}`
+      );
+      args.onRetention?.(retention);
+    }
+  } catch (error) {
+    logger.warn(`Retention pass failed: ${(error as Error).message}`);
+    if (error instanceof RetentionReclaimError) {
+      args.onRetention?.(error.outcome);
     }
   }
 }

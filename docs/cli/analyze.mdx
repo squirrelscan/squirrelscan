@@ -105,6 +105,10 @@ disable = ["ai/*"]
 
 See [Configuration](/configuration) for all options.
 
+## Retention
+
+When the analysis succeeds, `analyze` applies [`[storage] keep_audits`](/configuration/storage#keep_audits) like `squirrel audit` does: audits older than the newest `keep_audits` are retired, and so are crawls abandoned by earlier killed runs. It prints a one-line notice on stderr when it retires something. An analysis of a blocked or failed crawl retires nothing.
+
 ## Exit codes
 
 | Code | Meaning |

@@ -4475,12 +4475,20 @@ export class SQLiteStorage implements CrawlStorage {
    */
   setReportStatus(
     crawlId: string,
-    reportStatus: string
+    reportStatus: string,
+    // `squirrel analyze` records an outcome on a crawl it did not run the audit
+    // for: it must not clear the `building` sentinel of an audit that is still
+    // reconstructing its report (#955).
+    options?: { keepBuilding?: boolean }
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
         this.getDb()
-          .prepare("UPDATE crawls SET report_status = ? WHERE id = ?")
+          .prepare(
+            options?.keepBuilding
+              ? "UPDATE crawls SET report_status = ? WHERE id = ? AND (report_status IS NULL OR report_status != 'building')"
+              : "UPDATE crawls SET report_status = ? WHERE id = ?"
+          )
           .run(reportStatus, crawlId);
       },
       catch: (e) => StorageError.write(e),
