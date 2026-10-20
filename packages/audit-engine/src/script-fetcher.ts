@@ -17,6 +17,7 @@ import {
 import { fetchUndecoded, readBodyCapped } from "@squirrelscan/utils/response-body";
 import { isHttpOrHttpsUrl, safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 import type { FetchBudget, FetchOutcome } from "./fetch-budget";
+import { customHeadersFor, type HeaderScope } from "./lib/header-scope";
 import { rateLimitedFlag, wafBlockedFlag } from "./lib/asset-status";
 import { normalizeEncoding } from "./resource-checker";
 
@@ -51,6 +52,8 @@ export interface ScriptFetcherOptions {
   pageCount?: number;
   /** Custom HTTP request headers attached to every script fetch (#494). Secret values — never logged. */
   customHeaders?: Record<string, string>;
+  /** Hosts that get `customHeaders` (#732); absent: every request does. */
+  headerScope?: HeaderScope;
   /**
    * #1252: shared tarpit-aware budget (same object as the resource checker's, so
    * scripts + assets share ONE budget). Skips a script before its fetch once the
@@ -143,7 +146,7 @@ async function fetchScriptAttempt(
         headers: {
           "User-Agent": options.userAgent,
           Accept: "application/javascript, text/javascript, */*",
-          ...options.customHeaders,
+          ...customHeadersFor(url, options.customHeaders, options.headerScope),
         },
         signal: controller.signal,
       },

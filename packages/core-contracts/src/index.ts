@@ -1694,6 +1694,12 @@ export interface ResourceSizeData {
    * false otherwise.
    */
   wafBlocked?: boolean;
+  /**
+   * The audit's custom headers were withheld from this host (not the audited
+   * origin, not named in `header_hosts`), so a 401 or 403 says it wants them,
+   * not that the file is gone (#732). Absent or false otherwise.
+   */
+  headersWithheld?: boolean;
 }
 
 export interface ScriptContentData {
@@ -1719,6 +1725,8 @@ export interface ScriptContentData {
   rateLimited?: boolean;
   /** A WAF or bot challenge answered in place of the script (#703). */
   wafBlocked?: boolean;
+  /** Custom headers were withheld from this host: a 401 or 403 is unverified (#732). */
+  headersWithheld?: boolean;
 }
 
 export interface SitemapUrl {

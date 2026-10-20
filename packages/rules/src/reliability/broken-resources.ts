@@ -33,6 +33,8 @@ interface Asset {
   error: string | null;
   rateLimited: boolean;
   wafBlocked: boolean;
+  /** Custom headers were withheld from this host (#732): a 401/403 asks for them. */
+  headersWithheld: boolean;
   /** Probed by the third-party status check, which sends no credentials. */
   credentialless: boolean;
   sourcePages: Set<string>;
@@ -107,6 +109,11 @@ function verdictOf(asset: Asset): Verdict {
   if (asset.rateLimited || asset.wafBlocked || isRateLimitStatus(asset.status)) {
     return "unverified";
   }
+  // The audit's custom headers go to the audited origin and named hosts only
+  // (#732), so a 401/403 from another host says it wants them.
+  if (asset.headersWithheld && (asset.status === 401 || asset.status === 403)) {
+    return "unverified";
+  }
   // The third-party probe sends none of the audit's credentials, so on a
   // sibling of the site's own host (a staging CDN behind the same auth) a 401
   // or 407 says the host wants them, not that the file is gone. A true third
@@ -134,6 +141,7 @@ function toItem(asset: Asset): CheckItem {
       error: asset.error,
       rateLimited: asset.rateLimited,
       wafBlocked: asset.wafBlocked,
+      ...(asset.headersWithheld ? { headersWithheld: true } : {}),
     },
   };
 }
@@ -167,6 +175,7 @@ function collect(site: SiteData, origin: SiteOrigin | null): Collected {
         error: entry.error,
         rateLimited: entry.rateLimited === true,
         wafBlocked: entry.wafBlocked === true,
+        headersWithheld: entry.headersWithheld === true,
         credentialless,
         sourcePages: new Set(entry.sourcePages),
       });
@@ -282,10 +291,27 @@ export const brokenResourcesRule: Rule = {
     }
 
     if (unverified.length > 0) {
+      const withheldHosts = [
+        ...new Set(
+          unverified
+            .filter((asset) => asset.headersWithheld)
+            .map((asset) => {
+              try {
+                return new URL(asset.url).host;
+              } catch {
+                return asset.url;
+              }
+            }),
+        ),
+      ].sort();
+      const withheldNote =
+        withheldHosts.length > 0
+          ? `; ${withheldHosts.join(", ")} asked for credentials and the audit's custom headers are not sent there, so name the host in header_hosts or --header-host to send them`
+          : "";
       checks.push({
         name: "unverified-resources",
         status: "info",
-        message: `${unverified.length} resource(s) were throttled by the origin, answered with a WAF or bot challenge, or asked for credentials the third-party check does not send, so their status is unverified and not reported as broken`,
+        message: `${unverified.length} resource(s) were throttled by the origin, answered with a WAF or bot challenge, or asked for credentials the third-party check does not send, so their status is unverified and not reported as broken${withheldNote}`,
         items: unverified.map(toItem),
         details: { count: unverified.length },
       });

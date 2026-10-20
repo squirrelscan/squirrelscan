@@ -354,6 +354,42 @@ describe("reliability/broken-resources", () => {
     });
   });
 
+  test("a 401 from a host the custom headers were withheld from is unverified and names the host (#732)", () => {
+    const checks = run({
+      scripts: [
+        script({
+          url: "https://cdn.example.com/app.js",
+          status: 401,
+          error: "HTTP 401",
+          headersWithheld: true,
+        }),
+      ],
+      css: [],
+      fonts: [],
+    });
+    expect(named(checks, "broken-resources")).toBeUndefined();
+    const unverified = named(checks, "unverified-resources");
+    expect(unverified?.status).toBe("info");
+    expect(unverified?.message).toContain("cdn.example.com");
+    expect(unverified?.message).toContain("--header-host");
+  });
+
+  test("a 404 from a host the headers were withheld from is still broken (#732)", () => {
+    const checks = run({
+      scripts: [
+        script({
+          url: "https://cdn.example.com/gone.js",
+          status: 404,
+          error: "HTTP 404",
+          headersWithheld: true,
+        }),
+      ],
+      css: [],
+      fonts: [],
+    });
+    expect(named(checks, "broken-resources")).toBeDefined();
+  });
+
   test("one URL referenced from five pages yields one finding listing all five pages", () => {
     const pages = [1, 2, 3, 4, 5].map((n) => `https://example.com/p${n}`);
     const checks = run({

@@ -65,6 +65,11 @@ export const CrawlerConfigSchema = z.object({
       message: "Too many custom headers (max 50)",
     })
     .default({}),
+  // Hosts, besides the audited origin, that get the custom headers on asset
+  // requests (a signed CDN, Cloudflare Access on assets.example.com). Without
+  // it only the audited origin does; a subdomain is not trusted by default (#732).
+  // TOML: `[crawler] header_hosts = ["assets.example.com"]`.
+  header_hosts: z.array(z.string().min(1).max(255)).max(50).default([]),
   follow_redirects: z.boolean().default(true),
   concurrency: z.number().default(DEFAULT_CRAWLER_CONCURRENCY),
   // Single-host bump (#265): per-host caps gate throughput; robots crawl-delay

@@ -2437,6 +2437,15 @@ export function mergeOptionsToConfig(
       ...(options.headers && Object.keys(options.headers).length > 0
         ? { headers: { ...config.crawler.headers, ...options.headers } }
         : {}),
+      // --header-host adds to [crawler] header_hosts (#732).
+      ...(options.headerHosts && options.headerHosts.length > 0
+        ? {
+            header_hosts: [
+              ...config.crawler.header_hosts,
+              ...options.headerHosts,
+            ],
+          }
+        : {}),
       // --disable-discovery-probes[=false] overrides [crawler]
       // disable_discovery_probes (#409), in both directions.
       ...(typeof options.disableDiscoveryProbes === "boolean"

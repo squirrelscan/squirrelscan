@@ -401,6 +401,8 @@ export interface WebAppManifestIconCheck {
   rateLimited?: boolean;
   /** A WAF or bot challenge answered in place of the icon. */
   wafBlocked?: boolean;
+  /** Custom headers were withheld from this host: a 401 or 403 is unverified (#732). */
+  headersWithheld?: boolean;
 }
 
 /** A `<meta name="theme-color">` one linking page carries. */
@@ -422,6 +424,8 @@ export interface WebAppManifestData {
   rateLimited?: boolean;
   /** A WAF or bot challenge answered in place of the manifest. */
   wafBlocked?: boolean;
+  /** Custom headers were withheld from this host: a 401 or 403 is unverified (#732). */
+  headersWithheld?: boolean;
   /** Pages that link this manifest, sorted. */
   sourcePages: string[];
   /** Each linking page's theme-color metas, keyed by page URL. */

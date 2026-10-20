@@ -220,7 +220,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --visibility --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --fail-on --header -H --rule-include --rule-exclude --disable-discovery-probes --probe -P --passive --aggressive --probe-budget --pentest --summary --help" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --visibility --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --fail-on --header -H --header-host --rule-include --rule-exclude --disable-discovery-probes --probe -P --passive --aggressive --probe-budget --pentest --summary --help" -- "\${cur}") )
       return 0
       ;;
     entities)
@@ -549,6 +549,7 @@ _squirrel() {
             '--no-internal-links[Do not status-check unfetched internal link targets]' \\
             '*--fail-on[Exit 2 when a threshold trips (e.g. score<90, severity>=error)]:expr' \\
             '*'{-H,--header}'[Custom HTTP header on every crawl request, format "Name: Value" (repeatable)]:header' \\
+            '*--header-host[Host that also gets the custom headers on asset requests (repeatable)]:host' \\
             '*--rule-include[Only run these rule categories or rules]:pattern' \\
             '*--rule-exclude[Skip these rule categories or rules]:pattern' \\
             '--disable-discovery-probes[Skip the pre-crawl discovery probes (llms.txt, well-known files, swagger.json)]' \\
@@ -803,6 +804,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-external-links
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-internal-links -d "Do not status-check unfetched internal link targets"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l fail-on -d "Exit 2 when a threshold trips (e.g. score<90, severity>=error)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -s H -l header -d "Custom HTTP header on every crawl request, format \\"Name: Value\\" (repeatable)"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l header-host -d "Host that also gets the custom headers on asset requests (repeatable)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-include -d "Only run these rule categories or rules"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l rule-exclude -d "Skip these rule categories or rules"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l disable-discovery-probes -d "Skip the pre-crawl discovery probes (llms.txt, well-known files, swagger.json)"

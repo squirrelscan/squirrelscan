@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- Custom request headers (`-H`, `[crawler] headers`) now go to the audited origin only on asset requests, not to every subdomain of the audited host. A subdomain is not always run by the site's owner, and the headers usually carry credentials. To send them to a signed CDN or a Cloudflare Access host, name it with `[crawler] header_hosts` or `--header-host`. An asset on another host that answers 401 or 403 without them is reported as not checked, naming the host, not as broken. #732
+
 ### Fixed
 
 - The soft-404 confirmation and the cloaking probe no longer send your custom headers (`Authorization`, cookies, API keys, Web Bot Auth signatures) to another site when a page redirects there. They follow redirects one hop at a time, drop those headers on a hop to a different origin, and refuse a hop to a link-local or cloud metadata address. Private networks still work for LAN audits.

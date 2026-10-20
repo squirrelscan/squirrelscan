@@ -32,6 +32,7 @@ import {
 import { isHttpOrHttpsUrl, safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 import { wafBlockedFlag } from "./lib/asset-status";
 import type { FetchBudget, FetchOutcome } from "./fetch-budget";
+import { customHeadersFor, type HeaderScope } from "./lib/header-scope";
 import { parseImageHeader, type ImageHeaderInfo } from "./image-header";
 
 /**
@@ -123,6 +124,11 @@ export interface ResourceCheckerOptions {
    * Auth signatures), matching the page crawl. Secret values — never logged.
    */
   customHeaders?: Record<string, string>;
+  /**
+   * Hosts that get `customHeaders` (#732). Absent: every request does. The
+   * adapter sets it to the audited origin plus the hosts the user named.
+   */
+  headerScope?: HeaderScope;
   /**
    * #1252: shared tarpit-aware budget. When present, a resource is skipped
    * before its fetch if the total budget is spent or its host is tarpitting, and
@@ -335,7 +341,7 @@ async function measureUnrangedSize(
 ): Promise<number | null> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs);
-  const headers = { "User-Agent": options.userAgent, Accept: "*/*", ...options.customHeaders };
+  const headers = { "User-Agent": options.userAgent, Accept: "*/*", ...customHeadersFor(url, options.customHeaders, options.headerScope) };
   try {
     try {
       const { response } = await fetchResource(url, {
@@ -521,7 +527,7 @@ async function checkSingleResourceAsync(
           headers: {
             "User-Agent": options.userAgent,
             Accept: "*/*",
-            ...options.customHeaders,
+            ...customHeadersFor(url, options.customHeaders, options.headerScope),
             ...conditional,
           },
           signal: controller.signal,
@@ -643,7 +649,7 @@ async function checkSingleResourceAsync(
         Range: readHeader
           ? `bytes=0-${RESOURCE_SIZE_LIMITS.IMAGE_HEADER_BYTES - 1}`
           : "bytes=0-0",
-        ...options.customHeaders,
+        ...customHeadersFor(url, options.customHeaders, options.headerScope),
         ...conditional,
       },
       signal: getController.signal,
@@ -665,7 +671,7 @@ async function checkSingleResourceAsync(
         headers: {
           "User-Agent": options.userAgent,
           Accept: "*/*",
-          ...options.customHeaders,
+          ...customHeadersFor(url, options.customHeaders, options.headerScope),
           ...conditional,
         },
         signal: getController.signal,
@@ -750,7 +756,7 @@ async function checkSingleResourceAsync(
           headers: {
             "User-Agent": options.userAgent,
             Accept: "*/*",
-            ...options.customHeaders,
+            ...customHeadersFor(url, options.customHeaders, options.headerScope),
           },
           signal: confirmController.signal,
         }, options);

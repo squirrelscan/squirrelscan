@@ -686,6 +686,8 @@ export interface AuditOptions {
   // Custom HTTP request headers attached to every crawl request (#494); merged
   // over [crawler] headers. Values are secrets — never echo them, redact in logs.
   headers?: Record<string, string>;
+  /** `--header-host`: extra hosts that get the custom headers on asset requests (#732). */
+  headerHosts?: string[];
   // --rule-include/--rule-exclude (#1066): resolved patterns from
   // parseRuleFilters, applied over config.rules by mergeOptionsToConfig via
   // resolveRulesConfig. include REPLACES config.rules.enable, exclude APPENDS

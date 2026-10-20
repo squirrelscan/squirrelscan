@@ -749,8 +749,11 @@ user_agent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit
 **Default:** `{}` (no custom headers)
 
 Custom HTTP request headers attached to **every** crawl request: pages, assets
-on the audited host and its subdomains, `robots.txt`, sitemaps, `llms.txt`, and
-markdown probes. The status checks
+on the audited origin, `robots.txt`, sitemaps, `llms.txt`, and markdown probes.
+The audited origin is the scheme, host and port of the start URL after its
+redirects. A subdomain such as `cdn.example.com` does not get them unless you
+name it in [`header_hosts`](#header_hosts), because a subdomain is not always
+run by the site's owner. The status checks
 [reliability/broken-resources](/rules/reliability/broken-resources) sends to
 scripts, stylesheets and fonts on other hosts never carry them, and neither
 does the status check of a sitemap URL on another host. Use this to authorize
@@ -784,6 +787,10 @@ first colon, so values may contain colons). CLI headers **merge over** the TOML
 verbatim, so `Signature-Agent: "https://shopify.com"` keeps its quotes
 end-to-end.
 
+When a page redirects to another origin, the headers are dropped on that hop.
+The soft-404 confirmation and the cloaking probe follow redirects the same way,
+and refuse a hop to a link-local or cloud metadata address.
+
 <Warning>
   Header values are treated as **secrets**. squirrelscan never echoes them in CLI
   output or logs; the audit preamble shows header **names** only
@@ -791,6 +798,32 @@ end-to-end.
   values to a shared `squirrel.toml`; prefer the `-H` flag in CI with the values
   sourced from secrets.
 </Warning>
+
+### `header_hosts`
+
+**Type:** `array` of hosts
+**Default:** `[]` (the audited origin only)
+
+Hosts, besides the audited origin, that also get the [custom headers](#headers)
+on asset requests: a signed CDN, or Cloudflare Access on `assets.example.com`.
+It applies to hosts on the audited site's own domain. Only the hosts you name get
+them. A name matches the host on any port and
+scheme.
+
+```toml
+[crawler]
+header_hosts = ["assets.example.com"]
+```
+
+**CLI override:** the repeatable `--header-host` flag adds to the TOML list.
+
+```bash
+squirrel audit https://example.com -H 'X-Api-Key: ...' --header-host assets.example.com
+```
+
+If an asset on another host answers 401 or 403 to a request sent without the
+headers, it is reported as not checked rather than as a broken resource, and the
+message names the host to add here.
 
 **Cloud audits:** custom headers for dashboard **cloud** audits are available on
 [every plan](/dashboard/crawl-settings#custom-request-headers), Free included.

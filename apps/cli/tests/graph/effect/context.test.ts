@@ -41,6 +41,7 @@ const mockConfig: Config = {
     timeout_ms: 30000,
     user_agent: "TestBot/1.0",
     headers: {},
+    header_hosts: [],
     follow_redirects: true,
     concurrency: 3,
     per_host_concurrency: 2,

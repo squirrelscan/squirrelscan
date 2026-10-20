@@ -1137,6 +1137,11 @@ export const audit = defineCommand({
       description:
         'Custom HTTP header on every crawl request (repeatable), format "Name: Value"; merges over [crawler] headers. Values are secrets (redacted in output)',
     },
+    "header-host": {
+      type: "string",
+      description:
+        "Host that also gets the custom headers on asset requests (repeatable or comma-separated), e.g. assets.example.com. Only the audited origin gets them by default",
+    },
     "rule-include": {
       type: "string",
       description:
@@ -1263,6 +1268,12 @@ export const audit = defineCommand({
       return;
     }
     const customHeaders = headerParse.headers;
+    const headerHosts = normalizeHeaderArgs(
+      args["header-host"] as string | string[] | undefined
+    )
+      .flatMap((v) => v.split(","))
+      .map((v) => v.trim().toLowerCase())
+      .filter((v) => v.length > 0);
 
     // Parse --rule-include/--rule-exclude early so an unknown category fails
     // before crawling (same widening as --fail-on/--header). #1066
@@ -1781,6 +1792,7 @@ export const audit = defineCommand({
         ...(Object.keys(customHeaders).length > 0
           ? { headers: customHeaders }
           : {}),
+        ...(headerHosts.length > 0 ? { headerHosts } : {}),
         ...(ruleFilter.enable.length > 0
           ? { ruleInclude: ruleFilter.enable }
           : {}),

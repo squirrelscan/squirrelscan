@@ -26,6 +26,7 @@ import {
 
 import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 
+import { headersWithheldFrom } from "./lib/header-scope";
 import { checkResourceSizes, type ResourceCheckerOptions } from "./resource-checker";
 import { fetchScriptContents } from "./script-fetcher";
 
@@ -150,6 +151,17 @@ export function fetchWebAppManifests(
         : [];
     const checkByUrl = new Map(iconChecks.map((check) => [check.url, check]));
 
+    // A 401/403 from a host the custom headers were withheld from (#732).
+    const withheld = (
+      url: string,
+      status: number | null | undefined,
+      finalUrl?: string | null,
+    ): boolean =>
+      (status === 401 || status === 403) &&
+      (headersWithheldFrom(url, options.customHeaders, options.headerScope) ||
+        (finalUrl != null &&
+          headersWithheldFrom(finalUrl, options.customHeaders, options.headerScope)));
+
     const manifests = urls.map((url): WebAppManifestData => {
       const body = bodyByUrl.get(url);
       const pages = occurrences.get(url) ?? new Map<string, WebAppManifestPageThemeColor[]>();
@@ -160,6 +172,7 @@ export function fetchWebAppManifests(
         error: body?.error ?? (body ? null : "not fetched"),
         ...(body?.rateLimited ? { rateLimited: true } : {}),
         ...(body?.wafBlocked ? { wafBlocked: true } : {}),
+        ...(withheld(url, body?.status, body?.finalUrl) ? { headersWithheld: true } : {}),
         contentType: body?.contentType ?? null,
         content: body?.content ?? null,
         sourcePages,
@@ -176,6 +189,7 @@ export function fetchWebAppManifests(
             naturalHeight: check?.naturalHeight ?? null,
             ...(check?.rateLimited ? { rateLimited: true } : {}),
             ...(check?.wafBlocked ? { wafBlocked: true } : {}),
+            ...(withheld(iconUrl, check?.status, check?.redirectTarget) ? { headersWithheld: true } : {}),
           };
         }),
       };
