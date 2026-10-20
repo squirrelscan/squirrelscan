@@ -17,7 +17,9 @@ import { datePeriod } from "@squirrelscan/utils/date-period";
 import { getPathname, normalizeUrl } from "@squirrelscan/utils/url";
 import { stripHtmlForText } from "@squirrelscan/utils";
 
-import { DEFAULT_MAX_BODY_BYTES, fetchUndecoded, readBodyCapped } from "./lib/capped-body-read";
+import { DEFAULT_MAX_BODY_BYTES, readBodyCapped } from "./lib/capped-body-read";
+import { probeFetch } from "./lib/probe-fetch";
+import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 
 import type { CloakingProbeData } from "@squirrelscan/core-contracts";
 
@@ -49,6 +51,8 @@ export interface CloakingProbeOptions {
   googlebotUserAgent: string;
   /** UA used for the baseline fetch (the crawl's own UA). */
   defaultUserAgent: string;
+  /** Egress policy for every hop of a probe fetch (#2831). */
+  egress?: EgressPolicy;
   /** Custom request headers forwarded to every probe fetch (same as the crawl). */
   customHeaders?: Record<string, string>;
   /** Per-fetch timeout. Default 15s. */
@@ -214,21 +218,24 @@ function byteLen(s: string): number {
 
 // ── orchestration ───────────────────────────────────────────────────
 
-function defaultProbeFetch(timeoutMs: number): ProbeFetch {
+function defaultProbeFetch(timeoutMs: number, egress?: EgressPolicy): ProbeFetch {
   return async (url, userAgent, headers) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      // Undecoded on every hop (#2717): readBodyCapped decodes within its cap.
-      const res = await fetchUndecoded(url, {
-        headers: {
-          "User-Agent": userAgent,
-          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          ...headers,
+      // Redirects by hand: custom headers never reach another origin (#2831).
+      const res = await probeFetch(
+        url,
+        {
+          headers: {
+            "User-Agent": userAgent,
+            Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            ...headers,
+          },
+          signal: controller.signal,
         },
-        redirect: "follow",
-        signal: controller.signal,
-      });
+        egress,
+      );
       let body = "";
       try {
         body = await readBodyCapped(res, MAX_BODY_BYTES);
@@ -317,7 +324,7 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise
 export function runCloakingProbe(
   selected: SelectedProbe[],
   opts: CloakingProbeOptions,
-  fetchImpl: ProbeFetch = defaultProbeFetch(opts.timeoutMs ?? 15_000),
+  fetchImpl: ProbeFetch = defaultProbeFetch(opts.timeoutMs ?? 15_000, opts.egress),
 ): Promise<CloakingProbeData[]> {
   const limited = selected.slice(0, Math.max(0, opts.maxPages));
   return mapPool(limited, opts.concurrency ?? 3, (sel) => probeOne(sel, opts, fetchImpl));
@@ -422,7 +429,11 @@ export interface CloakingProbeToggle {
 export async function resolveCloakingProbes(
   cfg: CloakingProbeToggle | undefined,
   site: CloakingProbeSiteInput,
-  runtime: { defaultUserAgent: string; customHeaders?: Record<string, string> },
+  runtime: {
+    defaultUserAgent: string;
+    customHeaders?: Record<string, string>;
+    egress?: EgressPolicy;
+  },
   fetchImpl?: ProbeFetch,
 ): Promise<CloakingProbeData[] | undefined> {
   if (!cfg?.enabled) return undefined;
@@ -436,6 +447,7 @@ export async function resolveCloakingProbes(
         googlebotUserAgent: cfg.googlebot_user_agent,
         defaultUserAgent: runtime.defaultUserAgent,
         customHeaders: runtime.customHeaders,
+        egress: runtime.egress,
       },
       fetchImpl,
     );

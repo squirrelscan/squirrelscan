@@ -2043,6 +2043,7 @@ export function runRulesOnStorage(
         {
           defaultUserAgent: config.crawler?.user_agent || CHROME_USER_AGENT,
           customHeaders: config.crawler?.headers,
+          egress: probeEgress(crawl?.baseUrl ?? "", config),
         },
       ),
     );
@@ -2073,6 +2074,7 @@ export function runRulesOnStorage(
           // confirmation request is UA-equivalent to the crawl (#1177).
           userAgent: crawl?.config?.userAgent || config.crawler?.user_agent || CHROME_USER_AGENT,
           customHeaders: config.crawler?.headers,
+          egress: probeEgress(crawl?.baseUrl ?? "", config),
           // Honor the crawl's per-host politeness delay between same-host confirms.
           perHostDelayMs: config.crawler?.per_host_delay_ms,
         },
@@ -2673,6 +2675,7 @@ function buildStreamingSiteData(
   pageDataMap: ParsedUniverse["pageDataMap"],
   totalPageCount: number,
   fetchedTargets: ParsedUniverse["fetchedTargets"],
+  egressPinnedByTransport?: boolean,
 ): Effect.Effect<
   {
     siteDataForPageRules: SiteData;
@@ -2850,6 +2853,7 @@ function buildStreamingSiteData(
         {
           defaultUserAgent: config.crawler?.user_agent || CHROME_USER_AGENT,
           customHeaders: config.crawler?.headers,
+          egress: probeEgress(crawl?.baseUrl ?? "", config, egressPinnedByTransport),
         },
       ),
     );
@@ -2871,6 +2875,7 @@ function buildStreamingSiteData(
           wallBudgetMs: config.integrity?.soft404_confirm?.budget_ms,
           userAgent: crawl?.config?.userAgent || config.crawler?.user_agent || CHROME_USER_AGENT,
           customHeaders: config.crawler?.headers,
+          egress: probeEgress(crawl?.baseUrl ?? "", config, egressPinnedByTransport),
           perHostDelayMs: config.crawler?.per_host_delay_ms,
         },
       ).catch((): undefined => undefined),
@@ -3229,6 +3234,13 @@ export function runStreamingRules(
      */
     pageSink?: PageResultSink;
     /**
+     * The transport resolves once and connects to the address it validated (the
+     * hosted container's egress proxy), so the soft-404 and cloaking probes do
+     * not pin their own hops (#2831). Same meaning as
+     * `ResourceCheckOverrides.egressPinnedByTransport`.
+     */
+    egressPinnedByTransport?: boolean;
+    /**
      * Keep the O(pages × page bytes) result maps. Default TRUE (today's
      * behaviour, and what the cloud path runs on).
      *
@@ -3281,6 +3293,7 @@ export function runStreamingRules(
         pageDataMap,
         totalPageCount,
         fetchedTargets,
+        opts?.egressPinnedByTransport,
       ),
     );
 
@@ -3644,6 +3657,37 @@ function nofollowActionTargets(page: {
     }
   }
   return out;
+}
+
+/**
+ * The egress policy for the end-of-crawl probes (#2831), the same as the asset
+ * phase's own-site pool (#2764): private networks allowed (a LAN audit),
+ * link-local and metadata addresses refused, the hosts the crawl itself
+ * requests sent as the crawl sends them, every other hop vetted.
+ */
+function probeEgress(
+  baseUrl: string,
+  config: Config,
+  egressPinnedByTransport?: boolean,
+): EgressPolicy {
+  return {
+    allowPrivateNetwork: true,
+    resolve: memoizeResolveHost(resolveHostAddresses),
+    pin: egressPinnedByTransport !== true,
+    trustTarget: (url) => {
+      if (!baseUrl) return false;
+      try {
+        return isInScope(url.href, {
+          baseUrl,
+          include: [],
+          exclude: [],
+          allowedDomains: config.project?.domains ?? [],
+        }).allowed;
+      } catch {
+        return false;
+      }
+    },
+  };
 }
 
 /**

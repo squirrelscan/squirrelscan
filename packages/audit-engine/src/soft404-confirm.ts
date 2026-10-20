@@ -32,7 +32,9 @@ import { applyBrowserHeaders } from "@squirrelscan/crawler";
 import { detectSoft404, parsePage, type Soft404Confirmation } from "@squirrelscan/parser";
 import { detectWafChallengePage } from "@squirrelscan/waf-detect";
 
-import { DEFAULT_MAX_BODY_BYTES, fetchUndecoded, readBodyCapped } from "./lib/capped-body-read";
+import { DEFAULT_MAX_BODY_BYTES, readBodyCapped } from "./lib/capped-body-read";
+import { probeFetch } from "./lib/probe-fetch";
+import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 
 import type { ParsedPage } from "@squirrelscan/rules";
 
@@ -98,6 +100,8 @@ export interface Soft404ConfirmOptions {
    * make a real soft-404 look "intermittent".
    */
   userAgent: string;
+  /** Egress policy for every hop of the confirmation fetch (#2831). */
+  egress?: EgressPolicy;
   /** Custom request headers forwarded to every fetch (same as the crawl). */
   customHeaders?: Record<string, string>;
   /** Per-fetch timeout. Default 15s. */
@@ -141,7 +145,7 @@ function detectionInput(statusCode: number, parsed: ParsedPage) {
   };
 }
 
-function defaultConfirmFetch(timeoutMs: number): ConfirmFetch {
+function defaultConfirmFetch(timeoutMs: number, egress?: EgressPolicy): ConfirmFetch {
   return async (url, userAgent, headers) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -151,12 +155,12 @@ function defaultConfirmFetch(timeoutMs: number): ConfirmFetch {
       // confirmation. Custom headers set first win, matching the crawler.
       const reqHeaders = new Headers(headers);
       applyBrowserHeaders(reqHeaders, userAgent);
-      // Undecoded on every hop (#2717): readBodyCapped decodes within its cap.
-      const res = await fetchUndecoded(url, {
-        headers: reqHeaders,
-        redirect: "follow",
-        signal: controller.signal,
-      });
+      // Redirects by hand: custom headers never reach another origin (#2831).
+      const res = await probeFetch(
+        url,
+        { headers: reqHeaders, signal: controller.signal },
+        egress,
+      );
       let body = "";
       try {
         body = await readBodyCapped(res, MAX_BODY_BYTES);
@@ -236,7 +240,7 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise
 export async function confirmSoft404Candidates(
   pages: Soft404ConfirmPage[],
   opts: Soft404ConfirmOptions,
-  fetchImpl: ConfirmFetch = defaultConfirmFetch(opts.timeoutMs ?? 15_000),
+  fetchImpl: ConfirmFetch = defaultConfirmFetch(opts.timeoutMs ?? 15_000, opts.egress),
 ): Promise<Soft404ConfirmSummary> {
   const summary: Soft404ConfirmSummary = {
     candidates: 0,

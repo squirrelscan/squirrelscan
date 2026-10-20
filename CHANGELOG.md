@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- The soft-404 confirmation and the cloaking probe no longer send your custom headers (`Authorization`, cookies, API keys, Web Bot Auth signatures) to another site when a page redirects there. They follow redirects one hop at a time, drop those headers on a hop to a different origin, and refuse a hop to a link-local or cloud metadata address. Private networks still work for LAN audits.
+
 ## v0.0.120 (2026-10-20)
 
 A small release. A page and its locale variants sharing their own share image are no longer reported as a site template fallback, and squirrelscan's cloud now refuses the free link checks that CLIs older than v0.0.114 still ask for.
