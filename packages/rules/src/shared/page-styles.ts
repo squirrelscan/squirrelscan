@@ -146,7 +146,9 @@ function readIdent(sel: string, i: number): { value: string; end: number } {
       let hex = "";
       while (j < sel.length && hex.length < 6 && HEX.test(sel[j] as string)) hex += sel[j++];
       if (hex) {
-        if (j < sel.length && WS.test(sel[j] as string)) j++;
+        // One whitespace ends the escape; CRLF counts as one.
+        if (sel[j] === "\r" && sel[j + 1] === "\n") j += 2;
+        else if (j < sel.length && WS.test(sel[j] as string)) j++;
         const code = Number.parseInt(hex, 16);
         const bad = code === 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff);
         value += bad ? "\ufffd" : String.fromCodePoint(code);
@@ -223,7 +225,6 @@ export function parseSelector(sel: string): ParsedSelector {
   let compound = emptyCompound();
   let complex = false;
   let pseudoElement = false;
-  let anySubject = false;
   // `:root` in the subject compound: only the document element, `<html>`, matches it.
   let root = false;
   // A type selector (`div` or `*`) may only open a compound.
@@ -249,7 +250,6 @@ export function parseSelector(sel: string): ParsedSelector {
       complex = true;
       compound = emptyCompound();
       pseudoElement = false;
-      anySubject = false;
       root = false;
       typed = false;
       i = j;
@@ -285,9 +285,9 @@ export function parseSelector(sel: string): ParsedSelector {
       const doubled = sel[i + 1] === ":";
       if (doubled) pseudoElement = true;
       const { value, end } = readIdent(sel, i + (doubled ? 2 : 1));
-      // `:is()`, `:where()`, `:not()`, `:has()` and friends: their arguments
-      // can widen the match to anything.
-      if (asciiLower(value) !== "not" && sel[end] === "(") anySubject = true;
+      // `:is()`, `:where()`, `:has()`, `:nth-child()` and friends only narrow
+      // the compound (pub#951): the plain parts beside them still must match,
+      // so the subject stays those parts. With none, it could be any element.
       if (!doubled && asciiLower(value) === "root" && sel[end] !== "(") root = true;
       i = sel[end] === "(" ? skipBlock(sel, end) : end;
       continue;
@@ -315,7 +315,7 @@ export function parseSelector(sel: string): ParsedSelector {
   // block is usually `:root { … }`). A type selector already in the compound
   // stays: `div:root` matches nothing in HTML, and is kept as written.
   if (root && compound.tag === null) compound.tag = "html";
-  if (complex) return { kind: "complex", subject: anySubject ? null : compound };
+  if (complex) return { kind: "complex", subject: compound };
   const specificity =
     (compound.id ? 1 : 0) * 1_000_000 +
     (compound.classes.length + compound.attrs.length) * 1_000 +
