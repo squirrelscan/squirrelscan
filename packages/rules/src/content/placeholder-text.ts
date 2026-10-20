@@ -345,12 +345,30 @@ function findStringifiedObjects(text: string): PlaceholderFinding | undefined {
   };
 }
 
+/**
+ * `NaN` named next to `Infinity` is the IEEE 754 vocabulary of a floating-point
+ * article, never a leak: `Special values: NaN, Infinity` and a bullet list of
+ * `NaN` / `Infinity` / `-Infinity` read as a value at a slot boundary, so the
+ * slot test alone cannot clear them. A missing number prints one bare word, so
+ * an `Infinity` partner on the same or an adjacent line is the corroboration.
+ */
+const FLOAT_PARTNER_AFTER = /^(?:[ \t]*[,;/|][ \t]*|[ \t]+(?:and|or)[ \t]+|[ \t]*\n[ \t]*)[+-]?Infinity\b/;
+const FLOAT_PARTNER_BEFORE = /\b[+-]?Infinity(?:[ \t]*[,;/|][ \t]*|[ \t]+(?:and|or)[ \t]+|[ \t]*\n[ \t]*)$/;
+
+function hasFloatPartner(text: string, start: number, end: number): boolean {
+  return (
+    FLOAT_PARTNER_AFTER.test(text.slice(end, end + 40)) ||
+    FLOAT_PARTNER_BEFORE.test(text.slice(Math.max(0, start - 40), start))
+  );
+}
+
 function findJsArtifacts(text: string): PlaceholderFinding | undefined {
   const hits: string[] = [];
 
   for (const m of text.matchAll(JS_VALUE_RE)) {
     const start = m.index;
     const end = start + m[0].length;
+    if (m[0] === "NaN" && hasFloatPartner(text, start, end)) continue;
     if (PROSE_BEFORE.has(wordBefore(text, start))) continue;
     if (PROSE_AFTER.has(wordAfter(text, end))) continue;
 

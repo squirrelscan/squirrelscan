@@ -159,6 +159,34 @@ describe("findPlaceholders — JavaScript artifacts", () => {
     expect(kinds("If an operand is a quiet NaN, there is no exception.")).toEqual([]);
   });
 
+  test("NaN listed beside Infinity is floating-point prose, not a leak (#944)", () => {
+    expect(kinds("Special values: NaN, Infinity")).toEqual([]);
+    expect(kinds("Special values: Infinity and NaN")).toEqual([]);
+    expect(kinds("Floating-point values\nNaN\nInfinity\n-Infinity")).toEqual([]);
+    expect(kinds("Floating-point values\nInfinity\nNaN")).toEqual([]);
+  });
+
+  test("NaN embedded in a sentence is prose (#944 AC1)", () => {
+    expect(kinds("parseInt returns NaN for invalid input.")).toEqual([]);
+    expect(kinds("returns NaN for invalid input")).toEqual([]);
+    expect(kinds("NaN is not equal to itself")).toEqual([]);
+    expect(kinds("a NaN value")).toEqual([]);
+    expect(kinds("Gotcha: NaN is not equal to itself")).toEqual([]);
+  });
+
+  test("NaN as the displayed value is still caught (#944)", () => {
+    expect(kinds("NaN")).toContain("js-artifact");
+    expect(kinds("Price: $NaN")).toContain("js-artifact");
+    expect(kinds("Total: NaN%")).toContain("js-artifact");
+  });
+
+  test("a bare NaN is still caught, and placeholder text still flags (#944)", () => {
+    expect(kinds("Result: NaN")).toContain("js-artifact");
+    expect(kinds("Rating: NaN, 5 reviews")).toContain("js-artifact");
+    expect(kinds("Lorem ipsum dolor sit amet, consectetur adipiscing elit")).toContain("lorem-ipsum");
+    expect(kinds("Enter your text here")).not.toEqual([]);
+  });
+
   test("a preceding section number is not a label", () => {
     expect(kinds("See 30.3 NaN Boxing in Crafting Interpreters.")).toEqual([]);
   });
