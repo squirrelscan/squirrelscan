@@ -134,6 +134,30 @@ describe("notCheckedRules / notCheckedLines", () => {
     expect(notCheckedRules(report)).toEqual([]);
   });
 
+  test("a rule abandoned for its time budget is shown as not checked, a security rule included (pub#960)", () => {
+    const report = quickReport();
+    const message = "Rule not evaluated: exceeded its 1000 ms time budget and was abandoned";
+    report.ruleResults = {
+      "security/leaked-secrets": rule("security/leaked-secrets", "Leaked Secrets", "error", [
+        { name: "leaked-secrets", status: "pass", message: "ok", pageUrl: "https://example.com/a" },
+        {
+          name: "security/leaked-secrets-error",
+          status: "skipped",
+          message,
+          skipReason: "rule-timed-out",
+          pageUrl: "https://example.com/b",
+          details: { timedOut: true, ruleId: "security/leaked-secrets", budgetMs: 1000, elapsedMs: 1400 },
+        },
+      ]),
+    };
+    expect(notCheckedLines(report)).toEqual([
+      `Not checked: Leaked Secrets. ${message}. A timed-out rule did not check those pages, so no finding there is not a clean result. Run the audit again, or raise [rules] time_budget_ms if the machine was busy.`,
+    ]);
+    // The console and the other formats print it, not only the info row.
+    expect(renderText(report)).toContain("Not checked: Leaked Secrets.");
+    expect(renderMarkdown(report)).toContain("Leaked Secrets");
+  });
+
   test("no em-dash in the copy", () => {
     for (const line of notCheckedLines(quickReport())) expect(line).not.toContain("—");
   });

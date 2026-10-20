@@ -16,6 +16,7 @@ import {
   EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
   LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
   NOT_CHECKED_SKIP_REASONS,
+  RULE_TIMED_OUT_SKIP_REASON,
 } from "@squirrelscan/core-contracts";
 
 import type { ReportRuleResult } from "./types";
@@ -48,6 +49,8 @@ const HINTS: Record<string, string> = {
     "Raise the limit with external_links.max_links, or audit more pages, to check them.",
   [EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON]:
     "Run the audit again to check them.",
+  [RULE_TIMED_OUT_SKIP_REASON]:
+    "A timed-out rule did not check those pages, so no finding there is not a clean result. Run the audit again, or raise [rules] time_budget_ms if the machine was busy.",
 };
 
 const DEFAULT_HINT = "Run a Surface or Full audit to check them.";

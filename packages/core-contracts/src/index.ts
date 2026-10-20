@@ -72,6 +72,7 @@ import type {
 } from "./storage";
 import type { SiteMetadata } from "./site-metadata";
 import type { CompactResolutionSignal, ResolutionSignal } from "./resolution";
+import { RULE_TIMED_OUT_SKIP_REASON } from "./resolution";
 import type { AuditFailureReasonCode } from "./failure-reason";
 import type { RefusedFetch } from "./refused-fetch";
 import type { EntityMap } from "./entity-map";
@@ -194,6 +195,8 @@ export const NOT_CHECKED_SKIP_REASONS: ReadonlySet<string> = new Set([
   LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
   EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
   EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON,
+  // A rule abandoned for its time budget did not check that page (pub#960).
+  RULE_TIMED_OUT_SKIP_REASON,
 ]);
 
 export type RuleScope = "page" | "site";
