@@ -17,13 +17,19 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.120 (2026-10-20)
+
+A small release. A page and its locale variants sharing their own share image are no longer reported as a site template fallback, and squirrelscan's cloud now refuses the free link checks that CLIs older than v0.0.114 still ask for.
+
+Thanks to @deniskern, whose report is behind the `social/asset-divergence` fix below.
+
 ### Pricing
 
-- A `squirrel` CLI from before v0.0.114 no longer gets free cloud link checks. The cloud refuses them and charges nothing, and the CLI checks its links on your machine instead, as it already does for any link the cloud leaves unanswered. Run `squirrel self update` to send them to the cloud again, at 1 credit per distinct link the cloud verifies. See [Credits and pricing](https://docs.squirrelscan.com/cloud/credits).
+- A `squirrel` CLI from before v0.0.114, signed in with `squirrel auth login`, no longer gets free cloud link checks. That was due to end on 2026-11-12 and has ended now. The cloud refuses those checks and charges nothing, and the CLI checks the links on your machine instead, as it already does for any link the cloud leaves unanswered. Run `squirrel self update` to send them to the cloud again, at 1 credit per distinct link the cloud verifies. See [Credits and pricing](https://docs.squirrelscan.com/cloud/credits).
 
 ### Fixed
 
-- `social/asset-divergence` no longer reports an entity page's own `og:image` as a divergent fallback when its hreflang alternates repeat it. Pages that list each other as alternates now count as one voter on the OG image axis; real fallback pockets of unrelated pages are still reported (#937).
+- `social/asset-divergence` no longer reports a page's own `og:image` as a divergent fallback only because its hreflang alternates repeat it. Pages linked as hreflang alternates in both directions (directly or through each other, in any language) now cast one vote per image on the default OG image axis. So a collection page and 15 locale variants sharing an image the rest of the site does not use count as one page's image, which the rule leaves out, instead of a 16-page template fallback. A one-way hreflang link merges nothing, the favicon and theme-color axes still count each page, and a pocket of unrelated pages sharing a stale fallback image is still reported. See [social/asset-divergence](https://docs.squirrelscan.com/rules/social/asset-divergence).
 
 ## v0.0.119 (2026-10-20)
 
