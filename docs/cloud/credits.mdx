@@ -81,7 +81,7 @@ An external link costs a credit only when the cloud verifies it: it works, redir
 
 A signed-in `squirrel audit` sends its external links to the cloud's [dead-link check](/rules/links/dead-links), which answers the ones it can within a time limit, and pays 1 credit for each distinct link the cloud verifies, at most 1 per page of the audit's page limit. A link the cloud answers as unverifiable costs nothing, as above. The CLI checks every link the cloud left unanswered on your machine, and those are free. Its estimate before the audit includes the link reserve. Signed out, or at the quick level, the CLI checks links on your machine and nothing is charged; `--offline` checks no external links at all.
 
-Signed-in CLI link checks were free before v0.0.114. A CLI from before it still gets free cloud link checks until 2026-11-12; from then it checks its links on your machine until you run `squirrel self update`.
+Signed-in CLI link checks were free before v0.0.114. A CLI from before it no longer gets cloud link checks: the cloud refuses them and charges nothing, and the CLI checks its links on your machine until you run `squirrel self update`.
 
 An audit signed in with an org API key (CI) is not registered as a cloud run: it pays no audit base, no page charge and nothing for its links, which it checks on the runner. Pages it renders in the cloud are billed as standalone renders, 2 credits each. See [What an API-key audit costs](/guides/ci#what-an-api-key-audit-costs).
 

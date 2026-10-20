@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Pricing
+
+- A `squirrel` CLI from before v0.0.114 no longer gets free cloud link checks. The cloud refuses them and charges nothing, and the CLI checks its links on your machine instead, as it already does for any link the cloud leaves unanswered. Run `squirrel self update` to send them to the cloud again, at 1 credit per distinct link the cloud verifies. See [Credits and pricing](https://docs.squirrelscan.com/cloud/credits).
+
 ### Fixed
 
 - `social/asset-divergence` no longer reports an entity page's own `og:image` as a divergent fallback when its hreflang alternates repeat it. Pages that list each other as alternates now count as one voter on the OG image axis; real fallback pockets of unrelated pages are still reported (#937).

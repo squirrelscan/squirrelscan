@@ -57,8 +57,8 @@ part of the public contract either. One of them, the dead-link check
 belongs to. A call that names no run is billed to your org instead: 1 credit
 per distinct link it verifies, and nothing for a link it cannot verify (see
 [Credits and pricing](/cloud/credits)). The one exception is a `squirrel` CLI
-from before v0.0.114: its run-less calls are free until 2026-11-12, then
-refused with `426 RUN_REQUIRED`. To check a site's links, run an audit
+from before v0.0.114: its run-less calls are refused with `426 RUN_REQUIRED`
+and never charged. To check a site's links, run an audit
 (`POST /v1/agent-runs`) with external link checks on, or a signed-in
 `squirrel audit`.
 </Note>

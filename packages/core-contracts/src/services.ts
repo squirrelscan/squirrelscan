@@ -86,8 +86,10 @@ export interface DeadLinksRequest {
   /**
    * The signed-in CLI audit's registered run (#801): the batch's link checks
    * are billed to it, 1 credit per distinct external link the cloud answers,
-   * at most one per page of its page cap. A call without one is free and, from
-   * 2026-11-12, refused to a CLI, which then checks its links locally.
+   * at most one per page of its page cap. A call without one is billed to the
+   * caller's org, 1 credit per distinct link it verifies, except from a CLI
+   * before v0.0.114: that one is refused (426), never charged, and the CLI
+   * checks its links locally.
    */
   runId?: string;
 }
