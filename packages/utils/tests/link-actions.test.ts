@@ -268,3 +268,76 @@ describe("adversarial keys and paths stay linear (#778)", () => {
     });
   }
 });
+
+describe("a digit after a sign-out word (#779)", () => {
+  test("a numbered sign-out endpoint is an action", () => {
+    for (const path of [
+      "/LogOut2",
+      "/SignOut1.aspx",
+      "/account/logout2",
+      "/sign-out2",
+      "/log-off3",
+      "/Account/LogOff2.aspx",
+    ]) {
+      expect(looksLikeAnAction(`https://x.test${path}`)).toBe(true);
+    }
+  });
+
+  test("oauth2 is still one word, and pages that only look similar are pages", () => {
+    for (const path of [
+      "/oauth2/docs",
+      "/docs/oauth2/overview",
+      "/oauth2-guide",
+      "/LogOutdoor2",
+      "/SignOffice2",
+      "/out2",
+      "/guides/sign",
+    ]) {
+      expect(looksLikeAnAction(`https://x.test${path}`)).toBe(false);
+    }
+  });
+});
+
+describe("a credential in a matrix parameter (#779)", () => {
+  test("a credential key or a token value is an action", () => {
+    for (const path of [
+      "/file;sig=0123456789abcdef0123", // pragma: allowlist secret
+      "/a.zip;X-Amz-Credential=AKIAIOSFODNN7EXAMPLE", // pragma: allowlist secret
+      "/a.zip;X-Amz-Signature=abc",
+      "/download;token=abc",
+      "/report;api_key=abc",
+      "/file;jsessionid=abc",
+      "/x;auth=eyJhbGciOiJIUzI1.eyJzdWIiOiIxMjM0.SflKxwRJSMeKKF2Q", // pragma: allowlist secret
+      "/file%3Bsig%3D0123456789abcdef0123", // pragma: allowlist secret
+    ]) {
+      expect(looksLikeAnAction(`https://x.test${path}`)).toBe(true);
+    }
+  });
+
+  test("ordinary matrix parameters and equals signs in paths are pages", () => {
+    for (const path of [
+      "/shoes;color=red;size=10",
+      "/maps/@51.5,-0.12,14z",
+      "/a;lang=en",
+      "/a/b=c",
+      "/cars;make=ford;year=2020",
+      "/page;v=2",
+      "/guides/password-policy=examples",
+      "/articles/secret-garden=review",
+    ]) {
+      expect(looksLikeAnAction(`https://x.test${path}`)).toBe(false);
+    }
+  });
+
+  test("a bare token value with no credential key needs a credential word, as in a path", () => {
+    expect(looksLikeAnAction("https://x.test/a;v=0123456789abcdef0123")).toBe(false); // pragma: allowlist secret
+    expect(looksLikeAnAction("https://x.test/reset;v=0123456789abcdef0123")).toBe(true); // pragma: allowlist secret
+  });
+
+  test("a padded token in the path still counts, and a long digit run stays fast", () => {
+    expect(looksLikeAnAction("https://x.test/login/AbCdEfGhIjKlMnOpQr123456==")).toBe(true); // pragma: allowlist secret
+    const started = performance.now();
+    looksLikeAnAction(`https://x.test/a-${"1".repeat(40_000)}x`);
+    expect(performance.now() - started).toBeLessThan(200);
+  });
+});
