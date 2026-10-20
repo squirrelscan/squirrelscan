@@ -48,12 +48,15 @@ const SKIP_TOP_LEVEL = new Set(["scripts"]);
 // Any host will do: links are resolved against the page URL, then only the path and hash are read.
 const ORIGIN = "https://docs.invalid";
 
-function walk(dir: string, top: boolean, out: string[] = []): string[] {
-  for (const name of readdirSync(dir)) {
+/** Lists a directory's entry names. `readdirSync`'s order is the filesystem's, so callers sort. */
+export type ListDir = (dir: string) => string[];
+
+function walk(dir: string, top: boolean, listDir: ListDir, out: string[] = []): string[] {
+  for (const name of listDir(dir)) {
     if (name.startsWith(".") || SKIP_DIRS.has(name)) continue;
     if (top && SKIP_TOP_LEVEL.has(name)) continue;
     const path = join(dir, name);
-    if (statSync(path).isDirectory()) walk(path, false, out);
+    if (statSync(path).isDirectory()) walk(path, false, listDir, out);
     else out.push(path);
   }
   return out;
@@ -346,14 +349,22 @@ export function brokenOptionRows(source: string): number[] {
   return rows;
 }
 
-/** Check the docs under `root`. `requiredAnchors` are `/route#id` strings that must exist. */
+/**
+ * Check the docs under `root`. `requiredAnchors` are `/route#id` strings that
+ * must exist. Problems come back sorted by file, then line (pub#943): the
+ * filesystem lists a directory in its own order, which differs between
+ * machines, so nothing here may depend on it. `listDir` is for tests.
+ */
 export function checkDocs(
   root: string,
-  requiredAnchors: string[] = []
+  requiredAnchors: string[] = [],
+  listDir: ListDir = (dir) => readdirSync(dir)
 ): DocsProblem[] {
-  const files = walk(root, true).map((f) =>
-    relative(root, f).split("\\").join("/")
-  );
+  // Sorted, so the page that wins when two files name one route
+  // (`a.mdx` and `a/index.mdx`) is the same everywhere.
+  const files = walk(root, true, listDir)
+    .map((f) => relative(root, f).split("\\").join("/"))
+    .sort();
   const pages = new Map<string, { file: string; source: string }>();
   for (const file of files) {
     if (file.endsWith(".mdx") || file.endsWith(".md")) {
@@ -429,7 +440,10 @@ export function checkDocs(
       });
     }
   }
-  return problems;
+  // Stable: problems on one line keep the order they were found in.
+  return problems.sort((a, b) =>
+    a.file < b.file ? -1 : a.file > b.file ? 1 : a.line - b.line
+  );
 }
 
 if (import.meta.main) {

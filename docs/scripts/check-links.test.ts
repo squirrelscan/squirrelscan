@@ -4,7 +4,7 @@
 // dir, so no fixture page ends up in the published site.
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -173,9 +173,45 @@ describe("checkDocs", () => {
         "[a](/old/x/y) [b](/blog/hello/amp) [c](/v2/notes) [d](/blog/a/b/amp)\n",
     });
     expect(messages(root)).toEqual([
-      "index.mdx:1: dead link /blog/a/b/amp",
       "guides/scripts/index.mdx:3: dead link /nowhere",
+      "index.mdx:1: dead link /blog/a/b/amp",
     ]);
+  });
+
+  // pub#943: the filesystem lists a directory in its own order (CI runners
+  // differ from a laptop), and this test once failed on that alone.
+  test("reports the same problems in the same order however the filesystem lists them", () => {
+    const root = docs({
+      "zeta.mdx": "[z](/gone-z)\n",
+      "alpha/index.mdx": "[a](/gone-a)\n\n[b](/gone-b)\n",
+      "alpha.mdx": "# Alpha\n",
+      "mid/deep/page.mdx": "[m](/gone-m)\n",
+      "index.mdx": "[i](/gone-i) [j](/alpha#nowhere)\n",
+    });
+    const listed = (order: (names: string[]) => string[]) => (dir: string) => order(readdirSync(dir));
+    let seed = 7;
+    const shuffle = (names: string[]) => {
+      const out = [...names];
+      for (let i = out.length - 1; i > 0; i--) {
+        seed = (seed * 1103515245 + 12345) % 2147483648;
+        const j = seed % (i + 1);
+        [out[i], out[j]] = [out[j] as string, out[i] as string];
+      }
+      return out;
+    };
+    const asListed = (order: (names: string[]) => string[]) =>
+      checkDocs(root, [], listed(order)).map((p) => `${p.file}:${p.line}: ${p.message}`);
+    const expected = [
+      "alpha/index.mdx:1: dead link /gone-a",
+      "alpha/index.mdx:3: dead link /gone-b",
+      "index.mdx:1: dead link /gone-i",
+      "index.mdx:1: dead anchor /alpha#nowhere: /alpha has no #nowhere",
+      "mid/deep/page.mdx:1: dead link /gone-m",
+      "zeta.mdx:1: dead link /gone-z",
+    ];
+    expect(messages(root)).toEqual(expected);
+    expect(asListed((names) => [...names].reverse())).toEqual(expected);
+    for (let round = 0; round < 5; round++) expect(asListed(shuffle)).toEqual(expected);
   });
 
   test("fails on an anchor the target page does not render, cross-page and same-page", () => {
