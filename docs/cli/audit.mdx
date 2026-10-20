@@ -428,13 +428,13 @@ open report.html
 
 ### Progress without a terminal
 
-With no terminal on stdout (a CI job, a pipe, a supervisor), the audit has no spinner. The step after the crawl walks every crawled page before the rules run, and on a big site that takes minutes, so it writes a progress line to stderr every 15 seconds while it runs:
+With no terminal on stdout (a CI job, a pipe, a supervisor), the audit has no spinner. The step after the crawl walks every crawled page before the rules run, and on a big site that takes minutes, so it writes a progress line to stderr about every 15 seconds while it runs. The line is written between batches of pages (a batch is sized by bytes, so on any site one ends every few seconds), which means a single batch that takes longer than 15 seconds shows no line until it ends:
 
 ```text
 Walking pages: 40/104
 ```
 
-It goes to stderr, so `--format json` and piped stdout stay clean, and it stops when the walk ends. A terminal keeps its spinner and prints no extra lines. There is no `--quiet` flag; redirect stderr (`2>/dev/null`) to drop the line.
+It goes to stderr, so `--format json` and piped stdout stay clean, and it stops when the walk ends. A terminal keeps its spinner and prints no extra lines. There is no `--quiet` flag; redirect stderr (`2>/dev/null`) to drop the line. Set `SQUIRREL_WALK_HEARTBEAT_MS` to a number of milliseconds to change the 15 seconds, for a supervisor with a shorter watchdog.
 
 ## Crawl behavior
 

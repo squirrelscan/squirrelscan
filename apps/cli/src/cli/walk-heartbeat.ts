@@ -1,17 +1,28 @@
-// Non-TTY progress for the pre-rules walk (#950).
+// Non-TTY progress for the pre-rules walk (#950, #965).
 //
 // The walk over the crawled pages can run for minutes and, with no terminal,
 // prints nothing: the spinner is TTY-only. A supervisor with a no-output
 // watchdog cannot tell a slow phase from a hang. This writes one line to stderr
 // at a steady interval, so stdout (`-f json`, pipes) stays clean. It is a
 // no-op on a TTY, where the spinner already shows the phase.
+//
+// Driven by the walk, not by a timer (#965): the walk parses and absorbs each
+// batch synchronously, so the event loop gets no turn between batches and a
+// `setInterval` never fires before the walk ends. `update` is called at each
+// batch boundary the walk already has, and prints when the interval has passed
+// since the last line. A walk's batches are bounded by a byte budget, so a
+// boundary comes every few seconds on any site; one longer than the interval
+// shows no line until its batch ends.
 
 import { WALK_HEARTBEAT_INTERVAL_MS } from "@/constants";
 
 export interface WalkHeartbeat {
-  /** The pages walked so far, out of the total. Starts the timer on first call. */
+  /**
+   * The pages walked so far, out of the total. Prints one line when the
+   * interval has passed since the walk started or the last line.
+   */
   update(current: number, total: number): void;
-  /** Stop the timer. Safe to call repeatedly, and before `update`. */
+  /** No more lines. Safe to call repeatedly, and before `update`. */
   stop(): void;
 }
 
@@ -21,9 +32,21 @@ export interface WalkHeartbeatOptions {
   intervalMs?: number;
   /** Defaults to stderr. */
   write?: (line: string) => void;
-  /** Injected so a test can drive the interval without sleeping. */
-  setTimer?: (callback: () => void, ms: number) => unknown;
-  clearTimer?: (handle: unknown) => void;
+  /** Injected so a test can move time without sleeping. */
+  now?: () => number;
+}
+
+/**
+ * The interval: `SQUIRREL_WALK_HEARTBEAT_MS` when it is a positive number (a
+ * hook for tests and for supervisors with a short watchdog), else the default.
+ */
+export function walkHeartbeatIntervalMs(
+  env: Record<string, string | undefined> = process.env
+): number {
+  const override = Number(env.SQUIRREL_WALK_HEARTBEAT_MS);
+  return Number.isFinite(override) && override > 0
+    ? override
+    : WALK_HEARTBEAT_INTERVAL_MS;
 }
 
 export function formatWalkLine(current: number, total: number): string {
@@ -34,40 +57,33 @@ export function createWalkHeartbeat(
   options: WalkHeartbeatOptions
 ): WalkHeartbeat {
   const write = options.write ?? ((line) => process.stderr.write(`${line}\n`));
-  const setTimer =
-    options.setTimer ?? ((callback, ms) => setInterval(callback, ms));
-  const clearTimer =
-    options.clearTimer ??
-    ((handle) => clearInterval(handle as ReturnType<typeof setInterval>));
-  const intervalMs = options.intervalMs ?? WALK_HEARTBEAT_INTERVAL_MS;
+  const now = options.now ?? Date.now;
+  const intervalMs = options.intervalMs ?? walkHeartbeatIntervalMs();
 
-  let handle: unknown;
   let done = false;
-  let current = 0;
-  let total = 0;
-
-  const stop = (): void => {
-    done = true;
-    if (handle !== undefined) clearTimer(handle);
-    handle = undefined;
-  };
+  // Set by the first update, which the audit sends before the walk starts.
+  let lastWriteAt: number | undefined;
 
   return {
-    update(nextCurrent, nextTotal) {
+    update(current, total) {
       if (!options.enabled || done) return;
-      current = nextCurrent;
-      total = nextTotal;
       // The walk finished (or there is nothing to walk): no line for it, the
       // next phase speaks for itself.
-      if (current >= total) return stop();
-      if (handle !== undefined) return;
-      handle = setTimer(
-        () => write(formatWalkLine(current, total)),
-        intervalMs
-      );
-      // A timer must never keep the process alive past the audit.
-      (handle as { unref?: () => void } | undefined)?.unref?.();
+      if (current >= total) {
+        done = true;
+        return;
+      }
+      const at = now();
+      if (lastWriteAt === undefined) {
+        lastWriteAt = at;
+        return;
+      }
+      if (at - lastWriteAt < intervalMs) return;
+      lastWriteAt = at;
+      write(formatWalkLine(current, total));
     },
-    stop,
+    stop() {
+      done = true;
+    },
   };
 }
