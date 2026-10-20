@@ -354,8 +354,9 @@ command picks for you.
 
 An audit killed before it finishes (`kill -9`, a watchdog, an out-of-memory
 kill) leaves its crawl behind as `running`, `paused`, `stopped` or `crawled`.
-Once a newer audit of the project has finished, nothing can resume or analyze the
-older crawl, so `--prune` treats it as abandoned: it retires it, and it takes no
+Once a newer audit of the project has finished and the crawl has had no activity
+(no page fetched) for 30 minutes, nothing can resume or analyze it, so `--prune`
+treats it as abandoned: it retires it, and it takes no
 slot of the `--keep` window. `--dry-run` lists these apart from the finished
 audits, with each crawl's status and age:
 
@@ -366,8 +367,8 @@ acme-docs  2.3 GB  retiring 2 of 5 audits
     2026-10-02  7021c515  crawled, 17d old
 ```
 
-An unfinished crawl newer than the newest finished audit is never retired. It
-may be a live audit, or a crawl waiting for `squirrel analyze`, so it is listed
+An unfinished crawl newer than the newest finished audit, or active in the last
+30 minutes, is never retired. It may be a live audit, or a crawl waiting for `squirrel analyze`, so it is listed
 as skipped with that reason instead.
 
 ### Summary and exit code

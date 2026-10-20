@@ -308,7 +308,8 @@ describe("runProjectPrune", () => {
 /** Add one crawl of the 3-page site, whatever its state. */
 async function addCrawl(
   at: number,
-  status: CrawlMetadata["status"]
+  status: CrawlMetadata["status"],
+  pageAt: number = at
 ): Promise<string> {
   const store = new SQLiteStorage(dbPath);
   await run(store.init());
@@ -323,7 +324,7 @@ async function addCrawl(
   );
   for (const path of ["/a", "/b", "/c"]) {
     const url = `https://e.test${path}`;
-    await run(store.upsertPage(id, page(url, at, `v${at}`)));
+    await run(store.upsertPage(id, page(url, pageAt, `v${at}`)));
     await run(
       store.saveRuleResults(id, url, "seo/title", [
         { name: "title-present", status: "pass", message: "m" },
@@ -408,6 +409,27 @@ describe("abandoned crawls (#941)", () => {
     expect(crawl?.retiredAt).toBeUndefined();
     expect((await run(store.getRuleResultsByPage(live))).size).toBe(3);
     store.close?.();
+  });
+
+  test("an orphan with activity in the last 30 minutes is skipped with its last activity, a 31-minute-idle one is retired", async () => {
+    await project(3);
+    const fresh = await addCrawl(100, "running", Date.now() - 5 * 60_000);
+    const idle = await addCrawl(200, "running", Date.now() - 31 * 60_000);
+
+    const plan = (await planProjectPrune(dbPath, 3))!;
+    expect(plan.skippedLive.map((c) => c.id)).toEqual([fresh]);
+    expect(plan.skippedLive[0]!.lastActivityAt).toBeGreaterThan(
+      Date.now() - 6 * 60_000
+    );
+    expect(plan.abandoned.map((c) => c.id)).toEqual([idle]);
+
+    await runProjectPrune(plan);
+    const store = new SQLiteStorage(dbPath);
+    await run(store.init());
+    const byId = new Map((await run(store.listCrawls())).map((c) => [c.id, c]));
+    expect(byId.get(fresh)?.retiredAt).toBeUndefined();
+    expect(byId.get(idle)?.retiredAt).toBeDefined();
+    await run(store.close());
   });
 
   test("a project with only a live crawl plans as skipped-only, not as work", async () => {

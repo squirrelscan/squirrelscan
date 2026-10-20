@@ -7,7 +7,7 @@
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import type { CrawlMetadata } from "../src/storage/types";
+import type { CrawlMetadata, PageRecord } from "../src/storage/types";
 import { SQLiteStorage } from "../src/storage/sqlite";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -127,5 +127,75 @@ describe("retireCrawls guard", () => {
     expect(
       (await run(s.listCrawls())).every((c) => c.retiredAt === undefined)
     ).toBe(true);
+  });
+});
+
+function pageAt(url: string, fetchedAt: number): PageRecord {
+  const nulls = (keys: string[]) => Object.fromEntries(keys.map((k) => [k, null]));
+  return {
+    url,
+    normalizedUrl: url,
+    finalUrl: url,
+    depth: 0,
+    status: 200,
+    contentType: "text/html",
+    sizeBytes: 10,
+    loadTimeMs: 1,
+    fetchedAt,
+    etag: "e",
+    lastModified: null,
+    contentHash: "e",
+    html: "<html></html>",
+    parsedData: null,
+    headers: nulls([
+      "contentType", "contentEncoding", "cacheControl", "vary", "etag", "server",
+      "lastModified", "link", "serverTiming", "age", "xCache", "cfCacheStatus",
+      "xVercelCache", "altSvc", "acceptRanges",
+    ]),
+    securityHeaders: nulls([
+      "hsts", "csp", "xFrameOptions", "xContentTypeOptions", "referrerPolicy",
+      "permissionsPolicy", "xRobotsTag",
+    ]),
+  } as unknown as PageRecord;
+}
+
+describe("activity guard (#941)", () => {
+  const MIN = 60_000;
+
+  test("an orphan with a page fetched 5 minutes ago is kept and listed as possibly live", async () => {
+    const { s, ids } = await store([
+      [100, "running"],
+      [200, "analyzed"],
+    ]);
+    await run(s.upsertPage(ids[0]!, pageAt("https://e.test/a", Date.now() - 5 * MIN)));
+    expect(await run(s.listAbandonedCrawls())).toEqual([]);
+    const live = await run(s.listPossiblyLiveCrawls());
+    expect(live.map((c) => c.id)).toEqual([ids[0]!]);
+    expect(live[0]!.lastActivityAt).toBeGreaterThan(Date.now() - 6 * MIN);
+    await expect(
+      run(s.retireCrawls([ids[0]!], Date.now(), { allowAbandoned: true }))
+    ).rejects.toThrow(/not finished/);
+  });
+
+  test("an orphan idle for 31 minutes is abandoned and retired", async () => {
+    const { s, ids } = await store([
+      [100, "running"],
+      [200, "analyzed"],
+    ]);
+    await run(s.upsertPage(ids[0]!, pageAt("https://e.test/a", Date.now() - 31 * MIN)));
+    expect((await run(s.listAbandonedCrawls())).map((c) => c.id)).toEqual([ids[0]!]);
+    await run(s.retireCrawls([ids[0]!], Date.now(), { allowAbandoned: true }));
+    expect(
+      (await run(s.listCrawls())).find((c) => c.id === ids[0])?.retiredAt
+    ).toBeDefined();
+  });
+
+  test("a crawl that STARTED 5 minutes ago is not abandoned even with no pages yet", async () => {
+    const now = Date.now();
+    const { s } = await store([
+      [now - 5 * MIN, "running"],
+      [now - 1 * MIN, "analyzed"],
+    ]);
+    expect(await run(s.listAbandonedCrawls())).toEqual([]);
   });
 });

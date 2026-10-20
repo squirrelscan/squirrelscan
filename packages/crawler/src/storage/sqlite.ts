@@ -4377,8 +4377,9 @@ export class SQLiteStorage implements CrawlStorage {
    * its analyze step (watchdog, OOM, deploy, kill -9) leaves its crawl at
    * `running`, `paused`, `stopped` or `crawled` forever (#941).
    *
-   * The predicate is "not finished, not already retired, and STARTED BEFORE the
-   * newest finished crawl of the project". A newer finished audit proves the
+   * The predicate is "not finished, not already retired, STARTED BEFORE the
+   * newest finished crawl of the project, and idle for 30 minutes" (latest page
+   * or frontier timestamp, not its start). A newer finished audit proves the
    * default flow moved on: `--resume` only continues the newest crawl of a base
    * URL, and `analyze` reads the newest, so nothing can reach the older one. A
    * non-finished crawl newer than every finished one may be a live audit or a
@@ -4397,7 +4398,7 @@ export class SQLiteStorage implements CrawlStorage {
         const rows = this.getDb()
           .prepare(
             `SELECT id, status, started_at FROM crawls
-             WHERE ${SQLiteStorage.ABANDONED_SQL}
+             WHERE ${SQLiteStorage.abandonedSql()}
              ORDER BY started_at DESC, rowid DESC`
           )
           .all() as Array<{ id: string; status: string; started_at: number }>;
@@ -4413,11 +4414,16 @@ export class SQLiteStorage implements CrawlStorage {
 
   /**
    * Not-finished, not-retired crawls that are NOT abandoned: newer than the
-   * newest finished audit, so possibly a live audit or a crawl awaiting
-   * `analyze`. Prune lists these as skipped, with their status and age.
+   * newest finished audit, or active in the last 30 minutes, so possibly a live
+   * audit or a crawl awaiting `analyze`. Prune lists these as skipped, with their status and age.
    */
   listPossiblyLiveCrawls(): Effect.Effect<
-    Array<{ id: string; status: string; startedAt: number }>,
+    Array<{
+      id: string;
+      status: string;
+      startedAt: number;
+      lastActivityAt: number;
+    }>,
     StorageError,
     never
   > {
@@ -4425,17 +4431,24 @@ export class SQLiteStorage implements CrawlStorage {
       try: () => {
         const rows = this.getDb()
           .prepare(
-            `SELECT id, status, started_at FROM crawls
+            `SELECT id, status, started_at,
+                    ${SQLiteStorage.LAST_ACTIVITY_SQL} AS last_activity FROM crawls
              WHERE retired_at IS NULL
                AND status NOT IN ('completed', 'analyzed', 'failed')
-               AND NOT (${SQLiteStorage.ABANDONED_SQL})
+               AND NOT (${SQLiteStorage.abandonedSql()})
              ORDER BY started_at DESC, rowid DESC`
           )
-          .all() as Array<{ id: string; status: string; started_at: number }>;
+          .all() as Array<{
+            id: string;
+            status: string;
+            started_at: number;
+            last_activity: number;
+          }>;
         return rows.map((row) => ({
           id: row.id,
           status: row.status,
           startedAt: row.started_at,
+          lastActivityAt: row.last_activity,
         }));
       },
       catch: (e) => StorageError.read(e),
@@ -4625,13 +4638,34 @@ export class SQLiteStorage implements CrawlStorage {
    * inside {@link retireCrawls}' transaction so the two cannot drift. Scoped to
    * `crawls` rows (unaliased).
    */
-  private static readonly ABANDONED_SQL = `
+  private static abandonedSql(now: number = Date.now()): string {
+    const cutoff = Math.floor(now - SQLiteStorage.ABANDONED_IDLE_MS);
+    return `
     retired_at IS NULL
     AND status NOT IN ('completed', 'analyzed')
     AND started_at < COALESCE(
       (SELECT MAX(f.started_at) FROM crawls f
        WHERE f.status IN ('completed', 'analyzed')),
-      0)`;
+      0)
+    AND ${SQLiteStorage.LAST_ACTIVITY_SQL} < ${cutoff}`;
+  }
+
+  /**
+   * A crawl must also have been idle this long before it counts as abandoned
+   * (#941): a newer audit finishing first does not make an overlapping audit's
+   * still-running crawl abandoned.
+   */
+  static readonly ABANDONED_IDLE_MS = 30 * 60 * 1000;
+
+  /**
+   * The latest sign of life of a crawl: its start, its newest page and its
+   * newest processed frontier entry. Correlated on the outer `crawls` row.
+   */
+  private static readonly LAST_ACTIVITY_SQL = `MAX(
+      started_at,
+      COALESCE((SELECT MAX(p.fetched_at) FROM pages p WHERE p.crawl_id = crawls.id), 0),
+      COALESCE((SELECT MAX(fr.fetched_at) FROM frontier fr WHERE fr.crawl_id = crawls.id), 0)
+    )`;
 
   /**
    * Retire the derived output of the named crawls (#1912).
@@ -4667,7 +4701,7 @@ export class SQLiteStorage implements CrawlStorage {
             .prepare(
               `SELECT id FROM crawls WHERE id IN (${idList}) AND status NOT IN ('completed', 'analyzed', 'failed')${
                 options.allowAbandoned
-                  ? ` AND NOT (${SQLiteStorage.ABANDONED_SQL})`
+                  ? ` AND NOT (${SQLiteStorage.abandonedSql()})`
                   : ""
               }`
             )

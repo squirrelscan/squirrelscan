@@ -336,6 +336,29 @@ describe("retainRecentAudits", () => {
     store.close?.();
   });
 
+  test("an unfinished crawl older than a finished audit but active 5 minutes ago is kept (#941)", async () => {
+    const store = await open();
+    const overlapping = await audit(store, 0, "running", null);
+    // A live overlapping audit just fetched a page.
+    await run(
+      store.upsertPage(
+        overlapping,
+        page("https://e.test/live", Date.now() - 5 * 60_000, "live")
+      )
+    );
+    const current = await audit(store, 1);
+
+    expect(
+      await retainRecentAudits(store, { keep: 3, currentCrawlId: current })
+    ).toBeNull();
+    const crawl = (await run(store.listCrawls())).find(
+      (c) => c.id === overlapping
+    );
+    expect(crawl?.retiredAt).toBeUndefined();
+    expect((await run(store.getRuleResultsByPage(overlapping))).size).toBe(3);
+    store.close?.();
+  });
+
   test("a crawl resumed after the listing is refused inside the retiring transaction (#941)", async () => {
     const store = await open();
     const stale = await audit(store, 0, "running", null);
