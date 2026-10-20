@@ -310,6 +310,8 @@ Operators: `<`, `<=`, `>`, `>=`, `=`; all five work on the numeric metrics
 the **exact** rank (e.g. `severity=warning` trips on warnings but not errors);
 use `>=` for "at least" (e.g. `severity>=warning` trips on warnings *or* errors).
 
+A security rule that ran past its [time budget](/rules#rule-time-budget) did not check some pages, so an empty result there is not a clean one. It stays out of the score, and the gate counts each such rule as one warning-severity finding: `warnings>0` and `severity>=warning` trip on it, `errors` and `score` do not. The summary says which rule timed out and on how many pages. Other rules that time out are not counted.
+
 The gate summary is written to stderr, so machine formats like `--format json`
 keep a clean stdout for piping. A malformed expression fails fast (exit `1`)
 before any crawl runs.

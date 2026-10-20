@@ -151,8 +151,31 @@ describe("notCheckedRules / notCheckedLines", () => {
       ]),
     };
     expect(notCheckedLines(report)).toEqual([
-      `Not checked: Leaked Secrets. ${message}. A timed-out rule did not check those pages, so no finding there is not a clean result. Run the audit again, or raise [rules] time_budget_ms if the machine was busy.`,
+      `Not checked: Leaked Secrets. Leaked Secrets timed out on 1 page (exceeded its 1000 ms time budget). A timed-out rule did not check those pages, so no finding there is not a clean result. Run the audit again, or raise [rules] time_budget_ms if the machine was busy.`,
     ]);
+    // The rule and the page count come from the `-timeouts` row when it is there.
+    report.ruleResults["security/leaked-secrets"]!.checks.push({
+      name: "security/leaked-secrets-timeouts",
+      status: "info",
+      message: "2 pages not checked",
+      details: { timedOut: true, budgetMs: 1000, pagesNotChecked: 2 },
+    });
+    expect(notCheckedLines(report)[0]).toContain("Leaked Secrets timed out on 2 pages (exceeded its 1000 ms time budget).");
+    // Without the summary row (a published report may cut it) the folded skip's
+    // own counts still say how many pages.
+    const cut = quickReport();
+    cut.ruleResults = {
+      "security/leaked-secrets": rule("security/leaked-secrets", "Leaked Secrets", "error", [
+        {
+          name: "security/leaked-secrets-error",
+          status: "skipped",
+          message,
+          skipReason: "rule-timed-out",
+          details: { timedOut: true, budgetMs: 1000, occurrences: 20, pagesTruncated: 20 },
+        },
+      ]),
+    };
+    expect(notCheckedLines(cut)[0]).toContain("Leaked Secrets timed out on 20 pages");
     // The console and the other formats print it, not only the info row.
     expect(renderText(report)).toContain("Not checked: Leaked Secrets.");
     expect(renderMarkdown(report)).toContain("Leaked Secrets");

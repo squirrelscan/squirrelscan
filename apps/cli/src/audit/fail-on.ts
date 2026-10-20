@@ -4,6 +4,8 @@
 // exits 2 when ANY threshold trips (distinct from 1 = operational error,
 // 0 = passed). Grammar is intentionally tiny: `<metric><op><value>`.
 
+import { timedOutRules, type TimedOutRule } from "@squirrelscan/report";
+
 import type { AuditReport } from "@/types";
 
 import { RULE_CATEGORY_VALUES } from "@/rules/categories";
@@ -204,7 +206,19 @@ export function evaluateFailOn(
   // `failed`/`warnings` are non-optional on AuditReport, so they're the final
   // fallback when the optional healthScore is absent (no extra `?? 0` needed).
   const errorCount = report.healthScore?.errorCount ?? report.failed;
-  const warningCount = report.healthScore?.warningCount ?? report.warnings;
+  // A security rule abandoned for its time budget did not check those pages, so
+  // an empty result there is not a clean one (pub#970). It is a skipped check, so
+  // the score and the tallies stay as they were (a slow host must not lower the
+  // score), and the gate counts it here instead: one warning-severity finding per
+  // such rule. `errors` and `score` are unaffected.
+  const timedOutSecurity = timedOutSecurityRules(report);
+  const warningCount =
+    (report.healthScore?.warningCount ?? report.warnings) +
+    timedOutSecurity.length;
+  const timedOutNote =
+    timedOutSecurity.length > 0
+      ? ` (incl. ${timedOutSecurity.length} timed-out security rule${timedOutSecurity.length === 1 ? "" : "s"})`
+      : "";
   // Findings present at a given severity rank. Info (rank 1) is never counted —
   // it isn't tracked in the report tallies — so severity gating only sees 3/2.
   const countAtRank = (rank: number): number =>
@@ -260,7 +274,7 @@ export function evaluateFailOn(
         if (compare(warningCount, c.op, c.value)) {
           trips.push({
             condition: c,
-            actual: `${warningCount} warning-severity findings`,
+            actual: `${warningCount} warning-severity findings${timedOutNote}`,
           });
         }
         break;
@@ -279,7 +293,7 @@ export function evaluateFailOn(
         if (tripped) {
           trips.push({
             condition: c,
-            actual: `${errorCount} error / ${warningCount} warning findings`,
+            actual: `${errorCount} error / ${warningCount} warning findings${timedOutNote}`,
           });
         }
         break;
@@ -287,7 +301,25 @@ export function evaluateFailOn(
     }
   }
 
+  if (
+    timedOutSecurity.length > 0 &&
+    conditions.some((c) => c.metric === "warnings" || c.metric === "severity")
+  ) {
+    for (const rule of timedOutSecurity) {
+      notes.push(
+        `${rule.ruleId} timed out on ${rule.pages} page${rule.pages === 1 ? "" : "s"} and did not check them: counted as 1 warning for gating, not in the score`
+      );
+    }
+  }
+
   return { total: conditions.length, trips, notes };
+}
+
+/** Security-category rules that timed out in this audit (pub#970). */
+export function timedOutSecurityRules(report: AuditReport): TimedOutRule[] {
+  return timedOutRules({ ruleResults: report.ruleResults ?? {} }).filter(
+    (rule) => rule.category === "security"
+  );
 }
 
 /** Render the gate result as lines for the report output stream. */

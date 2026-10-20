@@ -277,7 +277,14 @@ export class RuleRunner {
   // `runSiteRules` as one `<rule>-timeouts` summary check.
   private readonly timedOutPageRules = new Map<
     string,
-    { details: { pages: number }; name: string; category: string; budgetMs: number; maxElapsedMs?: number }
+    {
+      details: { pages: number };
+      meta: Rule["meta"];
+      name: string;
+      category: string;
+      budgetMs: number;
+      maxElapsedMs?: number;
+    }
   >();
   // Per-run state — captured once at construction, immutable for the
   // lifetime of this runner instance. Each audit gets its own RuleRunner, so
@@ -553,6 +560,7 @@ export class RuleRunner {
         if (!scopeForLog) {
           this.timedOutPageRules.set(rule.meta.id, {
             details,
+            meta: rule.meta,
             name: rule.meta.name,
             category: rule.meta.category,
             budgetMs: e.budgetMs,
@@ -810,7 +818,19 @@ export class RuleRunner {
         // One summary per page rule that timed out in this audit, carrying the
         // final count of pages it did not check. The per-page checks are emitted as
         // each page finishes, so only this one can hold the total.
-        allChecks.push(...this.timeoutSummaryChecks());
+        // And the row also goes into the page rule's own results (pub#971): the
+        // store and the report are built from `ruleResults`, and a row only in
+        // `checks` never reached either. It merges into that rule's per-page results
+        // as one site-scope check.
+        for (const [ruleId, t] of this.timedOutPageRules) {
+          const summary = timeoutSummaryCheck(ruleId, t.name, t.category, t.budgetMs, t.details.pages, t.maxElapsedMs);
+          allChecks.push(summary);
+          const existing = ruleResults.get(ruleId);
+          ruleResults.set(
+            ruleId,
+            existing ? { ...existing, checks: [...existing.checks, summary] } : { meta: t.meta, checks: [summary] }
+          );
+        }
         this.resetAudit();
 
         return { checks: allChecks, ruleResults };
@@ -826,12 +846,6 @@ export class RuleRunner {
    */
   resetAudit(): void {
     this.timedOutPageRules.clear();
-  }
-
-  private timeoutSummaryChecks(): CheckResult[] {
-    return [...this.timedOutPageRules].map(([ruleId, t]) =>
-      timeoutSummaryCheck(ruleId, t.name, t.category, t.budgetMs, t.details.pages, t.maxElapsedMs)
-    );
   }
 }
 

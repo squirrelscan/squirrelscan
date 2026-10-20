@@ -132,6 +132,9 @@ export {
   notCheckedLine,
   notCheckedLines,
   notCheckedRules,
+  timedOutMessage,
+  timedOutRules,
+  type TimedOutRule,
   type NotCheckedReportShape,
   type NotCheckedRule,
 } from "./not-checked";
