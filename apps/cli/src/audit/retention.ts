@@ -122,8 +122,9 @@ export async function retainRecentAudits(
   // Crawls from audits that were killed before they finished (#941). They hold
   // the bulk rows (`sitemap_urls`, `frontier`, `rule_results`) forever, take no
   // slot of the window, and are retired whatever `keep` says: only those older
-  // than the newest finished audit qualify, so a live or resumable crawl never
-  // does. `retireCrawls` re-checks that inside its own transaction.
+  // than the newest finished audit and idle for 30 minutes (7 days for the
+  // `stopped`/`paused` ones `--resume` continues) qualify, so a live or
+  // resumable crawl never does. `retireCrawls` re-checks that inside its own transaction.
   const abandoned = (await Effect.runPromise(storage.listAbandonedCrawls()))
     .map((crawl) => crawl.id)
     .filter((id) => id !== options.currentCrawlId);
@@ -147,12 +148,16 @@ export async function retainRecentAudits(
   // fail on a locked or full disk. Reporting that as "nothing was retired"
   // would be the one lie this code must not tell, so the outcome is built
   // BEFORE the reclaim and the reclaim's failure is attached to it.
-  await Effect.runPromise(
-    storage.retireCrawls(retiring, Date.now(), { allowAbandoned: true })
+  const retiredNow = await Effect.runPromise(
+    storage.retireCrawlsDetailed(retiring, Date.now(), { allowAbandoned: true })
   );
+  // A crawl that stopped qualifying since it was listed (resumed, fresh
+  // activity) is skipped by the transaction; the rest of the pass still went.
+  const retiredCount = retiredNow.retired.length;
+  if (retiredCount === 0) return null;
 
   const outcome: RetentionOutcome = {
-    retired: retiring.length,
+    retired: retiredCount,
     freedBytes: 0,
     vacuumed: false,
     firstRetirement,
@@ -194,7 +199,7 @@ export async function retainRecentAudits(
     // retention was just switched on over a backlog, or the window was lowered.
     // That is when the space is worth handing back to the filesystem.
     const vacuumed =
-      retiring.length > 1 &&
+      retiredCount > 1 &&
       (freeBytes > VACUUM_MIN_BYTES ||
         freeBytes > fileBytes * VACUUM_MIN_SHARE);
 

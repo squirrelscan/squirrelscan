@@ -458,25 +458,42 @@ describe("abandoned crawls (#941)", () => {
     store.close?.();
   });
 
-  test("a crawl resumed between plan and run is refused, and the run reports it as a failure", async () => {
-    await project(2);
+  test("a crawl that went live between plan and run is skipped, and the rest of the project still retires", async () => {
+    await project(3);
     const stale = await addCrawl(100, "running");
-    const plan = (await planProjectPrune(dbPath, 5))!;
+    const plan = (await planProjectPrune(dbPath, 1))!;
     expect(plan.abandoned.map((c) => c.id)).toEqual([stale]);
+    expect(plan.retiring).toHaveLength(2);
 
-    // The newest finished audit goes back to running: `stale` is no longer
-    // provably abandoned.
+    // The crawl fetches a page after the plan was made.
     const store = new SQLiteStorage(dbPath);
     await run(store.init());
-    for (const c of await run(store.listCrawls())) {
-      await run(store.updateCrawl(c.id, { status: "running" }));
-    }
-    store.close?.();
+    await run(
+      store.upsertPage(stale, page("https://e.test/live", Date.now(), "live"))
+    );
+    await run(store.close());
 
     const outcomes = await runPrunePlans([{ name: "proj", plan }]);
-    expect(outcomes[0]!.status).toBe("failed");
-    expect(outcomes[0]!.reason).toMatch(/not finished/);
-    expect(pruneExitCode(outcomes)).toBe(1);
+    expect(outcomes[0]!.status).not.toBe("failed");
+    expect(pruneExitCode(outcomes)).toBe(0);
+
+    const check = new SQLiteStorage(dbPath);
+    await run(check.init());
+    const byId = new Map((await run(check.listCrawls())).map((c) => [c.id, c]));
+    expect(byId.get(stale)?.retiredAt).toBeUndefined();
+    for (const c of plan.retiring)
+      expect(byId.get(c.id)?.retiredAt).toBeDefined();
+    await run(check.close());
+  });
+
+  test("a failed crawl newer than the newest finished audit holds no --keep slot and is skipped", async () => {
+    await project(3);
+    const failed = await addCrawl(5_000, "failed");
+    const plan = (await planProjectPrune(dbPath, 3))!;
+    // All three finished audits stay: the failed crawl takes no slot.
+    expect(plan.retiring).toEqual([]);
+    expect(plan.keeping).toBe(3);
+    expect(plan.skippedLive.map((c) => c.id)).toEqual([failed]);
   });
 });
 

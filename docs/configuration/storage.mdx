@@ -29,10 +29,14 @@ are deleted and its report can no longer be opened.
 Crawls left behind by audits that were killed before they finished (a watchdog,
 an out-of-memory kill, a deploy) are retired too, once a newer audit of the
 project has finished and the crawl has had no activity (no page fetched) for 30
-minutes. They never count toward `keep_audits` and never take a slot from a
-finished audit. A crawl newer than the newest finished audit, or one that is
-still fetching pages, is never touched, because it may be a live audit or a
-crawl waiting for `squirrel analyze`.
+minutes. `stopped` and `paused` crawls are what `squirrel audit --resume`
+continues, and Ctrl-C leaves one, so they wait 7 days idle instead. A `failed`
+crawl follows the same rule as the rest: retired once a newer audit has finished
+and it is idle, otherwise left alone, and it never takes a slot of the window.
+Abandoned crawls never count toward `keep_audits` and never take a slot from a
+finished audit. A crawl newer than the newest finished audit, or one still
+fetching pages, is never touched, because it may be a live audit or a crawl
+waiting for `squirrel analyze`.
 
 Every audit writes a fresh set of rows, so without a window a project grows by
 about one audit each time you run it. On a 1,000-page site that is roughly 95 MB

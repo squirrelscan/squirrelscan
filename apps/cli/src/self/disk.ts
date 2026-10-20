@@ -457,14 +457,17 @@ export async function runProjectPrune(plan: ProjectPrunePlan): Promise<{
     await Effect.runPromise(storage.init());
     // `allowAbandoned` lets the unfinished ones through, and only those that
     // still satisfy the abandoned predicate inside the retiring transaction: a
-    // crawl resumed since the plan was made is refused, not gutted.
-    rows = await Effect.runPromise(
-      storage.retireCrawls(
-        [...plan.retiring, ...plan.abandoned].map((c) => c.id),
-        Date.now(),
-        { allowAbandoned: true }
+    // crawl resumed since the plan was made is skipped, not gutted, and the
+    // rest of the project is still retired.
+    rows = (
+      await Effect.runPromise(
+        storage.retireCrawlsDetailed(
+          [...plan.retiring, ...plan.abandoned].map((c) => c.id),
+          Date.now(),
+          { allowAbandoned: true }
+        )
       )
-    );
+    ).deleted;
     // VACUUM writes a full copy next to the file before swapping it in.
     vacuumSkipped = lowDiskReason(plan.path);
     if (vacuumSkipped === undefined) await Effect.runPromise(storage.vacuum());

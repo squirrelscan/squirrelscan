@@ -105,28 +105,111 @@ describe("retireCrawls guard", () => {
     await expect(run(s.retireCrawls([ids[0]!]))).rejects.toThrow(/not finished/);
   });
 
-  test("refuses the newest running crawl even with allowAbandoned", async () => {
+  test("skips the newest running crawl even with allowAbandoned, retiring nothing", async () => {
     const { s, ids } = await store([
       [100, "analyzed"],
       [200, "running"],
     ]);
-    await expect(
-      run(s.retireCrawls([ids[1]!], Date.now(), { allowAbandoned: true }))
-    ).rejects.toThrow(/not finished/);
-  });
-
-  test("a refused batch retires nothing, not even its abandoned members", async () => {
-    const { s, ids } = await store([
-      [100, "running"],
-      [200, "analyzed"],
-      [300, "running"],
-    ]);
-    await expect(
-      run(s.retireCrawls([ids[0]!, ids[2]!], Date.now(), { allowAbandoned: true }))
-    ).rejects.toThrow(/not finished/);
+    const result = await run(
+      s.retireCrawlsDetailed([ids[1]!], Date.now(), { allowAbandoned: true })
+    );
+    expect(result).toEqual({ deleted: 0, retired: [], skipped: [ids[1]!] });
     expect(
       (await run(s.listCrawls())).every((c) => c.retiredAt === undefined)
     ).toBe(true);
+  });
+
+  test("one crawl that stopped qualifying skips ALONE: the rest of the batch still retires", async () => {
+    const { s, ids } = await store([
+      [100, "running"],
+      [150, "completed"],
+      [200, "analyzed"],
+      [300, "running"],
+    ]);
+    // ids[0] is abandoned; ids[1] is finished; ids[3] is newer than every
+    // finished crawl (live). A caller that listed ids[3] earlier, before a
+    // newer finish was undone, must not lose the other two.
+    const result = await run(
+      s.retireCrawlsDetailed([ids[0]!, ids[1]!, ids[3]!], Date.now(), {
+        allowAbandoned: true,
+      })
+    );
+    expect(result.retired.sort()).toEqual([ids[0]!, ids[1]!].sort());
+    expect(result.skipped).toEqual([ids[3]!]);
+    const byId = new Map((await run(s.listCrawls())).map((c) => [c.id, c]));
+    expect(byId.get(ids[0]!)?.retiredAt).toBeDefined();
+    expect(byId.get(ids[1]!)?.retiredAt).toBeDefined();
+    expect(byId.get(ids[3]!)?.retiredAt).toBeUndefined();
+  });
+
+  test("without allowAbandoned an unfinished crawl still throws and retires nothing", async () => {
+    const { s, ids } = await store([
+      [100, "running"],
+      [200, "analyzed"],
+      [250, "completed"],
+    ]);
+    await expect(run(s.retireCrawls([ids[1]!, ids[0]!]))).rejects.toThrow(
+      /not finished/
+    );
+    expect(
+      (await run(s.listCrawls())).every((c) => c.retiredAt === undefined)
+    ).toBe(true);
+  });
+});
+
+describe("stopped and paused (resumable) crawls", () => {
+  const DAY = 24 * 60 * 60_000;
+  for (const status of ["stopped", "paused"] as const) {
+    test(`${status} idle for 31 minutes is NOT abandoned; idle 8 days is`, async () => {
+      const now = Date.now();
+      const { s, ids } = await store([
+        [now - 2 * DAY, status],
+        [now - 1 * DAY, "analyzed"],
+        [now - 40 * DAY, status],
+      ]);
+      // ids[0]: idle 2 days (> 30 minutes, < 7 days): kept and listed as live.
+      // ids[2]: idle 40 days but older than the newest finished: abandoned.
+      expect((await run(s.listAbandonedCrawls())).map((c) => c.id)).toEqual([
+        ids[2]!,
+      ]);
+      expect((await run(s.listPossiblyLiveCrawls())).map((c) => c.id)).toEqual([
+        ids[0]!,
+      ]);
+    });
+  }
+});
+
+describe("failed crawls agree across the three queries", () => {
+  test("a failed crawl newer than the newest finished audit is possibly live, never abandoned, never retired", async () => {
+    const { s, ids } = await store([
+      [100, "analyzed"],
+      [200, "failed"],
+    ]);
+    expect(await run(s.listAbandonedCrawls())).toEqual([]);
+    expect((await run(s.listPossiblyLiveCrawls())).map((c) => c.id)).toEqual([
+      ids[1]!,
+    ]);
+    const result = await run(
+      s.retireCrawlsDetailed([ids[1]!], Date.now(), { allowAbandoned: true })
+    );
+    expect(result.skipped).toEqual([ids[1]!]);
+    await expect(run(s.retireCrawls([ids[1]!]))).rejects.toThrow(
+      /not finished/
+    );
+  });
+
+  test("a failed crawl older than a finished audit, idle, is abandoned and retired", async () => {
+    const { s, ids } = await store([
+      [100, "failed"],
+      [200, "analyzed"],
+    ]);
+    expect((await run(s.listAbandonedCrawls())).map((c) => c.id)).toEqual([
+      ids[0]!,
+    ]);
+    const result = await run(
+      s.retireCrawlsDetailed([ids[0]!], Date.now(), { allowAbandoned: true })
+    );
+    expect(result.retired).toEqual([ids[0]!]);
   });
 });
 
@@ -172,9 +255,10 @@ describe("activity guard (#941)", () => {
     const live = await run(s.listPossiblyLiveCrawls());
     expect(live.map((c) => c.id)).toEqual([ids[0]!]);
     expect(live[0]!.lastActivityAt).toBeGreaterThan(Date.now() - 6 * MIN);
-    await expect(
-      run(s.retireCrawls([ids[0]!], Date.now(), { allowAbandoned: true }))
-    ).rejects.toThrow(/not finished/);
+    const result = await run(
+      s.retireCrawlsDetailed([ids[0]!], Date.now(), { allowAbandoned: true })
+    );
+    expect(result.skipped).toEqual([ids[0]!]);
   });
 
   test("an orphan idle for 31 minutes is abandoned and retired", async () => {
@@ -197,5 +281,21 @@ describe("activity guard (#941)", () => {
       [now - 1 * MIN, "analyzed"],
     ]);
     expect(await run(s.listAbandonedCrawls())).toEqual([]);
+  });
+
+  test("KNOWN LIMIT: an overlapping audit in a long no-write phase is retired once it has been silent 30 minutes", async () => {
+    // Audit A crawled, then spends 40 minutes in the analyze phase writing
+    // nothing to pages or frontier. Audit B started later and finished. With
+    // only timestamps there is no way to tell A from a killed crawl; a
+    // pid/heartbeat lease (#946) closes this.
+    const now = Date.now();
+    const { s, ids } = await store([
+      [now - 90 * MIN, "crawled"],
+      [now - 80 * MIN, "analyzed"],
+    ]);
+    await run(s.upsertPage(ids[0]!, pageAt("https://e.test/a", now - 40 * MIN)));
+    expect((await run(s.listAbandonedCrawls())).map((c) => c.id)).toEqual([
+      ids[0]!,
+    ]);
   });
 });

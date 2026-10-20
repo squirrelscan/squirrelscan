@@ -356,7 +356,9 @@ An audit killed before it finishes (`kill -9`, a watchdog, an out-of-memory
 kill) leaves its crawl behind as `running`, `paused`, `stopped` or `crawled`.
 Once a newer audit of the project has finished and the crawl has had no activity
 (no page fetched) for 30 minutes, nothing can resume or analyze it, so `--prune`
-treats it as abandoned: it retires it, and it takes no
+treats it as abandoned. `stopped` and `paused` crawls, which `--resume` continues
+(Ctrl-C leaves one), wait 7 days idle instead. A `failed` crawl follows the same
+rule as the others and never takes a slot of the `--keep` window: it retires it, and it takes no
 slot of the `--keep` window. `--dry-run` lists these apart from the finished
 audits, with each crawl's status and age:
 
@@ -367,15 +369,16 @@ acme-docs  2.3 GB  retiring 2 of 5 audits
     2026-10-02  7021c515  crawled, 17d old
 ```
 
-An unfinished crawl newer than the newest finished audit, or active in the last
-30 minutes, is never retired. It may be a live audit, or a crawl waiting for `squirrel analyze`, so it is listed
+An unfinished crawl (including a `failed` one) newer than the newest finished
+audit, or still within its idle time, is never retired. It may be a live audit, or a crawl waiting for `squirrel analyze`, so it is listed
 as skipped with that reason instead.
 
 ### Summary and exit code
 
 Each project is handled on its own. A project that cannot be planned or pruned
 (a locked or unreadable database, for example) is reported with its reason and
-the rest still run. When the volume does not have room for the rebuild, the
+the rest still run. A crawl that becomes active between the plan and the write is
+skipped on its own, and the rest of that project is still retired. When the volume does not have room for the rebuild, the
 project's crawls are still retired, the rebuild is skipped and the project is
 reported as skipped. A final line counts the projects pruned, skipped and failed,
 and the bytes reclaimed. The command exits 1 only when at least one project

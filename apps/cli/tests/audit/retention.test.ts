@@ -359,24 +359,32 @@ describe("retainRecentAudits", () => {
     store.close?.();
   });
 
-  test("a crawl resumed after the listing is refused inside the retiring transaction (#941)", async () => {
+  test("a crawl that went live after the listing is skipped alone; the rest of the pass retires (#941)", async () => {
     const store = await open();
     const stale = await audit(store, 0, "running", null);
-    await audit(store, 1);
+    const old = await audit(store, 1);
+    await audit(store, 2);
     const abandoned = await run(store.listAbandonedCrawls());
     expect(abandoned.map((c) => c.id)).toEqual([stale]);
 
-    // A newer finished audit is what made it abandoned; take that away (the
-    // finished audit becomes a live crawl) and the same id must now be refused.
+    // Between the listing and the write the crawl fetches a page: a live
+    // audit. The same batch also holds an ordinary keep_audits retirement.
     await run(
-      store.updateCrawl(
-        (await run(store.listCrawls())).find((c) => c.id !== stale)!.id,
-        { status: "running" }
+      store.upsertPage(
+        stale,
+        page("https://e.test/live", Date.now() - 60_000, "live")
       )
     );
-    await expect(
-      run(store.retireCrawls([stale], Date.now(), { allowAbandoned: true }))
-    ).rejects.toThrow(/not finished/);
+    const result = await run(
+      store.retireCrawlsDetailed([stale, old], Date.now(), {
+        allowAbandoned: true,
+      })
+    );
+    expect(result.retired).toEqual([old]);
+    expect(result.skipped).toEqual([stale]);
+    const byId = new Map((await run(store.listCrawls())).map((c) => [c.id, c]));
+    expect(byId.get(stale)?.retiredAt).toBeUndefined();
+    expect(byId.get(old)?.retiredAt).toBeDefined();
     store.close?.();
   });
 

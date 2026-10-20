@@ -4,10 +4,11 @@
 // left the crawl at `running`, indistinguishable from a `kill -9`. `stopped` is
 // the state `--resume` already continues, and it says the interruption was
 // seen. Runs inside a signal handler, so it is synchronous, best-effort and
-// never throws: a failed write leaves the crawl exactly as it was before.
+// never throws: a failed write leaves the crawl exactly as it was before. The
+// mark is best-effort: the 1 s busy timeout can lose it to a writer holding the
+// lock, so nothing the user sees may claim it was recorded.
 
 import { Database } from "bun:sqlite";
-import { existsSync } from "node:fs";
 
 let ownedCrawlId: () => string | null = () => null;
 
@@ -28,10 +29,10 @@ export function registerOwnedCrawl(getId: () => string | null): void {
 export function stopInterruptedCrawls(dbPath: string): number {
   const id = ownedCrawlId();
   if (!id) return 0;
-  if (!existsSync(dbPath)) return 0;
   let db: Database | undefined;
   try {
-    db = new Database(dbPath);
+    // Never create a database from a signal handler: a missing file is a no-op.
+    db = new Database(dbPath, { readwrite: true, create: false });
     db.exec("PRAGMA busy_timeout = 1000");
     const result = db
       .prepare(

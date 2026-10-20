@@ -50,7 +50,11 @@ import type {
   TemplateCluster,
 } from "./types";
 
-import { StorageError } from "./types";
+import {
+  ABANDONED_IDLE_MS,
+  ABANDONED_RESUMABLE_IDLE_MS,
+  StorageError,
+} from "./types";
 
 /** Injectable content store for HTML deduplication + compression.
  *  CLI provides the global content store; cloud runner passes nothing (HTML stored inline). */
@@ -4378,15 +4382,19 @@ export class SQLiteStorage implements CrawlStorage {
    * `running`, `paused`, `stopped` or `crawled` forever (#941).
    *
    * The predicate is "not finished, not already retired, STARTED BEFORE the
-   * newest finished crawl of the project, and idle for 30 minutes" (latest page
-   * or frontier timestamp, not its start). A newer finished audit proves the
+   * newest finished crawl of the project, and idle for 30 minutes" (7 days for
+   * `stopped` and `paused`; latest page or frontier timestamp, not its start). A newer finished audit proves the
    * default flow moved on: `--resume` only continues the newest crawl of a base
    * URL, and `analyze` reads the newest, so nothing can reach the older one. A
    * non-finished crawl newer than every finished one may be a live audit or a
    * resting `crawled` crawl awaiting `analyze`, and is NOT abandoned.
    *
-   * `failed` is included: it is not a renderable audit and, like the others,
-   * takes no slot of the retention window.
+   * `stopped` and `paused` are what `--resume` continues, so they need 7 days
+   * idle instead of 30 minutes. `failed` is unfinished like the others: abandoned
+   * under the same rule, and when newer than the newest finished audit it is
+   * listed as possibly live rather than holding a retention slot. The listings
+   * and {@link retireCrawlsDetailed} all use the one definition of "finished"
+   * (`completed`, `analyzed`).
    */
   listAbandonedCrawls(): Effect.Effect<
     Array<{ id: string; status: string; startedAt: number }>,
@@ -4434,7 +4442,7 @@ export class SQLiteStorage implements CrawlStorage {
             `SELECT id, status, started_at,
                     ${SQLiteStorage.LAST_ACTIVITY_SQL} AS last_activity FROM crawls
              WHERE retired_at IS NULL
-               AND status NOT IN ('completed', 'analyzed', 'failed')
+               AND status NOT IN ('completed', 'analyzed')
                AND NOT (${SQLiteStorage.abandonedSql()})
              ORDER BY started_at DESC, rowid DESC`
           )
@@ -4639,7 +4647,8 @@ export class SQLiteStorage implements CrawlStorage {
    * `crawls` rows (unaliased).
    */
   private static abandonedSql(now: number = Date.now()): string {
-    const cutoff = Math.floor(now - SQLiteStorage.ABANDONED_IDLE_MS);
+    const idleCutoff = Math.floor(now - ABANDONED_IDLE_MS);
+    const resumableCutoff = Math.floor(now - ABANDONED_RESUMABLE_IDLE_MS);
     return `
     retired_at IS NULL
     AND status NOT IN ('completed', 'analyzed')
@@ -4647,15 +4656,10 @@ export class SQLiteStorage implements CrawlStorage {
       (SELECT MAX(f.started_at) FROM crawls f
        WHERE f.status IN ('completed', 'analyzed')),
       0)
-    AND ${SQLiteStorage.LAST_ACTIVITY_SQL} < ${cutoff}`;
+    AND ${SQLiteStorage.LAST_ACTIVITY_SQL} < (
+      CASE WHEN status IN ('stopped', 'paused')
+        THEN ${resumableCutoff} ELSE ${idleCutoff} END)`;
   }
-
-  /**
-   * A crawl must also have been idle this long before it counts as abandoned
-   * (#941): a newer audit finishing first does not make an overlapping audit's
-   * still-running crawl abandoned.
-   */
-  static readonly ABANDONED_IDLE_MS = 30 * 60 * 1000;
 
   /**
    * The latest sign of life of a crawl: its start, its newest page and its
@@ -4682,55 +4686,90 @@ export class SQLiteStorage implements CrawlStorage {
     retiredAt: number = Date.now(),
     options: { allowAbandoned?: boolean } = {}
   ): Effect.Effect<number, StorageError, never> {
-    // Never a crawl that is still being written. A prune racing a live audit
-    // would delete the frontier out from under it and leave a half-written run.
-    // Checked HERE rather than only in the caller so the guard cannot be
-    // bypassed by a future caller that forgets it.
+    return Effect.map(
+      this.retireCrawlsDetailed(crawlIds, retiredAt, options),
+      (result) => result.deleted
+    );
+  }
 
+  /**
+   * {@link retireCrawls}, reporting which ids were retired and which skipped.
+   *
+   * Never a crawl that is still being written. A prune racing a live audit
+   * would delete the frontier out from under it and leave a half-written run.
+   * Checked HERE rather than only in the caller so the guard cannot be
+   * bypassed by a future caller that forgets it.
+   *
+   * Without `allowAbandoned` an unfinished crawl in the batch throws. With it,
+   * an unfinished crawl is retired only while it still satisfies the abandoned
+   * predicate, re-checked INSIDE the transaction. One that stopped qualifying
+   * between the caller's listing and this write (resumed, newer activity) is
+   * SKIPPED and reported, and the rest of the batch is retired: one live crawl
+   * must not roll back the whole pass.
+   */
+  retireCrawlsDetailed(
+    crawlIds: string[],
+    retiredAt: number = Date.now(),
+    options: { allowAbandoned?: boolean } = {}
+  ): Effect.Effect<
+    { deleted: number; retired: string[]; skipped: string[] },
+    StorageError,
+    never
+  > {
     return Effect.try({
       try: () => {
-        if (crawlIds.length === 0) return 0;
+        if (crawlIds.length === 0)
+          return { deleted: 0, retired: [], skipped: [] };
         const db = this.getDb();
-        const idList = crawlIds.map(() => "?").join(", ");
-        // With `allowAbandoned`, an unfinished crawl is let through only when
-        // it still satisfies the abandoned predicate. Re-checked INSIDE the
-        // transaction below, so a crawl resumed or superseded between the
-        // caller's listing and this write is refused rather than gutted.
-        const refuseUnfinished = (): void => {
-          const active = db
+        const marks = (n: number): string =>
+          Array.from({ length: n }, () => "?").join(", ");
+        let deleted = 0;
+        let retired: string[] = [];
+        let skipped: string[] = [];
+        const run = db.transaction(() => {
+          const unfinished = db
             .prepare(
-              `SELECT id FROM crawls WHERE id IN (${idList}) AND status NOT IN ('completed', 'analyzed', 'failed')${
-                options.allowAbandoned
-                  ? ` AND NOT (${SQLiteStorage.abandonedSql()})`
-                  : ""
-              }`
+              `SELECT id FROM crawls WHERE id IN (${marks(crawlIds.length)}) AND status NOT IN ('completed', 'analyzed')`
             )
             .all(...crawlIds) as Array<{ id: string }>;
-          if (active.length > 0) {
+          if (unfinished.length > 0 && !options.allowAbandoned) {
             throw new Error(
-              `Refusing to retire ${active.length} crawl(s) that are not finished: ${active
+              `Refusing to retire ${unfinished.length} crawl(s) that are not finished: ${unfinished
                 .map((c) => c.id)
                 .join(", ")}`
             );
           }
-        };
-        const placeholders = idList;
-        let deleted = 0;
-        const run = db.transaction(() => {
-          refuseUnfinished();
+          const unfinishedIds = new Set(unfinished.map((c) => c.id));
+          const stillAbandoned = new Set(
+            unfinished.length === 0
+              ? []
+              : (
+                  db
+                    .prepare(
+                      `SELECT id FROM crawls WHERE id IN (${marks(crawlIds.length)}) AND (${SQLiteStorage.abandonedSql()})`
+                    )
+                    .all(...crawlIds) as Array<{ id: string }>
+                ).map((c) => c.id)
+          );
+          retired = crawlIds.filter(
+            (id) => !unfinishedIds.has(id) || stillAbandoned.has(id)
+          );
+          skipped = crawlIds.filter((id) => !retired.includes(id));
+          if (retired.length === 0) return;
+          const placeholders = marks(retired.length);
           for (const table of SQLiteStorage.RETIREABLE_TABLES) {
             const result = db
               .prepare(
                 `DELETE FROM ${table} WHERE crawl_id IN (${placeholders})`
               )
-              .run(...crawlIds);
+              .run(...retired);
             deleted += Number(result.changes ?? 0);
           }
           const pageResult = db
             .prepare(
               `DELETE FROM pages WHERE rowid IN (${this.supersededPagesSql("p.rowid", placeholders)})`
             )
-            .run(...crawlIds);
+            .run(...retired);
           deleted += Number(pageResult.changes ?? 0);
           // Stamp INSIDE the transaction, so a crash can never leave a crawl
           // whose data is gone but which still reads as renderable. That state
@@ -4738,10 +4777,10 @@ export class SQLiteStorage implements CrawlStorage {
           // confident empty report from the pages that survive.
           db.prepare(
             `UPDATE crawls SET retired_at = ? WHERE id IN (${placeholders})`
-          ).run(retiredAt, ...crawlIds);
+          ).run(retiredAt, ...retired);
         });
         run();
-        return deleted;
+        return { deleted, retired, skipped };
       },
       catch: (e) => StorageError.write(e),
     });
