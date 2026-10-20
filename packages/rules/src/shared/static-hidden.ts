@@ -91,6 +91,9 @@ function authorStyle(el: Element): {
   complete: boolean;
   /** The `display` comes from an inline `!important`, which no stylesheet rule outranks. */
   displayInlineImportant: boolean;
+  /** An undecided rule that only shows (`display` other than none, `visibility: visible`) could reach it. */
+  displayMayShow: boolean;
+  visibilityMayShow: boolean;
 } {
   const decls = readDeclarations(getAttrCI(el, "style"));
   const styles = pageStylesFor(el.ownerDocument);
@@ -100,6 +103,8 @@ function authorStyle(el: Element): {
       visibility: "unknown",
       complete: styles?.complete ?? false,
       displayInlineImportant: false,
+      displayMayShow: false,
+      visibilityMayShow: false,
     };
   }
   const inlineImportant = decls.display?.important === true;
@@ -109,6 +114,8 @@ function authorStyle(el: Element): {
       ...(decls.visibility ? { visibility: decls.visibility.value } : {}),
       complete: false,
       displayInlineImportant: inlineImportant,
+      displayMayShow: false,
+      visibilityMayShow: false,
     };
   }
   const settle = <V extends string>(
@@ -119,13 +126,29 @@ function authorStyle(el: Element): {
     if (result.source === "sheet" && result.value === hides && !styles.complete) return "unknown";
     return result.value;
   };
-  const display = cascade(el, styles, "display", decls.display as Declared<DisplayValue> | undefined);
+  const displayReach = { shows: false };
+  const visibilityReach = { shows: false };
+  const display = cascade(
+    el,
+    styles,
+    "display",
+    decls.display as Declared<DisplayValue> | undefined,
+    displayReach,
+  );
   return {
     display: settle(display, "none" as DisplayValue),
     visibility: settle(
-      cascade(el, styles, "visibility", decls.visibility as Declared<VisibilityValue> | undefined),
+      cascade(
+        el,
+        styles,
+        "visibility",
+        decls.visibility as Declared<VisibilityValue> | undefined,
+        visibilityReach,
+      ),
       "hidden" as VisibilityValue,
     ),
+    displayMayShow: displayReach.shows,
+    visibilityMayShow: visibilityReach.shows,
     complete: styles.complete,
     displayInlineImportant:
       inlineImportant && typeof display === "object" && display.source === "inline",
@@ -320,12 +343,21 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
       display = "unknown";
     }
 
+    // A rule that only shows can undo hiding from elsewhere (pub#940): the
+    // `hidden` attribute, a closed dialog, a popover or a decided `display:none`.
+    // `aria-hidden` is not CSS: no display rule undoes it, so it is exempt.
+    if (display === "none" && !ariaHidden && author.displayMayShow) display = "unknown";
+
     // This element's computed visibility: its own value, else its parent's.
     const own = author.visibility;
-    const visibilityHidden =
+    const hiddenBy =
       own === "hidden" || ((own === undefined || own === "inherit") && parent.visibilityHidden);
+    // Likewise a `visibility: visible` rule against hiding it sets or inherits.
+    const visibilityHidden = hiddenBy && !author.visibilityMayShow;
     const visibilityUnknown =
-      own === "unknown" || ((own === undefined || own === "inherit") && parent.visibilityUnknown);
+      own === "unknown" ||
+      ((own === undefined || own === "inherit") && parent.visibilityUnknown) ||
+      (hiddenBy && author.visibilityMayShow);
 
     const treeUnreliable = parent.treeUnreliable || treeMayDiffer(el);
     const foreign = parent.foreign || tagOf(el) === "svg" || tagOf(el) === "math";
@@ -358,7 +390,7 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
     }
 
     let verdict: StaticVisibility;
-    if (display === "none" || own === "hidden") verdict = HIDDEN;
+    if (display === "none" || (own === "hidden" && !author.visibilityMayShow)) verdict = HIDDEN;
     else if (display === "unknown" || parent.displayUnknown) verdict = UNKNOWN;
     else if (visibilityHidden) verdict = HIDDEN;
     else if (visibilityUnknown) verdict = UNKNOWN;

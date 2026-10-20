@@ -24,6 +24,12 @@ import { skipComment, stepBlocks, stripComments } from "./css-tokens";
 export interface Declared<V extends string> {
   value: V;
   important: boolean;
+  /**
+   * A `display` that shows some elements and hides others (`contents` hides an
+   * `<input>`, `<img>` or `<select>`; `inherit` and `unset` copy a parent's
+   * value). Never taken as show-only (pub#940).
+   */
+  mixed?: true;
 }
 
 export type DisplayValue = "none" | "shown";
@@ -57,6 +63,13 @@ interface UncertainRule {
   important: boolean;
   /** An animation that may run on the subject: it loses to any `!important` declaration. */
   animation?: true;
+  /**
+   * Its declaration for this property is plainly written and only shows
+   * (`display` other than `none`, `visibility: visible`). It changes nothing
+   * for an element that is shown anyway, so it matters only where something
+   * else hides the element (pub#940).
+   */
+  shows?: true;
 }
 
 type Prop = "display" | "visibility";
@@ -379,6 +392,9 @@ const SHOWN_DISPLAY = new Set(
   ).split(" "),
 );
 
+/** `display` values that show some elements and hide others, so never show-only (pub#940). */
+const MIXED_DISPLAY = new Set(["contents", "inherit", "unset"]);
+
 /** A declaration's value without a trailing `!important`, and whether it had one. */
 function splitImportant(value: string): { value: string; important: boolean } {
   if (!value.endsWith("important")) return { value, important: false };
@@ -535,7 +551,13 @@ function readHidingDeclaration(
     // `revert-layer` is left out: it falls back to the page's own rules.
     value = "inherit";
   } else return false;
-  if (prop === "display") out.display = { value: value as DisplayValue, important: split.important };
+  if (prop === "display") {
+    out.display = {
+      value: value as DisplayValue,
+      important: split.important,
+      ...(MIXED_DISPLAY.has(v) ? { mixed: true as const } : {}),
+    };
+  }
   else out.visibility = { value: value as VisibilityValue, important: split.important };
   return true;
 }
@@ -708,9 +730,26 @@ export function readPageStyles(doc: Document): PageStyles {
         const subject = s.kind === "simple" ? s.compound : s.subject;
         const key = indexKey(subject);
         const important = (prop: Prop) => decls === "unknown" || decls[prop]?.important === true;
-        if (display) addTo(uncertain.display, key, { subject, important: important("display") });
+        // An animation on the same rule may hide what it shows, so it is not show-only.
+        const shows = (prop: Prop): { shows?: true } => {
+          if (animates || decls === "unknown") return {};
+          const decl = decls[prop];
+          if (!decl || ("mixed" in decl && decl.mixed)) return {};
+          return decl.value === "shown" || decl.value === "visible" ? { shows: true } : {};
+        };
+        if (display) {
+          addTo(uncertain.display, key, {
+            subject,
+            important: important("display"),
+            ...shows("display"),
+          });
+        }
         if (visibility) {
-          addTo(uncertain.visibility, key, { subject, important: important("visibility") });
+          addTo(uncertain.visibility, key, {
+            subject,
+            important: important("visibility"),
+            ...shows("visibility"),
+          });
         }
       }
     }
@@ -871,13 +910,16 @@ export type CascadeResult<V extends string> = { value: V; source: Source } | "un
  * declaration first, then inline over a rule, then specificity, then source
  * order). "unknown" when an uncertain rule or an animation could reach the
  * element, or a decidable rule matches only case-blind; undefined when
- * nothing sets it.
+ * nothing sets it. A rule that could only show the element does not make the
+ * answer "unknown" (pub#940): `reach.shows` says one could reach it, so the
+ * caller can tell whether something else hiding the element still holds.
  */
 export function cascade<P extends "display" | "visibility">(
   el: Element,
   styles: PageStyles,
   prop: P,
   inline: Declared<P extends "display" ? DisplayValue : VisibilityValue> | undefined,
+  reach?: { shows: boolean },
 ): CascadeResult<P extends "display" ? DisplayValue : VisibilityValue> {
   type V = P extends "display" ? DisplayValue : VisibilityValue;
   const view = viewOf(el);
@@ -924,7 +966,12 @@ export function cascade<P extends "display" | "visibility">(
     for (const rule of styles.uncertain[prop].get(key) ?? []) {
       if (--steps.left < 0) return "unknown";
       if (outranked(rule.important, rule.animation === true)) continue;
-      if (couldMatch(rule.subject, view)) return "unknown";
+      if (!couldMatch(rule.subject, view)) continue;
+      if (rule.shows && reach) {
+        reach.shows = true;
+        continue;
+      }
+      return "unknown";
     }
   }
   if (!best) return undefined;

@@ -21,6 +21,10 @@ How it works:
 
 - `squirrel audit` without a terminal now prints `Walking pages: N/M` to stderr about every 15 seconds while it walks the crawled pages before the rules run. That step could go minutes without output on a big site, so a supervisor with a no-output watchdog could not tell it from a hang. A terminal keeps its spinner, and stdout (`--format json`, pipes) is unchanged. See [audit](https://docs.squirrelscan.com/cli/audit#progress-without-a-terminal).
 
+### Fixed
+
+- a11y: a `<style>` rule squirrel cannot fully decide, whose declarations can only show an element (`display: inline-block`, `display: flex`, `visibility: visible`), no longer makes every element it could reach unconfirmed. WordPress core's `.wp-block-image>a` and `.wp-lightbox-container button` rules kept a page's links and buttons unconfirmed. Such a rule now matters only where something else hides the element (the `hidden` attribute, a closed dialog, a popover, a `display: none` or an inherited `visibility: hidden`), and there the control stays unconfirmed (#940).
+
 ## v0.0.121 (2026-10-21)
 
 A release about where your custom request headers go. Asset requests now send them to the audited origin only, with a new `header_hosts` setting for the site's other hosts that need them, and the soft-404 and cloaking probes no longer carry them across a redirect to another site. Also: `squirrel analyze` applies `keep_audits` retention, Tailwind v4's preflight no longer softens accessibility failures, and the link checks leave two more shapes of sign-out and credential link alone.
