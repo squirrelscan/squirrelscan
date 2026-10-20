@@ -161,10 +161,19 @@ function isDirtyConfig(
 }
 
 export interface AuditProgress {
-  phase: "crawling" | "external-links" | "cloud" | "rules" | "complete";
+  phase:
+    | "crawling"
+    | "external-links"
+    | "cloud"
+    | "rules"
+    | "walk"
+    | "complete";
   current?: number;
   total?: number;
-  /** Free-text detail for the cloud phase (service + batch progress). */
+  /**
+   * Free-text detail for the cloud phase (service + batch progress). For `walk`,
+   * `current` is the pages of the pre-rules walk done so far out of `total`.
+   */
   detail?: string;
 }
 
@@ -1496,6 +1505,11 @@ export async function runAudit(
         cloudPrefetchEnabled && externalLinksEnabled;
       const externalLinkUrls = new Set<string>();
 
+      // Per-batch page count of the walk (#950), for a caller with no terminal to
+      // show liveness on.
+      let pagesWalked = 0;
+      onProgress({ phase: "walk", current: 0, total: pageCount });
+
       const preRules = await Effect.runPromise(
         runStreamingPreRules(sqliteStorage, crawlId, mergedConfig, {
           batchSize: streamBatchSize,
@@ -1577,9 +1591,17 @@ export async function runAudit(
                 status: page.status,
               });
             }
+            pagesWalked += batchContext.length;
+            onProgress({
+              phase: "walk",
+              current: pagesWalked,
+              total: pageCount,
+            });
           },
         })
       );
+      // The walk is over whatever the batch counts added up to.
+      onProgress({ phase: "walk", current: pageCount, total: pageCount });
       const assets = preRules.assets;
       const techSample = techSampleCollector.build();
       // v1 opened the external-links phase and then the rules phase separately,

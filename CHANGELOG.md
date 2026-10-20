@@ -27,6 +27,10 @@ How it works:
 - `content/placeholder-text` no longer flags `NaN` in floating-point prose. `NaN` inside a sentence (`returns NaN for invalid input`, `NaN is not equal to itself`) and `NaN` listed beside `Infinity` (`Special values: NaN, Infinity`) are vocabulary, not a leaked value. `NaN` shown as the value itself (a line that is just `NaN`, `Rating: NaN`, `Price: $NaN`, `Total: NaN%`) and real placeholder text such as lorem ipsum still flag. See [content/placeholder-text](https://docs.squirrelscan.com/rules/content/placeholder-text).
 - `squirrel analyze` now applies `[storage] keep_audits` retention, so a project audited through `crawl`, `analyze` and `report` no longer grows without bound. It retires audits beyond the window and abandoned crawls the way `squirrel audit` does, prints the same stderr notice, and skips it for a blocked or failed crawl and for a crawl in another project than the one the directory's `squirrel.toml` names. See [Storage](https://docs.squirrelscan.com/configuration/storage).
 
+### Added
+
+- `squirrel audit` without a terminal now prints `Walking pages: N/M` to stderr every 15 seconds while it walks the crawled pages before the rules run. That step could go minutes without output on a big site, so a supervisor with a no-output watchdog could not tell it from a hang. A terminal keeps its spinner, and stdout (`--format json`, pipes) is unchanged. See [audit](https://docs.squirrelscan.com/cli/audit#progress-without-a-terminal).
+
 ## v0.0.120 (2026-10-20)
 
 A small release. A page and its locale variants sharing their own share image are no longer reported as a site template fallback, and squirrelscan's cloud now refuses the free link checks that CLIs older than v0.0.114 still ask for.

@@ -178,6 +178,7 @@ import {
   shouldShowPublishNudge,
 } from "../publish-nudge";
 import { pickTip, shouldShowTip, tipLabel } from "../tips";
+import { createWalkHeartbeat } from "../walk-heartbeat";
 
 /** Operator-facing labels for cloud services in coverage warnings. */
 const CLOUD_SERVICE_LABELS: Record<string, string> = {
@@ -2259,6 +2260,11 @@ export const audit = defineCommand({
       });
 
       const progress = createProgress("Initializing");
+      // #950: one stderr line at a steady interval through the pre-rules walk
+      // when there is no terminal; the spinner covers a TTY.
+      const walkHeartbeat = createWalkHeartbeat({
+        enabled: process.stdout.isTTY !== true,
+      });
       let currentPhase = "init";
       let discoveredCount = 0;
       let sitemapUrlCount = 0;
@@ -2443,6 +2449,11 @@ export const audit = defineCommand({
                   currentPhase = "rules";
                 }
                 break;
+              case "walk":
+                if (p.current !== undefined && p.total !== undefined) {
+                  walkHeartbeat.update(p.current, p.total);
+                }
+                break;
               case "complete":
                 break;
             }
@@ -2450,6 +2461,7 @@ export const audit = defineCommand({
         });
       } finally {
         // Always clean up progress and log interceptor
+        walkHeartbeat.stop();
         setLogInterceptor(undefined);
         progress.stop();
       }

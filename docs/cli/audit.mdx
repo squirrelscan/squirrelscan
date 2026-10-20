@@ -426,6 +426,16 @@ squirrel audit https://example.com -f html -o report.html
 open report.html
 ```
 
+### Progress without a terminal
+
+With no terminal on stdout (a CI job, a pipe, a supervisor), the audit has no spinner. The step after the crawl walks every crawled page before the rules run, and on a big site that takes minutes, so it writes a progress line to stderr every 15 seconds while it runs:
+
+```text
+Walking pages: 40/104
+```
+
+It goes to stderr, so `--format json` and piped stdout stay clean, and it stops when the walk ends. A terminal keeps its spinner and prints no extra lines. There is no `--quiet` flag; redirect stderr (`2>/dev/null`) to drop the line.
+
 ## Crawl behavior
 
 The audit command manages crawl sessions intelligently:

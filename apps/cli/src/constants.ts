@@ -114,6 +114,9 @@ export const DEFAULT_TERMINAL_COLUMNS = 80;
 export const PROGRESS_DETAIL_PADDING = 5;
 export const PROGRESS_SPINNER_INTERVAL_MS = 80;
 export const MIN_DETAIL_LENGTH = 10;
+// Non-TTY liveness line during the pre-rules walk (#950): steady, and well under
+// the 5 minute no-output watchdogs that supervisors run.
+export const WALK_HEARTBEAT_INTERVAL_MS = 15_000;
 
 // Update notification constants
 export const UPDATE_SNOOZE_HOURS = 24;
