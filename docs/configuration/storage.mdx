@@ -26,6 +26,13 @@ How many audits of this project stay fully renderable. After a successful audit,
 anything older than the newest `keep_audits` is retired: its per-check results
 are deleted and its report can no longer be opened.
 
+Crawls left behind by audits that were killed before they finished (a watchdog,
+an out-of-memory kill, a deploy) are retired too, once a newer audit of the
+project has finished. They never count toward `keep_audits` and never take a
+slot from a finished audit. A crawl newer than the newest finished audit is
+never touched, because it may be a live audit or a crawl waiting for
+`squirrel analyze`.
+
 Every audit writes a fresh set of rows, so without a window a project grows by
 about one audit each time you run it. On a 1,000-page site that is roughly 95 MB
 per audit, forever. Three is the default because it covers

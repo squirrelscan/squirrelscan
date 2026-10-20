@@ -15,7 +15,15 @@ import type { CrawlMetadata, PageRecord } from "@/crawler/storage/types";
 
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
 
-import { planProjectPrune, runProjectPrune } from "../../src/self/disk";
+import {
+  formatAge,
+  lowDiskReason,
+  planProjects,
+  planProjectPrune,
+  pruneExitCode,
+  runPrunePlans,
+  runProjectPrune,
+} from "../../src/self/disk";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
   return Effect.runPromise(eff as Effect.Effect<A, never, never>);
@@ -294,5 +302,242 @@ describe("runProjectPrune", () => {
     // And every audit is still listed.
     expect(crawls).toHaveLength(4);
     store.close?.();
+  });
+});
+
+/** Add one crawl of the 3-page site, whatever its state. */
+async function addCrawl(
+  at: number,
+  status: CrawlMetadata["status"]
+): Promise<string> {
+  const store = new SQLiteStorage(dbPath);
+  await run(store.init());
+  const id = await run(
+    store.createCrawl({
+      baseUrl: "https://e.test",
+      startedAt: at,
+      status,
+      config: {} as CrawlMetadata["config"],
+      stats: STATS,
+    } as Omit<CrawlMetadata, "id">)
+  );
+  for (const path of ["/a", "/b", "/c"]) {
+    const url = `https://e.test${path}`;
+    await run(store.upsertPage(id, page(url, at, `v${at}`)));
+    await run(
+      store.saveRuleResults(id, url, "seo/title", [
+        { name: "title-present", status: "pass", message: "m" },
+      ])
+    );
+  }
+  store.close?.();
+  return id;
+}
+
+describe("abandoned crawls (#941)", () => {
+  test("3 killed + 4 finished crawls retire cleanly and the prune succeeds", async () => {
+    await project(4); // started_at 1000..1003, all completed
+    const killed = [
+      await addCrawl(500, "crawled"),
+      await addCrawl(600, "running"),
+      await addCrawl(700, "stopped"),
+    ];
+
+    const plan = (await planProjectPrune(dbPath, 1))!;
+    // 3 finished audits fall outside --keep 1; the killed ones are listed apart.
+    expect(plan.retiring).toHaveLength(3);
+    expect(plan.abandoned.map((c) => c.id).sort()).toEqual([...killed].sort());
+    expect(plan.abandoned.map((c) => c.status).sort()).toEqual([
+      "crawled",
+      "running",
+      "stopped",
+    ]);
+    expect(plan.skippedLive).toHaveLength(0);
+    // They took no slot: the newest finished audit is the one kept.
+    expect(plan.keeping).toBe(1);
+
+    const [outcome] = await runPrunePlans([{ name: "proj", plan }]);
+    expect(outcome!.status).not.toBe("failed");
+    expect(pruneExitCode([outcome!])).toBe(0);
+
+    const store = new SQLiteStorage(dbPath);
+    await run(store.init());
+    const byId = new Map((await run(store.listCrawls())).map((c) => [c.id, c]));
+    for (const id of killed) expect(byId.get(id)?.retiredAt).toBeDefined();
+    expect(await run(store.listAbandonedCrawls())).toEqual([]);
+    store.close?.();
+  });
+
+  test("a retired abandoned crawl does not hold a window slot on the next prune", async () => {
+    // finished@300, abandoned@200, finished@100, keep 2: pruning twice must
+    // retire nothing inside the window.
+    const store = new SQLiteStorage(dbPath);
+    await run(store.init());
+    await run(store.close());
+    const oldest = await addCrawl(100, "analyzed");
+    await addCrawl(200, "running");
+    await addCrawl(300, "analyzed");
+
+    const first = (await planProjectPrune(dbPath, 2))!;
+    expect(first.retiring).toEqual([]);
+    expect(first.abandoned).toHaveLength(1);
+    await runProjectPrune(first);
+
+    const second = await planProjectPrune(dbPath, 2);
+    expect(second?.retiring ?? []).toEqual([]);
+    const check = new SQLiteStorage(dbPath);
+    await run(check.init());
+    const crawl = (await run(check.listCrawls())).find((c) => c.id === oldest);
+    expect(crawl?.retiredAt).toBeUndefined();
+    await run(check.close());
+  });
+
+  test("a crawl newer than the newest finished audit is skipped with its status, never retired", async () => {
+    await project(3);
+    const live = await addCrawl(5_000, "running");
+
+    const plan = (await planProjectPrune(dbPath, 1))!;
+    expect(plan.skippedLive.map((c) => c.id)).toEqual([live]);
+    expect(plan.skippedLive[0]!.status).toBe("running");
+    expect(plan.abandoned).toEqual([]);
+
+    await runProjectPrune(plan);
+    const store = new SQLiteStorage(dbPath);
+    await run(store.init());
+    const crawl = (await run(store.listCrawls())).find((c) => c.id === live);
+    expect(crawl?.retiredAt).toBeUndefined();
+    expect((await run(store.getRuleResultsByPage(live))).size).toBe(3);
+    store.close?.();
+  });
+
+  test("a project with only a live crawl plans as skipped-only, not as work", async () => {
+    await project(1);
+    await addCrawl(5_000, "crawled");
+    const plan = (await planProjectPrune(dbPath, 3))!;
+    expect(plan.skippedLive).toHaveLength(1);
+    expect(plan.retiring).toHaveLength(0);
+    // Nothing actionable: running the plans touches nothing and reports nothing.
+    expect(
+      await runPrunePlans([{ name: "proj", plan }], async () => {
+        throw new Error("must not run");
+      })
+    ).toEqual([]);
+  });
+
+  test("dry-run planning deletes nothing", async () => {
+    await project(2);
+    const killed = await addCrawl(100, "running");
+    await planProjectPrune(dbPath, 1);
+    const store = new SQLiteStorage(dbPath);
+    await run(store.init());
+    const crawl = (await run(store.listCrawls())).find((c) => c.id === killed);
+    expect(crawl?.retiredAt).toBeUndefined();
+    expect((await run(store.getRuleResultsByPage(killed))).size).toBe(3);
+    store.close?.();
+  });
+
+  test("a crawl resumed between plan and run is refused, and the run reports it as a failure", async () => {
+    await project(2);
+    const stale = await addCrawl(100, "running");
+    const plan = (await planProjectPrune(dbPath, 5))!;
+    expect(plan.abandoned.map((c) => c.id)).toEqual([stale]);
+
+    // The newest finished audit goes back to running: `stale` is no longer
+    // provably abandoned.
+    const store = new SQLiteStorage(dbPath);
+    await run(store.init());
+    for (const c of await run(store.listCrawls())) {
+      await run(store.updateCrawl(c.id, { status: "running" }));
+    }
+    store.close?.();
+
+    const outcomes = await runPrunePlans([{ name: "proj", plan }]);
+    expect(outcomes[0]!.status).toBe("failed");
+    expect(outcomes[0]!.reason).toMatch(/not finished/);
+    expect(pruneExitCode(outcomes)).toBe(1);
+  });
+});
+
+describe("prune across projects (#941)", () => {
+  test("one project that fails to plan or run does not stop the rest", async () => {
+    // Real databases for good projects; a garbage file for the bad one.
+    await project(3);
+    const good1 = dbPath;
+    const bad = join(dir, "bad", "project.db");
+    mkdirSync(join(dir, "bad"), { recursive: true });
+    await Bun.write(bad, "this is not a sqlite database".repeat(100));
+    mkdirSync(join(dir, "zlast"), { recursive: true });
+    dbPath = join(dir, "zlast", "project.db");
+    await project(3);
+    const good2 = dbPath;
+
+    const { plans, failed } = await planProjects(
+      [
+        { name: "a-good", dbPath: good1 },
+        { name: "bad", dbPath: bad },
+        { name: "zlast", dbPath: good2 },
+      ],
+      1
+    );
+    expect(plans.map((p) => p.name)).toEqual(["a-good", "zlast"]);
+    expect(failed.map((f) => f.name)).toEqual(["bad"]);
+    expect(failed[0]!.reason).toMatch(/could not plan/);
+
+    // A run failure in the first project still lets the second one run.
+    let calls = 0;
+    const outcomes = await runPrunePlans(plans, async (plan) => {
+      calls++;
+      if (calls === 1) throw new Error("database is locked");
+      return runProjectPrune(plan);
+    });
+    expect(outcomes.map((o) => [o.name, o.status])).toEqual([
+      ["a-good", "failed"],
+      ["zlast", "ok"],
+    ]);
+    expect(outcomes[0]!.reason).toBe("database is locked");
+    expect(pruneExitCode([...outcomes, ...failed])).toBe(1);
+  });
+
+  test("exit code: 0 for ok and skipped, 1 only when a project failed", () => {
+    const o = (status: "ok" | "skipped" | "failed") => ({
+      name: "p",
+      status,
+      bytesBefore: 0,
+      bytesAfter: 0,
+    });
+    expect(pruneExitCode([])).toBe(0);
+    expect(pruneExitCode([o("ok"), o("skipped")])).toBe(0);
+    expect(pruneExitCode([o("ok"), o("failed")])).toBe(1);
+  });
+
+  test("a run that skips the rebuild for low disk still retires and is a skip", async () => {
+    await project(3);
+    const plan = (await planProjectPrune(dbPath, 1))!;
+    const outcomes = await runPrunePlans(
+      [{ name: "proj", plan }],
+      async (p) => ({
+        rows: p.rows,
+        bytesBefore: p.bytesBefore,
+        bytesAfter: p.bytesBefore,
+        vacuumSkipped: "not enough free disk to rebuild",
+      })
+    );
+    expect(outcomes[0]!.status).toBe("skipped");
+    expect(pruneExitCode(outcomes)).toBe(0);
+  });
+
+  test("lowDiskReason compares free space with the file plus a margin", async () => {
+    await project(1);
+    expect(lowDiskReason(dbPath, 0)).toMatch(/not enough free disk/);
+    expect(lowDiskReason(dbPath, 10 * 1024 * 1024 * 1024)).toBeUndefined();
+    // Free space that cannot be read does not block the rebuild.
+    expect(lowDiskReason(dbPath, undefined)).toBeUndefined();
+  });
+
+  test("formatAge is coarse", () => {
+    const now = 10 * 24 * 3_600_000;
+    expect(formatAge(now - 5 * 60_000, now)).toBe("5m");
+    expect(formatAge(now - 5 * 3_600_000, now)).toBe("5h");
+    expect(formatAge(now - 3 * 24 * 3_600_000, now)).toBe("3d");
   });
 });

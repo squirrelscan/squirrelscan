@@ -7,7 +7,8 @@
 //
 // This runs at the END of a successful audit, once the report has been built,
 // and it retires the audits that fall outside `[storage] keep_audits`. It never
-// touches the crawl that just ran, a crawl still being written, or a failed one.
+// touches the crawl that just ran or a crawl that may still be live. Crawls an
+// earlier audit left unfinished, once a newer audit has finished, are retired too.
 // A failure here is swallowed by the caller: a retention pass must never be the
 // reason an audit that otherwise worked reports an error.
 //
@@ -117,7 +118,16 @@ export async function retainRecentAudits(
   if (!Number.isFinite(options.keep) || options.keep <= 0) return null;
 
   const candidates = await Effect.runPromise(storage.listRetentionCandidates());
-  const retiring = selectCrawlsToRetire(candidates, options);
+  const windowed = selectCrawlsToRetire(candidates, options);
+  // Crawls from audits that were killed before they finished (#941). They hold
+  // the bulk rows (`sitemap_urls`, `frontier`, `rule_results`) forever, take no
+  // slot of the window, and are retired whatever `keep` says: only those older
+  // than the newest finished audit qualify, so a live or resumable crawl never
+  // does. `retireCrawls` re-checks that inside its own transaction.
+  const abandoned = (await Effect.runPromise(storage.listAbandonedCrawls()))
+    .map((crawl) => crawl.id)
+    .filter((id) => id !== options.currentCrawlId);
+  const retiring = [...windowed, ...abandoned];
   if (retiring.length === 0) return null;
 
   // "The first time an audit retires anything" for THIS project, read off the
@@ -137,7 +147,9 @@ export async function retainRecentAudits(
   // fail on a locked or full disk. Reporting that as "nothing was retired"
   // would be the one lie this code must not tell, so the outcome is built
   // BEFORE the reclaim and the reclaim's failure is attached to it.
-  await Effect.runPromise(storage.retireCrawls(retiring));
+  await Effect.runPromise(
+    storage.retireCrawls(retiring, Date.now(), { allowAbandoned: true })
+  );
 
   const outcome: RetentionOutcome = {
     retired: retiring.length,

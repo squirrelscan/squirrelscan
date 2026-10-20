@@ -12,8 +12,14 @@
 // part of it that deletes.
 
 import { Database } from "bun:sqlite";
-import { existsSync, readdirSync, statSync, type Dirent } from "node:fs";
-import { isAbsolute, join, relative } from "node:path";
+import {
+  existsSync,
+  readdirSync,
+  statfsSync,
+  statSync,
+  type Dirent,
+} from "node:fs";
+import { dirname, isAbsolute, join, relative } from "node:path";
 
 import { type Result, ok } from "@/controllers/types";
 
@@ -285,12 +291,31 @@ export function formatBytes(bytes: number): string {
  */
 const RECLAIM_FLOOR_BYTES = 1024 * 1024;
 
+/** An unfinished crawl, as prune lists it. */
+export interface CrawlRef {
+  readonly id: string;
+  readonly status: string;
+  readonly startedAt: number;
+}
+
 /** What retiring would remove from one project. */
 export interface ProjectPrunePlan {
   readonly name: string;
   readonly path: string;
   /** Audits that would stop being renderable, oldest first. */
   readonly retiring: ReadonlyArray<{ id: string; startedAt: number }>;
+  /**
+   * Crawls from audits that never finished (killed, `kill -9`, OOM) and are
+   * older than the project's newest finished audit (#941). Retired along with
+   * `retiring`, and they take no slot of the `--keep` window. Oldest first.
+   */
+  readonly abandoned: ReadonlyArray<CrawlRef>;
+  /**
+   * Unfinished crawls NEWER than the newest finished audit: possibly a live
+   * audit, possibly a `crawled` crawl awaiting `analyze`. Never retired; listed
+   * so the skip is stated rather than silent. Newest first.
+   */
+  readonly skippedLive: ReadonlyArray<CrawlRef>;
   /**
    * Audits that stay fully renderable afterwards. Excludes the ones an earlier
    * pass already retired, which are listed but cannot be opened.
@@ -334,12 +359,26 @@ export async function planProjectPrune(
     const crawls = await Effect.runPromise(storage.listCrawls());
     const stats = await Effect.runPromise(storage.databasePageStats());
     const reclaimableBytes = stats.freelistPages * stats.pageSize;
+    const abandoned = await Effect.runPromise(storage.listAbandonedCrawls());
+    const skippedLive = await Effect.runPromise(
+      storage.listPossiblyLiveCrawls()
+    );
+    const unfinished = new Set([
+      ...abandoned.map((c) => c.id),
+      ...skippedLive.map((c) => c.id),
+    ]);
     // listCrawls is newest first; everything past the window retires, except
     // what an audit already retired — re-retiring deletes nothing and would
-    // print an audit as going when it went days ago.
+    // print an audit as going when it went days ago. Unfinished crawls are
+    // planned separately: a killed audit is not one of the audits being kept,
+    // so it neither takes a slot nor pushes a finished audit out of the window.
+    // Already-retired crawls are dropped BEFORE the window is applied: they
+    // cannot be opened, so they must not hold a slot. Otherwise a retired
+    // abandoned crawl sitting between two finished audits would push the older
+    // one out of the window on the second prune.
     const retiring = crawls
+      .filter((c) => !unfinished.has(c.id) && c.retiredAt === undefined)
       .slice(Math.max(0, keep))
-      .filter((c) => c.retiredAt === undefined)
       .map((c) => ({
         id: c.id,
         startedAt: c.startedAt,
@@ -348,14 +387,16 @@ export async function planProjectPrune(
     // would include the ones an earlier pass already retired and describe a
     // history the user does not have: seven listed, four retired, "keeping 6".
     const stillRenderable = crawls.filter(
-      (c) => c.retiredAt === undefined
+      (c) => c.retiredAt === undefined && !unfinished.has(c.id)
     ).length;
 
+    const toRetire = [
+      ...retiring.map((c) => c.id),
+      ...abandoned.map((c) => c.id),
+    ];
     const preview =
-      retiring.length > 0
-        ? await Effect.runPromise(
-            storage.previewRetireCrawls(retiring.map((c) => c.id))
-          )
+      toRetire.length > 0
+        ? await Effect.runPromise(storage.previewRetireCrawls(toRetire))
         : { totalRows: 0 };
     // Row count is not the test for "is there anything to do". An audit outside
     // the window with nothing deletable left in it is still retired by this —
@@ -363,6 +404,8 @@ export async function planProjectPrune(
     // an audit in it is a plan, and the caller has to describe it as one.
     if (
       retiring.length === 0 &&
+      abandoned.length === 0 &&
+      skippedLive.length === 0 &&
       preview.totalRows === 0 &&
       reclaimableBytes < RECLAIM_FLOOR_BYTES
     ) {
@@ -373,6 +416,8 @@ export async function planProjectPrune(
       name: dbPath,
       path: dbPath,
       retiring: [...retiring].reverse(),
+      abandoned: [...abandoned].reverse(),
+      skippedLive,
       keeping: stillRenderable - retiring.length,
       rows: preview.totalRows,
       reclaimableBytes,
@@ -393,20 +438,34 @@ export async function planProjectPrune(
  * whole database. That is fine once, on request, and would be a serious
  * regression if it ever ran as part of an audit.
  */
-export async function runProjectPrune(
-  plan: ProjectPrunePlan
-): Promise<{ rows: number; bytesBefore: number; bytesAfter: number }> {
+export async function runProjectPrune(plan: ProjectPrunePlan): Promise<{
+  rows: number;
+  bytesBefore: number;
+  bytesAfter: number;
+  /** Why the file was not rebuilt, when it was not. The crawls still retired. */
+  vacuumSkipped?: string;
+}> {
   const { SQLiteStorage } = await import("@/crawler/storage/sqlite");
   const { Effect } = await import("effect");
 
   const storage = new SQLiteStorage(plan.path);
   let rows = 0;
+  let vacuumSkipped: string | undefined;
   try {
     await Effect.runPromise(storage.init());
+    // `allowAbandoned` lets the unfinished ones through, and only those that
+    // still satisfy the abandoned predicate inside the retiring transaction: a
+    // crawl resumed since the plan was made is refused, not gutted.
     rows = await Effect.runPromise(
-      storage.retireCrawls(plan.retiring.map((c) => c.id))
+      storage.retireCrawls(
+        [...plan.retiring, ...plan.abandoned].map((c) => c.id),
+        Date.now(),
+        { allowAbandoned: true }
+      )
     );
-    await Effect.runPromise(storage.vacuum());
+    // VACUUM writes a full copy next to the file before swapping it in.
+    vacuumSkipped = lowDiskReason(plan.path);
+    if (vacuumSkipped === undefined) await Effect.runPromise(storage.vacuum());
   } finally {
     await Effect.runPromise(storage.close());
   }
@@ -416,5 +475,128 @@ export async function runProjectPrune(
     rows,
     bytesBefore: plan.bytesBefore,
     bytesAfter: dbFamilyBytes(plan.path),
+    ...(vacuumSkipped === undefined ? {} : { vacuumSkipped }),
   };
+}
+
+/**
+ * A reason not to VACUUM when the volume cannot hold a second copy of the file,
+ * else undefined. An unreadable free-space figure does not block the rebuild.
+ */
+export function lowDiskReason(
+  dbPath: string,
+  freeBytes: number | undefined = freeBytesAt(dirname(dbPath))
+): string | undefined {
+  if (freeBytes === undefined) return undefined;
+  const needed = Math.ceil(dbFamilyBytes(dbPath) * 1.1) + 64 * 1024 * 1024;
+  if (freeBytes >= needed) return undefined;
+  return `not enough free disk to rebuild (needs ${formatBytes(needed)}, ${formatBytes(freeBytes)} free)`;
+}
+
+function freeBytesAt(dir: string): number | undefined {
+  try {
+    const stats = statfsSync(dir);
+    return Number(stats.bavail) * Number(stats.bsize);
+  } catch {
+    return undefined;
+  }
+}
+
+/** How one project went through a prune. */
+export interface PruneOutcome {
+  readonly name: string;
+  /** `skipped` is not a failure: nothing was wrong, or it was held back safely. */
+  readonly status: "ok" | "skipped" | "failed";
+  readonly reason?: string;
+  readonly bytesBefore: number;
+  readonly bytesAfter: number;
+}
+
+const errorMessage = (e: unknown): string =>
+  e instanceof Error ? e.message : String(e);
+
+/**
+ * Plan every project, one failure at a time: a locked or unreadable database
+ * is reported against its project and the rest are still planned (#941).
+ */
+export async function planProjects(
+  entries: ReadonlyArray<{ name: string; dbPath: string }>,
+  keep: number,
+  plan: typeof planProjectPrune = planProjectPrune
+): Promise<{
+  plans: Array<{ name: string; plan: ProjectPrunePlan }>;
+  failed: PruneOutcome[];
+}> {
+  const plans: Array<{ name: string; plan: ProjectPrunePlan }> = [];
+  const failed: PruneOutcome[] = [];
+  for (const { name, dbPath } of entries) {
+    try {
+      const p = await plan(dbPath, keep);
+      if (p) plans.push({ name, plan: p });
+    } catch (e) {
+      failed.push({
+        name,
+        status: "failed",
+        reason: `could not plan: ${errorMessage(e)}`,
+        bytesBefore: 0,
+        bytesAfter: 0,
+      });
+    }
+  }
+  return { plans, failed };
+}
+
+/** Whether a plan has anything to act on, or only skipped crawls to report. */
+export function planIsActionable(plan: ProjectPrunePlan): boolean {
+  return (
+    plan.retiring.length > 0 ||
+    plan.abandoned.length > 0 ||
+    plan.rows > 0 ||
+    plan.reclaimableBytes >= RECLAIM_FLOOR_BYTES
+  );
+}
+
+/** Run the plans, isolating each project so one failure cannot stop the rest. */
+export async function runPrunePlans(
+  plans: ReadonlyArray<{ name: string; plan: ProjectPrunePlan }>,
+  run: typeof runProjectPrune = runProjectPrune
+): Promise<PruneOutcome[]> {
+  const outcomes: PruneOutcome[] = [];
+  for (const { name, plan } of plans) {
+    if (!planIsActionable(plan)) continue;
+    try {
+      const result = await run(plan);
+      outcomes.push({
+        name,
+        status: result.vacuumSkipped === undefined ? "ok" : "skipped",
+        ...(result.vacuumSkipped === undefined
+          ? {}
+          : { reason: result.vacuumSkipped }),
+        bytesBefore: result.bytesBefore,
+        bytesAfter: result.bytesAfter,
+      });
+    } catch (e) {
+      outcomes.push({
+        name,
+        status: "failed",
+        reason: errorMessage(e),
+        bytesBefore: plan.bytesBefore,
+        bytesAfter: plan.bytesBefore,
+      });
+    }
+  }
+  return outcomes;
+}
+
+/** 1 when any project failed; skips are not failures. */
+export function pruneExitCode(outcomes: ReadonlyArray<PruneOutcome>): 0 | 1 {
+  return outcomes.some((o) => o.status === "failed") ? 1 : 0;
+}
+
+/** "3d", "5h", "12m": how long ago, coarse on purpose. */
+export function formatAge(startedAt: number, now: number = Date.now()): string {
+  const minutes = Math.max(0, Math.floor((now - startedAt) / 60_000));
+  if (minutes >= 2880) return `${Math.floor(minutes / 1440)}d`;
+  if (minutes >= 120) return `${Math.floor(minutes / 60)}h`;
+  return `${minutes}m`;
 }

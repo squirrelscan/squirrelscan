@@ -350,6 +350,39 @@ A retired audit's report can no longer be rendered, and `report --list`,
 history, so how many audits to keep is your call rather than a number this
 command picks for you.
 
+### Abandoned crawls
+
+An audit killed before it finishes (`kill -9`, a watchdog, an out-of-memory
+kill) leaves its crawl behind as `running`, `paused`, `stopped` or `crawled`.
+Once a newer audit of the project has finished, nothing can resume or analyze the
+older crawl, so `--prune` treats it as abandoned: it retires it, and it takes no
+slot of the `--keep` window. `--dry-run` lists these apart from the finished
+audits, with each crawl's status and age:
+
+```text
+acme-docs  2.3 GB  retiring 2 of 5 audits
+    2026-09-07  6a1b45df
+    abandoned (never finished, older than the newest finished audit):
+    2026-10-02  7021c515  crawled, 17d old
+```
+
+An unfinished crawl newer than the newest finished audit is never retired. It
+may be a live audit, or a crawl waiting for `squirrel analyze`, so it is listed
+as skipped with that reason instead.
+
+### Summary and exit code
+
+Each project is handled on its own. A project that cannot be planned or pruned
+(a locked or unreadable database, for example) is reported with its reason and
+the rest still run. When the volume does not have room for the rebuild, the
+project's crawls are still retired, the rebuild is skipped and the project is
+reported as skipped. A final line counts the projects pruned, skipped and failed,
+and the bytes reclaimed. The command exits 1 only when at least one project
+failed; a skip is not a failure.
+
+Pressing Ctrl-C during `squirrel audit` records the interrupted crawl as
+`stopped`, so `--resume` continues it and it is not mistaken for a killed one.
+
 A project whose old audits an audit already retired has nothing left to retire
 and is still holding the space those deletes freed, so the plan offers the
 rebuild on its own:

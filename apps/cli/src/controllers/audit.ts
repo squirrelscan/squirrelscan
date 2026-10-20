@@ -72,6 +72,7 @@ import {
   runSmartAudits,
   REMOVED_STATUSES as SMART_REMOVED_STATUSES,
 } from "@/audit/smart-audits";
+import { registerOwnedCrawl } from "@/audit/stop-interrupted-crawl";
 import {
   resolveStreamBatchBytes,
   resolveStreamBatchPagesOverride,
@@ -1105,6 +1106,10 @@ export async function runAudit(
           parsedPageCache,
         })
       );
+
+      // #941: lets a Ctrl-C mark this crawl `stopped` instead of leaving it
+      // `running`, by id.
+      registerOwnedCrawl(() => crawler.currentCrawlId);
 
       logger.debug("step 1: crawling", url);
       onProgress({ phase: "crawling" });

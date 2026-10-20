@@ -63,6 +63,7 @@ import {
   resolveRulesConfig,
 } from "@/audit/rule-filter";
 import { preflightRuleOptions } from "@/audit/rule-options-preflight";
+import { stopInterruptedCrawls } from "@/audit/stop-interrupted-crawl";
 import { findConfigFile, getGlobalConfigPath, loadConfig } from "@/config";
 import {
   DASHBOARD_URL,
@@ -2182,6 +2183,11 @@ export const audit = defineCommand({
           process.stderr.write(
             `${lastPagesFetched} pages are saved. Resume with:\n  squirrel audit ${args.url} --resume\n`
           );
+        }
+        // #941: record the interruption on the crawl, so it reads as a stopped
+        // crawl `--resume` continues rather than as a killed one.
+        if (storeProject) {
+          stopInterruptedCrawls(resolveProjectDbPath(storeProject));
         }
         void finalizeTracked({
           status: "cancelled",
