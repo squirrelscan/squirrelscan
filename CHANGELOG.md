@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- `social/asset-divergence` no longer reports an entity page's own `og:image` as a divergent fallback when its hreflang alternates repeat it. Pages that list each other as alternates now count as one voter on the OG image axis; real fallback pockets of unrelated pages are still reported (#937).
+
 ## v0.0.119 (2026-10-20)
 
 A release about tidying up after audits that never finished, and about how the accessibility checks read `<style>` blocks. Crawls that killed audits leave behind are now retired instead of piling up in `project.db`, `squirrel self disk --prune` carries on past a project it cannot open, Ctrl-C marks the crawl it interrupts as stopped, and a `:root` block of design tokens no longer turns a page's accessibility failures into warnings.

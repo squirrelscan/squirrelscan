@@ -36,7 +36,7 @@ import { normalizePageUrl } from "@squirrelscan/utils/url";
 import type { ParsedPage } from "../types";
 
 /** Page identity for comparing URLs, or null when the URL does not parse. */
-function identity(url: string, base?: string): string | null {
+export function identity(url: string, base?: string): string | null {
   try {
     return normalizePageUrl(new URL(url, base).href);
   } catch {
