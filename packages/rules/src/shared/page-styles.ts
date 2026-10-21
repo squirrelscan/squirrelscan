@@ -893,6 +893,21 @@ function isForeign(el: Element): boolean {
   return result;
 }
 
+/** An element's attributes, names lower-cased, read from the DOM once per element. */
+const attributesCache = new WeakMap<Element, Array<{ name: string; value: string }>>();
+
+function attributesOf(el: Element): Array<{ name: string; value: string }> {
+  let list = attributesCache.get(el);
+  if (!list) {
+    list = Array.from(el.attributes ?? [], (attr) => ({
+      name: asciiLower(attr.name),
+      value: attr.value,
+    }));
+    attributesCache.set(el, list);
+  }
+  return list;
+}
+
 function viewOf(el: Element): ElementView {
   const classes = classTokens(el);
   let foreign: boolean | undefined;
@@ -902,7 +917,7 @@ function viewOf(el: Element): ElementView {
     id: el.getAttribute("id"),
     classes,
     lowerClasses: new Set(classes.map(asciiLower)),
-    attrNames: Array.from(el.attributes ?? [], (attr) => asciiLower(attr.name)),
+    attrNames: attributesOf(el).map((attr) => attr.name),
     foreign: () => (foreign ??= isForeign(el)),
   };
 }
@@ -960,14 +975,13 @@ function couldMatch(subject: Compound | null, view: ElementView): boolean {
   return subject.attrs.every((attr) => {
     // HTML keeps `aK` and `ak` apart while a selector matches names ASCII
     // case-blind, so any attribute of that name may satisfy the test.
-    let present = false;
-    for (const own of Array.from(view.el.attributes ?? [])) {
-      if (asciiLower(own.name) !== attr.name) continue;
-      present = true;
-      if (attrValueCouldMatch(attr, own.value)) return true;
+    // A presence test needs no value; the list is read once per element.
+    const own = attributesOf(view.el).filter((a) => a.name === attr.name);
+    if (own.length > 0) {
+      return attr.value === null || own.some((a) => attrValueCouldMatch(attr, a.value));
     }
-    if (present) return false;
     // linkedom lists no attribute: fall back to the case-blind read.
+    if (attributesOf(view.el).length > 0) return false;
     const value = getAttrCI(view.el, attr.name);
     return value !== null && attrValueCouldMatch(attr, value);
   });

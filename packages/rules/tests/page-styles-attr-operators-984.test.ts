@@ -145,3 +145,50 @@ describe("edge shapes where this DOM differs from a browser's", () => {
     );
   });
 });
+
+describe("an unquoted value is not read as a flag", () => {
+  test("[a^=bi] means the value bi, not b with the i flag", () => {
+    expect(parseSelector("[data-a^=bi]")).toMatchObject({
+      subject: { attrs: [{ name: "data-a", value: "bi", op: "^=" }] },
+    });
+    expect(parseSelector("[data-a^=b i]")).toMatchObject({
+      subject: { attrs: [{ name: "data-a", value: "b", op: "^=" }] },
+    });
+    // a bare `b` cannot satisfy `^=bi`: shown.
+    expect(state("[data-a^=bi]{display:none}", '<b id="t" data-a="b"></b>')).toBe("shown");
+    expect(state("[data-a^=b i]{display:none}", '<b id="t" data-a="B"></b>')).toBe("unknown");
+  });
+
+  test("plain [a=bi] is the value bi", () => {
+    expect(state("[data-a=bi]{display:none}", '<b id="t" data-a="b"></b>')).toBe("shown");
+    expect(state("[data-a=bi]{display:none}", '<b id="t" data-a="bi"></b>')).toBe("hidden");
+  });
+});
+
+describe("attributes are read from the DOM once per element", () => {
+  const readsFor = (css: string): number => {
+    const { document } = parsePage(
+      `<!doctype html><html><head><style>${css}</style></head><body><div id="t" data-a="x-1" data-b="2"></div></body></html>`,
+      "https://example.com/",
+    ) as unknown as { document: Document };
+    const el = document.getElementById("t") as Element;
+    const attributes = el.attributes;
+    let reads = 0;
+    Object.defineProperty(el, "attributes", {
+      get() {
+        reads++;
+        return attributes;
+      },
+    });
+    createStaticVisibility({ ariaHidden: true }).visibility(el);
+    return reads;
+  };
+
+  test("50 uncertain operator rules read no more than none do, plus one", () => {
+    const rules = Array.from(
+      { length: 50 },
+      (_, i) => `.s${i} [data-a$="-v${i}"]{display:none !important;visibility:hidden}`,
+    ).join("");
+    expect(readsFor(rules)).toBeLessThanOrEqual(readsFor("") + 1);
+  });
+});
