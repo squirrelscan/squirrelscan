@@ -5,7 +5,7 @@ import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../t
 import { UNCONFIRMED_CHECK_SUFFIX } from "@squirrelscan/core-contracts/resolution";
 import { getAttrCI, hasAttrCI } from "@squirrelscan/utils";
 
-import { createStaticVisibility, UNCONFIRMED_LABEL } from "../shared/static-hidden";
+import { createStaticVisibility, unconfirmedLabel } from "../shared/static-hidden";
 
 // Natively focusable elements. `disabled`, `type="hidden"` and tabindex are
 // decided in isFocusable, case-insensitively, rather than in the selectors.
@@ -95,7 +95,7 @@ export const ariaHiddenFocusRule: Rule = {
     name: "ARIA Hidden Focus",
     description: "Ensures aria-hidden elements do not contain focusable content",
     solution:
-      "Elements with aria-hidden='true' should not contain focusable content. When an element is hidden from assistive technology but still focusable, keyboard users can tab to it but screen reader users won't know what they're interacting with. Either remove aria-hidden, add the inert attribute to the hidden container (which takes its whole subtree out of focus), or make each focusable child non-focusable with tabindex='-1'. A control hidden by the hidden attribute, a closed dialog or an inline style='display:none' or 'visibility:hidden' is not focusable and is not reported. A <style> rule squirrel can decide (a plain selector, no media query) counts too. Vendor-prefixed display values (-webkit-box, -webkit-flex, -ms-flexbox) are read as shown, including the old fallback chain that ends in display: flex. An attribute selector with an operator ([id$=x], [href^=x], [data-a*=x], [class~=x], [lang|=en]) reaches only elements that have the attribute and a value that could satisfy it. A control a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet) is reported as unconfirmed. External stylesheets are not read, so a control hidden only by one is still reported.",
+      "Elements with aria-hidden='true' should not contain focusable content. When an element is hidden from assistive technology but still focusable, keyboard users can tab to it but screen reader users won't know what they're interacting with. Either remove aria-hidden, add the inert attribute to the hidden container (which takes its whole subtree out of focus), or make each focusable child non-focusable with tabindex='-1'. A control hidden by the hidden attribute, a closed dialog or an inline style='display:none' or 'visibility:hidden' is not focusable and is not reported. A <style> rule squirrel can decide (a plain selector, no media query) counts too. Vendor-prefixed display values (-webkit-box, -webkit-flex, -ms-flexbox) are read as shown, including the old fallback chain that ends in display: flex. An attribute selector with an operator ([id$=x], [href^=x], [data-a*=x], [class~=x], [lang|=en]) reaches only elements that have the attribute and a value that could satisfy it. A control carrying a no-js class (itself or an ancestor other than <html>) on a page with an external stylesheet or @import is reported as unconfirmed, because the theme may hide it when JavaScript runs. A control a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet) is reported as unconfirmed. External stylesheets are not read, so a control hidden only by one is still reported.",
     category: "a11y",
     scope: "page",
     verdictScope: "page",
@@ -130,7 +130,7 @@ export const ariaHiddenFocusRule: Rule = {
       if (isHoneypotCandidate(el)) {
         honeypotInHidden.push(labelFor(el));
       } else if (seen.state === "unknown") {
-        unconfirmed.push({ id: label, label: UNCONFIRMED_LABEL });
+        unconfirmed.push({ id: label, label: unconfirmedLabel(seen) });
       } else {
         focusableInHidden.push(label);
       }

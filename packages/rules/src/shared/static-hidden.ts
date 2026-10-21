@@ -28,11 +28,23 @@ import {
   type VisibilityValue,
 } from "./page-styles";
 
-export type StaticVisibility = { state: "shown" } | { state: "hidden" } | { state: "unknown" };
+export type StaticVisibility =
+  | { state: "shown" }
+  | { state: "hidden" }
+  | { state: "unknown"; reason?: "script" };
 
 /** Item label for a control reported as unconfirmed. */
 export const UNCONFIRMED_LABEL =
   "a style on it or an ancestor sets display or visibility in a way squirrel cannot settle";
+
+/** Item label for a `no-js` fallback on a page whose stylesheets were not all read (pub#989). */
+export const SCRIPT_STATE_LABEL =
+  "it or an ancestor carries a no-js class, and a stylesheet squirrel did not read may hide it when JavaScript runs";
+
+/** The label for a control the visibility verdict left unconfirmed. */
+export function unconfirmedLabel(seen: StaticVisibility): string {
+  return seen.state === "unknown" && seen.reason === "script" ? SCRIPT_STATE_LABEL : UNCONFIRMED_LABEL;
+}
 
 export interface StaticVisibilityOptions {
   /** Count `aria-hidden="true"` on the element or an ancestor as hidden. */
@@ -53,6 +65,20 @@ export interface StaticVisibilityResolver {
 const SHOWN: StaticVisibility = { state: "shown" };
 const HIDDEN: StaticVisibility = { state: "hidden" };
 const UNKNOWN: StaticVisibility = { state: "unknown" };
+const UNKNOWN_SCRIPT: StaticVisibility = { state: "unknown", reason: "script" };
+
+/**
+ * `no-js` as a whole class token: the usual marker for a fallback shown only
+ * without JavaScript, which a theme's script-state rule (`.js .no-js {
+ * display: none }`) hides once scripts run.
+ */
+function hasNoJsClass(el: Element): boolean {
+  // A class is case-sensitive, except in quirks mode (no doctype).
+  const blind = !el.ownerDocument?.doctype;
+  return (getAttrCI(el, "class") ?? "")
+    .split(/[\t\n\f\r ]+/)
+    .some((token) => (blind ? asciiLower(token) : token) === "no-js");
+}
 
 /** What one inline `style` attribute says about `display` and `visibility`. */
 interface InlineStyle {
@@ -294,6 +320,8 @@ interface Context {
    * anywhere below one: a miss, never a false "hidden".
    */
   foreign: boolean;
+  /** A non-root ancestor-or-self carries the `no-js` class (pub#989). */
+  noJs: boolean;
 }
 
 const ROOT: Context = {
@@ -303,6 +331,7 @@ const ROOT: Context = {
   visibilityHidden: false,
   treeUnreliable: false,
   foreign: false,
+  noJs: false,
 };
 
 /** The verdict for one element, and the context it passes to its children. */
@@ -360,6 +389,10 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
       (hiddenBy && author.visibilityMayShow);
 
     const treeUnreliable = parent.treeUnreliable || treeMayDiffer(el);
+    // The root's own class is a script-managed state, not a fallback marker.
+    // A stray second <html> or <body> only lends the real one attributes.
+    const wrapper = tagOf(el) === "html" || tagOf(el) === "body";
+    const noJs = parent.noJs || (!wrapper && hasNoJsClass(el));
     const foreign = parent.foreign || tagOf(el) === "svg" || tagOf(el) === "math";
     let children: Context;
     if (tagOf(el) === "template" && !foreign) {
@@ -374,6 +407,7 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
             visibilityHidden: false,
             treeUnreliable,
             foreign,
+            noJs,
           }
         : { ...ROOT, removed: true };
     } else {
@@ -386,6 +420,7 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
         visibilityHidden: visibilityHidden && author.complete,
         treeUnreliable,
         foreign,
+        noJs,
       };
     }
 
@@ -394,6 +429,9 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
     else if (display === "unknown" || parent.displayUnknown) verdict = UNKNOWN;
     else if (visibilityHidden) verdict = HIDDEN;
     else if (visibilityUnknown) verdict = UNKNOWN;
+    // Shown only because the stylesheets squirrel read say so: with others
+    // unread, a no-js fallback may be hidden once scripts run (pub#989).
+    else if (noJs && !author.complete) verdict = UNKNOWN_SCRIPT;
     else verdict = SHOWN;
     return { verdict, children };
   };
@@ -443,7 +481,15 @@ export function sortUnnamedControls<T>(
     add(el: Element, item: T): void {
       const seen = visibility.visibility(el);
       if (seen.state === "hidden") hidden++;
-      else if (seen.state === "unknown") unconfirmed.push(item);
+      else if (seen.state === "unknown") {
+        unconfirmed.push(
+          seen.reason === "script"
+            ? ((typeof item === "string"
+                ? { id: item, label: SCRIPT_STATE_LABEL }
+                : { ...item, label: SCRIPT_STATE_LABEL }) as T)
+            : item,
+        );
+      }
       else failures.push(item);
     },
     failures,
@@ -461,7 +507,7 @@ export function sortUnnamedControls<T>(
 export function unconfirmedRow(
   check: string,
   what: string,
-  items: Array<string | { id: string; snippet?: string }>,
+  items: Array<string | { id: string; snippet?: string; label?: string }>,
 ): CheckResult {
   return {
     name: `${check}${UNCONFIRMED_CHECK_SUFFIX}`,
@@ -469,7 +515,10 @@ export function unconfirmedRow(
     message: `${items.length} ${what} may be hidden by a style (unconfirmed)`,
     items: items
       .slice(0, 10)
-      .map((item) => ({ ...(typeof item === "string" ? { id: item } : item), label: UNCONFIRMED_LABEL })),
+      .map((item) => ({
+        ...(typeof item === "string" ? { id: item } : item),
+        label: (typeof item === "string" ? undefined : item.label) ?? UNCONFIRMED_LABEL,
+      })),
     ...(items.length > 10 ? { details: { additional: items.length - 10 } } : {}),
   };
 }

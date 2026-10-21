@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- a11y: a control with a `no-js` class (itself or an ancestor other than `<html>`) on a page that loads an external stylesheet or `@import` is now reported as unconfirmed, with the reason that it may be hidden when JavaScript runs, instead of as a failure. Themes hide that fallback with a rule such as `.js .no-js { display: none }` in a stylesheet squirrel does not read. A page whose styles were all read keeps its verdict (#989).
+
 ## v0.0.124 (2026-10-21)
 
 A small accessibility fix: a `<style>` rule that may hide elements and uses an operator attribute selector, such as `[id$="-drawer"]`, no longer turns the accessibility failures of unrelated controls into warnings.
