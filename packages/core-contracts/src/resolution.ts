@@ -216,6 +216,23 @@ export function resolutionCheckKey(ruleId: string, checkName: string): string {
   return `${ruleId}|${checkName}`;
 }
 
+/**
+ * Check-name half of a rule-wide `notEvaluated` key (pub#968): `<ruleId>|*`
+ * lists the crawled pages on which the rule as a whole did not run (it timed
+ * out), whatever checks it would have emitted there. A timed-out rule emits no
+ * check under its real names, so without it a rule that timed out on every page
+ * has no key at all, and the merge reads that as "no signal" and resolves its
+ * prior findings. Only ever in `notEvaluated` (and `truncated`), never in
+ * `failing`. A consumer from before it does not know the key and ignores it,
+ * which is today's behaviour.
+ */
+export const RESOLUTION_ANY_CHECK = "*";
+
+/** The rule-wide key (see {@link RESOLUTION_ANY_CHECK}). */
+export function resolutionRuleKey(ruleId: string): string {
+  return resolutionCheckKey(ruleId, RESOLUTION_ANY_CHECK);
+}
+
 const FNV32_OFFSET = 0x811c9dc5;
 const FNV32_PRIME = 0x01000193;
 

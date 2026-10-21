@@ -15,7 +15,7 @@ import type {
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
-import { resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
+import { resolutionRuleKey, resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
 
 import { findingFingerprint } from "./fingerprint";
 import type { PageUrlSet } from "./scoring";
@@ -969,6 +969,20 @@ export function createMergeSession(
       // it). Its absence from the fresh findings is not evidence the finding is
       // gone, so it can never resolve: carry regardless of what the sampled
       // payload suggests.
+      // (pub#968) The rule as a whole did not run on this page (it timed out), so
+      // the check it would have emitted is not evaluated either; the rule-wide key
+      // is the only thing that names it when the rule emitted no check of its own.
+      // A truncated rule-wide key lost its page list: carry every page of the rule.
+      const ruleKey = resolutionRuleKey(prior.ruleId);
+      if (
+        hasAnyHash(signal?.notEvaluatedByCheck.get(ruleKey), priorHashes) ||
+        signal?.truncatedChecks.has(ruleKey)
+      ) {
+        const carried: PageFindingRecord = { ...prior, provenance: "carried" };
+        sink.persist(carried);
+        sink.active(toMerged(carried, unrendered));
+        return;
+      }
       if (hasAnyHash(signal?.notEvaluatedByCheck.get(checkKey), priorHashes)) {
         const carried: PageFindingRecord = { ...prior, provenance: "carried" };
         sink.persist(carried);

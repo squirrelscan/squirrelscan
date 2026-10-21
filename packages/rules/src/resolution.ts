@@ -28,6 +28,8 @@ import {
   type CompactResolutionSignal,
   encodeIndexGaps,
   NOT_APPLICABLE_SKIP_REASON,
+  RULE_TIMED_OUT_SKIP_REASON,
+  resolutionRuleKey,
   resolutionCheckKey,
   resolutionUrlHash,
   SCAN_TRUNCATED_SKIP_REASON,
@@ -101,6 +103,12 @@ interface ResolutionEvidence {
  * means the rule stopped at a work cap before it had seen the whole page. That page
  * is not evaluated, and its key is emitted even when no other page evaluated the
  * check, so the page lands in `notEvaluated` and its prior findings carry.
+ *
+ * A third gap covers a whole rule: `skipReason: "rule-timed-out"` (pub#960) names
+ * `<rule>-error`, not the rule's real checks, so a rule that timed out on every
+ * page emits no key of its own. Each such rule gets the rule-wide key
+ * `<rule>|*` in `notEvaluated` (never `failing`), listing the pages it timed out
+ * on, and the merge carries a prior finding of the rule on them (pub#968).
  */
 function collectResolutionEvidence(
   ruleResults: Record<string, { checks: CheckResult[] }>,
@@ -128,6 +136,10 @@ function collectResolutionEvidence(
   // (normalized URL), merged into `evaluated` once every key is known.
   const keyRule = new Map<string, string>();
   const notApplicable = new Map<string, Set<string>>();
+  // (pub#968) Rule -> pages its time-budget skip names (normalized URL), or
+  // `true` when the skip cannot say which (no page, or a clipped page list):
+  // every crawled page then counts as not run. Becomes a rule-wide key below.
+  const timedOut = new Map<string, Set<string> | true>();
   // (pub#935) Base key -> pages a `<check>-unconfirmed` row evaluated, merged into
   // `evaluated` for that base key once every key is known.
   const unconfirmedOf = new Map<string, Set<string>>();
@@ -168,6 +180,30 @@ function collectResolutionEvidence(
           notApplicable.set(ruleId, set);
         }
         for (const url of skippedUrls) set.add(normalized(url));
+        continue;
+      }
+      if (check.status === "skipped" && check.skipReason === RULE_TIMED_OUT_SKIP_REASON) {
+        // (pub#968) A GAP of the whole rule: its real check names are unknown
+        // (the skip is `<rule>-error`), so no per-check key can carry the page.
+        // With the rule timing out on every page no key of it exists, and an
+        // absent key resolves. Recorded per rule, keyed below.
+        const listed = check.pageUrl
+          ? [check.pageUrl]
+          : check.details?.aggregated === true && check.pages && check.pages.length > 0
+            ? check.pages
+            : null;
+        const clipped =
+          typeof check.details?.pagesTruncated === "number" &&
+          check.details.pagesTruncated > (check.pages?.length ?? 0);
+        const known = timedOut.get(ruleId);
+        if (known !== true) {
+          if (!listed || clipped) timedOut.set(ruleId, true);
+          else {
+            const set = known ?? new Set<string>();
+            for (const url of listed) set.add(normalized(url));
+            timedOut.set(ruleId, set);
+          }
+        }
         continue;
       }
       if (check.status === "skipped" && check.skipReason === SCAN_TRUNCATED_SKIP_REASON) {
@@ -292,6 +328,15 @@ function collectResolutionEvidence(
     if (i < limits.maxCrawledUrls) crawled.push(norm);
   }
 
+  // (pub#968) One rule-wide key per timed-out rule: evaluated on every crawled
+  // page the rule did not time out on, so the complement is the timed-out pages.
+  // Only in `evaluated` (never `failing`), so no tally counts it as a check.
+  for (const [ruleId, pages] of timedOut) {
+    if (evaluated.size >= limits.maxChecks) break; // dropped key = no signal (safe)
+    const key = resolutionRuleKey(ruleId);
+    evaluated.set(key, pages === true ? new Set() : new Set(crawled.filter((n) => !pages.has(n))));
+  }
+
   const hashCache = new Map<string, string>();
   const hash = (norm: string): string => {
     let value = hashCache.get(norm);
@@ -379,6 +424,7 @@ export function buildResolutionSignal(
     // The crawled list itself was clipped, so no complement can be trusted —
     // every key loses resolve authority (falls back to pre-#1185 carry).
     for (const key of failing.keys()) truncated.add(key);
+    for (const key of evidence.evaluated.keys()) truncated.add(key);
   } else {
     let notEvaluatedTotal = 0;
     for (const [key, ev] of evidence.evaluated) {
