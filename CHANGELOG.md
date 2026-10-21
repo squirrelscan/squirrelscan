@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- a11y: `aria-meter-name`, `aria-progressbar-name`, `aria-toggle-field-name`, `aria-tooltip-name`, `aria-treeitem-name`, `input-image-alt` and `link-text` now read which elements are out of the accessibility tree the same way as `button-name` and `select-name`. An element hidden by `hidden`, `aria-hidden`, `display: none` or a closed dialog is no longer reported, and one a style may hide (a `no-js` fallback on a page with an external stylesheet included) is reported as `<check>-unconfirmed` instead of a failure. A visible one still fails (#993).
+
 ## v0.0.125 (2026-10-22)
 
 Fixes for false accessibility failures: on themes that hide a no-JavaScript fallback once scripts run, and on hidden `<select>` elements.
