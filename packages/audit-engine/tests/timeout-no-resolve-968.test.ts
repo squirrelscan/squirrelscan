@@ -10,6 +10,7 @@ import { describe, expect, test } from "bun:test";
 
 import type {
   CheckResult,
+  ResolutionSignal,
   FindingState,
   PageFindingRecord,
   SitePageRecord,
@@ -18,6 +19,7 @@ import {
   RULE_TIMED_OUT_SKIP_REASON,
   resolutionRuleKey,
 } from "@squirrelscan/core-contracts/resolution";
+import { RESOLUTION_SIGNAL_LIMITS } from "@squirrelscan/core-contracts/limits";
 import {
   buildPublishResolution,
   buildResolutionSignal,
@@ -175,5 +177,87 @@ for (const mode of ["sampled", "compact"] as const) {
     });
   });
 }
+
+/** Publish `runs` in order to one store, run 1 finding a secret on A; A's row after the last. */
+async function rowAfterRuns(
+  runs: Array<{
+    pages: Record<string, CheckResult[]>;
+    signal?: (crawled: string[], ruleResults: never) => ResolutionSignal | undefined;
+  }>,
+) {
+  const store = new MemStore();
+  let n = 0;
+  for (const run of runs) {
+    const ruleResults = { [RULE]: { meta, checks: Object.values(run.pages).flat() } } as never;
+    const crawled = Object.keys(run.pages);
+    await runCloudSmartAudits({
+      store,
+      siteKey: SITE,
+      crawlId: `audit_${++n}`,
+      ruleResults,
+      pageStatuses: crawled.map((url) => ({ url, status: 200 })),
+      resolutionSignal: run.signal
+        ? run.signal(crawled, ruleResults)
+        : buildResolutionSignal(ruleResults, crawled),
+    });
+  }
+  return [...store.findings.values()].find(
+    (f) => f.normalizedUrl === normalizePageUrl(A) && f.ruleId === RULE,
+  )!;
+}
+
+describe("the rule-wide key's edge cases (pub#968)", () => {
+  test("a truncated rule key carries every page of the rule", async () => {
+    // The check key is present and says A is clean, so only the truncated
+    // rule-wide key keeps the finding open.
+    const row = await rowAfterRuns([
+      { pages: { [A]: [fail(A)], [B]: [pass(B)] } },
+      {
+        pages: { [A]: [pass(A)], [B]: [pass(B)] },
+        signal: (crawled) => ({
+          crawledUrls: crawled,
+          failing: { [`${RULE}|${CHECK}`]: [] },
+          truncated: [resolutionRuleKey(RULE)],
+        }),
+      },
+    ]);
+    expect(row.state).toBe("open");
+    expect(row.provenance).toBe("carried");
+  });
+
+  test("a crawl past the collection cap marks the rule-wide key truncated", () => {
+    const filler = Array.from(
+      { length: RESOLUTION_SIGNAL_LIMITS.maxCrawledUrls },
+      (_, i) => `https://www.acme-shop.com/p/${i}`,
+    );
+    const signal = buildResolutionSignal(
+      { [RULE]: { checks: [timedOut(A), pass(B)] } },
+      [A, B, ...filler],
+    )!;
+    expect(signal.truncated).toContain(resolutionRuleKey(RULE));
+  });
+
+  test("the carry clears on the next normal run", async () => {
+    const row = await rowAfterRuns([
+      { pages: { [A]: [fail(A)], [B]: [pass(B)] } },
+      { pages: { [A]: [timedOut(A)], [B]: [timedOut(B)] } },
+      { pages: { [A]: [pass(A)], [B]: [pass(B)] } },
+    ]);
+    expect(row.state).toBe("resolved");
+  });
+
+  test("per-check keys yield to the rule-wide key under the key cap", () => {
+    const many: CheckResult[] = Array.from(
+      { length: RESOLUTION_SIGNAL_LIMITS.maxChecks + 5 },
+      (_, i) => ({ ...pass(A), name: `c${i}` }),
+    );
+    const signal = buildResolutionSignal(
+      { [RULE]: { checks: [...many, timedOut(B)] } },
+      [A, B],
+    )!;
+    expect(signal.notEvaluated?.[resolutionRuleKey(RULE)]).toHaveLength(1);
+    expect(Object.keys(signal.failing).length).toBeLessThan(RESOLUTION_SIGNAL_LIMITS.maxChecks);
+  });
+});
 
 describeSitePagesContract("timeout-no-resolve-968.test.ts MemStore", () => new MemStore());

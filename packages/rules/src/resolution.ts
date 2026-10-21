@@ -140,6 +140,14 @@ function collectResolutionEvidence(
   // `true` when the skip cannot say which (no page, or a clipped page list):
   // every crawled page then counts as not run. Becomes a rule-wide key below.
   const timedOut = new Map<string, Set<string> | true>();
+  // Room kept under `maxChecks` for one rule-wide key per timed-out rule: a
+  // dropped one would bring pub#968 back for that rule, so the per-check keys
+  // yield first.
+  let timedOutRules = 0;
+  for (const rule of Object.values(ruleResults)) {
+    if (rule.checks.some((c) => c.skipReason === RULE_TIMED_OUT_SKIP_REASON)) timedOutRules++;
+  }
+  const checkCap = limits.maxChecks - Math.min(timedOutRules, limits.maxChecks);
   // (pub#935) Base key -> pages a `<check>-unconfirmed` row evaluated, merged into
   // `evaluated` for that base key once every key is known.
   const unconfirmedOf = new Map<string, Set<string>>();
@@ -213,7 +221,7 @@ function collectResolutionEvidence(
         // falls back to resolving every prior on a crawled page. Registering it
         // with no evaluated page puts this page in `notEvaluated`, which carries.
         const key = resolutionCheckKey(ruleId, check.name);
-        if (!failing.has(key) && failing.size < limits.maxChecks) {
+        if (!failing.has(key) && failing.size < checkCap) {
           failing.set(key, new Set<string>());
           evaluated.set(key, new Set<string>());
           keyRule.set(key, ruleId);
@@ -239,7 +247,7 @@ function collectResolutionEvidence(
       const key = resolutionCheckKey(ruleId, check.name);
       let set = failing.get(key);
       if (!set) {
-        if (failing.size >= limits.maxChecks) continue; // dropped key = no signal (safe)
+        if (failing.size >= checkCap) continue; // dropped key = no signal (safe for a check key)
         set = new Set<string>();
         failing.set(key, set);
         evaluated.set(key, new Set<string>());
@@ -332,7 +340,7 @@ function collectResolutionEvidence(
   // page the rule did not time out on, so the complement is the timed-out pages.
   // Only in `evaluated` (never `failing`), so no tally counts it as a check.
   for (const [ruleId, pages] of timedOut) {
-    if (evaluated.size >= limits.maxChecks) break; // dropped key = no signal (safe)
+    if (evaluated.size >= limits.maxChecks) break; // unreachable: `checkCap` reserved the room
     const key = resolutionRuleKey(ruleId);
     evaluated.set(key, pages === true ? new Set() : new Set(crawled.filter((n) => !pages.has(n))));
   }
