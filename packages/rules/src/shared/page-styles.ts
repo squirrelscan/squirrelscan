@@ -45,8 +45,11 @@ export interface Compound {
   tag: string | null;
   id: string | null;
   classes: string[];
-  attrs: Array<{ name: string; value: string | null }>;
+  attrs: Array<{ name: string; value: string | null; op?: AttrOperator }>;
 }
+
+/** An attribute match operator beyond plain `=`; only an uncertain rule's subject carries one. */
+export type AttrOperator = "^=" | "$=" | "*=" | "~=" | "|=";
 
 interface DecidableRule {
   compound: Compound;
@@ -219,6 +222,37 @@ function readPlainAttr(inner: string): { name: string; value: string | null } | 
   return { name: asciiLower(m[1] as string), value: m[2] ?? m[3] ?? m[4] ?? null };
 }
 
+/**
+ * `[name op value]` with a quoted or identifier value and an optional `i` or
+ * `s` flag. Case is not tracked: a value is compared case-insensitively, a
+ * superset of what a browser matches. Null for anything else.
+ */
+function readOperatorAttr(
+  inner: string,
+): { name: string; value: string; op: AttrOperator } | null {
+  const m =
+    /^[\t\n\f\r ]*((?:--|-?[_a-zA-Z])[-_a-zA-Z0-9]*)[\t\n\f\r ]*([~|^$*]=)[\t\n\f\r ]*(?:"([^"\\\n\r\f]*)"|'([^'\\\n\r\f]*)'|((?:--|-?[_a-zA-Z])[-_a-zA-Z0-9]*))(?:[\t\n\f\r ]*[iIsS])?[\t\n\f\r ]*$/.exec(
+      inner,
+    );
+  if (!m) return null;
+  return {
+    name: asciiLower(m[1] as string),
+    op: m[2] as AttrOperator,
+    value: (m[3] ?? m[4] ?? m[5]) as string,
+  };
+}
+
+/**
+ * The attribute name of any `[name…]` selector whose value part is not read.
+ * Every attribute selector needs the attribute to be present, so that alone
+ * still narrows the match. Null for a namespaced name (`[ns|a]`), an escape
+ * or anything that is not plainly a name followed by `]` or an operator.
+ */
+function readAttrName(inner: string): string | null {
+  const m = /^[\t\n\f\r ]*((?:--|-?[_a-zA-Z])[-_a-zA-Z0-9]*)(?:[\t\n\f\r ]*(?:[~|^$*]?=|$))/.exec(inner);
+  return m ? asciiLower(m[1] as string) : null;
+}
+
 function emptyCompound(): Compound {
   return { tag: null, id: null, classes: [], attrs: [] };
 }
@@ -287,9 +321,18 @@ export function parseSelector(sel: string): ParsedSelector {
     if (ch === "[") {
       const end = skipBlock(sel, i);
       if (sel[end - 1] !== "]") return invalid;
-      const attr = readPlainAttr(sel.slice(i + 1, end - 1));
+      const inner = sel.slice(i + 1, end - 1);
+      const attr = readPlainAttr(inner);
       if (attr) compound.attrs.push(attr);
-      else complex = true;
+      else {
+        // An operator or an unread form: not matched exactly, but the
+        // attribute still has to be there (pub#984).
+        complex = true;
+        const operator = readOperatorAttr(inner);
+        const name = operator ? operator.name : readAttrName(inner);
+        if (operator) compound.attrs.push(operator);
+        else if (name !== null) compound.attrs.push({ name, value: null });
+      }
       i = end;
       continue;
     }
@@ -914,7 +957,47 @@ function couldMatch(subject: Compound | null, view: ElementView): boolean {
   if (subject.tag !== null && view.tag !== asciiLower(subject.tag)) return false;
   if (subject.id !== null && asciiLower(view.id ?? "") !== asciiLower(subject.id)) return false;
   if (!subject.classes.every((cls) => view.lowerClasses.has(asciiLower(cls)))) return false;
-  return subject.attrs.every((attr) => getAttrCI(view.el, attr.name) !== null);
+  return subject.attrs.every((attr) => {
+    // HTML keeps `aK` and `ak` apart while a selector matches names ASCII
+    // case-blind, so any attribute of that name may satisfy the test.
+    let present = false;
+    for (const own of Array.from(view.el.attributes ?? [])) {
+      if (asciiLower(own.name) !== attr.name) continue;
+      present = true;
+      if (attrValueCouldMatch(attr, own.value)) return true;
+    }
+    if (present) return false;
+    // linkedom lists no attribute: fall back to the case-blind read.
+    const value = getAttrCI(view.el, attr.name);
+    return value !== null && attrValueCouldMatch(attr, value);
+  });
+}
+
+/** Whether an attribute's value could satisfy the test, compared case-insensitively. */
+function attrValueCouldMatch(
+  attr: { value: string | null; op?: AttrOperator },
+  actual: string,
+): boolean {
+  if (attr.value === null) return true;
+  // A browser turns a literal NUL into U+FFFD while parsing; this DOM keeps it.
+  const both = attr.value + actual;
+  if (both.includes("\u0000") || both.includes("\ufffd")) return true;
+  const want = asciiLower(attr.value);
+  const have = asciiLower(actual);
+  switch (attr.op) {
+    case undefined:
+      return have === want;
+    case "^=":
+      return want !== "" && have.startsWith(want);
+    case "$=":
+      return want !== "" && have.endsWith(want);
+    case "*=":
+      return want !== "" && have.includes(want);
+    case "~=":
+      return want !== "" && !/[\t\n\f\r ]/.test(want) && have.split(/[\t\n\f\r ]+/).includes(want);
+    case "|=":
+      return have === want || have.startsWith(`${want}-`);
+  }
 }
 
 /** Where the winning declaration came from. */

@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- a11y: an attribute selector with an operator (`[id$="-drawer"]`, `[href^="#modal"]`, `[data-state*="closed"]`, `[class~="a"]`, `[lang|="en"]`) in a `<style>` rule no longer makes every element on the page unconfirmed. The rule now reaches only elements that have that attribute with a value that could satisfy it, so one rule that matches nothing no longer turns every unnamed control into `-unconfirmed` (#984).
+
 ## v0.0.123 (2026-10-21)
 
 A small accessibility fix: the old vendor-prefixed flexbox fallbacks in inline styles and a page's `<style>` blocks no longer turn accessibility failures into warnings.

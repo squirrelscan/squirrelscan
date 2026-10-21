@@ -275,5 +275,20 @@
   {"name": "vendor display: -webkit-inline-flex shown", "html": "<style>.x{display:-webkit-inline-flex}</style><b id=\"t\" class=\"x\" hidden></b>", "chromium": "shown"},
   {"name": "vendor display: descendant rule with the chain, child plain", "html": "<style>.m .i{display:-webkit-box;display:flex}</style><div class=\"m\"><div class=\"i\"><button id=\"t\"></button></div></div>", "chromium": "shown"},
   {"name": "vendor display: misspelt keyword is dropped, display:none stays", "html": "<style>.x{display:none;display:-webkit-bx}</style><b id=\"t\" class=\"x\"></b>", "chromium": "hidden"},
-  {"name": "vendor display: -moz-box after display:none is dropped by Chromium", "html": "<style>.x{display:none;display:-moz-box}</style><b id=\"t\" class=\"x\"></b>", "chromium": "hidden"}
+  {"name": "vendor display: -moz-box after display:none is dropped by Chromium", "html": "<style>.x{display:none;display:-moz-box}</style><b id=\"t\" class=\"x\"></b>", "chromium": "hidden"},
+  {"name": "attr op: $= hides a matching value", "html": "<style>.o [data-a$=\"-drawer\"]{display:none}</style><div class=\"o\"><b id=\"t\" data-a=\"cart-drawer\"></b></div>", "chromium": "hidden"},
+  {"name": "attr op: $= leaves a non-matching value", "html": "<style>.o [data-a$=\"-drawer\"]{display:none}</style><div class=\"o\"><b id=\"t\" data-a=\"cart\"></b></div>", "chromium": "shown"},
+  {"name": "attr op: ^= hides", "html": "<style>.o [data-a^=\"#modal\"]{display:none}</style><div class=\"o\"><b id=\"t\" data-a=\"#modal-1\"></b></div>", "chromium": "hidden"},
+  {"name": "attr op: ^= leaves", "html": "<style>.o [data-a^=\"#modal\"]{display:none}</style><div class=\"o\"><b id=\"t\" data-a=\"x#modal\"></b></div>", "chromium": "shown"},
+  {"name": "attr op: *= hides", "html": "<style>.o [data-a*=\"closed\"]{display:none}</style><div class=\"o\"><b id=\"t\" data-a=\"is-closed-x\"></b></div>", "chromium": "hidden"},
+  {"name": "attr op: *= leaves", "html": "<style>.o [data-a*=\"closed\"]{display:none}</style><div class=\"o\"><b id=\"t\" data-a=\"open\"></b></div>", "chromium": "shown"},
+  {"name": "attr op: ~= hides a whole word", "html": "<style>.o [data-a~=\"b\"]{display:none}</style><div class=\"o\"><b id=\"t\" data-a=\"a b c\"></b></div>", "chromium": "hidden"},
+  {"name": "attr op: ~= leaves a substring", "html": "<style>.o [data-a~=\"b\"]{display:none}</style><div class=\"o\"><b id=\"t\" data-a=\"ab c\"></b></div>", "chromium": "shown"},
+  {"name": "attr op: |= hides value-", "html": "<style>.o [data-a|=\"en\"]{display:none}</style><div class=\"o\"><b id=\"t\" data-a=\"en-US\"></b></div>", "chromium": "hidden"},
+  {"name": "attr op: |= leaves a longer word", "html": "<style>.o [data-a|=\"en\"]{display:none}</style><div class=\"o\"><b id=\"t\" data-a=\"eng\"></b></div>", "chromium": "shown"},
+  {"name": "attr op: i flag matches case-blind", "html": "<style>.o [data-a$=\"DRAWER\" i]{display:none}</style><div class=\"o\"><b id=\"t\" data-a=\"cart-drawer\"></b></div>", "chromium": "hidden"},
+  {"name": "attr op: no flag is case-sensitive for data-*", "html": "<style>.o [data-a$=\"DRAWER\"]{display:none}</style><div class=\"o\"><b id=\"t\" data-a=\"cart-drawer\"></b></div>", "chromium": "shown"},
+  {"name": "attr op: empty ^= matches nothing", "html": "<style>.o [data-a^=\"\"]{display:none}</style><div class=\"o\"><b id=\"t\" data-a=\"x\"></b></div>", "chromium": "shown"},
+  {"name": "attr op: plain = compares the value", "html": "<style>.o [data-a=\"drawer\"]{display:none}</style><div class=\"o\"><b id=\"t\" data-a=\"other\"></b></div>", "chromium": "shown"},
+  {"name": "attr op: combined list hides via the id part", "html": "<style>.o #t, .o [data-a$=\"-d\"]{display:none}</style><div class=\"o\"><b id=\"t\"></b></div>", "chromium": "hidden"}
 ]
