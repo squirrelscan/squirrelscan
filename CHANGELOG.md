@@ -17,9 +17,13 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.123 (2026-10-21)
+
+A small accessibility fix: the old vendor-prefixed flexbox fallbacks in inline styles and a page's `<style>` blocks no longer turn accessibility failures into warnings.
+
 ### Fixed
 
-- a11y: vendor-prefixed `display` values (`-webkit-box`, `-webkit-flex`, `-ms-flexbox`, `-moz-box` and the like) are now read as values that show the element, so the old flexbox fallback chain (`display: -webkit-box; display: -webkit-flex; display: -ms-flexbox; display: flex`) no longer leaves every control under that rule unconfirmed. A `-ms-` or `-moz-` value that no later standard `display` overrides stays unconfirmed, because engines differ on it (#978).
+- The accessibility checks that skip hidden controls now read vendor-prefixed `display` values (`-webkit-box`, `-webkit-flex`, `-ms-flexbox`, `-moz-box` and the like) as values that show the element. The old flexbox fallback chain (`display: -webkit-box; display: -webkit-flex; display: -ms-flexbox; display: flex`) used to make the whole declaration block unreadable, which could leave the unnamed controls under it unconfirmed, so `a11y/button-name` and the other naming checks can fail those controls again when nothing else hides them. A `-ms-` or `-moz-` value stays unconfirmed unless a later standard `display` overrides it (`!important` respected), because browsers differ on it. A `display: none` that wins after the prefixed values still hides the element where squirrel can settle the rule, and a `display` set from `var()` stays unconfirmed. See [a11y/button-name](https://docs.squirrelscan.com/rules/a11y/button-name).
 
 ## v0.0.122 (2026-10-21)
 
