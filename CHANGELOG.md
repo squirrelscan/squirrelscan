@@ -17,9 +17,13 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.124 (2026-10-21)
+
+A small accessibility fix: a `<style>` rule that may hide elements and uses an operator attribute selector, such as `[id$="-drawer"]`, no longer turns the accessibility failures of unrelated controls into warnings.
+
 ### Fixed
 
-- a11y: an attribute selector with an operator (`[id$="-drawer"]`, `[href^="#modal"]`, `[data-state*="closed"]`, `[class~="a"]`, `[lang|="en"]`) in a `<style>` rule no longer makes every element on the page unconfirmed. The rule now reaches only elements that have that attribute with a value that could satisfy it, so one rule that matches nothing no longer turns every unnamed control into `-unconfirmed` (#984).
+- The accessibility checks that skip hidden controls now read attribute selectors with an operator (`[id$="-drawer"]`, `[href^="#modal"]`, `[data-state*="closed" i]`, `[class~="a"]`, `[lang|="en"]`) in a `<style>` rule. A bare operator selector used to lose its attribute test, so a rule like `[id$="-drawer"] { display: none }` that matched nothing still left every unnamed control on the page unconfirmed. It now reaches only elements that have that attribute with a value that could satisfy it, compared without regard to ASCII case, so `a11y/button-name`, `a11y/form-labels` and the other checks can fail the rest again. An element whose attribute could satisfy the operator can still be left unconfirmed, with the visible controls inside it, as `<html lang="en">` against `[lang|="en"] { display: none }` shows. A plain `[id="drawer"]` test inside a selector squirrel cannot settle, such as `.is-open [id="drawer"]`, now compares the value too, so it no longer leaves `<input id="q">` unconfirmed. Reading these rules is also faster on large pages. See [a11y/button-name](https://docs.squirrelscan.com/rules/a11y/button-name).
 
 ## v0.0.123 (2026-10-21)
 
