@@ -16,6 +16,13 @@ Two checks, at rule severity warning. Both walk every `a[href]`, skipping fragme
 - `link-text-empty` fails when a link has neither an accessible name from `aria-labelledby`, `aria-label` or `title`, nor accessible content: text, an `<img>` with non-empty `alt`, an `<svg>` carrying a `<title>`, `aria-label` or `aria-labelledby`, or a `[role="img"]` with an `aria-label`. Report message: `N link(s) with no accessible text`. Each item is the first 50 characters of the `href`, labelled with the reason: `empty`, `svg-no-name`, `icon-font` or `role-img-no-name`.
 - `link-text-generic` warns when the link's accessible name, or its text, lowercased and stripped of punctuation, exactly matches one of 54 generic phrases. The list includes `click here`, `here`, `read more`, `learn more`, `more`, `link`, `download`, `view`, `sign up`, `submit`, `next`, `view details`, `website` and `discover`. Report message: `N link(s) with generic text`, listing each distinct phrase once.
 - `link-text` passes with `All links have descriptive text` when neither problem appears on a page that has links.
+- `link-text-unconfirmed` warns with `N link(s) with no accessible text may be hidden by a style (unconfirmed)` for an empty link a style may hide in a way squirrel cannot settle.
+
+### Hidden links
+
+An empty link out of the accessibility tree has nothing to announce, so it is not reported: one with the `hidden` attribute (except `hidden="until-found"`), `aria-hidden="true"` on itself or an ancestor, `display: none` on itself or an ancestor (set inline or by a `<style>` rule squirrel can decide), or inside a closed `<dialog>` or an unopened `popover`. It still needs a name before it is shown. A hidden link with generic text is skipped too.
+
+squirrel reads the markup, inline styles and the page's `<style>` blocks, the same way as `form-labels`; see [form-labels](/rules/a11y/form-labels) for what it can and cannot decide. External stylesheets are not read. An empty link that carries a `no-js` class, itself or on an ancestor other than `<html>`, is reported as unconfirmed on a page with an external stylesheet or an `@import`, because a theme usually hides that fallback with a rule such as `.js .no-js { display: none }` once JavaScript runs.
 
 ## How to fix it
 
