@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- a11y: vendor-prefixed `display` values (`-webkit-box`, `-webkit-flex`, `-ms-flexbox`, `-moz-box` and the like) are now read as values that show the element, so the old flexbox fallback chain (`display: -webkit-box; display: -webkit-flex; display: -ms-flexbox; display: flex`) no longer leaves every control under that rule unconfirmed. A `-ms-` or `-moz-` value that no later standard `display` overrides stays unconfirmed, because engines differ on it (#978).
+
 ## v0.0.122 (2026-10-21)
 
 A release about saying what actually happened. A rule that runs out of time is now reported as not checked, with a `Not checked` line in every report, rather than as a failure, and a timed-out security rule trips warning gates instead of error gates (see below). `squirrel audit` without a terminal prints a progress line while it walks the crawled pages, and WordPress's image and lightbox styles no longer soften accessibility failures on controls nothing else hides.

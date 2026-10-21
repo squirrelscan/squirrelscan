@@ -388,9 +388,21 @@ const SHOWN_DISPLAY = new Set(
   (
     "block inline inline-block flex inline-flex grid inline-grid contents flow-root list-item " +
     "table inline-table table-row table-cell table-caption table-column table-column-group " +
-    "table-header-group table-footer-group table-row-group initial inherit unset"
+    "table-header-group table-footer-group table-row-group initial inherit unset " +
+    // Vendor-prefixed box types (pub#978): old flexbox fallback chains. Each
+    // one only shows an element; an engine that does not know one drops it.
+    "-webkit-box -webkit-inline-box -webkit-flex -webkit-inline-flex " +
+    "-ms-flexbox -ms-inline-flexbox -ms-grid -ms-inline-grid -moz-box -moz-inline-box"
   ).split(" "),
 );
+
+/**
+ * Prefixed values some engines drop: Chromium knows `-webkit-*` but not
+ * `-ms-*` or `-moz-*`, Firefox knows `-moz-box`. Such a value is read as shown
+ * only when a later standard declaration overrides it in every engine
+ * (`display:-ms-flexbox;display:flex`); as the last word it is "unknown".
+ */
+const ENGINE_DEPENDENT_DISPLAY = /^-(?:ms|moz)-/;
 
 /** `display` values that show some elements and hide others, so never show-only (pub#940). */
 const MIXED_DISPLAY = new Set(["contents", "inherit", "unset"]);
@@ -486,6 +498,7 @@ export function scanDeclarations(style: string | null): {
 
   let unknown = false;
   let mayAnimate = false;
+  const engines = { pending: false };
   const out: { display?: Declared<DisplayValue>; visibility?: Declared<VisibilityValue> } = {};
   for (const { text, colon } of parts) {
     if (colon === -1) {
@@ -511,9 +524,11 @@ export function scanDeclarations(style: string | null): {
       unknown = true;
       continue;
     }
-    const read = readHidingDeclaration(out, prop, text.slice(colon + 1));
+    const read = readHidingDeclaration(out, prop, text.slice(colon + 1), engines);
     if (!read) unknown = true;
   }
+  // An engine-dependent `display` nothing later overrode: the engines differ.
+  if (engines.pending) unknown = true;
   return { decls: unknown ? "unknown" : out, mayAnimate };
 }
 
@@ -530,12 +545,15 @@ function readHidingDeclaration(
   out: { display?: Declared<DisplayValue>; visibility?: Declared<VisibilityValue> },
   prop: "display" | "visibility",
   raw: string,
+  engines: { pending: boolean },
 ): boolean {
   const split = splitImportant(asciiLower(raw.trim()));
   if (split.value.includes("!") || split.value === "") return false;
   // Within one block, !important beats normal, then the last wins.
   if (out[prop]?.important && !split.important) return true;
   const v = split.value;
+  // This declaration applies, so it replaces what an earlier one left open.
+  if (prop === "display") engines.pending = ENGINE_DEPENDENT_DISPLAY.test(v);
   let value: DisplayValue | VisibilityValue;
   if (prop === "display") {
     // `revert` is left out on purpose: Chromium shows a `hidden` element

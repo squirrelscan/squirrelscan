@@ -266,5 +266,14 @@
   {"name": "style: visibility:visible rule loses to inline visibility:hidden", "html": "<style>.a>b{visibility:visible}</style><div class=\"a\"><b id=\"t\" style=\"visibility:hidden\"></b></div>", "chromium": "hidden"},
   {"name": "style: show-only display rule does not show a visibility:hidden element", "html": "<style>.a>b{display:flex}</style><div class=\"a\" style=\"visibility:hidden\"><b id=\"t\"></b></div>", "chromium": "hidden"},
   {"name": "style: a display rule on an ancestor-only does not show a child of display:none", "html": "<style>.a>b{display:flex}</style><div class=\"a\" style=\"display:none\"><b id=\"t\"></b></div>", "chromium": "hidden"},
-  {"name": "display:contents hides an input", "html": "<div><input id=\"t\" style=\"display:contents\"></div>", "chromium": "hidden"}
+  {"name": "display:contents hides an input", "html": "<div><input id=\"t\" style=\"display:contents\"></div>", "chromium": "hidden"},
+  {"name": "vendor display: -webkit-box on a [hidden] element beats the UA rule", "html": "<style>.x{display:-webkit-box}</style><b id=\"t\" class=\"x\" hidden></b>", "chromium": "shown"},
+  {"name": "vendor display: the flexbox fallback chain on a [hidden] element", "html": "<style>.x{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex}</style><b id=\"t\" class=\"x\" hidden></b>", "chromium": "shown"},
+  {"name": "vendor display: -ms-flexbox alone is dropped by Chromium, [hidden] stays hidden", "html": "<style>.x{display:-ms-flexbox}</style><b id=\"t\" class=\"x\" hidden></b>", "chromium": "hidden"},
+  {"name": "vendor display: -ms-flexbox after display:none is dropped by Chromium", "html": "<style>.x{display:none;display:-ms-flexbox}</style><b id=\"t\" class=\"x\"></b>", "chromium": "hidden"},
+  {"name": "vendor display: display:none after the chain wins", "html": "<style>.x{display:-webkit-box;display:flex;display:none}</style><b id=\"t\" class=\"x\"></b>", "chromium": "hidden"},
+  {"name": "vendor display: -webkit-inline-flex shown", "html": "<style>.x{display:-webkit-inline-flex}</style><b id=\"t\" class=\"x\" hidden></b>", "chromium": "shown"},
+  {"name": "vendor display: descendant rule with the chain, child plain", "html": "<style>.m .i{display:-webkit-box;display:flex}</style><div class=\"m\"><div class=\"i\"><button id=\"t\"></button></div></div>", "chromium": "shown"},
+  {"name": "vendor display: misspelt keyword is dropped, display:none stays", "html": "<style>.x{display:none;display:-webkit-bx}</style><b id=\"t\" class=\"x\"></b>", "chromium": "hidden"},
+  {"name": "vendor display: -moz-box after display:none is dropped by Chromium", "html": "<style>.x{display:none;display:-moz-box}</style><b id=\"t\" class=\"x\"></b>", "chromium": "hidden"}
 ]
