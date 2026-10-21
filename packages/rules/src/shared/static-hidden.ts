@@ -73,9 +73,14 @@ const UNKNOWN_SCRIPT: StaticVisibility = { state: "unknown", reason: "script" };
  * display: none }`) hides once scripts run.
  */
 function hasNoJsClass(el: Element): boolean {
+  const raw = getAttrCI(el, "class");
+  // Bail out before splitting: almost no element carries the marker, and a
+  // large DOM resolves every element once (pub#993). The substring test is
+  // case-blind, so it never rejects a quirks-mode `NO-JS`.
+  if (!raw || raw.length < 5 || !/no-js/i.test(raw)) return false;
   // A class is case-sensitive, except in quirks mode (no doctype).
   const blind = !el.ownerDocument?.doctype;
-  return (getAttrCI(el, "class") ?? "")
+  return raw
     .split(/[\t\n\f\r ]+/)
     .some((token) => (blind ? asciiLower(token) : token) === "no-js");
 }
@@ -462,20 +467,22 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
  * (pub#665, pub#671): out of the accessibility tree they are only counted,
  * possibly hidden by a style they are unconfirmed, and the rest fail.
  */
-export interface UnnamedControls<T> {
+export type ControlItem = string | { id: string; snippet?: string; label?: string };
+
+export interface UnnamedControls<T extends ControlItem> {
   /** Files one unnamed control under the finding it belongs to. */
   add(el: Element, item: T): void;
   readonly failures: T[];
-  readonly unconfirmed: T[];
+  readonly unconfirmed: ControlItem[];
   /** Unnamed, but out of the accessibility tree. They need a name if shown later. */
   readonly hidden: number;
 }
 
-export function sortUnnamedControls<T>(
+export function sortUnnamedControls<T extends ControlItem>(
   visibility: StaticVisibilityResolver = createStaticVisibility({ ariaHidden: true }),
 ): UnnamedControls<T> {
   const failures: T[] = [];
-  const unconfirmed: T[] = [];
+  const unconfirmed: ControlItem[] = [];
   let hidden = 0;
   return {
     add(el: Element, item: T): void {
@@ -484,13 +491,10 @@ export function sortUnnamedControls<T>(
       else if (seen.state === "unknown") {
         unconfirmed.push(
           seen.reason === "script"
-            ? ((typeof item === "string"
-                ? { id: item, label: SCRIPT_STATE_LABEL }
-                : { ...item, label: SCRIPT_STATE_LABEL }) as T)
+            ? { ...(typeof item === "string" ? { id: item } : item), label: SCRIPT_STATE_LABEL }
             : item,
         );
-      }
-      else failures.push(item);
+      } else failures.push(item);
     },
     failures,
     unconfirmed,
