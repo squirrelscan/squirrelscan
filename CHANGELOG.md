@@ -17,10 +17,14 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.125 (2026-10-22)
+
+Fixes for false accessibility failures: on themes that hide a no-JavaScript fallback once scripts run, and on hidden `<select>` elements.
+
 ### Fixed
 
-- a11y: `a11y/select-name` now reads which selects are out of the accessibility tree the same way as `form-labels`. A select hidden by `hidden`, `aria-hidden`, `display: none` or a closed dialog is no longer reported, and one a style may hide (a `no-js` fallback on a page with an external stylesheet included) is reported as `select-name-unconfirmed` instead of a failure (#991).
-- a11y: a control with a `no-js` class (itself or an ancestor other than `<html>`) on a page that loads an external stylesheet or `@import` is now reported as unconfirmed, with the reason that it may be hidden when JavaScript runs, instead of as a failure. Themes hide that fallback with a rule such as `.js .no-js { display: none }` in a stylesheet squirrel does not read. A page whose styles were all read keeps its verdict (#989).
+- The accessibility checks that skip hidden controls (`a11y/form-labels`, `a11y/aria-input-field-name`, `a11y/select-name`, `a11y/aria-labels`, `a11y/aria-command-name`, `a11y/aria-dialog-name`, `a11y/button-name` and `a11y/aria-hidden-focus`) now report a control they would have decided was shown (an unnamed control, or a focusable one inside `aria-hidden`) as unconfirmed, not as a failure, when it or an ancestor other than `<html>` or `<body>` has a `no-js` class and squirrel could not read all of the page's styles (for example, an external stylesheet or an `@import`). Themes may hide such a fallback once JavaScript runs, with a rule like `.js .no-js { display: none }` in a stylesheet squirrel does not read. Items unconfirmed this way say so: `it or an ancestor carries a no-js class, and a stylesheet squirrel did not read may hide it when JavaScript runs`. A page whose styles were all read, a control with no such class, another class such as `no-js-fallback`, and a `no-js` class on `<html>` itself keep their verdict. See [a11y/form-labels](https://docs.squirrelscan.com/rules/a11y/form-labels).
+- `a11y/select-name` now reads which selects are out of the accessibility tree the way the other naming checks do. An unnamed select that the `hidden` attribute, `aria-hidden="true"`, a closed dialog, or a `display: none` squirrel can settle (inline or in a page `<style>` rule) keeps hidden is no longer reported. One a style may hide, a `no-js` fallback on a page with unread styles included, is reported as `select-name-unconfirmed` (a warning) instead of a failure. An unnamed select squirrel reads as shown still fails, and one hidden only by an external stylesheet is still reported. See [a11y/select-name](https://docs.squirrelscan.com/rules/a11y/select-name).
 
 ## v0.0.124 (2026-10-21)
 
