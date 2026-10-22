@@ -148,6 +148,13 @@ if (import.meta.main) {
   }
   // Warm-up, discarded: the first pass in a process pays module-load and JIT
   // garbage that the next forced collection reclaims, so its delta is skewed.
-  await measure(dbPath, true);
+  // It runs in BOUNDED mode whatever is measured next: a stale native-stack
+  // root can keep the warm-up's `result` alive into the measured pass's `before`
+  // sample (Bun 1.4.4 on linux-x64 does, every time) and a RETAINING warm-up
+  // leaves ~11 MB of pages behind it. The retaining arm then reads ~0 (the pin
+  // is in `before` and `after` alike) and the bounded arm reads -11 MB (the pin
+  // is released between them), which fakes a blind instrument and hides a leak.
+  // A bounded warm-up leaves nothing large to pin.
+  await measure(dbPath, false);
   console.log(JSON.stringify(await measure(dbPath, retainArg === "1")));
 }
