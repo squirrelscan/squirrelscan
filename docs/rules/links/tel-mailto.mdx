@@ -11,7 +11,7 @@ The failure that matters is a mismatch. When the href and the visible text carry
 
 ## What squirrel checks
 
-The rule runs on every crawled page over every `a[href]` starting with `tel:` or `mailto:`. Six check names are possible and at most five appear in one result, since the last only fires when neither link type is present:
+The rule runs on every crawled page over every `a[href]` starting with `tel:` or `mailto:`, and over Cloudflare's email address obfuscation links (`/cdn-cgi/l/email-protection`, on any host), which a browser turns into `mailto:` addresses. Those count as `mailto:` links. The address is decoded from the link's fragment or its `data-cfemail` attribute and checked like any other, and a link whose address cannot be decoded is counted and never reported as invalid or mismatched. Six check names are possible and at most five appear in one result, since the last only fires when neither link type is present:
 
 - `tel-links` warns when a phone value has no digit or `+`, or is shorter than seven characters. Message: `<invalid>/<total> tel: link(s) may be invalid`. It passes otherwise with `<total> tel: link(s) found`.
 - `mailto-links` warns when an address is present but has no `@` or no dot. Message: `<invalid>/<total> mailto: link(s) may be invalid`. It passes otherwise with `<total> mailto: link(s) found`. Format validation is skipped only for an empty recipient followed by a `?`, the `mailto:?subject=…` share pattern; a bare `mailto:` with nothing after it still warns.

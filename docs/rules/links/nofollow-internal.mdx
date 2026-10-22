@@ -11,7 +11,7 @@ On an external link it is a reasonable qualification. On an internal link it is 
 
 ## What squirrel checks
 
-The rule runs on every crawled page over every `a[href][rel]`. A link counts when its `rel`, lowercased, contains `nofollow` and its resolved hostname equals the page's hostname. It emits a single check named `nofollow-internal`:
+The rule runs on every crawled page over every `a[href][rel]`. A link counts when its `rel`, lowercased, contains `nofollow` and its resolved hostname equals the page's hostname. Cloudflare's email address obfuscation links (`/cdn-cgi/l/email-protection`) are skipped: a browser turns them into `mailto:` addresses, so they are not page links. It emits a single check named `nofollow-internal`:
 
 - Warn when any such link exists. Message: `3 internal link(s) have nofollow`, with each href listed. Severity warning, weight 5.
 - Pass otherwise. Message: `No internal links with nofollow`.

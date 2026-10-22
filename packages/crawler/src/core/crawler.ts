@@ -25,6 +25,7 @@ import {
   readBodyCapped,
 } from "@squirrelscan/utils/response-body";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
+import { isCloudflareEmailProtectionUrl } from "@squirrelscan/utils/cloudflare-email";
 import { urlHostKey } from "@squirrelscan/utils/url";
 
 import { budgetRemainingMs, createPhaseBudget, withRequestDeadline } from "../deadline";
@@ -773,6 +774,11 @@ export function createCrawler(
 
         if (!normalized) return;
 
+        // Cloudflare's email-protection link is an email address, never a page (pub#811,
+        // pub#838), whichever source names it: a sitemap, a carried finding, or a link from a
+        // page parsed before the parser left them out. A seed is the user's own choice.
+        if (source !== "seed" && isCloudflareEmailProtectionUrl(normalized)) return;
+
         // Depth ceiling (#318): never enqueue past maxDepth. Unset = unlimited (no-op).
         if (config.maxDepth != null && depth > config.maxDepth) return;
 
@@ -1021,7 +1027,12 @@ export function createCrawler(
             };
             if (parsed.links) {
               crawlableUrls = parsed.links
-                .filter((link) => link.isInternal && !link.isNofollow)
+                // A page cached before pub#811 still lists Cloudflare's email-protection link as
+                // internal; it is an email address, never a page to queue.
+                .filter(
+                  (link) =>
+                    link.isInternal && !link.isNofollow && !isCloudflareEmailProtectionUrl(link.url),
+                )
                 .map((link) => {
                   try {
                     const url = new URL(link.url);

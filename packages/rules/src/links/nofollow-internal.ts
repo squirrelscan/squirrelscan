@@ -2,6 +2,8 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { isCloudflareEmailProtectionUrl } from "@squirrelscan/utils";
+
 export const nofollowInternalRule: Rule = {
   meta: {
     id: "links/nofollow-internal",
@@ -31,6 +33,9 @@ export const nofollowInternalRule: Rule = {
       const rel = link.getAttribute("rel") || "";
 
       if (!href) continue;
+
+      // Cloudflare's email-protection link is a mailto in the browser, not a page (pub#838).
+      if (isCloudflareEmailProtectionUrl(href)) continue;
 
       // Check if nofollow
       const hasNofollow = rel.toLowerCase().includes("nofollow");

@@ -24,6 +24,7 @@ How it works:
 
 ### Fixed
 
+- links: Cloudflare email-protection links (`/cdn-cgi/l/email-protection#<hex>`) are read as the `mailto:` links they are. `tel-mailto` counts them and checks the decoded address (one that does not decode is never reported as invalid or mismatched), `nofollow-internal` and `https-downgrade` no longer judge them as page links, and the crawler never queues the path from a sitemap, a carried finding or a cached page's links. `/cdn-cgi/image/` URLs are still checked as images (#838).
 - a11y: `link-text` no longer reports conventional account and site-utility labels (`Sign in`, `Sign up`, `Log out`, `Register`, `Terms`, `Privacy policy`, `Contact`, `FAQ` and similar, in 11 languages) as generic link text. `click here`, `read more` and the other generic phrases are still reported (#839).
 - links: `no-contextual-inbound` no longer reports legal pages (privacy, terms, imprint, `/legal`, in any recognised language and under any path prefix) that are linked only from the footer, which is where they belong (#981).
 - A smart audit no longer marks a finding fixed when its rule threw an error on every page of the re-crawl. The rule never finished, so nothing was checked, and the earlier finding now stays open until a run completes the rule, the same as for a rule that times out (#999). A rule that timed out on only some pages still carries only those pages' findings, and a page it finished still resolves (#1000).

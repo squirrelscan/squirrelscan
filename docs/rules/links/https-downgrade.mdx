@@ -11,7 +11,7 @@ This is separate from mixed content. Mixed content is about subresources the pag
 
 ## What squirrel checks
 
-The rule runs on every crawled page. It emits a single check named `https-downgrade`:
+The rule runs on every crawled page. Cloudflare's email address obfuscation links (`/cdn-cgi/l/email-protection`) are never counted as `http://` links: a browser turns them into `mailto:` addresses. It emits a single check named `https-downgrade`:
 
 - Info when the page itself is not HTTPS, since there is nothing to downgrade from. Message: `Page is not HTTPS, downgrade check not applicable`.
 - Warn when any `a[href]` has an href that literally starts with `http://`. Message: `4 link(s) downgrade to HTTP`, with each href listed. Severity warning, weight 5.
