@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- **The CLI is built with Bun 1.4.4.** TLS chains through the eight compromised eMudhra intermediates are now refused and the root store moves to NSS 3.131.1. The roots for Entrust (2006), ePKI, Atos TrustedRoot 2011, SecureSign Root CA12 and three emSign roots are no longer bundled, so a site whose chain ends only at one of those can fail TLS. The binary is about 24 MB larger (measured on macOS arm64).
+
 ### Fixed
 
 - a11y: a page past the style reader's limits (more than 5,000 style rules, an over-long `<style>` block or selector, a no-break or other non-ASCII space in a style block, or a rule nested inside another) now reads every element as unconfirmed for what a style might hide, instead of as shown. Before, the rules past the limit were dropped, so an element they hid could read as shown and an unnamed control inside it failed; now the naming checks report `<check>-unconfirmed` there. A page under the limits reads as before (#1015).
