@@ -649,9 +649,10 @@ function readHidingDeclaration(
  * The reader gave up (a cap, or markup it cannot follow): the rules it dropped
  * could hide, or show, any element. So every element is "unknown" for both
  * properties (pub#1015), never "shown": one rule that may apply to anything,
- * and no step budget left to look for a better answer.
+ * and no step budget left to look for a better answer. A fresh object per call:
+ * the step budget is spent as the page is read.
  */
-const INCOMPLETE: PageStyles = {
+const incomplete = (): PageStyles => ({
   complete: false,
   decidable: { display: new Map(), visibility: new Map() },
   uncertain: {
@@ -660,7 +661,7 @@ const INCOMPLETE: PageStyles = {
   },
   steps: { left: 0 },
   animatesVisibility: false,
-};
+});
 
 /**
  * The index key of a compound: its id, else its first class, else its tag,
@@ -738,13 +739,10 @@ export function readPageStyles(doc: Document): PageStyles {
       continue;
     }
     chars += text.length;
-    if (chars > MAX_STYLE_CHARS) return INCOMPLETE;
+    if (chars > MAX_STYLE_CHARS) return incomplete();
     // A no-break or other non-ASCII space is part of a CSS name, but the rule
     // reader trims it away (`.x` + U+00A0 would read as `.x`): not read.
-    if (UNICODE_SPACE.test(text)) {
-      complete = false;
-      continue;
-    }
+    if (UNICODE_SPACE.test(text)) return incomplete();
     const css = stripComments(text);
     // An at-keyword with an escape anywhere in it (`@\69mport`, `@n\61mespace`)
     // could be any at-rule.
@@ -767,13 +765,13 @@ export function readPageStyles(doc: Document): PageStyles {
     const budget = MAX_RULES - ruleCount;
     const rules = parseRules(text, budget);
     ruleCount += rules.length;
-    if (rules.length >= budget) return INCOMPLETE;
+    if (rules.length >= budget) return incomplete();
 
     for (const rule of rules) {
       if (!MAY_SET.test(rule.body)) continue;
-      if (rule.selector.length > MAX_SELECTOR_CHARS) return INCOMPLETE;
+      if (rule.selector.length > MAX_SELECTOR_CHARS) return incomplete();
       // A nested rule (`& .x { … }`) could style any descendant.
-      if (rule.body.includes("{")) return INCOMPLETE;
+      if (rule.body.includes("{")) return incomplete();
       const { decls, mayAnimate: animates } = scanDeclarations(rule.body);
       if (!animates && decls !== "unknown" && !decls.display && !decls.visibility) continue;
       const display = decls === "unknown" || decls.display !== undefined;
@@ -787,7 +785,7 @@ export function readPageStyles(doc: Document): PageStyles {
       if (animates) {
         for (const s of selectors) {
           if (s.kind === "pseudo-element") continue;
-          if (++entries > MAX_ENTRIES) return INCOMPLETE;
+          if (++entries > MAX_ENTRIES) return incomplete();
           animated.push(s.kind === "simple" ? s.compound : s.subject);
         }
       }
@@ -797,7 +795,7 @@ export function readPageStyles(doc: Document): PageStyles {
       if (!sometimes && !rule.conditional && decls !== "unknown" && allSimple) {
         for (const s of selectors) {
           if (s.kind !== "simple") continue;
-          if (++entries > MAX_ENTRIES) return INCOMPLETE;
+          if (++entries > MAX_ENTRIES) return incomplete();
           const entry: DecidableRule = {
             compound: s.compound,
             specificity: s.specificity,
@@ -826,7 +824,7 @@ export function readPageStyles(doc: Document): PageStyles {
       // list is uncertain for every element any of its selectors names.
       for (const s of selectors) {
         if (s.kind === "pseudo-element") continue;
-        if (++entries > MAX_ENTRIES) return INCOMPLETE;
+        if (++entries > MAX_ENTRIES) return incomplete();
         const subject = s.kind === "simple" ? s.compound : s.subject;
         const key = indexKey(subject);
         const important = (prop: Prop) => decls === "unknown" || decls[prop]?.important === true;

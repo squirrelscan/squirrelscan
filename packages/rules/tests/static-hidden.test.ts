@@ -217,13 +217,13 @@ describe("static-hidden: <style> reading is bounded", () => {
     const nested = `${".a{display:block;".repeat(700)}${"}".repeat(700)}`;
     expect(nested.length).toBeGreaterThan(11_000);
     const { seen, ms } = timed(`<style>${nested}.x{display:none}</style><b id="t" class="x"></b>`);
-    expect(seen).not.toBe("hidden");
+    expect(seen).toBe("unknown");
     expect(ms).toBeLessThan(2000);
   });
 
   test("an over-long selector is not read", () => {
     const long = `.x${".y".repeat(600)}`;
-    expect(verdict(`<style>${long}{display:none}</style><b id="t" class="x"></b>`)).not.toBe("hidden");
+    expect(verdict(`<style>${long}{display:none}</style><b id="t" class="x"></b>`)).toBe("unknown");
   });
 
   test("4,000 rules against 2,000 controls stays fast", () => {
