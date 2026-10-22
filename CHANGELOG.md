@@ -21,6 +21,10 @@ How it works:
 
 - The default per-rule time budget is now 2 seconds (was 1 second), so a rule that runs slowly on a busy machine is abandoned less often. A site rule gets 2 seconds per page of the site, still capped at 60 seconds. `[rules] time_budget_ms` still overrides it, and values below 1000 are still refused.
 
+### Fixed
+
+- a11y: `frame-title`, `object-alt` and `empty-heading` now read which elements are out of the accessibility tree the same way as `button-name` and the other naming rules. A hidden element is skipped and counted, and one a style may hide (a `no-js` fallback on a page with an external stylesheet included) is reported as `<check>-unconfirmed` instead of a failure. A visible one still fails (#1002).
+
 ## v0.0.126 (2026-10-22)
 
 Seven more accessibility checks stop failing on hidden elements, and a smart audit no longer calls a finding fixed when its rule never finished.

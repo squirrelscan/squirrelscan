@@ -2,9 +2,8 @@
 
 import type { CheckItem } from "@squirrelscan/core-contracts";
 
-import { isHiddenFromMarkup } from "@squirrelscan/parser";
-
 import { fieldSnippet } from "../shared/form-fields";
+import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export const emptyHeadingRule: Rule = {
@@ -13,7 +12,7 @@ export const emptyHeadingRule: Rule = {
     name: "Empty Headings",
     description: "Checks that heading elements have visible content",
     solution:
-      "Headings (h1-h6) must have text content for screen readers to announce. Empty headings create confusing navigation. Either add text content, use aria-label, or remove the empty heading element.",
+      "Headings (h1-h6) must have text content for screen readers to announce. Empty headings create confusing navigation. Either add text content, use aria-label, or remove the empty heading element. An element hidden by the hidden attribute, aria-hidden, a closed dialog or an inline style='display:none' is out of the accessibility tree and is not reported, but it needs a name before it is shown. A <style> rule squirrel can decide counts too. An empty heading carrying a no-js class (itself or an ancestor other than <html>) on a page with an external stylesheet or @import is reported as unconfirmed, because the theme may hide it when JavaScript runs. One a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet) is reported as unconfirmed. External stylesheets are not read, so an element hidden only by one is still reported.",
     category: "a11y",
     scope: "page",
     verdictScope: "page",
@@ -27,7 +26,9 @@ export const emptyHeadingRule: Rule = {
     const checks: CheckResult[] = [];
 
     const headings = doc.querySelectorAll("h1, h2, h3, h4, h5, h6");
-    const emptyHeadings: CheckItem[] = [];
+    // pub#1002: out of the accessibility tree is skipped, a style that may hide
+    // it is unconfirmed, like button-name.
+    const unnamed = sortUnnamedControls<CheckItem>();
 
     let position = 0;
     for (const heading of headings) {
@@ -59,17 +60,19 @@ export const emptyHeadingRule: Rule = {
       }
 
       // Only an empty heading needs the (costlier) hidden check.
-      if (!hasContent && !isHiddenFromMarkup(heading)) {
+      if (!hasContent) {
         const level = heading.tagName.toLowerCase();
         const id = heading.getAttribute("id");
         const cls = heading.getAttribute("class")?.split(" ")[0];
-        emptyHeadings.push({
+        unnamed.add(heading, {
           id: id ? `${level}#${id}` : cls ? `${level}.${cls}` : level,
           label: `${level}, heading ${position} of ${headings.length} on the page`,
           snippet: fieldSnippet(heading),
         });
       }
     }
+
+    const emptyHeadings = unnamed.failures;
 
     if (emptyHeadings.length > 0) {
       checks.push({
@@ -82,19 +85,28 @@ export const emptyHeadingRule: Rule = {
             ? { additional: emptyHeadings.length - 10 }
             : undefined,
       });
-    } else if (headings.length > 0) {
-      checks.push({
-        name: "empty-heading",
-        status: "pass",
-        message: "All headings have content",
-        details: { headingsChecked: headings.length },
-      });
-    } else {
-      checks.push({
-        name: "empty-heading",
-        status: "info",
-        message: "No headings found",
-      });
+    }
+    if (unnamed.unconfirmed.length > 0) {
+      checks.push(unconfirmedRow("empty-heading", "empty heading(s)", unnamed.unconfirmed));
+    }
+    if (emptyHeadings.length === 0 && unnamed.unconfirmed.length === 0) {
+      if (headings.length > 0) {
+        checks.push({
+          name: "empty-heading",
+          status: "pass",
+          message: "All headings have content",
+          details: {
+            headingsChecked: headings.length,
+            ...(unnamed.hidden > 0 ? { hiddenWithoutName: unnamed.hidden } : {}),
+          },
+        });
+      } else {
+        checks.push({
+          name: "empty-heading",
+          status: "info",
+          message: "No headings found",
+        });
+      }
     }
 
     return { checks };

@@ -11,11 +11,17 @@ The `title` attribute supplies that name. `aria-label` and `aria-labelledby` do 
 
 ## What squirrel checks
 
-One check, `frame-title`, at severity error. It covers every `<iframe>` and `<frame>`, skipping any with `aria-hidden="true"` or with `role="presentation"` or `role="none"`.
+One check, `frame-title`, at severity error. It covers every `<iframe>` and `<frame>`, skipping any with `role="presentation"` or `role="none"` and any hidden from the accessibility tree (see below).
 
 - Fail when the element has no non-empty `title`, no non-empty `aria-label` and no `aria-labelledby`. Report message: `N iframe(s) without title attribute`. Items are identified by `name` first, then `id`, then the hostname taken from the `src`, as `iframe (www.youtube.com)`. Up to ten are shown with a count of the rest.
 - Pass with `N iframe(s) have title attributes`.
 - Info with `No iframes found`.
+
+### Hidden iframes
+
+An iframe out of the accessibility tree has nothing to announce, so it is not reported: one with the `hidden` attribute (except `hidden="until-found"`), `aria-hidden="true"` on itself or an ancestor, `display: none` on itself or an ancestor (set inline or by a `<style>` rule squirrel can decide), or inside a closed `<dialog>` or an unopened `popover`. The pass message then reads "in the accessibility tree" and the count of skipped elements is kept in `hiddenWithoutName`. It still needs a name before it is shown.
+
+squirrel reads the markup, inline styles and the page's `<style>` blocks, the same way as `form-labels`; see [form-labels](/rules/a11y/form-labels) for what it can and cannot decide. External stylesheets are not read. An unnamed iframe that carries a `no-js` class, itself or on an ancestor other than `<html>`, is reported as unconfirmed on a page with an external stylesheet or an `@import`, because a theme usually hides that fallback once JavaScript runs. One a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet) is unconfirmed too. Report message: `N iframe(s) without title attribute may be hidden by a style (unconfirmed)`, under the check name `frame-title-unconfirmed`.
 
 Findings are labelled `iframe` even when the element is a legacy `<frame>`.
 
