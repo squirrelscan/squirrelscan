@@ -18,6 +18,7 @@ import { getPathname, normalizeUrl } from "@squirrelscan/utils/url";
 import { stripHtmlForText } from "@squirrelscan/utils";
 
 import { DEFAULT_MAX_BODY_BYTES, readBodyCapped } from "./lib/capped-body-read";
+import { customHeadersFor, type HeaderScope } from "./lib/header-scope";
 import { probeFetch } from "./lib/probe-fetch";
 import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 
@@ -55,6 +56,8 @@ export interface CloakingProbeOptions {
   egress?: EgressPolicy;
   /** Custom request headers forwarded to every probe fetch (same as the crawl). */
   customHeaders?: Record<string, string>;
+  /** Which URLs get `customHeaders` (#959); absent: every probe does. */
+  headerScope?: HeaderScope;
   /** Per-fetch timeout. Default 15s. */
   timeoutMs?: number;
   /** Concurrent probe paths. Default 3. */
@@ -264,9 +267,17 @@ async function probeOne(
     if (res.error) errors.push(`${label}: ${res.error}`);
   };
 
-  const def = await fetchImpl(sel.url, opts.defaultUserAgent, opts.customHeaders);
+  const def = await fetchImpl(
+    sel.url,
+    opts.defaultUserAgent,
+    customHeadersFor(sel.url, opts.customHeaders, opts.headerScope),
+  );
   note("default", def);
-  const gb = await fetchImpl(sel.url, opts.googlebotUserAgent, opts.customHeaders);
+  const gb = await fetchImpl(
+    sel.url,
+    opts.googlebotUserAgent,
+    customHeadersFor(sel.url, opts.customHeaders, opts.headerScope),
+  );
   note("googlebot", gb);
 
   const ua = classifyDivergence(def, gb, UA_SIMILARITY_THRESHOLD);
@@ -279,7 +290,11 @@ async function probeOne(
 
   if (opts.queryVariation) {
     queryUrl = appendProbeToken(sel.url);
-    const q = await fetchImpl(queryUrl, opts.defaultUserAgent, opts.customHeaders);
+    const q = await fetchImpl(
+      queryUrl,
+      opts.defaultUserAgent,
+      customHeadersFor(queryUrl, opts.customHeaders, opts.headerScope),
+    );
     note("query", q);
     queryStatus = q.status;
     queryBytes = byteLen(q.body);
@@ -432,6 +447,7 @@ export async function resolveCloakingProbes(
   runtime: {
     defaultUserAgent: string;
     customHeaders?: Record<string, string>;
+    headerScope?: HeaderScope;
     egress?: EgressPolicy;
   },
   fetchImpl?: ProbeFetch,
@@ -447,6 +463,7 @@ export async function resolveCloakingProbes(
         googlebotUserAgent: cfg.googlebot_user_agent,
         defaultUserAgent: runtime.defaultUserAgent,
         customHeaders: runtime.customHeaders,
+        headerScope: runtime.headerScope,
         egress: runtime.egress,
       },
       fetchImpl,

@@ -2056,6 +2056,7 @@ export function runRulesOnStorage(
         {
           defaultUserAgent: config.crawler?.user_agent || CHROME_USER_AGENT,
           customHeaders: config.crawler?.headers,
+          headerScope: createHeaderScope(crawl?.baseUrl ?? "", config.crawler?.header_hosts ?? []),
           egress: probeEgress(crawl?.baseUrl ?? "", config),
         },
       ),
@@ -2087,6 +2088,7 @@ export function runRulesOnStorage(
           // confirmation request is UA-equivalent to the crawl (#1177).
           userAgent: crawl?.config?.userAgent || config.crawler?.user_agent || CHROME_USER_AGENT,
           customHeaders: config.crawler?.headers,
+          headerScope: createHeaderScope(crawl?.baseUrl ?? "", config.crawler?.header_hosts ?? []),
           egress: probeEgress(crawl?.baseUrl ?? "", config),
           // Honor the crawl's per-host politeness delay between same-host confirms.
           perHostDelayMs: config.crawler?.per_host_delay_ms,
@@ -2866,6 +2868,7 @@ function buildStreamingSiteData(
         {
           defaultUserAgent: config.crawler?.user_agent || CHROME_USER_AGENT,
           customHeaders: config.crawler?.headers,
+          headerScope: createHeaderScope(crawl?.baseUrl ?? "", config.crawler?.header_hosts ?? []),
           egress: probeEgress(crawl?.baseUrl ?? "", config, egressPinnedByTransport),
         },
       ),
@@ -2888,6 +2891,7 @@ function buildStreamingSiteData(
           wallBudgetMs: config.integrity?.soft404_confirm?.budget_ms,
           userAgent: crawl?.config?.userAgent || config.crawler?.user_agent || CHROME_USER_AGENT,
           customHeaders: config.crawler?.headers,
+          headerScope: createHeaderScope(crawl?.baseUrl ?? "", config.crawler?.header_hosts ?? []),
           egress: probeEgress(crawl?.baseUrl ?? "", config, egressPinnedByTransport),
           perHostDelayMs: config.crawler?.per_host_delay_ms,
         },

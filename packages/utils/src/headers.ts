@@ -157,3 +157,48 @@ export function isCompressibleContentType(
     t.includes("+json")
   );
 }
+
+// Which URLs get the audit's custom request headers (#732, #959). The headers
+// usually carry credentials (Web Bot Auth, Cloudflare Access, API keys), so only
+// the audited origin gets them, plus the hosts the user names.
+
+/** True when the custom headers may be sent to `url`. */
+export type HeaderScope = (url: string) => boolean;
+
+function headerHostOf(value: string): string {
+  const raw = value.trim().toLowerCase();
+  try {
+    return new URL(raw.includes("://") ? raw : `https://${raw}`).hostname.replace(/^\[|\]$/g, "");
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * `baseUrl` is the start URL after its redirects. Its scheme, host and port
+ * match; another port or scheme on the same host does not. `extraHosts` match
+ * by host alone, as the user named them.
+ */
+export function createHeaderScope(
+  baseUrl: string,
+  extraHosts: readonly string[] = [],
+): HeaderScope {
+  let origin = "";
+  try {
+    origin = baseUrl ? new URL(baseUrl).origin : "";
+  } catch {
+    // An unparseable base URL has no origin: nothing but named hosts matches.
+  }
+  const named = new Set(extraHosts.map(headerHostOf).filter((h) => h !== ""));
+  return (url) => {
+    try {
+      const parsed = new URL(url);
+      return (
+        (origin !== "" && parsed.origin === origin) ||
+        named.has(parsed.hostname.toLowerCase().replace(/^\[|\]$/g, ""))
+      );
+    } catch {
+      return false;
+    }
+  };
+}

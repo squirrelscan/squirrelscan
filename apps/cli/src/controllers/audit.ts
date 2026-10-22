@@ -1057,6 +1057,7 @@ export async function runAudit(
         timeoutMs: mergedConfig.crawler.timeout_ms,
         userAgent,
         headers: mergedConfig.crawler.headers,
+        headerHosts: mergedConfig.crawler.header_hosts,
         followRedirects: mergedConfig.crawler.follow_redirects,
         respectRobots: mergedConfig.crawler.respect_robots,
         discoveryProbePerHost: crawlConcurrency.discoveryProbePerHost,

@@ -56,6 +56,14 @@ export interface CrawlerConfig {
    * are secrets — never log them. Threaded into FetchOptions.headers.
    */
   headers?: Record<string, string>;
+  /**
+   * Hosts, besides the audited origin, that also get `headers` (`[crawler]
+   * header_hosts`, `--header-host`). Matched by host alone. Unset: the audited
+   * origin only (scheme, host and port), so a page on another scheme, port or
+   * host, including one `allowedDomains` or an include pattern admits, is
+   * crawled without the custom headers (#959).
+   */
+  headerHosts?: string[];
   /** Follow redirects */
   followRedirects: boolean;
   /**

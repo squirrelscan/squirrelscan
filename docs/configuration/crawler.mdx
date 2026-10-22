@@ -748,10 +748,13 @@ user_agent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit
 **Type:** `table` (map of header name → value)
 **Default:** `{}` (no custom headers)
 
-Custom HTTP request headers attached to **every** crawl request: pages, assets
-on the audited origin, `robots.txt`, sitemaps, `llms.txt`, and markdown probes.
-The audited origin is the scheme, host and port of the start URL after its
-redirects. A subdomain such as `cdn.example.com` does not get them unless you
+Custom HTTP request headers attached to every crawl request to the audited
+origin: pages, assets, `robots.txt`, sitemaps, `llms.txt`, markdown probes and
+the soft-404 and cloaking re-fetches. The audited origin is the scheme, host and
+port of the start URL after its redirects. A URL on another scheme (`http:` when
+you audit `https:`), another port or another host is still crawled and reported,
+but is requested without them, including a host that
+the `domains` list in `[project]` or an include pattern admits. A subdomain such as `cdn.example.com` does not get them unless you
 name it in [`header_hosts`](#header_hosts), because a subdomain is not always
 run by the site's owner. The status checks
 [reliability/broken-resources](/rules/reliability/broken-resources) sends to
@@ -805,9 +808,9 @@ and refuse a hop to a link-local or cloud metadata address.
 **Default:** `[]` (the audited origin only)
 
 Hosts, besides the audited origin, that also get the [custom headers](#headers)
-on asset requests: a signed CDN, or Cloudflare Access on `assets.example.com`.
-It applies to hosts on the audited site's own domain. Only the hosts you name get
-them. A name matches the host on any port and
+on page and asset requests: a signed CDN, or Cloudflare Access on
+`assets.example.com`. It applies to hosts on the audited site's own domain. Only
+the hosts you name get them, so a `www` host of an apex site is named here too. A name matches the host on any port and
 scheme.
 
 ```toml

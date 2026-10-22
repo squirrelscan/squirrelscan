@@ -33,6 +33,7 @@ import { detectSoft404, parsePage, type Soft404Confirmation } from "@squirrelsca
 import { detectWafChallengePage } from "@squirrelscan/waf-detect";
 
 import { DEFAULT_MAX_BODY_BYTES, readBodyCapped } from "./lib/capped-body-read";
+import { customHeadersFor, type HeaderScope } from "./lib/header-scope";
 import { probeFetch } from "./lib/probe-fetch";
 import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 
@@ -104,6 +105,8 @@ export interface Soft404ConfirmOptions {
   egress?: EgressPolicy;
   /** Custom request headers forwarded to every fetch (same as the crawl). */
   customHeaders?: Record<string, string>;
+  /** Which URLs get `customHeaders` (#959); absent: every confirmation does. */
+  headerScope?: HeaderScope;
   /** Per-fetch timeout. Default 15s. */
   timeoutMs?: number;
   /** Concurrent confirmation fetches ACROSS hosts. Default 3. */
@@ -193,7 +196,11 @@ async function confirmOne(
   opts: Soft404ConfirmOptions,
   fetchImpl: ConfirmFetch,
 ): Promise<Soft404Confirmation> {
-  const res = await fetchImpl(candidate.url, opts.userAgent, opts.customHeaders);
+  const res = await fetchImpl(
+    candidate.url,
+    opts.userAgent,
+    customHeadersFor(candidate.url, opts.customHeaders, opts.headerScope),
+  );
   // Only a fresh 2xx lets us re-judge the "serves 404 content with HTTP 200"
   // claim. A network error (status 0) or any non-2xx re-fetch can't confirm or
   // refute it → unconfirmed (annotate, never drop).
