@@ -11,6 +11,9 @@ Images rules cover the two things images most often break: page weight and layou
   <Card title="Broken images: empty and placeholder src attributes" icon="circle-exclamation" href="/rules/images/broken-images">
     An img with an empty or placeholder src renders as a broken icon. squirrel collects image sources across the crawl and flags the malformed ones.
   </Card>
+  <Card title="Hotlinked images: pictures loaded from another site's server" icon="triangle-exclamation" href="/rules/images/hotlinked">
+    An image loaded from a server you do not control breaks when that site moves it or blocks foreign referrers. squirrel groups them by host.
+  </Card>
   <Card title="figure and figcaption: captions that are associated" icon="circle-info" href="/rules/images/figure-figcaption">
     A caption in a plain div is text near an image; a figcaption is the image's caption. squirrel checks figures for captions and notes standalone images.
   </Card>

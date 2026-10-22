@@ -8,6 +8,7 @@ import { brokenImagesRule } from "./broken-images";
 import { dimensionsRule } from "./dimensions";
 import { figureFigcaptionRule } from "./figure-figcaption";
 import { filenameQualityRule } from "./filename-quality";
+import { hotlinkedRule } from "./hotlinked";
 import { imageFileSizeRule } from "./image-file-size";
 import { lazyLoadingRule } from "./lazy-loading";
 import { modernFormatRule } from "./modern-format";
@@ -37,6 +38,7 @@ export const rules: Rule[] = [
   brokenImagesRule,
   figureFigcaptionRule,
   pictureElementRule,
+  hotlinkedRule,
 ];
 
 export {
@@ -46,6 +48,7 @@ export {
   dimensionsRule,
   figureFigcaptionRule,
   filenameQualityRule,
+  hotlinkedRule,
   imageFileSizeRule,
   lazyLoadingRule,
   modernFormatRule,

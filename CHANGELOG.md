@@ -21,6 +21,10 @@ How it works:
 
 - a11y: a page past the style reader's limits (more than 5,000 style rules, an over-long `<style>` block or selector, a no-break or other non-ASCII space in a style block, or a rule nested inside another) now reads every element as unconfirmed for what a style might hide, instead of as shown. Before, the rules past the limit were dropped, so an element they hid could read as shown and an unnamed control inside it failed; now the naming checks report `<check>-unconfirmed` there. A page under the limits reads as before (#1015).
 
+### Added
+
+- images: new rule `images/hotlinked` reports, as info, a content image (`<img>`, `<picture>` source, inline `background`) that loads from another site's server, grouped per host. First-party hosts, known image CDNs and site-builder storage, launch and badge directories, tracking pixels and avatar services are not reported, and `allowed_hosts` adds your own. An `og:image` or `twitter:image` on another site is reported too (#932).
+
 ## v0.0.127 (2026-10-22)
 
 Custom request headers stay with the audited origin unless you name another host, the default rule time budget doubles, and a smart audit keeps findings it did not get to re-check.
