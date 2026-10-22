@@ -157,6 +157,7 @@
   {"name": "style: :not() rule shows it", "html": "<style>.x{display:none}.x:not(.y){display:block}</style><b id=\"t\" class=\"x\">x</b>", "chromium": "shown"},
   {"name": "style: :is() rule shows it", "html": "<style>.x{display:none}:is(b){display:block}</style><b id=\"t\" class=\"x\">x</b>", "chromium": "hidden"},
   {"name": "style: CSS nesting shows it", "html": "<style>.x{display:none; &.y{display:block}}</style><b id=\"t\" class=\"x y\">x</b>", "chromium": "shown"},
+  {"name": "style: nested @media display none (pub#1013)", "html": "<style>b { @media (min-width: 0) { display: none } }</style><b id=\"t\"></b>", "chromium": "hidden"},
   {"name": "style: hidden attribute shown by a class", "html": "<style>.flex{display:flex}</style><div hidden class=\"flex\"><b id=\"t\">x</b></div>", "chromium": "shown"},
   {"name": "style: hidden attribute shown by [hidden]", "html": "<style>[hidden]{display:block}</style><div hidden><b id=\"t\">x</b></div>", "chromium": "shown"},
   {"name": "style: reset [hidden] display:none", "html": "<style>[hidden]{display:none !important}</style><div hidden><b id=\"t\">x</b></div>", "chromium": "hidden"},

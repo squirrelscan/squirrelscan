@@ -70,6 +70,21 @@ describe("static-hidden: markup", () => {
     expect(verdict(`${css}<b id="t" class="y"></b>`)).toBe("shown");
   });
 
+  test("nested CSS that sets display or visibility is unknown, not shown (pub#1013)", () => {
+    expect(verdict('<style>b { @media (min-width: 0) { display: none } }</style><b id="t"></b>')).toBe(
+      "unknown",
+    );
+    expect(verdict('<style>.a { & .b { display: none } }</style><div class="a"><b id="t" class="b"></b></div>')).toBe(
+      "unknown",
+    );
+    // Nested rule that sets neither property: current answer stays shown.
+    expect(verdict('<style>b { @media (min-width: 0) { color: red } }</style><b id="t"></b>')).toBe("shown");
+    // Unnested rule on the same page still settles when nesting sets nothing.
+    expect(
+      verdict('<style>.x{display:none} b { @media (min-width: 0) { color: red } }</style><b id="t" class="x"></b>'),
+    ).toBe("hidden");
+  });
+
   test("inherited visibility is settled once every stylesheet was read", () => {
     expect(verdict('<div style="visibility:hidden"><b id="t"></b></div>')).toBe("hidden");
     expect(verdict('<link rel="stylesheet" href="/site.css"><div style="visibility:hidden"><b id="t"></b></div>')).toBe(

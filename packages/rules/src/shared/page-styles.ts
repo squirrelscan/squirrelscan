@@ -745,8 +745,12 @@ export function readPageStyles(doc: Document): PageStyles {
     for (const rule of rules) {
       if (!MAY_SET.test(rule.body)) continue;
       if (rule.selector.length > MAX_SELECTOR_CHARS) return INCOMPLETE;
-      // A nested rule (`& .x { … }`) could style any descendant.
-      if (rule.body.includes("{")) return INCOMPLETE;
+      // A nested rule (`& .x { … }`) could style any descendant. Nested CSS
+      // is not read (pub#1013): mark the sheet unread and keep going so a
+      // nested body that sets display/visibility leaves the outer selector's
+      // subjects unconfirmed (scanDeclarations reads it as "unknown"), rather
+      // than returning an empty incomplete index that would report them shown.
+      if (rule.body.includes("{")) complete = false;
       const { decls, mayAnimate: animates } = scanDeclarations(rule.body);
       if (!animates && decls !== "unknown" && !decls.display && !decls.visibility) continue;
       const display = decls === "unknown" || decls.display !== undefined;
