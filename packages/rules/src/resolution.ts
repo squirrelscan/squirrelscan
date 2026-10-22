@@ -27,6 +27,7 @@ import {
   type CompactResolutionPayload,
   type CompactResolutionSignal,
   encodeIndexGaps,
+  CHECK_NOT_APPLICABLE_SKIP_REASON,
   NOT_APPLICABLE_SKIP_REASON,
   RULE_TIMED_OUT_SKIP_REASON,
   resolutionRuleKey,
@@ -252,7 +253,22 @@ function collectResolutionEvidence(
         }
         continue;
       }
-      if (check.status !== "pass" && check.status !== "warn" && check.status !== "fail") continue;
+      // (pub#1011) A check that does not apply to the page is evaluated and clean:
+      // it registers the key and the page as evaluated, and is never failing, so a
+      // prior finding on the page resolves. An aggregate is trusted only when it
+      // carries the fold key (every constituent was this skip, not a gap).
+      const checkNotApplicable =
+        check.status === "skipped" &&
+        check.skipReason === CHECK_NOT_APPLICABLE_SKIP_REASON &&
+        (!!check.pageUrl || check.details?.foldKey === CHECK_NOT_APPLICABLE_SKIP_REASON);
+      if (
+        check.status !== "pass" &&
+        check.status !== "warn" &&
+        check.status !== "fail" &&
+        !checkNotApplicable
+      ) {
+        continue;
+      }
       // (#2063) A carried/unrendered check is a replay of an earlier observation,
       // not something this run evaluated. It can only mislead here — the pages it
       // names were not crawled, so the consumer never consults them — while eating
@@ -293,7 +309,7 @@ function collectResolutionEvidence(
         }
         for (const url of pageUrls) pages.add(normalized(url));
       }
-      if (check.status !== "pass") {
+      if (check.status === "warn" || check.status === "fail") {
         for (const url of pageUrls) {
           // Past the per-check cap the budget pass clips to at most the cap
           // anyway — stop collecting (cap+1 is enough to prove truncation).

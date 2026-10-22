@@ -3,6 +3,7 @@
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { documentUrl } from "../shared/redirect-evidence";
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 
 export const paginationRule: Rule = {
   meta: {
@@ -40,6 +41,8 @@ export const paginationRule: Rule = {
         name: "pagination",
         status: "skipped",
         message: "Page does not appear to be paginated",
+        skipReason: CHECK_NOT_APPLICABLE_SKIP_REASON,
+        details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON },
       });
       return { checks };
     }

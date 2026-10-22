@@ -1,6 +1,7 @@
 // content/mime-type - Validates Content-Type header matches file extension
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 
 // Expected MIME types by extension
 const MIME_TYPE_MAP: Record<string, string[]> = {
@@ -65,7 +66,8 @@ export const mimeTypeRule: Rule = {
         name: "mime-type",
         status: "skipped",
         message: "No file extension detected",
-        skipReason: "URL has no file extension",
+        skipReason: CHECK_NOT_APPLICABLE_SKIP_REASON,
+        details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON },
       });
       return { checks };
     }

@@ -16,6 +16,7 @@ import type {
 } from "@squirrelscan/core-contracts";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import {
+  CHECK_NOT_APPLICABLE_SKIP_REASON,
   NOT_APPLICABLE_SKIP_REASON,
   RULE_TIMED_OUT_SKIP_REASON,
   SCAN_TRUNCATED_SKIP_REASON,
@@ -275,7 +276,12 @@ export function createNotEvaluatedCollector(normalize: (url: string) => string):
         evaluated.add(checkKey);
         return;
       }
-      if (check.status !== "skipped" || check.skipReason === NOT_APPLICABLE_SKIP_REASON || timedOut) {
+      if (
+        check.status !== "skipped" ||
+        check.skipReason === NOT_APPLICABLE_SKIP_REASON ||
+        check.skipReason === CHECK_NOT_APPLICABLE_SKIP_REASON ||
+        timedOut
+      ) {
         return;
       }
       const own = check.pageUrl ?? pageUrl;

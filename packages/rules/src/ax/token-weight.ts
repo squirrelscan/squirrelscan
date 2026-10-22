@@ -1,6 +1,7 @@
 // ax/token-weight - per-page raw-HTML token estimate + text-to-HTML ratio
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 
 // Below this, a page is almost certainly a redirect, error stub, or otherwise
 // too small to say anything meaningful about its content-to-markup ratio.
@@ -35,15 +36,29 @@ export const tokenWeightRule: Rule = {
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
 
-    // No parsed DOM (4xx/5xx) or too small to be a real content page — skip
-    // rather than false-positive on a redirect stub or tiny error page.
+    // No parsed DOM (4xx/5xx, a parse failure) or too small to be a real content
+    // page: skip rather than false-positive on a redirect stub or tiny error page.
+    // A missing DOM, or a small body that is not a 2xx, is the check not running (a
+    // gap, so a prior finding carries). Only a genuine small 2xx page is "does not
+    // apply" (pub#1011).
     const htmlBytes = new TextEncoder().encode(ctx.page.html).length;
-    if (!ctx.parsed.document || htmlBytes < MIN_HTML_BYTES) {
+    if (!ctx.parsed.document) {
       checks.push({
         name: "token-weight",
         status: "skipped",
         message: "Page too small (or not a real content page) to assess token weight",
         skipReason: "below minimum size",
+      });
+      return { checks };
+    }
+    if (htmlBytes < MIN_HTML_BYTES) {
+      const ok = ctx.page.statusCode >= 200 && ctx.page.statusCode < 300;
+      checks.push({
+        name: "token-weight",
+        status: "skipped",
+        message: "Page too small (or not a real content page) to assess token weight",
+        skipReason: ok ? CHECK_NOT_APPLICABLE_SKIP_REASON : "below minimum size",
+        ...(ok ? { details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON } } : {}),
       });
       return { checks };
     }

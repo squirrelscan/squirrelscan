@@ -200,6 +200,17 @@ export const RULE_TIMED_OUT_SKIP_REASON = "rule-timed-out";
 export const NOT_APPLICABLE_SKIP_REASON = "noindex";
 
 /**
+ * A check that does not apply to THIS page: nothing for it to look at (no images,
+ * no form fields, no body, no `Link` header, a page below the minimum size, a
+ * `<picture>`-less page, a URL with no extension). Unlike a gap (`scan-truncated`,
+ * a timeout, no timing data), it is not "the check did not run": the signal and
+ * the merge read the page as evaluated and clean for that check, so a prior
+ * finding of it on the page resolves instead of carrying forever (pub#1011).
+ * Also the skip's `details.foldKey`, so a fold never mixes it with a gap.
+ */
+export const CHECK_NOT_APPLICABLE_SKIP_REASON = "not-applicable";
+
+/**
  * Suffix of a check that reports what its rule could not settle on a page:
  * `<check>-unconfirmed` (pub#921). A rule emits it IN PLACE of `<check>` for
  * the controls a style may hide, so the row is evaluation evidence for

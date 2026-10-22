@@ -19,6 +19,7 @@ import {
   isNumberHostile,
 } from "../shared/form-fields";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 
 /** Below this a form is a search box or a login, not a form worth a hint. */
 const MULTI_FIELD_THRESHOLD = 3;
@@ -265,7 +266,8 @@ export const inputTypesRule: Rule = {
         name: "form-novalidate",
         status: "skipped",
         message: "No forms set novalidate",
-        skipReason: "no-novalidate-forms",
+        skipReason: CHECK_NOT_APPLICABLE_SKIP_REASON,
+        details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON },
       });
     } else if (mismatches.length > 0) {
       checks.push({

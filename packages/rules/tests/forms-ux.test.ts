@@ -480,7 +480,7 @@ describe("a11y/input-types — novalidate intent", () => {
     const html = page(`<form action="/x"><input name="q" type="text" required></form>`);
     const result = check(inputTypesRule.run(ctx(html)).checks, "form-novalidate");
     expect(result?.status).toBe("skipped");
-    expect(result?.skipReason).toBe("no-novalidate-forms");
+    expect(result?.skipReason).toBe("not-applicable");
   });
 });
 
