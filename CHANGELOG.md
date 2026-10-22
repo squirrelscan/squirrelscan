@@ -36,7 +36,7 @@ Robots.txt is read the way crawlers read it, a redirect can no longer steer a cr
 
 ### Added
 
-- content: new rule `content/h1-title-alignment` reports, as info, a page whose H1 and `<title>` share no meaningful word (stopwords, generic words, stemming and the brand affix are read out; both strings are shown, and `details.confident` marks the stricter cases). It is info only because about a third of such pages are real mismatches; the rest are marketing headlines. Homepages and generic marketing pages, identical title and H1, and pages with no or several H1s, noindex pages, titles that are only the brand, glued or non-Latin text and languages without a stopword list are read as info or skipped (English, Spanish, French, German, Portuguese, Italian and Dutch are read) (#929).
+- content: new rule `content/h1-title-alignment` reports, as info, a page whose H1 and `<title>` share no meaningful word (stopwords, generic words, stemming and the brand affix are read out; both strings are shown, and `details.confident` marks the stricter cases). It is info only because a minority of such pages (roughly 10 to 20 percent by hand judgement) are real mismatches; the rest are marketing headlines. Homepages and generic marketing pages, identical title and H1, and pages with no or several H1s, noindex pages, titles that are only the brand, glued or non-Latin text and languages without a stopword list are read as info or skipped (English, Spanish, French, German, Portuguese, Italian and Dutch are read) (#929).
 
 ### Fixed
 

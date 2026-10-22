@@ -55,16 +55,19 @@ function fold(text: string): string {
 
 /** Words kept per side: bounds the work on a hostile 15,000-word heading (the rule timeout cannot interrupt a loop). */
 const MAX_WORDS = 64;
+/** Characters of the title and the H1 that are read, and of one word: bounds every later loop (the rule is synchronous). */
+const MAX_TEXT_CHARS = 500;
+const MAX_WORD_CHARS = 40;
 
 /** Words that alone say nothing about a topic: sharing only these is not a match. Per language. */
 const GENERIC_WORDS: Record<string, ReadonlySet<string>> = {
-  en: new Set("free online best new guide tool tools top official home page site website app service services solution solutions".split(" ")),
-  es: new Set("gratis online mejor nuevo guia herramienta oficial inicio pagina sitio servicio servicios".split(" ")),
-  fr: new Set("gratuit gratuite en ligne meilleur nouveau nouvelle guide outil officiel accueil site service services".split(" ")),
-  de: new Set("kostenlos online beste neu neue anleitung ratgeber werkzeug offiziell startseite seite service".split(" ")),
-  pt: new Set("gratis online melhor novo guia ferramenta oficial inicio pagina site servico servicos".split(" ")),
-  it: new Set("gratis online migliore nuovo guida strumento ufficiale home pagina sito servizio servizi".split(" ")),
-  nl: new Set("gratis online beste nieuw gids hulpmiddel officieel home pagina site dienst diensten".split(" ")),
+  en: new Set("free online best new guide tool tools top official home page site website app service services solution solutions about contact pricing features feature blog news faq support help".split(" ")),
+  es: new Set("gratis online mejor nuevo guia herramienta oficial inicio pagina sitio servicio servicios sobre contacto precios blog noticias ayuda".split(" ")),
+  fr: new Set("gratuit gratuite en ligne meilleur nouveau nouvelle guide outil officiel accueil site service services apropos contact tarifs blog actualites aide".split(" ")),
+  de: new Set("kostenlos online beste neu neue anleitung ratgeber werkzeug offiziell startseite seite service ueber kontakt preise blog neuigkeiten hilfe".split(" ")),
+  pt: new Set("gratis online melhor novo guia ferramenta oficial inicio pagina site servico servicos sobre contato precos blog ajuda".split(" ")),
+  it: new Set("gratis online migliore nuovo guida strumento ufficiale home pagina sito servizio servizi contatti prezzi blog aiuto".split(" ")),
+  nl: new Set("gratis online beste nieuw gids hulpmiddel officieel home pagina site dienst diensten contact prijzen blog hulp".split(" ")),
 };
 
 interface Word {
@@ -85,8 +88,9 @@ function contentWords(text: string, lang: string, stop: ReadonlySet<string>): Wo
   const generic = GENERIC_WORDS[lang];
   const out: Word[] = [];
   const raw = text.normalize("NFKC").replace(/['\u2019`]s\b/gi, "").replace(/['\u2019`]/g, "");
-  for (const piece of raw.split(/[^\p{L}\p{N}]+/u)) {
-    if (piece.length === 0) continue;
+  for (const longPiece of raw.split(/[^\p{L}\p{N}]+/u)) {
+    if (longPiece.length === 0) continue;
+    const piece = longPiece.length > MAX_WORD_CHARS ? longPiece.slice(0, MAX_WORD_CHARS) : longPiece;
     const t = fold(piece);
     if (/^\p{N}+$/u.test(t) || stop.has(t)) continue;
     if (t.length < 3 && !(t.length === 2 && /^\p{Lu}{2}$/u.test(piece))) continue;
@@ -124,12 +128,19 @@ export function stem(word: string, lang: string): string {
     const irregular = EN_IRREGULAR[w];
     if (irregular) return irregular;
     if (w.length > 4 && w.endsWith("ies")) return `${w.slice(0, -3)}y`;
-    if (w.length > 5 && w.endsWith("ing")) w = w.slice(0, -3).replace(DOUBLED, "$1");
-    else if (w.length > 4 && w.endsWith("ed")) w = w.slice(0, -2).replace(DOUBLED, "$1");
+    let ing = false;
+    if (w.length > 5 && w.endsWith("ing")) {
+      const base = w.slice(0, -3);
+      const undoubled = base.replace(DOUBLED, "$1");
+      w = undoubled;
+      // `making` -> `mak` -> `make`: a short consonant-vowel-consonant stem lost its silent e.
+      ing = undoubled === base && /^[^aeiou]*[aeiouy][^aeiouwxy]$/.test(w);
+    } else if (w.length > 4 && w.endsWith("ed")) w = w.slice(0, -2).replace(DOUBLED, "$1");
     else if (w.length > 3 && w.endsWith("es") && /(?:s|x|z|ch|sh)es$/.test(w)) w = w.slice(0, -2);
     else if (w.length > 3 && w.endsWith("s") && !w.endsWith("ss")) w = w.slice(0, -1);
-    // A silent final e, so price / pricing and make / making meet.
-    if (w.length > 3 && w.endsWith("e")) w = w.slice(0, -1);
+    if (ing) w += "e";
+    // A silent final e on a longer word, so service and services meet.
+    if (w.length > 5 && w.endsWith("e")) w = w.slice(0, -1);
     return w;
   }
   if (lang === "de" || lang === "nl") {
@@ -175,15 +186,16 @@ function latinShare(text: string): number {
 }
 
 /**
- * A word with a lower-to-upper hump (`TrustedWhen`) that splits off a stopword of the page
- * language and that the other text does not carry as written: heading markup whose pieces
- * were glued together (`<br>` or `<span>` with no space), so its words cannot be read. A
- * brand written in camel case on both sides (`WordPress`) is not that, and neither is one
- * whose pieces are not function words.
+ * A word of the H1 that starts in lower case and has a lower-to-upper hump (`voorBedrijven`,
+ * `forFree`), splits off a stopword of the page language, and that the title does not carry
+ * as written: heading markup whose pieces were glued together (`<br>` or `<span>` with no
+ * space), so its words cannot be read. Titles are plain text and are not checked. A
+ * capitalised word (`YouTube`, `OwnJournal`) is a brand, not a glue, and so is one the title
+ * carries as written. Runs on text already clipped to MAX_TEXT_CHARS.
  */
-function looksGlued(text: string, other: string, stop: ReadonlySet<string>): boolean {
-  for (const m of text.normalize("NFKC").matchAll(/\p{L}*\p{Ll}\p{Lu}\p{L}*/gu)) {
-    if (other.includes(m[0])) continue;
+function looksGlued(h1: string, title: string, stop: ReadonlySet<string>): boolean {
+  for (const m of h1.normalize("NFKC").matchAll(/(?<!\p{L})\p{Ll}\p{L}*\p{Ll}\p{Lu}\p{L}*/gu)) {
+    if (title.includes(m[0])) continue;
     for (const part of camelParts(m[0])) {
       if (part.length >= 3 && stop.has(fold(part))) return true;
     }
@@ -302,11 +314,12 @@ export const h1TitleAlignmentRule: Rule = {
 
   run(ctx: RuleContext): RuleResult {
     const { h1 } = ctx.parsed;
-    const title = (ctx.parsed.meta.title ?? "").replace(/\s+/g, " ").trim();
+    // Clipped before anything else runs: a hostile 100,000-letter token must not reach a loop.
+    const title = (ctx.parsed.meta.title ?? "").slice(0, MAX_TEXT_CHARS * 4).replace(/\s+/g, " ").trim().slice(0, MAX_TEXT_CHARS);
 
     // core/h1 owns a missing, repeated or empty H1; core/meta-title owns a missing title.
     if (h1.count !== 1) return skip(`${h1.count === 0 ? "No" : "Several"} H1: reported by core/h1`);
-    const h1Text = (h1.texts[0] ?? "").replace(/\s+/g, " ").trim();
+    const h1Text = (h1.texts[0] ?? "").slice(0, MAX_TEXT_CHARS * 4).replace(/\s+/g, " ").trim().slice(0, MAX_TEXT_CHARS);
     if (h1Text.length === 0) return skip("Empty H1: reported by core/h1");
     if (title.length === 0) return skip("No title: reported by core/meta-title");
 
@@ -328,8 +341,8 @@ export const h1TitleAlignmentRule: Rule = {
       return skip("The title or the H1 is mostly non-Latin text, which the stopword list cannot read");
     }
     // Heading markup whose pieces ran together has no readable words (a parser-side issue).
-    if (looksGlued(h1Text, title, stop) || looksGlued(title, h1Text, stop)) {
-      return skip("The title or the H1 looks run together (words glued without a space), so its words cannot be read");
+    if (looksGlued(h1Text, title, stop)) {
+      return skip("The H1 looks run together (words glued without a space), so its words cannot be read");
     }
 
     const brands = brandForms(ctx);

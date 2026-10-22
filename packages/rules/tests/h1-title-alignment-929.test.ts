@@ -164,7 +164,6 @@ describe("precision fixes (review of #1024)", () => {
   });
 
   test("silent e, -ing and irregular plurals meet", () => {
-    expect(run({ title: "Pricing for teams | Acme", h1: ["Our price list"] }).status).toBe("pass");
     expect(run({ title: "Making coffee at home | Acme", h1: ["How to make better espresso"] }).status).toBe("pass");
     expect(run({ title: "Hiring developers fast | Acme", h1: ["We hire remote engineers"] }).status).toBe("pass");
     expect(run({ title: "Dresses for women | Acme", h1: ["The woman who wears silk"] }).status).toBe("pass");
@@ -188,9 +187,42 @@ describe("precision fixes (review of #1024)", () => {
     expect(run({ title: "料金プランの比較 | Acme", h1: ["サービスのご案内と価格"], lang: "en" }).status).toBe("skipped");
   });
 
-  test("run-together heading text is skipped, not judged; a camel-case brand on both sides is not", () => {
-    expect(run({ title: "Teacher Mentor Attestation | SkillStory", h1: ["Achievements Become TrustedWhen Educators Back Them."], url: "https://example.com/blog/x" }).status).toBe("skipped");
+  test("run-together H1 text (lower-case start, a stopword hump) is skipped, not judged; capitalised brands are not", () => {
+    expect(run({ title: "Bedrijven software voor groei | Acme", h1: ["Software voorBedrijven met groei en meer"], lang: "nl", url: "https://example.com/blog/x" }).status).toBe("skipped");
+    expect(run({ title: "Pricing plans for teams | Acme", h1: ["Plans that start forFree today"], url: "https://example.com/blog/x" }).status).toBe("skipped");
+    // A capitalised camel word is a brand, not a glue; the title is plain text and is not checked.
+    expect(run({ title: "Notes on videos | Acme", h1: ["How YouTube and OwnJournal help writers"], url: "https://example.com/blog/x" }).status).not.toBe("skipped");
+    expect(run({ title: "Teacher Mentor ForFree Attestation | SkillStory", h1: ["Achievements become trusted when educators back them"], url: "https://example.com/blog/x" }).status).not.toBe("skipped");
     expect(run({ title: "WordPress themes for makers | Acme", h1: ["A WordPress theme you will love"], url: "https://example.com/blog/x" }).status).toBe("pass");
+  });
+
+  test("a hostile long token stays fast: 100k letters, German substring, shared-prefix tokens", () => {
+    const timed = (title: string, h1: string, lang = "en") => {
+      const started = performance.now();
+      run({ title, h1: [h1], lang, url: "https://example.com/blog/x" });
+      expect(performance.now() - started).toBeLessThan(100);
+    };
+    timed("\u00e9".repeat(100000) + " word", "\u00fc".repeat(100000) + " thing");
+    timed("a".repeat(100000), "aaaaab", "de");
+    timed(Array.from({ length: 64 }, (_, i) => `${"x".repeat(20000)}t${i}`).join(" "), Array.from({ length: 64 }, (_, i) => `${"x".repeat(20000)}h${i}`).join(" "), "de");
+    timed(Array.from({ length: 64 }, (_, i) => `${"x".repeat(20000)}t${i}`).join(" "), Array.from({ length: 64 }, (_, i) => `${"x".repeat(20000)}h${i}`).join(" "), "en");
+    timed("aB".repeat(100000), "xY".repeat(100000));
+    timed("Foo".repeat(50000) + " bar", "Qux".repeat(50000) + " baz");
+  });
+
+  test("silent e needs a 5-letter stem: unrelated short words do not collide", () => {
+    for (const [a, b] of [["hope", "hop"], ["cute", "cut"], ["mate", "mat"], ["tape", "tap"], ["lace", "lac"], ["prime", "prim"], ["dining", "din"], ["bored", "bore"]] as const) {
+      expect(stem(a, "en")).not.toBe(stem(b, "en"));
+    }
+    for (const [a, b] of [["price", "pricing"], ["make", "making"], ["bake", "baking"], ["women", "woman"]] as const) {
+      expect(stem(a, "en")).toBe(stem(b, "en"));
+    }
+    expect(run({ title: "Damenschuhe online kaufen | Marke", h1: ["Schuhe f\u00fcr jeden Tag"], lang: "de" }).status).toBe("pass");
+  });
+
+  test("page-kind words (about, contact, pricing) cannot match alone", () => {
+    const c = run({ title: "About the Mercury analytics platform | Acme", h1: ["About, ownership and funding for everyone"], url: "https://example.com/blog/x" });
+    expect(c.status).toBe("info");
   });
 
   test("a 15,000-word heading and title stay fast", () => {
