@@ -163,11 +163,12 @@ export function fetchRslLicensing(
     });
 
     // #1394: the caller's secret customHeaders are scoped to the audited origin —
-    // a license doc hosted off-origin must not receive them.
-    const baseHost = new URL(baseUrl).host;
+    // a license doc hosted off-origin (another host, scheme or port, #959) must not
+    // receive them.
+    const baseOrigin = new URL(baseUrl).origin;
     const documents = await Promise.all(
       licenseUrls.map((url) => {
-        const sameOrigin = new URL(url).host === baseHost;
+        const sameOrigin = new URL(url).origin === baseOrigin;
         return gate(url, () =>
           fetchLicenseDoc(url, userAgent, sameOrigin ? customHeaders : undefined, budget),
         );

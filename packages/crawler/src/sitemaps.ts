@@ -683,7 +683,7 @@ export function fetchSitemap(
   url: string,
   userAgent: string,
   customHeaders?: Record<string, string>,
-  baseHost?: string,
+  baseOrigin?: string,
   // squirrelscan/repo#1733: deadline for this one fetch, tightened by the
   // caller when the walk's progress window has less than a full timeout left.
   timeoutMs: number = SITEMAP_FETCH_TIMEOUT_MS,
@@ -693,10 +693,11 @@ export function fetchSitemap(
 ): Effect.Effect<SitemapFetchResult, never, never> {
   // #1393: the caller's secret customHeaders are scoped to the audited origin. A
   // `Sitemap:` directive (robots.txt) or child-sitemap reference can point at an
-  // off-origin host, so only forward them when the target host matches baseHost.
-  // When baseHost is unset (direct callers/tests), preserve prior behavior.
+  // off-origin host, so only forward them when the target origin (scheme, host
+  // and port, #959) matches baseOrigin.
+  // When baseOrigin is unset (direct callers/tests), preserve prior behavior.
   const originScopedHeaders =
-    baseHost !== undefined && new URL(url).host !== baseHost ? undefined : customHeaders;
+    baseOrigin !== undefined && new URL(url).origin !== baseOrigin ? undefined : customHeaders;
   const init: RequestInit & { decompress: boolean } = {
     headers: {
       "User-Agent": userAgent,
@@ -802,9 +803,9 @@ export function fetchSitemapsRecursive(
   seen: Set<string> = new Set(),
   urlBudget?: SitemapUrlBudget,
   customHeaders?: Record<string, string>,
-  // #1393: host of the audited origin; customHeaders are only forwarded to
-  // matching-host sitemap fetches. Threaded through the recursion.
-  baseHost?: string,
+  // #1393: audited origin (scheme, host, port, #959); customHeaders are only
+  // forwarded to matching-origin sitemap fetches. Threaded through the recursion.
+  baseOrigin?: string,
   // squirrelscan/repo#1733: progress window shared across the whole walk, so a
   // stalled origin ends the descent after one dead chunk while a slow-but-
   // healthy one keeps going. Created on the first call and threaded down.
@@ -860,7 +861,7 @@ export function fetchSitemapsRecursive(
       const chunkTimeoutMs = Math.min(SITEMAP_FETCH_TIMEOUT_MS, remainingMs);
       const chunkResults = yield* Effect.all(
         chunk.map((url) =>
-          fetchSitemap(url, userAgent, customHeaders, baseHost, chunkTimeoutMs, refusals),
+          fetchSitemap(url, userAgent, customHeaders, baseOrigin, chunkTimeoutMs, refusals),
         ),
         { concurrency: SITEMAP_FETCH_CONCURRENCY },
       );
@@ -915,7 +916,7 @@ export function fetchSitemapsRecursive(
       seen,
       urlBudget,
       customHeaders,
-      baseHost,
+      baseOrigin,
       walkWindow,
       refusals,
     );
@@ -978,10 +979,10 @@ export function discoverSitemaps(
     // carry any scheme/host, so `resolveRobotsSitemapUrl` rejects non-http(s)
     // targets (a `file://` sitemap would otherwise be fetched and its body
     // parsed/stored). Off-origin http(s) sitemaps are still fetched (legit CDN
-    // case) but without customHeaders, enforced by the baseHost gate passed to
+    // case) but without customHeaders, enforced by the baseOrigin gate passed to
     // fetchSitemapsRecursive below. #2316: the same resolver reads a scheme-less
     // line as a HOST, so the URL fetched here is the one the report stores.
-    const baseHost = new URL(baseUrl).host;
+    const baseOrigin = new URL(baseUrl).origin;
     if (robotsTxt?.sitemaps) {
       for (const sitemap of robotsTxt.sitemaps) {
         const resolvedUrl = resolveRobotsSitemapUrl(sitemap, baseUrl).url;
@@ -1014,7 +1015,7 @@ export function discoverSitemaps(
       undefined,
       urlBudget,
       options.customHeaders,
-      baseHost,
+      baseOrigin,
       walkWindow,
       options.refusals,
     );
