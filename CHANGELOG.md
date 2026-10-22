@@ -23,6 +23,7 @@ How it works:
 
 ### Fixed
 
+- a11y: an element a CSS-nesting rule may hide (`b { @media (min-width: 0) { display: none } }`, `.a { & .b { display: none } }`) now reads as unconfirmed instead of shown, so an unnamed control a browser hides is reported as `<check>-unconfirmed`, not as a failure. A nested rule that sets neither `display` nor `visibility` changes nothing. The reader's Chromium table gains 13 nesting rows measured in headless Chromium (#1013, repro from #1014 by @dbdefault).
 - a11y: a page past the style reader's limits (more than 5,000 style rules, an over-long `<style>` block or selector, a no-break or other non-ASCII space in a style block, or a rule nested inside another) now reads every element as unconfirmed for what a style might hide, instead of as shown. Before, the rules past the limit were dropped, so an element they hid could read as shown and an unnamed control inside it failed; now the naming checks report `<check>-unconfirmed` there. A page under the limits reads as before (#1015).
 
 ## v0.0.127 (2026-10-22)
