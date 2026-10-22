@@ -166,11 +166,16 @@ SQLite store keyed by site). On a partial re-audit:
 - **re-crawled pages** get fresh results that supersede their prior state,
 - **un-crawled pages** carry their last-known issues forward (tagged `carried`,
   with a "last seen" time) indefinitely, until you re-crawl them,
-- **re-crawled pages where a check was skipped** (for example `perf/ttfb` with
-  no timing data, or a scan that stopped at its work cap) keep that check's prior
-  issues, tagged `carried`: a check that did not run proves nothing is fixed. A
-  cloud audit that streams its findings to the store (very large crawls) never
-  sees skipped checks, so there a skipped check does not keep an issue open,
+- **re-crawled pages where a check was skipped** keep that check's prior issues,
+  tagged `carried`, when the check ran on other pages (for example `perf/ttfb`
+  with no timing data, or a scan that stopped at its work cap). A rule that timed
+  out or threw on a page carries all of its issues there. A check skipped on every
+  page, a rule you disabled in config, and a cloud audit that streams its findings
+  to the store (very large crawls, which never sees skipped checks) still close
+  the issue. A few rules also skip a page because the check does not apply to it
+  (for example `core/canonical-header` with no `Link` header); those carry too for
+  now, until they get a proper not-applicable skip
+  ([#1011](https://github.com/squirrelscan/squirrelscan/issues/1011)),
 - **pages no audit has ever rendered** (known from a sitemap or a rule's page
   list, but never inside a run's page budget) are tagged `unrendered` instead:
   nothing has observed them yet, so they have no "last seen" time and they are

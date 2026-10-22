@@ -223,6 +223,10 @@ export interface NotEvaluatedEvidence {
   pageChecks: Set<string>;
   /** `${ruleId}|${checkName}` whose skipped-page list was clipped: every page counts. */
   clippedChecks: Set<string>;
+  /** {@link pageRuleKey} of each (page, rule) where the rule timed out or threw. */
+  pageRules: Set<string>;
+  /** Rules that timed out or threw with no page to name (or a clipped list): every page carries. */
+  rules: Set<string>;
 }
 
 /**
@@ -245,18 +249,33 @@ export function createNotEvaluatedCollector(normalize: (url: string) => string):
   type Skips = { pages: Set<string>; clipped: boolean; gap: boolean };
   const skips = new Map<string, Skips>();
   const evaluated = new Set<string>();
+  const pageRules = new Set<string>();
+  const rules = new Set<string>();
   return {
     add(ruleId, check, pageUrl) {
       const checkKey = `${ruleId}${KEY_SEP}${check.name}`;
+      // A rule that timed out or threw named none of its real checks, and a local
+      // merge has no resolution signal to carry for it, so the whole rule carries
+      // on the pages it names (every page when it names none). A replayed row
+      // (carried or unrendered) is an earlier run's, not this one's.
+      const replayed = check.provenance === "carried" || check.provenance === "unrendered";
+      const timedOut = check.status === "skipped" && check.skipReason === RULE_TIMED_OUT_SKIP_REASON;
+      const thrown = check.status === "fail" && check.name === `${ruleId}-error`;
+      if ((timedOut || thrown) && !replayed) {
+        const at = check.pageUrl ?? pageUrl;
+        const aggregate = !at && check.details?.aggregated === true && !!check.pages?.length;
+        if (at) pageRules.add(pageRuleKey(normalize(at), ruleId));
+        else if (aggregate) {
+          for (const page of check.pages!) pageRules.add(pageRuleKey(normalize(page), ruleId));
+          const total = check.details?.pagesTruncated;
+          if (typeof total === "number" && total > check.pages!.length) rules.add(ruleId);
+        } else rules.add(ruleId);
+      }
       if (check.status === "pass" || check.status === "warn" || check.status === "fail") {
         evaluated.add(checkKey);
         return;
       }
-      if (
-        check.status !== "skipped" ||
-        check.skipReason === NOT_APPLICABLE_SKIP_REASON ||
-        check.skipReason === RULE_TIMED_OUT_SKIP_REASON
-      ) {
+      if (check.status !== "skipped" || check.skipReason === NOT_APPLICABLE_SKIP_REASON || timedOut) {
         return;
       }
       const own = check.pageUrl ?? pageUrl;
@@ -287,7 +306,7 @@ export function createNotEvaluatedCollector(normalize: (url: string) => string):
         for (const page of entry.pages) pageChecks.add(pageCheckKey(page, ruleId, checkName));
         if (entry.clipped) clippedChecks.add(checkKey);
       }
-      return { pageChecks, clippedChecks };
+      return { pageChecks, clippedChecks, pageRules, rules };
     },
   };
 }
@@ -1049,7 +1068,9 @@ export function createMergeSession(
         notEvaluated?.pageChecks.has(
           pageCheckKey(prior.normalizedUrl, prior.ruleId, prior.checkName)
         ) ||
-        notEvaluated?.clippedChecks.has(`${prior.ruleId}${KEY_SEP}${prior.checkName}`)
+        notEvaluated?.clippedChecks.has(`${prior.ruleId}${KEY_SEP}${prior.checkName}`) ||
+        notEvaluated?.rules.has(prior.ruleId) ||
+        notEvaluated?.pageRules.has(pageRuleKey(prior.normalizedUrl, prior.ruleId))
       ) {
         const carried: PageFindingRecord = { ...prior, provenance: "carried" };
         sink.persist(carried);

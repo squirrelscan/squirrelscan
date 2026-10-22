@@ -221,6 +221,43 @@ describe("local merge, no signal (#508)", () => {
     expect(merge([pass(A), skip(B)], true).state).toBe("resolved");
   });
 
+  const timedOutRow = (url?: string): CheckResult => ({
+    name: `${RULE}-error`,
+    status: "skipped",
+    message: "Rule not evaluated: exceeded its time budget",
+    skipReason: "rule-timed-out",
+    ...(url ? { pageUrl: url } : {}),
+  });
+  const thrownRow = (url?: string): CheckResult => ({
+    name: `${RULE}-error`,
+    status: "fail",
+    message: "Rule error: boom",
+    ...(url ? { pageUrl: url } : {}),
+  });
+
+  test("a rule that timed out on the page keeps its prior; one that later passes clears it", () => {
+    expect(merge([timedOutRow(A), pass(B)], true).state).toBe("open");
+    expect(merge([pass(A), pass(B)], true).state).toBe("resolved");
+  });
+
+  test("a rule that threw on the page keeps its prior", () => {
+    expect(merge([thrownRow(A), pass(B)], true).state).toBe("open");
+  });
+
+  test("a timeout or error that names no page carries every page of the rule", () => {
+    expect(merge([timedOutRow(), pass(B)], true).state).toBe("open");
+    expect(merge([thrownRow(), pass(B)], true).state).toBe("open");
+  });
+
+  test("a rule that timed out on another page only does not hold this page's prior", () => {
+    expect(merge([pass(A), timedOutRow(B)], true).state).toBe("resolved");
+  });
+
+  test("a replayed error row is an earlier run's, not a thrown rule", () => {
+    const replay = { ...thrownRow(A), provenance: "carried" } as CheckResult;
+    expect(merge([replay, pass(B)], true).state).toBe("resolved");
+  });
+
   test("without the evidence the skipped page resolved (the old behaviour)", () => {
     expect(merge([skip(A), pass(B)], false).state).toBe("resolved");
   });
