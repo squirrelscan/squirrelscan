@@ -86,6 +86,34 @@ describe("stopInterruptedCrawls", () => {
     expect(stopInterruptedCrawls(dbPath)).toBe(0);
   });
 
+  test("drops this process's crawl lease, and only this process's (#946)", async () => {
+    const { mine } = await seed();
+    const set = (pid: number) => {
+      const db = new Database(dbPath);
+      db.prepare(
+        "UPDATE crawls SET owner_pid = ?, owner_host = 'h', heartbeat_at = 9 WHERE id = ?"
+      ).run(pid, mine);
+      db.close();
+    };
+    const ownerOf = () => {
+      const db = new Database(dbPath);
+      const row = db
+        .prepare("SELECT owner_pid, heartbeat_at FROM crawls WHERE id = ?")
+        .get(mine) as { owner_pid: number | null; heartbeat_at: number };
+      db.close();
+      return row;
+    };
+    registerOwnedCrawl(() => mine);
+
+    set(process.pid + 1);
+    stopInterruptedCrawls(dbPath);
+    expect(ownerOf().owner_pid).toBe(process.pid + 1);
+
+    set(process.pid);
+    stopInterruptedCrawls(dbPath);
+    expect(ownerOf()).toEqual({ owner_pid: null, heartbeat_at: 9 });
+  });
+
   test("no owned crawl yet (still before the crawl started) is a no-op", async () => {
     await seed();
     registerOwnedCrawl(() => null);

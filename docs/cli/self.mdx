@@ -369,6 +369,14 @@ acme-docs  2.3 GB  retiring 2 of 5 audits
     2026-10-02  7021c515  crawled, 17d old
 ```
 
+While an audit, `crawl` or `analyze` runs, the process records itself on the
+crawl: its pid, host name and a heartbeat refreshed every 15 seconds, and it
+clears the owner when the command ends. This is written now and not yet read:
+`--prune` and the automatic retirement still use the rules above, and a later
+release will use the lease to keep a live crawl and to retire a killed one
+sooner. Crawls written by older versions carry no lease and keep following
+the rules above.
+
 An unfinished crawl (including a `failed` one) newer than the newest finished
 audit, or still within its idle time, is never retired. It may be a live audit, or a crawl waiting for `squirrel analyze`, so it is listed
 as skipped with that reason instead.

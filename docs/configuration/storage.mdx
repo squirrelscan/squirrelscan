@@ -47,6 +47,11 @@ finished audit. A crawl newer than the newest finished audit, or one still
 fetching pages, is never touched, because it may be a live audit or a crawl
 waiting for `squirrel analyze`.
 
+While a command runs on a crawl it writes a lease on it (the process id, host
+name and a heartbeat every 15 seconds), cleared when the command ends. Retention
+does not read the lease yet; it is recorded so a later release can tell a live
+crawl from a killed one. See [`self disk`](/cli/self#abandoned-crawls).
+
 Every audit writes a fresh set of rows, so without a window a project grows by
 about one audit each time you run it. On a 1,000-page site that is roughly 95 MB
 per audit, forever. Three is the default because it covers

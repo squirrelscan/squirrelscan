@@ -6,6 +6,12 @@ import { SQLiteStorage } from "./sqlite";
 import { StorageError } from "./types";
 
 export * from "./types";
+export {
+  startCrawlLease,
+  clearCrawlLease,
+  type CrawlLease,
+  type CrawlLeaseOptions,
+} from "./crawl-lease";
 export { SQLiteStorage, type ContentStoreAdapter } from "./sqlite";
 
 export function createTestStorage(): Effect.Effect<

@@ -56,6 +56,7 @@ import {
   type CloudTechDetectResult,
 } from "@/audit/cloud";
 import { gateStage1 } from "@/audit/cloud-gating";
+import { startLeaseForStorage } from "@/audit/crawl-lease";
 import { entityMapSite, storeEntityMap } from "@/audit/entity-map";
 import { guardCollector } from "@/audit/guard-collector";
 import {
@@ -929,6 +930,8 @@ export async function runAudit(
 
     // Fiber handle for event subscription (declared outside try for finally cleanup)
     let eventsFiber: ReturnType<typeof Effect.runFork> | undefined;
+    // Crawl lease (#946), released in the finally below.
+    let crawlLease: { release: () => void } | undefined;
 
     // Cloud spend charged OUTSIDE the prefetch: render submits during the
     // crawl and dead-links bulk calls during the external-links phase. Both
@@ -1120,6 +1123,8 @@ export async function runAudit(
       // #941: lets a Ctrl-C mark this crawl `stopped` instead of leaving it
       // `running`, by id.
       registerOwnedCrawl(() => crawler.currentCrawlId);
+      // #946: record that this process drives the crawl, for the whole command.
+      crawlLease = startLeaseForStorage(storage, () => crawler.currentCrawlId);
 
       logger.debug("step 1: crawling", url);
       onProgress({ phase: "crawling" });
@@ -2348,6 +2353,7 @@ export async function runAudit(
       if (eventsFiber) {
         await Effect.runPromise(Fiber.interrupt(eventsFiber));
       }
+      crawlLease?.release();
       releaseContentStore();
       await Effect.runPromise(storage.close());
     }

@@ -8,6 +8,7 @@ import type { TlsEvent } from "@/crawler/fetcher";
 import type { CrawlerConfigSnapshot } from "@/crawler/storage/types";
 import type { CoverageMode } from "@/types";
 
+import { startLeaseForStorage } from "@/audit/crawl-lease";
 import { loadConfig } from "@/config";
 import { MAX_PAGES_CAP } from "@/constants";
 import {
@@ -235,6 +236,8 @@ export async function runCrawl(
     logger.debug("creating storage", projectName);
 
     const storage = await Effect.runPromise(createStorage({ projectName }));
+    // Crawl lease (#946), released in the finally below.
+    let crawlLease: { release: () => void } | undefined;
     // #2342: the project's cap, and a lease so the crawl's own pages are not
     // evicted while it runs. Released in the finally below.
     const releaseContentStore = retainGlobalContentStore({
@@ -294,6 +297,8 @@ export async function runCrawl(
 
       logger.debug("starting crawler", url);
       onProgress({ phase: "crawling" });
+      // #946: record that this process drives the crawl.
+      crawlLease = startLeaseForStorage(storage, () => crawler.currentCrawlId);
 
       // Subscribe to event stream if callback provided
       const onEvent = options.onEvent;
@@ -454,6 +459,7 @@ export async function runCrawl(
         limitReached,
       });
     } finally {
+      crawlLease?.release();
       releaseContentStore();
       await Effect.runPromise(storage.close());
     }

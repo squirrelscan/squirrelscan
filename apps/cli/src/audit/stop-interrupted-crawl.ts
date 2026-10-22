@@ -39,6 +39,15 @@ export function stopInterruptedCrawls(dbPath: string): number {
         "UPDATE crawls SET status = 'stopped' WHERE id = ? AND status = 'running'"
       )
       .run(id);
+    // `finally` blocks do not run on this path, so drop the crawl lease too
+    // (#946). Separate from the status write: a failure here changes nothing.
+    try {
+      db.prepare(
+        "UPDATE crawls SET owner_pid = NULL, owner_host = NULL WHERE id = ? AND owner_pid = ?"
+      ).run(id, process.pid);
+    } catch {
+      // the lease goes stale on its own
+    }
     return Number(result.changes ?? 0);
   } catch {
     return 0;

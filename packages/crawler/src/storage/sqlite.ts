@@ -77,7 +77,7 @@ export interface ContentStoreAdapter {
 // Schema version - increment when schema changes.
 // Exported so migration tests can assert "this DB reached the CURRENT version" rather than pinning a
 // literal, which turned every schema bump into two unrelated test failures.
-export const SCHEMA_VERSION = 34;
+export const SCHEMA_VERSION = 35;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -502,6 +502,18 @@ const MIGRATIONS: Record<number, string[]> = {
   // and `squirrel analyze` keep the label. ADDITIVE and nullable: a row written
   // before this reads as plainly unverified. Local sqlite only.
   34: [`ALTER TABLE links ADD COLUMN unverified_reason TEXT`],
+  // Version 35: a liveness lease on crawls (#946). The CLI process driving a
+  // crawl writes its pid and host and refreshes a heartbeat, so a later change
+  // can tell a live crawl from a dead one instead of inferring it from newer
+  // audits. ADDITIVE and nullable, no defaults, no index: NULL means "written
+  // by a CLI without leases" and nothing reads these columns yet. Local sqlite
+  // only; an older CLI ignores them (reads map known keys, inserts name their
+  // columns).
+  35: [
+    `ALTER TABLE crawls ADD COLUMN owner_pid INTEGER`,
+    `ALTER TABLE crawls ADD COLUMN owner_host TEXT`,
+    `ALTER TABLE crawls ADD COLUMN heartbeat_at INTEGER`,
+  ],
 };
 
 // Every `pages` column but the two that hold a page's body, for
@@ -610,6 +622,11 @@ const CRAWLS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   // a database that skipped migration 27 would quietly put failed runs back in
   // the retention window instead of failing loudly.
   { name: "report_status", type: "TEXT" },
+  // Migration 35 (#946): the crawl lease. Nothing reads them yet, but the
+  // lease writer UPDATEs all three, which would throw on a DB that skipped 35.
+  { name: "owner_pid", type: "INTEGER" },
+  { name: "owner_host", type: "TEXT" },
+  { name: "heartbeat_at", type: "INTEGER" },
 ];
 
 // Same guard for `entity_edges` (#492). Migration 31 added both columns, and
@@ -655,7 +672,12 @@ CREATE TABLE IF NOT EXISTS crawls (
   -- failed, blocked, or the sentinel "building" while its report is still being
   -- reconstructed. Distinct from status, which is the crawl lifecycle and says
   -- analyzed for all of them. NULL for crawls written before migration 27.
-  report_status TEXT
+  report_status TEXT,
+  -- Crawl lease (#946): which process drives this crawl and when it last said
+  -- so. NULL = no lease.
+  owner_pid INTEGER,
+  owner_host TEXT,
+  heartbeat_at INTEGER
 );
 -- NO index on retired_at here. SCHEMA is exec'd BEFORE runMigrations(), and on a
 -- database written before migration 25 the crawls table exists WITHOUT the
@@ -1230,6 +1252,10 @@ function capBatchPerHost(
 export class SQLiteStorage implements CrawlStorage {
   private db: Database | null = null;
   private readonly path: string;
+  /** The database file, for a second connection (the crawl lease heartbeat). */
+  get dbPath(): string {
+    return this.path;
+  }
   private readonly contentStore: ContentStoreAdapter | null;
   /**
    * URLs whose cached entry was skipped because the content store had evicted

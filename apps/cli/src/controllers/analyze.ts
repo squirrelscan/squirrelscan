@@ -19,6 +19,7 @@ import {
   buildSiteContext,
   fetchResourceAssets,
 } from "@/audit/adapter";
+import { startLeaseForStorage } from "@/audit/crawl-lease";
 import { entityMapSite, storeEntityMap } from "@/audit/entity-map";
 import {
   auditMayRetire,
@@ -214,6 +215,9 @@ export async function runAnalyze(
   const onProgress = options.onProgress ?? (() => {});
 
   let storage: CrawlStorage | null = null;
+  // Crawl lease (#946): held from here to the finally, so the analyzed / report
+  // building window is covered.
+  let crawlLease: { release: () => void } | undefined;
 
   try {
     configureLogger({ debug: false });
@@ -267,6 +271,8 @@ export async function runAnalyze(
         commandError(ErrorCodes.CRAWL_NOT_FOUND, `Crawl not found: ${crawlId}`)
       );
     }
+
+    crawlLease = startLeaseForStorage(storage, () => crawlId);
 
     // Same reason as the selector above: retirement does not change the status,
     // so this has to be its own test or `analyze <id>` re-analyzes reclaimed
@@ -396,6 +402,7 @@ export async function runAnalyze(
       )
     );
   } finally {
+    crawlLease?.release();
     // Always close storage
     if (storage) {
       await Effect.runPromise(
