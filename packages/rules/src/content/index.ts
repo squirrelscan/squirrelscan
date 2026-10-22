@@ -11,6 +11,7 @@ import { devLeakageRule } from "./dev-leakage";
 import { duplicateDescriptionRule } from "./duplicate-description";
 import { duplicateTitleRule } from "./duplicate-title";
 import { freshnessRule } from "./freshness";
+import { h1TitleAlignmentRule } from "./h1-title-alignment";
 import { headingHierarchyRule } from "./heading-hierarchy";
 import { hiddenTextRule } from "./hidden-text";
 import { keywordStuffingRule } from "./keyword-stuffing";
@@ -54,6 +55,7 @@ export const rules: Rule[] = [
   devLeakageRule,
   placeholderContactRule,
   commonMisspellingsRule,
+  h1TitleAlignmentRule,
 ];
 
 export {
@@ -67,6 +69,7 @@ export {
   duplicateDescriptionRule,
   duplicateTitleRule,
   freshnessRule,
+  h1TitleAlignmentRule,
   headingHierarchyRule,
   hiddenTextRule,
   keywordStuffingRule,

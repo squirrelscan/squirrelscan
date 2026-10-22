@@ -23,6 +23,9 @@ Content rules read the words a visitor actually sees. Some of them catch pipelin
   <Card title="Visible date disagrees with schema: which date is wrong" icon="triangle-exclamation" href="/rules/content/date-agreement">
     A page states its date in several places and presence checks pass as soon as one exists. squirrel compares the byline, the schema and the URL year.
   </Card>
+  <Card title="H1 and title that share no word: two topics for one page" icon="circle-info" href="/rules/content/h1-title-alignment">
+    A page whose title and H1 share no meaningful word sends two different signals about its subject. squirrel compares the content words of both.
+  </Card>
   <Card title="localhost in production: dev hosts left in the markup" icon="triangle-exclamation" href="/rules/content/dev-leakage">
     A link or image pointing at localhost or a preview deployment is broken for every visitor. squirrel classifies the host and says whether it is yours.
   </Card>
