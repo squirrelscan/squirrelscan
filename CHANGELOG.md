@@ -12,14 +12,16 @@ How it works:
   A stable `## vX.Y.Z` matches any `## vX.Y.Z-<suffix>` heading (e.g. `-beta.N`,
   `-rc.1`), so a stable cut can reuse a pre-release section when no plain one exists.
 - Use `###` (or deeper) for sub-sections within an entry — a `## ` heading marks a new version.
-- A `## [Unreleased]` section collects merged changes that have not been cut into
-  a release yet; rename it to the version when the release goes out.
+- A `## [Unreleased]
 
-## [Unreleased]
+## v0.0.129 (2026-10-23)
+
+The editor's summary gets a ranked Priorities section, and the summary request now knows your stack.
 
 ### Added
 
-- **The editor's summary gets a ranked Priorities section.** Every output format (console, HTML, Markdown, text, JSON, XML and LLM) shows the summary's ranked next steps as their own section: a title, why it matters for the site, the concrete action and an effort rating. JSON carries them in `editorSummary.priorities`. The summary request now sends the technologies the audit detected and every failing rule, so actions can say where the fix is made on the site's platform. Reports without priorities still show the big-ticket list ([editor's summary](https://docs.squirrelscan.com/cloud/editor-summary)).
+- **The editor's summary gets a ranked Priorities section.** When the cloud summary includes priorities, every output format (console, HTML, Markdown, text, JSON, XML and LLM) shows them as their own section, up to eight, highest impact first: a title, why it matters for the site, the concrete action and an effort rating (quick win, moderate or significant). JSON carries them in `editorSummary.priorities`. A summary without priorities, such as one from before this release, shows the big-ticket list as before, and the big-ticket list gives way to Priorities when both exist ([editor's summary](https://docs.squirrelscan.com/cloud/editor-summary)).
+- **The summary request sends your stack and every failing rule.** The request now carries the technologies the audit detected and the id of every rule that failed or warned (not just the ranked top issues), so actions can say where the fix is made on your platform. Both are optional and left out when empty. No rules or scoring change.
 
 ## v0.0.128 (2026-10-22)
 
