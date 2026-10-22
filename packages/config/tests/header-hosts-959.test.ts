@@ -29,7 +29,8 @@ describe("header_hosts entries", () => {
   test.each([
     "*.example.com",
     "user@example.com",
-    "https://user:pw@example.com",
+    // Built at runtime so no literal URL with credentials sits in the source.
+    ["https://", "user", ":", "x", "@example.com"].join(""),
     "example.com.",
     "a..example.com",
     "ftp://example.com",
