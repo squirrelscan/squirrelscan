@@ -17,9 +17,13 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.128 (2026-10-22)
+
+The CLI moves to Bun 1.4.4, a crawl with a live owner is never retired, and a check that has nothing to check on a page stops keeping an old finding open.
+
 ### Changed
 
-- **The CLI is built with Bun 1.4.4.** TLS chains through the eight compromised eMudhra intermediates are now refused and the root store moves to NSS 3.131.1. The roots for Entrust (2006), ePKI, Atos TrustedRoot 2011, SecureSign Root CA12 and three emSign roots are no longer bundled, so a site whose chain ends only at one of those can fail TLS. The binary is about 24 MB larger (measured on macOS arm64).
+- **The CLI is built with Bun 1.4.4.** A TLS chain that holds any of eight blocked eMudhra intermediate CA public keys is now refused, and the root store moves to NSS 3.131.1. Seven roots are no longer bundled (Entrust Root Certification Authority 2006, ePKI, Atos TrustedRoot 2011, SecureSign Root CA12, emSign Root CA C1, emSign ECC Root CA G3 and emSign ECC Root CA C3), so a site whose chain ends only at one of those can fail TLS. SECOM and Telia TLS roots are added. The binary is about 24 MB larger (73 to 97 MB on macOS arm64).
 
 ### Fixed
 
@@ -31,7 +35,7 @@ How it works:
 
 - a11y, links: `link-text` and `anchor-text` now recognise generic link text in Spanish, French, German, Portuguese, Italian, Dutch, Japanese, Chinese, Korean and Russian (`cliquez ici`, `mehr`, `haga clic aquí`, `詳しくはこちら` and similar), chosen by the page's `<html lang>`, with English always checked. A page with no or an unknown `lang` keeps the English list, matching is on the whole text, and the conventional account and legal labels are never reported (#840).
 - content: `word-count` skips pages kept out of search (`noindex` meta or `X-Robots-Tag`), like `core/meta-title`, `core/meta-description` and `core/h1`: a login, sign-up or dashboard page is short by design. The page gets one skipped check naming the source, and nothing is skipped on a staging or preview site whose homepage is noindex (#841).
-- Retention and `self disk --prune` now read the crawl lease that v0.0.127 started writing (#946). A crawl whose heartbeat is under 5 minutes old, or whose owner process is still alive on this machine (trusted for up to 24 hours of silence, so a suspended laptop is safe and a reused pid cannot hold a crawl forever), is never retired, including when a later audit of the same project finishes first. A killed `crawled` crawl is retired by the next audit and by `--prune` once its heartbeat is 5 minutes old, and a killed `running` crawl, which `--resume` continues, after 24 hours, in both cases without waiting for a later audit; `stopped`, `paused` and `failed` crawls are never retired sooner by a dead lease and keep their idle rules. A newer finished audit plus 30 minutes idle retires any of them as before. An owner on another host or one that cannot be read counts as live until the 5 minutes pass, and the check runs again inside the retiring transaction. Crawls written by older versions have no lease and follow the previous rules, and `--prune --dry-run` shows a held crawl's owner pid and last heartbeat. A `--resume` after a kill takes the lease over at once when the old owner's process is gone.
+- Retention and `self disk --prune` now read the crawl lease that v0.0.127 started writing (#946). A crawl whose heartbeat is under 5 minutes old, or whose owner process is still alive on this machine (trusted for up to 24 hours of silence, so a suspended laptop is safe and a reused pid cannot hold a crawl forever), is never retired, including when a later audit of the same project finishes first. A killed `crawled` crawl is retired by the next audit and by `--prune` once its heartbeat is 5 minutes old, and a killed `running` crawl, which `--resume` continues, after 24 hours, in both cases without waiting for a later audit; `stopped`, `paused` and `failed` crawls are never retired sooner by a dead lease: `stopped` and `paused` keep their 7 days, `failed` its 30 minutes. A newer finished audit plus the idle time (30 minutes, or 7 days for `stopped` and `paused`) retires any of them as before. An owner on another host or one that cannot be read counts as live until the 5 minutes pass, and the check runs again inside the retiring transaction. Crawls written by older versions have no lease and follow the previous rules, and `--prune --dry-run` shows a held crawl's owner pid and last heartbeat. A `--resume` after a kill takes the lease over at once when the old owner's process is gone.
 
 ## v0.0.127 (2026-10-22)
 
