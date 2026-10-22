@@ -298,6 +298,10 @@ export interface CrawlRef {
   readonly startedAt: number;
   /** Latest page or frontier timestamp; set on skipped crawls. */
   readonly lastActivityAt?: number;
+  /** The crawl lease (#946): which process holds it and when it last beat. */
+  readonly ownerPid?: number;
+  readonly ownerHost?: string;
+  readonly heartbeatAt?: number;
 }
 
 /** What retiring would remove from one project. */
@@ -308,13 +312,14 @@ export interface ProjectPrunePlan {
   readonly retiring: ReadonlyArray<{ id: string; startedAt: number }>;
   /**
    * Crawls from audits that never finished (killed, `kill -9`, OOM), older than
-   * the project's newest finished audit and idle for 30 minutes (#941). Retired along with
+   * the project's newest finished audit and idle for 30 minutes (#941), or whose
+   * recorded owner is gone (#946, see isCrawlAbandoned). Retired along with
    * `retiring`, and they take no slot of the `--keep` window. Oldest first.
    */
   readonly abandoned: ReadonlyArray<CrawlRef>;
   /**
-   * Unfinished crawls NEWER than the newest finished audit, or active in the
-   * last 30 minutes: possibly a live audit, possibly a `crawled` crawl awaiting `analyze`. Never retired; listed
+   * Unfinished crawls NEWER than the newest finished audit, active in the
+   * last 30 minutes, or held by a live lease (#946): possibly a live audit, possibly a `crawled` crawl awaiting `analyze`. Never retired; listed
    * so the skip is stated rather than silent. Newest first.
    */
   readonly skippedLive: ReadonlyArray<CrawlRef>;

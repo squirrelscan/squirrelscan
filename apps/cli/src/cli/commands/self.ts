@@ -437,7 +437,7 @@ async function runPrune(
     }
     if (plan.abandoned.length > 0) {
       console.log(
-        `    abandoned (never finished, idle, older than the newest finished audit):`
+        `    abandoned (never finished: its owner is gone, or it is idle and older than the newest finished audit):`
       );
       for (const crawl of plan.abandoned) {
         console.log(
@@ -447,7 +447,15 @@ async function runPrune(
     }
     for (const crawl of plan.skippedLive) {
       console.log(
-        `    skipped ${crawl.id.slice(0, 8)}  ${crawl.status}, ${formatAge(crawl.startedAt)} old, last activity ${formatAge(crawl.lastActivityAt ?? crawl.startedAt)} ago: newer than the newest finished audit or recently active, so it may be live or resumable`
+        `    skipped ${crawl.id.slice(0, 8)}  ${crawl.status}, ${formatAge(crawl.startedAt)} old, last activity ${formatAge(crawl.lastActivityAt ?? crawl.startedAt)} ago${
+          crawl.heartbeatAt !== undefined
+            ? `, owner pid ${crawl.ownerPid ?? "?"} on ${crawl.ownerHost ?? "?"}, last heartbeat ${formatAge(crawl.heartbeatAt)} ago`
+            : ""
+        }: ${
+          crawl.heartbeatAt !== undefined
+            ? "held by a process that may still be running"
+            : "newer than the newest finished audit or recently active, so it may be live or resumable"
+        }`
       );
     }
   }

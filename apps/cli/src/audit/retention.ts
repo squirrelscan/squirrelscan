@@ -124,7 +124,10 @@ export async function retainRecentAudits(
   // slot of the window, and are retired whatever `keep` says: only those older
   // than the newest finished audit and idle for 30 minutes (7 days for the
   // `stopped`/`paused` ones `--resume` continues) qualify, so a live or
-  // resumable crawl never does. `retireCrawls` re-checks that inside its own transaction.
+  // resumable crawl never does. A crawl whose owner is recorded (#946) is
+  // decided by its lease instead: a live heartbeat or pid is never retired, a
+  // dead one is, without waiting for a newer audit. `retireCrawls` re-checks all
+  // of that inside its own transaction.
   const abandoned = (await Effect.runPromise(storage.listAbandonedCrawls()))
     .map((crawl) => crawl.id)
     .filter((id) => id !== options.currentCrawlId);

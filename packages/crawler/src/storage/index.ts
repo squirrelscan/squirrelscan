@@ -12,6 +12,13 @@ export {
   type CrawlLease,
   type CrawlLeaseOptions,
 } from "./crawl-lease";
+export {
+  isCrawlAbandoned,
+  isPidAlive,
+  REAL_LEASE_ENV,
+  type LeaseCrawlRow,
+  type LeaseEnv,
+} from "./crawl-liveness";
 export { SQLiteStorage, type ContentStoreAdapter } from "./sqlite";
 
 export function createTestStorage(): Effect.Effect<

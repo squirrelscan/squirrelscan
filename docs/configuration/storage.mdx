@@ -49,8 +49,9 @@ waiting for `squirrel analyze`.
 
 While a command runs on a crawl it writes a lease on it (the process id, host
 name and a heartbeat every 15 seconds), cleared when the command ends. Retention
-does not read the lease yet; it is recorded so a later release can tell a live
-crawl from a killed one. See [`self disk`](/cli/self#abandoned-crawls).
+reads it: a crawl with a live lease is never retired, even when a later audit
+finished first, and a `crawled` or `running` crawl whose owner was killed is retired without
+waiting for a later audit (after 5 minutes and 24 hours of silence). See [`self disk`](/cli/self#abandoned-crawls) for the exact rules.
 
 Every audit writes a fresh set of rows, so without a window a project grows by
 about one audit each time you run it. On a 1,000-page site that is roughly 95 MB

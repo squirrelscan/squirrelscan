@@ -13,6 +13,7 @@
 import { Database } from "bun:sqlite";
 import { hostname } from "node:os";
 
+import { isPidAlive } from "./crawl-liveness";
 import {
   CRAWL_LEASE_BUSY_TIMEOUT_MS,
   CRAWL_LEASE_HEARTBEAT_MS,
@@ -102,7 +103,7 @@ export function startCrawlLease(options: CrawlLeaseOptions): CrawlLease {
       const result = db
         .prepare(
           `UPDATE crawls SET owner_pid = ?, owner_host = ?, heartbeat_at = ?
-           WHERE id = ? AND (owner_pid IS NULL OR (owner_pid = ? AND owner_host = ?)
+           WHERE id = ? AND ((owner_pid IS NULL AND owner_host IS NULL) OR (owner_pid = ? AND owner_host = ?)
              OR heartbeat_at IS NULL OR heartbeat_at < ?)`
         )
         .run(pid, host, t, id, pid, host, t - CRAWL_LEASE_STALE_MS);
@@ -110,11 +111,44 @@ export function startCrawlLease(options: CrawlLeaseOptions): CrawlLease {
         held.add(id);
         return true;
       }
-      return false;
+      return takeOverDeadOwner(id);
     } catch {
       // SQLITE_BUSY past the 1 s timeout, or a DB without the columns: skip.
       return false;
     }
+  };
+
+  // A resume right after a kill -9: the dead owner's heartbeat is still fresh,
+  // so the CAS above yields. A same-host owner whose pid is gone is dead for
+  // certain, so take over at once (CAS on the pid we just read). Caveat: the
+  // pid probe only sees this machine's pid namespace, so two containers sharing
+  // a host name and a database file cannot see each other's pids and would read
+  // a live owner as dead. Not a supported setup (SQLite WAL needs one kernel);
+  // the retirement side is bounded by the same 24 h cap.
+  const takeOverDeadOwner = (id: string): boolean => {
+    if (!db) return false;
+    const owner = db
+      .prepare("SELECT owner_pid, owner_host FROM crawls WHERE id = ?")
+      .get(id) as { owner_pid: unknown; owner_host: unknown } | null;
+    if (
+      !owner ||
+      owner.owner_host !== host ||
+      typeof owner.owner_pid !== "number" ||
+      owner.owner_pid === pid ||
+      isPidAlive(owner.owner_pid)
+    ) {
+      return false;
+    }
+    const taken = db
+      .prepare(
+        "UPDATE crawls SET owner_pid = ?, owner_host = ?, heartbeat_at = ? WHERE id = ? AND owner_pid = ? AND owner_host = ?"
+      )
+      .run(pid, host, now(), id, owner.owner_pid, host);
+    if (Number(taken.changes ?? 0) > 0) {
+      held.add(id);
+      return true;
+    }
+    return false;
   };
 
   const schedule = (): void => {

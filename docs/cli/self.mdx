@@ -371,11 +371,32 @@ acme-docs  2.3 GB  retiring 2 of 5 audits
 
 While an audit, `crawl` or `analyze` runs, the process records itself on the
 crawl: its pid, host name and a heartbeat refreshed every 15 seconds, and it
-clears the owner when the command ends. This is written now and not yet read:
-`--prune` and the automatic retirement still use the rules above, and a later
-release will use the lease to keep a live crawl and to retire a killed one
-sooner. Crawls written by older versions carry no lease and keep following
-the rules above.
+clears the owner when the command ends. `--prune` and the automatic retirement
+read it, so liveness is recorded rather than guessed from newer audits:
+
+- A crawl whose heartbeat is under 5 minutes old is never retired, even when a
+  later audit of the project finished first (two audits running at once).
+- A heartbeat older than that does not retire it while its owner process is
+  still alive on this machine, for up to 24 hours of silence. That covers a busy
+  or suspended audit (a sleeping laptop: the heartbeat resumes within 15 seconds
+  of waking). After 24 hours a pid is not trusted, because it may have been
+  reused by another program. A container that shares a host name with the host
+  cannot see the host's pids, so it cannot tell a live owner from a dead one
+  that way.
+- An owner on another machine, or one that cannot be read, counts as live
+  until the 5 minutes pass.
+- A killed crawl whose owner is gone is retired without waiting for a later
+  audit to finish, once its heartbeat is stale: a `crawled` crawl after 5
+  minutes, a `running` crawl (what `--resume` continues) after 24 hours. A
+  `stopped`, `paused` or `failed` crawl is never retired sooner by a dead lease;
+  it follows the idle rules above (7 days for `stopped` and `paused`). In every
+  case a newer finished audit plus 30 minutes idle retires it as before.
+- A crawl written by an older version carries no lease and follows the rules
+  above. A crawl whose command ended normally (Ctrl-C, or `crawl` waiting for
+  `analyze`) clears its owner and follows them too.
+
+`--dry-run` lists a held crawl as skipped with its owner pid, host and the age of
+its last heartbeat.
 
 An unfinished crawl (including a `failed` one) newer than the newest finished
 audit, or still within its idle time, is never retired. It may be a live audit, or a crawl waiting for `squirrel analyze`, so it is listed

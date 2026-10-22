@@ -51,6 +51,12 @@ import type {
 } from "./types";
 
 import {
+  isCrawlAbandoned,
+  REAL_LEASE_ENV,
+  type LeaseCrawlRow,
+  type LeaseEnv,
+} from "./crawl-liveness";
+import {
   ABANDONED_IDLE_MS,
   ABANDONED_RESUMABLE_IDLE_MS,
   StorageError,
@@ -77,6 +83,12 @@ export interface ContentStoreAdapter {
 // Schema version - increment when schema changes.
 // Exported so migration tests can assert "this DB reached the CURRENT version" rather than pinning a
 // literal, which turned every schema bump into two unrelated test failures.
+interface UnfinishedCrawlRow extends LeaseCrawlRow {
+  id: string;
+  started_at: number;
+  last_activity: number;
+}
+
 export const SCHEMA_VERSION = 35;
 
 // Migrations to run when upgrading from older versions
@@ -1262,6 +1274,11 @@ export class SQLiteStorage implements CrawlStorage {
    * its body (#2342). See {@link getCachedPage}.
    */
   private readonly evictedCacheEntries = new Set<string>();
+  /**
+   * Clock, host name and pid probe behind the crawl-lease verdict (#946).
+   * Replaceable so a test can put a crawl on another host or move the clock.
+   */
+  leaseEnv: LeaseEnv = REAL_LEASE_ENV;
 
   constructor(path: string = ":memory:", contentStore?: ContentStoreAdapter) {
     this.path = path;
@@ -4415,6 +4432,10 @@ export class SQLiteStorage implements CrawlStorage {
    * non-finished crawl newer than every finished one may be a live audit or a
    * resting `crawled` crawl awaiting `analyze`, and is NOT abandoned.
    *
+   * That is the rule for a crawl with no lease. A crawl whose owner is recorded
+   * (#946) is decided by {@link isCrawlAbandoned} instead: a live lease is never
+   * abandoned, a dead one is abandoned without waiting for a newer audit.
+   *
    * `stopped` and `paused` are what `--resume` continues, so they need 7 days
    * idle instead of 30 minutes. `failed` is unfinished like the others: abandoned
    * under the same rule, and when newer than the newest finished audit it is
@@ -4429,18 +4450,13 @@ export class SQLiteStorage implements CrawlStorage {
   > {
     return Effect.try({
       try: () => {
-        const rows = this.getDb()
-          .prepare(
-            `SELECT id, status, started_at FROM crawls
-             WHERE ${SQLiteStorage.abandonedSql()}
-             ORDER BY started_at DESC, rowid DESC`
-          )
-          .all() as Array<{ id: string; status: string; started_at: number }>;
-        return rows.map((row) => ({
-          id: row.id,
-          status: row.status,
-          startedAt: row.started_at,
-        }));
+        return this.unfinishedCrawlRows()
+          .filter((row) => isCrawlAbandoned(row, this.leaseEnv))
+          .map((row) => ({
+            id: row.id,
+            status: row.status,
+            startedAt: row.started_at,
+          }));
       },
       catch: (e) => StorageError.read(e),
     });
@@ -4457,33 +4473,36 @@ export class SQLiteStorage implements CrawlStorage {
       status: string;
       startedAt: number;
       lastActivityAt: number;
+      /** The crawl lease (#946), when the crawl has an owner recorded. */
+      ownerPid?: number;
+      ownerHost?: string;
+      heartbeatAt?: number;
     }>,
     StorageError,
     never
   > {
     return Effect.try({
       try: () => {
-        const rows = this.getDb()
-          .prepare(
-            `SELECT id, status, started_at,
-                    ${SQLiteStorage.LAST_ACTIVITY_SQL} AS last_activity FROM crawls
-             WHERE retired_at IS NULL
-               AND status NOT IN ('completed', 'analyzed')
-               AND NOT (${SQLiteStorage.abandonedSql()})
-             ORDER BY started_at DESC, rowid DESC`
-          )
-          .all() as Array<{
-            id: string;
-            status: string;
-            started_at: number;
-            last_activity: number;
-          }>;
-        return rows.map((row) => ({
-          id: row.id,
-          status: row.status,
-          startedAt: row.started_at,
-          lastActivityAt: row.last_activity,
-        }));
+        return this.unfinishedCrawlRows()
+          .filter((row) => !isCrawlAbandoned(row, this.leaseEnv))
+          .map((row) => ({
+            id: row.id,
+            status: row.status,
+            startedAt: row.started_at,
+            lastActivityAt: row.last_activity,
+            ...(row.owner_pid != null || row.owner_host != null
+              ? {
+                  ownerPid:
+                    typeof row.owner_pid === "number" ? row.owner_pid : undefined,
+                  ownerHost:
+                    typeof row.owner_host === "string" ? row.owner_host : undefined,
+                  heartbeatAt:
+                    typeof row.heartbeat_at === "number"
+                      ? row.heartbeat_at
+                      : undefined,
+                }
+              : {}),
+          }));
       },
       catch: (e) => StorageError.read(e),
     });
@@ -4676,7 +4695,33 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   /**
-   * The abandoned-crawl predicate, shared by the listing and by the re-check
+   * Every unfinished, not-retired crawl (newest first) with what
+   * {@link isCrawlAbandoned} needs: the lease columns and the #945 rule computed
+   * in SQL. The ONE read behind both listings and the re-check inside the
+   * retirement transaction, so they cannot disagree. `ids` narrows it.
+   */
+  private unfinishedCrawlRows(ids?: string[]): UnfinishedCrawlRow[] {
+    const now = this.leaseEnv.now();
+    const where = ids
+      ? `AND id IN (${ids.map(() => "?").join(", ")})`
+      : "";
+    return this.getDb()
+      .prepare(
+        `SELECT id, status, started_at, heartbeat_at, owner_pid, owner_host,
+                ${SQLiteStorage.LAST_ACTIVITY_SQL} AS last_activity,
+                (${SQLiteStorage.abandonedSql(now)}) AS legacy_abandoned
+         FROM crawls
+         WHERE retired_at IS NULL
+           AND status NOT IN ('completed', 'analyzed')
+           ${where}
+         ORDER BY started_at DESC, rowid DESC`
+      )
+      .all(...(ids ?? [])) as UnfinishedCrawlRow[];
+  }
+
+  /**
+   * The abandoned-crawl predicate (#945, the legacy rule for a crawl with no
+   * live-readable lease), shared by the listing and by the re-check
    * inside {@link retireCrawls}' transaction so the two cannot drift. Scoped to
    * `crawls` rows (unaliased).
    */
@@ -4774,16 +4819,15 @@ export class SQLiteStorage implements CrawlStorage {
             );
           }
           const unfinishedIds = new Set(unfinished.map((c) => c.id));
+          // Re-decided HERE, inside the transaction, from the rows as they are
+          // now (a heartbeat may have landed since the listing). The pid probe
+          // is a synchronous syscall, so it is legal in this transaction.
           const stillAbandoned = new Set(
             unfinished.length === 0
               ? []
-              : (
-                  db
-                    .prepare(
-                      `SELECT id FROM crawls WHERE id IN (${marks(crawlIds.length)}) AND (${SQLiteStorage.abandonedSql()})`
-                    )
-                    .all(...crawlIds) as Array<{ id: string }>
-                ).map((c) => c.id)
+              : this.unfinishedCrawlRows(crawlIds)
+                  .filter((row) => isCrawlAbandoned(row, this.leaseEnv))
+                  .map((row) => row.id)
           );
           retired = crawlIds.filter(
             (id) => !unfinishedIds.has(id) || stillAbandoned.has(id)
@@ -4813,7 +4857,11 @@ export class SQLiteStorage implements CrawlStorage {
             `UPDATE crawls SET retired_at = ? WHERE id IN (${placeholders})`
           ).run(retiredAt, ...retired);
         });
-        run();
+        // IMMEDIATE: take the write lock before the liveness read. A deferred
+        // transaction would read under a snapshot and then fail with
+        // SQLITE_BUSY_SNAPSHOT when a heartbeat committed in between; this way
+        // a beat waits for the lock and the verdict is made against current rows.
+        run.immediate();
         return { deleted, retired, skipped };
       },
       catch: (e) => StorageError.write(e),
