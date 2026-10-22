@@ -34,6 +34,10 @@ Robots.txt is read the way crawlers read it, a redirect can no longer steer a cr
 - **Config validation runs on zod 4.** The same settings are accepted.
 - **`install.sh` and `install.ps1` check release metadata first.** The version, asset filename and SHA-256 are validated before any download URL is built, so malformed metadata cannot retarget the download. A checksum matches in either letter case. See [Installation](https://docs.squirrelscan.com/getting-started/installation).
 
+### Added
+
+- content: new rule `content/h1-title-alignment` warns when a page's H1 and `<title>` share no meaningful word (stopwords, stemming and the brand affix are read out; both strings are shown). It is info on the homepage and when the two are identical, skips pages with no or several H1s, noindex pages, titles that are only the brand, and languages without a stopword list (English, Spanish, French, German, Portuguese, Italian and Dutch are read) (#929).
+
 ### Fixed
 
 - **A viewer or billing member who runs a signed-in audit is told why it was not tracked.** The organization's role refused it (`forbidden_role`). The run used to be missing from the dashboard with no word, and a publish failed with an error that had no message. The local audit and its results are unchanged. See [Publishing to the dashboard](https://docs.squirrelscan.com/cli/audit#publishing-to-the-dashboard).

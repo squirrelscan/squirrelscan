@@ -1,0 +1,101 @@
+---
+title: "H1 and title that share no word: two topics for one page"
+description: "A page whose title and H1 share no meaningful word sends two different signals about its subject. squirrel compares the content words of both."
+---
+
+## What H1 and title alignment is
+
+The `<title>` is what a search result shows. The H1 is the first thing a visitor reads once they land. They do different jobs and should not be copies of each other, but they should be about the same thing. When they share no meaningful word, search engines get two different signals for the page's topic, and a reader who clicked a result for one phrase lands under a heading about something else.
+
+A real example: the title targets "Reddit Visibility Services, SEO & AI Search" while the H1 reads "Be recommended by AI and showed on Google". Nothing in the heading matches the phrase the title targets.
+
+## What squirrel checks
+
+The rule runs on every crawled page that has exactly one non-empty H1 and a title. It emits a single check named `h1-title-alignment`:
+
+- Warn when the title and the H1 share no content word, and both sides have at least two. Message: `The H1 and the title share no meaningful word`, with both strings shown as items. Severity warning, weight 3. On the homepage this is info, never a warning, because a creative homepage headline is deliberate.
+- Info when the H1 and the title are identical, character for character, on a page whose title carries more than the brand. Message: `The H1 and the title are identical: the title could target a second phrase`. That is a missed chance, not an error.
+- Pass when at least one content word is shared. Message: `The H1 and the title share a meaningful word`.
+- Skipped with the reason as the message when there is no H1, several H1s or an empty one (`core/h1` reports those), no title (`core/meta-title` does), the title is only the brand, either side has too few content words to compare, or the page language has no stopword list. A skipped page is never counted as a pass.
+
+Pages kept out of search (`noindex`) are skipped by the runner, on a site that is itself indexed; see [pages kept out of search](/rules#pages-kept-out-of-search).
+
+### How the words are compared
+
+Both strings are lower-cased, Unicode-normalised (NFKC) and stripped of diacritics, then split into words. Pure numbers, words under three letters and the stopwords of the page language are dropped. A light stemmer makes `service` match `services`, `running` match `run` and `Women's` match `women`, and a shared stem prefix of at least five letters also counts, so `optimize` and `optimization` match. A word shared with any part of the title, the brand included, counts as shared.
+
+Stopword lists exist for English, Spanish, French, German, Portuguese, Italian and Dutch, chosen from the primary subtag of `<html lang>`. Every other language, and a page with no `lang`, is skipped: squirrel does not guess where the words are in Japanese, Chinese or Korean text, and it will not judge words it cannot read.
+
+### The brand affix
+
+The title may carry the site name (`Running Shoes for Women | Acme`). A segment counts as the brand when it names the site (the `og:site_name` or the host's name, such as `squirrelscan` for `squirrelscan.com`), or, in a title with several segments separated by `|`, `-`, `–`, `—`, `·`, `•`, `»` or `::`, when it is a short (three words or fewer) last or first segment. The brand is left out when counting the title's content words, so a title that is only the brand is skipped and a one-word title plus the brand is too short to judge. A brand word the H1 repeats still counts as shared.
+
+## How to fix it
+
+Reword the H1 so it carries the phrase the title targets. The H1 can be longer and more natural than the title:
+
+```html
+<title>Reddit Visibility Services, SEO & AI Search | Acme</title>
+<h1>Reddit visibility services that get you recommended by AI</h1>
+```
+
+Or change the title to name what the H1 promises. If the headline is deliberately creative, make sure the first paragraph names the topic, and leave the finding: it is a warning, not a failure.
+
+| | |
+|---|---|
+| **Rule ID** | `content/h1-title-alignment` |
+| **Category** | [Content](/rules/content) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["content/h1-title-alignment"]
+```
+
+### Disable all Content rules
+
+```toml squirrel.toml
+[rules]
+disable = ["content/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["content/h1-title-alignment"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [core/h1](/rules/core/h1): exactly one non-empty H1 on the page.
+- [core/meta-title](/rules/core/meta-title): the title's presence and length.
+- [content/title-pattern-outlier](/rules/content/title-pattern-outlier): pages that break the site's title template.
+- [content/heading-hierarchy](/rules/content/heading-hierarchy): the order of the headings below the H1.
+
+Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Influencing your title links in search results, Google Search Central](https://developers.google.com/search/docs/appearance/title-link)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Content section of the report. Each affected page shows its title and its H1 side by side. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Content section looks like on a real site.
+  </Card>
+</CardGroup>

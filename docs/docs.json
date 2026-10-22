@@ -263,6 +263,7 @@
                 "group": "Content",
                 "pages": [
                   "rules/content/index",
+                  "rules/content/h1-title-alignment",
                   "rules/content/heading-hierarchy",
                   "rules/content/hidden-text",
                   "rules/content/word-count",
