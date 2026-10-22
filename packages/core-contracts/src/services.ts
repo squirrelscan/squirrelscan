@@ -2,7 +2,12 @@
 // Gemini-backed enrichment services (CLI -> API). Dep-free plain TypeScript
 // (type-only imports below are erased at compile time).
 
-import type { DomainStatsMetrics, ReportTechnology, SoftwareAdvisory } from "./index";
+import type {
+  DomainStatsMetrics,
+  EditorSummaryPriority,
+  ReportTechnology,
+  SoftwareAdvisory,
+} from "./index";
 
 export type CloudServiceId =
   | "ai-parse"
@@ -298,8 +303,8 @@ export interface TechDetectResponse {
 // --- editor-summary ---------------------------------------------------------
 // An auto-generated "editor's-style" audit summary (credit-only, any signed-in
 // plan), framed like a
-// quick exec-email to management: prose narrative + point-form big-ticket items.
-// ONE Sonnet 4.6 call per audit from the audit aggregate. Credited,
+// quick exec-email to management: prose narrative + ranked priorities.
+// ONE model call per audit from the audit aggregate. Credited,
 // report-only / non-scoring. The CLI sends a slim, pre-aggregated digest (never
 // the full report) — the server is a thin, untrusted wrapper around the model.
 
@@ -366,6 +371,30 @@ export interface EditorSummaryRequest {
    * site has no broken links. Absent when every check ran.
    */
   notChecked?: EditorSummaryNotCheckedInput[];
+  /**
+   * Technologies the audit detected, so action points can name the platform,
+   * plugin or setting to change. Capped by the CLI; absent when tech detection
+   * found nothing. Older servers ignore it.
+   */
+  technologies?: EditorSummaryTechnologyInput[];
+  /**
+   * Every rule id that failed or warned (not just the ranked top issues),
+   * capped by the CLI. Older servers ignore it.
+   */
+  failingRuleIds?: string[];
+}
+
+/** One detected technology fed to the summary. */
+export interface EditorSummaryTechnologyInput {
+  /** Fingerprint id, e.g. "wordpress". */
+  id: string;
+  /** Display name, e.g. "WordPress". */
+  name: string;
+  /** Category, e.g. "cms", "cdn", "web-server". */
+  category: string;
+  version?: string | null;
+  /** Detector that matched, e.g. "header:server" or "html:wp-content/". */
+  detectedBy?: string;
 }
 
 /** One check the audit did not run, for the summary prompt. */
@@ -400,7 +429,12 @@ export interface EditorSummaryResponse {
   bigTicket: string[];
   /** One-line bottom-line verdict. */
   verdict: string;
-  /** Model id that produced this (e.g. "google/gemini-3.1-flash-lite"). */
+  /**
+   * Ranked next steps, highest impact first, when the server supports them.
+   * `bigTicket` is still sent for older clients.
+   */
+  priorities?: EditorSummaryPriority[];
+  /** Model id that produced this (e.g. "openai/gpt-6-luna"). */
   model: string;
   /** ISO timestamp the summary was generated. */
   generatedAt: string;

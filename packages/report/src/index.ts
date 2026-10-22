@@ -165,13 +165,14 @@ export {
   EDITOR_SUMMARY_NOTE,
   buildEditorSummaryRequest,
   editorSummaryView,
+  priorityEffortLabel,
   toEditorSummary,
   type BuildEditorSummaryRequestOptions,
   type EditorSummaryView,
 } from "./editor-summary";
 
 // Re-export the persisted editor-summary report type for renderers + consumers.
-export type { EditorSummary } from "@squirrelscan/core-contracts";
+export type { EditorSummary, EditorSummaryPriority } from "@squirrelscan/core-contracts";
 
 // White-label report branding (#810) — threaded through every renderer option.
 export type { ReportBranding } from "@squirrelscan/core-contracts";

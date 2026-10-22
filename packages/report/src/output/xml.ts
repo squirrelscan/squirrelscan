@@ -102,7 +102,7 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     for (const para of es.paragraphs) {
       lines.push(`${indent(2)}<para>${escapeXml(para)}</para>`);
     }
-    if (es.bigTicket.length > 0) {
+    if (es.priorities.length === 0 && es.bigTicket.length > 0) {
       lines.push(`${indent(2)}<big-ticket>`);
       for (const item of es.bigTicket) {
         lines.push(`${indent(3)}<item>${escapeXml(item)}</item>`);
@@ -111,6 +111,21 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     }
     if (es.verdict) lines.push(`${indent(2)}<verdict>${escapeXml(es.verdict)}</verdict>`);
     lines.push(`${indent(1)}</editor-summary>`);
+  }
+
+  // Ranked priorities from the editor's summary (report-only; not scored).
+  if (es && es.priorities.length > 0) {
+    lines.push(`${indent(1)}<priorities>`);
+    for (const [i, p] of es.priorities.entries()) {
+      const rules = p.ruleIds.length > 0 ? ` rules="${escapeXml(p.ruleIds.join(" "))}"` : "";
+      const tech = p.technologies.length > 0 ? ` technologies="${escapeXml(p.technologies.join(" "))}"` : "";
+      lines.push(`${indent(2)}<priority rank="${i + 1}" effort="${escapeXml(p.effort)}"${rules}${tech}>`);
+      lines.push(`${indent(3)}<title>${escapeXml(p.title)}</title>`);
+      if (p.why) lines.push(`${indent(3)}<why>${escapeXml(p.why)}</why>`);
+      lines.push(`${indent(3)}<action>${escapeXml(p.action)}</action>`);
+      lines.push(`${indent(2)}</priority>`);
+    }
+    lines.push(`${indent(1)}</priorities>`);
   }
 
   // Site profile — report-only (Stage-0 context; does not affect the health score).

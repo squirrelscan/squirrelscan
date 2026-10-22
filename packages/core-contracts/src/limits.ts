@@ -811,6 +811,12 @@ export const SERVICE_LIMITS = {
   editorSummaryMaxCategories: 24,
   /** Max top issues accepted per editor-summary call (CLI pre-ranks + pre-caps). */
   editorSummaryMaxIssues: 30,
+  /** Max detected technologies sent per editor-summary call. */
+  editorSummaryMaxTechnologies: 60,
+  /** Max failing rule ids sent per editor-summary call (the catalog has about 320 rules). */
+  editorSummaryMaxFailingRuleIds: 500,
+  /** Max ranked priorities kept in a stored editor's summary. */
+  editorSummaryMaxPriorities: 8,
   blocklistBatchValues: 2000,
   gapsMaxCompetitors: 5,
   gapsMaxSeeds: 50,

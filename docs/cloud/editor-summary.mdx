@@ -1,12 +1,12 @@
 ---
 title: "Editor's Summary"
-description: "An auto-generated, exec-email-style summary of your audit - prose narrative plus point-form big-ticket items"
+description: "An auto-generated, exec-email-style summary of your audit: a short narrative, ranked priorities for your stack, and a one-line verdict"
 icon: "newspaper"
 ---
 
-Signed-in audits get an **editor's summary** at the top of the report: a couple of plain-English paragraphs on the state of the site, a short point-form list of the highest-impact things to fix, and a one-line verdict. Think of it as the quick note you'd email a manager - the bottom line, not a wall of checks.
+Signed-in audits get an **editor's summary** at the top of the report: a couple of plain-English paragraphs on the state of the site and a one-line verdict, followed by a ranked **Priorities** list of what to do next. Think of it as the quick note you'd email a manager: the bottom line, then the to-do list, not a wall of checks.
 
-It's generated automatically for every signed-in cloud audit (like the [site profile](/cloud/site-metadata) and [technology detection](/cloud/technologies)) and is **informational - it never affects your health score**.
+It's generated automatically for every signed-in cloud audit (like the [site profile](/cloud/site-metadata) and [technology detection](/cloud/technologies)) and is **informational: it never affects your health score**.
 
 ## What it looks like
 
@@ -14,39 +14,50 @@ It's generated automatically for every signed-in cloud audit (like the [site pro
 EDITOR'S SUMMARY
 Auto-generated editor's summary - informational, not scored.
 
-The site is in solid shape overall - an 82/100 health score, clean
+The site is in solid shape overall: an 82/100 health score, clean
 security headers, and fast core pages. The drag is mostly in links and
-images: a handful of broken internal links and missing alt text.
+images, plus a slow first byte on every page.
 
-Nothing here is structural. These are quick wins that, cleared, would
-push the score into the 90s.
+Nothing here is structural. These are fixes that, cleared, would push
+the score into the 90s.
 
-Big-ticket items:
-  - Fix 3 broken internal links (links category, -6 pts)
-  - Add alt text to 14 images (accessibility)
-  - Set a canonical tag on the blog index
+Verdict: Healthy site; cache the pages and clear the links and images.
 
-Verdict: Healthy site; clear the links and images and you're golden.
+PRIORITIES
+  1. Cache pages at the server (Quick win)
+     Every page waits on the origin, so first byte is slow site-wide.
+     Install a page caching plugin for WordPress and turn on page caching.
+  2. Fix the broken internal links (Quick win)
+     Three links on the blog index point at removed posts.
+     Update or remove the links in the blog index template.
+  3. Add alt text to images (Moderate)
+     Fourteen images have no text alternative.
+     Add alt text in the WordPress media library, starting with the homepage.
 ```
 
-The summary appears at the **top** of every output format - console, HTML, Markdown, JSON, XML, and LLM - and in the [dashboard](/dashboard) audit detail.
+Each priority has a short title, why it matters for this site, the concrete action and an effort rating (quick win, moderate or significant). When the audit detected the site's platform, the action says where the fix is made on that platform: the theme, plugin, app, setting or build step.
+
+The summary and the Priorities section appear at the **top** of every output format (console, HTML, Markdown, JSON, XML and LLM) and in the [dashboard](/dashboard) audit detail. In JSON they are `editorSummary`, with the ranked list in `editorSummary.priorities`. Reports from before priorities existed show a point-form list of big-ticket items instead.
 
 ## What goes into it
 
-A single [Claude Sonnet 4.6](/cloud) pass over the audit aggregate - never your raw pages:
+One model pass over the audit aggregate, never your raw pages:
 
 - Overall and per-category health scores
-- The highest-impact issues, ranked
-- Counts of passing / warning / failing checks
-- **Deltas vs. the previous audit** when one is available ("score up 7 since last run") - it degrades gracefully to a first-run framing when there's no prior audit
+- The highest-impact issues, ranked, plus the ids of every rule that failed or warned
+- Counts of passing, warning and failing checks
+- The [technologies](/cloud/technologies) the audit detected, so the advice fits your stack
+- **Deltas vs. the previous audit** when one is available ("score up 7 since last run"); it falls back to a first-run framing when there's no prior audit
 - The resolved [site profile](/cloud/site-metadata) for context (site type, audience, identity)
+
+Every priority is tied to the checks or detected technologies it is based on, and squirrelscan drops any priority that isn't.
 
 ## Requirements
 
 <Note>The editor's summary runs on any signed-in plan, free or Pro, and is included in the audit base charge. Pro just grants more monthly credits and lets you top up.</Note>
 
 - **Plan:** any signed-in account (free or Pro). Only anonymous runs skip it.
-- **Cost:** **included in the audit base charge** - no separate charge. See [Credits & Pricing](/cloud/credits).
+- **Cost:** **included in the audit base charge**, no separate charge. See [Credits & Pricing](/cloud/credits).
 - **Config:** on by default for logged-in users. Turn it off per project:
 
 ```toml squirrel.toml
@@ -58,6 +69,7 @@ Like all cloud features, it never fails your audit: if you're logged out or out 
 
 ## Related
 
-- [Cloud overview](/cloud) - what cloud features add
-- [Credits & Pricing](/cloud/credits) - pricing and spend controls
-- [Site metadata](/cloud/site-metadata) - the site profile the summary draws on
+- [Cloud overview](/cloud): what cloud features add
+- [Credits & Pricing](/cloud/credits): pricing and spend controls
+- [Site metadata](/cloud/site-metadata): the site profile the summary draws on
+- [Technology detection](/cloud/technologies): the stack the priorities are written for

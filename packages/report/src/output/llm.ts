@@ -291,7 +291,7 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     for (const para of es.paragraphs) {
       lines.push(`${indent(1)}<para>${escapeXml(para)}</para>`);
     }
-    if (es.bigTicket.length > 0) {
+    if (es.priorities.length === 0 && es.bigTicket.length > 0) {
       lines.push(`${indent(1)}<big-ticket>`);
       for (const item of es.bigTicket) {
         lines.push(`${indent(2)}<item>${escapeXml(item)}</item>`);
@@ -300,6 +300,22 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     }
     if (es.verdict) lines.push(`${indent(1)}<verdict>${escapeXml(es.verdict)}</verdict>`);
     lines.push("</editor-summary>");
+  }
+
+  // Ranked priorities from the editor's summary: the agent's ordered to-do list.
+  if (es && es.priorities.length > 0) {
+    lines.push("<priorities>");
+    for (const [i, p] of es.priorities.entries()) {
+      const attrs = [`rank="${i + 1}"`, `effort="${escapeXml(p.effort)}"`];
+      if (p.ruleIds.length > 0) attrs.push(`rules="${escapeXml(p.ruleIds.join(" "))}"`);
+      if (p.technologies.length > 0) attrs.push(`tech="${escapeXml(p.technologies.join(" "))}"`);
+      lines.push(`${indent(1)}<priority ${attrs.join(" ")}>`);
+      lines.push(`${indent(2)}<title>${escapeXml(p.title)}</title>`);
+      if (p.why) lines.push(`${indent(2)}<why>${escapeXml(p.why)}</why>`);
+      lines.push(`${indent(2)}<action>${escapeXml(p.action)}</action>`);
+      lines.push(`${indent(1)}</priority>`);
+    }
+    lines.push("</priorities>");
   }
 
   // Site profile — report-only context for the agent (Stage 0; does not affect the score).

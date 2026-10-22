@@ -19,7 +19,7 @@ import {
 } from "../entities";
 import { groupTechnologies, techChangeSummary } from "../technologies";
 import { SITE_PROFILE_NOTE, siteProfileFlags, siteProfileRows } from "../site-metadata";
-import { EDITOR_SUMMARY_NOTE, editorSummaryView } from "../editor-summary";
+import { EDITOR_SUMMARY_NOTE, editorSummaryView, priorityEffortLabel } from "../editor-summary";
 import { getGroupName, getSubcategoryName, severityLabel } from "../categories";
 import {
   carriedTag,
@@ -166,13 +166,26 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
       for (const line of wrapText(para, REPORT_TEXT_WRAP_WIDTH)) write(line);
       write("");
     }
-    if (es.bigTicket.length > 0) {
+    if (es.priorities.length === 0 && es.bigTicket.length > 0) {
       write("Big-ticket items:");
       for (const item of es.bigTicket) write(`  - ${item}`);
       write("");
     }
     if (es.verdict) {
       write(`Verdict: ${es.verdict}`);
+      write("");
+    }
+  }
+
+  // Ranked priorities from the editor's summary, as their own section.
+  if (es && es.priorities.length > 0) {
+    write("PRIORITIES");
+    write("-".repeat(40));
+    for (const [i, p] of es.priorities.entries()) {
+      write(`${i + 1}. ${p.title} [${priorityEffortLabel(p.effort)}]`);
+      for (const text of [p.why, p.action].filter(Boolean)) {
+        for (const line of wrapText(text, REPORT_TEXT_WRAP_WIDTH - 3)) write(`   ${line}`);
+      }
       write("");
     }
   }

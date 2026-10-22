@@ -13,11 +13,14 @@ import type {
   EditorSummaryCategoryInput,
   EditorSummaryIssueInput,
   EditorSummaryNotCheckedInput,
+  EditorSummaryPriority,
   EditorSummaryRequest,
   EditorSummarySiteProfile,
+  EditorSummaryTechnologyInput,
   SiteMetadata,
 } from "@squirrelscan/core-contracts";
-import { SERVICE_LIMITS } from "@squirrelscan/core-contracts/limits";
+import { clampItemString } from "@squirrelscan/core-contracts/clamp";
+import { REPORT_LIMITS, SERVICE_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { normalizeCategoryCode } from "./categories";
 import { notCheckedRules } from "./not-checked";
 import { checkOccurrences } from "./occurrences";
@@ -111,6 +114,30 @@ function buildCategories(report: AuditReport, max: number): EditorSummaryCategor
     .slice(0, max);
 }
 
+/**
+ * The detected stack, so action points can name the platform, plugin or setting.
+ * Only the fields the summary needs; capped.
+ */
+function buildTechnologies(report: AuditReport, max: number): EditorSummaryTechnologyInput[] {
+  return (report.technologies?.items ?? []).slice(0, max).map((t) => ({
+    id: t.id,
+    name: t.name,
+    category: t.category,
+    version: t.version ?? null,
+    detectedBy: t.detectedBy,
+  }));
+}
+
+/** Every rule that failed or warned, not just the ranked top issues; capped. */
+function buildFailingRuleIds(report: AuditReport, max: number): string[] {
+  const ids: string[] = [];
+  for (const [ruleId, rr] of Object.entries(report.ruleResults)) {
+    if (rr.checks.some((c) => c.status === "fail" || c.status === "warn")) ids.push(ruleId);
+    if (ids.length >= max) break;
+  }
+  return ids;
+}
+
 export interface BuildEditorSummaryRequestOptions {
   auditId?: string;
   websiteId?: string;
@@ -128,6 +155,8 @@ export function buildEditorSummaryRequest(
   opts: BuildEditorSummaryRequestOptions = {},
 ): EditorSummaryRequest {
   const notChecked = buildNotChecked(report);
+  const technologies = buildTechnologies(report, SERVICE_LIMITS.editorSummaryMaxTechnologies);
+  const failingRuleIds = buildFailingRuleIds(report, SERVICE_LIMITS.editorSummaryMaxFailingRuleIds);
   return {
     ...(opts.auditId ? { auditId: opts.auditId } : {}),
     ...(opts.websiteId ? { websiteId: opts.websiteId } : {}),
@@ -142,6 +171,8 @@ export function buildEditorSummaryRequest(
     ...(opts.delta ? { delta: opts.delta } : {}),
     ...(report.siteMetadata ? { siteProfile: toSiteProfile(report.siteMetadata) } : {}),
     ...(notChecked.length > 0 ? { notChecked } : {}),
+    ...(technologies.length > 0 ? { technologies } : {}),
+    ...(failingRuleIds.length > 0 ? { failingRuleIds } : {}),
   };
 }
 
@@ -163,6 +194,7 @@ export function toEditorSummary(res: unknown): EditorSummary | null {
   if (!res || typeof res !== "object") return null;
   const r = res as Partial<Record<keyof EditorSummary, unknown>>;
   if (typeof r.prose !== "string" || r.prose.trim() === "") return null;
+  const priorities = toPriorities(r.priorities);
   return {
     prose: r.prose,
     bigTicket: Array.isArray(r.bigTicket)
@@ -171,7 +203,54 @@ export function toEditorSummary(res: unknown): EditorSummary | null {
     verdict: typeof r.verdict === "string" ? r.verdict : "",
     model: typeof r.model === "string" ? r.model : "",
     generatedAt: typeof r.generatedAt === "string" ? r.generatedAt : "",
+    ...(priorities.length > 0 ? { priorities } : {}),
   };
+}
+
+const EFFORTS = new Set<EditorSummaryPriority["effort"]>(["quick-win", "moderate", "significant"]);
+/** Most ids kept per priority list (rule ids, technology ids). */
+const MAX_PRIORITY_IDS = 20;
+
+const stringIds = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value
+        .filter((id): id is string => typeof id === "string" && id.length > 0)
+        .slice(0, MAX_PRIORITY_IDS)
+        .map((id) => clampItemString(id, REPORT_LIMITS.maxShortString))
+    : [];
+
+/**
+ * Ranked priorities from a response or a stored report, or [] when absent.
+ * Same posture as the rest of the summary: model-authored and only cast, so an
+ * entry without a title or action is dropped, text is clamped, and the list is
+ * capped. An unknown effort reads as "moderate".
+ */
+function toPriorities(value: unknown): EditorSummaryPriority[] {
+  if (!Array.isArray(value)) return [];
+  const out: EditorSummaryPriority[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const p = item as Partial<Record<keyof EditorSummaryPriority, unknown>>;
+    if (typeof p.title !== "string" || p.title.trim() === "") continue;
+    if (typeof p.action !== "string" || p.action.trim() === "") continue;
+    out.push({
+      title: clampItemString(p.title.replace(/\s+/g, " ").trim(), REPORT_LIMITS.maxShortString),
+      why: typeof p.why === "string" ? clampItemString(p.why, REPORT_LIMITS.maxMediumString) : "",
+      action: clampItemString(p.action, REPORT_LIMITS.maxMediumString),
+      effort: EFFORTS.has(p.effort as EditorSummaryPriority["effort"])
+        ? (p.effort as EditorSummaryPriority["effort"])
+        : "moderate",
+      ruleIds: stringIds(p.ruleIds),
+      technologies: stringIds(p.technologies),
+    });
+    if (out.length >= SERVICE_LIMITS.editorSummaryMaxPriorities) break;
+  }
+  return out;
+}
+
+/** Display label for a priority's effort. */
+export function priorityEffortLabel(effort: EditorSummaryPriority["effort"]): string {
+  return effort === "quick-win" ? "Quick win" : effort === "significant" ? "Significant" : "Moderate";
 }
 
 /**
@@ -183,6 +262,12 @@ export function toEditorSummary(res: unknown): EditorSummary | null {
 export interface EditorSummaryView extends EditorSummary {
   /** Prose split on blank lines, trimmed, empties dropped; never empty. */
   paragraphs: string[];
+  /**
+   * Validated ranked priorities; [] when the summary has none. A format shows
+   * these as its own "Priorities" section and drops the big-ticket list (the
+   * server derives `bigTicket` from them), or shows `bigTicket` when empty.
+   */
+  priorities: EditorSummaryPriority[];
 }
 
 /**
@@ -205,5 +290,6 @@ export function editorSummaryView(
       .split(/\n{2,}/)
       .map((para) => para.trim())
       .filter(Boolean),
+    priorities: summary.priorities ?? [],
   };
 }

@@ -46,7 +46,7 @@ import {
   checkUnrenderedLabel,
   ruleCarriedRollupLine,
 } from "../coverage";
-import { EDITOR_SUMMARY_NOTE, editorSummaryView } from "../editor-summary";
+import { EDITOR_SUMMARY_NOTE, editorSummaryView, priorityEffortLabel } from "../editor-summary";
 import { DOMAIN_STATS_NOTE, domainStatRows, allPositionBands } from "../domain-stats";
 import { CACHE_STATS_NOTE, cacheHitRatePercent, cacheReasonsLabel } from "../cache-stats";
 import { formatBytes, formatHumanDateTime, sanitizeUrl } from "../utils";
@@ -245,6 +245,15 @@ details[open] > summary { margin-bottom: 0.5rem; }
 .editor-summary-bigticket { margin: 0.5rem 0 1rem 1.25rem; padding: 0; }
 .editor-summary-bigticket li { margin-bottom: 0.35rem; line-height: 1.5; }
 .editor-summary-verdict { border-top: 1px solid ${THEME.colors.border}; padding-top: 0.85rem; font-size: 0.95rem; }
+
+.priorities-section { margin: 2rem 0; }
+.priorities-section h2 { margin-top: 0; }
+.priorities-list { margin: 0.5rem 0 0 1.5rem; padding: 0; }
+.priorities-list li { margin-bottom: 1rem; line-height: 1.5; }
+.priority-title { font-weight: 600; }
+.priority-effort { font-size: 0.8rem; color: ${THEME.colors.mutedForeground}; margin-left: 0.5rem; }
+.priority-why { color: ${THEME.colors.mutedForeground}; margin: 0.2rem 0; }
+.priority-action { margin: 0.2rem 0 0; }
 
 .domain-stats-section { margin: 2rem 0; }
 .domain-stats-section h2 { margin-top: 0; }
@@ -1209,6 +1218,27 @@ function screenshotImgSrc(report: AuditReport): string | null {
   return safe;
 }
 
+/** Ranked priorities from the editor's summary, as their own section (report-only). */
+function PrioritiesSection({ report }: { report: AuditReport }) {
+  const es = editorSummaryView(report.editorSummary);
+  if (!es || es.priorities.length === 0) return null;
+  return (
+    <div className="priorities-section">
+      <h2>Priorities</h2>
+      <ol className="priorities-list">
+        {es.priorities.map((p, i) => (
+          <li key={i}>
+            <span className="priority-title">{p.title}</span>
+            <span className="priority-effort">{priorityEffortLabel(p.effort)}</span>
+            {p.why && <p className="priority-why">{p.why}</p>}
+            <p className="priority-action">{p.action}</p>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 function EditorSummarySection({ report }: { report: AuditReport }) {
   const es = editorSummaryView(report.editorSummary);
   if (!es) return null;
@@ -1222,7 +1252,7 @@ function EditorSummarySection({ report }: { report: AuditReport }) {
           {para}
         </p>
       ))}
-      {es.bigTicket.length > 0 && (
+      {es.priorities.length === 0 && es.bigTicket.length > 0 && (
         <ul className="editor-summary-bigticket">
           {es.bigTicket.map((item, i) => (
             <li key={i}>{item}</li>
@@ -1493,6 +1523,7 @@ function ReportPage({
           <FailureNotice report={report} />
           <GroupScores report={report} issueGroups={issueGroups} />
           <EditorSummarySection report={report} />
+          <PrioritiesSection report={report} />
           <SummaryStats report={report} />
           <ScreenshotSection report={report} />
           <SiteProfileSection report={report} />

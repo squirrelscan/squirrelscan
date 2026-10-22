@@ -29,6 +29,7 @@ import {
   positionBands,
   EDITOR_SUMMARY_NOTE,
   editorSummaryView,
+  priorityEffortLabel,
   SITE_PROFILE_NOTE,
   siteProfileFlags,
   siteProfileRows,
@@ -179,6 +180,10 @@ export function generateConsoleReport(
   if (editorSummary) {
     log("");
     printEditorSummary(editorSummary);
+    if (editorSummary.priorities.length > 0) {
+      log("");
+      printPriorities(editorSummary);
+    }
   }
 
   // Category breakdown
@@ -402,12 +407,23 @@ function printEditorSummary(es: EditorSummaryView): void {
     log(para);
     log("");
   }
-  if (es.bigTicket.length > 0) {
+  if (es.priorities.length === 0 && es.bigTicket.length > 0) {
     log(fmt.bold("Big-ticket items:"));
     for (const item of es.bigTicket) log(`  ${fmt.dim("•")} ${item}`);
     log("");
   }
   if (es.verdict) log(`${fmt.bold("Verdict:")} ${es.verdict}`);
+}
+
+function printPriorities(es: EditorSummaryView): void {
+  log(fmt.bold("PRIORITIES"));
+  for (const [i, p] of es.priorities.entries()) {
+    log(
+      `  ${fmt.bold(`${i + 1}.`)} ${fmt.bold(p.title)} ${fmt.dim(`(${priorityEffortLabel(p.effort)})`)}`
+    );
+    if (p.why) log(`     ${fmt.dim(p.why)}`);
+    log(`     ${p.action}`);
+  }
 }
 
 function printSiteProfile(meta: SiteMetadata): void {

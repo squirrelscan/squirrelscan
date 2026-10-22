@@ -854,6 +854,26 @@ export interface EditorSummary {
   model: string;
   /** ISO timestamp the summary was generated. */
   generatedAt: string;
+  /**
+   * Ranked next steps, highest impact first. Absent on summaries from servers
+   * that predate it; renderers fall back to `bigTicket`.
+   */
+  priorities?: EditorSummaryPriority[];
+}
+
+/** One ranked next step in the editor's summary. */
+export interface EditorSummaryPriority {
+  /** Short imperative title. */
+  title: string;
+  /** Why it matters for this site, in one sentence. */
+  why: string;
+  /** The concrete action, naming the platform, plugin or setting where known. */
+  action: string;
+  effort: "quick-win" | "moderate" | "significant";
+  /** Rule ids this priority addresses. */
+  ruleIds: string[];
+  /** Detected technology ids it refers to. */
+  technologies: string[];
 }
 
 // ── Domain stats (report-only, non-scoring) ───────────────────────

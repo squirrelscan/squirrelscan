@@ -1,6 +1,10 @@
 // JSON report output
 
-import type { AuditFailureReasonCode, RefusedFetch } from "@squirrelscan/core-contracts";
+import type {
+  AuditFailureReasonCode,
+  EditorSummaryPriority,
+  RefusedFetch,
+} from "@squirrelscan/core-contracts";
 import type { ResolvedAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
 import type { AuditReport, AuditStatus, CheckItem, EntityMap } from "../types";
 import { reportFailureReasonCode } from "../failure-notice";
@@ -184,6 +188,8 @@ interface SlimJsonReport {
     verdict: string;
     model: string;
     generatedAt: string;
+    /** Ranked next steps, when the server returned them. */
+    priorities?: EditorSummaryPriority[];
   };
   // Report-only — never part of the score. The entity-map document (#2091),
   // emitted verbatim so it still validates against the core-contracts schema.
@@ -325,6 +331,7 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
             verdict: es.verdict,
             model: es.model,
             generatedAt: es.generatedAt,
+            ...(es.priorities.length > 0 ? { priorities: es.priorities } : {}),
           },
         }
       : {}),

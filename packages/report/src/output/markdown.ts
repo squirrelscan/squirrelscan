@@ -11,7 +11,7 @@ import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
 import { entityMarkdownSection } from "../entities";
 import { groupTechnologies, techChangeSummary, techIconUrl } from "../technologies";
 import { SITE_PROFILE_NOTE, siteProfileFlags, siteProfileRows } from "../site-metadata";
-import { EDITOR_SUMMARY_NOTE, editorSummaryView } from "../editor-summary";
+import { EDITOR_SUMMARY_NOTE, editorSummaryView, priorityEffortLabel } from "../editor-summary";
 import { getGroupName, getSubcategoryName, severityLabel } from "../categories";
 import {
   carriedTag,
@@ -196,7 +196,7 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
       lines.push(para);
       lines.push("");
     }
-    if (es.bigTicket.length > 0) {
+    if (es.priorities.length === 0 && es.bigTicket.length > 0) {
       lines.push("**Big-ticket items:**");
       lines.push("");
       for (const item of es.bigTicket) lines.push(`- ${item}`);
@@ -204,6 +204,18 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
     }
     if (es.verdict) {
       lines.push(`**Verdict:** ${es.verdict}`);
+      lines.push("");
+    }
+  }
+
+  // Ranked priorities from the editor's summary, as their own section.
+  if (es && es.priorities.length > 0) {
+    lines.push("## Priorities");
+    lines.push("");
+    for (const [i, p] of es.priorities.entries()) {
+      lines.push(`${i + 1}. **${p.title}** (${priorityEffortLabel(p.effort)})`);
+      if (p.why) lines.push(`   ${p.why}`);
+      lines.push(`   ${p.action}`);
       lines.push("");
     }
   }

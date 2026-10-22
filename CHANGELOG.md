@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **The editor's summary gets a ranked Priorities section.** Every output format (console, HTML, Markdown, text, JSON, XML and LLM) shows the summary's ranked next steps as their own section: a title, why it matters for the site, the concrete action and an effort rating. JSON carries them in `editorSummary.priorities`. The summary request now sends the technologies the audit detected and every failing rule, so actions can say where the fix is made on the site's platform. Reports without priorities still show the big-ticket list ([editor's summary](https://docs.squirrelscan.com/cloud/editor-summary)).
+
 ## v0.0.128 (2026-10-22)
 
 The CLI moves to Bun 1.4.4, a crawl with a live owner is never retired, and a check that has nothing to check on a page stops keeping an old finding open.
