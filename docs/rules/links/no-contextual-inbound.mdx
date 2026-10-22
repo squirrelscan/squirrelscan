@@ -20,6 +20,8 @@ The rule is site-wide. For each crawled page it counts internal, resolvable, dof
 
 A page is only considered when its raw inbound count is at or above `minInboundLinks`, default 2. Below that it is already reported by `links/orphan-pages`, and the two thresholds should be kept in sync when either is tuned. The homepage is skipped, since it is linked from every header by design, and so is the page the audit started from: the URL you gave and where its redirects landed (a root that redirects to `/en/`).
 
+Legal pages are skipped too: privacy, terms and imprint pages are footer-only by design, so being linked only from chrome is expected. They are recognised by the last segment of the path, under any prefix, so `/impressum`, `/datenschutz`, `/agb`, `/privacy-policy`, `/terms-of-service`, `/imprint`, `/legal`, `/legal-notice` and `/en/legal` are not reported, in the languages the privacy and terms checks of [eeat/privacy-policy](/rules/eeat/privacy-policy) recognise. A page whose slug only contains one of those words (`/legalese-guide`) is still reported.
+
 Crawls stored before the chrome flag existed report every link as contextual, so an old crawl passes rather than producing a site-wide false alarm.
 
 ## How to fix it

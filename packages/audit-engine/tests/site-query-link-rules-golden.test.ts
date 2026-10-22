@@ -270,15 +270,15 @@ describe("SiteQuery dual-path — links/weak-internal-links", () => {
 
 // ── #109: contextual (non-chrome) inbound links ───────────────────────────────
 
-// Every page carries the same footer link to /legal, so /legal has a HEALTHY raw
+// Every page carries the same footer link to /pricing, so /pricing has a HEALTHY raw
 // inbound count (4) and zero contextual support — the exact case orphan-pages and
 // weak-internal-links cannot see. /deep is linked once, from body copy.
 const CHROME_FIXTURE: PageRecord[] = [
-  pageRow(BASE, [link("/a"), link("/b"), chrome("/legal")]),
-  pageRow("https://example.com/a", [link("/b"), link("/deep"), chrome("/legal")]),
-  pageRow("https://example.com/b", [link("/a"), chrome("/legal")]),
+  pageRow(BASE, [link("/a"), link("/b"), chrome("/pricing")]),
+  pageRow("https://example.com/a", [link("/b"), link("/deep"), chrome("/pricing")]),
+  pageRow("https://example.com/b", [link("/a"), chrome("/pricing")]),
   pageRow("https://example.com/deep", [link("/a")]),
-  pageRow("https://example.com/legal", [chrome("/legal")]),
+  pageRow("https://example.com/pricing", [chrome("/pricing")]),
 ];
 
 async function seedChromeFixture(store: SQLiteStorage): Promise<void> {
@@ -326,9 +326,9 @@ describe("SiteQuery — contextual inbound link counts (#109)", () => {
     // Same keys, same order — the two maps are built in one pass.
     expect([...contextual.keys()]).toEqual([...all.keys()]);
 
-    // /legal: four footer links, zero contextual → healthy on paper, unsupported.
-    expect(all.get("https://example.com/legal")).toBe(4);
-    expect(contextual.get("https://example.com/legal")).toBe(0);
+    // /pricing: four footer links, zero contextual → healthy on paper, unsupported.
+    expect(all.get("https://example.com/pricing")).toBe(4);
+    expect(contextual.get("https://example.com/pricing")).toBe(0);
     // /deep: one body-copy link.
     expect(all.get("https://example.com/deep")).toBe(1);
     expect(contextual.get("https://example.com/deep")).toBe(1);
@@ -370,9 +370,9 @@ describe("SiteQuery dual-path — links/no-contextual-inbound", () => {
         name: "no-contextual-inbound",
         status: "warn",
         message: "1 page(s) are linked only from sitewide chrome",
-        items: [{ id: "https://example.com/legal" }],
+        items: [{ id: "https://example.com/pricing" }],
         details: { total: 1 },
-        value: "/legal",
+        value: "/pricing",
       },
     ]);
     await run(store.close());
@@ -388,7 +388,7 @@ describe("SiteQuery dual-path — links/no-contextual-inbound", () => {
     });
 
     expect(streamed).toEqual(legacy);
-    // Only /deep (one inbound link) is an orphan; /legal's four footer links
+    // Only /deep (one inbound link) is an orphan; /pricing's four footer links
     // keep it comfortably above the threshold on both paths.
     expect(legacy[0]!.items).toEqual([{ id: "https://example.com/deep" }]);
     await run(store.close());
@@ -406,7 +406,7 @@ describe("SiteQuery dual-path — links/no-contextual-inbound", () => {
     });
 
     expect(streamed).toEqual(legacy);
-    expect(legacy[0]!.items).toEqual([{ id: "https://example.com/legal" }]);
+    expect(legacy[0]!.items).toEqual([{ id: "https://example.com/pricing" }]);
     await run(store.close());
   });
 
@@ -416,7 +416,7 @@ describe("SiteQuery dual-path — links/no-contextual-inbound", () => {
 
     const { legacy, streamed } = await runBothWays(store, contextualRule, {
       minInboundLinks: 2,
-      excludePatterns: ["/legal"],
+      excludePatterns: ["/pricing"],
     });
 
     expect(streamed).toEqual(legacy);
