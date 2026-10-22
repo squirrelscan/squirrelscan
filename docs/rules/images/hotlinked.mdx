@@ -1,0 +1,119 @@
+---
+title: "Hotlinked images: pictures loaded from another site's server"
+description: "An image loaded straight from a server you do not control breaks when that site moves it or blocks foreign referrers. squirrel groups them by host."
+---
+
+## What hotlinking is
+
+Hotlinking is loading an image from another site's server instead of your own: a logo from `upload.wikimedia.org`, a picture copied by URL from a supplier's or a news site's CDN. It looks like it works until it does not.
+
+- **Reliability.** The image breaks when the other site moves it, renames it, rate-limits it or blocks foreign referrers, which many sites do with a placeholder or a 403.
+- **Performance.** A page that loads nothing else from that host pays a DNS lookup, a TLS handshake and a connection for one picture, with no control over caching or format.
+- **Licensing.** It uses someone else's bandwidth and, often, their copyrighted image.
+
+## What squirrel checks
+
+The rule runs on every crawled page and makes no network request: it reads the image URLs already in the markup. It looks at `<img>` (`src`, a lazy-loader's `data-src` or `data-lazy-src`, and `srcset`), `<picture>` `<source>` elements and `background` declarations in inline `style` attributes, and ignores anything inside `<noscript>`.
+
+An image host is **not** a hotlink when it is:
+
+- first-party: the page's host, a subdomain of it, or any host on the same registrable domain, so `cdn.example.com` is fine for `example.com`;
+- a known image CDN or site-builder or object storage a site uses on purpose, matched on the host or its subdomains: Cloudinary, Imgix, Cloudflare Images, CloudFront, ImageKit, Shopify, WordPress.com (`wp.com`), Squarespace, Wix, Contentful, Sanity, Webflow, Storyblok, Prismic, Ghost, Bunny, KeyCDN, Fastly, Akamai, Azure and Amazon S3 storage, Google Cloud Storage, DigitalOcean Spaces, Supabase, Vercel storage, Unsplash, Pexels and the large social and Google image hosts (`twimg.com`, `fbcdn.net`, `googleusercontent.com`);
+- a host the page also loads a script or stylesheet from, or preconnects or prefetches: the site connects to it on purpose;
+- listed in the `allowed_hosts` option.
+
+Skipped altogether: tracking pixels (an image declared 1x1 or smaller, one hidden with `display:none`, or one from a known analytics or advertising host), avatar services (Gravatar, Libravatar, `avatars.githubusercontent.com`, Unavatar), and `data:` and `blob:` URLs. A relative URL belongs to the page's own host.
+
+It emits these checks:
+
+- `hotlinked-images` warns when a content image's host is none of the above. Message: `Content image(s) load from other sites' servers`. There is one item per host, such as `upload.wikimedia.org`, labelled with how many images on the page load from it, up to ten hosts with a count of the rest. The message carries no host or count, so the same defect has one identity on every page, and a report can group the pages affected by each host. Severity warning, weight 4.
+- `hotlinked-images` passes with `No content images are loaded from other sites' servers` when the page has content images and none is hotlinked, and is info with `No content images found` when it has none.
+- `hotlinked-share-image` is info when the `og:image` or `twitter:image` is on a host that would warn above. Social platforms fetch those, so a hotlinked share image that breaks fails silently. Turn it off with `check_social_images = false`.
+
+## How to fix it
+
+Download the image, if you are licensed to use it, and serve it from your own domain or image CDN:
+
+```html
+<!-- before -->
+<img src="https://upload.wikimedia.org/wikipedia/commons/a/ab/Logo.png" alt="Acme logo">
+
+<!-- after -->
+<img src="/images/acme-logo.png" alt="Acme logo" width="120" height="40">
+```
+
+If the host is your own CDN, or a partner you control the arrangement with, add it to `allowed_hosts`.
+
+| | |
+|---|---|
+| **Rule ID** | `images/hotlinked` |
+| **Category** | [Images](/rules/images) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 4/10 |
+
+## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `allowed_hosts` | array of strings | `[]` | Hosts whose images are not hotlinks (your own CDN or a partner). An entry matches the host itself and its subdomains, e.g. `images.partner.example`; a scheme, a path, a port or a leading `*.` is ignored |
+| `check_social_images` | boolean | `true` | Also report an og:image or twitter:image hosted on another site (info) |
+
+### Configuration example
+
+```toml squirrel.toml
+[rule_options."images/hotlinked"]
+allowed_hosts = ["media.partner.example", "assets.mycdn.example"]
+check_social_images = true
+```
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["images/hotlinked"]
+```
+
+### Disable all Images rules
+
+```toml squirrel.toml
+[rules]
+disable = ["images/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["images/hotlinked"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [images/optimized](/rules/images/optimized): which image CDNs the site uses and which formats it serves.
+- [images/responsive-size](/rules/images/responsive-size): small images that serve large files (it skips third-party hosts).
+- [images/broken-images](/rules/images/broken-images): image URLs that are empty or placeholders.
+- [social/og-image-size](/rules/social/og-image-size): the share image's size.
+
+Images findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+## References
+
+- [Image SEO best practices, Google Search Central](https://developers.google.com/search/docs/appearance/google-images)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Images section of the report. Each hotlinked host is listed with the pages that load from it. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Images section looks like on a real site.
+  </Card>
+</CardGroup>

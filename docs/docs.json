@@ -339,7 +339,8 @@
                   "rules/images/image-file-size",
                   "rules/images/responsive-size",
                   "rules/images/offscreen-lazy",
-                  "rules/images/optimized"
+                  "rules/images/optimized",
+                  "rules/images/hotlinked"
                 ]
               },
               {
