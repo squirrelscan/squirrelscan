@@ -11,11 +11,16 @@
 //     registrable domain (`cdn.example.com` for `example.com`);
 //   * it is a known image CDN or site-builder storage (images/optimized's list,
 //     extended), which a site uses on purpose;
-//   * the site itself connects to it: it also serves one of the page's scripts or
-//     stylesheets, or the page preconnects or dns-prefetches it;
+//   * the page connects to it: it also serves one of the page's scripts or stylesheets,
+//     or the page preconnects or dns-prefetches it (exact host, read from the whole
+//     document, `<noscript>` included);
 //   * the owner allowed it with `allowed_hosts`.
-// Skipped: tracking pixels (1x1, or a known analytics host), avatar services
-// (Gravatar and similar), data: and blob: URLs, anything inside `<noscript>`.
+// Skipped: tracking pixels (1x1, a known analytics host, or a platform's pixel path),
+// avatar services (Gravatar and similar), launch and review directories and any image
+// whose path or alt names a badge, widget or seal (served live by design), data: and blob:
+// URLs, anything inside `<noscript>`, and pages served from localhost. Every finding is
+// info: on a corpus of stored pages, badges and a site's own infrastructure host made a
+// warning too noisy.
 //
 // One finding per page, grouped by host: an item per host, so a report can say
 // "6 images on 3 pages load from upload.wikimedia.org". The message carries no host or
@@ -25,7 +30,7 @@ import { z } from "zod";
 
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 
-import { registrableDomain } from "../content/dev-leakage";
+import { isLoopbackHost, registrableDomain } from "../content/dev-leakage";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 /**
@@ -40,27 +45,19 @@ export const KNOWN_IMAGE_HOSTS: readonly string[] = [
   "imagedelivery.net",
   "cloudfront.net",
   "cdn.shopify.com",
-  "shopify.com",
   "shopifycdn.com",
   "wp.com",
-  "wordpress.com",
   "squarespace-cdn.com",
-  "squarespace.com",
   "sqspcdn.com",
   "wixstatic.com",
   "wixmp.com",
   "ctfassets.net",
-  "contentful.com",
   "cdn.sanity.io",
-  "sanity.io",
   "media.graphassets.com",
   "graphassets.com",
   "storyblok.com",
   "prismic.io",
   "website-files.com",
-  "webflow.com",
-  "webflow.io",
-  "ghost.io",
   "statically.io",
   "b-cdn.net",
   "kxcdn.com",
@@ -81,6 +78,37 @@ export const KNOWN_IMAGE_HOSTS: readonly string[] = [
   "googleusercontent.com",
   "ggpht.com",
   "ytimg.com",
+  "r2.dev",
+  "convex.cloud",
+  "up.railway.app",
+  "herokuapp.com",
+  "onrender.com",
+  "laravel.cloud",
+  "strapiapp.com",
+  "beehiiv.com",
+  "wsimg.com",
+  "builderservices.io",
+  "zyrosite.com",
+  "optimole.com",
+  "shortpixel.ai",
+  "gumlet.io",
+  "flagcdn.com",
+  "framerusercontent.com",
+  "jsdelivr.net",
+  "simpleicons.org",
+  "gstatic.com",
+  "raw.githubusercontent.com",
+  "s.w.org",
+  "buymeacoffee.com",
+  "img.youtube.com",
+  "trustpilot.net",
+  "kajabi-cdn.com",
+  "oraclecloud.com",
+  "myqcloud.com",
+  "aliyuncs.com",
+  "vsassets.io",
+  "itch.zone",
+  "slack-edge.com",
 ];
 
 /** Avatar services: a user's picture shown by design, not a copied content image. */
@@ -90,7 +118,29 @@ const AVATAR_HOSTS: readonly string[] = [
   "secure.gravatar.com",
   "libravatar.org",
   "unavatar.io",
+  "ui-avatars.com",
+  "icon.horse",
 ];
+
+/** Launch directories, review and award sites: they hand out badges meant to be embedded from their server. */
+const BADGE_HOSTS: readonly string[] = [
+  "producthunt.com",
+  "trendshift.io",
+  "dmca.com",
+  "capterra.com",
+  "legitscript.com",
+  "fazier.com",
+  "peerpush.com",
+  "launchbuff.com",
+  "startupfa.me",
+  "findly.tools",
+  "twelve.tools",
+  "nicklaunches.com",
+  "launchstag.com",
+];
+
+/** An image whose path or alt says it is an embeddable badge, widget or seal: served live by design. */
+const BADGE_WORDS = /badge|embed|widget|featured|launch|seal|banner-ad/i;
 
 /** Analytics and ad hosts whose images are measurement beacons. */
 const TRACKING_HOSTS: readonly string[] = [
@@ -98,11 +148,9 @@ const TRACKING_HOSTS: readonly string[] = [
   "googletagmanager.com",
   "doubleclick.net",
   "googleadservices.com",
-  "facebook.com",
   "facebook.net",
   "px.ads.linkedin.com",
   "analytics.twitter.com",
-  "t.co",
   "bat.bing.com",
   "ads.pubmatic.com",
   "scorecardresearch.com",
@@ -110,14 +158,28 @@ const TRACKING_HOSTS: readonly string[] = [
   "hotjar.com",
   "pixel.wp.com",
   "stats.wp.com",
-  "pinterest.com",
-  "tiktok.com",
-  "snapchat.com",
   "adsrvr.org",
   "criteo.com",
   "criteo.net",
   "demdex.net",
   "omtrdc.net",
+  "mc.yandex.ru",
+  "visitorbadge.io",
+  "getclicky.com",
+  "umami.is",
+  "simpleanalyticscdn.com",
+];
+
+/**
+ * Big platforms whose hosts also serve ordinary images: only their pixel paths are
+ * measurement beacons (`facebook.com/tr?id=`, `pinterest.com/ct/`, `tiktok.com/i18n/pixel`).
+ */
+const TRACKING_PIXEL_PATHS: ReadonlyArray<readonly [string, RegExp]> = [
+  ["facebook.com", /^\/tr(?:\.gif|\/|$)/],
+  ["pinterest.com", /^\/ct\//],
+  ["tiktok.com", /^\/i18n\/pixel/],
+  ["snapchat.com", /^\/(?:tr|p)(?:\/|$)/],
+  ["t.co", /^\/i\/adsct/],
 ];
 
 const MAX_ITEMS = 10;
@@ -153,17 +215,22 @@ function normalizeEntry(entry: string): string {
     .replace(/\.$/, "");
 }
 
-/** The host of an image URL resolved against the page, or null for a URL that is no network image. */
-function imageHost(raw: string, base: string): string | null {
+/** The host and path of an image URL resolved against `base`, or null for a URL that is no network image. */
+function parseImage(raw: string, base: string): { host: string; path: string } | null {
   const value = raw.trim();
   if (value.length === 0 || /^(?:data|blob|about|javascript):/i.test(value)) return null;
   try {
     const url = new URL(value, base);
     if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-    return url.hostname.toLowerCase().replace(/\.$/, "") || null;
+    const host = url.hostname.toLowerCase().replace(/\.$/, "");
+    return host ? { host, path: url.pathname } : null;
   } catch {
     return null;
   }
+}
+
+function imageHost(raw: string, base: string): string | null {
+  return parseImage(raw, base)?.host ?? null;
 }
 
 /** URLs of a `srcset` value, one per candidate. */
@@ -224,11 +291,11 @@ export const hotlinkedRule: Rule = {
     name: "Hotlinked Images",
     description: "Checks for content images loaded from other sites' servers",
     solution:
-      "A hotlinked image is loaded straight from a server you do not control. It breaks when that site moves it, renames it, rate-limits it or blocks foreign referrers, it costs an extra connection to a host nothing else on the page uses, and it uses someone else's bandwidth and often their copyrighted picture. Download the image (with permission, or one you are licensed to use) and serve it from your own domain or image CDN. If the host is your own CDN or a partner you are sure of, add it to the rule's allowed_hosts option.",
+      "A hotlinked image is loaded straight from a server you do not control. It breaks when that site moves it, renames it, rate-limits it or blocks foreign referrers, it costs an extra connection to a host nothing else on the page uses, and it uses someone else's bandwidth and often their copyrighted picture. If it is a picture you are licensed to use, download it and serve it from your own domain or image CDN. If it is a badge, widget or seal that the other site updates (a launch-directory badge, a review score), embedding it from their server is how it is meant to work: leave it, or add the host to the rule's allowed_hosts option. The same goes for your own CDN or a partner you are sure of.",
     category: "images",
     scope: "page",
     verdictScope: "page",
-    severity: "warning",
+    severity: "info",
     weight: 4,
     optionsSchema,
   },
@@ -242,59 +309,75 @@ export const hotlinkedRule: Rule = {
     const pageUrl = ctx.page.url;
     const pageHost = imageHost(pageUrl, pageUrl);
     if (!pageHost) return { checks: [] };
+    // A page on localhost or a loopback address is a dev server: every image host is "another site".
+    if (isLoopbackHost(pageHost)) {
+      return { checks: [{ name: "hotlinked-images", status: "skipped", message: "Page is served from a local address" }] };
+    }
+    // Image URLs resolve against `<base href>` when the page sets one.
+    let base = pageUrl;
+    const baseHref = (doc as unknown as Document).querySelector("base[href]")?.getAttribute("href");
+    if (baseHref) {
+      try {
+        base = new URL(baseHref, pageUrl).href;
+      } catch {
+        // an unparseable base is ignored, as a browser does
+      }
+    }
 
     const firstParty = new Set<string>([registrableDomain(pageHost)]);
     const baseHost = imageHost(ctx.site?.baseUrl ?? "", pageUrl);
     if (baseHost) firstParty.add(registrableDomain(baseHost));
     const allowed = opts.allowed_hosts.map(normalizeEntry).filter((e) => e.length > 0);
-    const connected = connectedHosts(doc as unknown as Document, pageUrl);
+    const connected = connectedHosts(doc as unknown as Document, base);
 
-    /** Whether a host is a third-party host the page does not use on purpose. */
-    const isHotlinkHost = (host: string): boolean => {
+    /** Whether a host is a third-party host the page has no listed reason to load images from. */
+    const isHotlinkHost = (host: string, path = "/"): boolean => {
       if (firstParty.has(registrableDomain(host))) return false;
       if (matchesAny(host, KNOWN_IMAGE_HOSTS) || matchesAny(host, allowed)) return false;
-      if (matchesAny(host, AVATAR_HOSTS) || matchesAny(host, TRACKING_HOSTS)) return false;
+      if (matchesAny(host, AVATAR_HOSTS) || matchesAny(host, BADGE_HOSTS) || matchesAny(host, TRACKING_HOSTS)) return false;
+      if (TRACKING_PIXEL_PATHS.some(([h, re]) => hostMatches(host, h) && re.test(path))) return false;
       if (connected.has(host)) return false;
       return true;
     };
 
     const perHost = new Map<string, number>();
     let contentImages = 0;
-    const note = (host: string | null): void => {
-      if (!host) return;
+    const note = (raw: string | null | undefined, alt = ""): boolean => {
+      const image = raw ? parseImage(raw, base) : null;
+      if (!image) return false;
+      // A badge, widget or seal is served live by the other site on purpose.
+      if (BADGE_WORDS.test(image.path) || BADGE_WORDS.test(alt)) return true;
       contentImages++;
-      if (isHotlinkHost(host)) perHost.set(host, (perHost.get(host) ?? 0) + 1);
+      if (isHotlinkHost(image.host, image.path)) perHost.set(image.host, (perHost.get(image.host) ?? 0) + 1);
+      return true;
     };
 
     for (const img of querySelectorAllOutsideNoscript(doc, "img")) {
       if (isOnePixel(img)) continue;
       const style = img.getAttribute("style") ?? "";
       if (/display\s*:\s*none/i.test(style)) continue;
+      // A lazy loader keeps the real URL in data-src and a placeholder in src: read it first.
       const urls = [
-        img.getAttribute("src"),
         img.getAttribute("data-src"),
         img.getAttribute("data-lazy-src"),
+        img.getAttribute("src"),
         ...srcsetUrls(img.getAttribute("srcset") ?? ""),
         ...srcsetUrls(img.getAttribute("data-srcset") ?? ""),
       ];
       // One image counts once, by the host of its first usable URL.
       for (const raw of urls) {
-        const host = raw ? imageHost(raw, pageUrl) : null;
-        if (host) {
-          note(host);
-          break;
-        }
+        if (note(raw, img.getAttribute("alt") ?? "")) break;
       }
     }
     for (const source of querySelectorAllOutsideNoscript(doc, "picture source")) {
       const first = srcsetUrls(source.getAttribute("srcset") ?? "")[0];
-      if (first) note(imageHost(first, pageUrl));
+      if (first) note(first);
     }
     for (const el of querySelectorAllOutsideNoscript(doc, "[style]")) {
       if (el.tagName === "IMG") continue;
       const style = el.getAttribute("style") ?? "";
       if (!/background/i.test(style)) continue;
-      for (const raw of backgroundUrls(style)) note(imageHost(raw, pageUrl));
+      for (const raw of backgroundUrls(style)) note(raw);
     }
 
     if (perHost.size > 0) {
@@ -302,7 +385,7 @@ export const hotlinkedRule: Rule = {
       const total = hosts.reduce((n, [, c]) => n + c, 0);
       checks.push({
         name: "hotlinked-images",
-        status: "warn",
+        status: "info",
         message: "Content image(s) load from other sites' servers",
         value: total,
         expected: "Images served from your own domain or an image CDN you use",
@@ -329,8 +412,8 @@ export const hotlinkedRule: Rule = {
       ] as const;
       const hotlinked: Array<{ id: string; label: string }> = [];
       for (const [name, raw] of shared) {
-        const host = raw ? imageHost(raw, pageUrl) : null;
-        if (host && isHotlinkHost(host)) hotlinked.push({ id: host, label: name });
+        const image = raw ? parseImage(raw, base) : null;
+        if (image && isHotlinkHost(image.host, image.path)) hotlinked.push({ id: image.host, label: name });
       }
       if (hotlinked.length > 0) {
         checks.push({

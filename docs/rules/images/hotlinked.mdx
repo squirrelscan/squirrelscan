@@ -18,21 +18,23 @@ The rule runs on every crawled page and makes no network request: it reads the i
 An image host is **not** a hotlink when it is:
 
 - first-party: the page's host, a subdomain of it, or any host on the same registrable domain, so `cdn.example.com` is fine for `example.com`;
-- a known image CDN or site-builder or object storage a site uses on purpose, matched on the host or its subdomains: Cloudinary, Imgix, Cloudflare Images, CloudFront, ImageKit, Shopify, WordPress.com (`wp.com`), Squarespace, Wix, Contentful, Sanity, Webflow, Storyblok, Prismic, Ghost, Bunny, KeyCDN, Fastly, Akamai, Azure and Amazon S3 storage, Google Cloud Storage, DigitalOcean Spaces, Supabase, Vercel storage, Unsplash, Pexels and the large social and Google image hosts (`twimg.com`, `fbcdn.net`, `googleusercontent.com`);
-- a host the page also loads a script or stylesheet from, or preconnects or prefetches: the site connects to it on purpose;
+- on the built-in list of image CDNs, site-builder CDNs and object or app storage, matched on the host or its subdomains: Cloudinary, Imgix, Cloudflare Images, CloudFront, ImageKit, `cdn.shopify.com`, WordPress.com's image hosts (`wp.com`), Squarespace and Wix CDNs, Contentful and Sanity asset hosts, Storyblok, Prismic, Webflow's asset host (`website-files.com`), Bunny, KeyCDN, Fastly, Akamai, Azure and Amazon S3 storage, Google Cloud Storage, Cloudflare R2, DigitalOcean Spaces, Supabase, Vercel, Heroku, Render, Railway, Convex, Framer, jsDelivr, Unsplash, Pexels, `gstatic.com`, `raw.githubusercontent.com` and the large social and Google image hosts. The list names CDNs, not whole platforms: another tenant's site on `webflow.io`, `wordpress.com`, `myshopify.com` or `squarespace.com` is a hotlink;
+- a launch directory, review or award site that hands out embeddable badges (Product Hunt, Trendshift, DMCA.com, Capterra and similar), or any image whose path or `alt` names a badge, widget, seal, "featured" or "launch" badge. Those are served live by the other site by design;
+- a host the page also loads a script or stylesheet from, or preconnects, dns-prefetches or preloads (an exact host match, read from the whole document, `<noscript>` included). This is a signal that the page connects to the host, not a test that the site owns it;
 - listed in the `allowed_hosts` option.
 
-Skipped altogether: tracking pixels (an image declared 1x1 or smaller, one hidden with `display:none`, or one from a known analytics or advertising host), avatar services (Gravatar, Libravatar, `avatars.githubusercontent.com`, Unavatar), and `data:` and `blob:` URLs. A relative URL belongs to the page's own host.
+Skipped altogether: tracking pixels (an image declared 1x1 or smaller, one hidden with `display:none`, a known analytics or advertising host, or a platform's pixel path such as `facebook.com/tr` or `pinterest.com/ct`), avatar services (Gravatar, Libravatar, `ui-avatars.com`, `avatars.githubusercontent.com`, Unavatar, `icon.horse`), `data:` and `blob:` URLs, and any page served from `localhost` or a loopback address. A relative URL belongs to the page's own host, or resolves against `<base href>` when the page sets one. A lazy-loaded image is read from `data-src` before its placeholder `src`.
 
-It emits these checks:
+It emits these checks, all info: the rule never lowers the score.
 
-- `hotlinked-images` warns when a content image's host is none of the above. Message: `Content image(s) load from other sites' servers`. There is one item per host, such as `upload.wikimedia.org`, labelled with how many images on the page load from it, up to ten hosts with a count of the rest. The message carries no host or count, so the same defect has one identity on every page, and a report can group the pages affected by each host. Severity warning, weight 4.
-- `hotlinked-images` passes with `No content images are loaded from other sites' servers` when the page has content images and none is hotlinked, and is info with `No content images found` when it has none.
-- `hotlinked-share-image` is info when the `og:image` or `twitter:image` is on a host that would warn above. Social platforms fetch those, so a hotlinked share image that breaks fails silently. Turn it off with `check_social_images = false`.
+- `hotlinked-images` is info when a content image's host is none of the above. Message: `Content image(s) load from other sites' servers`. There is one item per host, such as `upload.wikimedia.org`, labelled with how many images on the page load from it, up to ten hosts with a count of the rest. The message carries no host or count, so the same defect has one identity on every page, and a report can group the pages affected by each host. It passes with `No content images are loaded from other sites' servers` when the page has content images and none is hotlinked, and is info with `No content images found` when it has none.
+- `hotlinked-share-image` is info when the `og:image` or `twitter:image` is on a host that would be reported above. Social platforms fetch those, so a hotlinked share image that breaks fails silently. Turn it off with `check_social_images = false`.
+
+Why info: on a sample of stored crawls, most pages a warning would have flagged loaded a launch or directory badge, or an image from the site's own infrastructure host that no list could know. The lists and the badge test remove the common ones; the rest is a prompt to look, not a defect.
 
 ## How to fix it
 
-Download the image, if you are licensed to use it, and serve it from your own domain or image CDN:
+If it is a picture you are licensed to use, download it and serve it from your own domain or image CDN:
 
 ```html
 <!-- before -->
@@ -42,14 +44,14 @@ Download the image, if you are licensed to use it, and serve it from your own do
 <img src="/images/acme-logo.png" alt="Acme logo" width="120" height="40">
 ```
 
-If the host is your own CDN, or a partner you control the arrangement with, add it to `allowed_hosts`.
+If it is a badge, widget or seal the other site keeps up to date (a launch-directory badge, a review score), embedding it from their server is how it is meant to work: leave it. If the host is your own CDN, or a partner you control the arrangement with, add it to `allowed_hosts`.
 
 | | |
 |---|---|
 | **Rule ID** | `images/hotlinked` |
 | **Category** | [Images](/rules/images) |
 | **Scope** | Per-page |
-| **Severity** | warning |
+| **Severity** | info |
 | **Weight** | 4/10 |
 
 ## Options

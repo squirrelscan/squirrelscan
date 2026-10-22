@@ -26,12 +26,14 @@ function run(
 
 const hosts = (c: CheckResult | undefined) => (c?.items ?? []).map((i) => i.id);
 const warn = (checks: CheckResult[]) => checks.find((c) => c.name === "hotlinked-images");
+const flagged = (checks: CheckResult[]): boolean => (warn(checks)?.items?.length ?? 0) > 0;
 
 describe("hotlinked content images", () => {
   test("an image from another site warns, naming the host", () => {
     const checks = run('<img src="https://upload.wikimedia.org/wikipedia/commons/a/ab/Logo.png" alt="logo">');
     const c = warn(checks);
-    expect(c?.status).toBe("warn");
+    expect(c?.status).toBe("info");
+    expect(c?.items?.length).toBeGreaterThan(0);
     expect(hosts(c)).toEqual(["upload.wikimedia.org"]);
     expect(c?.message).toBe("Content image(s) load from other sites' servers");
   });
@@ -111,17 +113,17 @@ describe("first-party and allowlisted hosts", () => {
       '<img src="https://static.partner-cdn.net/a.png"><img src="https://styles.other-cdn.net/b.png">' +
       '<img src="https://media.third-cdn.net/c.png">';
     expect(warn(run(body, { head }))?.status).toBe("pass");
-    expect(warn(run(body))?.status).toBe("warn");
+    expect(flagged(run(body))).toBe(true);
   });
 
   test("a host added with allowed_hosts is allowed, with its subdomains, in any spelling", () => {
     const body = '<img src="https://images.partner.example.org/a.png"><img src="https://partner.example.org/b.png">';
-    expect(warn(run(body))?.status).toBe("warn");
+    expect(flagged(run(body))).toBe(true);
     for (const entry of ["partner.example.org", "https://Partner.Example.org/", "*.partner.example.org", "partner.example.org:443"]) {
       expect(warn(run(body, { options: { allowed_hosts: [entry] } }))?.status).toBe("pass");
     }
     // Only the named host and its subdomains.
-    expect(warn(run('<img src="https://other.example.org/a.png">', { options: { allowed_hosts: ["partner.example.org"] } }))?.status).toBe("warn");
+    expect(flagged(run('<img src="https://other.example.org/a.png">', { options: { allowed_hosts: ["partner.example.org"] } }))).toBe(true);
   });
 });
 
@@ -202,5 +204,71 @@ describe("robustness", () => {
     const started = performance.now();
     run(body);
     expect(performance.now() - started).toBeLessThan(1500);
+  });
+});
+
+describe("review of #1028", () => {
+  test("the rule and every finding are info", () => {
+    expect(hotlinkedRule.meta.severity).toBe("info");
+    const all = run('<img src="https://a.example.org/x.png">', { head: '<meta property="og:image" content="https://b.example.org/s.jpg">' });
+    expect(all.every((c) => c.status === "info" || c.status === "pass")).toBe(true);
+  });
+
+  test("launch directory and review badges are skipped by host, path and alt", () => {
+    const body =
+      '<img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1">' +
+      '<img src="https://trendshift.io/api/badge/repositories/1">' +
+      '<img src="https://images.dmca.com/Badges/dmca_protected.png">' +
+      '<img src="https://other-directory.example.net/assets/launch-badge.png">' +
+      '<img src="https://unknown.example.net/x.png" alt="Featured on Some Directory">' +
+      '<img src="https://unknown.example.net/seal.svg">';
+    expect(flagged(run(body))).toBe(false);
+    // An unrelated image from an unknown host still counts.
+    expect(flagged(run('<img src="https://unknown.example.net/photo.jpg" alt="A cat">'))).toBe(true);
+  });
+
+  test("the new known hosts are not hotlinks", () => {
+    const body = [
+      "https://pub-abc.r2.dev/a.png", "https://x.convex.cloud/a.png", "https://app.up.railway.app/a.png",
+      "https://x.herokuapp.com/a.png", "https://x.onrender.com/a.png", "https://x.strapiapp.com/a.png",
+      "https://media.beehiiv.com/a.png", "https://img1.wsimg.com/a.png", "https://x.framerusercontent.com/a.png",
+      "https://cdn.jsdelivr.net/gh/a/b.png", "https://cdn.simpleicons.org/a.svg", "https://www.gstatic.com/a.png",
+      "https://raw.githubusercontent.com/a/b/main/c.png", "https://s.w.org/images/a.png", "https://flagcdn.com/w40/us.png",
+      "https://ui-avatars.com/api/?name=A", "https://icon.horse/icon/example.com", "https://mc.yandex.ru/watch/1",
+      "https://visitorbadge.io/status?path=x", "https://cdn.optimole.com/a.png",
+    ].map((src) => `<img src="${src}">`).join("");
+    expect(flagged(run(body))).toBe(false);
+  });
+
+  test("another tenant's site on a builder domain is a hotlink; the builder's CDN is not", () => {
+    for (const host of ["https://someone.webflow.io", "https://someone.wordpress.com", "https://store.myshopify.com", "https://other.squarespace.com", "https://blog.ghost.io", "https://x.webflow.com"]) {
+      expect(flagged(run(`<img src="${host}/a.png">`))).toBe(true);
+    }
+    for (const host of ["https://cdn.shopify.com", "https://i0.wp.com", "https://images.squarespace-cdn.com", "https://cdn.prod.website-files.com"]) {
+      expect(flagged(run(`<img src="${host}/a.png">`))).toBe(false);
+    }
+  });
+
+  test("a big platform's pixel path is a beacon, its other images are not", () => {
+    expect(flagged(run('<img src="https://www.facebook.com/tr?id=1&ev=PageView"><img src="https://www.pinterest.com/ct/core.js?x=1">'))).toBe(false);
+    expect(flagged(run('<img src="https://www.facebook.com/photo/abc.jpg">'))).toBe(true);
+    expect(flagged(run('<img src="https://i.pinimg.com/a.jpg"><img src="https://www.pinterest.com/pin/a.jpg">'))).toBe(true);
+  });
+
+  test("a page on localhost or a loopback address is skipped", () => {
+    for (const url of ["http://localhost:3000/", "http://127.0.0.1:8080/a", "http://app.localhost/x"]) {
+      expect(run('<img src="https://a.example.org/x.png">', { url })).toEqual([
+        { name: "hotlinked-images", status: "skipped", message: "Page is served from a local address" },
+      ]);
+    }
+  });
+
+  test("<base href> resolves relative images, and a lazy data-src wins over a placeholder src", () => {
+    // Relative to the base, the image lives on another site.
+    expect(hosts(warn(run('<img src="a.png">', { head: '<base href="https://other-site.example.org/img/">' })))).toEqual(["other-site.example.org"]);
+    // Without it the same markup is first-party.
+    expect(warn(run('<img src="a.png">'))?.status).toBe("pass");
+    // The placeholder is first-party, the real image is not.
+    expect(hosts(warn(run('<img src="/spinner.gif" data-src="https://real.example.org/p.jpg">')))).toEqual(["real.example.org"]);
   });
 });
