@@ -17,6 +17,11 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- a11y: a page past the style reader's limits (more than 5,000 style rules, an over-long `<style>` block or selector, or a rule nested inside another) now reads every element as unconfirmed for what a style might hide, instead of as shown. Before, the rules past the limit were dropped, so an element they hid could read as shown and an unnamed control inside it failed; now the naming checks report `<check>-unconfirmed` there. A page under the limits reads as before (#1015).
+
+
 ## v0.0.127 (2026-10-22)
 
 Custom request headers stay with the audited origin unless you name another host, the default rule time budget doubles, and a smart audit keeps findings it did not get to re-check.

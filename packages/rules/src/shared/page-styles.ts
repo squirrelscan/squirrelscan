@@ -645,10 +645,19 @@ function readHidingDeclaration(
 // Stylesheets
 // ---------------------------------------------------------------------------
 
+/**
+ * The reader gave up (a cap, or markup it cannot follow): the rules it dropped
+ * could hide, or show, any element. So every element is "unknown" for both
+ * properties (pub#1015), never "shown": one rule that may apply to anything,
+ * and no step budget left to look for a better answer.
+ */
 const INCOMPLETE: PageStyles = {
   complete: false,
   decidable: { display: new Map(), visibility: new Map() },
-  uncertain: { display: new Map(), visibility: new Map() },
+  uncertain: {
+    display: new Map([["*", [{ subject: null, important: true }]]]),
+    visibility: new Map([["*", [{ subject: null, important: true }]]]),
+  },
   steps: { left: 0 },
   animatesVisibility: false,
 };
