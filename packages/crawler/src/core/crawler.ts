@@ -72,7 +72,13 @@ import {
   type FetchOptions,
   type RateLimitControl,
 } from "../fetcher";
-import { normalizeUrl, isInScope, isOffSiteFinalUrl, resolveSeedRedirect } from "../frontier";
+import {
+  headerScopeBase,
+  isInScope,
+  isOffSiteFinalUrl,
+  normalizeUrl,
+  resolveSeedRedirect,
+} from "../frontier";
 import {
   buildConditionalHeaders,
   extractChangeDetection,
@@ -468,17 +474,25 @@ export function createCrawler(
     // The custom headers go only to the audited origin (scheme, host and port,
     // after the seed's redirects) and the hosts the user named in `headerHosts`
     // (#959). A page on another scheme, port or host is still crawled, without
-    // them. Rebuilt when the base URL is set or changes.
+    // them. The origin is the base URL's, except that an https start URL whose
+    // redirect lands on http: keeps its https origin (see headerScopeBase).
+    // Rebuilt when the seed or the base URL changes.
+    let headerSeed = "";
     let headerScope: HeaderScope | undefined;
-    let headerScopeBase = "";
-    const customHeadersFor = (url: string): Record<string, string> | undefined => {
-      if (!config.headers) return undefined;
-      if (!headerScope || headerScopeBase !== baseUrl) {
-        headerScope = createHeaderScope(baseUrl, config.headerHosts ?? []);
-        headerScopeBase = baseUrl;
+    let headerScopeKey = "";
+    const getHeaderScope = (): HeaderScope => {
+      const key = `${headerSeed}\n${baseUrl}`;
+      if (!headerScope || headerScopeKey !== key) {
+        headerScope = createHeaderScope(
+          headerScopeBase(headerSeed, baseUrl),
+          config.headerHosts ?? [],
+        );
+        headerScopeKey = key;
       }
-      return headerScope(url) ? config.headers : undefined;
+      return headerScope;
     };
+    const customHeadersFor = (url: string): Record<string, string> | undefined =>
+      config.headers && getHeaderScope()(url) ? config.headers : undefined;
     // In-memory mirror of getPageCount (rows in `pages`): seeded at
     // runCrawlLoop start (resume-safe), bumped per upsertPage — avoids a
     // hot-path COUNT(*) per enqueue/dispatch (#268).
@@ -2530,7 +2544,7 @@ export function createCrawler(
           const llms = yield* fetchLlmsTxt(
             baseUrl,
             config.userAgent,
-            config.headers,
+            customHeadersFor(baseUrl),
             preamble,
             gate,
           );
@@ -2559,7 +2573,7 @@ export function createCrawler(
           const markdown = yield* probeMarkdownResponse(
             baseUrl,
             config.userAgent,
-            config.headers,
+            customHeadersFor(baseUrl),
             preamble,
             gate,
           );
@@ -2575,7 +2589,7 @@ export function createCrawler(
           const agentAccess = yield* probeAgentAccess(
             baseUrl,
             config.userAgent,
-            config.headers,
+            customHeadersFor(baseUrl),
             preamble,
             gate,
           );
@@ -2588,7 +2602,7 @@ export function createCrawler(
           const wellKnown = yield* probeWellKnown(
             baseUrl,
             config.userAgent,
-            config.headers,
+            customHeadersFor(baseUrl),
             preamble,
             { paths: wellKnownPaths, gate },
           );
@@ -2602,6 +2616,7 @@ export function createCrawler(
             config.headers,
             preamble,
             gate,
+            getHeaderScope(),
           );
           if (rsl) yield* storage.setRsl(crawlId, { ...rsl, fetchedAt: Date.now() });
         }
@@ -2663,6 +2678,7 @@ export function createCrawler(
         // `targetUrl` with the user's own URL as `originalUrl`.
         const seedResolution = resolveSeedRedirect(userProvidedUrl, finalTargetUrl);
         baseUrl = seedResolution.baseUrl;
+        headerSeed = userProvidedUrl;
         if (seedResolution.offSite) {
           logger.warn(
             "off-site redirect refused",
@@ -2750,7 +2766,7 @@ export function createCrawler(
         // sitemap discovery and the crawl/robots-txt rule need it. Only
         // Disallow enforcement and Crawl-delay honoring are conditional.
         const robotsResult = yield* Effect.either(
-          fetchRobots(baseUrl, config.userAgent, true, config.headers, preamble),
+          fetchRobots(baseUrl, config.userAgent, true, customHeadersFor(baseUrl), preamble),
         );
         if (robotsResult._tag === "Right") {
           robots = robotsResult.right;
@@ -2816,6 +2832,7 @@ export function createCrawler(
           {
             maxUrls: sitemapUrlCap,
             customHeaders: config.headers,
+            headerScope: getHeaderScope(),
             walkWindowMs: sitemapWalkWindowMs(config.timeoutMs),
             refusals,
           },
@@ -3007,6 +3024,7 @@ export function createCrawler(
         }
 
         baseUrl = crawl.baseUrl;
+        headerSeed = crawl.originalUrl ?? crawl.seedUrl ?? "";
         currentCrawlId = crawlId;
         isRunning = true;
         isPaused = false;
@@ -3021,7 +3039,7 @@ export function createCrawler(
             baseUrl,
             config.userAgent,
             true,
-            config.headers,
+            customHeadersFor(baseUrl),
             createPhaseBudget(preambleBudgetMs(config.timeoutMs)),
           ),
         );
@@ -3126,6 +3144,7 @@ export function createCrawler(
         }
 
         baseUrl = crawl.baseUrl;
+        headerSeed = crawl.originalUrl ?? crawl.seedUrl ?? "";
         currentCrawlId = crawlId;
         isRunning = true;
         isPaused = false;
@@ -3178,7 +3197,7 @@ export function createCrawler(
 
         // Fetch robots.txt — always, regardless of respectRobots (#790).
         const robotsResult = yield* Effect.either(
-          fetchRobots(baseUrl, config.userAgent, true, config.headers, preamble),
+          fetchRobots(baseUrl, config.userAgent, true, customHeadersFor(baseUrl), preamble),
         );
         if (robotsResult._tag === "Right") {
           robots = robotsResult.right;

@@ -20,6 +20,18 @@ export function isValidHeaderName(name: string): boolean {
   return HEADER_NAME_RE.test(name);
 }
 
+const HEADER_HOST_RE =
+  /^(https?:\/\/)?(\[[0-9a-f:.]+\]|[a-z0-9_](?:[a-z0-9_.-]*[a-z0-9_])?)(:\d{1,5})?$/i;
+
+/**
+ * True if `value` is a bare host name as `[crawler] header_hosts` takes it,
+ * optionally with an `http://` or `https://` prefix and a port: no wildcard,
+ * path, userinfo, trailing dot or empty label (#959).
+ */
+export function isValidHeaderHost(value: string): boolean {
+  return HEADER_HOST_RE.test(value.trim()) && !value.includes("..");
+}
+
 /** True if `value` contains only safe RFC 7230 field-value chars (no CR/LF/NUL/CTL). */
 export function isValidHeaderValue(value: string): boolean {
   return HEADER_VALUE_RE.test(value);
@@ -165,19 +177,27 @@ export function isCompressibleContentType(
 /** True when the custom headers may be sent to `url`. */
 export type HeaderScope = (url: string) => boolean;
 
-function headerHostOf(value: string): string {
+interface NamedHeaderHost {
+  host: string;
+  /** Written with an explicit `http://` prefix: plain http is allowed too. */
+  allowHttp: boolean;
+}
+
+function parseNamedHeaderHost(value: string): NamedHeaderHost | null {
   const raw = value.trim().toLowerCase();
   try {
-    return new URL(raw.includes("://") ? raw : `https://${raw}`).hostname.replace(/^\[|\]$/g, "");
+    const host = new URL(raw.includes("://") ? raw : `https://${raw}`).hostname.replace(/^\[|\]$/g, "");
+    return host === "" ? null : { host, allowHttp: raw.startsWith("http://") };
   } catch {
-    return "";
+    return null;
   }
 }
 
 /**
  * `baseUrl` is the start URL after its redirects. Its scheme, host and port
  * match; another port or scheme on the same host does not. `extraHosts` match
- * by host alone, as the user named them.
+ * by host alone, as the user named them, and only over https: an entry written
+ * with an explicit `http://` prefix also allows plain http.
  */
 export function createHeaderScope(
   baseUrl: string,
@@ -189,14 +209,18 @@ export function createHeaderScope(
   } catch {
     // An unparseable base URL has no origin: nothing but named hosts matches.
   }
-  const named = new Set(extraHosts.map(headerHostOf).filter((h) => h !== ""));
+  const named = new Map<string, boolean>();
+  for (const entry of extraHosts) {
+    const parsed = parseNamedHeaderHost(entry);
+    if (parsed) named.set(parsed.host, (named.get(parsed.host) ?? false) || parsed.allowHttp);
+  }
   return (url) => {
     try {
       const parsed = new URL(url);
-      return (
-        (origin !== "" && parsed.origin === origin) ||
-        named.has(parsed.hostname.toLowerCase().replace(/^\[|\]$/g, ""))
-      );
+      if (origin !== "" && parsed.origin === origin) return true;
+      const allowHttp = named.get(parsed.hostname.toLowerCase().replace(/^\[|\]$/g, ""));
+      if (allowHttp === undefined) return false;
+      return parsed.protocol === "https:" || (allowHttp && parsed.protocol === "http:");
     } catch {
       return false;
     }

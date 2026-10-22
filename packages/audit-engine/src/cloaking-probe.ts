@@ -18,7 +18,7 @@ import { getPathname, normalizeUrl } from "@squirrelscan/utils/url";
 import { stripHtmlForText } from "@squirrelscan/utils";
 
 import { DEFAULT_MAX_BODY_BYTES, readBodyCapped } from "./lib/capped-body-read";
-import { customHeadersFor, type HeaderScope } from "./lib/header-scope";
+import { customHeadersFor, type ScopedHeaderOptions } from "./lib/header-scope";
 import { probeFetch } from "./lib/probe-fetch";
 import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 
@@ -41,7 +41,9 @@ export const TOKEN_SIMILARITY_THRESHOLD = 0.5;
 /** Query param appended to detect token-/query-gated responses. */
 export const PROBE_QUERY_PARAM = "ss_cloak_probe";
 
-export interface CloakingProbeOptions {
+export type CloakingProbeOptions = CloakingProbeBaseOptions & ScopedHeaderOptions;
+
+interface CloakingProbeBaseOptions {
   /** Hard cap on probed paths. */
   maxPages: number;
   /** A sitemap lastmod within this many days counts as "recent". */
@@ -54,10 +56,6 @@ export interface CloakingProbeOptions {
   defaultUserAgent: string;
   /** Egress policy for every hop of a probe fetch (#2831). */
   egress?: EgressPolicy;
-  /** Custom request headers forwarded to every probe fetch (same as the crawl). */
-  customHeaders?: Record<string, string>;
-  /** Which URLs get `customHeaders` (#959); absent: every probe does. */
-  headerScope?: HeaderScope;
   /** Per-fetch timeout. Default 15s. */
   timeoutMs?: number;
   /** Concurrent probe paths. Default 3. */
@@ -446,10 +444,8 @@ export async function resolveCloakingProbes(
   site: CloakingProbeSiteInput,
   runtime: {
     defaultUserAgent: string;
-    customHeaders?: Record<string, string>;
-    headerScope?: HeaderScope;
     egress?: EgressPolicy;
-  },
+  } & ScopedHeaderOptions,
   fetchImpl?: ProbeFetch,
 ): Promise<CloakingProbeData[] | undefined> {
   if (!cfg?.enabled) return undefined;
@@ -462,8 +458,9 @@ export async function resolveCloakingProbes(
         queryVariation: cfg.query_variation,
         googlebotUserAgent: cfg.googlebot_user_agent,
         defaultUserAgent: runtime.defaultUserAgent,
-        customHeaders: runtime.customHeaders,
-        headerScope: runtime.headerScope,
+        ...(runtime.customHeaders
+          ? { customHeaders: runtime.customHeaders, headerScope: runtime.headerScope }
+          : { headerScope: runtime.headerScope }),
         egress: runtime.egress,
       },
       fetchImpl,

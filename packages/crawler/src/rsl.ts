@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { truncateToBytes } from "@squirrelscan/utils/bytes";
+import { createHeaderScope, type HeaderScope } from "@squirrelscan/utils/headers";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
 
@@ -112,8 +113,11 @@ export function fetchRslLicensing(
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
   gate: ProbeGate = ungated,
+  headerScope?: HeaderScope,
 ): Effect.Effect<RslData | null, never, never> {
   const robotsUrl = new URL("/robots.txt", baseUrl).toString();
+  // Which URLs get the caller's custom headers; without a scope, the audited origin only.
+  const scope = headerScope ?? createHeaderScope(baseUrl);
   return Effect.promise(async () => {
     let robotsBody = "";
     let linkHeader: string | null = null;
@@ -125,7 +129,13 @@ export function fetchRslLicensing(
         if (robotsTimeoutMs !== null) {
           await safeFetchWithDeadline(
             robotsUrl,
-            { headers: { "User-Agent": userAgent, Accept: "text/plain, */*", ...customHeaders } },
+            {
+              headers: {
+                "User-Agent": userAgent,
+                Accept: "text/plain, */*",
+                ...(scope(robotsUrl) ? customHeaders : undefined),
+              },
+            },
             robotsTimeoutMs,
             async (response) => {
               if (response.ok) {
@@ -165,10 +175,9 @@ export function fetchRslLicensing(
     // #1394: the caller's secret customHeaders are scoped to the audited origin —
     // a license doc hosted off-origin (another host, scheme or port, #959) must not
     // receive them.
-    const baseOrigin = new URL(baseUrl).origin;
     const documents = await Promise.all(
       licenseUrls.map((url) => {
-        const sameOrigin = new URL(url).origin === baseOrigin;
+        const sameOrigin = scope(url);
         return gate(url, () =>
           fetchLicenseDoc(url, userAgent, sameOrigin ? customHeaders : undefined, budget),
         );

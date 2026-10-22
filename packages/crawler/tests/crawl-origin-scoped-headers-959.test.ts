@@ -84,14 +84,18 @@ const baseConfig = {
   headers: TOKEN,
 };
 
-async function crawlUrls(urls: string[], extra: Record<string, unknown> = {}): Promise<Seen[]> {
+async function crawlUrls(
+  urls: string[],
+  extra: Record<string, unknown> = {},
+  crawl: { baseUrl?: string; originalUrl?: string } = {},
+): Promise<Seen[]> {
   const storage: CrawlStorage = await Effect.runPromise(createTestStorage());
   const config = { ...baseConfig, ...extra };
   const crawlId = await Effect.runPromise(
     storage.createCrawl({
-      baseUrl: ORIGIN,
+      baseUrl: crawl.baseUrl ?? ORIGIN,
       seedUrl: `${ORIGIN}/`,
-      originalUrl: `${ORIGIN}/`,
+      originalUrl: crawl.originalUrl ?? `${ORIGIN}/`,
       startedAt: Date.now(),
       status: "paused",
       config,
@@ -168,5 +172,37 @@ describe("the crawl sends custom headers only to the audited origin (#959)", () 
       include: ["https://cdn.invalid/*", `${ORIGIN}/*`],
     });
     expect(tokenOf(seen, "https://cdn.invalid/x")).toBeUndefined();
+  });
+});
+
+describe("custom headers are never sent over http on the strength of a redirect (#959)", () => {
+  test("an https start URL whose redirect landed on http: keeps its https scope", async () => {
+    const seen = await crawlUrls(
+      ["http://h.invalid/", "http://h.invalid/a", `${ORIGIN}/b`],
+      {},
+      { baseUrl: "http://h.invalid", originalUrl: `${ORIGIN}/` },
+    );
+    expect(tokenOf(seen, "http://h.invalid/")).toBeUndefined();
+    expect(tokenOf(seen, "http://h.invalid/a")).toBeUndefined();
+    expect(tokenOf(seen, `${ORIGIN}/b`)).toBe("secret");
+  });
+
+  test("an http start URL audits over http, with the headers", async () => {
+    const seen = await crawlUrls(
+      ["http://h.invalid/", "http://h.invalid/a"],
+      {},
+      { baseUrl: "http://h.invalid", originalUrl: "http://h.invalid/" },
+    );
+    expect(tokenOf(seen, "http://h.invalid/a")).toBe("secret");
+  });
+
+  test("a named header host gets them over https only, unless written with http://", async () => {
+    const allowed = { allowedDomains: ["h.invalid", "other.invalid"] };
+    const urls = [`${ORIGIN}/`, "http://other.invalid/p", "https://other.invalid/s"];
+    const bare = await crawlUrls(urls, { ...allowed, headerHosts: ["other.invalid"] });
+    expect(tokenOf(bare, "http://other.invalid/p")).toBeUndefined();
+    expect(tokenOf(bare, "https://other.invalid/s")).toBe("secret");
+    const explicit = await crawlUrls(urls, { ...allowed, headerHosts: ["http://other.invalid"] });
+    expect(tokenOf(explicit, "http://other.invalid/p")).toBe("secret");
   });
 });

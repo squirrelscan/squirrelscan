@@ -6,6 +6,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { parsePage } from "@squirrelscan/parser";
+import { createHeaderScope } from "@squirrelscan/utils/headers";
 import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 
 import { runCloakingProbe } from "../src/cloaking-probe";
@@ -126,6 +127,7 @@ describe("cloaking probe", () => {
     googlebotUserAgent: "Googlebot",
     defaultUserAgent: "Browser",
     customHeaders: SECRET,
+    headerScope: createHeaderScope(`http://127.0.0.1:${site.port}`),
     egress,
   });
 
@@ -171,6 +173,7 @@ describe("soft-404 confirmation", () => {
     await confirmSoft404Candidates([{ url, statusCode: 200, parsed }], {
       userAgent: "test-agent",
       customHeaders: SECRET,
+      headerScope: createHeaderScope(`http://127.0.0.1:${site.port}`),
       egress: policy,
     });
     return parsed;

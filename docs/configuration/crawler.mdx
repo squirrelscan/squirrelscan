@@ -791,6 +791,8 @@ verbatim, so `Signature-Agent: "https://shopify.com"` keeps its quotes
 end-to-end.
 
 When a page redirects to another origin, the headers are dropped on that hop.
+An `https:` start URL whose redirect lands on plain `http:` keeps its `https:`
+scope: the crawl follows the redirect, and the headers stay withheld.
 The soft-404 confirmation and the cloaking probe follow redirects the same way,
 and refuse a hop to a link-local or cloud metadata address.
 
@@ -809,9 +811,12 @@ and refuse a hop to a link-local or cloud metadata address.
 
 Hosts, besides the audited origin, that also get the [custom headers](#headers)
 on page and asset requests: a signed CDN, or Cloudflare Access on
-`assets.example.com`. It applies to hosts on the audited site's own domain. Only
-the hosts you name get them, so a `www` host of an apex site is named here too. A name matches the host on any port and
-scheme.
+`assets.example.com`. Only the hosts you name get them, so a `www` host of an apex
+site is named here too. An entry is a bare host name: no wildcard, path,
+userinfo or trailing dot, and an entry the config schema cannot read is refused.
+A name matches the host on any port, over `https:` only; write it with an
+`http://` prefix (`header_hosts = ["http://assets.example.com"]`) to allow plain
+http too.
 
 ```toml
 [crawler]

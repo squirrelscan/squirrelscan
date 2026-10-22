@@ -24,6 +24,7 @@ import {
 } from "@squirrelscan/core-contracts";
 import { AUDIT_LEVEL_PRESETS } from "@squirrelscan/core-contracts/audit-levels";
 import { fullScanHint } from "@squirrelscan/report";
+import { isValidHeaderHost } from "@squirrelscan/utils/headers";
 import { defineCommand } from "citty";
 import { existsSync } from "node:fs";
 import { platform } from "node:os";
@@ -1141,7 +1142,7 @@ export const audit = defineCommand({
     "header-host": {
       type: "string",
       description:
-        "Host that also gets the custom headers on asset requests (repeatable or comma-separated), e.g. assets.example.com. Only the audited origin gets them by default",
+        "Host that also gets the custom headers on page and asset requests, over https (repeatable or comma-separated), e.g. assets.example.com; prefix http:// to allow plain http. Only the audited origin gets them by default",
     },
     "rule-include": {
       type: "string",
@@ -1275,6 +1276,14 @@ export const audit = defineCommand({
       .flatMap((v) => v.split(","))
       .map((v) => v.trim().toLowerCase())
       .filter((v) => v.length > 0);
+    const badHeaderHost = headerHosts.find((v) => !isValidHeaderHost(v));
+    if (badHeaderHost !== undefined) {
+      console.error(
+        `Invalid --header-host "${badHeaderHost}": use a host name, optionally with an http:// or https:// prefix (no wildcard, path or userinfo)`
+      );
+      process.exitCode = 1;
+      return;
+    }
 
     // Parse --rule-include/--rule-exclude early so an unknown category fails
     // before crawling (same widening as --fail-on/--header). #1066

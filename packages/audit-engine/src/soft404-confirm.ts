@@ -33,7 +33,7 @@ import { detectSoft404, parsePage, type Soft404Confirmation } from "@squirrelsca
 import { detectWafChallengePage } from "@squirrelscan/waf-detect";
 
 import { DEFAULT_MAX_BODY_BYTES, readBodyCapped } from "./lib/capped-body-read";
-import { customHeadersFor, type HeaderScope } from "./lib/header-scope";
+import { customHeadersFor, type ScopedHeaderOptions } from "./lib/header-scope";
 import { probeFetch } from "./lib/probe-fetch";
 import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 
@@ -85,7 +85,9 @@ export interface Soft404ConfirmPage {
 /** Default overall wall-clock budget for the whole pass; exhausted → unconfirmed. */
 export const DEFAULT_WALL_BUDGET_MS = 60_000;
 
-export interface Soft404ConfirmOptions {
+export type Soft404ConfirmOptions = Soft404ConfirmBaseOptions & ScopedHeaderOptions;
+
+interface Soft404ConfirmBaseOptions {
   /**
    * Master switch. Default true. When false the pass does NO network — every
    * candidate is annotated `unconfirmed` (never dropped). For rate-limited /
@@ -103,10 +105,6 @@ export interface Soft404ConfirmOptions {
   userAgent: string;
   /** Egress policy for every hop of the confirmation fetch (#2831). */
   egress?: EgressPolicy;
-  /** Custom request headers forwarded to every fetch (same as the crawl). */
-  customHeaders?: Record<string, string>;
-  /** Which URLs get `customHeaders` (#959); absent: every confirmation does. */
-  headerScope?: HeaderScope;
   /** Per-fetch timeout. Default 15s. */
   timeoutMs?: number;
   /** Concurrent confirmation fetches ACROSS hosts. Default 3. */

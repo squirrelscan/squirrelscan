@@ -65,6 +65,17 @@ describe("createHeaderScope", () => {
     expect(scope("https://cf.example.net/a.js")).toBe(true);
     expect(scope("https://other.example.com/a.js")).toBe(false);
   });
+
+  test("a named host gets them over https only, unless written with http://", () => {
+    const scope = createHeaderScope("https://example.com/", [
+      "assets.example.com",
+      "http://plain.example.net",
+    ]);
+    expect(scope("https://assets.example.com/a.js")).toBe(true);
+    expect(scope("http://assets.example.com/a.js")).toBe(false);
+    expect(scope("https://plain.example.net/a.js")).toBe(true);
+    expect(scope("http://plain.example.net/a.js")).toBe(true);
+  });
 });
 
 describe("asset pools", () => {
@@ -97,7 +108,7 @@ describe("asset pools", () => {
     await Effect.runPromise(
       checkResourceSizes([cdnUrl("/a.css")], {
         customHeaders: SECRET,
-        headerScope: createHeaderScope(siteUrl("/"), ["127.0.0.1"]),
+        headerScope: createHeaderScope(siteUrl("/"), ["http://127.0.0.1"]),
       }),
     );
     expect(seen.cdn.every((v) => v === "audit-secret")).toBe(true);

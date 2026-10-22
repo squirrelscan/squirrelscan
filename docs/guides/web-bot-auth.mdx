@@ -100,12 +100,13 @@ requests carry them. For pages rendered in the cloud browser, see
 When the site refuses a render, the page is fetched again over plain HTTP with
 the signed headers.
 
-## Assets on other hosts
+## Other hosts
 
-Only the audited origin gets the headers, so an asset on a subdomain
-(`cdn.example.com`) is requested without them. If that host needs the signature
-too, name it with [`header_hosts`](/configuration/crawler#header_hosts) or
-`--header-host cdn.example.com`. A 401 or 403 from a host that was not sent the
+Only the audited origin gets the headers (scheme, host and port), so a page or
+asset on a subdomain (`cdn.example.com`), another port, or plain `http:` is
+requested without them. If that host needs the signature too, name it with [`header_hosts`](/configuration/crawler#header_hosts) or
+`--header-host cdn.example.com`; it gets them over https only, unless you write
+it with an `http://` prefix. A 401 or 403 from a host that was not sent the
 headers is reported as not checked, with the host named.
 
 ## Related

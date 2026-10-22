@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
+import { createHeaderScope } from "@squirrelscan/utils/headers";
+
 import { fetchRslLicensing } from "../src/rsl";
 import type { RobotsTxtData } from "@squirrelscan/core-contracts";
 
@@ -43,7 +45,9 @@ const xml = () => new Response(SITEMAP_XML, { headers: { "content-type": "applic
 
 async function tokenFor(sitemapUrl: string): Promise<string | null> {
   return withFetch(xml, async (seen) => {
-    await Effect.runPromise(fetchSitemap(sitemapUrl, "test-agent", SECRET, BASE_ORIGIN));
+    await Effect.runPromise(
+      fetchSitemap(sitemapUrl, "test-agent", SECRET, createHeaderScope(BASE_ORIGIN)),
+    );
     // A negative result only means something if the URL was really requested.
     expect(seen.some((s) => s.url === sitemapUrl)).toBe(true);
     return seen.find((s) => s.url === sitemapUrl)?.token ?? null;
@@ -150,5 +154,38 @@ describe("discoverSitemaps threads the audited origin to child sitemaps (#959)",
     // A child on another port is not crawled at all (the walk stays on the parent's
     // host and port); if it ever were, it must not carry the headers.
     expect(seen.find((s) => s.url === CHILD_PORT)?.token ?? null).toBeNull();
+  });
+});
+
+describe("a robots.txt Sitemap line on plain http is requested without the headers (#959)", () => {
+  const PLAIN = "http://example.test/robots-sitemap.xml";
+  const robots: RobotsTxtData = {
+    exists: true,
+    url: "https://example.test/robots.txt",
+    content: `Sitemap: ${PLAIN}\n`,
+    sizeBytes: 0,
+    sitemaps: [PLAIN],
+    rules: [],
+    errors: [],
+  };
+
+  test("the http: sitemap is fetched with no custom headers; a named host over https keeps them", async () => {
+    const seen = await withFetch(
+      () => xml(),
+      async (recorded) => {
+        await Effect.runPromise(
+          discoverSitemaps(BASE_ORIGIN, robots, "test-agent", {
+            maxUrls: 50,
+            customHeaders: SECRET,
+            headerScope: createHeaderScope(BASE_ORIGIN, ["named.test"]),
+          }),
+        );
+        return recorded.slice();
+      },
+    );
+    const hit = seen.find((s) => s.url === PLAIN);
+    expect(hit).toBeDefined();
+    expect(hit?.token).toBeNull();
+    expect(seen.find((s) => s.url === "https://example.test/sitemap.xml")?.token).toBe("secret");
   });
 });

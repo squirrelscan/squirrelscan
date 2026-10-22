@@ -96,16 +96,17 @@ describe("soft-404 confirmation re-fetches (#959)", () => {
     expect(sent.get(OTHER)).toEqual(HEADERS);
   });
 
-  test("with no scope every request keeps them (direct callers, as before)", async () => {
+  test("with no scope no request carries them (a missing scope never widens)", async () => {
     const sent: Sent = new Map();
     await confirmSoft404Candidates(
       [{ url: SAME, statusCode: 200, parsed: parsePage(SHELL, SAME) }],
-      { userAgent: "test-agent", customHeaders: HEADERS },
+      { userAgent: "test-agent" },
       async (url, _ua, headers) => {
         sent.set(url, headers);
         return { status: 200, body: SHELL };
       },
     );
-    expect(sent.get(SAME)).toEqual(HEADERS);
+    expect(sent.has(SAME)).toBe(true);
+    expect(sent.get(SAME)).toBeUndefined();
   });
 });

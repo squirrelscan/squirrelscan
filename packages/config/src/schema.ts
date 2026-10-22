@@ -3,7 +3,7 @@
 // TOML loading and file discovery are NOT here — those are CLI adapters.
 
 import { AUDIT_LEVELS, parseAuditLevel } from "@squirrelscan/core-contracts/audit-levels";
-import { isValidHeaderName, isValidHeaderValue } from "@squirrelscan/utils/headers";
+import { isValidHeaderHost, isValidHeaderName, isValidHeaderValue } from "@squirrelscan/utils/headers";
 import { z } from "zod";
 
 import { parseByteSize } from "./byte-size";
@@ -65,11 +65,22 @@ export const CrawlerConfigSchema = z.object({
       message: "Too many custom headers (max 50)",
     })
     .default({}),
-  // Hosts, besides the audited origin, that get the custom headers on asset
-  // requests (a signed CDN, Cloudflare Access on assets.example.com). Without
-  // it only the audited origin does; a subdomain is not trusted by default (#732).
+  // Hosts, besides the audited origin, that get the custom headers on page and
+  // asset requests (a signed CDN, Cloudflare Access on assets.example.com).
+  // Without it only the audited origin does; a subdomain is not trusted by
+  // default (#732). A host matches on any port, over https only; write it with
+  // an explicit `http://` prefix to allow plain http too. A bare host name, no
+  // wildcard, path, userinfo or trailing dot (#959).
   // TOML: `[crawler] header_hosts = ["assets.example.com"]`.
-  header_hosts: z.array(z.string().min(1).max(255)).max(50).default([]),
+  header_hosts: z
+    .array(
+      z.string().min(1).max(255).refine(isValidHeaderHost, {
+        message:
+          "header_hosts entries are host names, optionally with an http:// or https:// prefix: no wildcard, path, userinfo or trailing dot",
+      }),
+    )
+    .max(50)
+    .default([]),
   follow_redirects: z.boolean().default(true),
   concurrency: z.number().default(DEFAULT_CRAWLER_CONCURRENCY),
   // Single-host bump (#265): per-host caps gate throughput; robots crawl-delay

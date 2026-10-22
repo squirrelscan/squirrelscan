@@ -9,6 +9,7 @@ import type {
   SitemapFetchFailure,
   SitemapUrl,
 } from "@squirrelscan/core-contracts";
+import { createHeaderScope, type HeaderScope } from "@squirrelscan/utils/headers";
 import { resolveRobotsSitemapUrl } from "@squirrelscan/utils/robots-txt";
 
 import { SITEMAP_NOT_CHECKED_ERROR } from "@squirrelscan/core-contracts/storage";
@@ -683,7 +684,7 @@ export function fetchSitemap(
   url: string,
   userAgent: string,
   customHeaders?: Record<string, string>,
-  baseOrigin?: string,
+  headerScope?: HeaderScope,
   // squirrelscan/repo#1733: deadline for this one fetch, tightened by the
   // caller when the walk's progress window has less than a full timeout left.
   timeoutMs: number = SITEMAP_FETCH_TIMEOUT_MS,
@@ -694,10 +695,8 @@ export function fetchSitemap(
   // #1393: the caller's secret customHeaders are scoped to the audited origin. A
   // `Sitemap:` directive (robots.txt) or child-sitemap reference can point at an
   // off-origin host, so only forward them when the target origin (scheme, host
-  // and port, #959) matches baseOrigin.
-  // When baseOrigin is unset (direct callers/tests), preserve prior behavior.
-  const originScopedHeaders =
-    baseOrigin !== undefined && new URL(url).origin !== baseOrigin ? undefined : customHeaders;
+  // and port, #959) is in the caller's scope. With no scope, none are sent.
+  const originScopedHeaders = headerScope?.(url) ? customHeaders : undefined;
   const init: RequestInit & { decompress: boolean } = {
     headers: {
       "User-Agent": userAgent,
@@ -805,7 +804,7 @@ export function fetchSitemapsRecursive(
   customHeaders?: Record<string, string>,
   // #1393: audited origin (scheme, host, port, #959); customHeaders are only
   // forwarded to matching-origin sitemap fetches. Threaded through the recursion.
-  baseOrigin?: string,
+  headerScope?: HeaderScope,
   // squirrelscan/repo#1733: progress window shared across the whole walk, so a
   // stalled origin ends the descent after one dead chunk while a slow-but-
   // healthy one keeps going. Created on the first call and threaded down.
@@ -861,7 +860,7 @@ export function fetchSitemapsRecursive(
       const chunkTimeoutMs = Math.min(SITEMAP_FETCH_TIMEOUT_MS, remainingMs);
       const chunkResults = yield* Effect.all(
         chunk.map((url) =>
-          fetchSitemap(url, userAgent, customHeaders, baseOrigin, chunkTimeoutMs, refusals),
+          fetchSitemap(url, userAgent, customHeaders, headerScope, chunkTimeoutMs, refusals),
         ),
         { concurrency: SITEMAP_FETCH_CONCURRENCY },
       );
@@ -916,7 +915,7 @@ export function fetchSitemapsRecursive(
       seen,
       urlBudget,
       customHeaders,
-      baseOrigin,
+      headerScope,
       walkWindow,
       refusals,
     );
@@ -953,6 +952,8 @@ export interface DiscoverSitemapsOptions {
   maxUrls?: number;
   /** Custom HTTP headers attached to every sitemap fetch (e.g. Web Bot Auth signatures). */
   customHeaders?: Record<string, string>;
+  /** Which URLs get `customHeaders`. Default: the audited origin (scheme, host, port) only. */
+  headerScope?: HeaderScope;
   /**
    * How long the walk may go without completing a fetch before it gives up.
    * Defaults to SITEMAP_WALK_WINDOW_MS; pass `sitemapWalkWindowMs(timeoutMs)` to
@@ -979,10 +980,11 @@ export function discoverSitemaps(
     // carry any scheme/host, so `resolveRobotsSitemapUrl` rejects non-http(s)
     // targets (a `file://` sitemap would otherwise be fetched and its body
     // parsed/stored). Off-origin http(s) sitemaps are still fetched (legit CDN
-    // case) but without customHeaders, enforced by the baseOrigin gate passed to
+    // case) but without customHeaders, enforced by the header scope passed to
     // fetchSitemapsRecursive below. #2316: the same resolver reads a scheme-less
     // line as a HOST, so the URL fetched here is the one the report stores.
-    const baseOrigin = new URL(baseUrl).origin;
+    // Which URLs get the custom headers: the audited origin and any host the caller named.
+    const headerScope = options.headerScope ?? createHeaderScope(baseUrl);
     if (robotsTxt?.sitemaps) {
       for (const sitemap of robotsTxt.sitemaps) {
         const resolvedUrl = resolveRobotsSitemapUrl(sitemap, baseUrl).url;
@@ -1015,7 +1017,7 @@ export function discoverSitemaps(
       undefined,
       urlBudget,
       options.customHeaders,
-      baseOrigin,
+      headerScope,
       walkWindow,
       options.refusals,
     );
