@@ -20,6 +20,7 @@ How it works:
 ### Changed
 
 - The default per-rule time budget is now 2 seconds (was 1 second), so a rule that runs slowly on a busy machine is abandoned less often. A site rule gets 2 seconds per page of the site, still capped at 60 seconds. `[rules] time_budget_ms` still overrides it, and values below 1000 are still refused.
+- `legal/cookie-consent` finds its consent signals in one pass over the page's elements instead of 28 selector sweeps, and `social/share-buttons` no longer lowercases a copy of the page. Both give the same answers as before; on a 1 MB script-heavy page `legal/cookie-consent` is about 3 to 6x faster (#270).
 
 ### Fixed
 

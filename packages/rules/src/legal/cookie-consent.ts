@@ -83,29 +83,35 @@ const CMP_RESOURCE_PATTERNS: RegExp[] = [
 ];
 
 // Known CMP banner/dialog containers (present in the DOM once the widget mounts).
-const CMP_SELECTORS = [
-  "#onetrust-banner-sdk",
-  "#onetrust-consent-sdk",
-  "#ot-sdk-container",
-  "#CybotCookiebotDialog",
-  "#usercentrics-root",
-  "#usercentrics-cmp-ui",
-  "#cookiescript_injected",
-  "#cookie-law-info-bar",
-  ".cli-bar-container",
-  "#iubenda-cs-banner",
-  ".iubenda-cs-banner",
-  "#didomi-host",
-  "#osano-cm-window",
-  ".osano-cm-window",
-  "#termly-code-snippet-support",
-  "#axeptio_overlay",
-  "#qc-cmp2-container",
-  ".qc-cmp2-container",
-  ".cmplz-cookiebanner",
-  "#BorlabsCookieBox",
-  ".cc-window",
-];
+// Matched in ONE pass over the elements (see scanElements) with the exact
+// semantics of the `#id` and `.class` selectors they replace: an id is compared
+// verbatim and a class by whole whitespace-delimited token, both case-sensitive.
+const CMP_IDS = new Set([
+  "onetrust-banner-sdk",
+  "onetrust-consent-sdk",
+  "ot-sdk-container",
+  "CybotCookiebotDialog",
+  "usercentrics-root",
+  "usercentrics-cmp-ui",
+  "cookiescript_injected",
+  "cookie-law-info-bar",
+  "iubenda-cs-banner",
+  "didomi-host",
+  "osano-cm-window",
+  "termly-code-snippet-support",
+  "axeptio_overlay",
+  "qc-cmp2-container",
+  "BorlabsCookieBox",
+]);
+
+const CMP_CLASSES = new Set([
+  "cli-bar-container",
+  "iubenda-cs-banner",
+  "osano-cm-window",
+  "qc-cmp2-container",
+  "cmplz-cookiebanner",
+  "cc-window",
+]);
 
 // Unambiguous cookie-consent widget id/class fragments. A container keyed with
 // one of these IS a consent mechanism on its own — this catches server-rendered
@@ -167,42 +173,52 @@ function hasCmpResource(doc: Document): boolean {
   return false;
 }
 
-// A known CMP banner container mounted in the DOM.
-function hasCmpContainer(doc: Document): boolean {
-  return CMP_SELECTORS.some((sel) => {
-    try {
-      return doc.querySelector(sel) !== null;
-    } catch {
-      return false;
+// Mirrors `[id*='cookie' i]`, `[class*='cookie' i]`, `[id*='consent' i]` and
+// `[class*='consent' i]`: the selector engine tests a case-insensitive RegExp
+// against the raw attribute (no lowercasing), so this does too.
+const COOKIE_RE = /cookie/i;
+const CONSENT_RE = /consent/i;
+const WHITESPACE_RE = /\s+/;
+
+interface ElementScan {
+  /** A known CMP banner container is mounted. */
+  container: boolean;
+  /** Elements keyed as cookie/consent, or a dialog, to test for a control. */
+  regions: Element[];
+}
+
+// One pass over every element, replacing 21 `querySelector` sweeps for the CMP
+// containers and 7 `querySelectorAll` sweeps for the consent regions. On a
+// script-heavy page each sweep is a full-document traversal.
+function scanElements(doc: Document): ElementScan {
+  const regions: Element[] = [];
+  for (const el of doc.querySelectorAll("*")) {
+    const id = el.getAttribute("id");
+    const cls = el.getAttribute("class");
+    if (id !== null && CMP_IDS.has(id)) return { container: true, regions };
+    if (cls !== null && cls !== "") {
+      for (const token of cls.split(WHITESPACE_RE)) {
+        if (CMP_CLASSES.has(token)) return { container: true, regions };
+      }
     }
-  });
+    const role = el.getAttribute("role");
+    if (
+      (id !== null && (COOKIE_RE.test(id) || CONSENT_RE.test(id))) ||
+      (cls !== null && (COOKIE_RE.test(cls) || CONSENT_RE.test(cls))) ||
+      role === "dialog" ||
+      role === "alertdialog" ||
+      el.getAttribute("aria-modal") === "true"
+    ) {
+      regions.push(el as Element);
+    }
+  }
+  return { container: false, regions };
 }
 
 // A self-hosted banner: an element keyed as cookie/consent (or a dialog about
 // cookies) that also carries an accept/reject-style control. Requiring the
 // control is what keeps prose about cookies from passing.
-function hasInteractiveConsent(doc: Document): boolean {
-  // Substring attribute selectors are case-insensitive (`i` flag) so class/id
-  // values like `CookieConsent` are still discovered — attrHay() lowercases only
-  // after selection, so a case-sensitive selector would never surface them.
-  const selectors = [
-    "[id*='cookie' i]",
-    "[class*='cookie' i]",
-    "[id*='consent' i]",
-    "[class*='consent' i]",
-    "[role='dialog']",
-    "[role='alertdialog']",
-    "[aria-modal='true']",
-  ];
-  const regions = new Set<Element>();
-  for (const sel of selectors) {
-    try {
-      for (const el of doc.querySelectorAll(sel)) regions.add(el as Element);
-    } catch {
-      // Skip selectors the parser rejects.
-    }
-  }
-
+function hasInteractiveConsent(regions: Element[]): boolean {
   for (const region of regions) {
     const hay = attrHay(region);
     // An unambiguous cookie-consent widget container is sufficient on its own.
@@ -228,7 +244,9 @@ function hasInteractiveConsent(doc: Document): boolean {
 }
 
 function hasConsentMechanism(doc: Document): boolean {
-  return hasCmpResource(doc) || hasCmpContainer(doc) || hasInteractiveConsent(doc);
+  if (hasCmpResource(doc)) return true;
+  const { container, regions } = scanElements(doc);
+  return container || hasInteractiveConsent(regions);
 }
 
 // Every site type EXCEPT the low-value ones (a personal page / portfolio with no

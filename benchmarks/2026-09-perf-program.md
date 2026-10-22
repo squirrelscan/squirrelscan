@@ -1029,6 +1029,32 @@ mutation-checked by restoring the bug it claims to catch, and two of them did no
 bite until the fixture varied the character immediately before the literal — `"`
 is even and `'` is odd, and a corpus that quotes everything the same way is blind
 to the whole class.
+
+### Follow-up: the last two rules ([#270](https://github.com/squirrelscan/squirrelscan/issues/270))
+
+`legal/cookie-consent` ran 21 `querySelector` and 7 `querySelectorAll` sweeps, each
+a full-document traversal. It now reads every element once and answers from the
+same predicates (id compared verbatim, class by whole token, `cookie`/`consent`
+substrings by case-insensitive RegExp on the raw attribute, as the selector engine
+does). `social/share-buttons` no longer lowercases the page: the four patterns are
+tested on the raw HTML, and a page containing U+212A (Kelvin sign) or U+0130, the
+only two characters whose `toLowerCase()` yields an ASCII letter the `i` flag
+would not match, takes the lowercased path, so every answer is unchanged.
+
+Fixture: a generated 1.03 MB page (`59` inline scripts of about 13 KB each,
+1,500 product cards), rule `run()` called 60 times after 5 warm-up calls, base and
+branch alternating over 5 rounds, medians, isolated HOME. A rule-level bench, not
+the whole-audit run above, so the absolute numbers are not comparable to the table.
+
+| rule | before | after |
+|---|---|---|
+| `legal/cookie-consent` | 17.95 ms/page | 2.78 ms/page |
+| `social/share-buttons` | 3.08 ms/page | 2.49 ms/page |
+
+Both rules return byte-identical results on the fixture. `share-buttons` is mostly
+its four regular expressions now, which cannot be shortened without changing what
+they match; the saving there is the 1 MB lowercase copy.
+
 ## Ten thousand pages
 
 Nobody had run the estate at 10,000 pages, in the CLI or the cloud. Two things
