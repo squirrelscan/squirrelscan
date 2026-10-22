@@ -29,6 +29,8 @@ How it works:
 ### Added
 
 - a11y, links: `link-text` and `anchor-text` now recognise generic link text in Spanish, French, German, Portuguese, Italian, Dutch, Japanese, Chinese, Korean and Russian (`cliquez ici`, `mehr`, `haga clic aquí`, `詳しくはこちら` and similar), chosen by the page's `<html lang>`, with English always checked. A page with no or an unknown `lang` keeps the English list, matching is on the whole text, and the conventional account and legal labels are never reported (#840).
+- content: `word-count` skips pages kept out of search (`noindex` meta or `X-Robots-Tag`), like `core/meta-title`, `core/meta-description` and `core/h1`: a login, sign-up or dashboard page is short by design. The page gets one skipped check naming the source, and nothing is skipped on a staging or preview site whose homepage is noindex (#841).
+
 
 ## v0.0.127 (2026-10-22)
 

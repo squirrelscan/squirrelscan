@@ -19,6 +19,10 @@ The rule runs on every crawled page and reads the word count the parser computed
 
 The 300-word floor is also a precedence boundary. `content/thin-vs-site-norm` never reports a page below 300 words, so at the default `min_words` the two rules cannot both raise a finding on one page. That boundary is the fixed constant, not the configured option, so raising `min_words` above 300 opens a band where both can fire.
 
+### Pages kept out of search
+
+A page marked `noindex` (a `<meta name="robots">` tag or an `X-Robots-Tag` header containing `noindex`) is never offered to a search engine, so thin content on it is not a finding: login, sign-up and dashboard pages are short by design. Such a page gets one skipped check, `Skipped: page is set to noindex via robots meta tag` (or `via X-Robots-Tag header`), instead of its usual result, and skipped checks do not count toward the score. Pages are skipped only on a site that is itself being indexed. When the homepage is noindex too (a staging site or preview deployment) nothing is skipped. See [pages kept out of search](/rules#pages-kept-out-of-search). Contact and legal pages are not skipped yet: that needs a page type from a classifier model, which squirrel does not use to relax a verdict unless the label is model-sourced and confident.
+
 ## How to fix it
 
 Expand the page to answer the question it exists for, consolidate it into a fuller page and redirect, or `noindex` it if it exists only for navigation.

@@ -29,6 +29,8 @@ export const wordCountRule: Rule = {
     category: "content",
     scope: "page",
     verdictScope: "page",
+    // A page kept out of the search index is out of scope for a thin-content finding (pub#841).
+    skipOnNoindex: true,
     severity: "warning",
     weight: 4,
     optionsSchema,
