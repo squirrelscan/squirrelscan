@@ -416,13 +416,15 @@ function printEditorSummary(es: EditorSummaryView): void {
 }
 
 function printPriorities(es: EditorSummaryView): void {
+  // One line each: model text with an embedded newline would break the indent.
+  const line = (value: string) => value.replace(/\s+/g, " ").trim();
   log(fmt.bold("PRIORITIES"));
   for (const [i, p] of es.priorities.entries()) {
     log(
-      `  ${fmt.bold(`${i + 1}.`)} ${fmt.bold(p.title)} ${fmt.dim(`(${priorityEffortLabel(p.effort)})`)}`
+      `  ${fmt.bold(`${i + 1}.`)} ${fmt.bold(line(p.title))} ${fmt.dim(`(${priorityEffortLabel(p.effort)})`)}`
     );
-    if (p.why) log(`     ${fmt.dim(p.why)}`);
-    log(`     ${p.action}`);
+    if (p.why) log(`     ${fmt.dim(line(p.why))}`);
+    log(`     ${line(p.action)}`);
   }
 }
 

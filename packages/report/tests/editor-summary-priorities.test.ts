@@ -130,6 +130,28 @@ describe("renderers with priorities", () => {
     expect(out).not.toContain("Big-ticket items");
   });
 
+  test("markdown escapes model text and keeps each priority one list item", () => {
+    const out = renderMarkdown(
+      report({
+        editorSummary: {
+          ...WITH_PRIORITIES,
+          priorities: [
+            {
+              title: "Fix [the](javascript:x) *titles*",
+              why: "Line one\n\nline two",
+              action: "Edit <b>theme</b>",
+              effort: "moderate",
+              ruleIds: [],
+              technologies: [],
+            },
+          ],
+        },
+      }),
+    );
+    expect(out).toContain("1. **Fix \\[the\\]\\(javascript:x\\) \\*titles\\*** (Moderate)");
+    expect(out).toContain("   Line one line two  \n   Edit \\<b\\>theme\\</b\\>");
+  });
+
   test("text shows a PRIORITIES section", () => {
     const out = renderText(r);
     expect(out).toContain("PRIORITIES");

@@ -90,6 +90,32 @@ describe("console editor's summary", () => {
     expect(out).toContain("Verdict: Ship it");
   });
 
+  test("priorities print as their own section in place of the big-ticket list", () => {
+    const out = capture(
+      reportWith({
+        prose: "Body text.",
+        bigTicket: ["Fix the titles"],
+        verdict: "Ship it",
+        model: "test-model",
+        generatedAt: "2026-06-16T14:30:00.000Z",
+        priorities: [
+          {
+            title: "Cache pages",
+            why: "Slow first\nbyte.",
+            action: "Turn on page caching.",
+            effort: "quick-win",
+            ruleIds: ["perf/ttfb"],
+            technologies: [],
+          },
+        ],
+      })
+    );
+    expect(out).toContain("PRIORITIES");
+    expect(out).toContain("1. Cache pages (Quick win)");
+    expect(out).toContain("Slow first byte.");
+    expect(out).not.toContain("Big-ticket items:");
+  });
+
   test("a summary carrying only prose renders it with no bullet list", () => {
     // `bigTicket.length` was the second unguarded dereference here.
     const out = capture(reportWith({ prose: "Body text." }));

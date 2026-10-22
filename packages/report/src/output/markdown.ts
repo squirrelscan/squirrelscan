@@ -92,6 +92,11 @@ function escapeMarkdownDestination(value: string): string {
  * http/https/www/mailto, so it cannot produce a `javascript:` link, and the URL
  * is displayed in full either way.
  */
+/** Collapse a value to one line so a blank line in it cannot end a list item early. */
+function oneMdLine(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
 function escapeMarkdownInline(value: string): string {
   const output: string[] = [];
   for (const char of value) {
@@ -192,18 +197,19 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
     lines.push("");
     lines.push(`_${EDITOR_SUMMARY_NOTE}_`);
     lines.push("");
+    // Model-authored and site-influenced: escaped like every other value here.
     for (const para of es.paragraphs) {
-      lines.push(para);
+      lines.push(escapeMarkdownInline(para));
       lines.push("");
     }
     if (es.priorities.length === 0 && es.bigTicket.length > 0) {
       lines.push("**Big-ticket items:**");
       lines.push("");
-      for (const item of es.bigTicket) lines.push(`- ${item}`);
+      for (const item of es.bigTicket) lines.push(`- ${escapeMarkdownInline(oneMdLine(item))}`);
       lines.push("");
     }
     if (es.verdict) {
-      lines.push(`**Verdict:** ${es.verdict}`);
+      lines.push(`**Verdict:** ${escapeMarkdownInline(oneMdLine(es.verdict))}`);
       lines.push("");
     }
   }
@@ -213,9 +219,12 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
     lines.push("## Priorities");
     lines.push("");
     for (const [i, p] of es.priorities.entries()) {
-      lines.push(`${i + 1}. **${p.title}** (${priorityEffortLabel(p.effort)})`);
-      if (p.why) lines.push(`   ${p.why}`);
-      lines.push(`   ${p.action}`);
+      lines.push(
+        `${i + 1}. **${escapeMarkdownInline(p.title)}** (${priorityEffortLabel(p.effort)})`,
+      );
+      // Trailing two spaces: a hard break, so why and action stay separate lines.
+      if (p.why) lines.push(`   ${escapeMarkdownInline(oneMdLine(p.why))}  `);
+      lines.push(`   ${escapeMarkdownInline(oneMdLine(p.action))}`);
       lines.push("");
     }
   }

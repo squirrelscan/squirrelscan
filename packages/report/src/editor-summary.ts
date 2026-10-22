@@ -114,17 +114,23 @@ function buildCategories(report: AuditReport, max: number): EditorSummaryCategor
     .slice(0, max);
 }
 
+/** Per-field bound on technology and rule id strings sent to the summary. */
+const EDITOR_SUMMARY_FIELD_MAX = 128;
+
 /**
  * The detected stack, so action points can name the platform, plugin or setting.
  * Only the fields the summary needs; capped.
  */
 function buildTechnologies(report: AuditReport, max: number): EditorSummaryTechnologyInput[] {
+  // Site-derived values (a version string, a detector label): clamped so one
+  // long value cannot push the request past the server's field bounds.
+  const short = (value: string) => clampItemString(value, EDITOR_SUMMARY_FIELD_MAX);
   return (report.technologies?.items ?? []).slice(0, max).map((t) => ({
-    id: t.id,
-    name: t.name,
-    category: t.category,
-    version: t.version ?? null,
-    detectedBy: t.detectedBy,
+    id: short(t.id),
+    name: short(t.name),
+    category: short(t.category),
+    version: t.version ? short(t.version) : null,
+    ...(t.detectedBy ? { detectedBy: short(t.detectedBy) } : {}),
   }));
 }
 
@@ -132,7 +138,9 @@ function buildTechnologies(report: AuditReport, max: number): EditorSummaryTechn
 function buildFailingRuleIds(report: AuditReport, max: number): string[] {
   const ids: string[] = [];
   for (const [ruleId, rr] of Object.entries(report.ruleResults)) {
-    if (rr.checks.some((c) => c.status === "fail" || c.status === "warn")) ids.push(ruleId);
+    if (rr.checks.some((c) => c.status === "fail" || c.status === "warn")) {
+      ids.push(clampItemString(ruleId, EDITOR_SUMMARY_FIELD_MAX));
+    }
     if (ids.length >= max) break;
   }
   return ids;
