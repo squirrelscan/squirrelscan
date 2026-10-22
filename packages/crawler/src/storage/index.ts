@@ -8,7 +8,7 @@ import { StorageError } from "./types";
 export * from "./types";
 export {
   startCrawlLease,
-  clearCrawlLease,
+  releaseActiveLeases,
   type CrawlLease,
   type CrawlLeaseOptions,
 } from "./crawl-lease";

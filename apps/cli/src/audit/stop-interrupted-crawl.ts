@@ -8,6 +8,7 @@
 // mark is best-effort: the 1 s busy timeout can lose it to a writer holding the
 // lock, so nothing the user sees may claim it was recorded.
 
+import { releaseActiveLeases } from "@squirrelscan/crawler";
 import { Database } from "bun:sqlite";
 
 let ownedCrawlId: () => string | null = () => null;
@@ -27,6 +28,13 @@ export function registerOwnedCrawl(getId: () => string | null): void {
  * Returns the number marked.
  */
 export function stopInterruptedCrawls(dbPath: string): number {
+  // First, so a heartbeat still on its timer cannot re-assert what is cleared
+  // below (#946). Runs even with no owned crawl id.
+  try {
+    releaseActiveLeases();
+  } catch {
+    // best-effort
+  }
   const id = ownedCrawlId();
   if (!id) return 0;
   let db: Database | undefined;

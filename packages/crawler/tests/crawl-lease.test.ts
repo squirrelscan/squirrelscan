@@ -12,7 +12,7 @@ import { join } from "path";
 import { Effect } from "effect";
 
 import type { CrawlMetadata } from "../src/storage/types";
-import { clearCrawlLease, startCrawlLease } from "../src/storage/crawl-lease";
+import { releaseActiveLeases, startCrawlLease } from "../src/storage/crawl-lease";
 import { SCHEMA_VERSION, SQLiteStorage } from "../src/storage/sqlite";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -310,16 +310,61 @@ describe("startCrawlLease", () => {
     await run(store.close());
   });
 
-  test("clearCrawlLease (signal path) clears only this pid's lease", async () => {
+  test("releaseActiveLeases (signal path) clears the lease and a later beat does not re-assert it", async () => {
     const path = tempDbPath();
     const store = await openStore(path);
     const id = await run(store.createCrawl(meta));
-    const lease = startCrawlLease({ dbPath: path, getCrawlId: () => id, pid: 7 });
-
-    clearCrawlLease(path, id, 8);
+    const lease = startCrawlLease({
+      dbPath: path,
+      getCrawlId: () => id,
+      heartbeatMs: 10,
+      pid: 7,
+    });
     expect(leaseOf(path, id).owner_pid).toBe(7);
-    clearCrawlLease(path, id, 7);
+
+    releaseActiveLeases();
     expect(leaseOf(path, id).owner_pid).toBeNull();
+    // The timer is gone and an explicit beat is a no-op.
+    expect(lease.beat()).toBe(false);
+    await Bun.sleep(80);
+    expect(leaseOf(path, id).owner_pid).toBeNull();
+    await run(store.close());
+  });
+
+  test("a live foreign owner is not stolen; a stale or free lease is taken", async () => {
+    const path = tempDbPath();
+    const store = await openStore(path);
+    const id = await run(store.createCrawl(meta));
+    const set = (pid: number | null, hb: number | null) => {
+      const db = new Database(path);
+      db.query(
+        "UPDATE crawls SET owner_pid = ?, owner_host = 'other', heartbeat_at = ? WHERE id = ?"
+      ).run(pid, hb, id);
+      db.close();
+    };
+    const mk = () =>
+      startCrawlLease({
+        dbPath: path,
+        getCrawlId: () => id,
+        pid: 1,
+        host: "me",
+        now: () => 10_000_000,
+      });
+
+    set(2, 10_000_000 - 1_000); // fresh foreign beat
+    let lease = mk();
+    expect(lease.beat()).toBe(false);
+    expect(leaseOf(path, id).owner_pid).toBe(2);
+    lease.release();
+
+    set(2, 10_000_000 - 10 * 60_000); // stale: a resume takes over a dead owner
+    lease = mk();
+    expect(leaseOf(path, id).owner_pid).toBe(1);
+    lease.release();
+
+    set(null, 5); // released earlier
+    lease = mk();
+    expect(leaseOf(path, id).owner_pid).toBe(1);
     lease.release();
     await run(store.close());
   });

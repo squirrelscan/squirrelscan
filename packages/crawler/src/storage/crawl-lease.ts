@@ -16,6 +16,7 @@ import { hostname } from "node:os";
 import {
   CRAWL_LEASE_BUSY_TIMEOUT_MS,
   CRAWL_LEASE_HEARTBEAT_MS,
+  CRAWL_LEASE_STALE_MS,
 } from "./types";
 
 export interface CrawlLeaseOptions {
@@ -38,7 +39,19 @@ export interface CrawlLease {
 
 const NOOP_LEASE: CrawlLease = { beat: () => false, release: () => {} };
 
-/** How often to retry until the first beat lands (the crawl row may not exist yet). */
+/** Leases this process holds, so a signal handler can release them (see releaseActiveLeases). */
+const activeLeases = new Set<CrawlLease>();
+
+/**
+ * Release every lease this process holds: stops the timers (so no beat can
+ * re-assert a lease the signal path is clearing) and clears the owners. For the
+ * signal handler, which runs while the heartbeat timers are still live.
+ */
+export function releaseActiveLeases(): void {
+  for (const lease of [...activeLeases]) lease.release();
+}
+
+/** How often to poll for the crawl id while there is none yet (the row is created after the lease starts). */
 const FIRST_BEAT_POLL_MS = 1000;
 
 export function startCrawlLease(options: CrawlLeaseOptions): CrawlLease {
@@ -71,19 +84,28 @@ export function startCrawlLease(options: CrawlLeaseOptions): CrawlLease {
   const held = new Set<string>();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let released = false;
-  let everBeat = false;
+  // Fast polling only while there is no crawl id; once it exists the cadence is
+  // the heartbeat, also after a busy skip.
+  let haveId = false;
 
   const beat = (): boolean => {
     if (released || !db) return false;
     const id = options.getCrawlId();
     if (!id) return false;
+    haveId = true;
     try {
-      // Re-asserts ownership every beat, so a lease cleared by a stale sweep heals.
+      // Compare-and-set: take the lease when it is free, ours, or stale, so two
+      // processes on one crawl do not steal it from each other every beat, while
+      // a resume still takes over a killed owner's lease. A stale sweep heals too.
+      // PR 2 must design what a LIVE foreign owner means (the writer just yields).
+      const t = now();
       const result = db
         .prepare(
-          "UPDATE crawls SET owner_pid = ?, owner_host = ?, heartbeat_at = ? WHERE id = ?"
+          `UPDATE crawls SET owner_pid = ?, owner_host = ?, heartbeat_at = ?
+           WHERE id = ? AND (owner_pid IS NULL OR (owner_pid = ? AND owner_host = ?)
+             OR heartbeat_at IS NULL OR heartbeat_at < ?)`
         )
-        .run(pid, host, now(), id);
+        .run(pid, host, t, id, pid, host, t - CRAWL_LEASE_STALE_MS);
       if (Number(result.changes ?? 0) > 0) {
         held.add(id);
         return true;
@@ -98,20 +120,21 @@ export function startCrawlLease(options: CrawlLeaseOptions): CrawlLease {
   const schedule = (): void => {
     timer = setTimeout(
       () => {
-        if (beat()) everBeat = true;
+        beat();
         if (!released) schedule();
       },
-      everBeat ? heartbeatMs : Math.min(FIRST_BEAT_POLL_MS, heartbeatMs)
+      haveId ? heartbeatMs : Math.min(FIRST_BEAT_POLL_MS, heartbeatMs)
     );
     timer.unref?.();
   };
 
-  if (beat()) everBeat = true;
+  beat();
   schedule();
 
   const release = (): void => {
     if (released) return;
     released = true;
+    activeLeases.delete(lease);
     if (timer) clearTimeout(timer);
     try {
       if (db) {
@@ -133,32 +156,7 @@ export function startCrawlLease(options: CrawlLeaseOptions): CrawlLease {
     }
   };
 
-  return { beat, release };
-}
-
-/**
- * Clear this process's lease on a crawl, synchronously and best-effort, for the
- * signal handler (which exits without running `finally` blocks).
- */
-export function clearCrawlLease(
-  dbPath: string,
-  crawlId: string,
-  pid: number = process.pid
-): void {
-  let db: Database | undefined;
-  try {
-    db = new Database(dbPath, { readwrite: true, create: false });
-    db.exec(`PRAGMA busy_timeout = ${CRAWL_LEASE_BUSY_TIMEOUT_MS}`);
-    db.prepare(
-      "UPDATE crawls SET owner_pid = NULL, owner_host = NULL WHERE id = ? AND owner_pid = ?"
-    ).run(crawlId, pid);
-  } catch {
-    // leaves a lease that goes stale on its own
-  } finally {
-    try {
-      db?.close();
-    } catch {
-      // nothing to do
-    }
-  }
+  const lease: CrawlLease = { beat, release };
+  activeLeases.add(lease);
+  return lease;
 }

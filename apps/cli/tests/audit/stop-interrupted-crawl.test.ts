@@ -2,6 +2,7 @@
 // Runs in a signal handler, so it must be best-effort and scoped to crawls this
 // process started.
 
+import { startCrawlLease } from "@squirrelscan/crawler";
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
@@ -112,6 +113,25 @@ describe("stopInterruptedCrawls", () => {
     set(process.pid);
     stopInterruptedCrawls(dbPath);
     expect(ownerOf()).toEqual({ owner_pid: null, heartbeat_at: 9 });
+  });
+
+  test("a live heartbeat cannot re-assert the lease after the signal path (#946)", async () => {
+    const { mine } = await seed();
+    const lease = startCrawlLease({
+      dbPath,
+      getCrawlId: () => mine,
+      heartbeatMs: 10,
+    });
+    registerOwnedCrawl(() => mine);
+    stopInterruptedCrawls(dbPath);
+    await Bun.sleep(80);
+    expect(lease.beat()).toBe(false);
+    const db = new Database(dbPath);
+    const row = db
+      .prepare("SELECT owner_pid FROM crawls WHERE id = ?")
+      .get(mine) as { owner_pid: number | null };
+    db.close();
+    expect(row.owner_pid).toBeNull();
   });
 
   test("no owned crawl yet (still before the crawl started) is a no-op", async () => {
