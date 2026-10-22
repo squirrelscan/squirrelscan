@@ -9,6 +9,7 @@ import {
   sortUnnamedControls,
   unconfirmedRow,
 } from "../shared/static-hidden";
+import { isConventionalLinkLabel } from "../shared/conventional-link-labels";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 // Generic link text that doesn't describe the destination
@@ -36,15 +37,11 @@ const GENERIC_LINK_TEXT = [
   "get",
   "start",
   "begin",
-  // Sign up/account related
-  "sign up",
-  "signup",
-  "register",
+  // Sign up/account related. The conventional account labels (sign in, sign up,
+  // log in, register, ...) live in shared/conventional-link-labels.ts and win
+  // over this list (pub#839).
   "subscribe",
   "join",
-  "login",
-  "log in",
-  "sign in",
   // Navigation
   "next",
   "previous",
@@ -76,6 +73,11 @@ const GENERIC_LINK_TEXT = [
   "discover",
   "explore",
 ];
+
+/** Generic text, unless the whole text is a conventional account or utility label. */
+function isGenericLinkText(normalized: string): boolean {
+  return GENERIC_LINK_TEXT.includes(normalized) && !isConventionalLinkLabel(normalized);
+}
 
 /**
  * Get accessible name from an element
@@ -212,7 +214,7 @@ export const linkTextRule: Rule = {
           .toLowerCase()
           .replace(/[.,!?;:'"]+/g, "")
           .trim();
-        if (GENERIC_LINK_TEXT.includes(normalizedName) && !isHidden(link)) {
+        if (isGenericLinkText(normalizedName) && !isHidden(link)) {
           genericLinks.push(accessibleName);
         }
         continue;
@@ -229,7 +231,7 @@ export const linkTextRule: Rule = {
       // Has content - check if it's generic
       const text = link.textContent?.trim().toLowerCase() || "";
       const normalizedText = text.replace(/[.,!?;:'"]+/g, "").trim();
-      if (GENERIC_LINK_TEXT.includes(normalizedText) && !isHidden(link)) {
+      if (isGenericLinkText(normalizedText) && !isHidden(link)) {
         genericLinks.push(text);
       }
     }

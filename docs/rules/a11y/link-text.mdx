@@ -14,9 +14,18 @@ An icon-only link has the same problem in a harder form: there is no text at all
 Two checks, at rule severity warning. Both walk every `a[href]`, skipping fragment-only links whose `href` starts with `#` and links using an unsafe scheme such as `javascript:`.
 
 - `link-text-empty` fails when a link has neither an accessible name from `aria-labelledby`, `aria-label` or `title`, nor accessible content: text, an `<img>` with non-empty `alt`, an `<svg>` carrying a `<title>`, `aria-label` or `aria-labelledby`, or a `[role="img"]` with an `aria-label`. Report message: `N link(s) with no accessible text`. Each item is the first 50 characters of the `href`, labelled with the reason: `empty`, `svg-no-name`, `icon-font` or `role-img-no-name`.
-- `link-text-generic` warns when the link's accessible name, or its text, lowercased and stripped of punctuation, exactly matches one of 54 generic phrases. The list includes `click here`, `here`, `read more`, `learn more`, `more`, `link`, `download`, `view`, `sign up`, `submit`, `next`, `view details`, `website` and `discover`. Report message: `N link(s) with generic text`, listing each distinct phrase once.
+- `link-text-generic` warns when the link's accessible name, or its text, lowercased and stripped of punctuation, exactly matches one of 48 generic phrases. The list includes `click here`, `here`, `read more`, `learn more`, `more`, `link`, `download`, `view`, `subscribe`, `submit`, `next`, `view details`, `website` and `discover`. Report message: `N link(s) with generic text`, listing each distinct phrase once.
 - `link-text` passes with `All links have descriptive text` when neither problem appears on a page that has links.
 - `link-text-unconfirmed` warns with `N link(s) with no accessible text may be hidden by a style (unconfirmed)` for an empty link a style may hide in a way squirrel cannot settle.
+
+### Conventional labels
+
+A link that reads "Sign in", "Log out" or "Privacy policy" names its destination, so it is never reported as generic, even though it sits in the template of every page. The exempt set is matched against the whole link text after Unicode normalisation (NFKC, so full-width and non-breaking-space variants match, plus case folding and leading and trailing punctuation removed), and is the union across English, Spanish, French, German, Portuguese, Italian, Dutch, Japanese, Chinese, Korean and Russian, so no page language detection is needed. It covers:
+
+- account actions: sign in, sign up, log in, log out, sign out, register, my account, and their translations
+- legal and utility labels: terms, terms of service, terms and conditions, privacy, privacy policy, legal, legal notice, imprint, DMCA, cookies, cookie policy, accessibility, sitemap, contact, about, help, FAQ, careers, and their translations
+
+Only the whole text counts: "Sign in to read more" is not exempt. `click here`, `read more`, `learn more`, `here`, `more`, `link`, `this`, `go` and `continue` are still reported. `links/anchor-text` and `a11y/identical-links-same-purpose` do not list these labels as generic, so they needed no change.
 
 ### Hidden links
 
