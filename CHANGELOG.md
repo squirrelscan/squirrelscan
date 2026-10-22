@@ -24,6 +24,7 @@ How it works:
 
 ### Fixed
 
+- A smart audit no longer marks a finding fixed when its rule threw an error on every page of the re-crawl. The rule never finished, so nothing was checked, and the earlier finding now stays open until a run completes the rule, the same as for a rule that times out (#999). A rule that timed out on only some pages still carries only those pages' findings, and a page it finished still resolves (#1000).
 - a11y: `frame-title`, `object-alt` and `empty-heading` now read which elements are out of the accessibility tree the same way as `button-name` and the other naming rules. A hidden element is skipped and counted, and one a style may hide (a `no-js` fallback on a page with an external stylesheet included) is reported as `<check>-unconfirmed` instead of a failure. A visible one still fails (#1002).
 
 ## v0.0.126 (2026-10-22)

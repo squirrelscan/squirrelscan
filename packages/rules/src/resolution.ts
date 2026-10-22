@@ -71,6 +71,19 @@ interface ResolutionEvidence {
 }
 
 /**
+ * (pub#999) The runner's record of a rule that THREW: a failed `<rule>-error`. A
+ * replayed one (carried or unrendered) is an earlier run's, not this run's.
+ */
+function isThrownRuleRow(ruleId: string, check: CheckResult): boolean {
+  return (
+    check.status === "fail" &&
+    check.name === `${ruleId}-error` &&
+    check.provenance !== "carried" &&
+    check.provenance !== "unrendered"
+  );
+}
+
+/**
  * Walk a report's pre-sample rule results + the crawled page URLs
  * (`report.pages[].url`, which publish drops) into {@link ResolutionEvidence}.
  *
@@ -108,7 +121,9 @@ interface ResolutionEvidence {
  * `<rule>-error`, not the rule's real checks, so a rule that timed out on every
  * page emits no key of its own. Each such rule gets the rule-wide key
  * `<rule>|*` in `notEvaluated` (never `failing`), listing the pages it timed out
- * on, and the merge carries a prior finding of the rule on them (pub#968).
+ * on, and the merge carries a prior finding of the rule on them (pub#968). A rule
+ * that threw (`<rule>-error`, status `fail`) is the same gap and takes the same key
+ * (pub#999).
  */
 function collectResolutionEvidence(
   ruleResults: Record<string, { checks: CheckResult[] }>,
@@ -136,16 +151,19 @@ function collectResolutionEvidence(
   // (normalized URL), merged into `evaluated` once every key is known.
   const keyRule = new Map<string, string>();
   const notApplicable = new Map<string, Set<string>>();
-  // (pub#968) Rule -> pages its time-budget skip names (normalized URL), or
-  // `true` when the skip cannot say which (no page, or a clipped page list):
+  // (pub#968, pub#999) Rule -> pages its time-budget skip or thrown `<rule>-error`
+  // names (normalized URL), or `true` when the row cannot say which (no page, or a clipped page list):
   // every crawled page then counts as not run. Becomes a rule-wide key below.
   const timedOut = new Map<string, Set<string> | true>();
-  // Room kept under `maxChecks` for one rule-wide key per timed-out rule: a
+  // Room kept under `maxChecks` for one rule-wide key per timed-out or thrown rule: a
   // dropped one would bring pub#968 back for that rule, so the per-check keys
   // yield first.
   let timedOutRules = 0;
-  for (const rule of Object.values(ruleResults)) {
-    if (rule.checks.some((c) => c.skipReason === RULE_TIMED_OUT_SKIP_REASON)) timedOutRules++;
+  for (const [ruleId, rule] of Object.entries(ruleResults)) {
+    if (
+      rule.checks.some((c) => c.skipReason === RULE_TIMED_OUT_SKIP_REASON || isThrownRuleRow(ruleId, c))
+    )
+      timedOutRules++;
   }
   const checkCap = limits.maxChecks - Math.min(timedOutRules, limits.maxChecks);
   // (pub#935) Base key -> pages a `<check>-unconfirmed` row evaluated, merged into
@@ -190,7 +208,13 @@ function collectResolutionEvidence(
         for (const url of skippedUrls) set.add(normalized(url));
         continue;
       }
-      if (check.status === "skipped" && check.skipReason === RULE_TIMED_OUT_SKIP_REASON) {
+      const timeoutSkip =
+        check.status === "skipped" && check.skipReason === RULE_TIMED_OUT_SKIP_REASON;
+      // (pub#999) A rule that THREW is the same gap: the runner records it as a
+      // failed `<rule>-error`, which names none of the rule's real checks either.
+      // Unlike the timeout skip it is a real (failed) row, so it falls through to
+      // the ordinary path below as well and keeps its own key.
+      if (timeoutSkip || isThrownRuleRow(ruleId, check)) {
         // (pub#968) A GAP of the whole rule: its real check names are unknown
         // (the skip is `<rule>-error`), so no per-check key can carry the page.
         // With the rule timing out on every page no key of it exists, and an
@@ -212,7 +236,7 @@ function collectResolutionEvidence(
             timedOut.set(ruleId, set);
           }
         }
-        continue;
+        if (timeoutSkip) continue;
       }
       if (check.status === "skipped" && check.skipReason === SCAN_TRUNCATED_SKIP_REASON) {
         // (pub#501) The opposite kind of skip: a GAP. The rule stopped at a work
