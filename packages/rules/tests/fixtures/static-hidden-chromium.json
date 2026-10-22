@@ -315,5 +315,18 @@
   {"name": "width: the hidden attribute holds at every width", "html": "<style>@media (min-width: 990px){menu-drawer{display:none}}</style><menu-drawer hidden><b id=\"t\"></b></menu-drawer>", "chromium": "hidden", "widths": {"320": "hidden", "600": "hidden", "989": "hidden", "990": "hidden", "991": "hidden", "1200": "hidden"}},
   {"name": "width: an inline display:block outranks the media hide", "html": "<style>@media (min-width: 990px){b{display:none}}</style><b id=\"t\" style=\"display:block\"></b>", "chromium": "shown", "widths": {"320": "shown", "600": "shown", "989": "shown", "990": "shown", "991": "shown", "1200": "shown"}},
   {"name": "width: a !important media hide beats an inline display:block", "html": "<style>@media (min-width: 990px){b{display:none !important}}</style><b id=\"t\" style=\"display:block\"></b>", "chromium": "shown", "widths": {"320": "shown", "600": "shown", "989": "shown", "990": "hidden", "991": "hidden", "1200": "hidden"}},
-  {"name": "width: a decided hide and a media hide", "html": "<style>menu-drawer{display:none} @media (min-width: 990px){menu-drawer{display:none}}</style><menu-drawer><b id=\"t\"></b></menu-drawer>", "chromium": "hidden", "widths": {"320": "hidden", "600": "hidden", "989": "hidden", "990": "hidden", "991": "hidden", "1200": "hidden"}}
+  {"name": "width: a decided hide and a media hide", "html": "<style>menu-drawer{display:none} @media (min-width: 990px){menu-drawer{display:none}}</style><menu-drawer><b id=\"t\"></b></menu-drawer>", "chromium": "hidden", "widths": {"320": "hidden", "600": "hidden", "989": "hidden", "990": "hidden", "991": "hidden", "1200": "hidden"}},
+  {"name": "nesting: a nested @media sets display:none", "html": "<style>b{@media (min-width:0){display:none}}</style><b id=\"t\"></b>", "chromium": "hidden"},
+  {"name": "nesting: a nested @supports sets display:none", "html": "<style>b{@supports (display:grid){display:none}}</style><b id=\"t\"></b>", "chromium": "hidden"},
+  {"name": "nesting: & with a descendant combinator", "html": "<style>.a{& .b{display:none}}</style><div class=\"a\"><b class=\"b\" id=\"t\"></b></div>", "chromium": "hidden"},
+  {"name": "nesting: an implicit & rule", "html": "<style>.a{.b{display:none}}</style><div class=\"a\"><b class=\"b\" id=\"t\"></b></div>", "chromium": "hidden"},
+  {"name": "nesting: & alone", "html": "<style>b{&{display:none}}</style><b id=\"t\"></b>", "chromium": "hidden"},
+  {"name": "nesting: the outer rule hides and a nested rule follows", "html": "<style>b{display:none;& .x{color:red}}</style><b id=\"t\"></b>", "chromium": "hidden"},
+  {"name": "nesting: a nested sibling combinator reaches a sibling", "html": "<style>.a{& + .b{display:none}}</style><div class=\"a\"></div><b class=\"b\" id=\"t\"></b>", "chromium": "hidden"},
+  {"name": "nesting: a nested rule sets visibility:hidden", "html": "<style>.a{& .b{visibility:hidden}}</style><div class=\"a\"><b class=\"b\" id=\"t\"></b></div>", "chromium": "hidden"},
+  {"name": "nesting: a nested rule inside an at-rule", "html": "<style>@media (min-width:0){.a{& .b{display:none}}}</style><div class=\"a\"><b class=\"b\" id=\"t\"></b></div>", "chromium": "hidden"},
+  {"name": "nesting: a nested rule that sets neither property", "html": "<style>b{& .x{color:red}}</style><b id=\"t\"></b>", "chromium": "shown"},
+  {"name": "nesting: a nested :hover rule is not active", "html": "<style>b{&:hover{display:none}}</style><b id=\"t\"></b>", "chromium": "shown"},
+  {"name": "nesting: a nested rule that reaches another element", "html": "<style>.a{& .c{display:none}}</style><div class=\"a\"><b class=\"b\" id=\"t\"></b></div>", "chromium": "shown"},
+  {"name": "nesting: a nested @media that is false", "html": "<style>b{@media print{display:none}}</style><b id=\"t\"></b>", "chromium": "shown"}
 ]

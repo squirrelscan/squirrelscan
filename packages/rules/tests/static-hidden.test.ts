@@ -189,6 +189,26 @@ describe("static-hidden: never hidden where Chromium shows the element", () => {
   }
 });
 
+// pub#1013: CSS nesting. A rule nested inside a style rule (`b { @media (...) {
+// display: none } }`, `.a { & .b { ... } }`) is not read, and it could reach the
+// element, so where Chromium hides it the reader must never say "shown": an unnamed
+// control there would otherwise FAIL. Rows measured in headless Chromium at 1024px.
+describe("static-hidden: never shown where Chromium hides a nested-rule element", () => {
+  for (const row of CHROMIUM.filter((r) => r.name.startsWith("nesting:"))) {
+    test(`${row.name} (Chromium: ${row.chromium})`, () => {
+      if (row.chromium === "hidden") expect(verdict(row.html)).not.toBe("shown");
+    });
+  }
+
+  test("a nested rule that sets neither property keeps its answer", () => {
+    expect(verdict('<style>b{& .x{color:red}}</style><b id="t"></b>')).toBe("shown");
+  });
+
+  test("an unnested rule keeps its answer", () => {
+    expect(verdict('<style>b{display:none}</style><b id="t"></b>')).toBe("hidden");
+  });
+});
+
 // pub#678: the <style> reader is bounded on hostile input. Past a bound it
 // stops reading, and every element reads "unknown" (pub#1015): the rules it
 // dropped could hide or show anything.
