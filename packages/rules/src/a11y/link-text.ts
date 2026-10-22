@@ -10,6 +10,7 @@ import {
   unconfirmedRow,
 } from "../shared/static-hidden";
 import { isConventionalLinkLabel } from "../shared/conventional-link-labels";
+import { isGenericInPageLanguage } from "../shared/generic-link-phrases";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 // Generic link text that doesn't describe the destination
@@ -197,6 +198,10 @@ export const linkTextRule: Rule = {
     const emptyLinks = empty.failures;
 
     const isHidden = (el: Element): boolean => visibility.visibility(el).state === "hidden";
+    // pub#840: the page language adds its own generic phrases; English always applies.
+    const lang = doc.documentElement?.getAttribute("lang");
+    const isGeneric = (raw: string, normalized: string): boolean =>
+      isGenericLinkText(normalized) || isGenericInPageLanguage(raw, lang);
 
     for (const link of links) {
       const href = link.getAttribute("href") || "";
@@ -214,7 +219,7 @@ export const linkTextRule: Rule = {
           .toLowerCase()
           .replace(/[.,!?;:'"]+/g, "")
           .trim();
-        if (isGenericLinkText(normalizedName) && !isHidden(link)) {
+        if (isGeneric(accessibleName, normalizedName) && !isHidden(link)) {
           genericLinks.push(accessibleName);
         }
         continue;
@@ -231,7 +236,7 @@ export const linkTextRule: Rule = {
       // Has content - check if it's generic
       const text = link.textContent?.trim().toLowerCase() || "";
       const normalizedText = text.replace(/[.,!?;:'"]+/g, "").trim();
-      if (isGenericLinkText(normalizedText) && !isHidden(link)) {
+      if (isGeneric(text, normalizedText) && !isHidden(link)) {
         genericLinks.push(text);
       }
     }

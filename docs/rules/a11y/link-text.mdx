@@ -27,6 +27,10 @@ A link that reads "Sign in", "Log out" or "Privacy policy" names its destination
 
 Only the whole text counts: "Sign in to read more" is not exempt. `click here`, `read more`, `learn more`, `here`, `more`, `link`, `this`, `go` and `continue` are still reported. `links/anchor-text` and `a11y/identical-links-same-purpose` do not list these labels as generic, so they needed no change.
 
+### Generic phrases in other languages
+
+English phrases are always checked. The page language, the primary subtag of `<html lang>` (so `fr-CA` is French), adds its own list of generic phrases: Spanish, French, German, Portuguese, Italian, Dutch, Japanese, Chinese, Korean and Russian. Examples: `cliquez ici` and `en savoir plus` (French), `mehr` and `weiterlesen` (German), `haga clic aquí` and `leer más` (Spanish), `詳しくはこちら` (Japanese), `点击这里` (Chinese), `자세히 보기` (Korean), `читать далее` and `подробнее` (Russian). A page with no `lang`, or one that is not in that list, is checked with the English list only. Only the primary `<html lang>` is read: a `lang` on a nested element, or text in another language on a page, is not detected, so French text on an English page is not reported as generic. Ambiguous words that are also a pager or wizard button (German `Weiter`, Dutch `verder`, Russian `Продолжить`) are left out. Matching is on the whole link text after Unicode normalisation (NFKC, case folding, edge punctuation removed, full-width punctuation included), and CJK text is never split into words, so `詳しくはこちらの料金表` is not reported. A conventional account or legal label ([Conventional labels](/rules/a11y/link-text#conventional-labels)) is never reported in any language.
+
 ### Hidden links
 
 An empty link out of the accessibility tree has nothing to announce, so it is not reported: one with the `hidden` attribute (except `hidden="until-found"`), `aria-hidden="true"` on itself or an ancestor, `display: none` on itself or an ancestor (set inline or by a `<style>` rule squirrel can decide), or inside a closed `<dialog>` or an unopened `popover`. It still needs a name before it is shown. A hidden link with generic text is skipped too.

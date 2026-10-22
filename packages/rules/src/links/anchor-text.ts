@@ -1,5 +1,7 @@
 // links/anchor-text - Link anchor text quality
 
+import { isConventionalLinkLabel } from "../shared/conventional-link-labels";
+import { isGenericInPageLanguage } from "../shared/generic-link-phrases";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 const MAX_SNIPPET_LEN = 120;
@@ -57,9 +59,12 @@ function hasAccessibleName(link: Element, doc: Document): boolean {
   return false;
 }
 
-function isGeneric(link: Element): boolean {
-  const text = link.textContent?.trim().toLowerCase() || "";
-  return GENERIC_ANCHORS.includes(text);
+/** English always applies; the page language adds its own generic phrases (pub#840). */
+function isGeneric(link: Element, lang: string | null | undefined): boolean {
+  const raw = link.textContent?.trim() || "";
+  const text = raw.toLowerCase();
+  if (isConventionalLinkLabel(raw)) return false;
+  return GENERIC_ANCHORS.includes(text) || isGenericInPageLanguage(raw, lang);
 }
 
 export const anchorTextRule: Rule = {
@@ -82,6 +87,7 @@ export const anchorTextRule: Rule = {
     if (!doc) return { checks: [] };
 
     const links = doc.querySelectorAll("a[href]");
+    const lang = doc.documentElement?.getAttribute("lang");
 
     // Group links by resolved target URL so redundant links to the same
     // destination (image + headline + "Read more") are evaluated as one unit.
@@ -110,7 +116,7 @@ export const anchorTextRule: Rule = {
     for (const [target, groupLinks] of groups) {
       // A group passes if any member carries a descriptive (non-generic) accessible name.
       const hasDescriptiveLink = groupLinks.some(
-        (link) => hasAccessibleName(link, doc) && !isGeneric(link),
+        (link) => hasAccessibleName(link, doc) && !isGeneric(link, lang),
       );
       if (hasDescriptiveLink) continue;
 
@@ -125,7 +131,7 @@ export const anchorTextRule: Rule = {
         continue;
       }
 
-      const genericLink = groupLinks.find((link) => isGeneric(link));
+      const genericLink = groupLinks.find((link) => isGeneric(link, lang));
       const text = genericLink?.textContent?.trim() || "";
       genericAnchors.push(`"${text}"`);
     }
