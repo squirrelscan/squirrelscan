@@ -132,9 +132,9 @@ export const RulesConfigSchema = z.object({
   /**
    * Wall-clock budget (ms) for one rule on one page; a site rule gets this much
    * per page, capped at 60 s. A backstop against a pattern that matches slowly
-   * on hostile content. Unset = the engine default (1000); 0 turns it off (#578).
-   * Lower than the default is refused: a rule that ends just past its deadline
-   * can stop the audit (#880), and a lower budget makes that common.
+   * on hostile content. Unset = the engine default (2000); 0 turns it off (#578).
+   * Below 1000 is refused: a rule that ends just past its deadline can stop
+   * the audit (#880), and a lower budget makes that common.
    */
   time_budget_ms: z
     .number()

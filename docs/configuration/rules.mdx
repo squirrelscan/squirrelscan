@@ -83,7 +83,7 @@ disable = ["content/word-count", "images/modern-format"]
 ### `time_budget_ms`
 
 **Type:** `integer` (milliseconds: `0`, or `1000` or more)
-**Default:** unset (1000 ms)
+**Default:** unset (2000 ms)
 
 How long one rule may run on one page before it is abandoned and reported as not evaluated on that page (a skipped check, never a failure). A site rule gets this much per page of the site, capped at 60 seconds, or at the budget itself if you set it above that. `0` turns the budget off. A value below 1000 is refused for now: a rule that finishes just past a tight budget can stop the audit ([#880](https://github.com/squirrelscan/squirrelscan/issues/880)).
 

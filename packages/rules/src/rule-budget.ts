@@ -52,11 +52,12 @@ import { resetSharedRegexes } from "./shared-regex";
  * Chosen from measured rule times on the golden corpus (500-page fixture, 3 runs,
  * `packages/audit-engine/scripts/rule-time-percentiles.ts`): the slowest page
  * rule's p99 is 6 ms and the slowest single page-rule run 90 ms; the heaviest
- * synchronous site rule spends about 2 ms per page. 1000 ms leaves more than 10x
+ * synchronous site rule spends about 2 ms per page. 2000 ms leaves more than 20x
  * headroom over the worst observed run on a slow, shared CPU, so it only fires
- * on pathological input.
+ * on pathological input. Raised from 1000 ms, so a rule that finishes late on a busy
+ * machine is not abandoned; there is no retry.
  */
-export const RULE_TIME_BUDGET_MS = 1000;
+export const RULE_TIME_BUDGET_MS = 2000;
 
 /**
  * Ceiling on one site-rule evaluation, in ms. Without it the per-page scaling
