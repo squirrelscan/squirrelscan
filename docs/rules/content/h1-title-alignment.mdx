@@ -13,16 +13,24 @@ A real example: the title targets "Reddit Visibility Services, SEO & AI Search" 
 
 The rule runs on every crawled page that has exactly one non-empty H1 and a title. It emits a single check named `h1-title-alignment`:
 
-- Warn when the title and the H1 share no content word, and both sides have at least two. Message: `The H1 and the title share no meaningful word`, with both strings shown as items. Severity warning, weight 3. On the homepage this is info, never a warning, because a creative homepage headline is deliberate.
+- Info when the title and the H1 share no content word, and both sides have at least two. Message: `The H1 and the title share no meaningful word`, with both strings shown as items. Severity info, weight 3: it never lowers the score. `details.confident` is true for the stricter case, a page at least two segments below the root (`/blog/post`, `/de/products/shoe`) that is not a homepage or generic marketing page, with at least three topic words on each side.
 - Info when the H1 and the title are identical, character for character, on a page whose title carries more than the brand. Message: `The H1 and the title are identical: the title could target a second phrase`. That is a missed chance, not an error.
 - Pass when at least one content word is shared. Message: `The H1 and the title share a meaningful word`.
-- Skipped with the reason as the message when there is no H1, several H1s or an empty one (`core/h1` reports those), no title (`core/meta-title` does), the title is only the brand, either side has too few content words to compare, or the page language has no stopword list. A skipped page is never counted as a pass.
+- Skipped, with the reason as the message, when there is no H1, several H1s or an empty one (`core/h1` reports those), no title (`core/meta-title` does), the title is only the brand, either side has too few content words to compare, the page language has no stopword list, the title or H1 is mostly non-Latin text, the H1 text looks like code, or the words of the title or H1 run together without a space (`TrustedWhen`, usually a `<br>` or `<span>` with no whitespace around it). A skipped page is never counted as a pass.
+
+Why info and not a warning: on 115,556 stored pages, about a third of the mismatches judged by hand were real. The rest are headlines that pitch where the title describes ("Workflows that run the business for you" under "Use cases | Adoment"), and synonym pairs, so a default warning would mostly be noise. The rule tells you where to look.
 
 Pages kept out of search (`noindex`) are skipped by the runner, on a site that is itself indexed; see [pages kept out of search](/rules#pages-kept-out-of-search).
 
+### The homepage and marketing pages
+
+A creative headline is deliberate on a homepage, so the finding carries `details.pageKind` and is never confident there. The homepage here means the root path (`/`), a localized root (`/de/`, `/pt-br/`, `/en_gb`) and an index file (`/index.html`, `/de/index.php`). The same goes for a generic marketing page, a single path segment of `about`, `about-us`, `features`, `pricing`, `plans`, `contact`, `faq`, `services`, `company`, `team`, `support` or `help` (and their German, French, Spanish, Portuguese, Italian and Dutch forms, such as `preise`, `tarifs`, `precios`), with or without a locale prefix. A subpage such as `/pricing/enterprise` is not one.
+
 ### How the words are compared
 
-Both strings are lower-cased, Unicode-normalised (NFKC) and stripped of diacritics, then split into words. Pure numbers, words under three letters and the stopwords of the page language are dropped. A light stemmer makes `service` match `services`, `running` match `run` and `Women's` match `women`, and a shared stem prefix of at least five letters also counts, so `optimize` and `optimization` match. A word shared with any part of the title, the brand included, counts as shared.
+Both strings are NFKC-normalised, lower-cased and stripped of diacritics, then split into words. Dropped: pure numbers, words under three letters (an all-caps pair such as `AI`, `UX` or `EA` is kept, because it usually names the subject), the stopwords of the page language, and generic words that say nothing about a topic (`free`, `online`, `best`, `new`, `guide`, `tool` and their equivalents), which cannot make a match on their own. A camel-case word (`CustomerSuccess`) also offers its parts. At most 64 words are read per side.
+
+Two words match when their stems are equal, or share a prefix of at least five letters that covers at least 80% of the shorter stem, or, in German and Dutch, when one stem of at least five letters sits inside the other (`Damenschuhe` contains `Schuhe`). The stemmer is light: English plurals, `-ing`, `-ed`, a silent final `e` (`price` and `pricing`, `make` and `making`) and a few irregular plurals (`women` and `woman`, `men` and `man`); a plural or a final vowel for the other languages. It is not a full stemmer, so unrelated forms such as `run` and `ran` do not match. A word shared with any part of the title, the brand included, counts as shared.
 
 Stopword lists exist for English, Spanish, French, German, Portuguese, Italian and Dutch, chosen from the primary subtag of `<html lang>`. Every other language, and a page with no `lang`, is skipped: squirrel does not guess where the words are in Japanese, Chinese or Korean text, and it will not judge words it cannot read.
 
@@ -39,14 +47,14 @@ Reword the H1 so it carries the phrase the title targets. The H1 can be longer a
 <h1>Reddit visibility services that get you recommended by AI</h1>
 ```
 
-Or change the title to name what the H1 promises. If the headline is deliberately creative, make sure the first paragraph names the topic, and leave the finding: it is a warning, not a failure.
+Or change the title to name what the H1 promises. If the headline is deliberately creative, make sure the first paragraph names the topic and leave the finding: it is information, not a failure.
 
 | | |
 |---|---|
 | **Rule ID** | `content/h1-title-alignment` |
 | **Category** | [Content](/rules/content) |
 | **Scope** | Per-page |
-| **Severity** | warning |
+| **Severity** | info |
 | **Weight** | 3/10 |
 
 ## Enable / disable
