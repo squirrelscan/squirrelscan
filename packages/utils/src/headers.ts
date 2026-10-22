@@ -20,16 +20,43 @@ export function isValidHeaderName(name: string): boolean {
   return HEADER_NAME_RE.test(name);
 }
 
-const HEADER_HOST_RE =
-  /^(https?:\/\/)?(\[[0-9a-f:.]+\]|[a-z0-9_](?:[a-z0-9_.-]*[a-z0-9_])?)(:\d{1,5})?$/i;
-
 /**
- * True if `value` is a bare host name as `[crawler] header_hosts` takes it,
- * optionally with an `http://` or `https://` prefix and a port: no wildcard,
- * path, userinfo, trailing dot or empty label (#959).
+ * True if `value` is something `[crawler] header_hosts` can read as a host: a
+ * host name or address, optionally with an `http://` or `https://` prefix, a
+ * port, and a path or trailing slash (which are ignored). Wildcards, userinfo,
+ * other schemes, empty labels and a trailing dot are refused, and an
+ * internationalised name is accepted (it is matched in its punycode form, #959).
  */
 export function isValidHeaderHost(value: string): boolean {
-  return HEADER_HOST_RE.test(value.trim()) && !value.includes("..");
+  const raw = value.trim();
+  if (raw === "" || /[*@\s\\]/.test(raw) || raw.includes("..")) return false;
+  const scheme = /^([a-z][a-z0-9+.-]*):\/\//i.exec(raw);
+  if (scheme && !/^https?$/i.test(scheme[1]!)) return false;
+  const authority = (scheme ? raw.slice(scheme[0].length) : raw).split(/[/?#]/)[0]!;
+  if (authority === "" || authority.replace(/:\d{1,5}$/, "").endsWith(".")) return false;
+  try {
+    return new URL(`https://${authority}`).hostname !== "";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The URL whose origin the custom request headers are scoped to (#959): the
+ * crawl's base URL, except that an https start URL whose same-site redirect
+ * landed on plain http keeps its https origin. The crawl still follows the
+ * redirect, but the headers are never sent over http on the strength of it.
+ * A missing or unreadable start URL falls back to the base URL.
+ */
+export function headerScopeBase(seedUrl: string | null | undefined, baseUrl: string): string {
+  try {
+    const seed = seedUrl ? new URL(seedUrl) : null;
+    const base = baseUrl ? new URL(baseUrl) : null;
+    if (seed && base && seed.protocol === "https:" && base.protocol === "http:") return seed.origin;
+  } catch {
+    // Unreadable: fall through to the base URL.
+  }
+  return baseUrl;
 }
 
 /** True if `value` contains only safe RFC 7230 field-value chars (no CR/LF/NUL/CTL). */

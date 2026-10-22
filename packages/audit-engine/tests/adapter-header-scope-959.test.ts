@@ -110,7 +110,7 @@ function pageRecord(path: string, body: string): PageRecord {
 
 type Engine = "v1" | "streaming";
 
-async function audit(engine: Engine, config: Config = CONFIG) {
+async function audit(engine: Engine, config: Config = CONFIG, originalUrl?: string) {
   const storage = new SQLiteStorage(":memory:");
   return run(
     Effect.gen(function* () {
@@ -118,6 +118,7 @@ async function audit(engine: Engine, config: Config = CONFIG) {
       const crawlId = yield* storage.createCrawl({
         baseUrl: ORIGIN,
         seedUrl: `${ORIGIN}/`,
+        ...(originalUrl ? { originalUrl } : {}),
         startedAt: Date.now(),
         status: "completed",
         config: {} as never,
@@ -162,6 +163,18 @@ describe("adapter re-fetches send custom headers only to the audited origin (#95
       expect(own.some((s) => s.path === "/gone")).toBe(true);
       expect(own.filter((s) => s.path !== "/").every((s) => s.token === "secret")).toBe(true);
       expect(other.every((s) => s.token === null)).toBe(true);
+    }, 60_000);
+  }
+
+  for (const engine of ["v1", "streaming"] as const) {
+    test(`${engine}: an https start URL redirected to http: re-fetches carry no headers`, async () => {
+      seen.length = 0;
+      await audit(engine, CONFIG, `https://127.0.0.1:${server.port}/`);
+      const own = seen.filter((s) => s.host === `127.0.0.1:${server.port}`);
+      // The re-fetches ran, over http, and none carried the headers.
+      expect(own.some((s) => s.path === "/hidden-kit")).toBe(true);
+      expect(own.some((s) => s.path === "/gone")).toBe(true);
+      expect(seen.every((s) => s.token === null)).toBe(true);
     }, 60_000);
   }
 });

@@ -17,14 +17,17 @@ describe("header_hosts entries", () => {
     "localhost",
     "[::1]",
     "127.0.0.1",
+    "https://cdn.example.com/",
+    "https://cdn.example.com/x",
+    "cdn.example.com/",
+    "bücher.de",
+    "https://bücher.de/assets",
   ])("accepts %s", (entry) => {
     expect(parse([entry]).success).toBe(true);
   });
 
   test.each([
     "*.example.com",
-    "example.com/path",
-    "https://example.com/assets",
     "user@example.com",
     "https://user:pw@example.com",
     "example.com.",

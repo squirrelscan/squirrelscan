@@ -133,6 +133,8 @@ import { detachFromPage, detachParsedPage } from "./detach";
 import { resolveCloakingProbes } from "./cloaking-probe";
 import { createSiteQuery } from "./site-query";
 import { confirmSoft404Candidates } from "./soft404-confirm";
+import { headerScopeBase } from "@squirrelscan/utils/headers";
+
 import { createHeaderScope, headersWithheldFrom } from "./lib/header-scope";
 import {
   CHROME_USER_AGENT,
@@ -1092,7 +1094,7 @@ export function fetchAssetsFromOccurrences(
 
     // The custom headers go to the audited origin and the hosts the user named,
     // not to every subdomain (#732).
-    const headerScope = createHeaderScope(baseUrl, config.crawler?.header_hosts ?? []);
+    const headerScope = headerScopeOf(crawl, config);
     // Either the request or the redirect it ended on was sent without them.
     const withheld = (url: string, status: number | null, finalUrl?: string | null): boolean =>
       (status === 401 || status === 403) &&
@@ -1695,6 +1697,20 @@ export function buildHeadersMap(page: PageRecord): Record<string, string> {
  * Where the crawl started: where its seed's redirects resolved and the URL it
  * was given (#788). Both engine paths hand this to the hidden-page checks.
  */
+/**
+ * Who gets the audit's custom headers: the audited origin (the start URL's, when
+ * its redirect only moved it from https to http) and the hosts the user named.
+ */
+function headerScopeOf(
+  crawl: { baseUrl?: string; originalUrl?: string } | null | undefined,
+  config: Config,
+) {
+  return createHeaderScope(
+    headerScopeBase(crawl?.originalUrl, crawl?.baseUrl ?? ""),
+    config.crawler?.header_hosts ?? [],
+  );
+}
+
 function crawlEntryUrls(
   crawl: { seedUrl?: string; originalUrl?: string } | null | undefined,
 ): string[] {
@@ -2056,7 +2072,7 @@ export function runRulesOnStorage(
         {
           defaultUserAgent: config.crawler?.user_agent || CHROME_USER_AGENT,
           customHeaders: config.crawler?.headers,
-          headerScope: createHeaderScope(crawl?.baseUrl ?? "", config.crawler?.header_hosts ?? []),
+          headerScope: headerScopeOf(crawl, config),
           egress: probeEgress(crawl?.baseUrl ?? "", config),
         },
       ),
@@ -2088,7 +2104,7 @@ export function runRulesOnStorage(
           // confirmation request is UA-equivalent to the crawl (#1177).
           userAgent: crawl?.config?.userAgent || config.crawler?.user_agent || CHROME_USER_AGENT,
           customHeaders: config.crawler?.headers,
-          headerScope: createHeaderScope(crawl?.baseUrl ?? "", config.crawler?.header_hosts ?? []),
+          headerScope: headerScopeOf(crawl, config),
           egress: probeEgress(crawl?.baseUrl ?? "", config),
           // Honor the crawl's per-host politeness delay between same-host confirms.
           perHostDelayMs: config.crawler?.per_host_delay_ms,
@@ -2868,7 +2884,7 @@ function buildStreamingSiteData(
         {
           defaultUserAgent: config.crawler?.user_agent || CHROME_USER_AGENT,
           customHeaders: config.crawler?.headers,
-          headerScope: createHeaderScope(crawl?.baseUrl ?? "", config.crawler?.header_hosts ?? []),
+          headerScope: headerScopeOf(crawl, config),
           egress: probeEgress(crawl?.baseUrl ?? "", config, egressPinnedByTransport),
         },
       ),
@@ -2891,7 +2907,7 @@ function buildStreamingSiteData(
           wallBudgetMs: config.integrity?.soft404_confirm?.budget_ms,
           userAgent: crawl?.config?.userAgent || config.crawler?.user_agent || CHROME_USER_AGENT,
           customHeaders: config.crawler?.headers,
-          headerScope: createHeaderScope(crawl?.baseUrl ?? "", config.crawler?.header_hosts ?? []),
+          headerScope: headerScopeOf(crawl, config),
           egress: probeEgress(crawl?.baseUrl ?? "", config, egressPinnedByTransport),
           perHostDelayMs: config.crawler?.per_host_delay_ms,
         },

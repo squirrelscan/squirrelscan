@@ -5,6 +5,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
+import { headerScopeBase } from "@squirrelscan/utils/headers";
+
 import { createHeaderScope } from "../src/lib/header-scope";
 import { checkResourceSizes } from "../src/resource-checker";
 import { fetchScriptContents } from "../src/script-fetcher";
@@ -75,6 +77,37 @@ describe("createHeaderScope", () => {
     expect(scope("http://assets.example.com/a.js")).toBe(false);
     expect(scope("https://plain.example.net/a.js")).toBe(true);
     expect(scope("http://plain.example.net/a.js")).toBe(true);
+  });
+});
+
+describe("header_hosts entry forms (#959)", () => {
+  test("a path, a trailing slash and an internationalised name still match", () => {
+    const scope = createHeaderScope("https://example.com/", [
+      "https://cdn.example.com/x",
+      "static.example.com/",
+      "bücher.de",
+    ]);
+    expect(scope("https://cdn.example.com/a.js")).toBe(true);
+    expect(scope("https://static.example.com/a.js")).toBe(true);
+    expect(scope("https://xn--bcher-kva.de/a.js")).toBe(true);
+  });
+});
+
+describe("headerScopeBase (#959)", () => {
+  test("an https start URL redirected to http keeps its https origin", () => {
+    expect(headerScopeBase("https://example.com/", "http://www.example.com")).toBe(
+      "https://example.com",
+    );
+  });
+
+  test("otherwise the base URL, including with no start URL", () => {
+    expect(headerScopeBase("http://example.com/", "http://example.com")).toBe("http://example.com");
+    expect(headerScopeBase("https://example.com/", "https://www.example.com")).toBe(
+      "https://www.example.com",
+    );
+    expect(headerScopeBase(undefined, "http://example.com")).toBe("http://example.com");
+    expect(headerScopeBase("", "http://example.com")).toBe("http://example.com");
+    expect(headerScopeBase("not a url", "http://example.com")).toBe("http://example.com");
   });
 });
 

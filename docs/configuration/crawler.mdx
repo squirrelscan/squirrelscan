@@ -812,8 +812,10 @@ and refuse a hop to a link-local or cloud metadata address.
 Hosts, besides the audited origin, that also get the [custom headers](#headers)
 on page and asset requests: a signed CDN, or Cloudflare Access on
 `assets.example.com`. Only the hosts you name get them, so a `www` host of an apex
-site is named here too. An entry is a bare host name: no wildcard, path,
-userinfo or trailing dot, and an entry the config schema cannot read is refused.
+site is named here too. An entry is a host name, optionally with an
+`http://` or `https://` prefix and a port; a path or trailing slash is ignored and
+an internationalised name is matched in its punycode form. A wildcard, userinfo,
+empty label or trailing dot is refused.
 A name matches the host on any port, over `https:` only; write it with an
 `http://` prefix (`header_hosts = ["http://assets.example.com"]`) to allow plain
 http too.

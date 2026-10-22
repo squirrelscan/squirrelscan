@@ -69,14 +69,15 @@ export const CrawlerConfigSchema = z.object({
   // asset requests (a signed CDN, Cloudflare Access on assets.example.com).
   // Without it only the audited origin does; a subdomain is not trusted by
   // default (#732). A host matches on any port, over https only; write it with
-  // an explicit `http://` prefix to allow plain http too. A bare host name, no
-  // wildcard, path, userinfo or trailing dot (#959).
+  // an explicit `http://` prefix to allow plain http too. A port, path or
+  // trailing slash is ignored; a wildcard, userinfo, empty label or trailing dot
+  // is refused (#959).
   // TOML: `[crawler] header_hosts = ["assets.example.com"]`.
   header_hosts: z
     .array(
       z.string().min(1).max(255).refine(isValidHeaderHost, {
         message:
-          "header_hosts entries are host names, optionally with an http:// or https:// prefix: no wildcard, path, userinfo or trailing dot",
+          "header_hosts entries are host names, optionally with an http:// or https:// prefix: no wildcard, userinfo, empty label or trailing dot",
       }),
     )
     .max(50)

@@ -309,19 +309,6 @@ export function resolveSeedRedirect(seedUrl: string, finalUrl: string): SeedRedi
 }
 
 /**
- * The URL whose origin the custom request headers are scoped to (#959): the
- * crawl's base URL, except that an https start URL whose same-site redirect
- * lands on plain http keeps its https origin. The crawl still follows the
- * redirect, but the headers are never sent over http on the strength of it.
- */
-export function headerScopeBase(seedUrl: string, baseUrl: string): string {
-  const seed = parseHttpUrl(seedUrl);
-  const base = parseHttpUrl(baseUrl);
-  if (seed && base && seed.protocol === "https:" && base.protocol === "http:") return seed.origin;
-  return baseUrl;
-}
-
-/**
  * True when following a fetch's redirects landed outside the crawl's own site.
  *
  * The frontier only ever holds in-scope URLs, so a document that comes back

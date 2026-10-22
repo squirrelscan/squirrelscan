@@ -19,7 +19,7 @@ import { COVERAGE_PAGE_LIMITS, REPORT_LIMITS } from "@squirrelscan/core-contract
 import { extractCrawlableUrls } from "@squirrelscan/parser/extractors";
 import { parseDocument, parsePage, type ParsedPageCache } from "@squirrelscan/parser";
 import { findClientRedirects } from "@squirrelscan/utils/client-redirects";
-import { createHeaderScope, type HeaderScope } from "@squirrelscan/utils/headers";
+import { createHeaderScope, headerScopeBase, type HeaderScope } from "@squirrelscan/utils/headers";
 import {
   DEFAULT_MAX_DOCUMENT_BODY_BYTES,
   fetchUndecoded,
@@ -73,7 +73,6 @@ import {
   type RateLimitControl,
 } from "../fetcher";
 import {
-  headerScopeBase,
   isInScope,
   isOffSiteFinalUrl,
   normalizeUrl,

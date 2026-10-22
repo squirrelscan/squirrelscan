@@ -1279,7 +1279,7 @@ export const audit = defineCommand({
     const badHeaderHost = headerHosts.find((v) => !isValidHeaderHost(v));
     if (badHeaderHost !== undefined) {
       console.error(
-        `Invalid --header-host "${badHeaderHost}": use a host name, optionally with an http:// or https:// prefix (no wildcard, path or userinfo)`
+        `Invalid --header-host "${badHeaderHost}": use a host name, optionally with an http:// or https:// prefix (no wildcard or userinfo)`
       );
       process.exitCode = 1;
       return;
