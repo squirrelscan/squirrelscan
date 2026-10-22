@@ -19,6 +19,7 @@ import { getAttrCI, hasAttrCI } from "@squirrelscan/utils";
 
 import type { CheckResult } from "../types";
 
+import { coversAllWidths, describeShownWidths, unionWidths, type WidthSet } from "./media-widths";
 import {
   cascade,
   type Declared,
@@ -31,7 +32,12 @@ import {
 export type StaticVisibility =
   | { state: "shown" }
   | { state: "hidden" }
-  | { state: "unknown"; reason?: "script" };
+  | { state: "unknown"; reason?: "script" }
+  /**
+   * Hidden by `display: none` inside width-only media queries that do not
+   * cover every width (pub#988): shown at the widths in `shown`.
+   */
+  | { state: "unknown"; reason: "width"; shown: string };
 
 /** Item label for a control reported as unconfirmed. */
 export const UNCONFIRMED_LABEL =
@@ -41,9 +47,36 @@ export const UNCONFIRMED_LABEL =
 export const SCRIPT_STATE_LABEL =
   "it or an ancestor carries a no-js class, and a stylesheet squirrel did not read may hide it when JavaScript runs";
 
+/** The reason an element hidden only at some widths is unconfirmed (pub#988), also on the item as `meta.reason`. */
+export const WIDTH_REASON = "hidden-only-at-some-widths";
+
+/** Item label for an element hidden only inside width-only media queries (pub#988). */
+export function widthLabel(shown: string): string {
+  return `a media query hides it only at some widths (${WIDTH_REASON}): it is shown ${shown}, where no width-only query hides it`;
+}
+
 /** The label for a control the visibility verdict left unconfirmed. */
 export function unconfirmedLabel(seen: StaticVisibility): string {
-  return seen.state === "unknown" && seen.reason === "script" ? SCRIPT_STATE_LABEL : UNCONFIRMED_LABEL;
+  if (seen.state === "unknown" && seen.reason === "script") return SCRIPT_STATE_LABEL;
+  if (seen.state === "unknown" && seen.reason === "width") return widthLabel(seen.shown);
+  return UNCONFIRMED_LABEL;
+}
+
+/** An unconfirmed item for `id`: its label, and for a width reason the reason and widths as `meta`. */
+export function unconfirmedItem(id: string, seen: StaticVisibility): ControlItem & { id: string } {
+  return seen.state === "unknown" && seen.reason === "width"
+    ? { id, label: widthLabel(seen.shown), meta: { reason: WIDTH_REASON, shown: seen.shown } }
+    : { id, label: unconfirmedLabel(seen) };
+}
+
+/** The row message for unconfirmed items: names the width reason when every item has it. */
+export function unconfirmedMessage(what: string, items: ReadonlyArray<ControlItem>): string {
+  const allWidth =
+    items.length > 0 &&
+    items.every((item) => typeof item !== "string" && item.meta?.reason === WIDTH_REASON);
+  return allWidth
+    ? `${items.length} ${what} hidden only at some widths by a media query (unconfirmed)`
+    : `${items.length} ${what} may be hidden by a style (unconfirmed)`;
 }
 
 export interface StaticVisibilityOptions {
@@ -125,6 +158,8 @@ function authorStyle(el: Element): {
   /** An undecided rule that only shows (`display` other than none, `visibility: visible`) could reach it. */
   displayMayShow: boolean;
   visibilityMayShow: boolean;
+  /** `display: none` inside width-only media queries, at these widths only (pub#988). */
+  hideWidths?: WidthSet;
 } {
   const decls = readDeclarations(getAttrCI(el, "style"));
   const styles = pageStylesFor(el.ownerDocument);
@@ -157,7 +192,7 @@ function authorStyle(el: Element): {
     if (result.source === "sheet" && result.value === hides && !styles.complete) return "unknown";
     return result.value;
   };
-  const displayReach = { shows: false };
+  const displayReach: { shows: boolean; hideWidths?: WidthSet } = { shows: false };
   const visibilityReach = { shows: false };
   const display = cascade(
     el,
@@ -166,8 +201,18 @@ function authorStyle(el: Element): {
     decls.display as Declared<DisplayValue> | undefined,
     displayReach,
   );
+  let displayValue = settle(display, "none" as DisplayValue);
+  let hideWidths: WidthSet | undefined;
+  const hides = displayReach.hideWidths;
+  if (hides && displayValue !== "unknown") {
+    // An unread stylesheet could hide it at the other widths, or show it at these.
+    if (!styles.complete) displayValue = "unknown";
+    else if (coversAllWidths(hides)) displayValue = "none" as DisplayValue;
+    else hideWidths = hides;
+  }
   return {
-    display: settle(display, "none" as DisplayValue),
+    ...(hideWidths ? { hideWidths } : {}),
+    display: displayValue,
     visibility: settle(
       cascade(
         el,
@@ -327,6 +372,11 @@ interface Context {
   foreign: boolean;
   /** A non-root ancestor-or-self carries the `no-js` class (pub#989). */
   noJs: boolean;
+  /**
+   * The widths where an ancestor-or-self is hidden by `display: none` inside
+   * width-only media queries (pub#988), when the tree is reliable there.
+   */
+  widthHidden: WidthSet;
 }
 
 const ROOT: Context = {
@@ -337,6 +387,7 @@ const ROOT: Context = {
   treeUnreliable: false,
   foreign: false,
   noJs: false,
+  widthHidden: [],
 };
 
 /** The verdict for one element, and the context it passes to its children. */
@@ -367,6 +418,12 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
     // (pub#938): frameworks ship `[hidden] { display: none !important }`,
     // which only an inline `!important` outranks.
     let display = ariaHidden ? "none" : (author.display ?? (uaHides ? "none" : "shown"));
+    // pub#988: hidden by an ancestor and this element at some widths each,
+    // and at every width between them.
+    const widthUnion = author.hideWidths
+      ? unionWidths(parent.widthHidden, author.hideWidths)
+      : parent.widthHidden;
+    if (display === "shown" && widthUnion.length > 0 && coversAllWidths(widthUnion)) display = "none";
     if (
       display === "shown" &&
       uaHides &&
@@ -413,6 +470,7 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
             treeUnreliable,
             foreign,
             noJs,
+            widthHidden: [],
           }
         : { ...ROOT, removed: true };
     } else {
@@ -420,12 +478,18 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
       // for its descendants; otherwise an unread rule could show them again.
       children = {
         removed: false,
-        displayUnknown: parent.displayUnknown || display === "unknown",
+        // A width hide on an element whose subtree a browser may move out is no
+        // hide of that subtree: not settled (pub#988).
+        displayUnknown:
+          parent.displayUnknown ||
+          display === "unknown" ||
+          (treeUnreliable && author.hideWidths !== undefined),
         visibilityUnknown: visibilityUnknown || (visibilityHidden && !author.complete),
         visibilityHidden: visibilityHidden && author.complete,
         treeUnreliable,
         foreign,
         noJs,
+        widthHidden: treeUnreliable ? [] : widthUnion,
       };
     }
 
@@ -434,6 +498,11 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
     else if (display === "unknown" || parent.displayUnknown) verdict = UNKNOWN;
     else if (visibilityHidden) verdict = HIDDEN;
     else if (visibilityUnknown) verdict = UNKNOWN;
+    // Hidden only inside width-only media queries, and shown at the other
+    // widths (pub#988): unconfirmed, with its own reason.
+    else if (widthUnion.length > 0) {
+      verdict = { state: "unknown", reason: "width", shown: describeShownWidths(widthUnion) };
+    }
     // Shown only because the stylesheets squirrel read say so: with others
     // unread, a no-js fallback may be hidden once scripts run (pub#989).
     else if (noJs && !author.complete) verdict = UNKNOWN_SCRIPT;
@@ -467,7 +536,9 @@ export function createStaticVisibility(options: StaticVisibilityOptions): Static
  * (pub#665, pub#671): out of the accessibility tree they are only counted,
  * possibly hidden by a style they are unconfirmed, and the rest fail.
  */
-export type ControlItem = string | { id: string; snippet?: string; label?: string };
+export type ControlItem =
+  | string
+  | { id: string; snippet?: string; label?: string; meta?: Record<string, unknown> };
 
 export interface UnnamedControls<T extends ControlItem> {
   /** Files one unnamed control under the finding it belongs to. */
@@ -489,10 +560,13 @@ export function sortUnnamedControls<T extends ControlItem>(
       const seen = visibility.visibility(el);
       if (seen.state === "hidden") hidden++;
       else if (seen.state === "unknown") {
+        const base: Exclude<ControlItem, string> = typeof item === "string" ? { id: item } : item;
         unconfirmed.push(
           seen.reason === "script"
-            ? { ...(typeof item === "string" ? { id: item } : item), label: SCRIPT_STATE_LABEL }
-            : item,
+            ? { ...base, label: SCRIPT_STATE_LABEL }
+            : seen.reason === "width"
+              ? { ...base, label: widthLabel(seen.shown), meta: { reason: WIDTH_REASON, shown: seen.shown } }
+              : item,
         );
       } else failures.push(item);
     },
@@ -511,12 +585,12 @@ export function sortUnnamedControls<T extends ControlItem>(
 export function unconfirmedRow(
   check: string,
   what: string,
-  items: Array<string | { id: string; snippet?: string; label?: string }>,
+  items: Array<ControlItem>,
 ): CheckResult {
   return {
     name: `${check}${UNCONFIRMED_CHECK_SUFFIX}`,
     status: "warn",
-    message: `${items.length} ${what} may be hidden by a style (unconfirmed)`,
+    message: unconfirmedMessage(what, items),
     items: items
       .slice(0, 10)
       .map((item) => ({

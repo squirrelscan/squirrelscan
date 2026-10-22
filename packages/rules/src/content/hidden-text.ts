@@ -467,6 +467,8 @@ export interface RawRule {
    * untrustworthy instead.
    */
   conditional: boolean;
+  /** The preludes of the enclosing at-rules, outermost first (`@media (min-width: 990px)`); set when `conditional`. */
+  at?: readonly string[];
 }
 
 /**
@@ -485,6 +487,7 @@ export function parseRules(css: string, maxRules: number): RawRule[] {
   let i = 0;
   let preludeStart = 0;
   let atDepth = 0;
+  const atStack: string[] = [];
   // Blocks open in the current prelude (`:not(…`, `[…`).
   const closers: string[] = [];
 
@@ -515,7 +518,10 @@ export function parseRules(css: string, maxRules: number): RawRule[] {
       continue;
     }
     if (ch === "}") {
-      if (atDepth > 0) atDepth--;
+      if (atDepth > 0) {
+        atDepth--;
+        atStack.pop();
+      }
       i++;
       preludeStart = i;
       continue;
@@ -532,6 +538,7 @@ export function parseRules(css: string, maxRules: number): RawRule[] {
     // inside as conditional rather than skipping past it.
     if (prelude.startsWith("@")) {
       atDepth++;
+      atStack.push(prelude);
       i++;
       preludeStart = i;
       continue;
@@ -563,6 +570,7 @@ export function parseRules(css: string, maxRules: number): RawRule[] {
       selector: prelude,
       body: css.slice(bodyStart, bodyClosers.length === 0 ? j - 1 : css.length),
       conditional: atDepth > 0,
+      ...(atDepth > 0 ? { at: atStack.slice() } : {}),
     });
     i = j;
     preludeStart = i;

@@ -5,7 +5,7 @@ import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../t
 import { UNCONFIRMED_CHECK_SUFFIX } from "@squirrelscan/core-contracts/resolution";
 import { getAttrCI, hasAttrCI } from "@squirrelscan/utils";
 
-import { createStaticVisibility, unconfirmedLabel } from "../shared/static-hidden";
+import { createStaticVisibility, unconfirmedItem, unconfirmedMessage } from "../shared/static-hidden";
 
 // Natively focusable elements. `disabled`, `type="hidden"` and tabindex are
 // decided in isFocusable, case-insensitively, rather than in the selectors.
@@ -130,7 +130,7 @@ export const ariaHiddenFocusRule: Rule = {
       if (isHoneypotCandidate(el)) {
         honeypotInHidden.push(labelFor(el));
       } else if (seen.state === "unknown") {
-        unconfirmed.push({ id: label, label: unconfirmedLabel(seen) });
+        unconfirmed.push(unconfirmedItem(label, seen));
       } else {
         focusableInHidden.push(label);
       }
@@ -187,7 +187,7 @@ export const ariaHiddenFocusRule: Rule = {
       checks.push({
         name: `aria-hidden-focus${UNCONFIRMED_CHECK_SUFFIX}`,
         status: "warn",
-        message: `${unconfirmed.length} focusable element(s) inside aria-hidden may be hidden by a style (unconfirmed)`,
+        message: unconfirmedMessage("focusable element(s) inside aria-hidden", unconfirmed),
         items: unconfirmed.slice(0, 10),
         details: unconfirmed.length > 10 ? { additional: unconfirmed.length - 10 } : undefined,
       });

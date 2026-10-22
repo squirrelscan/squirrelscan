@@ -160,6 +160,10 @@ describe("static-hidden: the inline-style reader", () => {
  * The `style: …` rows (pub#678) are the `<style>` adversarial set: invalid
  * selector lists, ignored `type` and `media`, url() and block tokens, escapes,
  * NBSP, cascade order, external sheets, `@import`, `@layer` and nesting.
+ * The `width: …` rows (pub#988) are rendered at several viewport widths
+ * (`widths`, one iframe per width, set by its CSS width): `chromium` is "shown"
+ * when any width shows the element. static-hidden-width-media-988.test.ts adds
+ * the checks that need every width.
  *
  * To regenerate or add rows: write one HTML page holding an
  * `<iframe srcdoc="…">` per row (the body above, attribute-escaped), plus a
@@ -174,6 +178,7 @@ const CHROMIUM: Array<{
   name: string;
   html: string;
   chromium: "hidden" | "shown";
+  widths?: Record<string, "hidden" | "shown">;
 }> = await Bun.file(new URL("fixtures/static-hidden-chromium.json", import.meta.url)).json();
 
 describe("static-hidden: never hidden where Chromium shows the element", () => {

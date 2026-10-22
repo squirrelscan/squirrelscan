@@ -11,6 +11,11 @@
 // answer "unknown", never "hidden". A false "hidden" silently drops a real
 // accessibility failure; an "unknown" only softens it to unconfirmed.
 //
+// One exception (pub#988): a plain `display: none` rule on plain selectors that
+// sits only inside width-only `@media` queries (shared/media-widths.ts) is kept
+// with the widths it covers, so the cascade can report "hidden only at some
+// widths" and treat queries that cover every width as a hide.
+//
 // External stylesheets are not read. When a page has one (or an `@import`, or
 // a `<style>` this reader skips), any external rule could show an element
 // again, so hiding that comes from a `<style>` block is not taken as settled.
@@ -19,6 +24,7 @@ import { getAttrCI } from "@squirrelscan/utils";
 
 import { parseRules } from "../content/hidden-text";
 import { skipComment, stepBlocks, stripComments } from "./css-tokens";
+import { readAtRuleWidths, unionWidths, type WidthSet } from "./media-widths";
 
 /** One declared value and whether it was `!important`. */
 export interface Declared<V extends string> {
@@ -73,6 +79,18 @@ interface UncertainRule {
    * else hides the element (pub#940).
    */
   shows?: true;
+  /**
+   * A plain `display: none` on a plain selector (pub#988), inside width-only
+   * `@media` queries only: it hides the element at these widths and not at
+   * the others. Read by the cascade, which collects the widths instead of
+   * answering "unknown".
+   */
+  width?: {
+    ranges: WidthSet;
+    compound: Compound;
+    specificity: number;
+    order: number;
+  };
 }
 
 type Prop = "display" | "visibility";
@@ -783,6 +801,18 @@ export function readPageStyles(doc: Document): PageStyles {
         }
         continue;
       }
+      // pub#988: a plain `display: none` that only width-only `@media` queries
+      // apply is kept with the widths it covers, so the cascade can tell
+      // "hidden at some widths" from "may be hidden".
+      const widths =
+        rule.conditional && !sometimes && rule.at && decls !== "unknown" && !animates && allSimple
+          ? readAtRuleWidths(rule.at)
+          : null;
+      const widthHide =
+        widths !== null &&
+        decls !== "unknown" &&
+        decls.display?.value === "none" &&
+        decls.display.mixed !== true;
       // One invalid selector voids the whole list in a browser, so a mixed
       // list is uncertain for every element any of its selectors names.
       for (const s of selectors) {
@@ -798,7 +828,13 @@ export function readPageStyles(doc: Document): PageStyles {
           if (!decl || ("mixed" in decl && decl.mixed)) return {};
           return decl.value === "shown" || decl.value === "visible" ? { shows: true } : {};
         };
-        if (display) {
+        if (display && widthHide && widths && s.kind === "simple") {
+          addTo(uncertain.display, key, {
+            subject,
+            important: important("display"),
+            width: { ranges: widths, compound: s.compound, specificity: s.specificity, order: order++ },
+          });
+        } else if (display) {
           addTo(uncertain.display, key, {
             subject,
             important: important("display"),
@@ -1028,13 +1064,17 @@ export type CascadeResult<V extends string> = { value: V; source: Source } | "un
  * nothing sets it. A rule that could only show the element does not make the
  * answer "unknown" (pub#940): `reach.shows` says one could reach it, so the
  * caller can tell whether something else hiding the element still holds.
+ * A plain `display: none` inside width-only `@media` queries (pub#988) does
+ * not make the answer "unknown" either: the widths where it wins over the
+ * decidable rules are collected in `reach.hideWidths`, and the element is
+ * not hidden by it at any other width.
  */
 export function cascade<P extends "display" | "visibility">(
   el: Element,
   styles: PageStyles,
   prop: P,
   inline: Declared<P extends "display" ? DisplayValue : VisibilityValue> | undefined,
-  reach?: { shows: boolean },
+  reach?: { shows: boolean; hideWidths?: WidthSet },
 ): CascadeResult<P extends "display" ? DisplayValue : VisibilityValue> {
   type V = P extends "display" ? DisplayValue : VisibilityValue;
   const view = viewOf(el);
@@ -1081,6 +1121,26 @@ export function cascade<P extends "display" | "visibility">(
     for (const rule of styles.uncertain[prop].get(key) ?? []) {
       if (--steps.left < 0) return "unknown";
       if (outranked(rule.important, rule.animation === true)) continue;
+      if (rule.width) {
+        // Only `display` carries these, and only the caller that reads the widths can use them.
+        if (!reach) return "unknown";
+        const match = compoundMatches(rule.width.compound, view);
+        if (match === "no") continue;
+        if (match === "case") return "unknown";
+        // A decided hide, or a value that hides some elements, beside it: not settled by widths.
+        if (best && (best.decl.value === "none" || best.decl.mixed)) return "unknown";
+        const candidate = {
+          decl: { value: "none", important: rule.important } as Declared<V>,
+          inline: false,
+          specificity: rule.width.specificity,
+          order: rule.width.order,
+        };
+        // A decidable `display` that outranks it keeps the element shown at these widths.
+        if (!best || beats(candidate, best)) {
+          reach.hideWidths = unionWidths(reach.hideWidths ?? [], rule.width.ranges);
+        }
+        continue;
+      }
       if (!couldMatch(rule.subject, view)) continue;
       if (rule.shows && reach) {
         reach.shows = true;

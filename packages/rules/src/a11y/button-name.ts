@@ -4,7 +4,7 @@ import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../t
 
 import { UNCONFIRMED_CHECK_SUFFIX } from "@squirrelscan/core-contracts/resolution";
 
-import { createStaticVisibility, unconfirmedLabel } from "../shared/static-hidden";
+import { createStaticVisibility, unconfirmedItem, unconfirmedMessage } from "../shared/static-hidden";
 
 function hasAccessibleName(el: Element): boolean {
   // Check aria-label
@@ -83,7 +83,7 @@ export const buttonNameRule: Rule = {
       const seen = visibility.visibility(el);
       if (seen.state === "hidden") hiddenWithoutName++;
       else if (seen.state === "unknown") {
-        unconfirmed.push({ id: label, label: unconfirmedLabel(seen) });
+        unconfirmed.push(unconfirmedItem(label, seen));
       } else missingNames.push(label);
     };
 
@@ -123,7 +123,7 @@ export const buttonNameRule: Rule = {
       checks.push({
         name: `button-name${UNCONFIRMED_CHECK_SUFFIX}`,
         status: "warn",
-        message: `${unconfirmed.length} button(s) without accessible names may be hidden by a style (unconfirmed)`,
+        message: unconfirmedMessage("button(s) without accessible names", unconfirmed),
         items: unconfirmed.slice(0, 10),
         details:
           unconfirmed.length > 10

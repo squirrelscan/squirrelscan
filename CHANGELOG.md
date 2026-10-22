@@ -19,6 +19,7 @@ How it works:
 
 ### Changed
 
+- a11y: an unnamed control inside an element that `display: none` hides only inside width-only media queries (a theme's mobile menu, `@media (min-width: 990px) { menu-drawer { display: none } }`) is still reported as `<check>-unconfirmed`, but with its own reason, `hidden-only-at-some-widths`, and the widths where it shows ("shown below 990px"), so it reads apart from a style squirrel cannot settle. Queries that together cover every width (`min-width: 990px` with `max-width: 989.98px`, in colon or range syntax, em or rem) leave the element hidden at every width and it is not reported. Any other media feature, `not`, `@container`, `@supports` or a `<style media>` keeps the generic reason. A control inside a rule whose queries can never both match (`(min-width: 990px) and (max-width: 989px)`) is shown, so one an earlier audit reported as unconfirmed can now fail, as it does in a browser (#988).
 - The default per-rule time budget is now 2 seconds (was 1 second), so a rule that runs slowly on a busy machine is abandoned less often. A site rule gets 2 seconds per page of the site, still capped at 60 seconds. `[rules] time_budget_ms` still overrides it, and values below 1000 are still refused.
 - `legal/cookie-consent` finds its consent signals in one pass over the page's elements instead of 28 selector sweeps, and `social/share-buttons` no longer lowercases a copy of the page. Both give the same answers as before; on a 1 MB script-heavy page `legal/cookie-consent` is about 3 to 6x faster (#270).
 
@@ -30,6 +31,7 @@ How it works:
 - links: `no-contextual-inbound` no longer reports legal pages (privacy, terms, imprint, `/legal`, in any recognised language and under any path prefix) that are linked only from the footer, which is where they belong (#981).
 - A smart audit no longer marks a finding fixed when its rule threw an error on every page of the re-crawl. The rule never finished, so nothing was checked, and the earlier finding now stays open until a run completes the rule, the same as for a rule that times out (#999). A rule that timed out on only some pages still carries only those pages' findings, and a page it finished still resolves (#1000).
 - a11y: `frame-title`, `object-alt` and `empty-heading` now read which elements are out of the accessibility tree the same way as `button-name` and the other naming rules. A hidden element is skipped and counted, and one a style may hide (a `no-js` fallback on a page with an external stylesheet included) is reported as `<check>-unconfirmed` instead of a failure. A visible one still fails (#1002).
+
 
 ## v0.0.126 (2026-10-22)
 
