@@ -405,3 +405,31 @@ describe("the CHROMIUM width rows", () => {
     expect(WIDTH_ROWS.length).toBeGreaterThanOrEqual(20);
   });
 });
+
+describe("impossible queries and hostile nesting (pub#988 review)", () => {
+  test("a query pair that can never both match hides nothing: shown", () => {
+    const css = "@media (min-width: 990px) and (max-width: 989px){menu-drawer{display:none}}";
+    expect(drawer(css)).toEqual({ state: "shown" });
+  });
+
+  test("describeShownWidths of no hidden widths is safe", () => {
+    expect(describeShownWidths([])).toBe("at every width");
+  });
+
+  test("deep @media nesting is capped: generic unknown, and fast", () => {
+    for (const [depth, count] of [[3000, 1000], [14000, 4900]] as const) {
+      const css = `${"@media all{".repeat(depth)}${".a{display:none}".repeat(count)}${"}".repeat(depth)}`;
+      const started = performance.now();
+      const v = seen('<b id="t" class="a"></b>', `<style>${css}</style>`);
+      expect(performance.now() - started).toBeLessThan(500);
+      expect(v).toEqual({ state: "unknown" });
+    }
+  });
+
+  test("nesting within the cap is still read", () => {
+    const css = `${"@media all{".repeat(7)}@media (min-width: 990px){menu-drawer{display:none}}${"}".repeat(7)}`;
+    expect(widthOf(drawer(css))).toBe("below 990px");
+    const deeper = `${"@media all{".repeat(8)}@media (min-width: 990px){menu-drawer{display:none}}${"}".repeat(8)}`;
+    expect(drawer(deeper)).toEqual({ state: "unknown" });
+  });
+});

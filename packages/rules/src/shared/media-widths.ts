@@ -111,7 +111,8 @@ export function describeShownWidths(set: WidthSet): string {
   const pieces: string[] = [];
   const emit = (lo: number, loIncl: boolean, hi: number, hiIncl: boolean): void => {
     if (hi !== Infinity && hi - lo <= WIDTH_GAP_TOLERANCE + EPS) return;
-    if (lo === 0 && loIncl) pieces.push(hiIncl ? `at ${px(hi)} and below` : `below ${px(hi)}`);
+    if (lo === 0 && loIncl && hi === Infinity) pieces.push("at every width");
+    else if (lo === 0 && loIncl) pieces.push(hiIncl ? `at ${px(hi)} and below` : `below ${px(hi)}`);
     else if (hi === Infinity) pieces.push(loIncl ? `at ${px(lo)} and above` : `above ${px(lo)}`);
     else pieces.push(`between ${px(lo)} and ${px(hi)}`);
   };

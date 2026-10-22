@@ -455,6 +455,9 @@ export function parseDeclarations(css: string): Declarations {
   return decls;
 }
 
+/** Deepest at-rule nesting whose chain a rule keeps (`RawRule.at`); real themes nest 1 to 3. */
+const MAX_AT_DEPTH = 8;
+
 /** One style rule lifted out of a sheet, with whether an at-rule encloses it. */
 export interface RawRule {
   selector: string;
@@ -570,7 +573,8 @@ export function parseRules(css: string, maxRules: number): RawRule[] {
       selector: prelude,
       body: css.slice(bodyStart, bodyClosers.length === 0 ? j - 1 : css.length),
       conditional: atDepth > 0,
-      ...(atDepth > 0 ? { at: atStack.slice() } : {}),
+      // Capped: a rule nested deeper is read as generic conditional, and the copy stays O(1) (pub#988).
+      ...(atDepth > 0 && atStack.length <= MAX_AT_DEPTH ? { at: atStack.slice() } : {}),
     });
     i = j;
     preludeStart = i;
