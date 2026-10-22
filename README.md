@@ -17,6 +17,7 @@ Combine your coding agent with a deterministic and extensible audit tool.
 [![CI](https://img.shields.io/github/actions/workflow/status/squirrelscan/squirrelscan/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/squirrelscan/squirrelscan/actions/workflows/ci.yml)
 [![CodeQL](https://img.shields.io/github/actions/workflow/status/squirrelscan/squirrelscan/codeql.yml?branch=main&style=for-the-badge&label=CodeQL)](https://github.com/squirrelscan/squirrelscan/actions/workflows/codeql.yml)
 [![npm](https://img.shields.io/npm/v/squirrelscan?style=for-the-badge&label=npm)](https://www.npmjs.com/package/squirrelscan)
+[![Toolweather](https://toolweather.toolweather.workers.dev/badge/com.squirrelscan/squirrelscan.svg)](https://toolweather.pages.dev/servers/com.squirrelscan--squirrelscan/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-52a852?style=for-the-badge)](LICENSE)
 
 ![Terminal demo: squirrel audit on a small test site reports 13 failed checks, the report is piped to Claude Code, which fixes the pages and re-audits from 32/100 (F) to 92/100 (A), then git status lists the files it changed](assets/readme-demo.gif)
