@@ -15,7 +15,13 @@ import type {
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
-import { resolutionRuleKey, resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
+import {
+  NOT_APPLICABLE_SKIP_REASON,
+  RULE_TIMED_OUT_SKIP_REASON,
+  SCAN_TRUNCATED_SKIP_REASON,
+  resolutionRuleKey,
+  resolutionUrlHash,
+} from "@squirrelscan/core-contracts/resolution";
 
 import { findingFingerprint } from "./fingerprint";
 import type { PageUrlSet } from "./scoring";
@@ -198,6 +204,92 @@ export interface ComputeMergeInput {
    * signal reads it. Positive evidence alongside {@link passedCheckPages}.
    */
   notApplicablePages?: Set<string>;
+  /**
+   * (#508) Page checks this run did NOT evaluate on a crawled page: skipped there
+   * (perf/ttfb without timing data, `scan-truncated`) while the check ran
+   * elsewhere. Read straight from the checks, so a prior finding on such a page
+   * carries whatever the publish resolution signal says: its key dropped past the
+   * key cap, or no signal at all (the CLI's local merge). Undefined → no evidence.
+   */
+  notEvaluated?: NotEvaluatedEvidence;
+}
+
+/**
+ * (#508) What {@link createNotEvaluatedCollector} reads off a run's checks: the
+ * page checks it skipped, and the checks whose list of skipped pages was clipped.
+ */
+export interface NotEvaluatedEvidence {
+  /** {@link pageCheckKey} of each (page, check) skipped this run. */
+  pageChecks: Set<string>;
+  /** `${ruleId}|${checkName}` whose skipped-page list was clipped: every page counts. */
+  clippedChecks: Set<string>;
+}
+
+/**
+ * (#508) Collects {@link NotEvaluatedEvidence} one check at a time, mirroring what
+ * the resolution signal builder calls "not evaluated": a page that skipped a check
+ * (not for the noindex verdict, which reads as clean, and not for a timeout, which
+ * the rule-wide key covers) while the check ran on another page, or that stopped at
+ * a work cap (`scan-truncated`), whatever else ran. A check skipped on every page
+ * says nothing about any one of them and gives no evidence, as in the signal.
+ *
+ * `normalize` is the caller's page-URL normalizer (this module has no URL code).
+ * `pageUrl` is the page a per-page check belongs to when the check has none of its
+ * own. A folded aggregate names its pages in `pages` and, when clipped past its
+ * cap, marks the whole check.
+ */
+export function createNotEvaluatedCollector(normalize: (url: string) => string): {
+  add(ruleId: string, check: CheckResult, pageUrl?: string): void;
+  result(): NotEvaluatedEvidence;
+} {
+  type Skips = { pages: Set<string>; clipped: boolean; gap: boolean };
+  const skips = new Map<string, Skips>();
+  const evaluated = new Set<string>();
+  return {
+    add(ruleId, check, pageUrl) {
+      const checkKey = `${ruleId}${KEY_SEP}${check.name}`;
+      if (check.status === "pass" || check.status === "warn" || check.status === "fail") {
+        evaluated.add(checkKey);
+        return;
+      }
+      if (
+        check.status !== "skipped" ||
+        check.skipReason === NOT_APPLICABLE_SKIP_REASON ||
+        check.skipReason === RULE_TIMED_OUT_SKIP_REASON
+      ) {
+        return;
+      }
+      const own = check.pageUrl ?? pageUrl;
+      const aggregate = !own && check.details?.aggregated === true;
+      if (!own && !aggregate) return; // a site-scope skip names no page
+      let entry = skips.get(checkKey);
+      if (!entry) {
+        entry = { pages: new Set(), clipped: false, gap: false };
+        skips.set(checkKey, entry);
+      }
+      if (check.skipReason === SCAN_TRUNCATED_SKIP_REASON) entry.gap = true;
+      if (own) {
+        entry.pages.add(normalize(own));
+        return;
+      }
+      for (const page of check.pages ?? []) entry.pages.add(normalize(page));
+      const total = check.details?.pagesTruncated;
+      if (typeof total === "number" && total > (check.pages?.length ?? 0)) entry.clipped = true;
+    },
+    result() {
+      const pageChecks = new Set<string>();
+      const clippedChecks = new Set<string>();
+      for (const [checkKey, entry] of skips) {
+        if (!entry.gap && !evaluated.has(checkKey)) continue;
+        const sep = checkKey.indexOf(KEY_SEP);
+        const ruleId = checkKey.slice(0, sep);
+        const checkName = checkKey.slice(sep + 1);
+        for (const page of entry.pages) pageChecks.add(pageCheckKey(page, ruleId, checkName));
+        if (entry.clipped) clippedChecks.add(checkKey);
+      }
+      return { pageChecks, clippedChecks };
+    },
+  };
 }
 
 /** Pre-indexed form of the publish `ResolutionSignal` (#1185). */
@@ -735,6 +827,7 @@ export function createMergeSession(
     incompleteItemChecks,
     passedCheckPages,
     notApplicablePages,
+    notEvaluated,
   } = input;
 
   // Index fresh findings by key (latest wins on dup keys within a run).
@@ -948,6 +1041,21 @@ export function createMergeSession(
     }
 
     if (wasCrawled || signalCrawled) {
+      // (#508) The check was skipped on this page this run while it ran elsewhere:
+      // it was not evaluated, so its absence from the fresh findings proves
+      // nothing, whatever the signal (dropped key, over budget, none at all in a
+      // local merge) or the sampled payload can say. Carry.
+      if (
+        notEvaluated?.pageChecks.has(
+          pageCheckKey(prior.normalizedUrl, prior.ruleId, prior.checkName)
+        ) ||
+        notEvaluated?.clippedChecks.has(`${prior.ruleId}${KEY_SEP}${prior.checkName}`)
+      ) {
+        const carried: PageFindingRecord = { ...prior, provenance: "carried" };
+        sink.persist(carried);
+        sink.active(toMerged(carried, unrendered));
+        return;
+      }
       // (#1185) Resolution-signal override: a key present in `failingByCheck`
       // means the check RAN this run with page-attributable results, so its
       // UNSAMPLED failing set is authoritative — hash present → still failing

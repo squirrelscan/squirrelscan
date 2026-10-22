@@ -166,6 +166,11 @@ SQLite store keyed by site). On a partial re-audit:
 - **re-crawled pages** get fresh results that supersede their prior state,
 - **un-crawled pages** carry their last-known issues forward (tagged `carried`,
   with a "last seen" time) indefinitely, until you re-crawl them,
+- **re-crawled pages where a check was skipped** (for example `perf/ttfb` with
+  no timing data, or a scan that stopped at its work cap) keep that check's prior
+  issues, tagged `carried`: a check that did not run proves nothing is fixed. A
+  cloud audit that streams its findings to the store (very large crawls) never
+  sees skipped checks, so there a skipped check does not keep an issue open,
 - **pages no audit has ever rendered** (known from a sitemap or a rule's page
   list, but never inside a run's page budget) are tagged `unrendered` instead:
   nothing has observed them yet, so they have no "last seen" time and they are

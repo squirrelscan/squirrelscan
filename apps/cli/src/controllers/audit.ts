@@ -20,6 +20,7 @@ import type { ParsedPageCache } from "@squirrelscan/parser";
 
 import {
   createCloudDocumentFetcher,
+  createNotEvaluatedCollector,
   flattenChecks,
   type FlatFinding,
   type PageResultSink,
@@ -1776,6 +1777,10 @@ export async function runAudit(
           .map((p) => p.normalizedUrl)
       );
       const freshFindings: FlatFinding[] = [];
+      // (#508) The checks a page skipped, which only the sink sees: a skipped check
+      // is no finding, but its page's prior finding must carry, not resolve. Pages
+      // reach the sink by normalized URL already.
+      const notEvaluatedCollector = createNotEvaluatedCollector((url) => url);
       const scoredPageUrls: string[] = [];
       let pendingRuleRows = new Map<
         string,
@@ -1797,6 +1802,8 @@ export async function runAudit(
           // (mostly passing) check set.
           if (!smartAuditsOn || removedPageUrls.has(pageUrl)) return;
           for (const [ruleId, checks] of entries) {
+            for (const check of checks)
+              notEvaluatedCollector.add(ruleId, check, pageUrl);
             const flat = flattenChecks(
               pageUrl,
               ruleId,
@@ -1949,6 +1956,7 @@ export async function runAudit(
               // from the bounded tallies — neither needs the O(pages) result
               // maps the phase no longer builds.
               freshFindings,
+              notEvaluated: notEvaluatedCollector.result(),
               scoredPageUrls,
               ruleMeta: ruleResults.tallies,
               // Collected during the pre-rules walk in the same

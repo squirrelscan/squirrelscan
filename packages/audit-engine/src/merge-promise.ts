@@ -33,6 +33,7 @@ import { normalizePageUrl } from "@squirrelscan/utils/url";
 import {
   computeMerge,
   createMergeSession,
+  createNotEvaluatedCollector,
   flattenChecks,
   itemListComplete,
   pageCheckKey,
@@ -41,6 +42,7 @@ import {
   type MergedFinding,
   type MergedState,
   type MergeResolutionInput,
+  type NotEvaluatedEvidence,
 } from "./merge-core";
 import {
   createCompleteStoreTallyFold,
@@ -665,6 +667,22 @@ export async function runCloudSmartAudits(
     }
   }
 
+  // (#508) Page checks this run skipped while the check ran elsewhere, read off the
+  // published checks themselves: the signal's key for them can be dropped past the
+  // key cap, and a prior finding there must carry either way. Sampled mode only: a
+  // complete-store finalize holds the findings, not the checks, so it has no skip
+  // evidence to read (see docs/configuration/index.mdx, Smart Audits).
+  let notEvaluated: NotEvaluatedEvidence | undefined;
+  if (!completeStore) {
+    const collector = createNotEvaluatedCollector(normalizePageUrl);
+    for (const [ruleId, r] of Object.entries(input.ruleResults)) {
+      for (const c of r.checks) {
+        if (!isReplayedCheck(c)) collector.add(ruleId, c);
+      }
+    }
+    notEvaluated = collector.result();
+  }
+
   // Flatten fresh page-scope fail/warn checks into findings, grouped per page
   // (flattenChecks stamps one normalizedUrl across the checks it's given). Skip
   // pages removed this run — they're gone, not active issues.
@@ -826,6 +844,7 @@ export async function runCloudSmartAudits(
       incompleteItemChecks,
       passedCheckPages,
       notApplicablePages,
+      notEvaluated,
     },
     {
       persist: (record) => onPersist(record),

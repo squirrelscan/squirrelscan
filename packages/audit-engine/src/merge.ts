@@ -16,12 +16,18 @@ import { Effect } from "effect";
 
 import type { CrawlStorage, StorageError } from "@squirrelscan/core-contracts";
 
-import { computeMerge, type FlatFinding, type MergedState } from "./merge-core";
+import {
+  computeMerge,
+  type FlatFinding,
+  type MergedState,
+  type NotEvaluatedEvidence,
+} from "./merge-core";
 
 // Re-export the pure helpers + types so existing `@squirrelscan/audit-engine`
 // consumers (CLI, tests) keep importing them from here unchanged.
 export {
   computeMerge,
+  createNotEvaluatedCollector,
   fingerprint,
   findingKey,
   flattenChecks,
@@ -32,6 +38,7 @@ export type {
   FlatFinding,
   MergedFinding,
   MergedState,
+  NotEvaluatedEvidence,
 } from "./merge-core";
 
 export interface MergeInput {
@@ -48,6 +55,8 @@ export interface MergeInput {
   severityByRule: Map<string, string>;
   /** Real per-page HTTP status (normalizedUrl -> status) for site_pages. */
   statusByUrl: Map<string, number>;
+  /** (#508) Page checks this run skipped while the check ran elsewhere; they carry, never resolve. */
+  notEvaluated?: NotEvaluatedEvidence;
 }
 
 /**
