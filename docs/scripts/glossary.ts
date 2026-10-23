@@ -42,13 +42,23 @@
  *    `--write` produces;
  * 5. a category hub (every `rules/<dir>/index.mdx` except the score-group
  *    overview pages) with a category `<Card href="/rules/<category>">` or a
- *    stated rule count ("12 rules"): the private rule-count test treats such a
- *    page as an overview page and fails at the next submodule bump. Cards are
- *    matched in the raw text, comments and code included, as that test does;
- *    a number glued to a ratio ("the 4.5:1 rule") is not a count;
+ *    stated rule count ("12 rules", "1,000 rules", "300+ audit rules"). The
+ *    two halves have different reasons. A category Card is what makes the
+ *    private rule-count test read a page as an overview page, and an overview
+ *    page it does not list fails at the next submodule bump; Cards are matched
+ *    in the raw text, comments and code included, as that test does. A count
+ *    is banned by copy policy: nothing keeps a hub's count in sync with the
+ *    catalog, and the private test does not look at counts on a page without
+ *    category Cards. A number glued to a ratio ("the 4.5:1 rule") is not a
+ *    count;
  * 6. a glossary or hub page whose title is over 60 or description over 155
- *    characters, or that has an em-dash or a banned phrase;
- * 7. two glossary or rule pages (or a planned term page) with the same title.
+ *    characters (block scalar descriptions included), or that has an em-dash
+ *    or a banned phrase;
+ * 7. two glossary or rule pages, or two term titles in terms.json (written or
+ *    planned), or a planned term title and an existing page, with the same
+ *    title;
+ * 8. an unclosed code fence on a glossary or rule page: every marker after it
+ *    would be read as code and silently ignored.
  *
  * It also prints rule coverage (rules linked from at least one term) and never
  * fails on an uncovered rule.
@@ -58,6 +68,8 @@
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+
+import { linksOf, normalizeRoute } from "./check-links";
 
 export interface Problem {
   file: string;
@@ -166,11 +178,12 @@ const DATA_DIR = "scripts/glossary";
 const TERMS_FILE = `${DATA_DIR}/terms.json`;
 const HUBS_FILE = `${DATA_DIR}/hubs.json`;
 const BASELINE_FILE = `${DATA_DIR}/baseline.json`;
+const LINK_ORIGIN = "https://docs.invalid";
 
 /**
  * The score-group overview pages. The private rule-count test
  * (apps/api/tests/routes/rule-count-consistency.test.ts, OVERVIEW_PAGES) lists
- * exactly these as the pages allowed to carry category Cards and counts.
+ * exactly these as the pages allowed to carry category Cards.
  * `security` is also the security category's hub.
  */
 export const OVERVIEW_DIRS: ReadonlySet<string> = new Set([
@@ -205,10 +218,13 @@ const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const RULE_ID = /^[a-z0-9]+\/[a-z0-9-]+$/;
 const SITE_LINK = /^https:\/\/squirrelscan\.com\/(learn|tools)\/[a-z0-9-]+$/;
 
-// Same shapes as the private test's CARD_RE and ANY_COUNT_RE. The count pattern
-// skips a number glued to a ratio or decimal ("the 4.5:1 rule").
+// CATEGORY_CARD matches a superset of the private test's CARD_RE. RULE_COUNT is
+// a copy rule, wider than the private ANY_COUNT_RE: it also catches "1,000
+// rules" and "300+ audit rules", and skips a number glued to a ratio or decimal
+// ("the 4.5:1 rule").
 const CATEGORY_CARD = /<Card\b[^>]*?\bhref=["']\/rules\/([a-z0-9-]+)["']/g;
-const RULE_COUNT = /(?<![\d.:,/])\b\d+\s+(?:audit\s+)?rules?\b/gi;
+const RULE_COUNT =
+  /(?<![\d.:,/])\b(?:\d{1,3}(?:,\d{3})+|\d+)\+?\s+(?:audit\s+)?rules?\b/gi;
 const MARKER =
   /^\s*\{\/\*\s*((?:glossary|hub):[a-z-]+):(start|end)\s*\*\/\}\s*$/;
 const FENCE = /^\s*(`{3,}|~{3,})/;
@@ -252,17 +268,67 @@ function unquote(raw: string): string {
   return value;
 }
 
-/** Top-level `key: value` lines of the frontmatter, with their 1-based line numbers. */
+const FIELD = /^([A-Za-z][\w-]*):\s*(.*)$/;
+
+/**
+ * The index of the first line after the field on line `at` (its key line) that
+ * is not part of its value. Indented lines continue a scalar: a block scalar
+ * (`|`, `>`), a plain or quoted scalar wrapped onto the next lines, or a plain
+ * scalar that starts on the line after the key. A blank line counts only when
+ * an indented line follows it, an indented `#` comment ends a plain scalar,
+ * and a nested map or list under an empty value is not a scalar at all.
+ */
+function fieldEnd(lines: string[], at: number): number {
+  const head = (FIELD.exec(lines[at]!)?.[2] ?? "").trim();
+  // A quoted scalar closed on the key line has nothing after it but comments.
+  if (/^(?:"(?:[^"\\]|\\.)*"|'(?:[^']|'')*')\s*(?:#.*)?$/.test(head))
+    return at + 1;
+  const block = /^[|>][+-]?\d*$/.test(head);
+  const plain = !block && !/^["']/.test(head);
+  const continues = (text: string) =>
+    /^\s+\S/.test(text) && !(plain && /^\s+#/.test(text));
+  if (
+    head === "" &&
+    /^\s+(?:-(?:\s|$)|["']?[\w-]+["']?:(?:\s|$))/.test(lines[at + 1] ?? "")
+  )
+    return at + 1;
+  let next = at + 1;
+  for (let j = at + 1; j < lines.length; j += 1) {
+    const text = lines[j]!;
+    if (text.trim() === "---") break;
+    if (text.trim() === "") continue;
+    if (!continues(text)) break;
+    next = j + 1;
+  }
+  return next;
+}
+
+/**
+ * Top-level `key: value` fields of the frontmatter, with the 1-based line of
+ * the key. A value continued on indented lines is joined (see `fieldEnd`): a
+ * literal block scalar with newlines, anything else with spaces, so a long
+ * description cannot hide on its next lines.
+ */
 export function frontmatterOf(source: string): Map<string, FrontmatterField> {
   const fields = new Map<string, FrontmatterField>();
   const lines = source.split("\n");
   if (lines[0]?.trim() !== "---") return fields;
   for (let i = 1; i < lines.length; i += 1) {
-    const text = lines[i]!;
-    if (text.trim() === "---") break;
-    const match = /^([A-Za-z][\w-]*):\s*(.*)$/.exec(text);
-    if (match)
-      fields.set(match[1]!, { value: unquote(match[2]!), line: i + 1 });
+    if (lines[i]!.trim() === "---") break;
+    const match = FIELD.exec(lines[i]!);
+    if (!match) continue;
+    const head = match[2]!.trim();
+    const end = fieldEnd(lines, i);
+    const rest = lines.slice(i + 1, end).map((l) => l.trim());
+    const block = /^([|>])[+-]?\d*$/.exec(head)?.[1];
+    const value =
+      block === "|"
+        ? rest.join("\n").trim()
+        : block === ">"
+          ? rest.filter(Boolean).join(" ")
+          : unquote([head, ...rest].filter(Boolean).join(" "));
+    fields.set(match[1]!, { value, line: i + 1 });
+    i = end - 1;
   }
   return fields;
 }
@@ -278,14 +344,21 @@ function proseMask(source: string): string[] {
     /\{\/\*[\s\S]*?\*\/\}|<!--[\s\S]*?-->/g,
     (comment) => comment.replace(/[^\n]/g, ""),
   );
-  const fenced = fencedLines(blanked);
+  const { fenced } = fencedLines(blanked);
   return blanked.split("\n").map((text, i) => (fenced[i] ? "" : text));
 }
 
-/** Per line: is it a code fence or inside one. */
-function fencedLines(source: string): boolean[] {
+/**
+ * Per line: is it a code fence or inside one. `unclosed` is the 0-based line of
+ * a fence that never closes, or null.
+ */
+function fencedLines(source: string): {
+  fenced: boolean[];
+  unclosed: number | null;
+} {
   let fence: string | null = null;
-  return source.split("\n").map((text) => {
+  let openedAt = 0;
+  const fenced = source.split("\n").map((text, i) => {
     const match = FENCE.exec(text);
     if (fence !== null) {
       if (
@@ -296,9 +369,13 @@ function fencedLines(source: string): boolean[] {
         fence = null;
       return true;
     }
-    if (match) fence = match[1]!;
+    if (match) {
+      fence = match[1]!;
+      openedAt = i;
+    }
     return match !== null;
   });
+  return { fenced, unclosed: fence === null ? null : openedAt };
 }
 
 /**
@@ -361,7 +438,14 @@ export function blocksOf(
   let open: { kind: string; start: number } | null = null;
   const lines = source.split("\n");
   // A marker quoted in a code example is not a marker.
-  const fenced = fencedLines(source);
+  const { fenced, unclosed } = fencedLines(source);
+  if (unclosed !== null)
+    problems.push({
+      file,
+      line: unclosed + 1,
+      message:
+        "code fence is never closed: everything after it, generated-block markers included, reads as code",
+    });
   for (let i = 0; i < lines.length; i += 1) {
     const match = fenced[i] ? null : MARKER.exec(lines[i]!);
     if (!match) continue;
@@ -433,17 +517,17 @@ export function setFrontmatter(
       (l, i) => i > 0 && i < end && l.startsWith(`${key}:`),
     );
     if (at >= 0) {
-      if (unquote(lines[at]!.slice(key.length + 1)) === value) continue;
-      // Drop a block scalar's indented continuation lines along with its key.
-      let next = at + 1;
-      while (next < end && /^\s+\S/.test(lines[next]!)) next += 1;
-      lines.splice(at, next - at, line);
+      // Read the field as --check does, so an accepted value is never rewritten.
+      if (frontmatterOf(lines.join("\n")).get(key)?.value === value) continue;
+      // Drop a multi-line value's continuation lines along with its key.
+      lines.splice(at, fieldEnd(lines, at) - at, line);
       continue;
     }
     const title = lines.findIndex(
       (l, i) => i > 0 && i < end && l.startsWith("title:"),
     );
-    lines.splice(title >= 0 ? title + 1 : end, 0, line);
+    // After the whole title field, so a multi-line title is not split.
+    lines.splice(title >= 0 ? fieldEnd(lines, title) : end, 0, line);
   }
   return lines.join("\n");
 }
@@ -809,7 +893,12 @@ function checkData(model: Model, problems: Problem[]): void {
   const termAt = (slug: string) => lineOf(termsText, `"slug": "${slug}"`);
   const hubAt = (code: string) => lineOf(hubsText, `"code": "${code}"`);
   const slugs = new Set<string>();
+  // Every slug, name and alias, case-folded, to the term that owns it: an alias
+  // may not be another term's slug, name or alias.
   const names = new Map<string, string>();
+  for (const term of data.terms)
+    if (!names.has(term.slug)) names.set(term.slug, term.slug);
+  const titles = new Map<string, string>();
   for (const term of data.terms) {
     const line = termAt(term.slug);
     const bad = (message: string) =>
@@ -821,9 +910,24 @@ function checkData(model: Model, problems: Problem[]): void {
     if (!SLUG.test(term.slug)) bad("slug is not lowercase-hyphenated");
     if (slugs.has(term.slug)) bad("duplicate slug");
     slugs.add(term.slug);
-    const name = term.term.toLowerCase();
-    if (names.has(name)) bad(`same name as term ${names.get(name)}`);
-    else names.set(name, term.slug);
+    for (const [label, value] of [
+      ["name", term.term],
+      ...term.aliases.map((a) => ["alias", a] as const),
+    ] as const) {
+      const key = value.trim().toLowerCase();
+      const owner = names.get(key);
+      if (owner !== undefined && owner !== term.slug)
+        bad(
+          `${label} "${value}" is also the slug, name or alias of term ${owner}`,
+        );
+      else names.set(key, term.slug);
+    }
+    if (term.title) {
+      const key = term.title.trim().toLowerCase();
+      const owner = titles.get(key);
+      if (owner !== undefined) bad(`same title as term ${owner}`);
+      else titles.set(key, term.slug);
+    }
     if (!model.hubs.has(term.hub)) bad(`hub ${term.hub} is not in hubs.json`);
     if (term.format === "page" && !term.title) bad("a page term needs a title");
     if (term.format === "entry" && term.title !== null)
@@ -840,6 +944,9 @@ function checkData(model: Model, problems: Problem[]): void {
           `${field} has < > { or } outside a code span, which MDX parses as markup`,
         );
     }
+    // Aliases render through cell(), so only the copy rules apply.
+    for (const alias of term.aliases)
+      for (const found of copyProblems(alias)) bad(`alias "${alias}" ${found}`);
     if (term.rules.length === 0) bad("lists no rules");
     const ruleSet = new Set<string>();
     for (const id of term.rules) {
@@ -912,14 +1019,29 @@ function checkData(model: Model, problems: Problem[]): void {
       });
 }
 
-/** A hub's link targets, as `/rules/...` paths without a hash. */
-function rulesLinkedFrom(source: string): Set<string> {
+/**
+ * The rule ids a hub links to. Links are read and resolved the way
+ * check-links.ts does: inline, reference-style and `href`, absolute or relative
+ * to the hub's URL (`/rules/<code>`), with any trailing slash or hash dropped.
+ */
+function rulesLinkedFrom(source: string, code: string): Set<string> {
   const linked = new Set<string>();
-  const prose = proseMask(source).join("\n");
-  for (const match of prose.matchAll(
-    /(?:\]\(|href=["'])(\/rules\/[a-z0-9-]+\/[a-z0-9-]+)(?:#[^)"']*)?[)"']/g,
-  ))
-    linked.add(match[1]!.slice("/rules/".length));
+  for (const { target } of linksOf(proseMask(source).join("\n"))) {
+    if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("//"))
+      continue;
+    let route: string;
+    try {
+      route = normalizeRoute(
+        decodeURIComponent(
+          new URL(target, `${LINK_ORIGIN}/rules/${code}`).pathname,
+        ),
+      );
+    } catch {
+      continue;
+    }
+    const id = /^\/rules\/([a-z0-9-]+\/[a-z0-9-]+)$/.exec(route)?.[1];
+    if (id) linked.add(id);
+  }
   return linked;
 }
 
@@ -1142,7 +1264,7 @@ function plan(root: string): Plan {
     // Guard 2: a hub links every rule in its category.
     if (kind === "hub") {
       const code = /^rules\/([^/]+)\//.exec(page.file)![1]!;
-      const linked = rulesLinkedFrom(page.source);
+      const linked = rulesLinkedFrom(page.source, code);
       for (const rule of rulesOfHub(model, code))
         if (!linked.has(rule.id))
           problems.push({

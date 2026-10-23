@@ -37,7 +37,8 @@ so edit the data files and run `bun scripts/glossary.ts --write` in `docs/` inst
 of editing it by hand. The check also fails on a term naming a rule with no docs
 page, a hub that does not link one of its rules, a category hub with a category
 `<Card>` or a stated rule count, a glossary or hub title over 60 or description over
-155 characters, an em-dash, and two pages with the same title.
+155 characters, an em-dash, and two pages with the same title. Last, it runs the
+tests for both scripts (`docs/scripts/glossary.test.ts` and `check-links.test.ts`).
 
 ## Issues
 

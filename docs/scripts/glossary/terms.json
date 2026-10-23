@@ -1288,7 +1288,7 @@
       "hub": "schema",
       "title": null,
       "primary_query": "website schema sitelinks searchbox",
-      "definition": "WebSite structured data naming the site and, optionally, its internal search for a sitelinks search box.",
+      "definition": "WebSite structured data naming the site, which Google reads for the site name in results, and optionally describing its internal search with a SearchAction.",
       "rules": [
         "schema/website-search",
         "schema/entity-website-missing"
@@ -1301,7 +1301,7 @@
       "tools": [],
       "authority": [
         "https://developers.google.com/search/blog/2024/10/sitelinks-search-box",
-        "https://developers.google.com/search/docs/appearance/structured-data/sitelinks-searchbox",
+        "https://developers.google.com/search/docs/appearance/site-names",
         "https://schema.org/WebSite",
         "https://schema.org/SearchAction"
       ],

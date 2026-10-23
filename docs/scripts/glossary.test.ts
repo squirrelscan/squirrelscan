@@ -16,6 +16,7 @@ import { dirname, join } from "node:path";
 
 import {
   checkGlossary,
+  frontmatterOf,
   type Hub,
   setFrontmatter,
   type Term,
@@ -641,6 +642,167 @@ describe("review edge cases", () => {
     expect(setFrontmatter(source, { title: "New", sidebarTitle: "S" })).toBe(
       '---\ntitle: "New"\nsidebarTitle: "S"\ndescription: "d"\n---\nbody\n',
     );
+  });
+
+  test("two planned term pages with the same title fail, though neither is written", () => {
+    const dir = docs({
+      terms: [
+        { ...SOLO },
+        {
+          ...TERMS[1]!,
+          related: [],
+          format: "page",
+          title: "what is robots.txt? Rules and syntax",
+        },
+      ],
+    });
+    expect(
+      messages(dir).filter((m) => m.includes("same title as term")),
+    ).toEqual([
+      expect.stringMatching(
+        /^scripts\/glossary\/terms\.json:\d+: term xml-sitemap: same title as term robots-txt$/,
+      ),
+    ]);
+  });
+
+  test("rule counts with a thousands separator or a plus sign fail on a category hub", () => {
+    const dir = docs({ terms: [SOLO] });
+    replaceIn(
+      "rules/crawl/index.mdx",
+      "Crawlability rules cover",
+      "Of 1,000 rules and 300+ audit rules, these cover",
+    );
+    expect(messages(dir)).toEqual([
+      'rules/crawl/index.mdx:6: category hub states a rule count ("1,000 rules"): counts here are not kept in sync; let the rule table show the count',
+      'rules/crawl/index.mdx:6: category hub states a rule count ("300+ audit rules"): counts here are not kept in sync; let the rule table show the count',
+    ]);
+  });
+
+  test("a hub link with a trailing slash, a relative path or a reference definition counts", () => {
+    const dir = docs({ terms: [SOLO] });
+    replaceIn(
+      "rules/crawl/index.mdx",
+      '<Card title="robots.txt" href="/rules/crawl/robots-txt">Checks robots.txt.</Card>',
+      "See [robots.txt][r].\n\n[r]: crawl/robots-txt#how-to-fix",
+    );
+    replaceIn(
+      "rules/crawl/index.mdx",
+      "(/rules/crawl/sitemap-exists)",
+      "(/rules/crawl/sitemap-exists/)",
+    );
+    expect(messages(dir)).toEqual([]);
+    // `./x` on /rules/crawl resolves to /rules/x, as in a browser: not a link to the rule.
+    replaceIn(
+      "rules/crawl/index.mdx",
+      "(/rules/crawl/sitemap-exists/)",
+      "(./sitemap-exists)",
+    );
+    expect(messages(dir)).toEqual([
+      "rules/crawl/index.mdx:1: hub does not link rule crawl/sitemap-exists, whose **Category** is /rules/crawl",
+    ]);
+  });
+
+  test("an unclosed code fence is an error, so markers after it are not silently ignored", () => {
+    const dir = docs({
+      terms: [SOLO],
+      files: {
+        "rules/crawl/robots-txt.mdx": `${rulePage("crawl/robots-txt", "crawl", "robots.txt checks", "error")}\n\`\`\`bash\nsquirrel audit\n\n{/* glossary:backlinks:start */}\n{/* glossary:backlinks:end */}\n`,
+      },
+    });
+    expect(messages(dir)).toEqual([
+      "rules/crawl/robots-txt.mdx:16: code fence is never closed: everything after it, generated-block markers included, reads as code",
+    ]);
+    expect(writeGlossary(dir)).toEqual([]);
+  });
+
+  test("aliases follow the copy rules and may not take another term's slug, name or alias", () => {
+    const dir = docs({
+      terms: [
+        { ...TERMS[0]!, aliases: ["AI readiness file", "robots file"] },
+        {
+          ...TERMS[1]!,
+          aliases: ["Robots File", "sitemap — xml", "ROBOTS-TXT"],
+        },
+      ],
+    });
+    const found = messages(dir).map((m) => m.replace(/^[^ ]+ /, ""));
+    expect(found).toEqual([
+      'term robots-txt: alias "AI readiness file" says "AI readiness"',
+      'term xml-sitemap: alias "ROBOTS-TXT" is also the slug, name or alias of term robots-txt',
+      'term xml-sitemap: alias "Robots File" is also the slug, name or alias of term robots-txt',
+      'term xml-sitemap: alias "sitemap — xml" has an em-dash (use a colon, comma or period)',
+    ]);
+  });
+
+  test("a description in a block scalar or wrapped onto indented lines is length-checked", () => {
+    const long = "word ".repeat(40).trim();
+    const half = "word ".repeat(20).trim();
+    const dir = docs({
+      terms: [SOLO],
+      files: {
+        "glossary/index.mdx": `---\ntitle: "Glossary"\ndescription: >-\n  ${half}\n  ${half}\n---\n`,
+      },
+    });
+    replaceIn(
+      "rules/crawl/index.mdx",
+      'description: "Robots.txt and sitemaps."',
+      `description: "${half}\n  ${half}"`,
+    );
+    expect(messages(dir).filter((m) => m.includes("description is"))).toEqual([
+      `glossary/index.mdx:3: description is ${long.length} characters (max 155)`,
+      `rules/crawl/index.mdx:3: description is ${long.length} characters (max 155)`,
+    ]);
+  });
+
+  test("setFrontmatter leaves a block scalar alone when it already holds the value", () => {
+    const source = "---\ntitle: >-\n  Two\n  lines\n---\nbody\n";
+    expect(frontmatterOf(source).get("title")).toEqual({
+      value: "Two lines",
+      line: 2,
+    });
+    expect(setFrontmatter(source, { title: "Two lines" })).toBe(source);
+    // A missing key goes after the whole title, not inside it.
+    expect(
+      setFrontmatter(source, { title: "Two lines", sidebarTitle: "S" }),
+    ).toBe('---\ntitle: >-\n  Two\n  lines\nsidebarTitle: "S"\n---\nbody\n');
+  });
+
+  test("frontmatterOf: comments, blank lines and nested maps", () => {
+    const fields = frontmatterOf(
+      [
+        "---",
+        'title: "Example"',
+        "  # an editorial note",
+        "description: plain words",
+        "  # ends the plain scalar",
+        'summary: "Short',
+        "",
+        '  and longer"',
+        "seo:",
+        "  noindex: true",
+        "---",
+      ].join("\n"),
+    );
+    expect(fields.get("title")).toEqual({ value: "Example", line: 2 });
+    expect(fields.get("description")).toEqual({
+      value: "plain words",
+      line: 4,
+    });
+    expect(fields.get("summary")).toEqual({
+      value: "Short and longer",
+      line: 6,
+    });
+    expect(fields.get("seo")).toEqual({ value: "", line: 9 });
+  });
+
+  test("a percent-encoded hub link reaches the rule", () => {
+    const dir = docs({ terms: [SOLO] });
+    replaceIn(
+      "rules/crawl/index.mdx",
+      "(/rules/crawl/sitemap-exists)",
+      "(/rules/crawl/%73itemap-exists)",
+    );
+    expect(messages(dir)).toEqual([]);
   });
 
   test("rule text with MDX syntax is escaped in generated blocks", () => {
