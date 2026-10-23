@@ -1666,7 +1666,7 @@ function ReportPage({
               {groups.map((g) => {
                 const body = (
                   <>
-                    <ScoreCircle score={g.score} size={88} color={getGroupColor(g.group).base} />
+                    <ScoreCircle score={g.score} size={88} />
                     <GroupBadge group={g.group} />
                     <p className="mt-1.5 text-xs text-muted-foreground">
                       {g.failed === 0 && g.warnings === 0 ? (

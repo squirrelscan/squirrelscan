@@ -4,10 +4,12 @@
 export {
   getScoreGrade,
   getScoreColor,
+  getScoreInkColor,
   getScoreBand,
   getGroupColor,
   SCORE_THRESHOLDS,
   SCORE_COLORS,
+  SCORE_INK_COLORS,
   GROUP_COLORS,
   type ScoreBand,
   type GroupColor,

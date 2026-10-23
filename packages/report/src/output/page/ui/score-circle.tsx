@@ -1,23 +1,19 @@
 // Classic JSX in the CLI build needs React in scope.
 import React from "react";
-import { getScoreColor, getScoreGrade } from "../../../scoring";
+import { getScoreGrade, getScoreInkColor, SCORE_INK_COLORS } from "../../../scoring";
 
-/** `color` overrides the score-band colour, e.g. a rule group's own colour. */
-export function ScoreCircle({
-  score,
-  size = 64,
-  color: colorOverride,
-}: {
-  score: number | null;
-  size?: number;
-  color?: string;
-}) {
+/**
+ * A score ring with its number and grade, colored by score band (red to green)
+ * in the band's ink tone, readable on the white cards it sits on. A group's own
+ * color belongs on its card border and badge, never on the score.
+ */
+export function ScoreCircle({ score, size = 64 }: { score: number | null; size?: number }) {
   const strokeWidth = 7;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const clampedScore = Math.max(0, Math.min(100, score ?? 0));
   const offset = circumference - (clampedScore / 100) * circumference;
-  const color = score === null ? "#9ca3af" : (colorOverride ?? getScoreColor(clampedScore));
+  const color = score === null ? SCORE_INK_COLORS.none : getScoreInkColor(clampedScore);
   const grade = score === null ? "-" : getScoreGrade(clampedScore);
 
   return (

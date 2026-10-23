@@ -7,7 +7,7 @@ import type { AuditReport, ReportRuleResult } from "../src/types";
 
 import { groupIssuesByCategory, groupCategoriesByGroup } from "../src/grouping";
 import { GROUP_CODES } from "../src/categories";
-import { GROUP_COLORS } from "../src/scoring";
+import { GROUP_COLORS, SCORE_INK_COLORS, getGroupColor, getScoreInkColor } from "../src/scoring";
 import { renderJson } from "../src/output/json";
 import { renderText } from "../src/output/text";
 import { renderHtml } from "../src/output/html";
@@ -194,6 +194,38 @@ describe("renderers surface groups (#626)", () => {
     expect(html).not.toContain('class="divider"');
   });
 
+  test("html: group score rings, numbers and grades use the score color; the card keeps the group color", () => {
+    const r = reportWithGroups();
+    const html = renderHtml(r);
+    for (const g of r.healthScore!.groups!) {
+      const at = html.indexOf(`data-group-score="${g.group}"`);
+      const next = html.indexOf("data-group-score=", at + 1);
+      const card = html.slice(html.lastIndexOf("<", at), next === -1 ? undefined : next);
+      const ink = getScoreInkColor(g.score);
+      // Ring stroke, score number and grade letter: the score band (red to green).
+      expect(card).toContain(`stroke="${ink}"`);
+      expect(card.split(`fill:${ink}`).length - 1).toBe(2);
+      // The group's own color is never on the score itself.
+      expect(card).not.toContain(`stroke="${getGroupColor(g.group).base}"`);
+      // ...but stays on the card's identity (border and badge).
+      expect(card).toContain(getGroupColor(g.group).base);
+    }
+  });
+
+  test("score ink colors read on the white card: AA text (4.5:1) and ring (3:1)", () => {
+    const channel = (c: number) => {
+      const v = c / 255;
+      return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    };
+    const luminance = (hex: string) => {
+      const [r, g, b] = [1, 3, 5].map((i) => channel(parseInt(hex.slice(i, i + 2), 16)));
+      return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+    };
+    for (const color of Object.values(SCORE_INK_COLORS)) {
+      expect((1 + 0.05) / (luminance(color) + 0.05)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
   test("html: a group with a score but no issues renders a non-link circle", () => {
     const r = reportWithGroups();
     delete (r.ruleResults as Record<string, unknown>)["ax/x"];
@@ -314,7 +346,9 @@ describe("severity headings replace the group headings (#1536)", () => {
     // both blocking rules sit in the security group section with its label.
     expect(html).not.toContain("subcategory-header");
     expect(html).toContain('id="g-security"');
-    expect((html.match(/data-g="security" title="Security">Security<\/span>/g) || []).length).toBe(2);
+    expect((html.match(/data-g="security" title="Security">Security<\/span>/g) || []).length).toBe(
+      2,
+    );
   });
 
   test("markdown: subcategories nest under the category (### sev → #### cat → ##### sub → ###### rule)", () => {
@@ -344,6 +378,8 @@ describe("severity headings replace the group headings (#1536)", () => {
     };
     const html = renderHtml(r);
     expect((html.match(/id="g-security"/g) || []).length).toBe(1);
-    expect((html.match(/data-g="security" title="Security">Security<\/span>/g) || []).length).toBe(3);
+    expect((html.match(/data-g="security" title="Security">Security<\/span>/g) || []).length).toBe(
+      3,
+    );
   });
 });
