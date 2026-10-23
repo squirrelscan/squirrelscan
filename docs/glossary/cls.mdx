@@ -1,0 +1,80 @@
+---
+title: "What is CLS? Cumulative Layout Shift and how to fix it"
+description: "CLS scores how much visible content moves unexpectedly while a page is open. Good is 0.1 or less. The usual causes, and what squirrelscan flags."
+sidebarTitle: "Cumulative Layout Shift (CLS)"
+---
+
+**Cumulative Layout Shift (CLS)** is the Core Web Vitals score for visual stability: how much visible content moves unexpectedly while a page is open.
+
+web.dev defines it as the largest burst of layout shift scores across every unexpected shift in the page's lifetime. Each shift scores the share of the viewport that moved times the distance it moved. 0.1 or less is good and more than 0.25 is poor, at the 75th percentile of page loads.
+
+{/* glossary:hub:start */}
+
+Category: [Performance](/rules/perf)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+A shift moves the paragraph someone is reading or the button they are about to tap. web.dev's example is a user who means to cancel an order and confirms it instead. The common causes it lists are images and videos with unknown dimensions, web fonts that render larger or smaller than their fallback, and ads or widgets that resize after they load.
+
+## How squirrelscan checks it
+
+squirrelscan does not measure CLS. It reads the markup that lets the browser reserve space before content arrives.
+
+[perf/cls-hints](/rules/perf/cls-hints) lists images with no declared size and iframes missing a width or height. For an image, one `width` or `height` attribute, or an inline style naming both, clears it. [images/dimensions](/rules/images/dimensions) is stricter and wants both attributes on every image, since one alone gives no aspect ratio. [perf/font-loading](/rules/perf/font-loading) reads `@font-face` blocks in the page HTML for a `font-display` descriptor, and checks that a page using Google Fonts preconnects to it.
+
+None of the three reads external stylesheets. An image sized by `aspect-ratio` in a linked stylesheet is stable in the browser and still reported, and `@font-face` blocks in a linked stylesheet are not checked.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Images without width and height: the CLS risk squirrel finds](/rules/perf/cls-hints) | Images and iframes with no dimensions, so the browser cannot reserve space before they load. squirrel lists every one by page. | warning |
+| [Image width and height attributes: preventing layout shift](/rules/images/dimensions) | An image with no width and height reserves no space, so the page jumps when it loads. squirrel checks both attributes on every image. | warning |
+| [font-display swap: the @font-face rule squirrel looks for](/rules/perf/font-loading) | An @font-face block with no font-display, or Google Fonts loaded without a preconnect. squirrel reads the inline CSS on every page. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Put the intrinsic size in the attributes and let CSS scale the image:
+
+```html
+<img src="/photo.jpg" width="1200" height="630" style="width:100%;height:auto" alt="" />
+```
+
+The attributes carry the ratio and `height: auto` keeps it ([the dimensions fix](/rules/images/dimensions#how-to-fix-it)). For an ad slot or embed whose size is only known at runtime, reserve the box in CSS with `min-height` or `aspect-ratio` ([the CLS hint fix](/rules/perf/cls-hints#how-to-fix-it)). For fonts, `font-display: swap` keeps text visible, but the text reflows when the web font arrives unless the fallback's metrics match it. `optional` never swaps late ([the font fix](/rules/perf/font-loading#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include perf/cls-hints,images/dimensions,perf/font-loading
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Core Web Vitals](/glossary/core-web-vitals): Google's three user-experience metrics: LCP for loading, INP for responsiveness and CLS for visual stability, judged at the 75th percentile of real visits.
+- [Image width and height attributes](/glossary#image-dimensions): Declared width and height on `<img>` that let the browser reserve space before the file loads, preventing layout shift.
+- [font-display](/glossary#font-display): The @font-face descriptor (swap, optional, fallback) that decides what text shows while a web font loads.
+
+{/* glossary:related:end */}
+
+## Learn more
+
+- [Core Web Vitals guide](https://squirrelscan.com/learn/core-web-vitals)
+- [Core Web Vitals checker](https://squirrelscan.com/tools/core-web-vitals-checker)
+
+## References
+
+- [Cumulative Layout Shift, web.dev](https://web.dev/articles/cls)
+- [Optimize Cumulative Layout Shift, web.dev](https://web.dev/articles/optimize-cls)
+- [Best practices for fonts, web.dev](https://web.dev/articles/font-best-practices)

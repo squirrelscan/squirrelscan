@@ -1,0 +1,73 @@
+---
+title: "Render-blocking resources: what blocks first paint"
+description: "Render-blocking resources are the stylesheets and scripts in head a browser must load before its first paint. Which ones count, and how to unblock them."
+sidebarTitle: "Render-blocking resources"
+---
+
+**Render-blocking resources** are the files a browser has to download and process before it can paint anything: stylesheets in `<head>` and classic scripts in `<head>` without `async` or `defer`.
+
+Lighthouse's criteria are specific. A `<link rel="stylesheet">` blocks unless it is `disabled` or its `media` does not match the device. A `<script>` in `<head>` blocks when it has neither `defer` nor `async`. A `type="module"` script is deferred by default.
+
+{/* glossary:hub:start */}
+
+Category: [Performance](/rules/perf)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+The browser will not paint until it has every matching stylesheet, and a parser-blocking script stops everything after it until it has downloaded and run. That time sits in front of the first paint and of [Largest Contentful Paint](/glossary/lcp). Chains make it worse. An `@import` inside a stylesheet names a file the browser cannot discover until the first file has arrived and been parsed, so each link costs another round trip, and a faster connection does not shorten round trips. A file on a new origin also waits for DNS, TCP and TLS before its first byte, which `rel="preconnect"` can start early.
+
+## How squirrelscan checks it
+
+[perf/render-blocking](/rules/perf/render-blocking) counts the blocking stylesheets and scripts in `<head>` and lists each URL. A stylesheet counts only when it has no `media` attribute at all, so even `media="all"`, which still blocks paint, removes it from the count. Check the listed URLs rather than the number. [perf/critical-request-chains](/rules/perf/critical-request-chains) counts the stylesheets in `<head>` that are neither `media="print"` nor `disabled`, the blocking scripts there, plus every `@import` a browser would fetch from the page's `<style>` blocks. It counts resources, not measured chain depth, since a static read cannot see what a stylesheet fetches once it loads. [perf/preconnect](/rules/perf/preconnect) checks thirteen common CDN hosts, such as `fonts.googleapis.com` and `cdn.jsdelivr.net`, for a missing preconnect.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Render-blocking resources: the ones squirrel counts in head](/rules/perf/render-blocking) | Stylesheets and scripts in head that hold up first paint. squirrel counts them per page and lists each URL. | warning |
+| [Critical request chains: the blocking head resources counted](/rules/perf/critical-request-chains) | Blocking stylesheets and scripts in head, plus every inline CSS @import a browser fetches. squirrel counts each as a link in the chain before first paint. | warning |
+| [rel=preconnect: the CDN origins squirrel checks for a hint](/rules/perf/preconnect) | A page loading from a known CDN with no preconnect for that origin. squirrel checks thirteen common hosts. | info |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Inline what the first screen needs, load the rest without blocking, and defer scripts:
+
+```html
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<style>/* styles the first screen needs */</style>
+<link rel="stylesheet" href="/rest.css" media="print" onload="this.media='all'" />
+<script src="/app.js" defer></script>
+```
+
+The `media="print"` stylesheet downloads without blocking and switches on once loaded ([the render-blocking fix](/rules/perf/render-blocking#how-to-fix-it)). Replace each `@import` with its own `<link>`, so the browser fetches the files in parallel ([the request chain fix](/rules/perf/critical-request-chains#how-to-fix-it)). Preconnect to two to four origins on the critical path at most, with `crossorigin` for fonts ([the preconnect fix](/rules/perf/preconnect#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include perf/render-blocking,perf/critical-request-chains,perf/preconnect
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Largest Contentful Paint (LCP)](/glossary/lcp): The time until the largest image or text block in the viewport renders; good is 2.5 seconds or less.
+- [font-display](/glossary#font-display): The @font-face descriptor (swap, optional, fallback) that decides what text shows while a web font loads.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Eliminate render-blocking resources, Chrome for Developers](https://developer.chrome.com/docs/lighthouse/performance/render-blocking-resources)
+- [Establish network connections early, web.dev](https://web.dev/articles/preconnect-and-dns-prefetch)
+- [The script element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/script)

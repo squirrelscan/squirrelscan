@@ -1,0 +1,77 @@
+---
+title: "Lazy loading images: below the fold yes, the LCP image no"
+description: "Lazy loading defers off-screen images and iframes with loading=lazy until the visitor scrolls near them. Where it helps and where it hurts LCP."
+sidebarTitle: "Lazy loading"
+---
+
+**Lazy loading** is deferring the download of an off-screen image or iframe until the visitor scrolls near it, which browsers support natively with the `loading="lazy"` attribute.
+
+The attribute works on `<img>` and `<iframe>` and needs no JavaScript. The browser holds the request until the element comes within a set distance of the viewport. The other value, `eager`, loads the resource straight away, which is also what happens with no attribute at all.
+
+{/* glossary:hub:start */}
+
+Category: [Images](/rules/images)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+Below the fold, lazy loading saves bytes the visitor may never need. Iframes gain the most: an embedded video or map is a whole document with its own scripts, and none of it loads until the visitor gets close.
+
+Above the fold it does harm. The browser has to finish layout before it knows a lazy image is visible, so the request starts later than it would with no attribute. web.dev says not to lazy-load images that are likely to be in the viewport when the page loads, and the Largest Contentful Paint image least of all.
+
+## How squirrelscan checks it
+
+Four rules cover both directions. [images/offscreen-lazy](/rules/images/offscreen-lazy) treats the first three images as above the fold (the `above_fold_count` option) and warns about later images that are neither `lazy` nor `eager`. [perf/lazy-above-fold](/rules/perf/lazy-above-fold) does the reverse and flags `loading="lazy"` on the first three images that could be visible, skipping hidden images, inactive carousel slides and images in a `<footer>`. [perf/carousel-hidden-eager](/rules/perf/carousel-hidden-eager) finds eager images inside carousel slides hidden with an inline style or attribute. [images/lazy-loading](/rules/images/lazy-loading) is an info-level count of how much of the page defers.
+
+Position comes from document order, not from layout. An image late in the markup that CSS places at the top of the screen is treated as below the fold, and a slide hidden only by a stylesheet class is not seen.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Lazy loading: how much of the page defers its load](/rules/images/lazy-loading) | A page-wide count of images and iframes using loading=lazy. squirrel reports the mix rather than judging individual images. | info |
+| [loading=lazy: which images need it and which must not](/rules/images/offscreen-lazy) | Images below the fold that load eagerly compete with the ones the visitor can see. squirrel treats the first few images as above the fold. | warning |
+| [loading=lazy on a hero image: the LCP delay squirrel finds](/rules/perf/lazy-above-fold) | An above-fold image marked loading=lazy, which delays the paint that matters. squirrel checks the first three eligible images. | warning |
+| [Hidden carousel slides still download: eager images inside](/rules/perf/carousel-hidden-eager) | Images in inactive carousel slides loaded eagerly, so the browser fetches them anyway. squirrel walks up eight ancestors to find them. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Leave the hero alone and lazy-load what the visitor has to scroll to:
+
+```html
+<img src="/hero.jpg" width="1200" height="600" alt="…" fetchpriority="high" />
+<img src="/gallery-1.jpg" width="600" height="400" alt="…" loading="lazy" />
+<iframe src="https://www.youtube.com/embed/…" loading="lazy" title="…"></iframe>
+```
+
+A component that renders a list of images can add the attribute to every item after the first row ([the off-screen fix](/rules/images/offscreen-lazy#how-to-fix-it)). Remove it from anything on the first screen ([the above-the-fold fix](/rules/perf/lazy-above-fold#how-to-fix-it)). Most carousel libraries have an option that lazy-loads every slide except the first ([the carousel fix](/rules/perf/carousel-hidden-eager#how-to-fix-it)). If a page really shows more than three images on its first screen, raise `above_fold_count`.
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include images/lazy-loading,images/offscreen-lazy,perf/lazy-above-fold,perf/carousel-hidden-eager
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Largest Contentful Paint (LCP)](/glossary/lcp): The time until the largest image or text block in the viewport renders; good is 2.5 seconds or less.
+- [fetchpriority](/glossary#fetchpriority): An HTML attribute (high, low, auto) that hints how urgently the browser should fetch an image, script or link.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Browser-level image lazy loading for the web, web.dev](https://web.dev/articles/browser-level-image-lazy-loading)
+- [Lazy loading, MDN](https://developer.mozilla.org/en-US/docs/Web/Performance/Guides/Lazy_loading)
+- [Optimize Largest Contentful Paint, web.dev](https://web.dev/articles/optimize-lcp)

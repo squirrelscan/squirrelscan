@@ -670,10 +670,24 @@
           {
             "group": "SEO",
             "pages": [
+              "glossary/alt-text",
               "glossary/geo-meta-tags",
               "glossary/json-ld",
+              "glossary/lazy-loading",
+              "glossary/responsive-images",
               "glossary/robots-txt",
               "glossary/structured-data"
+            ]
+          },
+          {
+            "group": "Performance",
+            "pages": [
+              "glossary/core-web-vitals",
+              "glossary/cls",
+              "glossary/http-caching",
+              "glossary/inp",
+              "glossary/lcp",
+              "glossary/render-blocking-resources"
             ]
           },
           {

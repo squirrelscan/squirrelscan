@@ -1,0 +1,73 @@
+---
+title: "Alt text: when to write it, when to leave it empty"
+description: "Alt text is the alt attribute that gives an image a text alternative for screen readers and failed loads. When to describe, when to leave it empty."
+sidebarTitle: "Alt text"
+---
+
+**Alt text** is the text in an image's `alt` attribute: what a screen reader announces in place of the image, and what the browser shows when the image does not load.
+
+WCAG 2.2 success criterion 1.1.1, Non-text Content, asks for a text alternative that serves the same purpose as the image. The W3C's image tutorials split images into two kinds. An informative image gets a short description of what it conveys. A decorative one gets an empty `alt=""`, so assistive technology skips it. Leaving the attribute out is the failure, because some screen readers then read out the file name.
+
+{/* glossary:hub:start */}
+
+Category: [Images](/rules/images)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+For a person using a screen reader, an image with no alt is often just its file name read aloud, something like `IMG_4031.jpg`. Redundant alt text wastes their time in a different way. Screen readers already announce "image", so "image of a chart" says it twice, and alt text that repeats the caption below it is read twice too. Google also reads alt text: its image guidelines say it uses alt text, along with computer vision and the page content, to work out what an image shows.
+
+## How squirrelscan checks it
+
+[images/alt-text](/rules/images/alt-text) reports a page where any `<img>` has no `alt` attribute at all. An empty or whitespace-only alt counts as decorative and passes, and the rule does not judge the quality of the text. [a11y/image-redundant-alt](/rules/a11y/image-redundant-alt) does look at the text: it flags alt that matches patterns such as "photo of" or a bare "logo", alt that matches the file name, and alt that repeats a `<figcaption>` or the text around the image. Two rules cover elements that are easy to forget. [a11y/input-image-alt](/rules/a11y/input-image-alt) reports a visible `<input type="image">` with no name, which is a submit button with nothing to announce. [a11y/object-alt](/rules/a11y/object-alt) reports a visible `<object>` with no label and no fallback text between its tags.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Missing alt attribute: what an empty alt means](/rules/images/alt-text) | An image with no alt attribute has no name for a screen reader. An empty alt is the correct way to say decorative, and squirrel accepts it. | warning |
+| [Redundant alt text: image of, filenames and captions](/rules/a11y/image-redundant-alt) | Screen readers already announce that it is an image, so alt starting with 'photo of' wastes the announcement. squirrel checks four ways. | warning |
+| [input type=image without alt: an unnamed submit button](/rules/a11y/input-image-alt) | An image input is a submit button drawn as a picture, and with no alt it announces nothing. squirrel checks every one on the page. | error |
+| [object elements with no alternative content](/rules/a11y/object-alt) | An embedded object with no fallback is announced as nothing at all. squirrel checks every object element on the page. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Describe what the image conveys in its context, and mark decoration as decoration:
+
+```html
+<img src="/revenue.png" alt="Revenue by quarter, rising from Q1 to Q4" />
+<img src="/divider.svg" alt="" />
+<input type="image" src="/icons/search.svg" alt="Search" />
+```
+
+Skip "image of" and do not paste the caption into the alt ([the redundant alt fix](/rules/a11y/image-redundant-alt#how-to-fix-it)). An icon inside a button that already has a label takes `alt=""` ([the alt attribute fix](/rules/images/alt-text#how-to-fix-it)). An image input is a button, so its alt names the action, never `alt=""` ([the image input fix](/rules/a11y/input-image-alt#how-to-fix-it)). Put a link to the resource between an `<object>`'s tags ([the object fix](/rules/a11y/object-alt#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include images/alt-text,a11y/image-redundant-alt,a11y/input-image-alt,a11y/object-alt
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [WCAG](/glossary#wcag): The W3C's Web Content Accessibility Guidelines, organised as testable success criteria at levels A, AA and AAA; 2.2 is current.
+- [Accessible name](/glossary#accessible-name): The name assistive technology announces for an element, computed from its content, label, aria-label or aria-labelledby.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Understanding SC 1.1.1 Non-text Content, W3C](https://www.w3.org/WAI/WCAG22/Understanding/non-text-content.html)
+- [Decorative images, W3C WAI tutorials](https://www.w3.org/WAI/tutorials/images/decorative/)
+- [Google image SEO best practices, Google Search Central](https://developers.google.com/search/docs/appearance/google-images)

@@ -72,6 +72,8 @@ The alt attribute that gives an image a text alternative for screen readers, fai
 
 Checked by [Missing alt attribute: what an empty alt means](/rules/images/alt-text), [Redundant alt text: image of, filenames and captions](/rules/a11y/image-redundant-alt), [input type=image without alt: an unnamed submit button](/rules/a11y/input-image-alt), [object elements with no alternative content](/rules/a11y/object-alt).
 
+[Read the full definition](/glossary/alt-text).
+
 ### Anchor text \{#anchor-text\}
 
 The visible, clickable text of a link, which tells readers and search engines what the target is about.
@@ -212,6 +214,8 @@ Google's three user-experience metrics: LCP for loading, INP for responsiveness 
 
 Checked by [LCP image not preloaded: what squirrel counts as a hero](/rules/perf/lcp-hints), [Third-party scripts and INP: what squirrel counts per page](/rules/perf/inp-hints), [Images without width and height: the CLS risk squirrel finds](/rules/perf/cls-hints), [Audits that need a browser: what a static crawl cannot see](/rules/perf/browser-required).
 
+[Read the full definition](/glossary/core-web-vitals).
+
 ### Crawl budget \{#crawl-budget\}
 
 The number of URLs a search engine is willing and able to crawl on a site in a given time, set by crawl capacity and crawl demand.
@@ -223,6 +227,8 @@ Checked by [Redirect chains: when one hop turns into three](/rules/crawl/redirec
 A score for how much visible content moves unexpectedly while the page is in use; good is 0.1 or less.
 
 Checked by [Images without width and height: the CLS risk squirrel finds](/rules/perf/cls-hints), [Image width and height attributes: preventing layout shift](/rules/images/dimensions), [font-display swap: the @font-face rule squirrel looks for](/rules/perf/font-loading).
+
+[Read the full definition](/glossary/cls).
 
 ## D
 
@@ -382,6 +388,8 @@ Also called: Cache-Control.
 
 Checked by [Cache-Control on a page: what squirrel reads and expects](/rules/perf/cache-headers), [Weak caching across a site: freshness, validators, gzip](/rules/perf/bad-caching).
 
+[Read the full definition](/glossary/http-caching).
+
 ### HTTP compression \{#http-compression\}
 
 Compressing text responses (HTML, CSS, JS, JSON) with gzip, Brotli or zstd, signalled by Content-Encoding.
@@ -429,6 +437,8 @@ Checked by [Page is blocked from indexing: finding the directive](/rules/crawl/i
 The latency from a user interaction to the next frame, taken across the visit; good is 200 milliseconds or less. It replaced FID in March 2024.
 
 Checked by [Third-party scripts and INP: what squirrel counts per page](/rules/perf/inp-hints), [Large DOM: node count, depth and children per element](/rules/perf/dom-size), [JavaScript bundle too large: the 250 KB and 1 MB limits](/rules/perf/js-file-size), [Same library loaded twice: duplicate JavaScript on a page](/rules/perf/duplicate-js), [core-js and Babel helpers: legacy JavaScript in a bundle](/rules/perf/legacy-js).
+
+[Read the full definition](/glossary/inp).
 
 ### Internal linking \{#internal-linking\}
 
@@ -482,11 +492,15 @@ The time until the largest image or text block in the viewport renders; good is 
 
 Checked by [LCP image not preloaded: what squirrel counts as a hero](/rules/perf/lcp-hints), [fetchpriority='high': the LCP image hint squirrel checks](/rules/perf/lcp-fetchpriority), [loading=lazy on a hero image: the LCP delay squirrel finds](/rules/perf/lazy-above-fold), [Render-blocking resources: the ones squirrel counts in head](/rules/perf/render-blocking), [rel=preconnect: the CDN origins squirrel checks for a hint](/rules/perf/preconnect), [Time to First Byte: the 600ms and 1000ms thresholds](/rules/perf/ttfb).
 
+[Read the full definition](/glossary/lcp).
+
 ### Lazy loading \{#lazy-loading\}
 
 Deferring off-screen images and iframes with loading="lazy" so they load as the visitor scrolls.
 
 Checked by [Lazy loading: how much of the page defers its load](/rules/images/lazy-loading), [loading=lazy: which images need it and which must not](/rules/images/offscreen-lazy), [loading=lazy on a hero image: the LCP delay squirrel finds](/rules/perf/lazy-above-fold), [Hidden carousel slides still download: eager images inside](/rules/perf/carousel-hidden-eager).
+
+[Read the full definition](/glossary/lazy-loading).
 
 ### Leaked secrets \{#leaked-secrets\}
 
@@ -680,6 +694,8 @@ Also called: critical request chain, preconnect, resource hints.
 
 Checked by [Render-blocking resources: the ones squirrel counts in head](/rules/perf/render-blocking), [Critical request chains: the blocking head resources counted](/rules/perf/critical-request-chains), [rel=preconnect: the CDN origins squirrel checks for a hint](/rules/perf/preconnect).
 
+[Read the full definition](/glossary/render-blocking-resources).
+
 ### Responsive images \{#responsive-images\}
 
 Serving differently sized image files with srcset, sizes and `<picture>` so each device downloads one that fits.
@@ -687,6 +703,8 @@ Serving differently sized image files with srcset, sizes and `<picture>` so each
 Also called: srcset, sizes.
 
 Checked by [srcset: serving the right image size for the screen](/rules/images/srcset), [Thumbnails without srcset: small images serving large files](/rules/images/responsive-size), [\<picture\> without an \<img\>: the fallback that is required](/rules/images/picture-element).
+
+[Read the full definition](/glossary/responsive-images).
 
 ### Rich results \{#rich-results\}
 
