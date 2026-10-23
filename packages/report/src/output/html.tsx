@@ -43,7 +43,6 @@ import {
   fullScanHint,
   publishedReportNote,
   ruleCarriedRollupLine,
-  scanScopeLine,
   scanScopeUnfetched,
   seedRedirectLine,
   clampedPageLimit,
@@ -328,17 +327,19 @@ const LOCAL_TIME_SCRIPT = `document.querySelectorAll("time[data-local-time]").fo
 /** The audit levels guide: what each level reads and how to raise the depth. */
 export const AUDIT_LEVELS_DOCS_URL = "https://docs.squirrelscan.com/guides/audit-levels";
 
-/** localStorage key prefix for a dismissed coverage notice; the report's key follows it. */
-export const COVERAGE_NOTICE_STORAGE_PREFIX = "squirrelscan:coverage-notice-dismissed:";
+/** localStorage key prefix for a dismissed notice; the notice's key follows it. */
+export const NOTICE_STORAGE_PREFIX = "squirrelscan:notice-dismissed:";
 
 /**
- * The coverage notice's dismiss control (pub#1046). The notice is visible as
- * rendered; this only hides it, for this report in this browser. The button
- * stays hidden without script (it could do nothing), and every storage access
- * is guarded: a private window, blocked site data or a file:// page that
- * refuses storage still renders the notice and still dismisses it for the visit.
+ * The dismiss control on every notice line (the coverage notice, pub#1046, and
+ * the notes under it). A notice is visible as rendered; this only hides it, for
+ * this report in this browser. The button stays hidden without script (it could
+ * do nothing), and every storage access is guarded: a private window, blocked
+ * site data or a file:// page that refuses storage still renders the notice and
+ * still dismisses it for the visit. The prefix is a literal (no interpolation
+ * into script text); a test pins it to NOTICE_STORAGE_PREFIX.
  */
-const COVERAGE_NOTICE_SCRIPT = `(function(){var n=document.getElementById("coverage-notice");if(!n)return;var k="squirrelscan:coverage-notice-dismissed:"+n.getAttribute("data-notice-key"),b=n.querySelector("[data-dismiss-notice]");try{if(window.localStorage.getItem(k)==="1"){n.hidden=true;return}}catch(e){}if(!b)return;b.hidden=false;b.addEventListener("click",function(){n.hidden=true;try{window.localStorage.setItem(k,"1")}catch(e){}})})();`;
+const NOTICE_SCRIPT = `(function(){var p="squirrelscan:notice-dismissed:";document.querySelectorAll("[data-notice-key]").forEach(function(n){var k=p+n.getAttribute("data-notice-key"),b=n.querySelector("[data-dismiss-notice]");try{if(window.localStorage.getItem(k)==="1"){n.hidden=true;return}}catch(e){}if(!b)return;b.hidden=false;b.addEventListener("click",function(){n.hidden=true;try{window.localStorage.setItem(k,"1")}catch(e){}})})})();`;
 
 /** 32-bit FNV-1a, hex: a stable, short storage key from report fields. */
 function fnv1a(text: string): string {
@@ -363,6 +364,27 @@ export function coverageNoticeKey(
   const id = (reportId ?? "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
   if (id) return `r-${id}`;
   return `h-${fnv1a(`${String(report.baseUrl ?? "")}\n${String(report.timestamp ?? "")}`)}`;
+}
+
+/** A notice's dismiss button; NOTICE_SCRIPT reveals and wires it. */
+function DismissButton() {
+  return (
+    <button
+      type="button"
+      data-dismiss-notice
+      hidden
+      aria-label="Dismiss this notice"
+      title="Dismiss"
+      className="-my-0.5 inline-flex size-6 shrink-0 cursor-pointer items-center justify-center text-muted-foreground hover:text-foreground"
+    >
+      <PiX className="size-3.5" />
+    </button>
+  );
+}
+
+/** A note's dismiss key: the report's key plus a hash of its text, so each note is dismissed on its own. */
+export function noteKey(reportKey: string, text: string): string {
+  return `${reportKey}:${fnv1a(text)}`;
 }
 
 /**
@@ -415,19 +437,8 @@ function CoverageNotice({
             Audit levels
           </a>
         </p>
-        <button
-          type="button"
-          data-dismiss-notice
-          hidden
-          aria-label="Dismiss this notice"
-          title="Dismiss"
-          className="-my-0.5 inline-flex size-6 shrink-0 cursor-pointer items-center justify-center text-muted-foreground hover:text-foreground"
-        >
-          <PiX className="size-3.5" />
-        </button>
+        <DismissButton />
       </div>
-      {/* Right after the notice, so a dismissed one never flashes. */}
-      <script dangerouslySetInnerHTML={{ __html: COVERAGE_NOTICE_SCRIPT }} />
     </>
   );
 }
@@ -1341,9 +1352,6 @@ function ReportPage({
   const lockedAi =
     signedIn && report.coverageMode === "quick" && !groups.some((g) => g.group === "ai");
   const locked = branding?.whiteLabel ? null : lockedRulesMessage(report);
-  // What was crawled and why it stopped: the coverage notice is one line and
-  // leaves that to the scope line (pub#1046).
-  const scope = scanScopeLine(report);
   const level = auditLevelLine(report);
   const cov =
     report.coverage &&
@@ -1356,16 +1364,12 @@ function ReportPage({
   const priv = privateTargetLine(report);
   // repo#2729: checks this audit did not run, so a skipped check never reads as a clean one.
   const notChecked = notCheckedLines(report);
-  // repo#2661: a capped published report lists samples; say so once.
+  // repo#2661: a capped published report lists samples; said once, in the footer.
   const capped = publishedReportNote(report);
-  const notes = [
-    scope || cov ? [scope, cov].filter(Boolean).join(" ") : null,
-    priv,
-    ...notChecked,
-    capped,
-    seed,
-    hint,
-  ].filter((t): t is string => !!t);
+  // The header already says how many pages were scanned and at what level, and
+  // the coverage notice says when that is partial, so no scope line here.
+  const notes = [cov, priv, ...notChecked, seed, hint].filter((t): t is string => !!t);
+  const reportKey = coverageNoticeKey(report, reportId);
   const byReach = (a: FlatIssue, b: FlatIssue) =>
     reach(b, totalPages).count - reach(a, totalPages).count;
   const fixFirst = [
@@ -1597,7 +1601,7 @@ function ReportPage({
               gap={gap}
               carried={carriedRest}
               clamped={clamped}
-              noticeKey={coverageNoticeKey(report, reportId)}
+              noticeKey={reportKey}
             />
           )}
 
@@ -1606,13 +1610,20 @@ function ReportPage({
               {notes.map((t, i) => (
                 <div
                   key={i}
+                  role="note"
+                  data-notice-key={noteKey(reportKey, t)}
                   className="flex items-start gap-2 border border-border bg-card px-3 py-2 text-sm text-muted-foreground"
                 >
                   <PiWarning className="mt-0.5 size-4 shrink-0 text-primary" />
-                  <span>{t}</span>
+                  <span className="min-w-0 flex-1">{t}</span>
+                  <DismissButton />
                 </div>
               ))}
             </div>
+          )}
+          {(gap || notes.length > 0) && (
+            // Right after the notices, so a dismissed one never flashes.
+            <script dangerouslySetInnerHTML={{ __html: NOTICE_SCRIPT }} />
           )}
 
           {notice && (
@@ -1861,6 +1872,11 @@ function ReportPage({
           )}
 
           <footer className="mt-14 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5 text-sm text-muted-foreground">
+            {capped && (
+              <p id="published-report-note" className="basis-full text-xs leading-5">
+                {capped}
+              </p>
+            )}
             <span>
               {passed.toLocaleString()} passed · {warnings.toLocaleString()} warnings ·{" "}
               {failed.toLocaleString()} failed across {plural(totalPages, "page")}

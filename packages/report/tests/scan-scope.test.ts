@@ -124,7 +124,10 @@ describe("time-stopped scans", () => {
   test("renderers carry the note; llm output names the stop reason", () => {
     expect(renderText(timeStopped)).toContain("stopped early on time");
     expect(renderMarkdown(timeStopped)).toContain("Partial scan: the crawl ran out of time");
-    expect(renderHtml(timeStopped, { reportId: "TESTID" })).toContain("stopped early on time");
+    // The HTML page has no scope line: the coverage notice says the report is partial.
+    const html = renderHtml(timeStopped, { reportId: "TESTID" });
+    expect(html).toContain('id="coverage-notice"');
+    expect(html).not.toContain("Scan: ");
     expect(renderLlm(timeStopped)).toContain('stop-reason="time"');
   });
 
@@ -191,9 +194,10 @@ describe("renderer wiring (#1180)", () => {
     expect(out).toContain("Partial scan:");
   });
 
-  test("html output carries the scope line and the one-line coverage notice in place of the hint", () => {
+  test("html output carries the one-line coverage notice in place of the scope line and hint", () => {
     const out = renderHtml(report, { reportId: "TESTID" });
-    expect(out).toContain("Scan: 100 pages crawled from the CLI v0.0.76 (page limit 100 reached).");
+    // The header says what was scanned; no separate scope line.
+    expect(out).not.toContain("Scan: 100 pages crawled");
     // pub#1046: one line says the report may not cover the site and how to go deeper.
     expect(out).toContain('id="coverage-notice"');
     // Smart-audit carry: the rest is carried forward, not missing.
@@ -298,13 +302,11 @@ describe("a reduced page limit (#1909)", () => {
     // The gap this closes: json and llm already emitted `requestedMaxPages`,
     // and the three renderers a person actually reads did not.
     const report = baseReport({ scanScope: clampedScope });
-    for (const rendered of [
-      renderText(report),
-      renderMarkdown(report),
-      renderHtml(report),
-    ]) {
+    for (const rendered of [renderText(report), renderMarkdown(report)]) {
       expect(rendered).toContain("4320 of 10000 requested");
     }
+    // The HTML page says it in the coverage notice.
+    expect(renderHtml(report)).toContain("limited to 4,320 of the 10,000 pages requested");
   });
 });
 

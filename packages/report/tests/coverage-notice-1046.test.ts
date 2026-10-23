@@ -9,8 +9,9 @@ import { runInNewContext } from "node:vm";
 
 import {
   AUDIT_LEVELS_DOCS_URL,
-  COVERAGE_NOTICE_STORAGE_PREFIX,
+  NOTICE_STORAGE_PREFIX,
   coverageNoticeKey,
+  noteKey,
   renderHtml,
 } from "../src/output/html";
 import { REPORT_HTML_VERSION } from "../src/constants";
@@ -79,7 +80,6 @@ describe("when the notice shows (pub#1046)", () => {
     );
     expect(html).not.toContain('id="coverage-notice"');
     expect(html).not.toContain("may not cover the whole site");
-    expect(html).not.toContain(COVERAGE_NOTICE_STORAGE_PREFIX);
   });
 
   test("capped with nothing known past the cap: the line, no count, never 0+", () => {
@@ -89,13 +89,13 @@ describe("when the notice shows (pub#1046)", () => {
     // The dismiss script spells the storage prefix as a literal (no interpolation
     // into script text); it must stay the exported constant.
     expect(html).toContain(
-      `var k=${JSON.stringify(COVERAGE_NOTICE_STORAGE_PREFIX)}+n.getAttribute`,
+      `var p=${JSON.stringify(NOTICE_STORAGE_PREFIX)};document.querySelectorAll`,
     );
     // Neither the notice nor any other copy claims a count it does not have.
     expect(html).not.toMatch(/\b0\+/);
     expect(textOf(notice)).not.toContain("200 of 200");
-    // The scope line still says why the crawl stopped.
-    expect(html).toContain("Scan: 200 pages crawled from the CLI (page limit 200 reached).");
+    // No scope line: the header says what was scanned, the notice that it is partial.
+    expect(html).not.toContain("Scan: 200 pages crawled");
   });
 
   test("capped with more pages known: the line adds the count", () => {
@@ -127,7 +127,7 @@ describe("when the notice shows (pub#1046)", () => {
     expect(textOf(noticeMarkup(html))).toBe(
       `This report may not cover the whole site. ${LINE_TAIL}`,
     );
-    expect(html).toContain("stopped early on time");
+    expect(html).not.toContain("Scan: 87 pages crawled");
     expect(html).not.toMatch(/\b0\+/);
   });
 
@@ -226,7 +226,9 @@ function fakeDom(storage: "ok" | "throws", store: Map<string, string> = new Map(
     getAttribute: (name: string) => (name === "data-notice-key" ? "r-TESTID" : null),
     querySelector: (sel: string) => (sel === "[data-dismiss-notice]" ? button : null),
   };
-  const document = { getElementById: (id: string) => (id === "coverage-notice" ? notice : null) };
+  const document = {
+    querySelectorAll: (sel: string) => (sel === "[data-notice-key]" ? [notice] : []),
+  };
   const localStorage = {
     getItem: (k: string) => store.get(k) ?? null,
     setItem: (k: string, v: string) => void store.set(k, v),
@@ -271,7 +273,7 @@ describe("dismiss script", () => {
     expect(dom.button.hidden).toBe(false);
     dom.click();
     expect(dom.notice.hidden).toBe(true);
-    expect(dom.store.get(`${COVERAGE_NOTICE_STORAGE_PREFIX}r-TESTID`)).toBe("1");
+    expect(dom.store.get(`${NOTICE_STORAGE_PREFIX}r-TESTID`)).toBe("1");
     // A reload of the same report starts hidden.
     const again = fakeDom("ok", dom.store);
     run(again);
@@ -285,5 +287,37 @@ describe("dismiss script", () => {
     expect(dom.button.hidden).toBe(false);
     expect(() => dom.click()).not.toThrow();
     expect(dom.notice.hidden).toBe(true);
+  });
+});
+
+describe("notes under the coverage notice", () => {
+  const capped = report({
+    scanScope: cappedScope,
+    finalUrl: "https://other.example/landing",
+    detail: { capped: true },
+  } as Partial<AuditReport>);
+  const html = renderHtml(capped, { reportId: "TESTID" });
+  const notesBlock = html.slice(
+    html.indexOf('id="coverage-notice"'),
+    html.indexOf("<script>", html.indexOf('id="coverage-notice"')),
+  );
+
+  test("every note line is dismissible on its own key", () => {
+    const note =
+      "Seed redirected off-site to https://other.example/landing, not followed. This audit graded https://example.com.";
+    expect(notesBlock).toContain(
+      `data-notice-key="${noteKey(coverageNoticeKey(capped, "TESTID"), note)}"`,
+    );
+    // The coverage notice plus the redirect note, each with its own dismiss button.
+    expect(notesBlock.split("data-dismiss-notice").length - 1).toBe(2);
+    expect(noteKey("r-A", "one")).not.toBe(noteKey("r-A", "two"));
+  });
+
+  test("no scope line, and the published-report note sits in the footer", () => {
+    expect(html).not.toContain("Scan: 200 pages crawled");
+    expect(notesBlock).not.toContain("This published report is a summary");
+    const footer = html.slice(html.indexOf("<footer"));
+    expect(footer).toContain('id="published-report-note"');
+    expect(footer).toContain("This published report is a summary");
   });
 });
