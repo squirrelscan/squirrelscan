@@ -95,8 +95,13 @@ export function clampedPageLimit(
  * printing only the requested one describes a crawl that did not happen.
  */
 export function scanScopeLine(report: AuditReport): string | null {
-  const s = report.scanScope;
-  if (!s) return null;
+  const raw = report.scanScope;
+  if (!raw) return null;
+  // Stored reports of any origin reach this line: a count that is not a whole
+  // number (NaN, Infinity, a string) is left out rather than printed.
+  const whole = (v: unknown) =>
+    typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.floor(v) : undefined;
+  const s = { ...raw, pagesCrawled: whole(raw.pagesCrawled) ?? 0, maxPages: whole(raw.maxPages) };
   const origin = s.origin === "cloud" ? "squirrelscan cloud" : s.origin === "ci" ? "CI" : "the CLI";
   const version = report.generatorVersion ? ` v${report.generatorVersion}` : "";
   // The UNCLAMPED wording is byte-for-byte what it has always been — a comma

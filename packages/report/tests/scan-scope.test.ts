@@ -174,6 +174,7 @@ describe("fullScanHint (#1180)", () => {
 describe("renderer wiring (#1180)", () => {
   const report = baseReport({
     generatorVersion: "0.0.76",
+    totalPages: 100,
     scanScope: { origin: "cli", maxPages: 100, pagesCrawled: 100, capped: true },
     coverage: { auditedPages: 100, knownPages: 505, carriedFindings: 12 },
   });
@@ -190,14 +191,17 @@ describe("renderer wiring (#1180)", () => {
     expect(out).toContain("Partial scan:");
   });
 
-  test("html output carries the coverage notice in place of scope line + hint", () => {
+  test("html output carries the scope line and the one-line coverage notice in place of the hint", () => {
     const out = renderHtml(report, { reportId: "TESTID" });
-    // One notice says what was crawled, why it stopped and how to get the rest.
-    expect(out).toContain('id="coverage"');
-    expect(out).toContain("The crawl reached its page limit of 100");
+    expect(out).toContain("Scan: 100 pages crawled from the CLI v0.0.76 (page limit 100 reached).");
+    // pub#1046: one line says the report may not cover the site and how to go deeper.
+    expect(out).toContain('id="coverage-notice"');
     // Smart-audit carry: the rest is carried forward, not missing.
-    expect(out).toContain("were not re-checked this run and their findings are carried from earlier audits.");
-    expect(out).toContain("squirrel audit &#x27;https://example.com/&#x27; --max-pages");
+    expect(out).toContain(
+      "This report may not cover the whole site (405 more known pages carried from earlier audits).",
+    );
+    expect(out).not.toContain("Partial scan:");
+    expect(out).not.toContain("squirrel audit &#x27;https://example.com/&#x27; --max-pages");
   });
 
   test("llm output emits a structured scan-scope element", () => {

@@ -149,6 +149,7 @@ describe("siteUrl / shellQuote / rerunCommand", () => {
       rerunCommand("https://example.com", {
         scanned: 1,
         discovered: 2,
+        moreKnown: 1,
         suggestedPages: Number.NaN,
       }),
     ).toBeNull();
@@ -241,6 +242,20 @@ describe("fixPrompt / fixPlanPrompt: model text stays fenced, one line per field
     expect(out.startsWith("Fix this site, from a squirrelscan audit.")).toBe(true);
     expect(out).not.toContain("javascript:");
     expect(out).not.toContain("verify with");
+  });
+
+  test("coverage line: a count only when pages are known past the scanned set (pub#1046)", () => {
+    const capped = coverageGap({ scanned: 200, discovered: 200, capped: true, timeStopped: false });
+    expect(capped).toMatchObject({ scanned: 200, discovered: 200, moreKnown: 0 });
+    const none = fixPrompt(fix, ctxFor(report(), { gap: capped }));
+    expect(none).toContain("Coverage: this audit scanned 200 pages and may not cover the whole site,");
+    expect(none).not.toContain("0+");
+    expect(none).not.toContain("200 of 200");
+    const known = coverageGap({ scanned: 10, discovered: 40, capped: true, timeStopped: false });
+    expect(known?.moreKnown).toBe(30);
+    expect(fixPrompt(fix, ctxFor(report(), { gap: known }))).toContain(
+      "Coverage: this audit scanned 10 of 40+ known pages,",
+    );
   });
 
   test("a reduced page limit gives no re-run suggestion", () => {

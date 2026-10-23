@@ -332,7 +332,11 @@ describe("odd report data", () => {
         scanScope: { origin: "cli", maxPages: 10, pagesCrawled: 10, capped: true },
       }),
     );
-    expect(html).toContain("were not re-checked this run and their findings are carried");
+    // pub#1046: the one-line notice names them as carried, not as unknown pages.
+    expect(html).toContain(
+      "This report may not cover the whole site (30 more known pages carried from earlier audits).",
+    );
+    expect(html).not.toContain("more pages known");
     expect(html).not.toContain("are not in this report");
   });
 

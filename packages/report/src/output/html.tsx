@@ -7,6 +7,7 @@ import {
   PiCopy,
   PiLockSimple,
   PiWarning,
+  PiX,
 } from "react-icons/pi";
 
 import type {
@@ -79,8 +80,8 @@ import {
   inlineJson,
   issuePromptBody,
   NOTE_TOKEN,
-  rerunCommand,
   sharedPromptParts,
+  type CoverageGap,
   type PromptContext,
 } from "./page/prompts";
 import { REPORT_CSS } from "./page/styles.generated";
@@ -316,6 +317,113 @@ const COPY_SCRIPT = `document.addEventListener("click",function(e){var s=e.targe
  * icon, a screenshot not captured yet) is hidden, with its frame when it has one.
  */
 const LOCAL_TIME_SCRIPT = `document.querySelectorAll("time[data-local-time]").forEach(function(t){var d=new Date(t.getAttribute("datetime"));if(isNaN(d))return;t.textContent=new Intl.DateTimeFormat(undefined,{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit",timeZoneName:"short"}).format(d);t.title=d.toISOString()});document.querySelectorAll("img[data-favicon],img[data-hide-broken]").forEach(function(i){function h(){(i.closest("[data-hide-scope]")||i).style.display="none"}if(i.complete&&!i.naturalWidth)h();else i.addEventListener("error",h)});`;
+
+/** The audit levels guide: what each level reads and how to raise the depth. */
+export const AUDIT_LEVELS_DOCS_URL = "https://docs.squirrelscan.com/guides/audit-levels";
+
+/** localStorage key prefix for a dismissed coverage notice; the report's key follows it. */
+export const COVERAGE_NOTICE_STORAGE_PREFIX = "squirrelscan:coverage-notice-dismissed:";
+
+/**
+ * The coverage notice's dismiss control (pub#1046). The notice is visible as
+ * rendered; this only hides it, for this report in this browser. The button
+ * stays hidden without script (it could do nothing), and every storage access
+ * is guarded: a private window, blocked site data or a file:// page that
+ * refuses storage still renders the notice and still dismisses it for the visit.
+ */
+const COVERAGE_NOTICE_SCRIPT = `(function(){var n=document.getElementById("coverage-notice");if(!n)return;var k=${JSON.stringify(COVERAGE_NOTICE_STORAGE_PREFIX)}+n.getAttribute("data-notice-key"),b=n.querySelector("[data-dismiss-notice]");try{if(window.localStorage.getItem(k)==="1"){n.hidden=true;return}}catch(e){}if(!b)return;b.hidden=false;b.addEventListener("click",function(){n.hidden=true;try{window.localStorage.setItem(k,"1")}catch(e){}})})();`;
+
+/** 32-bit FNV-1a, hex: a stable, short storage key from report fields. */
+function fnv1a(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  // Math.imul keeps it a signed 32-bit int: read it as unsigned.
+  return (h < 0 ? h + 0x1_0000_0000 : h).toString(16).padStart(8, "0");
+}
+
+/**
+ * Which report a dismissal belongs to: the published report id, or for a local
+ * report (no id) a hash of the site and the time it was generated, so a new
+ * audit of the same site shows its notice again.
+ */
+export function coverageNoticeKey(
+  report: Pick<AuditReport, "baseUrl" | "timestamp">,
+  reportId?: string,
+): string {
+  const id = (reportId ?? "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+  if (id) return `r-${id}`;
+  return `h-${fnv1a(`${String(report.baseUrl ?? "")}\n${String(report.timestamp ?? "")}`)}`;
+}
+
+/**
+ * The one-line partial-coverage notice (pub#1046): the report may not cover the
+ * whole site, how to raise the audit depth, and the audit levels guide. A count
+ * is printed only when pages beyond the scanned set are known; a capped crawl
+ * with nothing known past it never reads "0+ pages".
+ */
+function CoverageNotice({
+  gap,
+  carried,
+  clamped,
+  noticeKey,
+}: {
+  gap: CoverageGap;
+  /** The rest of the known pages are carried from earlier audits (smart audits). */
+  carried: boolean;
+  /** The page limit was reduced below the one requested (#1909). */
+  clamped: { requested: number; effective: number } | null;
+  noticeKey: string;
+}) {
+  const more = gap.moreKnown;
+  const known =
+    more > 0
+      ? carried
+        ? ` (${more.toLocaleString("en-US")} more known ${more === 1 ? "page" : "pages"} carried from earlier audits)`
+        : ` (${more.toLocaleString("en-US")}+ more ${more === 1 ? "page" : "pages"} known)`
+      : "";
+  const code = "bg-muted px-1 py-px font-mono text-[11px] text-foreground";
+  return (
+    <>
+      <div
+        id="coverage-notice"
+        role="note"
+        data-notice-key={noticeKey}
+        className="mb-6 flex items-start gap-2 border border-border border-l-[3px] border-l-accent bg-card px-3 py-1.5 text-xs leading-5 text-muted-foreground"
+      >
+        <PiWarning className="mt-0.5 size-4 shrink-0 text-primary" />
+        <p className="min-w-0 flex-1">
+          {`This report may not cover the whole site${known}. `}
+          {clamped ? (
+            `This run was limited to ${clamped.effective.toLocaleString("en-US")} of the ${clamped.requested.toLocaleString("en-US")} pages requested, so raising the limit alone will not extend it. `
+          ) : (
+            <>
+              Raise the audit depth in the CLI (<code className={code}>--level full</code>,{" "}
+              <code className={code}>--max-pages N</code>) or in the cloud website settings.{" "}
+            </>
+          )}
+          <a href={AUDIT_LEVELS_DOCS_URL} target="_blank" rel="noreferrer" className="lnk">
+            Audit levels
+          </a>
+        </p>
+        <button
+          type="button"
+          data-dismiss-notice
+          hidden
+          aria-label="Dismiss this notice"
+          title="Dismiss"
+          className="-my-0.5 inline-flex size-6 shrink-0 cursor-pointer items-center justify-center text-muted-foreground hover:text-foreground"
+        >
+          <PiX className="size-3.5" />
+        </button>
+      </div>
+      {/* Right after the notice, so a dismissed one never flashes. */}
+      <script dangerouslySetInnerHTML={{ __html: COVERAGE_NOTICE_SCRIPT }} />
+    </>
+  );
+}
 
 /** Rule id → its parent group (the rule's row when on this page, else its category). */
 type Known = Map<string, string>;
@@ -1184,15 +1292,14 @@ function ReportPage({
         timeStopped: report.scanScope?.stopReason === "time",
       });
   // A page limit reduced below the one requested (#1909): a bigger --max-pages
-  // is reduced the same way, so no re-run command is offered for it.
+  // is reduced the same way, so neither the notice nor a fix prompt suggests one.
   const clamped = report.scanScope ? clampedPageLimit(report.scanScope) : null;
-  const rerun = gap && !clamped ? rerunCommand(report.baseUrl, gap) : null;
   // A smart audit re-checked only some known pages and carried the rest forward:
   // those pages are in the report, with earlier results, not missing from it.
   // (Same test as fullScanHint: a rate-limited run's gap is pages never fetched.)
   const carriedRest =
     !!gap &&
-    gap.discovered > gap.scanned &&
+    gap.moreKnown > 0 &&
     !!report.coverage &&
     report.coverage.auditedPages < report.coverage.knownPages &&
     (report.rateLimited?.unfetched ?? 0) <= 0;
@@ -1218,16 +1325,16 @@ function ReportPage({
   const lockedAi =
     signedIn && report.coverageMode === "quick" && !groups.some((g) => g.group === "ai");
   const locked = branding?.whiteLabel ? null : lockedRulesMessage(report);
-  // The coverage notice already says what was crawled and why it stopped,
-  // except a reduced limit, which only the scope line spells out.
-  const scope = gap && !clamped ? null : scanScopeLine(report);
+  // What was crawled and why it stopped: the coverage notice is one line and
+  // leaves that to the scope line (pub#1046).
+  const scope = scanScopeLine(report);
   const level = auditLevelLine(report);
   const cov =
     report.coverage &&
     (report.coverage.carriedFindings > 0 || (report.coverage.unrenderedFindings ?? 0) > 0)
       ? coverageLine(report)
       : null;
-  // The explicit coverage notice below replaces the generic partial-scan hint.
+  // The coverage notice replaces the generic partial-scan hint.
   const hint = gap ? null : fullScanHint(report);
   const seed = seedRedirectLine(report);
   const priv = privateTargetLine(report);
@@ -1469,6 +1576,15 @@ function ReportPage({
         </DecorativeHeader>
 
         <main className="mx-auto max-w-6xl px-4 pb-16 pt-6">
+          {gap && (
+            <CoverageNotice
+              gap={gap}
+              carried={carriedRest}
+              clamped={clamped}
+              noticeKey={coverageNoticeKey(report, reportId)}
+            />
+          )}
+
           {notes.length > 0 && (
             <div className="mb-6 grid gap-2">
               {notes.map((t, i) => (
@@ -1481,42 +1597,6 @@ function ReportPage({
                 </div>
               ))}
             </div>
-          )}
-
-          {gap && (
-            <Panel id="coverage" className="mb-6 border-l-[3px] border-l-accent">
-              <h2 className="text-base font-semibold tracking-tight">
-                {gap.discovered > gap.scanned
-                  ? `This audit covered ${gap.scanned.toLocaleString()} of ${plural(gap.discovered, "discovered page")}`
-                  : `This audit covered ${plural(gap.scanned, "page")}`}
-              </h2>
-              <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-                {report.scanScope?.stopReason === "time"
-                  ? "The crawl stopped early on time"
-                  : report.scanScope?.capped
-                    ? `The crawl reached its page limit of ${(count(report.scanScope.maxPages) || gap.scanned).toLocaleString()}`
-                    : "Not every discovered page was crawled"}
-                {carriedRest
-                  ? `, so the other ${(gap.discovered - gap.scanned).toLocaleString()} pages were not re-checked this run and their findings are carried from earlier audits.`
-                  : `${
-                      gap.discovered > gap.scanned
-                        ? `, so problems on the other ${(gap.discovered - gap.scanned).toLocaleString()}+ pages are not in this report`
-                        : ", so problems on pages it did not reach are not in this report"
-                    } and the scores cover only the pages checked.`}{" "}
-                {clamped
-                  ? `This run was limited to ${clamped.effective.toLocaleString()} of the ${clamped.requested.toLocaleString()} pages requested, so raising the limit alone will not extend it.`
-                  : `Run a larger audit for fuller results${
-                      report.scanScope?.origin === "cloud"
-                        ? " (raise the page limit in the website settings, or from the CLI)"
-                        : ""
-                    }${rerun ? ":" : "."}`}
-              </p>
-              {rerun && (
-                <code className="mt-3 inline-block border border-border bg-muted px-3 py-1.5 font-mono text-sm">
-                  {rerun}
-                </code>
-              )}
-            </Panel>
           )}
 
           {notice && (

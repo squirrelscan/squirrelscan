@@ -20,6 +20,7 @@ How it works:
 ### Changed
 
 - The cloud editor's summary now hears how much of the site the audit covered (pages scanned, the page limit, a time stop, pages known), so it can say when a report covers only part of the site and suggest a deeper audit.
+- **The HTML report's coverage notice is one line.** A report whose crawl hit its page limit, ran out of time or knows more pages than it scanned now shows a single dismissible line at the top: the report may not cover the whole site, how to raise the audit depth (`--level full` or `--max-pages N` in the CLI, or the website settings in the cloud) and a link to [Audit levels](https://docs.squirrelscan.com/guides/audit-levels). It adds a count only when more pages are known, so a capped crawl no longer reads "200 of 200" or "the other 0+ pages". Dismissing it hides it for that report in that browser, and the page works the same with browser storage blocked ([html format](https://docs.squirrelscan.com/reports#html)).
 
 ## v0.0.130 (2026-10-23)
 

@@ -56,14 +56,23 @@ export interface PromptContext {
 /** A partial audit: what it covered and the page budget that would cover the rest. */
 export interface CoverageGap {
   scanned: number;
+  /** Pages known to exist, never below `scanned`. */
   discovered: number;
+  /**
+   * Pages known beyond the scanned set (`discovered - scanned`). Zero for a
+   * crawl cut short with nothing known past it: link discovery is a floor, so
+   * copy must not print a count then ("0+ pages", pub#1046).
+   */
+  moreKnown: number;
   /** Page budget to ask for on the re-run. */
   suggestedPages: number;
 }
 
 /**
  * The gap between what the audit scanned and what it knows exists, or null
- * when it covered everything it found and was not cut short.
+ * when it covered everything it found and was not cut short. A capped or
+ * time-stopped crawl is a gap even when nothing is known past it
+ * (`moreKnown` is 0 then).
  */
 export function coverageGap(input: {
   scanned: number;
@@ -78,7 +87,12 @@ export function coverageGap(input: {
   // Room above what is known (link discovery is a floor), rounded to a tidy number.
   const want = Math.max(discovered, scanned * 2);
   const suggestedPages = Math.ceil((want * 1.2) / 50) * 50;
-  return { scanned, discovered: Math.max(discovered, scanned), suggestedPages };
+  return {
+    scanned,
+    discovered: Math.max(discovered, scanned),
+    moreKnown: Math.max(0, discovered - scanned),
+    suggestedPages,
+  };
 }
 
 /** The re-run command with a larger page budget, or null for a URL we will not put in a shell command. */
@@ -142,8 +156,15 @@ function header(ctx: PromptContext): string[] {
   );
   if (stack.length) out.push(`Detected stack: ${stack.join(", ")}.`);
   if (ctx.gap) {
+    // Only a real count of known pages is printed: a capped crawl with nothing
+    // known past it says "may not cover", never "200 of 200+" (pub#1046).
+    const scanned = `${ctx.gap.scanned} page${ctx.gap.scanned === 1 ? "" : "s"}`;
+    const covered =
+      ctx.gap.moreKnown > 0
+        ? `this audit scanned ${ctx.gap.scanned} of ${ctx.gap.discovered}+ known pages`
+        : `this audit scanned ${scanned} and may not cover the whole site`;
     out.push(
-      `Coverage: this audit scanned ${ctx.gap.scanned} of ${ctx.gap.discovered}+ discovered pages, so the same problem likely exists on pages it did not check. Fix it at the source (the shared template, component, theme or config), not page by page.`,
+      `Coverage: ${covered}, so the same problem likely exists on pages it did not check. Fix it at the source (the shared template, component, theme or config), not page by page.`,
     );
   }
   return out;
