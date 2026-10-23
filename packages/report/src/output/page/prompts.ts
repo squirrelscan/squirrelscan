@@ -71,7 +71,9 @@ export function coverageGap(input: {
   capped: boolean;
   timeStopped: boolean;
 }): CoverageGap | null {
-  const { scanned, discovered } = input;
+  const whole = (n: number) => (Number.isFinite(n) && n > 0 ? Math.floor(n) : 0);
+  const scanned = whole(input.scanned);
+  const discovered = whole(input.discovered);
   if (discovered <= scanned && !input.capped && !input.timeStopped) return null;
   // Room above what is known (link discovery is a floor), rounded to a tidy number.
   const want = Math.max(discovered, scanned * 2);
@@ -83,6 +85,8 @@ export function coverageGap(input: {
 export function rerunCommand(rawUrl: string, gap: CoverageGap): string | null {
   const url = siteUrl(rawUrl);
   if (!url || url.length > LIMIT.url) return null;
+  // Only a whole page budget reaches the shell command (never NaN or a stray value).
+  if (!Number.isSafeInteger(gap.suggestedPages) || gap.suggestedPages <= 0) return null;
   return `squirrel audit ${shellQuote(url)} --max-pages ${gap.suggestedPages}`;
 }
 
@@ -152,7 +156,9 @@ function task(ruleIds: string[], ctx: PromptContext): string[] {
   const named = ids.map((id) => `${id} (${line(ctx.issues.get(id)!.name, LIMIT.title)})`);
   return [
     `Task: fix the audit findings for these rules: ${named.join("; ")}.`,
-    `Rule docs: ${getDocsUrl(ids[0]!)} (same path for each rule id).`,
+    ids.length > 1
+      ? `Rule docs: ${getDocsUrl(ids[0]!)} (the others: the same URL with their rule id).`
+      : `Rule docs: ${getDocsUrl(ids[0]!)}`,
   ];
 }
 

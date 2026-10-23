@@ -176,3 +176,89 @@ describe("online (offline: false, the cloud)", () => {
     expect(html).toContain("f.png&quot; onload=&quot;alert(1)");
   });
 });
+
+// Stored reports of any origin and age reach this renderer, so odd data must
+// render (not throw) and never print NaN or a broken command.
+describe("odd report data", () => {
+  test("an invalid timestamp and non-finite counts render without NaN", () => {
+    const html = renderHtml(
+      report({
+        timestamp: "not a date",
+        totalPages: Number.NaN,
+        coverage: { auditedPages: 1, knownPages: Number.POSITIVE_INFINITY, carriedFindings: 0 },
+        scanScope: { origin: "cli", maxPages: Number.NaN, pagesCrawled: 1, capped: true },
+      }),
+    );
+    // The page script's own isNaN() is code, not copy: look at the markup only.
+    const markup = html.replace(/<script>[\s\S]*?<\/script>/g, "");
+    expect(markup).toContain("not a date");
+    expect(markup).not.toContain("NaN");
+    expect(markup).not.toContain("Infinity");
+  });
+
+  test("malformed strategic issues are skipped, not fatal", () => {
+    const r = report() as AuditReport & { strategicIssues: unknown };
+    r.strategicIssues = [
+      null,
+      {
+        slug: "x",
+        title: "No rule list",
+        description: "d",
+        actions: "a",
+        severity: "high",
+        effort: "moderate",
+      },
+      {
+        slug: "y",
+        title: "Bad severity",
+        description: "d",
+        actions: "a",
+        severity: "urgent",
+        effort: "moderate",
+        ruleIds: [],
+      },
+      {
+        slug: "z",
+        title: "Use a CDN cache rule",
+        description: "d",
+        actions: "1. Do it",
+        severity: "high",
+        effort: "moderate",
+        ruleIds: ["perf/x"],
+      },
+    ];
+    const html = renderHtml(r);
+    expect(html).toContain("Use a CDN cache rule");
+    expect(html).not.toContain("No rule list");
+    expect(html).not.toContain("Bad severity");
+  });
+
+  test("a smart audit's un-rechecked pages read as carried, not missing", () => {
+    const html = renderHtml(
+      report({
+        totalPages: 10,
+        coverage: { auditedPages: 10, knownPages: 40, carriedFindings: 0 },
+        scanScope: { origin: "cli", maxPages: 10, pagesCrawled: 10, capped: true },
+      }),
+    );
+    expect(html).toContain("were not re-checked this run and their findings are carried");
+    expect(html).not.toContain("are not in this report");
+  });
+
+  test("cache stats show even without a site profile or tech stack", () => {
+    const html = renderHtml(
+      report({
+        technologies: undefined,
+        cacheStats: {
+          total: 10,
+          hits: 5,
+          hitRate: 0.5,
+          bytesSaved: 2048,
+          hitsByReason: {},
+          pages: { total: 5, hits: 2, bytesSaved: 1024 },
+        } as unknown as AuditReport["cacheStats"],
+      }),
+    );
+    expect(html).toContain("Cache: 50% hit rate");
+  });
+});

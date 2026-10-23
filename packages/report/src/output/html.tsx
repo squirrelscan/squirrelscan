@@ -131,12 +131,42 @@ function discoveredPages(report: AuditReport): {
       sitemaps?: Partial<Pick<SitemapDiscovery, "totalUrls" | "missingPages">>;
     }
   ).sitemaps;
-  const count = (v: unknown) =>
-    typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0;
   const sitemap = count(sm?.totalUrls);
   const crawlOnly = Array.isArray(sm?.missingPages) ? sm.missingPages.length : 0;
-  const total = Math.max(report.totalPages, report.coverage?.knownPages ?? 0, sitemap + crawlOnly);
+  const total = Math.max(
+    count(report.totalPages),
+    count(report.coverage?.knownPages),
+    sitemap + crawlOnly,
+  );
   return { total, sitemap, crawlOnly };
+}
+
+/** A non-negative whole number off report JSON, or 0 (stored reports of any origin). */
+function count(v: unknown): number {
+  return typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0;
+}
+
+const STRATEGIC_SEVERITIES = new Set(["critical", "high", "medium", "low"]);
+const EFFORTS = new Set(["quick-win", "moderate", "significant"]);
+
+/** Strategic issues off report JSON, keeping only well-formed rows (cloud-only, unchecked shape). */
+function strategicIssues(report: AuditReport): StrategicIssueView[] {
+  const raw = (report as AuditReport & { strategicIssues?: unknown }).strategicIssues;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((v: unknown): v is StrategicIssueView => {
+    if (!v || typeof v !== "object") return false;
+    const s = v as Record<string, unknown>;
+    return (
+      typeof s.slug === "string" &&
+      typeof s.title === "string" &&
+      typeof s.description === "string" &&
+      typeof s.actions === "string" &&
+      STRATEGIC_SEVERITIES.has(s.severity as string) &&
+      EFFORTS.has(s.effort as string) &&
+      Array.isArray(s.ruleIds) &&
+      s.ruleIds.every((id) => typeof id === "string")
+    );
+  });
 }
 
 /** Cloud features a local audit goes without (docs: cloud/index). No em-dashes: public copy. */
@@ -962,7 +992,7 @@ function SiteContext({ report, offline }: { report: AuditReport; offline: boolea
   const techSummary = tech ? techChangeSummary(tech) : null;
   return (
     <>
-      {(profileRows.length > 0 || hasTech) && (
+      {(profileRows.length > 0 || hasTech || cs) && (
         <section id="site">
           <SectionHead
             title="Site"
@@ -1112,6 +1142,11 @@ function ReportPage({
 }) {
   const host = hostOf(report);
   const favicon = !offline && faviconUrl ? sanitizeUrl(faviconUrl) : "#";
+  // Counts off stored report JSON, as whole numbers (never NaN in the copy).
+  const totalPages = count(report.totalPages);
+  const passed = count(report.passed);
+  const warnings = count(report.warnings);
+  const failed = count(report.failed);
   const found = discoveredPages(report);
   const localRun =
     !branding?.whiteLabel &&
@@ -1135,7 +1170,7 @@ function ReportPage({
   const gap = failedRun
     ? null
     : coverageGap({
-        scanned: report.totalPages,
+        scanned: totalPages,
         discovered: found.total,
         capped: !!report.scanScope?.capped,
         timeStopped: report.scanScope?.stopReason === "time",
@@ -1146,11 +1181,13 @@ function ReportPage({
   const rerun = gap && !clamped ? rerunCommand(report.baseUrl, gap) : null;
   // A smart audit re-checked only some known pages and carried the rest forward:
   // those pages are in the report, with earlier results, not missing from it.
+  // (Same test as fullScanHint: a rate-limited run's gap is pages never fetched.)
   const carriedRest =
     !!gap &&
     gap.discovered > gap.scanned &&
-    (report.coverage?.carriedFindings ?? 0) > 0 &&
-    report.coverage!.auditedPages < report.coverage!.knownPages;
+    !!report.coverage &&
+    report.coverage.auditedPages < report.coverage.knownPages &&
+    (report.rateLimited?.unfetched ?? 0) <= 0;
   const reportBase = reportId ? `https://reports.squirrelscan.com/${reportId}` : null;
   const ctx: PromptContext = {
     url: report.baseUrl,
@@ -1160,8 +1197,7 @@ function ReportPage({
     gap,
     canRerun: !clamped,
   };
-  const strategic =
-    (report as AuditReport & { strategicIssues?: StrategicIssueView[] }).strategicIssues ?? [];
+  const strategic = strategicIssues(report);
   const top = failedRun ? [] : mergeIssues(priorities, strategic);
   const notice = getAuditFailureNotice(
     report.status,
@@ -1200,7 +1236,7 @@ function ReportPage({
     hint,
   ].filter((t): t is string => !!t);
   const byReach = (a: FlatIssue, b: FlatIssue) =>
-    reach(b, report.totalPages).count - reach(a, report.totalPages).count;
+    reach(b, totalPages).count - reach(a, totalPages).count;
   const fixFirst = [
     ...issues.filter((i) => i.severity === "error").sort(byReach),
     ...issues.filter((i) => i.severity === "warning").sort(byReach),
@@ -1213,8 +1249,8 @@ function ReportPage({
     : "";
   const metaDescription =
     score != null
-      ? `Health score ${score} (${getScoreGrade(score)})${groupsPart} · ${plural(report.totalPages, "page")} audited`
-      : `Website audit report · ${plural(report.totalPages, "page")} · ${report.failed} failed, ${report.warnings} warnings`;
+      ? `Health score ${score} (${getScoreGrade(score)})${groupsPart} · ${plural(totalPages, "page")} audited`
+      : `Website audit report · ${plural(totalPages, "page")} · ${failed} failed, ${warnings} warnings`;
 
   return (
     <html lang="en">
@@ -1369,7 +1405,7 @@ function ReportPage({
                     <span
                       title={`${found.sitemap.toLocaleString()} in sitemaps, ${found.crawlOnly.toLocaleString()} more found by crawling`}
                     >
-                      Scanned {report.totalPages.toLocaleString()} of{" "}
+                      Scanned {totalPages.toLocaleString()} of{" "}
                       {plural(found.total, "discovered page")}
                     </span>
                   </Badge>
@@ -1450,7 +1486,7 @@ function ReportPage({
                 {report.scanScope?.stopReason === "time"
                   ? "The crawl stopped early on time"
                   : report.scanScope?.capped
-                    ? `The crawl reached its page limit of ${(report.scanScope.maxPages ?? gap.scanned).toLocaleString()}`
+                    ? `The crawl reached its page limit of ${(count(report.scanScope.maxPages) || gap.scanned).toLocaleString()}`
                     : "Not every discovered page was crawled"}
                 {carriedRest
                   ? `, so the other ${(gap.discovered - gap.scanned).toLocaleString()} pages were not re-checked this run and their findings are carried from earlier audits.`
@@ -1585,11 +1621,11 @@ function ReportPage({
           {!failedRun && (
             <Metrics
               items={[
-                { value: report.totalPages.toLocaleString(), label: "Scanned" },
+                { value: totalPages.toLocaleString(), label: "Scanned" },
                 { value: found.total.toLocaleString(), label: "Discovered" },
-                { value: report.passed.toLocaleString(), label: "Passed", color: "#16a34a" },
-                { value: report.warnings.toLocaleString(), label: "Warnings", color: "#ca8a04" },
-                { value: report.failed.toLocaleString(), label: "Failed", color: "#dc2626" },
+                { value: passed.toLocaleString(), label: "Passed", color: "#16a34a" },
+                { value: warnings.toLocaleString(), label: "Warnings", color: "#ca8a04" },
+                { value: failed.toLocaleString(), label: "Failed", color: "#dc2626" },
               ]}
             />
           )}
@@ -1598,7 +1634,7 @@ function ReportPage({
             <section id="summary">
               <SectionHead
                 title="Summary"
-                sub="Written from this audit's findings and the detected stack"
+                sub="Auto-generated from this audit's findings and the detected stack. Informational, not scored."
               />
               <Panel>
                 <div className="grid gap-x-8 gap-y-3 text-sm leading-relaxed text-muted-foreground md:grid-cols-2">
@@ -1661,7 +1697,7 @@ function ReportPage({
                               {severityLabel(r.severity)}
                             </Badge>
                             <span className="text-xs text-muted-foreground">
-                              {reach(r, report.totalPages).label}
+                              {reach(r, totalPages).label}
                             </span>
                           </div>
                           {r.solution && (
@@ -1682,7 +1718,7 @@ function ReportPage({
 
           {issues.length > 0 ? (
             <>
-              <Issues issues={issues} totalPages={report.totalPages} ctx={ctx} />
+              <Issues issues={issues} totalPages={totalPages} ctx={ctx} />
               <PagesLens />
             </>
           ) : failedRun ? null : (
@@ -1720,8 +1756,8 @@ function ReportPage({
 
           <footer className="mt-14 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5 text-sm text-muted-foreground">
             <span>
-              {report.passed.toLocaleString()} passed · {report.warnings.toLocaleString()} warnings
-              · {report.failed.toLocaleString()} failed across {plural(report.totalPages, "page")}
+              {passed.toLocaleString()} passed · {warnings.toLocaleString()} warnings ·{" "}
+              {failed.toLocaleString()} failed across {plural(totalPages, "page")}
             </span>
             {!branding?.whiteLabel && (
               <span>

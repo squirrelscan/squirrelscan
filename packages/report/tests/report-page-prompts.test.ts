@@ -137,6 +137,23 @@ describe("siteUrl / shellQuote / rerunCommand", () => {
     expect(quoted.slice(1, -1).replace(/'\\''/g, "")).not.toContain("'");
   });
 
+  test("a non-finite page count never reaches the shell command", () => {
+    const gap = coverageGap({
+      scanned: Number.NaN,
+      discovered: Number.POSITIVE_INFINITY,
+      capped: true,
+      timeStopped: false,
+    })!;
+    expect(rerunCommand("https://example.com", gap)).toBeNull();
+    expect(
+      rerunCommand("https://example.com", {
+        scanned: 1,
+        discovered: 2,
+        suggestedPages: Number.NaN,
+      }),
+    ).toBeNull();
+  });
+
   test("the re-run command is refused for a non-http URL", () => {
     const gap = coverageGap({ scanned: 10, discovered: 40, capped: true, timeStopped: false })!;
     expect(rerunCommand("javascript:alert(1)", gap)).toBeNull();
