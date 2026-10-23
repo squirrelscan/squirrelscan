@@ -21,6 +21,8 @@ Nothing in `docs/scripts/` is published. This note and `term-template.mdx.txt` a
 
 Text outside the markers is yours and is never rewritten. The glossary index (`glossary/index.mdx`) is all generated except its intro.
 
+Rule pages carry one block, `glossary:backlinks`: a `Glossary:` line linking every term that lists the rule. In a category whose `hubs.json` entry has `"rule_backlinks": true`, `--write` adds the markers itself at the end of the page's `## Related rules` section, so adding a rule to a term's `rules` is all it takes.
+
 ## Budget and copy
 
 - 250 to 600 words of hand-written prose.

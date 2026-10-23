@@ -1,5 +1,5 @@
 {
-  "$comment": "Rule-category hubs (docs/rules/<code>/index.mdx). category is the CLI category for --rule-include; group is the score group the glossary nav files terms under; title is the hub's search title (<= 60 chars), sidebarTitle its nav label; related are other hub codes. Applied to a hub once it carries hub: markers.",
+  "$comment": "Rule-category hubs (docs/rules/<code>/index.mdx). category is the CLI category for --rule-include; group is the score group the glossary nav files terms under; title is the hub's search title (<= 60 chars), sidebarTitle its nav label; related are other hub codes. Applied to a hub once it carries hub: markers. rule_backlinks: true puts the generated Glossary line on the category rule pages that a term lists (squirrelscan/repo#3152), one batch of categories at a time.",
   "hubs": [
     {
       "code": "ax",
@@ -20,7 +20,8 @@
         "crawl",
         "perf",
         "schema"
-      ]
+      ],
+      "rule_backlinks": true
     },
     {
       "code": "perf",
@@ -39,7 +40,8 @@
         "images",
         "a11y",
         "ax"
-      ]
+      ],
+      "rule_backlinks": true
     },
     {
       "code": "crawl",
@@ -57,7 +59,8 @@
         "core",
         "links",
         "ax"
-      ]
+      ],
+      "rule_backlinks": true
     },
     {
       "code": "a11y",
@@ -109,7 +112,8 @@
         "schema",
         "eeat",
         "integrity"
-      ]
+      ],
+      "rule_backlinks": true
     },
     {
       "code": "url",

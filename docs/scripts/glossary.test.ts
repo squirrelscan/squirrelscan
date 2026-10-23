@@ -840,3 +840,156 @@ describe("review edge cases", () => {
     );
   });
 });
+
+// squirrelscan/repo#3152: rule pages link up to the terms that list them.
+describe("rule page backlinks (rule_backlinks)", () => {
+  const ON: Hub[] = [{ ...HUBS[0]!, rule_backlinks: true }];
+  const RELATED = [
+    "## Related rules",
+    "",
+    "- [crawl/sitemap-exists](/rules/crawl/sitemap-exists): the sitemap.",
+    "",
+    "Crawlability findings ship in every audit.",
+    "",
+    "",
+    "## References",
+    "",
+    "- [RFC 9309](https://www.rfc-editor.org/rfc/rfc9309)",
+    "",
+  ].join("\n");
+  const withRelated = (tail = RELATED) =>
+    `${rulePage("crawl/robots-txt", "crawl", "robots.txt checks", "error")}\n${tail}`;
+  const read = (dir: string, path: string) =>
+    readFileSync(join(dir, path), "utf8");
+
+  test("--check fails on a listed rule page without the block; --write adds it at the end of Related rules, once", () => {
+    const dir = docs({
+      terms: [SOLO],
+      hubs: ON,
+      files: { "rules/crawl/robots-txt.mdx": withRelated() },
+    });
+    expect(messages(dir)).toEqual([
+      "rules/crawl/robots-txt.mdx:21: rule page has no glossary:backlinks block, and a term lists it: run `bun scripts/glossary.ts --write`",
+    ]);
+    expect(writeGlossary(dir)).toEqual(["rules/crawl/robots-txt.mdx"]);
+    expect(read(dir, "rules/crawl/robots-txt.mdx")).toContain(
+      [
+        "Crawlability findings ship in every audit.",
+        "",
+        "{/* glossary:backlinks:start */}",
+        "",
+        "Glossary: [robots.txt](/glossary#robots-txt).",
+        "",
+        "{/* glossary:backlinks:end */}",
+        "",
+        "",
+        "## References",
+      ].join("\n"),
+    );
+    expect(messages(dir)).toEqual([]);
+    expect(writeGlossary(dir)).toEqual([]);
+  });
+
+  test("no block on a rule no term lists, nor in a category without rule_backlinks", () => {
+    const unlisted = docs({
+      terms: [{ ...SOLO, rules: ["crawl/sitemap-exists"] }],
+      hubs: ON,
+      files: {
+        "rules/crawl/robots-txt.mdx": withRelated(),
+        "rules/crawl/sitemap-exists.mdx": `${rulePage("crawl/sitemap-exists", "crawl", "No XML sitemap found")}\n${RELATED}`,
+      },
+    });
+    expect(writeGlossary(unlisted)).toEqual(["rules/crawl/sitemap-exists.mdx"]);
+    expect(read(unlisted, "rules/crawl/robots-txt.mdx")).not.toContain(
+      "glossary:backlinks",
+    );
+    const off = docs({
+      terms: [SOLO],
+      files: { "rules/crawl/robots-txt.mdx": withRelated() },
+    });
+    expect(messages(off)).toEqual([]);
+    expect(writeGlossary(off)).toEqual([]);
+  });
+
+  test("a listed rule page with no Related rules section fails, and a heading in a code fence does not count", () => {
+    const dir = docs({
+      terms: [SOLO],
+      hubs: ON,
+      files: {
+        "rules/crawl/robots-txt.mdx": withRelated(
+          "```md\n## Related rules\n```\n",
+        ),
+      },
+    });
+    const problem =
+      "rules/crawl/robots-txt.mdx:1: rule page has no ## Related rules section, where its glossary:backlinks block goes: add one";
+    expect(messages(dir)).toEqual([problem]);
+    expect(writeGlossary(dir)).toEqual([]);
+  });
+
+  test("Related rules as the last section: the block goes after its last line", () => {
+    const dir = docs({
+      terms: [SOLO],
+      hubs: ON,
+      files: {
+        "rules/crawl/robots-txt.mdx": withRelated(
+          "## Related rules\n\n- [crawl/sitemap-exists](/rules/crawl/sitemap-exists): the sitemap.\n\n",
+        ),
+      },
+    });
+    writeGlossary(dir);
+    expect(read(dir, "rules/crawl/robots-txt.mdx")).toEndWith(
+      "the sitemap.\n\n{/* glossary:backlinks:start */}\n\nGlossary: [robots.txt](/glossary#robots-txt).\n\n{/* glossary:backlinks:end */}\n\n",
+    );
+    expect(messages(dir)).toEqual([]);
+  });
+
+  test("a heading inside a comment does not end the section", () => {
+    const dir = docs({
+      terms: [SOLO],
+      hubs: ON,
+      files: {
+        "rules/crawl/robots-txt.mdx": withRelated(
+          "## Related rules\n\n- one\n\n{/*\n## Example\n*/}\n\n## References\n",
+        ),
+      },
+    });
+    writeGlossary(dir);
+    expect(read(dir, "rules/crawl/robots-txt.mdx")).toContain(
+      "{/*\n## Example\n*/}\n\n{/* glossary:backlinks:start */}",
+    );
+    expect(messages(dir)).toEqual([]);
+  });
+
+  test("an existing block is kept where it is and only refilled", () => {
+    const dir = docs({
+      terms: [SOLO],
+      hubs: ON,
+      files: {
+        "rules/crawl/robots-txt.mdx": withRelated(
+          `{/* glossary:backlinks:start */}\nstale\n{/* glossary:backlinks:end */}\n\n${RELATED}`,
+        ),
+      },
+    });
+    expect(messages(dir)).toEqual([
+      "rules/crawl/robots-txt.mdx:16: generated block glossary:backlinks is out of date: run `bun scripts/glossary.ts --write`",
+    ]);
+    writeGlossary(dir);
+    const page = read(dir, "rules/crawl/robots-txt.mdx");
+    expect(page.match(/glossary:backlinks:start/g)).toHaveLength(1);
+    expect(page.indexOf("glossary:backlinks:start")).toBeLessThan(
+      page.indexOf("## Related rules"),
+    );
+    expect(messages(dir)).toEqual([]);
+  });
+
+  test("rule_backlinks must be a boolean", () => {
+    const dir = docs({
+      terms: [SOLO],
+      hubs: [{ ...HUBS[0]!, rule_backlinks: "yes" as unknown as boolean }],
+    });
+    expect(messages(dir)).toContain(
+      "scripts/glossary/hubs.json:1: hubs[0] is missing a field or has a field of the wrong type",
+    );
+  });
+});

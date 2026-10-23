@@ -25,7 +25,11 @@
  * Blocks: `glossary:index` on `glossary/index.mdx`; `glossary:hub`,
  * `glossary:rules`, `glossary:run` and `glossary:related` on a term page
  * (`glossary/<slug>.mdx`); `hub:start-here`, `hub:rules` and `hub:terms` on a
- * category hub; `glossary:backlinks` on a rule page. Text outside the markers
+ * category hub; `glossary:backlinks` on a rule page. On a rule page a term
+ * lists, in a category whose hubs.json entry has `rule_backlinks: true`,
+ * `--write` adds the `glossary:backlinks` markers itself, at the end of the
+ * `## Related rules` section, and `--check` fails while they are missing. Text
+ * outside the markers
  * is hand-written and never touched, except the `title` and `sidebarTitle`
  * frontmatter of a term page and of a hub that carries `hub:` markers, which
  * come from the data files.
@@ -39,7 +43,8 @@
  * 3. a glossary page with no term, a term page for an index-only entry, or a
  *    Glossary tab in docs.json that differs from the generated one;
  * 4. a generated block or synced frontmatter field that differs from what
- *    `--write` produces;
+ *    `--write` produces, or a missing `glossary:backlinks` block (see above),
+ *    or a rule page that needs one and has no `## Related rules` section;
  * 5. a category hub (every `rules/<dir>/index.mdx` except the score-group
  *    overview pages) with a category `<Card href="/rules/<category>">` or a
  *    stated rule count ("12 rules", "1,000 rules", "300+ audit rules"). The
@@ -107,6 +112,12 @@ export interface Hub {
   learn: string[];
   tools: string[];
   related: string[];
+  /**
+   * The category's rule pages carry a `glossary:backlinks` block: `--write`
+   * adds one to every rule page a term lists, and `--check` fails without it.
+   * Turned on one batch of categories at a time (squirrelscan/repo#3152).
+   */
+  rule_backlinks?: boolean;
 }
 
 export interface BaselineEntry {
@@ -501,6 +512,38 @@ export function applyBlocks(
   return out.join("\n");
 }
 
+const RELATED_RULES = /^##\s+Related rules\s*$/;
+const SECTION_HEADING = /^#{1,2}\s/;
+
+/**
+ * `source` with an empty `glossary:backlinks` block added after the last
+ * non-blank line of its `## Related rules` section, and the 1-based line of
+ * `source` it goes in before. Null when the page has no such section outside
+ * code fences and comments.
+ */
+export function insertBacklinksBlock(
+  source: string,
+): { source: string; line: number } | null {
+  const lines = source.split("\n");
+  // Headings in code fences and MDX or HTML comments are not sections.
+  const prose = proseMask(source);
+  const heading = prose.findIndex((text) => RELATED_RULES.test(text));
+  if (heading < 0) return null;
+  const next = prose.findIndex(
+    (text, i) => i > heading && SECTION_HEADING.test(text),
+  );
+  let at = next < 0 ? lines.length : next;
+  while (at > heading + 1 && lines[at - 1]!.trim() === "") at -= 1;
+  lines.splice(
+    at,
+    0,
+    "",
+    "{/* glossary:backlinks:start */}",
+    "{/* glossary:backlinks:end */}",
+  );
+  return { source: lines.join("\n"), line: at + 1 };
+}
+
 /** Set frontmatter fields, adding a missing one after `title`. */
 export function setFrontmatter(
   source: string,
@@ -858,7 +901,8 @@ function validHub(item: unknown): item is Hub {
       (k) => typeof h[k] === "string",
     ) &&
     GROUPS.includes(h.group as Group) &&
-    ["learn", "tools", "related"].every((k) => isStringArray(h[k]))
+    ["learn", "tools", "related"].every((k) => isStringArray(h[k])) &&
+    (h.rule_backlinks === undefined || typeof h.rule_backlinks === "boolean")
   );
 }
 
@@ -1167,6 +1211,16 @@ function buildModel(
   return { model, pages };
 }
 
+/** A rule page whose category has rule_backlinks on and that a term lists. */
+function needsBacklinks(model: Model, file: string): boolean {
+  const rule = [...model.rules.values()].find((r) => r.file === file);
+  return (
+    rule !== undefined &&
+    model.hubs.get(rule.hub)?.rule_backlinks === true &&
+    model.data.terms.some((t) => t.rules.includes(rule.id))
+  );
+}
+
 function pageKind(model: Model, file: string): PageKind {
   if (file === "glossary/index.mdx") return "index";
   if (file.startsWith("glossary/")) return "term";
@@ -1208,19 +1262,43 @@ function plan(root: string): Plan {
 
   for (const page of pages.values()) {
     const kind = pageKind(model, page.file);
-    const { blocks, problems: markerProblems } = blocksOf(
-      page.file,
-      page.source,
-      BLOCKS_BY_PAGE[kind],
-    );
+    let base = page.source;
+    const marked = blocksOf(page.file, base, BLOCKS_BY_PAGE[kind]);
+    const markerProblems = marked.problems;
+    let blocks = marked.blocks;
     problems.push(...markerProblems);
+    // A rule page a term lists, in a category with rule_backlinks on, gets a
+    // glossary:backlinks block at the end of its Related rules section.
+    const missingBacklinks =
+      kind === "rule" &&
+      markerProblems.length === 0 &&
+      !blocks.some((b) => b.kind === "glossary:backlinks") &&
+      needsBacklinks(model, page.file);
+    if (missingBacklinks) {
+      const inserted = insertBacklinksBlock(base);
+      if (!inserted)
+        problems.push({
+          file: page.file,
+          line: 1,
+          message:
+            "rule page has no ## Related rules section, where its glossary:backlinks block goes: add one",
+        });
+      else {
+        stale.push({
+          file: page.file,
+          line: inserted.line,
+          message:
+            "rule page has no glossary:backlinks block, and a term lists it: run `bun scripts/glossary.ts --write`",
+        });
+        base = inserted.source;
+        blocks = blocksOf(page.file, base, BLOCKS_BY_PAGE[kind]).blocks;
+      }
+    }
     let next =
       markerProblems.length === 0 && blocks.length > 0
-        ? applyBlocks(page.source, blocks, (k) =>
-            renderBlock(model, k, page.file),
-          )
-        : page.source;
-    if (next !== page.source) {
+        ? applyBlocks(base, blocks, (k) => renderBlock(model, k, page.file))
+        : base;
+    if (next !== page.source && base === page.source) {
       for (const block of blocks) {
         const fresh = applyBlocks(page.source, [block], (k) =>
           renderBlock(model, k, page.file),
