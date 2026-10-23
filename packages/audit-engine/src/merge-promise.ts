@@ -35,6 +35,7 @@ import {
   createMergeSession,
   createNotEvaluatedCollector,
   flattenChecks,
+  isRunLocalRuleErrorFinding,
   itemListComplete,
   pageCheckKey,
   pageRuleKey,
@@ -1005,7 +1006,9 @@ export async function runCloudSmartAudits(
         const neverRendered = !session.everRendered(page.normalizedUrl);
         fold.retainUntouchedSample(
           page.normalizedUrl,
-          page.sample.map((row) => untouchedCarriedFinding(row, neverRendered)),
+          page.sample
+            .filter((row) => !isRunLocalRuleErrorFinding(row))
+            .map((row) => untouchedCarriedFinding(row, neverRendered)),
         );
         continue;
       }

@@ -21,6 +21,7 @@ import { buildPublishResolution, buildResolutionSignal } from "@squirrelscan/rul
 import { decodeResolutionSignal } from "@squirrelscan/rules/resolution-decode";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
 
+import { aggregateUntouchedCarried } from "../src/complete-store-fold";
 import { findingKey } from "../src/merge-core";
 import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
 import { describeSitePagesContract } from "./helpers/site-pages-contract";
@@ -79,7 +80,15 @@ const threw = (url?: string): CheckResult => ({
   ...(url ? { pageUrl: url } : {}),
 });
 
-const meta = { id: RULE, name: "Leaked secrets", category: "security" };
+const meta = { id: RULE, name: "Leaked secrets", category: "security", scope: "page" as const };
+
+const legacyTimeout = (url: string, budgetMs = 1000): CheckResult => ({
+  name: `${RULE}-error`,
+  status: "fail",
+  message: `Rule not evaluated: exceeded its ${budgetMs} ms time budget`,
+  pageUrl: url,
+  details: { timedOut: true, ruleId: RULE, budgetMs },
+});
 
 type Mode = "sampled" | "compact";
 
@@ -199,5 +208,135 @@ for (const mode of ["sampled", "compact"] as const) {
     });
   });
 }
+
+describe("prior rule errors are run-local (repo#1075)", () => {
+  async function publish(
+    store: MemStore,
+    crawlId: string,
+    checks: CheckResult[],
+    pageStatuses: Array<{ url: string; status: number }>,
+  ) {
+    return runCloudSmartAudits({
+      store,
+      siteKey: SITE,
+      crawlId,
+      ruleResults: { [RULE]: { meta, checks } } as never,
+      pageStatuses,
+    });
+  }
+
+  test("an untouched page does not carry an older timeout row", async () => {
+    const store = new MemStore();
+    await publish(store, "audit_1", [legacyTimeout(A)], [{ url: A, status: 200 }]);
+
+    const current = await publish(store, "audit_2", [pass(B)], [{ url: B, status: 200 }]);
+    expect(current.unionRuleResults.get(RULE)?.checks.some((c) => c.name === `${RULE}-error`)).toBe(
+      false,
+    );
+
+    const row = [...store.findings.values()].find(
+      (finding) =>
+        finding.normalizedUrl === normalizePageUrl(A) && finding.checkName === `${RULE}-error`,
+    );
+    expect(row?.state).toBe("resolved");
+    expect(row?.lastSeenCrawlId).toBe("audit_2");
+  });
+
+  test("a fresh error in the current run still reports normally", async () => {
+    const store = new MemStore();
+    await publish(store, "audit_1", [legacyTimeout(A)], [{ url: A, status: 200 }]);
+
+    const current = await publish(store, "audit_2", [legacyTimeout(A, 2000)], [
+      { url: A, status: 200 },
+    ]);
+    const row = current.unionRuleResults
+      .get(RULE)
+      ?.checks.find((check) => check.name === `${RULE}-error`);
+    expect(row?.message).toContain("2000 ms time budget");
+
+    const persisted = [...store.findings.values()].find(
+      (finding) =>
+        finding.normalizedUrl === normalizePageUrl(A) && finding.checkName === `${RULE}-error`,
+    );
+    expect(persisted).toMatchObject({ state: "open", lastSeenCrawlId: "audit_2" });
+  });
+
+  test("the complete-store materialized path retires the same prior row", async () => {
+    const store = new MemStore();
+    await publish(store, "audit_1", [legacyTimeout(A)], [{ url: A, status: 200 }]);
+    const priorOpenFindings = await store.getFindings(SITE, ["open"]);
+    async function* noFindingPages(): AsyncGenerator<readonly PageFindingRecord[]> {}
+
+    const current = await runCloudSmartAudits({
+      store,
+      siteKey: SITE,
+      crawlId: "audit_2",
+      ruleResults: { [RULE]: { meta, checks: [pass(B)] } } as never,
+      pageStatuses: [{ url: B, status: 200 }],
+      completeStore: {
+        priorOpenFindings,
+        findingPages: noFindingPages(),
+        crawledUrls: [B],
+      },
+    });
+
+    expect(current.unionRuleResults.get(RULE)?.checks.some((c) => c.name === `${RULE}-error`)).toBe(
+      false,
+    );
+    expect(priorOpenFindings[0]).toMatchObject({ checkName: `${RULE}-error`, state: "open" });
+    expect([...store.findings.values()].find((finding) => finding.checkName === `${RULE}-error`))
+      .toMatchObject({ state: "resolved", lastSeenCrawlId: "audit_2" });
+  });
+
+  test("the untouched aggregate excludes rule-error rows from counts and samples", async () => {
+    const store = new MemStore();
+    await publish(store, "audit_1", [legacyTimeout(A), fail(A)], [{ url: A, status: 200 }]);
+    const rows = await store.getFindings(SITE, ["open"]);
+
+    const { aggregate, sample } = aggregateUntouchedCarried([
+      { normalizedUrl: normalizePageUrl(A), rows, rendered: true, active: true },
+    ]);
+
+    expect(rows.some((row) => row.checkName === `${RULE}-error`)).toBe(true);
+    expect(aggregate.findings).toBe(1);
+    expect(aggregate.classes.map((entry) => entry.checkName)).toEqual([CHECK]);
+    expect(sample.flatMap((page) => page.sample).map((row) => row.checkName)).toEqual([CHECK]);
+  });
+
+  test("an oversized untouched sample cannot replay an excluded rule-error row", async () => {
+    const store = new MemStore();
+    await publish(store, "audit_1", [legacyTimeout(A), fail(A)], [{ url: A, status: 200 }]);
+    const rows = await store.getFindings(SITE, ["open"]);
+    const { aggregate } = aggregateUntouchedCarried([
+      { normalizedUrl: normalizePageUrl(A), rows, rendered: true, active: true },
+    ]);
+
+    const current = await runCloudSmartAudits({
+      store,
+      siteKey: SITE,
+      crawlId: "audit_2",
+      ruleResults: { [RULE]: { meta, checks: [pass(B)] } } as never,
+      pageStatuses: [{ url: B, status: 200 }],
+      completeStore: {
+        crawledUrls: [B],
+        untouchedCarried: async () => {
+          async function* pages() {
+            yield {
+              normalizedUrl: normalizePageUrl(A),
+              untouched: true as const,
+              sample: rows,
+            };
+          }
+          return { pages: pages(), aggregate };
+        },
+      },
+    });
+
+    const checks = current.unionRuleResults.get(RULE)?.checks ?? [];
+    expect(checks.some((check) => check.name === `${RULE}-error`)).toBe(false);
+    expect(checks.some((check) => check.name === CHECK)).toBe(true);
+    expect(current.coverage.carriedFindings).toBe(1);
+  });
+});
 
 describeSitePagesContract("rule-error-no-resolve-999.test.ts MemStore", () => new MemStore());
