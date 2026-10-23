@@ -69,8 +69,14 @@ describe("unfetched survives a saved report", () => {
     expect(loaded.data.scanScope?.capped).toBe(true);
   });
 
-  test("absent, or not a number, reloads without one", async () => {
-    for (const meta of [{}, { unfetched: "69" }, { unfetched: null }]) {
+  test("absent, or not a whole count, reloads without one", async () => {
+    for (const meta of [
+      {},
+      { unfetched: "69" },
+      { unfetched: null },
+      { unfetched: -1 },
+      { unfetched: 2.5 },
+    ]) {
       const loaded = await reload(meta);
       expect(loaded.ok).toBe(true);
       if (!loaded.ok) return;

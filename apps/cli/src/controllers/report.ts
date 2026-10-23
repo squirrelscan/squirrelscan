@@ -191,6 +191,13 @@ function isSlimJsonReport(
   );
 }
 
+/** A non-negative safe integer off user-supplied JSON, or undefined. */
+function wholeCount(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : undefined;
+}
+
 function convertSlimReport(report: SlimJsonReport): AuditReport {
   const ruleResults: Record<string, ReportRuleResult> = {};
 
@@ -257,10 +264,10 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
   // twice next to `unfetched`, and call a run capped that never reached its
   // limit. The audit itself stamps this run's count (`report.pages.length`).
   const audited = report.meta.coverage?.auditedPages;
-  const crawled =
-    typeof audited === "number" && Number.isSafeInteger(audited) && audited >= 0
-      ? audited
-      : report.meta.totalPages;
+  const crawled = wholeCount(audited) ?? report.meta.totalPages;
+  // A whole count only: the file is user-supplied, and the cloud's publish
+  // schema rejects anything else.
+  const unfetched = wholeCount(report.meta.unfetched);
 
   return {
     baseUrl: report.meta.baseUrl,
@@ -296,10 +303,7 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
               : {}),
             pagesCrawled: crawled,
             capped: crawled >= report.meta.maxPages,
-            // The renderers re-check it: the file is user-supplied.
-            ...(typeof report.meta.unfetched === "number"
-              ? { unfetched: report.meta.unfetched }
-              : {}),
+            ...(unfetched !== undefined ? { unfetched } : {}),
           },
         }
       : {}),
