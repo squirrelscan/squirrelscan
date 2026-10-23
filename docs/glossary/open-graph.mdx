@@ -1,0 +1,76 @@
+---
+title: "Open Graph tags: what each one controls in a share"
+description: "Open Graph is the set of og: meta tags (title, description, image, url) that controls how a link looks when it is shared. What each tag does."
+sidebarTitle: "Open Graph"
+---
+
+**Open Graph** is a set of `og:` meta properties, such as `og:title`, `og:description`, `og:image` and `og:url`, that controls how a link to a page previews when someone shares it in a social app, a chat or a messaging client.
+
+The protocol at ogp.me lists four properties as required on every page: `og:title`, `og:type`, `og:image` and `og:url`. The tags use the `property` attribute, while X (Twitter) card tags such as `twitter:card` use `name`. Share clients read the HTML the server sends without running JavaScript, so tags injected in the browser are not there for them.
+
+{/* glossary:hub:start */}
+
+Category: [Social Media](/rules/social)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+The preview is the page's first impression wherever it is shared. With no `og:image` the card is plain text, and with no title the platform has to pick text from the page itself. `og:url` is what platforms use to deduplicate shares. When it disagrees with the canonical URL, usually over `www`, the scheme or a trailing slash, shares can be counted against two addresses. A stale template that leaves some pages with an old default image or favicon is easy to miss, because each page looks fine on its own.
+
+## How squirrelscan checks it
+
+[core/og-tags](/rules/core/og-tags) warns on a missing `og:title`, `og:description` or `og:image` and notes a missing `og:type`. It checks presence only, so an image URL that answers 404 passes. [social/og-image-size](/rules/social/og-image-size) reads the declared `og:image:width` and `og:image:height` and warns below 1200 by 630. It never fetches the image, so it trusts the numbers. [social/og-url-match](/rules/social/og-url-match) compares `og:url` with the canonical after resolving both and dropping a trailing slash. [core/twitter-cards](/rules/core/twitter-cards) checks the card type and the image a `summary_large_image` card needs, and notes when a page relies on the Open Graph fallback. [social/asset-divergence](/rules/social/asset-divergence) compares the default `og:image`, favicon and `theme-color` across the site, once 10 pages agree at 70%, and reports the pages that differ. Articles, products and other page types that carry their own share image are exempt from the image comparison, not from the favicon and color ones.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Missing og:image: the Open Graph tags squirrel checks](/rules/core/og-tags) | A page missing og:title, og:description or og:image, so shares render without a preview. squirrel checks four tags per page. | warning |
+| [og:image size: the 1200 by 630 recommendation](/rules/social/og-image-size) | A share image below the recommended size is cropped or upscaled in the preview card. squirrel reads og:image and its declared dimensions. | warning |
+| [og:url versus canonical: why they should be the same URL](/rules/social/og-url-match) | When og:url and the canonical disagree, share counts split across two addresses. squirrel normalises both and compares them. | warning |
+| [Favicon and theme-color that differ across the site](/rules/social/asset-divergence) | Site chrome comes from one layout, so a page carrying a different favicon is running a different template. squirrel finds the minority. | warning |
+| [twitter:card: the card types and the Open Graph fallback](/rules/core/twitter-cards) | A page with no twitter:card, an unrecognised type, or a large-image card with no image. squirrel checks the type and the fallback. | info |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Render the tags in the shared layout, with absolute URLs and declared image dimensions:
+
+```html
+<meta property="og:title" content="Configuring the build cache" />
+<meta property="og:description" content="How the build cache stores compiled output between runs." />
+<meta property="og:image" content="https://example.com/og/build-cache.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:url" content="https://example.com/guides/build-cache" />
+<meta name="twitter:card" content="summary_large_image" />
+```
+
+Generate a 1200 by 630 image per page or template, and keep the important part away from the edges ([the image size fix](/rules/social/og-image-size#how-to-fix-it)). Render `og:url` and the canonical from the same value ([the URL match fix](/rules/social/og-url-match#how-to-fix-it)). Fix divergent assets in the shared head partial, not page by page ([the divergence fix](/rules/social/asset-divergence#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include core/og-tags,social/og-image-size,social/og-url-match,social/asset-divergence,core/twitter-cards
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Canonical URL](/glossary#canonical-url): The URL a page declares, with `<link rel="canonical">` or a Link header, as the preferred address for its content.
+
+{/* glossary:related:end */}
+
+## References
+
+- [The Open Graph protocol](https://ogp.me/)
+- [How to specify a canonical URL, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls)

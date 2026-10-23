@@ -1,0 +1,69 @@
+---
+title: "What is hreflang? Return links, x-default and errors"
+description: "hreflang annotations tell search engines which language or regional versions of a page exist, with x-default as the fallback. Return links and errors."
+sidebarTitle: "hreflang"
+---
+
+**hreflang** is a link annotation that tells search engines which language or regional versions of a page exist, so each searcher can be shown the version that matches their language or region.
+
+It is written as `<link rel="alternate" hreflang="en-gb" href="...">` in the head, or sent in an HTTP header or a sitemap. The value is a language code, optionally followed by a region, such as `de` or `en-au`. Google's localized versions guide asks each version to list every version, itself included. It also asks for return links: if page X lists page Y, page Y must list page X, or the annotations may be ignored. `x-default` names the page for searchers whose language matches none of the versions, such as a language picker. hreflang is not the same as the `lang` attribute, which declares the language of the content itself for browsers and screen readers.
+
+{/* glossary:hub:start */}
+
+Category: [Internationalization](/rules/i18n)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+Without hreflang, a search engine has to work out for itself which version suits a searcher, and someone in the UK can land on the Australian page with the wrong prices. With it set up wrong, Google may ignore the set. The usual faults are missing return links, a missing self-reference, URLs in the annotations that differ from the canonical form, and a canonical on each version that points at the primary language instead of itself.
+
+## How squirrelscan checks it
+
+[i18n/hreflang](/rules/i18n/hreflang) reads every `link[rel="alternate"][hreflang]` on each page. A page with none is noted at info level, since a single-language site does not need them. On a page that has them, it warns when there is no `x-default` and when no annotation's URL matches the page's own URL exactly. A trailing slash or query string difference counts as a mismatch. After an HTTP redirect, the page's own URL is where the redirect ended. The rule does not validate language codes, and it cannot check return links from one page: those live on the other versions. It reads HTML annotations only, not headers or sitemaps.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [hreflang: x-default and the self-referencing tag](/rules/i18n/hreflang) | hreflang tells search engines which language version to show. squirrel checks for x-default and a self-reference on any page that has them. | info |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Generate the full set from one source, and put the same block on every version:
+
+```html
+<link rel="alternate" hreflang="en-au" href="https://example.com/au/pricing" />
+<link rel="alternate" hreflang="en-gb" href="https://example.com/uk/pricing" />
+<link rel="alternate" hreflang="x-default" href="https://example.com/pricing" />
+```
+
+Each version lists all the others and itself, using URLs in exactly the canonical form. Keep each version canonical to itself, not to the primary language ([the hreflang fix](/rules/i18n/hreflang#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include i18n/hreflang
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [lang attribute](/glossary#lang-attribute): The lang attribute on `<html>` (and on passages) that declares the language, so screen readers pick the right voice.
+- [Canonical URL](/glossary#canonical-url): The URL a page declares, with `<link rel="canonical">` or a Link header, as the preferred address for its content.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Tell Google about localized versions of your page, Google Search Central](https://developers.google.com/search/docs/specialty/international/localized-versions)
+- [Declaring language in HTML, W3C Internationalization](https://www.w3.org/International/questions/qa-html-language-declarations)

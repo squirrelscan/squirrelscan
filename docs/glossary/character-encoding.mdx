@@ -1,0 +1,69 @@
+---
+title: "Character encoding and mojibake: charset done right"
+description: "Character encoding maps bytes to characters, normally UTF-8, declared in the Content-Type header or a meta charset tag. A mismatch produces mojibake."
+sidebarTitle: "Character encoding"
+---
+
+**Character encoding** is the mapping a browser uses to turn the bytes of a page into characters, declared in the `Content-Type` response header or a `<meta charset>` tag, and on the web it should be UTF-8.
+
+MDN notes that UTF-8 is the only valid encoding for HTML5 documents, and that a `<meta>` element declaring the encoding must sit entirely within the first 1024 bytes of the document. When the header and the page both name an encoding, the header wins. A page that declares nothing leaves the browser to guess.
+
+{/* glossary:hub:start */}
+
+Category: [Core SEO](/rules/core)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+When the bytes and the declared encoding disagree, text turns into mojibake: `café` shows as `cafÃ©`, and a curly apostrophe becomes a run of accented letters. The page still loads, so the damage goes unnoticed until someone reads it. The same corruption tends to reach fields nobody looks at, such as meta descriptions, alt text and structured data. A wrong header is the subtle case, because a page that says UTF-8 under a header that says `iso-8859-1` is decoded as the latter.
+
+## How squirrelscan checks it
+
+[core/charset](/rules/core/charset) reads all three sources on every page: `<meta charset>`, a `<meta http-equiv="Content-Type">` and the `Content-Type` header. It warns when the header and the page disagree about UTF-8, when the charset meta does not end within the first 1024 bytes, and when a non-UTF-8 charset is declared. It fails a page that declares no charset at all. Within those bytes, a UTF-8 meta first in `<head>`, or straight after a leading `<title>`, passes. Later placement is noted at info level only.
+
+[content/mojibake](/rules/content/mojibake) reads the visible text in `<body>`, leaving out code blocks and scripts, for byte sequences that show UTF-8 read as Latin-1, and for the Unicode replacement character. The message names the likely cause from the page's declared charset: a missing declaration means the browser guessed, a correct `utf-8` means the stored content is already double-encoded.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [meta charset UTF-8: where it goes and what squirrel checks](/rules/core/charset) | A page with no charset declaration, one that is not UTF-8, a header that disagrees with the page, or a meta charset past the first 1024 bytes. squirrel checks all three sources. | warning |
+| [Mojibake: â€™ and other encoding corruption in page text](/rules/content/mojibake) | Strange character sequences in your copy mean the bytes and the declared encoding disagree. squirrel finds them and names which of the two is wrong. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Declare UTF-8 in both places, with the meta first in `<head>`:
+
+```html
+<head>
+  <meta charset="utf-8" />
+  <title>Page title</title>
+</head>
+```
+
+Send `Content-Type: text/html; charset=utf-8` from the server too, so the header and the page agree ([the charset fix](/rules/core/charset#how-to-fix-it)). If the declaration is already right and the text is still broken, the stored content is corrupt. Re-import it from the original source rather than patching the visible symptoms ([the mojibake fix](/rules/content/mojibake#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include core/charset,content/mojibake
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+{/* glossary:related:end */}
+
+## References
+
+- [The meta element: charset, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta#charset)
+- [Character encoding, MDN glossary](https://developer.mozilla.org/en-US/docs/Glossary/Character_encoding)
+- [Specifying the document's character encoding, HTML Standard](https://html.spec.whatwg.org/multipage/semantics.html#charset)

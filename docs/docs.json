@@ -670,30 +670,22 @@
           {
             "group": "SEO",
             "pages": [
-              "glossary/canonical-url",
-              "glossary/crawl-budget",
+              "glossary/anchor-text",
+              "glossary/broken-link",
+              "glossary/character-encoding",
+              "glossary/duplicate-content",
               "glossary/geo-meta-tags",
-              "glossary/http-status-code",
-              "glossary/indexability",
+              "glossary/heading-hierarchy",
+              "glossary/hreflang",
+              "glossary/internal-linking",
               "glossary/json-ld",
-              "glossary/noindex",
-              "glossary/redirect-chain",
-              "glossary/robots-meta-tag",
+              "glossary/meta-description",
+              "glossary/open-graph",
+              "glossary/orphan-page",
               "glossary/robots-txt",
-              "glossary/lastmod",
               "glossary/structured-data",
-              "glossary/xml-sitemap"
-            ]
-          },
-          {
-            "group": "Performance",
-            "pages": [
-              "glossary/core-web-vitals",
-              "glossary/cls",
-              "glossary/http-caching",
-              "glossary/inp",
-              "glossary/lcp",
-              "glossary/render-blocking-resources"
+              "glossary/title-tag",
+              "glossary/url-slug"
             ]
           },
           {

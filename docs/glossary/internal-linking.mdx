@@ -1,0 +1,77 @@
+---
+title: "Internal linking: what counts and what a crawl can see"
+description: "Internal links connect pages of the same site, carrying crawlers and readers through it. What counts as a link, contextual versus sitewide, and the checks."
+sidebarTitle: "Internal linking"
+---
+
+**Internal linking** is the set of links between pages of the same site, which carry crawlers and readers from page to page and show which pages the site treats as important.
+
+Google's link guidance says it can generally only crawl a link that is an `<a>` element with an `href`. A click handler on a `<span>` is not a link to a crawler. Google says it uses links to find new pages to crawl and as a signal of relevance, and a sitemap supplements that discovery rather than replacing it. The text of each link also tells readers and search engines what the target is about.
+
+{/* glossary:hub:start */}
+
+Category: [Links](/rules/links)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+A page that nothing links to is hard to find, and a page linked only from the footer gets none of the context that a link from a related article gives. Navigation, headers and footers repeat on every page, so they say little about any one target. The links in body copy carry the context. Pages with no outgoing links leave readers and crawlers stuck. `rel="nofollow"` on an internal link asks search engines not to follow it, which works against the site's own pages.
+
+## How squirrelscan checks it
+
+The rules count crawlable, resolvable internal links, and leave `nofollow` links out of inbound totals. [links/internal-links](/rules/links/internal-links) warns on a page with fewer than 1 or more than 100 internal links, both configurable. A large sitewide menu pushes every page toward the ceiling. [links/orphan-pages](/rules/links/orphan-pages) reports pages with fewer than 2 inbound links, and [links/weak-internal-links](/rules/links/weak-internal-links) reports pages with exactly one. [links/no-contextual-inbound](/rules/links/no-contextual-inbound) finds pages linked only from `nav`, `header`, `footer` or `aside`. It skips legal pages, which are footer-only by design, and skips itself when the crawl stopped at its page cap. [links/dead-end-pages](/rules/links/dead-end-pages) flags pages with no outgoing internal link. [links/nofollow-internal](/rules/links/nofollow-internal) lists internal links marked `nofollow`. The homepage and the page the audit started from are never reported as orphans.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Internal link count per page: too few and too many](/rules/links/internal-links) | A page with no internal links leads nowhere and a page with hundreds dilutes each one. squirrel counts internal links against a configurable range. | warning |
+| [Pages with only one internal link pointing to them](/rules/links/weak-internal-links) | One inbound link is enough to be found and not enough to look important. squirrel lists every page whose dofollow inbound count is exactly one. | warning |
+| [Linked only from the nav and footer: no editorial links](/rules/links/no-contextual-inbound) | A footer link on every page looks like hundreds of inbound links and carries none of the signal. squirrel counts only links outside sitewide chrome. | warning |
+| [Dead-end page: no outgoing internal links to continue with](/rules/links/dead-end-pages) | A page with no onward links leaves the reader and the crawler with nowhere to go. squirrel counts outgoing internal links, excluding self-links. | warning |
+| [Orphan pages: pages with too few inbound internal links](/rules/links/orphan-pages) | A page nothing links to is hard to discover and reads as unimportant. squirrel counts dofollow inbound internal links for every crawled page. | warning |
+| [rel=nofollow on an internal link: usually a mistake](/rules/links/nofollow-internal) | Nofollow on your own links tells search engines to ignore your site's internal structure. squirrel flags every internal link carrying it. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Link related pages from the body, with text that names the target:
+
+```html
+<p>
+  The cache is keyed on the lockfile, so see
+  <a href="/guides/lockfiles">how lockfiles change between installs</a>.
+</p>
+```
+
+Add links from the hub or category page and from articles on the same topic ([the orphan fix](/rules/links/orphan-pages#how-to-fix-it), [the contextual link fix](/rules/links/no-contextual-inbound#how-to-fix-it)). Give dead-end pages a related-content block or a breadcrumb ([the dead-end fix](/rules/links/dead-end-pages#how-to-fix-it)). Remove `nofollow` from internal links, and use robots.txt or `noindex` for pages that should not be crawled or indexed ([the nofollow fix](/rules/links/nofollow-internal#how-to-fix-it)). On a site with a full sidebar, raise `max_internal_links` rather than cutting navigation ([the link count fix](/rules/links/internal-links#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include links/internal-links,links/weak-internal-links,links/no-contextual-inbound,links/dead-end-pages,links/orphan-pages,links/nofollow-internal
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Orphan page](/glossary/orphan-page): A page that no other crawled page links to, so crawlers and readers only reach it through a sitemap or a direct URL.
+- [Anchor text](/glossary/anchor-text): The visible, clickable text of a link, which tells readers and search engines what the target is about.
+- [rel=nofollow](/glossary#nofollow): A link attribute value asking search engines not to associate the linking page with the target; a hint, not a block.
+- [Broken link](/glossary/broken-link): A link whose target answers with an error, does not resolve, or is malformed.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Link best practices for Google, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/links-crawlable)
+- [Qualify your outbound links to Google, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/qualify-outbound-links)

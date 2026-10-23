@@ -1,0 +1,73 @@
+---
+title: "Meta description: length, duplicates and snippets"
+description: "A meta description is a short summary of a page that search engines may use as its snippet. When Google uses it, length limits and why duplicates hurt."
+sidebarTitle: "Meta description"
+---
+
+A **meta description** is a `<meta name="description">` tag holding a short summary of a page, which search engines may show as the snippet under the result.
+
+"May" is the important word. Google's snippet documentation says snippets are created mainly from the page content, and that it sometimes uses the meta description when that describes the page better than any part of the content. The snippet can change from one query to the next. A description is a suggestion, not a setting, and Google's own advice is to write one that summarises the specific page.
+
+{/* glossary:hub:start */}
+
+Category: [Core SEO](/rules/core)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+When Google does use it, the description is the pitch: the text a searcher reads before deciding to click. Google warns that identical or similar descriptions on every page of a site are not helpful when individual pages appear in results, and asks for descriptions that describe each page accurately. A description stamped from a template tells a reader nothing that sets the page apart, and Google may use the page's own text when that answers the query better.
+
+## How squirrelscan checks it
+
+[core/meta-description](/rules/core/meta-description) fails a page with no description and warns when it is shorter than 120 or longer than 160 characters, both configurable. It counts characters of the parsed value. [content/duplicate-description](/rules/content/duplicate-description) groups pages by description, trimmed and lowercased, and reports every description shared by more than one page.
+
+Both rules leave out pages marked `noindex` on a site that is itself indexed, because their descriptions never appear in results. On a staging host that is noindex everywhere, every page is checked. The duplicate check also treats reciprocal hreflang alternates in one language as one page when neither canonicalises elsewhere, so `en-gb` and `en-us` versions can share text.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Meta description length: the 120 to 160 character range](/rules/core/meta-description) | A page with no meta description, or one outside 120 to 160 characters. squirrel measures it on every crawled page. | error |
+| [Duplicate meta descriptions across pages](/rules/content/duplicate-description) | One description reused across a section describes none of those pages well. squirrel groups every crawled page by its meta description. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Write one per page, about that page:
+
+```html
+<meta
+  name="description"
+  content="How the build cache stores compiled output between runs, when it invalidates, and the three settings that control it."
+/>
+```
+
+Where a section has too many pages to write by hand, generate the description from each page's own content rather than reusing one string ([the duplicate fix](/rules/content/duplicate-description#how-to-fix-it)). Leaving a page with nothing distinct to say without a description is defensible, since Google then picks text from the page, but the rule still reports it as missing ([the description fix](/rules/core/meta-description#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include core/meta-description,content/duplicate-description
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Title tag](/glossary/title-tag): The `<title>` element in the page head; browsers show it in the tab and search engines usually use it as the result headline.
+- [Duplicate content](/glossary/duplicate-content): The same or near-identical content reachable at more than one URL, or repeated titles and descriptions across pages.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Control your snippets in search results, Google Search Central](https://developers.google.com/search/docs/appearance/snippet)
+- [meta name=description, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name#description)

@@ -1,0 +1,74 @@
+---
+title: "Anchor text: descriptive links for search and screen readers"
+description: "Anchor text is the visible, clickable text of a link. Why descriptive text helps search engines and screen reader users, and what generic text costs."
+sidebarTitle: "Anchor text"
+---
+
+**Anchor text** is the visible, clickable text of a link, which tells readers and search engines what they will find at the other end.
+
+Google's link guidance says good anchor text is descriptive, reasonably concise and relevant to both the page it is on and the page it points to. For an image link, the image's `alt` text plays that part. WCAG 2.2 success criterion 2.4.4, Link Purpose (In Context), asks that the purpose of each link can be told from its text alone, or from the text together with its surrounding context.
+
+{/* glossary:hub:start */}
+
+Category: [Links](/rules/links)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+Screen reader users often pull up a list of a page's links and move through it out of context. A list of "Read more", "Click here" and "Learn more" tells them nothing, and an icon link with no name is announced as a bare link. For search engines the text is a description of the target, so "click here" wastes it. The same text pointing at two different pages is a related problem: "Learn more" under every card on a pricing page sends readers to different places with the same promise.
+
+## How squirrelscan checks it
+
+[links/anchor-text](/rules/links/anchor-text) groups the links on each page by destination. It warns when no link to a destination has any accessible name, and notes at info level when every named link to it uses generic text such as `click here`, `read more` or `learn more`. Pages in several other languages are checked against that language's generic phrases as well. [a11y/link-text](/rules/a11y/link-text) fails links with no accessible text at all, including an icon font or an unnamed SVG, and warns on 48 generic phrases. Conventional labels such as "Sign in" or "Privacy policy" are never reported as generic. [a11y/identical-links-same-purpose](/rules/a11y/identical-links-same-purpose) warns when one link text leads to more than one destination. It compares URLs as written, so `/pricing` and `https://example.com/pricing` count as different.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Empty and generic anchor text: click here and icons](/rules/links/anchor-text) | A link with no text has no name, and click here describes nothing. squirrel groups links by destination and checks each group for a descriptive name. | warning |
+| [Link text: why 'click here' fails and what to use](/rules/a11y/link-text) | Links reading 'click here', and links wrapping an unlabeled icon, give screen reader users nothing to go on. squirrel lists both kinds. | warning |
+| [Identical link text pointing at different pages](/rules/a11y/identical-links-same-purpose) | Two links reading 'Learn more' that go to different places are indistinguishable in a screen reader's link list. squirrel finds them. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Write the destination into the link, and name icon links with `aria-label`:
+
+```html
+<a href="/pricing">View our pricing plans</a>
+
+<a href="/search" aria-label="Search">
+  <svg aria-hidden="true">...</svg>
+</a>
+```
+
+When the design needs a short visible label, keep it and put the full phrase in `aria-label`, with the visible words inside it ([the link text fix](/rules/a11y/link-text#how-to-fix-it)). For a card, wrap the image and headline in one link and give the image `alt=""`, so the headline is the name. Two separate links each need a name of their own ([the anchor text fix](/rules/links/anchor-text#how-to-fix-it)). Make repeated labels specific, such as "Learn more about the Team plan" ([the same-purpose fix](/rules/a11y/identical-links-same-purpose#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include links/anchor-text,a11y/link-text,a11y/identical-links-same-purpose
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Internal linking](/glossary/internal-linking): Links between pages of the same site, which carry crawlers and readers through it and signal which pages matter.
+- [Accessible name](/glossary#accessible-name): The name assistive technology announces for an element, computed from its content, label, aria-label or aria-labelledby.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Link best practices for Google, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/links-crawlable)
+- [Understanding SC 2.4.4 Link Purpose (In Context), W3C](https://www.w3.org/WAI/WCAG22/Understanding/link-purpose-in-context.html)
+- [H30: Providing link text that describes the purpose of a link, W3C](https://www.w3.org/WAI/WCAG22/Techniques/html/H30)

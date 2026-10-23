@@ -1,0 +1,77 @@
+---
+title: "URL slugs: length, hyphens, case and special characters"
+description: "A URL slug is the readable last part of a URL path. Short, lowercase, hyphen-separated words work best. What Google recommends and the checks."
+sidebarTitle: "URL slug"
+---
+
+A **URL slug** is the readable last part of a URL's path, such as `merino-crew-socks` in `https://example.com/products/merino-crew-socks`, usually built from the page title.
+
+Google's URL structure guidance recommends readable words over long ID numbers, and hyphens over underscores to separate words, because hyphens clearly mark a word boundary. It also notes that URLs are case-sensitive: `/APPLE` and `/apple` are different URLs. Characters outside the URL-safe set have to be percent-encoded, so a space becomes `%20`.
+
+{/* glossary:hub:start */}
+
+Category: [URL Structure](/rules/url)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+A slug is part of what a searcher sees in the result and what a person reads in a shared link. `/products/merino-crew-socks` says what the page is; `/p/48213` does not. The bigger risks come from inconsistency. Mixed case or a mix of hyphens and underscores creates near-duplicate URLs for one page, and spaces and special characters turn into percent-encoded strings that are hard to read and easy to break. Renaming a live URL has a cost too. It needs a permanent redirect, and the change usually brings a period of ranking movement, so the convention matters most for new pages.
+
+## How squirrelscan checks it
+
+Most URL rules look at one path and report at info or warning level. [url/slug-keywords](/rules/url/slug-keywords) warns when the last segment is a numeric ID, a hash or a generic pattern such as `post-123`, except pagination such as `/page/2`. [url/hyphens](/rules/url/hyphens) warns on underscores in the path, [url/lowercase](/rules/url/lowercase) on uppercase letters, and [url/special-chars](/rules/url/special-chars) on spaces, symbols such as `&` or `#`, non-ASCII characters and double slashes. [url/stop-words](/rules/url/stop-words) notes paths with more than two English stop words, and [url/length](/rules/url/length) notes URLs over 75 characters, warns over 100 and flags more than four path segments. [url/slug-convention](/rules/url/slug-convention) is site-wide. It learns the site's own separator, case and trailing slash, plus date use and depth per page type, and reports the pages that break a convention 70% of comparable pages follow.
+
+Only [url/length](/rules/url/length) looks at the query string, as part of the full URL.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Non-descriptive URL slug: numeric IDs and generic patterns](/rules/url/slug-keywords) | A slug like /p/48213 tells a reader and a crawler nothing. squirrel classifies the last path segment and flags the ID-shaped ones. | info |
+| [Mixed URL conventions: finding the minority form](/rules/url/slug-convention) | Half your paths ending in a slash and half not is how canonical bugs start. squirrel computes your site's own norm and reports what deviates. | warning |
+| [Stop words in a URL slug: when to drop them](/rules/url/stop-words) | the, of and for add characters without adding meaning to a slug. squirrel counts them in each path and only reports the pile-ups. | info |
+| [Underscores in URLs: why hyphens separate words](/rules/url/hyphens) | Google reads blue-shoes as two words and blue_shoes as one. squirrel flags every crawled path containing an underscore. | warning |
+| [Special characters in a URL path: what breaks and why](/rules/url/special-chars) | Spaces, percent signs and non-ASCII characters in a path break when copied and pasted. squirrel decodes the path and reports what it finds. | warning |
+| [Uppercase in a URL: the duplicate content it creates](/rules/url/lowercase) | Most servers treat /Page and /page as two URLs serving the same content. squirrel flags every crawled path containing a capital letter. | warning |
+| [URL length: when a URL is long enough to be a problem](/rules/url/length) | Long URLs get truncated in results and shares, and usually signal deep nesting. squirrel measures the full URL and counts path segments. | info |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Generate the slug once, from the title, when the page is created:
+
+```
+https://example.com/products/merino-crew-socks
+https://example.com/products/merino-crew-socks-48213
+```
+
+The second form keeps an ID for routing and still reads correctly ([the slug fix](/rules/url/slug-keywords#how-to-fix-it)). Transliterate to ASCII, lowercase, replace everything else with a hyphen and collapse repeats ([the special character fix](/rules/url/special-chars#how-to-fix-it)). For existing URLs, change the slug at the source and 301-redirect the old path, or leave it until you restructure anyway ([the hyphen fix](/rules/url/hyphens#how-to-fix-it), [the length fix](/rules/url/length#how-to-fix-it)). A site written in a non-Latin script has good reason to keep its characters, and can disable the special character rule.
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include url/slug-keywords,url/slug-convention,url/stop-words,url/hyphens,url/special-chars,url/lowercase,url/length
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Trailing slash](/glossary#trailing-slash): Whether URLs end in /; /page and /page/ are different URLs, so a site should pick one and redirect the other.
+- [URL parameters](/glossary#url-parameters): Key-value pairs after ? in a URL; tracking and sort parameters can multiply URLs for the same content.
+
+{/* glossary:related:end */}
+
+## References
+
+- [URL structure best practices, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/url-structure)
+- [Percent-encoding, MDN glossary](https://developer.mozilla.org/en-US/docs/Glossary/Percent-encoding)
+- [What is a URL, MDN](https://developer.mozilla.org/en-US/docs/Learn_web_development/Howto/Web_mechanics/What_is_a_URL)

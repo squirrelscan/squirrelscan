@@ -80,6 +80,8 @@ The visible, clickable text of a link, which tells readers and search engines wh
 
 Checked by [Empty and generic anchor text: click here and icons](/rules/links/anchor-text), [Link text: why 'click here' fails and what to use](/rules/a11y/link-text), [Identical link text pointing at different pages](/rules/a11y/identical-links-same-purpose).
 
+[Read the full definition](/glossary/anchor-text).
+
 ### ARIA \{#aria\}
 
 Accessible Rich Internet Applications: roles, states and properties that describe custom widgets to assistive technology.
@@ -110,6 +112,8 @@ Also called: dead link.
 
 Checked by [Broken internal links: 404s inside your own site](/rules/links/broken-links), [Broken external links: link rot on pages you cannot fix](/rules/links/broken-external-links), [Cloud dead-link checking: the shared external link cache](/rules/links/dead-links), [Invalid links: hrefs that do not parse as a URL](/rules/links/invalid-links), [Broken anchor links: #fragments that point at nothing](/rules/links/broken-anchors), [Broken images: empty and placeholder src attributes](/rules/images/broken-images).
 
+[Read the full definition](/glossary/broken-link).
+
 ## C
 
 ### Canonical URL \{#canonical-url\}
@@ -135,6 +139,8 @@ The mapping from bytes to characters (normally UTF-8) declared in the Content-Ty
 Also called: charset, mojibake.
 
 Checked by [meta charset UTF-8: where it goes and what squirrel checks](/rules/core/charset), [Mojibake: â€™ and other encoding corruption in page text](/rules/content/mojibake).
+
+[Read the full definition](/glossary/character-encoding).
 
 ### Client-side redirect \{#client-side-redirect\}
 
@@ -254,6 +260,8 @@ The same or near-identical content reachable at more than one URL, or repeated t
 
 Checked by [Duplicate title tags: the same title on several pages](/rules/content/duplicate-title), [Duplicate meta descriptions across pages](/rules/content/duplicate-description), [Duplicate page titles: the site-wide uniqueness check](/rules/core/title-unique), [rel=canonical: presence, absolute form and self-reference](/rules/core/canonical), [Trailing slash: /page and /page/ are two different URLs](/rules/url/trailing-slash), [Uppercase in a URL: the duplicate content it creates](/rules/url/lowercase), [URL parameters: how many is too many, and what to do](/rules/url/parameters).
 
+[Read the full definition](/glossary/duplicate-content).
+
 ## E
 
 ### E-E-A-T \{#e-e-a-t\}
@@ -360,6 +368,8 @@ Also called: H1 tag.
 
 Checked by [Skipped heading levels: h1 to h3 and other outline problems](/rules/content/heading-hierarchy), [Heading order: why skipping from h1 to h3 matters](/rules/a11y/heading-order), [Empty headings: what counts as empty and how to check](/rules/a11y/empty-heading), [Missing or multiple H1: what squirrel expects on a page](/rules/core/h1).
 
+[Read the full definition](/glossary/heading-hierarchy).
+
 ### hreflang \{#hreflang\}
 
 Link annotations that tell search engines which language or regional versions of a page exist, with x-default as the fallback.
@@ -367,6 +377,8 @@ Link annotations that tell search engines which language or regional versions of
 Also called: x-default.
 
 Checked by [hreflang: x-default and the self-referencing tag](/rules/i18n/hreflang).
+
+[Read the full definition](/glossary/hreflang).
 
 ### HSTS \{#hsts\}
 
@@ -453,6 +465,8 @@ Checked by [Third-party scripts and INP: what squirrel counts per page](/rules/p
 Links between pages of the same site, which carry crawlers and readers through it and signal which pages matter.
 
 Checked by [Internal link count per page: too few and too many](/rules/links/internal-links), [Pages with only one internal link pointing to them](/rules/links/weak-internal-links), [Linked only from the nav and footer: no editorial links](/rules/links/no-contextual-inbound), [Dead-end page: no outgoing internal links to continue with](/rules/links/dead-end-pages), [Orphan pages: pages with too few inbound internal links](/rules/links/orphan-pages), [rel=nofollow on an internal link: usually a mistake](/rules/links/nofollow-internal).
+
+[Read the full definition](/glossary/internal-linking).
 
 ## J
 
@@ -548,6 +562,8 @@ A `<meta name="description">` summary of the page that search engines may use as
 
 Checked by [Meta description length: the 120 to 160 character range](/rules/core/meta-description), [Duplicate meta descriptions across pages](/rules/content/duplicate-description).
 
+[Read the full definition](/glossary/meta-description).
+
 ### Minification \{#minification\}
 
 Removing whitespace, comments and long names from CSS and JavaScript so the file is smaller without changing behaviour.
@@ -608,6 +624,8 @@ Also called: og tags, og:image, Twitter card.
 
 Checked by [Missing og:image: the Open Graph tags squirrel checks](/rules/core/og-tags), [og:image size: the 1200 by 630 recommendation](/rules/social/og-image-size), [og:url versus canonical: why they should be the same URL](/rules/social/og-url-match), [Favicon and theme-color that differ across the site](/rules/social/asset-divergence), [twitter:card: the card types and the Open Graph fallback](/rules/core/twitter-cards).
 
+[Read the full definition](/glossary/open-graph).
+
 ### Organization schema \{#organization-schema\}
 
 Organization structured data naming the business behind a site, its logo, contact points and sameAs profiles.
@@ -621,6 +639,8 @@ Checked by [Organization schema: name, url, logo and sameAs checks](/rules/schem
 A page that no other crawled page links to, so crawlers and readers only reach it through a sitemap or a direct URL.
 
 Checked by [Orphan pages: pages with too few inbound internal links](/rules/links/orphan-pages), [Linked only from the nav and footer: no editorial links](/rules/links/no-contextual-inbound), [Hidden orphan page: reachable but linked from nowhere](/rules/integrity/orphan-page).
+
+[Read the full definition](/glossary/orphan-page).
 
 ## P
 
@@ -816,6 +836,8 @@ The `<title>` element in the page head; browsers show it in the tab and search e
 
 Checked by [Title tag length: the 30 to 75 character range squirrel uses](/rules/core/meta-title), [Duplicate page titles: the site-wide uniqueness check](/rules/core/title-unique), [Duplicate title tags: the same title on several pages](/rules/content/duplicate-title), [Inconsistent page titles: pages breaking the template](/rules/content/title-pattern-outlier).
 
+[Read the full definition](/glossary/title-tag).
+
 ### Token storage \{#token-storage\}
 
 Where a web app keeps session or auth tokens; tokens in localStorage are readable by any script on the page.
@@ -849,6 +871,8 @@ Checked by [URL parameters: how many is too many, and what to do](/rules/url/par
 The readable last part of a URL path; short, lowercase, hyphen-separated words work best.
 
 Checked by [Non-descriptive URL slug: numeric IDs and generic patterns](/rules/url/slug-keywords), [Mixed URL conventions: finding the minority form](/rules/url/slug-convention), [Stop words in a URL slug: when to drop them](/rules/url/stop-words), [Underscores in URLs: why hyphens separate words](/rules/url/hyphens), [Special characters in a URL path: what breaks and why](/rules/url/special-chars), [Uppercase in a URL: the duplicate content it creates](/rules/url/lowercase), [URL length: when a URL is long enough to be a problem](/rules/url/length).
+
+[Read the full definition](/glossary/url-slug).
 
 ## V
 
