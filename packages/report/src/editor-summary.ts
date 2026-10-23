@@ -162,7 +162,9 @@ function buildCoverage(report: AuditReport): EditorSummaryCoverageInput | undefi
   if (!scope || scannedPages === undefined) return undefined;
   const maxPages = count(scope.maxPages);
   const knownPages = count(report.coverage?.knownPages);
-  const unfetchedPages = count(report.rateLimited?.unfetched);
+  // A rate-limited run's count already includes the URLs still queued; any
+  // other run that stopped short has only those (`scanScope.unfetched`).
+  const unfetchedPages = count(report.rateLimited?.unfetched) ?? count(scope.unfetched);
   return {
     scannedPages,
     ...(maxPages !== undefined ? { maxPages } : {}),

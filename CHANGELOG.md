@@ -25,7 +25,7 @@ How it works:
 
 ### Fixed
 
-- **A capped audit counts the pages it found but did not reach.** When a crawl stops before it fetches every page it found, the in-scope URLs still queued (sitemap entries and links that passed the scope and robots checks) now count as discovered, so a 200-page audit of a bigger site no longer reads "200 of 200 discovered pages". A local HTML report shows the count as the floor it is ("Scanned 200 of 731+ discovered pages"), the console, text and Markdown scan lines add "531 more discovered but not fetched", JSON carries it in `meta.unfetched` and the LLM and XML formats in `<scan-scope unfetched="...">` ([JSON output](https://docs.squirrelscan.com/configuration/output#json-output-schema)).
+- **A capped audit counts the pages it found but did not reach.** When a crawl stops before it fetches every page it found, the in-scope URLs still queued (sitemap entries and links that passed the scope and robots checks) now count as discovered, so a 200-page audit of a bigger site no longer reads "200 of 200 discovered pages". A local HTML report shows the count as the floor it is ("Scanned 200 of 731+ discovered pages"), the console, text and Markdown scan lines add "531 more discovered but not fetched", JSON carries it in `meta.unfetched` and the LLM and XML formats in `<scan-scope unfetched="...">`, and the editor's summary request sends it as pages found but not fetched ([JSON output](https://docs.squirrelscan.com/configuration/output#json-output-schema)).
 
 ## v0.0.130 (2026-10-23)
 

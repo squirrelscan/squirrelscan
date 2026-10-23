@@ -403,7 +403,10 @@ export interface EditorSummaryCoverageInput {
   timeStopped: boolean;
   /** Pages the audit knows exist (`coverage.knownPages`), when reported. */
   knownPages?: number;
-  /** Pages discovered but never fetched (`rateLimited.unfetched`), when reported. */
+  /**
+   * Pages discovered but never fetched (`rateLimited.unfetched`, else
+   * `scanScope.unfetched`), when reported.
+   */
   unfetchedPages?: number;
 }
 

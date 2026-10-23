@@ -103,6 +103,31 @@ describe("buildEditorSummaryRequest", () => {
     });
   });
 
+  const CAPPED_QUEUED = {
+    origin: "cloud" as const,
+    maxPages: 200,
+    pagesCrawled: 200,
+    capped: true,
+    unfetched: 531,
+  };
+
+  test("a capped crawl that was not rate limited sends the URLs it left queued", () => {
+    const req = buildEditorSummaryRequest(
+      report({
+        scanScope: CAPPED_QUEUED,
+      }),
+    );
+    expect(req.coverage?.unfetchedPages).toBe(531);
+    // A rate-limited run's own count already includes them, so it wins.
+    const throttled = buildEditorSummaryRequest(
+      report({
+        scanScope: CAPPED_QUEUED,
+        rateLimited: { pages: 5, hosts: [], unfetched: 536 },
+      }),
+    );
+    expect(throttled.coverage?.unfetchedPages).toBe(536);
+  });
+
   test("marks a time-stopped crawl and leaves unknown counts out", () => {
     const req = buildEditorSummaryRequest(
       report({ scanScope: { origin: "cli", pagesCrawled: 34, capped: false, stopReason: "time" } }),
