@@ -30,7 +30,7 @@
       ],
       "authority": [
         "https://developers.google.com/search/docs/crawling-indexing/robots/intro",
-        "https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt",
+        "https://developers.google.com/crawling/docs/robots-txt/robots-txt-spec",
         "https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag",
         "https://developers.google.com/crawling/docs/crawlers-fetchers/overview-google-crawlers"
       ],
@@ -72,7 +72,7 @@
         "https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap",
         "https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview",
         "https://developers.google.com/search/blog/2008/01/sitemaps-faqs",
-        "https://developers.google.com/search/docs/crawling-indexing/http-network-errors"
+        "https://developers.google.com/crawling/docs/troubleshooting/http-status-codes"
       ],
       "grounding_note": null,
       "batch": "3a-crawl-index"
@@ -166,7 +166,7 @@
       "authority": [
         "https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag",
         "https://developers.google.com/search/docs/appearance/snippet",
-        "https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt",
+        "https://developers.google.com/crawling/docs/robots-txt/robots-txt-spec",
         "https://developers.google.com/search/docs/crawling-indexing/robots/intro"
       ],
       "grounding_note": null,
@@ -196,7 +196,7 @@
       "authority": [
         "https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag",
         "https://developers.google.com/search/docs/crawling-indexing/block-indexing",
-        "https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt",
+        "https://developers.google.com/crawling/docs/robots-txt/robots-txt-spec",
         "https://developers.google.com/search/blog/2026/03/crawler-blog-post"
       ],
       "grounding_note": null,
@@ -229,7 +229,7 @@
         "https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag",
         "https://developers.google.com/search/docs/crawling-indexing/block-indexing",
         "https://developers.google.com/search/docs/crawling-indexing/robots/intro",
-        "https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt"
+        "https://developers.google.com/crawling/docs/robots-txt/robots-txt-spec"
       ],
       "grounding_note": null,
       "batch": "3a-crawl-index"
@@ -260,9 +260,9 @@
       "tools": [],
       "authority": [
         "https://developers.google.com/search/docs/crawling-indexing/301-redirects",
-        "https://developers.google.com/search/docs/crawling-indexing/large-site-managing-crawl-budget",
+        "https://developers.google.com/crawling/docs/crawl-budget",
         "https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap",
-        "https://developers.google.com/search/docs/crawling-indexing/http-network-errors"
+        "https://developers.google.com/crawling/docs/troubleshooting/http-status-codes"
       ],
       "grounding_note": "Google says crawl budget is a concern mainly for very large or fast-changing sites; say so.",
       "batch": "3a-crawl-index"
@@ -288,8 +288,8 @@
       "tools": [],
       "authority": [
         "https://developers.google.com/search/docs/crawling-indexing/troubleshoot-crawling-errors",
-        "https://developers.google.com/search/docs/crawling-indexing/http-network-errors",
-        "https://developers.google.com/search/docs/crawling-indexing/large-site-managing-crawl-budget"
+        "https://developers.google.com/crawling/docs/troubleshooting/http-status-codes",
+        "https://developers.google.com/crawling/docs/crawl-budget"
       ],
       "grounding_note": null,
       "batch": "3a-crawl-index"
@@ -319,7 +319,7 @@
       "tools": [],
       "authority": [
         "https://developers.google.com/search/docs/crawling-indexing/301-redirects",
-        "https://developers.google.com/search/docs/crawling-indexing/large-site-managing-crawl-budget",
+        "https://developers.google.com/crawling/docs/crawl-budget",
         "https://developers.google.com/search/docs/crawling-indexing/links-crawlable",
         "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls"
       ],
@@ -353,10 +353,10 @@
       "learn": [],
       "tools": [],
       "authority": [
-        "https://developers.google.com/search/docs/crawling-indexing/http-network-errors",
+        "https://developers.google.com/crawling/docs/troubleshooting/http-status-codes",
         "https://developers.google.com/search/docs/crawling-indexing/links-crawlable",
         "https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap",
-        "https://developers.google.com/search/docs/crawling-indexing/large-site-managing-crawl-budget"
+        "https://developers.google.com/crawling/docs/crawl-budget"
       ],
       "grounding_note": null,
       "batch": "3a-crawl-index"
@@ -407,7 +407,7 @@
       "tools": [],
       "authority": [
         "https://developers.google.com/search/blog/2026/03/crawler-blog-post",
-        "https://developers.google.com/search/docs/crawling-indexing/large-site-managing-crawl-budget",
+        "https://developers.google.com/crawling/docs/crawl-budget",
         "https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag"
       ],
       "grounding_note": "Quote the limits exactly as the rule pages state them; the limits changed in 2026.",
@@ -729,7 +729,7 @@
       ],
       "authority": [
         "https://www.w3.org/WAI/WCAG22/Understanding/bypass-blocks.html",
-        "https://developers.google.com/search/docs/crawling-indexing/http-network-errors",
+        "https://developers.google.com/crawling/docs/troubleshooting/http-status-codes",
         "https://developers.google.com/search/docs/crawling-indexing/links-crawlable",
         "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/a"
       ],
@@ -2324,7 +2324,7 @@
         "https://web.dev/articles/why-https-matters",
         "https://developer.mozilla.org/en-US/docs/Glossary/Source_map",
         "https://datatracker.ietf.org/doc/html/rfc1918",
-        "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/01-Information_Gathering/05-Review_Web_Page_Content_for_Information_Leakage"
+        "https://wstg.owasp.org/stable/4-Web_Application_Security_Testing/01-Information_Gathering/05-Review_Webpage_Content_for_Information_Leakage/"
       ],
       "grounding_note": null,
       "batch": "5-security"
@@ -3037,7 +3037,7 @@
       "learn": [],
       "tools": [],
       "authority": [
-        "https://developers.google.com/search/docs/crawling-indexing/crawling-managing-faceted-navigation",
+        "https://developers.google.com/crawling/docs/faceted-navigation",
         "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls"
       ],
       "grounding_note": null,
@@ -3308,7 +3308,7 @@
       "authority": [
         "https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics",
         "https://developers.google.com/crawling/docs/crawlers-fetchers/overview-google-crawlers",
-        "https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt",
+        "https://developers.google.com/crawling/docs/robots-txt/robots-txt-spec",
         "https://web.dev/articles/rendering-on-the-web"
       ],
       "grounding_note": "Canonical term. Never 'agent readiness' or 'AI readiness' (Cloudflare's product name may be cited as a proper noun only).",
@@ -3445,7 +3445,7 @@
       "authority": [
         "https://developers.google.com/crawling/docs/crawlers-fetchers/overview-google-crawlers",
         "https://developers.google.com/search/docs/crawling-indexing/robots/intro",
-        "https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt",
+        "https://developers.google.com/crawling/docs/robots-txt/robots-txt-spec",
         "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/403"
       ],
       "grounding_note": null,
@@ -3471,7 +3471,7 @@
       "learn": [],
       "tools": [],
       "authority": [
-        "https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt",
+        "https://developers.google.com/crawling/docs/robots-txt/robots-txt-spec",
         "https://www.rfc-editor.org/rfc/rfc9309.html",
         "https://contentsignals.org/"
       ],
