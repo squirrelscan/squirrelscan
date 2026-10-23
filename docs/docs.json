@@ -658,6 +658,18 @@
         ]
       },
       {
+        "tab": "Glossary",
+        "icon": "book-a",
+        "groups": [
+          {
+            "group": "Glossary",
+            "pages": [
+              "glossary/index"
+            ]
+          }
+        ]
+      },
+      {
         "tab": "Reference",
         "icon": "terminal",
         "groups": [

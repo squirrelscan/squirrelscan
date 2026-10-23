@@ -1,0 +1,31 @@
+# Writing a glossary term page
+
+Nothing in `docs/scripts/` is published. This note and `term-template.mdx` are for authors.
+
+## Steps
+
+1. Pick a term in `terms.json` and set `"format": "page"`. Its `title` (at most 60 characters) becomes the page title, and `term` becomes the sidebar label. Both are written into the page frontmatter by the generator, so edit them in `terms.json`, not in the page.
+2. Copy `term-template.mdx` to `docs/glossary/<slug>.mdx`. The slug is the term's `slug` and never changes; a rename needs a redirect in `docs.json`.
+3. Write the hand-written sections. Leave the marker pairs empty.
+4. Run `bun scripts/glossary.ts --write` in `docs/`. It fills the markers, adds the page to the Glossary tab in `docs.json` and points every link to the term (index entry, related terms, hub key terms) at the new page. Run it a second time: it must report nothing to write.
+5. Run `make validate` in `docs/`.
+
+## Generated blocks
+
+| Marker | What the generator writes |
+|---|---|
+| `glossary:hub` | `Category:` line linking the term's hub |
+| `glossary:rules` | the table of the term's rules, with each rule page's description and severity |
+| `glossary:run` | a `squirrel audit` command with `--rule-include` set to the term's rules |
+| `glossary:related` | the `## Related terms` heading and one line per related term |
+
+Text outside the markers is yours and is never rewritten. The glossary index (`glossary/index.mdx`) is all generated except its intro.
+
+## Budget and copy
+
+- 250 to 600 words of hand-written prose.
+- Open with one sentence that defines the term. Then why it matters, how squirrelscan checks it, how to fix it.
+- Every factual sentence comes from a rule page or a source in References. If squirrelscan does not measure something (LCP, INP and CLS, GEO, E-E-A-T), say so.
+- Do not restate thresholds a rule owns: link to the rule page.
+- Sentence-case headings, no em-dash, "audit rules" not "SEO rules", "agent experience (AX)", never "agent readiness".
+- Description at most 155 characters. The check fails on a longer one.

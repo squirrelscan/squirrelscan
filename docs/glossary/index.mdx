@@ -1,0 +1,881 @@
+---
+title: "Website audit glossary: audit, performance and AX terms"
+description: "Short definitions of the terms in squirrelscan reports and rule pages, from canonical URL to llms.txt, each linked to the rules that check it."
+sidebarTitle: "A to Z"
+---
+
+This glossary defines the terms you meet in squirrelscan reports and on the [rule pages](/rules): crawling and indexing, page speed, security headers, accessibility and agent experience (AX). Each entry links to the rules that check it, and the rule page has the details and the fix.
+
+{/* glossary:index:start */}
+
+[A](#a) · [B](#b) · [C](#c) · [D](#d) · [E](#e) · [F](#f) · [G](#g) · [H](#h) · [I](#i) · [J](#j) · [K](#k) · [L](#l) · [M](#m) · [N](#n) · [O](#o) · [P](#p) · [R](#r) · [S](#s) · [T](#t) · [U](#u) · [V](#v) · [W](#w) · [X](#x) · [Y](#y)
+
+## A
+
+### Accessible name \{#accessible-name\}
+
+The name assistive technology announces for an element, computed from its content, label, aria-label or aria-labelledby.
+
+Also called: aria-label.
+
+Checked by [aria-label: which elements need one and how to check](/rules/a11y/aria-labels), [Accessible names for buttons: what counts and how to check](/rules/a11y/button-name), [Input fields with no accessible name, ARIA and native](/rules/a11y/aria-input-field-name), [Command roles: buttons, links and menu items need names](/rules/a11y/aria-command-name), [Dialog accessible name: role=dialog and the dialog element](/rules/a11y/aria-dialog-name), [Dropdowns with no accessible name: naming a select](/rules/a11y/select-name), [iframe title: naming embedded frames for screen readers](/rules/a11y/frame-title), [Visible label missing from the accessible name](/rules/a11y/label-content-name-mismatch), [Accessible name for a meter element and role=meter](/rules/a11y/aria-meter-name), [Accessible name for a progress bar and role=progressbar](/rules/a11y/aria-progressbar-name), [Checkboxes, radios and switches with no accessible name](/rules/a11y/aria-toggle-field-name), [role=tooltip with no content: what to check](/rules/a11y/aria-tooltip-name), [role=treeitem: naming every node in a tree](/rules/a11y/aria-treeitem-name), [Tables sharing a name, and tables with none](/rules/a11y/table-duplicate-name).
+
+### Ad blocker filter lists \{#filter-list\}
+
+Community-maintained rule lists (EasyList, EasyPrivacy) that ad and tracker blockers use to hide elements and block requests.
+
+Also called: EasyList.
+
+Checked by [Adblock cosmetic filters: classes that get hidden](/rules/adblock/element-hiding), [Requests ad blockers stop: links and resources on EasyList](/rules/adblock/blocked-links), [EasyPrivacy matches: analytics that silently does not run](/rules/adblock/privacy-blocked).
+
+### Affiliate disclosure \{#affiliate-disclosure\}
+
+A clear statement that a page earns commission from links, required by the FTC in the US and similar rules elsewhere.
+
+Checked by [Affiliate disclosure: detecting affiliate links without one](/rules/eeat/affiliate-disclosure).
+
+### Agent experience (AX) \{#agent-experience\}
+
+How well a site serves AI agents that read it, find their way around it and act on it, the way UX serves people.
+
+Also called: AX.
+
+Checked by [Content that needs JavaScript: invisible to raw-HTML agents](/rules/ax/content-without-js), [Text to HTML ratio: the token cost of a page for an agent](/rules/ax/token-weight), [Accept: text/markdown: serving Markdown to AI agents](/rules/ax/markdown-response), [AI crawlers in robots.txt: which bots you block, by class](/rules/ax/ai-crawlers), [Blocking AI agents at the edge: what robots.txt hides](/rules/ax/agent-blocking), [llms.txt: what the file is and how squirrel validates it](/rules/ax/llms-txt), [AGENTS.md: the paths squirrel probes and what counts](/rules/ax/agents-md), [MCP and A2A manifests under .well-known: what squirrel finds](/rules/ax/well-known-agent), [Content-Signal in robots.txt: search, ai-input, ai-train](/rules/ax/content-signals), [api-catalog and OpenAPI: how an agent finds your API](/rules/ax/api-discovery).
+
+### AGENTS.md \{#agents-md\}
+
+A Markdown file of instructions for coding agents working in a repository or against a docs site.
+
+Checked by [AGENTS.md: the paths squirrel probes and what counts](/rules/ax/agents-md).
+
+### AI crawler \{#ai-crawler\}
+
+A bot that fetches pages for AI companies, in three classes: training crawlers, AI search indexers and user-triggered fetchers, each with its own user-agent token.
+
+Also called: GPTBot, ClaudeBot, Common Crawl.
+
+Checked by [AI crawlers in robots.txt: which bots you block, by class](/rules/ax/ai-crawlers), [Blocking AI agents at the edge: what robots.txt hides](/rules/ax/agent-blocking), [robots.txt: what to put in it and how squirrel checks it](/rules/crawl/robots-txt), [Common Crawl and Wayback: is your site in the archives](/rules/ax/archive-indexing).
+
+### AI-generated content \{#ai-generated-content\}
+
+Text written by a language model; Google's position is that how content is made matters less than whether it is helpful.
+
+Checked by [AI content detection: why this rule is retired](/rules/ai/ai-content).
+
+### Alt text \{#alt-text\}
+
+The alt attribute that gives an image a text alternative for screen readers, failed loads and search engines.
+
+Checked by [Missing alt attribute: what an empty alt means](/rules/images/alt-text), [Redundant alt text: image of, filenames and captions](/rules/a11y/image-redundant-alt), [input type=image without alt: an unnamed submit button](/rules/a11y/input-image-alt), [object elements with no alternative content](/rules/a11y/object-alt).
+
+### Anchor text \{#anchor-text\}
+
+The visible, clickable text of a link, which tells readers and search engines what the target is about.
+
+Checked by [Empty and generic anchor text: click here and icons](/rules/links/anchor-text), [Link text: why 'click here' fails and what to use](/rules/a11y/link-text), [Identical link text pointing at different pages](/rules/a11y/identical-links-same-purpose).
+
+### ARIA \{#aria\}
+
+Accessible Rich Internet Applications: roles, states and properties that describe custom widgets to assistive technology.
+
+Also called: WAI-ARIA.
+
+Checked by [Invalid ARIA role values and how to check them](/rules/a11y/aria-roles), [Invalid aria-* attribute names, aria-labeledby included](/rules/a11y/aria-valid-attr), [Invalid ARIA attribute values and the types they need](/rules/a11y/aria-valid-attr-value), [ARIA attributes that are not allowed on an element](/rules/a11y/aria-allowed-attr), [Required ARIA attributes for a role, and what is missing](/rules/a11y/aria-required-attr), [ARIA roles that require particular child roles](/rules/a11y/aria-required-children), [ARIA roles that require a particular parent role](/rules/a11y/aria-required-parent), [Deprecated and abstract ARIA roles, and what to use instead](/rules/a11y/aria-deprecated-role), [aria-hidden on body or html: what it breaks](/rules/a11y/aria-hidden-body), [Focusable elements inside aria-hidden: the tab trap](/rules/a11y/aria-hidden-focus), [ARIA references pointing at duplicate or missing ids](/rules/a11y/duplicate-id-aria), [role=text with focusable children: why it breaks](/rules/a11y/aria-text).
+
+### Article schema \{#article-schema\}
+
+Article, NewsArticle or BlogPosting structured data with headline, dates, author and publisher.
+
+Checked by [Article schema: headline, author and datePublished checks](/rules/schema/article), [An author who is only a name string is not an entity](/rules/schema/entity-authors), [Your pages disagree about who publishes this site](/rules/schema/entity-publisher-mismatch).
+
+### Author byline \{#author-byline\}
+
+The visible author name on an article, ideally linked to an author page and matched by an author entity in structured data.
+
+Checked by [Author bylines on content pages: what share carry one](/rules/eeat/author-byline), [Author expertise: bio pages and Person schema](/rules/eeat/author-expertise), [Author attribution: schema, rel=author and visible bylines](/rules/content/author-info), [An author who is only a name string is not an entity](/rules/schema/entity-authors).
+
+## B
+
+### Broken link \{#broken-link\}
+
+A link whose target answers with an error, does not resolve, or is malformed.
+
+Also called: dead link.
+
+Checked by [Broken internal links: 404s inside your own site](/rules/links/broken-links), [Broken external links: link rot on pages you cannot fix](/rules/links/broken-external-links), [Cloud dead-link checking: the shared external link cache](/rules/links/dead-links), [Invalid links: hrefs that do not parse as a URL](/rules/links/invalid-links), [Broken anchor links: #fragments that point at nothing](/rules/links/broken-anchors), [Broken images: empty and placeholder src attributes](/rules/images/broken-images).
+
+## C
+
+### Canonical URL \{#canonical-url\}
+
+The URL a page declares, with `<link rel="canonical">` or a Link header, as the preferred address for its content.
+
+Also called: rel=canonical.
+
+Checked by [rel=canonical: presence, absolute form and self-reference](/rules/core/canonical), [Link rel=canonical header vs the HTML tag: the mismatch](/rules/core/canonical-header), [Canonicals in two forms: www, scheme and trailing slash](/rules/core/canonical-form-drift), [Canonical URL resolves through a redirect: how to spot it](/rules/crawl/canonical-chain), [Pagination canonicals: why page 2 is not page 1](/rules/crawl/pagination), [og:url versus canonical: why they should be the same URL](/rules/social/og-url-match).
+
+### Captions \{#captions\}
+
+Synchronised text of a video's dialogue and sounds, supplied as a `<track kind="captions">` file.
+
+Checked by [Video captions: track elements and embedded players](/rules/a11y/video-captions), [Video captions: the track element and why it is required](/rules/video/video-accessible).
+
+### Character encoding \{#character-encoding\}
+
+The mapping from bytes to characters (normally UTF-8) declared in the Content-Type header or a meta charset tag; a mismatch produces mojibake.
+
+Also called: charset, mojibake.
+
+Checked by [meta charset UTF-8: where it goes and what squirrel checks](/rules/core/charset), [Mojibake: â€™ and other encoding corruption in page text](/rules/content/mojibake).
+
+### Client-side redirect \{#client-side-redirect\}
+
+A redirect done in the page (meta refresh or JavaScript) rather than with an HTTP 3xx response.
+
+Also called: meta refresh.
+
+Checked by [meta http-equiv=refresh: redirects and auto-refresh](/rules/a11y/meta-refresh), [Script URL redirects: a 3xx in front of every script load](/rules/perf/js-redirects).
+
+### Client-side rendering \{#client-side-rendering\}
+
+Building page content in the browser with JavaScript; agents and many fetchers that do not run JavaScript see an empty page.
+
+Also called: JavaScript rendering.
+
+Checked by [Content that needs JavaScript: invisible to raw-HTML agents](/rules/ax/content-without-js), [Audits that need a browser: what a static crawl cannot see](/rules/perf/browser-required).
+
+### Cloaking \{#cloaking\}
+
+Serving search engines or particular user agents different content from what visitors see, a Google spam policy violation.
+
+Also called: hidden text and links.
+
+Checked by [Cloaking: showing Googlebot a different page](/rules/integrity/cloaking), [Hidden text and links: what Google's spam policy covers](/rules/content/hidden-text).
+
+### Color contrast ratio \{#color-contrast\}
+
+The luminance ratio between text and its background; WCAG AA asks for 4.5:1 for body text and 3:1 for large text.
+
+Checked by [Color contrast: the 4.5:1 rule and how to check it](/rules/a11y/color-contrast), [Links in a paragraph told apart by color alone](/rules/a11y/link-in-text-block).
+
+### Content freshness \{#content-freshness\}
+
+How current a page is and how consistently it says so: visible dates, dateModified, sitemap lastmod and copyright year.
+
+Checked by [Freshness signals: the dates a page publishes about itself](/rules/content/freshness), [datePublished and dateModified across content pages](/rules/eeat/content-dates), [Visible date disagrees with schema: which date is wrong](/rules/content/date-agreement), [Footer copyright year behind the current year](/rules/content/stale-copyright), [Sitemap lastmod disagrees with the page's dateModified](/rules/crawl/sitemap-lastmod-drift).
+
+### Content gap analysis \{#content-gap\}
+
+Finding the topics and queries a site's audience searches for that the site does not yet cover.
+
+Also called: keyword gap.
+
+Checked by [Content gaps: topic clusters your site does not cover](/rules/gaps/content), [Keyword gaps: terms competitors rank for and you do not](/rules/gaps/keywords).
+
+### Content Security Policy (CSP) \{#content-security-policy\}
+
+A response header listing where a page may load scripts, styles, frames and other resources from, limiting what injected code can do.
+
+Checked by [Content-Security-Policy: what to set and how to check it](/rules/security/csp), [CSP blocks your own scripts, frames and analytics endpoints](/rules/security/csp-blocks-own-resources).
+
+### Content Signals \{#content-signals\}
+
+Content-Signal lines in robots.txt that state whether content may be used for search, AI input or AI training.
+
+Checked by [Content-Signal in robots.txt: search, ai-input, ai-train](/rules/ax/content-signals).
+
+### Cookie attributes \{#cookie-attributes\}
+
+The Secure, HttpOnly and SameSite flags on Set-Cookie that limit where a cookie is sent and whether scripts can read it.
+
+Also called: Secure, HttpOnly, SameSite.
+
+Checked by [Cookie flags: Secure, HttpOnly and SameSite on Set-Cookie](/rules/security/cookie-flags), [Third-party cookies: which external domains a page loads](/rules/security/third-party-cookies).
+
+### Cookie consent \{#cookie-consent\}
+
+The banner and mechanism that asks visitors before setting non-essential cookies, as GDPR and ePrivacy require in the EU.
+
+Also called: Google Consent Mode.
+
+Checked by [Cookie consent banner: detecting a consent mechanism](/rules/legal/cookie-consent), [Google Consent Mode v2: the four consent parameters](/rules/analytics/consent-mode).
+
+### Core Web Vitals \{#core-web-vitals\}
+
+Google's three user-experience metrics: LCP for loading, INP for responsiveness and CLS for visual stability, judged at the 75th percentile of real visits.
+
+Checked by [LCP image not preloaded: what squirrel counts as a hero](/rules/perf/lcp-hints), [Third-party scripts and INP: what squirrel counts per page](/rules/perf/inp-hints), [Images without width and height: the CLS risk squirrel finds](/rules/perf/cls-hints), [Audits that need a browser: what a static crawl cannot see](/rules/perf/browser-required).
+
+### Crawl budget \{#crawl-budget\}
+
+The number of URLs a search engine is willing and able to crawl on a site in a given time, set by crawl capacity and crawl demand.
+
+Checked by [Redirect chains: when one hop turns into three](/rules/crawl/redirect-chain), [4XX pages in sitemap: dead URLs you are still submitting](/rules/crawl/sitemap-4xx), [Soft 404: error content served with an HTTP 200 status](/rules/crawl/soft-404), [URL parameters: how many is too many, and what to do](/rules/url/parameters), [Links pointing at redirecting URLs: the hop on every click](/rules/links/redirect-chains).
+
+### Cumulative Layout Shift (CLS) \{#cls\}
+
+A score for how much visible content moves unexpectedly while the page is in use; good is 0.1 or less.
+
+Checked by [Images without width and height: the CLS risk squirrel finds](/rules/perf/cls-hints), [Image width and height attributes: preventing layout shift](/rules/images/dimensions), [font-display swap: the @font-face rule squirrel looks for](/rules/perf/font-loading).
+
+## D
+
+### DOM size \{#dom-size\}
+
+The number and depth of elements in a page's document tree; large DOMs slow style calculation and interactions.
+
+Checked by [Large DOM: node count, depth and children per element](/rules/perf/dom-size).
+
+### Doorway page \{#doorway-page\}
+
+A page made to rank for a query and funnel visitors elsewhere, often many near-identical pages per keyword or city.
+
+Checked by [Doorway page: injected affiliate spam on a legitimate site](/rules/integrity/seo-doorway), [Service area pages: the location URLs squirrel looks for](/rules/local/service-area).
+
+### Duplicate content \{#duplicate-content\}
+
+The same or near-identical content reachable at more than one URL, or repeated titles and descriptions across pages.
+
+Checked by [Duplicate title tags: the same title on several pages](/rules/content/duplicate-title), [Duplicate meta descriptions across pages](/rules/content/duplicate-description), [Duplicate page titles: the site-wide uniqueness check](/rules/core/title-unique), [rel=canonical: presence, absolute form and self-reference](/rules/core/canonical), [Trailing slash: /page and /page/ are two different URLs](/rules/url/trailing-slash), [Uppercase in a URL: the duplicate content it creates](/rules/url/lowercase), [URL parameters: how many is too many, and what to do](/rules/url/parameters).
+
+## E
+
+### E-E-A-T \{#e-e-a-t\}
+
+Experience, expertise, authoritativeness and trustworthiness: the qualities Google's quality raters are told to assess, with trust at the centre.
+
+Also called: EEAT.
+
+Checked by [Author bylines on content pages: what share carry one](/rules/eeat/author-byline), [Author expertise: bio pages and Person schema](/rules/eeat/author-expertise), [About page: what it establishes and how squirrel finds it](/rules/eeat/about-page), [Contact page: finding it and counting the contact methods](/rules/eeat/contact-page), [Authoritative citations: sources a reader can check](/rules/eeat/citations), [Trust signals: reviews, testimonials and social proof](/rules/eeat/trust-signals), [Editorial policy: publishing how the content gets made](/rules/eeat/editorial-policy), [Authority signals: an AI read of authorship and citations](/rules/eeat/authority-signals).
+
+### Entity \{#entity\}
+
+A thing a site describes in structured data, such as an organization, person or product, identified across pages so search engines and agents can tell it is one thing.
+
+Checked by [One organization, or sixty? Entities declared without an @id](/rules/schema/entity-identity), [A business with nothing to attach its reputation to](/rules/schema/entity-organization-missing), [Your organization is not connected to anything that corroborates it](/rules/schema/entity-sameas-missing), [The same entity, two different logos](/rules/schema/entity-conflicts), [An Organization on one page, a LocalBusiness on another](/rules/schema/entity-type-drift), [An @id that nothing points at](/rules/schema/entity-orphan).
+
+## F
+
+### FAQ schema \{#faq-schema\}
+
+FAQPage structured data marking up question-and-answer pairs; Google now shows FAQ rich results only for a narrow set of sites.
+
+Also called: FAQPage.
+
+Checked by [FAQPage schema: mainEntity, Question and acceptedAnswer](/rules/schema/faq).
+
+### fetchpriority \{#fetchpriority\}
+
+An HTML attribute (high, low, auto) that hints how urgently the browser should fetch an image, script or link.
+
+Checked by [fetchpriority='high': the LCP image hint squirrel checks](/rules/perf/lcp-fetchpriority).
+
+### font-display \{#font-display\}
+
+The @font-face descriptor (swap, optional, fallback) that decides what text shows while a web font loads.
+
+Also called: web font loading.
+
+Checked by [font-display swap: the @font-face rule squirrel looks for](/rules/perf/font-loading), [Google Fonts blocking render: the font CSS squirrel flags](/rules/perf/font-delivery).
+
+### Form labels \{#form-labels\}
+
+The `<label>` or accessible name tied to each form control, plus autocomplete tokens, so people know what to enter.
+
+Checked by [Form labels: which inputs need one and how to check](/rules/a11y/form-labels), [One control, two labels: why multiple labels confuse](/rules/a11y/form-field-multiple-labels), [autocomplete: the right token for every form field](/rules/a11y/autocomplete-tokens), [Input type, enterkeyhint and novalidate on forms](/rules/a11y/input-types), [Inputs that block paste, and why that fails users](/rules/a11y/paste-inputs).
+
+### Fragment link \{#anchor-link\}
+
+A link to an id within a page (#section); it is broken when no element on the target page carries that id.
+
+Also called: jump link, #anchor.
+
+Checked by [Broken anchor links: #fragments that point at nothing](/rules/links/broken-anchors).
+
+## G
+
+### Generative engine optimization (GEO) \{#generative-engine-optimization\}
+
+Making content more likely to be retrieved, cited and quoted by AI answer engines; the term comes from a 2023 research paper.
+
+Also called: GEO, AEO.
+
+Checked by [AI crawlers in robots.txt: which bots you block, by class](/rules/ax/ai-crawlers), [Content that needs JavaScript: invisible to raw-HTML agents](/rules/ax/content-without-js), [llms.txt: what the file is and how squirrel validates it](/rules/ax/llms-txt), [LLM parsability score: what it measures and how to raise it](/rules/ai/llm-parsability), [Invalid JSON-LD syntax: what breaks it and how to fix](/rules/schema/json-ld-valid), [Blocking AI agents at the edge: what robots.txt hides](/rules/ax/agent-blocking).
+
+### Geo meta tags \{#geo-meta-tags\}
+
+Legacy geo.region, geo.placename and geo.position meta tags that state a page's location; not to be confused with GEO, generative engine optimization.
+
+Also called: geo.position, ICBM.
+
+Checked by [geo.placename: what geo meta tags do and who reads them](/rules/local/geo-meta).
+
+### Googlebot file size limit \{#googlebot-file-size-limit\}
+
+The byte limit after which Googlebot stops reading a fetched HTML file or PDF; content past it is not indexed.
+
+Checked by [HTML document size: when a page is too big to crawl fully](/rules/crawl/html-size), [PDF size: large linked documents and what gets indexed](/rules/crawl/pdf-size).
+
+### GraphQL introspection \{#graphql-introspection\}
+
+The GraphQL feature that returns the full schema on request; left on in production it maps the API for attackers.
+
+Checked by [GraphQL introspection in production: what an open schema exposes](/rules/security/graphql-introspection), [GraphQL mutations over GET: why they open the door to CSRF](/rules/security/graphql-get-mutations).
+
+## H
+
+### Hacked site signals \{#hacked-site\}
+
+The traces a compromise leaves on a site: injected pages off the theme, phishing kits, obfuscated scripts and known malicious URLs.
+
+Also called: SEO spam, injected pages.
+
+Checked by [Kit signature: matching a page against known phishing kits](/rules/integrity/kit-signature), [Obfuscated inline script: spotting an injected payload](/rules/integrity/obfuscated-script), [Known malicious URL: checking against threat feeds](/rules/integrity/known-malicious-url), [Template discontinuity: a page that is not on your theme](/rules/integrity/template-discontinuity), [Hidden orphan page: reachable but linked from nowhere](/rules/integrity/orphan-page), [Doorway page: injected affiliate spam on a legitimate site](/rules/integrity/seo-doorway), [Brand impersonation: a sign-in page that is not the brand's](/rules/integrity/brand-impersonation), [Fake authentication overlay: full-screen login iframes](/rules/integrity/fake-auth-overlay).
+
+### Heading hierarchy \{#heading-hierarchy\}
+
+The nesting of h1 to h6 headings that gives a page its outline for readers, screen readers and parsers.
+
+Also called: H1 tag.
+
+Checked by [Skipped heading levels: h1 to h3 and other outline problems](/rules/content/heading-hierarchy), [Heading order: why skipping from h1 to h3 matters](/rules/a11y/heading-order), [Empty headings: what counts as empty and how to check](/rules/a11y/empty-heading), [Missing or multiple H1: what squirrel expects on a page](/rules/core/h1).
+
+### hreflang \{#hreflang\}
+
+Link annotations that tell search engines which language or regional versions of a page exist, with x-default as the fallback.
+
+Also called: x-default.
+
+Checked by [hreflang: x-default and the self-referencing tag](/rules/i18n/hreflang).
+
+### HSTS \{#hsts\}
+
+The Strict-Transport-Security header that tells browsers to use only HTTPS for a host for a set time.
+
+Also called: Strict-Transport-Security.
+
+Checked by [HSTS: what Strict-Transport-Security needs to be valid](/rules/security/hsts).
+
+### HTML validity \{#html-validation\}
+
+Whether the markup parses as intended: closed elements, head-only tags in the head, and no raw markup printed as text.
+
+Also called: doctype.
+
+Checked by [Malformed HTML: doctype, nesting and deprecated tags](/rules/content/broken-html), [Meta tags in the body: why they are silently ignored](/rules/content/meta-in-body), [Literal **bold** on the page: markdown that never rendered](/rules/content/unrendered-markup), [Doctype must be declared first: what it means and the fix](/rules/core/doctype).
+
+### HTTP caching \{#http-caching\}
+
+Response headers (Cache-Control, ETag, Expires) that let browsers and CDNs reuse a response instead of fetching it again.
+
+Also called: Cache-Control.
+
+Checked by [Cache-Control on a page: what squirrel reads and expects](/rules/perf/cache-headers), [Weak caching across a site: freshness, validators, gzip](/rules/perf/bad-caching).
+
+### HTTP compression \{#http-compression\}
+
+Compressing text responses (HTML, CSS, JS, JSON) with gzip, Brotli or zstd, signalled by Content-Encoding.
+
+Also called: gzip, Brotli.
+
+Checked by [No compression detected: gzip and Brotli on the response](/rules/perf/compression), [Uncompressed CSS and JS: assets served without gzip](/rules/perf/asset-compression).
+
+### HTTP status code \{#http-status-code\}
+
+The three-digit code a server returns with every response; 2xx success, 3xx redirect, 4xx client error, 5xx server error.
+
+Also called: 4xx error, 5xx error.
+
+Checked by [Broken internal links: 404s inside your own site](/rules/links/broken-links), [4XX pages in sitemap: dead URLs you are still submitting](/rules/crawl/sitemap-4xx), [Soft 404: error content served with an HTTP 200 status](/rules/crawl/soft-404), [Broken images: empty and placeholder src attributes](/rules/images/broken-images), [Broken scripts, stylesheets and fonts: files that do not load](/rules/reliability/broken-resources).
+
+### HTTPS \{#https\}
+
+HTTP over TLS, which encrypts traffic and proves the server's identity; every page and form should use it.
+
+Checked by [HTTPS: what it means when a page is not served over HTTPS](/rules/security/https), [HTTP to HTTPS redirect: how squirrel probes for it](/rules/security/http-to-https), [Form action over HTTP: the insecure form submission warning](/rules/security/form-https), [Links from an HTTPS page to an http:// destination](/rules/links/https-downgrade).
+
+## I
+
+### @id (JSON-LD node identifier) \{#entity-id\}
+
+The JSON-LD @id that gives a node a stable IRI, so other nodes and pages can reference the same entity instead of redeclaring it.
+
+Checked by [One organization, or sixty? Entities declared without an @id](/rules/schema/entity-identity), [Two plugins, two @ids, one organization split in half](/rules/schema/entity-split-identity), [A publisher that points at nothing](/rules/schema/entity-dangling), [A bare #organization is one entity per page, not one entity](/rules/schema/entity-id-format), [An @id that nothing points at](/rules/schema/entity-orphan).
+
+### Image width and height attributes \{#image-dimensions\}
+
+Declared width and height on `<img>` that let the browser reserve space before the file loads, preventing layout shift.
+
+Checked by [Image width and height attributes: preventing layout shift](/rules/images/dimensions), [Image aspect ratio mismatch: attributes versus the CSS box](/rules/images/aspect-mismatch), [Images without width and height: the CLS risk squirrel finds](/rules/perf/cls-hints).
+
+### Indexability \{#indexability\}
+
+Whether a crawled URL is eligible to be indexed: reachable, a 200 response, not noindexed, not blocked and not canonicalised elsewhere.
+
+Checked by [Page is blocked from indexing: finding the directive](/rules/crawl/indexability), [robots.txt blocked pages without noindex](/rules/crawl/indexability-conflicts), [All non-indexed pages: the full blocked list for review](/rules/crawl/all-noindex-pages), [Redundant noindex: a blocked page nobody reads it on](/rules/crawl/robots-meta-conflict).
+
+### Interaction to Next Paint (INP) \{#inp\}
+
+The latency from a user interaction to the next frame, taken across the visit; good is 200 milliseconds or less. It replaced FID in March 2024.
+
+Checked by [Third-party scripts and INP: what squirrel counts per page](/rules/perf/inp-hints), [Large DOM: node count, depth and children per element](/rules/perf/dom-size), [JavaScript bundle too large: the 250 KB and 1 MB limits](/rules/perf/js-file-size), [Same library loaded twice: duplicate JavaScript on a page](/rules/perf/duplicate-js), [core-js and Babel helpers: legacy JavaScript in a bundle](/rules/perf/legacy-js).
+
+### Internal linking \{#internal-linking\}
+
+Links between pages of the same site, which carry crawlers and readers through it and signal which pages matter.
+
+Checked by [Internal link count per page: too few and too many](/rules/links/internal-links), [Pages with only one internal link pointing to them](/rules/links/weak-internal-links), [Linked only from the nav and footer: no editorial links](/rules/links/no-contextual-inbound), [Dead-end page: no outgoing internal links to continue with](/rules/links/dead-end-pages), [Orphan pages: pages with too few inbound internal links](/rules/links/orphan-pages), [rel=nofollow on an internal link: usually a mistake](/rules/links/nofollow-internal).
+
+## J
+
+### JSON-LD \{#json-ld\}
+
+JSON for Linking Data, the format Google recommends for structured data, embedded in a `<script type="application/ld+json">` block.
+
+Checked by [Invalid JSON-LD syntax: what breaks it and how to fix](/rules/schema/json-ld-valid), [A bare #organization is one entity per page, not one entity](/rules/schema/entity-id-format), [A publisher that points at nothing](/rules/schema/entity-dangling).
+
+## K
+
+### Keyboard accessibility \{#keyboard-accessibility\}
+
+Whether every control can be reached and used with a keyboard alone, with a visible focus indicator and sensible tab order.
+
+Checked by [focus-visible: keeping a visible keyboard focus ring](/rules/a11y/focus-visible), [Positive tabindex and why it breaks the tab order](/rules/a11y/tabindex), [accesskey: why duplicate shortcuts break and how to check](/rules/a11y/accesskeys), [Focusable elements inside aria-hidden: the tab trap](/rules/a11y/aria-hidden-focus).
+
+### Keyword stuffing \{#keyword-stuffing\}
+
+Repeating a term far beyond natural use in the hope of ranking for it, which Google lists as spam.
+
+Checked by [Keyword stuffing: measuring density around your CTAs](/rules/content/keyword-stuffing), [Hidden text and links: what Google's spam policy covers](/rules/content/hidden-text).
+
+## L
+
+### Landmark regions \{#landmark\}
+
+The page regions (main, nav, header, footer) that screen reader users jump between, plus the skip link to main content.
+
+Also called: skip link.
+
+Checked by [One main landmark per page, and what happens without](/rules/a11y/landmark-one-main), [Landmark regions: main, nav and footer on every page](/rules/a11y/landmark-regions), [Skip to content: bypassing repeated navigation](/rules/a11y/skip-link).
+
+### lang attribute \{#lang-attribute\}
+
+The lang attribute on `<html>` (and on passages) that declares the language, so screen readers pick the right voice.
+
+Checked by [lang attribute on \<html\>: declaring the page's language](/rules/i18n/lang-attribute), [html lang: valid values and what a missing one breaks](/rules/a11y/html-lang-valid), [lang on elements below html: validating every tag](/rules/a11y/valid-lang), [lang and xml:lang disagreeing on the html element](/rules/a11y/html-xml-lang-mismatch).
+
+### Largest Contentful Paint (LCP) \{#lcp\}
+
+The time until the largest image or text block in the viewport renders; good is 2.5 seconds or less.
+
+Checked by [LCP image not preloaded: what squirrel counts as a hero](/rules/perf/lcp-hints), [fetchpriority='high': the LCP image hint squirrel checks](/rules/perf/lcp-fetchpriority), [loading=lazy on a hero image: the LCP delay squirrel finds](/rules/perf/lazy-above-fold), [Render-blocking resources: the ones squirrel counts in head](/rules/perf/render-blocking), [rel=preconnect: the CDN origins squirrel checks for a hint](/rules/perf/preconnect), [Time to First Byte: the 600ms and 1000ms thresholds](/rules/perf/ttfb).
+
+### Lazy loading \{#lazy-loading\}
+
+Deferring off-screen images and iframes with loading="lazy" so they load as the visitor scrolls.
+
+Checked by [Lazy loading: how much of the page defers its load](/rules/images/lazy-loading), [loading=lazy: which images need it and which must not](/rules/images/offscreen-lazy), [loading=lazy on a hero image: the LCP delay squirrel finds](/rules/perf/lazy-above-fold), [Hidden carousel slides still download: eager images inside](/rules/perf/carousel-hidden-eager).
+
+### Leaked secrets \{#leaked-secrets\}
+
+Credentials or private keys shipped to the browser in HTML, scripts or source maps.
+
+Also called: exposed API keys, source maps.
+
+Checked by [Leaked API key in client-side code: how to find one](/rules/security/leaked-secrets), [Exposed source maps: sourceMappingURL in production output](/rules/perf/source-maps), [localhost in production: dev hosts left in the markup](/rules/content/dev-leakage).
+
+### llms.txt \{#llms-txt\}
+
+A proposed Markdown file at /llms.txt that gives language models a curated map of a site's key content.
+
+Checked by [llms.txt: what the file is and how squirrel validates it](/rules/ax/llms-txt).
+
+### LocalBusiness schema \{#local-business-schema\}
+
+LocalBusiness structured data with address, opening hours and geo coordinates for a physical business.
+
+Checked by [LocalBusiness schema: required name, address or areaServed](/rules/schema/local-business), [The whole LocalBusiness block, on every single page](/rules/schema/entity-local-business-per-page), [NAP consistency: same name, address and phone everywhere](/rules/local/nap-consistency).
+
+## M
+
+### Markdown for agents \{#markdown-for-agents\}
+
+Serving a clean Markdown version of a page, through Accept: text/markdown or a .md URL, so agents read fewer tokens.
+
+Also called: content negotiation, token weight.
+
+Checked by [Accept: text/markdown: serving Markdown to AI agents](/rules/ax/markdown-response), [Text to HTML ratio: the token cost of a page for an agent](/rules/ax/token-weight).
+
+### Meta description \{#meta-description\}
+
+A `<meta name="description">` summary of the page that search engines may use as the result snippet.
+
+Checked by [Meta description length: the 120 to 160 character range](/rules/core/meta-description), [Duplicate meta descriptions across pages](/rules/content/duplicate-description).
+
+### Minification \{#minification\}
+
+Removing whitespace, comments and long names from CSS and JavaScript so the file is smaller without changing behaviour.
+
+Checked by [Unminified CSS: how squirrel tells minified from formatted](/rules/perf/unminified-css), [Unminified JavaScript: the signals squirrel reads in a file](/rules/perf/unminified-js).
+
+### Mixed content \{#mixed-content\}
+
+An HTTPS page loading scripts, styles, images or media over plain HTTP.
+
+Checked by [Mixed content: HTTP resources on an HTTPS page](/rules/security/mixed-content).
+
+### Mobile-friendly \{#mobile-friendly\}
+
+A page that works on a phone without zooming or sideways scrolling: viewport set, readable text, tappable controls, no input zoom.
+
+Also called: intrusive interstitials, web app manifest.
+
+Checked by [Missing viewport meta tag: what it does and what to set](/rules/mobile/viewport), [Font size under 12px: text too small to read on a phone](/rules/mobile/font-size), [Horizontal scroll on mobile: the usual causes](/rules/mobile/horizontal-scroll), [Tap target size: the 44 by 44 pixel guideline](/rules/mobile/tap-targets), [Form fields under 16px: why iOS Safari zooms in when one is focused](/rules/mobile/input-zoom), [Intrusive interstitials: popups that cover mobile content](/rules/mobile/interstitials), [Web app manifest: the file that sets the home-screen icon and name](/rules/mobile/web-app-manifest).
+
+### Modern image formats \{#modern-image-formats\}
+
+WebP and AVIF, which encode the same image in fewer bytes than JPEG or PNG.
+
+Also called: WebP, AVIF.
+
+Checked by [WebP and AVIF: converting from JPEG and PNG](/rules/images/modern-format), [Image optimization signals: CDNs and modern formats](/rules/images/optimized), [Oversized image files: the 200KB and 1MB thresholds](/rules/images/image-file-size), [Animated GIF on a page: convert to video for the bytes](/rules/perf/animated-content).
+
+## N
+
+### NAP consistency \{#nap-consistency\}
+
+Name, address and phone number stated the same way across a site's pages, schema and listings.
+
+Checked by [NAP consistency: same name, address and phone everywhere](/rules/local/nap-consistency), [LocalBusiness schema: required name, address or areaServed](/rules/schema/local-business), [Physical address: PostalAddress and LocalBusiness schema](/rules/eeat/physical-address).
+
+### noai and noimageai \{#noai\}
+
+Meta robots values some sites use to ask AI systems not to train on their text or images; not part of any standard search engines honour.
+
+Checked by [noai and nosnippet: the AI opt-out tags squirrel reports](/rules/ax/noai-signals).
+
+### noindex \{#noindex\}
+
+A robots directive, in a meta tag or the X-Robots-Tag header, that asks search engines to keep a page out of their index.
+
+Checked by [noindex in a robots meta tag or X-Robots-Tag header: what squirrel reports per page](/rules/core/robots-meta), [Page is blocked from indexing: finding the directive](/rules/crawl/indexability), [All non-indexed pages: the full blocked list for review](/rules/crawl/all-noindex-pages), [Noindexed page in sitemap: why it is a contradiction](/rules/crawl/noindex-in-sitemap), [Rich result schema on a noindexed page: wasted markup](/rules/crawl/schema-noindex-conflict), [Redundant noindex: a blocked page nobody reads it on](/rules/crawl/robots-meta-conflict).
+
+## O
+
+### Open Graph \{#open-graph\}
+
+A set of og: meta properties (title, description, image, url) that controls how a link previews when it is shared.
+
+Also called: og tags, og:image, Twitter card.
+
+Checked by [Missing og:image: the Open Graph tags squirrel checks](/rules/core/og-tags), [og:image size: the 1200 by 630 recommendation](/rules/social/og-image-size), [og:url versus canonical: why they should be the same URL](/rules/social/og-url-match), [Favicon and theme-color that differ across the site](/rules/social/asset-divergence), [twitter:card: the card types and the Open Graph fallback](/rules/core/twitter-cards).
+
+### Organization schema \{#organization-schema\}
+
+Organization structured data naming the business behind a site, its logo, contact points and sameAs profiles.
+
+Also called: sameAs.
+
+Checked by [Organization schema: name, url, logo and sameAs checks](/rules/schema/organization), [A business with nothing to attach its reputation to](/rules/schema/entity-organization-missing), [Your organization is not connected to anything that corroborates it](/rules/schema/entity-sameas-missing), [Social profile links: which platforms a page links to](/rules/social/social-profiles).
+
+### Orphan page \{#orphan-page\}
+
+A page that no other crawled page links to, so crawlers and readers only reach it through a sitemap or a direct URL.
+
+Checked by [Orphan pages: pages with too few inbound internal links](/rules/links/orphan-pages), [Linked only from the nav and footer: no editorial links](/rules/links/no-contextual-inbound), [Hidden orphan page: reachable but linked from nowhere](/rules/integrity/orphan-page).
+
+## P
+
+### Page weight \{#page-weight\}
+
+The total bytes a page downloads across HTML, CSS, JavaScript, images and fonts.
+
+Also called: legacy JavaScript, polyfills.
+
+Checked by [Total page weight: the 1600 KB and 5000 KB thresholds](/rules/perf/total-byte-weight), [JavaScript bundle too large: the 250 KB and 1 MB limits](/rules/perf/js-file-size), [CSS file too large: the 150 KB and 500 KB thresholds](/rules/perf/css-file-size), [Oversized image files: the 200KB and 1MB thresholds](/rules/images/image-file-size), [Large inline SVG: when to move it to an external file](/rules/images/svg-inline), [core-js and Babel helpers: legacy JavaScript in a bundle](/rules/perf/legacy-js), [Outdated jQuery and friends: the libraries squirrel detects](/rules/perf/js-libraries).
+
+### Pagination \{#pagination\}
+
+Splitting a long list across numbered URLs; each page should be crawlable and canonicalise to itself.
+
+Checked by [Pagination canonicals: why page 2 is not page 1](/rules/crawl/pagination).
+
+### Pay per crawl \{#pay-per-crawl\}
+
+Charging AI crawlers for access with HTTP 402 Payment Required responses, as in Cloudflare Pay Per Crawl and the x402 protocol.
+
+Also called: HTTP 402, x402.
+
+Checked by [HTTP 402 for crawlers: pay-per-crawl and x402 detection](/rules/ax/pay-per-crawl).
+
+### Placeholder content \{#placeholder-content\}
+
+Template filler left in production: lorem ipsum text, stock placeholder images, example phone numbers and emails.
+
+Also called: lorem ipsum.
+
+Checked by [Lorem ipsum in production: placeholders and leftovers](/rules/content/placeholder-text), [Placeholder images and camera-default alt text](/rules/content/placeholder-media), [Fake phone numbers and example.com emails in production](/rules/content/placeholder-contact).
+
+### Privacy policy \{#privacy-policy\}
+
+The page explaining what personal data a site collects and why; required by law in many places and a trust signal for search.
+
+Checked by [Privacy policy link: finding one anywhere on the site](/rules/legal/privacy-policy), [Privacy policy: the page and how widely it is linked](/rules/eeat/privacy-policy), [Sub-processor disclosure: what a security review asks](/rules/legal/subprocessor-disclosure).
+
+### Product schema \{#product-schema\}
+
+Product structured data with offers, price, availability and reviews, used for product rich results and merchant listings.
+
+Also called: review snippet, aggregateRating.
+
+Checked by [Product schema: name, image, offers and review checks](/rules/schema/product), [AggregateRating: ratingValue, ratingCount and review checks](/rules/schema/review), [AggregateRating on the wrong page: visible and on-topic](/rules/schema/rating-scope).
+
+## R
+
+### Readability \{#readability\}
+
+How hard a text is to read, estimated from sentence and word length with formulas such as Flesch reading ease.
+
+Also called: reading level, Flesch reading ease.
+
+Checked by [Flesch reading ease: measuring how hard a page is to read](/rules/content/reading-level).
+
+### Redirect chain \{#redirect-chain\}
+
+A sequence of two or more redirects between the requested URL and the final response.
+
+Checked by [Redirect chains: when one hop turns into three](/rules/crawl/redirect-chain), [Links pointing at redirecting URLs: the hop on every click](/rules/links/redirect-chains), [Canonical URL resolves through a redirect: how to spot it](/rules/crawl/canonical-chain), [Script URL redirects: a 3xx in front of every script load](/rules/perf/js-redirects).
+
+### rel=nofollow \{#nofollow\}
+
+A link attribute value asking search engines not to associate the linking page with the target; a hint, not a block.
+
+Checked by [rel=nofollow on an internal link: usually a mistake](/rules/links/nofollow-internal), [External link count: how many outbound links a page has](/rules/links/external-links).
+
+### rel=noopener \{#noopener\}
+
+A link attribute that stops a page opened with `target=_blank` from controlling the page that opened it (tabnabbing).
+
+Checked by [rel=noopener: external target=_blank links and tabnabbing](/rules/security/new-tab).
+
+### Render-blocking resources \{#render-blocking-resources\}
+
+Stylesheets and synchronous scripts in the head that the browser must fetch before it can paint anything.
+
+Also called: critical request chain, preconnect, resource hints.
+
+Checked by [Render-blocking resources: the ones squirrel counts in head](/rules/perf/render-blocking), [Critical request chains: the blocking head resources counted](/rules/perf/critical-request-chains), [rel=preconnect: the CDN origins squirrel checks for a hint](/rules/perf/preconnect).
+
+### Responsive images \{#responsive-images\}
+
+Serving differently sized image files with srcset, sizes and `<picture>` so each device downloads one that fits.
+
+Also called: srcset, sizes.
+
+Checked by [srcset: serving the right image size for the screen](/rules/images/srcset), [Thumbnails without srcset: small images serving large files](/rules/images/responsive-size), [\<picture\> without an \<img\>: the fallback that is required](/rules/images/picture-element).
+
+### Rich results \{#rich-results\}
+
+Search result features (stars, breadcrumbs, product prices, video thumbnails) that Google can show when a page has eligible structured data.
+
+Also called: rich snippets, breadcrumb schema.
+
+Checked by [Product schema: name, image, offers and review checks](/rules/schema/product), [AggregateRating: ratingValue, ratingCount and review checks](/rules/schema/review), [BreadcrumbList schema: positions, names and what breaks](/rules/schema/breadcrumb), [VideoObject schema: required props and duration format](/rules/schema/video), [Article schema: headline, author and datePublished checks](/rules/schema/article), [AggregateRating on the wrong page: visible and on-topic](/rules/schema/rating-scope), [Rich result schema on a noindexed page: wasted markup](/rules/crawl/schema-noindex-conflict).
+
+### Robots meta tag \{#robots-meta-tag\}
+
+A `<meta name="robots">` tag carrying page-level directives such as noindex, nofollow, nosnippet and max-snippet.
+
+Also called: nosnippet, max-snippet.
+
+Checked by [noindex in a robots meta tag or X-Robots-Tag header: what squirrel reports per page](/rules/core/robots-meta), [nosnippet and max-snippet:0: pages with no search snippet](/rules/core/nosnippet), [Redundant noindex: a blocked page nobody reads it on](/rules/crawl/robots-meta-conflict), [robots.txt blocked pages without noindex](/rules/crawl/indexability-conflicts).
+
+### robots.txt \{#robots-txt\}
+
+A plain-text file at the site root that tells crawlers which paths they may fetch, per user-agent token (RFC 9309).
+
+Checked by [robots.txt: what to put in it and how squirrel checks it](/rules/crawl/robots-txt), [Redundant noindex: a blocked page nobody reads it on](/rules/crawl/robots-meta-conflict), [robots.txt blocked pages without noindex](/rules/crawl/indexability-conflicts), [AI crawlers in robots.txt: which bots you block, by class](/rules/ax/ai-crawlers), [Content-Signal in robots.txt: search, ai-input, ai-train](/rules/ax/content-signals).
+
+### RSL (Really Simple Licensing) \{#rsl\}
+
+A standard for publishing machine-readable licensing terms for AI use of content, referenced from robots.txt.
+
+Checked by [robots.txt License: directive and RSL document validation](/rules/ax/rsl-license).
+
+## S
+
+### Security headers \{#security-headers\}
+
+HTTP response headers (CSP, HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy) that tell browsers to restrict risky behaviour.
+
+Also called: Referrer-Policy, Permissions-Policy, X-Powered-By.
+
+Checked by [Content-Security-Policy: what to set and how to check it](/rules/security/csp), [HSTS: what Strict-Transport-Security needs to be valid](/rules/security/hsts), [X-Content-Type-Options: nosniff and why it matters](/rules/security/x-content-type), [X-Frame-Options: how to stop your pages being framed](/rules/security/x-frame-options), [Referrer-Policy: which value to send and what leaks](/rules/security/referrer-policy), [Permissions-Policy: what the header does and how to set it](/rules/security/permissions-policy), [Version-revealing headers: why Server and X-Powered-By should not name a version](/rules/security/version-disclosure).
+
+### security.txt \{#security-txt\}
+
+A file at /.well-known/security.txt (RFC 9116) that tells researchers how to report a vulnerability.
+
+Checked by [security.txt: how to publish a vulnerability disclosure contact](/rules/security/security-txt).
+
+### Sitemap lastmod \{#lastmod\}
+
+The optional `<lastmod>` date on a sitemap URL entry, meant to say when the page content last changed.
+
+Checked by [Sitemap lastmod stamped at build time: how to detect it](/rules/crawl/sitemap-lastmod-churn), [Sitemap lastmod disagrees with the page's dateModified](/rules/crawl/sitemap-lastmod-drift).
+
+### Soft 404 \{#soft-404\}
+
+A page that tells the visitor it does not exist (or is empty) while the server answers HTTP 200.
+
+Checked by [Soft 404: error content served with an HTTP 200 status](/rules/crawl/soft-404).
+
+### Structured data \{#structured-data\}
+
+Machine-readable statements about a page's content, usually schema.org vocabulary in JSON-LD, that search engines and agents can parse.
+
+Also called: schema.org.
+
+Checked by [Invalid JSON-LD syntax: what breaks it and how to fix](/rules/schema/json-ld-valid), [Structured data coverage: pages that break your own norm](/rules/schema/coverage-outlier), [Rich result schema on a noindexed page: wasted markup](/rules/crawl/schema-noindex-conflict), [Article schema: headline, author and datePublished checks](/rules/schema/article), [Product schema: name, image, offers and review checks](/rules/schema/product), [Organization schema: name, url, logo and sameAs checks](/rules/schema/organization).
+
+### Subresource Integrity (SRI) \{#subresource-integrity\}
+
+An integrity attribute holding a hash of a third-party script or stylesheet, so the browser refuses a tampered file.
+
+Checked by [Subresource Integrity: which scripts need an integrity hash](/rules/security/sri).
+
+## T
+
+### Thin content \{#thin-content\}
+
+A page with too little substantive content to be useful, judged here against word count and the site's own norm.
+
+Checked by [Thin content: the 300 word floor and what to do below it](/rules/content/word-count), [Thin against your own site: outliers by page type](/rules/content/thin-vs-site-norm).
+
+### Time to First Byte (TTFB) \{#ttfb\}
+
+The time from the request until the first byte of the response arrives, covering redirects, DNS, connection and server time.
+
+Checked by [Time to First Byte: the 600ms and 1000ms thresholds](/rules/perf/ttfb).
+
+### Title tag \{#title-tag\}
+
+The `<title>` element in the page head; browsers show it in the tab and search engines usually use it as the result headline.
+
+Checked by [Title tag length: the 30 to 75 character range squirrel uses](/rules/core/meta-title), [Duplicate page titles: the site-wide uniqueness check](/rules/core/title-unique), [Duplicate title tags: the same title on several pages](/rules/content/duplicate-title), [Inconsistent page titles: pages breaking the template](/rules/content/title-pattern-outlier).
+
+### Token storage \{#token-storage\}
+
+Where a web app keeps session or auth tokens; tokens in localStorage are readable by any script on the page.
+
+Checked by [Auth tokens in localStorage: why a stored JWT is exposed](/rules/security/token-storage).
+
+### Touch target size \{#touch-targets\}
+
+The tappable area of a control; WCAG 2.2 sets 24 by 24 CSS pixels as the AA minimum.
+
+Checked by [Touch target size: the 24 and 44 pixel minimums](/rules/a11y/touch-targets), [Tap target size: the 44 by 44 pixel guideline](/rules/mobile/tap-targets).
+
+### Trailing slash \{#trailing-slash\}
+
+Whether URLs end in /; /page and /page/ are different URLs, so a site should pick one and redirect the other.
+
+Checked by [Trailing slash: /page and /page/ are two different URLs](/rules/url/trailing-slash), [Canonicals in two forms: www, scheme and trailing slash](/rules/core/canonical-form-drift).
+
+## U
+
+### URL parameters \{#url-parameters\}
+
+Key-value pairs after ? in a URL; tracking and sort parameters can multiply URLs for the same content.
+
+Also called: query strings.
+
+Checked by [URL parameters: how many is too many, and what to do](/rules/url/parameters).
+
+### URL slug \{#url-slug\}
+
+The readable last part of a URL path; short, lowercase, hyphen-separated words work best.
+
+Checked by [Non-descriptive URL slug: numeric IDs and generic patterns](/rules/url/slug-keywords), [Mixed URL conventions: finding the minority form](/rules/url/slug-convention), [Stop words in a URL slug: when to drop them](/rules/url/stop-words), [Underscores in URLs: why hyphens separate words](/rules/url/hyphens), [Special characters in a URL path: what breaks and why](/rules/url/special-chars), [Uppercase in a URL: the duplicate content it creates](/rules/url/lowercase), [URL length: when a URL is long enough to be a problem](/rules/url/length).
+
+## V
+
+### VideoObject schema \{#video-schema\}
+
+VideoObject structured data with name, thumbnail, upload date and duration so a video can appear in video results.
+
+Checked by [VideoObject schema: required props and duration format](/rules/schema/video), [VideoObject schema: video on a page with no markup for it](/rules/video/video-schema), [Video poster attribute: the frame shown before playback](/rules/video/video-thumbnail).
+
+### Viewport meta tag \{#viewport-meta-tag\}
+
+`<meta name="viewport">` that sets the layout width to the device width; disabling zoom in it fails accessibility.
+
+Checked by [Missing viewport meta tag: what it does and what to set](/rules/mobile/viewport), [user-scalable=no: the viewport setting that blocks zoom](/rules/mobile/viewport-zoom), [user-scalable=no: viewport settings that block zoom](/rules/a11y/zoom-disabled), [Horizontal scroll on mobile: the usual causes](/rules/mobile/horizontal-scroll).
+
+## W
+
+### WCAG \{#wcag\}
+
+The W3C's Web Content Accessibility Guidelines, organised as testable success criteria at levels A, AA and AAA; 2.2 is current.
+
+Also called: Web Content Accessibility Guidelines.
+
+Checked by [Color contrast: the 4.5:1 rule and how to check it](/rules/a11y/color-contrast), [Form labels: which inputs need one and how to check](/rules/a11y/form-labels), [Link text: why 'click here' fails and what to use](/rules/a11y/link-text), [Heading order: why skipping from h1 to h3 matters](/rules/a11y/heading-order), [html lang: valid values and what a missing one breaks](/rules/a11y/html-lang-valid), [Touch target size: the 24 and 44 pixel minimums](/rules/a11y/touch-targets), [Missing alt attribute: what an empty alt means](/rules/images/alt-text).
+
+### WebSite schema \{#website-schema\}
+
+WebSite structured data naming the site, which Google reads for the site name in results, and optionally describing its internal search with a SearchAction.
+
+Checked by [WebSite SearchAction and the retired sitelinks searchbox](/rules/schema/website-search), [Nothing says these pages are one site](/rules/schema/entity-website-missing).
+
+### Well-known URIs \{#well-known-uri\}
+
+Fixed paths under /.well-known/ (RFC 8615) where sites publish machine-readable files: security.txt, api-catalog, OAuth metadata and agent manifests.
+
+Also called: .well-known, MCP server card.
+
+Checked by [MCP and A2A manifests under .well-known: what squirrel finds](/rules/ax/well-known-agent), [api-catalog and OpenAPI: how an agent finds your API](/rules/ax/api-discovery), [security.txt: how to publish a vulnerability disclosure contact](/rules/security/security-txt).
+
+## X
+
+### X-Content-Type-Options \{#x-content-type-options\}
+
+The nosniff header that stops browsers guessing a response's type instead of trusting Content-Type.
+
+Also called: MIME type, Content-Type.
+
+Checked by [X-Content-Type-Options: nosniff and why it matters](/rules/security/x-content-type), [Wrong Content-Type: header and extension disagree](/rules/content/mime-type).
+
+### X-Frame-Options \{#x-frame-options\}
+
+A response header that controls whether other sites may embed the page in a frame; CSP frame-ancestors is its successor.
+
+Also called: clickjacking.
+
+Checked by [X-Frame-Options: how to stop your pages being framed](/rules/security/x-frame-options), [Content-Security-Policy: what to set and how to check it](/rules/security/csp).
+
+### X-Robots-Tag \{#x-robots-tag\}
+
+An HTTP response header that carries the same directives as the robots meta tag, and works for non-HTML files such as PDFs.
+
+Checked by [Page is blocked from indexing: finding the directive](/rules/crawl/indexability), [Redundant noindex: a blocked page nobody reads it on](/rules/crawl/robots-meta-conflict), [PDF size: large linked documents and what gets indexed](/rules/crawl/pdf-size), [Indexable pages missing from the sitemap: measuring the gap](/rules/crawl/sitemap-coverage).
+
+### XML sitemap \{#xml-sitemap\}
+
+An XML file listing the URLs a site wants crawled, with optional lastmod dates, referenced from robots.txt or submitted to search engines.
+
+Also called: sitemap.xml.
+
+Checked by [No XML sitemap found: where squirrel looks and what to add](/rules/crawl/sitemap-exists), [Sitemap validation: XML errors and the 50,000 entry limit](/rules/crawl/sitemap-valid), [Indexable pages missing from the sitemap: measuring the gap](/rules/crawl/sitemap-coverage), [Cross-domain sitemap URL: why search engines ignore it](/rules/crawl/sitemap-domain), [4XX pages in sitemap: dead URLs you are still submitting](/rules/crawl/sitemap-4xx), [Noindexed page in sitemap: why it is a contradiction](/rules/crawl/noindex-in-sitemap), [Sitemap lastmod stamped at build time: how to detect it](/rules/crawl/sitemap-lastmod-churn), [Sitemap lastmod disagrees with the page's dateModified](/rules/crawl/sitemap-lastmod-drift).
+
+## Y
+
+### YMYL \{#ymyl\}
+
+Topics that could significantly affect a person's health, finances, safety or society, which Google's raters hold to a higher standard.
+
+Also called: Your Money or Your Life.
+
+Checked by [YMYL content: what it is and how squirrel detects it](/rules/eeat/ymyl-detection), [Disclaimers on YMYL content: what to say and where](/rules/eeat/disclaimers).
+
+{/* glossary:index:end */}
