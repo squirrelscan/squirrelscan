@@ -11,6 +11,7 @@ import type {
   AuditReport,
   EditorSummary,
   EditorSummaryCategoryInput,
+  EditorSummaryCoverageInput,
   EditorSummaryIssueInput,
   EditorSummaryNotCheckedInput,
   EditorSummaryPriority,
@@ -146,6 +147,31 @@ function buildFailingRuleIds(report: AuditReport, max: number): string[] {
   return ids;
 }
 
+/** A count the engine wrote, or undefined when absent or not a whole non-negative number. */
+const count = (v: unknown): number | undefined =>
+  typeof v === "number" && Number.isSafeInteger(v) && v >= 0 ? v : undefined;
+
+/**
+ * The audit's coverage facts, copied from the report (never estimated), or
+ * undefined when the report has no scan scope to read them from.
+ */
+function buildCoverage(report: AuditReport): EditorSummaryCoverageInput | undefined {
+  const scope = report.scanScope;
+  const scannedPages = count(scope?.pagesCrawled);
+  if (!scope || scannedPages === undefined) return undefined;
+  const maxPages = count(scope.maxPages);
+  const knownPages = count(report.coverage?.knownPages);
+  const unfetchedPages = count(report.rateLimited?.unfetched);
+  return {
+    scannedPages,
+    ...(maxPages !== undefined ? { maxPages } : {}),
+    capped: scope.capped === true,
+    timeStopped: scope.stopReason === "time",
+    ...(knownPages !== undefined ? { knownPages } : {}),
+    ...(unfetchedPages !== undefined ? { unfetchedPages } : {}),
+  };
+}
+
 export interface BuildEditorSummaryRequestOptions {
   auditId?: string;
   websiteId?: string;
@@ -165,6 +191,7 @@ export function buildEditorSummaryRequest(
   const notChecked = buildNotChecked(report);
   const technologies = buildTechnologies(report, SERVICE_LIMITS.editorSummaryMaxTechnologies);
   const failingRuleIds = buildFailingRuleIds(report, SERVICE_LIMITS.editorSummaryMaxFailingRuleIds);
+  const coverage = buildCoverage(report);
   return {
     ...(opts.auditId ? { auditId: opts.auditId } : {}),
     ...(opts.websiteId ? { websiteId: opts.websiteId } : {}),
@@ -181,6 +208,7 @@ export function buildEditorSummaryRequest(
     ...(notChecked.length > 0 ? { notChecked } : {}),
     ...(technologies.length > 0 ? { technologies } : {}),
     ...(failingRuleIds.length > 0 ? { failingRuleIds } : {}),
+    ...(coverage ? { coverage } : {}),
   };
 }
 

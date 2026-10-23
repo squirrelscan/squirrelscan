@@ -84,6 +84,42 @@ describe("buildEditorSummaryRequest", () => {
     expect(req.technologies).toBeUndefined();
     expect(req.failingRuleIds).toBeUndefined();
   });
+
+  test("sends coverage copied from a capped crawl's scan scope, coverage and rate-limit counts", () => {
+    const req = buildEditorSummaryRequest(
+      report({
+        scanScope: { origin: "cloud", maxPages: 10, pagesCrawled: 10, capped: true },
+        coverage: { auditedPages: 10, knownPages: 90, carriedFindings: 0 },
+        rateLimited: { pages: 0, hosts: [], unfetched: 4 },
+      }),
+    );
+    expect(req.coverage).toEqual({
+      scannedPages: 10,
+      maxPages: 10,
+      capped: true,
+      timeStopped: false,
+      knownPages: 90,
+      unfetchedPages: 4,
+    });
+  });
+
+  test("marks a time-stopped crawl and leaves unknown counts out", () => {
+    const req = buildEditorSummaryRequest(
+      report({ scanScope: { origin: "cli", pagesCrawled: 34, capped: false, stopReason: "time" } }),
+    );
+    expect(req.coverage).toEqual({ scannedPages: 34, capped: false, timeStopped: true });
+  });
+
+  test("sends no coverage without a scan scope, and drops counts that are not whole numbers", () => {
+    expect(buildEditorSummaryRequest(report()).coverage).toBeUndefined();
+    const req = buildEditorSummaryRequest(
+      report({
+        scanScope: { origin: "cli", maxPages: Number.NaN, pagesCrawled: 5, capped: false },
+        coverage: { auditedPages: 5, knownPages: -1, carriedFindings: 0 },
+      }),
+    );
+    expect(req.coverage).toEqual({ scannedPages: 5, capped: false, timeStopped: false });
+  });
 });
 
 describe("toEditorSummary priorities", () => {

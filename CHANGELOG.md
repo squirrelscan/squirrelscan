@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- The cloud editor's summary now hears how much of the site the audit covered (pages scanned, the page limit, a time stop, pages known), so it can say when a report covers only part of the site and suggest a deeper audit.
+
 ## v0.0.130 (2026-10-23)
 
 Local HTML reports get a glow-up: same page as the cloud, still fully offline. Plus a docs-site security patch.

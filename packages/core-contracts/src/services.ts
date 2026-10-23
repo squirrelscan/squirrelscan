@@ -382,6 +382,29 @@ export interface EditorSummaryRequest {
    * capped by the CLI. Older servers ignore it.
    */
   failingRuleIds?: string[];
+  /**
+   * How much of the site this audit covered, so the summary can say plainly
+   * when it read only part of it and suggest a deeper audit. Engine counts,
+   * never estimated. Absent when the report has no scan scope. Older servers
+   * ignore it.
+   */
+  coverage?: EditorSummaryCoverageInput;
+}
+
+/** The audit's coverage facts for the summary (from scanScope, coverage, rateLimited). */
+export interface EditorSummaryCoverageInput {
+  /** Pages freshly crawled this run (`scanScope.pagesCrawled`). */
+  scannedPages: number;
+  /** Page cap in effect, when the runner had one. */
+  maxPages?: number;
+  /** The page cap was the binding constraint. */
+  capped: boolean;
+  /** The crawl time budget stopped the crawl (`scanScope.stopReason === "time"`). */
+  timeStopped: boolean;
+  /** Pages the audit knows exist (`coverage.knownPages`), when reported. */
+  knownPages?: number;
+  /** Pages discovered but never fetched (`rateLimited.unfetched`), when reported. */
+  unfetchedPages?: number;
 }
 
 /** One detected technology fed to the summary. */
