@@ -1,41 +1,70 @@
 ---
-title: "URL Structure"
-description: "URL structure, length, and formatting"
+title: "URL structure audit rules: slugs, case and parameters"
+sidebarTitle: "URL Structure"
+description: "Audit rules for URLs: uppercase letters, underscores, length, stop words, special characters, query parameters, trailing slashes and mixed conventions."
 ---
 
 URL Structure rules read the address of each crawled page: its case, its word separators, its length and depth, its query parameters and its trailing slash. Most of them are conventions rather than defects, so their severities are low and their findings are worth applying to new URLs rather than retrofitting to old ones. The exception is `url/slug-convention`, which measures the site against its own dominant form and reports the minority, because mixed conventions are how duplicate-content and canonical bugs start.
 
+## Run only these rules
+
+```bash
+squirrel audit https://example.com --rule-include url
+```
+
+{/* hub:start-here:start */}
+
+## Where to start
+
+These carry the highest severity and weight in the category.
+
+- [Special characters in a URL path: what breaks and why](/rules/url/special-chars): Spaces, percent signs and non-ASCII characters in a path break when copied and pasted. squirrel decodes the path and reports what it finds.
+- [Underscores in URLs: why hyphens separate words](/rules/url/hyphens): Google reads blue-shoes as two words and blue_shoes as one. squirrel flags every crawled path containing an underscore.
+- [Uppercase in a URL: the duplicate content it creates](/rules/url/lowercase): Most servers treat /Page and /page as two URLs serving the same content. squirrel flags every crawled path containing a capital letter.
+- [Mixed URL conventions: finding the minority form](/rules/url/slug-convention): Half your paths ending in a slash and half not is how canonical bugs start. squirrel computes your site's own norm and reports what deviates.
+- [Non-descriptive URL slug: numeric IDs and generic patterns](/rules/url/slug-keywords): A slug like /p/48213 tells a reader and a crawler nothing. squirrel classifies the last path segment and flags the ID-shaped ones.
+
+{/* hub:start-here:end */}
+
+{/* hub:rules:start */}
+
 ## Rules
 
-<CardGroup cols={2}>
-  <Card title="Non-descriptive URL slug: numeric IDs and generic patterns" icon="circle-info" href="/rules/url/slug-keywords">
-    A slug like /p/48213 tells a reader and a crawler nothing. squirrel classifies the last path segment and flags the ID-shaped ones.
-  </Card>
-  <Card title="Trailing slash: /page and /page/ are two different URLs" icon="circle-info" href="/rules/url/trailing-slash">
-    A file URL with a trailing slash is a mistake; a directory URL either has one or does not, consistently. squirrel reports the state of each path.
-  </Card>
-  <Card title="Mixed URL conventions: finding the minority form" icon="triangle-exclamation" href="/rules/url/slug-convention">
-    Half your paths ending in a slash and half not is how canonical bugs start. squirrel computes your site's own norm and reports what deviates.
-  </Card>
-  <Card title="Underscores in URLs: why hyphens separate words" icon="triangle-exclamation" href="/rules/url/hyphens">
-    Google reads blue-shoes as two words and blue_shoes as one. squirrel flags every crawled path containing an underscore.
-  </Card>
-  <Card title="URL length: when a URL is long enough to be a problem" icon="circle-info" href="/rules/url/length">
-    Long URLs get truncated in results and shares, and usually signal deep nesting. squirrel measures the full URL and counts path segments.
-  </Card>
-  <Card title="Uppercase in a URL: the duplicate content it creates" icon="triangle-exclamation" href="/rules/url/lowercase">
-    Most servers treat /Page and /page as two URLs serving the same content. squirrel flags every crawled path containing a capital letter.
-  </Card>
-  <Card title="URL parameters: how many is too many, and what to do" icon="circle-info" href="/rules/url/parameters">
-    Every parameter combination is a separate URL to a crawler. squirrel counts the query parameters on each page and names the tracking ones.
-  </Card>
-  <Card title="Special characters in a URL path: what breaks and why" icon="triangle-exclamation" href="/rules/url/special-chars">
-    Spaces, percent signs and non-ASCII characters in a path break when copied and pasted. squirrel decodes the path and reports what it finds.
-  </Card>
-  <Card title="Stop words in a URL slug: when to drop them" icon="circle-info" href="/rules/url/stop-words">
-    the, of and for add characters without adding meaning to a slug. squirrel counts them in each path and only reports the pile-ups.
-  </Card>
-</CardGroup>
+| Rule | What it flags | Severity | Scope |
+|---|---|---|---|
+| [Mixed URL conventions: finding the minority form](/rules/url/slug-convention) | Half your paths ending in a slash and half not is how canonical bugs start. squirrel computes your site's own norm and reports what deviates. | warning | Site-wide |
+| [Non-descriptive URL slug: numeric IDs and generic patterns](/rules/url/slug-keywords) | A slug like /p/48213 tells a reader and a crawler nothing. squirrel classifies the last path segment and flags the ID-shaped ones. | info | Per-page |
+| [Special characters in a URL path: what breaks and why](/rules/url/special-chars) | Spaces, percent signs and non-ASCII characters in a path break when copied and pasted. squirrel decodes the path and reports what it finds. | warning | Per-page |
+| [Stop words in a URL slug: when to drop them](/rules/url/stop-words) | the, of and for add characters without adding meaning to a slug. squirrel counts them in each path and only reports the pile-ups. | info | Per-page |
+| [Trailing slash: /page and /page/ are two different URLs](/rules/url/trailing-slash) | A file URL with a trailing slash is a mistake; a directory URL either has one or does not, consistently. squirrel reports the state of each path. | info | Per-page |
+| [Underscores in URLs: why hyphens separate words](/rules/url/hyphens) | Google reads blue-shoes as two words and blue_shoes as one. squirrel flags every crawled path containing an underscore. | warning | Per-page |
+| [Uppercase in a URL: the duplicate content it creates](/rules/url/lowercase) | Most servers treat /Page and /page as two URLs serving the same content. squirrel flags every crawled path containing a capital letter. | warning | Per-page |
+| [URL length: when a URL is long enough to be a problem](/rules/url/length) | Long URLs get truncated in results and shares, and usually signal deep nesting. squirrel measures the full URL and counts path segments. | info | Per-page |
+| [URL parameters: how many is too many, and what to do](/rules/url/parameters) | Every parameter combination is a separate URL to a crawler. squirrel counts the query parameters on each page and names the tracking ones. | info | Per-page |
+
+{/* hub:rules:end */}
+
+{/* hub:terms:start */}
+
+## Key terms
+
+- [Crawl budget](/glossary#crawl-budget): The number of URLs a search engine is willing and able to crawl on a site in a given time, set by crawl capacity and crawl demand.
+- [Duplicate content](/glossary#duplicate-content): The same or near-identical content reachable at more than one URL, or repeated titles and descriptions across pages.
+- [Trailing slash](/glossary#trailing-slash): Whether URLs end in /; /page and /page/ are different URLs, so a site should pick one and redirect the other.
+- [URL parameters](/glossary#url-parameters): Key-value pairs after ? in a URL; tracking and sort parameters can multiply URLs for the same content.
+- [URL slug](/glossary#url-slug): The readable last part of a URL path; short, lowercase, hyphen-separated words work best.
+
+{/* hub:terms:end */}
+
+## Related categories
+
+[Core SEO](/rules/core) checks the canonical tag that declares the preferred form of a URL. [Content](/rules/content) checks the duplicate titles and descriptions that two forms of one URL produce, and [Crawlability](/rules/crawl) checks redirect chains and sitemaps.
+
+## Learn more
+
+- [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai), the coding agent workflow for working through a report
+- [Website audit tool](https://squirrelscan.com/tools/website-audit)
+- [Sample report](https://squirrelscan.com/reports/squirrelscan-sample), with the URL Structure section on a real site
 
 ## Disable all URL Structure rules
 
@@ -43,5 +72,3 @@ URL Structure rules read the address of each crawled page: its case, its word se
 [rules]
 disable = ["url/*"]
 ```
-
-Every audit reports URL Structure findings next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.

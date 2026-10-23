@@ -1,20 +1,57 @@
 ---
-title: "Internationalization"
-description: "Language declarations and multi-region support"
+title: "Internationalization audit rules: hreflang and lang"
+sidebarTitle: "Internationalization"
+description: "Audit rules for multilingual sites: the lang attribute on the html element, and hreflang tags with x-default and a self-reference."
 ---
 
 Internationalization rules cover two declarations. The `lang` attribute on the `html` element says what language this page is in, which a screen reader uses to pick a voice. The hreflang tags say which other language or region versions exist, which is what stops them competing with each other in search. Both are cheap to get right and quietly wrong on a lot of sites.
 
+## Run only these rules
+
+```bash
+squirrel audit https://example.com --rule-include i18n
+```
+
+{/* hub:start-here:start */}
+
+## Where to start
+
+These carry the highest severity and weight in the category.
+
+- [lang attribute on \<html\>: declaring the page's language](/rules/i18n/lang-attribute): Without a lang attribute a screen reader guesses which voice to use and may read the page in the wrong language. squirrel checks it and its format.
+- [hreflang: x-default and the self-referencing tag](/rules/i18n/hreflang): hreflang tells search engines which language version to show. squirrel checks for x-default and a self-reference on any page that has them.
+
+{/* hub:start-here:end */}
+
+{/* hub:rules:start */}
+
 ## Rules
 
-<CardGroup cols={2}>
-  <Card title="hreflang: x-default and the self-referencing tag" icon="circle-info" href="/rules/i18n/hreflang">
-    hreflang tells search engines which language version to show. squirrel checks for x-default and a self-reference on any page that has them.
-  </Card>
-  <Card title="lang attribute on <html>: declaring the page's language" icon="triangle-exclamation" href="/rules/i18n/lang-attribute">
-    Without a lang attribute a screen reader guesses which voice to use and may read the page in the wrong language. squirrel checks it and its format.
-  </Card>
-</CardGroup>
+| Rule | What it flags | Severity | Scope |
+|---|---|---|---|
+| [hreflang: x-default and the self-referencing tag](/rules/i18n/hreflang) | hreflang tells search engines which language version to show. squirrel checks for x-default and a self-reference on any page that has them. | info | Per-page |
+| [lang attribute on \<html\>: declaring the page's language](/rules/i18n/lang-attribute) | Without a lang attribute a screen reader guesses which voice to use and may read the page in the wrong language. squirrel checks it and its format. | warning | Per-page |
+
+{/* hub:rules:end */}
+
+{/* hub:terms:start */}
+
+## Key terms
+
+- [hreflang](/glossary#hreflang): Link annotations that tell search engines which language or regional versions of a page exist, with x-default as the fallback.
+- [lang attribute](/glossary#lang-attribute): The lang attribute on `<html>` (and on passages) that declares the language, so screen readers pick the right voice.
+
+{/* hub:terms:end */}
+
+## Related categories
+
+[Accessibility](/rules/a11y) checks that the `lang` value is a valid language code, that `lang` on passages is valid, and that `lang` and `xml:lang` agree.
+
+## Learn more
+
+- [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai), the coding agent workflow for working through a report
+- [Website audit tool](https://squirrelscan.com/tools/website-audit)
+- [Sample report](https://squirrelscan.com/reports/squirrelscan-sample), with the Internationalization section on a real site
 
 ## Disable all Internationalization rules
 
@@ -22,5 +59,3 @@ Internationalization rules cover two declarations. The `lang` attribute on the `
 [rules]
 disable = ["i18n/*"]
 ```
-
-Every audit reports Internationalization findings next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
