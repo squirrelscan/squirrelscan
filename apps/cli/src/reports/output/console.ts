@@ -176,7 +176,7 @@ export function generateConsoleReport(
   log(divider());
 
   // Editor's summary — report-only Pro exec narrative, surfaced at the top.
-  const editorSummary = editorSummaryView(report.editorSummary);
+  const editorSummary = editorSummaryView(report.editorSummary, report);
   if (editorSummary) {
     log("");
     printEditorSummary(editorSummary);

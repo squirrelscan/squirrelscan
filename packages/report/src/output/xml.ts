@@ -96,7 +96,7 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   lines.push(`${indent(1)}<summary passed="${report.passed}" warnings="${report.warnings}" failed="${report.failed}"/>`);
 
   // Editor's summary — report-only exec narrative (does not affect the health score).
-  const es = editorSummaryView(report.editorSummary);
+  const es = editorSummaryView(report.editorSummary, report);
   if (es) {
     lines.push(`${indent(1)}<editor-summary model="${escapeXml(es.model)}">`);
     for (const para of es.paragraphs) {

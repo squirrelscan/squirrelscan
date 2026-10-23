@@ -192,7 +192,8 @@ describe("the notice markup", () => {
   });
 
   test("REPORT_HTML_VERSION is bumped for the new markup", () => {
-    expect(REPORT_HTML_VERSION).toBe(16);
+    // At least the #1046 bump; later markup changes bump it further.
+    expect(REPORT_HTML_VERSION).toBeGreaterThanOrEqual(16);
   });
 });
 

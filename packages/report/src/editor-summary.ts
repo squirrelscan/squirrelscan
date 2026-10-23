@@ -25,6 +25,7 @@ import { REPORT_LIMITS, SERVICE_LIMITS } from "@squirrelscan/core-contracts/limi
 import { normalizeCategoryCode } from "./categories";
 import { notCheckedRules } from "./not-checked";
 import { checkOccurrences } from "./occurrences";
+import { guardSummaryText, stripOutOf100 } from "./summary-text";
 
 /** Note rendered above the summary so it reads as informational, not scored. */
 export const EDITOR_SUMMARY_NOTE = "Auto-generated editor's summary — informational, not scored.";
@@ -284,6 +285,28 @@ function toPriorities(value: unknown): EditorSummaryPriority[] {
   return out;
 }
 
+function guardedSummary(summary: EditorSummary, report: AuditReport): EditorSummary {
+  const text = guardSummaryText(
+    { prose: summary.prose, verdict: summary.verdict },
+    { allowedPageCounts: summaryPageCounts(report), fallbackProse: fallbackProse(report) },
+  );
+  return {
+    ...summary,
+    prose: text.prose,
+    verdict: text.verdict,
+    bigTicket: summary.bigTicket.map(stripOutOf100),
+    ...(summary.priorities
+      ? {
+          priorities: summary.priorities.map((p) => ({
+            ...p,
+            why: stripOutOf100(p.why),
+            action: stripOutOf100(p.action),
+          })),
+        }
+      : {}),
+  };
+}
+
 /** Display label for a priority's effort. */
 export function priorityEffortLabel(effort: EditorSummaryPriority["effort"]): string {
   return effort === "quick-win" ? "Quick win" : effort === "significant" ? "Significant" : "Moderate";
@@ -315,11 +338,45 @@ export interface EditorSummaryView extends EditorSummary {
  * report stored before the fetch-side guard existed can still carry a malformed
  * summary: the guard has to live at render time too, not only at fetch time.
  */
+/**
+ * Page counts this report states: the totals, the scan scope and coverage
+ * counts, and each failing rule's occurrence count (what the summary's digest
+ * was built from). A page count in the summary that is none of these was
+ * invented by the model.
+ */
+export function summaryPageCounts(report: AuditReport): number[] {
+  const counts: Array<number | undefined> = [
+    report.totalPages,
+    report.scanScope?.pagesCrawled,
+    report.scanScope?.maxPages,
+    report.coverage?.knownPages,
+    report.coverage?.auditedPages,
+    report.rateLimited?.pages,
+    report.rateLimited?.unfetched,
+    ...buildTopIssues(report, Number.POSITIVE_INFINITY).map((i) => i.occurrences),
+  ];
+  return counts.filter((n): n is number => typeof n === "number" && Number.isSafeInteger(n) && n > 0);
+}
+
+/** The summary prose when no model sentence survives the text rules. */
+function fallbackProse(report: AuditReport): string {
+  const n = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+  return `This audit found ${n(report.failed, "failing check", "failing checks")} and ${n(report.warnings, "warning", "warnings")} across ${n(report.totalPages, "page", "pages")}.`;
+}
+
+/**
+ * The summary as every format shows it. With the report, the text rules apply
+ * (`guardSummaryText`): at most one numeric score and no "/100", and no page
+ * count the report does not state, so older stored summaries read the same as
+ * new ones. Without it (a caller with only the summary), the text is as stored.
+ */
 export function editorSummaryView(
   es: EditorSummary | undefined | null,
+  report?: AuditReport,
 ): EditorSummaryView | null {
-  const summary = toEditorSummary(es);
-  if (!summary) return null;
+  const stored = toEditorSummary(es);
+  if (!stored) return null;
+  const summary = report ? guardedSummary(stored, report) : stored;
   return {
     ...summary,
     paragraphs: summary.prose

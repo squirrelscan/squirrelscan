@@ -1276,7 +1276,7 @@ function ReportPage({
   const issues = flattenIssuesBySeverity(
     groupIssuesByCategory(report.ruleResults, report.checkTallies),
   );
-  const es = editorSummaryView(report.editorSummary);
+  const es = editorSummaryView(report.editorSummary, report);
   const priorities = es?.priorities ?? [];
   const known: Known = new Map(issues.map((i) => [i.id, i.group]));
   const techName = new Map((report.technologies?.items ?? []).map((t) => [t.id, t.name]));

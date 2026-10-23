@@ -191,7 +191,7 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   lines.push("");
 
   // Editor's summary — report-only (Pro exec-email narrative), surfaced first.
-  const es = editorSummaryView(report.editorSummary);
+  const es = editorSummaryView(report.editorSummary, report);
   if (es) {
     lines.push("## Editor's Summary");
     lines.push("");

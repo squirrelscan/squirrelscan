@@ -14,12 +14,14 @@ It's generated automatically for every signed-in cloud audit (like the [site pro
 EDITOR'S SUMMARY
 Auto-generated editor's summary - informational, not scored.
 
-The site is in solid shape overall: an 82/100 health score, clean
-security headers, and fast core pages. The drag is mostly in links and
-images, plus a slow first byte on every page.
+The site is in solid shape overall, with clean security headers and
+fast core pages. The drag is mostly in links and images, plus a slow
+first byte on every page.
 
-Nothing here is structural. These are fixes that, cleared, would push
-the score into the 90s.
+Nothing here is structural. These are fixes that, cleared, would make
+it a healthy site. This audit scanned 100 pages and stopped at its
+page limit of 100, so it may not cover the whole site; raise the audit
+level or the page limit to audit more pages.
 
 Verdict: Healthy site; cache the pages and clear the links and images.
 
@@ -49,8 +51,20 @@ One model pass over the audit aggregate, never your raw pages:
 - The [technologies](/cloud/technologies) the audit detected, so the advice fits your stack
 - **Deltas vs. the previous audit** when one is available ("score up 7 since last run"); it falls back to a first-run framing when there's no prior audit
 - The resolved [site profile](/cloud/site-metadata) for context (site type, audience, identity)
+- **Coverage:** how many pages the audit scanned, the page limit, whether the crawl stopped on time, and how many pages are known on the site
 
 Each priority lists the checks and detected technologies it is based on, so you can trace it back to the findings in the report.
+
+## How the text is checked
+
+The model writes the prose, so the numbers in it are checked against the audit:
+
+- **Scores read as words.** The summary says what scores mean ("healthy overall; accessibility is the weak spot") and uses at most one numeric score. `/100` never appears.
+- **Page counts are the audit's own.** A sentence that states a page count the audit never reported is left out, so the summary cannot invent "400 pages" or "0+ pages".
+- **A partial audit says so.** When the crawl hit its page limit or ran out of time, the summary says how much it covered and how to audit more pages (see [Audit levels](/guides/audit-levels)).
+- **Never blank.** If no sentence passes, the summary falls back to the audit's own totals.
+
+Reports apply the score and page-count checks when they render, so summaries stored before these checks existed read the same way.
 
 ## Requirements
 

@@ -285,7 +285,7 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   }
 
   // Editor's summary — report-only exec narrative for the agent (does not affect the score).
-  const es = editorSummaryView(report.editorSummary);
+  const es = editorSummaryView(report.editorSummary, report);
   if (es) {
     lines.push(`<editor-summary model="${escapeXml(es.model)}">`);
     for (const para of es.paragraphs) {

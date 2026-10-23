@@ -156,7 +156,7 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
 
   // Editor's summary — report-only (Pro exec-email narrative; not part of the score).
   // Surfaced at the very top of the report, before the health score.
-  const es = editorSummaryView(report.editorSummary);
+  const es = editorSummaryView(report.editorSummary, report);
   if (es) {
     write("EDITOR'S SUMMARY");
     write("-".repeat(40));
