@@ -127,7 +127,7 @@ describe("offline (default)", () => {
     expect(html).toContain('<symbol id="i-copy"');
     expect(html).toContain('<use href="#i-caret"');
     expect(html).toContain('id="fix-prompts"');
-    expect(html).toMatch(/<script>[^<]*navigator\.clipboard/);
+    expect(html).toMatch(/<script\b[^>]*>[^<]*navigator\.clipboard/i);
     expect(html).toContain('href="https://example.com/a"');
     expect(html).toContain('href="https://docs.squirrelscan.com/rules/core/meta-title"');
   });
@@ -138,6 +138,58 @@ describe("offline (default)", () => {
     expect(css.length).toBeGreaterThan(10_000);
     expect(css).not.toMatch(/url\(/);
     expect(css).not.toContain("@font-face");
+  });
+});
+
+describe("the offline default and the cloud's offline: false", () => {
+  const FAVICON = "https://assets.squirrelscan.com/favicons/example.png";
+
+  test("no options at all means offline: no remote image, even when a favicon is passed", () => {
+    for (const html of [renderHtml(report()), renderHtml(report(), { faviconUrl: FAVICON })]) {
+      expect(html).not.toContain("<img");
+      expect(html).not.toContain("squirrelscan.com/tech-icons");
+      expect(html).not.toContain(FAVICON);
+      expect(remoteLoads(html)).toEqual([]);
+    }
+  });
+
+  test("offline: false emits the first-party tech icons and the given faviconUrl", () => {
+    const html = renderHtml(report(), { offline: false, faviconUrl: FAVICON });
+    const imgs = [...html.matchAll(/<img\b[^>]*\bsrc="([^"]+)"/g)].map((m) => m[1]);
+    expect(imgs).toContain(FAVICON);
+    expect(imgs).toContain("https://squirrelscan.com/tech-icons/react.png");
+    // Only first-party hosts: nothing else is loaded.
+    for (const src of imgs) expect(src).toMatch(/^https:\/\/(assets\.)?squirrelscan\.com\//);
+  });
+});
+
+describe("a hostile site title and rule message", () => {
+  const PAYLOAD = "</script><script>alert(1)</script>";
+
+  test("never close an inline script or the JSON block, and render escaped", () => {
+    const r = report({ homepage: { title: PAYLOAD, description: PAYLOAD } });
+    r.ruleResults["core/meta-title"]!.checks[0]!.message = PAYLOAD;
+    const html = renderHtml(r);
+    // Every script element closes exactly where it should: opens == closes,
+    // and the payload's own tags never appear raw anywhere in the page.
+    const opens = (html.match(/<script\b/gi) ?? []).length;
+    const closes = (html.match(/<\/script\s*>/gi) ?? []).length;
+    expect(opens).toBeGreaterThan(0);
+    expect(closes).toBe(opens);
+    expect(html).not.toContain("<script>alert(1)");
+    // Inside every script block (code and JSON), no raw closing tag.
+    for (const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script[^>]*>/gi)) {
+      expect(m[1]!.toLowerCase()).not.toContain("</script");
+      expect(m[1]!).not.toContain("alert(1)</");
+    }
+    // The JSON block still carries the text, decoded, for the copy prompt.
+    const json =
+      /<script type="application\/json" id="fix-prompts">([\s\S]*?)<\/script[^>]*>/i.exec(html);
+    expect(JSON.stringify(JSON.parse(json![1]!))).toContain("alert(1)");
+    // The title and the message render as escaped text.
+    const escaped = "&lt;/script&gt;&lt;script&gt;alert(1)&lt;/script&gt;";
+    expect(html).toContain(`<title>Audit Report - example.com</title>`);
+    expect(html.split(escaped).length - 1).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -229,7 +281,7 @@ describe("odd report data", () => {
       }),
     );
     // The page script's own isNaN() is code, not copy: look at the markup only.
-    const markup = html.replace(/<script>[\s\S]*?<\/script>/g, "");
+    const markup = html.replace(/<script\b[^>]*>[\s\S]*?<\/script[^>]*>/gi, "");
     expect(markup).toContain("not a date");
     expect(markup).not.toContain("NaN");
     expect(markup).not.toContain("Infinity");

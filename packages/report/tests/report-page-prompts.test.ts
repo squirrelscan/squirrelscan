@@ -336,7 +336,9 @@ describe("inlineJson and the page's prompt block", () => {
         },
       }),
     );
-    const m = /<script type="application\/json" id="fix-prompts">([\s\S]*?)<\/script>/.exec(html);
+    const m = /<script type="application\/json" id="fix-prompts">([\s\S]*?)<\/script[^>]*>/i.exec(
+      html,
+    );
     expect(m).not.toBeNull();
     const data = JSON.parse(m![1]!) as {
       head: string;

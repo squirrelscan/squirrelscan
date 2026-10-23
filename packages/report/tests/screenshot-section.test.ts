@@ -27,7 +27,9 @@ function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
 
 /** Executable inline scripts (not the application/json data blocks). */
 const inlineScripts = (html: string): string[] =>
-  [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]!);
+  [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script[^>]*>/gi)]
+    .filter((m) => !/type="application\/json"/i.test(m[1]!))
+    .map((m) => m[2]!);
 
 describe("Screenshot", () => {
   test("(a) present screenshotUrl renders the framed img with the hide-on-error hooks", () => {

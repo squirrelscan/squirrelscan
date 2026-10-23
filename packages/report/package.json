@@ -35,6 +35,7 @@
     "typecheck": "tsgo --noEmit",
     "build:css": "bun run scripts/build-css.ts",
     "build:css:check": "bun run scripts/build-css.ts --check",
+    "lint": "bun run build:css:check",
     "preview": "bun run scripts/preview.ts"
   },
   "private": true,
