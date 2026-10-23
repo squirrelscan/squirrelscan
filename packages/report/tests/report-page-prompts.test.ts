@@ -289,6 +289,24 @@ describe("issue prompts: the shared note is expanded once, on its own line", () 
 });
 
 describe("inlineJson and the page's prompt block", () => {
+  test("</script> never survives raw, in any case", () => {
+    for (const s of ["</script>", "</SCRIPT >", "a</script\n>b", "<script>", "<!-- x -->"]) {
+      const out = inlineJson({ s });
+      expect(out.toLowerCase()).not.toContain("</script");
+      expect(out).not.toContain("<!--");
+      expect(out).toContain("\\u003c");
+      expect(JSON.parse(out)).toEqual({ s });
+    }
+  });
+
+  test("U+2028 and U+2029 are escaped, not emitted raw", () => {
+    const out = inlineJson(["line\u2028separator", "para\u2029separator"]);
+    expect(out).not.toMatch(/[\u2028\u2029]/);
+    expect(out).toContain("\\u2028");
+    expect(out).toContain("\\u2029");
+    expect(JSON.parse(out)).toEqual(["line\u2028separator", "para\u2029separator"]);
+  });
+
   test("nothing in the JSON can close the script tag or open a comment", () => {
     const out = inlineJson({
       a: "</script><script>alert(1)</script>",

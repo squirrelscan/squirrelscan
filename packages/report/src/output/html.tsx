@@ -475,7 +475,7 @@ function TopIssues({
           return (
             <li key={t.key}>
               <Panel
-                className="grid grid-cols-[2rem_minmax(0,1fr)] gap-4 border-l-[3px] border-l-[var(--gc)] p-4 md:p-5"
+                className="grid grid-cols-[2rem_minmax(0,1fr)] gap-4 border-l-[3px] border-l-[var(--gc)]"
                 style={gcVar(gs[0] ?? "")}
               >
                 <span className="flex size-8 items-center justify-center border border-border bg-muted text-sm font-bold text-muted-foreground">
@@ -588,8 +588,9 @@ function CloudUpsell({ report }: { report: AuditReport }) {
 const groupCard =
   "flex flex-col items-center gap-2 border border-border border-t-[3px] border-t-[var(--gc)] bg-card p-4 text-center";
 
-const buttonLink =
-  "inline-flex min-h-9 items-center gap-1.5 border border-border bg-card px-3 py-1.5 text-sm transition-colors hover:border-primary/40";
+/** The header's small .md / .json links for agents. */
+const agentLink =
+  "inline-flex min-h-8 items-center gap-1.5 border border-border bg-card px-3 py-1.5 font-mono text-xs transition-colors hover:border-primary/40";
 
 function PageLinks({
   pages,
@@ -783,7 +784,7 @@ function IssueRow({ rule, totalPages }: { rule: FlatIssue; totalPages: number })
           <p className="max-w-prose text-sm text-muted-foreground">{rule.description}</p>
         )}
         {rule.solution && live.length > 0 && (
-          <Panel tone="selected" className="max-w-prose p-3 md:p-3">
+          <Panel tone="selected" padded={false} className="max-w-prose p-3">
             <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-primary">
               How to fix
             </p>
@@ -879,7 +880,7 @@ function Issues({
                 </Badge>
                 <span className="text-sm text-muted-foreground">{SEVERITY[sev].blurb}</span>
               </div>
-              <Card className="shadow-none">
+              <Card flat>
                 {rows.map((r) => (
                   <IssueRow rule={r} totalPages={totalPages} key={r.id} />
                 ))}
@@ -902,7 +903,7 @@ function PagesLens() {
   return (
     <section id="pages" hidden>
       <SectionHead title="Pages" sub="The same findings, by URL. Worst first." />
-      <Card className="shadow-none">
+      <Card flat>
         <div id="pages-list" />
       </Card>
       <p id="pages-note" className="mt-2 text-xs text-muted-foreground">
@@ -958,13 +959,25 @@ const SPRITE: Record<string, React.ComponentType> = {
   copy: PiCopy,
   check: PiCheck,
 };
+/**
+ * One <symbol> from an icon component's markup. Throws (at module load) when
+ * the markup is not the `<svg viewBox="..."><path .../></svg>` shape expected,
+ * so an icon-library change breaks the build loudly instead of shipping
+ * blank icons.
+ */
+export function spriteSymbol(id: string, svg: string): string {
+  const open = /^<svg\b[^>]*>/.exec(svg);
+  const viewBox = open ? /\bviewBox="([^"]+)"/.exec(open[0])?.[1] : undefined;
+  const inner = open && svg.endsWith("</svg>") ? svg.slice(open[0].length, -"</svg>".length) : "";
+  if (!viewBox) throw new Error(`report sprite: icon "${id}" has no viewBox`);
+  if (!/<(path|circle|rect|polyline|polygon|line|g)\b/.test(inner)) {
+    throw new Error(`report sprite: icon "${id}" has no drawable markup`);
+  }
+  return `<symbol id="i-${id}" viewBox="${viewBox}">${inner}</symbol>`;
+}
+
 const SPRITE_MARKUP = Object.entries(SPRITE)
-  .map(([id, C]) => {
-    const svg = renderToStaticMarkup(<C />);
-    const viewBox = /viewBox="([^"]+)"/.exec(svg)?.[1] ?? "0 0 256 256";
-    const inner = svg.replace(/^<svg[^>]*>/, "").replace(/<\/svg>$/, "");
-    return `<symbol id="i-${id}" viewBox="${viewBox}">${inner}</symbol>`;
-  })
+  .map(([id, C]) => spriteSymbol(id, renderToStaticMarkup(<C />)))
   .join("");
 const Sym = ({ id, className }: { id: keyof typeof SPRITE & string; className?: string }) => (
   <svg className={className} aria-hidden="true" fill="currentColor">
@@ -1050,12 +1063,7 @@ function SiteContext({ report, offline }: { report: AuditReport; offline: boolea
                       <p className="mb-1.5 text-xs text-muted-foreground">{grp.label}</p>
                       <div className="flex flex-wrap gap-1.5">
                         {grp.items.map((t) => (
-                          <Badge
-                            color="neutral"
-                            size="md"
-                            key={t.id}
-                            className="border border-border bg-card text-foreground"
-                          >
+                          <Badge variant="outline" size="md" key={t.id} className="bg-card">
                             <TechIcon icon={t.icon} offline={offline} />
                             {t.name}
                             {t.version && (
@@ -1311,7 +1319,7 @@ function ReportPage({
                 rel="noreferrer"
                 aria-label="squirrelscan"
               >
-                <SquirrelLogo className="h-6" />
+                <SquirrelLogo height="h-6" />
               </a>
             )}
             {!failedRun && (
@@ -1349,10 +1357,10 @@ function ReportPage({
             {base && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className="hidden sm:inline">For your agent</span>
-                <a href={`${base}.md`} className={`${buttonLink} min-h-8 font-mono text-xs`}>
+                <a href={`${base}.md`} className={agentLink}>
                   .md
                 </a>
-                <a href={`${base}.json`} className={`${buttonLink} min-h-8 font-mono text-xs`}>
+                <a href={`${base}.json`} className={agentLink}>
                   .json
                 </a>
               </div>
@@ -1360,7 +1368,7 @@ function ReportPage({
           </div>
         </header>
 
-        <DecorativeHeader className="min-h-0 md:min-h-0">
+        <DecorativeHeader compact>
           <div className="mx-auto max-w-6xl px-4 py-10" id="top">
             <div className="flex flex-wrap items-center justify-between gap-6">
               <div className="min-w-0 flex-1 basis-96">
@@ -1476,7 +1484,7 @@ function ReportPage({
           )}
 
           {gap && (
-            <Panel id="coverage" className="mb-6 border-l-[3px] border-l-accent p-4 md:p-5">
+            <Panel id="coverage" className="mb-6 border-l-[3px] border-l-accent">
               <h2 className="text-base font-semibold tracking-tight">
                 {gap.discovered > gap.scanned
                   ? `This audit covered ${gap.scanned.toLocaleString()} of ${plural(gap.discovered, "discovered page")}`
@@ -1512,10 +1520,7 @@ function ReportPage({
           )}
 
           {notice && (
-            <Card
-              id="failure-notice"
-              className="mb-6 space-y-3 border-destructive/40 p-4 shadow-none md:p-6"
-            >
+            <Card id="failure-notice" tone="destructive" flat className="mb-6 space-y-3 p-4 md:p-6">
               <h2 className="text-lg font-semibold text-destructive">{notice.heading}</h2>
               <p className="text-sm text-muted-foreground">{notice.body[0]}</p>
               {notice.tone === "blocked" ? (
@@ -1737,7 +1742,12 @@ function ReportPage({
                 {locked.cta && (
                   <>
                     {" "}
-                    <a href={locked.cta.url} target="_blank" rel="noreferrer" className="lnk">
+                    <a
+                      href={sanitizeUrl(locked.cta.url)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="lnk"
+                    >
                       {locked.cta.label}
                     </a>
                     .

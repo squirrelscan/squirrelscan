@@ -7,7 +7,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport } from "../src/types";
-import { renderHtml } from "../src/output/html";
+import { renderHtml, spriteSymbol } from "../src/output/html";
 
 function report(overrides: Partial<AuditReport> = {}): AuditReport {
   return {
@@ -174,6 +174,45 @@ describe("online (offline: false, the cloud)", () => {
     });
     expect(html).not.toContain('f.png" onload=');
     expect(html).toContain("f.png&quot; onload=&quot;alert(1)");
+  });
+});
+
+describe("caller-supplied URLs", () => {
+  test("a non-http white-label logo is refused; the org name shows instead", () => {
+    for (const orgLogoUrl of ["javascript:alert(1)", "data:image/svg+xml,<svg/onload=alert(1)>"]) {
+      const html = renderHtml(report(), {
+        branding: { whiteLabel: true, orgName: "Acme Inc", orgLogoUrl },
+      });
+      expect(html).not.toContain("javascript:alert(1)");
+      expect(html).not.toContain("data:image");
+      expect(html).not.toContain("<img");
+      expect(html).toContain('class="wl-wordmark ');
+    }
+  });
+
+  test("an http(s) white-label logo renders", () => {
+    const html = renderHtml(report(), {
+      branding: { whiteLabel: true, orgName: "Acme Inc", orgLogoUrl: "https://example.com/l.png" },
+    });
+    expect(html).toMatch(/<img [^>]*src="https:\/\/example\.com\/l\.png"/);
+  });
+});
+
+describe("icon sprite", () => {
+  test("every row icon is a symbol with a viewBox and drawable markup", () => {
+    const html = renderHtml(report());
+    for (const id of ["caret", "out", "copy", "check"]) {
+      expect(html).toMatch(new RegExp(`<symbol id="i-${id}" viewBox="[^"]+"><path `));
+    }
+  });
+
+  test("changed icon markup fails loudly instead of shipping a blank icon", () => {
+    expect(() => spriteSymbol("x", "<svg><path d='M0 0'/></svg>")).toThrow(/no viewBox/);
+    expect(() => spriteSymbol("x", '<svg viewBox="0 0 1 1"></svg>')).toThrow(/no drawable/);
+    expect(() => spriteSymbol("x", '<span viewBox="0 0 1 1"><path/></span>')).toThrow();
+    expect(spriteSymbol("x", '<svg viewBox="0 0 2 2"><path d="M0 0"></path></svg>')).toBe(
+      '<symbol id="i-x" viewBox="0 0 2 2"><path d="M0 0"></path></symbol>',
+    );
   });
 });
 

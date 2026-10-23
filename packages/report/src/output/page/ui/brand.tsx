@@ -36,17 +36,18 @@ function SquirrelPixels() {
   );
 }
 
-type BrandSvgProps = SVGProps<SVGSVGElement> & {
-  className?: string;
+type BrandSvgProps = Omit<SVGProps<SVGSVGElement>, "className" | "height"> & {
+  /** Height utility (width follows the aspect ratio). */
+  height?: string;
 };
 
 /** The squirrelscan wordmark: pixel squirrel plus the lowercase name. */
-export function SquirrelLogo({ className, ...props }: BrandSvgProps) {
+export function SquirrelLogo({ height = "h-8", ...props }: BrandSvgProps) {
   return (
     // oxlint-disable-next-line github/a11y-aria-label-is-well-formatted -- brand name is always lowercase
     <svg
       viewBox="0 0 216 32"
-      className={cn("h-8 w-auto", className)}
+      className={cn("w-auto", height)}
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       style={{ shapeRendering: "crispEdges" }}

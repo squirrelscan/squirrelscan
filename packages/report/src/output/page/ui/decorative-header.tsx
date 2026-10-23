@@ -126,13 +126,16 @@ const FLOATING_ICONS = [
 export interface DecorativeHeaderProps {
   children: ReactNode;
   className?: string;
+  /** No minimum height: the band is as tall as its content. */
+  compact?: boolean;
 }
 
-export function DecorativeHeader({ children, className }: DecorativeHeaderProps) {
+export function DecorativeHeader({ children, className, compact = false }: DecorativeHeaderProps) {
   return (
     <section
       className={cn(
-        "pixel-grid border-b-2 border-primary/50 relative overflow-hidden min-h-[180px] md:min-h-[220px]",
+        "pixel-grid border-b-2 border-primary/50 relative overflow-hidden",
+        !compact && "min-h-[180px] md:min-h-[220px]",
         className,
       )}
     >
