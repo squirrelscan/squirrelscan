@@ -1192,6 +1192,17 @@ function plan(root: string): Plan {
   const stale: Problem[] = [];
   const { model, pages } = buildModel(root, problems);
   checkData(model, problems);
+  // tangly renders any .md/.mdx it finds as a docs page; `.tanglyignore` only
+  // keeps static files out of the copy. Author-only notes under scripts/ must
+  // use a non-page extension (.txt), or they ship in the sitemap and llms.txt.
+  for (const file of list(root, "scripts/**/*.{md,mdx}")) {
+    problems.push({
+      file,
+      line: 1,
+      message:
+        "markdown under scripts/ is published as a docs page by tangly: use a non-page extension such as .txt",
+    });
+  }
   const writes = new Map<string, string>();
   const allTitles = new Map<string, string[]>();
 

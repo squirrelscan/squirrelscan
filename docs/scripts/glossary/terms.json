@@ -32,7 +32,7 @@
         "https://developers.google.com/search/docs/crawling-indexing/robots/intro",
         "https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt",
         "https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag",
-        "https://developers.google.com/search/docs/crawling-indexing/overview-google-crawlers"
+        "https://developers.google.com/crawling/docs/crawlers-fetchers/overview-google-crawlers"
       ],
       "grounding_note": "robots.txt controls crawling, not indexing; a blocked URL can still be indexed from links.",
       "batch": "1-ax-geo"
@@ -62,7 +62,9 @@
         "robots-txt",
         "lastmod",
         "noindex",
-        "indexability"
+        "indexability",
+        "url-slug",
+        "hreflang"
       ],
       "learn": [],
       "tools": [],
@@ -434,7 +436,9 @@
         "duplicate-content",
         "trailing-slash",
         "redirect-chain",
-        "url-parameters"
+        "url-parameters",
+        "url-slug",
+        "hreflang"
       ],
       "learn": [],
       "tools": [],
@@ -469,7 +473,8 @@
         "canonical-url",
         "title-tag",
         "meta-description",
-        "trailing-slash"
+        "trailing-slash",
+        "thin-content"
       ],
       "learn": [],
       "tools": [],
@@ -558,7 +563,8 @@
       ],
       "related": [
         "wcag",
-        "landmark"
+        "landmark",
+        "thin-content"
       ],
       "learn": [],
       "tools": [],
@@ -1013,7 +1019,7 @@
       "hub": "ax",
       "title": null,
       "primary_query": "ai generated content seo",
-      "definition": "Text written by a language model; Google's position is that how content is made matters less than whether it is helpful.",
+      "definition": "Text written by a language model; Google's position is that how content is made matters less than whether it is helpful. The related rule is retired and does not run.",
       "rules": [
         "ai/ai-content"
       ],
@@ -1418,7 +1424,8 @@
       ],
       "related": [
         "wcag",
-        "accessible-name"
+        "accessible-name",
+        "responsive-images"
       ],
       "learn": [],
       "tools": [],
@@ -1448,7 +1455,8 @@
       ],
       "related": [
         "lcp",
-        "fetchpriority"
+        "fetchpriority",
+        "responsive-images"
       ],
       "learn": [],
       "tools": [],
@@ -1574,7 +1582,8 @@
         "lcp",
         "inp",
         "cls",
-        "ttfb"
+        "ttfb",
+        "http-caching"
       ],
       "learn": [
         "https://squirrelscan.com/learn/core-web-vitals",
@@ -1613,7 +1622,8 @@
         "core-web-vitals",
         "fetchpriority",
         "render-blocking-resources",
-        "lazy-loading"
+        "lazy-loading",
+        "http-caching"
       ],
       "learn": [
         "https://squirrelscan.com/learn/core-web-vitals"
@@ -2243,7 +2253,7 @@
       ],
       "format": "page",
       "hub": "security",
-      "title": "Cookie flags: Secure, HttpOnly and SameSite explained",
+      "title": "Cookie attributes: Secure, HttpOnly, SameSite and scope",
       "primary_query": "cookie security flags",
       "definition": "The Secure, HttpOnly and SameSite flags on Set-Cookie that limit where a cookie is sent and whether scripts can read it.",
       "rules": [
@@ -3244,7 +3254,7 @@
       "hub": "gaps",
       "title": null,
       "primary_query": "content gap analysis",
-      "definition": "Finding the topics and queries a site's audience searches for that the site does not yet cover.",
+      "definition": "Finding the topics and queries a site's audience searches for that the site does not yet cover. The related rules are disabled and do not run.",
       "rules": [
         "gaps/content",
         "gaps/keywords"
@@ -3297,7 +3307,7 @@
       "tools": [],
       "authority": [
         "https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics",
-        "https://developers.google.com/search/docs/crawling-indexing/overview-google-crawlers",
+        "https://developers.google.com/crawling/docs/crawlers-fetchers/overview-google-crawlers",
         "https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt",
         "https://web.dev/articles/rendering-on-the-web"
       ],
@@ -3340,7 +3350,7 @@
       "authority": [
         "https://arxiv.org/abs/2311.09735",
         "https://www.w3.org/TR/json-ld11/",
-        "https://developers.google.com/search/docs/crawling-indexing/overview-google-crawlers",
+        "https://developers.google.com/crawling/docs/crawlers-fetchers/overview-google-crawlers",
         "https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics"
       ],
       "grounding_note": "No rule measures GEO directly. List the rules that bear on whether an AI system can reach and parse the page; no ranking claims. /learn owns the long guide; this page is the definition.",
@@ -3433,7 +3443,7 @@
         "https://squirrelscan.com/tools/robots-txt-generator"
       ],
       "authority": [
-        "https://developers.google.com/search/docs/crawling-indexing/overview-google-crawlers",
+        "https://developers.google.com/crawling/docs/crawlers-fetchers/overview-google-crawlers",
         "https://developers.google.com/search/docs/crawling-indexing/robots/intro",
         "https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt",
         "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/403"

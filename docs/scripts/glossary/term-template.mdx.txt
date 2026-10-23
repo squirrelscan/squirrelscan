@@ -5,7 +5,7 @@ sidebarTitle: "Set by glossary.ts from terms.json"
 ---
 
 {/* Copy to docs/glossary/<slug>.mdx, set "format": "page" on the term in
-terms.json, then run `bun scripts/glossary.ts --write`. See AUTHORING.md. */}
+terms.json, then run `bun scripts/glossary.ts --write`. See AUTHORING.txt. */}
 
 A **Term name** is one quotable sentence of at most 30 words that defines it.
 

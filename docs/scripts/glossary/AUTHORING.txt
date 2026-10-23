@@ -1,11 +1,11 @@
 # Writing a glossary term page
 
-Nothing in `docs/scripts/` is published. This note and `term-template.mdx` are for authors.
+Nothing in `docs/scripts/` is published. This note and `term-template.mdx.txt` are for authors.
 
 ## Steps
 
 1. Pick a term in `terms.json` and set `"format": "page"`. Its `title` (at most 60 characters) becomes the page title, and `term` becomes the sidebar label. Both are written into the page frontmatter by the generator, so edit them in `terms.json`, not in the page.
-2. Copy `term-template.mdx` to `docs/glossary/<slug>.mdx`. The slug is the term's `slug` and never changes; a rename needs a redirect in `docs.json`.
+2. Copy `term-template.mdx.txt` (drop the `.txt`) to `docs/glossary/<slug>.mdx`. The slug is the term's `slug` and never changes; a rename needs a redirect in `docs.json`.
 3. Write the hand-written sections. Leave the marker pairs empty.
 4. Run `bun scripts/glossary.ts --write` in `docs/`. It fills the markers, adds the page to the Glossary tab in `docs.json` and points every link to the term (index entry, related terms, hub key terms) at the new page. Run it a second time: it must report nothing to write.
 5. Run `make validate` in `docs/`.

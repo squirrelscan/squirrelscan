@@ -217,6 +217,22 @@ describe("glossary --check", () => {
     });
   });
 
+  test("a markdown file under scripts/ fails: tangly would publish it as a page", () => {
+    const dir = docs({
+      terms: [SOLO],
+      files: {
+        "scripts/glossary/AUTHORING.md": "# Notes\n",
+        "scripts/glossary/term-template.mdx": "---\ntitle: x\n---\n",
+        "scripts/glossary/AUTHORING.txt": "fine\n",
+      },
+    });
+    const found = messages(dir).filter((m) => m.includes("under scripts/"));
+    expect(found).toEqual([
+      "scripts/glossary/AUTHORING.md:1: markdown under scripts/ is published as a docs page by tangly: use a non-page extension such as .txt",
+      "scripts/glossary/term-template.mdx:1: markdown under scripts/ is published as a docs page by tangly: use a non-page extension such as .txt",
+    ]);
+  });
+
   test("a term naming a nonexistent rule fails at its line in terms.json", () => {
     const dir = docs({
       terms: [TERMS[0]!, { ...TERMS[1]!, rules: ["crawl/sitemap-exist"] }],
