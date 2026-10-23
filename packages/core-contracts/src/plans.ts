@@ -370,15 +370,20 @@ export function isSelfServePlan(planId: string): boolean {
 
 /**
  * White-label report branding (#810). Resolved from the owning org's plan and
- * logo: Team plan grants `whiteLabel: true`, which hides squirrelscan branding
- * in rendered reports and shows the org's own logo (or its name as plain text
- * when no logo is set). Omitted / undefined = default squirrelscan-branded
- * output, so every existing render path is unchanged.
+ * its white-label settings: Team and Enterprise orgs that turn it on get
+ * `whiteLabel: true`, which hides squirrelscan branding in rendered reports
+ * and shows the org's own logo (or its name as plain text when no logo is
+ * set). Omitted / undefined = default squirrelscan-branded output, so every
+ * existing render path is unchanged.
  */
 export interface ReportBranding {
   whiteLabel: boolean;
-  /** Public org logo URL (organizations.avatar_url, #807). */
+  /** Public logo URL for the report header. */
   orgLogoUrl?: string;
-  /** Org display name — the header fallback when no logo is set. */
+  /** Brand name — the header fallback when no logo is set, and the logo's alt text. */
   orgName?: string;
+  /** https URL the header logo or name links to. Anything else is not linked. */
+  websiteUrl?: string;
+  /** Plain-text footer shown in place of the squirrelscan footer credit. */
+  footerText?: string;
 }

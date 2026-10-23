@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **White-label reports can show a website link and footer text.** Team and Enterprise organizations that use white-label reports can add a website and a footer line, such as a copyright notice. The report header links the logo or brand name to the website, and the footer shows the text and the website link where the squirrelscan credit was, in HTML, Markdown and text reports, including local reports from a signed-in CLI. Only an `https://` website is linked. A report keeps the branding it was published with ([HTML report](https://docs.squirrelscan.com/reports#white-label-reports)).
+
 ## v0.0.132 (2026-10-24)
 
 Reports can show what passed, score rings tell the truth about color, and the docs get a glossary.
