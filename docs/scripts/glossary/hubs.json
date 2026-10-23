@@ -76,7 +76,8 @@
         "images",
         "mobile",
         "content"
-      ]
+      ],
+      "rule_backlinks": true
     },
     {
       "code": "schema",
@@ -94,7 +95,8 @@
         "crawl",
         "eeat",
         "local"
-      ]
+      ],
+      "rule_backlinks": true
     },
     {
       "code": "local",
