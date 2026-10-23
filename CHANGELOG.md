@@ -17,9 +17,13 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.132 (2026-10-24)
+
+Reports can show what passed, score rings tell the truth about color, and the docs get a glossary.
+
 ### Added
 
-- `squirrel audit` and `squirrel report` take `--include-passed` (#1037), which lists the rules that passed after the issues, in every format: each rule with at least one passing check and no warning or error, with how many pages it passed on, `site-wide` for a site rule, or `pages not recorded` for a page rule whose passes name no page. On the HTML report it is one closed line under the findings. JSON gets a `passedRules` array (`ruleId`, `name`, `category`, `scope`, `pages`). A report read with `--input` lists none. Without the flag every format renders exactly as before. See [report](https://docs.squirrelscan.com/cli/report#list-what-passed).
+- `squirrel audit` and `squirrel report` take `--include-passed`, which lists the rules that passed after the issues, in every format: each rule with at least one passing check and no warning or error, with how many pages it passed on, `site-wide` for a site rule, or `pages not recorded` for a page rule whose passes name no page. On the HTML report it is one closed line under the findings. JSON gets a `passedRules` array (`ruleId`, `name`, `category`, `scope`, `pages`). A report read with `--input` lists none. Without the flag every format renders exactly as before. See [report](https://docs.squirrelscan.com/cli/report#list-what-passed).
 
 ### Changed
 
@@ -27,7 +31,13 @@ How it works:
 
 ### Fixed
 
-- **Copy-to-agent prompts keep site text fenced.** The HTML report's fix prompts now strip hidden characters and the internal note placeholder before they defuse quote fences, so text from the audited site can no longer piece a fence marker back together and step outside its untrusted block.
+- **Copy-to-agent prompts keep site text fenced.** (Security.) The HTML report's fix prompts now strip hidden characters and the internal note placeholder before they defuse quote fences, so text from the audited site can no longer piece a fence marker back together and step outside its untrusted block.
+
+### Docs
+
+- **A glossary.** [docs.squirrelscan.com/glossary](https://docs.squirrelscan.com/glossary) has an A to Z index and 64 short definitions, from canonical URL to llms.txt, each linked to the rules that check it.
+- The team page no longer lists SAML, SCIM or verified-domain auto-join as Enterprise features: squirrelscan does not support them today.
+- The CI guide now says `--fail-on` checks each run against your thresholds, not against an earlier audit, and points at `squirrel report --regression-since` for comparing two audits.
 
 ## v0.0.131 (2026-10-23)
 
