@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.130 (2026-10-23)
+
+Local HTML reports get a glow-up: same page as the cloud, still fully offline. Plus a docs-site security patch.
+
 ### Security
 
 - DOMPurify moves to 3.4.17 for GHSA-cg2g-xh64-v4q7 (critical), GHSA-mrv2-3pqr-j5jr (high) and GHSA-c6gr-qvv4-5v3f (low). It is a docs-site dependency only; nothing in the `squirrel` binary loads it.
@@ -24,7 +28,7 @@ How it works:
 
 ### Changed
 
-- **The HTML report is redesigned, and local reports get the same page as published ones.** `--format html` now writes the page reports.squirrelscan.com shows: the health and group scores up top, a coverage notice with the command for a larger audit when the crawl stopped short, the most widespread errors and warnings to fix first, every finding banded by severity and filterable by group, the same findings by page, and the site profile, tech stack and entity map. Every finding has a **Copy fix prompt** button that copies a prompt for your coding agent: the rules to fix, their docs, the audit's evidence fenced as untrusted data, and the `squirrel audit` command that verifies the fix. A signed-out local report also shows what a free cloud account adds, and the checks on the site that need it. The file is still self-contained and makes no network request when opened: no favicon and no technology logos ([html format](https://docs.squirrelscan.com/reports#html)).
+- **The HTML report is redesigned, and local reports get the same page as published ones.** `--format html` now writes the page reports.squirrelscan.com shows: the health and group scores up top, a coverage notice with the command for a larger audit when the crawl stopped short, the most widespread errors and warnings to fix first, every finding banded by severity and filterable by group, the same findings by page, and the site profile, tech stack and entity map. Every finding has a **Copy fix prompt** button that copies a prompt for your coding agent: the rules to fix, their docs, the audit's evidence fenced as untrusted data, and the `squirrel audit` command that verifies the fix. A signed-out local report also shows what a free cloud account adds, and the checks on the site that need it. The file is still self-contained and makes no network request when opened: no favicon and no technology logos. HTML files written by earlier versions keep the old design; run `squirrel report -f html` again (or a fresh audit) to get the new page ([html format](https://docs.squirrelscan.com/reports#html)).
 
 ## v0.0.129 (2026-10-23)
 
