@@ -331,7 +331,7 @@ export const COVERAGE_NOTICE_STORAGE_PREFIX = "squirrelscan:coverage-notice-dism
  * is guarded: a private window, blocked site data or a file:// page that
  * refuses storage still renders the notice and still dismisses it for the visit.
  */
-const COVERAGE_NOTICE_SCRIPT = `(function(){var n=document.getElementById("coverage-notice");if(!n)return;var k=${JSON.stringify(COVERAGE_NOTICE_STORAGE_PREFIX)}+n.getAttribute("data-notice-key"),b=n.querySelector("[data-dismiss-notice]");try{if(window.localStorage.getItem(k)==="1"){n.hidden=true;return}}catch(e){}if(!b)return;b.hidden=false;b.addEventListener("click",function(){n.hidden=true;try{window.localStorage.setItem(k,"1")}catch(e){}})})();`;
+const COVERAGE_NOTICE_SCRIPT = `(function(){var n=document.getElementById("coverage-notice");if(!n)return;var k="squirrelscan:coverage-notice-dismissed:"+n.getAttribute("data-notice-key"),b=n.querySelector("[data-dismiss-notice]");try{if(window.localStorage.getItem(k)==="1"){n.hidden=true;return}}catch(e){}if(!b)return;b.hidden=false;b.addEventListener("click",function(){n.hidden=true;try{window.localStorage.setItem(k,"1")}catch(e){}})})();`;
 
 /** 32-bit FNV-1a, hex: a stable, short storage key from report fields. */
 function fnv1a(text: string): string {

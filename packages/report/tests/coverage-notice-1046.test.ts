@@ -86,6 +86,11 @@ describe("when the notice shows (pub#1046)", () => {
     const html = renderHtml(report({ scanScope: cappedScope }));
     const notice = noticeMarkup(html);
     expect(textOf(notice)).toBe(`This report may not cover the whole site. ${LINE_TAIL}`);
+    // The dismiss script spells the storage prefix as a literal (no interpolation
+    // into script text); it must stay the exported constant.
+    expect(html).toContain(
+      `var k=${JSON.stringify(COVERAGE_NOTICE_STORAGE_PREFIX)}+n.getAttribute`,
+    );
     // Neither the notice nor any other copy claims a count it does not have.
     expect(html).not.toMatch(/\b0\+/);
     expect(textOf(notice)).not.toContain("200 of 200");
