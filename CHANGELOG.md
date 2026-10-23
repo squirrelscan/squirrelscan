@@ -12,7 +12,15 @@ How it works:
   A stable `## vX.Y.Z` matches any `## vX.Y.Z-<suffix>` heading (e.g. `-beta.N`,
   `-rc.1`), so a stable cut can reuse a pre-release section when no plain one exists.
 - Use `###` (or deeper) for sub-sections within an entry — a `## ` heading marks a new version.
-- A `## [Unreleased]
+- A `## [Unreleased]` section collects merged changes that have not been cut into
+  a release yet; rename it to the version when the release goes out.
+
+## [Unreleased]
+
+### Security
+
+- DOMPurify moves to 3.4.17 for GHSA-cg2g-xh64-v4q7 (critical), GHSA-mrv2-3pqr-j5jr (high) and GHSA-c6gr-qvv4-5v3f (low). It is a docs-site dependency only; nothing in the `squirrel` binary loads it.
+- The dependency audit now ignores two Astro advisories, GHSA-98hj-9722-w3j8 (moderate) and GHSA-mpr7-6m5w-76rw (low). Astro stays capped below 7.2.10 until tangly moves to `@astrojs/mdx` 8, and only the static docs build uses it, with no untrusted input. The reasoning is in `.github/dependency-audit-allowlist.md`.
 
 ## v0.0.129 (2026-10-23)
 
