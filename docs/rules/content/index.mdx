@@ -1,86 +1,98 @@
 ---
-title: "Content"
-description: "Text quality, readability, and content structure"
+title: "Content audit rules: thin, duplicate and stale content"
+sidebarTitle: "Content"
+description: "Audit rules for page text: thin and duplicate content, stale dates, placeholder text, mojibake, broken HTML, readability and keyword stuffing."
 ---
 
 Content rules read the words a visitor actually sees. Some of them catch pipeline failures that reach the reader as text: mojibake, literal markdown, lorem ipsum, a development URL, a visible undefined. Others measure the writing itself, its length, its readability and its keyword density. A third group compares pages against each other, finding duplicate titles, thin outliers and titles that break the site's own template.
 
+## Run only these rules
+
+```bash
+squirrel audit https://example.com --rule-include content
+```
+
+[LLM content quality score](/rules/content/quality) is retired and never runs. It stays in the table so its page and ID keep working.
+
+{/* hub:start-here:start */}
+
+## Where to start
+
+These carry the highest severity and weight in the category.
+
+- [Meta tags in the body: why they are silently ignored](/rules/content/meta-in-body): A meta description or robots tag inside body is not read by anything. squirrel finds every meta element that ended up outside the head.
+- [Duplicate title tags: the same title on several pages](/rules/content/duplicate-title): Two pages with the same title compete with each other in search and look identical in results. squirrel groups every crawled page by its title.
+- [Hidden text and links: what Google's spam policy covers](/rules/content/hidden-text): Text a crawler reads and a visitor cannot see is a spam policy violation. squirrel finds it while exempting screen-reader and collapsed-UI patterns.
+- [localhost in production: dev hosts left in the markup](/rules/content/dev-leakage): A link or image pointing at localhost or a preview deployment is broken for every visitor. squirrel classifies the host and says whether it is yours.
+- [Lorem ipsum in production: placeholders and leftovers](/rules/content/placeholder-text): Filler copy, unrendered template syntax and a visible undefined all mean something shipped unfinished. squirrel names the family and shows a sample.
+
+{/* hub:start-here:end */}
+
+{/* hub:rules:start */}
+
 ## Rules
 
-<CardGroup cols={2}>
-  <Card title="Article link density: how many links an article needs" icon="triangle-exclamation" href="/rules/content/article-links">
-    An article that cites nothing and links nowhere is a dead end. squirrel scales the minimum with the article's length.
-  </Card>
-  <Card title="Author attribution: schema, rel=author and visible bylines" icon="circle-info" href="/rules/content/author-info">
-    Who wrote a page is part of how a reader decides whether to trust it. squirrel inventories the author markup a page carries.
-  </Card>
-  <Card title="Malformed HTML: doctype, nesting and deprecated tags" icon="triangle-exclamation" href="/rules/content/broken-html">
-    Browsers recover from bad markup silently and other parsers may not. squirrel checks document structure, nesting and deprecated elements.
-  </Card>
-  <Card title="Freshness signals: the dates a page publishes about itself" icon="circle-info" href="/rules/content/freshness">
-    squirrel inventories the date signals on a page: the Last-Modified header, schema dates, time elements and Open Graph article dates.
-  </Card>
-  <Card title="Visible date disagrees with schema: which date is wrong" icon="triangle-exclamation" href="/rules/content/date-agreement">
-    A page states its date in several places and presence checks pass as soon as one exists. squirrel compares the byline, the schema and the URL year.
-  </Card>
-  <Card title="localhost in production: dev hosts left in the markup" icon="triangle-exclamation" href="/rules/content/dev-leakage">
-    A link or image pointing at localhost or a preview deployment is broken for every visitor. squirrel classifies the host and says whether it is yours.
-  </Card>
-  <Card title="Duplicate meta descriptions across pages" icon="triangle-exclamation" href="/rules/content/duplicate-description">
-    One description reused across a section describes none of those pages well. squirrel groups every crawled page by its meta description.
-  </Card>
-  <Card title="Duplicate title tags: the same title on several pages" icon="triangle-exclamation" href="/rules/content/duplicate-title">
-    Two pages with the same title compete with each other in search and look identical in results. squirrel groups every crawled page by its title.
-  </Card>
-  <Card title="Mojibake: â€™ and other encoding corruption in page text" icon="triangle-exclamation" href="/rules/content/mojibake">
-    Strange character sequences in your copy mean the bytes and the declared encoding disagree. squirrel finds them and names which of the two is wrong.
-  </Card>
-  <Card title="Skipped heading levels: h1 to h3 and other outline problems" icon="triangle-exclamation" href="/rules/content/heading-hierarchy">
-    Headings are the page's outline, and a skipped level breaks it for anyone navigating by structure. squirrel checks order, emptiness, length and repeats.
-  </Card>
-  <Card title="Hidden text and links: what Google's spam policy covers" icon="triangle-exclamation" href="/rules/content/hidden-text">
-    Text a crawler reads and a visitor cannot see is a spam policy violation. squirrel finds it while exempting screen-reader and collapsed-UI patterns.
-  </Card>
-  <Card title="Keyword stuffing: measuring density around your CTAs" icon="triangle-exclamation" href="/rules/content/keyword-stuffing">
-    Repeating a term unnaturally is a spam policy violation. squirrel measures density while discounting repeated call-to-action labels.
-  </Card>
-  <Card title="Meta tags in the body: why they are silently ignored" icon="circle-exclamation" href="/rules/content/meta-in-body">
-    A meta description or robots tag inside body is not read by anything. squirrel finds every meta element that ended up outside the head.
-  </Card>
-  <Card title="Wrong Content-Type: header and extension disagree" icon="triangle-exclamation" href="/rules/content/mime-type">
-    A stylesheet served as text/html is refused by the browser under nosniff. squirrel compares the response type against the URL extension.
-  </Card>
-  <Card title="Fake phone numbers and example.com emails in production" icon="triangle-exclamation" href="/rules/content/placeholder-contact">
-    A 555-01xx phone number or an address at example.com means a theme's contact block shipped unedited. squirrel flags template-default contact details and fails them on contact and checkout pages.
-  </Card>
-  <Card title="Lorem ipsum in production: placeholders and leftovers" icon="triangle-exclamation" href="/rules/content/placeholder-text">
-    Filler copy, unrendered template syntax and a visible undefined all mean something shipped unfinished. squirrel names the family and shows a sample.
-  </Card>
-  <Card title="Misspellings and doubled words in English copy" icon="triangle-exclamation" href="/rules/content/common-misspellings">
-    A known typo in a title, a heading or a price table, and a doubled "the the", are the first things a visitor notices. squirrel names the correction and the pages it appears on.
-  </Card>
-  <Card title="Placeholder images and camera-default alt text" icon="triangle-exclamation" href="/rules/content/placeholder-media">
-    A via.placeholder.com image, a 1x1 stand-in or an alt of DSC_0001 means the media was never finished. squirrel names the image and why it was flagged.
-  </Card>
-  <Card title="Flesch reading ease: measuring how hard a page is to read" icon="circle-info" href="/rules/content/reading-level">
-    squirrel computes a Flesch reading ease score and a Flesch-Kincaid grade level from the page text, and reports both without judging them.
-  </Card>
-  <Card title="Footer copyright year behind the current year" icon="circle-info" href="/rules/content/stale-copyright">
-    An old year in the footer is the cheapest signal that a site is abandoned. squirrel reads the footer only, so dated body copy is left alone.
-  </Card>
-  <Card title="Thin against your own site: outliers by page type" icon="triangle-exclamation" href="/rules/content/thin-vs-site-norm">
-    A 200 word product page is normal and a 200 word article is not. squirrel compares each page against the median for its own page type.
-  </Card>
-  <Card title="Inconsistent page titles: pages breaking the template" icon="triangle-exclamation" href="/rules/content/title-pattern-outlier">
-    Most sites title pages the same way and then ship a pocket that does not. squirrel infers your template and reports the pages that break it.
-  </Card>
-  <Card title="Literal **bold** on the page: markdown that never rendered" icon="triangle-exclamation" href="/rules/content/unrendered-markup">
-    Visible asterisks, bracket links or escaped tags mean a value printed as text instead of markup. squirrel reads the prose and names the mistake.
-  </Card>
-  <Card title="Thin content: the 300 word floor and what to do below it" icon="triangle-exclamation" href="/rules/content/word-count">
-    A page under a few hundred words rarely answers the question it ranks for. squirrel counts the words and reports against two thresholds.
-  </Card>
-</CardGroup>
+| Rule | What it flags | Severity | Scope |
+|---|---|---|---|
+| [Article link density: how many links an article needs](/rules/content/article-links) | An article that cites nothing and links nowhere is a dead end. squirrel scales the minimum with the article's length. | warning | Per-page |
+| [Author attribution: schema, rel=author and visible bylines](/rules/content/author-info) | Who wrote a page is part of how a reader decides whether to trust it. squirrel inventories the author markup a page carries. | info | Per-page |
+| [Duplicate meta descriptions across pages](/rules/content/duplicate-description) | One description reused across a section describes none of those pages well. squirrel groups every crawled page by its meta description. | warning | Site-wide |
+| [Duplicate title tags: the same title on several pages](/rules/content/duplicate-title) | Two pages with the same title compete with each other in search and look identical in results. squirrel groups every crawled page by its title. | warning | Site-wide |
+| [Fake phone numbers and example.com emails in production](/rules/content/placeholder-contact) | A 555-01xx phone number or an address at example.com means a theme's contact block shipped unedited. squirrel flags template-default contact details and fails them on contact and checkout pages. | warning | Per-page |
+| [Flesch reading ease: measuring how hard a page is to read](/rules/content/reading-level) | squirrel computes a Flesch reading ease score and a Flesch-Kincaid grade level from the page text, and reports both without judging them. | info | Per-page |
+| [Footer copyright year behind the current year](/rules/content/stale-copyright) | An old year in the footer is the cheapest signal that a site is abandoned. squirrel reads the footer only, so dated body copy is left alone. | warning | Per-page |
+| [Freshness signals: the dates a page publishes about itself](/rules/content/freshness) | squirrel inventories the date signals on a page: the Last-Modified header, schema dates, time elements and Open Graph article dates. | info | Per-page |
+| [Hidden text and links: what Google's spam policy covers](/rules/content/hidden-text) | Text a crawler reads and a visitor cannot see is a spam policy violation. squirrel finds it while exempting screen-reader and collapsed-UI patterns. | warning | Per-page |
+| [Inconsistent page titles: pages breaking the template](/rules/content/title-pattern-outlier) | Most sites title pages the same way and then ship a pocket that does not. squirrel infers your template and reports the pages that break it. | warning | Site-wide |
+| [Keyword stuffing: measuring density around your CTAs](/rules/content/keyword-stuffing) | Repeating a term unnaturally is a spam policy violation. squirrel measures density while discounting repeated call-to-action labels. | warning | Per-page |
+| [Literal **bold** on the page: markdown that never rendered](/rules/content/unrendered-markup) | Visible asterisks, bracket links or escaped tags mean a value printed as text instead of markup. squirrel reads the prose and names the mistake. | warning | Per-page |
+| [LLM content quality score: what it measures](/rules/content/quality) | A language-model read of the page copy, scored 0 to 100 with written feedback. Retired in this release: it never runs. | info | Per-page |
+| [localhost in production: dev hosts left in the markup](/rules/content/dev-leakage) | A link or image pointing at localhost or a preview deployment is broken for every visitor. squirrel classifies the host and says whether it is yours. | warning | Per-page |
+| [Lorem ipsum in production: placeholders and leftovers](/rules/content/placeholder-text) | Filler copy, unrendered template syntax and a visible undefined all mean something shipped unfinished. squirrel names the family and shows a sample. | warning | Per-page |
+| [Malformed HTML: doctype, nesting and deprecated tags](/rules/content/broken-html) | Browsers recover from bad markup silently and other parsers may not. squirrel checks document structure, nesting and deprecated elements. | warning | Per-page |
+| [Meta tags in the body: why they are silently ignored](/rules/content/meta-in-body) | A meta description or robots tag inside body is not read by anything. squirrel finds every meta element that ended up outside the head. | error | Per-page |
+| [Misspellings and doubled words in English copy](/rules/content/common-misspellings) | A typo in a heading, a price table or a page title is the first thing a visitor notices. squirrel finds known misspellings and doubled words on English pages, and names the correction. | warning | Per-site |
+| [Mojibake: â€™ and other encoding corruption in page text](/rules/content/mojibake) | Strange character sequences in your copy mean the bytes and the declared encoding disagree. squirrel finds them and names which of the two is wrong. | warning | Per-page |
+| [Placeholder images and camera-default alt text](/rules/content/placeholder-media) | A placeholder service image, a 1x1 stand-in or an alt of DSC_0001 means the media was never finished. squirrel names the image and why it was flagged. | warning | Per-page |
+| [Skipped heading levels: h1 to h3 and other outline problems](/rules/content/heading-hierarchy) | Headings are the page's outline, and a skipped level breaks it for anyone navigating by structure. squirrel checks order, emptiness, length and repeats. | warning | Per-page |
+| [Thin against your own site: outliers by page type](/rules/content/thin-vs-site-norm) | A 200 word product page is normal and a 200 word article is not. squirrel compares each page against the median for its own page type. | warning | Site-wide |
+| [Thin content: the 300 word floor and what to do below it](/rules/content/word-count) | A page under a few hundred words rarely answers the question it ranks for. squirrel counts the words and reports against two thresholds. | warning | Per-page |
+| [Visible date disagrees with schema: which date is wrong](/rules/content/date-agreement) | A page states its date in several places and presence checks pass as soon as one exists. squirrel compares the byline, the schema and the URL year. | warning | Per-page |
+| [Wrong Content-Type: header and extension disagree](/rules/content/mime-type) | A stylesheet served as text/html is refused by the browser under nosniff. squirrel compares the response type against the URL extension. | warning | Per-page |
+
+{/* hub:rules:end */}
+
+{/* hub:terms:start */}
+
+## Key terms
+
+- [Author byline](/glossary#author-byline): The visible author name on an article, ideally linked to an author page and matched by an author entity in structured data.
+- [Character encoding](/glossary#character-encoding): The mapping from bytes to characters (normally UTF-8) declared in the Content-Type header or a meta charset tag; a mismatch produces mojibake.
+- [Cloaking](/glossary#cloaking): Serving search engines or particular user agents different content from what visitors see, a Google spam policy violation.
+- [Content freshness](/glossary#content-freshness): How current a page is and how consistently it says so: visible dates, dateModified, sitemap lastmod and copyright year.
+- [Duplicate content](/glossary#duplicate-content): The same or near-identical content reachable at more than one URL, or repeated titles and descriptions across pages.
+- [Heading hierarchy](/glossary#heading-hierarchy): The nesting of h1 to h6 headings that gives a page its outline for readers, screen readers and parsers.
+- [HTML validity](/glossary#html-validation): Whether the markup parses as intended: closed elements, head-only tags in the head, and no raw markup printed as text.
+- [Keyword stuffing](/glossary#keyword-stuffing): Repeating a term far beyond natural use in the hope of ranking for it, which Google lists as spam.
+- [Leaked secrets](/glossary#leaked-secrets): Credentials or private keys shipped to the browser in HTML, scripts or source maps.
+- [Meta description](/glossary#meta-description): A `<meta name="description">` summary of the page that search engines may use as the result snippet.
+- [Placeholder content](/glossary#placeholder-content): Template filler left in production: lorem ipsum text, stock placeholder images, example phone numbers and emails.
+- [Readability](/glossary#readability): How hard a text is to read, estimated from sentence and word length with formulas such as Flesch reading ease.
+- [Thin content](/glossary#thin-content): A page with too little substantive content to be useful, judged here against word count and the site's own norm.
+- [Title tag](/glossary#title-tag): The `<title>` element in the page head; browsers show it in the tab and search engines usually use it as the result headline.
+- [X-Content-Type-Options](/glossary#x-content-type-options): The nosniff header that stops browsers guessing a response's type instead of trusting Content-Type.
+
+{/* hub:terms:end */}
+
+## Related categories
+
+[Core SEO](/rules/core) checks each page's own title, description and H1. [E-E-A-T](/rules/eeat) looks for authors, dates and the pages that back up what the text claims, and [Security](/rules/security) looks for secrets that reached the browser.
+
+## Learn more
+
+- [SEO for vibe coded sites](https://squirrelscan.com/learn/seo-for-vibe-coded-sites), the checks that Lovable, v0 and Bolt output tends to miss
+- [Website audit tool](https://squirrelscan.com/tools/website-audit)
+- [Sample report](https://squirrelscan.com/reports/squirrelscan-sample), with the Content section on a real site
 
 ## Disable all Content rules
 
@@ -88,5 +100,3 @@ Content rules read the words a visitor actually sees. Some of them catch pipelin
 [rules]
 disable = ["content/*"]
 ```
-
-Every audit reports Content findings next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.

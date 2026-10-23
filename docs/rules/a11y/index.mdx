@@ -1,199 +1,133 @@
 ---
-title: "Accessibility"
-description: "61 audit rules covering accessible names, ARIA, forms, structure, tables, language and zoom, run on every crawled page."
+title: "Accessibility audit rules: WCAG and ARIA checks"
+sidebarTitle: "Accessibility"
+description: "Audit rules for accessibility: accessible names, ARIA roles and attributes, forms, headings and landmarks, tables, language and zoom on every crawled page."
 ---
 
-squirrelscan runs 61 accessibility rules against every page it crawls. They cover accessible names for buttons, links and form controls, ARIA roles and attributes, heading and landmark structure, tables, language declarations and viewport settings. Each page below quotes the exact report message a rule emits, and most findings identify the offending element by selector, id or quoted text, so a coding agent can go straight to the markup that needs changing.
+squirrelscan runs its accessibility rules against every page it crawls. They cover accessible names for buttons, links and form controls, ARIA roles and attributes, heading and landmark structure, tables, language declarations and viewport settings. Each page below quotes the exact report message a rule emits, and most findings identify the offending element by selector, id or quoted text, so a coding agent can go straight to the markup that needs changing.
 
-Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+<Note>These are hand-written checks that read each page's markup, not an axe-core run, and they cover part of WCAG. A page with no findings has not been shown to conform to WCAG: criteria that need a person to judge, such as whether alt text describes the image or captions match the audio, are beyond what they can check.</Note>
+
+## Run only these rules
+
+```bash
+squirrel audit https://example.com --rule-include a11y
+```
+
+{/* hub:start-here:start */}
+
+## Where to start
+
+These carry the highest severity and weight in the category.
+
+- [aria-hidden on body or html: what it breaks](/rules/a11y/aria-hidden-body): aria-hidden=true on the body or html element asks assistive technology to ignore the entire page. squirrel checks both, at the highest weight.
+- [Accessible names for buttons: what counts and how to check](/rules/a11y/button-name): A button with only an icon has no name for a screen reader. squirrel lists every button on every page that has nothing to announce.
+- [ARIA references pointing at duplicate or missing ids](/rules/a11y/duplicate-id-aria): aria-labelledby resolving to two elements, or to none, names the wrong thing silently. squirrel checks all eight ARIA id references.
+- [Dropdowns with no accessible name: naming a select](/rules/a11y/select-name): A select announced only as 'combo box' gives no clue what it changes. squirrel checks every select element on the page.
+- [input type=image without alt: an unnamed submit button](/rules/a11y/input-image-alt): An image input is a submit button drawn as a picture, and with no alt it announces nothing. squirrel checks every one on the page.
+
+{/* hub:start-here:end */}
+
+{/* hub:rules:start */}
 
 ## Rules
 
-<CardGroup cols={2}>
-  <Card title="accesskey: why duplicate shortcuts break and how to check" icon="triangle-exclamation" href="/rules/a11y/accesskeys">
-    Two elements claiming the same accesskey means one shortcut is unreachable.
-  </Card>
-  <Card title="ARIA attributes that are not allowed on an element" icon="triangle-exclamation" href="/rules/a11y/aria-allowed-attr">
-    role=presentation with an aria-label, or a decorative image with one, contradicts itself.
-  </Card>
-  <Card title="Command roles: buttons, links and menu items need names" icon="circle-exclamation" href="/rules/a11y/aria-command-name">
-    Anything that performs an action has to announce what it does.
-  </Card>
-  <Card title="Dialog accessible name: role=dialog and the dialog element" icon="circle-exclamation" href="/rules/a11y/aria-dialog-name">
-    A modal with no name leaves screen reader users guessing what just opened.
-  </Card>
-  <Card title="aria-hidden on body or html: what it breaks" icon="circle-exclamation" href="/rules/a11y/aria-hidden-body">
-    aria-hidden=true on the body or html element asks assistive technology to ignore the entire page.
-  </Card>
-  <Card title="Focusable elements inside aria-hidden: the tab trap" icon="circle-exclamation" href="/rules/a11y/aria-hidden-focus">
-    A hidden element that still takes focus lets keyboard users tab into nothing.
-  </Card>
-  <Card title="Input fields with no accessible name, ARIA and native" icon="circle-exclamation" href="/rules/a11y/aria-input-field-name">
-    Text boxes, comboboxes and sliders that announce nothing.
-  </Card>
-  <Card title="aria-label: which elements need one and how to check" icon="circle-exclamation" href="/rules/a11y/aria-labels">
-    Buttons, links and inputs with no visible text and no aria-label have no name for screen readers.
-  </Card>
-  <Card title="Accessible name for a meter element and role=meter" icon="circle-exclamation" href="/rules/a11y/aria-meter-name">
-    A gauge that announces only a number tells a screen reader user nothing.
-  </Card>
-  <Card title="Accessible name for a progress bar and role=progressbar" icon="circle-exclamation" href="/rules/a11y/aria-progressbar-name">
-    A progress bar with no name announces a percentage and nothing else.
-  </Card>
-  <Card title="Required ARIA attributes for a role, and what is missing" icon="circle-exclamation" href="/rules/a11y/aria-required-attr">
-    role=checkbox with no aria-checked has a state screen readers cannot read.
-  </Card>
-  <Card title="ARIA roles that require particular child roles" icon="circle-exclamation" href="/rules/a11y/aria-required-children">
-    role=list with no listitem, or role=tablist with no tab, is an incomplete widget.
-  </Card>
-  <Card title="ARIA roles that require a particular parent role" icon="circle-exclamation" href="/rules/a11y/aria-required-parent">
-    role=listitem outside a list, or a tab outside a tablist, loses its meaning.
-  </Card>
-  <Card title="role=text with focusable children: why it breaks" icon="triangle-exclamation" href="/rules/a11y/aria-text">
-    role=text flattens a subtree into one announced string, so a link inside it cannot be operated.
-  </Card>
-  <Card title="Checkboxes, radios and switches with no accessible name" icon="circle-exclamation" href="/rules/a11y/aria-toggle-field-name">
-    A checkbox that announces only its role gives no reason to tick it.
-  </Card>
-  <Card title="role=tooltip with no content: what to check" icon="circle-exclamation" href="/rules/a11y/aria-tooltip-name">
-    A tooltip with nothing to announce leaves the control it explains unexplained.
-  </Card>
-  <Card title="role=treeitem: naming every node in a tree" icon="circle-exclamation" href="/rules/a11y/aria-treeitem-name">
-    A tree node that announces only its position in the tree is unusable.
-  </Card>
-  <Card title="Invalid ARIA attribute values and the types they need" icon="circle-exclamation" href="/rules/a11y/aria-valid-attr-value">
-    aria-checked=yes and aria-level=two are ignored by browsers.
-  </Card>
-  <Card title="Invalid aria-* attribute names, aria-labeledby included" icon="circle-exclamation" href="/rules/a11y/aria-valid-attr">
-    A misspelled ARIA attribute is ignored by every browser and warns nobody.
-  </Card>
-  <Card title="Invalid ARIA role values and how to check them" icon="circle-exclamation" href="/rules/a11y/aria-roles">
-    A misspelled or invented role gives an element no semantics at all.
-  </Card>
-  <Card title="autocomplete: the right token for every form field" icon="triangle-exclamation" href="/rules/a11y/autocomplete-tokens">
-    Name, email, address and payment fields with a missing or wrong autocomplete token break autofill.
-  </Card>
-  <Card title="Accessible names for buttons: what counts and how to check" icon="circle-exclamation" href="/rules/a11y/button-name">
-    A button with only an icon has no name for a screen reader.
-  </Card>
-  <Card title="Color contrast: the 4.5:1 rule and how to check it" icon="triangle-exclamation" href="/rules/a11y/color-contrast">
-    Light gray text on white fails WCAG AA.
-  </Card>
-  <Card title="dt and dd outside a dl: orphaned definition list items" icon="circle-exclamation" href="/rules/a11y/dlitem">
-    A dt or dd that is not inside a dl loses the term-description pairing entirely.
-  </Card>
-  <Card title="Definition list structure: what belongs inside a dl" icon="circle-exclamation" href="/rules/a11y/definition-list">
-    A stray paragraph between the terms of a dl breaks the pairing screen readers rely on.
-  </Card>
-  <Card title="Deprecated and abstract ARIA roles, and what to use instead" icon="circle-exclamation" href="/rules/a11y/aria-deprecated-role">
-    role=directory is deprecated and abstract roles were never meant for markup.
-  </Card>
-  <Card title="Duplicate id on a focusable element: what it breaks" icon="circle-exclamation" href="/rules/a11y/duplicate-id-active">
-    Two inputs sharing an id break label association and focus management.
-  </Card>
-  <Card title="ARIA references pointing at duplicate or missing ids" icon="circle-exclamation" href="/rules/a11y/duplicate-id-aria">
-    aria-labelledby resolving to two elements, or to none, names the wrong thing silently.
-  </Card>
-  <Card title="Empty headings: what counts as empty and how to check" icon="triangle-exclamation" href="/rules/a11y/empty-heading">
-    A heading with no text still shows up in the screen reader outline, as a blank entry.
-  </Card>
-  <Card title="focus-visible: keeping a visible keyboard focus ring" icon="triangle-exclamation" href="/rules/a11y/focus-visible">
-    Removing the focus outline leaves keyboard users with no idea where they are.
-  </Card>
-  <Card title="Form labels: which inputs need one and how to check" icon="circle-exclamation" href="/rules/a11y/form-labels">
-    An input labelled only by its placeholder loses its label the moment someone types.
-  </Card>
-  <Card title="iframe title: naming embedded frames for screen readers" icon="circle-exclamation" href="/rules/a11y/frame-title">
-    An iframe with no title is announced as just 'frame'.
-  </Card>
-  <Card title="Heading order: why skipping from h1 to h3 matters" icon="triangle-exclamation" href="/rules/a11y/heading-order">
-    Screen reader users navigate by heading level, and a skipped level makes the outline harder to follow.
-  </Card>
-  <Card title="html lang: valid values and what a missing one breaks" icon="circle-exclamation" href="/rules/a11y/html-lang-valid">
-    Without a lang attribute a screen reader guesses the pronunciation, often wrongly.
-  </Card>
-  <Card title="lang and xml:lang disagreeing on the html element" icon="circle-exclamation" href="/rules/a11y/html-xml-lang-mismatch">
-    When both attributes are present and name different languages, a screen reader can pick the wrong voice.
-  </Card>
-  <Card title="Identical link text pointing at different pages" icon="triangle-exclamation" href="/rules/a11y/identical-links-same-purpose">
-    Two links reading 'Learn more' that go to different places are indistinguishable in a screen reader's link list.
-  </Card>
-  <Card title="input type=image without alt: an unnamed submit button" icon="circle-exclamation" href="/rules/a11y/input-image-alt">
-    An image input is a submit button drawn as a picture, and with no alt it announces nothing.
-  </Card>
-  <Card title="Input type, enterkeyhint and novalidate on forms" icon="triangle-exclamation" href="/rules/a11y/input-types">
-    type=text where type=email belongs costs mobile users the right keyboard.
-  </Card>
-  <Card title="Visible label missing from the accessible name" icon="circle-exclamation" href="/rules/a11y/label-content-name-mismatch">
-    A button showing 'Search' with aria-label 'Find products' may not respond when a user speaks its visible label.
-  </Card>
-  <Card title="Landmark regions: main, nav and footer on every page" icon="circle-info" href="/rules/a11y/landmark-regions">
-    Screen reader users jump between landmarks instead of reading top to bottom.
-  </Card>
-  <Card title="Links in a paragraph told apart by color alone" icon="triangle-exclamation" href="/rules/a11y/link-in-text-block">
-    A link inside body text needs more than color to be visible.
-  </Card>
-  <Card title="Link text: why 'click here' fails and what to use" icon="triangle-exclamation" href="/rules/a11y/link-text">
-    Links reading 'click here', and links wrapping an unlabeled icon, give screen reader users nothing to go on.
-  </Card>
-  <Card title="Orphaned li: list items outside ul, ol or menu" icon="circle-exclamation" href="/rules/a11y/listitem">
-    An li whose parent is not a list is announced as a plain block of text.
-  </Card>
-  <Card title="ul and ol with children that are not list items" icon="circle-exclamation" href="/rules/a11y/list-structure">
-    A div between the li elements of a list changes what a screen reader announces.
-  </Card>
-  <Card title="meta http-equiv=refresh: redirects and auto-refresh" icon="circle-exclamation" href="/rules/a11y/meta-refresh">
-    A timed redirect moves the page out from under a screen reader user mid-sentence.
-  </Card>
-  <Card title="One control, two labels: why multiple labels confuse" icon="triangle-exclamation" href="/rules/a11y/form-field-multiple-labels">
-    A control with two labels is announced inconsistently across screen readers.
-  </Card>
-  <Card title="object elements with no alternative content" icon="triangle-exclamation" href="/rules/a11y/object-alt">
-    An embedded object with no fallback is announced as nothing at all.
-  </Card>
-  <Card title="One main landmark per page, and what happens without" icon="triangle-exclamation" href="/rules/a11y/landmark-one-main">
-    A page with no main landmark, or with two, breaks the jump-to-content shortcut screen reader users rely on.
-  </Card>
-  <Card title="Inputs that block paste, and why that fails users" icon="triangle-exclamation" href="/rules/a11y/paste-inputs">
-    Blocking paste forces people to retype passwords by hand.
-  </Card>
-  <Card title="Redundant alt text: image of, filenames and captions" icon="triangle-exclamation" href="/rules/a11y/image-redundant-alt">
-    Screen readers already announce that it is an image, so alt starting with 'photo of' wastes the announcement.
-  </Card>
-  <Card title="Dropdowns with no accessible name: naming a select" icon="circle-exclamation" href="/rules/a11y/select-name">
-    A select announced only as 'combo box' gives no clue what it changes.
-  </Card>
-  <Card title="Skip to content: bypassing repeated navigation" icon="triangle-exclamation" href="/rules/a11y/skip-link">
-    Keyboard users tab through the whole navigation on every page without a bypass.
-  </Card>
-  <Card title="Positive tabindex and why it breaks the tab order" icon="triangle-exclamation" href="/rules/a11y/tabindex">
-    tabindex=1 pulls an element to the front of the tab order for the entire page.
-  </Card>
-  <Card title="td headers attribute pointing at a missing th id" icon="circle-exclamation" href="/rules/a11y/td-headers-attr">
-    A headers attribute naming an id that does not exist leaves the cell unassociated.
-  </Card>
-  <Card title="Tables sharing a name, and tables with none" icon="triangle-exclamation" href="/rules/a11y/table-duplicate-name">
-    Several tables on one page need distinct names or a screen reader's table list is unusable.
-  </Card>
-  <Card title="Table headers: why a data table needs th cells" icon="triangle-exclamation" href="/rules/a11y/table-headers">
-    A table built from styled td cells has no header relationships for a screen reader.
-  </Card>
-  <Card title="th cells with no data cells: a layout table in disguise" icon="triangle-exclamation" href="/rules/a11y/th-has-data-cells">
-    A header with no data in its row or column usually means the table is really a layout.
-  </Card>
-  <Card title="Touch target size: the 24 and 44 pixel minimums" icon="triangle-exclamation" href="/rules/a11y/touch-targets">
-    Buttons and links smaller than a fingertip are hard to hit on a phone.
-  </Card>
-  <Card title="lang on elements below html: validating every tag" icon="triangle-exclamation" href="/rules/a11y/valid-lang">
-    A quoted passage marked with a bad lang tag is read in the wrong voice.
-  </Card>
-  <Card title="Video captions: track elements and embedded players" icon="triangle-exclamation" href="/rules/a11y/video-captions">
-    A video with no caption track excludes deaf and hard of hearing viewers.
-  </Card>
-  <Card title="user-scalable=no: viewport settings that block zoom" icon="circle-exclamation" href="/rules/a11y/zoom-disabled">
-    A viewport that caps the zoom level stops low-vision users enlarging text.
-  </Card>
-</CardGroup>
+| Rule | What it flags | Severity | Scope |
+|---|---|---|---|
+| [Accessible name for a meter element and role=meter](/rules/a11y/aria-meter-name) | A gauge that announces only a number tells a screen reader user nothing. squirrel checks native meter elements and role=meter. | error | Per-page |
+| [Accessible name for a progress bar and role=progressbar](/rules/a11y/aria-progressbar-name) | A progress bar with no name announces a percentage and nothing else. squirrel checks native progress elements and role=progressbar. | error | Per-page |
+| [Accessible names for buttons: what counts and how to check](/rules/a11y/button-name) | A button with only an icon has no name for a screen reader. squirrel lists every button on every page that has nothing to announce. | error | Per-page |
+| [accesskey: why duplicate shortcuts break and how to check](/rules/a11y/accesskeys) | Two elements claiming the same accesskey means one shortcut is unreachable. squirrel lists every duplicated access key on every page. | warning | Per-page |
+| [ARIA attributes that are not allowed on an element](/rules/a11y/aria-allowed-attr) | role=presentation with an aria-label, or a decorative image with one, contradicts itself. squirrel reports both on every page. | warning | Per-page |
+| [ARIA references pointing at duplicate or missing ids](/rules/a11y/duplicate-id-aria) | aria-labelledby resolving to two elements, or to none, names the wrong thing silently. squirrel checks all eight ARIA id references. | error | Per-page |
+| [ARIA roles that require a particular parent role](/rules/a11y/aria-required-parent) | role=listitem outside a list, or a tab outside a tablist, loses its meaning. squirrel checks explicit roles and native li, tr, td and option. | error | Per-page |
+| [ARIA roles that require particular child roles](/rules/a11y/aria-required-children) | role=list with no listitem, or role=tablist with no tab, is an incomplete widget. squirrel checks thirteen container roles for their children. | error | Per-page |
+| [aria-hidden on body or html: what it breaks](/rules/a11y/aria-hidden-body) | aria-hidden=true on the body or html element asks assistive technology to ignore the entire page. squirrel checks both, at the highest weight. | error | Per-page |
+| [aria-label: which elements need one and how to check](/rules/a11y/aria-labels) | Buttons, links and inputs with no visible text and no aria-label have no name for screen readers. squirrel finds every one on every page. | error | Per-page |
+| [autocomplete: the right token for every form field](/rules/a11y/autocomplete-tokens) | Name, email, address and payment fields with a missing or wrong autocomplete token break autofill. squirrel finds every one on every page. | warning | Per-page |
+| [Checkboxes, radios and switches with no accessible name](/rules/a11y/aria-toggle-field-name) | A checkbox that announces only its role gives no reason to tick it. squirrel checks toggle roles and native checkbox and radio inputs. | error | Per-page |
+| [Color contrast: the 4.5:1 rule and how to check it](/rules/a11y/color-contrast) | Light gray text on white fails WCAG AA. squirrel measures the contrast of text whose color and background are both set inline, and reports pairs under 4.5:1. | warning | Per-page |
+| [Command roles: buttons, links and menu items need names](/rules/a11y/aria-command-name) | Anything that performs an action has to announce what it does. squirrel lists every command element on a page with no accessible name. | error | Per-page |
+| [Definition list structure: what belongs inside a dl](/rules/a11y/definition-list) | A stray paragraph between the terms of a dl breaks the pairing screen readers rely on. squirrel checks every definition list on the page. | error | Per-page |
+| [Deprecated and abstract ARIA roles, and what to use instead](/rules/a11y/aria-deprecated-role) | role=directory is deprecated and abstract roles were never meant for markup. squirrel names every one it finds and its replacement. | error | Per-page |
+| [Dialog accessible name: role=dialog and the dialog element](/rules/a11y/aria-dialog-name) | A modal with no name leaves screen reader users guessing what just opened. squirrel checks ARIA dialogs and native dialogs separately. | error | Per-page |
+| [Dropdowns with no accessible name: naming a select](/rules/a11y/select-name) | A select announced only as 'combo box' gives no clue what it changes. squirrel checks every select element on the page. | error | Per-page |
+| [dt and dd outside a dl: orphaned definition list items](/rules/a11y/dlitem) | A dt or dd that is not inside a dl loses the term-description pairing entirely. squirrel finds every orphan on every page. | error | Per-page |
+| [Duplicate id on a focusable element: what it breaks](/rules/a11y/duplicate-id-active) | Two inputs sharing an id break label association and focus management. squirrel checks every focusable element that carries an id. | error | Per-page |
+| [Empty headings: what counts as empty and how to check](/rules/a11y/empty-heading) | A heading with no text still shows up in the screen reader outline, as a blank entry. squirrel flags every one on every page. | warning | Per-page |
+| [focus-visible: keeping a visible keyboard focus ring](/rules/a11y/focus-visible) | Removing the focus outline leaves keyboard users with no idea where they are. squirrel flags outline:none with no :focus-visible fallback. | warning | Per-page |
+| [Focusable elements inside aria-hidden: the tab trap](/rules/a11y/aria-hidden-focus) | A hidden element that still takes focus lets keyboard users tab into nothing. squirrel finds them, and tells anti-spam honeypots apart. | error | Per-page |
+| [Form labels: which inputs need one and how to check](/rules/a11y/form-labels) | An input labelled only by its placeholder loses its label the moment someone types. squirrel lists every unlabeled input, textarea and select. | error | Per-page |
+| [Heading order: why skipping from h1 to h3 matters](/rules/a11y/heading-order) | Screen reader users navigate by heading level, and a skipped level makes the outline harder to follow. squirrel checks document order on every page. | warning | Per-page |
+| [html lang: valid values and what a missing one breaks](/rules/a11y/html-lang-valid) | Without a lang attribute a screen reader guesses the pronunciation, often wrongly. squirrel checks the html element on every page. | error | Per-page |
+| [Identical link text pointing at different pages](/rules/a11y/identical-links-same-purpose) | Two links reading 'Learn more' that go to different places are indistinguishable in a screen reader's link list. squirrel finds them. | warning | Per-page |
+| [iframe title: naming embedded frames for screen readers](/rules/a11y/frame-title) | An iframe with no title is announced as just 'frame'. squirrel checks every iframe and frame element on the page. | error | Per-page |
+| [Input fields with no accessible name, ARIA and native](/rules/a11y/aria-input-field-name) | Text boxes, comboboxes and sliders that announce nothing. squirrel checks the nine ARIA input roles alongside native inputs and selects. | error | Per-page |
+| [Input type, enterkeyhint and novalidate on forms](/rules/a11y/input-types) | type=text where type=email belongs costs mobile users the right keyboard. squirrel checks three ways a form opts out of browser help. | warning | Per-page |
+| [input type=image without alt: an unnamed submit button](/rules/a11y/input-image-alt) | An image input is a submit button drawn as a picture, and with no alt it announces nothing. squirrel checks every one on the page. | error | Per-page |
+| [Inputs that block paste, and why that fails users](/rules/a11y/paste-inputs) | Blocking paste forces people to retype passwords by hand. squirrel finds onpaste, oncopy and oncut handlers that cancel the event. | warning | Per-page |
+| [Invalid ARIA attribute values and the types they need](/rules/a11y/aria-valid-attr-value) | aria-checked=yes and aria-level=two are ignored by browsers. squirrel type-checks 26 ARIA attributes against their allowed values. | error | Per-page |
+| [Invalid ARIA role values and how to check them](/rules/a11y/aria-roles) | A misspelled or invented role gives an element no semantics at all. squirrel validates every role attribute against the ARIA vocabulary. | error | Per-page |
+| [Invalid aria-* attribute names, aria-labeledby included](/rules/a11y/aria-valid-attr) | A misspelled ARIA attribute is ignored by every browser and warns nobody. squirrel checks each aria-* name against the ARIA vocabulary. | error | Per-page |
+| [Landmark regions: main, nav and footer on every page](/rules/a11y/landmark-regions) | Screen reader users jump between landmarks instead of reading top to bottom. squirrel reports which of the three a page has. | info | Per-page |
+| [lang and xml:lang disagreeing on the html element](/rules/a11y/html-xml-lang-mismatch) | When both attributes are present and name different languages, a screen reader can pick the wrong voice. squirrel compares them. | error | Per-page |
+| [lang on elements below html: validating every tag](/rules/a11y/valid-lang) | A quoted passage marked with a bad lang tag is read in the wrong voice. squirrel validates every lang attribute except the one on html. | warning | Per-page |
+| [Link text: why 'click here' fails and what to use](/rules/a11y/link-text) | Links reading 'click here', and links wrapping an unlabeled icon, give screen reader users nothing to go on. squirrel lists both kinds. | warning | Per-page |
+| [Links in a paragraph told apart by color alone](/rules/a11y/link-in-text-block) | A link inside body text needs more than color to be visible. squirrel flags links whose markup removes the underline. | warning | Per-page |
+| [meta http-equiv=refresh: redirects and auto-refresh](/rules/a11y/meta-refresh) | A timed redirect moves the page out from under a screen reader user mid-sentence. squirrel reads the content value and grades it. | error | Per-page |
+| [object elements with no alternative content](/rules/a11y/object-alt) | An embedded object with no fallback is announced as nothing at all. squirrel checks every object element on the page. | warning | Per-page |
+| [One control, two labels: why multiple labels confuse](/rules/a11y/form-field-multiple-labels) | A control with two labels is announced inconsistently across screen readers. squirrel counts the labels on every input on the page. | warning | Per-page |
+| [One main landmark per page, and what happens without](/rules/a11y/landmark-one-main) | A page with no main landmark, or with two, breaks the jump-to-content shortcut screen reader users rely on. squirrel counts them. | warning | Per-page |
+| [Orphaned li: list items outside ul, ol or menu](/rules/a11y/listitem) | An li whose parent is not a list is announced as a plain block of text. squirrel checks the immediate parent of every list item. | error | Per-page |
+| [Positive tabindex and why it breaks the tab order](/rules/a11y/tabindex) | tabindex=1 pulls an element to the front of the tab order for the entire page. squirrel flags every positive value on every page. | warning | Per-page |
+| [Redundant alt text: image of, filenames and captions](/rules/a11y/image-redundant-alt) | Screen readers already announce that it is an image, so alt starting with 'photo of' wastes the announcement. squirrel checks four ways. | warning | Per-page |
+| [Required ARIA attributes for a role, and what is missing](/rules/a11y/aria-required-attr) | role=checkbox with no aria-checked has a state screen readers cannot read. squirrel checks the roles whose attributes are mandatory. | error | Per-page |
+| [role=text with focusable children: why it breaks](/rules/a11y/aria-text) | role=text flattens a subtree into one announced string, so a link inside it cannot be operated. squirrel reports every case it finds. | warning | Per-page |
+| [role=tooltip with no content: what to check](/rules/a11y/aria-tooltip-name) | A tooltip with nothing to announce leaves the control it explains unexplained. squirrel checks every role=tooltip element on the page. | error | Per-page |
+| [role=treeitem: naming every node in a tree](/rules/a11y/aria-treeitem-name) | A tree node that announces only its position in the tree is unusable. squirrel checks every role=treeitem for something to read out. | error | Per-page |
+| [Skip to content: bypassing repeated navigation](/rules/a11y/skip-link) | Keyboard users tab through the whole navigation on every page without a bypass. squirrel accepts a skip link or landmark structure. | warning | Per-page |
+| [Table headers: why a data table needs th cells](/rules/a11y/table-headers) | A table built from styled td cells has no header relationships for a screen reader. squirrel checks every data table for th elements. | warning | Per-page |
+| [Tables sharing a name, and tables with none](/rules/a11y/table-duplicate-name) | Several tables on one page need distinct names or a screen reader's table list is unusable. squirrel checks captions and labels. | warning | Per-page |
+| [td headers attribute pointing at a missing th id](/rules/a11y/td-headers-attr) | A headers attribute naming an id that does not exist leaves the cell unassociated. squirrel checks every reference in every table. | error | Per-page |
+| [th cells with no data cells: a layout table in disguise](/rules/a11y/th-has-data-cells) | A header with no data in its row or column usually means the table is really a layout. squirrel builds the grid and checks each one. | warning | Per-page |
+| [Touch target size: the 24 and 44 pixel minimums](/rules/a11y/touch-targets) | Buttons and links smaller than a fingertip are hard to hit on a phone. squirrel flags interactive elements sized below 44 pixels inline. | warning | Per-page |
+| [ul and ol with children that are not list items](/rules/a11y/list-structure) | A div between the li elements of a list changes what a screen reader announces. squirrel checks the direct children of every list. | error | Per-page |
+| [user-scalable=no: viewport settings that block zoom](/rules/a11y/zoom-disabled) | A viewport that caps the zoom level stops low-vision users enlarging text. squirrel parses the viewport meta tag on every page. | error | Per-page |
+| [Video captions: track elements and embedded players](/rules/a11y/video-captions) | A video with no caption track excludes deaf and hard of hearing viewers. squirrel checks native video and flags third-party embeds. | warning | Per-page |
+| [Visible label missing from the accessible name](/rules/a11y/label-content-name-mismatch) | A button showing 'Search' with aria-label 'Find products' may not respond when a user speaks its visible label. squirrel compares the two. | error | Per-page |
+
+{/* hub:rules:end */}
+
+{/* hub:terms:start */}
+
+## Key terms
+
+- [Accessible name](/glossary#accessible-name): The name assistive technology announces for an element, computed from its content, label, aria-label or aria-labelledby.
+- [Alt text](/glossary#alt-text): The alt attribute that gives an image a text alternative for screen readers, failed loads and search engines.
+- [Anchor text](/glossary#anchor-text): The visible, clickable text of a link, which tells readers and search engines what the target is about.
+- [ARIA](/glossary#aria): Accessible Rich Internet Applications: roles, states and properties that describe custom widgets to assistive technology.
+- [Captions](/glossary#captions): Synchronised text of a video's dialogue and sounds, supplied as a `<track kind="captions">` file.
+- [Client-side redirect](/glossary#client-side-redirect): A redirect done in the page (meta refresh or JavaScript) rather than with an HTTP 3xx response.
+- [Color contrast ratio](/glossary#color-contrast): The luminance ratio between text and its background; WCAG AA asks for 4.5:1 for body text and 3:1 for large text.
+- [Form labels](/glossary#form-labels): The `<label>` or accessible name tied to each form control, plus autocomplete tokens, so people know what to enter.
+- [Heading hierarchy](/glossary#heading-hierarchy): The nesting of h1 to h6 headings that gives a page its outline for readers, screen readers and parsers.
+- [Keyboard accessibility](/glossary#keyboard-accessibility): Whether every control can be reached and used with a keyboard alone, with a visible focus indicator and sensible tab order.
+- [Landmark regions](/glossary#landmark): The page regions (main, nav, header, footer) that screen reader users jump between, plus the skip link to main content.
+- [lang attribute](/glossary#lang-attribute): The lang attribute on `<html>` (and on passages) that declares the language, so screen readers pick the right voice.
+- [Touch target size](/glossary#touch-targets): The tappable area of a control; WCAG 2.2 sets 24 by 24 CSS pixels as the AA minimum.
+- [Viewport meta tag](/glossary#viewport-meta-tag): `<meta name="viewport">` that sets the layout width to the device width; disabling zoom in it fails accessibility.
+- [WCAG](/glossary#wcag): The W3C's Web Content Accessibility Guidelines, organised as testable success criteria at levels A, AA and AAA; 2.2 is current.
+
+{/* hub:terms:end */}
+
+## Related categories
+
+[Images](/rules/images) checks that every image has an alt attribute. [Mobile](/rules/mobile) checks tap targets, font size and the viewport tag from the phone side, and [Content](/rules/content) checks the heading outline of each page.
+
+## Learn more
+
+- [Website audit tool](https://squirrelscan.com/tools/website-audit)
+- [Sample report](https://squirrelscan.com/reports/squirrelscan-sample), with the Accessibility section on a real site
 
 ## Disable all Accessibility rules
 

@@ -1,15 +1,4 @@
 {
   "$comment": "Findings on pages written before glossary.ts existed. A listed finding is not reported; an entry that stops matching fails the check, so remove it in the PR that fixes the page. Never add an entry for a new page. Each is due to be fixed when its hub is upgraded (squirrelscan/repo#3113, hub tasks G4 to G8).",
-  "entries": [
-    {
-      "file": "rules/a11y/index.mdx",
-      "message": "category hub states a rule count (\"61 audit rules\"): counts here are not kept in sync; let the rule table show the count",
-      "reason": "Description written before the guard. The a11y hub rewrite (G8) drops the count."
-    },
-    {
-      "file": "rules/content/index.mdx",
-      "message": "hub does not link rule content/quality, whose **Category** is /rules/content",
-      "reason": "content/quality is retired (its page says it never runs) and the hub leaves it out on purpose. The content hub rewrite (G8) decides whether a retired rule is listed."
-    }
-  ]
+  "entries": []
 }
