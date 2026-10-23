@@ -666,6 +666,25 @@
             "pages": [
               "glossary/index"
             ]
+          },
+          {
+            "group": "SEO",
+            "pages": [
+              "glossary/geo-meta-tags",
+              "glossary/json-ld",
+              "glossary/robots-txt",
+              "glossary/structured-data"
+            ]
+          },
+          {
+            "group": "Agent experience",
+            "pages": [
+              "glossary/agent-experience",
+              "glossary/ai-crawler",
+              "glossary/client-side-rendering",
+              "glossary/generative-engine-optimization",
+              "glossary/llms-txt"
+            ]
           }
         ]
       },

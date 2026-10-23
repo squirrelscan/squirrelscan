@@ -1,0 +1,71 @@
+---
+title: "Geo meta tags: geo.position, placename and their limits"
+sidebarTitle: "Geo meta tags"
+description: "Geo meta tags (geo.region, geo.placename, geo.position, ICBM) state a page's location. Google ignores them. Not to be confused with GEO for AI search."
+---
+
+**Geo meta tags** are the `geo.region`, `geo.placename`, `geo.position` and `ICBM` meta tags that state the place a page is about.
+
+`geo.region` holds an ISO 3166-2 country and subdivision code, `geo.placename` a city or locality, `geo.position` the coordinates as `latitude;longitude`, and `ICBM` the same coordinates separated by a comma. None of the four is a web standard: they come from an IETF Internet-Draft that expired in 2008 without becoming an RFC.
+
+Looking for GEO in the AI search sense? That is [generative engine optimization](/glossary/generative-engine-optimization), a different thing that shares the abbreviation.
+
+{/* glossary:hub:start */}
+
+Category: [Local SEO](/rules/local)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+For search, very little. Google says it ignores locational meta tags such as `geo.position`, so adding them will not move a page in local search. They are valid HTML and cost nothing to serve. If you keep them, keep them in step with your [LocalBusiness structured data](/rules/schema/local-business): a wrong city name then shows up in two places instead of one. Treat them as a supplement to schema, never a replacement.
+
+## How squirrelscan checks it
+
+[local/geo-meta](/rules/local/geo-meta) looks for the four tag names on each page. One or more passes, and none is reported at info level, which does not need fixing on pages that are not about a place. The rule matches names, not values, so a stale city or wrong coordinates still pass, and it only counts `ICBM` in that exact uppercase spelling. It is skipped when the site profile says the site is not a local business.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [geo.placename: what geo meta tags do and who reads them](/rules/local/geo-meta) | Location pages carrying no geo.region, geo.placename, geo.position or ICBM tag. squirrel reports which of the four are present, page by page. | info |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Put the tags in the `<head>` of location and service-area pages, not site-wide, with values that match the address in your `LocalBusiness` JSON-LD (see [the geo meta fix](/rules/local/geo-meta#how-to-fix-it)):
+
+```html
+<meta name="geo.region" content="US-CA" />
+<meta name="geo.placename" content="San Francisco" />
+<meta name="geo.position" content="37.7749;-122.4194" />
+<meta name="ICBM" content="37.7749, -122.4194" />
+```
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include local/geo-meta
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [NAP consistency](/glossary#nap-consistency): Name, address and phone number stated the same way across a site's pages, schema and listings.
+- [Generative engine optimization (GEO)](/glossary/generative-engine-optimization): Making content more likely to be retrieved, cited and quoted by AI answer engines; the term comes from a 2023 research paper.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Managing multi-regional and multilingual sites, Google Search Central](https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites)
+- [draft-daviel-html-geo-tag, the expired IETF Internet-Draft](https://datatracker.ietf.org/doc/html/draft-daviel-html-geo-tag-07)
+- [LocalBusiness, schema.org](https://schema.org/LocalBusiness)

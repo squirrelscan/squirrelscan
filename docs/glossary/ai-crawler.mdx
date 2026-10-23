@@ -1,0 +1,85 @@
+---
+title: "AI crawlers: GPTBot, ClaudeBot and what to allow"
+sidebarTitle: "AI crawler"
+description: "An AI crawler fetches pages for an AI company: to train models, to build an AI search index, or for a person's live request. Tokens, and what to allow."
+---
+
+An **AI crawler** is a bot that fetches web pages for an AI company, either to train models, to build the index an AI search product cites from, or to answer a person's request in real time.
+
+Each class has its own robots.txt user-agent token. OpenAI uses `GPTBot` for training, `OAI-SearchBot` for ChatGPT search and `ChatGPT-User` for actions a user starts, and says each setting is independent of the others. Anthropic splits the same way with `ClaudeBot`, `Claude-SearchBot` and `Claude-User`. Google's `Google-Extended` is a robots.txt token only: it controls whether content Google already crawls can be used for training, and sends no requests of its own. Archive crawlers such as Common Crawl's `CCBot` sit upstream of many training sets.
+
+{/* glossary:hub:start */}
+
+Category: [Agent Experience](/rules/ax)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+A rule aimed at one token never covers another, so "block AI crawlers" is several decisions. Blocking a training crawler is a policy choice about one vendor. Blocking an AI search indexer keeps the site out of that product's answers, though OpenAI notes a blocked site can still appear as a navigational link. Blocking a user-action fetcher at the edge breaks a request a person made inside an assistant; OpenAI says robots.txt rules may not apply to `ChatGPT-User`, because a person starts those requests. A `CCBot` block is wider than it looks: it keeps future pages out of Common Crawl, which many training sets are built from. robots.txt is also only a request, and a WAF can still challenge a bot that robots.txt allows.
+
+## How squirrelscan checks it
+
+[ax/ai-crawlers](/rules/ax/ai-crawlers) reads robots.txt and resolves the groups that apply to each known AI crawler token. It lists every crawler blocked from the whole site (`Disallow: /` with no `Allow: /`), and warns only when an AI search indexer, a user-action fetcher or an archive crawler is blocked; a training-only block never costs score. [ax/agent-blocking](/rules/ax/agent-blocking) fetches the homepage as a browser, as `GPTBot` and as `Claude-User`, and flags a bot challenge, a 401, 403 or 5xx, or a body under a fifth of the browser's size served to an agent while the browser gets a 2xx. [ax/archive-indexing](/rules/ax/archive-indexing) looks the domain up in Common Crawl and the Wayback Machine, and needs a cloud audit.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [AI crawlers in robots.txt: which bots you block, by class](/rules/ax/ai-crawlers) | robots.txt blocking Claude-User or PerplexityBot alongside the training bots. squirrel classifies all 24 known AI crawlers and names what each block costs. | warning |
+| [Blocking AI agents at the edge: what robots.txt hides](/rules/ax/agent-blocking) | A WAF or bot-management rule serving GPTBot or Claude-User a challenge the browser never sees. squirrel probes the homepage as all three. | error |
+| [robots.txt: what to put in it and how squirrel checks it](/rules/crawl/robots-txt) | A missing robots.txt, a Disallow: / left in production, or a syntax error changes what gets crawled. squirrel checks existence, syntax and rules. | error |
+| [Common Crawl and Wayback: is your site in the archives](/rules/ax/archive-indexing) | A site missing from the Common Crawl index or the Wayback Machine, or archived only with a capture over a year old. squirrel checks both. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Decide per class, then write one group per token (see [the AI crawler access fix](/rules/ax/ai-crawlers#how-to-fix-it)):
+
+```
+User-agent: GPTBot
+Disallow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+```
+
+This opts out of OpenAI's training crawl and lets in its search crawler and the fetches a person starts in ChatGPT. Then check the edge: allow-list `ChatGPT-User`, `Claude-User` and `Perplexity-User` in the WAF or bot-management rules, whatever the preset does (see [the agent blocking fix](/rules/ax/agent-blocking#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include ax/ai-crawlers,ax/agent-blocking,crawl/robots-txt,ax/archive-indexing
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing. The archive lookup runs in cloud audits only.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [robots.txt](/glossary/robots-txt): A plain-text file at the site root that tells crawlers which paths they may fetch, per user-agent token (RFC 9309).
+- [Content Signals](/glossary#content-signals): Content-Signal lines in robots.txt that state whether content may be used for search, AI input or AI training.
+- [Agent experience (AX)](/glossary/agent-experience): How well a site serves AI agents that read it, find their way around it and act on it, the way UX serves people.
+- [noai and noimageai](/glossary#noai): Meta robots values some sites use to ask AI systems not to train on their text or images; not part of any standard search engines honour.
+
+{/* glossary:related:end */}
+
+## Learn more
+
+- [AI crawlers guide](https://squirrelscan.com/learn/ai-crawlers)
+- [robots.txt generator](https://squirrelscan.com/tools/robots-txt-generator)
+
+## References
+
+- [Overview of OpenAI crawlers](https://developers.openai.com/api/docs/bots)
+- [Does Anthropic crawl data from the web, and how can site owners block the crawler?](https://support.claude.com/en/articles/8896518-does-anthropic-crawl-data-from-the-web-and-how-can-site-owners-block-the-crawler)
+- [Google common crawlers: Google-Extended](https://developers.google.com/crawling/docs/crawlers-fetchers/google-common-crawlers)

@@ -1,0 +1,72 @@
+---
+title: "Client-side rendering: what agents and crawlers miss"
+sidebarTitle: "Client-side rendering"
+description: "Client-side rendering builds page content in the browser with JavaScript, so agents and fetchers that only read HTML see an empty page. How to check it."
+---
+
+**Client-side rendering** (CSR) is building a page's content in the browser with JavaScript, so the HTML the server sends is a shell that only fills in after scripts run.
+
+It is the default for many single-page apps: the HTML loads the JavaScript, and the JavaScript generates the content. The alternatives put the content in the first response. Server-side rendering builds the HTML on the server for each request, and static generation or prerendering builds it ahead of time.
+
+{/* glossary:hub:start */}
+
+Category: [Agent Experience](/rules/ax)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+Whether a client sees the content depends on whether it runs JavaScript. Googlebot queues pages for rendering and runs them in a headless Chromium when its resources allow, a separate queue after the crawl. Google notes that other search engines may ignore JavaScript and miss content it generates. Most AI agent fetchers, such as `ChatGPT-User` and `Claude-User`, run no JavaScript at all, so a client-rendered article reads to them as an empty page.
+
+## How squirrelscan checks it
+
+[ax/content-without-js](/rules/ax/content-without-js) compares the raw HTML from the crawl with a browser-rendered copy of the same page and counts the words in each. It reports the share of the content that only appears after JavaScript runs, once the gap is large enough to matter (the thresholds are on the rule page). Rendering is a cloud service, so this comparison needs a cloud audit. [perf/browser-required](/rules/perf/browser-required) lists the measurements a static audit cannot make, such as the Core Web Vitals, which need a real render. squirrelscan does not measure LCP, INP or CLS.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Content that needs JavaScript: invisible to raw-HTML agents](/rules/ax/content-without-js) | Most of a page's text arriving only after JavaScript runs. squirrel compares the raw HTML against the rendered DOM and reports the gap. | info |
+| [Audits that need a browser: what a static crawl cannot see](/rules/perf/browser-required) | The runtime metrics no HTML analysis can produce. squirrel lists them so the gap in a static audit is explicit. | info |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Render the main content on the server or at build time, and keep the interactive parts on the client. In a framework that supports it, that is usually the default page mode rather than a client-only component (see [the content-without-JavaScript fix](/rules/ax/content-without-js#how-to-fix-it)):
+
+```jsx
+export default async function Page() {
+  const article = await getArticle();
+  return <article>{article.body}</article>;
+}
+```
+
+To test a page by hand, fetch it without a browser and look for a sentence you can see on screen: `curl https://example.com/page | grep "some text from the page"`. If the text is not in the response, an agent reading raw HTML does not have it. A dashboard behind a login is an application, not a document, and the finding does not apply to it.
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include ax/content-without-js,perf/browser-required
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing. The raw-versus-rendered comparison needs a cloud audit.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Agent experience (AX)](/glossary/agent-experience): How well a site serves AI agents that read it, find their way around it and act on it, the way UX serves people.
+- [Generative engine optimization (GEO)](/glossary/generative-engine-optimization): Making content more likely to be retrieved, cited and quoted by AI answer engines; the term comes from a 2023 research paper.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Rendering on the web, web.dev](https://web.dev/articles/rendering-on-the-web)
+- [Understand JavaScript SEO basics, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics)
+- [Dynamic rendering as a workaround, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/javascript/dynamic-rendering)

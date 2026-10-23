@@ -1,0 +1,81 @@
+---
+title: "What is structured data? JSON-LD, schema.org and checks"
+sidebarTitle: "Structured data"
+description: "Structured data is machine-readable markup, usually schema.org in JSON-LD, that describes a page's content to search engines and agents. What to check."
+---
+
+**Structured data** is machine-readable markup that describes what a page is about, such as an article, a product or the organization behind a site, usually written in schema.org vocabulary as JSON-LD.
+
+Google supports three formats, JSON-LD, Microdata and RDFa, and recommends JSON-LD because it sits in a `<script>` block apart from the visible text. Whatever the format, the markup has to describe the same thing the page shows: Google's guidelines say that if the JSON-LD describes a performer, the HTML body must describe that same performer.
+
+{/* glossary:hub:start */}
+
+Category: [Structured Data](/rules/schema)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+Search engines build rich results, such as review stars, product prices and event dates, from structured data, and a page has to be in the index for them to appear. Markup on a page that is `noindex` or blocked in robots.txt produces nothing. A block with a syntax error is unreadable as a whole. Google also says structured data is not required for its generative AI search features.
+
+## How squirrelscan checks it
+
+[schema/json-ld-valid](/rules/schema/json-ld-valid) parses every JSON-LD block on a page and validates it against the properties each type needs. The type rules, such as [schema/article](/rules/schema/article), [schema/product](/rules/schema/product) and [schema/organization](/rules/schema/organization), check the required and recommended properties for their type. [schema/coverage-outlier](/rules/schema/coverage-outlier) groups pages by type and reports the ones missing markup that their same-type siblings carry, which usually points at one template. [crawl/schema-noindex-conflict](/rules/crawl/schema-noindex-conflict) flags pages with rich-result types that are blocked from indexing.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Invalid JSON-LD syntax: what breaks it and how to fix](/rules/schema/json-ld-valid) | A structured data block that will not parse, or parses but omits properties schema.org requires. squirrel names the exact type and property. | warning |
+| [Structured data coverage: pages that break your own norm](/rules/schema/coverage-outlier) | Forty of forty-five product pages carry Product markup and five do not. squirrel finds the gap against the site's own pattern, not a generic rule. | warning |
+| [Rich result schema on a noindexed page: wasted markup](/rules/crawl/schema-noindex-conflict) | Structured data on a page search engines cannot index will never produce a rich result. squirrel finds pages carrying both. | error |
+| [Article schema: headline, author and datePublished checks](/rules/schema/article) | Article JSON-LD missing headline, author or datePublished, or carrying a date that is not ISO 8601. squirrel checks both on every page. | warning |
+| [Product schema: name, image, offers and review checks](/rules/schema/product) | Product markup with no name or image, an Offer missing price or availability, and no rating data. squirrel checks each product page. | warning |
+| [Organization schema: name, url, logo and sameAs checks](/rules/schema/organization) | Organization JSON-LD missing name or url, with no logo, or a sameAs list that omits a social profile the site clearly runs. squirrel finds all three. | info |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Emit the block from a real object with `JSON.stringify` rather than a string template, which is where trailing commas and unescaped quotes come from (see [the JSON-LD fix](/rules/schema/json-ld-valid#how-to-fix-it)):
+
+```html
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "Acme Coffee",
+  "url": "https://example.com/"
+}
+</script>
+```
+
+Then fix the pages the coverage check lists by sending them through the same template branch as the pages that pass. squirrelscan reads the HTML the server sent, so JSON-LD injected by client-side JavaScript only counts when browser rendering is on.
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include schema/json-ld-valid,schema/coverage-outlier,crawl/schema-noindex-conflict,schema/article,schema/product,schema/organization
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [JSON-LD](/glossary/json-ld): JSON for Linking Data, the format Google recommends for structured data, embedded in a `<script type="application/ld+json">` block.
+- [Rich results](/glossary#rich-results): Search result features (stars, breadcrumbs, product prices, video thumbnails) that Google can show when a page has eligible structured data.
+- [Entity](/glossary#entity): A thing a site describes in structured data, such as an organization, person or product, identified across pages so search engines and agents can tell it is one thing.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Introduction to structured data markup, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/intro-structured-data)
+- [General structured data guidelines, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/sd-policies)
+- [JSON-LD 1.1, W3C Recommendation](https://www.w3.org/TR/json-ld11/)
