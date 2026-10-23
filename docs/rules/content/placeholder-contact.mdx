@@ -77,3 +77,15 @@ enable = ["content/placeholder-contact"]
 ```
 
 `enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [content/placeholder-text](/rules/content/placeholder-text): filler copy and unrendered template syntax, the same unfinished template in the page's prose.
+- [content/placeholder-media](/rules/content/placeholder-media): placeholder images and camera-default alt text.
+- [eeat/contact-page](/rules/eeat/contact-page) and [eeat/physical-address](/rules/eeat/physical-address): contact details that are missing, which this rule never reports.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Placeholder content](/glossary#placeholder-content).
+
+{/* glossary:backlinks:end */}

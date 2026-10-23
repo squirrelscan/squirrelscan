@@ -99,3 +99,14 @@ enable = ["security/graphql-introspection"]
 ```
 
 `enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [security/graphql-get-mutations](/rules/security/graphql-get-mutations): probes the same endpoints for a server that runs a mutation sent over `GET`.
+- [security/version-disclosure](/rules/security/version-disclosure): response headers that tell a scanner which server version to target.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [GraphQL introspection](/glossary#graphql-introspection).
+
+{/* glossary:backlinks:end */}

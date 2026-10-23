@@ -115,3 +115,14 @@ enable = ["security/csp-blocks-own-resources"]
 ```
 
 `enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [security/csp](/rules/security/csp): how strict the policy is, and a missing policy, which this rule passes.
+- [reliability/broken-resources](/rules/reliability/broken-resources): scripts and stylesheets that return 404 or 500, another way a page's own resources fail to load.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Content Security Policy (CSP)](/glossary/content-security-policy).
+
+{/* glossary:backlinks:end */}

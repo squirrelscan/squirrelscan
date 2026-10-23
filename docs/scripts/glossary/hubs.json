@@ -133,7 +133,8 @@
         "core",
         "content",
         "crawl"
-      ]
+      ],
+      "rule_backlinks": true
     },
     {
       "code": "links",
@@ -151,7 +152,8 @@
         "crawl",
         "images",
         "a11y"
-      ]
+      ],
+      "rule_backlinks": true
     },
     {
       "code": "security",
@@ -169,7 +171,8 @@
         "content",
         "ax",
         "links"
-      ]
+      ],
+      "rule_backlinks": true
     },
     {
       "code": "core",
@@ -187,7 +190,8 @@
         "content",
         "crawl",
         "social"
-      ]
+      ],
+      "rule_backlinks": true
     },
     {
       "code": "content",
@@ -205,7 +209,8 @@
         "core",
         "eeat",
         "security"
-      ]
+      ],
+      "rule_backlinks": true
     },
     {
       "code": "images",
@@ -223,7 +228,8 @@
         "perf",
         "a11y",
         "links"
-      ]
+      ],
+      "rule_backlinks": true
     },
     {
       "code": "eeat",
@@ -241,7 +247,8 @@
         "content",
         "schema",
         "crawl"
-      ]
+      ],
+      "rule_backlinks": true
     },
     {
       "code": "mobile",
@@ -257,7 +264,8 @@
       ],
       "related": [
         "a11y"
-      ]
+      ],
+      "rule_backlinks": true
     },
     {
       "code": "i18n",
@@ -273,7 +281,8 @@
       ],
       "related": [
         "a11y"
-      ]
+      ],
+      "rule_backlinks": true
     },
     {
       "code": "social",
@@ -291,7 +300,8 @@
         "core",
         "crawl",
         "schema"
-      ]
+      ],
+      "rule_backlinks": true
     },
     {
       "code": "integrity",
@@ -309,7 +319,8 @@
         "content",
         "links",
         "local"
-      ]
+      ],
+      "rule_backlinks": true
     },
     {
       "code": "legal",
@@ -326,7 +337,8 @@
       "related": [
         "analytics",
         "eeat"
-      ]
+      ],
+      "rule_backlinks": true
     },
     {
       "code": "reliability",
@@ -344,7 +356,8 @@
         "crawl",
         "images",
         "links"
-      ]
+      ],
+      "rule_backlinks": true
     },
     {
       "code": "video",
@@ -361,7 +374,8 @@
       "related": [
         "a11y",
         "schema"
-      ]
+      ],
+      "rule_backlinks": true
     },
     {
       "code": "analytics",
@@ -377,7 +391,8 @@
       ],
       "related": [
         "legal"
-      ]
+      ],
+      "rule_backlinks": true
     },
     {
       "code": "adblock",
@@ -395,7 +410,8 @@
         "security",
         "analytics",
         "legal"
-      ]
+      ],
+      "rule_backlinks": true
     },
     {
       "code": "gaps",
@@ -412,7 +428,8 @@
       "related": [
         "content",
         "ax"
-      ]
+      ],
+      "rule_backlinks": true
     }
   ]
 }
