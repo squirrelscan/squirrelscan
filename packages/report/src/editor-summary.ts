@@ -25,6 +25,7 @@ import { REPORT_LIMITS, SERVICE_LIMITS } from "@squirrelscan/core-contracts/limi
 import { normalizeCategoryCode } from "./categories";
 import { notCheckedRules } from "./not-checked";
 import { checkOccurrences } from "./occurrences";
+import { scanScopeUnfetched } from "./coverage";
 import { guardSummaryText, stripOutOf100 } from "./summary-text";
 
 /** Note rendered above the summary so it reads as informational, not scored. */
@@ -347,6 +348,7 @@ export interface EditorSummaryView extends EditorSummary {
  * invented by the model.
  */
 export function summaryPageCounts(report: AuditReport): number[] {
+  const unfetched = scanScopeUnfetched(report);
   const counts: Array<number | undefined> = [
     report.totalPages,
     report.scanScope?.pagesCrawled,
@@ -355,6 +357,9 @@ export function summaryPageCounts(report: AuditReport): number[] {
     report.coverage?.auditedPages,
     report.rateLimited?.pages,
     report.rateLimited?.unfetched,
+    // The URLs a capped crawl left queued (the digest's "found but not
+    // fetched"), and the discovered total the report shows beside them.
+    ...(unfetched > 0 ? [unfetched, (report.scanScope?.pagesCrawled ?? 0) + unfetched] : []),
     ...buildTopIssues(report, Number.POSITIVE_INFINITY).map((i) => i.occurrences),
   ];
   return counts.filter((n): n is number => typeof n === "number" && Number.isSafeInteger(n) && n > 0);

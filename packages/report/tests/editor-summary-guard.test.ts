@@ -107,6 +107,14 @@ describe("page counts", () => {
     expect(summaryPageCounts(report()).sort((a, b) => a - b)).toEqual([7, 10, 10, 10, 13, 90]);
   });
 
+  test("allows a capped crawl's queued count and the discovered total it makes", () => {
+    const capped = report({
+      scanScope: { origin: "cloud", maxPages: 10, pagesCrawled: 10, capped: true, unfetched: 531 },
+    });
+    expect(summaryPageCounts(capped)).toContain(531);
+    expect(summaryPageCounts(capped)).toContain(541);
+  });
+
   test("drops sentences with counts the report does not state, keeps the rest", () => {
     const view = editorSummaryView(
       summary({
