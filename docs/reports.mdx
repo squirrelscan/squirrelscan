@@ -225,12 +225,32 @@ squirrel report -f html -o report.html
 open report.html
 ```
 
-**Features:**
-- Health score plus the four group scores (SEO, Performance, Security, Agents)
-- Issues grouped by category with affected pages and fixes
-- Site summary and tech stack (cloud audits)
-- Shareable when published
-- Responsive design
+The local file and the published report at reports.squirrelscan.com are the same page. Top to bottom:
+
+- **Overview:** the health score, the four group scores (SEO, Performance, Security, Agents) and the pass, warning and fail counts. Each group score links to its findings.
+- **Coverage notice:** when the crawl hit its page limit, ran out of time or found more pages than it scanned, a note says how much of the site the report covers and gives the command for a larger audit, such as `squirrel audit 'https://example.com/' --max-pages 300`.
+- **Summary** (cloud audits): the [editor's summary](/cloud/editor-summary) of the audit.
+- **Issues:** what to fix, in order. Cloud audits rank the fixes for the detected stack, each with the rules it clears. A local audit lists its most widespread errors and warnings instead.
+- **Findings:** every flagged rule, banded by severity (errors, recommendations, warnings) and filterable by group. Each one opens to its checks, affected pages, the fix and a link to the rule docs.
+- **Pages:** the same findings by URL, worst page first.
+- **Site:** the site profile and the detected tech stack.
+- **Search footprint** (cloud audits) and **Entities**, the site's JSON-LD as one [entity map](/guides/entity-map).
+
+#### Copy fix prompts
+
+Every finding has a **Copy fix prompt** button, and so does every ranked issue. The Issues list also has a **Copy fix plan** button that covers all of them in order. Paste the prompt into your coding agent: it names the rules to fix and links their docs, quotes the audit's evidence (messages and example pages), and ends with the command to verify the fix:
+
+```bash
+squirrel audit 'https://example.com/' --rule-include core/meta-title
+```
+
+Text that comes from the audited site, or from automated analysis of it, sits inside a fenced block the prompt labels as untrusted data, one line per item, so a page cannot slip instructions into your agent's task. The buttons need JavaScript and clipboard access; without them, the prompt opens on the page for you to select.
+
+#### Local reports
+
+A local HTML report is one self-contained file. Opening it makes no network request: the styles and scripts are inline, and it shows no favicon or technology logos (those come from squirrelscan.com in published reports). Links to the audited pages and the rule docs work as usual.
+
+A signed-out local audit also shows a **Get the full audit with squirrelscan cloud** card: what a free account adds to the same report, and the checks on this site that need the cloud and did not run. Run `squirrel auth login` to add them. See [Cloud overview](/cloud).
 
 ### markdown
 

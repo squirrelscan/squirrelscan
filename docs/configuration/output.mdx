@@ -191,23 +191,15 @@ squirrel audit https://example.com --format json | jq '.score.overall'
 
 Interactive HTML report that opens in your browser.
 
-**Features:**
-
-- Visual charts and graphs
-- Filterable issue list
-- Page-by-page breakdown
-- Click-to-navigate
-- Responsive design
-- Shareable standalone file
-
 **Includes:**
 
-- Health score gauge
-- Issue distribution charts
-- Rule category breakdown
-- Page list with status
-- Link analysis graphs
-- Image optimization metrics
+- Health score and the four group scores
+- Issues to fix first, and every finding banded by severity, filterable by group
+- A **Copy fix prompt** button on each finding for your coding agent
+- The same findings by page
+- Site profile, tech stack and the entity map
+
+It is one standalone file that makes no network request when opened. See [the html format](/reports#html) for each section and the fix prompts.
 
 **Configuration:**
 
