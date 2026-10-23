@@ -25,6 +25,10 @@ How it works:
 
 - **Group score rings read by score, not by group.** On the HTML report the SEO, Performance, Security and Agents rings, numbers and grades are colored red to green by score, like the health score, so a 45 F looks like one. The group's own color stays on its card's top border and label. Every score ring on the page uses a darker tone of the same red, amber and green bands, so the numbers pass WCAG AA contrast on the white cards.
 
+### Fixed
+
+- **Copy-to-agent prompts keep site text fenced.** The HTML report's fix prompts now strip hidden characters and the internal note placeholder before they defuse quote fences, so text from the audited site can no longer piece a fence marker back together and step outside its untrusted block.
+
 ## v0.0.131 (2026-10-23)
 
 Reports are honest about how much of your site they saw, and the HTML page lets you dismiss every notice.

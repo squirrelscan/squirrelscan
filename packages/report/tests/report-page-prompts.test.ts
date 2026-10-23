@@ -120,6 +120,80 @@ describe("line(): one bounded line of untrusted text", () => {
   });
 });
 
+describe("line(): removals can never rebuild a fence or the placeholder (#3196)", () => {
+  const cp = (n: number) => String.fromCodePoint(n);
+  const ZW = cp(0x200b);
+  const RLO = cp(0x202e);
+  const LRI = cp(0x2066);
+  const NUL = cp(0);
+  const FENCE = '"""';
+
+  const safe = (out: string) => {
+    expect(out).not.toContain(FENCE);
+    expect(out).not.toContain(NOTE_TOKEN);
+    expect(out).not.toMatch(/[\p{Cc}\p{Cf}]/u);
+  };
+
+  test("a placeholder between quotes does not leave a fence behind", () => {
+    for (const s of ['""%DATA_NOTE%"', '""%DATA_NOTE%%DATA_NOTE%"', '"%DATA_NOTE%"%DATA_NOTE%"']) {
+      safe(line(s, 100));
+    }
+    expect(line('""%DATA_NOTE%"', 100)).toBe("''");
+  });
+
+  test("a placeholder split by a placeholder is removed too", () => {
+    for (const s of [
+      "%DATA_%DATA_NOTE%NOTE%",
+      "%DATA_%DATA_%DATA_NOTE%NOTE%NOTE%",
+      `""%DATA_%DATA_NOTE%NOTE%"`,
+    ]) {
+      safe(line(s, 100));
+    }
+    expect(line("a %DATA_%DATA_NOTE%NOTE% b", 100)).toBe("a b");
+  });
+
+  test("deeply nested placeholders are removed in linear time", () => {
+    const n = 100_000;
+    const start = performance.now();
+    expect(line(`""${"%DATA_".repeat(n)}${"NOTE%".repeat(n)}"x`, 240)).toBe("''x");
+    // Quadratic removal takes seconds here; linear takes milliseconds.
+    expect(performance.now() - start).toBeLessThan(1500);
+  });
+
+  test("quotes split by control or format characters stay defused", () => {
+    for (const c of [ZW, RLO, LRI, NUL, "\n", "\r\n", cp(0xfeff), cp(0x2028)]) {
+      safe(line(`"${c}""`, 100));
+      safe(line(`""${c}"`, 100));
+      safe(line(`"${c}"${c}"`, 100));
+      safe(line(`""${c}%DATA_NOTE%${c}"`, 100));
+      safe(line(`%DATA_${c}NOTE%`, 100));
+    }
+  });
+
+  test("whitespace-split quotes stay apart", () => {
+    for (const s of ['" ""', '"  "  "', '"\t"\t"', '" %DATA_NOTE% ""']) safe(line(s, 100));
+  });
+
+  test("random concatenations of the fragments never yield a fence or placeholder", () => {
+    const frags = ['"', '""', "%DATA_NOTE%", "%DATA_", "NOTE%", ZW, RLO, NUL, " ", "\n", "a", "b"];
+    // Seeded Park-Miller PRNG, so a failure reproduces.
+    let seed = 3196;
+    const rand = () => {
+      seed = (seed * 48271) % 2147483647;
+      return seed / 2147483647;
+    };
+    for (let i = 0; i < 5000; i++) {
+      const n = 1 + Math.floor(rand() * 16);
+      let s = "";
+      for (let j = 0; j < n; j++) s += frags[Math.floor(rand() * frags.length)];
+      const max = 1 + Math.floor(rand() * 40);
+      const out = line(s, max);
+      safe(out);
+      expect(out.length).toBeLessThanOrEqual(max);
+    }
+  });
+});
+
 describe("siteUrl / shellQuote / rerunCommand", () => {
   test("only http(s) URLs, canonicalised", () => {
     expect(siteUrl("javascript:alert(1)")).toBeNull();

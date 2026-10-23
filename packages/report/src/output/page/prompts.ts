@@ -23,16 +23,45 @@ import { getPathname } from "../../url";
 // Cc = control characters (incl. newlines); Cf = format (bidi overrides, zero-width).
 const CONTROL_OR_FORMAT = /[\p{Cc}\p{Cf}]+/gu;
 
-/** One bounded line of untrusted text; a fence marker inside it is defused. */
+// The note placeholder (NOTE_TOKEN) is ours alone: untrusted text never carries it.
+const PLACEHOLDER = "%DATA_NOTE%";
+// A """ fence marker; ours open and close every untrusted block.
+const FENCE_RUN = /"{3,}/g;
+const UNSAFE = /"{3}|%DATA_NOTE%|[\p{Cc}\p{Cf}]/u;
+
+/**
+ * Drop every placeholder, including one that a removal joins from two halves
+ * (`%DATA_%DATA_NOTE%NOTE%`), in one linear pass: the kept text is a stack
+ * that never ends in the placeholder, so it never contains one.
+ */
+function dropPlaceholder(s: string): string {
+  if (!s.includes("%")) return s;
+  const kept: string[] = [];
+  const n = PLACEHOLDER.length;
+  for (let i = 0; i < s.length; i++) {
+    kept.push(s[i]!);
+    if (s[i] === "%" && kept.length >= n && kept.slice(-n).join("") === PLACEHOLDER) {
+      kept.length -= n;
+    }
+  }
+  return kept.join("");
+}
+
+/**
+ * One bounded line of untrusted text; a fence marker inside it is defused.
+ *
+ * Order matters (#3196): every removal runs first (control and format
+ * characters, then the placeholder), and fences are defused last, so no
+ * removal can rebuild a `"""` after the fence step.
+ */
 export function line(value: unknown, max: number): string {
-  const s = String(value ?? "")
-    .replace(CONTROL_OR_FORMAT, " ")
-    .replace(/"{3,}/g, "''")
-    // The note placeholder is ours alone: untrusted text never carries it.
-    .replace(/%DATA_NOTE%/g, "")
+  const s = dropPlaceholder(String(value ?? "").replace(CONTROL_OR_FORMAT, " "))
     .replace(/\s+/g, " ")
-    .trim();
-  return s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s;
+    .trim()
+    .replace(FENCE_RUN, "''");
+  const out = s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s;
+  // Fail closed: nothing that could break out of a fence ever leaves here.
+  return UNSAFE.test(out) ? "" : out;
 }
 
 const LIMIT = { title: 160, text: 600, step: 300, message: 240, path: 120, tech: 40, url: 200 };
@@ -290,7 +319,7 @@ export function issuePrompt(rule: FlatIssue, ctx: PromptContext): string {
  * body per finding states the note once. Expanding a token that site text
  * happened to contain only inserts our own note.
  */
-export const NOTE_TOKEN = "%DATA_NOTE%";
+export const NOTE_TOKEN = PLACEHOLDER;
 
 /** Swap the standalone placeholder line, and only that line, for the data note. */
 export function expandNote(body: string, note: string): string {
