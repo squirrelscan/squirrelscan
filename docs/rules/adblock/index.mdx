@@ -1,6 +1,7 @@
 ---
-title: "Blocking"
-description: "Content, links, and trackers that ad blockers and privacy filters block"
+title: "Ad blocker audit rules: filter lists and blocked content"
+sidebarTitle: "Blocking"
+description: "Audit rules for what ad blockers and privacy filters remove: requests on EasyList, elements hidden by cosmetic filters and trackers on EasyPrivacy."
 ---
 
 <Note>**Cloud rules** - requires login (`squirrel auth login`). All three rules share a single blocklist check per audit, **included in the audit base charge**, matched server-side against the full EasyList and EasyPrivacy filter lists. Skipped when not logged in. See [Cloud rules](/cloud/rules).</Note>
@@ -9,26 +10,57 @@ The **Blocking** category covers content, links, and trackers that ad blockers a
 
 <Note>Rule IDs and config filters keep the `adblock/` prefix (e.g. `adblock/*`) - only the report category was renamed to Blocking.</Note>
 
-The three rules answer one question from three angles: what does a visitor running a blocker not get? A resource on an EasyList domain is never requested, a tracker on EasyPrivacy is blocked in several browsers by default, and an element whose class matches a cosmetic filter is hidden whatever is in it. All three share a single blocklist check per audit.
+The three rules answer one question from three angles: what does a visitor running a blocker not get? A resource on an EasyList domain is never requested, a tracker on EasyPrivacy is blocked in several browsers by default, and an element whose class matches a cosmetic filter is hidden whatever is in it. All three share a single blocklist check per audit. In the report, [blocked requests](/rules/adblock/blocked-links) and [cosmetic filters](/rules/adblock/element-hiding) sit under **Ad blocking**, and [EasyPrivacy matches](/rules/adblock/privacy-blocked) under **Privacy blocking**.
 
-## Ad blocking
+## Run only these rules
 
-<CardGroup cols={2}>
-  <Card title="Adblock cosmetic filters: classes that get hidden" icon="triangle-exclamation" href="/rules/adblock/element-hiding">
-    A block named .ad-container is hidden for anyone running an ad blocker, whatever is in it. squirrel matches your selectors against EasyList.
-  </Card>
-  <Card title="Requests ad blockers stop: links and resources on EasyList" icon="circle-info" href="/rules/adblock/blocked-links">
-    A resource on an EasyList domain never loads for a visitor running a blocker. squirrel reports each one with what it is.
-  </Card>
-</CardGroup>
+```bash
+squirrel audit https://example.com --rule-include blocking
+```
 
-## Privacy blocking
+`adblock` works too, since the rule IDs keep that prefix. These are cloud rules, so they run only when you are signed in.
 
-<CardGroup cols={2}>
-  <Card title="EasyPrivacy matches: analytics that silently does not run" icon="circle-info" href="/rules/adblock/privacy-blocked">
-    Privacy filters block trackers by default in several browsers, so your analytics quietly under-counts. squirrel reports which resources they block.
-  </Card>
-</CardGroup>
+{/* hub:start-here:start */}
+
+## Where to start
+
+These carry the highest severity and weight in the category.
+
+- [Adblock cosmetic filters: classes that get hidden](/rules/adblock/element-hiding): A block named .ad-container is hidden for anyone running an ad blocker, whatever is in it. squirrel matches your selectors against EasyList.
+- [EasyPrivacy matches: analytics that silently does not run](/rules/adblock/privacy-blocked): Privacy filters block trackers by default in several browsers, so your analytics quietly under-counts. squirrel reports which resources they block.
+- [Requests ad blockers stop: links and resources on EasyList](/rules/adblock/blocked-links): A resource on an EasyList domain never loads for a visitor running a blocker. squirrel reports each one with what it is.
+
+{/* hub:start-here:end */}
+
+{/* hub:rules:start */}
+
+## Rules
+
+| Rule | What it flags | Severity | Scope |
+|---|---|---|---|
+| [Adblock cosmetic filters: classes that get hidden](/rules/adblock/element-hiding) | A block named .ad-container is hidden for anyone running an ad blocker, whatever is in it. squirrel matches your selectors against EasyList. | warning | Site-wide |
+| [EasyPrivacy matches: analytics that silently does not run](/rules/adblock/privacy-blocked) | Privacy filters block trackers by default in several browsers, so your analytics quietly under-counts. squirrel reports which resources they block. | warning | Site-wide |
+| [Requests ad blockers stop: links and resources on EasyList](/rules/adblock/blocked-links) | A resource on an EasyList domain never loads for a visitor running a blocker. squirrel reports each one with what it is. | warning | Site-wide |
+
+{/* hub:rules:end */}
+
+{/* hub:terms:start */}
+
+## Key terms
+
+- [Ad blocker filter lists](/glossary#filter-list): Community-maintained rule lists (EasyList, EasyPrivacy) that ad and tracker blockers use to hide elements and block requests.
+
+{/* hub:terms:end */}
+
+## Related categories
+
+[Security](/rules/security) lists the third-party scripts, iframes and pixels a page loads. [Analytics](/rules/analytics) lists the measurement tools a page loads, the ones [EasyPrivacy matches](/rules/adblock/privacy-blocked) may report as blocked, and [Legal Compliance](/rules/legal) checks for cookie consent.
+
+## Learn more
+
+- [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai), the coding agent workflow for working through a report
+- [Cloud rules](/cloud/rules), what they check and what they cost
+- [Sample report](https://squirrelscan.com/reports/squirrelscan-sample), with the Blocking section on a real site
 
 ## Disable all blocking rules
 
@@ -36,5 +68,3 @@ The three rules answer one question from three angles: what does a visitor runni
 [rules]
 disable = ["adblock/*"]
 ```
-
-Every audit reports Blocking findings next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.

@@ -1,22 +1,42 @@
 ---
-title: "Gap Analysis"
-description: "Keyword and content gap analysis backed by live search data"
+title: "Keyword and content gap analysis (cloud)"
+sidebarTitle: "Gap Analysis"
+description: "Cloud rules for keyword and content gaps: the searches competitors rank for and the topics your site does not cover, from live search data."
 ---
 
 <Note>**Cloud rules, opt-in** - these rules require login (`squirrel auth login`), cost **25 credits each per audit**, and are **disabled by default** so a routine audit never spends them by surprise. See [Cloud rules](/cloud/rules).</Note>
 
 Gap analysis compares your site against live search demand data: what people search for, what competitors rank for, and which of those topics your site doesn't cover. Both rules read a result the cloud service produced before the rules ran, report at info severity with a weight of 1, and flag anything above 500 monthly searches as high volume. They are research output rather than defects, which is why they barely move a score.
 
+## Run only these rules
+
+```bash
+squirrel audit https://example.com --rule-include gaps
+```
+
+Both rules are opt-in cloud rules: they need you signed in and cost 25 credits each per audit. Right now neither one runs, even when enabled as shown under [Enable gap analysis](#enable-gap-analysis): both are marked disabled in the rule source, and the rule loader drops disabled rules before it reads any enable list ([#1067](https://github.com/squirrelscan/squirrelscan/issues/1067)).
+
+{/* hub:start-here:start */}
+
+## Where to start
+
+These carry the highest severity and weight in the category.
+
+- [Content gaps: topic clusters your site does not cover](/rules/gaps/content): A content gap is a cluster of related searches next to what you already rank for. squirrel groups the demand and reports the uncovered clusters.
+- [Keyword gaps: terms competitors rank for and you do not](/rules/gaps/keywords): A keyword gap is demand your competitors capture and you do not. squirrel compares your ranking footprint against theirs using live search data.
+
+{/* hub:start-here:end */}
+
+{/* hub:rules:start */}
+
 ## Rules
 
-<CardGroup cols={2}>
-  <Card title="Keyword gaps: terms competitors rank for and you do not" icon="circle-info" href="/rules/gaps/keywords">
-    A keyword gap is demand your competitors capture and you do not. squirrel compares your ranking footprint against theirs using live search data.
-  </Card>
-  <Card title="Content gaps: topic clusters your site does not cover" icon="circle-info" href="/rules/gaps/content">
-    A content gap is a cluster of related searches next to what you already rank for. squirrel groups the demand and reports the uncovered clusters.
-  </Card>
-</CardGroup>
+| Rule | What it flags | Severity | Scope |
+|---|---|---|---|
+| [Content gaps: topic clusters your site does not cover](/rules/gaps/content) | A content gap is a cluster of related searches next to what you already rank for. squirrel groups the demand and reports the uncovered clusters. | info | Site-wide |
+| [Keyword gaps: terms competitors rank for and you do not](/rules/gaps/keywords) | A keyword gap is demand your competitors capture and you do not. squirrel compares your ranking footprint against theirs using live search data. | info | Site-wide |
+
+{/* hub:rules:end */}
 
 ## Enable gap analysis
 
@@ -26,6 +46,23 @@ Both rules are opt-in:
 [rules]
 enable = ["gaps/keywords", "gaps/content"]
 ```
+
+{/* hub:terms:start */}
+
+## Key terms
+
+- [Content gap analysis](/glossary#content-gap): Finding the topics and queries a site's audience searches for that the site does not yet cover.
+
+{/* hub:terms:end */}
+
+## Related categories
+
+[Content](/rules/content) checks the pages you already have: thin pages, duplicates and stale dates. [Agent experience](/rules/ax) checks whether AI crawlers and agents can reach and read them.
+
+## Learn more
+
+- [Best generative engine optimization tools](https://squirrelscan.com/learn/geo-tools), sorted by the job each one does
+- [Website audit tool](https://squirrelscan.com/tools/website-audit)
 
 ## Options
 
@@ -37,5 +74,3 @@ country = "US"                       # ISO country for search data
 language = "en"                      # language code for search data
 competitors = ["competitor.com"]     # up to 5 competitor domains
 ```
-
-Every audit reports Gap Analysis findings next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.

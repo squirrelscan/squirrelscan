@@ -1,38 +1,67 @@
 ---
-title: "Mobile"
-description: "Mobile-friendliness and responsive design"
+title: "Mobile audit rules: viewport, tap targets and font size"
+sidebarTitle: "Mobile"
+description: "Audit rules for phones: the viewport tag, pinch zoom, font size, tap targets, sideways scrolling, iOS input zoom, interstitials and the web app manifest."
 ---
 
 Mobile rules check whether a page works on a phone: the viewport tag that decides how it is laid out, whether zoom is still available, whether text and tap targets are large enough, and whether anything overflows the screen. Most of them read static markup, so they see inline styles and not the stylesheet, and several report a count as context rather than a measurement. Treat them as a list of things to look at in a narrow browser window.
 
+## Run only these rules
+
+```bash
+squirrel audit https://example.com --rule-include mobile
+```
+
+{/* hub:start-here:start */}
+
+## Where to start
+
+These carry the highest severity and weight in the category.
+
+- [Missing viewport meta tag: what it does and what to set](/rules/mobile/viewport): Without a viewport meta tag a phone renders the page at desktop width and zooms out. squirrel checks the tag and its content properties.
+- [user-scalable=no: the viewport setting that blocks zoom](/rules/mobile/viewport-zoom): Disabling pinch zoom stops readers who need to magnify text. squirrel checks the viewport content for user-scalable and maximum-scale.
+- [Web app manifest: the file that sets the home-screen icon and name](/rules/mobile/web-app-manifest): A linked web app manifest that is missing, broken or inconsistent gives a blank home-screen icon and a generic name. squirrel checks the manifest the pages link.
+- [Horizontal scroll on mobile: the usual causes](/rules/mobile/horizontal-scroll): A page a phone can scroll sideways is a page that does not fit. squirrel looks for fixed widths, tables and fixed-width iframes.
+- [Intrusive interstitials: popups that cover mobile content](/rules/mobile/interstitials): A popup covering the content a visitor came for is a ranking problem as well as a usability one. squirrel detects popup markup and libraries.
+
+{/* hub:start-here:end */}
+
+{/* hub:rules:start */}
+
 ## Rules
 
-<CardGroup cols={2}>
-  <Card title="Font size under 12px: text too small to read on a phone" icon="triangle-exclamation" href="/rules/mobile/font-size">
-    Body text below about 16px is hard to read on a phone without zooming. squirrel checks inline styles for sizes under 12px.
-  </Card>
-  <Card title="Form fields under 16px: why iOS Safari zooms in when one is focused" icon="triangle-exclamation" href="/rules/mobile/input-zoom">
-    A text field under 16px makes an iPhone zoom the page in when it is focused. squirrel reads field sizes from inline styles and style blocks.
-  </Card>
-  <Card title="Horizontal scroll on mobile: the usual causes" icon="triangle-exclamation" href="/rules/mobile/horizontal-scroll">
-    A page a phone can scroll sideways is a page that does not fit. squirrel looks for fixed widths, tables and fixed-width iframes.
-  </Card>
-  <Card title="Intrusive interstitials: popups that cover mobile content" icon="triangle-exclamation" href="/rules/mobile/interstitials">
-    A popup covering the content a visitor came for is a ranking problem as well as a usability one. squirrel detects popup markup and libraries.
-  </Card>
-  <Card title="Tap target size: the 44 by 44 pixel guideline" icon="triangle-exclamation" href="/rules/mobile/tap-targets">
-    A control smaller than a fingertip is a control people miss. squirrel counts interactive elements and flags small inline dimensions.
-  </Card>
-  <Card title="Web app manifest: the file that sets the home-screen icon and name" icon="triangle-exclamation" href="/rules/mobile/web-app-manifest">
-    A linked manifest that is missing, broken or inconsistent leaves the home-screen icon blank. squirrel checks the file the pages link and its icons.
-  </Card>
-  <Card title="Missing viewport meta tag: what it does and what to set" icon="circle-exclamation" href="/rules/mobile/viewport">
-    Without a viewport meta tag a phone renders the page at desktop width and zooms out. squirrel checks the tag and its content properties.
-  </Card>
-  <Card title="user-scalable=no: the viewport setting that blocks zoom" icon="circle-exclamation" href="/rules/mobile/viewport-zoom">
-    Disabling pinch zoom stops readers who need to magnify text. squirrel checks the viewport content for user-scalable and maximum-scale.
-  </Card>
-</CardGroup>
+| Rule | What it flags | Severity | Scope |
+|---|---|---|---|
+| [Font size under 12px: text too small to read on a phone](/rules/mobile/font-size) | Body text below about 16px is hard to read on a phone without zooming. squirrel checks inline styles for sizes under 12px. | warning | Per-page |
+| [Form fields under 16px: why iOS Safari zooms in when one is focused](/rules/mobile/input-zoom) | On an iPhone, focusing a text field under 16px zooms the page in. squirrel reads form field sizes from inline styles and style blocks and reports the small ones. | warning | Per-page |
+| [Horizontal scroll on mobile: the usual causes](/rules/mobile/horizontal-scroll) | A page a phone can scroll sideways is a page that does not fit. squirrel looks for fixed widths, tables and fixed-width iframes. | warning | Per-page |
+| [Intrusive interstitials: popups that cover mobile content](/rules/mobile/interstitials) | A popup covering the content a visitor came for is a ranking problem as well as a usability one. squirrel detects popup markup and libraries. | warning | Per-page |
+| [Missing viewport meta tag: what it does and what to set](/rules/mobile/viewport) | Without a viewport meta tag a phone renders the page at desktop width and zooms out. squirrel checks the tag and its content properties. | error | Per-page |
+| [Tap target size: the 44 by 44 pixel guideline](/rules/mobile/tap-targets) | A control smaller than a fingertip is a control people miss. squirrel counts interactive elements and flags small inline dimensions. | warning | Per-page |
+| [user-scalable=no: the viewport setting that blocks zoom](/rules/mobile/viewport-zoom) | Disabling pinch zoom stops readers who need to magnify text. squirrel checks the viewport content for user-scalable and maximum-scale. | error | Per-page |
+| [Web app manifest: the file that sets the home-screen icon and name](/rules/mobile/web-app-manifest) | A linked web app manifest that is missing, broken or inconsistent gives a blank home-screen icon and a generic name. squirrel checks the manifest the pages link. | error | Site-wide |
+
+{/* hub:rules:end */}
+
+{/* hub:terms:start */}
+
+## Key terms
+
+- [Mobile-friendly](/glossary#mobile-friendly): A page that works on a phone without zooming or sideways scrolling: viewport set, readable text, tappable controls, no input zoom.
+- [Touch target size](/glossary#touch-targets): The tappable area of a control; WCAG 2.2 sets 24 by 24 CSS pixels as the AA minimum.
+- [Viewport meta tag](/glossary#viewport-meta-tag): `<meta name="viewport">` that sets the layout width to the device width; disabling zoom in it fails accessibility.
+
+{/* hub:terms:end */}
+
+## Related categories
+
+[Accessibility](/rules/a11y) checks touch target size and a viewport that blocks zoom from the side of a reader who needs to enlarge text.
+
+## Learn more
+
+- [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai), the coding agent workflow for working through a report
+- [Website audit tool](https://squirrelscan.com/tools/website-audit)
+- [Sample report](https://squirrelscan.com/reports/squirrelscan-sample), with the Mobile section on a real site
 
 ## Disable all Mobile rules
 
@@ -40,5 +69,3 @@ Mobile rules check whether a page works on a phone: the viewport tag that decide
 [rules]
 disable = ["mobile/*"]
 ```
-
-Every audit reports Mobile findings next to the performance, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
