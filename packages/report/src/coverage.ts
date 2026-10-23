@@ -74,7 +74,7 @@ export function coverageLine(report: AuditReport): string | null {
  * alone, so a producer that echoes the same number both ways does not render a
  * reduction that never happened.
  */
-function clampedPageLimit(
+export function clampedPageLimit(
   scope: NonNullable<AuditReport["scanScope"]>,
 ): { requested: number; effective: number } | null {
   const requested = scope.requestedMaxPages;

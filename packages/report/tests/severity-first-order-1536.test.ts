@@ -91,7 +91,8 @@ describe("renderers emit one global severity order (#1536)", () => {
   const cases: Array<[string, (r: AuditReport) => string]> = [
     ["json", (r) => renderJson(r)],
     ["text", (r) => renderText(r)],
-    ["html", (r) => renderHtml(r)],
+    // The Findings bands; the short Issues list above them only ranks errors and warnings.
+    ["html", (r) => renderHtml(r).split('class="bands"')[1] ?? ""],
     ["markdown", (r) => renderMarkdown(r)],
     ["xml", (r) => renderXml(r)],
     ["llm", (r) => renderLlm(r)],

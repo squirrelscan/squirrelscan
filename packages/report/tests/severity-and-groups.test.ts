@@ -191,11 +191,12 @@ describe("Recommendation label for info severity — human renderers only (#4)",
 
   test("html: renders 'recommendation' text for info severity, class name stays raw", () => {
     const html = renderHtml(reportAcrossSeverities());
-    // Visible text is the label; the className stays the raw severity so the
-    // existing .rule-severity.info CSS color rule still applies.
-    expect(html).toContain('class="rule-severity info">recommendation</span>');
-    expect(html).toContain('class="rule-severity error">error</span>');
-    expect(html).toContain('class="rule-severity warning">warning</span>');
+    // The label is what readers see (the band title and the Pages view's tag);
+    // the raw severity stays on data-sev for the filters and the band.
+    expect(html).toContain('data-sev="info" data-sev-label="recommendation"');
+    expect(html).toContain('data-sev="error" data-sev-label="error"');
+    expect(html).toContain('data-sev="warning" data-sev-label="warning"');
+    expect(html).toMatch(/>Recommendations \d+<\/span>/);
     expect(html).not.toContain(">info</span>");
   });
 });
@@ -232,10 +233,9 @@ describe("SUMMARY surfaces all 4 group scores incl. Agent Experience (#4, #626)"
 
   test("html: the group-scores summary already renders all 4 groups incl. Agent Experience", () => {
     const html = renderHtml(reportAcrossSeverities());
-    expect(html).toContain('class="group-scores"');
-    expect((html.match(/class="group-circle"/g) || []).length).toBe(4);
+    expect((html.match(/data-group-score="/g) || []).length).toBe(4);
     // Short label from the group CODE ("ai" → "Agents"); full title on hover.
-    expect(html).toContain(">Agents</div>");
+    expect(html).toContain('title="Agent Experience">Agents</span>');
     expect(html).toContain('title="Agent Experience"');
     expect(html).not.toContain("AI Readiness");
   });

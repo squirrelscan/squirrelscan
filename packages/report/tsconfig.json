@@ -8,9 +8,10 @@
     "skipLibCheck": true,
     "noEmit": true,
     "jsx": "react-jsx",
+    "types": ["bun"],
     "paths": {
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "scripts/**/*.ts"]
 }

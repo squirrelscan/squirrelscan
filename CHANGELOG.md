@@ -22,6 +22,10 @@ How it works:
 - DOMPurify moves to 3.4.17 for GHSA-cg2g-xh64-v4q7 (critical), GHSA-mrv2-3pqr-j5jr (high) and GHSA-c6gr-qvv4-5v3f (low). It is a docs-site dependency only; nothing in the `squirrel` binary loads it.
 - The dependency audit now ignores two Astro advisories, GHSA-98hj-9722-w3j8 (moderate) and GHSA-mpr7-6m5w-76rw (low). Astro stays capped below 7.2.10 until tangly moves to `@astrojs/mdx` 8, and only the static docs build uses it, with no untrusted input. The reasoning is in `.github/dependency-audit-allowlist.md`.
 
+### Changed
+
+- **The HTML report is redesigned, and local reports get the same page as published ones.** `--format html` now writes the page reports.squirrelscan.com shows: the health and group scores up top, a coverage notice with the command for a larger audit when the crawl stopped short, the most widespread errors and warnings to fix first, every finding banded by severity and filterable by group, the same findings by page, and the site profile, tech stack and entity map. Every finding has a **Copy fix prompt** button that copies a prompt for your coding agent: the rules to fix, their docs, the audit's evidence fenced as untrusted data, and the `squirrel audit` command that verifies the fix. A signed-out local report also shows what a free cloud account adds, and the checks on the site that need it. The file is still self-contained and makes no network request when opened: no favicon and no technology logos ([html format](https://docs.squirrelscan.com/reports#html)).
+
 ## v0.0.129 (2026-10-23)
 
 The editor's summary gets a ranked Priorities section, and the summary request now knows your stack.

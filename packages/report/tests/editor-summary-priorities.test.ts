@@ -170,9 +170,9 @@ describe("renderers with priorities", () => {
 
   test("html renders a priorities section", () => {
     const out = renderHtml(r);
-    expect(out).toContain('class="priorities-section"');
+    expect(out).toContain('data-issues="ranked"');
     expect(out).toContain("Cache pages with WP Rocket");
-    expect(out).not.toContain('class="editor-summary-bigticket"');
+    expect(out).not.toContain('data-big-ticket');
   });
 
   test("json carries the priorities in the summary", () => {
@@ -190,7 +190,7 @@ describe("renderers without priorities keep the big-ticket list", () => {
     expect(renderText(r)).not.toContain("PRIORITIES");
     expect(renderLlm(r)).toContain("<big-ticket>");
     expect(renderXml(r)).toContain("<big-ticket>");
-    expect(renderHtml(r)).toContain('class="editor-summary-bigticket"');
-    expect(renderHtml(r)).not.toContain('class="priorities-section"');
+    expect(renderHtml(r)).toContain('data-big-ticket');
+    expect(renderHtml(r)).not.toContain('data-issues="ranked"');
   });
 });

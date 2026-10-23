@@ -173,23 +173,23 @@ describe("renderers surface groups (#626)", () => {
 
   test("html: renders the 4 group score circles linking to their issues section", () => {
     const html = renderHtml(reportWithGroups());
-    expect(html).toContain('class="group-scores"');
-    expect((html.match(/class="group-circle"/g) || []).length).toBe(4);
-    // Every group has issues in this fixture, so every circle is a link.
+    expect((html.match(/data-group-score="/g) || []).length).toBe(4);
+    // Every group has issues in this fixture, so every circle links to its
+    // Findings filter, and the filter anchor exists.
     for (const code of ["seo", "performance", "security", "ai"]) {
-      expect(html).toContain(`href="#group-${code}"`);
-      expect(html).toContain(`id="group-${code}"`);
+      expect(html).toContain(`href="#g-${code}"`);
+      expect(html).toContain(`id="g-${code}"`);
     }
     // Short name from the group code (stored name says "AI Readiness"),
     // full title on the hover tooltip.
-    expect(html).toContain(">Agents</div>");
+    expect(html).toContain('title="Agent Experience">Agents</span>');
     expect(html).toContain('title="Agent Experience"');
     expect(html).not.toContain("AI Readiness");
     // Circle names carry the per-group accent from GROUP_COLORS.
     expect(html).toContain(GROUP_COLORS.ai.text);
-    // No terminal command strip in the header.
+    // No terminal command strip in the header. (The copy fix prompts carry a
+    // verify command on purpose, so "squirrel audit" itself is not pinned here.)
     expect(html).not.toContain("terminal-cmd");
-    expect(html).not.toContain("squirrel audit");
     // Footer draws a single rule (border-top) — no extra divider div.
     expect(html).not.toContain('class="divider"');
   });
@@ -198,11 +198,11 @@ describe("renderers surface groups (#626)", () => {
     const r = reportWithGroups();
     delete (r.ruleResults as Record<string, unknown>)["ax/x"];
     const html = renderHtml(r);
-    expect((html.match(/class="group-circle"/g) || []).length).toBe(4);
-    expect(html).not.toContain('href="#group-ai"');
-    expect(html).not.toContain('id="group-ai"');
+    expect((html.match(/data-group-score="/g) || []).length).toBe(4);
+    expect(html).not.toContain('href="#g-ai"');
+    expect(html).not.toContain('id="g-ai"');
     // The other three still link.
-    expect(html).toContain('href="#group-seo"');
+    expect(html).toContain('href="#g-seo"');
   });
 });
 
@@ -230,14 +230,14 @@ describe("severity headings replace the group headings (#1536)", () => {
 
   test("html: no group/category headings — every rule carries its parent group label", () => {
     const html = renderHtml(reportWithGroups());
-    // The redesign drops the heading hierarchy entirely: a single "Issues"
-    // section, one anchor div per group, and a group label pill on each rule.
-    expect(html).toContain("<h2>Issues</h2>");
+    // No heading hierarchy: one Findings section banded by severity, one
+    // filter anchor per group, and a group tag on each rule row.
+    expect(html).toContain('<section id="findings">');
     expect(html).not.toContain('class="category-header"');
     expect(html).not.toContain('class="group-heading"');
-    // 5 rules → 5 pills; the seo group's two categories both label as "SEO".
-    expect((html.match(/class="group-label"/g) || []).length).toBe(5);
-    expect((html.match(/class="group-label" title="SEO"[^>]*>SEO<\/span>/g) || []).length).toBe(2);
+    // 5 rules → 5 tags; the seo group's two categories both label as "SEO".
+    expect((html.match(/class="gtag"/g) || []).length).toBe(5);
+    expect((html.match(/data-g="seo" title="SEO">SEO<\/span>/g) || []).length).toBe(2);
     // Each pill is tinted with its group's accent (inline from GROUP_COLORS).
     for (const code of ["seo", "performance", "security", "ai"] as const) {
       expect(html).toContain(GROUP_COLORS[code].text);
@@ -313,10 +313,8 @@ describe("severity headings replace the group headings (#1536)", () => {
     // The flat redesign has no subcategory headers in HTML (text/md keep them);
     // both blocking rules sit in the security group section with its label.
     expect(html).not.toContain("subcategory-header");
-    expect(html).toContain('id="group-security"');
-    expect(
-      (html.match(/class="group-label" title="Security"[^>]*>Security<\/span>/g) || []).length,
-    ).toBe(2);
+    expect(html).toContain('id="g-security"');
+    expect((html.match(/data-g="security" title="Security">Security<\/span>/g) || []).length).toBe(2);
   });
 
   test("markdown: subcategories nest under the category (### sev → #### cat → ##### sub → ###### rule)", () => {
@@ -329,8 +327,8 @@ describe("severity headings replace the group headings (#1536)", () => {
   });
 
   test("html: rules from multiple categories share one group section and label", () => {
-    // A second security category joins blocking in the same #group-security
-    // section; all three rules carry the same "Security" label.
+    // A second security category joins blocking in the same #g-security
+    // filter; all three rules carry the same "Security" label.
     const r = reportBlockingOnly();
     (r.ruleResults as Record<string, unknown>)["security/https"] = {
       meta: {
@@ -345,9 +343,7 @@ describe("severity headings replace the group headings (#1536)", () => {
       checks: [fail("no https")],
     };
     const html = renderHtml(r);
-    expect((html.match(/id="group-security"/g) || []).length).toBe(1);
-    expect(
-      (html.match(/class="group-label" title="Security"[^>]*>Security<\/span>/g) || []).length,
-    ).toBe(3);
+    expect((html.match(/id="g-security"/g) || []).length).toBe(1);
+    expect((html.match(/data-g="security" title="Security">Security<\/span>/g) || []).length).toBe(3);
   });
 });

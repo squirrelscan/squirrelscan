@@ -7,7 +7,6 @@ import { describe, expect, test } from "bun:test";
 
 import type { AuditReport, DomainStatsPositions } from "../src/types";
 import { renderHtml } from "../src/output/html";
-import { formatHumanDateTime } from "../src/utils";
 
 function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
   return {
@@ -25,8 +24,8 @@ function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
 describe("ReportSummary", () => {
   test("favicon renders as an offline initial tile", () => {
     const html = renderHtml(baseReport());
-    expect(html).toContain('class="site-favicon"');
-    expect(html).toContain('class="site-favicon" aria-hidden="true">G</div>');
+    expect(html).toMatch(/<span class="site-favicon [^"]*" aria-hidden="true">G<\/span>/);
+    expect(html).not.toContain("<img");
     expect(html).not.toContain("icons.duckduckgo.com");
     expect(html).not.toContain("squirrelscan.com/tech-icons");
   });
@@ -71,13 +70,14 @@ describe("ReportSummary", () => {
 
   test("generated line shows date AND time (UTC)", () => {
     const html = renderHtml(baseReport());
-    expect(html).toContain(formatHumanDateTime("2026-06-16T14:30:00.000Z"));
-    expect(html).toContain("14:30 UTC");
+    // Rendered in UTC; the page script swaps in the reader's own timezone.
+    expect(html).toContain('<time dateTime="2026-06-16T14:30:00.000Z" data-local-time="true">');
+    expect(html).toContain("16 Jun 2026, 14:30 UTC");
   });
 
-  test("footer shows the squirrel generator version when present, omits it otherwise", () => {
-    expect(renderHtml(baseReport({ generatorVersion: "1.2.3" }))).toContain("squirrel v1.2.3");
-    expect(renderHtml(baseReport())).not.toContain("squirrel v");
+  test("header shows the squirrel generator version when present, omits it otherwise", () => {
+    expect(renderHtml(baseReport({ generatorVersion: "1.2.3" }))).toContain(">v1.2.3</span>");
+    expect(renderHtml(baseReport())).not.toMatch(/>v\d/);
   });
 
   test("no dedicated Screenshot heading — the screenshot moved into the summary", () => {
@@ -85,7 +85,7 @@ describe("ReportSummary", () => {
       baseReport({ screenshotUrl: "https://assets.squirrelscan.com/s.png" }),
     );
     expect(html).not.toContain(">Screenshot</h2>");
-    expect(html).toContain('class="screenshot-section"');
+    expect(html).toContain('class="screenshot-section ');
   });
 });
 
@@ -100,7 +100,7 @@ describe("failed/blocked report copy", () => {
         totalPages: 0,
       }),
     );
-    expect(html).toContain('class="failure-notice"');
+    expect(html).toContain('id="failure-notice"');
     expect(html).toContain("Your site blocked the audit");
     expect(html).toContain("Allowlist the squirrelscan crawler");
     // Never a false clean pass.
@@ -129,7 +129,7 @@ describe("failed/blocked report copy", () => {
         totalPages: 0,
       }),
     );
-    expect(html).toContain('class="failure-notice"');
+    expect(html).toContain('id="failure-notice"');
     // Apostrophes render escaped (&#x27;), so assert on apostrophe-free spans.
     expect(html).toContain("audit your site");
     expect(html).toContain("there was nothing");
@@ -141,7 +141,8 @@ describe("failed/blocked report copy", () => {
     const failed = renderHtml(baseReport({ status: "failed", totalPages: 0 }));
     // Isolate the notice so unrelated markup can't mask an em-dash in the copy.
     for (const html of [blocked, failed]) {
-      const start = html.indexOf('class="failure-notice"');
+      const start = html.indexOf('id="failure-notice"');
+      expect(start).toBeGreaterThan(0);
       const notice = html.slice(start, start + 1200);
       expect(notice).not.toContain("—");
     }
@@ -158,8 +159,9 @@ describe("LockedRulesSection", () => {
         ],
       }),
     );
-    expect(html).toContain('class="locked-section"');
-    expect(html).toContain("2 more checks with cloud audits");
+    // A signed-out local run: the cloud card lists what did not run.
+    expect(html).toContain('<section id="cloud"');
+    expect(html).toContain("2 checks on this site need the cloud and did not run:");
     expect(html).toContain("JS Rendering");
     expect(html).toContain("AI Content Quality");
     expect(html).toContain("https://squirrelscan.com");
@@ -167,12 +169,14 @@ describe("LockedRulesSection", () => {
 
   test("singular wording for a single locked rule", () => {
     const html = renderHtml(baseReport({ lockedRules: [{ id: "a", name: "X" }] }));
-    expect(html).toContain("1 more check with cloud audits");
+    expect(html).toContain("1 check on this site needs the cloud and did not run:");
   });
 
   test("omits the section when there are no locked rules", () => {
-    expect(renderHtml(baseReport())).not.toContain('class="locked-section"');
-    expect(renderHtml(baseReport({ lockedRules: [] }))).not.toContain('class="locked-section"');
+    for (const html of [renderHtml(baseReport()), renderHtml(baseReport({ lockedRules: [] }))]) {
+      expect(html).not.toContain('id="locked-rules"');
+      expect(html).not.toContain("did not run:");
+    }
   });
 
   // #368: a signed-in user must never see the "get a free account" upsell.
@@ -180,7 +184,8 @@ describe("LockedRulesSection", () => {
     const html = renderHtml(
       baseReport({ lockedRules: [{ id: "a", name: "X" }], cloudPlan: "free" }),
     );
-    expect(html).toContain('class="locked-section"');
+    expect(html).toContain('id="locked-rules"');
+    expect(html).not.toContain('id="cloud"');
     expect(html).toContain("run this audit");
     expect(html).toContain("Add credits in your");
     expect(html).not.toContain("free squirrelscan account");
@@ -231,8 +236,8 @@ describe("LockedRulesSection", () => {
     const html = renderHtml(
       baseReport({ lockedRules: [{ id: "a", name: "X" }], cloudPlan: "anonymous" }),
     );
-    expect(html).toContain("free squirrelscan account");
-    expect(html).toContain("Get started");
+    expect(html).toContain("Get the full audit with squirrelscan cloud");
+    expect(html).toContain("Create a free account");
   });
 });
 
@@ -266,8 +271,7 @@ describe("DomainStats organic-positions chart (#491)", () => {
     const html = renderHtml(
       withStats({ pos1: 5, pos2_3: 12, pos4_10: 30, pos11_20: null, pos21_30: null }),
     );
-    expect(html).toContain('class="position-chart"');
-    expect(html).toContain('class="position-fill"');
+    expect(html).toContain("data-position-chart");
     // Bands present best→worst, with counts.
     expect(html).toContain(">#1<");
     expect(html).toContain(">#4–10<");
@@ -278,9 +282,9 @@ describe("DomainStats organic-positions chart (#491)", () => {
   });
 
   test("absent/all-null positions render no chart", () => {
-    expect(renderHtml(withStats(null))).not.toContain('class="position-chart"');
-    expect(
-      renderHtml(withStats({ pos1: null, pos2_3: null })),
-    ).not.toContain('class="position-chart"');
+    expect(renderHtml(withStats(null))).not.toContain("data-position-chart");
+    expect(renderHtml(withStats({ pos1: null, pos2_3: null }))).not.toContain(
+      "data-position-chart",
+    );
   });
 });

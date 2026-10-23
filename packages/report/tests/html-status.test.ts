@@ -53,8 +53,8 @@ describe("renderHtml failed/blocked statusReason (#802)", () => {
     expect(html).toContain(
       "<li>Turn off bot fight mode (or the blocking rule) for the audit.</li>",
     );
-    expect(html).toContain(
-      "<li>Run the audit from a trusted network with <code>squirrel audit https://example.com</code>.</li>",
+    expect(html).toMatch(
+      /<li>Run the audit from a trusted network with <code[^>]*>squirrel audit https:\/\/example\.com<\/code>\.<\/li>/,
     );
     // Exactly 3 items in the failure-notice list — no separate CLI paragraph.
     expect(countOccurrences(html, "<li>Run the audit from a trusted network")).toBe(1);
@@ -62,9 +62,8 @@ describe("renderHtml failed/blocked statusReason (#802)", () => {
 
   test("failed report merges the CLI hint into the 2nd paragraph, verbatim", () => {
     const html = renderHtml(baseReport({ status: "failed" }));
-    expect(html).toContain(
-      "Check that the site is reachable and try again, or run it locally with " +
-        "<code>squirrel audit https://example.com</code>.",
+    expect(html).toMatch(
+      /Check that the site is reachable and try again, or run it locally with <code[^>]*>squirrel audit https:\/\/example\.com<\/code>\./,
     );
   });
 });

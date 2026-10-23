@@ -190,10 +190,14 @@ describe("renderer wiring (#1180)", () => {
     expect(out).toContain("Partial scan:");
   });
 
-  test("html output carries scope line + hint", () => {
+  test("html output carries the coverage notice in place of scope line + hint", () => {
     const out = renderHtml(report, { reportId: "TESTID" });
-    expect(out).toContain("Scan: 100 pages crawled from the CLI v0.0.76");
-    expect(out).toContain("Partial scan:");
+    // One notice says what was crawled, why it stopped and how to get the rest.
+    expect(out).toContain('id="coverage"');
+    expect(out).toContain("The crawl reached its page limit of 100");
+    // Smart-audit carry: the rest is carried forward, not missing.
+    expect(out).toContain("were not re-checked this run and their findings are carried from earlier audits.");
+    expect(out).toContain("squirrel audit &#x27;https://example.com/&#x27; --max-pages");
   });
 
   test("llm output emits a structured scan-scope element", () => {
