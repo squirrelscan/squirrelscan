@@ -28,11 +28,11 @@
  * category hub; `glossary:backlinks` on a rule page. On a rule page a term
  * lists, in a category whose hubs.json entry has `rule_backlinks: true`,
  * `--write` adds the `glossary:backlinks` markers itself, at the end of the
- * `## Related rules` section, and `--check` fails while they are missing. Text
- * outside the markers
- * is hand-written and never touched, except the `title` and `sidebarTitle`
- * frontmatter of a term page and of a hub that carries `hub:` markers, which
- * come from the data files.
+ * `## Related rules` section, and `--check` fails while they are missing.
+ *
+ * Text outside the markers is hand-written and never touched, except the
+ * `title` and `sidebarTitle` frontmatter of a term page and of a hub that
+ * carries `hub:` markers, which come from the data files.
  *
  * `--check` (run by `bun run check` and `make validate`) exits 1 with
  * `file:line: message` for:
@@ -1298,6 +1298,8 @@ function plan(root: string): Plan {
       markerProblems.length === 0 && blocks.length > 0
         ? applyBlocks(base, blocks, (k) => renderBlock(model, k, page.file))
         : base;
+    // A just-inserted block is already reported as missing above; reporting it
+    // again as out of date would say the same thing twice.
     if (next !== page.source && base === page.source) {
       for (const block of blocks) {
         const fresh = applyBlocks(page.source, [block], (k) =>

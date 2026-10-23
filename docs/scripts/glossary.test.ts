@@ -961,6 +961,23 @@ describe("rule page backlinks (rule_backlinks)", () => {
     expect(messages(dir)).toEqual([]);
   });
 
+  test("a JSX component that ends the section stays whole: the block goes after it", () => {
+    const dir = docs({
+      terms: [SOLO],
+      hubs: ON,
+      files: {
+        "rules/crawl/robots-txt.mdx": withRelated(
+          "## Related rules\n\n- one\n\n<Note>\n  See also the sitemap rules.\n</Note>\n\n## References\n",
+        ),
+      },
+    });
+    writeGlossary(dir);
+    expect(read(dir, "rules/crawl/robots-txt.mdx")).toContain(
+      "</Note>\n\n{/* glossary:backlinks:start */}\n\nGlossary: [robots.txt](/glossary#robots-txt).\n\n{/* glossary:backlinks:end */}\n\n## References",
+    );
+    expect(messages(dir)).toEqual([]);
+  });
+
   test("an existing block is kept where it is and only refilled", () => {
     const dir = docs({
       terms: [SOLO],
