@@ -1,0 +1,81 @@
+---
+title: "Organization schema: logo, sameAs and one stable @id"
+description: "Organization schema names the business behind a site, with its logo, contact points and sameAs profiles. What Google uses and how to declare it once."
+sidebarTitle: "Organization schema"
+---
+
+**Organization schema** is schema.org `Organization` structured data that names the business or institution behind a site, with properties such as its `url`, `logo`, contact points and `sameAs` links to its profiles elsewhere.
+
+Google's Organization documentation lists no required properties. It recommends adding the ones that apply, and says the markup can help Google understand the organization's administrative details and disambiguate it in search results, including the logo it shows. `sameAs` lists URLs of pages about the same organization, such as its LinkedIn or Wikidata entry. A business with premises customers visit uses a `LocalBusiness` subtype instead, which is still an organization.
+
+{/* glossary:hub:start */}
+
+Category: [Structured Data](/rules/schema)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+The organization is the publisher of every article and the owner of the site, so other markup points at it. That works best when it is declared once, with a stable `@id`, and referenced everywhere else. The common failures are the opposite: no organization at all on a site that sells things, a full copy of the block on every page with slightly different logos, or two plugins each declaring their own version. `sameAs` is the corroboration, the links that say this is the same company that has these profiles.
+
+## How squirrelscan checks it
+
+[schema/organization](/rules/schema/organization) reads each page's `Organization` or `Corporation` node and warns when `name` or `url` is missing. It notes a missing `logo` and an empty `sameAs` at info level. When the audit knows the site's official social accounts, it warns about any that `sameAs` leaves out. Two rules read the site-wide [entity](/glossary/entity) map. [schema/entity-organization-missing](/rules/schema/entity-organization-missing) notes a site whose markup presents it as a business, through `AboutPage`, `ContactPage`, `Product` or `Offer` entities, but declares no organization. [schema/entity-sameas-missing](/rules/schema/entity-sameas-missing) notes a primary organization with no `sameAs`. [social/social-profiles](/rules/social/social-profiles) looks for links to seven social platforms in each page's markup, and checks known official accounts against them.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Organization schema: name, url, logo and sameAs checks](/rules/schema/organization) | Organization JSON-LD missing name or url, with no logo, or a sameAs list that omits a social profile the site clearly runs. squirrel finds all three. | info |
+| [A business with nothing to attach its reputation to](/rules/schema/entity-organization-missing) | This site has the pages a business has and no Organization entity for a search engine to hang any of it on. | info |
+| [Your organization is not connected to anything that corroborates it](/rules/schema/entity-sameas-missing) | sameAs is how a search engine learns the company on your site is the company on LinkedIn and Wikidata. Without it the entity stands alone. | info |
+| [Social profile links: which platforms a page links to](/rules/social/social-profiles) | Linking your official accounts confirms which ones are yours. squirrel detects profile links and cross-checks the accounts the audit knows about. | info |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Declare it once, with an absolute `@id`, and reference it elsewhere:
+
+```json
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "@id": "https://example.com/#organization",
+  "name": "Acme Coffee",
+  "url": "https://example.com/",
+  "logo": "https://example.com/logo.png",
+  "sameAs": [
+    "https://www.linkedin.com/company/acme-coffee",
+    "https://github.com/acme-coffee"
+  ]
+}
+```
+
+Put the full block on the homepage ([the organization fix](/rules/schema/organization#how-to-fix-it)). On other pages, refer to it as `{ "@id": "https://example.com/#organization" }`, for example as an article's `publisher` ([the missing organization fix](/rules/schema/entity-organization-missing#how-to-fix-it)). List every profile that is genuinely about this organization in `sameAs` ([the sameAs fix](/rules/schema/entity-sameas-missing#how-to-fix-it)), and link the same accounts from the footer ([the social profiles fix](/rules/social/social-profiles#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include schema/organization,schema/entity-organization-missing,schema/entity-sameas-missing,social/social-profiles
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Entity](/glossary/entity): A thing a site describes in structured data, such as an organization, person or product, identified across pages so search engines and agents can tell it is one thing.
+- [LocalBusiness schema](/glossary/local-business-schema): LocalBusiness structured data with address, opening hours and geo coordinates for a physical business.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Organization structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/organization)
+- [Organization, schema.org](https://schema.org/Organization)

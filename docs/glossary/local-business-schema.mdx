@@ -1,0 +1,82 @@
+---
+title: "LocalBusiness schema: address, hours and where to put it"
+description: "LocalBusiness schema describes a physical business: its address, hours, phone and coordinates. What Google requires and where on the site to put it."
+sidebarTitle: "LocalBusiness schema"
+---
+
+**LocalBusiness schema** is schema.org `LocalBusiness` structured data, or one of its subtypes such as `Restaurant`, `Dentist` or `Plumber`, that describes a business people can visit or call: its address, opening hours, phone number and location.
+
+Google's local business documentation requires a `name` and an `address` as a `PostalAddress`, and recommends properties such as `telephone`, `openingHoursSpecification`, `geo`, `url` and `priceRange`. It also suggests following the Organization recommendations alongside these. A business can declare several types at once, such as an electrician that is also a plumber. Service-area businesses without a public storefront are a known gap. squirrelscan accepts an `areaServed` declaration where Google's reference expects an address.
+
+{/* glossary:hub:start */}
+
+Category: [Local SEO](/rules/local)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+For a business with premises, this markup is how the site states its own name, address, hours and phone number in a form machines can read. That only helps when it is the same everywhere. The common failures are an address with missing parts, a business that is marked up on every page in full rather than once and referenced, and details in the markup that differ from what the page or the business listing says. The [NAP consistency](/glossary/nap-consistency) page covers that last problem.
+
+## How squirrelscan checks it
+
+[schema/local-business](/rules/schema/local-business) finds the page's first node of a recognised `LocalBusiness` type, including inside an `@graph`, and warns when it has no `name`. It warns when an address is present but no entry has a street, locality and postal code. It also warns when there is neither an address nor an `areaServed` (or the older `serviceArea`), and notes missing `geo` and other recommended properties at info level. [schema/entity-local-business-per-page](/rules/schema/entity-local-business-per-page) reads the site-wide entity map and, on crawls of five pages or more, warns when one business is declared in full on 80% or more of them. Declaring it on the homepage and the contact page is correct and passes. [local/nap-consistency](/rules/local/nap-consistency) compares the primary phone number and postal address across pages, from `tel:` links and JSON-LD.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [LocalBusiness schema: required name, address or areaServed](/rules/schema/local-business) | LocalBusiness markup with no name, an incomplete PostalAddress, or neither an address nor a service area. squirrel checks all three. | warning |
+| [The whole LocalBusiness block, on every single page](/rules/schema/entity-local-business-per-page) | Declaring the business in full on every page is the default of most page builders, and it is why so many local sites disagree with themselves about their own phone number. | warning |
+| [NAP consistency: same name, address and phone everywhere](/rules/local/nap-consistency) | One phone number or address written several ways across a site. squirrel finds the site norm and lists every page that disagrees with it. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Declare the business in full once, on the homepage or the location page:
+
+```json
+{
+  "@context": "https://schema.org",
+  "@type": "Plumber",
+  "@id": "https://example.com/#business",
+  "name": "Acme Plumbing",
+  "telephone": "+14155550142",
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "1 Market Street",
+    "addressLocality": "San Francisco",
+    "postalCode": "94105"
+  }
+}
+```
+
+A service-area business can use `areaServed` instead of a street address ([the LocalBusiness fix](/rules/schema/local-business#how-to-fix-it)). On every other page, refer to it with `{ "@id": "https://example.com/#business" }` ([the per-page fix](/rules/schema/entity-local-business-per-page#how-to-fix-it)). Render the visible contact block and the markup from one source ([the NAP fix](/rules/local/nap-consistency#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include schema/local-business,schema/entity-local-business-per-page,local/nap-consistency
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [NAP consistency](/glossary/nap-consistency): Name, address and phone number stated the same way across a site's pages, schema and listings.
+- [Organization schema](/glossary/organization-schema): Organization structured data naming the business behind a site, its logo, contact points and sameAs profiles.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Local business structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/local-business)
+- [LocalBusiness, schema.org](https://schema.org/LocalBusiness)
+- [PostalAddress, schema.org](https://schema.org/PostalAddress)

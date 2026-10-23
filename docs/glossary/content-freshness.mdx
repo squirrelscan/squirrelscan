@@ -1,0 +1,75 @@
+---
+title: "Content freshness: dates that agree with each other"
+description: "Content freshness is how current a page is and how consistently it says so: visible dates, dateModified, sitemap lastmod and the copyright year."
+sidebarTitle: "Content freshness"
+---
+
+**Content freshness** is how current a page is, and how consistently it says so across the places a date appears: the visible byline, `datePublished` and `dateModified` in structured data, the sitemap `lastmod` and the copyright year in the footer.
+
+A dated page can carry its date in five places, and each is read by someone different. Readers see the byline. Search engines read the structured data and the sitemap, and Google's Article documentation recommends `datePublished` and `dateModified`. The HTTP `Last-Modified` header is for caches. A footer year is read by people deciding whether anyone still maintains the site.
+
+{/* glossary:hub:start */}
+
+Category: [Content](/rules/content)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+Fresh is not the same as recent. Google's helpful content guide lists, among the things to avoid, changing the date of pages to make them seem fresh when the content has not substantially changed. Its 2023 guidance on `lastmod` says it stops trusting dates that do not match reality. The damage usually comes from disagreement rather than age. A byline says March, the schema says January, the sitemap says yesterday because it is stamped at build time, and the footer says 2022. Each one on its own looks harmless.
+
+## How squirrelscan checks it
+
+[content/freshness](/rules/content/freshness) notes which date signals a page has: a `Last-Modified` header, schema dates, `<time datetime>` elements and Open Graph article dates. It reports at info level when there are none. [eeat/content-dates](/rules/eeat/content-dates) measures the share of content pages with a published date and with a modified date, from schema or visible date markup, and warns when published-date coverage is below 80%. [content/date-agreement](/rules/content/date-agreement) compares the visible date with the schema dates on the node that describes the page, and warns when they disagree beyond a tolerance, or when an article has a schema date but shows the reader none. [content/stale-copyright](/rules/content/stale-copyright) reads the footer only and warns when its copyright year is behind the current one. [crawl/sitemap-lastmod-drift](/rules/crawl/sitemap-lastmod-drift) compares each URL's sitemap `lastmod` with the page's own date.
+
+squirrelscan does not judge whether content is out of date. It checks whether the dates are present and agree.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Freshness signals: the dates a page publishes about itself](/rules/content/freshness) | squirrel inventories the date signals on a page: the Last-Modified header, schema dates, time elements and Open Graph article dates. | info |
+| [datePublished and dateModified across content pages](/rules/eeat/content-dates) | Undated content leaves a reader guessing whether it is current. squirrel measures how much of your content carries each date. | warning |
+| [Visible date disagrees with schema: which date is wrong](/rules/content/date-agreement) | A page states its date in several places and presence checks pass as soon as one exists. squirrel compares the byline, the schema and the URL year. | warning |
+| [Footer copyright year behind the current year](/rules/content/stale-copyright) | An old year in the footer is the cheapest signal that a site is abandoned. squirrel reads the footer only, so dated body copy is left alone. | warning |
+| [Sitemap lastmod disagrees with the page's dateModified](/rules/crawl/sitemap-lastmod-drift) | When lastmod and the page's own dateModified disagree, one of them is wrong. squirrel compares them per URL and separates the two directions. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Drive every date from one content timestamp, and show it:
+
+```html
+<time datetime="2026-03-12">12 March 2026</time>
+```
+
+Put the same value in the Article schema, and move `dateModified` only when the content changes substantially ([the freshness fix](/rules/content/freshness#how-to-fix-it), [the dates fix](/rules/eeat/content-dates#how-to-fix-it)). When the byline and the schema disagree, find the field each one renders from ([the agreement fix](/rules/content/date-agreement#how-to-fix-it)). Render the footer year at build time or use a range ([the copyright fix](/rules/content/stale-copyright#how-to-fix-it)), and take sitemap `lastmod` from the same timestamp ([the drift fix](/rules/crawl/sitemap-lastmod-drift#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include content/freshness,eeat/content-dates,content/date-agreement,content/stale-copyright,crawl/sitemap-lastmod-drift
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Sitemap lastmod](/glossary#lastmod): The optional `<lastmod>` date on a sitemap URL entry, meant to say when the page content last changed.
+- [E-E-A-T](/glossary/e-e-a-t): Experience, expertise, authoritativeness and trustworthiness: the qualities Google's quality raters are told to assess, with trust at the centre.
+- [Structured data](/glossary/structured-data): Machine-readable statements about a page's content, usually schema.org vocabulary in JSON-LD, that search engines and agents can parse.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Creating helpful, reliable, people-first content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+- [Article structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/article)
+- [Best practices for setting the lastmod element, Google Search Central](https://developers.google.com/search/blog/2023/06/sitemaps-lastmod-ping)

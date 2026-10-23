@@ -1,0 +1,76 @@
+---
+title: "Rich results: eligibility, markup and what blocks them"
+description: "Rich results are search features such as stars, breadcrumbs, prices and video thumbnails that Google can show when a page has eligible structured data."
+sidebarTitle: "Rich results"
+---
+
+**Rich results** are the enhanced search listings, such as review stars, breadcrumb trails, product prices and video thumbnails, that Google can show for a page whose structured data makes it eligible.
+
+Each feature has its own documented markup in Google Search Central, with required and recommended properties, and its own policies. Eligibility is all the markup buys. Google's structured data guidelines say it does not guarantee that a page will show a rich result even when the markup is correct, because the results are tailored to the search. A structured data manual action costs eligibility for rich results, and Google says it does not affect how the page ranks in web search.
+
+{/* glossary:hub:start */}
+
+Category: [Structured Data](/rules/schema)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+A rich result carries more information than a plain link. The markup has to be honest. Google's guidelines say a page can lose eligibility when the structured data describes content hidden from the user or is misleading. A star rating that readers cannot see on the page, or a sitewide rating stamped on every page, is the common case. Markup on a page that cannot be indexed produces nothing, because a rich result appears in search results and the page has to be in the index first.
+
+## How squirrelscan checks it
+
+squirrelscan checks the markup against its own required sets, which do not always match Google's. [schema/product](/rules/schema/product) wants `name` and `image` and checks the offer's price and availability. [schema/review](/rules/schema/review) checks that an `AggregateRating` has a value and a count, and that each review has an author and a rating. [schema/breadcrumb](/rules/schema/breadcrumb) checks `BreadcrumbList` items and their numbering, [schema/video](/rules/schema/video) checks `VideoObject` properties and the ISO 8601 duration, and [schema/article](/rules/schema/article) wants `headline`, `author` and a valid `datePublished`. [schema/rating-scope](/rules/schema/rating-scope) warns when a rating is not visible anywhere on the page, or sits on a page such as a privacy policy that cannot be rated. [crawl/schema-noindex-conflict](/rules/crawl/schema-noindex-conflict) fails a page that carries rich-result types but cannot be indexed.
+
+None of the rules can tell you whether Google will show a rich result. Google's Rich Results Test checks eligibility for its features, and even a pass is no guarantee.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Product schema: name, image, offers and review checks](/rules/schema/product) | Product markup with no name or image, an Offer missing price or availability, and no rating data. squirrel checks each product page. | warning |
+| [AggregateRating: ratingValue, ratingCount and review checks](/rules/schema/review) | Rating markup missing ratingValue or a review count, and Review nodes with no author or reviewRating. squirrel checks both shapes. | warning |
+| [BreadcrumbList schema: positions, names and what breaks](/rules/schema/breadcrumb) | Breadcrumb markup with no itemListElement, items missing position or name, or positions out of order. squirrel checks every non-homepage URL. | info |
+| [VideoObject schema: required props and duration format](/rules/schema/video) | A page with an embedded video and no VideoObject markup, or markup missing thumbnailUrl, uploadDate or an ISO 8601 duration. squirrel checks both. | warning |
+| [Article schema: headline, author and datePublished checks](/rules/schema/article) | Article JSON-LD missing headline, author or datePublished, or carrying a date that is not ISO 8601. squirrel checks both on every page. | warning |
+| [AggregateRating on the wrong page: visible and on-topic](/rules/schema/rating-scope) | A sitewide star rating stamped on privacy, terms and blog pages, or one no reader can see. squirrel flags both as policy risks. | warning |
+| [Rich result schema on a noindexed page: wasted markup](/rules/crawl/schema-noindex-conflict) | Structured data on a page search engines cannot index will never produce a rich result. squirrel finds pages carrying both. | error |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Mark up what the page shows, on the page it describes, and print the same numbers for readers:
+
+```html
+<p>Rated 4.7 out of 5 from 218 reviews</p>
+```
+
+Attach a rating to the product or business it rates, not to the site ([the rating scope fix](/rules/schema/rating-scope#how-to-fix-it), [the review fix](/rules/schema/review#how-to-fix-it)). Keep prices and availability in step with the page ([the product fix](/rules/schema/product#how-to-fix-it)). Number breadcrumb positions from 1 as numbers ([the breadcrumb fix](/rules/schema/breadcrumb#how-to-fix-it)). Emit dates and durations from a formatter ([the article fix](/rules/schema/article#how-to-fix-it), [the video fix](/rules/schema/video#how-to-fix-it)). Decide whether a noindexed page should rank or lose its markup ([the noindex fix](/rules/crawl/schema-noindex-conflict#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include schema/product,schema/review,schema/breadcrumb,schema/video,schema/article,schema/rating-scope,crawl/schema-noindex-conflict
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Structured data](/glossary/structured-data): Machine-readable statements about a page's content, usually schema.org vocabulary in JSON-LD, that search engines and agents can parse.
+- [Product schema](/glossary/product-schema): Product structured data with offers, price, availability and reviews, used for product rich results and merchant listings.
+
+{/* glossary:related:end */}
+
+## References
+
+- [General structured data guidelines, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/sd-policies)
+- [Structured data markup that Google Search supports, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/search-gallery)
+- [Review snippet structured data, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/review-snippet)

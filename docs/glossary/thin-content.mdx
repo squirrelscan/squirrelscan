@@ -1,0 +1,70 @@
+---
+title: "Thin content: what it is and how audits measure it"
+description: "Thin content is a page with too little substance to be useful. Google has no preferred word count, so squirrelscan measures length and the site's own norm."
+sidebarTitle: "Thin content"
+---
+
+**Thin content** is a page with too little substance to be useful to the person who lands on it: a stub, a near-empty template, or a page that exists for navigation rather than to answer anything.
+
+There is no official word count behind the term. Google's guide to helpful content asks site owners whether they are writing to a word count because they heard Google prefers one, and answers in brackets: "No, we don't." What the guide asks instead is whether a page gives a complete answer, or leaves the reader needing to search again. Word count is a proxy for that, a useful but rough one.
+
+{/* glossary:hub:start */}
+
+Category: [Content](/rules/content)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+A thin page disappoints the reader who arrives from search, and a site with many of them is harder to trust as a whole. The causes are usually structural. A CMS creates a page per tag or location with nothing on it, a product range shares one paragraph, or a migration leaves stubs behind. Length on its own is the wrong target, though. A category listing, a contact page or a short definition can be complete at 150 words, and padding a page to a number makes it worse.
+
+## How squirrelscan checks it
+
+Two rules approach it from different sides, and at the defaults they never both warn on the same page. [content/word-count](/rules/content/word-count) warns on a page under 300 words, notes one under 500 at info level, and both thresholds are configurable. [content/thin-vs-site-norm](/rules/content/thin-vs-site-norm) compares each page with others of the same page type on the same site. It needs at least 10 crawled pages and 8 pages of a type with a clear norm, and flags a page only when it is under half the median for its type and well below the spread of that group. So a 400-word article on a site whose articles run 1,800 words is reported, while a 400-word product page among 300-word product pages is not. Pages under 300 words are left to the first rule.
+
+The word count rule skips noindexed pages on a site that is itself indexed, since login and sign-up pages are short by design.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Thin content: the 300 word floor and what to do below it](/rules/content/word-count) | A page under a few hundred words rarely answers the question it ranks for. squirrel counts the words and reports against two thresholds. | warning |
+| [Thin against your own site: outliers by page type](/rules/content/thin-vs-site-norm) | A 200 word product page is normal and a 200 word article is not. squirrel compares each page against the median for its own page type. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Decide what each flagged page is for. Then expand it, merge it into a fuller page and redirect, or take it out of search:
+
+```html
+<meta name="robots" content="noindex" />
+```
+
+Expand a page to answer the question it exists for, at the depth its siblings have ([the word count fix](/rules/content/word-count#how-to-fix-it), [the site norm fix](/rules/content/thin-vs-site-norm#how-to-fix-it)). Merge thin pages on one topic into one good page with a 301 from the others. Use `noindex` for a page that only exists for navigation. A listing page that is short on purpose is better excluded than padded.
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include content/word-count,content/thin-vs-site-norm
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Duplicate content](/glossary#duplicate-content): The same or near-identical content reachable at more than one URL, or repeated titles and descriptions across pages.
+- [E-E-A-T](/glossary/e-e-a-t): Experience, expertise, authoritativeness and trustworthiness: the qualities Google's quality raters are told to assess, with trust at the centre.
+- [Content gap analysis](/glossary#content-gap): Finding the topics and queries a site's audience searches for that the site does not yet cover.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Creating helpful, reliable, people-first content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)

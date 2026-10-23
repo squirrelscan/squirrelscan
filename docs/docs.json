@@ -670,22 +670,21 @@
           {
             "group": "SEO",
             "pages": [
-              "glossary/anchor-text",
-              "glossary/broken-link",
-              "glossary/character-encoding",
-              "glossary/duplicate-content",
+              "glossary/content-freshness",
+              "glossary/e-e-a-t",
+              "glossary/entity",
               "glossary/geo-meta-tags",
-              "glossary/heading-hierarchy",
-              "glossary/hreflang",
-              "glossary/internal-linking",
+              "glossary/entity-id",
               "glossary/json-ld",
-              "glossary/meta-description",
-              "glossary/open-graph",
-              "glossary/orphan-page",
+              "glossary/local-business-schema",
+              "glossary/nap-consistency",
+              "glossary/organization-schema",
+              "glossary/product-schema",
+              "glossary/rich-results",
               "glossary/robots-txt",
               "glossary/structured-data",
-              "glossary/title-tag",
-              "glossary/url-slug"
+              "glossary/thin-content",
+              "glossary/ymyl"
             ]
           },
           {

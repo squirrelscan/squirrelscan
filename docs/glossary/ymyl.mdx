@@ -1,0 +1,71 @@
+---
+title: "What is YMYL? Your Money or Your Life content explained"
+description: "YMYL, Your Money or Your Life, is Google's name for topics that could affect a person's health, finances or safety. Why raters hold them higher."
+sidebarTitle: "YMYL"
+---
+
+**YMYL**, short for "Your Money or Your Life", is Google's name for topics that could significantly affect a person's health, financial stability or safety, or the welfare of society.
+
+The term comes from Google's search quality rater guidelines. Their overview says raters apply very high page quality standards to YMYL topics, because low-quality pages on them could harm people. Google's helpful content guide uses the same definition, and says its ranking systems give even more weight to content with strong [E-E-A-T](/glossary/e-e-a-t) on these topics.
+
+{/* glossary:hub:start */}
+
+Category: [E-E-A-T](/rules/eeat)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+A wrong answer about a recipe wastes a dinner. A wrong answer about a dosage, a mortgage or a custody hearing can do lasting damage, which is the reason the bar is higher. For a site that publishes on these topics, what a reader needs to see is the same as on any page, only more of it and more clearly. They need to know who wrote it and with what qualifications, what the claims are based on, when it was last reviewed, and what the content is not, such as "not medical advice". As with E-E-A-T, YMYL is a category raters use, not a score a page receives.
+
+## How squirrelscan checks it
+
+[eeat/ymyl-detection](/rules/eeat/ymyl-detection) scans each page's title, meta description and URL path, not the body, for keywords in three groups: health terms such as `symptoms` and `medication`, finance terms such as `mortgage` and `tax`, and legal terms such as `lawsuit` and `custody`. It reports at info level how many pages match each group. A keyword match is a prompt to look, not a classification: a page that mentions `credit` for an unrelated reason is counted. [eeat/disclaimers](/rules/eeat/disclaimers) looks for a dedicated disclaimer or disclosure page by URL, such as `/medical-disclaimer` or `/affiliate-disclosure`. It runs on sites the audit classifies as YMYL, and an inline disclaimer at the top of an article is not detected.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [YMYL content: what it is and how squirrel detects it](/rules/eeat/ymyl-detection) | Health, finance and legal content is held to a higher standard. squirrel classifies the crawl by keyword and reports which categories it found. | info |
+| [Disclaimers on YMYL content: what to say and where](/rules/eeat/disclaimers) | Health, finance and legal content needs to say what it is not. squirrel looks for a dedicated disclaimer page by its URL. | info |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Where the categories are right, apply the stricter standard to those sections. Put the disclaimer where readers look before they act:
+
+```html
+<p class="disclaimer">
+  This article is general information and is not medical advice.
+  Speak to your doctor about your own situation.
+</p>
+```
+
+Publish a disclaimer page and link it from the footer as well ([the disclaimer fix](/rules/eeat/disclaimers#how-to-fix-it)). Name authors with relevant credentials, cite sources a reader can check, and show a visible review date ([the YMYL fix](/rules/eeat/ymyl-detection#how-to-fix-it)). Where the keyword scan caught an incidental mention, there is nothing to fix.
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include eeat/ymyl-detection,eeat/disclaimers
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [E-E-A-T](/glossary/e-e-a-t): Experience, expertise, authoritativeness and trustworthiness: the qualities Google's quality raters are told to assess, with trust at the centre.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Search Quality Rater Guidelines: an overview, Google (PDF)](https://services.google.com/fh/files/misc/hsw-sqrg.pdf)
+- [Search Quality Evaluator Guidelines, Google (PDF)](https://static.googleusercontent.com/media/guidelines.raterhub.com/en//searchqualityevaluatorguidelines.pdf)
+- [Creating helpful, reliable, people-first content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)

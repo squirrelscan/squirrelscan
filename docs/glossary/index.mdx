@@ -180,6 +180,8 @@ How current a page is and how consistently it says so: visible dates, dateModifi
 
 Checked by [Freshness signals: the dates a page publishes about itself](/rules/content/freshness), [datePublished and dateModified across content pages](/rules/eeat/content-dates), [Visible date disagrees with schema: which date is wrong](/rules/content/date-agreement), [Footer copyright year behind the current year](/rules/content/stale-copyright), [Sitemap lastmod disagrees with the page's dateModified](/rules/crawl/sitemap-lastmod-drift).
 
+[Read the full definition](/glossary/content-freshness).
+
 ### Content gap analysis \{#content-gap\}
 
 Finding the topics and queries a site's audience searches for that the site does not yet cover.
@@ -272,11 +274,15 @@ Also called: EEAT.
 
 Checked by [Author bylines on content pages: what share carry one](/rules/eeat/author-byline), [Author expertise: bio pages and Person schema](/rules/eeat/author-expertise), [About page: what it establishes and how squirrel finds it](/rules/eeat/about-page), [Contact page: finding it and counting the contact methods](/rules/eeat/contact-page), [Authoritative citations: sources a reader can check](/rules/eeat/citations), [Trust signals: reviews, testimonials and social proof](/rules/eeat/trust-signals), [Editorial policy: publishing how the content gets made](/rules/eeat/editorial-policy), [Authority signals: an AI read of authorship and citations](/rules/eeat/authority-signals).
 
+[Read the full definition](/glossary/e-e-a-t).
+
 ### Entity \{#entity\}
 
 A thing a site describes in structured data, such as an organization, person or product, identified across pages so search engines and agents can tell it is one thing.
 
 Checked by [One organization, or sixty? Entities declared without an @id](/rules/schema/entity-identity), [A business with nothing to attach its reputation to](/rules/schema/entity-organization-missing), [Your organization is not connected to anything that corroborates it](/rules/schema/entity-sameas-missing), [The same entity, two different logos](/rules/schema/entity-conflicts), [An Organization on one page, a LocalBusiness on another](/rules/schema/entity-type-drift), [An @id that nothing points at](/rules/schema/entity-orphan).
+
+[Read the full definition](/glossary/entity).
 
 ## F
 
@@ -438,6 +444,8 @@ The JSON-LD @id that gives a node a stable IRI, so other nodes and pages can ref
 
 Checked by [One organization, or sixty? Entities declared without an @id](/rules/schema/entity-identity), [Two plugins, two @ids, one organization split in half](/rules/schema/entity-split-identity), [A publisher that points at nothing](/rules/schema/entity-dangling), [A bare #organization is one entity per page, not one entity](/rules/schema/entity-id-format), [An @id that nothing points at](/rules/schema/entity-orphan).
 
+[Read the full definition](/glossary/entity-id).
+
 ### Image width and height attributes \{#image-dimensions\}
 
 Declared width and height on `<img>` that let the browser reserve space before the file loads, preventing layout shift.
@@ -546,6 +554,8 @@ LocalBusiness structured data with address, opening hours and geo coordinates fo
 
 Checked by [LocalBusiness schema: required name, address or areaServed](/rules/schema/local-business), [The whole LocalBusiness block, on every single page](/rules/schema/entity-local-business-per-page), [NAP consistency: same name, address and phone everywhere](/rules/local/nap-consistency).
 
+[Read the full definition](/glossary/local-business-schema).
+
 ## M
 
 ### Markdown for agents \{#markdown-for-agents\}
@@ -600,6 +610,8 @@ Name, address and phone number stated the same way across a site's pages, schema
 
 Checked by [NAP consistency: same name, address and phone everywhere](/rules/local/nap-consistency), [LocalBusiness schema: required name, address or areaServed](/rules/schema/local-business), [Physical address: PostalAddress and LocalBusiness schema](/rules/eeat/physical-address).
 
+[Read the full definition](/glossary/nap-consistency).
+
 ### noai and noimageai \{#noai\}
 
 Meta robots values some sites use to ask AI systems not to train on their text or images; not part of any standard search engines honour.
@@ -633,6 +645,8 @@ Organization structured data naming the business behind a site, its logo, contac
 Also called: sameAs.
 
 Checked by [Organization schema: name, url, logo and sameAs checks](/rules/schema/organization), [A business with nothing to attach its reputation to](/rules/schema/entity-organization-missing), [Your organization is not connected to anything that corroborates it](/rules/schema/entity-sameas-missing), [Social profile links: which platforms a page links to](/rules/social/social-profiles).
+
+[Read the full definition](/glossary/organization-schema).
 
 ### Orphan page \{#orphan-page\}
 
@@ -687,6 +701,8 @@ Product structured data with offers, price, availability and reviews, used for p
 Also called: review snippet, aggregateRating.
 
 Checked by [Product schema: name, image, offers and review checks](/rules/schema/product), [AggregateRating: ratingValue, ratingCount and review checks](/rules/schema/review), [AggregateRating on the wrong page: visible and on-topic](/rules/schema/rating-scope).
+
+[Read the full definition](/glossary/product-schema).
 
 ## R
 
@@ -745,6 +761,8 @@ Search result features (stars, breadcrumbs, product prices, video thumbnails) th
 Also called: rich snippets, breadcrumb schema.
 
 Checked by [Product schema: name, image, offers and review checks](/rules/schema/product), [AggregateRating: ratingValue, ratingCount and review checks](/rules/schema/review), [BreadcrumbList schema: positions, names and what breaks](/rules/schema/breadcrumb), [VideoObject schema: required props and duration format](/rules/schema/video), [Article schema: headline, author and datePublished checks](/rules/schema/article), [AggregateRating on the wrong page: visible and on-topic](/rules/schema/rating-scope), [Rich result schema on a noindexed page: wasted markup](/rules/crawl/schema-noindex-conflict).
+
+[Read the full definition](/glossary/rich-results).
 
 ### Robots meta tag \{#robots-meta-tag\}
 
@@ -823,6 +841,8 @@ Checked by [Subresource Integrity: which scripts need an integrity hash](/rules/
 A page with too little substantive content to be useful, judged here against word count and the site's own norm.
 
 Checked by [Thin content: the 300 word floor and what to do below it](/rules/content/word-count), [Thin against your own site: outliers by page type](/rules/content/thin-vs-site-norm).
+
+[Read the full definition](/glossary/thin-content).
 
 ### Time to First Byte (TTFB) \{#ttfb\}
 
@@ -955,5 +975,7 @@ Topics that could significantly affect a person's health, finances, safety or so
 Also called: Your Money or Your Life.
 
 Checked by [YMYL content: what it is and how squirrel detects it](/rules/eeat/ymyl-detection), [Disclaimers on YMYL content: what to say and where](/rules/eeat/disclaimers).
+
+[Read the full definition](/glossary/ymyl).
 
 {/* glossary:index:end */}
