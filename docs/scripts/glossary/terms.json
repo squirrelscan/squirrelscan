@@ -1,0 +1,3643 @@
+{
+  "$comment": "Glossary terms: the single source for /glossary, the term pages' generated blocks, hub key terms and rule-page backlinks. Edit here, then run `bun scripts/glossary.ts --write`. format=page gets /glossary/<slug> once that page is written; format=entry is an A to Z entry on /glossary only. rules are docs rule ids (the **Rule ID** row of a rule page). Seeded from the 119-term plan, rule ids verified against the docs rule pages.",
+  "terms": [
+    {
+      "slug": "robots-txt",
+      "term": "robots.txt",
+      "aliases": [],
+      "format": "page",
+      "hub": "crawl",
+      "title": "What is robots.txt? Rules, syntax and common mistakes",
+      "primary_query": "what is robots.txt",
+      "definition": "A plain-text file at the site root that tells crawlers which paths they may fetch, per user-agent token (RFC 9309).",
+      "rules": [
+        "crawl/robots-txt",
+        "crawl/robots-meta-conflict",
+        "crawl/indexability-conflicts",
+        "ax/ai-crawlers",
+        "ax/content-signals"
+      ],
+      "related": [
+        "noindex",
+        "xml-sitemap",
+        "ai-crawler",
+        "content-signals",
+        "crawl-budget"
+      ],
+      "learn": [],
+      "tools": [
+        "https://squirrelscan.com/tools/robots-txt-generator"
+      ],
+      "authority": [
+        "https://developers.google.com/search/docs/crawling-indexing/robots/intro",
+        "https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt",
+        "https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag",
+        "https://developers.google.com/search/docs/crawling-indexing/overview-google-crawlers"
+      ],
+      "grounding_note": "robots.txt controls crawling, not indexing; a blocked URL can still be indexed from links.",
+      "batch": "1-ax-geo"
+    },
+    {
+      "slug": "xml-sitemap",
+      "term": "XML sitemap",
+      "aliases": [
+        "sitemap.xml"
+      ],
+      "format": "page",
+      "hub": "crawl",
+      "title": "What is an XML sitemap? Format, limits and checks",
+      "primary_query": "what is an xml sitemap",
+      "definition": "An XML file listing the URLs a site wants crawled, with optional lastmod dates, referenced from robots.txt or submitted to search engines.",
+      "rules": [
+        "crawl/sitemap-exists",
+        "crawl/sitemap-valid",
+        "crawl/sitemap-coverage",
+        "crawl/sitemap-domain",
+        "crawl/sitemap-4xx",
+        "crawl/noindex-in-sitemap",
+        "crawl/sitemap-lastmod-churn",
+        "crawl/sitemap-lastmod-drift"
+      ],
+      "related": [
+        "robots-txt",
+        "lastmod",
+        "noindex",
+        "indexability"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap",
+        "https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview",
+        "https://developers.google.com/search/blog/2008/01/sitemaps-faqs",
+        "https://developers.google.com/search/docs/crawling-indexing/http-network-errors"
+      ],
+      "grounding_note": null,
+      "batch": "3a-crawl-index"
+    },
+    {
+      "slug": "lastmod",
+      "term": "Sitemap lastmod",
+      "aliases": [],
+      "format": "page",
+      "hub": "crawl",
+      "title": "Sitemap lastmod: what it means and when it is ignored",
+      "primary_query": "sitemap lastmod",
+      "definition": "The optional `<lastmod>` date on a sitemap URL entry, meant to say when the page content last changed.",
+      "rules": [
+        "crawl/sitemap-lastmod-churn",
+        "crawl/sitemap-lastmod-drift"
+      ],
+      "related": [
+        "xml-sitemap",
+        "content-freshness"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/blog/2023/06/sitemaps-lastmod-ping",
+        "https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap",
+        "https://schema.org/dateModified"
+      ],
+      "grounding_note": null,
+      "batch": "3a-crawl-index"
+    },
+    {
+      "slug": "noindex",
+      "term": "noindex",
+      "aliases": [],
+      "format": "page",
+      "hub": "crawl",
+      "title": "What does noindex do? Meta tag, header and conflicts",
+      "primary_query": "noindex meta tag",
+      "definition": "A robots directive, in a meta tag or the X-Robots-Tag header, that asks search engines to keep a page out of their index.",
+      "rules": [
+        "core/robots-meta",
+        "crawl/indexability",
+        "crawl/all-noindex-pages",
+        "crawl/noindex-in-sitemap",
+        "crawl/schema-noindex-conflict",
+        "crawl/robots-meta-conflict"
+      ],
+      "related": [
+        "robots-meta-tag",
+        "x-robots-tag",
+        "robots-txt",
+        "indexability"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag",
+        "https://developers.google.com/search/docs/crawling-indexing/block-indexing",
+        "https://developers.google.com/search/docs/crawling-indexing/robots/intro",
+        "https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap"
+      ],
+      "grounding_note": null,
+      "batch": "3a-crawl-index"
+    },
+    {
+      "slug": "robots-meta-tag",
+      "term": "Robots meta tag",
+      "aliases": [
+        "nosnippet",
+        "max-snippet"
+      ],
+      "format": "page",
+      "hub": "core",
+      "title": "Robots meta tag: directives, defaults and conflicts",
+      "primary_query": "robots meta tag",
+      "definition": "A `<meta name=\"robots\">` tag carrying page-level directives such as noindex, nofollow, nosnippet and max-snippet.",
+      "rules": [
+        "core/robots-meta",
+        "core/nosnippet",
+        "crawl/robots-meta-conflict",
+        "crawl/indexability-conflicts"
+      ],
+      "related": [
+        "noindex",
+        "x-robots-tag",
+        "robots-txt"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag",
+        "https://developers.google.com/search/docs/appearance/snippet",
+        "https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt",
+        "https://developers.google.com/search/docs/crawling-indexing/robots/intro"
+      ],
+      "grounding_note": null,
+      "batch": "3a-crawl-index"
+    },
+    {
+      "slug": "x-robots-tag",
+      "term": "X-Robots-Tag",
+      "aliases": [],
+      "format": "entry",
+      "hub": "crawl",
+      "title": null,
+      "primary_query": "x-robots-tag header",
+      "definition": "An HTTP response header that carries the same directives as the robots meta tag, and works for non-HTML files such as PDFs.",
+      "rules": [
+        "crawl/indexability",
+        "crawl/robots-meta-conflict",
+        "crawl/pdf-size",
+        "crawl/sitemap-coverage"
+      ],
+      "related": [
+        "robots-meta-tag",
+        "noindex"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag",
+        "https://developers.google.com/search/docs/crawling-indexing/block-indexing",
+        "https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt",
+        "https://developers.google.com/search/blog/2026/03/crawler-blog-post"
+      ],
+      "grounding_note": null,
+      "batch": "3a-crawl-index"
+    },
+    {
+      "slug": "indexability",
+      "term": "Indexability",
+      "aliases": [],
+      "format": "page",
+      "hub": "crawl",
+      "title": "What is indexability? Why a page is not indexed",
+      "primary_query": "indexability",
+      "definition": "Whether a crawled URL is eligible to be indexed: reachable, a 200 response, not noindexed, not blocked and not canonicalised elsewhere.",
+      "rules": [
+        "crawl/indexability",
+        "crawl/indexability-conflicts",
+        "crawl/all-noindex-pages",
+        "crawl/robots-meta-conflict"
+      ],
+      "related": [
+        "noindex",
+        "robots-txt",
+        "canonical-url",
+        "http-status-code"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag",
+        "https://developers.google.com/search/docs/crawling-indexing/block-indexing",
+        "https://developers.google.com/search/docs/crawling-indexing/robots/intro",
+        "https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt"
+      ],
+      "grounding_note": null,
+      "batch": "3a-crawl-index"
+    },
+    {
+      "slug": "crawl-budget",
+      "term": "Crawl budget",
+      "aliases": [],
+      "format": "page",
+      "hub": "crawl",
+      "title": "What is crawl budget? When it matters and what wastes it",
+      "primary_query": "what is crawl budget",
+      "definition": "The number of URLs a search engine is willing and able to crawl on a site in a given time, set by crawl capacity and crawl demand.",
+      "rules": [
+        "crawl/redirect-chain",
+        "crawl/sitemap-4xx",
+        "crawl/soft-404",
+        "url/parameters",
+        "links/redirect-chains"
+      ],
+      "related": [
+        "redirect-chain",
+        "soft-404",
+        "url-parameters",
+        "xml-sitemap"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/crawling-indexing/301-redirects",
+        "https://developers.google.com/search/docs/crawling-indexing/large-site-managing-crawl-budget",
+        "https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap",
+        "https://developers.google.com/search/docs/crawling-indexing/http-network-errors"
+      ],
+      "grounding_note": "Google says crawl budget is a concern mainly for very large or fast-changing sites; say so.",
+      "batch": "3a-crawl-index"
+    },
+    {
+      "slug": "soft-404",
+      "term": "Soft 404",
+      "aliases": [],
+      "format": "entry",
+      "hub": "crawl",
+      "title": null,
+      "primary_query": "soft 404",
+      "definition": "A page that tells the visitor it does not exist (or is empty) while the server answers HTTP 200.",
+      "rules": [
+        "crawl/soft-404"
+      ],
+      "related": [
+        "http-status-code",
+        "broken-link",
+        "crawl-budget"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/crawling-indexing/troubleshoot-crawling-errors",
+        "https://developers.google.com/search/docs/crawling-indexing/http-network-errors",
+        "https://developers.google.com/search/docs/crawling-indexing/large-site-managing-crawl-budget"
+      ],
+      "grounding_note": null,
+      "batch": "3a-crawl-index"
+    },
+    {
+      "slug": "redirect-chain",
+      "term": "Redirect chain",
+      "aliases": [],
+      "format": "page",
+      "hub": "crawl",
+      "title": "Redirect chains: what they cost and how to flatten them",
+      "primary_query": "redirect chain",
+      "definition": "A sequence of two or more redirects between the requested URL and the final response.",
+      "rules": [
+        "crawl/redirect-chain",
+        "links/redirect-chains",
+        "crawl/canonical-chain",
+        "perf/js-redirects"
+      ],
+      "related": [
+        "http-status-code",
+        "crawl-budget",
+        "canonical-url",
+        "client-side-redirect"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/crawling-indexing/301-redirects",
+        "https://developers.google.com/search/docs/crawling-indexing/large-site-managing-crawl-budget",
+        "https://developers.google.com/search/docs/crawling-indexing/links-crawlable",
+        "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls"
+      ],
+      "grounding_note": null,
+      "batch": "3a-crawl-index"
+    },
+    {
+      "slug": "http-status-code",
+      "term": "HTTP status code",
+      "aliases": [
+        "4xx error",
+        "5xx error"
+      ],
+      "format": "page",
+      "hub": "links",
+      "title": "HTTP status codes for site audits: 3xx, 4xx and 5xx",
+      "primary_query": "http status codes seo",
+      "definition": "The three-digit code a server returns with every response; 2xx success, 3xx redirect, 4xx client error, 5xx server error.",
+      "rules": [
+        "links/broken-links",
+        "crawl/sitemap-4xx",
+        "crawl/soft-404",
+        "images/broken-images",
+        "reliability/broken-resources"
+      ],
+      "related": [
+        "broken-link",
+        "soft-404",
+        "redirect-chain"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/crawling-indexing/http-network-errors",
+        "https://developers.google.com/search/docs/crawling-indexing/links-crawlable",
+        "https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap",
+        "https://developers.google.com/search/docs/crawling-indexing/large-site-managing-crawl-budget"
+      ],
+      "grounding_note": null,
+      "batch": "3a-crawl-index"
+    },
+    {
+      "slug": "pagination",
+      "term": "Pagination",
+      "aliases": [],
+      "format": "entry",
+      "hub": "crawl",
+      "title": null,
+      "primary_query": "pagination seo canonical",
+      "definition": "Splitting a long list across numbered URLs; each page should be crawlable and canonicalise to itself.",
+      "rules": [
+        "crawl/pagination"
+      ],
+      "related": [
+        "canonical-url",
+        "duplicate-content"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/specialty/ecommerce/pagination-and-incremental-page-loading",
+        "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls"
+      ],
+      "grounding_note": null,
+      "batch": "3a-crawl-index"
+    },
+    {
+      "slug": "googlebot-file-size-limit",
+      "term": "Googlebot file size limit",
+      "aliases": [],
+      "format": "entry",
+      "hub": "crawl",
+      "title": null,
+      "primary_query": "googlebot html size limit",
+      "definition": "The byte limit after which Googlebot stops reading a fetched HTML file or PDF; content past it is not indexed.",
+      "rules": [
+        "crawl/html-size",
+        "crawl/pdf-size"
+      ],
+      "related": [
+        "page-weight",
+        "crawl-budget"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/blog/2026/03/crawler-blog-post",
+        "https://developers.google.com/search/docs/crawling-indexing/large-site-managing-crawl-budget",
+        "https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag"
+      ],
+      "grounding_note": "Quote the limits exactly as the rule pages state them; the limits changed in 2026.",
+      "batch": "3a-crawl-index"
+    },
+    {
+      "slug": "canonical-url",
+      "term": "Canonical URL",
+      "aliases": [
+        "rel=canonical"
+      ],
+      "format": "page",
+      "hub": "core",
+      "title": "What is a canonical URL? rel=canonical explained",
+      "primary_query": "what is a canonical url",
+      "definition": "The URL a page declares, with `<link rel=\"canonical\">` or a Link header, as the preferred address for its content.",
+      "rules": [
+        "core/canonical",
+        "core/canonical-header",
+        "core/canonical-form-drift",
+        "crawl/canonical-chain",
+        "crawl/pagination",
+        "social/og-url-match"
+      ],
+      "related": [
+        "duplicate-content",
+        "trailing-slash",
+        "redirect-chain",
+        "url-parameters"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls",
+        "https://developers.google.com/search/docs/crawling-indexing/canonicalization",
+        "https://developers.google.com/search/docs/specialty/ecommerce/pagination-and-incremental-page-loading",
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel#canonical"
+      ],
+      "grounding_note": null,
+      "batch": "3a-crawl-index"
+    },
+    {
+      "slug": "duplicate-content",
+      "term": "Duplicate content",
+      "aliases": [],
+      "format": "page",
+      "hub": "content",
+      "title": "Duplicate content: causes, myths and how to consolidate",
+      "primary_query": "duplicate content",
+      "definition": "The same or near-identical content reachable at more than one URL, or repeated titles and descriptions across pages.",
+      "rules": [
+        "content/duplicate-title",
+        "content/duplicate-description",
+        "core/title-unique",
+        "core/canonical",
+        "url/trailing-slash",
+        "url/lowercase",
+        "url/parameters"
+      ],
+      "related": [
+        "canonical-url",
+        "title-tag",
+        "meta-description",
+        "trailing-slash"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/appearance/title-link",
+        "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls",
+        "https://developers.google.com/search/docs/specialty/international/localized-versions",
+        "https://developers.google.com/search/docs/appearance/snippet"
+      ],
+      "grounding_note": null,
+      "batch": "3b-onpage-links"
+    },
+    {
+      "slug": "title-tag",
+      "term": "Title tag",
+      "aliases": [],
+      "format": "page",
+      "hub": "core",
+      "title": "Title tag: length, uniqueness and what search shows",
+      "primary_query": "title tag length",
+      "definition": "The `<title>` element in the page head; browsers show it in the tab and search engines usually use it as the result headline.",
+      "rules": [
+        "core/meta-title",
+        "core/title-unique",
+        "content/duplicate-title",
+        "content/title-pattern-outlier"
+      ],
+      "related": [
+        "meta-description",
+        "duplicate-content"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/appearance/title-link",
+        "https://developers.google.com/search/docs/specialty/international/localized-versions",
+        "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls",
+        "https://html.spec.whatwg.org/multipage/semantics.html#the-title-element"
+      ],
+      "grounding_note": null,
+      "batch": "3b-onpage-links"
+    },
+    {
+      "slug": "meta-description",
+      "term": "Meta description",
+      "aliases": [],
+      "format": "page",
+      "hub": "core",
+      "title": "Meta description: length, duplicates and snippets",
+      "primary_query": "meta description length",
+      "definition": "A `<meta name=\"description\">` summary of the page that search engines may use as the result snippet.",
+      "rules": [
+        "core/meta-description",
+        "content/duplicate-description"
+      ],
+      "related": [
+        "title-tag",
+        "duplicate-content"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/appearance/snippet",
+        "https://developers.google.com/search/docs/specialty/international/localized-versions",
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name#description"
+      ],
+      "grounding_note": null,
+      "batch": "3b-onpage-links"
+    },
+    {
+      "slug": "heading-hierarchy",
+      "term": "Heading hierarchy",
+      "aliases": [
+        "H1 tag"
+      ],
+      "format": "page",
+      "hub": "content",
+      "title": "Heading hierarchy: h1 to h6 for people and parsers",
+      "primary_query": "heading hierarchy",
+      "definition": "The nesting of h1 to h6 headings that gives a page its outline for readers, screen readers and parsers.",
+      "rules": [
+        "content/heading-hierarchy",
+        "a11y/heading-order",
+        "a11y/empty-heading",
+        "core/h1"
+      ],
+      "related": [
+        "wcag",
+        "landmark"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/WAI/WCAG22/Understanding/headings-and-labels.html",
+        "https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html",
+        "https://www.w3.org/WAI/WCAG22/Techniques/general/G141",
+        "https://www.w3.org/WAI/WCAG22/Techniques/html/H42"
+      ],
+      "grounding_note": null,
+      "batch": "3b-onpage-links"
+    },
+    {
+      "slug": "character-encoding",
+      "term": "Character encoding",
+      "aliases": [
+        "charset",
+        "mojibake"
+      ],
+      "format": "page",
+      "hub": "core",
+      "title": "Character encoding and mojibake: charset done right",
+      "primary_query": "meta charset utf-8",
+      "definition": "The mapping from bytes to characters (normally UTF-8) declared in the Content-Type header or a meta charset tag; a mismatch produces mojibake.",
+      "rules": [
+        "core/charset",
+        "content/mojibake"
+      ],
+      "related": [],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta#charset",
+        "https://developer.mozilla.org/en-US/docs/Glossary/Character_encoding",
+        "https://html.spec.whatwg.org/multipage/semantics.html#charset"
+      ],
+      "grounding_note": null,
+      "batch": "3b-onpage-links"
+    },
+    {
+      "slug": "open-graph",
+      "term": "Open Graph",
+      "aliases": [
+        "og tags",
+        "og:image",
+        "Twitter card"
+      ],
+      "format": "page",
+      "hub": "social",
+      "title": "Open Graph tags: what each one controls in a share",
+      "primary_query": "open graph meta tags",
+      "definition": "A set of og: meta properties (title, description, image, url) that controls how a link previews when it is shared.",
+      "rules": [
+        "core/og-tags",
+        "social/og-image-size",
+        "social/og-url-match",
+        "social/asset-divergence",
+        "core/twitter-cards"
+      ],
+      "related": [
+        "canonical-url"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls",
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name/theme-color",
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name",
+        "https://html.spec.whatwg.org/multipage/semantics.html#the-meta-element"
+      ],
+      "grounding_note": null,
+      "batch": "3b-onpage-links"
+    },
+    {
+      "slug": "internal-linking",
+      "term": "Internal linking",
+      "aliases": [],
+      "format": "page",
+      "hub": "links",
+      "title": "Internal linking: what counts and what a crawl can see",
+      "primary_query": "internal linking",
+      "definition": "Links between pages of the same site, which carry crawlers and readers through it and signal which pages matter.",
+      "rules": [
+        "links/internal-links",
+        "links/weak-internal-links",
+        "links/no-contextual-inbound",
+        "links/dead-end-pages",
+        "links/orphan-pages",
+        "links/nofollow-internal"
+      ],
+      "related": [
+        "orphan-page",
+        "anchor-text",
+        "nofollow",
+        "broken-link"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/crawling-indexing/links-crawlable",
+        "https://developers.google.com/search/docs/crawling-indexing/qualify-outbound-links"
+      ],
+      "grounding_note": null,
+      "batch": "3b-onpage-links"
+    },
+    {
+      "slug": "orphan-page",
+      "term": "Orphan page",
+      "aliases": [],
+      "format": "page",
+      "hub": "links",
+      "title": "What is an orphan page? Finding and fixing them",
+      "primary_query": "orphan pages",
+      "definition": "A page that no other crawled page links to, so crawlers and readers only reach it through a sitemap or a direct URL.",
+      "rules": [
+        "links/orphan-pages",
+        "links/no-contextual-inbound",
+        "integrity/orphan-page"
+      ],
+      "related": [
+        "internal-linking",
+        "xml-sitemap",
+        "hacked-site"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/crawling-indexing/links-crawlable",
+        "https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview",
+        "https://developers.google.com/search/docs/essentials/spam-policies#hacked-content"
+      ],
+      "grounding_note": null,
+      "batch": "3b-onpage-links"
+    },
+    {
+      "slug": "broken-link",
+      "term": "Broken link",
+      "aliases": [
+        "dead link"
+      ],
+      "format": "page",
+      "hub": "links",
+      "title": "Broken links: internal, external and how to find them",
+      "primary_query": "broken links",
+      "definition": "A link whose target answers with an error, does not resolve, or is malformed.",
+      "rules": [
+        "links/broken-links",
+        "links/broken-external-links",
+        "links/dead-links",
+        "links/invalid-links",
+        "links/broken-anchors",
+        "images/broken-images"
+      ],
+      "related": [
+        "http-status-code",
+        "anchor-link",
+        "redirect-chain"
+      ],
+      "learn": [],
+      "tools": [
+        "https://squirrelscan.com/tools/broken-link-checker"
+      ],
+      "authority": [
+        "https://www.w3.org/WAI/WCAG22/Understanding/bypass-blocks.html",
+        "https://developers.google.com/search/docs/crawling-indexing/http-network-errors",
+        "https://developers.google.com/search/docs/crawling-indexing/links-crawlable",
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/a"
+      ],
+      "grounding_note": null,
+      "batch": "3b-onpage-links"
+    },
+    {
+      "slug": "anchor-text",
+      "term": "Anchor text",
+      "aliases": [],
+      "format": "page",
+      "hub": "links",
+      "title": "Anchor text: descriptive links for search and screen readers",
+      "primary_query": "anchor text",
+      "definition": "The visible, clickable text of a link, which tells readers and search engines what the target is about.",
+      "rules": [
+        "links/anchor-text",
+        "a11y/link-text",
+        "a11y/identical-links-same-purpose"
+      ],
+      "related": [
+        "internal-linking",
+        "accessible-name"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/WAI/WCAG22/Understanding/link-purpose-in-context.html",
+        "https://www.w3.org/WAI/WCAG22/Techniques/html/H30",
+        "https://www.w3.org/WAI/WCAG22/Understanding/consistent-identification.html",
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/a"
+      ],
+      "grounding_note": null,
+      "batch": "3b-onpage-links"
+    },
+    {
+      "slug": "nofollow",
+      "term": "rel=nofollow",
+      "aliases": [],
+      "format": "entry",
+      "hub": "links",
+      "title": null,
+      "primary_query": "rel nofollow",
+      "definition": "A link attribute value asking search engines not to associate the linking page with the target; a hint, not a block.",
+      "rules": [
+        "links/nofollow-internal",
+        "links/external-links"
+      ],
+      "related": [
+        "internal-linking",
+        "noopener"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/crawling-indexing/qualify-outbound-links"
+      ],
+      "grounding_note": null,
+      "batch": "3b-onpage-links"
+    },
+    {
+      "slug": "anchor-link",
+      "term": "Fragment link",
+      "aliases": [
+        "jump link",
+        "#anchor"
+      ],
+      "format": "entry",
+      "hub": "links",
+      "title": null,
+      "primary_query": "anchor link not working",
+      "definition": "A link to an id within a page (#section); it is broken when no element on the target page carries that id.",
+      "rules": [
+        "links/broken-anchors"
+      ],
+      "related": [
+        "broken-link"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/WAI/WCAG22/Understanding/bypass-blocks.html",
+        "https://html.spec.whatwg.org/multipage/browsing-the-web.html#scroll-to-fragid"
+      ],
+      "grounding_note": null,
+      "batch": "3b-onpage-links"
+    },
+    {
+      "slug": "noopener",
+      "term": "rel=noopener",
+      "aliases": [],
+      "format": "entry",
+      "hub": "security",
+      "title": null,
+      "primary_query": "rel noopener",
+      "definition": "A link attribute that stops a page opened with `target=_blank` from controlling the page that opened it (tabnabbing).",
+      "rules": [
+        "security/new-tab"
+      ],
+      "related": [
+        "nofollow",
+        "security-headers"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel/noopener",
+        "https://html.spec.whatwg.org/multipage/links.html#link-type-noopener"
+      ],
+      "grounding_note": null,
+      "batch": "5-security"
+    },
+    {
+      "slug": "thin-content",
+      "term": "Thin content",
+      "aliases": [],
+      "format": "page",
+      "hub": "content",
+      "title": "Thin content: what it is and how audits measure it",
+      "primary_query": "thin content",
+      "definition": "A page with too little substantive content to be useful, judged here against word count and the site's own norm.",
+      "rules": [
+        "content/word-count",
+        "content/thin-vs-site-norm"
+      ],
+      "related": [
+        "duplicate-content",
+        "e-e-a-t",
+        "content-gap"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/fundamentals/creating-helpful-content"
+      ],
+      "grounding_note": null,
+      "batch": "4-schema-trust"
+    },
+    {
+      "slug": "keyword-stuffing",
+      "term": "Keyword stuffing",
+      "aliases": [],
+      "format": "entry",
+      "hub": "content",
+      "title": null,
+      "primary_query": "keyword stuffing",
+      "definition": "Repeating a term far beyond natural use in the hope of ranking for it, which Google lists as spam.",
+      "rules": [
+        "content/keyword-stuffing",
+        "content/hidden-text"
+      ],
+      "related": [
+        "thin-content"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/essentials/spam-policies#keyword-stuffing",
+        "https://developers.google.com/search/docs/fundamentals/creating-helpful-content",
+        "https://developers.google.com/search/docs/essentials/spam-policies"
+      ],
+      "grounding_note": null,
+      "batch": "4-schema-trust"
+    },
+    {
+      "slug": "readability",
+      "term": "Readability",
+      "aliases": [
+        "reading level",
+        "Flesch reading ease"
+      ],
+      "format": "entry",
+      "hub": "content",
+      "title": null,
+      "primary_query": "flesch reading ease",
+      "definition": "How hard a text is to read, estimated from sentence and word length with formulas such as Flesch reading ease.",
+      "rules": [
+        "content/reading-level"
+      ],
+      "related": [
+        "thin-content"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/TR/WCAG22/#readable"
+      ],
+      "grounding_note": null,
+      "batch": "4-schema-trust"
+    },
+    {
+      "slug": "content-freshness",
+      "term": "Content freshness",
+      "aliases": [],
+      "format": "page",
+      "hub": "content",
+      "title": "Content freshness: dates that agree with each other",
+      "primary_query": "content freshness",
+      "definition": "How current a page is and how consistently it says so: visible dates, dateModified, sitemap lastmod and copyright year.",
+      "rules": [
+        "content/freshness",
+        "eeat/content-dates",
+        "content/date-agreement",
+        "content/stale-copyright",
+        "crawl/sitemap-lastmod-drift"
+      ],
+      "related": [
+        "lastmod",
+        "e-e-a-t",
+        "structured-data"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/appearance/structured-data/article",
+        "https://developers.google.com/search/docs/fundamentals/creating-helpful-content",
+        "https://developers.google.com/search/blog/2023/06/sitemaps-lastmod-ping",
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Last-Modified"
+      ],
+      "grounding_note": null,
+      "batch": "4-schema-trust"
+    },
+    {
+      "slug": "placeholder-content",
+      "term": "Placeholder content",
+      "aliases": [
+        "lorem ipsum"
+      ],
+      "format": "entry",
+      "hub": "content",
+      "title": null,
+      "primary_query": "lorem ipsum on live site",
+      "definition": "Template filler left in production: lorem ipsum text, stock placeholder images, example phone numbers and emails.",
+      "rules": [
+        "content/placeholder-text",
+        "content/placeholder-media",
+        "content/placeholder-contact"
+      ],
+      "related": [
+        "thin-content",
+        "html-validation"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/fundamentals/creating-helpful-content"
+      ],
+      "grounding_note": null,
+      "batch": "4-schema-trust"
+    },
+    {
+      "slug": "html-validation",
+      "term": "HTML validity",
+      "aliases": [
+        "doctype"
+      ],
+      "format": "entry",
+      "hub": "content",
+      "title": null,
+      "primary_query": "html validation",
+      "definition": "Whether the markup parses as intended: closed elements, head-only tags in the head, and no raw markup printed as text.",
+      "rules": [
+        "content/broken-html",
+        "content/meta-in-body",
+        "content/unrendered-markup",
+        "core/doctype"
+      ],
+      "related": [
+        "placeholder-content"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta",
+        "https://developer.mozilla.org/en-US/docs/Glossary/Character_reference",
+        "https://developer.mozilla.org/en-US/docs/Web/API/HTML_Sanitizer_API",
+        "https://developer.mozilla.org/en-US/docs/Glossary/Doctype"
+      ],
+      "grounding_note": null,
+      "batch": "3b-onpage-links"
+    },
+    {
+      "slug": "ai-generated-content",
+      "term": "AI-generated content",
+      "aliases": [],
+      "format": "entry",
+      "hub": "ax",
+      "title": null,
+      "primary_query": "ai generated content seo",
+      "definition": "Text written by a language model; Google's position is that how content is made matters less than whether it is helpful.",
+      "rules": [
+        "ai/ai-content"
+      ],
+      "related": [
+        "e-e-a-t",
+        "thin-content"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/fundamentals/creating-helpful-content",
+        "https://developers.google.com/search/docs/essentials/spam-policies"
+      ],
+      "grounding_note": "ai/ai-content is a cloud rule; say so, and do not claim detection accuracy the rule page does not state.",
+      "batch": "1-ax-geo"
+    },
+    {
+      "slug": "structured-data",
+      "term": "Structured data",
+      "aliases": [
+        "schema.org"
+      ],
+      "format": "page",
+      "hub": "schema",
+      "title": "What is structured data? JSON-LD, schema.org and checks",
+      "primary_query": "what is structured data",
+      "definition": "Machine-readable statements about a page's content, usually schema.org vocabulary in JSON-LD, that search engines and agents can parse.",
+      "rules": [
+        "schema/json-ld-valid",
+        "schema/coverage-outlier",
+        "crawl/schema-noindex-conflict",
+        "schema/article",
+        "schema/product",
+        "schema/organization"
+      ],
+      "related": [
+        "json-ld",
+        "rich-results",
+        "entity"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/TR/json-ld11/",
+        "https://www.w3.org/TR/NOTE-datetime",
+        "https://developers.google.com/search/docs/appearance/structured-data/intro-structured-data",
+        "https://developers.google.com/search/docs/appearance/structured-data/search-gallery"
+      ],
+      "grounding_note": null,
+      "batch": "1-ax-geo"
+    },
+    {
+      "slug": "json-ld",
+      "term": "JSON-LD",
+      "aliases": [],
+      "format": "page",
+      "hub": "schema",
+      "title": "What is JSON-LD? Syntax, @id and common errors",
+      "primary_query": "what is json-ld",
+      "definition": "JSON for Linking Data, the format Google recommends for structured data, embedded in a `<script type=\"application/ld+json\">` block.",
+      "rules": [
+        "schema/json-ld-valid",
+        "schema/entity-id-format",
+        "schema/entity-dangling"
+      ],
+      "related": [
+        "structured-data",
+        "entity-id"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/TR/json-ld11/",
+        "https://www.w3.org/TR/json-ld11/#node-identifiers",
+        "https://www.w3.org/TR/json-ld11/#iris",
+        "https://www.w3.org/TR/json-ld11/#node-objects"
+      ],
+      "grounding_note": null,
+      "batch": "1-ax-geo"
+    },
+    {
+      "slug": "rich-results",
+      "term": "Rich results",
+      "aliases": [
+        "rich snippets",
+        "breadcrumb schema"
+      ],
+      "format": "page",
+      "hub": "schema",
+      "title": "Rich results: eligibility, markup and what blocks them",
+      "primary_query": "rich results",
+      "definition": "Search result features (stars, breadcrumbs, product prices, video thumbnails) that Google can show when a page has eligible structured data.",
+      "rules": [
+        "schema/product",
+        "schema/review",
+        "schema/breadcrumb",
+        "schema/video",
+        "schema/article",
+        "schema/rating-scope",
+        "crawl/schema-noindex-conflict"
+      ],
+      "related": [
+        "structured-data",
+        "product-schema"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/TR/NOTE-datetime",
+        "https://developers.google.com/search/docs/appearance/structured-data/product",
+        "https://developers.google.com/search/docs/appearance/structured-data/review-snippet",
+        "https://developers.google.com/search/docs/appearance/structured-data/sd-policies"
+      ],
+      "grounding_note": null,
+      "batch": "4-schema-trust"
+    },
+    {
+      "slug": "faq-schema",
+      "term": "FAQ schema",
+      "aliases": [
+        "FAQPage"
+      ],
+      "format": "entry",
+      "hub": "schema",
+      "title": null,
+      "primary_query": "faq schema",
+      "definition": "FAQPage structured data marking up question-and-answer pairs; Google now shows FAQ rich results only for a narrow set of sites.",
+      "rules": [
+        "schema/faq"
+      ],
+      "related": [
+        "rich-results",
+        "structured-data"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/blog/2023/08/howto-faq-changes",
+        "https://developers.google.com/search/updates",
+        "https://schema.org/FAQPage"
+      ],
+      "grounding_note": "Check the rule page for the current Google eligibility statement before writing.",
+      "batch": "4-schema-trust"
+    },
+    {
+      "slug": "product-schema",
+      "term": "Product schema",
+      "aliases": [
+        "review snippet",
+        "aggregateRating"
+      ],
+      "format": "page",
+      "hub": "schema",
+      "title": "Product schema: required fields and rich result checks",
+      "primary_query": "product schema",
+      "definition": "Product structured data with offers, price, availability and reviews, used for product rich results and merchant listings.",
+      "rules": [
+        "schema/product",
+        "schema/review",
+        "schema/rating-scope"
+      ],
+      "related": [
+        "rich-results"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/appearance/structured-data/product",
+        "https://developers.google.com/search/docs/appearance/structured-data/review-snippet",
+        "https://developers.google.com/search/docs/appearance/structured-data/sd-policies",
+        "https://schema.org/Product"
+      ],
+      "grounding_note": null,
+      "batch": "4-schema-trust"
+    },
+    {
+      "slug": "article-schema",
+      "term": "Article schema",
+      "aliases": [],
+      "format": "entry",
+      "hub": "schema",
+      "title": null,
+      "primary_query": "article schema",
+      "definition": "Article, NewsArticle or BlogPosting structured data with headline, dates, author and publisher.",
+      "rules": [
+        "schema/article",
+        "schema/entity-authors",
+        "schema/entity-publisher-mismatch"
+      ],
+      "related": [
+        "author-byline",
+        "content-freshness",
+        "structured-data"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/TR/NOTE-datetime",
+        "https://developers.google.com/search/docs/appearance/structured-data/article",
+        "https://developers.google.com/search/docs/fundamentals/creating-helpful-content",
+        "https://schema.org/Article"
+      ],
+      "grounding_note": null,
+      "batch": "4-schema-trust"
+    },
+    {
+      "slug": "organization-schema",
+      "term": "Organization schema",
+      "aliases": [
+        "sameAs"
+      ],
+      "format": "page",
+      "hub": "schema",
+      "title": "Organization schema: logo, sameAs and one stable @id",
+      "primary_query": "organization schema",
+      "definition": "Organization structured data naming the business behind a site, its logo, contact points and sameAs profiles.",
+      "rules": [
+        "schema/organization",
+        "schema/entity-organization-missing",
+        "schema/entity-sameas-missing",
+        "social/social-profiles"
+      ],
+      "related": [
+        "entity",
+        "local-business-schema"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/appearance/structured-data/organization",
+        "https://developers.google.com/search/docs/appearance/structured-data/local-business",
+        "https://developers.google.com/search/docs/appearance/structured-data/logo",
+        "https://schema.org/Organization"
+      ],
+      "grounding_note": null,
+      "batch": "4-schema-trust"
+    },
+    {
+      "slug": "local-business-schema",
+      "term": "LocalBusiness schema",
+      "aliases": [],
+      "format": "page",
+      "hub": "local",
+      "title": "LocalBusiness schema: address, hours and where to put it",
+      "primary_query": "local business schema",
+      "definition": "LocalBusiness structured data with address, opening hours and geo coordinates for a physical business.",
+      "rules": [
+        "schema/local-business",
+        "schema/entity-local-business-per-page",
+        "local/nap-consistency"
+      ],
+      "related": [
+        "nap-consistency",
+        "organization-schema"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/TR/json-ld11/#node-identifiers",
+        "https://developers.google.com/search/docs/appearance/structured-data/local-business",
+        "https://schema.org/LocalBusiness",
+        "https://schema.org/PostalAddress"
+      ],
+      "grounding_note": null,
+      "batch": "4-schema-trust"
+    },
+    {
+      "slug": "website-schema",
+      "term": "WebSite schema",
+      "aliases": [],
+      "format": "entry",
+      "hub": "schema",
+      "title": null,
+      "primary_query": "website schema sitelinks searchbox",
+      "definition": "WebSite structured data naming the site and, optionally, its internal search for a sitelinks search box.",
+      "rules": [
+        "schema/website-search",
+        "schema/entity-website-missing"
+      ],
+      "related": [
+        "entity",
+        "structured-data"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/blog/2024/10/sitelinks-search-box",
+        "https://developers.google.com/search/docs/appearance/structured-data/sitelinks-searchbox",
+        "https://schema.org/WebSite",
+        "https://schema.org/SearchAction"
+      ],
+      "grounding_note": null,
+      "batch": "4-schema-trust"
+    },
+    {
+      "slug": "entity",
+      "term": "Entity",
+      "aliases": [],
+      "format": "page",
+      "hub": "schema",
+      "title": "Entities in structured data: one thing, one identity",
+      "primary_query": "what is an entity in seo",
+      "definition": "A thing a site describes in structured data, such as an organization, person or product, identified across pages so search engines and agents can tell it is one thing.",
+      "rules": [
+        "schema/entity-identity",
+        "schema/entity-organization-missing",
+        "schema/entity-sameas-missing",
+        "schema/entity-conflicts",
+        "schema/entity-type-drift",
+        "schema/entity-orphan"
+      ],
+      "related": [
+        "entity-id",
+        "organization-schema",
+        "json-ld"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/TR/json-ld11/#node-identifiers",
+        "https://www.w3.org/TR/json-ld11/#specifying-the-type",
+        "https://www.w3.org/TR/json-ld11/#node-objects",
+        "https://developers.google.com/search/docs/appearance/structured-data/sd-policies"
+      ],
+      "grounding_note": null,
+      "batch": "4-schema-trust"
+    },
+    {
+      "slug": "entity-id",
+      "term": "@id (JSON-LD node identifier)",
+      "aliases": [],
+      "format": "page",
+      "hub": "schema",
+      "title": "JSON-LD @id: stable identifiers for your entities",
+      "primary_query": "json-ld @id",
+      "definition": "The JSON-LD @id that gives a node a stable IRI, so other nodes and pages can reference the same entity instead of redeclaring it.",
+      "rules": [
+        "schema/entity-identity",
+        "schema/entity-split-identity",
+        "schema/entity-dangling",
+        "schema/entity-id-format",
+        "schema/entity-orphan"
+      ],
+      "related": [
+        "entity",
+        "json-ld"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/TR/json-ld11/#node-identifiers",
+        "https://www.w3.org/TR/json-ld11/#node-objects",
+        "https://www.w3.org/TR/json-ld11/#iris",
+        "https://developers.google.com/search/docs/appearance/structured-data/sd-policies"
+      ],
+      "grounding_note": null,
+      "batch": "4-schema-trust"
+    },
+    {
+      "slug": "video-schema",
+      "term": "VideoObject schema",
+      "aliases": [],
+      "format": "entry",
+      "hub": "video",
+      "title": null,
+      "primary_query": "video schema",
+      "definition": "VideoObject structured data with name, thumbnail, upload date and duration so a video can appear in video results.",
+      "rules": [
+        "schema/video",
+        "video/video-schema",
+        "video/video-thumbnail"
+      ],
+      "related": [
+        "rich-results",
+        "captions"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/appearance/structured-data/video",
+        "https://developers.google.com/search/docs/appearance/video",
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/video",
+        "https://schema.org/VideoObject"
+      ],
+      "grounding_note": null,
+      "batch": "4-schema-trust"
+    },
+    {
+      "slug": "alt-text",
+      "term": "Alt text",
+      "aliases": [],
+      "format": "page",
+      "hub": "images",
+      "title": "Alt text: when to write it, when to leave it empty",
+      "primary_query": "alt text",
+      "definition": "The alt attribute that gives an image a text alternative for screen readers, failed loads and search engines.",
+      "rules": [
+        "images/alt-text",
+        "a11y/image-redundant-alt",
+        "a11y/input-image-alt",
+        "a11y/object-alt"
+      ],
+      "related": [
+        "wcag",
+        "accessible-name"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/WAI/tutorials/images/decorative/",
+        "https://www.w3.org/WAI/WCAG22/Understanding/non-text-content.html",
+        "https://www.w3.org/WAI/tutorials/images/tips/",
+        "https://www.w3.org/WAI/WCAG22/Techniques/html/H36"
+      ],
+      "grounding_note": null,
+      "batch": "2-perf-images"
+    },
+    {
+      "slug": "lazy-loading",
+      "term": "Lazy loading",
+      "aliases": [],
+      "format": "page",
+      "hub": "images",
+      "title": "Lazy loading images: below the fold yes, the LCP image no",
+      "primary_query": "lazy loading images",
+      "definition": "Deferring off-screen images and iframes with loading=\"lazy\" so they load as the visitor scrolls.",
+      "rules": [
+        "images/lazy-loading",
+        "images/offscreen-lazy",
+        "perf/lazy-above-fold",
+        "perf/carousel-hidden-eager"
+      ],
+      "related": [
+        "lcp",
+        "fetchpriority"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://web.dev/articles/browser-level-image-lazy-loading",
+        "https://web.dev/articles/optimize-lcp",
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img",
+        "https://developer.mozilla.org/en-US/docs/Web/Performance/Guides/Lazy_loading"
+      ],
+      "grounding_note": null,
+      "batch": "2-perf-images"
+    },
+    {
+      "slug": "responsive-images",
+      "term": "Responsive images",
+      "aliases": [
+        "srcset",
+        "sizes"
+      ],
+      "format": "page",
+      "hub": "images",
+      "title": "Responsive images: srcset, sizes and picture explained",
+      "primary_query": "srcset sizes",
+      "definition": "Serving differently sized image files with srcset, sizes and `<picture>` so each device downloads one that fits.",
+      "rules": [
+        "images/srcset",
+        "images/responsive-size",
+        "images/picture-element"
+      ],
+      "related": [
+        "modern-image-formats",
+        "page-weight"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://web.dev/articles/optimize-lcp",
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Responsive_images",
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img",
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/picture"
+      ],
+      "grounding_note": null,
+      "batch": "2-perf-images"
+    },
+    {
+      "slug": "modern-image-formats",
+      "term": "Modern image formats",
+      "aliases": [
+        "WebP",
+        "AVIF"
+      ],
+      "format": "entry",
+      "hub": "images",
+      "title": null,
+      "primary_query": "webp vs avif",
+      "definition": "WebP and AVIF, which encode the same image in fewer bytes than JPEG or PNG.",
+      "rules": [
+        "images/modern-format",
+        "images/optimized",
+        "images/image-file-size",
+        "perf/animated-content"
+      ],
+      "related": [
+        "responsive-images",
+        "page-weight"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/appearance/google-images",
+        "https://web.dev/articles/serve-images-webp",
+        "https://web.dev/articles/optimize-lcp",
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/picture"
+      ],
+      "grounding_note": null,
+      "batch": "2-perf-images"
+    },
+    {
+      "slug": "image-dimensions",
+      "term": "Image width and height attributes",
+      "aliases": [],
+      "format": "entry",
+      "hub": "images",
+      "title": null,
+      "primary_query": "img width height attributes cls",
+      "definition": "Declared width and height on `<img>` that let the browser reserve space before the file loads, preventing layout shift.",
+      "rules": [
+        "images/dimensions",
+        "images/aspect-mismatch",
+        "perf/cls-hints"
+      ],
+      "related": [
+        "cls",
+        "responsive-images"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://web.dev/articles/optimize-cls",
+        "https://web.dev/articles/cls",
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img",
+        "https://developer.mozilla.org/en-US/docs/Web/CSS/object-fit"
+      ],
+      "grounding_note": null,
+      "batch": "2-perf-images"
+    },
+    {
+      "slug": "core-web-vitals",
+      "term": "Core Web Vitals",
+      "aliases": [],
+      "format": "page",
+      "hub": "perf",
+      "title": "What are Core Web Vitals? LCP, INP and CLS defined",
+      "primary_query": "what are core web vitals",
+      "definition": "Google's three user-experience metrics: LCP for loading, INP for responsiveness and CLS for visual stability, judged at the 75th percentile of real visits.",
+      "rules": [
+        "perf/lcp-hints",
+        "perf/inp-hints",
+        "perf/cls-hints",
+        "perf/browser-required"
+      ],
+      "related": [
+        "lcp",
+        "inp",
+        "cls",
+        "ttfb"
+      ],
+      "learn": [
+        "https://squirrelscan.com/learn/core-web-vitals",
+        "https://squirrelscan.com/learn/lighthouse-alternative"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/core-web-vitals-checker"
+      ],
+      "authority": [
+        "https://web.dev/articles/lcp",
+        "https://web.dev/articles/optimize-lcp",
+        "https://web.dev/articles/inp",
+        "https://web.dev/articles/cls"
+      ],
+      "grounding_note": "squirrelscan does not measure the three metrics; its rules flag the page patterns that cause bad values. Say this plainly (matches /learn/core-web-vitals).",
+      "batch": "2-perf-images"
+    },
+    {
+      "slug": "lcp",
+      "term": "Largest Contentful Paint (LCP)",
+      "aliases": [],
+      "format": "page",
+      "hub": "perf",
+      "title": "What is LCP? Largest Contentful Paint and its causes",
+      "primary_query": "what is lcp",
+      "definition": "The time until the largest image or text block in the viewport renders; good is 2.5 seconds or less.",
+      "rules": [
+        "perf/lcp-hints",
+        "perf/lcp-fetchpriority",
+        "perf/lazy-above-fold",
+        "perf/render-blocking",
+        "perf/preconnect",
+        "perf/ttfb"
+      ],
+      "related": [
+        "core-web-vitals",
+        "fetchpriority",
+        "render-blocking-resources",
+        "lazy-loading"
+      ],
+      "learn": [
+        "https://squirrelscan.com/learn/core-web-vitals"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/core-web-vitals-checker"
+      ],
+      "authority": [
+        "https://web.dev/articles/lcp",
+        "https://web.dev/articles/optimize-lcp",
+        "https://web.dev/articles/preconnect-and-dns-prefetch",
+        "https://web.dev/articles/ttfb"
+      ],
+      "grounding_note": "Hint rules, not measurement.",
+      "batch": "2-perf-images"
+    },
+    {
+      "slug": "inp",
+      "term": "Interaction to Next Paint (INP)",
+      "aliases": [],
+      "format": "page",
+      "hub": "perf",
+      "title": "What is INP? Interaction to Next Paint explained",
+      "primary_query": "what is inp",
+      "definition": "The latency from a user interaction to the next frame, taken across the visit; good is 200 milliseconds or less. It replaced FID in March 2024.",
+      "rules": [
+        "perf/inp-hints",
+        "perf/dom-size",
+        "perf/js-file-size",
+        "perf/duplicate-js",
+        "perf/legacy-js"
+      ],
+      "related": [
+        "core-web-vitals",
+        "dom-size",
+        "page-weight"
+      ],
+      "learn": [
+        "https://squirrelscan.com/learn/core-web-vitals"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/core-web-vitals-checker"
+      ],
+      "authority": [
+        "https://web.dev/articles/inp",
+        "https://web.dev/articles/dom-size-and-interactivity",
+        "https://web.dev/articles/reduce-network-payloads-using-text-compression",
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules"
+      ],
+      "grounding_note": "Hint rules, not measurement.",
+      "batch": "2-perf-images"
+    },
+    {
+      "slug": "cls",
+      "term": "Cumulative Layout Shift (CLS)",
+      "aliases": [],
+      "format": "page",
+      "hub": "perf",
+      "title": "What is CLS? Cumulative Layout Shift and how to fix it",
+      "primary_query": "what is cls",
+      "definition": "A score for how much visible content moves unexpectedly while the page is in use; good is 0.1 or less.",
+      "rules": [
+        "perf/cls-hints",
+        "images/dimensions",
+        "perf/font-loading"
+      ],
+      "related": [
+        "core-web-vitals",
+        "image-dimensions",
+        "font-display"
+      ],
+      "learn": [
+        "https://squirrelscan.com/learn/core-web-vitals"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/core-web-vitals-checker"
+      ],
+      "authority": [
+        "https://web.dev/articles/cls",
+        "https://web.dev/articles/optimize-cls",
+        "https://web.dev/articles/font-best-practices",
+        "https://developer.mozilla.org/en-US/docs/Web/CSS/aspect-ratio"
+      ],
+      "grounding_note": "Hint rules, not measurement.",
+      "batch": "2-perf-images"
+    },
+    {
+      "slug": "ttfb",
+      "term": "Time to First Byte (TTFB)",
+      "aliases": [],
+      "format": "entry",
+      "hub": "perf",
+      "title": null,
+      "primary_query": "what is ttfb",
+      "definition": "The time from the request until the first byte of the response arrives, covering redirects, DNS, connection and server time.",
+      "rules": [
+        "perf/ttfb"
+      ],
+      "related": [
+        "lcp",
+        "http-caching"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://web.dev/articles/ttfb",
+        "https://web.dev/articles/vitals",
+        "https://developer.mozilla.org/en-US/docs/Web/API/PerformanceResourceTiming"
+      ],
+      "grounding_note": null,
+      "batch": "2-perf-images"
+    },
+    {
+      "slug": "render-blocking-resources",
+      "term": "Render-blocking resources",
+      "aliases": [
+        "critical request chain",
+        "preconnect",
+        "resource hints"
+      ],
+      "format": "page",
+      "hub": "perf",
+      "title": "Render-blocking resources: what blocks first paint",
+      "primary_query": "eliminate render blocking resources",
+      "definition": "Stylesheets and synchronous scripts in the head that the browser must fetch before it can paint anything.",
+      "rules": [
+        "perf/render-blocking",
+        "perf/critical-request-chains",
+        "perf/preconnect"
+      ],
+      "related": [
+        "lcp",
+        "font-display"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://web.dev/articles/lcp",
+        "https://web.dev/articles/preconnect-and-dns-prefetch",
+        "https://developer.mozilla.org/en-US/docs/Web/CSS/@import",
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel/preconnect"
+      ],
+      "grounding_note": null,
+      "batch": "2-perf-images"
+    },
+    {
+      "slug": "fetchpriority",
+      "term": "fetchpriority",
+      "aliases": [],
+      "format": "entry",
+      "hub": "perf",
+      "title": null,
+      "primary_query": "fetchpriority high",
+      "definition": "An HTML attribute (high, low, auto) that hints how urgently the browser should fetch an image, script or link.",
+      "rules": [
+        "perf/lcp-fetchpriority"
+      ],
+      "related": [
+        "lcp",
+        "lazy-loading"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://web.dev/articles/optimize-lcp",
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/fetchpriority",
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel/preload"
+      ],
+      "grounding_note": null,
+      "batch": "2-perf-images"
+    },
+    {
+      "slug": "http-compression",
+      "term": "HTTP compression",
+      "aliases": [
+        "gzip",
+        "Brotli"
+      ],
+      "format": "entry",
+      "hub": "perf",
+      "title": null,
+      "primary_query": "gzip vs brotli",
+      "definition": "Compressing text responses (HTML, CSS, JS, JSON) with gzip, Brotli or zstd, signalled by Content-Encoding.",
+      "rules": [
+        "perf/compression",
+        "perf/asset-compression"
+      ],
+      "related": [
+        "page-weight",
+        "minification"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://web.dev/articles/reduce-network-payloads-using-text-compression",
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Encoding"
+      ],
+      "grounding_note": null,
+      "batch": "2-perf-images"
+    },
+    {
+      "slug": "http-caching",
+      "term": "HTTP caching",
+      "aliases": [
+        "Cache-Control"
+      ],
+      "format": "page",
+      "hub": "perf",
+      "title": "HTTP caching: Cache-Control for static assets and HTML",
+      "primary_query": "cache-control header",
+      "definition": "Response headers (Cache-Control, ETag, Expires) that let browsers and CDNs reuse a response instead of fetching it again.",
+      "rules": [
+        "perf/cache-headers",
+        "perf/bad-caching"
+      ],
+      "related": [
+        "ttfb",
+        "page-weight"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://web.dev/articles/http-cache",
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control",
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/ETag",
+        "https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.2"
+      ],
+      "grounding_note": null,
+      "batch": "2-perf-images"
+    },
+    {
+      "slug": "minification",
+      "term": "Minification",
+      "aliases": [],
+      "format": "entry",
+      "hub": "perf",
+      "title": null,
+      "primary_query": "minify css js",
+      "definition": "Removing whitespace, comments and long names from CSS and JavaScript so the file is smaller without changing behaviour.",
+      "rules": [
+        "perf/unminified-css",
+        "perf/unminified-js"
+      ],
+      "related": [
+        "http-compression",
+        "page-weight"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://web.dev/articles/reduce-network-payloads-using-text-compression",
+        "https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_syntax/Syntax",
+        "https://html.spec.whatwg.org/multipage/scripting.html#the-script-element"
+      ],
+      "grounding_note": null,
+      "batch": "2-perf-images"
+    },
+    {
+      "slug": "font-display",
+      "term": "font-display",
+      "aliases": [
+        "web font loading"
+      ],
+      "format": "entry",
+      "hub": "perf",
+      "title": null,
+      "primary_query": "font-display swap",
+      "definition": "The @font-face descriptor (swap, optional, fallback) that decides what text shows while a web font loads.",
+      "rules": [
+        "perf/font-loading",
+        "perf/font-delivery"
+      ],
+      "related": [
+        "cls",
+        "render-blocking-resources"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://web.dev/articles/font-best-practices",
+        "https://developer.mozilla.org/en-US/docs/Web/CSS/@font-face/font-display",
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel/preconnect",
+        "https://developer.mozilla.org/en-US/docs/Web/CSS/@import"
+      ],
+      "grounding_note": null,
+      "batch": "2-perf-images"
+    },
+    {
+      "slug": "dom-size",
+      "term": "DOM size",
+      "aliases": [],
+      "format": "entry",
+      "hub": "perf",
+      "title": null,
+      "primary_query": "excessive dom size",
+      "definition": "The number and depth of elements in a page's document tree; large DOMs slow style calculation and interactions.",
+      "rules": [
+        "perf/dom-size"
+      ],
+      "related": [
+        "inp",
+        "page-weight"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://web.dev/articles/dom-size-and-interactivity",
+        "https://web.dev/articles/inp"
+      ],
+      "grounding_note": null,
+      "batch": "2-perf-images"
+    },
+    {
+      "slug": "page-weight",
+      "term": "Page weight",
+      "aliases": [
+        "legacy JavaScript",
+        "polyfills"
+      ],
+      "format": "entry",
+      "hub": "perf",
+      "title": null,
+      "primary_query": "page weight",
+      "definition": "The total bytes a page downloads across HTML, CSS, JavaScript, images and fonts.",
+      "rules": [
+        "perf/total-byte-weight",
+        "perf/js-file-size",
+        "perf/css-file-size",
+        "images/image-file-size",
+        "images/svg-inline",
+        "perf/legacy-js",
+        "perf/js-libraries"
+      ],
+      "related": [
+        "http-compression",
+        "modern-image-formats",
+        "inp"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://web.dev/articles/reduce-network-payloads-using-text-compression",
+        "https://web.dev/articles/lcp",
+        "https://web.dev/articles/inp",
+        "https://web.dev/articles/serve-images-webp"
+      ],
+      "grounding_note": null,
+      "batch": "2-perf-images"
+    },
+    {
+      "slug": "client-side-redirect",
+      "term": "Client-side redirect",
+      "aliases": [
+        "meta refresh"
+      ],
+      "format": "entry",
+      "hub": "perf",
+      "title": null,
+      "primary_query": "meta refresh redirect",
+      "definition": "A redirect done in the page (meta refresh or JavaScript) rather than with an HTTP 3xx response.",
+      "rules": [
+        "a11y/meta-refresh",
+        "perf/js-redirects"
+      ],
+      "related": [
+        "redirect-chain",
+        "http-status-code"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/WAI/WCAG22/Techniques/failures/F40",
+        "https://www.w3.org/WAI/WCAG22/Techniques/failures/F41",
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Redirections",
+        "https://html.spec.whatwg.org/multipage/semantics.html#attr-meta-http-equiv-refresh"
+      ],
+      "grounding_note": null,
+      "batch": "2-perf-images"
+    },
+    {
+      "slug": "https",
+      "term": "HTTPS",
+      "aliases": [],
+      "format": "page",
+      "hub": "security",
+      "title": "HTTPS for every page: redirects, forms and downgrades",
+      "primary_query": "http to https redirect",
+      "definition": "HTTP over TLS, which encrypts traffic and proves the server's identity; every page and form should use it.",
+      "rules": [
+        "security/https",
+        "security/http-to-https",
+        "security/form-https",
+        "links/https-downgrade"
+      ],
+      "related": [
+        "hsts",
+        "mixed-content"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/crawling-indexing/301-redirects",
+        "https://web.dev/articles/why-https-matters",
+        "https://developer.mozilla.org/en-US/docs/Glossary/HTTPS",
+        "https://developer.mozilla.org/en-US/docs/Web/Security/Practical_implementation_guides/TLS"
+      ],
+      "grounding_note": null,
+      "batch": "5-security"
+    },
+    {
+      "slug": "security-headers",
+      "term": "Security headers",
+      "aliases": [
+        "Referrer-Policy",
+        "Permissions-Policy",
+        "X-Powered-By"
+      ],
+      "format": "page",
+      "hub": "security",
+      "title": "Security headers: the six every site should send",
+      "primary_query": "security headers",
+      "definition": "HTTP response headers (CSP, HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy) that tell browsers to restrict risky behaviour.",
+      "rules": [
+        "security/csp",
+        "security/hsts",
+        "security/x-content-type",
+        "security/x-frame-options",
+        "security/referrer-policy",
+        "security/permissions-policy",
+        "security/version-disclosure"
+      ],
+      "related": [
+        "content-security-policy",
+        "hsts",
+        "x-frame-options"
+      ],
+      "learn": [
+        "https://squirrelscan.com/learn/audit-website-security-with-ai"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/security-headers-checker"
+      ],
+      "authority": [
+        "https://www.w3.org/TR/CSP3/",
+        "https://www.w3.org/TR/referrer-policy/",
+        "https://web.dev/articles/strict-csp",
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy"
+      ],
+      "grounding_note": null,
+      "batch": "5-security"
+    },
+    {
+      "slug": "content-security-policy",
+      "term": "Content Security Policy (CSP)",
+      "aliases": [],
+      "format": "page",
+      "hub": "security",
+      "title": "What is Content Security Policy? CSP directives explained",
+      "primary_query": "content security policy",
+      "definition": "A response header listing where a page may load scripts, styles, frames and other resources from, limiting what injected code can do.",
+      "rules": [
+        "security/csp",
+        "security/csp-blocks-own-resources"
+      ],
+      "related": [
+        "security-headers",
+        "subresource-integrity",
+        "x-frame-options"
+      ],
+      "learn": [],
+      "tools": [
+        "https://squirrelscan.com/tools/security-headers-checker"
+      ],
+      "authority": [
+        "https://www.w3.org/TR/CSP3/",
+        "https://web.dev/articles/strict-csp",
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy"
+      ],
+      "grounding_note": null,
+      "batch": "5-security"
+    },
+    {
+      "slug": "hsts",
+      "term": "HSTS",
+      "aliases": [
+        "Strict-Transport-Security"
+      ],
+      "format": "page",
+      "hub": "security",
+      "title": "What is HSTS? max-age, includeSubDomains and preload",
+      "primary_query": "what is hsts",
+      "definition": "The Strict-Transport-Security header that tells browsers to use only HTTPS for a host for a set time.",
+      "rules": [
+        "security/hsts"
+      ],
+      "related": [
+        "https",
+        "security-headers"
+      ],
+      "learn": [],
+      "tools": [
+        "https://squirrelscan.com/tools/security-headers-checker"
+      ],
+      "authority": [
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Strict-Transport-Security",
+        "https://datatracker.ietf.org/doc/html/rfc6797",
+        "https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Strict_Transport_Security_Cheat_Sheet.html"
+      ],
+      "grounding_note": null,
+      "batch": "5-security"
+    },
+    {
+      "slug": "mixed-content",
+      "term": "Mixed content",
+      "aliases": [],
+      "format": "entry",
+      "hub": "security",
+      "title": null,
+      "primary_query": "mixed content",
+      "definition": "An HTTPS page loading scripts, styles, images or media over plain HTTP.",
+      "rules": [
+        "security/mixed-content"
+      ],
+      "related": [
+        "https",
+        "content-security-policy"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://web.dev/articles/what-is-mixed-content",
+        "https://developer.mozilla.org/en-US/docs/Web/Security/Mixed_content"
+      ],
+      "grounding_note": null,
+      "batch": "5-security"
+    },
+    {
+      "slug": "subresource-integrity",
+      "term": "Subresource Integrity (SRI)",
+      "aliases": [],
+      "format": "entry",
+      "hub": "security",
+      "title": null,
+      "primary_query": "subresource integrity",
+      "definition": "An integrity attribute holding a hash of a third-party script or stylesheet, so the browser refuses a tampered file.",
+      "rules": [
+        "security/sri"
+      ],
+      "related": [
+        "content-security-policy",
+        "security-headers"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/TR/SRI/",
+        "https://developer.mozilla.org/en-US/docs/Web/Security/Subresource_Integrity"
+      ],
+      "grounding_note": null,
+      "batch": "5-security"
+    },
+    {
+      "slug": "x-frame-options",
+      "term": "X-Frame-Options",
+      "aliases": [
+        "clickjacking"
+      ],
+      "format": "entry",
+      "hub": "security",
+      "title": null,
+      "primary_query": "x-frame-options",
+      "definition": "A response header that controls whether other sites may embed the page in a frame; CSP frame-ancestors is its successor.",
+      "rules": [
+        "security/x-frame-options",
+        "security/csp"
+      ],
+      "related": [
+        "content-security-policy",
+        "security-headers"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/TR/CSP3/",
+        "https://web.dev/articles/strict-csp",
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-Frame-Options",
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/frame-ancestors"
+      ],
+      "grounding_note": null,
+      "batch": "5-security"
+    },
+    {
+      "slug": "x-content-type-options",
+      "term": "X-Content-Type-Options",
+      "aliases": [
+        "MIME type",
+        "Content-Type"
+      ],
+      "format": "entry",
+      "hub": "security",
+      "title": null,
+      "primary_query": "x-content-type-options nosniff",
+      "definition": "The nosniff header that stops browsers guessing a response's type instead of trusting Content-Type.",
+      "rules": [
+        "security/x-content-type",
+        "content/mime-type"
+      ],
+      "related": [
+        "security-headers"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-Content-Type-Options",
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Type"
+      ],
+      "grounding_note": null,
+      "batch": "5-security"
+    },
+    {
+      "slug": "cookie-attributes",
+      "term": "Cookie attributes",
+      "aliases": [
+        "Secure",
+        "HttpOnly",
+        "SameSite"
+      ],
+      "format": "page",
+      "hub": "security",
+      "title": "Cookie flags: Secure, HttpOnly and SameSite explained",
+      "primary_query": "cookie security flags",
+      "definition": "The Secure, HttpOnly and SameSite flags on Set-Cookie that limit where a cookie is sent and whether scripts can read it.",
+      "rules": [
+        "security/cookie-flags",
+        "security/third-party-cookies"
+      ],
+      "related": [
+        "token-storage",
+        "cookie-consent"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie",
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Cookies",
+        "https://developer.mozilla.org/en-US/docs/Web/Privacy/Guides/Third-party_cookies",
+        "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html"
+      ],
+      "grounding_note": null,
+      "batch": "5-security"
+    },
+    {
+      "slug": "security-txt",
+      "term": "security.txt",
+      "aliases": [],
+      "format": "entry",
+      "hub": "security",
+      "title": null,
+      "primary_query": "security.txt",
+      "definition": "A file at /.well-known/security.txt (RFC 9116) that tells researchers how to report a vulnerability.",
+      "rules": [
+        "security/security-txt"
+      ],
+      "related": [
+        "well-known-uri"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.rfc-editor.org/rfc/rfc9116"
+      ],
+      "grounding_note": null,
+      "batch": "5-security"
+    },
+    {
+      "slug": "leaked-secrets",
+      "term": "Leaked secrets",
+      "aliases": [
+        "exposed API keys",
+        "source maps"
+      ],
+      "format": "page",
+      "hub": "security",
+      "title": "Leaked API keys in the browser: what to look for",
+      "primary_query": "exposed api keys in javascript",
+      "definition": "Credentials or private keys shipped to the browser in HTML, scripts or source maps.",
+      "rules": [
+        "security/leaked-secrets",
+        "perf/source-maps",
+        "content/dev-leakage"
+      ],
+      "related": [
+        "token-storage"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://web.dev/articles/why-https-matters",
+        "https://developer.mozilla.org/en-US/docs/Glossary/Source_map",
+        "https://datatracker.ietf.org/doc/html/rfc1918",
+        "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/01-Information_Gathering/05-Review_Web_Page_Content_for_Information_Leakage"
+      ],
+      "grounding_note": null,
+      "batch": "5-security"
+    },
+    {
+      "slug": "graphql-introspection",
+      "term": "GraphQL introspection",
+      "aliases": [],
+      "format": "entry",
+      "hub": "security",
+      "title": null,
+      "primary_query": "graphql introspection",
+      "definition": "The GraphQL feature that returns the full schema on request; left on in production it maps the API for attackers.",
+      "rules": [
+        "security/graphql-introspection",
+        "security/graphql-get-mutations"
+      ],
+      "related": [
+        "leaked-secrets"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://cheatsheetseries.owasp.org/cheatsheets/GraphQL_Cheat_Sheet.html"
+      ],
+      "grounding_note": null,
+      "batch": "5-security"
+    },
+    {
+      "slug": "token-storage",
+      "term": "Token storage",
+      "aliases": [],
+      "format": "entry",
+      "hub": "security",
+      "title": null,
+      "primary_query": "jwt localstorage vs cookie",
+      "definition": "Where a web app keeps session or auth tokens; tokens in localStorage are readable by any script on the page.",
+      "rules": [
+        "security/token-storage"
+      ],
+      "related": [
+        "cookie-attributes",
+        "content-security-policy"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html",
+        "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html"
+      ],
+      "grounding_note": null,
+      "batch": "5-security"
+    },
+    {
+      "slug": "hacked-site",
+      "term": "Hacked site signals",
+      "aliases": [
+        "SEO spam",
+        "injected pages"
+      ],
+      "format": "page",
+      "hub": "integrity",
+      "title": "How to tell if your website is hacked: the signals",
+      "primary_query": "how to tell if website is hacked",
+      "definition": "The traces a compromise leaves on a site: injected pages off the theme, phishing kits, obfuscated scripts and known malicious URLs.",
+      "rules": [
+        "integrity/kit-signature",
+        "integrity/obfuscated-script",
+        "integrity/known-malicious-url",
+        "integrity/template-discontinuity",
+        "integrity/orphan-page",
+        "integrity/seo-doorway",
+        "integrity/brand-impersonation",
+        "integrity/fake-auth-overlay"
+      ],
+      "related": [
+        "cloaking",
+        "doorway-page",
+        "orphan-page"
+      ],
+      "learn": [
+        "https://squirrelscan.com/learn/audit-website-security-with-ai"
+      ],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/monitor-debug/security/social-engineering",
+        "https://developers.google.com/search/docs/essentials/spam-policies#hacked-content",
+        "https://developers.google.com/search/docs/monitor-debug/security/malware",
+        "https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview"
+      ],
+      "grounding_note": null,
+      "batch": "5-security"
+    },
+    {
+      "slug": "cloaking",
+      "term": "Cloaking",
+      "aliases": [
+        "hidden text and links"
+      ],
+      "format": "entry",
+      "hub": "integrity",
+      "title": null,
+      "primary_query": "cloaking seo",
+      "definition": "Serving search engines or particular user agents different content from what visitors see, a Google spam policy violation.",
+      "rules": [
+        "integrity/cloaking",
+        "content/hidden-text"
+      ],
+      "related": [
+        "hacked-site",
+        "doorway-page"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/essentials/spam-policies#cloaking",
+        "https://developers.google.com/search/docs/essentials/spam-policies#hacked-content",
+        "https://developers.google.com/search/docs/essentials/spam-policies",
+        "https://developers.google.com/search/docs/fundamentals/creating-helpful-content"
+      ],
+      "grounding_note": null,
+      "batch": "5-security"
+    },
+    {
+      "slug": "doorway-page",
+      "term": "Doorway page",
+      "aliases": [],
+      "format": "entry",
+      "hub": "integrity",
+      "title": null,
+      "primary_query": "doorway pages",
+      "definition": "A page made to rank for a query and funnel visitors elsewhere, often many near-identical pages per keyword or city.",
+      "rules": [
+        "integrity/seo-doorway",
+        "local/service-area"
+      ],
+      "related": [
+        "hacked-site",
+        "cloaking",
+        "thin-content"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/essentials/spam-policies#doorways",
+        "https://developers.google.com/search/docs/essentials/spam-policies#hacked-content",
+        "https://developers.google.com/search/docs/appearance/structured-data/local-business",
+        "https://schema.org/areaServed"
+      ],
+      "grounding_note": null,
+      "batch": "5-security"
+    },
+    {
+      "slug": "cookie-consent",
+      "term": "Cookie consent",
+      "aliases": [
+        "Google Consent Mode"
+      ],
+      "format": "page",
+      "hub": "legal",
+      "title": "Cookie consent banners: what an audit can verify",
+      "primary_query": "cookie consent banner",
+      "definition": "The banner and mechanism that asks visitors before setting non-essential cookies, as GDPR and ePrivacy require in the EU.",
+      "rules": [
+        "legal/cookie-consent",
+        "analytics/consent-mode"
+      ],
+      "related": [
+        "cookie-attributes",
+        "privacy-policy"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/tag-platform/security/guides/consent",
+        "https://developers.google.com/tag-platform/security/concepts/consent-mode",
+        "https://developers.google.com/tag-platform/tag-manager",
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Cookies"
+      ],
+      "grounding_note": "Not legal advice; say what the rule detects, not what the law requires in detail.",
+      "batch": "5-security"
+    },
+    {
+      "slug": "privacy-policy",
+      "term": "Privacy policy",
+      "aliases": [],
+      "format": "entry",
+      "hub": "legal",
+      "title": null,
+      "primary_query": "privacy policy page",
+      "definition": "The page explaining what personal data a site collects and why; required by law in many places and a trust signal for search.",
+      "rules": [
+        "legal/privacy-policy",
+        "eeat/privacy-policy",
+        "legal/subprocessor-disclosure"
+      ],
+      "related": [
+        "cookie-consent",
+        "e-e-a-t"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/fundamentals/creating-helpful-content",
+        "https://developer.mozilla.org/en-US/docs/Web/Privacy",
+        "https://developer.mozilla.org/en-US/docs/Web/Privacy/Guides/Third-party_cookies"
+      ],
+      "grounding_note": null,
+      "batch": "5-security"
+    },
+    {
+      "slug": "filter-list",
+      "term": "Ad blocker filter lists",
+      "aliases": [
+        "EasyList"
+      ],
+      "format": "entry",
+      "hub": "adblock",
+      "title": null,
+      "primary_query": "easylist element hiding",
+      "definition": "Community-maintained rule lists (EasyList, EasyPrivacy) that ad and tracker blockers use to hide elements and block requests.",
+      "rules": [
+        "adblock/element-hiding",
+        "adblock/blocked-links",
+        "adblock/privacy-blocked"
+      ],
+      "related": [
+        "cookie-consent"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_selectors",
+        "https://developer.mozilla.org/en-US/docs/Web/Privacy/Guides/Third-party_cookies",
+        "https://developer.mozilla.org/en-US/docs/Web/API/HTMLScriptElement",
+        "https://developer.mozilla.org/en-US/docs/Web/Privacy"
+      ],
+      "grounding_note": null,
+      "batch": "5-security"
+    },
+    {
+      "slug": "wcag",
+      "term": "WCAG",
+      "aliases": [
+        "Web Content Accessibility Guidelines"
+      ],
+      "format": "page",
+      "hub": "a11y",
+      "title": "What is WCAG? Levels, criteria and what audits check",
+      "primary_query": "what is wcag",
+      "definition": "The W3C's Web Content Accessibility Guidelines, organised as testable success criteria at levels A, AA and AAA; 2.2 is current.",
+      "rules": [
+        "a11y/color-contrast",
+        "a11y/form-labels",
+        "a11y/link-text",
+        "a11y/heading-order",
+        "a11y/html-lang-valid",
+        "a11y/touch-targets",
+        "images/alt-text"
+      ],
+      "related": [
+        "aria",
+        "accessible-name",
+        "color-contrast"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html",
+        "https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio",
+        "https://www.w3.org/WAI/tutorials/forms/labels/",
+        "https://www.w3.org/WAI/WCAG22/Techniques/html/H44"
+      ],
+      "grounding_note": "a11y rules are hand-written, not axe-core; an automated audit covers a subset of WCAG. Say so.",
+      "batch": "6-a11y-mobile"
+    },
+    {
+      "slug": "aria",
+      "term": "ARIA",
+      "aliases": [
+        "WAI-ARIA"
+      ],
+      "format": "page",
+      "hub": "a11y",
+      "title": "What is ARIA? Roles, states and the first rule of ARIA",
+      "primary_query": "what is aria",
+      "definition": "Accessible Rich Internet Applications: roles, states and properties that describe custom widgets to assistive technology.",
+      "rules": [
+        "a11y/aria-roles",
+        "a11y/aria-valid-attr",
+        "a11y/aria-valid-attr-value",
+        "a11y/aria-allowed-attr",
+        "a11y/aria-required-attr",
+        "a11y/aria-required-children",
+        "a11y/aria-required-parent",
+        "a11y/aria-deprecated-role",
+        "a11y/aria-hidden-body",
+        "a11y/aria-hidden-focus",
+        "a11y/duplicate-id-aria",
+        "a11y/aria-text"
+      ],
+      "related": [
+        "accessible-name",
+        "wcag",
+        "landmark"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/TR/wai-aria-1.2/#role_definitions",
+        "https://www.w3.org/TR/html-aria/",
+        "https://www.w3.org/TR/wai-aria-1.2/",
+        "https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html"
+      ],
+      "grounding_note": null,
+      "batch": "6-a11y-mobile"
+    },
+    {
+      "slug": "accessible-name",
+      "term": "Accessible name",
+      "aliases": [
+        "aria-label"
+      ],
+      "format": "page",
+      "hub": "a11y",
+      "title": "Accessible names and aria-label: how they are computed",
+      "primary_query": "aria-label",
+      "definition": "The name assistive technology announces for an element, computed from its content, label, aria-label or aria-labelledby.",
+      "rules": [
+        "a11y/aria-labels",
+        "a11y/button-name",
+        "a11y/aria-input-field-name",
+        "a11y/aria-command-name",
+        "a11y/aria-dialog-name",
+        "a11y/select-name",
+        "a11y/frame-title",
+        "a11y/label-content-name-mismatch",
+        "a11y/aria-meter-name",
+        "a11y/aria-progressbar-name",
+        "a11y/aria-toggle-field-name",
+        "a11y/aria-tooltip-name",
+        "a11y/aria-treeitem-name",
+        "a11y/table-duplicate-name"
+      ],
+      "related": [
+        "aria",
+        "form-labels",
+        "anchor-text"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/WAI/ARIA/apg/practices/names-and-descriptions/",
+        "https://www.w3.org/TR/accname-1.2/",
+        "https://www.w3.org/WAI/standards-guidelines/act/rules/97a4e1/",
+        "https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html"
+      ],
+      "grounding_note": null,
+      "batch": "6-a11y-mobile"
+    },
+    {
+      "slug": "color-contrast",
+      "term": "Color contrast ratio",
+      "aliases": [],
+      "format": "page",
+      "hub": "a11y",
+      "title": "Color contrast ratio: WCAG AA thresholds and checks",
+      "primary_query": "color contrast ratio",
+      "definition": "The luminance ratio between text and its background; WCAG AA asks for 4.5:1 for body text and 3:1 for large text.",
+      "rules": [
+        "a11y/color-contrast",
+        "a11y/link-in-text-block"
+      ],
+      "related": [
+        "wcag"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html",
+        "https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio",
+        "https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html",
+        "https://www.w3.org/WAI/WCAG22/Techniques/general/G183"
+      ],
+      "grounding_note": null,
+      "batch": "6-a11y-mobile"
+    },
+    {
+      "slug": "form-labels",
+      "term": "Form labels",
+      "aliases": [],
+      "format": "entry",
+      "hub": "a11y",
+      "title": null,
+      "primary_query": "form label accessibility",
+      "definition": "The `<label>` or accessible name tied to each form control, plus autocomplete tokens, so people know what to enter.",
+      "rules": [
+        "a11y/form-labels",
+        "a11y/form-field-multiple-labels",
+        "a11y/autocomplete-tokens",
+        "a11y/input-types",
+        "a11y/paste-inputs"
+      ],
+      "related": [
+        "accessible-name",
+        "wcag"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/WAI/tutorials/forms/labels/",
+        "https://www.w3.org/WAI/WCAG22/Techniques/html/H44",
+        "https://www.w3.org/WAI/WCAG22/Understanding/identify-input-purpose.html",
+        "https://www.w3.org/WAI/WCAG22/Understanding/accessible-authentication-minimum.html"
+      ],
+      "grounding_note": null,
+      "batch": "6-a11y-mobile"
+    },
+    {
+      "slug": "landmark",
+      "term": "Landmark regions",
+      "aliases": [
+        "skip link"
+      ],
+      "format": "entry",
+      "hub": "a11y",
+      "title": null,
+      "primary_query": "aria landmarks",
+      "definition": "The page regions (main, nav, header, footer) that screen reader users jump between, plus the skip link to main content.",
+      "rules": [
+        "a11y/landmark-one-main",
+        "a11y/landmark-regions",
+        "a11y/skip-link"
+      ],
+      "related": [
+        "heading-hierarchy",
+        "aria"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/WAI/ARIA/apg/practices/landmark-regions/",
+        "https://www.w3.org/WAI/tutorials/page-structure/regions/",
+        "https://www.w3.org/WAI/WCAG22/Understanding/bypass-blocks.html",
+        "https://www.w3.org/WAI/WCAG22/Techniques/general/G1"
+      ],
+      "grounding_note": null,
+      "batch": "6-a11y-mobile"
+    },
+    {
+      "slug": "keyboard-accessibility",
+      "term": "Keyboard accessibility",
+      "aliases": [],
+      "format": "entry",
+      "hub": "a11y",
+      "title": null,
+      "primary_query": "keyboard accessibility",
+      "definition": "Whether every control can be reached and used with a keyboard alone, with a visible focus indicator and sensible tab order.",
+      "rules": [
+        "a11y/focus-visible",
+        "a11y/tabindex",
+        "a11y/accesskeys",
+        "a11y/aria-hidden-focus"
+      ],
+      "related": [
+        "wcag",
+        "aria"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/WAI/WCAG22/Understanding/focus-visible.html",
+        "https://www.w3.org/WAI/WCAG22/Techniques/failures/F78",
+        "https://www.w3.org/WAI/WCAG22/Understanding/keyboard.html",
+        "https://www.w3.org/WAI/standards-guidelines/act/rules/6cfa84/"
+      ],
+      "grounding_note": null,
+      "batch": "6-a11y-mobile"
+    },
+    {
+      "slug": "lang-attribute",
+      "term": "lang attribute",
+      "aliases": [],
+      "format": "entry",
+      "hub": "i18n",
+      "title": null,
+      "primary_query": "html lang attribute",
+      "definition": "The lang attribute on `<html>` (and on passages) that declares the language, so screen readers pick the right voice.",
+      "rules": [
+        "i18n/lang-attribute",
+        "a11y/html-lang-valid",
+        "a11y/valid-lang",
+        "a11y/html-xml-lang-mismatch"
+      ],
+      "related": [
+        "hreflang",
+        "wcag"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/International/questions/qa-html-language-declarations",
+        "https://www.w3.org/WAI/WCAG22/Understanding/language-of-page.html",
+        "https://www.w3.org/WAI/WCAG22/Understanding/language-of-parts.html",
+        "https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites"
+      ],
+      "grounding_note": null,
+      "batch": "3b-onpage-links"
+    },
+    {
+      "slug": "captions",
+      "term": "Captions",
+      "aliases": [],
+      "format": "entry",
+      "hub": "a11y",
+      "title": null,
+      "primary_query": "video captions accessibility",
+      "definition": "Synchronised text of a video's dialogue and sounds, supplied as a `<track kind=\"captions\">` file.",
+      "rules": [
+        "a11y/video-captions",
+        "video/video-accessible"
+      ],
+      "related": [
+        "video-schema",
+        "wcag"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/WAI/WCAG22/Understanding/captions-prerecorded.html",
+        "https://www.w3.org/WAI/media/av/captions/",
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/track"
+      ],
+      "grounding_note": null,
+      "batch": "6-a11y-mobile"
+    },
+    {
+      "slug": "touch-targets",
+      "term": "Touch target size",
+      "aliases": [],
+      "format": "entry",
+      "hub": "mobile",
+      "title": null,
+      "primary_query": "touch target size",
+      "definition": "The tappable area of a control; WCAG 2.2 sets 24 by 24 CSS pixels as the AA minimum.",
+      "rules": [
+        "a11y/touch-targets",
+        "mobile/tap-targets"
+      ],
+      "related": [
+        "wcag",
+        "mobile-friendly"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html",
+        "https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html",
+        "https://developers.google.com/search/docs/appearance/page-experience"
+      ],
+      "grounding_note": null,
+      "batch": "6-a11y-mobile"
+    },
+    {
+      "slug": "viewport-meta-tag",
+      "term": "Viewport meta tag",
+      "aliases": [],
+      "format": "page",
+      "hub": "mobile",
+      "title": "Viewport meta tag: width=device-width and zoom",
+      "primary_query": "viewport meta tag",
+      "definition": "`<meta name=\"viewport\">` that sets the layout width to the device width; disabling zoom in it fails accessibility.",
+      "rules": [
+        "mobile/viewport",
+        "mobile/viewport-zoom",
+        "a11y/zoom-disabled",
+        "mobile/horizontal-scroll"
+      ],
+      "related": [
+        "mobile-friendly",
+        "touch-targets"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/WAI/WCAG22/Understanding/resize-text.html",
+        "https://www.w3.org/WAI/standards-guidelines/act/rules/b4f0c3/",
+        "https://www.w3.org/WAI/WCAG22/Understanding/reflow.html",
+        "https://developers.google.com/search/docs/appearance/page-experience"
+      ],
+      "grounding_note": null,
+      "batch": "6-a11y-mobile"
+    },
+    {
+      "slug": "mobile-friendly",
+      "term": "Mobile-friendly",
+      "aliases": [
+        "intrusive interstitials",
+        "web app manifest"
+      ],
+      "format": "page",
+      "hub": "mobile",
+      "title": "Mobile-friendly pages: what a mobile audit checks",
+      "primary_query": "mobile friendly test",
+      "definition": "A page that works on a phone without zooming or sideways scrolling: viewport set, readable text, tappable controls, no input zoom.",
+      "rules": [
+        "mobile/viewport",
+        "mobile/font-size",
+        "mobile/horizontal-scroll",
+        "mobile/tap-targets",
+        "mobile/input-zoom",
+        "mobile/interstitials",
+        "mobile/web-app-manifest"
+      ],
+      "related": [
+        "viewport-meta-tag",
+        "touch-targets"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/WAI/WCAG22/Understanding/resize-text.html",
+        "https://www.w3.org/WAI/WCAG22/Understanding/reflow.html",
+        "https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html",
+        "https://www.w3.org/TR/appmanifest/"
+      ],
+      "grounding_note": null,
+      "batch": "6-a11y-mobile"
+    },
+    {
+      "slug": "url-slug",
+      "term": "URL slug",
+      "aliases": [],
+      "format": "page",
+      "hub": "url",
+      "title": "URL slugs: length, hyphens, case and special characters",
+      "primary_query": "url slug best practices",
+      "definition": "The readable last part of a URL path; short, lowercase, hyphen-separated words work best.",
+      "rules": [
+        "url/slug-keywords",
+        "url/slug-convention",
+        "url/stop-words",
+        "url/hyphens",
+        "url/special-chars",
+        "url/lowercase",
+        "url/length"
+      ],
+      "related": [
+        "trailing-slash",
+        "url-parameters"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/crawling-indexing/url-structure",
+        "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls",
+        "https://developer.mozilla.org/en-US/docs/Glossary/Percent-encoding",
+        "https://developer.mozilla.org/en-US/docs/Learn_web_development/Howto/Web_mechanics/What_is_a_URL"
+      ],
+      "grounding_note": null,
+      "batch": "3b-onpage-links"
+    },
+    {
+      "slug": "trailing-slash",
+      "term": "Trailing slash",
+      "aliases": [],
+      "format": "entry",
+      "hub": "url",
+      "title": null,
+      "primary_query": "trailing slash seo",
+      "definition": "Whether URLs end in /; /page and /page/ are different URLs, so a site should pick one and redirect the other.",
+      "rules": [
+        "url/trailing-slash",
+        "core/canonical-form-drift"
+      ],
+      "related": [
+        "canonical-url",
+        "duplicate-content",
+        "url-slug"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/blog/2010/04/to-slash-or-not-to-slash",
+        "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls",
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel#canonical"
+      ],
+      "grounding_note": null,
+      "batch": "3a-crawl-index"
+    },
+    {
+      "slug": "url-parameters",
+      "term": "URL parameters",
+      "aliases": [
+        "query strings"
+      ],
+      "format": "entry",
+      "hub": "url",
+      "title": null,
+      "primary_query": "url parameters seo",
+      "definition": "Key-value pairs after ? in a URL; tracking and sort parameters can multiply URLs for the same content.",
+      "rules": [
+        "url/parameters"
+      ],
+      "related": [
+        "crawl-budget",
+        "canonical-url",
+        "duplicate-content"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/crawling-indexing/crawling-managing-faceted-navigation",
+        "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls"
+      ],
+      "grounding_note": null,
+      "batch": "3a-crawl-index"
+    },
+    {
+      "slug": "hreflang",
+      "term": "hreflang",
+      "aliases": [
+        "x-default"
+      ],
+      "format": "page",
+      "hub": "i18n",
+      "title": "What is hreflang? Return links, x-default and errors",
+      "primary_query": "what is hreflang",
+      "definition": "Link annotations that tell search engines which language or regional versions of a page exist, with x-default as the fallback.",
+      "rules": [
+        "i18n/hreflang"
+      ],
+      "related": [
+        "lang-attribute",
+        "canonical-url"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.w3.org/International/questions/qa-html-language-declarations",
+        "https://developers.google.com/search/docs/specialty/international/localized-versions"
+      ],
+      "grounding_note": null,
+      "batch": "3b-onpage-links"
+    },
+    {
+      "slug": "e-e-a-t",
+      "term": "E-E-A-T",
+      "aliases": [
+        "EEAT"
+      ],
+      "format": "page",
+      "hub": "eeat",
+      "title": "What is E-E-A-T? The signals a site can show",
+      "primary_query": "what is e-e-a-t",
+      "definition": "Experience, expertise, authoritativeness and trustworthiness: the qualities Google's quality raters are told to assess, with trust at the centre.",
+      "rules": [
+        "eeat/author-byline",
+        "eeat/author-expertise",
+        "eeat/about-page",
+        "eeat/contact-page",
+        "eeat/citations",
+        "eeat/trust-signals",
+        "eeat/editorial-policy",
+        "eeat/authority-signals"
+      ],
+      "related": [
+        "ymyl",
+        "author-byline",
+        "content-freshness"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/fundamentals/creating-helpful-content",
+        "https://developers.google.com/search/blog/2022/12/google-raters-guidelines-e-e-a-t",
+        "https://services.google.com/fh/files/misc/hsw-sqrg.pdf",
+        "https://developers.google.com/search/docs/appearance/structured-data/article"
+      ],
+      "grounding_note": "E-E-A-T is not a ranking factor or score; rules detect on-page signals only.",
+      "batch": "4-schema-trust"
+    },
+    {
+      "slug": "ymyl",
+      "term": "YMYL",
+      "aliases": [
+        "Your Money or Your Life"
+      ],
+      "format": "page",
+      "hub": "eeat",
+      "title": "What is YMYL? Your Money or Your Life content explained",
+      "primary_query": "what is ymyl",
+      "definition": "Topics that could significantly affect a person's health, finances, safety or society, which Google's raters hold to a higher standard.",
+      "rules": [
+        "eeat/ymyl-detection",
+        "eeat/disclaimers"
+      ],
+      "related": [
+        "e-e-a-t"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://static.googleusercontent.com/media/guidelines.raterhub.com/en//searchqualityevaluatorguidelines.pdf",
+        "https://developers.google.com/search/docs/fundamentals/creating-helpful-content"
+      ],
+      "grounding_note": null,
+      "batch": "4-schema-trust"
+    },
+    {
+      "slug": "author-byline",
+      "term": "Author byline",
+      "aliases": [],
+      "format": "entry",
+      "hub": "eeat",
+      "title": null,
+      "primary_query": "author byline",
+      "definition": "The visible author name on an article, ideally linked to an author page and matched by an author entity in structured data.",
+      "rules": [
+        "eeat/author-byline",
+        "eeat/author-expertise",
+        "content/author-info",
+        "schema/entity-authors"
+      ],
+      "related": [
+        "e-e-a-t",
+        "article-schema"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/fundamentals/creating-helpful-content",
+        "https://developers.google.com/search/docs/appearance/structured-data/article",
+        "https://schema.org/Person"
+      ],
+      "grounding_note": null,
+      "batch": "4-schema-trust"
+    },
+    {
+      "slug": "affiliate-disclosure",
+      "term": "Affiliate disclosure",
+      "aliases": [],
+      "format": "entry",
+      "hub": "eeat",
+      "title": null,
+      "primary_query": "affiliate disclosure",
+      "definition": "A clear statement that a page earns commission from links, required by the FTC in the US and similar rules elsewhere.",
+      "rules": [
+        "eeat/affiliate-disclosure"
+      ],
+      "related": [
+        "e-e-a-t"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/fundamentals/creating-helpful-content",
+        "https://developers.google.com/search/docs/crawling-indexing/qualify-outbound-links"
+      ],
+      "grounding_note": null,
+      "batch": "4-schema-trust"
+    },
+    {
+      "slug": "nap-consistency",
+      "term": "NAP consistency",
+      "aliases": [],
+      "format": "page",
+      "hub": "local",
+      "title": "What is NAP in local SEO? Consistency and checks",
+      "primary_query": "what is nap seo",
+      "definition": "Name, address and phone number stated the same way across a site's pages, schema and listings.",
+      "rules": [
+        "local/nap-consistency",
+        "schema/local-business",
+        "eeat/physical-address"
+      ],
+      "related": [
+        "local-business-schema",
+        "geo-meta-tags"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/appearance/structured-data/local-business",
+        "https://schema.org/LocalBusiness",
+        "https://schema.org/PostalAddress"
+      ],
+      "grounding_note": null,
+      "batch": "4-schema-trust"
+    },
+    {
+      "slug": "geo-meta-tags",
+      "term": "Geo meta tags",
+      "aliases": [
+        "geo.position",
+        "ICBM"
+      ],
+      "format": "page",
+      "hub": "local",
+      "title": "Geo meta tags: geo.position, placename and their limits",
+      "primary_query": "geo meta tags",
+      "definition": "Legacy geo.region, geo.placename and geo.position meta tags that state a page's location; not to be confused with GEO, generative engine optimization.",
+      "rules": [
+        "local/geo-meta"
+      ],
+      "related": [
+        "nap-consistency",
+        "generative-engine-optimization"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/specialty/international/managing-multi-regional-sites",
+        "https://schema.org/LocalBusiness",
+        "https://datatracker.ietf.org/doc/html/draft-daviel-html-geo-tag-07"
+      ],
+      "grounding_note": "GSC shows 'geo placename' and 'geo meta tags' queries on /rules/local/geo-meta: this term disambiguates from GEO.",
+      "batch": "1-ax-geo"
+    },
+    {
+      "slug": "content-gap",
+      "term": "Content gap analysis",
+      "aliases": [
+        "keyword gap"
+      ],
+      "format": "entry",
+      "hub": "gaps",
+      "title": null,
+      "primary_query": "content gap analysis",
+      "definition": "Finding the topics and queries a site's audience searches for that the site does not yet cover.",
+      "rules": [
+        "gaps/content",
+        "gaps/keywords"
+      ],
+      "related": [
+        "thin-content"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/fundamentals/creating-helpful-content",
+        "https://developers.google.com/search/docs/fundamentals/seo-starter-guide"
+      ],
+      "grounding_note": "Cloud, opt-in, uses live search data.",
+      "batch": "4-schema-trust"
+    },
+    {
+      "slug": "agent-experience",
+      "term": "Agent experience (AX)",
+      "aliases": [
+        "AX"
+      ],
+      "format": "page",
+      "hub": "ax",
+      "title": "What is agent experience (AX)? Five pillars, checked",
+      "primary_query": "agent experience ax",
+      "definition": "How well a site serves AI agents that read it, find their way around it and act on it, the way UX serves people.",
+      "rules": [
+        "ax/content-without-js",
+        "ax/token-weight",
+        "ax/markdown-response",
+        "ax/ai-crawlers",
+        "ax/agent-blocking",
+        "ax/llms-txt",
+        "ax/agents-md",
+        "ax/well-known-agent",
+        "ax/content-signals",
+        "ax/api-discovery"
+      ],
+      "related": [
+        "llms-txt",
+        "ai-crawler",
+        "generative-engine-optimization",
+        "client-side-rendering"
+      ],
+      "learn": [
+        "https://squirrelscan.com/learn/ai-crawlers",
+        "https://squirrelscan.com/learn/llms-txt"
+      ],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics",
+        "https://developers.google.com/search/docs/crawling-indexing/overview-google-crawlers",
+        "https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt",
+        "https://web.dev/articles/rendering-on-the-web"
+      ],
+      "grounding_note": "Canonical term. Never 'agent readiness' or 'AI readiness' (Cloudflare's product name may be cited as a proper noun only).",
+      "batch": "1-ax-geo"
+    },
+    {
+      "slug": "generative-engine-optimization",
+      "term": "Generative engine optimization (GEO)",
+      "aliases": [
+        "GEO",
+        "AEO"
+      ],
+      "format": "page",
+      "hub": "ax",
+      "title": "What is GEO? Generative engine optimization defined",
+      "primary_query": "what is generative engine optimization",
+      "definition": "Making content more likely to be retrieved, cited and quoted by AI answer engines; the term comes from a 2023 research paper.",
+      "rules": [
+        "ax/ai-crawlers",
+        "ax/content-without-js",
+        "ax/llms-txt",
+        "ai/llm-parsability",
+        "schema/json-ld-valid",
+        "ax/agent-blocking"
+      ],
+      "related": [
+        "agent-experience",
+        "ai-crawler",
+        "llms-txt",
+        "structured-data",
+        "geo-meta-tags"
+      ],
+      "learn": [
+        "https://squirrelscan.com/learn/generative-engine-optimization",
+        "https://squirrelscan.com/learn/geo-tools",
+        "https://squirrelscan.com/learn/geo-checker"
+      ],
+      "tools": [],
+      "authority": [
+        "https://arxiv.org/abs/2311.09735",
+        "https://www.w3.org/TR/json-ld11/",
+        "https://developers.google.com/search/docs/crawling-indexing/overview-google-crawlers",
+        "https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics"
+      ],
+      "grounding_note": "No rule measures GEO directly. List the rules that bear on whether an AI system can reach and parse the page; no ranking claims. /learn owns the long guide; this page is the definition.",
+      "batch": "1-ax-geo"
+    },
+    {
+      "slug": "llms-txt",
+      "term": "llms.txt",
+      "aliases": [],
+      "format": "page",
+      "hub": "ax",
+      "title": "What is llms.txt? Format, adoption and what it is not",
+      "primary_query": "what is llms.txt",
+      "definition": "A proposed Markdown file at /llms.txt that gives language models a curated map of a site's key content.",
+      "rules": [
+        "ax/llms-txt"
+      ],
+      "related": [
+        "agent-experience",
+        "agents-md",
+        "markdown-for-agents"
+      ],
+      "learn": [
+        "https://squirrelscan.com/learn/llms-txt"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/llms-txt-validator"
+      ],
+      "authority": [
+        "https://www.rfc-editor.org/rfc/rfc7763.html",
+        "https://llmstxt.org/"
+      ],
+      "grounding_note": "Google has said it does not use llms.txt for ranking; keep that line from the AX hub.",
+      "batch": "1-ax-geo"
+    },
+    {
+      "slug": "agents-md",
+      "term": "AGENTS.md",
+      "aliases": [],
+      "format": "entry",
+      "hub": "ax",
+      "title": null,
+      "primary_query": "agents.md",
+      "definition": "A Markdown file of instructions for coding agents working in a repository or against a docs site.",
+      "rules": [
+        "ax/agents-md"
+      ],
+      "related": [
+        "llms-txt",
+        "agent-experience"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.rfc-editor.org/rfc/rfc7763.html",
+        "https://agents.md/"
+      ],
+      "grounding_note": null,
+      "batch": "1-ax-geo"
+    },
+    {
+      "slug": "ai-crawler",
+      "term": "AI crawler",
+      "aliases": [
+        "GPTBot",
+        "ClaudeBot",
+        "Common Crawl"
+      ],
+      "format": "page",
+      "hub": "ax",
+      "title": "AI crawlers: GPTBot, ClaudeBot and what to allow",
+      "primary_query": "ai crawlers list",
+      "definition": "A bot that fetches pages for AI companies, in three classes: training crawlers, AI search indexers and user-triggered fetchers, each with its own user-agent token.",
+      "rules": [
+        "ax/ai-crawlers",
+        "ax/agent-blocking",
+        "crawl/robots-txt",
+        "ax/archive-indexing"
+      ],
+      "related": [
+        "robots-txt",
+        "content-signals",
+        "agent-experience",
+        "noai"
+      ],
+      "learn": [
+        "https://squirrelscan.com/learn/ai-crawlers"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/robots-txt-generator"
+      ],
+      "authority": [
+        "https://developers.google.com/search/docs/crawling-indexing/overview-google-crawlers",
+        "https://developers.google.com/search/docs/crawling-indexing/robots/intro",
+        "https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt",
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/403"
+      ],
+      "grounding_note": null,
+      "batch": "1-ax-geo"
+    },
+    {
+      "slug": "content-signals",
+      "term": "Content Signals",
+      "aliases": [],
+      "format": "entry",
+      "hub": "ax",
+      "title": null,
+      "primary_query": "content signals robots.txt",
+      "definition": "Content-Signal lines in robots.txt that state whether content may be used for search, AI input or AI training.",
+      "rules": [
+        "ax/content-signals"
+      ],
+      "related": [
+        "robots-txt",
+        "ai-crawler",
+        "rsl"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt",
+        "https://www.rfc-editor.org/rfc/rfc9309.html",
+        "https://contentsignals.org/"
+      ],
+      "grounding_note": null,
+      "batch": "1-ax-geo"
+    },
+    {
+      "slug": "noai",
+      "term": "noai and noimageai",
+      "aliases": [],
+      "format": "entry",
+      "hub": "ax",
+      "title": null,
+      "primary_query": "noai meta tag",
+      "definition": "Meta robots values some sites use to ask AI systems not to train on their text or images; not part of any standard search engines honour.",
+      "rules": [
+        "ax/noai-signals"
+      ],
+      "related": [
+        "content-signals"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag",
+        "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name"
+      ],
+      "grounding_note": null,
+      "batch": "1-ax-geo"
+    },
+    {
+      "slug": "rsl",
+      "term": "RSL (Really Simple Licensing)",
+      "aliases": [],
+      "format": "entry",
+      "hub": "ax",
+      "title": null,
+      "primary_query": "rsl license",
+      "definition": "A standard for publishing machine-readable licensing terms for AI use of content, referenced from robots.txt.",
+      "rules": [
+        "ax/rsl-license"
+      ],
+      "related": [
+        "content-signals",
+        "pay-per-crawl"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.rfc-editor.org/rfc/rfc9309.html",
+        "https://rslstandard.org/"
+      ],
+      "grounding_note": null,
+      "batch": "1-ax-geo"
+    },
+    {
+      "slug": "pay-per-crawl",
+      "term": "Pay per crawl",
+      "aliases": [
+        "HTTP 402",
+        "x402"
+      ],
+      "format": "entry",
+      "hub": "ax",
+      "title": null,
+      "primary_query": "pay per crawl",
+      "definition": "Charging AI crawlers for access with HTTP 402 Payment Required responses, as in Cloudflare Pay Per Crawl and the x402 protocol.",
+      "rules": [
+        "ax/pay-per-crawl"
+      ],
+      "related": [
+        "rsl",
+        "ai-crawler"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://docs.x402.org/",
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/402",
+        "https://developers.cloudflare.com/ai-crawl-control/features/pay-per-crawl/"
+      ],
+      "grounding_note": null,
+      "batch": "1-ax-geo"
+    },
+    {
+      "slug": "markdown-for-agents",
+      "term": "Markdown for agents",
+      "aliases": [
+        "content negotiation",
+        "token weight"
+      ],
+      "format": "entry",
+      "hub": "ax",
+      "title": null,
+      "primary_query": "serve markdown to ai agents",
+      "definition": "Serving a clean Markdown version of a page, through Accept: text/markdown or a .md URL, so agents read fewer tokens.",
+      "rules": [
+        "ax/markdown-response",
+        "ax/token-weight"
+      ],
+      "related": [
+        "llms-txt"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://web.dev/articles/dom-size-and-interactivity",
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Content_negotiation",
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Vary",
+        "https://www.rfc-editor.org/rfc/rfc7763.html"
+      ],
+      "grounding_note": null,
+      "batch": "1-ax-geo"
+    },
+    {
+      "slug": "client-side-rendering",
+      "term": "Client-side rendering",
+      "aliases": [
+        "JavaScript rendering"
+      ],
+      "format": "page",
+      "hub": "ax",
+      "title": "Client-side rendering: what agents and crawlers miss",
+      "primary_query": "client side rendering seo",
+      "definition": "Building page content in the browser with JavaScript; agents and many fetchers that do not run JavaScript see an empty page.",
+      "rules": [
+        "ax/content-without-js",
+        "perf/browser-required"
+      ],
+      "related": [
+        "agent-experience",
+        "generative-engine-optimization"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics",
+        "https://web.dev/articles/rendering-on-the-web",
+        "https://web.dev/articles/vitals",
+        "https://web.dev/articles/inp"
+      ],
+      "grounding_note": null,
+      "batch": "1-ax-geo"
+    },
+    {
+      "slug": "well-known-uri",
+      "term": "Well-known URIs",
+      "aliases": [
+        ".well-known",
+        "MCP server card"
+      ],
+      "format": "entry",
+      "hub": "ax",
+      "title": null,
+      "primary_query": "well-known uri",
+      "definition": "Fixed paths under /.well-known/ (RFC 8615) where sites publish machine-readable files: security.txt, api-catalog, OAuth metadata and agent manifests.",
+      "rules": [
+        "ax/well-known-agent",
+        "ax/api-discovery",
+        "security/security-txt"
+      ],
+      "related": [
+        "security-txt",
+        "agent-experience",
+        "llms-txt"
+      ],
+      "learn": [],
+      "tools": [],
+      "authority": [
+        "https://www.rfc-editor.org/rfc/rfc9727.html",
+        "https://www.rfc-editor.org/rfc/rfc8414.html",
+        "https://www.rfc-editor.org/rfc/rfc9728.html",
+        "https://www.rfc-editor.org/rfc/rfc9116"
+      ],
+      "grounding_note": null,
+      "batch": "1-ax-geo"
+    }
+  ]
+}

@@ -3,6 +3,7 @@
 validate:
 	bun x tangly check --strict
 	bun scripts/check-links.ts
+	bun scripts/glossary.ts --check
 
 dev:
 	bun x tangly dev

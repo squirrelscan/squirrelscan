@@ -30,6 +30,15 @@ does not render, a missing anchor from `docs/scripts/required-anchors.json` (the
 cloud app links to those sections, so keep a heading's `{#id}` when you rename it),
 and a rule page `## Options` row that prints `unknown` or `undefined`.
 
+It then runs `docs/scripts/glossary.ts --check`. The glossary and the rule-category
+hubs are built from `docs/scripts/glossary/terms.json` and `hubs.json`: the content
+between `{/* glossary:...:start */}` or `{/* hub:...:start */}` markers is generated,
+so edit the data files and run `bun scripts/glossary.ts --write` in `docs/` instead
+of editing it by hand. The check also fails on a term naming a rule with no docs
+page, a hub that does not link one of its rules, a category hub with a category
+`<Card>` or a stated rule count, a glossary or hub title over 60 or description over
+155 characters, an em-dash, and two pages with the same title.
+
 ## Issues
 
 Every issue carries a `## Acceptance Criteria` checklist: the observable outcomes that mean it is done. The issue templates include the section. If a report arrives without one, maintainers add it at triage.
