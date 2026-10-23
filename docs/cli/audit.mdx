@@ -282,7 +282,8 @@ cloud access and login).
 
 ### Gate CI on audit results
 
-Use `--fail-on` to fail a CI build when an audit regresses. The command exits
+Use `--fail-on` to fail a CI build when an audit crosses a threshold you set.
+Thresholds are absolute, not a comparison with an earlier audit. The command exits
 with code `2` when **any** threshold trips (vs `1` for operational errors and
 `0` when everything passes), and prints a summary of what tripped:
 
