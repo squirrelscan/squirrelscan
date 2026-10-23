@@ -4,7 +4,7 @@
   "scripts": {
     "dev": "tangly dev",
     "build": "tangly build",
-    "check": "tangly check --strict && bun scripts/check-links.ts",
+    "check": "tangly check --strict && bun scripts/check-links.ts && bun scripts/glossary.ts --check && bun test ./scripts/glossary.test.ts ./scripts/check-links.test.ts",
     "preview": "tangly preview",
     "deploy": "tangly build && wrangler deploy"
   },
