@@ -281,7 +281,7 @@ describe("odd report data", () => {
       }),
     );
     // The page script's own isNaN() is code, not copy: look at the markup only.
-    const markup = html.replace(/<script\b[^>]*>[\s\S]*?<\/script[^>]*>/gi, "");
+    const markup = html.split(/<script\b[^>]*>[\s\S]*?<\/script[^>]*>/i).join("");
     expect(markup).toContain("not a date");
     expect(markup).not.toContain("NaN");
     expect(markup).not.toContain("Infinity");
