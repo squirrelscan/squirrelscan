@@ -10,16 +10,6 @@
       "file": "rules/content/index.mdx",
       "message": "hub does not link rule content/quality, whose **Category** is /rules/content",
       "reason": "content/quality is retired (its page says it never runs) and the hub leaves it out on purpose. The content hub rewrite (G8) decides whether a retired rule is listed."
-    },
-    {
-      "file": "rules/perf/index.mdx",
-      "message": "same title as rules/performance/index.mdx",
-      "reason": "Both pages are titled \"Performance\". The perf hub rewrite (G6) gives each a distinct title."
-    },
-    {
-      "file": "rules/performance/index.mdx",
-      "message": "same title as rules/perf/index.mdx",
-      "reason": "Both pages are titled \"Performance\". The perf hub rewrite (G6) gives each a distinct title."
     }
   ]
 }
