@@ -80,3 +80,17 @@ renders at request time, and every page is our own MDX with no untrusted props o
 view-transition values. Neither advisory has untrusted input to work with.
 
 Remove this exception, and the cap, when tangly moves to `@astrojs/mdx` `8`.
+
+## GHSA-mrhx-c7xc-m3w5
+
+Zod: memory exhaustion while validating oversized constrained collections (high,
+fixed in `4.6.6`). The tree resolves `4.4.3`, `4.1.11` and `3.25.76`. `cli` and
+`rules` ask for `^4.4.3`, but `config` and `crawler` ask for `^3.25.76`, so
+reaching `4.6.6` there is a zod 3 to 4 migration, not a bump (#1085). The MCP
+packages, tangly/astro and ultracite pull zod in transitively.
+
+Public zod validates trusted local config and our own cloud API responses. The
+attack needs an attacker-sized array inside the validated input, and neither
+source carries one from an untrusted party.
+
+Remove this exception when zod is at `4.6.6` or later everywhere (#1085).
