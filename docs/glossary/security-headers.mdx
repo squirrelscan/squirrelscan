@@ -1,0 +1,85 @@
+---
+title: "Security headers: the six every site should send"
+description: "Security headers are HTTP response headers, such as CSP, HSTS and X-Content-Type-Options, that tell browsers to restrict risky behavior. The six to send."
+sidebarTitle: "Security headers"
+---
+
+**Security headers** are HTTP response headers that tell the browser to restrict risky behavior on a page: where it may load code from, whether it may be framed, how much of its URL it shares and which device features it may use.
+
+The usual set is six headers. `Content-Security-Policy` limits where scripts and other resources load from. `Strict-Transport-Security` keeps the browser on HTTPS. `X-Content-Type-Options: nosniff` stops the browser guessing a response's type. `X-Frame-Options`, or CSP's `frame-ancestors`, controls who may embed the page. `Referrer-Policy` limits what the `Referer` header reveals to other sites, and `Permissions-Policy` turns off features such as the camera or geolocation for the page and its frames. They are meant to change what an attacker can do with the page, not how it looks, though a CSP that blocks the page's own styles or images changes both.
+
+{/* glossary:hub:start */}
+
+Category: [Security](/rules/security)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+The headers are a second line of defence. A script injection bug becomes much less useful when CSP refuses to run the injected code. A page that cannot be framed cannot be overlaid for clickjacking. They are also cheap to send, usually a few lines at the CDN or in one middleware. The opposite kind of header matters too: a `Server` or `X-Powered-By` value that names an exact software version tells an attacker which known vulnerabilities to try.
+
+## How squirrelscan checks it
+
+Most of these rules read the response headers of the first crawled page, so the verdict covers the site rather than each page. [security/csp](/rules/security/csp) warns when there is no policy, when it is report-only, and when its script sources allow `'unsafe-inline'`, `'unsafe-eval'` or a bare `*`. [security/hsts](/rules/security/hsts) warns on a missing header or a `max-age` under six months. [security/x-content-type](/rules/security/x-content-type) wants `nosniff`. [security/x-frame-options](/rules/security/x-frame-options) accepts `DENY`, `SAMEORIGIN` or a CSP `frame-ancestors`. [security/referrer-policy](/rules/security/referrer-policy) warns on `unsafe-url`, and [security/permissions-policy](/rules/security/permissions-policy) notes a missing header without parsing its directives. [security/version-disclosure](/rules/security/version-disclosure) reads `Server`, `X-Powered-By` and three other headers on every page and warns when a value contains a version number such as `nginx/1.24.0`.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Content-Security-Policy: what to set and how to check it](/rules/security/csp) | A missing CSP, a report-only policy or an unsafe-inline script-src leaves XSS unmitigated. squirrel parses the header and names each gap. | warning |
+| [HSTS: what Strict-Transport-Security needs to be valid](/rules/security/hsts) | A missing or short Strict-Transport-Security header leaves the first request downgradeable. squirrel reads the header and checks max-age. | warning |
+| [X-Content-Type-Options: nosniff and why it matters](/rules/security/x-content-type) | Without nosniff a browser may execute an uploaded file as script because the bytes look like one. squirrel reads the header once per site. | info |
+| [X-Frame-Options: how to stop your pages being framed](/rules/security/x-frame-options) | With no X-Frame-Options and no frame-ancestors, any site can iframe your pages and overlay them. squirrel checks both headers together. | warning |
+| [Referrer-Policy: which value to send and what leaks](/rules/security/referrer-policy) | unsafe-url sends the full URL, query string included, to every site you link to. squirrel reads the header and flags the leaky values. | info |
+| [Permissions-Policy: what the header does and how to set it](/rules/security/permissions-policy) | Without a Permissions-Policy, embedded frames inherit access to camera, microphone and geolocation. squirrel reads the header once per site. | info |
+| [Version-revealing headers: why Server and X-Powered-By should not name a version](/rules/security/version-disclosure) | A Server or X-Powered-By header with a version number tells a scanner which known vulnerabilities to try. squirrel reads five headers and flags each version it finds. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Set the headers once, at the edge or in global middleware, on every HTML response:
+
+```
+Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-r4nd0m'; object-src 'none'; frame-ancestors 'self'
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+```
+
+Build the CSP in report-only mode first ([the CSP fix](/rules/security/csp#how-to-fix-it)). Raise HSTS `max-age` once every subdomain serves HTTPS ([the HSTS fix](/rules/security/hsts#how-to-fix-it)). Check that scripts are served with the right content type before turning on `nosniff` ([the nosniff fix](/rules/security/x-content-type#how-to-fix-it)). Turn off version tokens in the server and framework, for example `server_tokens off;` in nginx ([the version fix](/rules/security/version-disclosure#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include security/csp,security/hsts,security/x-content-type,security/x-frame-options,security/referrer-policy,security/permissions-policy,security/version-disclosure
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Content Security Policy (CSP)](/glossary/content-security-policy): A response header listing where a page may load scripts, styles, frames and other resources from, limiting what injected code can do.
+- [HSTS](/glossary/hsts): The Strict-Transport-Security header that tells browsers to use only HTTPS for a host for a set time.
+- [X-Frame-Options](/glossary#x-frame-options): A response header that controls whether other sites may embed the page in a frame; CSP frame-ancestors is its successor.
+
+{/* glossary:related:end */}
+
+## Learn more
+
+- [Audit website security with AI](https://squirrelscan.com/learn/audit-website-security-with-ai)
+- [Security headers checker](https://squirrelscan.com/tools/security-headers-checker)
+
+## References
+
+- [Content-Security-Policy, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy)
+- [Content Security Policy Level 3, W3C](https://www.w3.org/TR/CSP3/)
+- [Referrer Policy, W3C](https://www.w3.org/TR/referrer-policy/)

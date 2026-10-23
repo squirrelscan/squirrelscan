@@ -1,0 +1,77 @@
+---
+title: "HTTPS for every page: redirects, forms and downgrades"
+description: "HTTPS is HTTP over TLS: it encrypts traffic and proves the server's identity. Why every page and form needs it, and how to redirect and stop downgrades."
+sidebarTitle: "HTTPS"
+---
+
+**HTTPS** is HTTP sent over an encrypted TLS connection, which keeps traffic private, stops it being altered on the way, and proves to the browser that it is talking to the real server.
+
+MDN describes it as the encrypted version of HTTP, with TLS doing the encryption and the server's certificate doing the identity check. web.dev's case for it is about integrity as much as privacy. HTTPS stops intruders from tampering with the traffic between a site and its visitors, and those intruders include attackers and also companies such as ISPs that inject ads into pages. Many newer browser features, including the ones progressive web apps need, only work over HTTPS.
+
+{/* glossary:hub:start */}
+
+Category: [Security](/rules/security)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+An HTTP page can be read and changed by anyone on the network path, from a café's Wi-Fi to a compromised router. A form that submits over HTTP sends what the visitor types in the clear, and even a form posting to HTTPS can be rewritten while its page travels over HTTP. A site that has moved to HTTPS can still leak in three ways: an old `http://` URL that does not redirect, a form whose `action` points at `http://`, and internal links that still use the old scheme, which send visitors through a redirect or, worse, onto an unencrypted page.
+
+## How squirrelscan checks it
+
+[security/https](/rules/security/https) fails each crawled page whose URL is not `https:`. [security/http-to-https](/rules/security/http-to-https) rewrites a sample of the site's URLs to `http://` and follows the redirects, then lists those that land on HTTPS. Read that warning as an inventory of HTTP URLs that still answer, not as a defect. [security/form-https](/rules/security/form-https) fails an HTTPS page with a form `action`, or a submit button's `formaction`, that resolves to `http:`. [links/https-downgrade](/rules/links/https-downgrade) warns about `<a href>` values on an HTTPS page that start with `http://`. It reads the attribute text, so relative and protocol-relative links are not flagged.
+
+The HTTPS and redirect rules are skipped on `localhost` and private-network hosts, where a dev server is not the production edge.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [HTTPS: what it means when a page is not served over HTTPS](/rules/security/https) | A page delivered over plain HTTP can be read and rewritten in transit. squirrel flags every crawled URL whose protocol is not https. | error |
+| [HTTP to HTTPS redirect: how squirrel probes for it](/rules/security/http-to-https) | squirrel requests the http:// version of a sample of your URLs and reports which ones redirect to HTTPS, with the status code of the first hop. | warning |
+| [Form action over HTTP: the insecure form submission warning](/rules/security/form-https) | A form on an HTTPS page that posts to http:// sends the data in the clear and browsers interstitial it. squirrel checks action and formaction. | error |
+| [Links from an HTTPS page to an http:// destination](/rules/links/https-downgrade) | A link that drops the visitor to plain HTTP hands their next request to the network. squirrel flags every explicit http:// link on an HTTPS page. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Serve the site on 443 with a valid certificate, and send every HTTP request to the HTTPS URL in one permanent hop:
+
+```nginx
+server {
+  listen 80;
+  server_name example.com www.example.com;
+  return 301 https://example.com$request_uri;
+}
+```
+
+Keep the path and query string, and use a 301 so the HTTPS URL becomes the canonical one ([the redirect fix](/rules/security/http-to-https#how-to-fix-it), [the page fix](/rules/security/https#how-to-fix-it)). Change form actions to `https://` or to a relative path ([the form fix](/rules/security/form-https#how-to-fix-it)). Update internal links, canonical tags and the sitemap to `https://` ([the downgrade fix](/rules/links/https-downgrade#how-to-fix-it)), then add [HSTS](/glossary/hsts).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include security/https,security/http-to-https,security/form-https,links/https-downgrade
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [HSTS](/glossary/hsts): The Strict-Transport-Security header that tells browsers to use only HTTPS for a host for a set time.
+- [Mixed content](/glossary#mixed-content): An HTTPS page loading scripts, styles, images or media over plain HTTP.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Why HTTPS matters, web.dev](https://web.dev/articles/why-https-matters)
+- [HTTPS, MDN glossary](https://developer.mozilla.org/en-US/docs/Glossary/HTTPS)
+- [Transport Layer Security, MDN](https://developer.mozilla.org/en-US/docs/Web/Security/Practical_implementation_guides/TLS)

@@ -1,0 +1,71 @@
+---
+title: "Viewport meta tag: width=device-width and zoom"
+description: "The viewport meta tag sets a page's layout width to the device width on phones. Why width=device-width matters, and why disabling zoom fails users."
+sidebarTitle: "Viewport meta tag"
+---
+
+The **viewport meta tag** is a `<meta name="viewport">` element that tells a mobile browser how wide to lay out the page, normally `width=device-width, initial-scale=1`, so the layout fits the screen instead of a desktop-sized canvas.
+
+Without it, mobile browsers lay the page out at a desktop width and shrink it to fit, which leaves text too small to read. MDN documents the parts: `width` sets the layout width, `initial-scale` the starting zoom, and `maximum-scale`, `minimum-scale` and `user-scalable` limit zoom. MDN also notes that browsers can ignore `maximum-scale`, and that iOS 10 and later do so by default.
+
+{/* glossary:hub:start */}
+
+Category: [Mobile](/rules/mobile)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+The tag is what makes a responsive layout work at all, because media queries respond to the layout width it sets. The zoom settings are where it goes wrong. `user-scalable=no` or `maximum-scale=1` stops people pinching to zoom. WCAG success criterion 1.4.4, Resize Text, asks that text can be resized up to 200 percent without losing content or function. Most often zoom gets disabled to stop iOS zooming in when a form field takes focus, which is caused by input text smaller than 16 pixels and is better fixed there.
+
+## How squirrelscan checks it
+
+[mobile/viewport](/rules/mobile/viewport) fails a page with no viewport tag, warns when the tag has no `width` or a width other than `device-width`, and notes a missing `initial-scale`. [mobile/viewport-zoom](/rules/mobile/viewport-zoom) fails `user-scalable=no`, `user-scalable=0` or `maximum-scale=1`. [a11y/zoom-disabled](/rules/a11y/zoom-disabled) is stricter: it also fails any `maximum-scale` below 5, the threshold Lighthouse uses, and a `minimum-scale` above 1. That is stricter than WCAG's 200 percent, so a page can fail this rule and still meet the criterion. [mobile/horizontal-scroll](/rules/mobile/horizontal-scroll) lists likely overflow causes at info level: inline widths over 500 pixels, tables and iframes with a fixed `width`. Nothing is rendered, so these are candidates, not measured overflow.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Missing viewport meta tag: what it does and what to set](/rules/mobile/viewport) | Without a viewport meta tag a phone renders the page at desktop width and zooms out. squirrel checks the tag and its content properties. | error |
+| [user-scalable=no: the viewport setting that blocks zoom](/rules/mobile/viewport-zoom) | Disabling pinch zoom stops readers who need to magnify text. squirrel checks the viewport content for user-scalable and maximum-scale. | error |
+| [user-scalable=no: viewport settings that block zoom](/rules/a11y/zoom-disabled) | A viewport that caps the zoom level stops low-vision users enlarging text. squirrel parses the viewport meta tag on every page. | error |
+| [Horizontal scroll on mobile: the usual causes](/rules/mobile/horizontal-scroll) | A page a phone can scroll sideways is a page that does not fit. squirrel looks for fixed widths, tables and fixed-width iframes. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+For almost every site, this is the whole tag:
+
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+```
+
+Put it in the base layout so every page gets it ([the viewport fix](/rules/mobile/viewport#how-to-fix-it)). Remove `user-scalable` and `maximum-scale`, and set form fields to 16 pixels or larger if the reason was input zoom ([the zoom fix](/rules/mobile/viewport-zoom#how-to-fix-it), [the zoom-disabled fix](/rules/a11y/zoom-disabled#how-to-fix-it)). Replace fixed widths with `max-width` and wrap wide tables in a scrolling container ([the overflow fix](/rules/mobile/horizontal-scroll#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include mobile/viewport,mobile/viewport-zoom,a11y/zoom-disabled,mobile/horizontal-scroll
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Mobile-friendly](/glossary/mobile-friendly): A page that works on a phone without zooming or sideways scrolling: viewport set, readable text, tappable controls, no input zoom.
+- [Touch target size](/glossary#touch-targets): The tappable area of a control; WCAG 2.2 sets 24 by 24 CSS pixels as the AA minimum.
+
+{/* glossary:related:end */}
+
+## References
+
+- [The viewport meta tag, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name/viewport)
+- [Understanding SC 1.4.4 Resize Text, W3C](https://www.w3.org/WAI/WCAG22/Understanding/resize-text.html)
+- [Meta viewport allows for zoom, W3C ACT rule](https://www.w3.org/WAI/standards-guidelines/act/rules/b4f0c3/)

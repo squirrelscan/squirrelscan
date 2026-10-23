@@ -1,0 +1,83 @@
+---
+title: "How to tell if your website is hacked: the signals"
+description: "A hacked site carries content placed without permission: injected pages, phishing kits, obfuscated scripts and malicious links. The signals to look for."
+sidebarTitle: "Hacked site signals"
+---
+
+**Hacked site signals** are the traces a compromise leaves on a website: pages the owner never published, phishing kits, obfuscated scripts, overlays that harvest logins, and links to known malicious URLs.
+
+Google's spam policies define hacked content as any content placed on a site without permission through a security vulnerability. Its security documentation describes social engineering, such as phishing pages that trick visitors into revealing information or downloading software, and says Chrome may warn visitors away from a site that hosts it. Injected pages are often built to stay out of sight. They sit off the site's own template, are not linked from its navigation and are missing from its sitemap, so the owner does not notice them.
+
+{/* glossary:hub:start */}
+
+Category: [Site Integrity](/rules/integrity)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+Visitors are the first victims: a fake sign-in form takes their passwords, and an injected script can redirect them or load malware. The site pays next, through browser warnings, lost trust and search results full of pages it did not write. A compromise that is caught early is cheaper to clean up, because the attacker has had less time to plant backdoors.
+
+## How squirrelscan checks it
+
+The integrity rules use correlation gating. A heuristic signal on its own is reported at info level for review, and fails only when at least two distinct integrity signals fire on the same page. That keeps one odd page from being called a compromise. [integrity/obfuscated-script](/rules/integrity/obfuscated-script) looks for large, high-entropy inline scripts with packer markers such as `eval(` or `_0x`. [integrity/seo-doorway](/rules/integrity/seo-doorway) looks for thin or stuffed affiliate-spam pages. [integrity/brand-impersonation](/rules/integrity/brand-impersonation) finds sign-in controls for six brands, such as Google and Microsoft, that point at hosts the brand does not own, and [integrity/fake-auth-overlay](/rules/integrity/fake-auth-overlay) finds full-screen login iframes. [integrity/template-discontinuity](/rules/integrity/template-discontinuity) and [integrity/orphan-page](/rules/integrity/orphan-page) find pages off the site's template or hidden from its links and sitemap.
+
+Two rules belong to the opt-in threat-intel feature and fail directly. [integrity/kit-signature](/rules/integrity/kit-signature) matches bundled phishing-kit signatures, and [integrity/known-malicious-url](/rules/integrity/known-malicious-url) checks site URLs and outbound links against threat feeds. With the feature off, they report nothing rather than a clean result.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Kit signature: matching a page against known phishing kits](/rules/integrity/kit-signature) | A phishing kit reuses the same markup and strings on every site it lands on. squirrel matches each page against bundled kit signatures. | error |
+| [Obfuscated inline script: spotting an injected payload](/rules/integrity/obfuscated-script) | A large inline script with high entropy and eval or anti-tamper markers is rarely something a site ships on purpose. squirrel measures all three. | warning |
+| [Known malicious URL: checking against threat feeds](/rules/integrity/known-malicious-url) | A page can be listed by Safe Browsing before you notice anything wrong. squirrel checks your URLs and outbound links against reputation feeds. | error |
+| [Template discontinuity: a page that is not on your theme](/rules/integrity/template-discontinuity) | An injected standalone page loads none of your site's CSS, hosts or chrome. squirrel fingerprints every page and scores it against the site baseline. | warning |
+| [Hidden orphan page: reachable but linked from nowhere](/rules/integrity/orphan-page) | An injected page hides by being in no sitemap and linked from no page. squirrel finds crawled pages with zero inbound links and no sitemap entry. | warning |
+| [Doorway page: injected affiliate spam on a legitimate site](/rules/integrity/seo-doorway) | An off-topic, keyword-stuffed affiliate post is how a compromise monetises your domain's authority. squirrel checks the title, the density and the body. | warning |
+| [Brand impersonation: a sign-in page that is not the brand's](/rules/integrity/brand-impersonation) | A 'Sign in with Google' control pointing at a host that is not Google is a phishing pattern. squirrel checks where credential controls actually go. | warning |
+| [Fake authentication overlay: full-screen login iframes](/rules/integrity/fake-auth-overlay) | A fixed, full-viewport, high z-index iframe with an auth identifier is a credential-harvesting overlay. squirrel measures the geometry and the intent. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Open each flagged page and compare it with a normal one. Most off-template pages turn out to be your own, such as a campaign landing page ([the template fix](/rules/integrity/template-discontinuity#how-to-fix-it)). For a page or script you did not add, treat the site as compromised:
+
+```bash
+# list files changed in the last 14 days under the web root
+find /var/www -type f -mtime -14 -print
+```
+
+Remove the injected pages and scripts, look for the loader or account that put them there, rotate credentials and read the access logs ([the kit fix](/rules/integrity/kit-signature#how-to-fix-it), [the script fix](/rules/integrity/obfuscated-script#how-to-fix-it)). Once a listed URL is clean, request a review from the provider that listed it ([the malicious URL fix](/rules/integrity/known-malicious-url#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include integrity/kit-signature,integrity/obfuscated-script,integrity/known-malicious-url,integrity/template-discontinuity,integrity/orphan-page,integrity/seo-doorway,integrity/brand-impersonation,integrity/fake-auth-overlay
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Cloaking](/glossary#cloaking): Serving search engines or particular user agents different content from what visitors see, a Google spam policy violation.
+- [Doorway page](/glossary#doorway-page): A page made to rank for a query and funnel visitors elsewhere, often many near-identical pages per keyword or city.
+- [Orphan page](/glossary#orphan-page): A page that no other crawled page links to, so crawlers and readers only reach it through a sitemap or a direct URL.
+
+{/* glossary:related:end */}
+
+## Learn more
+
+- [Audit website security with AI](https://squirrelscan.com/learn/audit-website-security-with-ai)
+
+## References
+
+- [Spam policies: hacked content, Google Search Central](https://developers.google.com/search/docs/essentials/spam-policies#hacked-content)
+- [Social engineering (phishing and deceptive sites), Google Search Central](https://developers.google.com/search/docs/monitor-debug/security/social-engineering)
+- [Malware and unwanted software, Google Search Central](https://developers.google.com/search/docs/monitor-debug/security/malware)

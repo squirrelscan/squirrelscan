@@ -1,0 +1,80 @@
+---
+title: "What is WCAG? Levels, criteria and what audits check"
+description: "WCAG is the W3C's Web Content Accessibility Guidelines: testable success criteria at levels A, AA and AAA. What it covers, and what audits cannot."
+sidebarTitle: "WCAG"
+---
+
+**WCAG**, the Web Content Accessibility Guidelines, is the W3C standard for making web content accessible to people with disabilities, written as testable success criteria at three levels: A, AA and AAA.
+
+WCAG 2.2 was published in October 2023 and is the current version. Each success criterion is a statement that content passes or fails, such as text having a contrast ratio of at least 4.5:1, and sits under a guideline grouped by four principles: perceivable, operable, understandable and robust. Level A is the lowest and AAA the highest. W3C also publishes an Understanding document and sufficient techniques for each criterion, which explain the intent and show ways to meet it.
+
+{/* glossary:hub:start */}
+
+Category: [Accessibility](/rules/a11y)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+Accessibility barriers are specific. A form field with no label, a button with no name, text too faint to read, a page that cannot be zoomed or a carousel that traps the keyboard each shuts out a group of people. WCAG gives teams a shared, checkable definition of the bar. The standard itself says it is meant for places where conformance testing is needed, such as design specifications, purchasing, regulation and contracts.
+
+## How squirrelscan checks it
+
+The accessibility rules are hand-written checks that cover part of WCAG. They are not axe-core and they are not a conformance test. W3C's guidance on evaluation tools says tools cannot check every accessibility aspect automatically, and that human judgement is required. Many criteria, such as whether alt text is meaningful or a page can be used with a keyboard, need a person.
+
+The rules read the HTML and inline styles, and the `<style>` blocks where a rule needs them. They do not read external stylesheets. Several examples: [a11y/color-contrast](/rules/a11y/color-contrast) measures only text whose colors are both set inline. [a11y/form-labels](/rules/a11y/form-labels) fails form controls with no label. [a11y/link-text](/rules/a11y/link-text) flags empty and generic links. [a11y/heading-order](/rules/a11y/heading-order) flags skipped heading levels, and [a11y/html-lang-valid](/rules/a11y/html-lang-valid) checks the page language. [a11y/touch-targets](/rules/a11y/touch-targets) reads inline sizes against 44 pixels. [images/alt-text](/rules/images/alt-text) reports images with no `alt`. A clean audit means these checks found nothing, not that the site conforms to WCAG.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Color contrast: the 4.5:1 rule and how to check it](/rules/a11y/color-contrast) | Light gray text on white fails WCAG AA. squirrel measures the contrast of text whose color and background are both set inline, and reports pairs under 4.5:1. | warning |
+| [Form labels: which inputs need one and how to check](/rules/a11y/form-labels) | An input labelled only by its placeholder loses its label the moment someone types. squirrel lists every unlabeled input, textarea and select. | error |
+| [Link text: why 'click here' fails and what to use](/rules/a11y/link-text) | Links reading 'click here', and links wrapping an unlabeled icon, give screen reader users nothing to go on. squirrel lists both kinds. | warning |
+| [Heading order: why skipping from h1 to h3 matters](/rules/a11y/heading-order) | Screen reader users navigate by heading level, and a skipped level makes the outline harder to follow. squirrel checks document order on every page. | warning |
+| [html lang: valid values and what a missing one breaks](/rules/a11y/html-lang-valid) | Without a lang attribute a screen reader guesses the pronunciation, often wrongly. squirrel checks the html element on every page. | error |
+| [Touch target size: the 24 and 44 pixel minimums](/rules/a11y/touch-targets) | Buttons and links smaller than a fingertip are hard to hit on a phone. squirrel flags interactive elements sized below 44 pixels inline. | warning |
+| [Missing alt attribute: what an empty alt means](/rules/images/alt-text) | An image with no alt attribute has no name for a screen reader. An empty alt is the correct way to say decorative, and squirrel accepts it. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Fix what the rules report, then test what they cannot see, with a keyboard, a screen reader and the browser's zoom:
+
+```html
+<html lang="en-GB">
+  <label for="email">Email address</label>
+  <input id="email" type="email" autocomplete="email">
+</html>
+```
+
+Give every control a label and every page a language ([the labels fix](/rules/a11y/form-labels#how-to-fix-it), [the language fix](/rules/a11y/html-lang-valid#how-to-fix-it)). Check contrast in the rendered page, since most colors live in stylesheets ([the contrast fix](/rules/a11y/color-contrast#how-to-fix-it)). Name links by their destination ([the link text fix](/rules/a11y/link-text#how-to-fix-it)). For a conformance claim, run a manual evaluation against the success criteria.
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include a11y/color-contrast,a11y/form-labels,a11y/link-text,a11y/heading-order,a11y/html-lang-valid,a11y/touch-targets,images/alt-text
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [ARIA](/glossary/aria): Accessible Rich Internet Applications: roles, states and properties that describe custom widgets to assistive technology.
+- [Accessible name](/glossary/accessible-name): The name assistive technology announces for an element, computed from its content, label, aria-label or aria-labelledby.
+- [Color contrast ratio](/glossary/color-contrast): The luminance ratio between text and its background; WCAG AA asks for 4.5:1 for body text and 3:1 for large text.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Web Content Accessibility Guidelines (WCAG) 2.2, W3C](https://www.w3.org/TR/WCAG22/)
+- [WCAG 2 overview, W3C WAI](https://www.w3.org/WAI/standards-guidelines/wcag/)
+- [Selecting web accessibility evaluation tools, W3C WAI](https://www.w3.org/WAI/test-evaluate/tools/selecting/)

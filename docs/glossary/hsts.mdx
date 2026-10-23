@@ -1,0 +1,72 @@
+---
+title: "What is HSTS? max-age, includeSubDomains and preload"
+description: "HSTS is the Strict-Transport-Security header that tells browsers to use only HTTPS for a host. max-age, includeSubDomains, preload and how to roll it out."
+sidebarTitle: "HSTS"
+---
+
+**HSTS**, HTTP Strict Transport Security, is a response header, `Strict-Transport-Security`, that tells browsers to reach a host only over HTTPS for a set period.
+
+It is defined in RFC 6797. After a browser has seen the header, it upgrades every later `http://` request to that host to HTTPS before sending it. MDN adds that it also stops the user from clicking through a certificate error on that host. `max-age` sets how long the rule lasts in seconds, `includeSubDomains` extends it to every subdomain, and `preload` signals consent to the browser preload list run at hstspreload.org. That list is not part of the HSTS specification. A browser ignores the header when it arrives over plain HTTP.
+
+{/* glossary:hub:start */}
+
+Category: [Security](/rules/security)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+A redirect from HTTP to HTTPS still leaves the first request in the clear, and an attacker on the network can answer that request before the redirect happens. HSTS closes the gap for every visit after the first, because the browser never sends the HTTP request at all. The preload list closes it for the first visit too, since browsers ship with the list built in. Mistakes are costly in the other direction. `includeSubDomains` on a domain with an HTTP-only subdomain makes that subdomain unreachable for the length of `max-age`, and removing a preloaded domain from the list takes months.
+
+## How squirrelscan checks it
+
+[security/hsts](/rules/security/hsts) reads the headers of the first crawled page, so the verdict covers the site rather than each page. It reports at info level when that page is not HTTPS, since the header would be ignored. It warns when the header is missing, when it has no valid `max-age`, when `max-age=0` tells browsers to drop the policy, and when `max-age` is below 15,768,000 seconds, about six months. A longer `max-age` passes. The rule does not check whether the domain is on the preload list. It is skipped on `localhost` and private-network hosts.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [HSTS: what Strict-Transport-Security needs to be valid](/rules/security/hsts) | A missing or short Strict-Transport-Security header leaves the first request downgradeable. squirrel reads the header and checks max-age. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Send the header from the HTTPS origin, not from the HTTP redirect:
+
+```
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+```
+
+Start with a short `max-age` while you confirm that every subdomain serves HTTPS, then raise it to a year ([the HSTS fix](/rules/security/hsts#how-to-fix-it)). Add `preload` and submit the domain at hstspreload.org only once you are sure, because getting it off the list again is slow.
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include security/hsts
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [HTTPS](/glossary/https): HTTP over TLS, which encrypts traffic and proves the server's identity; every page and form should use it.
+- [Security headers](/glossary/security-headers): HTTP response headers (CSP, HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy) that tell browsers to restrict risky behaviour.
+
+{/* glossary:related:end */}
+
+## Learn more
+
+- [Security headers checker](https://squirrelscan.com/tools/security-headers-checker)
+
+## References
+
+- [RFC 6797: HTTP Strict Transport Security](https://datatracker.ietf.org/doc/html/rfc6797)
+- [Strict-Transport-Security, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Strict-Transport-Security)
+- [HTTP Strict Transport Security Cheat Sheet, OWASP](https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Strict_Transport_Security_Cheat_Sheet.html)

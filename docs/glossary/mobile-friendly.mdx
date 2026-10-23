@@ -1,0 +1,77 @@
+---
+title: "Mobile-friendly pages: what a mobile audit checks"
+description: "A mobile-friendly page works on a phone without zooming or sideways scrolling: viewport set, readable text, tappable controls. What an audit can check."
+sidebarTitle: "Mobile-friendly"
+---
+
+A **mobile-friendly** page is one a person can use on a phone without pinching, zooming or scrolling sideways: the layout fits the screen, the text is readable, the controls are big enough to tap and nothing blocks the content on arrival.
+
+There is no single standard behind the term, but several pieces are defined. Google uses the mobile version of a page's content for indexing and ranking, which it calls mobile-first indexing. WCAG 2.2 sets the accessibility side. Success criterion 1.4.10, Reflow, asks that content works at a width of 320 CSS pixels without two-way scrolling. 2.5.8, Target Size (Minimum), asks for targets of at least 24 by 24 CSS pixels at level AA, with exceptions for spacing. 1.4.4 asks that text can be resized to 200 percent. A web app manifest, defined by W3C, is what lets a site be installed like an app.
+
+{/* glossary:hub:start */}
+
+Category: [Mobile](/rules/mobile)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+Most of the failures are small and add up: a fixed 960-pixel container, body text set at 11 pixels, links in a menu packed too close to hit, form fields that make iOS zoom in, and a full-screen sign-up popup over the article a search visitor came for. Because Google indexes the mobile version, content that is missing or broken there is missing for search too.
+
+## How squirrelscan checks it
+
+These rules read markup and inline styles. Nothing is rendered or measured on a real screen. [mobile/viewport](/rules/mobile/viewport) checks the viewport tag. [mobile/font-size](/rules/mobile/font-size) warns on inline font sizes under 12 pixels, and [mobile/tap-targets](/rules/mobile/tap-targets) counts interactive elements and warns on inline sizes under 30 pixels. Both say little when sizes live in a stylesheet. [mobile/horizontal-scroll](/rules/mobile/horizontal-scroll) lists likely overflow causes. [mobile/input-zoom](/rules/mobile/input-zoom) finds text fields under 16 pixels, reading inline styles and the page's `<style>` blocks. [mobile/interstitials](/rules/mobile/interstitials) notes popup and modal patterns by class name or library, without telling a consent banner from a sign-up overlay. [mobile/web-app-manifest](/rules/mobile/web-app-manifest) fetches the linked manifests and their icons, up to five manifests, and checks the fields an install needs.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Missing viewport meta tag: what it does and what to set](/rules/mobile/viewport) | Without a viewport meta tag a phone renders the page at desktop width and zooms out. squirrel checks the tag and its content properties. | error |
+| [Font size under 12px: text too small to read on a phone](/rules/mobile/font-size) | Body text below about 16px is hard to read on a phone without zooming. squirrel checks inline styles for sizes under 12px. | warning |
+| [Horizontal scroll on mobile: the usual causes](/rules/mobile/horizontal-scroll) | A page a phone can scroll sideways is a page that does not fit. squirrel looks for fixed widths, tables and fixed-width iframes. | warning |
+| [Tap target size: the 44 by 44 pixel guideline](/rules/mobile/tap-targets) | A control smaller than a fingertip is a control people miss. squirrel counts interactive elements and flags small inline dimensions. | warning |
+| [Form fields under 16px: why iOS Safari zooms in when one is focused](/rules/mobile/input-zoom) | On an iPhone, focusing a text field under 16px zooms the page in. squirrel reads form field sizes from inline styles and style blocks and reports the small ones. | warning |
+| [Intrusive interstitials: popups that cover mobile content](/rules/mobile/interstitials) | A popup covering the content a visitor came for is a ranking problem as well as a usability one. squirrel detects popup markup and libraries. | warning |
+| [Web app manifest: the file that sets the home-screen icon and name](/rules/mobile/web-app-manifest) | A linked web app manifest that is missing, broken or inconsistent gives a blank home-screen icon and a generic name. squirrel checks the manifest the pages link. | error |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Start with a responsive base and test at a narrow width:
+
+```css
+img, video { max-width: 100%; height: auto; }
+body { font-size: 1rem; line-height: 1.5; }
+input, select, textarea { font-size: 16px; }
+.icon-button { min-width: 44px; min-height: 44px; }
+```
+
+Set body text in `rem` so it follows the reader's browser setting ([the font size fix](/rules/mobile/font-size#how-to-fix-it)). Give small controls padding ([the tap target fix](/rules/mobile/tap-targets#how-to-fix-it)) and fields 16 pixels ([the input zoom fix](/rules/mobile/input-zoom#how-to-fix-it)). Delay promotional overlays until the reader has engaged ([the interstitials fix](/rules/mobile/interstitials#how-to-fix-it)). Serve the manifest as `application/manifest+json` with 192 and 512 pixel icons ([the manifest fix](/rules/mobile/web-app-manifest#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include mobile/viewport,mobile/font-size,mobile/horizontal-scroll,mobile/tap-targets,mobile/input-zoom,mobile/interstitials,mobile/web-app-manifest
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Viewport meta tag](/glossary/viewport-meta-tag): `<meta name="viewport">` that sets the layout width to the device width; disabling zoom in it fails accessibility.
+- [Touch target size](/glossary#touch-targets): The tappable area of a control; WCAG 2.2 sets 24 by 24 CSS pixels as the AA minimum.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Mobile site and mobile-first indexing best practices, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/mobile/mobile-sites-mobile-first-indexing)
+- [Understanding SC 1.4.10 Reflow, W3C](https://www.w3.org/WAI/WCAG22/Understanding/reflow.html)
+- [Understanding SC 2.5.8 Target Size (Minimum), W3C](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)

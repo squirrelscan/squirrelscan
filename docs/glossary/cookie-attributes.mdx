@@ -1,0 +1,69 @@
+---
+title: "Cookie flags: Secure, HttpOnly and SameSite explained"
+description: "Cookie attributes Secure, HttpOnly and SameSite limit where a cookie is sent and whether scripts can read it. What each flag does and how to set them."
+sidebarTitle: "Cookie attributes"
+---
+
+**Cookie attributes** are the flags on a `Set-Cookie` header, mainly `Secure`, `HttpOnly` and `SameSite`, that limit where the browser sends a cookie and whether page scripts can read it.
+
+MDN's reference sets out what each one does. `Secure` sends the cookie only over HTTPS, except on `localhost`. `HttpOnly` stops JavaScript from reading the cookie through `document.cookie`, though it is still sent with requests a script makes. `SameSite` controls cross-site sending. `Strict` keeps the cookie to same-site requests and `Lax` also allows top-level navigations such as following a link. `None` sends it everywhere and requires `Secure`. Some browsers treat a cookie with no `SameSite` as `Lax`.
+
+{/* glossary:hub:start */}
+
+Category: [Security](/rules/security)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+A session cookie is a key to the account. Without `Secure`, it can travel over an unencrypted connection. If `HttpOnly` is missing, any script that runs on the page, including one injected through a cross-site scripting bug, can read it and send it elsewhere. With no deliberate `SameSite`, the cookie may ride along on requests other sites trigger, which is how cross-site request forgery works. `SameSite=None` without `Secure` is a different failure: modern browsers reject the cookie outright.
+
+## How squirrelscan checks it
+
+[security/cookie-flags](/rules/security/cookie-flags) splits each page's `Set-Cookie` header into cookies. It fails a cookie set `SameSite=None` without `Secure`, and warns on one with no `Secure` on an HTTPS page or no `HttpOnly`. It notes at info level a cookie with no explicit `SameSite`. It only sees cookies the server sets in a response header. Cookies written by JavaScript, the usual case for analytics, are not visible to it. [security/third-party-cookies](/rules/security/third-party-cookies) does not observe cookies at all. It reads the markup for scripts, iframes and tracking pixels from about forty known tracking domains, such as `doubleclick.net` and `hotjar.com`, and lists other third-party hosts at info level.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Cookie flags: Secure, HttpOnly and SameSite on Set-Cookie](/rules/security/cookie-flags) | SameSite=None without Secure is rejected outright, and a session cookie without HttpOnly is readable by any script. squirrel parses every Set-Cookie. | warning |
+| [Third-party cookies: which external domains a page loads](/rules/security/third-party-cookies) | Trackers and 1x1 pixels set cookies from domains you do not control. squirrel inventories the third-party scripts, iframes and pixels per page. | info |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Set the flags where the cookie is created, in the session middleware or the framework's cookie helper:
+
+```
+Set-Cookie: session=abc123; Path=/; Secure; HttpOnly; SameSite=Lax
+```
+
+Drop `HttpOnly` only for a cookie your own frontend has to read, such as a CSRF token mirrored into the page. When a cookie needs `SameSite=None`, add `Secure` in the same change ([the cookie flags fix](/rules/security/cookie-flags#how-to-fix-it)). Hold third-party tags behind a consent gate, or replace them with a first-party collector ([the third-party fix](/rules/security/third-party-cookies#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include security/cookie-flags,security/third-party-cookies
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Token storage](/glossary#token-storage): Where a web app keeps session or auth tokens; tokens in localStorage are readable by any script on the page.
+- [Cookie consent](/glossary/cookie-consent): The banner and mechanism that asks visitors before setting non-essential cookies, as GDPR and ePrivacy require in the EU.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Set-Cookie, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie)
+- [Using HTTP cookies, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Cookies)
+- [Session Management Cheat Sheet, OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)

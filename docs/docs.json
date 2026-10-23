@@ -670,21 +670,30 @@
           {
             "group": "SEO",
             "pages": [
-              "glossary/content-freshness",
-              "glossary/e-e-a-t",
-              "glossary/entity",
+              "glossary/accessible-name",
+              "glossary/aria",
+              "glossary/color-contrast",
               "glossary/geo-meta-tags",
               "glossary/entity-id",
               "glossary/json-ld",
-              "glossary/local-business-schema",
-              "glossary/nap-consistency",
-              "glossary/organization-schema",
-              "glossary/product-schema",
-              "glossary/rich-results",
+              "glossary/mobile-friendly",
               "glossary/robots-txt",
               "glossary/structured-data",
-              "glossary/thin-content",
-              "glossary/ymyl"
+              "glossary/viewport-meta-tag",
+              "glossary/wcag"
+            ]
+          },
+          {
+            "group": "Security",
+            "pages": [
+              "glossary/content-security-policy",
+              "glossary/cookie-attributes",
+              "glossary/cookie-consent",
+              "glossary/hacked-site",
+              "glossary/hsts",
+              "glossary/https",
+              "glossary/leaked-secrets",
+              "glossary/security-headers"
             ]
           },
           {

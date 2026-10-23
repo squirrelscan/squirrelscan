@@ -1,0 +1,87 @@
+---
+title: "Accessible names and aria-label: how they are computed"
+description: "An accessible name is what assistive technology announces for an element, computed from its content, label, aria-label or aria-labelledby. How it works."
+sidebarTitle: "Accessible name"
+---
+
+An **accessible name** is the text assistive technology announces for an element, such as "Search" for a button or "Email address" for a field, worked out from the element's content, its label or ARIA attributes.
+
+W3C's Accessible Name and Description Computation specification sets the order. `aria-labelledby` wins, then `aria-label`, then the native label: a `<label>` for a form field, `alt` for an image, a `<caption>` for a table. Then comes the element's own text for roles that take their name from content, such as buttons and links, and finally `title`. The Authoring Practices Guide's advice is to prefer visible text, and to treat `aria-label` as the fallback when there is nothing visible to point at. WCAG success criterion 4.1.2, Name, Role, Value, requires every user interface component to have a name that can be determined by software.
+
+{/* glossary:hub:start */}
+
+Category: [Accessibility](/rules/a11y)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+A control with no name is announced as "button" or "edit text" and nothing else. Icon buttons are the usual case: a magnifying glass, a cross or a hamburger menu that is obvious to a sighted user is silent to a screen reader. Voice control users hit a different problem. They say the words they can see, so a button that shows "Search" but is named "Find products" does not respond to "click Search". WCAG 2.5.3, Label in Name, asks that the name contain the visible text for that reason.
+
+## How squirrelscan checks it
+
+Fourteen hand-written rules check names, each for a kind of element. [a11y/button-name](/rules/a11y/button-name) and [a11y/aria-labels](/rules/a11y/aria-labels) cover buttons and clickable SVGs. [a11y/aria-input-field-name](/rules/a11y/aria-input-field-name), [a11y/select-name](/rules/a11y/select-name) and [a11y/aria-toggle-field-name](/rules/a11y/aria-toggle-field-name) cover fields, selects, checkboxes and radios. [a11y/aria-command-name](/rules/a11y/aria-command-name) covers links and menu items, and [a11y/aria-dialog-name](/rules/a11y/aria-dialog-name) covers dialogs. [a11y/frame-title](/rules/a11y/frame-title) covers iframes. Meters, progress bars, tooltips and tree items each have their own rule, and [a11y/table-duplicate-name](/rules/a11y/table-duplicate-name) flags tables that share or lack a name on pages with more than one. [a11y/label-content-name-mismatch](/rules/a11y/label-content-name-mismatch) fails an `aria-label` that does not contain the element's visible text.
+
+Most of these rules skip elements hidden from the accessibility tree, and report ones a style may hide in a way squirrelscan cannot settle as unconfirmed. An icon drawn by a CSS pseudo-element is not in the markup, so such a button reads as empty.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [aria-label: which elements need one and how to check](/rules/a11y/aria-labels) | Buttons, links and inputs with no visible text and no aria-label have no name for screen readers. squirrel finds every one on every page. | error |
+| [Accessible names for buttons: what counts and how to check](/rules/a11y/button-name) | A button with only an icon has no name for a screen reader. squirrel lists every button on every page that has nothing to announce. | error |
+| [Input fields with no accessible name, ARIA and native](/rules/a11y/aria-input-field-name) | Text boxes, comboboxes and sliders that announce nothing. squirrel checks the nine ARIA input roles alongside native inputs and selects. | error |
+| [Command roles: buttons, links and menu items need names](/rules/a11y/aria-command-name) | Anything that performs an action has to announce what it does. squirrel lists every command element on a page with no accessible name. | error |
+| [Dialog accessible name: role=dialog and the dialog element](/rules/a11y/aria-dialog-name) | A modal with no name leaves screen reader users guessing what just opened. squirrel checks ARIA dialogs and native dialogs separately. | error |
+| [Dropdowns with no accessible name: naming a select](/rules/a11y/select-name) | A select announced only as 'combo box' gives no clue what it changes. squirrel checks every select element on the page. | error |
+| [iframe title: naming embedded frames for screen readers](/rules/a11y/frame-title) | An iframe with no title is announced as just 'frame'. squirrel checks every iframe and frame element on the page. | error |
+| [Visible label missing from the accessible name](/rules/a11y/label-content-name-mismatch) | A button showing 'Search' with aria-label 'Find products' may not respond when a user speaks its visible label. squirrel compares the two. | error |
+| [Accessible name for a meter element and role=meter](/rules/a11y/aria-meter-name) | A gauge that announces only a number tells a screen reader user nothing. squirrel checks native meter elements and role=meter. | error |
+| [Accessible name for a progress bar and role=progressbar](/rules/a11y/aria-progressbar-name) | A progress bar with no name announces a percentage and nothing else. squirrel checks native progress elements and role=progressbar. | error |
+| [Checkboxes, radios and switches with no accessible name](/rules/a11y/aria-toggle-field-name) | A checkbox that announces only its role gives no reason to tick it. squirrel checks toggle roles and native checkbox and radio inputs. | error |
+| [role=tooltip with no content: what to check](/rules/a11y/aria-tooltip-name) | A tooltip with nothing to announce leaves the control it explains unexplained. squirrel checks every role=tooltip element on the page. | error |
+| [role=treeitem: naming every node in a tree](/rules/a11y/aria-treeitem-name) | A tree node that announces only its position in the tree is unusable. squirrel checks every role=treeitem for something to read out. | error |
+| [Tables sharing a name, and tables with none](/rules/a11y/table-duplicate-name) | Several tables on one page need distinct names or a screen reader's table list is unusable. squirrel checks captions and labels. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Name the element that has the role, not the icon inside it, and hide the icon:
+
+```html
+<button aria-label="Close settings">
+  <svg aria-hidden="true">...</svg>
+</button>
+<button aria-label="Search products">Search</button>
+```
+
+Prefer a visible `<label>` for form fields, which also makes the words clickable ([the select fix](/rules/a11y/select-name#how-to-fix-it), [the field fix](/rules/a11y/aria-input-field-name#how-to-fix-it)). Point a dialog's `aria-labelledby` at its visible heading ([the dialog fix](/rules/a11y/aria-dialog-name#how-to-fix-it)). Start an `aria-label` with the visible words ([the mismatch fix](/rules/a11y/label-content-name-mismatch#how-to-fix-it)), and describe an iframe's content rather than the vendor ([the frame fix](/rules/a11y/frame-title#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include a11y/aria-labels,a11y/button-name,a11y/aria-input-field-name,a11y/aria-command-name,a11y/aria-dialog-name,a11y/select-name,a11y/frame-title,a11y/label-content-name-mismatch,a11y/aria-meter-name,a11y/aria-progressbar-name,a11y/aria-toggle-field-name,a11y/aria-tooltip-name,a11y/aria-treeitem-name,a11y/table-duplicate-name
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [ARIA](/glossary/aria): Accessible Rich Internet Applications: roles, states and properties that describe custom widgets to assistive technology.
+- [Form labels](/glossary#form-labels): The `<label>` or accessible name tied to each form control, plus autocomplete tokens, so people know what to enter.
+- [Anchor text](/glossary#anchor-text): The visible, clickable text of a link, which tells readers and search engines what the target is about.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Accessible Name and Description Computation 1.2, W3C](https://www.w3.org/TR/accname-1.2/)
+- [Providing accessible names and descriptions, ARIA Authoring Practices Guide](https://www.w3.org/WAI/ARIA/apg/practices/names-and-descriptions/)
+- [Understanding SC 4.1.2 Name, Role, Value, W3C](https://www.w3.org/WAI/WCAG22/Understanding/name-role-value.html)
