@@ -1,0 +1,83 @@
+---
+title: "What is an XML sitemap? Format, limits and checks"
+description: "An XML sitemap lists the URLs a site wants crawled, with optional lastmod dates. The format, the 50,000 URL limit and the checks squirrelscan runs."
+sidebarTitle: "XML sitemap"
+---
+
+An **XML sitemap** is a file that lists the URLs a site wants search engines to crawl, each in a `<loc>` element with an optional `<lastmod>` date.
+
+The format comes from sitemaps.org. One file holds at most 50,000 URLs or 50 MB uncompressed. A larger site splits its URLs across several files and lists them in a sitemap index, which has its own 50,000-entry limit. You can reference the sitemap from robots.txt with a `Sitemap:` line or submit it in Search Console. Google ignores `<priority>` and `<changefreq>`, and uses `<lastmod>` only when it is consistently and verifiably accurate.
+
+{/* glossary:hub:start */}
+
+Category: [Crawlability](/rules/crawl)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+A sitemap helps discovery. It does not guarantee that a URL is crawled or indexed. Google says the sites that most need one are large sites, new sites with few external links, and sites with a lot of video or image content. A small site of about 500 pages or fewer, with good internal linking, may not need one. A sitemap is also a weak canonical signal, so listing redirects, 404s or noindexed pages sends search engines URLs you do not want indexed.
+
+## How squirrelscan checks it
+
+Eight rules read the sitemaps the audit discovers from robots.txt and the common locations. [crawl/sitemap-exists](/rules/crawl/sitemap-exists) reports a missing sitemap, a sitemap that robots.txt does not name, and the URL count. A site that refused the requests is reported as not checked, not as missing. [crawl/sitemap-valid](/rules/crawl/sitemap-valid) reports parse errors, files over the 50,000-entry limit and `<lastmod>` values outside the W3C Datetime format. [crawl/sitemap-domain](/rules/crawl/sitemap-domain) flags URLs on another host (`www` and the bare domain count as one), [crawl/sitemap-4xx](/rules/crawl/sitemap-4xx) flags entries that answer 4xx and lists rate-limited ones apart as unverifiable, and [crawl/noindex-in-sitemap](/rules/crawl/noindex-in-sitemap) flags listed pages whose robots meta tag says `noindex`. [crawl/sitemap-coverage](/rules/crawl/sitemap-coverage) compares the sitemap with the crawl in both directions. Two rules judge the dates: [crawl/sitemap-lastmod-churn](/rules/crawl/sitemap-lastmod-churn) and [crawl/sitemap-lastmod-drift](/rules/crawl/sitemap-lastmod-drift), covered on the [lastmod](/glossary/lastmod) page.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [No XML sitemap found: where squirrel looks and what to add](/rules/crawl/sitemap-exists) | Without a sitemap, discovery depends entirely on internal links. squirrel checks the common locations and robots.txt, and counts the URLs it found. | error |
+| [Sitemap validation: XML errors and the 50,000 entry limit](/rules/crawl/sitemap-valid) | A sitemap that fails to parse or exceeds the protocol limits is ignored past the break. squirrel reports errors per file and checks entry counts. | error |
+| [Indexable pages missing from the sitemap: measuring the gap](/rules/crawl/sitemap-coverage) | A page you want indexed that is in no sitemap depends entirely on link discovery. squirrel diffs the crawl against the sitemap in both directions. | warning |
+| [Cross-domain sitemap URL: why search engines ignore it](/rules/crawl/sitemap-domain) | A sitemap can only vouch for URLs on its own host. squirrel compares every sitemap entry's hostname against your base URL. | error |
+| [4XX pages in sitemap: dead URLs you are still submitting](/rules/crawl/sitemap-4xx) | A sitemap entry that returns 404 wastes a crawl and teaches search engines to trust the file less. squirrel reports the status of every checked entry. | warning |
+| [Noindexed page in sitemap: why it is a contradiction](/rules/crawl/noindex-in-sitemap) | A sitemap says crawl this, noindex says do not index it. squirrel cross-references every crawled page's robots meta against your sitemap URLs. | warning |
+| [Sitemap lastmod stamped at build time: how to detect it](/rules/crawl/sitemap-lastmod-churn) | If every lastmod carries the same date, the field records your deploy, not your content. squirrel counts distinct days across the sitemap. | warning |
+| [Sitemap lastmod disagrees with the page's dateModified](/rules/crawl/sitemap-lastmod-drift) | When lastmod and the page's own dateModified disagree, one of them is wrong. squirrel compares them per URL and separates the two directions. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Generate the sitemap from the same data your routes come from, list only canonical URLs that return 200 and are indexable, and point to it from robots.txt:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://example.com/pricing</loc>
+    <lastmod>2026-03-14</lastmod>
+  </url>
+</urlset>
+```
+
+Add `Sitemap: https://example.com/sitemap.xml` to robots.txt ([the missing sitemap fix](/rules/crawl/sitemap-exists#how-to-fix-it)). Escape `&` as `&amp;` in URLs and split large sites behind an index ([the validation fix](/rules/crawl/sitemap-valid#how-to-fix-it)). Drop dead and noindexed entries in the generator rather than by hand ([the 4xx fix](/rules/crawl/sitemap-4xx#how-to-fix-it), [the noindex fix](/rules/crawl/noindex-in-sitemap#how-to-fix-it)), and set the generator's base URL to the canonical host ([the domain fix](/rules/crawl/sitemap-domain#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include crawl/sitemap-exists,crawl/sitemap-valid,crawl/sitemap-coverage,crawl/sitemap-domain,crawl/sitemap-4xx,crawl/noindex-in-sitemap,crawl/sitemap-lastmod-churn,crawl/sitemap-lastmod-drift
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [robots.txt](/glossary/robots-txt): A plain-text file at the site root that tells crawlers which paths they may fetch, per user-agent token (RFC 9309).
+- [Sitemap lastmod](/glossary/lastmod): The optional `<lastmod>` date on a sitemap URL entry, meant to say when the page content last changed.
+- [noindex](/glossary/noindex): A robots directive, in a meta tag or the X-Robots-Tag header, that asks search engines to keep a page out of their index.
+- [Indexability](/glossary/indexability): Whether a crawled URL is eligible to be indexed: reachable, a 200 response, not noindexed, not blocked and not canonicalised elsewhere.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Build and submit a sitemap, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap)
+- [Learn about sitemaps, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview)
+- [Sitemaps XML format, sitemaps.org](https://www.sitemaps.org/protocol.html)

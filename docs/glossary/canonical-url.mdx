@@ -1,0 +1,76 @@
+---
+title: "What is a canonical URL? rel=canonical explained"
+description: "A canonical URL is the address a page declares as the preferred one for its content, with rel=canonical or a Link header. How it works and how to set it."
+sidebarTitle: "Canonical URL"
+---
+
+A **canonical URL** is the address a page declares, with `<link rel="canonical">` or an HTTP `Link` header, as the preferred URL for its content.
+
+Google calls canonicalization the process of picking one representative URL from a set of duplicates, such as the same page with and without `www`, a trailing slash or a tracking parameter. The declaration is a hint. Google weighs it with other signals: a redirect is a strong signal, `rel="canonical"` is a strong one, and inclusion in a sitemap is a weak one. Google recommends absolute URLs, and a self-referencing canonical on the canonical page itself.
+
+{/* glossary:hub:start */}
+
+Category: [Core SEO](/rules/core)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+When one page is reachable at several URLs, links and other signals split between them, and the search engine picks the address to show. A clear canonical tells it which one you want. The mistakes are usually inconsistencies rather than a missing tag: a relative href resolved against the wrong base, a canonical that points through a redirect, an HTML tag and a header that disagree, or half the site canonicalising to `www` and half to the apex domain. Google also advises against using `noindex` to choose a canonical within a site, because it removes the page from search entirely.
+
+## How squirrelscan checks it
+
+[core/canonical](/rules/core/canonical) checks every page for a canonical, requires an absolute URL, and notes at info level when it points somewhere other than the page itself. [core/canonical-header](/rules/core/canonical-header) compares a `Link: rel="canonical"` header with the HTML tag. [core/canonical-form-drift](/rules/core/canonical-form-drift) looks across the site for canonicals that disagree on scheme, `www`, trailing slash or tracking parameters, once at least 10 comparable pages give a norm. [crawl/canonical-chain](/rules/crawl/canonical-chain) flags a canonical that names a URL the crawl saw redirect, or that looks like a redirect URL. [crawl/pagination](/rules/crawl/pagination) warns when page 2 or later canonicalises to an unpaginated URL. [social/og-url-match](/rules/social/og-url-match) checks that `og:url` matches the canonical.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [rel=canonical: presence, absolute form and self-reference](/rules/core/canonical) | A page with no canonical link, a relative one, or one that points somewhere else. squirrel checks every crawled page. | warning |
+| [Link rel=canonical header vs the HTML tag: the mismatch](/rules/core/canonical-header) | A page declaring one canonical in an HTTP header and a different one in the markup. squirrel parses the header and compares. | warning |
+| [Canonicals in two forms: www, scheme and trailing slash](/rules/core/canonical-form-drift) | Half the site canonicalising to www and half to the apex domain. squirrel compares four form axes across the crawl. | warning |
+| [Canonical URL resolves through a redirect: how to spot it](/rules/crawl/canonical-chain) | A canonical that redirects sends search engines on an extra hop before the real URL. squirrel checks the tag against the page's own redirect chain. | warning |
+| [Pagination canonicals: why page 2 is not page 1](/rules/crawl/pagination) | Canonicalizing every paginated page to page 1 hides the rest of the sequence. squirrel detects paginated URLs and checks where their canonical points. | info |
+| [og:url versus canonical: why they should be the same URL](/rules/social/og-url-match) | When og:url and the canonical disagree, share counts split across two addresses. squirrel normalises both and compares them. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Build the canonical from one function, from the route, and render it everywhere the URL is declared:
+
+```html
+<link rel="canonical" href="https://example.com/guides/build-cache" />
+<meta property="og:url" content="https://example.com/guides/build-cache" />
+```
+
+Use the final URL that answers 200 with no redirect ([the canonical fix](/rules/core/canonical#how-to-fix-it), [the chain fix](/rules/crawl/canonical-chain#how-to-fix-it)). Pick one scheme, one host and one slash convention per section ([the drift fix](/rules/core/canonical-form-drift#how-to-fix-it)). Give each paginated page a canonical that points at itself ([the pagination fix](/rules/crawl/pagination#how-to-fix-it)). Stop a CDN from adding a `Link` header that disagrees with the markup ([the header fix](/rules/core/canonical-header#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include core/canonical,core/canonical-header,core/canonical-form-drift,crawl/canonical-chain,crawl/pagination,social/og-url-match
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Duplicate content](/glossary#duplicate-content): The same or near-identical content reachable at more than one URL, or repeated titles and descriptions across pages.
+- [Trailing slash](/glossary#trailing-slash): Whether URLs end in /; /page and /page/ are different URLs, so a site should pick one and redirect the other.
+- [Redirect chain](/glossary/redirect-chain): A sequence of two or more redirects between the requested URL and the final response.
+- [URL parameters](/glossary#url-parameters): Key-value pairs after ? in a URL; tracking and sort parameters can multiply URLs for the same content.
+
+{/* glossary:related:end */}
+
+## References
+
+- [How to specify a canonical URL, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls)
+- [What is canonicalization, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/canonicalization)
+- [rel=canonical, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel#canonical)

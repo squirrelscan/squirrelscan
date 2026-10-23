@@ -1,0 +1,74 @@
+---
+title: "Sitemap lastmod: what it means and when it is ignored"
+description: "Sitemap lastmod is the date a URL's content last changed. Google uses it only when it matches reality. How build-time stamps and drift break it."
+sidebarTitle: "Sitemap lastmod"
+---
+
+**Sitemap lastmod** is the optional `<lastmod>` date on a sitemap entry, meant to record when the content at that URL last changed in a meaningful way.
+
+The value uses the W3C Datetime format: a date such as `2026-03-14`, or a full datetime with a time zone such as `2026-03-14T09:12:00+00:00`. Google's 2023 guidance says it uses `lastmod` as a signal for scheduling crawls of URLs it already knows, and that "last modification" means the last significant change: the main text, the structured data or the links, not a sidebar or a footer.
+
+{/* glossary:hub:start */}
+
+Category: [Crawlability](/rules/crawl)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+The date is only useful while it can be trusted. Google's example is a page that changed seven years ago but whose `lastmod` says yesterday: eventually, it says, it stops believing the site's dates. Its sitemap documentation puts the same rule plainly, saying Google uses `lastmod` only when it is consistently and verifiably accurate. The two common ways a site loses that trust are a generator that writes the build time onto every entry, and a sitemap that reads a different date field from the one the page renders.
+
+## How squirrelscan checks it
+
+[crawl/sitemap-lastmod-churn](/rules/crawl/sitemap-lastmod-churn) looks for build-time stamping. It reads every `<lastmod>` in every discovered sitemap, turns each into a calendar day, and warns when 20 or more dated URLs collapse onto two distinct days or fewer. Google News sitemaps are left out, because they hold about 48 hours of articles by design, and values that name only a year or a month are left out of the sample too.
+
+[crawl/sitemap-lastmod-drift](/rules/crawl/sitemap-lastmod-drift) compares each URL's `lastmod` with the page's own date: the `dateModified` in its JSON-LD first, then other `dateModified` markup, then the visible published date. It warns in two directions, with separate thresholds: `lastmod` behind the page by more than 7 whole days, and ahead by more than 30. Partial days are dropped, so a 7.5-day gap does not warn. Both are rule options. [crawl/sitemap-valid](/rules/crawl/sitemap-valid) separately reports values that are not valid W3C Datetime.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Sitemap lastmod stamped at build time: how to detect it](/rules/crawl/sitemap-lastmod-churn) | If every lastmod carries the same date, the field records your deploy, not your content. squirrel counts distinct days across the sitemap. | warning |
+| [Sitemap lastmod disagrees with the page's dateModified](/rules/crawl/sitemap-lastmod-drift) | When lastmod and the page's own dateModified disagree, one of them is wrong. squirrel compares them per URL and separates the two directions. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Write the content's own modification time, and leave it alone when a deploy does not change the page:
+
+```xml
+<url>
+  <loc>https://example.com/blog/post</loc>
+  <lastmod>2026-03-14T09:12:00Z</lastmod>
+</url>
+```
+
+Take the value from the CMS field or from version control, never from the clock at build time ([the churn fix](/rules/crawl/sitemap-lastmod-churn#how-to-fix-it)). Make the sitemap and the page read the same field in the same order, since `publishedAt ?? updatedAt` on one side and `updatedAt ?? publishedAt` on the other disagree on every edited post ([the drift fix](/rules/crawl/sitemap-lastmod-drift#how-to-fix-it)). Leaving `lastmod` out is better than writing a wrong one.
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include crawl/sitemap-lastmod-churn,crawl/sitemap-lastmod-drift
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [XML sitemap](/glossary/xml-sitemap): An XML file listing the URLs a site wants crawled, with optional lastmod dates, referenced from robots.txt or submitted to search engines.
+- [Content freshness](/glossary#content-freshness): How current a page is and how consistently it says so: visible dates, dateModified, sitemap lastmod and copyright year.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Best practices for setting the lastmod element, Google Search Central](https://developers.google.com/search/blog/2023/06/sitemaps-lastmod-ping)
+- [Build and submit a sitemap, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap)
+- [dateModified, Schema.org](https://schema.org/dateModified)

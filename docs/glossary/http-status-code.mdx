@@ -1,0 +1,77 @@
+---
+title: "HTTP status codes for site audits: 3xx, 4xx and 5xx"
+description: "An HTTP status code is the three-digit code a server sends with every response. How Google treats 3xx, 4xx and 5xx, and the checks squirrelscan runs."
+sidebarTitle: "HTTP status code"
+---
+
+An **HTTP status code** is the three-digit number a server sends at the start of every response: 2xx for success, 3xx for a redirect (or, with 304, a cached copy that is still valid), 4xx for a client error and 5xx for a server error.
+
+Google documents how its crawlers treat each class. A 200 goes on to indexing, though indexing is not guaranteed. Redirects are followed up to 10 hops. All 4xx codes except 429 mean the content does not exist: the URL is not indexed, an indexed one is removed, and any body is ignored. A 5xx or a 429 makes the crawlers slow down. Already indexed URLs stay for a while but are eventually dropped if the errors continue.
+
+{/* glossary:hub:start */}
+
+Category: [Links](/rules/links)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+The status code is what a crawler believes, whatever the page says. An error page sent with 200 is a soft 404: it gets crawled and can be indexed as thin content, and Search Console reports it as a soft 404. A 404 for a removed page is the right answer, and Google calls it a strong signal not to crawl the URL again. A script or stylesheet that answers 404 after a deploy leaves a page that returns 200 but renders broken.
+
+## How squirrelscan checks it
+
+[links/broken-links](/rules/links/broken-links) compares every internal link with the status the crawl recorded and fails targets that answered 400 or above. Rate-limited and refused targets are reported as unverifiable instead, and targets the audit never fetched are not counted as broken. [crawl/sitemap-4xx](/rules/crawl/sitemap-4xx) lists sitemap entries that answer 4xx. [crawl/soft-404](/rules/crawl/soft-404) detects error content served with 200 and re-fetches the page to confirm. [reliability/broken-resources](/rules/reliability/broken-resources) checks the status of every script, stylesheet and font the pages reference, and fails first-party scripts and stylesheets that answer 4xx or 5xx. Throttled and challenged responses are reported as unverified, and a capped or skipped fetch is noted as a partial check. [images/broken-images](/rules/images/broken-images) is narrower than its name: it flags an empty, `#` or `data:error` image source and sends no request, so a well-formed image URL that answers 404 passes it.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Broken internal links: 404s inside your own site](/rules/links/broken-links) | An internal link to a page that returns 404 or 500 is a dead end you control. squirrel cross-references every internal link against the crawl. | error |
+| [4XX pages in sitemap: dead URLs you are still submitting](/rules/crawl/sitemap-4xx) | A sitemap entry that returns 404 wastes a crawl and teaches search engines to trust the file less. squirrel reports the status of every checked entry. | warning |
+| [Soft 404: error content served with an HTTP 200 status](/rules/crawl/soft-404) | A not-found page that answers 200 gets crawled and can be indexed as thin content. squirrel detects the error shell and re-checks it before reporting. | warning |
+| [Broken images: empty and placeholder src attributes](/rules/images/broken-images) | An img with an empty or placeholder src renders as a broken icon. squirrel collects image sources across the crawl and flags the malformed ones. | error |
+| [Broken scripts, stylesheets and fonts: files that do not load](/rules/reliability/broken-resources) | A page whose script or stylesheet returns 404 or 500 looks fine to a crawler but renders unstyled or never runs its interactive parts. squirrel checks every script, stylesheet and font the crawl fetched. | error |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Return the status that matches the content, from the server:
+
+```js
+export async function loader({ params }) {
+  const post = await getPost(params.slug);
+  if (!post) throw new Response("Not Found", { status: 404 });
+  return post;
+}
+```
+
+For a client-rendered app, the server route has to know the resource is missing ([the soft 404 fix](/rules/crawl/soft-404#how-to-fix-it)). Update a broken internal link, or redirect the old URL permanently ([the broken link fix](/rules/links/broken-links#how-to-fix-it)). Regenerate the sitemap from live data ([the sitemap fix](/rules/crawl/sitemap-4xx#how-to-fix-it)). Keep the previous release's hashed assets online while cached HTML may still reference them ([the resource fix](/rules/reliability/broken-resources#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include links/broken-links,crawl/sitemap-4xx,crawl/soft-404,images/broken-images,reliability/broken-resources
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Broken link](/glossary#broken-link): A link whose target answers with an error, does not resolve, or is malformed.
+- [Soft 404](/glossary#soft-404): A page that tells the visitor it does not exist (or is empty) while the server answers HTTP 200.
+- [Redirect chain](/glossary/redirect-chain): A sequence of two or more redirects between the requested URL and the final response.
+
+{/* glossary:related:end */}
+
+## References
+
+- [How HTTP status codes affect Google's crawlers](https://developers.google.com/crawling/docs/troubleshooting/http-status-codes)
+- [HTTP response status codes, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status)
+- [RFC 9110, HTTP Semantics: status codes](https://www.rfc-editor.org/rfc/rfc9110.html#name-status-codes)

@@ -670,13 +670,19 @@
           {
             "group": "SEO",
             "pages": [
-              "glossary/alt-text",
+              "glossary/canonical-url",
+              "glossary/crawl-budget",
               "glossary/geo-meta-tags",
+              "glossary/http-status-code",
+              "glossary/indexability",
               "glossary/json-ld",
-              "glossary/lazy-loading",
-              "glossary/responsive-images",
+              "glossary/noindex",
+              "glossary/redirect-chain",
+              "glossary/robots-meta-tag",
               "glossary/robots-txt",
-              "glossary/structured-data"
+              "glossary/lastmod",
+              "glossary/structured-data",
+              "glossary/xml-sitemap"
             ]
           },
           {

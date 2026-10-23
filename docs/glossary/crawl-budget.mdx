@@ -1,0 +1,80 @@
+---
+title: "What is crawl budget? When it matters and what wastes it"
+description: "Crawl budget is how many URLs a search engine will crawl on a site in a given time. Google says it matters mainly for large or fast-changing sites."
+sidebarTitle: "Crawl budget"
+---
+
+**Crawl budget** is the number of URLs a search engine is able and willing to crawl on a site in a given period, set by how much load the server can take and how much the search engine wants the content.
+
+Google calls the two parts the crawl capacity limit and crawl demand. Capacity starts at a conservative default and rises if the site stays fast and healthy. It drops when responses slow down or the server answers with 5xx errors or 429. Demand depends on the site's size, how often it changes, page quality and relevance. Google treats each hostname as its own site with its own budget.
+
+{/* glossary:hub:start */}
+
+Category: [Crawlability](/rules/crawl)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+For most sites it does not. Google's guide is aimed at sites with a million or more pages that change weekly, or 10,000 or more that change daily. It says that if your pages are crawled the same day they are published, you do not need it, and that a current sitemap plus a regular look at the Page Indexing report is enough for Google Search.
+
+On a large site, wasted fetches add up. Every hop in a redirect chain is a request. A soft 404 answers 200, so the search engine has to work out from the content that the page is missing. Parameter combinations turn one listing into over a hundred URLs with near-identical content. Google's own advice includes returning 404 or 410 for removed pages, which it calls a strong signal not to crawl the URL again, and avoiding long redirect chains.
+
+## How squirrelscan checks it
+
+squirrelscan cannot see a search engine's crawl budget. Its rules flag the patterns that waste one. [crawl/redirect-chain](/rules/crawl/redirect-chain) counts the hops on every crawled URL and warns past two by default. [links/redirect-chains](/rules/links/redirect-chains) finds internal links that point at redirecting URLs. [crawl/soft-404](/rules/crawl/soft-404) detects error pages served with 200 and re-fetches them at the end of the crawl to confirm. [crawl/sitemap-4xx](/rules/crawl/sitemap-4xx) lists sitemap entries that answer 4xx, keeping rate-limited ones apart. [url/parameters](/rules/url/parameters) counts query parameters per URL, warns above three and names tracking parameters such as `utm_source` and `gclid`.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Redirect chains: when one hop turns into three](/rules/crawl/redirect-chain) | Each redirect hop costs latency and crawl budget, and search engines stop following after a few. squirrel counts the hops on every crawled URL. | warning |
+| [4XX pages in sitemap: dead URLs you are still submitting](/rules/crawl/sitemap-4xx) | A sitemap entry that returns 404 wastes a crawl and teaches search engines to trust the file less. squirrel reports the status of every checked entry. | warning |
+| [Soft 404: error content served with an HTTP 200 status](/rules/crawl/soft-404) | A not-found page that answers 200 gets crawled and can be indexed as thin content. squirrel detects the error shell and re-checks it before reporting. | warning |
+| [URL parameters: how many is too many, and what to do](/rules/url/parameters) | Every parameter combination is a separate URL to a crawler. squirrel counts the query parameters on each page and names the tracking ones. | info |
+| [Links pointing at redirecting URLs: the hop on every click](/rules/links/redirect-chains) | An internal link to a URL that redirects costs a round trip every time anyone follows it. squirrel finds redirecting pages and who links to them. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Make every URL a crawler requests worth the request. Send one redirect hop at most:
+
+```nginx
+server {
+  listen 80;
+  server_name example.com www.example.com;
+  return 301 https://www.example.com$request_uri;
+}
+```
+
+Then update internal links to the final URLs ([the redirect chain fix](/rules/crawl/redirect-chain#how-to-fix-it), [the internal link fix](/rules/links/redirect-chains#how-to-fix-it)). Return a real 404 for missing content ([the soft 404 fix](/rules/crawl/soft-404#how-to-fix-it)), remove dead entries from the sitemap ([the sitemap 4xx fix](/rules/crawl/sitemap-4xx#how-to-fix-it)), and point parameter variants at the clean URL with a canonical ([the parameters fix](/rules/url/parameters#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include crawl/redirect-chain,crawl/sitemap-4xx,crawl/soft-404,url/parameters,links/redirect-chains
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Redirect chain](/glossary/redirect-chain): A sequence of two or more redirects between the requested URL and the final response.
+- [Soft 404](/glossary#soft-404): A page that tells the visitor it does not exist (or is empty) while the server answers HTTP 200.
+- [URL parameters](/glossary#url-parameters): Key-value pairs after ? in a URL; tracking and sort parameters can multiply URLs for the same content.
+- [XML sitemap](/glossary/xml-sitemap): An XML file listing the URLs a site wants crawled, with optional lastmod dates, referenced from robots.txt or submitted to search engines.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Crawl budget management for large sites, Google](https://developers.google.com/crawling/docs/crawl-budget)
+- [How HTTP status codes affect Google's crawlers](https://developers.google.com/crawling/docs/troubleshooting/http-status-codes)
+- [Redirects and Google Search, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/301-redirects)

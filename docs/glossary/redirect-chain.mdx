@@ -1,0 +1,77 @@
+---
+title: "Redirect chains: what they cost and how to flatten them"
+description: "A redirect chain is two or more redirects between the requested URL and the final page. What each hop costs, how far Google follows, how to flatten them."
+sidebarTitle: "Redirect chain"
+---
+
+A **redirect chain** is a sequence of two or more redirects between the URL that was requested and the response that finally serves the content.
+
+A typical one comes from migrations stacked on top of each other: `http://example.com/page` redirects to `https://example.com/page`, then to `https://www.example.com/page`, then to `https://www.example.com/page/`. That is three redirects for one request. Google's crawlers follow up to 10 hops by default, and Google treats a 301 as a strong signal that the target should be processed in place of the source, a 302 as a weak one.
+
+{/* glossary:hub:start */}
+
+Category: [Crawlability](/rules/crawl)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+Each hop is another round trip for every visitor who takes the old URL, before the page even starts to load. For crawlers, every hop is a request. Google's crawl budget guide says long redirect chains have a negative effect on crawling, and a chain past the hop limit is not followed to the end. Chains also blur canonical signals. A canonical tag that points at a URL that redirects sends the crawler through an extra hop before it reaches the page it was meant to name.
+
+## How squirrelscan checks it
+
+[crawl/redirect-chain](/rules/crawl/redirect-chain) reads the chain recorded for each crawled URL and warns when it is longer than `maxHops`, 2 by default. The count includes the final response, so `/old (301) → /new (301) → /final (200)` is three. The site's entry URL is reported even for a single redirect, because the address people type should answer directly. [links/redirect-chains](/rules/links/redirect-chains) lists the pages that redirect and the internal links that still point at them. [crawl/canonical-chain](/rules/crawl/canonical-chain) flags an `http` canonical on an `https` page, a canonical that looks like a redirect URL, and a canonical naming the requested URL when that request redirected. It does not fetch other canonical targets. [perf/js-redirects](/rules/perf/js-redirects) reports script URLs that answer with a 3xx. Its range includes `304 Not Modified`, which is a cache revalidation and not a redirect.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Redirect chains: when one hop turns into three](/rules/crawl/redirect-chain) | Each redirect hop costs latency and crawl budget, and search engines stop following after a few. squirrel counts the hops on every crawled URL. | warning |
+| [Links pointing at redirecting URLs: the hop on every click](/rules/links/redirect-chains) | An internal link to a URL that redirects costs a round trip every time anyone follows it. squirrel finds redirecting pages and who links to them. | warning |
+| [Canonical URL resolves through a redirect: how to spot it](/rules/crawl/canonical-chain) | A canonical that redirects sends search engines on an extra hop before the real URL. squirrel checks the tag against the page's own redirect chain. | warning |
+| [Script URL redirects: a 3xx in front of every script load](/rules/perf/js-redirects) | JavaScript files that answer with a 3xx before serving. squirrel reports every one with the pages that reference it. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Send every old URL to its final destination in one hop:
+
+```nginx
+server {
+  listen 80;
+  server_name example.com www.example.com;
+  return 301 https://www.example.com$request_uri;
+}
+```
+
+`$request_uri` passes the path and query through unchanged, so a trailing slash rule needs its own route ([the chain fix](/rules/crawl/redirect-chain#how-to-fix-it)). Then rewrite internal links, canonical tags and sitemap entries to the final URLs, so ordinary navigation takes no redirect at all ([the link fix](/rules/links/redirect-chains#how-to-fix-it), [the canonical fix](/rules/crawl/canonical-chain#how-to-fix-it)). Leave the redirects in place for links you do not control. Point script tags at the URL the redirect resolves to ([the script fix](/rules/perf/js-redirects#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include crawl/redirect-chain,links/redirect-chains,crawl/canonical-chain,perf/js-redirects
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [HTTP status code](/glossary/http-status-code): The three-digit code a server returns with every response; 2xx success, 3xx redirect, 4xx client error, 5xx server error.
+- [Crawl budget](/glossary/crawl-budget): The number of URLs a search engine is willing and able to crawl on a site in a given time, set by crawl capacity and crawl demand.
+- [Canonical URL](/glossary/canonical-url): The URL a page declares, with `<link rel="canonical">` or a Link header, as the preferred address for its content.
+- [Client-side redirect](/glossary#client-side-redirect): A redirect done in the page (meta refresh or JavaScript) rather than with an HTTP 3xx response.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Redirects and Google Search, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/301-redirects)
+- [How HTTP status codes affect Google's crawlers](https://developers.google.com/crawling/docs/troubleshooting/http-status-codes)
+- [Crawl budget management for large sites, Google](https://developers.google.com/crawling/docs/crawl-budget)

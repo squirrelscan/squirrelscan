@@ -1,0 +1,76 @@
+---
+title: "What is indexability? Why a page is not indexed"
+description: "Indexability is whether a crawled URL can be indexed: reachable, a 200 response, not noindexed, not blocked. Why a page is not indexed and how to check."
+sidebarTitle: "Indexability"
+---
+
+**Indexability** is whether a URL a search engine has found can go into its index, which depends on whether the crawler may fetch it, the status code it answers with, any `noindex` it carries and where its canonical points.
+
+Each condition has its own mechanism. robots.txt decides whether the URL is fetched, though a blocked URL can still be indexed from links without its content. The status code decides whether there is content to consider: Google ignores the body of a 4xx or 5xx response. A robots meta tag or `X-Robots-Tag` header with `noindex` removes the page after the fetch, and a `rel="canonical"` pointing elsewhere asks for another URL to be indexed instead. Indexable is not the same as indexed. Google says the content of a 200 page may be indexed, but that is not guaranteed.
+
+{/* glossary:hub:start */}
+
+Category: [Crawlability](/rules/crawl)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+A page that cannot be indexed cannot rank, however good it is. Most non-indexable pages are deliberate: thank-you pages, internal search results, filter combinations, staging routes. The problems are the unplanned ones, such as a `noindex` left in a template, a robots.txt rule broader than intended, or a CMS default applied to a whole post type. Each looks normal on one page and only shows when you list every blocked URL together.
+
+## How squirrelscan checks it
+
+[crawl/indexability](/rules/crawl/indexability) checks every page for `noindex` in the robots meta tag and then the `X-Robots-Tag` header, and reports a blocked page at info level with the source. It describes rather than penalises. [crawl/all-noindex-pages](/rules/crawl/all-noindex-pages) collects every non-indexable page in one list with its reasons, such as `meta:noindex`, `header:noindex` or `robots.txt:disallowed`. Configure `errorOnPatterns` or `warnOnPatterns` and blocked pages under those paths fail or warn.
+
+Two rules compare robots.txt with the page. [crawl/robots-meta-conflict](/rules/crawl/robots-meta-conflict) lists pages blocked in robots.txt that also say `noindex`, which is never read. [crawl/indexability-conflicts](/rules/crawl/indexability-conflicts) lists blocked pages with no `noindex`, which can still be listed from links elsewhere with no description. Status codes and canonicals have rules of their own, on the [HTTP status code](/glossary/http-status-code) and [canonical URL](/glossary/canonical-url) pages.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Page is blocked from indexing: finding the directive](/rules/crawl/indexability) | A page can be excluded from search by a robots meta tag or an X-Robots-Tag header. squirrel reports which one, per page. | info |
+| [robots.txt blocked pages without noindex](/rules/crawl/indexability-conflicts) | Allow plus noindex is the correct way to deindex a page. squirrel only reports pages robots.txt blocks that carry no noindex, at info level. | warning |
+| [All non-indexed pages: the full blocked list for review](/rules/crawl/all-noindex-pages) | One list of every page a search engine will not index, with the reason. squirrel can raise severity for URL patterns that must never be blocked. | info |
+| [Redundant noindex: a blocked page nobody reads it on](/rules/crawl/robots-meta-conflict) | A page disallowed in robots.txt is never fetched, so its noindex is never seen. squirrel lists the pages carrying both. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Decide per section which pages belong in search, then make the signals agree:
+
+```toml squirrel.toml
+[rule_options."crawl/all-noindex-pages"]
+errorOnPatterns = ["/products/", "/blog/"]
+```
+
+That turns a stray `noindex` on a product or post into a failing finding ([the list fix](/rules/crawl/all-noindex-pages#how-to-fix-it)). Remove the directive from the source the report names ([the indexability fix](/rules/crawl/indexability#how-to-fix-it)). To keep a page out of results, allow the crawl and use `noindex`. Keep `Disallow` for paths that should not be fetched at all ([the conflict fix](/rules/crawl/indexability-conflicts#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include crawl/indexability,crawl/indexability-conflicts,crawl/all-noindex-pages,crawl/robots-meta-conflict
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [noindex](/glossary/noindex): A robots directive, in a meta tag or the X-Robots-Tag header, that asks search engines to keep a page out of their index.
+- [robots.txt](/glossary/robots-txt): A plain-text file at the site root that tells crawlers which paths they may fetch, per user-agent token (RFC 9309).
+- [Canonical URL](/glossary/canonical-url): The URL a page declares, with `<link rel="canonical">` or a Link header, as the preferred address for its content.
+- [HTTP status code](/glossary/http-status-code): The three-digit code a server returns with every response; 2xx success, 3xx redirect, 4xx client error, 5xx server error.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Block Search indexing with noindex, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/block-indexing)
+- [How HTTP status codes affect Google's crawlers](https://developers.google.com/crawling/docs/troubleshooting/http-status-codes)
+- [Introduction to robots.txt, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/robots/intro)
