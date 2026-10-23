@@ -17,12 +17,16 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.131 (2026-10-23)
+
+Reports are honest about how much of your site they saw, and the HTML page lets you dismiss every notice.
+
 ### Changed
 
-- **Summaries read scores in words, and every count is the report's own.** When a report shows its editor's summary (HTML, Markdown, text, XML, JSON, LLM and the console), at most one numeric score survives and `/100` never appears, and a sentence that states a page count the report does not have is left out. Older stored summaries get the same treatment. If nothing survives, the summary falls back to the report's own totals instead of going blank.
-- **Every notice line on the HTML report can be dismissed**, not just the coverage notice, each on its own for that report in that browser. The "Scan: N pages crawled" line is gone (the header already says what was scanned and at what level), and a published report's "this is a summary" note moves to the footer.
+- **Summaries keep to one score and the report's own counts.** When a report shows its editor's summary (HTML, Markdown, text, XML, JSON, LLM and the console), at most one numeric score survives and `/100` never appears, and a sentence that states a page count the report does not have is left out. Older stored summaries get the same treatment. If nothing survives, the summary falls back to the report's own totals instead of going blank.
+- **Every notice line on the HTML report can be dismissed**, not just the coverage notice, each on its own for that report in that browser. This works in a saved offline file too. The "Scan: N pages crawled" line is gone (the header already says what was scanned and at what level), and a published report's "this is a summary" note moves to the footer.
 - The cloud editor's summary now hears how much of the site the audit covered (pages scanned, the page limit, a time stop, pages known), so it can say when a report covers only part of the site and suggest a deeper audit.
-- **The HTML report's coverage notice is one line.** A report whose crawl hit its page limit, ran out of time or knows more pages than it scanned now shows a single dismissible line at the top: the report may not cover the whole site, how to raise the audit depth (`--level full` or `--max-pages N` in the CLI, or the website settings in the cloud) and a link to [Audit levels](https://docs.squirrelscan.com/guides/audit-levels). It adds a count only when more pages are known, so a capped crawl no longer reads "200 of 200" or "the other 0+ pages". Dismissing it hides it for that report in that browser, and the page works the same with browser storage blocked ([html format](https://docs.squirrelscan.com/reports#html)).
+- **The HTML report's coverage notice is one line.** A report whose crawl hit its page limit, ran out of time or knows more pages than it scanned now shows a single dismissible line at the top: the report may not cover the whole site, how to raise the audit depth (`--level full` or `--max-pages N` in the CLI, or the website settings in the cloud) and a link to [Audit levels](https://docs.squirrelscan.com/guides/audit-levels). It adds a count only when more pages are known, so a capped crawl no longer reads "200 of 200" or "the other 0+ pages". Dismissing it hides it for that report in that browser, and with browser storage blocked it hides for that visit only ([html format](https://docs.squirrelscan.com/reports#html)).
 
 ### Fixed
 
