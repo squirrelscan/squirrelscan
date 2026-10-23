@@ -44,6 +44,7 @@ import {
   publishedReportNote,
   ruleCarriedRollupLine,
   scanScopeLine,
+  scanScopeUnfetched,
   seedRedirectLine,
   clampedPageLimit,
 } from "../coverage";
@@ -118,13 +119,16 @@ export interface HtmlRenderOptions {
 
 /**
  * Pages the audit knows exist: every sitemap URL plus the crawled pages no
- * sitemap lists. Link targets the crawl saw but never fetched are not in the
- * report yet, so this is a floor, never more than the site really has.
+ * sitemap lists, or the crawled pages plus the in-scope URLs the crawl queued
+ * but never fetched (`scanScope.unfetched`), whichever is larger. The links on
+ * the pages still queued are unknown and sitemap intake is capped, so a capped
+ * crawl's count is a floor.
  */
 function discoveredPages(report: AuditReport): {
   total: number;
   sitemap: number;
   crawlOnly: number;
+  unfetched: number;
 } {
   // Written by the engine's report stream but not on the AuditReport type; read defensively.
   const sm = (
@@ -134,12 +138,15 @@ function discoveredPages(report: AuditReport): {
   ).sitemaps;
   const sitemap = count(sm?.totalUrls);
   const crawlOnly = Array.isArray(sm?.missingPages) ? sm.missingPages.length : 0;
+  const unfetched = scanScopeUnfetched(report);
   const total = Math.max(
     count(report.totalPages),
     count(report.coverage?.knownPages),
     sitemap + crawlOnly,
+    // Fetched and still-queued URLs are disjoint, so their sum is a floor too.
+    count(report.scanScope?.pagesCrawled) + unfetched,
   );
-  return { total, sitemap, crawlOnly };
+  return { total, sitemap, crawlOnly, unfetched };
 }
 
 /** A non-negative whole number off report JSON, or 0 (stored reports of any origin). */
@@ -1264,6 +1271,12 @@ function ReportPage({
   const warnings = count(report.warnings);
   const failed = count(report.failed);
   const found = discoveredPages(report);
+  // A crawl cut short knows only part of the site: its discovered count is a
+  // floor, so it reads "N+" wherever it is printed.
+  const discoveredFloor =
+    (!!report.scanScope?.capped || report.scanScope?.stopReason === "time") &&
+    found.total > totalPages;
+  const discoveredCount = `${found.total.toLocaleString()}${discoveredFloor ? "+" : ""}`;
   const localRun =
     !branding?.whiteLabel &&
     (report.cloudPlan ?? "anonymous") === "anonymous" &&
@@ -1297,11 +1310,14 @@ function ReportPage({
   // A smart audit re-checked only some known pages and carried the rest forward:
   // those pages are in the report, with earlier results, not missing from it.
   // (Same test as fullScanHint: a rate-limited run's gap is pages never fetched.)
+  // Only while the known pages explain the whole gap: URLs still queued
+  // (`scanScope.unfetched`) were never audited, so nothing of theirs is carried.
   const carriedRest =
     !!gap &&
     gap.moreKnown > 0 &&
     !!report.coverage &&
     report.coverage.auditedPages < report.coverage.knownPages &&
+    found.total <= count(report.coverage.knownPages) &&
     (report.rateLimited?.unfetched ?? 0) <= 0;
   const reportBase = reportId ? `https://reports.squirrelscan.com/${reportId}` : null;
   const ctx: PromptContext = {
@@ -1518,10 +1534,10 @@ function ReportPage({
                 <div className="mt-4 flex flex-wrap gap-1.5">
                   <Badge color="neutral" size="md">
                     <span
-                      title={`${found.sitemap.toLocaleString()} in sitemaps, ${found.crawlOnly.toLocaleString()} more found by crawling`}
+                      title={`${found.sitemap.toLocaleString()} in sitemaps, ${found.crawlOnly.toLocaleString()} more found by crawling${found.unfetched > 0 ? `; this crawl fetched ${count(report.scanScope?.pagesCrawled).toLocaleString()} and left ${found.unfetched.toLocaleString()} queued` : ""}`}
                     >
-                      Scanned {totalPages.toLocaleString()} of{" "}
-                      {plural(found.total, "discovered page")}
+                      Scanned {totalPages.toLocaleString()} of {discoveredCount} discovered{" "}
+                      {found.total === 1 && !discoveredFloor ? "page" : "pages"}
                     </span>
                   </Badge>
                   <Badge color="neutral" size="md">
@@ -1707,7 +1723,7 @@ function ReportPage({
             <Metrics
               items={[
                 { value: totalPages.toLocaleString(), label: "Scanned" },
-                { value: found.total.toLocaleString(), label: "Discovered" },
+                { value: discoveredCount, label: "Discovered" },
                 { value: passed.toLocaleString(), label: "Passed", color: "#16a34a" },
                 { value: warnings.toLocaleString(), label: "Warnings", color: "#ca8a04" },
                 { value: failed.toLocaleString(), label: "Failed", color: "#dc2626" },

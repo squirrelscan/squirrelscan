@@ -11,6 +11,7 @@ export {
   runStreamingRules,
   generateReportFromStorage,
   emptyRuleExecutionResult,
+  unfetchedFrontierCount,
   parsePageRecord,
   parseHtmlForRules,
   getParsedPages,

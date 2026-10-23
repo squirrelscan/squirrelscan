@@ -23,7 +23,7 @@ import {
   primaryEntities,
   stableIdPercent,
 } from "../entities";
-import { publishedReportNote, seedRedirect } from "../coverage";
+import { publishedReportNote, scanScopeUnfetched, seedRedirect } from "../coverage";
 import { LLM_REPORT } from "@squirrelscan/core-contracts/limits";
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 import { AUDIT_FAILURE_NEXT_STEP_THIRD } from "@squirrelscan/core-contracts/failure-reason";
@@ -250,8 +250,11 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
         : "";
     // Present only on a time stop: the crawl budget, not the page limit, ended it.
     const stop = s.stopReason ? ` stop-reason="${s.stopReason}"` : "";
+    // In-scope URLs left queued: how much more of the site the crawl knew of.
+    const left = scanScopeUnfetched(report);
+    const unfetched = left > 0 ? ` unfetched="${left}"` : "";
     lines.push(
-      `<scan-scope origin="${s.origin}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}/>`,
+      `<scan-scope origin="${s.origin}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}/>`,
     );
   }
 

@@ -3523,6 +3523,7 @@ export function runStreamingRules(
 // "./adapter") and every existing "./adapter" importer stay byte-identical.
 export {
   emptyRuleExecutionResult,
+  unfetchedFrontierCount,
   V1_REPORT_PAGE_BATCH,
   type AuditSummary,
   type BuildV1ReportOptions,

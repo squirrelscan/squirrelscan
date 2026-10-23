@@ -133,6 +133,10 @@ interface SlimJsonReport {
     maxPages?: number;
     /** Requested cap, present only when it was clamped (#1909). */
     requestedMaxPages?: number;
+    /** URLs left queued, never fetched; absent when none were. Untrusted. */
+    unfetched?: unknown;
+    /** Smart audits (#110): this run's pages and the known ones. Untrusted. */
+    coverage?: { auditedPages?: unknown };
     /** The audit level snapshot; absent in slim JSON written before audit levels. Untrusted. */
     auditLevel?: unknown;
   };
@@ -248,6 +252,16 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
   // back, never a string the renderers would print as is.
   const auditLevel = parseResolvedAuditSettings(report.meta.auditLevel);
 
+  // The pages this run crawled. A smart audit's `totalPages` is every known
+  // page, carried ones included, so it would count a still-queued known page
+  // twice next to `unfetched`, and call a run capped that never reached its
+  // limit. The audit itself stamps this run's count (`report.pages.length`).
+  const audited = report.meta.coverage?.auditedPages;
+  const crawled =
+    typeof audited === "number" && Number.isSafeInteger(audited) && audited >= 0
+      ? audited
+      : report.meta.totalPages;
+
   return {
     baseUrl: report.meta.baseUrl,
     // #1418: carry a refused off-site seed redirect back through the round
@@ -280,8 +294,12 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
             ...(report.meta.requestedMaxPages !== undefined
               ? { requestedMaxPages: report.meta.requestedMaxPages }
               : {}),
-            pagesCrawled: report.meta.totalPages,
-            capped: report.meta.totalPages >= report.meta.maxPages,
+            pagesCrawled: crawled,
+            capped: crawled >= report.meta.maxPages,
+            // The renderers re-check it: the file is user-supplied.
+            ...(typeof report.meta.unfetched === "number"
+              ? { unfetched: report.meta.unfetched }
+              : {}),
           },
         }
       : {}),

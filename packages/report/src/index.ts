@@ -147,6 +147,7 @@ export {
   carriedTag,
   timeAgo,
   scanScopeLine,
+  scanScopeUnfetched,
   publishedReportNote,
   seedRedirect,
   seedRedirectLine,

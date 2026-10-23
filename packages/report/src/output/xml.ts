@@ -9,7 +9,7 @@ import { affectedPages, itemsNotListed } from "../affected-pages";
 import { domainAgeYears } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import { entityPageTotal, stableIdPercent } from "../entities";
-import { seedRedirect } from "../coverage";
+import { scanScopeUnfetched, seedRedirect } from "../coverage";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
 
 export interface XmlRenderOptions {
@@ -56,8 +56,10 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     const requested =
       s.requestedMaxPages !== undefined ? ` requested-max-pages="${s.requestedMaxPages}"` : "";
     const stop = s.stopReason ? ` stop-reason="${escapeXml(s.stopReason)}"` : "";
+    const left = scanScopeUnfetched(report);
+    const unfetched = left > 0 ? ` unfetched="${left}"` : "";
     lines.push(
-      `${indent(2)}<scan-scope origin="${escapeXml(s.origin)}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}/>`,
+      `${indent(2)}<scan-scope origin="${escapeXml(s.origin)}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}/>`,
     );
   }
   lines.push(`${indent(1)}</site>`);

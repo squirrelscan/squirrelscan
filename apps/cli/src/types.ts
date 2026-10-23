@@ -575,6 +575,8 @@ export interface AuditReport {
     capped: boolean;
     /** The crawl time budget ended the crawl early (the page cap was not the reason). */
     stopReason?: "time";
+    /** In-scope URLs left queued, never fetched, when the crawl stopped. */
+    unfetched?: number;
   };
   /**
    * Rule-result cache disclosure (#1990): how many pages replayed a previous

@@ -24,6 +24,7 @@ import {
   flattenChecks,
   type FlatFinding,
   type PageResultSink,
+  unfetchedFrontierCount,
 } from "@squirrelscan/audit-engine";
 import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
 import { computeCost } from "@squirrelscan/core-contracts/credits";
@@ -2019,6 +2020,11 @@ export async function runAudit(
         // "asked for everything" — worse than leaving it out.
         const recordRequested =
           scopeLimit.clamped && Number.isFinite(scopeLimit.requested);
+        // Queued but never fetched, so a capped report can say how much of
+        // the site it knew of beyond the pages it audited.
+        const unfetched = await Effect.runPromise(
+          unfetchedFrontierCount(sqliteStorage, crawlId)
+        );
         report.scanScope = {
           origin: detectRunner().ci ? "ci" : "cli",
           maxPages: scopeMaxPages,
@@ -2027,6 +2033,7 @@ export async function runAudit(
             : {}),
           pagesCrawled: report.pages.length,
           capped: report.pages.length >= scopeMaxPages,
+          ...(unfetched > 0 ? { unfetched } : {}),
         };
       }
 

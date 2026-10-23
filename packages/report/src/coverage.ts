@@ -114,8 +114,26 @@ export function scanScopeLine(report: AuditReport): string | null {
   const limit = clamped
     ? `page limit ${clamped.effective} of ${clamped.requested} requested${s.capped ? ", reached" : ""}${timeStop}`
     : `page limit ${s.maxPages}${s.capped ? " reached" : ""}${timeStop}`;
-  const cap = s.maxPages !== undefined ? ` (${limit})` : "";
+  // What the crawl knew of beyond the pages it fetched: present only when some
+  // URLs were left queued, so every other report's line is unchanged. A
+  // rate-limited run's own line already counts them (`rateLimited.unfetched`
+  // is the abandoned URLs plus these), so saying it twice would read as more.
+  const unfetched = (report.rateLimited?.unfetched ?? 0) > 0 ? 0 : scanScopeUnfetched(report);
+  const parts = [
+    s.maxPages !== undefined ? limit : "",
+    unfetched > 0 ? `${unfetched} more discovered but not fetched` : "",
+  ].filter(Boolean);
+  const cap = parts.length > 0 ? ` (${parts.join("; ")})` : "";
   return `Scan: ${s.pagesCrawled} page${s.pagesCrawled === 1 ? "" : "s"} crawled from ${origin}${version}${cap}.`;
+}
+
+/**
+ * In-scope URLs the crawl queued but never fetched (`scanScope.unfetched`), as
+ * a whole number, or 0. Read off stored reports of any origin, so a value that
+ * is not a finite non-negative number counts as none.
+ */
+export function scanScopeUnfetched(report: Pick<AuditReport, "scanScope">): number {
+  return stampCount(report.scanScope?.unfetched, 0);
 }
 
 /**

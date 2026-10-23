@@ -23,6 +23,10 @@ How it works:
 - The cloud editor's summary now hears how much of the site the audit covered (pages scanned, the page limit, a time stop, pages known), so it can say when a report covers only part of the site and suggest a deeper audit.
 - **The HTML report's coverage notice is one line.** A report whose crawl hit its page limit, ran out of time or knows more pages than it scanned now shows a single dismissible line at the top: the report may not cover the whole site, how to raise the audit depth (`--level full` or `--max-pages N` in the CLI, or the website settings in the cloud) and a link to [Audit levels](https://docs.squirrelscan.com/guides/audit-levels). It adds a count only when more pages are known, so a capped crawl no longer reads "200 of 200" or "the other 0+ pages". Dismissing it hides it for that report in that browser, and the page works the same with browser storage blocked ([html format](https://docs.squirrelscan.com/reports#html)).
 
+### Fixed
+
+- **A capped audit counts the pages it found but did not reach.** When a crawl stops before it fetches every page it found, the in-scope URLs still queued (sitemap entries and links that passed the scope and robots checks) now count as discovered, so a 200-page audit of a bigger site no longer reads "200 of 200 discovered pages". A local HTML report shows the count as the floor it is ("Scanned 200 of 731+ discovered pages"), the console, text and Markdown scan lines add "531 more discovered but not fetched", JSON carries it in `meta.unfetched` and the LLM and XML formats in `<scan-scope unfetched="...">` ([JSON output](https://docs.squirrelscan.com/configuration/output#json-output-schema)).
+
 ## v0.0.130 (2026-10-23)
 
 Local HTML reports get a glow-up: same page as the cloud, still fully offline. Plus a docs-site security patch.

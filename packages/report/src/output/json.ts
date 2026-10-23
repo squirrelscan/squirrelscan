@@ -15,7 +15,7 @@ import { affectedPages } from "../affected-pages";
 import { techIconUrl } from "../technologies";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
-import { seedRedirect } from "../coverage";
+import { scanScopeUnfetched, seedRedirect } from "../coverage";
 import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
 import { collectSkippedChecks, type SkippedCheck } from "../skipped";
@@ -61,6 +61,13 @@ interface SlimJsonReport {
      * run that finished or hit the page cap.
      */
     stopReason?: "time";
+    /**
+     * In-scope URLs the crawl queued but never fetched before it stopped. Added
+     * to the pages this run crawled (`coverage.auditedPages` on a smart audit,
+     * else `totalPages`) it is a floor on the pages the crawl knew of. Absent
+     * when nothing was left queued.
+     */
+    unfetched?: number;
     /** The audit level and the settings it resolved to. Absent before audit levels. */
     auditLevel?: ResolvedAuditSettings;
     /** Smart audits (#110): present only when `smart_audits` ran. */
@@ -270,6 +277,7 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
       ...(report.scanScope?.stopReason !== undefined
         ? { stopReason: report.scanScope.stopReason }
         : {}),
+      ...(scanScopeUnfetched(report) > 0 ? { unfetched: scanScopeUnfetched(report) } : {}),
       ...(report.coverage ? { coverage: report.coverage } : {}),
       // The audit level and the settings it resolved to: `level` (a level's
       // name, or `custom`), `basedOn`, `changes` and `settings`. Absent on

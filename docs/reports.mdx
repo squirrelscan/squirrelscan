@@ -431,7 +431,7 @@ squirrel report -f xml -o report.xml
 </squirrelscan-audit>
 ```
 
-`<scan-scope>` says where the audit ran (`origin`: `cli`, `ci` or `cloud`), how many pages it crawled, the page limit in force (`max-pages`), and whether that limit stopped the crawl (`capped`). `requested-max-pages` appears only when the limit you asked for was lowered, and `stop-reason="time"` only when the crawl time budget ended the crawl. A report from before scan scope existed has no `<scan-scope>`. A white-label report's root element is `<audit>`.
+`<scan-scope>` says where the audit ran (`origin`: `cli`, `ci` or `cloud`), how many pages it crawled, the page limit in force (`max-pages`), and whether that limit stopped the crawl (`capped`). `requested-max-pages` appears only when the limit you asked for was lowered, and `stop-reason="time"` only when the crawl time budget ended the crawl. `unfetched` appears when the crawl stopped with in-scope URLs still queued: pages it found (in a sitemap, linked from a crawled page, or carried from an earlier audit) but never fetched. `crawled` plus `unfetched` is how many pages the crawl knew of. It is a floor: the links on the pages still queued are unknown, so the site may have more. On a rate-limited run, the `unfetched` count on `<rate-limited>` already includes these. A report from before scan scope existed has no `<scan-scope>`. A white-label report's root element is `<audit>`.
 
 **Key Features:**
 - **2-space indentation** for readability

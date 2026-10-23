@@ -824,6 +824,17 @@ export interface ScanScope {
    * `healthScore`.
    */
   stopReason?: "time";
+  /**
+   * In-scope URLs the crawl queued but never fetched: sitemap entries, links
+   * and pages carried from earlier audits that passed the scope, robots and
+   * dedupe checks and were still pending when the crawl stopped (page limit,
+   * time budget, or an interrupted run). Disjoint from `pagesCrawled`, so their
+   * sum is how many pages the crawl knows of. A floor, not the site's size: the
+   * links on the pages still queued are unknown, and sitemap intake is capped.
+   * A rate-limited run's `rateLimited.unfetched` already includes these. Absent
+   * when nothing was left over, and on reports from before it. REPORT-ONLY.
+   */
+  unfetched?: number;
 }
 
 /** Locked-rules audience for a report — anonymous/local vs signed-in tier (#368). */
