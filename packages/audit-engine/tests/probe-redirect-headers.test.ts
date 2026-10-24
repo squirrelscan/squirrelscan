@@ -88,7 +88,8 @@ const reset = () => {
 };
 
 // Every request any probe sends, as the runtime saw it (repo#3332). The public
-// and metadata addresses answer here, never from the network.
+// and metadata addresses answer here, never from the network, and anything
+// other than the loopback fixtures fails the test.
 const realFetch = globalThis.fetch;
 const sent: string[] = [];
 beforeEach(() => {
@@ -100,6 +101,7 @@ beforeEach(() => {
     if (host === "169.254.169.254" || host === "93.184.215.14") {
       return new Response(SHELL_HTML, { headers: { "content-type": "text/html" } });
     }
+    if (host !== "127.0.0.1") throw new Error(`unexpected request to ${url}`);
     return realFetch(input, init);
   }) as typeof fetch;
 });
@@ -241,7 +243,9 @@ describe("soft-404 confirmation", () => {
 
   test("a metadata redirect is not followed, and a public one is (control)", async () => {
     reset();
-    await run("/meta");
+    const refused = await run("/meta");
+    // Not confirmed either way: the probe got no page to judge.
+    expect(refused.soft404Confirmation).toBe("unconfirmed");
     expect(siteSeen.some((s) => s.path === "/meta")).toBe(true);
     expect(sentTo("169.254.169.254")).toEqual([]);
 
