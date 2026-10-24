@@ -17,9 +17,24 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.133 (2026-10-24)
+
+White-label reports get a website and a footer, and the docs get a report walkthrough.
+
 ### Added
 
 - **White-label reports can show a website link and footer text.** Team and Enterprise organizations that use white-label reports can add a website and a footer line, such as a copyright notice. The report header links the logo or brand name to the website, and the footer shows the text and the website link where the squirrelscan credit was, in HTML, Markdown and text reports, including local reports from a signed-in CLI. Only an `https://` website is linked. A report keeps the branding it was published with ([HTML report](https://docs.squirrelscan.com/reports#white-label-reports)).
+
+### Security
+
+- The `zod` validation library the `squirrel` CLI bundles moves to 4.6.7, which hardens validation against oversized input.
+- The docs toolchain is patched for a vulnerable `undici`. It is docs-site only; nothing in the `squirrel` binary loads it.
+
+### Docs
+
+- **Every rule page links to its glossary terms.** Each rule page ends its definition with the glossary entries for the terms it uses.
+- **A new guide, [How to read your report](https://docs.squirrelscan.com/guides/read-your-report).** A walk through a real report from the health score down to what was not checked. The README and the reports page now show the same current report.
+- Stale claims on rule pages are fixed, and links to Google's crawler and robots.txt documentation point at its current pages.
 
 ## v0.0.132 (2026-10-24)
 
