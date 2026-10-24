@@ -815,7 +815,9 @@ probe's Googlebot fetch. To change the agent on the other requests too, set
 [`user_agent`](#user_agent). Quoting is preserved verbatim, so
 `Signature-Agent: "https://shopify.com"` keeps its quotes end-to-end.
 
-When a page redirects to another origin, the headers are dropped on that hop.
+When a page redirects to another origin, the headers are dropped on that hop,
+except a `User-Agent`: it names the client rather than proving who you are, and
+the crawl keeps one on every request. Put a secret in any other header.
 An `https:` start URL whose redirect lands on plain `http:` keeps its `https:`
 scope: the crawl follows the redirect, and the headers stay withheld.
 The soft-404 confirmation and the cloaking probe follow redirects the same way,
