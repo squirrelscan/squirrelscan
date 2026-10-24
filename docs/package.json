@@ -9,7 +9,7 @@
     "deploy": "tangly build && wrangler deploy"
   },
   "devDependencies": {
-    "tangly": "0.5.0",
+    "tangly": "0.6.0",
     "wrangler": "^4.144.0"
   }
 }

@@ -32,6 +32,10 @@ jobs:
     environment: docs-production
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: tangly dates each sitemap <lastmod> from git commit dates
+          # and skips them (with a warning) in a shallow clone.
+          fetch-depth: 0
       - uses: ./.github/actions/setup-bun
       - name: Validate docs
         run: bun run docs:check
