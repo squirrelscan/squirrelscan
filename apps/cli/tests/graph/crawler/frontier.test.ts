@@ -59,7 +59,7 @@ describe("isInScope", () => {
     expect(blocked.allowed).toBe(false);
   });
 
-  it("allows configured domains and subdomains, including localhost ports", () => {
+  it("allows configured domains and subdomains, on the audited port only", () => {
     const allowed = isInScope("https://docs.example.com/guide", {
       baseUrl: "https://example.com",
       include: [],
@@ -67,7 +67,15 @@ describe("isInScope", () => {
       allowedDomains: ["example.com"],
     });
 
-    const localAllowed = isInScope("http://localhost:3000/page", {
+    const localSamePort = isInScope("http://localhost:8080/page", {
+      baseUrl: "http://localhost:8080",
+      include: [],
+      exclude: [],
+      allowedDomains: ["localhost"],
+    });
+
+    // Another port is another service on the machine (repo#2762).
+    const localOtherPort = isInScope("http://localhost:3000/page", {
       baseUrl: "http://localhost:8080",
       include: [],
       exclude: [],
@@ -82,7 +90,8 @@ describe("isInScope", () => {
     });
 
     expect(allowed.allowed).toBe(true);
-    expect(localAllowed.allowed).toBe(true);
+    expect(localSamePort.allowed).toBe(true);
+    expect(localOtherPort.allowed).toBe(false);
     expect(blocked.allowed).toBe(false);
   });
 });

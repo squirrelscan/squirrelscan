@@ -89,6 +89,9 @@ Setting `domains = ["example.com"]` automatically allows all subdomains:
 **Does NOT allow:**
 - `example.org` ✗ (different TLD)
 - `test-example.com` ✗ (not a subdomain)
+- `example.com:6379` ✗ (a port other than the seed's)
+
+**Ports:** allowed domains name hosts, not ports. The crawl and the internal link check stay on the seed URL's port. When the seed uses the default port, both default ports count (`http://` on 80 and `https://` on 443). A link to another port on an allowed host is not crawled or checked as an internal link. See [Port handling](#port-handling).
 
 ## Examples
 
@@ -170,17 +173,18 @@ Domain `"example.com"` matches:
 
 ### Port handling
 
-Ports are ignored for matching:
+Domains name hosts, not ports. The crawl stays on the seed URL's port:
 
 ```toml
 [project]
 domains = ["localhost"]
 ```
 
-Matches:
-- `http://localhost:3000` ✓
-- `http://localhost:8080` ✓
-- `http://localhost` ✓
+Auditing `http://localhost:8080`:
+- `http://localhost:8080/about` ✓
+- `http://localhost:3000` ✗ (another port: another service on the machine)
+
+Auditing `https://example.com` (the default port): both default ports count, so `http://example.com` ✓ and `https://www.example.com` ✓, but `https://example.com:8443` ✗.
 
 ### Protocol handling
 
