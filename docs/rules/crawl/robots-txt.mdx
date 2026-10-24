@@ -1,6 +1,6 @@
 ---
 title: "robots.txt: what to put in it and how squirrel checks it"
-description: "A missing robots.txt, a Disallow: / left in production, or a syntax error changes what gets crawled. squirrel checks existence, syntax and rules."
+description: "A missing robots.txt, a Disallow: / left in production, or an excessive Crawl-delay changes what gets crawled. squirrel checks existence, syntax and rules."
 ---
 
 ## What robots.txt is
@@ -11,7 +11,7 @@ It controls crawling, not indexing. A URL blocked in robots.txt can still be ind
 
 ## What squirrel checks
 
-The rule is site-wide and reads the robots.txt the crawl fetched. It emits up to five checks:
+The rule is site-wide and reads the robots.txt the crawl fetched. It emits these checks:
 
 - `robots-txt-exists` reports info when no robots.txt data is available at all. Message: `robots.txt data not available`.
 - `robots-txt-exists` reports info when the site refused the request (a 401, 403 or 429, or a bot challenge). Message: `robots.txt could not be checked`, with `The site refused the request (HTTP 403 (Cloudflare)), so this is unknown, not missing` as the value.
@@ -20,6 +20,7 @@ The rule is site-wide and reads the robots.txt the crawl fetched. It emits up to
 - `robots-txt-exists` passes when the file exists. Message: `robots.txt exists`, with the file URL.
 - `robots-txt-syntax` warns when the parser recorded errors. Message: `2 syntax error(s) in robots.txt`, listing each. It passes otherwise with `robots.txt syntax is valid`.
 - `robots-txt-disallow` fails when the `*` group has `Disallow: /` and no `Allow` rule. Message: `robots.txt blocks all crawling`, with `Disallow: / with no Allow rules`. It reports info when there is a `Disallow: /` alongside `Allow` exceptions, and passes otherwise with `robots.txt does not block all crawling`.
+- `robots-txt-crawl-delay` reports info for a `Crawl-delay` in a `*`, `bingbot`, `msnbot`, `yandex` or `googlebot` group, naming the delay and group. Google ignores this non-standard directive, while Bing and Yandex obey applicable groups. A delay of 10 seconds or more in `*` or `bingbot` warns and estimates Bing's maximum daily URL rate; `Crawl-delay: 10` is about 8,640 URLs per day. Delays limited to other bots are not reported.
 - `robots-txt-sitemap` passes when at least one `Sitemap` line is present, listing the URLs. Otherwise it reports info with `No sitemap referenced in robots.txt`.
 - `robots-txt-size` warns when the file exceeds 500 KB. Message: `robots.txt is very large`, with the size and Google's 500 KB limit as the value.
 
@@ -33,6 +34,8 @@ Sitemap: https://example.com/sitemap.xml
 ```
 
 Serve it from the host root with a `text/plain` content type. Keep `Disallow` for paths that genuinely waste crawl budget, such as faceted search and session URLs, and use `noindex` rather than `Disallow` when the goal is keeping a page out of results.
+
+Remove stale `Crawl-delay` directives unless a crawler-specific throttle is intentional. Google ignores them; Bing and Yandex slow discovery to the requested interval when the directive applies. Prefer server-side rate limiting for abusive non-search bots rather than a wildcard delay that also affects search crawlers.
 
 Do not block the CSS, JavaScript or image paths a renderer needs. A page rendered without its stylesheet can be judged as broken or as having hidden text.
 

@@ -100,7 +100,7 @@ All tools require authentication. Write tools are marked; everything else only r
 | `get_credit_balance` | Monthly and pack credit buckets for the org. | Read |
 | `list_credit_transactions` | Org credit accounting log: grants, per-audit debits (each carries a `run_id`), refunds and adjustments, newest first, paginated, with the current balance. Needs `credits:read`. | Read |
 | `list_notifications` | The org's notification feed, newest first: audits completed or failed, new issues, paused schedules. Filter by `category` or `unread_only`, page with `limit` and `offset`, or pass `next_cursor` back as `after` to get only what arrived since, oldest first. It never marks anything read. Needs `org:read`. | Read |
-| `create_api_key` | Mint a new org API key. Requires the `keys:write` scope, which only OAuth login grants. The key is returned exactly once. | Write, gated |
+| `create_api_key` | Mint a new org API key. Requires the `keys:write` scope, which only OAuth login grants, and only to organization owners and admins. The key is returned exactly once. | Write, gated |
 | `send_feedback` | Send product feedback to the team: `bug_report`, `feature_request`, `what_worked`, `confusing`, `missing_data`, `tool_ergonomics`, or `other`. Works with any authenticated key, no scope required. | Write |
 
 A few tools deserve a closer look:
@@ -112,7 +112,7 @@ A few tools deserve a closer look:
 - **`delete_website` and `delete_websites` have the same confirm rail.** The first call previews what happens without deleting anything (for one site, the domain and how many audits and open issues stay attached to the old id; for a batch, the domain and kind behind every id); the agent confirms with you and calls again with `confirm: true`. Deletion is soft: nothing is destroyed, and re-adding the domain later registers a fresh website with a new id.
 - **Recurring audits switch on by themselves, and the schedule says so.** After a website's first successful cloud audit, squirrelscan re-audits it on a schedule, and every run spends credits. `run_audit`, `get_audit_status` and both settings tools carry a `schedule` field: `pending_first_audit: true` means the schedule is about to switch on, and `estimated_cost` gives the most it can spend per run, per week and per month. `update_website_settings` with `schedule: "off"` turns it off at once.
 - **`update_website_settings` has a confirm rail for spend.** Turning recurring audits on, changing their cadence, or a change that raises the most one audit can cost (a bigger page cap, external link checks) returns `confirmation_required` with the estimate and changes nothing; the agent shows it to you and calls again with `confirm: true`. Turning the schedule off, and changes that cost nothing more (crawl scope, patterns, depth, `internal_links`, a cheaper level), apply straight away. A cadence your plan does not run is set to one it does, and a page cap above your plan's ceiling is stored and held to the ceiling when audits run; the result says so in both cases.
-- **`create_api_key` is scope-gated.** It needs credentials carrying the reserved `keys:write` scope. OAuth login grants it (you consented on the approval screen); plain API keys never carry it, and keys minted by this tool can't mint further keys. No escalation loops.
+- **`create_api_key` is scope-gated.** It needs credentials carrying the reserved `keys:write` scope. OAuth login grants it to organization owners and admins (you consented on the approval screen); an editor, viewer or billing member's sign-in works without it. The tool also checks your current role, the same rule as creating a key in the dashboard, so a member who is demoted or removed can no longer mint keys. Plain API keys never carry the scope, and keys minted by this tool can't mint further keys. No escalation loops.
 
 ### The entity tools run one loop
 
@@ -154,7 +154,7 @@ Copy-paste starters. Prompts marked **spends credits** run a cloud audit; prompt
 - "Audit https://example.com and fix the top 3 issues in this repo." (spends credits, write)
 - "Check my site's open audit issues and comment on the ones this PR fixes." (write)
 - "Compare the last two audits of example.com and tell me what regressed."
-- "Create an API key for CI and add it to my GitHub Actions secrets." (write, needs OAuth login for `keys:write`)
+- "Create an API key for CI and add it to my GitHub Actions secrets." (write, needs OAuth login as an organization owner or admin for `keys:write`)
 - "What would a full audit of example.com cost, and how many credits do we have left?"
 - "Run a full audit of staging.example.com, but stop if it would cost more than 200 credits." (spends credits, write)
 - "List our websites and summarize the health of each one."

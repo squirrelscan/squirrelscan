@@ -4,7 +4,7 @@ icon: "log-in"
 description: "Authenticate with squirrelscan for cloud features and publishing"
 ---
 
-The `auth` command manages authentication for [cloud features](/cloud) - cloud rules, browser rendering, and publishing reports. Every account gets 500 free credits each month, no card required.
+The `auth` command manages authentication for [cloud features](/cloud) - cloud rules, browser rendering, and publishing reports. Every account gets 500 free credits each month, no card required, one free allowance per email inbox ([details](/cloud/credits#one-free-allowance-per-inbox)).
 
 There are two ways to authenticate:
 
@@ -102,7 +102,7 @@ clear error naming the missing scope.
 | `audits:read` | Read published reports |
 | `credits:read` | Read credit balance + ledger |
 | `org:read` | Read org details |
-| `org:write` | Manage org (invites, settings) |
+| `org:write` | Manage org settings (name, slug, logo). Inviting members needs a signed-in owner or admin |
 
 Login sessions are unscoped (full access). Scopes only apply to API keys.
 

@@ -10,7 +10,7 @@ Cloud audits are priced in **credits** - small integers, not dollars. A signed-i
 
 | Source | Credits | Notes |
 |--------|---------|-------|
-| Free plan | 500/month | Every account, no card required; resets monthly on your signup date |
+| Free plan | 500/month | One account per email inbox, no card required; resets monthly on your signup date ([details](#one-free-allowance-per-inbox)) |
 | Pro plan ($19/mo or $190/yr) | 3,000/month | Resets each billing period; unused monthly credits expire |
 | Team plan ($29/seat/mo or $290/seat/yr) | 3,000/seat/month | Pooled across the org; see [Team plan](/cloud/team) for seat billing rules |
 | Credit top-up (min $10) | 100 per $1 | Paid plan only; pick any amount; never expire |
@@ -18,6 +18,26 @@ Cloud audits are priced in **credits** - small integers, not dollars. A signed-i
 Annual billing is 12 months for the price of 10. Your monthly credits still arrive every month; you just pay once a year.
 
 Monthly credits are spent before purchased top-up credits. Subscribe and top up from the **Billing & Credits** page in the [dashboard](/dashboard).
+
+### One free allowance per inbox
+
+The Free plan's 500 monthly credits go to one account per email inbox. The first account on an inbox to receive them keeps them. A newer account on the same inbox starts with 0 free credits, and so does an account on a throwaway-inbox service such as Mailinator or YOPmail. The account itself still works: you can sign in and use the dashboard, and a signed-in `squirrel audit` [runs locally](#when-credits-run-out), the same as for any account that is out of credits. It just has no free cloud credits.
+
+The same applies to a second free organization created by the same account: it starts with 0 free credits. Sign in to your first organization to use the free credits.
+
+Two addresses count as the same inbox when they deliver to the same mailbox:
+
+- A `+tag` is ignored on Gmail, Outlook, Hotmail, Live, MSN, iCloud, Proton and Fastmail addresses, so `name+test@gmail.com` is the same inbox as `name@gmail.com`. On any other domain, `staff+alice@example.com` and `staff+bob@example.com` are separate inboxes.
+- Dots in a Gmail address are ignored, and `googlemail.com` is `gmail.com`, so `j.doe@gmail.com` is the same inbox as `jdoe@gmail.com`.
+- Capital letters never matter.
+
+Deleting the first account, or changing its email address, does not free the inbox for a new account. Accounts whose organization was created before 24 October 2026 keep their free credits whatever their address.
+
+If your account shows 0 free credits:
+
+- Sign in with the account you created first on that inbox. Its free credits are still there.
+- Upgrade to [Pro or Team](https://squirrelscan.com/pricing). Paid plans get their own monthly credits and can top up.
+- If you think this is a mistake, [contact support](/dashboard/support) from the dashboard.
 
 Free, Pro, and Team run the **same** audit at the same price: the base charge includes every cloud service (AI analysis, editor's summary, blocking check, tech + site metadata, report publishing) on every plan. The one difference is the [Full level](/guides/audit-levels#full-on-the-free-plan): its every-page crawl is Pro and Team, and on Free a Full audit samples one page per URL pattern first instead, the way Surface does. [Scheduled audits](/cloud/scheduled-audits) are on every plan: free re-audits one website weekly or monthly, Pro and Team re-audit every website daily. Pro and Team just grant more monthly credits and unlock top-ups, that daily cadence and extra scheduled sites, and higher render concurrency - Team adds pooled credits, invites, and roles on top. [Custom request headers](/dashboard/crawl-settings#custom-request-headers) are on every plan.
 

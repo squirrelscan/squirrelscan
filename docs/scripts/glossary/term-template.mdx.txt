@@ -46,3 +46,6 @@ Only when the term has `learn` or `tools` links in terms.json. Delete the sectio
 ## References
 
 One to three links from the term's `authority` list.
+
+{/* glossary:jsonld:start */}
+{/* glossary:jsonld:end */}

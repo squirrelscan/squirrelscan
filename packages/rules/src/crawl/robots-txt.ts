@@ -6,11 +6,55 @@ import { describeRefusedFetch } from "@squirrelscan/core-contracts";
 
 import { refusalReason, refusedFor } from "../refused";
 
+const SEARCH_CRAWL_DELAY_AGENTS = new Set(["*", "bingbot", "msnbot", "yandex", "googlebot"]);
+
+function formatInteger(value: number): string {
+  return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+function crawlDelayCheck(userAgent: string, delay: number): CheckResult | null {
+  const normalizedAgent = userAgent.toLowerCase();
+  if (!SEARCH_CRAWL_DELAY_AGENTS.has(normalizedAgent) || !Number.isFinite(delay) || delay <= 0) {
+    return null;
+  }
+
+  const slowBing = delay >= 10 && (normalizedAgent === "*" || normalizedAgent === "bingbot");
+  if (slowBing) {
+    const dailyCap = Math.floor(86_400 / delay);
+    return {
+      name: "robots-txt-crawl-delay",
+      status: "warn",
+      message: `Crawl-delay ${delay}s slows Bing crawling for User-agent: ${userAgent}`,
+      value: `Google ignores Crawl-delay; Bing obeys it and may fetch at most about ${formatInteger(dailyCap)} URLs/day`,
+      items: [{ id: userAgent, label: `User-agent: ${userAgent}; Crawl-delay: ${delay}` }],
+    };
+  }
+
+  let behavior = "This search crawler may honor the directive";
+  if (normalizedAgent === "*") {
+    behavior = "Google ignores Crawl-delay; Bing and Yandex obey it";
+  } else if (normalizedAgent === "googlebot") {
+    behavior = "Google ignores this directive";
+  } else if (normalizedAgent === "bingbot" || normalizedAgent === "msnbot") {
+    behavior = "Bing obeys this directive";
+  } else if (normalizedAgent === "yandex") {
+    behavior = "Yandex obeys this directive";
+  }
+
+  return {
+    name: "robots-txt-crawl-delay",
+    status: "info",
+    message: `Crawl-delay ${delay}s applies to User-agent: ${userAgent}`,
+    value: behavior,
+    items: [{ id: userAgent, label: `User-agent: ${userAgent}; Crawl-delay: ${delay}` }],
+  };
+}
+
 export const robotsTxtRule: Rule = {
   meta: {
     id: "crawl/robots-txt",
     name: "Robots.txt",
-    description: "Checks if robots.txt exists and is properly configured",
+    description: "Checks if robots.txt exists and is properly configured, including crawl delays",
     solution:
       "robots.txt tells search engines which pages to crawl. Place it at the root of your domain (example.com/robots.txt). Include your sitemap URL. Avoid blocking important resources (CSS, JS, images) that search engines need to render pages. Never use 'Disallow: /' unless you want to block all crawling. Use Google Search Console to test your robots.txt.",
     category: "crawl",
@@ -129,6 +173,12 @@ export const robotsTxtRule: Rule = {
         status: "pass",
         message: "robots.txt does not block all crawling",
       });
+    }
+
+    for (const group of robotsTxt.rules) {
+      if (group.crawlDelay === undefined) continue;
+      const check = crawlDelayCheck(group.userAgent, group.crawlDelay);
+      if (check) checks.push(check);
     }
 
     // Check if sitemap is referenced
