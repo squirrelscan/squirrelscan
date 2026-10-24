@@ -881,6 +881,10 @@ export function reconstructReport(
         ? { refusedFetches: crawl.stats.refusedFetches }
         : {}),
       ...(smartMerge ? { coverage: smartMerge.coverage } : {}),
+      // The original audit stamps this after reconstruction and persists it on
+      // the crawl (#1050). A later database report restores that exact scope;
+      // old crawl rows have no stamp and deliberately gain no inferred one.
+      ...(crawl.scanScope ? { scanScope: crawl.scanScope } : {}),
       ...(cacheStats ? { cacheStats } : {}),
       ...(renderBlockRecovered > 0
         ? { fetchFallbacks: { recovered: renderBlockRecovered } }

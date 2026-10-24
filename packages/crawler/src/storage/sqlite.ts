@@ -89,7 +89,7 @@ interface UnfinishedCrawlRow extends LeaseCrawlRow {
   last_activity: number;
 }
 
-export const SCHEMA_VERSION = 35;
+export const SCHEMA_VERSION = 36;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -526,6 +526,11 @@ const MIGRATIONS: Record<number, string[]> = {
     `ALTER TABLE crawls ADD COLUMN owner_host TEXT`,
     `ALTER TABLE crawls ADD COLUMN heartbeat_at INTEGER`,
   ],
+  // Version 36: the exact coverage disclosure printed by the audit (#1050).
+  // ADDITIVE and nullable: NULL means the crawl predates persisted scan scope,
+  // so a reconstructed report omits the scope instead of inventing one from
+  // config and page counts. Local sqlite only.
+  36: [`ALTER TABLE crawls ADD COLUMN scan_scope TEXT`],
 };
 
 // Every `pages` column but the two that hold a page's body, for
@@ -639,6 +644,9 @@ const CRAWLS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   { name: "owner_pid", type: "INTEGER" },
   { name: "owner_host", type: "TEXT" },
   { name: "heartbeat_at", type: "INTEGER" },
+  // Migration 36 (#1050): a missing value has defined back-compat semantics,
+  // but the writer still needs the column to exist on every current database.
+  { name: "scan_scope", type: "TEXT" },
 ];
 
 // Same guard for `entity_edges` (#492). Migration 31 added both columns, and
@@ -689,7 +697,10 @@ CREATE TABLE IF NOT EXISTS crawls (
   -- so. NULL = no lease.
   owner_pid INTEGER,
   owner_host TEXT,
-  heartbeat_at INTEGER
+  heartbeat_at INTEGER,
+  -- Exact report coverage for a later database reconstruction (#1050). NULL
+  -- on crawls stored before schema 36, which means "scope not recorded".
+  scan_scope TEXT
 );
 -- NO index on retired_at here. SCHEMA is exec'd BEFORE runMigrations(), and on a
 -- database written before migration 25 the crawls table exists WITHOUT the
@@ -1508,8 +1519,8 @@ export class SQLiteStorage implements CrawlStorage {
         const id = randomUUID();
         const db = this.getDb();
         const stmt = db.prepare(`
-          INSERT INTO crawls (id, base_url, seed_url, original_url, started_at, completed_at, status, config, stats)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO crawls (id, base_url, seed_url, original_url, started_at, completed_at, status, config, stats, scan_scope)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         stmt.run(
           id,
@@ -1520,7 +1531,8 @@ export class SQLiteStorage implements CrawlStorage {
           metadata.completedAt ?? null,
           metadata.status,
           JSON.stringify(metadata.config),
-          JSON.stringify(metadata.stats)
+          JSON.stringify(metadata.stats),
+          metadata.scanScope ? JSON.stringify(metadata.scanScope) : null
         );
         return id;
       },
@@ -1585,12 +1597,16 @@ export class SQLiteStorage implements CrawlStorage {
           sets.push("stats = ?");
           values.push(JSON.stringify(updates.stats));
         }
+        if (updates.scanScope !== undefined) {
+          sets.push("scan_scope = ?");
+          values.push(JSON.stringify(updates.scanScope));
+        }
 
         if (sets.length > 0) {
           values.push(id);
           // Cached, and safe to cache even though the SQL is built here. The
-          // cache is keyed by TEXT and `sets` is drawn from eight fixed
-          // optional columns in a fixed order, so there are at most 255 distinct
+          // cache is keyed by TEXT and `sets` is drawn from nine fixed
+          // optional columns in a fixed order, so there are at most 511 distinct
           // texts however a caller mixes them.
           //
           // The hazard is not an unbounded cache. On Bun 1.3.14 the cache holds
@@ -1703,6 +1719,13 @@ export class SQLiteStorage implements CrawlStorage {
         bytesTotal: 0,
         avgLoadTimeMs: 0,
       }),
+      scanScope:
+        typeof row.scan_scope === "string"
+          ? this.safeJsonParse(
+              row.scan_scope,
+              undefined as CrawlMetadata["scanScope"]
+            )
+          : undefined,
     };
   }
 

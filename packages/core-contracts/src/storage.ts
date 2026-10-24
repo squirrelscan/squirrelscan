@@ -4,6 +4,7 @@
 import type { Effect } from "effect";
 
 import type { AuditFailureDetail } from "./failure-reason";
+import type { ScanScope } from "./index";
 import type { RefusedFetch } from "./refused-fetch";
 import type { UnverifiedReason } from "./services";
 
@@ -338,6 +339,12 @@ export interface CrawlMetadata {
   status: CrawlStatus;
   config: CrawlerConfigSnapshot;
   stats: CrawlStats;
+  /**
+   * The report scope stamped after this crawl was analyzed. Kept on the crawl
+   * so a later `squirrel report` can reconstruct the same coverage disclosure
+   * the original audit printed. Absent on crawls written before it was stored.
+   */
+  scanScope?: ScanScope;
   /**
    * When `squirrel self disk --prune` reclaimed this audit's derived data
    * (#1912). Absent for every audit that has not been reclaimed.
