@@ -705,6 +705,19 @@ squirrel report --publish --visibility private
 Publishing is included in the audit base charge, whatever the visibility. Flipping an existing report's visibility later (in the [dashboard](/dashboard) or via the API) is free.
 </Note>
 
+### Secrets in URLs
+
+A crawl sometimes reaches a URL that carries a secret: a reset link's `?token=`, a signed file's `X-Amz-Signature`, a session id the server wrote into its links (`;jsessionid=`, `?PHPSESSID=`), a JSON Web Token in the path, or a `user:password@` login. A published report never stores those values. The cloud replaces each one with `REDACTED` everywhere the report names the URL, in page lists, issue items and messages alike:
+
+```
+https://example.com/reset?token=REDACTED&lang=en
+https://example.com/shop;jsessionid=REDACTED
+```
+
+The parameter name stays, so you can still see which page it was and which link to fix. The same page gets the same redacted URL in every audit, so issue history and audit diffs still match it. Session parameters on links to other sites are kept as written, and credentials such as `token` or a signature are redacted there too.
+
+Your local report keeps the URLs exactly as the crawler saw them.
+
 ### Output formats via URL
 
 Published reports support multiple output formats. Append a file extension to the report URL to get a specific format:
