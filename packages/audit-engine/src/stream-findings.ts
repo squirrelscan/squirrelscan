@@ -11,6 +11,7 @@
 // the package's `./smart-audits` entry so the container can import it.
 
 import type { CheckResult, PageFindingRecord } from "@squirrelscan/core-contracts";
+import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { unfoldAggregateCheck } from "@squirrelscan/rules/fold";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
 
@@ -24,6 +25,94 @@ import { findingKey, flattenChecks } from "./merge-core";
  * meta; `fingerprint` is the portable change hash (CLI+server parity).
  */
 export type StreamFindingLine = Omit<PageFindingRecord, "siteKey" | "lastSeenCrawlId">;
+
+/**
+ * Safety net for an over-cap payload carrying component evidence.
+ *
+ * `flattenChecks` already keeps every payload it builds within
+ * `maxFindingPayload`, so in practice nothing here fires — it exists because
+ * the chunk ingest DROPS an over-cap payload whole, and an additive field must
+ * never be the reason a complete legacy finding is lost. It mirrors
+ * `itemFindingPayload`'s ladder exactly: evidence, then a marker, then the
+ * untouched legacy fields.
+ */
+function clampComponentEvidenceForStream(payload: string | null): string | null {
+  if (!payload || payload.length <= REPORT_LIMITS.maxFindingPayload) return payload;
+
+  let parsed: Record<string, unknown>;
+  try {
+    const value: unknown = JSON.parse(payload);
+    if (!value || typeof value !== "object" || Array.isArray(value)) return payload;
+    parsed = value as Record<string, unknown>;
+  } catch {
+    return payload;
+  }
+
+  const occurrences = parsed.componentOccurrences;
+  // (#2341) Either kind of evidence can be the reason a payload is over cap, so
+  // a payload carrying only resource evidence must still be clampable.
+  const resources = parsed.siteResourceOccurrences;
+  const resourceCount = siteResourceOccurrenceCount(resources);
+  if (!Array.isArray(occurrences) && resourceCount === 0) return payload;
+
+  const {
+    componentOccurrences: _componentOccurrences,
+    siteResourceOccurrences: _siteResourceOccurrences,
+    ...withoutEvidence
+  } = parsed;
+  const resourceMarker =
+    resourceCount > 0
+      ? {
+          siteResourceEvidence: {
+            state: "omitted",
+            reason: "payload-limit",
+            occurrenceCount: resourceCount,
+          },
+        }
+      : {};
+
+  // Element evidence is the bulkier of the two, so try dropping it alone first:
+  // the resource set is what decides the shared-bundle page count, and losing it
+  // changes the grouping answer rather than merely thinning the evidence.
+  if (Array.isArray(occurrences) && resourceCount > 0) {
+    const resourceKept = JSON.stringify({
+      ...withoutEvidence,
+      siteResourceOccurrences: resources,
+      componentEvidence: {
+        state: "omitted",
+        reason: "payload-limit",
+        occurrenceCount: occurrences.length,
+      },
+    });
+    if (resourceKept.length <= REPORT_LIMITS.maxFindingPayload) return resourceKept;
+  }
+
+  const omitted = JSON.stringify({
+    ...withoutEvidence,
+    ...resourceMarker,
+    ...(Array.isArray(occurrences)
+      ? {
+          componentEvidence: {
+            state: "omitted",
+            reason: "payload-limit",
+            occurrenceCount: occurrences.length,
+          },
+        }
+      : {}),
+  });
+  if (omitted.length <= REPORT_LIMITS.maxFindingPayload) return omitted;
+  // No room for even the marker without trimming legacy data. Keep that data
+  // byte-identical rather than emitting an over-cap payload the ingest drops.
+  return JSON.stringify(withoutEvidence);
+}
+
+/** Occurrence count in either wire form, without rehydrating the whole blob. */
+function siteResourceOccurrenceCount(value: unknown): number {
+  if (Array.isArray(value)) return value.length;
+  if (!value || typeof value !== "object") return 0;
+  const rows = (value as { occurrences?: unknown }).occurrences;
+  return Array.isArray(rows) ? rows.length : 0;
+}
 
 /**
  * Flatten a report's `ruleResults` into complete streamable finding lines. Only
@@ -74,7 +163,7 @@ export function buildStreamFindings(
           message: f.message,
           value: f.value,
           expected: f.expected,
-          payload: f.payload,
+          payload: clampComponentEvidenceForStream(f.payload),
           fingerprint: findingFingerprint(f.status, f.message, f.value, f.expected),
           firstSeenAt: now,
           lastSeenAt: now,

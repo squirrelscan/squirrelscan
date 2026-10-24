@@ -19,6 +19,7 @@ import type { SQLiteStorage } from "@squirrelscan/crawler";
 import type {
   DuplicateGroup,
   LinkData,
+  LinkSectionCounts,
   PageFeatureDuplicateField,
   PageFeatureRow,
   PageLinkRow,
@@ -102,6 +103,7 @@ export function createSiteQuery(
       pageCount: () => pageCount,
       incomingLinkCounts: () => incoming.all,
       contextualIncomingLinkCounts: () => incoming.contextual,
+      inboundSectionCounts: () => incoming.sections,
       homepage: () => homepageRow,
       duplicateGroups: (field) => duplicates[field] ?? [],
       templateClusters: () => templateGroups,
@@ -136,6 +138,10 @@ export function createSiteQuery(
  * contextual — an old DB degrades to the pre-#109 numbers rather than reporting
  * every page as chrome-only.
  *
+ * SECTIONS (#2307): the same pass counts the links per `LinkData.section`, under the same filters
+ * and keys, so a page's section counts add up to at most its `all` count. Links with no section
+ * (a crawl stored before link sections existed) and `unknown` ones add nothing.
+ *
  * PAGE-UNIVERSE RECONCILIATION (#1021 E-E2 (b)): when `universe` is supplied (the
  * streaming loop passes v1's assembled `site.pages` URLs), Pass A projects onto
  * exactly that set/order (HTML + appended 4xx/5xx, WAF/non-HTML/redirect pages
@@ -151,7 +157,11 @@ function buildIncomingLinkCounts(
   universe: readonly string[] | undefined,
   pageScanBatch: number
 ): Effect.Effect<
-  { all: Map<string, number>; contextual: Map<string, number> },
+  {
+    all: Map<string, number>;
+    contextual: Map<string, number>;
+    sections: Map<string, LinkSectionCounts>;
+  },
   StorageError,
   never
 > {
@@ -161,6 +171,8 @@ function buildIncomingLinkCounts(
     const bucket = new Map<string, number>();
     // Same keys; counts only links that did NOT sit in site chrome (#109).
     const contextualBucket = new Map<string, number>();
+    // Same links, counted per link section (#2307). Only targets with a known section get an entry.
+    const sectionBucket = new Map<string, LinkSectionCounts>();
     // Link SOURCES are restricted to the universe so a WAF-challenge page's links
     // (its parsedData is populated but v1 excludes it from site.pages) never inflate
     // a target's incoming count. Undefined → count from every stored page (legacy).
@@ -198,6 +210,11 @@ function buildIncomingLinkCounts(
               if (!link.isChrome) {
                 contextualBucket.set(target, (contextualBucket.get(target) ?? 0) + 1);
               }
+              if (link.section && link.section !== "unknown") {
+                let sections = sectionBucket.get(target);
+                if (!sections) sectionBucket.set(target, (sections = {}));
+                sections[link.section] = (sections[link.section] ?? 0) + 1;
+              }
             }
           } catch {
             // Invalid link URL — ignored, matching the legacy rules' try/catch.
@@ -210,12 +227,15 @@ function buildIncomingLinkCounts(
     // crawl order — mirrors the legacy `incomingLinkCount.get(normalizeUrl(page.url))`.
     const all = new Map<string, number>();
     const contextual = new Map<string, number>();
+    const sections = new Map<string, LinkSectionCounts>();
     for (const url of orderedUrls) {
       const key = normalizeUrl(url);
       all.set(url, bucket.get(key) ?? 0);
       contextual.set(url, contextualBucket.get(key) ?? 0);
+      const placed = sectionBucket.get(key);
+      if (placed) sections.set(url, placed);
     }
-    return { all, contextual };
+    return { all, contextual, sections };
   });
 }
 

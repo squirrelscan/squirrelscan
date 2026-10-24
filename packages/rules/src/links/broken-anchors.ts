@@ -8,19 +8,33 @@
 // records. Findings are one per target URL and fragment, listing every page that
 // links to it.
 
+import type { LinkSection } from "@squirrelscan/core-contracts";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 import type { PageAnchorSignal } from "./page-anchors";
 
 import { normalizeUrl } from "@squirrelscan/utils";
 
+import {
+  regionsField,
+  sectionMeta,
+  tallyFields,
+  tallySource,
+  withSection,
+  type SourceTally,
+} from "./link-section-label";
 import { buildPageAnchorSignal, decodeFragment, isJudgeableFragment } from "./page-anchors";
 
 interface AnchorGroup {
   /** The first link seen to this target and fragment, as written (absolute). */
   url: string;
-  /** Pages that link to it, in first-seen order. A Set: a site-wide nav link
-   * repeats on every page, and an array scan per link is quadratic. */
-  sources: Set<string>;
+  /**
+   * Pages that link to it, in first-seen order, each with its links there and where they sit
+   * (#2307, pub#837). A map: a site-wide nav link repeats on every page, and an array scan per
+   * link is quadratic. Same-page `#x` links have no section; the anchor record keeps each of a
+   * page's fragments once, with its link count beside it.
+   */
+  sources: SourceTally;
   skipLink: boolean;
   /** The target is an unrendered client-side shell: the id may come from JavaScript. */
   unconfirmed: boolean;
@@ -73,7 +87,10 @@ export const brokenAnchorsRule: Rule = {
       "Detects links to #fragments whose target id does not exist on the page they point at",
     solution:
       "A link to #id jumps to the element with that id. When the element is renamed or removed, the link still loads and the reader lands at the top of the page instead of the section. Update the link to the id that exists now, or add the id to the target element. Skip links need a target too: give <main> or the content container the id the skip link points at.",
-    category: "links",
+    // A link whose fragment names an id that is gone lands the visitor somewhere that does not
+    // have what the link promised: the same failure as a broken link, so Reliability (pub#843).
+    // The id keeps its `links/` prefix; only the category, and so the badge and score group, moves.
+    category: "reliability",
     scope: "site",
     severity: "warning",
     weight: 4,
@@ -140,6 +157,9 @@ export const brokenAnchorsRule: Rule = {
       sourceUrl: string;
       targetRecord: PageAnchorSignal | null;
       sourceRecord: PageAnchorSignal | null;
+      section?: LinkSection;
+      /** Links this stands for: a page's repeated same-page links are judged once. */
+      links?: number;
     }): void => {
       if (!isJudgeableFragment(link.fragment)) return;
       // No record: nothing to judge against (no document, failed parse, error page).
@@ -155,13 +175,13 @@ export const brokenAnchorsRule: Rule = {
       if (!group) {
         group = {
           url: link.url,
-          sources: new Set(),
+          sources: new Map(),
           skipLink: false,
           unconfirmed: link.targetRecord.clientShell,
         };
         groups.set(groupKey, group);
       }
-      group.sources.add(link.sourceUrl);
+      tallySource(group.sources, link.sourceUrl, link.section, link.links);
       if (link.sourceRecord?.skipFragments.includes(link.fragment)) group.skipLink = true;
     };
 
@@ -176,7 +196,7 @@ export const brokenAnchorsRule: Rule = {
 
       // Same-page links, from the DOM record. The parser keeps `#x` hrefs out of
       // parsed.links, so this is the only place they are seen.
-      for (const fragment of ownRecord?.selfFragments ?? []) {
+      for (const [i, fragment] of (ownRecord?.selfFragments ?? []).entries()) {
         judge({
           targetKey: sourceKey,
           fragment,
@@ -184,6 +204,7 @@ export const brokenAnchorsRule: Rule = {
           sourceUrl: page.url,
           targetRecord: ownRecord,
           sourceRecord: ownRecord,
+          links: ownRecord?.selfFragmentLinks?.[i] ?? 1,
         });
       }
 
@@ -203,6 +224,7 @@ export const brokenAnchorsRule: Rule = {
             sourceUrl: page.url,
             targetRecord: ownRecord,
             sourceRecord: ownRecord,
+            section: link.section,
           });
           continue;
         }
@@ -218,6 +240,7 @@ export const brokenAnchorsRule: Rule = {
           sourceUrl: page.url,
           targetRecord: anchorsOf(targetKey),
           sourceRecord: ownRecord,
+          section: link.section,
         });
       }
     }
@@ -231,12 +254,17 @@ export const brokenAnchorsRule: Rule = {
         name: "broken-anchors",
         status: "warn",
         message: `${broken.length} in-page anchor link(s) point at an id that does not exist on the target page`,
-        items: broken.map((g) => ({
-          id: g.url,
-          label: `${g.url}${g.skipLink ? " (skip link)" : ""}`,
-          sourcePages: [...g.sources],
-          meta: { skipLink: g.skipLink, linkedFrom: g.sources.size },
-        })),
+        items: broken.map((g) => {
+          const { sourcePages, sources, sections, regions } = tallyFields(g.sources);
+          return {
+            id: g.url,
+            label: withSection(`${g.url}${g.skipLink ? " (skip link)" : ""}`, sections),
+            sourcePages,
+            sources,
+            ...regionsField(regions),
+            meta: { skipLink: g.skipLink, ...sectionMeta(sections), linkedFrom: sourcePages.length },
+          };
+        }),
       });
     } else {
       checks.push({
@@ -252,12 +280,17 @@ export const brokenAnchorsRule: Rule = {
         name: "unconfirmed-anchors",
         status: "info",
         message: `${unconfirmed.length} in-page anchor link(s) target a client-rendered page that was not rendered, so the id may be added by JavaScript`,
-        items: unconfirmed.map((g) => ({
-          id: g.url,
-          label: g.url,
-          sourcePages: [...g.sources],
-          meta: { linkedFrom: g.sources.size, rendered: false },
-        })),
+        items: unconfirmed.map((g) => {
+          const { sourcePages, sources, sections, regions } = tallyFields(g.sources);
+          return {
+            id: g.url,
+            label: withSection(g.url, sections),
+            sourcePages,
+            sources,
+            ...regionsField(regions),
+            meta: { ...sectionMeta(sections), linkedFrom: sourcePages.length, rendered: false },
+          };
+        }),
       });
     }
 

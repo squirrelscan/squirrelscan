@@ -5,6 +5,8 @@
 // module's types, surfacing their linkedom DOM-typing quirks under a consumer's
 // tsconfig (e.g. the API Worker). types.ts is the leaf type module. (#195)
 import type { RuleRunResult } from "@squirrelscan/rules/types";
+import { unpackComponentOccurrences } from "@squirrelscan/core-contracts/component-evidence";
+import { unpackSiteResourceOccurrences } from "@squirrelscan/core-contracts/site-resource-evidence";
 import type {
   AuditFailureDetail,
   AuditFailureReasonCode,
@@ -183,6 +185,8 @@ export function carriedFindingToCheck(
   normalizedUrl: string
 ): CheckResult {
   const payload = parseCarriedPayload(f.payload);
+  const carriedOccurrences = unpackComponentOccurrences(payload.componentOccurrences);
+  const carriedResources = unpackSiteResourceOccurrences(payload.siteResourceOccurrences);
   return {
     name: f.checkName,
     status: f.status === "fail" ? "fail" : "warn",
@@ -201,6 +205,12 @@ export function carriedFindingToCheck(
     ...(Array.isArray(payload.items) ? { items: payload.items } : {}),
     ...(payload.details ? { details: payload.details } : {}),
     ...(payload.pages ? { pages: payload.pages } : {}),
+    ...(carriedOccurrences ? { componentOccurrences: carriedOccurrences } : {}),
+    ...(payload.componentEvidence ? { componentEvidence: payload.componentEvidence } : {}),
+    ...(carriedResources ? { siteResourceOccurrences: carriedResources } : {}),
+    ...(payload.siteResourceEvidence
+      ? { siteResourceEvidence: payload.siteResourceEvidence }
+      : {}),
     // Key ORDER matters: the sampled path's caller ASSIGNS provenance then
     // lastSeenAt after this returns, so stamping them last here serializes
     // identically to a check the caller tagged (#1876).
@@ -333,6 +343,17 @@ interface CarriedPayload {
   m?: string;
   v?: string;
   e?: string;
+  /** (#2307) Component evidence stashed by `flattenChecks` on the owning item
+   * row. Carried replay must restore it, or a page carried from an earlier
+   * audit renders without the evidence a freshly crawled page shows. */
+  componentOccurrences?: unknown;
+  componentEvidence?: CheckResult["componentEvidence"];
+  /** (#2341) Resource evidence, stashed the same way and restored for the same
+   * reason: a carried page must group into the same shared-bundle unit a freshly
+   * crawled one does, or the unit's page count silently shrinks on a partial
+   * re-audit and reports a narrower fix than the site actually needs. */
+  siteResourceOccurrences?: unknown;
+  siteResourceEvidence?: CheckResult["siteResourceEvidence"];
 }
 
 /** Safely parse a carried finding's stored payload JSON. */

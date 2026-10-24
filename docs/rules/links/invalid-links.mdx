@@ -18,6 +18,8 @@ The rule runs on every crawled page and reports the links the parser flagged wit
 
 The classification comes from the parser rather than from this rule, so what counts as invalid is whatever the link extractor could not resolve against the page URL.
 
+When the link's parse recorded a link section (see [Page Classifier](/configuration/classifier)), the item's label says where it sits, for example `Invalid URL format, linked in the footer`, and `meta.sections` carries the count. Without one the item is as it was. A placed item also carries `regions`, one page per section, so the same bad link in the site footer of most pages is reported once for the footer. See [findings in a shared page region](/reports#findings-in-a-shared-page-region).
+
 ## How to fix it
 
 ```html

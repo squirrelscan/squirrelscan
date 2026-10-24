@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>All widgets</title>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        "mainEntity": {
+          "@type": "ItemList",
+          "itemListElement": [
+            { "@type": "Product", "name": "Blue widget" },
+            { "@type": "Product", "name": "Red widget" }
+          ]
+        }
+      }
+    </script>
+  </head>
+  <body class="collection">
+    <header id="site-header"><nav id="primary-nav"><a href="/">Shop</a></nav></header>
+    <main id="main">
+      <h1>All widgets</h1>
+      <ul id="grid" class="product-grid">
+        <li class="card"><a href="/p/blue"><img src="/i/b.jpg" alt="Blue" /><h3>Blue widget</h3><p>$24.00</p></a></li>
+        <li class="card"><a href="/p/red"><img src="/i/r.jpg" alt="Red" /><h3>Red widget</h3><p>$26.00</p></a></li>
+        <li class="card"><a href="/p/green"><img src="/i/g.jpg" alt="Green" /><h3>Green widget</h3><p>$21.00</p></a></li>
+      </ul>
+      <nav id="pager" class="pagination"><a href="?page=2">Next page</a></nav>
+    </main>
+    <footer id="site-footer"><p>&copy; 2026 Example Shop</p></footer>
+  </body>
+</html>

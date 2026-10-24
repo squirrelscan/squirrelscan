@@ -78,12 +78,15 @@ import type { ParsedPage, RuleMeta, SiteData } from "@squirrelscan/rules";
 
 /**
  * Bumped when the payload shape or the key's ingredients change; old rows then miss.
+ * prc-5: `features.reportScalars.structure` (#2307). A prc-4 row would replay a page's features
+ * without its link sections and page type, and the report's page structure block would read
+ * that page as having none.
  * prc-4: `preloadedScripts` joins the run context (security/csp-blocks-own-resources).
  * prc-3: `features.hreflangAlternates` (#489). A prc-2 row would replay features
  * without it, which the store reads as "no alternates" and exempts nothing, so
  * the bump is about getting the new field filled, not about safety.
  */
-export const RULE_CACHE_FORMAT = "prc-4";
+export const RULE_CACHE_FORMAT = "prc-5";
 
 /**
  * The `SiteData` keys page-scope rules read, and therefore the only ones the run

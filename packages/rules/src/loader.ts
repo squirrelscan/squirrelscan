@@ -2,6 +2,8 @@
 
 import type { Rule } from "./types";
 
+import { normalizeCategoryCode } from "./categories";
+
 import { rules as a11yRules } from "./a11y";
 import { rules as adblockRules } from "./adblock";
 import { rules as aiRules } from "./ai";
@@ -130,4 +132,24 @@ export function getNamespaces(options: LoaderOptions = {}): RuleNamespace[] {
     ...ns,
     rules: ns.rules.filter((r) => !r.meta.disabled),
   }));
+}
+
+/**
+ * Rules whose category is not their id prefix, read from the registry (pub#836):
+ * `links/broken-links` is a Reliability rule, but a pattern matches on the id, so
+ * `links/*` selects it and `reliability/*` does not. Anything that turns "this
+ * category" into rules by prefix (the CLI's `--rule-include reliability`, the
+ * `--fail-on score:reliability` check) has to add these. Legacy prefixes that name
+ * the same category after a rename (`adblock` and `blocking`) are not mismatches.
+ */
+export function getRulesOutsideTheirPrefixCategory(
+  options: LoaderOptions = {}
+): Array<{ id: string; category: string }> {
+  const out: Array<{ id: string; category: string }> = [];
+  for (const rule of loadAllRules(options).values()) {
+    const prefix = normalizeCategoryCode(rule.meta.id.split("/")[0] ?? "");
+    const category = normalizeCategoryCode(rule.meta.category);
+    if (prefix !== category) out.push({ id: rule.meta.id, category });
+  }
+  return out;
 }

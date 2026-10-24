@@ -14,7 +14,9 @@ import type {
   AuditReport,
   AuditStatus,
   CheckResult,
+  ComponentOccurrence,
   ReportRuleResult,
+  SiteResourceOccurrence,
 } from "@/types";
 
 // Extended crawl metadata with optional published info
@@ -23,6 +25,8 @@ export interface CrawlMetadataWithPublished extends CrawlMetadata {
 }
 
 import { parseResolvedAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
+import { unpackComponentOccurrences } from "@squirrelscan/core-contracts/component-evidence";
+import { unpackSiteResourceOccurrences } from "@squirrelscan/core-contracts/site-resource-evidence";
 import { WITHHELD_SEED_REDIRECT_TARGET } from "@squirrelscan/report";
 
 import {
@@ -35,7 +39,11 @@ import { warnEvictedPages } from "@/crawler/storage/eviction-notice";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
 import { reconstructReport } from "@/reports/reconstruct";
 import { retiredAuditReason } from "@/reports/retired";
-import { isValidCategory, normalizeCategoryCode } from "@/rules/categories";
+import {
+  CATEGORIES,
+  isValidCategory,
+  normalizeCategoryCode,
+} from "@/rules/categories";
 import { getProjectsPath } from "@/self/paths";
 import {
   isEquivalentAuditTarget,
@@ -168,6 +176,11 @@ interface SlimJsonReport {
     description: string;
     solution?: string;
     domain: string;
+    /**
+     * Display name the report was written with (e.g. "Reliability"), absent in slim JSON written
+     * before the field was read back. The rule id's prefix is NOT always the category (pub#836).
+     */
+    category?: string;
     subcategory?: string;
     severity: "error" | "warning" | "info";
     checks: Array<{
@@ -177,6 +190,30 @@ interface SlimJsonReport {
       affectedPages: string[];
       items?: Array<{ id: string; label?: string; sourcePages?: string[] }>;
       details?: Record<string, unknown>;
+      /**
+       * #2307 component evidence. Absent in slim JSON written before it, and
+       * carried back through so `squirrel report -i <file>` renders the same
+       * fix groups as the audit that produced the file. The serialized
+       * `componentFixGroups` are deliberately NOT read back: they are derived,
+       * and `groupIssuesByCategory` re-derives them from these occurrences, so
+       * there is one source of truth rather than two that can disagree.
+       */
+      componentOccurrences?: unknown;
+      /**
+       * Lookup tables for the packed occurrences above. `ladders` must survive
+       * the reimport: without it a repeated-subtree group re-derives from rows
+       * whose ladder indices resolve to nothing, and the group id changes.
+       */
+      componentShapes?: { v: number; shapes: unknown[]; ladders?: unknown[] };
+      componentEvidence?: CheckResult["componentEvidence"];
+      /**
+       * #2341 shared-resource evidence, packed. Read back for the same reason
+       * as the component evidence above: the serialized `siteResourceFixGroups`
+       * are derived, and `groupIssuesByCategory` re-derives them from this, so
+       * there is one source of truth rather than two that can disagree.
+       */
+      siteResourceOccurrences?: unknown;
+      siteResourceEvidence?: CheckResult["siteResourceEvidence"];
       legacyValue?: string;
     }>;
   }>;
@@ -191,6 +228,14 @@ function isSlimJsonReport(
   );
 }
 
+/** Category code for a category display name ("Reliability" → "reliability"); undefined when unknown. */
+function categoryCodeByName(name: string | undefined): string | undefined {
+  if (!name) return undefined;
+  const lower = name.trim().toLowerCase();
+  return Object.values(CATEGORIES).find((c) => c.name.toLowerCase() === lower)
+    ?.code;
+}
+
 /** A non-negative safe integer off user-supplied JSON, or undefined. */
 function wholeCount(value: unknown): number | undefined {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
@@ -202,10 +247,15 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
   const ruleResults: Record<string, ReportRuleResult> = {};
 
   for (const issue of report.issues) {
+    // The category the report was written with wins: a rule can sit in a category other than its
+    // id prefix (`links/broken-links` is Reliability since pub#836), and slim JSON written before
+    // that still says "Links". Slim JSON that names no known category falls back to the prefix.
     // Normalize legacy code prefixes (e.g. stable rule IDs keep the `adblock/`
     // prefix while the category was renamed to `blocking`).
     const categoryCandidate = normalizeCategoryCode(
-      issue.ruleId.split("/")[0] ?? "other"
+      categoryCodeByName(issue.category) ??
+        issue.ruleId.split("/")[0] ??
+        "other"
     );
     const category = isValidCategory(categoryCandidate)
       ? categoryCandidate
@@ -214,8 +264,55 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
     const checks: CheckResult[] = [];
 
     for (const check of issue.checks) {
+      // One check per affected page, so evidence is partitioned by page rather
+      // than copied onto every row — the same rule `unfoldAggregateCheck`
+      // follows. Copying the whole array onto each page would multiply every
+      // occurrence by the page count.
+      // Accepts the hoisted wire form and a plain occurrence array alike.
+      const restored =
+        unpackComponentOccurrences(
+          check.componentShapes
+            ? {
+                ...check.componentShapes,
+                occurrences: check.componentOccurrences,
+              }
+            : check.componentOccurrences
+        ) ?? [];
+      const occurrencesByPage = new Map<string, ComponentOccurrence[]>();
+      for (const occurrence of restored) {
+        const list = occurrencesByPage.get(occurrence.pageUrl);
+        if (list) list.push(occurrence);
+        else occurrencesByPage.set(occurrence.pageUrl, [occurrence]);
+      }
+      // Partitioned by page, never copied onto every row: the grouping keys on
+      // which pages reference a resource, so duplicating the set across rows
+      // would make every page claim every map.
+      const restoredResources =
+        unpackSiteResourceOccurrences(check.siteResourceOccurrences) ?? [];
+      const resourcesByPage = new Map<string, SiteResourceOccurrence[]>();
+      for (const occurrence of restoredResources) {
+        const list = resourcesByPage.get(occurrence.pageUrl);
+        if (list) list.push(occurrence);
+        else resourcesByPage.set(occurrence.pageUrl, [occurrence]);
+      }
+
       if (check.affectedPages.length > 0) {
-        for (const page of check.affectedPages) {
+        // Evidence for a page the serialized sample does not list cannot be
+        // placed on a row without inventing one. Record the count instead.
+        const sampled = new Set(check.affectedPages);
+        const unplaceable = restored.filter(
+          (occurrence) => !sampled.has(occurrence.pageUrl)
+        );
+        const evidence =
+          check.componentEvidence ??
+          (unplaceable.length > 0
+            ? {
+                state: "omitted" as const,
+                reason: "page-sample-limit" as const,
+                occurrenceCount: unplaceable.length,
+              }
+            : undefined);
+        for (const [index, page] of check.affectedPages.entries()) {
           checks.push({
             name: check.name,
             status: check.status,
@@ -224,6 +321,13 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
             items: check.items,
             details: check.details,
             value: check.legacyValue ?? null,
+            componentOccurrences: occurrencesByPage.get(page),
+            siteResourceOccurrences: resourcesByPage.get(page),
+            // A whole-check fact cannot be split across rows; pin it to the
+            // first, as the fold does with `details.additional`.
+            componentEvidence: index === 0 ? evidence : undefined,
+            siteResourceEvidence:
+              index === 0 ? check.siteResourceEvidence : undefined,
           });
         }
       } else {
@@ -234,6 +338,11 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
           items: check.items,
           details: check.details,
           value: check.legacyValue ?? null,
+          componentOccurrences: restored.length > 0 ? restored : undefined,
+          componentEvidence: check.componentEvidence,
+          siteResourceOccurrences:
+            restoredResources.length > 0 ? restoredResources : undefined,
+          siteResourceEvidence: check.siteResourceEvidence,
         });
       }
     }

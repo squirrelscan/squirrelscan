@@ -11,6 +11,19 @@ import { editorSummaryView } from "../editor-summary";
 import { entityPageTotal, stableIdPercent } from "../entities";
 import { scanScopeUnfetched, seedRedirect } from "../coverage";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
+import { pageTypePhrase, structureAttr, structureSectionName } from "../structure";
+import { checkRegionScope, itemLabel, itemRegionScope, type RegionScope } from "../region-scope";
+import { checkPageTypeScope, type PageTypeScope } from "../page-type-scope";
+
+/** `<scope page-type="docs" pages="9" type-pages="11"/>` (pub#857). */
+function pageTypeScopeElement(scope: PageTypeScope): string {
+  return `<scope page-type="${escapeXml(scope.pageType)}" pages="${scope.pages}" type-pages="${scope.typePages}"/>`;
+}
+
+/** `<scope region="footer" pages="49" region-pages="53" other-pages="0"/>` (pub#846). */
+function scopeElement(scope: RegionScope): string {
+  return `<scope region="${scope.region}" pages="${scope.pages}" region-pages="${scope.regionPages}" other-pages="${scope.otherPages}"/>`;
+}
 
 export interface XmlRenderOptions {
   version?: string;
@@ -194,6 +207,34 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     lines.push(`${indent(1)}</technologies>`);
   }
 
+  // Page structure (#2307) — report-only (does not affect the health score). Section and page
+  // type names are the ids the JSON report uses.
+  if (report.structure) {
+    const structure = report.structure;
+    const share = structure.chrome.share;
+    lines.push(
+      `${indent(1)}<page-structure pages="${structureAttr(structure.pages)}" links="${structureAttr(structure.totalLinks)}" unknown-links="${structureAttr(structure.unknownLinks)}" chrome-links="${structureAttr(structure.chrome.links)}" content-links="${structureAttr(structure.chrome.contentLinks)}"${typeof share === "number" ? ` chrome-share="${structureAttr(share)}"` : ""}>`,
+    );
+    for (const row of structure.sections) {
+      if (structureSectionName(row.section) === undefined) continue;
+      lines.push(
+        `${indent(2)}<section name="${escapeXml(row.section)}" pages="${structureAttr(row.pages)}" links="${structureAttr(row.links)}"/>`,
+      );
+    }
+    const types = structure.pageTypes;
+    lines.push(
+      `${indent(2)}<page-types not-classified="${structureAttr(types.notClassified)}" by-model="${structureAttr(types.byModel)}" degraded="${structureAttr(types.degraded)}">`,
+    );
+    for (const type of types.counts) {
+      if (pageTypePhrase(type.label, type.pages) === undefined) continue;
+      lines.push(
+        `${indent(3)}<page-type label="${escapeXml(type.label)}" pages="${structureAttr(type.pages)}"/>`,
+      );
+    }
+    lines.push(`${indent(2)}</page-types>`);
+    lines.push(`${indent(1)}</page-structure>`);
+  }
+
   const categoryIssues = groupIssuesByCategory(report.ruleResults, report.checkTallies);
 
   if (categoryIssues.length > 0) {
@@ -213,6 +254,14 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
         // #1023 R-F: count is the authoritative total; the listed pages are a
         // labeled sample (examples) when has-more.
         const pages = affectedPages(check);
+        // pub#846: a check that only reads one shared region names it, beside its page list.
+        const checkScope = checkRegionScope(check, pages.count, report.structure);
+        if (checkScope) lines.push(`${indent(4)}${scopeElement(checkScope)}`);
+        else {
+          // pub#857: a check on every page of one page type names the type, beside its page list.
+          const typeScope = checkPageTypeScope(check, pages.count, report.structure);
+          if (typeScope) lines.push(`${indent(4)}${pageTypeScopeElement(typeScope)}`);
+        }
         if (pages.sample.length > 0) {
           lines.push(
             `${indent(4)}<affected-pages count="${pages.count}" examples="${pages.sample.length}" has-more="${pages.hasMore}">`,
@@ -229,15 +278,41 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
           lines.push(`${indent(4)}<items count="${check.items.length}"${notListed}>`);
           for (const item of check.items) {
             lines.push(`${indent(5)}<item id="${escapeXml(item.id)}">`);
-            if (item.label && item.label !== item.id) lines.push(`${indent(6)}<label>${escapeXml(item.label)}</label>`);
+            // pub#846: the region the item is shown in, beside its bounded page list; a scoped
+            // item's label drops the section phrase the region says.
+            const scope = itemRegionScope(item, report.structure);
+            const label = itemLabel(item, scope);
+            if (label && label !== item.id) lines.push(`${indent(6)}<label>${escapeXml(label)}</label>`);
+            if (scope) lines.push(`${indent(6)}${scopeElement(scope)}`);
             if (item.meta) {
               for (const [k, v] of Object.entries(item.meta)) {
-                if (v !== undefined && v !== null) lines.push(`${indent(6)}<${k}>${escapeXml(String(v))}</${k}>`);
+                // An object value (a link's `sections` counts) as JSON, not "[object Object]".
+                if (v !== undefined && v !== null)
+                  lines.push(`${indent(6)}<${k}>${escapeXml(typeof v === "object" ? JSON.stringify(v) : String(v))}</${k}>`);
               }
             }
             if (item.sourcePages && item.sourcePages.length > 0) {
+              // pub#837: each page once, with its links to the item and where they sit.
+              const sources = new Map((item.sources ?? []).map((s) => [s.page, s]));
               lines.push(`${indent(6)}<source-pages>`);
-              for (const src of item.sourcePages) lines.push(`${indent(7)}<page url="${escapeXml(src)}"/>`);
+              for (const src of new Set(item.sourcePages)) {
+                const source = sources.get(src);
+                const url = `url="${escapeXml(src)}"`;
+                const sections = Object.entries(source?.sections ?? {}).filter(([, n]) => (n ?? 0) > 0);
+                if (!source) {
+                  lines.push(`${indent(7)}<page ${url}/>`);
+                  continue;
+                }
+                const attrs = `${url} links="${escapeXml(String(source.links))}"`;
+                if (sections.length === 0) {
+                  lines.push(`${indent(7)}<page ${attrs}/>`);
+                  continue;
+                }
+                lines.push(`${indent(7)}<page ${attrs}>`);
+                for (const [name, n] of sections)
+                  lines.push(`${indent(8)}<section name="${escapeXml(name)}" links="${escapeXml(String(n))}"/>`);
+                lines.push(`${indent(7)}</page>`);
+              }
               lines.push(`${indent(6)}</source-pages>`);
             }
             lines.push(`${indent(5)}</item>`);

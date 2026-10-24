@@ -70,12 +70,15 @@ function localReport(): AuditReport {
 }
 
 describe("console report names the rules a private host skipped", () => {
-  test("once, right under the score line", () => {
+  test("once, in Report detail at the end, not under the score line", () => {
     const lines = capture(localReport()).split("\n");
-    expect(lines.filter((l) => l === LINE)).toHaveLength(1);
+    expect(lines.filter((l) => l.includes(LINE))).toHaveLength(1);
     const header = lines.findIndex((l) => l.includes("/100"));
-    expect(lines.indexOf(LINE)).toBeGreaterThan(header);
-    expect(lines.indexOf(LINE) - header).toBeLessThanOrEqual(3);
+    const detail = lines.indexOf("REPORT DETAIL");
+    const at = lines.findIndex((l) => l.includes(LINE));
+    expect(detail).toBeGreaterThan(header);
+    expect(at).toBeGreaterThan(detail);
+    expect(at - header).toBeGreaterThan(3);
   });
 
   test("and never as an issue", () => {

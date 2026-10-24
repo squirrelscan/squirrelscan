@@ -52,14 +52,21 @@ describe("console report discloses a refused off-site seed redirect", () => {
   test("names the refused target and the URL that was actually graded", () => {
     const out = capture(redirected());
     expect(out).toContain(NOTE);
-    // The graded URL is still the header's subject; the disclosure sits under
-    // it. Located by the score, not by the URL: a URL literal handed to
-    // `includes` trips CodeQL's incomplete-url-substring-sanitization rule.
+    // The graded URL is still the header's subject; the disclosure closes the
+    // report, under "Scan details" in Report detail. Located by the score, not
+    // by the URL: a URL literal handed to `includes` trips CodeQL's
+    // incomplete-url-substring-sanitization rule.
     const lines = out.split("\n");
     const header = lines.findIndex((l) => l.includes("/100"));
     expect(header).toBeGreaterThan(-1);
     expect(lines[header]).toContain("https://example.com");
-    expect(lines[header + 1]).toContain("Seed redirected off-site");
+    expect(lines[header + 1]).not.toContain("Seed redirected");
+    const detail = lines.indexOf("REPORT DETAIL");
+    const scan = lines.indexOf("Scan details");
+    const note = lines.findIndex((l) => l.includes("Seed redirected off-site"));
+    expect(detail).toBeGreaterThan(header);
+    expect(scan).toBeGreaterThan(detail);
+    expect(note).toBeGreaterThan(scan);
   });
 
   test("nothing is printed when the seed did not redirect off-site", () => {
@@ -67,14 +74,18 @@ describe("console report discloses a refused off-site seed redirect", () => {
   });
 
   test("the whole rest of the output is byte-identical without a redirect", () => {
-    // Full-output equality, not the absence of a phrase: the disclosure is the
-    // only thing a redirect adds to the console report.
+    // Full-output equality, not the absence of a phrase: the disclosure, and the
+    // Report detail section that holds it, are the only things a redirect adds
+    // to the console report.
     const clean = capture(createMinimalReport());
     const lines = capture(redirected()).split("\n");
-    const kept = lines.filter((l) => !l.includes("Seed redirected"));
-    // Exactly one line is the disclosure, and dropping it leaves the clean
-    // rendering byte for byte — so nothing else rode along with it.
-    expect(lines.length - kept.length).toBe(1);
+    const note = lines.findIndex((l) => l.includes("Seed redirected"));
+    const detail = lines.indexOf("REPORT DETAIL");
+    expect(note).toBeGreaterThan(detail);
+    // The section is the blank line before its heading through the disclosure line, which is
+    // the last thing in it. Dropping it leaves the clean rendering byte for byte.
+    const kept = lines.filter((_, i) => i < detail - 1 || i > note);
+    expect(lines.filter((l) => l.includes("Seed redirected"))).toHaveLength(1);
     expect(kept.join("\n")).toBe(clean);
     // And every suppressed spelling renders exactly as the absent field does.
     for (const finalUrl of [

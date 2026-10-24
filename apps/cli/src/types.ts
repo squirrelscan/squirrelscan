@@ -191,15 +191,20 @@ import type {
   AuditStatus as _AS,
   CacheStats as _CST,
   CategoryScore as _CS,
+  CheckItemSource,
+  ComponentOccurrence as _CO,
+  LinkSectionCounts,
   DomainStats as _DST,
   EditorSummary as _ES,
   EntityMap as _EM,
   GroupScore as _GS,
   HealthScore as _HS,
   RefusedFetch,
+  ReportStructure as _RST,
   ReportTechnologies as _RT,
   RuleCategory as _RC,
   SiteMetadata as _SM,
+  SiteResourceOccurrence as _SRO,
 } from "@squirrelscan/core-contracts";
 export type AuditStatus = _AS;
 export type AuditFailureReasonCode = _AFRC;
@@ -208,11 +213,14 @@ export type GroupScore = _GS;
 export type HealthScore = _HS;
 export type RuleCategory = _RC;
 export type ReportTechnologies = _RT;
+export type ReportStructure = _RST;
 export type SiteMetadata = _SM;
 export type EditorSummary = _ES;
 export type EntityMap = _EM;
 export type DomainStats = _DST;
 export type CacheStats = _CST;
+export type ComponentOccurrence = _CO;
+export type SiteResourceOccurrence = _SRO;
 
 // Structured item for CheckResult - represents a single affected resource
 export interface CheckItem {
@@ -220,6 +228,9 @@ export interface CheckItem {
   label?: string; // Human-readable label (defaults to id if not set)
   snippet?: string; // Truncated HTML context (e.g., '<img src="..." alt="">')
   sourcePages?: string[]; // Pages where this item appears (for site-scope rules)
+  pageCount?: number; // Pages it was found on when sourcePages lists fewer (published reports)
+  sources?: CheckItemSource[]; // Per source page: links to the item and their sections (pub#837)
+  regions?: LinkSectionCounts; // Pages it sits on, per page section (pub#846)
   meta?: Record<string, unknown>; // Rule-specific metadata (e.g., { status: 404, density: 3.2 })
 }
 
@@ -238,6 +249,26 @@ export interface CheckResult {
   value?: string | number | null;
   expected?: string | number | null;
   skipReason?: string; // Why rule was skipped (e.g., "LLM unavailable")
+
+  // #2307: additive DOM evidence for component-aware fix grouping. This
+  // interface is a hand-maintained twin of the core-contracts CheckResult, so a
+  // field missing here is silently dropped by every CLI path typed against it —
+  // which is how the feature reached production emitting nothing.
+  componentOccurrences?: ComponentOccurrence[];
+  componentEvidence?: {
+    state: "omitted";
+    reason: "payload-limit" | "page-sample-limit" | "sibling-row";
+    occurrenceCount: number;
+  };
+  // #2341: additive shared-resource evidence. Here for exactly the reason the
+  // twin warning above gives — omitting it from this interface is how the
+  // field reaches production silently dropped.
+  siteResourceOccurrences?: SiteResourceOccurrence[];
+  siteResourceEvidence?: {
+    state: "omitted";
+    reason: "payload-limit" | "page-sample-limit" | "sibling-row";
+    occurrenceCount: number;
+  };
 
   // Smart audits (#110): provenance for findings carried across audits.
   // `carried` = re-injected from the store for a page not re-crawled this run.
@@ -289,6 +320,8 @@ export interface LinkData {
   isNofollow?: boolean;
   /** Anchor sat in a `nav`/`header`/`footer`/`aside` landmark (#109). */
   isChrome?: boolean;
+  /** Part of the page the anchor sat in (#2307). */
+  section?: import("@squirrelscan/core-contracts").LinkSection;
 }
 
 export interface ResourceSizeData {
@@ -481,6 +514,12 @@ export interface AuditReport {
    * tech-detect ran (logged-in users with cloud enabled).
    */
   technologies?: ReportTechnologies;
+  /**
+   * Page structure (#2307) — REPORT-ONLY / non-scoring. Where the audited pages' links sit and
+   * the page types the classifier gave them. Mirrors core-contracts `AuditReport`. Absent when no
+   * audited page carries a link section or a classification.
+   */
+  structure?: ReportStructure;
   /**
    * Resolved Stage-0 site profile — REPORT-ONLY / non-scoring. Present only when
    * the credited cloud `site-metadata` service resolved it (logged-in + cloud +

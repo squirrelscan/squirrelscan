@@ -1,0 +1,13 @@
+{
+  "file": "classifier-v2.json",
+  "sha256": "f0de5687de8b2e735d5ab3a2782c2d8049b820ccec477794c22a4a795fd106ec",
+  "bytes": 8818429,
+  "format": "squirrel-dom-classifier",
+  "artifactVersion": 1,
+  "featurizerVersion": "v2.3.0",
+  "heads": [
+    "region",
+    "pageType",
+    "section"
+  ]
+}

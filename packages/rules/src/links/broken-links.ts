@@ -9,6 +9,15 @@ import {
 import { isCloudflareEmailProtectionUrl, normalizeUrl } from "@squirrelscan/utils";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 
+import {
+  regionsField,
+  sectionMeta,
+  tallyFields,
+  tallySource,
+  withSection,
+  type SourceTally,
+} from "./link-section-label";
+
 export const brokenLinksRule: Rule = {
   meta: {
     id: "links/broken-links",
@@ -16,7 +25,10 @@ export const brokenLinksRule: Rule = {
     description: "Detects links returning 404 or 5xx errors",
     solution:
       "Broken links hurt user experience and waste crawl budget. Regularly audit links using tools or crawlers. Fix or remove broken links. Set up 301 redirects for moved content. For external links, consider using nofollow and regularly verifying they still work. Implement custom 404 pages that help users find content.",
-    category: "links",
+    // A dead link is a failed request a visitor hits, not a search-engine signal (pub#836): the
+    // id keeps its `links/` prefix (configs, disable lists, rule_options and docs URLs name it),
+    // and only the category, and so the report badge and score group, is Reliability.
+    category: "reliability",
     scope: "site",
     severity: "error",
     weight: 7,
@@ -35,8 +47,9 @@ export const brokenLinksRule: Rule = {
       return { checks };
     }
 
-    // Collect all link targets and their sources
-    const linkTargets = new Map<string, string[]>();
+    // Every link target, with the pages that link it: each page once, with its links there and
+    // where on the page they sit (#2307, pub#837).
+    const linkTargets = new Map<string, SourceTally>();
     // pub#811: Cloudflare's email obfuscation rewrites `mailto:` links to
     // `/cdn-cgi/l/email-protection#<hex>`, which answers an error status but
     // is an email address, not a page. The parser carries them as contact
@@ -51,9 +64,9 @@ export const brokenLinksRule: Rule = {
             emailProtectionLinks++;
             continue;
           }
-          const sources = linkTargets.get(link.url) || [];
-          sources.push(page.url);
-          linkTargets.set(link.url, sources);
+          let tally = linkTargets.get(link.url);
+          if (!tally) linkTargets.set(link.url, (tally = new Map()));
+          tallySource(tally, page.url, link.section);
         }
       }
       for (const contact of page.parsed.contactLinks ?? []) {
@@ -88,13 +101,13 @@ export const brokenLinksRule: Rule = {
 
     const brokenLinks: {
       url: string;
-      sources: string[];
+      sources: SourceTally;
       statusCode: number;
       probed: boolean;
     }[] = [];
     const rateLimitedLinks: {
       url: string;
-      sources: string[];
+      sources: SourceTally;
       statusCode: number;
     }[] = [];
     // repo#2729: a probed 401/403 is a bot wall or an auth wall refusing a
@@ -103,7 +116,7 @@ export const brokenLinksRule: Rule = {
     // pub#798: so is a target the crawl itself got a bot-wall challenge for.
     const refusedLinks: {
       url: string;
-      sources: string[];
+      sources: SourceTally;
       statusCode: number;
       wafChallenge?: boolean;
     }[] = [];
@@ -212,16 +225,23 @@ export const brokenLinksRule: Rule = {
         name: "broken-links",
         status: "fail",
         message: `${brokenLinks.length} broken internal link(s) (4xx/5xx)`,
-        items: brokenLinks.map((b) => ({
-          id: b.url,
-          label: `${b.url} (${b.statusCode})`,
-          sourcePages: b.sources,
-          meta: {
-            statusCode: b.statusCode,
-            linkedFrom: b.sources.length,
-            ...(b.probed ? { probed: true } : {}),
-          },
-        })),
+        items: brokenLinks.map((b) => {
+          const { sourcePages, sources, sections, regions } = tallyFields(b.sources);
+          return {
+            id: b.url,
+            label: withSection(`${b.url} (${b.statusCode})`, sections),
+            sourcePages,
+            sources,
+            ...regionsField(regions),
+            meta: {
+              statusCode: b.statusCode,
+              ...sectionMeta(sections),
+              // Pages, as the report counts them; `sources` says how many links each one has.
+              linkedFrom: sourcePages.length,
+              ...(b.probed ? { probed: true } : {}),
+            },
+          };
+        }),
         details: coverage(),
       });
     } else if (!notFollowed) {
@@ -257,14 +277,19 @@ export const brokenLinksRule: Rule = {
         name: "refused-links",
         status: "info",
         message: `${refusedLinks.length} internal link(s) ${why} - status unverifiable`,
-        items: refusedLinks.map((b) => ({
-          id: b.url,
-          label: `${b.url} (${b.statusCode})`,
-          sourcePages: b.sources,
-          meta: b.wafChallenge
-            ? { statusCode: b.statusCode, wafChallenge: true }
-            : { statusCode: b.statusCode, probed: true },
-        })),
+        items: refusedLinks.map((b) => {
+          const { sourcePages, sources, regions } = tallyFields(b.sources);
+          return {
+            id: b.url,
+            label: `${b.url} (${b.statusCode})`,
+            sourcePages,
+            sources,
+            ...regionsField(regions),
+            meta: b.wafChallenge
+              ? { statusCode: b.statusCode, wafChallenge: true }
+              : { statusCode: b.statusCode, probed: true },
+          };
+        }),
       });
     }
 
@@ -273,12 +298,17 @@ export const brokenLinksRule: Rule = {
         name: "rate-limited-links",
         status: "info",
         message: `${rateLimitedLinks.length} internal link(s) rate-limited - status unverifiable`,
-        items: rateLimitedLinks.map((b) => ({
-          id: b.url,
-          label: `${b.url} (${b.statusCode})`,
-          sourcePages: b.sources,
-          meta: { statusCode: b.statusCode, rateLimited: true },
-        })),
+        items: rateLimitedLinks.map((b) => {
+          const { sourcePages, sources, regions } = tallyFields(b.sources);
+          return {
+            id: b.url,
+            label: `${b.url} (${b.statusCode})`,
+            sourcePages,
+            sources,
+            ...regionsField(regions),
+            meta: { statusCode: b.statusCode, rateLimited: true },
+          };
+        }),
       });
     }
 

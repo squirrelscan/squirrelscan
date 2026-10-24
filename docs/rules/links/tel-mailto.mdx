@@ -24,6 +24,8 @@ Numbers match on an exact digit comparison, on either digit string ending with t
 
 The `(0)` reading applies only to the link text, never to the href, and only to calling codes whose national trunk prefix is 0 and is dropped when dialling from abroad, according to the ITU-T list of dialling procedures: +31 (Netherlands), +32 (Belgium), +33 (France), +41 (Switzerland), +43 (Austria), +44 (United Kingdom), +49 (Germany), +61 (Australia), +64 (New Zealand) and +353 (Ireland). For every other calling code the text is read literally. Italy (+39), for example, has no trunk prefix: its numbers keep the leading 0 after the country code, so `+39 (0)6 1234 567` against `tel:+3961234567` is still a mismatch. A German display number that differs from the href in any other digit is a mismatch too.
 
+When the page's contact links carry a link section (see [Page Classifier](/configuration/classifier)), the mismatch and trunk prefix items say where the link sits and carry the counts in `meta.sections`, for example `href "+61414007351" ≠ text "0400 111 222", linked in the footer`. A crawl whose links carry no section keeps the item as it was. These items also carry `regions`, one page per section, so a contact link repeated in the site footer of most pages is reported once as `In the site footer, on 49 of 53 pages`. See [findings in a shared page region](/reports#findings-in-a-shared-page-region).
+
 ## How to fix it
 
 ```html

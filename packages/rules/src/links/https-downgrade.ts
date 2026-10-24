@@ -4,6 +4,14 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { isCloudflareEmailProtectionUrl } from "@squirrelscan/utils";
 
+import {
+  addSection,
+  pageRegionsField,
+  sectionMeta,
+  withSection,
+  type SectionCounts,
+} from "./link-section-label";
+
 export const httpsDowngradeRule: Rule = {
   meta: {
     id: "links/https-downgrade",
@@ -49,11 +57,36 @@ export const httpsDowngradeRule: Rule = {
     }
 
     if (httpLinks.length > 0) {
+      // #2307: where each offending link sits, by resolved URL. Without sections (an old crawl)
+      // the items stay bare.
+      const placed = new Map<string, SectionCounts>();
+      for (const link of ctx.parsed.links ?? []) {
+        if (link.url.startsWith("http://")) addSection(placed, link.url, link.section);
+      }
+      const resolve = (href: string): string | undefined => {
+        try {
+          return new URL(href, ctx.page.url).toString();
+        } catch {
+          return undefined;
+        }
+      };
       checks.push({
         name: "https-downgrade",
         status: "warn",
         message: `${httpLinks.length} link(s) downgrade to HTTP`,
-        items: httpLinks.map((url) => ({ id: url })),
+        items: httpLinks.map((url) => {
+          const resolved = resolve(url);
+          const sections = resolved ? placed.get(resolved) : undefined;
+          return sections
+            ? {
+                id: url,
+                label: withSection(url, sections),
+                meta: sectionMeta(sections),
+                // pub#846: the page's sections, so the report can scope a repeated link to one.
+                ...pageRegionsField(sections),
+              }
+            : { id: url };
+        }),
       });
     } else {
       checks.push({

@@ -16,9 +16,10 @@ const logger = {
   traceEnd: (_id: string, _m?: Record<string, unknown>) => {},
 };
 
-import type { ExtractedLink, LinkPosition } from "./types";
+import type { ExtractedLink, LinkData, LinkPosition } from "./types";
 
 import { isInSiteChrome } from "./chrome";
+import { makeLinkSectionResolver, type LinkPlacer } from "./link-section";
 
 /**
  * Detect link position in document structure.
@@ -110,13 +111,19 @@ function hasNofollow(relArray: string[]): boolean {
 }
 
 /**
- * Extract all links from document
+ * Extract all links from document. `placeLink`, when given, is the page classifier's placer: it
+ * fills in `section` where the markup says nothing (see ./link-section.ts).
  */
-export function extractLinks(doc: Document, baseUrl: string): ExtractedLink[] {
+export function extractLinks(
+  doc: Document,
+  baseUrl: string,
+  placeLink?: LinkPlacer,
+): ExtractedLink[] {
   const spanId = logger.traceStart("extractLinks");
   const anchors = doc.querySelectorAll("a[href]");
   const links: ExtractedLink[] = [];
   const baseUrlObj = new URL(baseUrl);
+  const sectionOf = makeLinkSectionResolver(placeLink);
 
   for (const anchor of anchors) {
     const element = anchor as Element;
@@ -148,6 +155,7 @@ export function extractLinks(doc: Document, baseUrl: string): ExtractedLink[] {
         isNofollow: hasNofollow(rel),
         // Landmark-strict, unlike `position` above (#109) — see ./chrome.ts.
         isChrome: isInSiteChrome(element),
+        ...sectionOf(element),
       });
     } catch {
       // Skip invalid URLs
@@ -156,6 +164,27 @@ export function extractLinks(doc: Document, baseUrl: string): ExtractedLink[] {
 
   logger.traceEnd(spanId, { linkCount: links.length });
   return links;
+}
+
+/**
+ * The stored `LinkData` for an extracted link, shared by every producer that builds a ParsedPage
+ * from the extractors (audit-engine `parseHtmlForRules`, the CLI's `parsePageRecord`). The
+ * classifier's provenance keys appear only when the model answered, so a parse without it is
+ * byte-identical to the markup-only one.
+ */
+export function toLinkData(link: ExtractedLink): LinkData {
+  return {
+    url: link.href,
+    text: link.text,
+    isInternal: link.isInternal,
+    rel: link.rel,
+    isNofollow: link.isNofollow,
+    isChrome: link.isChrome,
+    section: link.section,
+    ...(link.sectionSource
+      ? { sectionSource: link.sectionSource, sectionConfidence: link.sectionConfidence }
+      : {}),
+  };
 }
 
 /**

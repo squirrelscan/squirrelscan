@@ -286,10 +286,12 @@ const selfDoctor = defineCommand({
   },
   async run() {
     const { runDoctorChecks } = await import("@/self/doctor");
+    // Loaded here, not at the top of the file: it parses the bundled model (#2307).
+    const { checkClassifier } = await import("@/classifier/doctor");
 
     console.log("Running health checks...\n");
 
-    const result = runDoctorChecks();
+    const result = runDoctorChecks({ extraChecks: [checkClassifier()] });
     if (!result.ok) {
       console.error(`Error: ${result.error.message}`);
       process.exit(1);

@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["bun", "node"],
+    "paths": {
+      "@squirrelscan/core-contracts": ["../core-contracts/src/index.ts"],
+      "@squirrelscan/parser": ["../parser/src/index.ts"],
+      "@squirrelscan/parser/dom": ["../parser/src/dom.ts"],
+      "@squirrelscan/utils": ["../utils/src/index.ts"],
+      "@squirrelscan/utils/*": ["../utils/src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.ts"]
+}

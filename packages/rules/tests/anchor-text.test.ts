@@ -3,6 +3,7 @@
 // not three findings.
 
 import { describe, expect, test } from "bun:test";
+import { parsePage } from "@squirrelscan/parser";
 import { parseHTML } from "@squirrelscan/parser/dom";
 
 import { anchorTextRule } from "../src/links/anchor-text";
@@ -88,5 +89,83 @@ describe("links/anchor-text", () => {
     const checks = run('<a href="#section"></a>');
     expect(checks).toHaveLength(1);
     expect(checks[0].name).toBe("anchor-text");
+  });
+});
+
+// #2307: where the flagged links sit.
+describe("links/anchor-text — link sections", () => {
+  const URL = "https://example.com/";
+
+  /** A context whose parse carries the link sections, as every crawl since the classifier does. */
+  function sectioned(html: string, strip = false): RuleContext {
+    const parsed = parsePage(html, URL);
+    if (strip) for (const link of parsed.links) delete link.section;
+    return {
+      page: { url: URL, html, statusCode: 200, loadTime: 0, headers: {} },
+      parsed,
+      options: {},
+    } as unknown as RuleContext;
+  }
+
+  test("an empty anchor says where it sits and carries meta.sections", () => {
+    const { checks } = anchorTextRule.run(
+      sectioned('<footer><a href="/repairs"><img alt=""></a></footer>')
+    );
+    const empty = checks.find((c) => c.name === "empty-anchor");
+
+    expect(empty?.items).toHaveLength(1);
+    expect(empty?.items?.[0]).toMatchObject({
+      id: "https://example.com/repairs",
+      label: "https://example.com/repairs, linked in the footer",
+      meta: { sections: { footer: 1 } },
+    });
+  });
+
+  test("a generic anchor text names the sections of every link that uses it", () => {
+    const { checks } = anchorTextRule.run(
+      sectioned('<nav><a href="/a">Read more</a></nav><main><a href="/b">Read more</a></main>')
+    );
+    const generic = checks.find((c) => c.name === "generic-anchor");
+
+    expect(generic?.items).toEqual([
+      {
+        id: '"Read more"',
+        label: '"Read more", linked in the page content and the navigation',
+        meta: { sections: { navigation: 1, content: 1 } },
+        // pub#846: one page in each section it sits in, for the report's region scope.
+        regions: { navigation: 1, content: 1 },
+      },
+    ]);
+  });
+
+  test("a schemeless host is found where the parse stored it", () => {
+    // The DOM reads `www.example.org` as a relative path; the parse reads it as a host.
+    const { checks } = anchorTextRule.run(
+      sectioned('<footer><a href="www.example.org">click here</a></footer>')
+    );
+
+    expect(checks.find((c) => c.name === "generic-anchor")?.items).toEqual([
+      {
+        id: '"click here"',
+        label: '"click here", linked in the footer',
+        meta: { sections: { footer: 1 } },
+        regions: { footer: 1 },
+      },
+    ]);
+  });
+
+  test("without section data the items are as they were", () => {
+    const { checks } = anchorTextRule.run(
+      sectioned('<footer><a href="/repairs"><img alt=""></a><a href="/x">here</a></footer>', true)
+    );
+
+    const empty = checks.find((c) => c.name === "empty-anchor");
+    expect(empty?.items?.[0]).toEqual({
+      id: "https://example.com/repairs",
+      snippet: '<a href="/repairs"><img alt=""></a>',
+    });
+    expect(checks.find((c) => c.name === "generic-anchor")?.items).toEqual([
+      { id: '"here"', label: '"here"' },
+    ]);
   });
 });

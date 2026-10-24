@@ -77,6 +77,22 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // the same shape as 48 -> 49 above. main alone is 50 (verified with the rule
       // removed), so the move comes from this deliberate rule addition.
       expect(v1.healthScore.overall).toBe(51);
+      // pub#836, pub#843: links/broken-links, links/broken-external-links and links/broken-anchors
+      // are Reliability rules (ids unchanged). All three pass on the synthetic site, so their three
+      // passes leave the Links category and make the new Reliability category (3 of 3, score 100).
+      // Links moved 90 -> 86 when the first two left (2504 passes and 2 warnings became 2502 and 2)
+      // and 86 -> 84 when broken-anchors left (2501 and 2). Reliability rolls up into the Performance
+      // group (64 -> 65 with #836, unchanged by #843: 8005 -> 8006 passes), the SEO group score stays
+      // 52 with three fewer passes (28799 -> 28796), and the overall health score is unmoved: it
+      // weights every rule the same wherever it sits. 28796 -> 28786 (pub#841): content/word-count
+      // skips the 10 noindex pages of the fixture instead of passing them, so each is a skipped
+      // check, not a pass; no finding row is added or lost.
+      const category = (code: string) => v1.healthScore.categories.find((c) => c.category === code);
+      const group = (code: string) => v1.healthScore.groups.find((g) => g.group === code);
+      expect(category("links")).toMatchObject({ score: 84, passed: 2501, warnings: 2, failed: 0 });
+      expect(category("reliability")).toMatchObject({ score: 100, passed: 3, warnings: 0, failed: 0 });
+      expect(group("performance")).toMatchObject({ score: 65, passed: 8006, warnings: 1000, failed: 0 });
+      expect(group("seo")).toMatchObject({ score: 52, passed: 28786, warnings: 3498, failed: 500 });
       // 97711 -> 98211: content/hidden-text emits one page check across the 500
       // fixture pages that have a document, and passes on every one of them. The
       // overall score is unmoved.
@@ -178,7 +194,12 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // or code-editor markup and no mojibake for it to change; the new
       // placeholder-title check adds a row only for a broken title, and every
       // synthetic title is real copy.
-      expect(v1.findings.length).toBe(101743);
+      // 101743 -> 102243: schema/expected-type is page-scoped and adds one check on each
+      // of 500 pages. The harness pages carry no classification (the page classifier
+      // is not wired into the synthetic site), so the check is the info "not
+      // classified with enough confidence". Info does not score, so
+      // healthScore.overall is unmoved at 51.
+      expect(v1.findings.length).toBe(102243);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -204,9 +225,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 305 -> 306 mobile/web-app-manifest,
       // 306 -> 307 reliability/broken-forms,
       // 307 -> 308 content/common-misspellings,
-      // 308 -> 309 mobile/input-zoom;
+      // 308 -> 309 mobile/input-zoom, 309 -> 310 schema/expected-type;
       // anything else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(309);
+      expect(v1.perRuleTally.length).toBe(310);
       expect(v1.perRuleTally.find((t) => t.ruleId === "reliability/broken-forms")).toEqual({
         ruleId: "reliability/broken-forms",
         pass: 0,

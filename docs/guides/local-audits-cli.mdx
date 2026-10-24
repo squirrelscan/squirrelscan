@@ -115,7 +115,7 @@ A dev server is plain HTTP on purpose, usually speaks HTTP/1.1, and sends no pro
 | [`perf/cache-headers`](/rules/perf/cache-headers) | Cache-Control on each page |
 | [`perf/bad-caching`](/rules/perf/bad-caching) | Caching and validators across the site |
 
-A skipped rule is not a pass and not a failure: it is left out of the score entirely, so a clean site on `localhost` scores what the same site scores behind a production edge, and one missing piece (no HTTPS, no compression, no caching policy) is not charged by several rules at once. The report says so once, under the score, instead of once per rule and page:
+A skipped rule is not a pass and not a failure: it is left out of the score entirely, so a clean site on `localhost` scores what the same site scores behind a production edge, and one missing piece (no HTTPS, no compression, no caching policy) is not charged by several rules at once. The report says so once, under Scan details in Report detail at the end, instead of once per rule and page:
 
 ```text
 Local or private-network host: {count} transport and delivery rules do not apply here and are not scored ({rule names}).

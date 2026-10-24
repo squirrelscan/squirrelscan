@@ -237,3 +237,84 @@ describe("filterResolvesToZeroCategories", () => {
     ).toBe(true);
   });
 });
+
+// pub#836: `links/broken-links` and `links/broken-external-links` are Reliability rules that
+// keep their `links/` ids. A pattern matches on the id, so "the reliability category" has to
+// name them explicitly or `--rule-include reliability` would run without them.
+describe("rules whose category is not their id prefix (pub#836, pub#843)", () => {
+  const MOVED = [
+    "links/broken-links",
+    "links/broken-external-links",
+    "links/broken-anchors",
+  ];
+
+  test("a bare reliability token also names the broken link rules", () => {
+    const r = parseRuleFilters("reliability", "reliability");
+    expect(r.errors).toEqual([]);
+    for (const patterns of [r.enable, r.disable]) {
+      expect(patterns[0]).toBe("reliability/*");
+      expect(patterns.slice(1).sort()).toEqual([...MOVED].sort());
+    }
+  });
+
+  test("a bare links token is still links/* (the ids are Links ids)", () => {
+    expect(parseRuleFilters("links", undefined).enable).toEqual(["links/*"]);
+  });
+
+  test("an explicit pattern is taken as written", () => {
+    expect(
+      parseRuleFilters("reliability/*,links/broken-links", undefined).enable
+    ).toEqual(["reliability/*", "links/broken-links"]);
+  });
+
+  test("reliability is not excluded when only a broken link rule is included", () => {
+    expect(
+      isCategoryExcluded("reliability", {
+        enable: ["links/broken-links"],
+        disable: [],
+      })
+    ).toBe(false);
+    expect(
+      isCategoryExcluded("reliability", { enable: ["links/*"], disable: [] })
+    ).toBe(false);
+  });
+
+  test("including only the broken anchors rule keeps reliability in the run", () => {
+    expect(
+      isCategoryExcluded("reliability", {
+        enable: ["links/broken-anchors"],
+        disable: [],
+      })
+    ).toBe(false);
+  });
+
+  test("reliability is excluded when the include names only other links rules", () => {
+    expect(
+      isCategoryExcluded("reliability", {
+        enable: ["links/orphan-pages"],
+        disable: [],
+      })
+    ).toBe(true);
+  });
+
+  test("excluding every broken link rule, or links/*, excludes the reliability rules they name", () => {
+    expect(
+      isCategoryExcluded("reliability", { enable: [], disable: ["links/*"] })
+    ).toBe(true);
+    expect(
+      isCategoryExcluded("reliability", { enable: [], disable: MOVED })
+    ).toBe(true);
+  });
+
+  test("a prefix-only check is unchanged for every other category", () => {
+    expect(
+      isCategoryExcluded("core", { enable: ["core/*"], disable: [] })
+    ).toBe(false);
+    expect(
+      isCategoryExcluded("core", { enable: ["perf/*"], disable: [] })
+    ).toBe(true);
+    expect(
+      isCategoryExcluded("core", { enable: [], disable: ["core/*"] })
+    ).toBe(true);
+  });
+});

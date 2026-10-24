@@ -5,6 +5,9 @@
 // falling back to matchesRulePattern's bare-token = exact-rule-id semantics
 // (which would silently match zero rules for a typo'd category name).
 
+import { getRulesOutsideTheirPrefixCategory } from "@squirrelscan/rules";
+import { matchesRulePattern } from "@squirrelscan/utils/rule-pattern";
+
 import {
   isValidCategory,
   normalizeCategoryCode,
@@ -32,16 +35,32 @@ export function normalizeRuleFilterArgs(
     .filter((s) => s.length > 0);
 }
 
+let outsidePrefixRules: Array<{ id: string; category: string }> | undefined;
+
+/** Ids of the rules in `category` whose id prefix is another category (pub#836:
+ * `links/broken-links` is a Reliability rule). A pattern matches on the id, so
+ * "this category" by prefix alone would miss them. */
+function ruleIdsOutsidePrefix(category: string): string[] {
+  outsidePrefixRules ??= getRulesOutsideTheirPrefixCategory();
+  return outsidePrefixRules
+    .filter((rule) => rule.category === category)
+    .map((rule) => rule.id);
+}
+
 function expandToken(
   token: string,
   flag: "--rule-include" | "--rule-exclude"
-): { pattern: string } | { error: string } {
+): { patterns: string[] } | { error: string } {
   const slash = token.indexOf("/");
   if (slash === -1) {
     // Bare token — must name a known category (the CLI-only upgrade this
     // module exists for; see file header).
     const canonical = normalizeCategoryCode(token);
-    if (isValidCategory(canonical)) return { pattern: `${canonical}/*` };
+    if (isValidCategory(canonical)) {
+      return {
+        patterns: [`${canonical}/*`, ...ruleIdsOutsidePrefix(canonical)],
+      };
+    }
     return {
       error: `${flag} "${token}": unknown category. Valid categories: ${RULE_CATEGORY_VALUES.join(", ")}`,
     };
@@ -56,7 +75,7 @@ function expandToken(
       error: `${flag} "${token}": unknown category "${category}". Valid categories: ${RULE_CATEGORY_VALUES.join(", ")}`,
     };
   }
-  return { pattern: token };
+  return { patterns: [token] };
 }
 
 /** Parse --rule-include/--rule-exclude flag values into enable/disable
@@ -73,12 +92,12 @@ export function parseRuleFilters(
   for (const token of normalizeRuleFilterArgs(includeArgs)) {
     const r = expandToken(token, "--rule-include");
     if ("error" in r) errors.push(r.error);
-    else enable.push(r.pattern);
+    else enable.push(...r.patterns);
   }
   for (const token of normalizeRuleFilterArgs(excludeArgs)) {
     const r = expandToken(token, "--rule-exclude");
     if ("error" in r) errors.push(r.error);
-    else disable.push(r.pattern);
+    else disable.push(...r.patterns);
   }
 
   return { enable, disable, errors };
@@ -137,9 +156,16 @@ function patternTouchesCategory(pattern: string, category: string): boolean {
   if (pattern === "*") return true;
   const slash = pattern.indexOf("/");
   if (slash === -1) return false; // shouldn't occur post-parseRuleFilters
-  return (
+  if (
     normalizeCategoryCode(pattern.slice(0, slash)) ===
     normalizeCategoryCode(category)
+  ) {
+    return true;
+  }
+  // A rule in this category under another prefix (`links/broken-links` is
+  // Reliability, pub#836) is touched by the pattern that names its id.
+  return ruleIdsOutsidePrefix(normalizeCategoryCode(category)).some((id) =>
+    matchesRulePattern(id, pattern)
   );
 }
 

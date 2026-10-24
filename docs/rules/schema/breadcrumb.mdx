@@ -1,6 +1,6 @@
 ---
 title: "BreadcrumbList schema: positions, names and what breaks"
-description: "Breadcrumb markup with no itemListElement, items missing position or name, or positions out of order. squirrel checks every non-homepage URL."
+description: "Breadcrumb markup with no itemListElement, items missing position or name, or positions out of order, and a visible trail with no markup at all. squirrel checks every non-homepage URL."
 ---
 
 ## What BreadcrumbList schema is
@@ -11,16 +11,20 @@ It describes a path, not the navigation widget, so the markup should mirror the 
 
 ## What squirrel checks
 
-The rule reads every `script[type="application/ld+json"]` on the page and keeps the first `BreadcrumbList` node from the last script that contains one, matching either a plain `@type` or an `@type` array. It emits one or more checks:
+The rule reads every `script[type="application/ld+json"]` on the page and keeps the first `BreadcrumbList` node from the last script that contains one, matching either a plain `@type` or an `@type` array, with or without a URL prefix such as `https://schema.org/`. It emits one or more checks:
 
-- `breadcrumb-schema`: on the homepage, meaning a URL path of `/` or empty, it reports at info status with the message `Homepage - breadcrumbs not typically needed` and stops. On any other page with no `BreadcrumbList` node it reports at info status with the message `No BreadcrumbList schema found` and the value `Consider adding for non-homepage`.
+- `breadcrumb-schema`: on the homepage, meaning a URL path of `/` or empty, it reports at info status with the message `Homepage - breadcrumbs not typically needed` and stops. On any other page with no `BreadcrumbList` node it reports at info status with the message `No BreadcrumbList schema found` and the value `Consider adding for non-homepage`, unless the page shows a breadcrumb trail. When at least one link on the page sits in the breadcrumbs section, it fails with the message `A breadcrumb trail on the page has no BreadcrumbList schema` and the value `Add BreadcrumbList JSON-LD that mirrors the trail`. The check carries the number of trail links in its `details`.
 - `breadcrumb-items`: warns with the message `BreadcrumbList has no items` when `itemListElement` is absent, is not an array, or is empty. It warns with the message `Some breadcrumb items missing position or name` when at least one entry lacks either property.
 - `breadcrumb-order`: warns with the message `Breadcrumb positions not sequential` when a numeric `position` is not one more than the previous entry's. The first entry is compared against 1, so a list starting at 0 or 2 is reported. This check is pushed once per offending entry, so a badly numbered list emits it more than once.
 - `breadcrumb-valid`: passes with the message `BreadcrumbList has N item(s)` when every entry has both a `position` and a `name`.
 
+The breadcrumbs section is the bundled [page classifier](/configuration/classifier)'s answer for where a link sits on the page. Page markup never names it, and the classifier answers only when it is confident, so it is a high-precision signal that the page shows a trail. One link is enough, because the current page is plain text in a trail and a short one such as `Docs / Security` holds a single link. A page whose trail is declared nested in another JSON-LD node (the `breadcrumb` of a `WebPage`), or marked up as microdata or RDFa (`itemtype="https://schema.org/BreadcrumbList"`), is described already, so it keeps the info check too. When the page's markup is too large to read in full, the check is info with the message `Page markup too large to judge structured data`, because a missing schema is not proven. A run with `--no-classifier` or `classifier.enabled = false` gives no link a section, so it also keeps the info check.
+
 The sequence check only runs on positions that are JavaScript numbers. A `position` written as the string `"1"` is accepted as present by `breadcrumb-valid` but skipped by `breadcrumb-order`, so a string-numbered list never reports as out of order. Every property test is a truthiness test rather than a presence test, so a property present but empty, `0` or `false` counts as missing. A `position` of `0` and a `name` of `""` therefore both read as missing.
 
 An `itemListElement` entry that is a node reference, `{"@id": "…#crumb-1"}`, is read from the `ListItem` node with that `@id` anywhere in the page's JSON-LD, in the same `@graph` or another script. A relative `@id` resolves against the page URL. A reference to a node the page does not have counts as an item missing its position and name.
+
+Severity is warning. Before the trail check existed it was info, which kept every check here advisory: a `warn` from a severity-info rule is listed but left out of the warning totals. It now counts toward them, so a malformed `BreadcrumbList` lowers the score where it used to be a recommendation.
 
 ## How to fix it
 
@@ -46,7 +50,7 @@ JSON-LD wrapped in an `@graph` array, which is what Yoast, Rank Math and several
 | **Rule ID** | `schema/breadcrumb` |
 | **Category** | [Structured Data](/rules/schema) |
 | **Scope** | Per-page |
-| **Severity** | info |
+| **Severity** | warning |
 | **Weight** | 3/10 |
 
 ## Enable / disable
@@ -80,6 +84,7 @@ enable = ["schema/breadcrumb"]
 - [links/internal-links](/rules/links/internal-links): how many internal links a page carries, which the trail is part of.
 - [url/slug-convention](/rules/url/slug-convention): URLs that break the site's own path conventions, which the trail usually mirrors.
 - [schema/coverage-outlier](/rules/schema/coverage-outlier): pages missing markup the rest of their page type carries.
+- [schema/expected-type](/rules/schema/expected-type): pages the classifier reads as a product, article or contact page that declare none of the schema that type should carry.
 
 Structured data findings ship in every audit next to the core SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
 

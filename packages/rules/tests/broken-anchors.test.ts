@@ -333,3 +333,37 @@ describe("links/broken-anchors — streaming parity", () => {
     expect(checks[0]!.message).toBe("Skip link found");
   });
 });
+
+// #2307: where the broken anchor links sit.
+for (const [engine, build] of ENGINES) {
+  describe(`links/broken-anchors — link sections, ${engine}`, () => {
+    const fixtures: Fixture[] = [
+      {
+        path: "/",
+        html: page(
+          '<footer><a href="/guide#gone">Guide</a></footer><main><a href="/guide#gone">Guide again</a></main>',
+        ),
+      },
+      { path: "/guide", html: page("<h1>Guide</h1>") },
+    ];
+
+    test("an item says where its links sit and carries meta.sections", () => {
+      const w = warning(run(build(fixtures)))!;
+
+      expect(w.items).toHaveLength(1);
+      expect(w.items![0]!.label).toBe(`${BASE}/guide#gone, linked in the page content and the footer`);
+      expect(w.items![0]!.meta).toEqual({
+        skipLink: false,
+        sections: { footer: 1, content: 1 },
+        linkedFrom: 1,
+      });
+    });
+
+    test("a same-page link has no section and the item stays as it was", () => {
+      const w = warning(run(build([{ path: "/", html: page('<a href="#pricing">P</a>') }])))!;
+
+      expect(w.items![0]!.label).toBe(`${BASE}/#pricing`);
+      expect(w.items![0]!.meta).toEqual({ skipLink: false, linkedFrom: 1 });
+    });
+  });
+}

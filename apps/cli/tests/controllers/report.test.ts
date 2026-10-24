@@ -109,6 +109,108 @@ describe("validateReportData", () => {
 });
 
 describe("loadReport - slim JSON reconstruction", () => {
+  // pub#836: `links/broken-links` and `links/broken-external-links` are Reliability, but their
+  // ids keep the `links/` prefix, so the prefix is not the category. A slim report names its
+  // category by display name; reconstruction reads that first.
+  function slimWithCategory(ruleId: string, category: string | undefined) {
+    return {
+      meta: {
+        version: "0.0.114",
+        baseUrl: "https://example.com",
+        timestamp: new Date().toISOString(),
+        totalPages: 3,
+      },
+      score: { overall: 80, grade: "B", categories: [] },
+      summary: { passed: 5, warnings: 0, failed: 1 },
+      issues: [
+        {
+          ruleId,
+          name: "Broken Links",
+          description: "Detects links returning 404 or 5xx errors",
+          ...(category === undefined ? {} : { category }),
+          severity: "error",
+          checks: [
+            {
+              name: "broken-links",
+              status: "fail",
+              message: "1 broken internal link(s) (4xx/5xx)",
+              affectedPages: ["https://example.com/"],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  function loadedCategory(slim: unknown, ruleId: string): string | undefined {
+    const dir = mkdtempSync(join(tmpdir(), "squirrel-slim-"));
+    const path = join(dir, "report.json");
+    try {
+      writeFileSync(path, JSON.stringify(slim));
+      const result = loadReport(path);
+      expect(result.ok).toBe(true);
+      return result.ok
+        ? result.data.ruleResults[ruleId]?.meta.category
+        : undefined;
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  test("a broken-links issue written as Reliability reloads as Reliability, not as its links/ prefix", () => {
+    expect(
+      loadedCategory(
+        slimWithCategory("links/broken-links", "Reliability"),
+        "links/broken-links"
+      )
+    ).toBe("reliability");
+    expect(
+      loadedCategory(
+        slimWithCategory("links/broken-external-links", "Reliability"),
+        "links/broken-external-links"
+      )
+    ).toBe("reliability");
+  });
+
+  test("slim JSON written before the move still reloads with the category it was written with", () => {
+    expect(
+      loadedCategory(
+        slimWithCategory("links/broken-links", "Links"),
+        "links/broken-links"
+      )
+    ).toBe("links");
+  });
+
+  test("a broken-anchors issue follows the category it was written with (pub#843)", () => {
+    expect(
+      loadedCategory(
+        slimWithCategory("links/broken-anchors", "Reliability"),
+        "links/broken-anchors"
+      )
+    ).toBe("reliability");
+    expect(
+      loadedCategory(
+        slimWithCategory("links/broken-anchors", "Links"),
+        "links/broken-anchors"
+      )
+    ).toBe("links");
+  });
+
+  test("slim JSON with no category, or one this version does not know, falls back to the id prefix", () => {
+    expect(
+      loadedCategory(
+        slimWithCategory("links/broken-links", undefined),
+        "links/broken-links"
+      )
+    ).toBe("links");
+    expect(
+      loadedCategory(
+        slimWithCategory("links/broken-links", "A category from the future"),
+        "links/broken-links"
+      )
+    ).toBe("links");
+  });
+
   test("reconstructs stable adblock/* rule IDs under the blocking category", () => {
     // Slim JSON keeps stable rule IDs (adblock/*) while the category was
     // renamed to "blocking"; reconstruction must normalize the legacy prefix

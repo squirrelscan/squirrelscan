@@ -1,0 +1,23 @@
+{
+  "name": "@squirrelscan/page-classifier",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Page classifier runtime: DOM region, page type and section purpose from one featurizer and a bundled gradient-boosted artifact, with a deterministic markup fallback.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./assets/classifier-v2.json": "./assets/classifier-v2.json",
+    "./assets/classifier-v2.manifest.json": "./assets/classifier-v2.manifest.json"
+  },
+  "dependencies": {
+    "@squirrelscan/parser": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "tsgo --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.0",
+    "@types/node": "^24.13.1"
+  },
+  "private": true,
+  "license": "MIT"
+}

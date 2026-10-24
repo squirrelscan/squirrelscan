@@ -45,9 +45,18 @@ function collectItemPages(item: CheckItem, acc: Set<string>): void {
  * the items listing, or it silently disappears from both places (#1136
  * review round 3 — `sourcePages: []` was being conflated with "no
  * sourcePages key" and dropped entirely).
+ *
+ * A page-URL item that carries its own `label` (a text that differs from the id) is NOT
+ * redundant either: the label says something the page list does not ("linked only from the
+ * footer and the navigation", #2307), and dropping the row dropped that sentence with it.
  */
-export function isRedundantPageItem(item: { id: string; sourcePages?: string[] }): boolean {
-  return isPageUrl(item.id) && item.sourcePages === undefined;
+export function isRedundantPageItem(item: {
+  id: string;
+  sourcePages?: string[];
+  label?: string;
+}): boolean {
+  if (!isPageUrl(item.id) || item.sourcePages !== undefined) return false;
+  return item.label === undefined || item.label === "" || item.label === item.id;
 }
 
 /**

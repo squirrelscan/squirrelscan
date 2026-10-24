@@ -16,6 +16,7 @@
 //     v1 would score. (4xx/5xx pages, which v1 appends as EMPTY_PARSED_PAGE with
 //     empty headers, are E-E's universe-assembly concern, not this function's.)
 
+import { extractPageStructure } from "@squirrelscan/report/structure";
 import { detectWafChallengePage } from "@squirrelscan/waf-detect";
 import { extractNapSignal, getRichResultTypes, isPageIndexable } from "@squirrelscan/utils";
 
@@ -114,6 +115,9 @@ export function extractPageFeatures(
   // page, resolved against the SAME base URL (`site.pages[].url` is this exact
   // value), so the stored assets and the re-derived ones are identical.
   const chrome = extractSiteChromeSignal(parsed, page.normalizedUrl);
+  // #2307: link sections and the classifier's page type, for the report's page structure block.
+  // Undefined (and so left out of the scalars) for a parse that has neither.
+  const structure = extractPageStructure(parsed);
 
   return {
     normalizedUrl: page.normalizedUrl,
@@ -175,6 +179,7 @@ export function extractPageFeatures(
       twitterCard: parsed.twitter?.card ?? null,
       h1Count: parsed.h1?.count ?? 0,
       thinContent: parsed.content?.isThinContent ?? false,
+      ...(structure ? { structure } : {}),
     },
   };
 }
