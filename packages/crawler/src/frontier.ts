@@ -175,6 +175,15 @@ function isWwwHostOfApex(base: URL, candidate: URL): boolean {
   return candidate.host.toLowerCase() === `www.${base.host.toLowerCase()}`;
 }
 
+/**
+ * The candidate is on the audited URL's port: the same explicit port, or, when
+ * the audited URL uses its scheme's default, either default (80 or 443), so an
+ * http↔https link to the same host stays in scope.
+ */
+function isAuditedPort(base: URL, candidate: URL): boolean {
+  return candidate.port === base.port;
+}
+
 export function isInScope(url: string, options: ScopeOptions): CrawlDecision {
   const { baseUrl, include, exclude, allowedDomains } = options;
   const baseUrlObj = new URL(baseUrl);
@@ -212,6 +221,11 @@ export function isInScope(url: string, options: ScopeOptions): CrawlDecision {
 
   if (allowedDomains && allowedDomains.length > 0) {
     if (!isAllowedDomain(candidateHostname, allowedDomains)) {
+      return { allowed: false, reason: "cross_domain" };
+    }
+    // The allowlist names hosts, not services on them (repo#2762): another
+    // port on an allowed host is another service the user never asked to audit.
+    if (!isAuditedPort(baseUrlObj, candidateUrlObj)) {
       return { allowed: false, reason: "cross_domain" };
     }
     return { allowed: true };

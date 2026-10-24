@@ -752,8 +752,8 @@ Custom HTTP request headers attached to every crawl request to the audited
 origin: pages, assets, `robots.txt`, sitemaps, `llms.txt`, markdown probes and
 the soft-404 and cloaking re-fetches. The audited origin is the scheme, host and
 port of the start URL after its redirects. A URL on another scheme (`http:` when
-you audit `https:`), another port or another host is still crawled and reported,
-but is requested without them, including a host that
+you audit `https:`), another port or another host is still crawled and reported
+when it is in the crawl's scope, but is requested without them, including a host that
 the `domains` list in `[project]` or an include pattern admits. A subdomain such as `cdn.example.com` does not get them unless you
 name it in [`header_hosts`](#header_hosts), because a subdomain is not always
 run by the site's owner. The status checks

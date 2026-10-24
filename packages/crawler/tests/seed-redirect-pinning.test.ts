@@ -188,6 +188,39 @@ describe("seed redirect that leaves the seed's site", () => {
 
 describe("scope config the user asked for", () => {
   test("a cross-site landing listed in allowedDomains is still crawled", async () => {
+    // One server under two names, so the landing is on another SITE but the
+    // audited port: allowedDomains names hosts, not other ports (repo#2762).
+    const server = Bun.serve({
+      port: 0,
+      fetch(req) {
+        const url = new URL(req.url);
+        if (url.hostname === "127.0.0.1" && url.pathname === "/") {
+          return new Response(null, {
+            status: 302,
+            headers: { location: `http://localhost:${url.port}${TARGET_PATH}` },
+          });
+        }
+        if (url.hostname === "localhost") {
+          return new Response(`<!doctype html><html><head><title>${TARGET_TITLE}</title></head></html>`, {
+            headers: { "content-type": "text/html" },
+          });
+        }
+        return new Response("not found", { status: 404 });
+      },
+    });
+    track({ origin: "", paths: [], stop: () => server.stop(true) });
+    const seedOrigin = `http://127.0.0.1:${server.port}`;
+    const landing = `http://localhost:${server.port}${TARGET_PATH}`;
+
+    const { meta, pages } = await crawl(`${seedOrigin}/`, `${seedOrigin}/`, {
+      allowedDomains: ["127.0.0.1", "localhost"],
+    });
+
+    // The base still never moves — only the drop guard defers to the config.
+    expect(meta?.baseUrl).toBe(seedOrigin);
+    expect(pages.some((p) => p.finalUrl === landing)).toBe(true);
+  });
+  test("a landing on another port of an allowed host is not crawled (repo#2762)", async () => {
     const target = track(serveTarget());
     const seed = track(serveSingleRedirect(`${target.origin}${TARGET_PATH}`));
 
@@ -195,9 +228,9 @@ describe("scope config the user asked for", () => {
       allowedDomains: ["127.0.0.1"],
     });
 
-    // The base still never moves — only the drop guard defers to the config.
     expect(meta?.baseUrl).toBe(seed.origin);
-    expect(pages.some((p) => p.finalUrl === `${target.origin}${TARGET_PATH}`)).toBe(true);
+    expect(pages.some((p) => p.finalUrl === `${target.origin}${TARGET_PATH}`)).toBe(false);
+    expect(JSON.stringify(pages)).not.toContain(TARGET_TITLE);
   });
 });
 

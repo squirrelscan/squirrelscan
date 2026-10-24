@@ -324,3 +324,46 @@ describe("crawl with a path-only include (#347)", () => {
     expect(fetched).toContain(`${THIRD}/blog/theirs`);
   });
 });
+
+// repo#2762: allowedDomains names hosts. A link to another port on an allowed
+// host is another service on that machine (`:6379`), never part of the audit.
+describe("isInScope: allowedDomains keeps the audited port", () => {
+  const scope = { baseUrl: "https://example.com/", include: [], exclude: [] };
+
+  test("another port on an allowed host is out of scope", () => {
+    const allowedDomains = ["example.com"];
+    expect(isInScope("http://example.com:6379/", { ...scope, allowedDomains })).toEqual({
+      allowed: false,
+      reason: "cross_domain",
+    });
+    expect(isInScope("https://example.com:8443/x", { ...scope, allowedDomains }).allowed).toBe(
+      false,
+    );
+    // The default ports stay: an http link to the https site is the same site.
+    expect(isInScope("https://www.example.com/", { ...scope, allowedDomains }).allowed).toBe(true);
+    expect(isInScope("http://example.com/a", { ...scope, allowedDomains }).allowed).toBe(true);
+    // A default port named on the other scheme is not a default port.
+    expect(isInScope("http://example.com:443/", { ...scope, allowedDomains }).allowed).toBe(false);
+    // An absolute include cannot widen it: the allowlist is a hard allowlist.
+    expect(
+      isInScope("https://example.com:8443/x", {
+        ...scope,
+        include: ["https://example.com:8443/*"],
+        allowedDomains,
+      }).allowed,
+    ).toBe(false);
+  });
+
+  test("a site on its own port keeps that port, and only that one", () => {
+    const own = { ...scope, baseUrl: "https://example.com:8443/", allowedDomains: ["example.com"] };
+    expect(isInScope("https://example.com:8443/a", own).allowed).toBe(true);
+    expect(isInScope("https://example.com/a", own).allowed).toBe(false);
+  });
+
+  test("no change without allowedDomains, where host:port already decides", () => {
+    expect(isInScope("http://example.com:6379/", { ...scope, allowedDomains: [] }).allowed).toBe(
+      false,
+    );
+    expect(isInScope("https://example.com/b", { ...scope, allowedDomains: [] }).allowed).toBe(true);
+  });
+});
