@@ -16,7 +16,7 @@
     "@squirrelscan/utils": "workspace:*",
     "linkedom": "^0.18.12",
     "tldts": "^7",
-    "zod": "^4.4.3"
+    "zod": "^4.6.6"
   },
   "scripts": {
     "typecheck": "tsgo --noEmit",

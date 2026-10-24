@@ -84,10 +84,12 @@ Remove this exception, and the cap, when tangly moves to `@astrojs/mdx` `8`.
 ## GHSA-mrhx-c7xc-m3w5
 
 Zod: memory exhaustion while validating oversized constrained collections (high,
-fixed in `4.6.6`). The tree resolves `4.4.3`, `4.1.11` and `3.25.76`. `cli` and
-`rules` ask for `^4.4.3`, but `config` and `crawler` ask for `^3.25.76`, so
-reaching `4.6.6` there is a zod 3 to 4 migration, not a bump (#1085). The MCP
-packages, tangly/astro and ultracite pull zod in transitively.
+fixed in `4.6.6`). `cli` and `rules` ask for `^4.6.6`, and that copy (`4.6.7`)
+is also the one the MCP packages, tangly/astro and ultracite resolve. Two
+affected copies remain. `config` and `crawler` ask for `^3.25.76`, and reaching
+`4.6.6` there is a zod 3 to 4 migration, not a bump (#1085).
+`@vercel/cli-config` (docs only, through `@vercel/oidc`) pins `4.1.11` exactly
+and is not in the compiled binary.
 
 Public zod validates trusted local config and our own cloud API responses. The
 attack needs an attacker-sized array inside the validated input, and neither
