@@ -251,10 +251,30 @@ function Test-ForceMirror {
     return -not ($value -eq "" -or $value -eq "0" -or $value -eq "false")
 }
 
+# Keep these installer metadata guards aligned with the validation in
+# apps/cli/src/self/paths.ts. Installer versions may carry the tag's `v`.
+function Test-ReleaseVersion {
+    param([string]$Value)
+    return $Value -cmatch '^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?\z'
+}
+
+function Test-ReleaseFilename {
+    param([string]$Value)
+    return $Value -cmatch '^[A-Za-z0-9][A-Za-z0-9._-]*\z'
+}
+
+function Test-Sha256 {
+    param([string]$Value)
+    return $Value -cmatch '^[0-9a-fA-F]{64}\z'
+}
+
 # The two sources for one asset, in the order to try them, as (host, url)
 # pairs. Also records both URLs for the failure report.
 function Get-DownloadSources {
     param([string]$Version, [string]$Asset)
+
+    if (-not (Test-ReleaseVersion $Version)) { Write-Err "Invalid release version in metadata" }
+    if (-not (Test-ReleaseFilename $Asset)) { Write-Err "Invalid release asset filename in metadata" }
 
     $script:DownloadUrlGitHub = "https://github.com/$Repo/releases/download/$Version/$Asset"
     $script:DownloadUrlMirror = "$DownloadEndpoint/$Version/$Asset"
@@ -508,6 +528,13 @@ function Install-Squirrel {
 
     $filename = $binary.filename
     $expectedHash = $binary.sha256
+    if (-not (Test-ReleaseFilename $filename)) {
+        Write-Err "Invalid release asset filename in metadata"
+    }
+    if (-not (Test-Sha256 $expectedHash)) {
+        Write-Err "Invalid SHA256 in release manifest"
+    }
+    $expectedHash = $expectedHash.ToLowerInvariant()
 
     # Create temp directory
     $tempDir = Join-Path $env:TEMP "squirrel-install-$(Get-Random)"
@@ -531,9 +558,9 @@ function Install-Squirrel {
         # Verify checksum
         $script:CurrentStep = "verify_checksum"
         Write-Log "Verifying checksum..."
-        $actualHash = (Get-FileHash -Path $binaryPath -Algorithm SHA256).Hash.ToLower()
+        $actualHash = (Get-FileHash -Path $binaryPath -Algorithm SHA256).Hash.ToLowerInvariant()
 
-        if ($actualHash -ne $expectedHash.ToLower()) {
+        if ($actualHash -cne $expectedHash) {
             Write-Err "Checksum mismatch!`n  Expected: $expectedHash`n  Actual:   $actualHash"
         }
         Write-Info "Checksum verified: $($expectedHash.Substring(0, 16))..."

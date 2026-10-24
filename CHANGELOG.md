@@ -25,6 +25,7 @@ How it works:
 ### Fixed
 
 - robots.txt parsing now gives consecutive `User-agent` lines the rules that follow them, keeps a named group whose empty `Disallow:` explicitly allows every path, and ignores inline comments, so AI-crawler and indexability checks match how crawlers read those common files (#1078).
+- `install.sh` and `install.ps1` now validate the release version, asset filename and SHA-256 from release metadata before building download URLs or downloading the binary, preventing malformed metadata from retargeting installer requests. Checksum comparison accepts either hexadecimal letter case. See [Installation](https://docs.squirrelscan.com/getting-started/installation).
 
 ## v0.0.133 (2026-10-24)
 

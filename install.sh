@@ -818,6 +818,21 @@ compute_sha256() {
   fi
 }
 
+# Keep these installer metadata guards aligned with the validation in
+# apps/cli/src/self/paths.ts. Installer versions may carry the tag's `v`.
+valid_release_version() {
+  local re='^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+  [[ "$1" =~ $re ]]
+}
+
+valid_release_filename() {
+  [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]
+}
+
+valid_sha256() {
+  [[ "$1" =~ ^[0-9a-fA-F]{64}$ ]]
+}
+
 # Fetch with retry and timeout
 fetch_with_retry() {
   local url="$1"
@@ -919,6 +934,9 @@ manifest_looks_valid() {
 # pass it is a failed source, not a successful download of the wrong thing.
 fetch_release_asset() {
   local version="$1" asset="$2" output="$3" label="$4" validator="${5:-}"
+
+  valid_release_version "$version" || error "Invalid release version in metadata"
+  valid_release_filename "$asset" || error "Invalid release asset filename in metadata"
 
   DOWNLOAD_URL_GITHUB="https://github.com/${REPO}/releases/download/${version}/${asset}"
   DOWNLOAD_URL_MIRROR="${DOWNLOAD_ENDPOINT}/${version}/${asset}"
@@ -1273,6 +1291,8 @@ download_and_install() {
   if [ -z "$filename" ] || [ -z "$sha256" ]; then
     error "No binary for platform: $platform\n  See: https://github.com/${REPO}/releases/tag/${version}"
   fi
+  valid_release_filename "$filename" || error "Invalid release asset filename in metadata"
+  valid_sha256 "$sha256" || error "Invalid SHA256 in release manifest"
 
   # Download binary
   CURRENT_STEP="download_binary"
@@ -1290,13 +1310,15 @@ download_and_install() {
   # Verify checksum
   CURRENT_STEP="verify_checksum"
   log "Verifying checksum..."
-  local actual_sha256
+  local actual_sha256 expected_sha256
   actual_sha256=$(compute_sha256 "$tmpdir/squirrel")
+  actual_sha256=$(printf '%s' "$actual_sha256" | tr '[:upper:]' '[:lower:]')
+  expected_sha256=$(printf '%s' "$sha256" | tr '[:upper:]' '[:lower:]')
 
-  if [ "$actual_sha256" != "$sha256" ]; then
-    error "Checksum mismatch!\n  Expected: ${sha256}\n  Actual:   ${actual_sha256}"
+  if [ "$actual_sha256" != "$expected_sha256" ]; then
+    error "Checksum mismatch!\n  Expected: ${expected_sha256}\n  Actual:   ${actual_sha256}"
   fi
-  info "Checksum verified: ${sha256:0:16}..."
+  info "Checksum verified: ${expected_sha256:0:16}..."
 
   # Make executable and run self install with bin dir
   chmod +x "$tmpdir/squirrel"
