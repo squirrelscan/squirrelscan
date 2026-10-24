@@ -49,6 +49,9 @@ export type CrawlErrorType =
 /** The generic timeout sentence; a `timeout` error carrying anything else is naming its deadline. */
 const TIMEOUT_MESSAGE = "Crawl request timed out";
 
+/** Bound refusal-body reads while leaving enough context to reject real pages. */
+const WAF_CHALLENGE_BODY_BYTES = 64 * 1024;
+
 export class CrawlError extends Error {
   constructor(
     readonly url: string,
@@ -798,8 +801,38 @@ export function applyStatusGuards(
     );
   }
 
-  if (status === 403) {
-    return Effect.fail(CrawlError.blocked(url, undefined, 403));
+  // A managed challenge can answer 403 or 503. Only proof carried by the
+  // refused response itself names the mechanism: Server: cloudflare alone is
+  // not enough, because ordinary auth/geo blocks carry it too (#446).
+  if (status === 403 || status === 503) {
+    if (headers.get("cf-mitigated") === "challenge") {
+      return Effect.fail(
+        CrawlError.blocked(url, `Blocked by Cloudflare challenge (${status})`, status),
+      );
+    }
+    if (body) {
+      const challenge = detectWafChallengePage({
+        status,
+        headers: {
+          server: headers.get("server"),
+          cfCacheStatus: headers.get("cf-cache-status"),
+          xCache: headers.get("x-cache"),
+        },
+        html: body,
+      });
+      if (challenge.detected) {
+        return Effect.fail(
+          CrawlError.blocked(
+            url,
+            `Blocked by ${challenge.provider ?? "bot protection"} challenge (${status})`,
+            status,
+          ),
+        );
+      }
+    }
+    if (status === 403) {
+      return Effect.fail(CrawlError.blocked(url, undefined, 403));
+    }
   }
 
   if (status >= 500) {
@@ -808,32 +841,6 @@ export function applyStatusGuards(
     // blocked (non-retryable; a challenge never clears on retry) so a walled
     // root gets the actionable blocked notice instead of "unreachable" (#802).
     if (status === 503) {
-      // Cloudflare stamps challenge responses explicitly — a body-independent
-      // signal (a 503 passed through from a down origin never carries it).
-      if (headers.get("cf-mitigated") === "challenge") {
-        return Effect.fail(CrawlError.blocked(url, "Blocked by Cloudflare challenge (503)", 503));
-      }
-      if (body) {
-        const challenge = detectWafChallengePage({
-          status,
-          headers: {
-            server: headers.get("server"),
-            cfCacheStatus: headers.get("cf-cache-status"),
-            xCache: headers.get("x-cache"),
-          },
-          html: body,
-        });
-        if (challenge.detected) {
-          return Effect.fail(
-            CrawlError.blocked(
-              url,
-              `Blocked by ${challenge.provider ?? "bot protection"} challenge (503)`,
-              503,
-            ),
-          );
-        }
-      }
-
       // A 503 that carries Retry-After is the origin asking us to come back
       // later, which is the same contract as a 429 — back off instead of
       // recording the page as a server error (#1829). A bare 503 is a real
@@ -1091,13 +1098,13 @@ function fetchPageStandardOnce(
 
     const ttfb = finalTiming.responseTime - finalTiming.fetchStart;
 
-    const readBody = Effect.tryPromise({
+    const readBody = (maxBytes = DEFAULT_MAX_DOCUMENT_BODY_BYTES) => Effect.tryPromise({
       // Race the body read against the interrupt signal so a stalled stream doesn't leak the host slot (#405).
       try: async (signal) => {
         let onAbort: (() => void) | undefined;
         try {
           return await Promise.race([
-            readBodyCapped(finalResponse, DEFAULT_MAX_DOCUMENT_BODY_BYTES),
+            readBodyCapped(finalResponse, maxBytes),
             new Promise<never>((_, reject) => {
               // #1729: aborting the request as well as losing the race is what
               // actually cancels the read. Rejecting alone only frees the FIBER
@@ -1135,28 +1142,34 @@ function fetchPageStandardOnce(
       },
     });
 
-    // A 503 needs its body to tell a bot-challenge interstitial from a real
-    // outage (#802). 503 always fails the guard below, so consuming the stream
-    // here is safe; an unreadable body falls through to the generic server error.
+    // A 403/503 needs a bounded body prefix to tell a bot-challenge
+    // interstitial from an ordinary refusal/outage (#446/#802). Both statuses
+    // always fail the guard below, so consuming the stream here is safe. The
+    // explicit Cloudflare header is already enough and avoids the read.
+    const statusMayBeChallenge = finalResponse.status === 403 || finalResponse.status === 503;
     const challengeBody =
-      finalResponse.status === 503
-        ? yield* readBody.pipe(
-            Effect.catchAll((error) =>
-              // #1729: a deadline firing on a stalled body is a TIMEOUT, and
-              // swallowing it here reclassified it as the generic "Server error:
-              // 503" — the origin blamed for what was actually our own deadline.
-              // Every other read failure still degrades to "no body" so the
-              // guard can classify the 503 from its headers alone.
-              error.type === "timeout"
+      statusMayBeChallenge && finalResponse.headers.get("cf-mitigated") !== "challenge"
+        ? yield* readBody(WAF_CHALLENGE_BODY_BYTES).pipe(
+            Effect.catchAll((error) => {
+              // A 403 already proves the request was refused. The body is only
+              // sampled to name the challenge provider, so an unreadable or
+              // stalled sample degrades to the generic blocked result.
+              if (finalResponse.status === 403) return Effect.succeed(undefined);
+
+              // #1729: for a 503, a deadline firing on a stalled body is a
+              // TIMEOUT. Swallowing it here would blame the origin with the
+              // generic "Server error: 503" for what was actually our deadline.
+              // Every other read failure still degrades to "no body".
+              return error.type === "timeout"
                 ? Effect.fail(error)
-                : Effect.succeed(undefined),
-            ),
+                : Effect.succeed(undefined);
+            }),
           )
         : undefined;
 
     yield* applyStatusGuards(url, finalResponse.status, finalResponse.headers, challengeBody);
 
-    const body = yield* readBody;
+    const body = yield* readBody();
 
     const loadTime = Date.now() - finalTiming.fetchStart;
     const downloadTime = loadTime - ttfb;

@@ -25,6 +25,7 @@ How it works:
 ### Fixed
 
 - robots.txt parsing now gives consecutive `User-agent` lines the rules that follow them, keeps a named group whose empty `Disallow:` explicitly allows every path, and ignores inline comments, so AI-crawler and indexability checks match how crawlers read those common files (#1078).
+- The crawler now recognizes managed challenge pages served with HTTP 403, including Cloudflare, Akamai and other detected providers, while a plain or stalled 403 remains the generic `Request blocked by server` result. Challenge-body sampling is capped at 64 KB and preserves the existing 503 timeout behavior.
 
 ## v0.0.133 (2026-10-24)
 
