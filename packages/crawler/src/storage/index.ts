@@ -10,6 +10,7 @@ export {
   startCrawlLease,
   releaseActiveLeases,
   type CrawlLease,
+  type CrawlLeaseClaim,
   type CrawlLeaseOptions,
 } from "./crawl-lease";
 export {

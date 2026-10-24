@@ -57,7 +57,10 @@ import {
   type CloudTechDetectResult,
 } from "@/audit/cloud";
 import { gateStage1 } from "@/audit/cloud-gating";
-import { startLeaseForStorage } from "@/audit/crawl-lease";
+import {
+  formatResumeClaimWarning,
+  startLeaseForStorage,
+} from "@/audit/crawl-lease";
 import { entityMapSite, storeEntityMap } from "@/audit/entity-map";
 import { guardCollector } from "@/audit/guard-collector";
 import {
@@ -932,7 +935,7 @@ export async function runAudit(
     // Fiber handle for event subscription (declared outside try for finally cleanup)
     let eventsFiber: ReturnType<typeof Effect.runFork> | undefined;
     // Crawl lease (#946), released in the finally below.
-    let crawlLease: { release: () => void } | undefined;
+    let crawlLease: ReturnType<typeof startLeaseForStorage> | undefined;
 
     // Cloud spend charged OUTSIDE the prefetch: render submits during the
     // crawl and dead-links bulk calls during the external-links phase. Both
@@ -1227,7 +1230,7 @@ export async function runAudit(
       );
 
       // Resume decision logic
-      const shouldResume =
+      const resumeCandidate =
         options.resume && // User explicitly requested resume
         !!existingCrawl &&
         !options.refresh && // Can't resume if refresh requested
@@ -1237,6 +1240,11 @@ export async function runAudit(
           existingCrawl.status === "paused" ||
           existingCrawl.status === "stopped") &&
         !isDirtyConfig(existingCrawl.config, crawlerConfig);
+      const resumeClaim =
+        resumeCandidate && existingCrawl
+          ? crawlLease.claim(existingCrawl.id)
+          : null;
+      const shouldResume = resumeCandidate && resumeClaim?.acquired === true;
 
       // Crawl-phase wall-clock backstop: a wedged fetch (e.g. a cloud render
       // that never returns) must never hang the audit. On expiry stop the
@@ -1280,7 +1288,11 @@ export async function runAudit(
         } else {
           // Create new crawl
           // Warn if resume conditions not met
-          if (options.resume && !existingCrawl) {
+          if (resumeClaim && !resumeClaim.acquired && existingCrawl) {
+            logger.warn(
+              formatResumeClaimWarning(existingCrawl.id, resumeClaim)
+            );
+          } else if (options.resume && !existingCrawl) {
             logger.warn("--resume requested but no previous crawl found");
           } else if (
             options.resume &&

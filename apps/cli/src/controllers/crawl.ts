@@ -8,7 +8,10 @@ import type { TlsEvent } from "@/crawler/fetcher";
 import type { CrawlerConfigSnapshot } from "@/crawler/storage/types";
 import type { CoverageMode } from "@/types";
 
-import { startLeaseForStorage } from "@/audit/crawl-lease";
+import {
+  formatResumeClaimWarning,
+  startLeaseForStorage,
+} from "@/audit/crawl-lease";
 import { loadConfig } from "@/config";
 import { MAX_PAGES_CAP } from "@/constants";
 import {
@@ -237,7 +240,7 @@ export async function runCrawl(
 
     const storage = await Effect.runPromise(createStorage({ projectName }));
     // Crawl lease (#946), released in the finally below.
-    let crawlLease: { release: () => void } | undefined;
+    let crawlLease: ReturnType<typeof startLeaseForStorage> | undefined;
     // #2342: the project's cap, and a lease so the crawl's own pages are not
     // evicted while it runs. Released in the finally below.
     const releaseContentStore = retainGlobalContentStore({
@@ -366,7 +369,7 @@ export async function runCrawl(
       };
 
       // Resume decision logic
-      const shouldResume =
+      const resumeCandidate =
         options.resume && // User explicitly requested resume
         !!existingCrawl &&
         !options.refresh && // Can't resume if refresh requested
@@ -376,6 +379,11 @@ export async function runCrawl(
           existingCrawl.status === "paused" ||
           existingCrawl.status === "stopped") &&
         !isDirtyConfig(existingCrawl.config, crawlerConfig);
+      const resumeClaim =
+        resumeCandidate && existingCrawl
+          ? crawlLease.claim(existingCrawl.id)
+          : null;
+      const shouldResume = resumeCandidate && resumeClaim?.acquired === true;
 
       let crawlId: string;
       if (shouldResume) {
@@ -387,7 +395,9 @@ export async function runCrawl(
       } else {
         // Create new crawl
         // Warn if resume conditions not met
-        if (options.resume && !existingCrawl) {
+        if (resumeClaim && !resumeClaim.acquired && existingCrawl) {
+          logger.warn(formatResumeClaimWarning(existingCrawl.id, resumeClaim));
+        } else if (options.resume && !existingCrawl) {
           logger.warn("--resume requested but no previous crawl found");
         } else if (
           options.resume &&

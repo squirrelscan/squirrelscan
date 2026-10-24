@@ -26,6 +26,12 @@ function tempDbPath(): string {
   return p;
 }
 
+function tempPath(label: string): string {
+  const p = join(tmpdir(), `sq-lease-${label}-${randomUUID()}`);
+  paths.push(p);
+  return p;
+}
+
 afterEach(() => {
   for (const p of paths.splice(0)) {
     for (const suffix of ["", "-wal", "-shm"]) {
@@ -369,6 +375,142 @@ describe("startCrawlLease", () => {
     await run(store.close());
   });
 
+  test("two concurrent same-host resumes cannot both claim one live crawl", async () => {
+    const path = tempDbPath();
+    const store = await openStore(path);
+    const id = await run(store.createCrawl(meta));
+    const start = tempPath("start");
+    const release = tempPath("release");
+    const resultPaths = [tempPath("result-a"), tempPath("result-b")];
+    const childScript = join(
+      import.meta.dir,
+      "fixtures/crawl-lease-claim-child.ts"
+    );
+    const children: Array<ReturnType<typeof Bun.spawn>> = [];
+
+    try {
+      for (const result of resultPaths) {
+        children.push(
+          Bun.spawn(
+            [process.execPath, childScript, path, id, start, result, release],
+            { stderr: "inherit", stdout: "ignore" }
+          )
+        );
+      }
+      await Bun.write(start, "go");
+      const deadline = Date.now() + 5_000;
+      while (
+        !resultPaths.every((result) => existsSync(result)) &&
+        Date.now() < deadline
+      ) {
+        await Bun.sleep(10);
+      }
+      expect(resultPaths.every((result) => existsSync(result))).toBe(true);
+
+      const results = await Promise.all(
+        resultPaths.map(async (result) => Bun.file(result).json())
+      ) as Array<{
+        claim: {
+          acquired: boolean;
+          ownerPid?: number;
+          ownerHost?: string;
+        };
+        pid: number;
+      }>;
+      const winner = results.find((result) => result.claim.acquired);
+      const loser = results.find((result) => !result.claim.acquired);
+
+      expect(results.filter((result) => result.claim.acquired)).toHaveLength(1);
+      expect(winner).toBeDefined();
+      expect(loser?.claim).toEqual({
+        acquired: false,
+        ownerPid: winner?.pid,
+        ownerHost: "same-host",
+      });
+      expect(leaseOf(path, id)).toEqual({
+        owner_pid: winner?.pid,
+        owner_host: "same-host",
+        heartbeat_at: 10_000_000,
+      });
+    } finally {
+      await Bun.write(release, "done");
+      await Promise.race([
+        Promise.all(children.map((child) => child.exited)),
+        Bun.sleep(1_000),
+      ]);
+      for (const child of children) {
+        if (child.exitCode === null) child.kill();
+      }
+      await Promise.all(children.map((child) => child.exited));
+      await run(store.close());
+    }
+  }, 20_000);
+
+  test("claim takes over a stale or same-host dead owner", async () => {
+    const path = tempDbPath();
+    const store = await openStore(path);
+    const id = await run(store.createCrawl(meta));
+    const set = (pid: number, host: string, heartbeat: number) => {
+      const db = new Database(path);
+      db.query(
+        "UPDATE crawls SET owner_pid = ?, owner_host = ?, heartbeat_at = ? WHERE id = ?"
+      ).run(pid, host, heartbeat, id);
+      db.close();
+    };
+
+    set(222, "box-b", 10_000_000 - 10 * 60_000);
+    let lease = startCrawlLease({
+      dbPath: path,
+      getCrawlId: () => null,
+      pid: 111,
+      host: "box-a",
+      now: () => 10_000_000,
+    });
+    expect(lease.claim(id)).toEqual({ acquired: true });
+    expect(leaseOf(path, id).owner_pid).toBe(111);
+    lease.release();
+
+    set(2_000_000_000, "box-a", 10_000_000);
+    lease = startCrawlLease({
+      dbPath: path,
+      getCrawlId: () => null,
+      pid: 111,
+      host: "box-a",
+      now: () => 10_000_000,
+    });
+    expect(lease.claim(id)).toEqual({ acquired: true });
+    expect(leaseOf(path, id).owner_pid).toBe(111);
+    lease.release();
+    await run(store.close());
+  });
+
+  test("claim does not steal from a live same-host owner after five silent minutes", async () => {
+    const path = tempDbPath();
+    const store = await openStore(path);
+    const id = await run(store.createCrawl(meta));
+    const db = new Database(path);
+    db.query(
+      "UPDATE crawls SET owner_pid = ?, owner_host = ?, heartbeat_at = ? WHERE id = ?"
+    ).run(process.pid, "box-a", 10_000_000 - 6 * 60_000, id);
+    db.close();
+
+    const lease = startCrawlLease({
+      dbPath: path,
+      getCrawlId: () => null,
+      pid: 2_000_000_000,
+      host: "box-a",
+      now: () => 10_000_000,
+    });
+    expect(lease.claim(id)).toEqual({
+      acquired: false,
+      ownerPid: process.pid,
+      ownerHost: "box-a",
+    });
+    expect(leaseOf(path, id).owner_pid).toBe(process.pid);
+    lease.release();
+    await run(store.close());
+  });
+
   test("a busy database skips the beat after about 1 s instead of throwing or waiting 15 s", async () => {
     const path = tempDbPath();
     const store = await openStore(path);
@@ -391,13 +533,17 @@ describe("startCrawlLease", () => {
     await run(store.close());
   });
 
-  test("a non-file or missing database is a no-op and creates nothing", () => {
-    expect(startCrawlLease({ dbPath: ":memory:", getCrawlId: () => "x" }).beat()).toBe(
-      false
-    );
+  test("a non-file store is a no-op; a missing database cannot be claimed", () => {
+    const memory = startCrawlLease({
+      dbPath: ":memory:",
+      getCrawlId: () => "x",
+    });
+    expect(memory.beat()).toBe(false);
+    expect(memory.claim("x")).toEqual({ acquired: true });
     const missing = tempDbPath();
     const lease = startCrawlLease({ dbPath: missing, getCrawlId: () => "x" });
     expect(lease.beat()).toBe(false);
+    expect(lease.claim("x")).toEqual({ acquired: false });
     lease.release();
     expect(existsSync(missing)).toBe(false);
   });

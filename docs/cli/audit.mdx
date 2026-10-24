@@ -187,6 +187,19 @@ squirrel audit https://example.com -f html -o report.html
 squirrel audit https://example.com --refresh
 ```
 
+### Resume an interrupted crawl
+
+```bash
+squirrel audit https://example.com --resume
+```
+
+Resume only continues a crawl when this process can claim it. If another live
+process already owns that crawl, the command names its PID and host and starts a
+new crawl instead. A lease becomes stale after 5 minutes without a heartbeat;
+a live same-host PID remains protected longer. Stop the other process (Ctrl-C
+releases its lease immediately), wait 5 minutes for a silent remote owner to go
+stale, or use `--refresh` for a fresh crawl. See [crawl leases](/cli/self#crawl-leases).
+
 ### Publishing to the dashboard
 
 When you're **logged in and online, every audit auto-publishes to your dashboard as `unlisted`**, independent of cloud rendering or enrichment. You get a shareable link plus issue history with no extra flags. Not logged in (or `--offline`)? Nothing publishes.
