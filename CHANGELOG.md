@@ -19,6 +19,7 @@ How it works:
 
 ### Fixed
 
+- `security/x-frame-options` now warns on an unrecognised `X-Frame-Options` value (`ALLOWALL`, a typo) unless CSP `frame-ancestors` covers the page, treats a joined repeat like `DENY, DENY` as one value, and detects `frame-ancestors` as a directive name instead of a substring (#1080).
 - robots.txt parsing now gives consecutive `User-agent` lines the rules that follow them, keeps a named group whose empty `Disallow:` explicitly allows every path, and ignores inline comments, so AI-crawler and indexability checks match how crawlers read those common files (#1078).
 
 ## v0.0.133 (2026-10-24)
