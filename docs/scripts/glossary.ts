@@ -22,7 +22,9 @@
  *     ...generated...
  *     {/* glossary:rules:end *\/}
  *
- * Blocks: `glossary:index` on `glossary/index.mdx`; `glossary:hub`,
+ * Blocks: `glossary:index` on `glossary/index.mdx`; `glossary:jsonld` on the
+ * index (DefinedTermSet) and on every term page (DefinedTerm), required;
+ * `glossary:hub`,
  * `glossary:rules`, `glossary:run` and `glossary:related` on a term page
  * (`glossary/<slug>.mdx`); `hub:start-here`, `hub:rules` and `hub:terms` on a
  * category hub; `glossary:backlinks` on a rule page. On a rule page a term
@@ -155,6 +157,7 @@ type BlockKind =
   | "glossary:rules"
   | "glossary:run"
   | "glossary:related"
+  | "glossary:jsonld"
   | "glossary:backlinks"
   | "hub:start-here"
   | "hub:rules"
@@ -163,12 +166,13 @@ type BlockKind =
 type PageKind = "index" | "term" | "hub" | "rule" | "other";
 
 const BLOCKS_BY_PAGE: Record<PageKind, ReadonlySet<BlockKind>> = {
-  index: new Set(["glossary:index"]),
+  index: new Set(["glossary:index", "glossary:jsonld"]),
   term: new Set([
     "glossary:hub",
     "glossary:rules",
     "glossary:run",
     "glossary:related",
+    "glossary:jsonld",
   ]),
   hub: new Set(["hub:start-here", "hub:rules", "hub:terms"]),
   rule: new Set(["glossary:backlinks"]),
@@ -693,6 +697,8 @@ export function renderBlock(
         ...related.map((t) => termLine(model, t)),
       ].join("\n");
     }
+    case "glossary:jsonld":
+      return renderJsonLd(model, term, file);
     case "glossary:backlinks": {
       const id = [...model.rules.values()].find((r) => r.file === file)?.id;
       const terms = model.data.terms
@@ -745,6 +751,78 @@ export function renderBlock(
       ].join("\n");
     }
   }
+}
+
+/** The definition as a reader sees it rendered: code spans lose their backticks. */
+function plainDefinition(term: Term): string {
+  return term.definition.replace(/`/g, "");
+}
+
+function siteOrigin(model: Model): string {
+  try {
+    const config = JSON.parse(read(model.root, "docs.json") ?? "{}") as {
+      siteUrl?: unknown;
+    };
+    if (typeof config.siteUrl === "string")
+      return config.siteUrl.replace(/\/+$/, "");
+  } catch {
+    // No readable docs.json: fall through to the published origin.
+  }
+  return "https://docs.squirrelscan.com";
+}
+
+/**
+ * A `<script type="application/ld+json">` for a glossary page. tangly has no
+ * per-page JSON-LD key, so the block is a script element in the MDX body; it
+ * lands next to the graph tangly emits in the head and does not replace it.
+ * The description is the term's definition, which the /glossary index prints
+ * word for word. The index carries the DefinedTermSet and every term; a term
+ * page carries its DefinedTerm, pointing at the set by `@id`.
+ */
+function renderJsonLd(model: Model, term: Term | undefined, file: string): string {
+  const origin = siteOrigin(model);
+  const set = `${origin}/glossary#set`;
+  const node = (t: Term) => {
+    const url = model.written.has(t.slug)
+      ? `${origin}/glossary/${t.slug}`
+      : `${origin}/glossary#${t.slug}`;
+    return {
+      "@type": "DefinedTerm",
+      "@id": `${url}#term`,
+      name: t.term,
+      description: plainDefinition(t),
+      url,
+    };
+  };
+  let data: Record<string, unknown>;
+  if (file === "glossary/index.mdx") {
+    data = {
+      "@context": "https://schema.org",
+      "@type": "DefinedTermSet",
+      "@id": set,
+      name: "Website audit glossary",
+      url: `${origin}/glossary`,
+      hasDefinedTerm: [...model.data.terms].sort(bySortKey).map(node),
+    };
+  } else if (term) {
+    data = {
+      "@context": "https://schema.org",
+      ...node(term),
+      inDefinedTermSet: {
+        "@type": "DefinedTermSet",
+        "@id": set,
+        name: "Website audit glossary",
+        url: `${origin}/glossary`,
+      },
+    };
+  } else return "";
+  // "<" becomes a JSON escape so the text can never close the script element;
+  // then backslashes, backticks and "${" are escaped for the MDX template
+  // literal, which the build unescapes back to the JSON text.
+  const json = JSON.stringify(data)
+    .replace(/</g, "\\" + "u003c")
+    .replace(/[\\`]|\$\{/g, (m) => `\\${m}`);
+  return `<script type="application/ld+json">{\`${json}\`}</script>`;
 }
 
 function letterOf(term: Term): string {
@@ -1267,6 +1345,17 @@ function plan(root: string): Plan {
     const markerProblems = marked.problems;
     let blocks = marked.blocks;
     problems.push(...markerProblems);
+    if (
+      (kind === "term" || kind === "index") &&
+      markerProblems.length === 0 &&
+      !blocks.some((b) => b.kind === "glossary:jsonld")
+    )
+      problems.push({
+        file: page.file,
+        line: 1,
+        message:
+          "glossary page has no glossary:jsonld block (its DefinedTerm JSON-LD): add the start and end markers at the end of the page, then run `bun scripts/glossary.ts --write`",
+      });
     // A rule page a term lists, in a category with rule_backlinks on, gets a
     // glossary:backlinks block at the end of its Related rules section.
     const missingBacklinks =

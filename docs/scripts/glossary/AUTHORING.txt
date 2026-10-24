@@ -18,6 +18,7 @@ Nothing in `docs/scripts/` is published. This note and `term-template.mdx.txt` a
 | `glossary:rules` | the table of the term's rules, with each rule page's description and severity |
 | `glossary:run` | a `squirrel audit` command with `--rule-include` set to the term's rules |
 | `glossary:related` | the `## Related terms` heading and one line per related term |
+| `glossary:jsonld` | the page's DefinedTerm JSON-LD script (the index carries the DefinedTermSet); required, the template ends with it |
 
 Text outside the markers is yours and is never rewritten. The glossary index (`glossary/index.mdx`) is all generated except its intro.
 
