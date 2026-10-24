@@ -301,9 +301,10 @@ export function createFetchDocumentFetcher(): DocumentFetcher {
               break;
             }
             // repo#2830: never to a link-local or metadata address off the site.
+            // Fails closed: a hop whose lookup fails is not followed either.
             if (
               req.egress &&
-              (await egressRefuses(nextUrl, req.egress, signal).catch(() => false))
+              (await egressRefuses(nextUrl, req.egress, signal).catch(() => true))
             ) {
               endsInError = true;
               break;
