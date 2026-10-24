@@ -130,10 +130,13 @@ export function scanScopeLine(report: AuditReport): string | null {
 /**
  * In-scope URLs the crawl queued but never fetched (`scanScope.unfetched`), as
  * a whole number, or 0. Read off stored reports of any origin, so a value that
- * is not a finite non-negative number counts as none.
+ * is not a safe non-negative integer counts as none.
  */
 export function scanScopeUnfetched(report: Pick<AuditReport, "scanScope">): number {
-  return stampCount(report.scanScope?.unfetched, 0);
+  const unfetched = report.scanScope?.unfetched;
+  return typeof unfetched === "number" && Number.isSafeInteger(unfetched) && unfetched >= 0
+    ? unfetched
+    : 0;
 }
 
 /**

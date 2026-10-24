@@ -75,7 +75,7 @@ describe("unfetched survives a saved report", () => {
       { unfetched: "69" },
       { unfetched: null },
       { unfetched: -1 },
-      { unfetched: 2.5 },
+      { unfetched: 2.7 },
     ]) {
       const loaded = await reload(meta);
       expect(loaded.ok).toBe(true);

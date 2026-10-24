@@ -271,6 +271,7 @@ function buildSlimReport(
   const skippedChecks = collectSkippedChecks(report.ruleResults);
   const privateTarget = privateTargetLine(report);
   const notChecked = notCheckedRules(report);
+  const unfetched = scanScopeUnfetched(report);
   return {
     meta: {
       version,
@@ -297,7 +298,7 @@ function buildSlimReport(
       ...(report.scanScope?.stopReason !== undefined
         ? { stopReason: report.scanScope.stopReason }
         : {}),
-      ...(scanScopeUnfetched(report) > 0 ? { unfetched: scanScopeUnfetched(report) } : {}),
+      ...(unfetched > 0 ? { unfetched } : {}),
       ...(report.coverage ? { coverage: report.coverage } : {}),
       // The audit level and the settings it resolved to: `level` (a level's
       // name, or `custom`), `basedOn`, `changes` and `settings`. Absent on
