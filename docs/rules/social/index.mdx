@@ -18,7 +18,7 @@ squirrel audit https://example.com --rule-include social
 
 These carry the highest severity and weight in the category.
 
-- [og:image size: the 1200 by 630 recommendation](/rules/social/og-image-size): A share image below the recommended size is cropped or upscaled in the preview card. squirrel reads og:image and its declared dimensions.
+- [og:image size and format: the 1200 by 630 recommendation](/rules/social/og-image-size): A share image with unsupported format or undersized dimensions can render as a broken or low-quality preview card.
 - [Favicon and theme-color that differ across the site](/rules/social/asset-divergence): Site chrome comes from one layout, so a page carrying a different favicon is running a different template. squirrel finds the minority.
 - [og:url versus canonical: why they should be the same URL](/rules/social/og-url-match): When og:url and the canonical disagree, share counts split across two addresses. squirrel normalises both and compares them.
 - [Social profile links: which platforms a page links to](/rules/social/social-profiles): Linking your official accounts confirms which ones are yours. squirrel detects profile links and cross-checks the accounts the audit knows about.
@@ -33,7 +33,7 @@ These carry the highest severity and weight in the category.
 | Rule | What it flags | Severity | Scope |
 |---|---|---|---|
 | [Favicon and theme-color that differ across the site](/rules/social/asset-divergence) | Site chrome comes from one layout, so a page carrying a different favicon is running a different template. squirrel finds the minority. | warning | Site-wide |
-| [og:image size: the 1200 by 630 recommendation](/rules/social/og-image-size) | A share image below the recommended size is cropped or upscaled in the preview card. squirrel reads og:image and its declared dimensions. | warning | Per-page |
+| [og:image size and format: the 1200 by 630 recommendation](/rules/social/og-image-size) | A share image with unsupported format or undersized dimensions can render as a broken or low-quality preview card. | warning | Per-page |
 | [og:url versus canonical: why they should be the same URL](/rules/social/og-url-match) | When og:url and the canonical disagree, share counts split across two addresses. squirrel normalises both and compares them. | warning | Per-page |
 | [Social profile links: which platforms a page links to](/rules/social/social-profiles) | Linking your official accounts confirms which ones are yours. squirrel detects profile links and cross-checks the accounts the audit knows about. | info | Per-page |
 | [Social share buttons: detecting them on content pages](/rules/social/share-buttons) | Share buttons make it one click instead of three to pass a page on. squirrel looks for share markup, share libraries and platform share URLs. | info | Per-page |

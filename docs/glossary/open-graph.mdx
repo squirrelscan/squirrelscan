@@ -27,7 +27,7 @@ The preview is the page's first impression wherever it is shared. With no `og:im
 | Rule | What it flags | Severity |
 |---|---|---|
 | [Missing og:image: the Open Graph tags squirrel checks](/rules/core/og-tags) | A page missing og:title, og:description or og:image, so shares render without a preview. squirrel checks four tags per page. | warning |
-| [og:image size: the 1200 by 630 recommendation](/rules/social/og-image-size) | A share image below the recommended size is cropped or upscaled in the preview card. squirrel reads og:image and its declared dimensions. | warning |
+| [og:image size and format: the 1200 by 630 recommendation](/rules/social/og-image-size) | A share image with unsupported format or undersized dimensions can render as a broken or low-quality preview card. | warning |
 | [og:url versus canonical: why they should be the same URL](/rules/social/og-url-match) | When og:url and the canonical disagree, share counts split across two addresses. squirrel normalises both and compares them. | warning |
 | [Favicon and theme-color that differ across the site](/rules/social/asset-divergence) | Site chrome comes from one layout, so a page carrying a different favicon is running a different template. squirrel finds the minority. | warning |
 | [twitter:card: the card types and the Open Graph fallback](/rules/core/twitter-cards) | A page with no twitter:card, an unrecognised type, or a large-image card with no image. squirrel checks the type and the fallback. | info |

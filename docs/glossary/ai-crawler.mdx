@@ -28,7 +28,7 @@ A rule aimed at one token never covers another, so "block AI crawlers" is severa
 |---|---|---|
 | [AI crawlers in robots.txt: which bots you block, by class](/rules/ax/ai-crawlers) | robots.txt blocking Claude-User or PerplexityBot alongside the training bots. squirrel classifies all 24 known AI crawlers and names what each block costs. | warning |
 | [Blocking AI agents at the edge: what robots.txt hides](/rules/ax/agent-blocking) | A WAF or bot-management rule serving GPTBot or Claude-User a challenge the browser never sees. squirrel probes the homepage as all three. | error |
-| [robots.txt: what to put in it and how squirrel checks it](/rules/crawl/robots-txt) | A missing robots.txt, a Disallow: / left in production, or a syntax error changes what gets crawled. squirrel checks existence, syntax and rules. | error |
+| [robots.txt: what to put in it and how squirrel checks it](/rules/crawl/robots-txt) | A missing robots.txt, a Disallow: / left in production, or an excessive Crawl-delay changes what gets crawled. squirrel checks existence, syntax and rules. | error |
 | [Common Crawl and Wayback: is your site in the archives](/rules/ax/archive-indexing) | A site missing from the Common Crawl index or the Wayback Machine, or archived only with a capture over a year old. squirrel checks both. | warning |
 
 {/* glossary:rules:end */}

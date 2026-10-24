@@ -1,6 +1,6 @@
 ---
-title: "og:image size: the 1200 by 630 recommendation"
-description: "A share image below the recommended size is cropped or upscaled in the preview card. squirrel reads og:image and its declared dimensions."
+title: "og:image size and format: the 1200 by 630 recommendation"
+description: "A share image with unsupported format or undersized dimensions can render as a broken or low-quality preview card."
 ---
 
 ## What og:image is
@@ -11,20 +11,23 @@ Facebook's sharing guidance recommends at least 1200 by 630 pixels, a ratio of a
 
 ## What squirrel checks
 
-The rule runs on every crawled page and reads `meta[property="og:image"]` along with the `og:image:width` and `og:image:height` properties. It emits up to two checks:
+The rule runs on every crawled page and reads `meta[property="og:image"]` along with the `og:image:type`, `og:image:width` and `og:image:height` properties. It also checks `twitter:image`. It never makes an image request: format comes only from the URL extension or the declared Open Graph content type.
 
-- `og-image-size` reports info when there is no `og:image`. Message: `No og:image tag found`. No further checks run.
+- `og-image-size` reports info when there is no `og:image`. Message: `No og:image tag found`. No Open Graph dimension or format checks run, though a declared `twitter:image` is still checked independently.
 - `og-image-exists` passes when the tag is present. Message: `og:image is set`, with the first 60 characters of the URL.
 - `og-image-size` passes when both declared dimensions parse as positive numbers and are at least 1200 and 630. Message: `og:image dimensions meet recommendations`, with `1200x630` as the value.
 - `og-image-size` warns when both parse as positive and at least one is below its recommendation. Message: `og:image may be too small (600x315)`, with the recommendation as the value.
 - `og-image-size` reports info in every other case. Message: `og:image dimensions not specified`, with `Add og:image:width and og:image:height` as the value. That covers an absent tag and also a present one whose value is zero, negative or unparseable.
+- `og-image-format` and `twitter-image-format` warn when the URL ends in `.svg` or `og:image:type` is `image/svg+xml`, because social preview clients may not render SVG. They recommend a 1200 by 630 PNG or JPEG and name the image URL.
+- The format checks report info for AVIF because support is inconsistent, and pass for declared or filename-derived JPEG, PNG, GIF and WebP. An unknown extension produces no format verdict rather than a guess.
 
-The image itself is never fetched, so the check reads the declared numbers rather than the real ones. A page declaring 1200 by 630 for a 400-pixel file passes. Severity warning, weight 4.
+The image itself is never fetched, so the checks read the declared numbers and format rather than the real response. A page declaring 1200 by 630 for a 400-pixel file passes. Severity warning, weight 4.
 
 ## How to fix it
 
 ```html
 <meta property="og:image" content="https://example.com/share.png" />
+<meta property="og:image:type" content="image/png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
 <meta property="og:image:alt" content="…" />

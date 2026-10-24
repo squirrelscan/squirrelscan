@@ -17,6 +17,11 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- `social/og-image-size` now checks the declared or filename-derived format of Open Graph and Twitter card images. SVG warns because preview clients may not render it, AVIF reports inconsistent support, and JPEG, PNG, GIF and WebP pass without fetching the image. Both `name="twitter:image"` and `property="twitter:image"` are recognized. See [og:image size and format](https://docs.squirrelscan.com/rules/social/og-image-size).
+- `crawl/robots-txt` now reports `Crawl-delay` directives that affect major search crawlers, including every crawler named in a stacked `User-agent` group. It warns when a wildcard or Bing-specific delay is at least 10 seconds, estimates Bing's resulting daily crawl cap, explains which search engines honor the directive, and ignores zero delays and delays limited to non-search bots. See [robots.txt](https://docs.squirrelscan.com/rules/crawl/robots-txt).
+
 ### Fixed
 
 - robots.txt parsing now gives consecutive `User-agent` lines the rules that follow them, keeps a named group whose empty `Disallow:` explicitly allows every path, and ignores inline comments, so AI-crawler and indexability checks match how crawlers read those common files (#1078).

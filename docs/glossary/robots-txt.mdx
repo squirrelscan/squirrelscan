@@ -26,7 +26,7 @@ robots.txt controls crawling, not indexing. Google says a disallowed page can st
 
 | Rule | What it flags | Severity |
 |---|---|---|
-| [robots.txt: what to put in it and how squirrel checks it](/rules/crawl/robots-txt) | A missing robots.txt, a Disallow: / left in production, or a syntax error changes what gets crawled. squirrel checks existence, syntax and rules. | error |
+| [robots.txt: what to put in it and how squirrel checks it](/rules/crawl/robots-txt) | A missing robots.txt, a Disallow: / left in production, or an excessive Crawl-delay changes what gets crawled. squirrel checks existence, syntax and rules. | error |
 | [Redundant noindex: a blocked page nobody reads it on](/rules/crawl/robots-meta-conflict) | A page disallowed in robots.txt is never fetched, so its noindex is never seen. squirrel lists the pages carrying both. | warning |
 | [robots.txt blocked pages without noindex](/rules/crawl/indexability-conflicts) | Allow plus noindex is the correct way to deindex a page. squirrel only reports pages robots.txt blocks that carry no noindex, at info level. | warning |
 | [AI crawlers in robots.txt: which bots you block, by class](/rules/ax/ai-crawlers) | robots.txt blocking Claude-User or PerplexityBot alongside the training bots. squirrel classifies all 24 known AI crawlers and names what each block costs. | warning |

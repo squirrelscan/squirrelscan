@@ -184,6 +184,7 @@ export function parseRobotsTxt(content: string, url: string): RobotsTxtData {
           const delay = Number.parseFloat(value);
           if (!Number.isNaN(delay)) {
             currentCrawlDelay = delay;
+            hasGroupRecord = true;
           }
         }
         break;
