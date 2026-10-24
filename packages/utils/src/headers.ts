@@ -94,6 +94,11 @@ const CROSS_ORIGIN_REDIRECT_HEADER_ALLOWLIST = new Set([
   "accept-encoding",
   "accept-language",
   "upgrade-insecure-requests",
+  // Kept, including one set through custom headers (`-H "User-Agent: ..."`,
+  // `[crawler] headers`): it names the client, it is not a credential, and a
+  // hop that dropped it would go out agentless, which WAFs refuse
+  // (squirrelscan/repo#1899). A secret belongs in any other header, which a
+  // cross-origin hop drops (squirrelscan/repo#3332).
   "user-agent",
 ]);
 

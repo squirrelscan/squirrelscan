@@ -3,11 +3,11 @@
 // hop obeys the egress policy. Real loopback servers: a different port is a
 // different origin.
 
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 
 import { parsePage } from "@squirrelscan/parser";
 import { createHeaderScope } from "@squirrelscan/utils/headers";
-import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
+import { EgressRefusedError, type EgressPolicy } from "@squirrelscan/utils/public-egress";
 
 import { runCloakingProbe } from "../src/cloaking-probe";
 import { probeFetch } from "../src/lib/probe-fetch";
@@ -55,6 +55,15 @@ beforeAll(() => {
           headers: { location: "http://169.254.169.254/latest/meta-data/" },
         });
       }
+      // A public address, answered by the spy below: the control that shows a
+      // redirect off the site IS followed, so the metadata hop's absence is
+      // the egress refusal and not something else (a deadline, a mock miss).
+      if (path === "/public") {
+        return new Response(null, {
+          status: 302,
+          headers: { location: "http://93.184.215.14/elsewhere" },
+        });
+      }
       if (path === "/same") {
         return new Response(null, { status: 302, headers: { location: "/final" } });
       }
@@ -77,6 +86,27 @@ const reset = () => {
   siteSeen.length = 0;
   otherSeen.length = 0;
 };
+
+// Every request any probe sends, as the runtime saw it (repo#3332). The public
+// and metadata addresses answer here, never from the network.
+const realFetch = globalThis.fetch;
+const sent: string[] = [];
+beforeEach(() => {
+  sent.length = 0;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = input instanceof Request ? input.url : String(input);
+    sent.push(url);
+    const host = new URL(url).hostname;
+    if (host === "169.254.169.254" || host === "93.184.215.14") {
+      return new Response(SHELL_HTML, { headers: { "content-type": "text/html" } });
+    }
+    return realFetch(input, init);
+  }) as typeof fetch;
+});
+afterEach(() => {
+  globalThis.fetch = realFetch;
+});
+const sentTo = (host: string) => sent.filter((url) => new URL(url).hostname === host);
 
 describe("probeFetch", () => {
   for (const [label, egress] of [
@@ -111,11 +141,20 @@ describe("probeFetch", () => {
     });
   }
 
-  test("a redirect to a metadata address is refused, never requested", async () => {
+  test("a redirect to a metadata address is refused by the egress policy, never requested", async () => {
     reset();
     await expect(
       probeFetch(`http://127.0.0.1:${site.port}/meta`, { headers: SECRET }, policy),
-    ).rejects.toThrow();
+    ).rejects.toBeInstanceOf(EgressRefusedError);
+    expect(siteSeen.map((s) => s.path)).toEqual(["/meta"]);
+    expect(sentTo("169.254.169.254")).toEqual([]);
+  });
+
+  test("control: a redirect to a public address off the site is followed", async () => {
+    reset();
+    const res = await probeFetch(`http://127.0.0.1:${site.port}/public`, {}, policy);
+    expect(res.status).toBe(200);
+    expect(sentTo("93.184.215.14")).toEqual(["http://93.184.215.14/elsewhere"]);
   });
 });
 
@@ -163,6 +202,19 @@ describe("cloaking probe", () => {
       opts(policy),
     );
     expect(probe?.defaultStatus).toBe(0);
+    // The redirect was asked for, and its target never was.
+    expect(siteSeen.some((s) => s.path === "/meta")).toBe(true);
+    expect(sentTo("169.254.169.254")).toEqual([]);
+  });
+
+  test("control: a public redirect target off the site is requested", async () => {
+    reset();
+    const [probe] = await runCloakingProbe(
+      [{ url: `http://127.0.0.1:${site.port}/public`, reason: "orphan" }],
+      opts(policy),
+    );
+    expect(probe?.defaultStatus).toBe(200);
+    expect(sentTo("93.184.215.14").length).toBeGreaterThan(0);
   });
 });
 
@@ -185,6 +237,18 @@ describe("soft-404 confirmation", () => {
     expect(otherSeen.length).toBeGreaterThan(0);
     expect(otherSeen[0]?.apiKey).toBeNull();
     expect(otherSeen[0]?.auth).toBeNull();
+  });
+
+  test("a metadata redirect is not followed, and a public one is (control)", async () => {
+    reset();
+    await run("/meta");
+    expect(siteSeen.some((s) => s.path === "/meta")).toBe(true);
+    expect(sentTo("169.254.169.254")).toEqual([]);
+
+    reset();
+    sent.length = 0;
+    await run("/public");
+    expect(sentTo("93.184.215.14").length).toBeGreaterThan(0);
   });
 
   test("a LAN audit still confirms through a same-site redirect, headers kept", async () => {
