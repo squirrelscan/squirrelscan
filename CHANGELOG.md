@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- `i18n/hreflang` now warns on hreflang values that are not `x-default` or a valid language and region code, such as `en_US` (underscore) or `en-uk` (the region is `GB`). It checks code format only, not return links (squirrelscan/repo#3137).
+
 ### Fixed
 
 - robots.txt parsing now gives consecutive `User-agent` lines the rules that follow them, keeps a named group whose empty `Disallow:` explicitly allows every path, and ignores inline comments, so AI-crawler and indexability checks match how crawlers read those common files (#1078).
