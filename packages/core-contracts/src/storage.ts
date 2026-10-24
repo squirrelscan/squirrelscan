@@ -339,6 +339,20 @@ export interface CrawlMetadata {
   config: CrawlerConfigSnapshot;
   stats: CrawlStats;
   /**
+   * The report scope stamped after this crawl was analyzed. Kept on the crawl
+   * so a later `squirrel report` can reconstruct the same coverage disclosure
+   * the original audit printed. Absent on crawls written before it was stored.
+   */
+  scanScope?: {
+    origin: "cli" | "ci" | "cloud";
+    maxPages?: number;
+    requestedMaxPages?: number;
+    pagesCrawled: number;
+    capped: boolean;
+    stopReason?: "time";
+    unfetched?: number;
+  };
+  /**
    * When `squirrel self disk --prune` reclaimed this audit's derived data
    * (#1912). Absent for every audit that has not been reclaimed.
    *

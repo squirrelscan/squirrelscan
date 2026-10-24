@@ -24,6 +24,7 @@ How it works:
 
 ### Fixed
 
+- `squirrel report` now preserves the original audit's scan scope when rebuilding from the project database, including the page limit, a clamped requested limit, the runner, and URLs discovered but not fetched. Older stored audits continue to render without an inferred scope. (#1050)
 - robots.txt parsing now gives consecutive `User-agent` lines the rules that follow them, keeps a named group whose empty `Disallow:` explicitly allows every path, and ignores inline comments, so AI-crawler and indexability checks match how crawlers read those common files (#1078).
 
 ## v0.0.133 (2026-10-24)

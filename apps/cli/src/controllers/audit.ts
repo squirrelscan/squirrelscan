@@ -2025,7 +2025,7 @@ export async function runAudit(
         const unfetched = await Effect.runPromise(
           unfetchedFrontierCount(sqliteStorage, crawlId)
         );
-        report.scanScope = {
+        const scanScope: NonNullable<AuditReport["scanScope"]> = {
           origin: detectRunner().ci ? "ci" : "cli",
           maxPages: scopeMaxPages,
           ...(recordRequested
@@ -2035,6 +2035,11 @@ export async function runAudit(
           capped: report.pages.length >= scopeMaxPages,
           ...(unfetched > 0 ? { unfetched } : {}),
         };
+        report.scanScope = scanScope;
+        // `squirrel report` rebuilds from this crawl after the audit process is
+        // gone. Persist the exact disclosure rather than making that later path
+        // guess the runner, the requested limit or how much frontier remained.
+        await Effect.runPromise(storage.updateCrawl(crawlId, { scanScope }));
       }
 
       // Rule-result cache disclosure (#1990). REPORT-ONLY, and stripped on
