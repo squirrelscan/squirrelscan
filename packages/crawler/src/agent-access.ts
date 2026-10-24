@@ -111,6 +111,7 @@ async function probeOne(
           error: null,
         };
       },
+      budget?.egress,
     );
   } catch (e) {
     return unreachableProbe(identity, (e as Error).message);

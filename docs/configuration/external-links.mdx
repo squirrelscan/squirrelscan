@@ -283,7 +283,7 @@ A longer slug that only mentions one of them is still a page and is checked: `/w
 
 **It uses `HEAD` only.** A `GET` asking for one byte (the body is discarded) is sent only when the server answers the `HEAD` with `405` or `501`, which say it does not support `HEAD`. Some servers answer `HEAD` with an error on pages they serve. So the check first sends `HEAD` to the audited URL, which the crawl already fetched. If that answer is an error, the targets' errors are not trusted. They are never reported as broken, and in an audit that did not follow links they are listed as **Not checked**.
 
-**It re-checks every redirect hop.** It does not follow a redirect to another host, out of the crawl scope, to a path robots.txt disallows, or to an action link; that redirect is the target's status. It follows at most 5 hops.
+**It re-checks every redirect hop.** It does not follow a redirect to another host, out of the crawl scope, to a path robots.txt disallows, to an action link, or to a link-local or cloud metadata address; that redirect is the target's status. It follows at most 5 hops.
 
 **It stays polite.** It stays inside the crawl scope and, when the crawl respects it, robots.txt. It never has more of its own requests in flight than the crawl's per-host concurrency, and checks at most `max_targets` targets an audit, each with one `HEAD` and the redirect hops that follow it.
 

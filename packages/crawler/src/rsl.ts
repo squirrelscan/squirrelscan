@@ -95,6 +95,7 @@ async function fetchLicenseDoc(
           error: null,
         };
       },
+      budget?.egress,
     );
   } catch (e) {
     return unreachableDoc(url, (e as Error).message);
@@ -146,6 +147,7 @@ export function fetchRslLicensing(
                 await response.body?.cancel().catch(() => {});
               }
             },
+            budget?.egress,
           );
         }
       } catch {

@@ -23,6 +23,11 @@ import {
   TECH_DETECT_PRESENCE_HEADERS,
 } from "@squirrelscan/utils/constants";
 import { headersForRedirect, techCookieNames } from "@squirrelscan/utils/headers";
+import {
+  egressGuardedSend,
+  egressRefuses,
+  type EgressPolicy,
+} from "@squirrelscan/utils/public-egress";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import {
   DEFAULT_MAX_DOCUMENT_BODY_BYTES,
@@ -431,6 +436,7 @@ function requestWithTiming(
   options: RequestInit,
   timeoutMs: number,
   userAgent: string,
+  send: (url: string, init: RequestInit) => Promise<Response> = fetchUndecoded,
 ): Effect.Effect<TimedResponse, CrawlError, never> {
   return Effect.tryPromise({
     // Forward the fiber-interrupt signal so a wedged socket is aborted and the host-slot release runs (#405).
@@ -450,7 +456,7 @@ function requestWithTiming(
         // #2717: undecoded on every hop, or the runtime inflates a
         // Content-Encoding body in full before the capped read below (or the
         // abort of a discarded 3xx) can stop it.
-        const response = await fetchUndecoded(url, {
+        const response = await send(url, {
           ...options,
           headers,
           signal: controller.signal,
@@ -545,6 +551,13 @@ export interface FetchOptions {
   followRedirects: boolean;
   headers?: Record<string, string>;
   fetcher?: DocumentFetcher;
+  /**
+   * Egress policy for every REDIRECT hop (repo#2830): a redirect that leaves the
+   * crawl's hosts for a link-local or cloud metadata address ends the fetch at
+   * that hop, never requested. The URL asked for is the crawl's own and is not
+   * vetted. Unset, redirects are checked for scheme only (#1392).
+   */
+  egress?: EgressPolicy;
   /**
    * Outer attempts `fetchPageWithRetry` may make for a retryable transport
    * failure. Unset, the path decides (one through a document fetcher, three
@@ -882,6 +895,7 @@ function fetchWithDocumentFetcher(
           followRedirects: options.followRedirects,
           signal,
           storedSourceHash: options.storedSourceHash,
+          ...(options.egress ? { egress: options.egress } : {}),
         }),
       catch: (error) => {
         if (isTlsError(error)) return CrawlError.tls(url, (error as Error).message);
@@ -1007,6 +1021,8 @@ function fetchPageStandardOnce(
     const MAX_REDIRECTS = 10;
     const hops: RedirectHop[] = [];
     const visited = new Set<string>();
+    const egress = options.egress;
+    const guardedSend = egress ? egressGuardedSend(fetchUndecoded, egress) : fetchUndecoded;
     let currentUrl = url;
     let isLoop = false;
     let endsInError = false;
@@ -1031,6 +1047,9 @@ function fetchPageStandardOnce(
         },
         options.timeoutMs,
         options.userAgent,
+        // A redirect hop goes out vetted (and pinned, outside the hosted proxy)
+        // by the same policy that let it through above.
+        i > 0 && egress ? guardedSend : fetchUndecoded,
       );
       const { response, timing } = timed;
 
@@ -1067,6 +1086,16 @@ function fetchPageStandardOnce(
         // a terminal error hop, never fetch it. Scheme-only: private/loopback
         // HOSTS stay allowed so internal-site audits keep working.
         if (!isHttpOrHttpsUrl(nextUrl)) {
+          endsInError = true;
+          finalResponse = response;
+          finalTiming = timing;
+          break;
+        }
+        // repo#2830: an open redirect on the site (`/go?u=http://169.254.169.254/`)
+        // must not send the auditor's machine to a metadata or link-local
+        // address. Ends here like the refused scheme above. A resolver failure
+        // is left to the request itself to report.
+        if (egress && (yield* Effect.promise(() => egressRefuses(nextUrl, egress).catch(() => false)))) {
           endsInError = true;
           finalResponse = response;
           finalTiming = timing;

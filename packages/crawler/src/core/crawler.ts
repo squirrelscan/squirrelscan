@@ -25,6 +25,12 @@ import {
   fetchUndecoded,
   readBodyCapped,
 } from "@squirrelscan/utils/response-body";
+import {
+  memoizeResolveHost,
+  refusedWithoutLookup,
+  resolveHostAddresses,
+  type EgressPolicy,
+} from "@squirrelscan/utils/public-egress";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import { isCloudflareEmailProtectionUrl } from "@squirrelscan/utils/cloudflare-email";
 import { urlHostKey } from "@squirrelscan/utils/url";
@@ -492,6 +498,36 @@ export function createCrawler(
     };
     const customHeadersFor = (url: string): Record<string, string> | undefined =>
       config.headers && getHeaderScope()(url) ? config.headers : undefined;
+    // repo#2830: the asset phase's own-site policy (#2764) for every request
+    // the site can steer: a page's redirect hops, the root probes and theirs,
+    // and the sitemaps robots.txt or an index names. The crawl's own hosts go
+    // out as before and private networks stay allowed (a LAN or dev-server
+    // audit); a hop anywhere else to a link-local or cloud metadata address is
+    // refused, never sent, and the rest connect to the address they were
+    // vetted on unless the transport pins. None when the user named such an
+    // address as the site: the guard is for where the site sends the crawl.
+    const resolveOnce = memoizeResolveHost(resolveHostAddresses);
+    const egressFor = (base: string): EgressPolicy | undefined => {
+      const policy: EgressPolicy = {
+        allowPrivateNetwork: true,
+        resolve: resolveOnce,
+        pin: config.egressPinnedByTransport !== true,
+        trustTarget: (url) => {
+          try {
+            return isInScope(url.href, {
+              baseUrl: base,
+              include: [],
+              exclude: [],
+              allowedDomains: config.allowedDomains,
+            }).allowed;
+          } catch {
+            return false;
+          }
+        },
+      };
+      return refusedWithoutLookup(base, policy) ? undefined : policy;
+    };
+    let crawlEgress: EgressPolicy | undefined;
     // In-memory mirror of getPageCount (rows in `pages`): seeded at
     // runCrawlLoop start (resume-safe), bumped per upsertPage — avoids a
     // hot-path COUNT(*) per enqueue/dispatch (#268).
@@ -1374,6 +1410,8 @@ export function createCrawler(
             // Crawl-wide backoff (#1829): a rate-limit response here pauses
             // every other worker aimed at this host, not just this fetch.
             rateLimit: rateLimitControlFor(host, entry, startedAt),
+            // Redirect hops only (repo#2830): the URL itself is the crawl's.
+            ...(crawlEgress ? { egress: crawlEgress } : {}),
           };
           let fetchResult = yield* Effect.either(fetchPage(entry.normalizedUrl, fetchOptions));
 
@@ -2641,10 +2679,10 @@ export function createCrawler(
         // The log rides on the budget so every root probe can note a request the
         // site refused; persisted below so the rules say "refused", not "absent".
         const refusals = new RefusalLog();
-        const preamble = createPhaseBudget(preambleBudgetMs(config.timeoutMs), Date.now(), refusals);
+        const seedPhase = createPhaseBudget(preambleBudgetMs(config.timeoutMs), Date.now(), refusals);
 
         // Follow redirects to get final URL (both HTTP and client-side)
-        const rawFinalTargetUrl = yield* detectRedirects(targetUrl, preamble);
+        const rawFinalTargetUrl = yield* detectRedirects(targetUrl, seedPhase);
         // SECURITY (#1396) defense-in-depth: detectRedirects follows client-side
         // redirects (meta refresh / JS) whose target is page-controlled.
         // findMetaRefresh / findJavaScriptRedirect already restrict to
@@ -2678,6 +2716,9 @@ export function createCrawler(
         const seedResolution = resolveSeedRedirect(userProvidedUrl, finalTargetUrl);
         baseUrl = seedResolution.baseUrl;
         headerSeed = userProvidedUrl;
+        crawlEgress = egressFor(baseUrl);
+        // The same budget and refusal log, now with the crawl's egress policy.
+        const preamble: PhaseBudget = crawlEgress ? { ...seedPhase, egress: crawlEgress } : seedPhase;
         if (seedResolution.offSite) {
           logger.warn(
             "off-site redirect refused",
@@ -2834,6 +2875,7 @@ export function createCrawler(
             headerScope: getHeaderScope(),
             walkWindowMs: sitemapWalkWindowMs(config.timeoutMs),
             refusals,
+            ...(crawlEgress ? { egress: crawlEgress } : {}),
           },
         );
 
@@ -3024,6 +3066,7 @@ export function createCrawler(
 
         baseUrl = crawl.baseUrl;
         headerSeed = crawl.originalUrl ?? crawl.seedUrl ?? "";
+        crawlEgress = egressFor(baseUrl);
         currentCrawlId = crawlId;
         isRunning = true;
         isPaused = false;
@@ -3039,7 +3082,7 @@ export function createCrawler(
             config.userAgent,
             true,
             customHeadersFor(baseUrl),
-            createPhaseBudget(preambleBudgetMs(config.timeoutMs)),
+            createPhaseBudget(preambleBudgetMs(config.timeoutMs), Date.now(), undefined, crawlEgress),
           ),
         );
         if (robotsResult._tag === "Right") {
@@ -3144,6 +3187,7 @@ export function createCrawler(
 
         baseUrl = crawl.baseUrl;
         headerSeed = crawl.originalUrl ?? crawl.seedUrl ?? "";
+        crawlEgress = egressFor(baseUrl);
         currentCrawlId = crawlId;
         isRunning = true;
         isPaused = false;
@@ -3192,7 +3236,12 @@ export function createCrawler(
         });
 
         // One wall-clock budget for this restart's preamble, same as start().
-        const preamble = createPhaseBudget(preambleBudgetMs(config.timeoutMs));
+        const preamble = createPhaseBudget(
+          preambleBudgetMs(config.timeoutMs),
+          Date.now(),
+          undefined,
+          crawlEgress,
+        );
 
         // Fetch robots.txt — always, regardless of respectRobots (#790).
         const robotsResult = yield* Effect.either(

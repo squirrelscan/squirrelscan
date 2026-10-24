@@ -864,6 +864,17 @@ Follow HTTP 3xx redirects.
 - Does not fetch redirect destination
 - Useful for debugging redirect issues
 
+**Where a redirect may lead.** A redirect is followed to any `http` or `https`
+URL, private networks included, so a `localhost`, LAN or staging audit works as
+usual. A redirect that leaves the crawl's hosts for a link-local or cloud
+metadata address (`169.254.169.254`, `fe80::/10`, `metadata.google.internal`)
+is not followed: the crawl stops at that redirect and never sends the request.
+The same holds for the root files the crawl fetches (robots.txt, sitemaps,
+llms.txt, the well-known and markdown probes) and for a sitemap that robots.txt
+or a sitemap index points at such an address. On your machine, a redirect to
+another host connects to the address squirrel checked, so a DNS answer cannot
+change in between.
+
 **Example:**
 
 Disable redirect following:

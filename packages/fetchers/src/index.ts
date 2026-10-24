@@ -7,6 +7,11 @@ import {
   isHttpOrHttpsUrl,
   readBodyCapped,
 } from "@squirrelscan/utils";
+import {
+  egressGuardedSend,
+  egressRefuses,
+  type EgressPolicy,
+} from "@squirrelscan/utils/public-egress";
 
 /**
  * Enforce the one invariant every redirect chain must satisfy: an HTTP hop that
@@ -64,6 +69,14 @@ export interface FetchRequest {
    * Ignored by every other fetcher.
    */
   storedSourceHash?: string;
+  /**
+   * Egress policy for every REDIRECT hop (repo#2830): a redirect to a
+   * link-local or cloud metadata address outside the crawl's hosts ends the
+   * fetch at that hop, never requested. The URL asked for is not vetted.
+   * Honored by the plain fetch fetcher; a render fetcher's browser runs in its
+   * own sandbox.
+   */
+  egress?: EgressPolicy;
 }
 
 export interface FetchTiming {
@@ -175,16 +188,25 @@ function headersToRecord(headers: Headers): Record<string, string> {
 
 // Fetch tolerant of a bad Content-Encoding: on decompress failure, refetch raw (identity) so the page isn't dropped #292.
 // Undecoded on every hop (#2717): the runtime would otherwise inflate a bomb in
-// full before readBodyCapped's cap applies.
-async function fetchTolerant(url: string, init: RequestInit): Promise<Response> {
+// full before readBodyCapped's cap applies. With `egress`, both requests are
+// vetted and sent by `egressGuardedSend` (repo#2830).
+async function fetchTolerant(
+  url: string,
+  init: RequestInit,
+  egress?: EgressPolicy,
+): Promise<Response> {
+  const guarded = (send: (url: string, init: RequestInit) => Promise<Response>) =>
+    egress ? egressGuardedSend(send, egress) : send;
   try {
-    return await fetchUndecoded(url, init);
+    return await guarded(fetchUndecoded)(url, init);
   } catch (error) {
     if (!isDecompressionError(error)) throw error;
     // `decompress: false` is a Bun fetch option returning the undecoded bytes.
     // Plain fetch, not fetchUndecoded, on purpose: this body is read raw, as
     // identity, which is the whole point of the fallback.
-    return await fetch(url, { ...init, decompress: false } as RequestInit);
+    return await guarded((rawUrl, rawInit) =>
+      fetch(rawUrl, { ...rawInit, decompress: false } as RequestInit),
+    )(url, init);
   }
 }
 
@@ -239,7 +261,13 @@ export function createFetchDocumentFetcher(): DocumentFetcher {
             redirect: "manual",
             signal,
           };
-          const response = await fetchTolerant(currentUrl, requestInit);
+          // A redirect hop goes out vetted (and pinned, outside the hosted
+          // proxy) by the policy that let it through below (repo#2830).
+          const response = await fetchTolerant(
+            currentUrl,
+            requestInit,
+            i > 0 ? req.egress : undefined,
+          );
 
           responseAt = Date.now();
           finalStatus = response.status;
@@ -264,6 +292,11 @@ export function createFetchDocumentFetcher(): DocumentFetcher {
             // non-http(s) redirect target — terminal error hop, never fetched.
             // Scheme-only: private/loopback HOSTS stay allowed (internal audits).
             if (!isHttpOrHttpsUrl(nextUrl)) {
+              endsInError = true;
+              break;
+            }
+            // repo#2830: never to a link-local or metadata address off the site.
+            if (req.egress && (await egressRefuses(nextUrl, req.egress).catch(() => false))) {
               endsInError = true;
               break;
             }

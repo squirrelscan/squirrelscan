@@ -9,6 +9,7 @@ import {
   EgressRefusedError,
   assertEgressAllowed,
   egressGuardedSend,
+  egressRefuses,
   isLinkLocalOrMetadataAddress,
   isNonPublicAddress,
   memoizeResolveHost,
@@ -752,5 +753,23 @@ describe("refusedWithoutLookup: what the URL alone settles (pub#770)", () => {
     expect(refusedWithoutLookup("http://169.254.169.254/", privateSite)).toBe(true);
     expect(refusedWithoutLookup("http://[fe80::1]/", privateSite)).toBe(true);
     expect(refusedWithoutLookup("http://metadata.google.internal/", privateSite)).toBe(true);
+  });
+});
+
+describe("egressRefuses: a redirect loop's pre-check (repo#2830)", () => {
+  const policy: EgressPolicy = {
+    allowPrivateNetwork: true,
+    resolve: table({ "intranet.test": ["10.0.0.5"], "imds.example.com": ["169.254.169.254"] }),
+  };
+
+  test("true for what the policy refuses, false for what it allows; nothing is sent", async () => {
+    expect(await egressRefuses("http://169.254.169.254/latest/", policy)).toBe(true);
+    expect(await egressRefuses("http://metadata.google.internal/", policy)).toBe(true);
+    expect(await egressRefuses("http://imds.example.com/", policy)).toBe(true);
+    expect(await egressRefuses("http://intranet.test/", policy)).toBe(false);
+  });
+
+  test("a resolver failure is not a refusal: it propagates", async () => {
+    await expect(egressRefuses("http://unknown.test/", policy)).rejects.toThrow("ENOTFOUND");
   });
 });

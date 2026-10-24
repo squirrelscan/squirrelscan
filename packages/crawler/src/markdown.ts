@@ -82,6 +82,7 @@ async function probeOne(
         await res.body?.cancel().catch(() => {});
         return result;
       },
+      budget?.egress,
     );
   } catch {
     return null;

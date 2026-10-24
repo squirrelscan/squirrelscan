@@ -10,6 +10,7 @@ import type {
   SitemapUrl,
 } from "@squirrelscan/core-contracts";
 import { createHeaderScope, type HeaderScope } from "@squirrelscan/utils/headers";
+import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 import { resolveRobotsSitemapUrl } from "@squirrelscan/utils/robots-txt";
 
 import { SITEMAP_NOT_CHECKED_ERROR } from "@squirrelscan/core-contracts/storage";
@@ -691,6 +692,9 @@ export function fetchSitemap(
   // Where a refusal (401/403/429, a bot wall) is noted, so the report can
   // say the sitemap request was refused rather than that no sitemap exists.
   refusals?: RefusalLog,
+  // repo#2830: every hop vetted, the first included: a `Sitemap:` line or an
+  // index entry is the site's to name, and so is every redirect.
+  egress?: EgressPolicy,
 ): Effect.Effect<SitemapFetchResult, never, never> {
   // #1393: the caller's secret customHeaders are scoped to the audited origin. A
   // `Sitemap:` directive (robots.txt) or child-sitemap reference can point at an
@@ -760,6 +764,7 @@ export function fetchSitemap(
             ),
           };
         },
+        egress,
       );
     } catch (error) {
       return {
@@ -810,6 +815,7 @@ export function fetchSitemapsRecursive(
   // healthy one keeps going. Created on the first call and threaded down.
   walkWindow: WalkWindow = newWalkWindow(),
   refusals?: RefusalLog,
+  egress?: EgressPolicy,
 ): Effect.Effect<SitemapFetchResult[], never, never> {
   if (urls.length === 0) return Effect.succeed([]);
   // Candidates exist but the walk will not visit them: that is a gap in
@@ -860,7 +866,15 @@ export function fetchSitemapsRecursive(
       const chunkTimeoutMs = Math.min(SITEMAP_FETCH_TIMEOUT_MS, remainingMs);
       const chunkResults = yield* Effect.all(
         chunk.map((url) =>
-          fetchSitemap(url, userAgent, customHeaders, headerScope, chunkTimeoutMs, refusals),
+          fetchSitemap(
+            url,
+            userAgent,
+            customHeaders,
+            headerScope,
+            chunkTimeoutMs,
+            refusals,
+            egress,
+          ),
         ),
         { concurrency: SITEMAP_FETCH_CONCURRENCY },
       );
@@ -918,6 +932,7 @@ export function fetchSitemapsRecursive(
       headerScope,
       walkWindow,
       refusals,
+      egress,
     );
 
     return [...fetchResults, ...childResults];
@@ -964,6 +979,11 @@ export interface DiscoverSitemapsOptions {
   walkTotalMs?: number;
   /** Notes sitemap requests the site refused. */
   refusals?: RefusalLog;
+  /**
+   * Egress policy for every sitemap request and redirect hop (repo#2830): a
+   * link-local or cloud metadata address off the crawl's hosts is not requested.
+   */
+  egress?: EgressPolicy;
 }
 
 export function discoverSitemaps(
@@ -1020,6 +1040,7 @@ export function discoverSitemaps(
       headerScope,
       walkWindow,
       options.refusals,
+      options.egress,
     );
 
     // #670: a server that answers 200 with a page for every path makes each

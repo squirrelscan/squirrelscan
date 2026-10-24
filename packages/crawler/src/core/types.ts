@@ -158,6 +158,12 @@ export interface CrawlerConfig {
   /** Optional pluggable document fetcher implementation */
   documentFetcher?: DocumentFetcher;
   /**
+   * The transport resolves once and connects to what it validated (the hosted
+   * container's egress proxy), so a redirect hop the crawl vets is sent by
+   * name, not pinned to the vetted address (repo#2830). Unset on the CLI.
+   */
+  egressPinnedByTransport?: boolean;
+  /**
    * Optional hook for structured TLS/status-0 failure + standard-fetch fallback
    * events. Lets consumers (CLI/cloud) surface these with TLS context instead
    * of them being swallowed into a generic network error. Defaults to unset.

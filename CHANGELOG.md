@@ -28,6 +28,10 @@ How it works:
 - The crawler now recognizes managed challenge pages served with HTTP 403, including Cloudflare, Akamai and other detected providers, while a plain or stalled 403 remains the generic `Request blocked by server` result. Challenge-body sampling is capped at 64 KB and preserves the existing 503 timeout behavior.
 - `install.sh` and `install.ps1` now validate the release version, asset filename and SHA-256 from release metadata before building download URLs or downloading the binary, preventing malformed metadata from retargeting installer requests. Checksum comparison accepts either hexadecimal letter case. See [Installation](https://docs.squirrelscan.com/getting-started/installation).
 
+### Security
+
+- **A redirect on the audited site can no longer send the CLI to a cloud metadata or link-local address.** The page crawl, the root files (robots.txt, sitemaps, llms.txt, the well-known and markdown probes) and the internal link check now refuse a redirect hop that leaves the crawl's hosts for an address such as `169.254.169.254`, `fe80::/10` or `metadata.google.internal`, before sending it, as the asset checks already did. A sitemap that robots.txt or a sitemap index names on such an address is not requested either. Private networks stay allowed, so `localhost`, LAN and staging audits crawl as before ([follow_redirects](https://docs.squirrelscan.com/configuration/crawler#follow_redirects)).
+
 ## v0.0.133 (2026-10-24)
 
 White-label reports get a website and a footer, and the docs get a report walkthrough.

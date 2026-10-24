@@ -348,6 +348,26 @@ export async function assertEgressAllowed(
 }
 
 /**
+ * True when `policy` refuses a request to `url` ({@link vetEgressTarget} throws
+ * {@link EgressRefusedError}); nothing is sent either way. For a hand-rolled
+ * redirect loop that ends at a refused hop instead of failing the whole fetch
+ * (repo#2830). Any other error (a resolver failure) propagates.
+ */
+export async function egressRefuses(
+  url: string,
+  policy: EgressPolicy,
+  signal?: AbortSignal | null,
+): Promise<boolean> {
+  try {
+    await vetEgressTarget(url, policy, signal);
+    return false;
+  } catch (error) {
+    if (error instanceof EgressRefusedError) return true;
+    throw error;
+  }
+}
+
+/**
  * True when `policy` refuses `url` on what the URL itself says, with no DNS
  * lookup: a non-http(s) scheme, a host outside `allowHost`, a refused IP
  * literal, a metadata hostname, or a non-public name the policy does not

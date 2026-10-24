@@ -125,6 +125,7 @@ export function fetchRobotsEvaluator(
           const content = await readBodyCapped(response, ROBOTS_MAX_BYTES);
           return createRobotsEvaluator(robotsUrl, content, userAgent);
         },
+        budget?.egress,
       ),
     catch: (error) => unreachableEvaluator(robotsUrl, (error as Error).message),
   }).pipe(Effect.catchAll((err) => Effect.succeed(err)));

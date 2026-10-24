@@ -1359,6 +1359,8 @@ export function fetchAssetsFromOccurrences(
             Math.min(resourceCheckOptions.concurrency, config.crawler?.per_host_concurrency ?? 2),
           ),
           mayRequest: mayProbe,
+          // repo#2830: the asset pools' own-site policy, every hop.
+          egress: ownSiteEgress,
           ...(fetchBudget ? { budget: fetchBudget } : {}),
           // The audited URL, which the crawl fetched: the HEAD control.
           ...(baseUrl ? { controlUrl: baseUrl } : {}),

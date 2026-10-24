@@ -59,6 +59,7 @@ async function fetchOne(
         const content = truncateToBytes(raw, LLMS_MAX_BYTES);
         return { url, exists: true, content, sizeBytes: byteLength(content) };
       },
+      budget?.egress,
     );
   } catch {
     return null;

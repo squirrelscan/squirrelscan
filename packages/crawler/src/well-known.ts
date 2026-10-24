@@ -163,6 +163,7 @@ async function probeOne(
           error: null,
         };
       },
+      budget?.egress,
     );
   } catch (e) {
     return unreachableProbe(path, url, (e as Error).message);
