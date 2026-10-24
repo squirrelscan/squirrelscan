@@ -73,7 +73,6 @@ runtime dependency closure of `apps/cli`.
 | `xml-naming@0.3.0` | MIT | [source](https://github.com/NaturalIntelligence/xml-naming) |
 | `xml2js@0.6.2` | MIT | [source](https://github.com/Leonidas-from-XIV/node-xml2js) |
 | `xmlbuilder@11.0.1` | MIT | [source](https://github.com/oozcitak/xmlbuilder-js) |
-| `zod@3.25.76` | MIT | [source](https://github.com/colinhacks/zod) |
 | `zod@4.6.7` | MIT | [source](https://github.com/colinhacks/zod) |
 
 ## License And Notice Texts
@@ -1564,7 +1563,7 @@ Packages: `@modelcontextprotocol/core@2.3.1`, `@modelcontextprotocol/server@2.3.
 
 ### LICENSE (f61cacc2acb8)
 
-Packages: `zod@3.25.76`, `zod@4.6.7`
+Packages: `zod@4.6.7`
 
     MIT License
 
