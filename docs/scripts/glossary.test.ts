@@ -470,9 +470,12 @@ describe("glossary --write", () => {
     "{/* glossary:related:start */}",
     "{/* glossary:related:end */}",
     "",
+    "{/* glossary:jsonld:start */}",
+    "{/* glossary:jsonld:end */}",
+    "",
   ].join("\n");
   const INDEX =
-    '---\ntitle: "Website audit glossary"\ndescription: "Terms."\n---\n\n{/* glossary:index:start */}\n{/* glossary:index:end */}\n';
+    '---\ntitle: "Website audit glossary"\ndescription: "Terms."\n---\n\n{/* glossary:index:start */}\n{/* glossary:index:end */}\n\n{/* glossary:jsonld:start */}\n{/* glossary:jsonld:end */}\n';
   const HUB_MARKERS =
     "{/* hub:start-here:start */}\n{/* hub:start-here:end */}\n\n{/* hub:rules:start */}\n{/* hub:rules:end */}\n\n{/* hub:terms:start */}\n{/* hub:terms:end */}\n";
 
@@ -543,6 +546,35 @@ describe("glossary --write", () => {
       "- [XML sitemap](/glossary#xml-sitemap): What XML sitemap is.",
     );
     expect(page).not.toContain("stale");
+    const ld = (text: string): Record<string, unknown> => {
+      const raw = /<script type="application\/ld\+json">\{`(.*)`\}<\/script>/.exec(
+        text,
+      )?.[1];
+      // The build reads the template literal, so unescape it the same way.
+      return JSON.parse(
+        Function(`return \`${raw}\`;`)() as string,
+      ) as Record<string, unknown>;
+    };
+    expect(ld(page)).toMatchObject({
+      "@type": "DefinedTerm",
+      "@id": "https://docs.squirrelscan.com/glossary/robots-txt#term",
+      name: "robots.txt",
+      description: "What robots.txt is.",
+      url: "https://docs.squirrelscan.com/glossary/robots-txt",
+      inDefinedTermSet: { "@id": "https://docs.squirrelscan.com/glossary#set" },
+    });
+    expect(ld(snapshot("glossary/index.mdx"))).toMatchObject({
+      "@type": "DefinedTermSet",
+      "@id": "https://docs.squirrelscan.com/glossary#set",
+      url: "https://docs.squirrelscan.com/glossary",
+      hasDefinedTerm: expect.arrayContaining([
+        expect.objectContaining({
+          "@type": "DefinedTerm",
+          name: "XML sitemap",
+          url: "https://docs.squirrelscan.com/glossary#xml-sitemap",
+        }),
+      ]),
+    });
 
     const index = snapshot("glossary/index.mdx");
     expect(index).toContain("### robots.txt \\{#robots-txt\\}");
@@ -580,6 +612,16 @@ describe("glossary --write", () => {
         { group: "SEO", pages: ["glossary/robots-txt"] },
       ],
     });
+  });
+
+  test("a term page or the index without a glossary:jsonld block fails", () => {
+    const dir = tree();
+    writeGlossary(dir);
+    replaceIn("glossary/robots-txt.mdx", "{/* glossary:jsonld:start */}", "");
+    replaceIn("glossary/robots-txt.mdx", "{/* glossary:jsonld:end */}", "");
+    expect(messages(dir)).toContain(
+      "glossary/robots-txt.mdx:1: glossary page has no glossary:jsonld block (its DefinedTerm JSON-LD): add the start and end markers at the end of the page, then run `bun scripts/glossary.ts --write`",
+    );
   });
 
   test("a hand edit inside a block is reported, and --write puts it back", () => {

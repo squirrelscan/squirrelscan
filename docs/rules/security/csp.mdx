@@ -82,6 +82,7 @@ enable = ["security/csp"]
 - [security/sri](/rules/security/sri): per-file hashes for the third-party origins your policy allows.
 - [security/permissions-policy](/rules/security/permissions-policy): the companion header for device and browser features.
 - [security/leaked-secrets](/rules/security/leaked-secrets): what an attacker collects once a script does run.
+- [security/csp-blocks-own-resources](/rules/security/csp-blocks-own-resources): the opposite failure, a policy that is present but leaves out a host the page loads, so the browser blocks it.
 
 Security findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
 
@@ -90,10 +91,6 @@ Security findings ship in every audit next to the SEO, performance and agent exp
 Glossary: [Content Security Policy (CSP)](/glossary/content-security-policy), [Security headers](/glossary/security-headers), [X-Frame-Options](/glossary#x-frame-options).
 
 {/* glossary:backlinks:end */}
-
-## Related rules
-
-[security/csp-blocks-own-resources](/rules/security/csp-blocks-own-resources) checks the opposite failure: a policy that is present but leaves out a host the page loads, so the browser blocks it.
 
 ## References
 
