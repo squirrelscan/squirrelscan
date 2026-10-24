@@ -63,13 +63,16 @@ const builtInNamespaces: RuleNamespace[] = [
 
 interface LoaderOptions {
   additionalNamespaces?: RuleNamespace[];
+  /** Include available rules that require an explicit selection. */
+  includeOptIn?: boolean;
 }
 
 function getRuleNamespaces(options: LoaderOptions = {}): RuleNamespace[] {
   return [...builtInNamespaces, ...(options.additionalNamespaces ?? [])];
 }
 
-// Load all rules into a Map by ID
+// Load runnable rules into a Map by ID. Opt-in rules join the candidate set
+// only for callers that will apply an explicit rule selection afterward.
 export function loadAllRules(options: LoaderOptions = {}): Map<string, Rule> {
   const rules = new Map<string, Rule>();
   const namespaces = getRuleNamespaces(options);
@@ -77,6 +80,7 @@ export function loadAllRules(options: LoaderOptions = {}): Map<string, Rule> {
   for (const ns of namespaces) {
     for (const rule of ns.rules) {
       if (rule.meta.disabled) continue;
+      if (rule.meta.optIn && !options.includeOptIn) continue;
       if (rules.has(rule.meta.id)) {
         console.warn(`Duplicate rule ID: ${rule.meta.id}`);
       }
@@ -107,6 +111,7 @@ export function getAllRuleIds(options: LoaderOptions = {}): string[] {
   for (const ns of namespaces) {
     for (const rule of ns.rules) {
       if (rule.meta.disabled) continue;
+      if (rule.meta.optIn && !options.includeOptIn) continue;
       ids.push(rule.meta.id);
     }
   }
@@ -120,7 +125,11 @@ export function getRulesByDomain(
 ): Rule[] {
   const namespaces = getRuleNamespaces(options);
   const ns = namespaces.find((n) => n.name === domain);
-  return ns?.rules.filter((r) => !r.meta.disabled) ?? [];
+  return (
+    ns?.rules.filter(
+      (r) => !r.meta.disabled && (options.includeOptIn || !r.meta.optIn)
+    ) ?? []
+  );
 }
 
 // Get all namespaces
@@ -128,6 +137,8 @@ export function getNamespaces(options: LoaderOptions = {}): RuleNamespace[] {
   const namespaces = getRuleNamespaces(options);
   return namespaces.map((ns) => ({
     ...ns,
-    rules: ns.rules.filter((r) => !r.meta.disabled),
+    rules: ns.rules.filter(
+      (r) => !r.meta.disabled && (options.includeOptIn || !r.meta.optIn)
+    ),
   }));
 }

@@ -234,6 +234,30 @@ describe("reconstructReport audit status (#510)", () => {
   });
 });
 
+describe("reconstructReport rule metadata", () => {
+  test("keeps metadata for a stored opt-in gap result", async () => {
+    const { store, crawlId } = await freshCrawl([page(200)]);
+    await run(
+      store.saveRuleResults(crawlId, "", "gaps/keywords", [
+        {
+          name: "keyword-gaps",
+          status: "info",
+          message: "1 keyword gap found",
+        },
+      ])
+    );
+
+    const report = await run(reconstructReport(store, crawlId, undefined));
+    expect(report.ruleResults["gaps/keywords"]?.meta).toMatchObject({
+      name: "Keyword Gaps",
+      category: "gaps",
+      scope: "site",
+      severity: "info",
+    });
+    await run(store.close());
+  });
+});
+
 // A site that refuses the crawler has not said which root files it serves, so
 // the blocked report carries no per-category score off findings it could not
 // observe, and names what was refused.

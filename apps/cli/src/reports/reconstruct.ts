@@ -377,7 +377,9 @@ export function reconstructReport(
       yield* storage.getRuleResultsGrouped(crawlId);
 
     // 7. Load rule registry to get metadata
-    const ruleRegistry = loadAllRules();
+    // Stored results can include explicitly enabled opt-in rules. Reconstruction
+    // needs their metadata even though a default audit does not select them.
+    const ruleRegistry = loadAllRules({ includeOptIn: true });
 
     // 8. Build PageAudit[] from page records with parsed data and rule results
     const pages: PageAudit[] = [];

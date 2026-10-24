@@ -207,6 +207,12 @@ export interface RuleMeta {
   // Zod schema for rule options - self-describing with defaults
   optionsSchema?: z.ZodObject<z.ZodRawShape>;
   disabled?: boolean; // Internal flag - hides rule from all listings and execution
+  /**
+   * The rule is available but excluded by the default `enable = ["*"]` selection.
+   * A concrete enable pattern (the exact id or its category) or
+   * `[rule_options."id"] enabled = true` opts it in.
+   */
+  optIn?: boolean;
   // Cloud-backed rules declare the credit-gated service they read (prefetched).
   cloud?: RuleCloudSpec;
   // Context-aware rules declare when they apply; gated by the Stage-0 metadata.

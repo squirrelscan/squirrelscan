@@ -72,4 +72,22 @@ describe("preflightRuleOptions", () => {
     );
     expect(errors).toHaveLength(1);
   });
+
+  test("an opt-in gap rule validates only when explicitly selected", () => {
+    const options = { "gaps/keywords": { country: 1 } };
+    expect(preflightRuleOptions(options, ALL)).toMatchObject({
+      errors: [],
+      warnings: [
+        expect.stringContaining("the rule does not run in this audit"),
+      ],
+    });
+    expect(
+      preflightRuleOptions(options, {
+        enable: ["gaps/keywords"],
+        disable: [],
+      }).errors
+    ).toEqual([
+      '[rule_options."gaps/keywords"] country: Invalid input: expected string, received number',
+    ]);
+  });
 });

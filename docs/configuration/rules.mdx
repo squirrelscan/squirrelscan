@@ -19,13 +19,17 @@ disable = ["images/modern-format", "links/orphan-pages"]
 ### `enable`
 
 **Type:** `string[]`
-**Default:** `["*"]` (all rules)
+**Default:** `["*"]` (all default-on rules)
 
 Patterns of rules to enable. Supports wildcards and specific rule IDs.
 
+The default `*` pattern deliberately skips opt-in rules such as `gaps/keywords` and
+`gaps/content`. Add an explicit rule or category pattern alongside `*` to run them,
+for example `enable = ["*", "gaps/*"]`.
+
 **Pattern Syntax:**
 
-- `*` - All rules
+- `*` - All default-on rules (opt-in rules are skipped)
 - `category/*` - All rules in a category
 - `category/rule-name` - Specific rule
 

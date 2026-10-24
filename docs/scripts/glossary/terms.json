@@ -3254,7 +3254,7 @@
       "hub": "gaps",
       "title": null,
       "primary_query": "content gap analysis",
-      "definition": "Finding the topics and queries a site's audience searches for that the site does not yet cover. The related rules are disabled and do not run.",
+      "definition": "Finding the topics and queries a site's audience searches for that the site does not yet cover. The related rules are opt-in and run only when selected explicitly.",
       "rules": [
         "gaps/content",
         "gaps/keywords"
