@@ -813,3 +813,43 @@ describe("a scoped link-local answer beside routable ones (repo#2830)", () => {
     ).rejects.toThrow(EgressRefusedError);
   });
 });
+
+describe("safeRedirectFetch stopBefore (repo#3336)", () => {
+  /** A send over a redirect map: `routes[url]` is the Location, else a 200. */
+  function routed(routes: Record<string, string>) {
+    const sent: string[] = [];
+    const send = async (url: string) => {
+      sent.push(url);
+      const location = routes[url];
+      return location
+        ? new Response(null, { status: 302, headers: { location } })
+        : new Response("ok", { status: 200 });
+    };
+    return { send, sent };
+  }
+
+  test("ends the chain at the redirect it refuses: that 3xx answers, its target is never sent", async () => {
+    const { send, sent } = routed({
+      "https://site.test/": "https://site.test/a",
+      "https://site.test/a": "http://169.254.169.254/latest/",
+    });
+    const result = await safeRedirectFetch("https://site.test/", {}, send, {
+      stopBefore: (next) => next.includes("169.254."),
+    });
+    expect(sent).toEqual(["https://site.test/", "https://site.test/a"]);
+    expect(result.response.status).toBe(302);
+    expect(result.finalUrl).toBe("https://site.test/a");
+    expect(result.redirected).toBe(true);
+    expect(result.stoppedAt).toBe("http://169.254.169.254/latest/");
+  });
+
+  test("without a refusal the chain is followed to its end", async () => {
+    const { send, sent } = routed({ "https://site.test/": "https://site.test/a" });
+    const result = await safeRedirectFetch("https://site.test/", {}, send, {
+      stopBefore: async () => false,
+    });
+    expect(sent).toEqual(["https://site.test/", "https://site.test/a"]);
+    expect(result.response.status).toBe(200);
+    expect(result.stoppedAt).toBeUndefined();
+  });
+});

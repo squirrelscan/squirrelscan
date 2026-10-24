@@ -375,7 +375,9 @@ export function requestOnceScoped<T>(
   url: string,
   options: RequestInit | undefined,
   use: (response: Response) => Promise<T>,
-  timeoutMs: number = config.timeout
+  timeoutMs: number = config.timeout,
+  // repo#3336: a caller that must vet each redirect follows them itself.
+  send: (url: string, init: RequestInit) => Promise<Response> = fetchUndecoded
 ): Effect.Effect<T, RequestError, never> {
   return Effect.suspend(() => {
     const headers = new Headers(options?.headers);
@@ -387,7 +389,7 @@ export function requestOnceScoped<T>(
       config.followRedirects ? "follow" : "manual",
       timeoutMs,
       (response) => use(response),
-      fetchUndecoded
+      send
     );
   });
 }

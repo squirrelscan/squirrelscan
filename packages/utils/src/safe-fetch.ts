@@ -36,6 +36,19 @@ export interface SafeRedirectResult {
   finalUrl: string;
   /** True when at least one redirect was followed. */
   redirected: boolean;
+  /** The redirect target `stopBefore` refused: never requested. */
+  stoppedAt?: string;
+}
+
+export interface SafeRedirectOptions {
+  /**
+   * Asked before each redirect is followed (repo#3336): true ends the chain at
+   * that redirect, whose 3xx is the answer (body unread) and whose target is
+   * never requested. For a caller that would rather report the redirect than
+   * fail on it, such as a reachability check whose site redirects somewhere
+   * the egress policy refuses.
+   */
+  stopBefore?: (nextUrl: string) => Promise<boolean> | boolean;
 }
 
 /**
@@ -69,6 +82,7 @@ export async function safeRedirectFetch(
   url: string,
   init: RequestInit = {},
   send: (url: string, init: RequestInit) => Promise<Response> = fetch,
+  options: SafeRedirectOptions = {},
 ): Promise<SafeRedirectResult> {
   if (!isHttpOrHttpsUrl(url)) {
     throw new TypeError(`Refusing to fetch non-http(s) URL: ${url}`);
@@ -98,6 +112,10 @@ export async function safeRedirectFetch(
       // Cross-protocol redirect (e.g. Location: file:///etc/passwd) — refuse it.
       response.body?.cancel().catch(() => {});
       throw new TypeError(`Refusing redirect to non-http(s) URL: ${nextUrl}`);
+    }
+
+    if (options.stopBefore && (await options.stopBefore(nextUrl))) {
+      return { response, finalUrl: currentUrl, redirected: currentUrl !== url, stoppedAt: nextUrl };
     }
 
     // Discard the 3xx body before the next hop so the socket can be reused.

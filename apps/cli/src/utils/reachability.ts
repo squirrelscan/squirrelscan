@@ -2,7 +2,16 @@
 // Uses request tool with browser-like headers
 // Detects WAF/bot protection on target site
 
+import {
+  egressGuardedSend,
+  egressRefuses,
+  memoizeResolveHost,
+  refusedWithoutLookup,
+  resolveHostAddresses,
+  type EgressPolicy,
+} from "@squirrelscan/utils/public-egress";
 import { decodedBody, fetchUndecoded } from "@squirrelscan/utils/response-body";
+import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 import { Effect, Duration } from "effect";
 
 import { requestOnceScoped, RequestError } from "@/tools/request";
@@ -180,6 +189,53 @@ export async function checkReachability(
   return result;
 }
 
+/**
+ * How the reachability check sends (repo#3336): the start URL's redirects are
+ * the site's to choose, so they are followed by hand and each is held to the
+ * crawl's egress rules (repo#2830). The start URL's own host is sent by name,
+ * private networks stay allowed (localhost, LAN and staging audits), and a
+ * redirect to a link-local or cloud metadata address is not followed: the
+ * redirect itself is the answer, so the site still counts as reachable. When
+ * the start URL is itself such an address, the user chose it and its redirects
+ * are followed as before. With redirects off (`follow_redirects = false`), one
+ * request. For requests that carry no credentials: the headers ride every hop.
+ */
+export function reachabilitySend(
+  startUrl: string
+): (url: string, init: RequestInit) => Promise<Response> {
+  let host = "";
+  try {
+    host = new URL(startUrl).hostname.toLowerCase();
+  } catch {
+    // An unparseable start URL fails its own request.
+  }
+  const policy: EgressPolicy = {
+    allowPrivateNetwork: true,
+    resolve: memoizeResolveHost(resolveHostAddresses),
+    trustTarget: (target) =>
+      host !== "" && target.hostname.toLowerCase() === host,
+  };
+  const guarded = !refusedWithoutLookup(startUrl, policy);
+  const hop = guarded
+    ? egressGuardedSend(fetchUndecoded, policy)
+    : fetchUndecoded;
+  return async (url, init) => {
+    if (init.redirect === "manual") return hop(url, init);
+    // The check sends browser headers only, never a credential, so every hop
+    // carries them, as the runtime's own follow did: a WAF judging the `www.`
+    // landing by its client hints sees the same request it always has.
+    const sameHeaders = (hopUrl: string, hopInit: RequestInit) =>
+      hop(hopUrl, { ...hopInit, headers: init.headers });
+    const { response } = await safeRedirectFetch(url, init, sameHeaders, {
+      // A lookup failure falls through to the guarded send, which vets the hop
+      // again and fails it with that error: nothing is sent unvetted.
+      stopBefore: (next) =>
+        guarded && egressRefuses(next, policy, init.signal).catch(() => false),
+    });
+    return response;
+  };
+}
+
 async function attemptReachability(url: string): Promise<ReachabilityResult> {
   // Fast path for localhost/loopback using native fetch (no WAF detection needed)
   let isLocalhost = false;
@@ -202,7 +258,7 @@ async function attemptReachability(url: string): Promise<ReachabilityResult> {
     try {
       // Undecoded (#2717): Bun inflates a Content-Encoding body in full even
       // when it is cancelled unread, as this one is.
-      const response = await fetchUndecoded(url, {
+      const response = await reachabilitySend(url)(url, {
         method: "GET",
         redirect: "follow",
         signal: controller.signal,
@@ -259,7 +315,8 @@ async function attemptReachability(url: string): Promise<ReachabilityResult> {
           };
         },
         // Shorter than the crawl timeout
-        REACHABILITY_TIMEOUT_MS
+        REACHABILITY_TIMEOUT_MS,
+        reachabilitySend(url)
       ).pipe(
         Effect.timeoutFail({
           duration: Duration.millis(REACHABILITY_TIMEOUT_MS),

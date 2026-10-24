@@ -26,12 +26,13 @@ import {
   readBodyCapped,
 } from "@squirrelscan/utils/response-body";
 import {
+  egressGuardedSend,
   memoizeResolveHost,
   refusedWithoutLookup,
   resolveHostAddresses,
   type EgressPolicy,
 } from "@squirrelscan/utils/public-egress";
-import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
+import { isHttpOrHttpsUrl, safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 import { isCloudflareEmailProtectionUrl } from "@squirrelscan/utils/cloudflare-email";
 import { getHostname, urlHostKey } from "@squirrelscan/utils/url";
 
@@ -2442,6 +2443,14 @@ export function createCrawler(
           );
           let currentUrl = targetUrl;
           const visited = new Set<string>();
+          // squirrelscan/repo#3336: the seed's redirects, HTTP and client-side,
+          // go where the site says, so every hop is held to the crawl's egress
+          // policy (repo#2830) with the seed as its base: a hop to a link-local
+          // or metadata address is not sent, and the seed is resolved to the
+          // last URL that answered. Followed by hand (`safeRedirectFetch`) so
+          // each HTTP hop is vetted, which `redirect: "follow"` never allows.
+          const seedEgress = egressFor(targetUrl);
+          const seedSend = seedEgress ? egressGuardedSend(fetchUndecoded, seedEgress) : fetchUndecoded;
 
           for (let i = 0; i < MAX_REDIRECTS; i++) {
             const remainingMs = deadline - Date.now();
@@ -2458,33 +2467,41 @@ export function createCrawler(
             visited.add(currentUrl);
 
             const hopUrl = currentUrl;
+            // Where this hop's HTTP redirects ended: the hop URL until one is followed.
+            let served = hopUrl;
             const redirectTo = await withRequestDeadline(
               Math.min(hopTimeoutMs, remainingMs),
-              // Undecoded (#2717): `redirect: "follow"` carries it to every
-              // hop, and the capped read below decodes within its cap.
+              // Undecoded (#2717) on every HTTP redirect, and the capped read
+              // below decodes within its cap.
               (signal) =>
-                fetchUndecoded(hopUrl, {
-                  method: "GET",
-                  signal,
-                  redirect: "follow",
-                  // Identify as the crawl does (squirrelscan/repo#1899). This was
-                  // the only request in the whole crawl going out under the
-                  // runtime's default agent, and origins behind a WAF refuse
-                  // that agent — with a 403 that carries no `Location`, which
-                  // this loop then reads as "the seed does not redirect". The
-                  // base gets pinned to the seed, every `www.` link goes
-                  // cross_domain, and the audit is one page.
-                  //
-                  // The crawl's own `config.headers` deliberately do NOT ride
-                  // along: `redirect: "follow"` hands them to whatever origin
-                  // the chain lands on, and a custom header may be a credential
-                  // (#1395). The agent is not a secret; the rest are.
-                  //
-                  // Only when there is one to send. A header object built from
-                  // an absent value does not omit the header, it sends the
-                  // string "undefined", and an empty one asks the origin to
-                  // treat the request as agentless — the very thing being fixed.
-                  ...(config.userAgent ? { headers: { "User-Agent": config.userAgent } } : {}),
+                safeRedirectFetch(
+                  hopUrl,
+                  {
+                    method: "GET",
+                    signal,
+                    // Identify as the crawl does (squirrelscan/repo#1899). This was
+                    // the only request in the whole crawl going out under the
+                    // runtime's default agent, and origins behind a WAF refuse
+                    // that agent — with a 403 that carries no `Location`, which
+                    // this loop then reads as "the seed does not redirect". The
+                    // base gets pinned to the seed, every `www.` link goes
+                    // cross_domain, and the audit is one page.
+                    //
+                    // The crawl's own `config.headers` deliberately do NOT ride
+                    // along: the chain may land on any origin, and a custom
+                    // header may be a credential (#1395). The agent is not a
+                    // secret; the rest are.
+                    //
+                    // Only when there is one to send. A header object built from
+                    // an absent value does not omit the header, it sends the
+                    // string "undefined", and an empty one asks the origin to
+                    // treat the request as agentless — the very thing being fixed.
+                    ...(config.userAgent ? { headers: { "User-Agent": config.userAgent } } : {}),
+                  },
+                  seedSend,
+                ).then((result) => {
+                  served = result.finalUrl;
+                  return result.response;
                 }),
               // The deadline stays armed for the whole callback, so the body
               // read below is bounded too — before #1699 the timer was cleared
@@ -2493,9 +2510,8 @@ export function createCrawler(
               async (response) => {
                 // Headers are in, so this URL demonstrably serves — bank it
                 // BEFORE the body read, which is the step that can still time
-                // out. response.url is post-redirect; the fallback covers
-                // runtimes and mocks that leave it empty.
-                const served = response.url || hopUrl;
+                // out. `served` is post-redirect, by name: a pinned hop's
+                // response.url is the address it connected to.
                 settledUrl = served;
 
                 // A refusal is not an answer (squirrelscan/repo#1899). A 403 or
