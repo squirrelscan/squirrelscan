@@ -25,6 +25,7 @@ How it works:
 ### Fixed
 
 - robots.txt parsing now gives consecutive `User-agent` lines the rules that follow them, keeps a named group whose empty `Disallow:` explicitly allows every path, and ignores inline comments, so AI-crawler and indexability checks match how crawlers read those common files (#1078).
+- HTML report issue cards now show each detected technology badge once, preserving the order in which distinct technologies first appear (#1093).
 
 ## v0.0.133 (2026-10-24)
 

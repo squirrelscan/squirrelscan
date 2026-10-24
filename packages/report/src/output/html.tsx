@@ -540,7 +540,7 @@ function mergeIssues(
     steps: [],
     effort: p.effort,
     ruleIds: [...p.ruleIds],
-    technologies: [...p.technologies],
+    technologies: [...new Set(p.technologies)],
   }));
   const taken = new Set<number>();
   const rest: TopIssue[] = [];
