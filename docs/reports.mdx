@@ -225,7 +225,11 @@ squirrel report -f html -o report.html
 open report.html
 ```
 
-The local file and the published report at reports.squirrelscan.com are the same page. Top to bottom:
+The local file and the published report at reports.squirrelscan.com are the same page. [See a live one](<https://reports.squirrelscan.com/01M5NJH51Q6FNRAA3QGW8GYWB6>), or read [how to read your report](/guides/read-your-report) for a walk through it.
+
+![A squirrelscan report for squirrelscan.com. The header shows the site, 220 of 220 pages scanned, the Full audit level and a health score of 79 (C). A notice says 912 of 1412 external links were not checked. Four group cards show SEO 86 (B), Performance 59 (F), Security 95 (A) and Agents 42 (F), each with its error and warning counts. Below are pass, warning and fail totals, an auto-generated summary, and the first three ranked issues, each with a Copy fix prompt button.](/images/report/example-report.webp)
+
+Top to bottom:
 
 - **Overview:** the health score, the four group scores (SEO, Performance, Security, Agents) and the pass, warning and fail counts. Each group score links to its findings. Score rings, numbers and grades are colored by score, red to green, like the health score; each group keeps its own color on its card and label.
 - **Coverage notice:** when the crawl hit its page limit, ran out of time or found more pages than it scanned, one line at the top of the report says it may not cover the whole site, with how many more pages are known when there are any. Raise the audit depth with `--level full` or `--max-pages N` in the CLI, or in the website settings for a cloud audit; the line links to [Audit levels](/guides/audit-levels). Dismiss it with its close button: it stays hidden for that report in that browser. The other notice lines under it (checks that did not run, a refused seed redirect and similar) dismiss the same way, each on its own. A published report notes in its footer that it lists sample pages.

@@ -95,6 +95,7 @@
               "guides/audit-levels",
               "guides/link-checking",
               "reports",
+              "guides/read-your-report",
               "guides/failed-audits",
               "guides/badges",
               "guides/browser-rendering",

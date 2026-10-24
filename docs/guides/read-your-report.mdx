@@ -1,0 +1,87 @@
+---
+title: "How to read your report"
+icon: "file-search"
+description: "A walk through a squirrelscan report: the health score, group scores, ranked issues, findings, pages, notices and what was not checked"
+---
+
+A squirrelscan report is one page, read top to bottom. This guide walks through the [live report for squirrelscan.com](https://reports.squirrelscan.com/01M5NJH51Q6FNRAA3QGW8GYWB6), an audit of our own site with 220 pages scanned. A local HTML report and a published one are the same page. See [Reports and scoring](/reports) for the formats and the formula behind the numbers.
+
+![A squirrelscan report for squirrelscan.com. The header shows the site, 220 of 220 pages scanned, the Full audit level and a health score of 79 (C). A notice says 912 of 1412 external links were not checked. Four group cards show SEO 86 (B), Performance 59 (F), Security 95 (A) and Agents 42 (F), each with its error and warning counts. Below are pass, warning and fail totals, an auto-generated summary, and the first three ranked issues, each with a Copy fix prompt button.](/images/report/example-report.webp)
+
+## Health score and grade
+
+The ring in the header is the overall health score, 0 to 100, with a letter grade under the number. The example scores 79, a C.
+
+| Score | Grade | Ring color |
+|-------|-------|------------|
+| 90-100 | A | Green |
+| 80-89 | B | Amber |
+| 70-79 | C | Amber |
+| 60-69 | D | Red |
+| 0-59 | F | Red |
+
+The grade and the color are two views of the same number: the letter has five steps, the color has three. The score is a weighted result of every check that ran, so a heavy rule failing costs more than a light one. Checks that were skipped count toward nothing. See [Grade scale](/reports#grade-scale) for how the score is calculated.
+
+The header also shows how many pages were scanned out of the pages found, when the audit ran, the audit level and the squirrelscan version.
+
+## Group scores
+
+Under the header are four cards, one per group: SEO, Performance, Security and Agents. Each has its own score, grade, and a count of errors and warnings. A group with none reads "No issues". Agents covers [agent experience](/glossary#agent-experience).
+
+Two colors show up here and they mean different things:
+
+- **The ring and number** are colored by the score, the same way as the health score: green at 90 or more, amber at 70 to 89, red below 70.
+- **The top border and the label** use the group's own color: green for SEO, orange for Performance, blue for Security, purple for Agents. That color never changes with the score.
+
+So in the example, the orange Performance card has a red ring at 59, and the blue Security card has a green ring at 95. Read the ring for how the group is doing and the border for which group it is.
+
+Click a card with issues to jump to its findings, filtered to that group. At the quick audit level a signed-in report does not score Agents: the card says so and tells you to re-run at surface or full. See [Audit levels](/guides/audit-levels).
+
+Below the cards, five totals count what was scanned and discovered, and how many checks passed, warned and failed.
+
+## Summary
+
+On cloud audits, the Summary section holds the [editor's summary](/cloud/editor-summary): a short write-up of the audit's findings and the technology the site runs on. It is informational and does not change the score. It reads as prose in two columns, with a one-line verdict at the bottom.
+
+The summary is where a report says what is healthy as well as what is broken. In the example, it names crawlability, site integrity and analytics as healthy before it gets to the reliability and performance problems.
+
+A local audit has no summary. Its Issues list stands in for it.
+
+## Issues
+
+Issues is the list of what to fix, in order. Each entry may clear several findings at once. On a cloud audit, the fixes are ranked for the stack the audit detected. A local audit lists its most widespread errors and warnings instead.
+
+Each entry carries:
+
+- A number for its place in the order.
+- Tags: a severity when it has one (critical, high, medium or low), an effort (Quick win, Moderate or Significant), the group it belongs to, and any technology it involves.
+- A short explanation, the action to take, and chips with the ids of the rules it clears.
+- A **Copy fix prompt** button.
+
+**Copy fix prompt** puts a ready-made prompt on your clipboard. It names the rules, links their docs, quotes the evidence and ends with the command to verify the fix. Paste it into your coding agent. **Copy fix plan**, at the top of the list, does the same for every issue in order. See [Copy fix prompts](/reports#copy-fix-prompts) for what a prompt contains.
+
+![The Summary and Issues sections of a squirrelscan report. The summary reads as two columns of prose with a bold one-line verdict. Below it, the ranked Issues list starts with issue 1, Fix broken site resources, tagged Moderate and Performance, with a Copy fix prompt button and a Copy fix plan button above the list.](/images/report/example-report-summary.webp)
+
+## Findings, Pages, Site and Entities
+
+The bar at the top of the report links to the rest of it. The sections below Issues are:
+
+- **Findings:** every rule that flagged something, in three bands. Errors are broken or harmful: fix these first. Recommendations are worth doing but not hurting you today. Warnings are likely to cost you over time. Chips filter the list by group. Each row shows how many pages it affects, or "site-wide", and opens to the rule's description, how to fix it, its checks and a link to the rule docs. A row marked "carried" comes from an earlier audit rather than this one.
+- **Pages:** the same findings by URL, worst page first. It is built in the browser from each rule's listed example pages, so a very widespread rule may not name every page. It needs JavaScript.
+- **Site:** what the audit detected about the site, such as its profile and technology stack. None of it affects the score.
+- **Entities:** the site's [JSON-LD](/glossary#json-ld) collapsed into one graph. See the [entity map](/guides/entity-map).
+
+A report made with `--include-passed` adds a Passed section listing the rules that held. The `.md` and `.json` links in the header of a published report give your agent the same report as Markdown or JSON.
+
+## Coverage and not checked
+
+Some notices sit above the group cards. They say what the report does not cover, so a gap never reads as a clean result.
+
+- **Coverage:** when the crawl hit its page limit, ran out of time or found more pages than it scanned, the report says it may not cover the whole site. It links to [Audit levels](/guides/audit-levels), where `--level full` and `--max-pages` raise the depth.
+- **Not checked:** a check that did not run gets a line with the reason and what to run instead. The example says 912 of 1412 external links were not checked because the audit's limit of 500 was reached; raising `external_links.max_links` checks more of them.
+
+Skipped checks are neither passes nor findings, and they do not affect the score. A score is as good as the coverage behind it, so read these notices before you trust a high number.
+
+## Dismissing notices
+
+Each notice has a close button. Dismissing one hides it for that report in that browser. It does not change the audit, and the notice comes back in a new report. Each notice dismisses on its own. Findings and issues cannot be dismissed in the report.

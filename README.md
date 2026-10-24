@@ -23,6 +23,12 @@ Combine your coding agent with a deterministic and extensible audit tool.
 
 <sub>A real run on a tiny test site, with the released CLI (signed out, so free) and Claude Code. We cut the two minutes the agent spent working, because nobody wants to watch an agent think.</sub>
 
+### See a real report
+
+[![A squirrelscan report for squirrelscan.com. The header shows the site, 220 of 220 pages scanned, the Full audit level and a health score of 79 (C). A notice says 912 of 1412 external links were not checked. Four group cards show SEO 86 (B), Performance 59 (F), Security 95 (A) and Agents 42 (F), each with its error and warning counts. Below are pass, warning and fail totals, an auto-generated summary, and the first three ranked issues, each with a Copy fix prompt button.](docs/images/report/example-report.webp)](https://reports.squirrelscan.com/01M5NJH51Q6FNRAA3QGW8GYWB6)
+
+This is the report for squirrelscan.com, audited by squirrelscan itself: a health score, four group scores, a summary and a ranked list of what to fix, each with a button that copies a ready-to-paste fix prompt for your agent. [Open the live report](https://reports.squirrelscan.com/01M5NJH51Q6FNRAA3QGW8GYWB6), or read [how to read your report](https://docs.squirrelscan.com/guides/read-your-report).
+
 ## Features
 
 - **[Built for coding agents](https://docs.squirrelscan.com/developers/agents)** - Skills for Claude Code, Cursor, Codex and any coding agent run the audit, fix and re-audit loop. Connect over the CLI, the hosted or local MCP server, or the API.
