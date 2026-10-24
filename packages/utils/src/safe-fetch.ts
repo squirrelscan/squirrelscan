@@ -49,8 +49,11 @@ export interface SafeRedirectOptions {
    * the egress policy refuses.
    */
   stopBefore?: (nextUrl: string) => Promise<boolean> | boolean;
-  /** Redirects followed before giving up. Default 10. */
-  maxRedirects?: number;
+  /**
+   * Requests sent along the chain before giving up, the first included (each
+   * redirect is one more). Default 10.
+   */
+  maxRequests?: number;
 }
 
 /**
@@ -93,8 +96,8 @@ export async function safeRedirectFetch(
   let currentUrl = url;
   let headers = new Headers(init.headers);
 
-  const maxRedirects = options.maxRedirects ?? MAX_REDIRECTS;
-  for (let hop = 0; hop < maxRedirects; hop++) {
+  const maxRequests = options.maxRequests ?? MAX_REDIRECTS;
+  for (let hop = 0; hop < maxRequests; hop++) {
     const response = await send(currentUrl, { ...init, headers, redirect: "manual" });
 
     const location =

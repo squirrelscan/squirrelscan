@@ -198,8 +198,8 @@ export interface ReachabilityOptions {
   resolve?: ResolveHost;
 }
 
-/** Native follow went to 20; a long chain is an answer, not a failure. */
-const REACHABILITY_MAX_REDIRECTS = 20;
+/** The runtime's own follow resolved 20 redirects (21 requests); so does this. */
+const REACHABILITY_MAX_REQUESTS = 21;
 
 /**
  * How the reachability check sends (repo#3336): the start URL's redirects are
@@ -240,7 +240,7 @@ export function reachabilitySend(
       return hop(hopUrl, { ...hopInit, headers });
     };
     const { response } = await safeRedirectFetch(url, init, withHints, {
-      maxRedirects: REACHABILITY_MAX_REDIRECTS,
+      maxRequests: REACHABILITY_MAX_REQUESTS,
       // A lookup failure falls through to the guarded send, which vets the hop
       // again and fails it with that error: nothing is sent unvetted.
       stopBefore: (next) =>

@@ -69,6 +69,7 @@ describe("reachability check redirects (repo#3336)", () => {
     expect(result.reachable).toBe(true);
     expect(result.statusCode).toBe(302);
     expect(requested.filter((r) => isRefusedHost(r.url))).toEqual([]);
+    expect(requested.every((r) => r.redirect === "manual")).toBe(true);
   });
 
   test.each([
