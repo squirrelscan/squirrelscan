@@ -77,6 +77,17 @@ export interface FlatFinding {
   payload: string | null;
 }
 
+/**
+ * A `<rule>-error` finding describes one audit run's execution, not the page.
+ * It may be fresh evidence in the run that produced it, but it must never be
+ * replayed as a page finding by a later smart audit.
+ */
+export function isRunLocalRuleErrorFinding(
+  finding: Pick<PageFindingRecord, "ruleId" | "checkName">
+): boolean {
+  return finding.checkName === `${finding.ruleId}-error`;
+}
+
 /** A finding carrying its identity + scoring/report metadata. */
 export interface MergedFinding {
   siteKey: string;
@@ -1059,6 +1070,21 @@ export function createMergeSession(
       sink.persist({
         ...prior,
         state: "stale",
+        lastSeenCrawlId: crawlId,
+        lastSeenAt: now,
+      });
+      return;
+    }
+
+    // (#1075) A timeout or thrown-rule row only says that an earlier run could
+    // not evaluate this rule. Carrying it onto an untouched page turns that
+    // historical execution failure into a current page failure (and can retain
+    // an obsolete time budget in the report). A matching fresh row returned at
+    // the top of this function, so only the prior-only diagnostic is retired.
+    if (isRunLocalRuleErrorFinding(prior)) {
+      sink.persist({
+        ...prior,
+        state: "resolved",
         lastSeenCrawlId: crawlId,
         lastSeenAt: now,
       });

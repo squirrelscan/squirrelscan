@@ -25,6 +25,7 @@ How it works:
 ### Fixed
 
 - robots.txt parsing now gives consecutive `User-agent` lines the rules that follow them, keeps a named group whose empty `Disallow:` explicitly allows every path, and ignores inline comments, so AI-crawler and indexability checks match how crawlers read those common files (#1078).
+- Smart audits no longer carry an older run's rule timeout or thrown-rule error onto a page they did not re-audit. Those run-local diagnostics leave the current report instead of remaining as failures with stale execution details; a fresh error from the current run still reports normally (#1075).
 
 ## v0.0.133 (2026-10-24)
 

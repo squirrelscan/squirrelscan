@@ -47,6 +47,7 @@ import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { DEFAULT_FOLD_LIMITS, foldGroupKey, foldOverflowChecks } from "@squirrelscan/rules/fold";
 import type { RuleRunResult } from "@squirrelscan/rules/types";
 
+import { isRunLocalRuleErrorFinding } from "./merge-core";
 import { reconstructPageRuleChecks } from "./reconstruct";
 import {
   addChecksToTally,
@@ -146,7 +147,7 @@ export type CompleteStoreFoldInput = Omit<
  * total past `Number.MAX_SAFE_INTEGER`.
  */
 export interface UntouchedCarriedAggregate {
-  /** Open findings on untouched pages: each is a carry the merge would persist. */
+  /** Carryable open findings on untouched pages; run-local error rows are excluded. */
   findings: number;
   /** Of those, the ones on pages no audit has rendered (no `site_pages` row). */
   unrenderedFindings: number;
@@ -1047,13 +1048,18 @@ export function aggregateUntouchedCarried(
 
   for (const page of pages) {
     const neverRendered = !page.rendered;
-    findings += page.rows.length;
-    if (neverRendered) unrenderedFindings += page.rows.length;
+    // (#1075) The SQL/store twin must apply this same predicate before it
+    // aggregates or samples untouched rows. A rule error is evidence about the
+    // run that produced it, so replaying it would turn an old timeout/exception
+    // into a current failing page finding.
+    const rows = page.rows.filter((row) => !isRunLocalRuleErrorFinding(row));
+    findings += rows.length;
+    if (neverRendered) unrenderedFindings += rows.length;
 
     // Row indices per rule, in cursor order: one `addChecksToTally` call each.
     const byRule = new Map<string, number[]>();
-    for (let i = 0; i < page.rows.length; i++) {
-      const ruleId = page.rows[i]!.ruleId;
+    for (let i = 0; i < rows.length; i++) {
+      const ruleId = rows[i]!.ruleId;
       const list = byRule.get(ruleId);
       if (list) list.push(i);
       else byRule.set(ruleId, [i]);
@@ -1061,7 +1067,7 @@ export function aggregateUntouchedCarried(
 
     const sampled = new Set<number>();
     for (const [ruleId, indices] of byRule) {
-      const findings = indices.map((i) => untouchedCarriedFinding(page.rows[i]!, neverRendered));
+      const findings = indices.map((i) => untouchedCarriedFinding(rows[i]!, neverRendered));
       const checks = findings.map((f) => carriedFindingToCheck(f, page.normalizedUrl));
       findings.forEach((f, i) => assertAggregatable(f.payload, checks[i]!, page.normalizedUrl));
 
@@ -1111,7 +1117,7 @@ export function aggregateUntouchedCarried(
       sample.push({
         normalizedUrl: page.normalizedUrl,
         untouched: true,
-        sample: page.rows.filter((_, i) => sampled.has(i)),
+        sample: rows.filter((_, i) => sampled.has(i)),
       });
     }
   }
