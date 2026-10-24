@@ -11,14 +11,27 @@ Two rules make a set work. Every page in the set lists every version including i
 
 ## What squirrel checks
 
-The rule runs on every crawled page over every `link[rel="alternate"][hreflang]`. It emits up to three checks:
+The rule runs on every crawled page over every `link[rel="alternate"][hreflang]`. It emits up to four checks:
 
 - Info when the page has no hreflang tags. Message: `No hreflang tags found (not required for single-language sites)`. No further checks run.
 - `hreflang-xdefault` warns when no tag has `hreflang="x-default"`. Message: `No x-default hreflang found`.
 - `hreflang-self` warns when no tag's resolved href equals the page URL exactly. Message: `No self-referencing hreflang found`. For a URL that answers with an HTTP redirect, the page URL is the one the redirect ended on, since that is the page whose tags are read: `/en/old-slug` redirecting to `/en/new-slug` passes when `/en/new-slug` references itself.
+- `hreflang-codes` warns when a tag's value is not `x-default` or a valid code. Message: `1 invalid hreflang code(s): en-uk`. Each invalid value is listed with the reason and, where one exists, the fix. What counts as valid is below.
 - `hreflang` passes, listing the language codes found. Message: `4 hreflang tag(s) found`.
 
-The final pass check is always emitted alongside any warnings, so a page can report both a missing `x-default` and a count of its tags. The self-reference comparison is on the fully resolved URL, so a self-tag that differs by a trailing slash or a query string does not count. Language codes are not validated, and the return links from the other versions cannot be checked from this page. Severity info, weight 3.
+The final pass check is always emitted alongside any warnings, so a page can report both a missing `x-default` and a count of its tags. The self-reference comparison is on the fully resolved URL, so a self-tag that differs by a trailing slash or a query string does not count. The code check validates format only. It does not check return links: whether the other versions link back to this page is not checked. Severity info, weight 3.
+
+## What counts as a valid code
+
+A value is valid when it is `x-default` or `language`, optionally followed by `script`, then `region`. Matching is case-insensitive, so `en-GB`, `en-gb` and `EN-gb` are all fine.
+
+- **Language**: a two-letter ISO 639-1 code from the standard list, or any three letters (ISO 639-2/3, checked by shape only). The legacy `iw`, `in` and `ji` are accepted because Google accepts them.
+- **Script**: four letters, such as `Hant` or `Latn`.
+- **Region**: a two-letter ISO 3166-1 alpha-2 country code from the standard list, or a three-digit UN M.49 code such as `419`.
+
+These are flagged: an underscore instead of a hyphen (`en_US`, use `en-US`), a language that is not a real code (`xx`, `english`), a region that is not a real code (`en-uk`, use `en-GB`), and extra subtags after the region. `uk` is only wrong as a region: as a language it is Ukrainian, so `uk` and `uk-UA` pass.
+
+The check looks at the shape and the code lists. It does not confirm that a three-letter language exists, or that a language is used in a region.
 
 ## How to fix it
 
@@ -87,7 +100,7 @@ Glossary: [hreflang](/glossary/hreflang).
 
 ## Check your site
 
-Run `squirrel audit https://example.com` and open the Internationalization section of the report. Each page is reported with its hreflang codes and any missing x-default or self-reference. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+Run `squirrel audit https://example.com` and open the Internationalization section of the report. Each page is reported with its hreflang codes and any invalid code, missing x-default or missing self-reference. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
 
 <CardGroup cols={2}>
   <Card title="Install squirrel" icon="terminal" href="/quickstart">

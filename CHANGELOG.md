@@ -26,6 +26,7 @@ How it works:
 ### Security
 
 - With `[project] domains` set, the crawl and the internal link check now stay on the audited URL's port. A link to another port on an allowed host, such as `http://example.com:6379/`, is no longer crawled or checked as an internal link, where it reached another service on the audited machine. When the audited URL uses the default port, both 80 and 443 still count as the site. See [Project settings](https://docs.squirrelscan.com/configuration/project#port-handling).
+- `i18n/hreflang` now warns on hreflang values that are not `x-default` or a valid language and region code, such as `en_US` (underscore) or `en-uk` (the region is `GB`). It checks code format only, not return links (squirrelscan/repo#3137).
 
 ### Fixed
 
