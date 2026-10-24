@@ -241,3 +241,74 @@ describe("an off-site redirect hop that is allowed (repo#2830)", () => {
     expect(landed.every((r) => new URL(r.url).hostname === "localhost")).toBe(true);
   });
 });
+
+describe("root files that redirect off the site (repo#2830)", () => {
+  test("a robots.txt redirect and a sitemap index child on a metadata address are never requested", async () => {
+    const server = Bun.serve({
+      port: 0,
+      fetch(req) {
+        const url = new URL(req.url);
+        const origin = `http://localhost:${url.port}`;
+        switch (url.pathname) {
+          case "/":
+            return html(`<a href="/about">About</a>`);
+          case "/about":
+            return html("About us", "About");
+          case "/robots.txt":
+            return redirect(`${METADATA_IP}robots.txt`);
+          case "/sitemap.xml":
+            return new Response(
+              `<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` +
+                `<sitemap><loc>${origin}/sitemap-a.xml</loc></sitemap>` +
+                `<sitemap><loc>http://169.254.169.254/child.xml</loc></sitemap></sitemapindex>`,
+              { headers: { "content-type": "application/xml" } },
+            );
+          case "/sitemap-a.xml":
+            return new Response(
+              `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${origin}/about</loc></url></urlset>`,
+              { headers: { "content-type": "application/xml" } },
+            );
+          default:
+            return new Response("not found", { status: 404 });
+        }
+      },
+    });
+    servers.push(server);
+    const origin = `http://localhost:${server.port}`;
+    const { pages, robots } = await crawl(`${origin}/`);
+
+    const own = new Set(
+      requested
+        .map((r) => new URL(r.url))
+        .filter((u) => u.origin === origin)
+        .map((u) => u.pathname),
+    );
+    for (const path of ["/robots.txt", "/sitemap.xml", "/sitemap-a.xml"])
+      expect(own).toContain(path);
+    expect(requested.filter((r) => isRefusedHost(r.url)).map((r) => r.url)).toEqual([]);
+    // Refused at the hop: robots.txt got no answer, which is not a missing file.
+    expect(robots?.exists).toBe(false);
+    expect(JSON.stringify(robots)).not.toContain(SECRET);
+    expect(pages.filter((p) => p.status === 200).map((p) => p.url)).toContain(`${origin}/about`);
+  });
+});
+
+describe("the audited host on another port (repo#2830)", () => {
+  test("is sent by name, as the crawl sends it, not looked up and pinned", async () => {
+    const other = Bun.serve({ port: 0, fetch: () => html("Landed", "Landed") });
+    servers.push(other);
+    const site = Bun.serve({
+      port: 0,
+      fetch(req) {
+        const url = new URL(req.url);
+        if (url.pathname === "/") return html(`<a href="/other">other</a>`);
+        if (url.pathname === "/other") return redirect(`http://localhost:${other.port}/landed`);
+        return new Response("not found", { status: 404 });
+      },
+    });
+    servers.push(site);
+    await crawl(`http://localhost:${site.port}/`);
+    const landed = requested.filter((r) => new URL(r.url).pathname === "/landed");
+    expect(landed.map((r) => r.url)).toEqual([`http://localhost:${other.port}/landed`]);
+  });
+});

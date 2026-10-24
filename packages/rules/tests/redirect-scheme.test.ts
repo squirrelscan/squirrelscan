@@ -109,3 +109,50 @@ describe("followRedirects scheme allowlist", () => {
     expect(chain.endsInError).toBe(false);
   });
 });
+
+// repo#2830: http-to-https probes the http variant of the site's own pages, so
+// an open redirect on the site (`/go?u=http://169.254.169.254/`) would send the
+// auditor's machine to a metadata or link-local address through this loop.
+describe("followRedirects egress", () => {
+  const resolved: string[] = [];
+  const resolve = async (host: string) => {
+    resolved.push(host);
+    if (host === "imds.example.net") return ["169.254.169.254"];
+    if (host === "intranet.test") return ["10.0.0.5"];
+    return ["93.184.215.14"];
+  };
+
+  test.each([
+    "http://169.254.169.254/latest/meta-data/",
+    "http://metadata.google.internal/computeMetadata/v1/",
+    "http://[fe80::1]/x",
+    "http://imds.example.net/latest/",
+  ])("a redirect to %s is never fetched", async (location) => {
+    const fetched = serve({ "http://example.com/go": { status: 302, location } });
+
+    const chain = await followRedirects("http://example.com/go", resolve);
+
+    expect(fetched).toEqual(["http://example.com/go"]);
+    expect(chain.endsInError).toBe(true);
+    expect(chain.finalUrl).toBe("http://example.com/go");
+  });
+
+  test("the probed host is followed without a lookup; a private host elsewhere still is followed", async () => {
+    resolved.length = 0;
+    const fetched = serve({
+      "http://example.com/": { status: 301, location: "https://example.com/" },
+      "https://example.com/": { status: 302, location: "http://intranet.test/home" },
+      "http://intranet.test/home": { status: 200 },
+    });
+
+    const chain = await followRedirects("http://example.com/", resolve);
+
+    expect(fetched).toEqual([
+      "http://example.com/",
+      "https://example.com/",
+      "http://intranet.test/home",
+    ]);
+    expect(chain.endsInError).toBe(false);
+    expect(resolved).toEqual(["intranet.test"]);
+  });
+});

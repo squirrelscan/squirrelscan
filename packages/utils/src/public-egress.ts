@@ -429,7 +429,14 @@ export async function vetEgressTarget(
     throw new EgressRefusedError("refused non-public host");
   }
 
-  const addresses = await raceAbort((policy.resolve ?? resolveHostAddresses)(host), signal);
+  const answers = await raceAbort((policy.resolve ?? resolveHostAddresses)(host), signal);
+  // A scoped link-local answer (`fe80::1%en0`) cannot be pinned in a URL, so a
+  // pinned request never connects to it. A LAN name (`nas.local`) answers one
+  // beside its routable addresses on macOS, and refusing the whole name for it
+  // refused every redirect between LAN hosts (repo#2830), so it is set aside.
+  // Not when the transport connects by name: it might pick that address.
+  const addresses =
+    policy.pin === false ? answers : answers.filter((address) => !address.includes("%"));
   if (
     addresses.length === 0 ||
     addresses.some((address) => refusesAddress(address, allowPrivate))

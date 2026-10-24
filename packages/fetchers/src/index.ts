@@ -73,8 +73,8 @@ export interface FetchRequest {
    * Egress policy for every REDIRECT hop (repo#2830): a redirect to a
    * link-local or cloud metadata address outside the crawl's hosts ends the
    * fetch at that hop, never requested. The URL asked for is not vetted.
-   * Honored by the plain fetch fetcher; a render fetcher's browser runs in its
-   * own sandbox.
+   * Honored by the plain fetch fetcher, which runs on this machine; a render
+   * fetcher's browser runs in the cloud, behind its egress proxy.
    */
   egress?: EgressPolicy;
 }
@@ -186,27 +186,32 @@ function headersToRecord(headers: Headers): Record<string, string> {
   return result;
 }
 
+type Send = (url: string, init: RequestInit) => Promise<Response>;
+
+// `decompress: false` is a Bun fetch option returning the undecoded bytes.
+// Plain fetch, not fetchUndecoded, on purpose: the decode fallbacks read this
+// body raw, as identity, which is their whole point.
+const fetchRaw: Send = (url, init) => fetch(url, { ...init, decompress: false } as RequestInit);
+
+/** `send`, vetted and pinned by `egress` when there is one (repo#2830). */
+function guardedBy(send: Send, egress: EgressPolicy | undefined): Send {
+  return egress ? egressGuardedSend(send, egress) : send;
+}
+
 // Fetch tolerant of a bad Content-Encoding: on decompress failure, refetch raw (identity) so the page isn't dropped #292.
 // Undecoded on every hop (#2717): the runtime would otherwise inflate a bomb in
 // full before readBodyCapped's cap applies. With `egress`, both requests are
-// vetted and sent by `egressGuardedSend` (repo#2830).
+// vetted and sent by `egressGuardedSend`.
 async function fetchTolerant(
   url: string,
   init: RequestInit,
   egress?: EgressPolicy,
 ): Promise<Response> {
-  const guarded = (send: (url: string, init: RequestInit) => Promise<Response>) =>
-    egress ? egressGuardedSend(send, egress) : send;
   try {
-    return await guarded(fetchUndecoded)(url, init);
+    return await guardedBy(fetchUndecoded, egress)(url, init);
   } catch (error) {
     if (!isDecompressionError(error)) throw error;
-    // `decompress: false` is a Bun fetch option returning the undecoded bytes.
-    // Plain fetch, not fetchUndecoded, on purpose: this body is read raw, as
-    // identity, which is the whole point of the fallback.
-    return await guarded((rawUrl, rawInit) =>
-      fetch(rawUrl, { ...rawInit, decompress: false } as RequestInit),
-    )(url, init);
+    return await guardedBy(fetchRaw, egress)(url, init);
   }
 }
 
@@ -296,7 +301,10 @@ export function createFetchDocumentFetcher(): DocumentFetcher {
               break;
             }
             // repo#2830: never to a link-local or metadata address off the site.
-            if (req.egress && (await egressRefuses(nextUrl, req.egress).catch(() => false))) {
+            if (
+              req.egress &&
+              (await egressRefuses(nextUrl, req.egress, signal).catch(() => false))
+            ) {
               endsInError = true;
               break;
             }
@@ -315,10 +323,12 @@ export function createFetchDocumentFetcher(): DocumentFetcher {
             // Body-time decode failure (large/streamed bodies) — recover the raw body, else keep an empty page.
             if (!isDecompressionError(error)) throw error;
             try {
-              const raw = await fetch(currentUrl, {
-                ...requestInit,
-                decompress: false,
-              } as RequestInit);
+              // The same address as the request it repeats (repo#2830): a
+              // fresh lookup here could answer differently.
+              const raw = await guardedBy(fetchRaw, i > 0 ? req.egress : undefined)(
+                currentUrl,
+                requestInit,
+              );
               finalBody = await readBodyCapped(raw, DEFAULT_MAX_DOCUMENT_BODY_BYTES);
             } catch {
               finalBody = "";

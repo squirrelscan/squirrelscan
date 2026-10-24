@@ -30,7 +30,7 @@ How it works:
 
 ### Security
 
-- **A redirect on the audited site can no longer send the CLI to a cloud metadata or link-local address.** The page crawl, the root files (robots.txt, sitemaps, llms.txt, the well-known and markdown probes) and the internal link check now refuse a redirect hop that leaves the crawl's hosts for an address such as `169.254.169.254`, `fe80::/10` or `metadata.google.internal`, before sending it, as the asset checks already did. A sitemap that robots.txt or a sitemap index names on such an address is not requested either. Private networks stay allowed, so `localhost`, LAN and staging audits crawl as before ([follow_redirects](https://docs.squirrelscan.com/configuration/crawler#follow_redirects)).
+- **A redirect found while crawling the audited site can no longer send the CLI to a cloud metadata or link-local address.** The page crawl, the root files (robots.txt, sitemaps, llms.txt, the well-known and markdown probes), the internal link check and the `security/http-to-https` rule now refuse a redirect hop that leaves the site's hosts for an address such as `169.254.169.254`, `fe80::/10` or `metadata.google.internal`, before sending it, as the asset checks already did. A sitemap that robots.txt or a sitemap index names at such an address is not requested either. Private networks stay allowed, so `localhost`, LAN and staging audits still crawl their own pages and root files ([follow_redirects](https://docs.squirrelscan.com/configuration/crawler#follow_redirects)).
 
 ## v0.0.133 (2026-10-24)
 

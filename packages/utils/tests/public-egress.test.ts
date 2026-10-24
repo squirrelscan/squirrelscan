@@ -14,6 +14,7 @@ import {
   isNonPublicAddress,
   memoizeResolveHost,
   refusedWithoutLookup,
+  vetEgressTarget,
   type EgressPolicy,
   type ResolveHost,
 } from "../src/public-egress";
@@ -771,5 +772,44 @@ describe("egressRefuses: a redirect loop's pre-check (repo#2830)", () => {
 
   test("a resolver failure is not a refusal: it propagates", async () => {
     await expect(egressRefuses("http://unknown.test/", policy)).rejects.toThrow("ENOTFOUND");
+  });
+});
+
+describe("a scoped link-local answer beside routable ones (repo#2830)", () => {
+  // What macOS answers for a LAN mDNS name such as `nas.local`.
+  const lan = ["::1", "fe80::1c2b:3a4d:5e6f:7081%en0", "fd07::5", "127.0.0.1", "192.168.1.5"];
+
+  test("is set aside for a pinned request, which connects to a routable address", async () => {
+    const target = await vetEgressTarget("http://nas.local:5000/", {
+      allowPrivateNetwork: true,
+      resolve: table({ "nas.local": lan }),
+    });
+    expect(target?.urls.some((url) => url.includes("fe80"))).toBe(false);
+    expect(target?.urls).toContain("http://127.0.0.1:5000/");
+  });
+
+  test("still refuses a name whose only answers are scoped link-local", async () => {
+    await expect(
+      vetEgressTarget("http://printer.local/", {
+        allowPrivateNetwork: true,
+        resolve: table({ "printer.local": ["fe80::1%en0"] }),
+      }),
+    ).rejects.toThrow(EgressRefusedError);
+  });
+
+  test("still refuses an unscoped link-local answer, and any when the transport connects by name", async () => {
+    await expect(
+      vetEgressTarget("http://nas.local/", {
+        allowPrivateNetwork: true,
+        resolve: table({ "nas.local": ["192.168.1.5", "fe80::1"] }),
+      }),
+    ).rejects.toThrow(EgressRefusedError);
+    await expect(
+      vetEgressTarget("http://nas.local/", {
+        allowPrivateNetwork: true,
+        pin: false,
+        resolve: table({ "nas.local": lan }),
+      }),
+    ).rejects.toThrow(EgressRefusedError);
   });
 });

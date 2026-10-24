@@ -1094,8 +1094,16 @@ function fetchPageStandardOnce(
         // repo#2830: an open redirect on the site (`/go?u=http://169.254.169.254/`)
         // must not send the auditor's machine to a metadata or link-local
         // address. Ends here like the refused scheme above. A resolver failure
-        // is left to the request itself to report.
-        if (egress && (yield* Effect.promise(() => egressRefuses(nextUrl, egress).catch(() => false)))) {
+        // is left to the request itself to report; a stalled one, to the hop's
+        // own deadline.
+        const refused =
+          egress &&
+          (yield* Effect.promise(() =>
+            egressRefuses(nextUrl, egress, AbortSignal.timeout(options.timeoutMs)).catch(
+              () => false,
+            ),
+          ));
+        if (refused) {
           endsInError = true;
           finalResponse = response;
           finalTiming = timing;

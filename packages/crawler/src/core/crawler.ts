@@ -33,7 +33,7 @@ import {
 } from "@squirrelscan/utils/public-egress";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import { isCloudflareEmailProtectionUrl } from "@squirrelscan/utils/cloudflare-email";
-import { urlHostKey } from "@squirrelscan/utils/url";
+import { getHostname, urlHostKey } from "@squirrelscan/utils/url";
 
 import { budgetRemainingMs, createPhaseBudget, withRequestDeadline } from "../deadline";
 import type { PhaseBudget, ProbeGate } from "../deadline";
@@ -508,11 +508,15 @@ export function createCrawler(
     // address as the site: the guard is for where the site sends the crawl.
     const resolveOnce = memoizeResolveHost(resolveHostAddresses);
     const egressFor = (base: string): EgressPolicy | undefined => {
+      const baseHost = getHostname(base).toLowerCase();
       const policy: EgressPolicy = {
         allowPrivateNetwork: true,
         resolve: resolveOnce,
         pin: config.egressPinnedByTransport !== true,
+        // The audited host on any port too: its name is the user's, and
+        // `allowedDomains` alone (a hard allowlist) may not list it.
         trustTarget: (url) => {
+          if (url.hostname.toLowerCase() === baseHost) return true;
           try {
             return isInScope(url.href, {
               baseUrl: base,
