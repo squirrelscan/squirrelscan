@@ -1093,14 +1093,15 @@ function fetchPageStandardOnce(
         }
         // repo#2830: an open redirect on the site (`/go?u=http://169.254.169.254/`)
         // must not send the auditor's machine to a metadata or link-local
-        // address. Ends here like the refused scheme above. Fails closed: a hop
-        // off the crawl's hosts whose lookup fails or outlasts the hop's
-        // deadline is not followed either (the crawl's own are never looked up).
+        // address. Ends here like the refused scheme above. A resolver failure
+        // or timeout here falls through to the guarded send, which vets the hop
+        // again and fails it with that error (a retryable network or timeout
+        // failure, DNS reason kept); nothing is sent unvetted.
         const refused =
           egress &&
           (yield* Effect.promise(() =>
             egressRefuses(nextUrl, egress, AbortSignal.timeout(options.timeoutMs)).catch(
-              () => true,
+              () => false,
             ),
           ));
         if (refused) {

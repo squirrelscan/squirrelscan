@@ -58,8 +58,21 @@ function policy(resolve: (host: string) => Promise<string[]>): EgressPolicy {
 }
 
 describe("the plain fetcher's redirect egress (repo#2830)", () => {
+  it("a hop off the site whose lookup fails is never requested: the fetch fails with that error", async () => {
+    // The pre-check lets a resolver error through to the guarded send, which
+    // vets again and fails the hop with it, so the crawl reports (and retries)
+    // a network failure with its DNS reason instead of a bare 302.
+    const origin = serve("http://elsewhere.example.net/x");
+    await expect(
+      createFetchDocumentFetcher().fetch({
+        url: `${origin}/go`,
+        egress: policy(() => Promise.reject(new Error("ENOTFOUND elsewhere.example.net"))),
+      }),
+    ).rejects.toThrow("ENOTFOUND");
+    expect(requested.map((r) => new URL(r.url).hostname)).toEqual(["127.0.0.1"]);
+  });
+
   it.each<[string, (host: string) => Promise<string[]>]>([
-    ["the lookup fails", () => Promise.reject(new Error("ENOTFOUND"))],
     ["an answer is link-local", async () => ["93.184.215.14", "169.254.169.254"]],
     ["an answer is the IPv6 metadata address", async () => ["fd00:ec2::254"]],
   ])("a hop off the site is never requested when %s", async (_why, resolve) => {
