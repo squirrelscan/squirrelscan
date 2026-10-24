@@ -286,6 +286,7 @@ NO_TELEMETRY=1 squirrel audit https://example.com
 
 - [Website](https://squirrelscan.com)
 - [Documentation](https://docs.squirrelscan.com)
+- [FAQ](https://docs.squirrelscan.com/faq)
 - [Coding agent integration](https://docs.squirrelscan.com/agents)
 - [Share feedback](https://squirrelscan.com/feedback)
 - [Bugs, issues and feature requests](https://github.com/squirrelscan/squirrelscan/issues)

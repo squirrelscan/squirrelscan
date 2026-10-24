@@ -1,0 +1,67 @@
+---
+title: "FAQ"
+icon: "circle-help"
+description: "Short answers to the questions people ask first: what is open source, what is sent, what robots.txt does, what it costs, and how it compares"
+---
+
+The questions a skeptical developer asks first, answered briefly. Each answer links to the page it comes from, and those pages win if anything here is out of date.
+
+## Is squirrelscan open source?
+
+The `squirrel` CLI, the audit engine and the rule packages are [MIT licensed](https://github.com/squirrelscan/squirrelscan/blob/main/LICENSE) and live in the public repository. The hosted cloud is not in that repository.
+
+Signed out, a local audit runs the deterministic rules on your machine and needs no account ([Local audits with the CLI](/guides/local-audits-cli)). These need the cloud ([Cloud overview](/cloud)):
+
+- Browser rendering, for JavaScript-heavy sites
+- AI analysis rules, such as [`ai/llm-parsability`](/rules/ai/llm-parsability) ([Cloud rules](/cloud/rules))
+- Shared data: full ad blocker filter lists and a global dead-link cache
+- Publishing reports, issue tracking over time, the dashboard and teams
+- The [hosted MCP server](/developers/mcp)
+
+## What does telemetry send?
+
+Telemetry is on by default. The CLI sends the event name, the CLI version, a random install ID and a bounded error category. It does not send credentials, URLs, report contents or raw error messages, and telemetry requests are never authenticated. The CLI shows this once before its first telemetry-enabled command ([`self` settings](/cli/self#telemetry)).
+
+To turn it off:
+
+```bash
+squirrel self settings set telemetry false
+```
+
+For CI or one-off commands, set `NO_TELEMETRY` (any defined value disables it). `squirrel audit --offline` sends no telemetry ([`audit` options](/cli/audit)).
+
+The install script is separate: it sends an anonymous report only when the install fails, and `NO_TELEMETRY` turns that off too ([Quickstart](/quickstart#installation)). The report is a fixed set of fields: the failing step, OS, architecture, release version, exit code and the tail of the failing command's output.
+
+## Does it obey robots.txt?
+
+Not by default. squirrelscan always fetches and parses `robots.txt` for sitemap discovery and the `crawl/robots-txt` audit rule, but with the default `respect_robots = false` it ignores `Disallow:` rules and `Crawl-delay:`. The reasoning: an audit is something you run against your own site, not an uninvited crawl.
+
+Auditing a site you don't own? Opt in:
+
+```toml
+[crawler]
+respect_robots = true
+```
+
+Cloud audits have the same switch per website, also off by default. See [`respect_robots`](/configuration/crawler#respect_robots).
+
+## What does it cost?
+
+- **Local audits are free** when you are signed out or pass `--offline`.
+- **Signed in**, every audit spends credits: 50 per audit plus 2 per audited page, including audits you run locally with `squirrel audit`.
+- **Free plan:** 500 credits a month, no card required, one allowance per email inbox.
+- **Pro:** $19 a month ($190 a year) for 3,000 credits a month.
+
+External link checks, top-ups and the Team plan are in [Credits and pricing](/cloud/credits). If your balance runs out, audits still run locally and cloud rules are skipped.
+
+## How does it work with coding agents?
+
+Output is built for an agent to read and act on: `--format llm` gives LLM-optimized output, and every finding says how to fix it ([Fix your site with an AI agent](/guides/fix-your-site-with-an-ai-agent)). Skills, a CLI MCP server and the [hosted MCP server](/developers/mcp) cover the rest ([Agents](/developers/agents)).
+
+The audit rules are deterministic. Local audits run only those rules. The rules that use AI models are cloud rules, and they run only when you are signed in ([Cloud rules](/cloud/rules)). The fixing is done by your own coding agent.
+
+## How is it different from Lighthouse or Screaming Frog?
+
+Lighthouse audits one URL per run and goes deep on that page's performance. squirrelscan crawls the whole site and checks links, security headers, structured data and agent experience together. For one slow page, Lighthouse is still the right first stop. Details: [Lighthouse alternative](https://squirrelscan.com/learn/lighthouse-alternative).
+
+Screaming Frog is a mature desktop crawler, strong at manual, exploratory work: filtering and segmenting a crawl, and custom extraction with XPath or CSS selectors, which squirrelscan does not have. squirrelscan does not render JavaScript locally either; rendering is a cloud feature. What it offers instead is a CLI that runs the same way in CI or inside a coding agent, with output meant for a model. Many teams use both. Details: [Screaming Frog alternative](https://squirrelscan.com/learn/screaming-frog-alternative).

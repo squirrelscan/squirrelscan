@@ -64,7 +64,8 @@
             "pages": [
               "index",
               "agent-setup/index",
-              "quickstart"
+              "quickstart",
+              "faq"
             ]
           },
           {
