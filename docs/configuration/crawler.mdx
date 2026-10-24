@@ -875,7 +875,10 @@ well-known and markdown probes), for a sitemap that robots.txt or a sitemap
 index points at such an address, and for the redirects the internal link check
 follows. The `security/http-to-https` rule checks the address of each redirect
 it follows the same way, and so does squirrel when it resolves the start URL's
-own redirects, a meta refresh or JS redirect included, before the crawl begins.
+own redirects, a meta refresh or JS redirect included, before the crawl begins:
+such a redirect is not followed and the start URL itself is audited. A start
+URL that is itself a link-local address (a device on your network, say) is
+yours to audit, and its redirects are followed.
 
 **Example:**
 

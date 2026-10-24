@@ -28,17 +28,17 @@ import {
 import {
   egressGuardedSend,
   memoizeResolveHost,
-  refusedWithoutLookup,
   resolveHostAddresses,
   type EgressPolicy,
 } from "@squirrelscan/utils/public-egress";
 import { isHttpOrHttpsUrl, safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 import { isCloudflareEmailProtectionUrl } from "@squirrelscan/utils/cloudflare-email";
-import { getHostname, urlHostKey } from "@squirrelscan/utils/url";
+import { urlHostKey } from "@squirrelscan/utils/url";
 
 import { budgetRemainingMs, createPhaseBudget, withRequestDeadline } from "../deadline";
 import type { PhaseBudget, ProbeGate } from "../deadline";
 import { RefusalLog } from "../refusals";
+import { crawlEgressPolicy } from "../egress";
 import {
   computeSitemapUrlCap,
   discoverSitemaps,
@@ -499,39 +499,18 @@ export function createCrawler(
     };
     const customHeadersFor = (url: string): Record<string, string> | undefined =>
       config.headers && getHeaderScope()(url) ? config.headers : undefined;
-    // repo#2830: the asset phase's own-site policy (#2764) for every request
-    // the site can steer: a page's redirect hops, the root probes and theirs,
-    // and the sitemaps robots.txt or an index names. The crawl's own hosts go
-    // out as before and private networks stay allowed (a LAN or dev-server
-    // audit); a hop anywhere else to a link-local or cloud metadata address is
-    // refused, never sent, and the rest connect to the address they were
-    // vetted on unless the transport pins. None when the user named such an
-    // address as the site: the guard is for where the site sends the crawl.
+    // repo#2830: the egress policy for every request the site can steer (see
+    // crawlEgressPolicy). One resolver for the crawler's life; the allowlist is
+    // read on each check, so a resumed crawl's restored config is seen.
     const resolveOnce = memoizeResolveHost(resolveHostAddresses);
-    const egressFor = (base: string): EgressPolicy | undefined => {
-      const baseHost = getHostname(base).toLowerCase();
-      const policy: EgressPolicy = {
-        allowPrivateNetwork: true,
+    const egressFor = (base: string): EgressPolicy | undefined =>
+      crawlEgressPolicy(base, {
         resolve: resolveOnce,
-        pin: config.egressPinnedByTransport !== true,
-        // The audited host on any port too: its name is the user's, and
-        // `allowedDomains` alone (a hard allowlist) may not list it.
-        trustTarget: (url) => {
-          if (url.hostname.toLowerCase() === baseHost) return true;
-          try {
-            return isInScope(url.href, {
-              baseUrl: base,
-              include: [],
-              exclude: [],
-              allowedDomains: config.allowedDomains,
-            }).allowed;
-          } catch {
-            return false;
-          }
+        egressPinnedByTransport: config.egressPinnedByTransport,
+        get allowedDomains() {
+          return config.allowedDomains;
         },
-      };
-      return refusedWithoutLookup(base, policy) ? undefined : policy;
-    };
+      });
     let crawlEgress: EgressPolicy | undefined;
     // In-memory mirror of getPageCount (rows in `pages`): seeded at
     // runCrawlLoop start (resume-safe), bumped per upsertPage — avoids a
@@ -2524,7 +2503,7 @@ export function createCrawler(
                 // apex/www rule is the recovery; this is the diagnosis.
                 //
                 // 4xx/5xx only. `response.ok` is also false for a 3xx that
-                // `redirect: "follow"` declined to follow (a `Location`-less
+                // the redirect loop could not follow (a `Location`-less
                 // 302), which is a different thing from an origin refusing us.
                 if (response.status >= 400 && served === hopUrl) {
                   logger.warn(

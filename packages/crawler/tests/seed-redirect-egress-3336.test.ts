@@ -39,11 +39,15 @@ function isRefusedHost(url: string): boolean {
 // destination answers with a marker instead of the network.
 const realFetch = globalThis.fetch;
 let requested: string[] = [];
+// The runtime's own following is invisible to this spy, so none may be asked for.
+let followed: string[] = [];
 beforeEach(() => {
   requested = [];
+  followed = [];
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input);
     requested.push(url);
+    if (init?.redirect !== "manual") followed.push(url);
     if (isRefusedHost(url)) {
       return new Response(
         `<html><head><title>${SECRET}</title></head><body>${SECRET}</body></html>`,
@@ -121,6 +125,7 @@ describe("resolving the start URL (repo#3336)", () => {
 
       expect(requested.some((url) => new URL(url).origin === origin)).toBe(true);
       expect(requested.filter(isRefusedHost)).toEqual([]);
+      expect(followed).toEqual([]);
       expect(finalUrl).toBe(`${origin}/`);
       expect(meta?.baseUrl).toBe(origin);
       expect(JSON.stringify(pages)).not.toContain(SECRET);

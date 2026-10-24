@@ -904,7 +904,9 @@ export async function runAudit(
 
     // Check reachability
     logger.debug("checking reachability", url);
-    const reachability = await checkReachability(url);
+    const reachability = await checkReachability(url, {
+      allowedDomains: mergedConfig.project.domains,
+    });
     if (!reachability.reachable) {
       return err(
         commandError(

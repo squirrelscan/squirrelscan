@@ -210,7 +210,9 @@ export async function runCrawl(
 
     // Check reachability
     logger.debug("checking reachability", url);
-    const reachability = await checkReachability(url);
+    const reachability = await checkReachability(url, {
+      allowedDomains: config.project.domains,
+    });
     if (!reachability.reachable) {
       return err(
         commandError(

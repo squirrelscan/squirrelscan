@@ -12,7 +12,11 @@ import {
 } from "../../src/utils/reachability";
 
 const realFetch = globalThis.fetch;
-let requested: Array<{ url: string; headers: Headers }> = [];
+let requested: Array<{
+  url: string;
+  headers: Headers;
+  redirect: RequestRedirect | undefined;
+}> = [];
 
 function isRefusedHost(url: string): boolean {
   const host = new URL(url).hostname.replace(/^\[|\]$/g, "").toLowerCase();
@@ -27,7 +31,11 @@ function isRefusedHost(url: string): boolean {
 function fakeNetwork(routes: Record<string, () => Response>) {
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input);
-    requested.push({ url, headers: new Headers(init?.headers) });
+    requested.push({
+      url,
+      headers: new Headers(init?.headers),
+      redirect: init?.redirect,
+    });
     const route = routes[url];
     if (route) return route();
     if (isRefusedHost(url)) return new Response("metadata");
@@ -136,5 +144,89 @@ describe("reachability check redirects (repo#3336)", () => {
       "http://169.254.10.10/",
       "http://169.254.10.10/admin",
     ]);
+  });
+
+  test("no request is left to the runtime's own redirect following", async () => {
+    fakeNetwork({
+      "https://site.example/": () => redirect("http://169.254.169.254/"),
+    });
+    await reachabilitySend("https://site.example/")("https://site.example/", {
+      method: "GET",
+      redirect: "follow",
+    });
+    expect(requested.every((r) => r.redirect === "manual")).toBe(true);
+  });
+
+  test("the apex to www hop is sent by name, and a WAF on the landing is still detected", async () => {
+    fakeNetwork({
+      "https://site.example/": () => redirect("https://www.site.example/", 301),
+      "https://www.site.example/": () =>
+        new Response("<html><title>Just a moment...</title></html>", {
+          status: 403,
+          headers: {
+            "content-type": "text/html",
+            server: "cloudflare",
+            "cf-ray": "8f1234567890abcd-AMS",
+          },
+        }),
+    });
+    const result = await checkReachability("https://site.example/", {
+      resolve: async () => {
+        throw new Error("the crawl's own hosts are never looked up");
+      },
+    });
+    expect(result.reachable).toBe(true);
+    expect(result.statusCode).toBe(403);
+    expect(result.wafDetected).toBe(true);
+    expect(requested.map((r) => r.url)).toEqual([
+      "https://site.example/",
+      "https://www.site.example/",
+    ]);
+    expect(requested.every((r) => r.redirect === "manual")).toBe(true);
+  });
+
+  test("a project domain is trusted as the crawl trusts it", async () => {
+    fakeNetwork({
+      "https://site.example/": () => redirect("https://shop.partner.example/"),
+      "https://shop.partner.example/": () => new Response("ok"),
+    });
+    const response = await reachabilitySend("https://site.example/", {
+      allowedDomains: ["site.example", "shop.partner.example"],
+      resolve: async () => {
+        throw new Error("never looked up");
+      },
+    })("https://site.example/", { method: "GET", redirect: "follow" });
+    expect(response.status).toBe(200);
+    expect(requested.map((r) => r.url)).toEqual([
+      "https://site.example/",
+      "https://shop.partner.example/",
+    ]);
+  });
+
+  test("a hop elsewhere connects to the vetted address with its Host and client hints; one resolving to metadata is not followed", async () => {
+    fakeNetwork({
+      "https://site.example/": () => redirect("https://cdn.other.example/x"),
+      "https://93.184.215.14/x": () => new Response("ok"),
+      "https://site.example/imds": () =>
+        redirect("http://imds.other.example/latest/"),
+    });
+    const resolve = async (host: string) =>
+      host === "imds.other.example" ? ["169.254.169.254"] : ["93.184.215.14"];
+    const send = reachabilitySend("https://site.example/", { resolve });
+    const init = {
+      method: "GET",
+      redirect: "follow" as const,
+      headers: { "sec-ch-ua": '"Chromium";v="140"' },
+    };
+
+    expect((await send("https://site.example/", init)).status).toBe(200);
+    const pinned = requested[1]!;
+    expect(pinned.url).toBe("https://93.184.215.14/x");
+    expect(pinned.headers.get("host")).toBe("cdn.other.example");
+    expect(pinned.headers.get("sec-ch-ua")).toBe('"Chromium";v="140"');
+
+    requested = [];
+    expect((await send("https://site.example/imds", init)).status).toBe(302);
+    expect(requested.map((r) => r.url)).toEqual(["https://site.example/imds"]);
   });
 });

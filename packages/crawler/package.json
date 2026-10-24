@@ -5,6 +5,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./deadline": "./src/deadline.ts",
+    "./egress": "./src/egress.ts",
     "./create-crawler": "./src/create-crawler.ts",
     "./fetcher": "./src/fetcher.ts",
     "./frontier": "./src/frontier.ts",
