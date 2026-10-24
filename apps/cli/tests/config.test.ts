@@ -104,7 +104,7 @@ describe("crawler.coverage (the audit level)", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(JSON.stringify(result.error.issues)).toContain(
-        "'quick' | 'surface' | 'full'"
+        '\\"quick\\"|\\"surface\\"|\\"full\\"'
       );
     }
   });

@@ -247,7 +247,7 @@ export const StorageConfigSchema = z.object({
       const bytes = parseByteSize(value);
       if (bytes === null) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           message:
             'content_store_max_bytes must be a positive size, such as 4294967296 or "4GB"',
         });
