@@ -52,6 +52,23 @@ foreach ($case in @(
 }
 Remove-Item Env:SQUIRREL_FORCE_MIRROR -ErrorAction SilentlyContinue
 
+Write-Host "release metadata is limited to URL-safe values"
+Check "a normal version is accepted" (Test-ReleaseVersion "v1.2.3-beta.1")
+Check "a dot version is rejected" (-not (Test-ReleaseVersion "."))
+Check "a dot-dot version is rejected" (-not (Test-ReleaseVersion ".."))
+Check "a v-dot-dot version is rejected" (-not (Test-ReleaseVersion "v.."))
+Check "a path version is rejected" (-not (Test-ReleaseVersion "../v1.2.3"))
+Check "a query version is rejected" (-not (Test-ReleaseVersion "v1.2.3?download=1"))
+Check "a normal filename is accepted" (Test-ReleaseFilename "squirrel-1.2.3-windows-x64.exe")
+Check "a path filename is rejected" (-not (Test-ReleaseFilename "../squirrel.exe"))
+Check "a nested filename is rejected" (-not (Test-ReleaseFilename "nested/squirrel.exe"))
+Check "a lowercase sha256 is accepted" (Test-Sha256 ("ab" * 32))
+Check "an uppercase sha256 is accepted" (Test-Sha256 (("ab" * 32).ToUpperInvariant()))
+Check "a malformed sha256 is rejected" (-not (Test-Sha256 "not-a-sha256"))
+Check "a version with a trailing newline is rejected" (-not (Test-ReleaseVersion "v1.2.3`n"))
+Check "a filename with a trailing newline is rejected" (-not (Test-ReleaseFilename "squirrel.exe`n"))
+Check "a sha256 with a trailing newline is rejected" (-not (Test-Sha256 (("ab" * 32) + "`n")))
+
 Write-Host "GitHub is tried first, the mirror second"
 $sources = Get-DownloadSources -Version "v1.2.3" -Asset "squirrel-1.2.3-windows-x64.exe"
 Check "two sources" ($sources.Count -eq 2)
