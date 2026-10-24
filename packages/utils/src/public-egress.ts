@@ -351,7 +351,14 @@ export async function assertEgressAllowed(
  * True when `policy` refuses a request to `url` ({@link vetEgressTarget} throws
  * {@link EgressRefusedError}); nothing is sent either way. For a hand-rolled
  * redirect loop that ends at a refused hop instead of failing the whole fetch
- * (repo#2830). Any other error (a resolver failure) propagates.
+ * (repo#2830). Any other error (a resolver failure) propagates: a caller that
+ * would otherwise follow the hop treats it as refused (fail closed).
+ *
+ * False holds only for a request sent through {@link egressGuardedSend} with
+ * the same policy, which connects to the vetted address. A pinning policy (pin
+ * unset) sets scoped link-local answers aside, which is safe only because the
+ * pinned connect never uses them; a caller that checks here and then sends by
+ * name must pass `pin: false`, which judges every answer.
  */
 export async function egressRefuses(
   url: string,

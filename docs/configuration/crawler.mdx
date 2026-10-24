@@ -873,7 +873,9 @@ the crawl stops at that redirect and never sends the request. The same holds
 for the root files the crawl fetches (robots.txt, sitemaps, llms.txt, the
 well-known and markdown probes), for a sitemap that robots.txt or a sitemap
 index points at such an address, and for the redirects the internal link check
-and the `security/http-to-https` rule follow.
+follows. The `security/http-to-https` rule checks the address of each redirect
+it follows the same way. Redirects of the start URL itself, resolved before the
+crawl begins, are not covered yet.
 
 **Example:**
 
