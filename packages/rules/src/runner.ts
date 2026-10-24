@@ -317,7 +317,10 @@ export class RuleRunner {
     this.siteRuleBudgetCapMs = options.siteRuleBudgetCapMs ?? SITE_RULE_BUDGET_CAP_MS;
 
     // Load all rules (plus any caller-supplied namespaces — plugins / tests)
-    this.rules = loadAllRules({ additionalNamespaces: options.additionalNamespaces });
+    this.rules = loadAllRules({
+      additionalNamespaces: options.additionalNamespaces,
+      includeOptIn: true,
+    });
 
     // Filter to enabled rules based on config
     const allIds = Array.from(this.rules.keys());
@@ -325,7 +328,8 @@ export class RuleRunner {
       allIds,
       this.config.rules?.enable,
       this.config.rules?.disable,
-      this.config.rule_options as Record<string, { enabled?: boolean }>
+      this.config.rule_options as Record<string, { enabled?: boolean }>,
+      this.rules
     );
   }
 

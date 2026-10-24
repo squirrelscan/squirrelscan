@@ -168,7 +168,7 @@ export type { CloudPrefetchResult } from "@squirrelscan/audit-engine";
 export function selectCloudRules(
   config: Config
 ): Array<{ id: string; cloud: RuleCloudSpec }> {
-  const all = loadAllRules();
+  const all = loadAllRules({ includeOptIn: true });
   const enabledIds = new Set(
     filterRules(
       [...all.keys()],
@@ -176,7 +176,8 @@ export function selectCloudRules(
       config.rules.disable,
       // rule_options values are Record<string, unknown>; filterRules only
       // reads the optional `enabled` key, so this narrowing is safe.
-      config.rule_options as Record<string, { enabled?: boolean }>
+      config.rule_options as Record<string, { enabled?: boolean }>,
+      all
     )
   );
   const selected: Array<{ id: string; cloud: RuleCloudSpec }> = [];

@@ -14,7 +14,7 @@ Gap analysis compares your site against live search demand data: what people sea
 squirrel audit https://example.com --rule-include gaps
 ```
 
-Both rules are opt-in cloud rules: they need you signed in and cost 25 credits each per audit. Right now neither one runs, even when enabled as shown under [Enable gap analysis](#enable-gap-analysis): both are marked disabled in the rule source, and the rule loader drops disabled rules before it reads any enable list ([#1067](https://github.com/squirrelscan/squirrelscan/issues/1067)).
+Both rules are opt-in cloud rules: they need you signed in and cost 25 credits each per audit. The default `enable = ["*"]` deliberately leaves them out; selecting the `gaps` category or either rule explicitly turns them on.
 
 {/* hub:start-here:start */}
 

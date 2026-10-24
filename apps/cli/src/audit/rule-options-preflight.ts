@@ -9,7 +9,7 @@
 import {
   checkRuleOptions,
   filterRules,
-  getAllRuleIds,
+  loadAllRules,
 } from "@squirrelscan/rules";
 
 export interface RuleOptionsPreflight {
@@ -29,12 +29,14 @@ export function preflightRuleOptions(
 
   // The same selection the runner makes, so a rule this audit skips cannot
   // stop it.
+  const registry = loadAllRules({ includeOptIn: true });
   const running = new Set(
     filterRules(
-      getAllRuleIds(),
+      [...registry.keys()],
       rules.enable,
       rules.disable,
-      ruleOptions as Record<string, { enabled?: boolean }>
+      ruleOptions as Record<string, { enabled?: boolean }>,
+      registry
     )
   );
   for (const problem of problems) {

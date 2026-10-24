@@ -68,6 +68,22 @@ describe("cloud prefetch input parity (container replica == CLI)", () => {
     const cli = cliSelectCloudRules(config as never);
     expect(ae).toEqual(cli);
     expect(ae.length).toBeGreaterThan(0); // there ARE cloud-gated rules
+    const ids = ae.map((rule) => rule.id);
+    expect(
+      ids.filter((id) => id === "gaps/keywords" || id === "gaps/content")
+    ).toEqual([]);
+  });
+
+  test("selectCloudRules: explicit gaps opt-in selects both paid services", () => {
+    const config = getDefaultConfig();
+    config.rules.enable = ["gaps/*"];
+    const ae = aeSelectCloudRules(config as never);
+    const cli = cliSelectCloudRules(config as never);
+    expect(ae).toEqual(cli);
+    expect(ae.map((rule) => rule.id)).toEqual([
+      "gaps/keywords",
+      "gaps/content",
+    ]);
   });
 
   test("buildCloudPagePayloads: replica matches the CLI byte-for-byte", () => {

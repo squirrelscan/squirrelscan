@@ -40,12 +40,9 @@ export const keywordGapsRule: Rule = {
     severity: "info",
     weight: 1,
     optionsSchema,
-    // Opt-in only: keyword_gaps costs 25 credits/audit, so this stays disabled
-    // (like ai/ai-content) and is excluded from selectCloudRules until the user
-    // explicitly enables it (enable: ["gaps/keywords"]). Prevents surprise spend
-    // on a default cloud-enabled audit, especially in non-TTY/agent mode where no
-    // spend confirmation prompt is shown.
-    disabled: true,
+    // Opt-in only: keyword_gaps costs 25 credits/audit. A concrete rule/category
+    // enable pattern can select it, while the default enable: ["*"] cannot.
+    optIn: true,
     cloud: { service: "keyword-gaps", unit: "site", creditFeature: "keyword_gaps" },
   },
 
