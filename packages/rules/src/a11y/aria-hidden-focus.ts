@@ -179,10 +179,13 @@ export const ariaHiddenFocusRule: Rule = {
     };
     const containers: Array<{ el: Element; entry: number; exit: number }> = [];
     let pos = 0;
-    const root = doc.documentElement as Element | null;
-    if (root) {
+    {
       type Frame = { el: Element; covered: boolean; inHidden: boolean } | { leave: number };
-      const stack: Frame[] = [{ el: root, covered: false, inHidden: false }];
+      // Every top-level element, not just documentElement: a page without an
+      // <html> tag, or with a warning printed ahead of it, has several, and the
+      // old document-wide query reached them all.
+      const tops = Array.from(doc.children as ArrayLike<Element>);
+      const stack: Frame[] = tops.reverse().map((el) => ({ el, covered: false, inHidden: false }));
       while (stack.length > 0) {
         const frame = stack.pop()!;
         if ("leave" in frame) {
@@ -207,6 +210,8 @@ export const ariaHiddenFocusRule: Rule = {
           containers.push({ el, entry: pos, exit: pos });
           stack.push({ leave: containers.length - 1 });
         }
+        // querySelectorAll (what the old scan used) never enters a template.
+        if (el.localName === "template") continue;
         const children = el.children;
         for (let i = children.length - 1; i >= 0; i--) {
           stack.push({ el: children[i] as Element, covered, inHidden });
@@ -241,7 +246,13 @@ export const ariaHiddenFocusRule: Rule = {
           if (self.finding === "unconfirmed" && !isWidthOnly(self.seen)) into.allWidth = false;
           if (into.first.length < 10) {
             into.first.push(
-              itemFor(self.finding, `${hidden.tagName.toLowerCase()} (self is focusable)`, self.seen),
+              itemFor(
+                self.finding,
+                self.finding === "honeypot"
+                  ? labelFor(hidden)
+                  : `${hidden.tagName.toLowerCase()} (self is focusable)`,
+                self.seen,
+              ),
             );
           }
           continue;
