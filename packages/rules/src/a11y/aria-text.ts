@@ -18,6 +18,45 @@ function isFocusable(el: Element): boolean {
   return tabindex !== null && tabindex !== "-1";
 }
 
+/**
+ * The focusable descendants of each role="text" element, counted in one walk
+ * of each outermost one's subtree (squirrelscan/repo#3066). A count is the
+ * focusables seen between entering the element and leaving it, so a nested
+ * role="text" is counted for itself and for every outer one without its
+ * subtree being scanned again: a page that nested thousands of them made the
+ * per-element `querySelectorAll("*")` quadratic (35 s at 5,000 levels).
+ * An element's own focusability counts for its ancestors only, as
+ * `querySelectorAll("*")` (descendants only) did.
+ */
+function focusableDescendantCounts(textElements: Iterable<Element>): Map<Element, number> {
+  const isText = new Set(textElements);
+  const counts = new Map<Element, number>();
+  let focusables = 0;
+  for (const root of isText) {
+    // Already counted inside an outer role="text" element.
+    if (counts.has(root)) continue;
+    const entered = new Map<Element, number>();
+    const stack: Array<{ el: Element; leaving: boolean }> = [{ el: root, leaving: false }];
+    while (stack.length > 0) {
+      const { el, leaving } = stack.pop()!;
+      if (leaving) {
+        counts.set(el, focusables - entered.get(el)!);
+        continue;
+      }
+      if (isFocusable(el)) focusables++;
+      if (isText.has(el)) {
+        entered.set(el, focusables);
+        stack.push({ el, leaving: true });
+      }
+      const children = el.children;
+      for (let i = children.length - 1; i >= 0; i--) {
+        stack.push({ el: children[i] as Element, leaving: false });
+      }
+    }
+  }
+  return counts;
+}
+
 export const ariaTextRule: Rule = {
   meta: {
     id: "a11y/aria-text",
@@ -50,18 +89,17 @@ export const ariaTextRule: Rule = {
     }
 
     const violations: string[] = [];
+    const focusableCounts = focusableDescendantCounts(textElements);
 
     for (const el of textElements) {
-      const focusable = Array.from(el.querySelectorAll("*")).filter(
-        isFocusable
-      );
-      if (focusable.length > 0) {
+      const focusable = focusableCounts.get(el) ?? 0;
+      if (focusable > 0) {
         const id = el.getAttribute("id");
         const tag = el.tagName.toLowerCase();
         violations.push(
           id
-            ? `${tag}#${id} (${focusable.length} focusable)`
-            : `${tag} (${focusable.length} focusable)`
+            ? `${tag}#${id} (${focusable} focusable)`
+            : `${tag} (${focusable} focusable)`
         );
       }
     }
