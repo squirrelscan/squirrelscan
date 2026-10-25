@@ -1,5 +1,5 @@
 // Shared cloud-service contracts: request/response shapes for the credit-gated
-// Gemini-backed enrichment services (CLI -> API). Dep-free plain TypeScript
+// LLM-backed enrichment services (CLI -> API). Dep-free plain TypeScript
 // (type-only imports below are erased at compile time).
 
 import type {

@@ -46,7 +46,7 @@ export const CREDIT_COSTS = {
   // Opt-in add-ons — the only audit-scoped features still itemized.
   keyword_gaps: { cost: 25, per: 1, unit: "run" },
   content_gaps: { cost: 25, per: 1, unit: "run" },
-  // AI issue enrichment — one Gemini Flash call per issue, charged on the
+  // AI issue enrichment — one LLM call per issue, charged on the
   // manual enrich routes (not part of an audit run).
   issue_enrich: { cost: 3, per: 1, unit: "issue" },
   // ── Folded into audit_base (cost 0; still gated: org lock + positive balance) ──
