@@ -698,7 +698,7 @@ export function renderBlock(
       ].join("\n");
     }
     case "glossary:jsonld":
-      return renderJsonLd(model, term, file);
+      return renderJsonLd(term, file);
     case "glossary:backlinks": {
       const id = [...model.rules.values()].find((r) => r.file === file)?.id;
       const terms = model.data.terms
@@ -753,76 +753,20 @@ export function renderBlock(
   }
 }
 
-/** The definition as a reader sees it rendered: code spans lose their backticks. */
-function plainDefinition(term: Term): string {
-  return term.definition.replace(/`/g, "");
-}
-
-function siteOrigin(model: Model): string {
-  try {
-    const config = JSON.parse(read(model.root, "docs.json") ?? "{}") as {
-      siteUrl?: unknown;
-    };
-    if (typeof config.siteUrl === "string")
-      return config.siteUrl.replace(/\/+$/, "");
-  } catch {
-    // No readable docs.json: fall through to the published origin.
-  }
-  return "https://docs.squirrelscan.com";
-}
-
 /**
- * A `<script type="application/ld+json">` for a glossary page. tangly has no
- * per-page JSON-LD key, so the block is a script element in the MDX body; it
- * lands next to the graph tangly emits in the head and does not replace it.
- * The description is the term's definition, which the /glossary index prints
- * word for word. The index carries the DefinedTermSet and every term; a term
- * page carries its DefinedTerm, pointing at the set by `@id`.
+ * The component renders a DefinedTermSet on the index or a DefinedTerm on a
+ * term page. Keeping the JSON generation outside the MDX body preserves the
+ * schema in rendered HTML without copying raw script text into tangly's
+ * agent-facing Markdown outputs.
  */
-function renderJsonLd(model: Model, term: Term | undefined, file: string): string {
-  const origin = siteOrigin(model);
-  const set = `${origin}/glossary#set`;
-  const node = (t: Term) => {
-    const url = model.written.has(t.slug)
-      ? `${origin}/glossary/${t.slug}`
-      : `${origin}/glossary#${t.slug}`;
-    return {
-      "@type": "DefinedTerm",
-      "@id": `${url}#term`,
-      name: t.term,
-      description: plainDefinition(t),
-      url,
-    };
-  };
-  let data: Record<string, unknown>;
-  if (file === "glossary/index.mdx") {
-    data = {
-      "@context": "https://schema.org",
-      "@type": "DefinedTermSet",
-      "@id": set,
-      name: "Website audit glossary",
-      url: `${origin}/glossary`,
-      hasDefinedTerm: [...model.data.terms].sort(bySortKey).map(node),
-    };
-  } else if (term) {
-    data = {
-      "@context": "https://schema.org",
-      ...node(term),
-      inDefinedTermSet: {
-        "@type": "DefinedTermSet",
-        "@id": set,
-        name: "Website audit glossary",
-        url: `${origin}/glossary`,
-      },
-    };
-  } else return "";
-  // "<" becomes a JSON escape so the text can never close the script element;
-  // then backslashes, backticks and "${" are escaped for the MDX template
-  // literal, which the build unescapes back to the JSON text.
-  const json = JSON.stringify(data)
-    .replace(/</g, "\\" + "u003c")
-    .replace(/[\\`]|\$\{/g, (m) => `\\${m}`);
-  return `<script type="application/ld+json">{\`${json}\`}</script>`;
+function renderJsonLd(term: Term | undefined, file: string): string {
+  const slug = file === "glossary/index.mdx" ? undefined : term?.slug;
+  if (file !== "glossary/index.mdx" && slug === undefined) return "";
+  return [
+    'import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";',
+    "",
+    `<GlossaryJsonLd${slug ? ` slug="${slug}"` : ""} />`,
+  ].join("\n");
 }
 
 function letterOf(term: Term): string {
@@ -1511,15 +1455,19 @@ function plan(root: string): Plan {
     }
   }
 
-  // Nothing under scripts/ may be published.
+  // Neither generator inputs nor build-only components may be published.
   const ignore = read(root, ".tanglyignore") ?? "";
-  if (!ignore.split("\n").some((l) => l.trim() === "/scripts/"))
-    problems.push({
-      file: ".tanglyignore",
-      line: 1,
-      message:
-        "must list /scripts/ so the glossary data and scripts are not published",
-    });
+  const ignored = new Set(ignore.split("\n").map((line) => line.trim()));
+  for (const [directory, reason] of [
+    ["/scripts/", "the glossary data and scripts"],
+    ["/components/", "the build-only components"],
+  ])
+    if (!ignored.has(directory))
+      problems.push({
+        file: ".tanglyignore",
+        line: 1,
+        message: `must list ${directory} so ${reason} are not published`,
+      });
 
   return { model, problems, writes, stale, docsConfig };
 }

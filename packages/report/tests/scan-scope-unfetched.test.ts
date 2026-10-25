@@ -44,13 +44,10 @@ describe("scanScopeUnfetched", () => {
   test("a whole non-negative count, or 0 for anything a stored report could hold", () => {
     expect(scanScopeUnfetched(capped)).toBe(531);
     expect(scanScopeUnfetched(report(undefined))).toBe(0);
-    for (const bad of [-1, Number.NaN, Number.POSITIVE_INFINITY, "531", null]) {
+    for (const bad of [-1, 2.7, Number.NaN, Number.POSITIVE_INFINITY, "531", null]) {
       const r = report({ origin: "cli", pagesCrawled: 1, capped: false, unfetched: bad as never });
       expect(scanScopeUnfetched(r)).toBe(0);
     }
-    expect(
-      scanScopeUnfetched(report({ origin: "cli", pagesCrawled: 1, capped: false, unfetched: 2.7 })),
-    ).toBe(2);
   });
 });
 
@@ -129,6 +126,25 @@ describe("machine-readable formats", () => {
     expect(JSON.parse(renderJson(capped)).meta.unfetched).toBe(531);
     const none = report({ origin: "cloud", maxPages: 200, pagesCrawled: 200, capped: true });
     expect("unfetched" in JSON.parse(renderJson(none)).meta).toBe(false);
+  });
+
+  test("every renderer drops a non-whole unfetched count", () => {
+    const forged = report({
+      origin: "cloud",
+      maxPages: 200,
+      pagesCrawled: 200,
+      capped: true,
+      unfetched: 2.7,
+    });
+
+    expect(renderText(forged)).not.toContain("more discovered but not fetched");
+    expect(renderMarkdown(forged)).not.toContain("more discovered but not fetched");
+    expect(renderLlm(forged)).not.toContain('unfetched="');
+    expect(renderXml(forged)).not.toContain('unfetched="');
+    expect("unfetched" in JSON.parse(renderJson(forged)).meta).toBe(false);
+    const renderedHtml = html(forged);
+    expect(renderedHtml).toContain("Scanned 200 of 200 discovered pages");
+    expect(renderedHtml).not.toContain("this crawl fetched 200 and left");
   });
 });
 

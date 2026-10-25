@@ -23,6 +23,7 @@ import {
   withGlossaryTab,
   writeGlossary,
 } from "./glossary";
+import { buildGlossaryJsonLd } from "./glossary-jsonld";
 
 let root = "";
 
@@ -165,7 +166,7 @@ function docs({
       null,
       2,
     )}\n`,
-    ".tanglyignore": "/scripts/\n",
+    ".tanglyignore": "/scripts/\n/components/\n",
     "rules/crawl/index.mdx": CRAWL_HUB,
     "rules/crawl/robots-txt.mdx": rulePage(
       "crawl/robots-txt",
@@ -421,12 +422,13 @@ describe("glossary --check", () => {
     );
   });
 
-  test("docs/scripts must stay out of the published site", () => {
+  test("generator inputs and build-only components stay out of the published site", () => {
     const dir = docs({
       terms: [SOLO],
       files: { ".tanglyignore": "/node_modules/\n" },
     });
     expect(messages(dir)).toEqual([
+      ".tanglyignore:1: must list /components/ so the build-only components are not published",
       ".tanglyignore:1: must list /scripts/ so the glossary data and scripts are not published",
     ]);
   });
@@ -546,16 +548,21 @@ describe("glossary --write", () => {
       "- [XML sitemap](/glossary#xml-sitemap): What XML sitemap is.",
     );
     expect(page).not.toContain("stale");
-    const ld = (text: string): Record<string, unknown> => {
-      const raw = /<script type="application\/ld\+json">\{`(.*)`\}<\/script>/.exec(
-        text,
-      )?.[1];
-      // The build reads the template literal, so unescape it the same way.
-      return JSON.parse(
-        Function(`return \`${raw}\`;`)() as string,
-      ) as Record<string, unknown>;
-    };
-    expect(ld(page)).toMatchObject({
+    expect(page).toContain(
+      'import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";',
+    );
+    expect(page).toContain('<GlossaryJsonLd slug="robots-txt" />');
+    expect(page).not.toContain('<script type="application/ld+json">');
+
+    const written = new Set(["robots-txt"]);
+    expect(
+      buildGlossaryJsonLd({
+        origin: "https://docs.squirrelscan.com",
+        terms: TERMS,
+        written,
+        slug: "robots-txt",
+      }),
+    ).toMatchObject({
       "@type": "DefinedTerm",
       "@id": "https://docs.squirrelscan.com/glossary/robots-txt#term",
       name: "robots.txt",
@@ -563,7 +570,16 @@ describe("glossary --write", () => {
       url: "https://docs.squirrelscan.com/glossary/robots-txt",
       inDefinedTermSet: { "@id": "https://docs.squirrelscan.com/glossary#set" },
     });
-    expect(ld(snapshot("glossary/index.mdx"))).toMatchObject({
+    const indexPage = snapshot("glossary/index.mdx");
+    expect(indexPage).toContain("<GlossaryJsonLd />");
+    expect(indexPage).not.toContain('<script type="application/ld+json">');
+    expect(
+      buildGlossaryJsonLd({
+        origin: "https://docs.squirrelscan.com/",
+        terms: TERMS,
+        written,
+      }),
+    ).toMatchObject({
       "@type": "DefinedTermSet",
       "@id": "https://docs.squirrelscan.com/glossary#set",
       url: "https://docs.squirrelscan.com/glossary",
@@ -576,7 +592,7 @@ describe("glossary --write", () => {
       ]),
     });
 
-    const index = snapshot("glossary/index.mdx");
+    const index = indexPage;
     expect(index).toContain("### robots.txt \\{#robots-txt\\}");
     expect(index).toContain(
       "[Read the full definition](/glossary/robots-txt).",

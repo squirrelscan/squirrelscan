@@ -28,9 +28,12 @@ How it works:
 
 ### Fixed
 
+- `content/keyword-stuffing` now excludes common function words for German, Spanish, French, Portuguese, Italian and Dutch pages according to `<html lang>`, so natural non-English copy no longer reports those words as overused (#1042).
+- Glossary JSON-LD stays in rendered pages without leaking its raw script text into `llms-full.txt` or per-page agent Markdown (#1113).
 - robots.txt parsing now gives consecutive `User-agent` lines the rules that follow them, keeps a named group whose empty `Disallow:` explicitly allows every path, and ignores inline comments, so AI-crawler and indexability checks match how crawlers read those common files (#1078).
 - The crawler now recognizes managed challenge pages served with HTTP 403, including Cloudflare, Akamai and other detected providers, while a plain or stalled 403 remains the generic `Request blocked by server` result. Challenge-body sampling is capped at 64 KB and preserves the existing 503 timeout behavior.
 - `install.sh` and `install.ps1` now validate the release version, asset filename and SHA-256 from release metadata before building download URLs or downloading the binary, preventing malformed metadata from retargeting installer requests. Checksum comparison accepts either hexadecimal letter case. See [Installation](https://docs.squirrelscan.com/getting-started/installation).
+- HTML report issue cards now show each detected technology badge once, preserving the order in which distinct technologies first appear (#1093).
 
 ### Security
 

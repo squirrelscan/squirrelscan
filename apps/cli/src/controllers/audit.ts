@@ -2022,6 +2022,7 @@ export async function runAudit(
           scopeLimit.clamped && Number.isFinite(scopeLimit.requested);
         // Queued but never fetched, so a capped report can say how much of
         // the site it knew of beyond the pages it audited.
+        // This is one cheap indexed COUNT(*) and intentionally runs on every audit.
         const unfetched = await Effect.runPromise(
           unfetchedFrontierCount(sqliteStorage, crawlId)
         );

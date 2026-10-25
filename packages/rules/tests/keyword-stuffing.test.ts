@@ -139,6 +139,50 @@ describe("content/keyword-stuffing false-positive fixes (#695)", () => {
   });
 });
 
+describe("content/keyword-stuffing language stop words (#1042)", () => {
+  test.each([
+    ["de-DE", "und"],
+    ["es", "para"],
+    ["fr", "avec"],
+    ["pt-BR", "para"],
+    ["it", "della"],
+    ["nl", "voor"],
+  ])("%s excludes its own function word %p", (lang, word) => {
+    const html = `<html lang="${lang}"><body><p>${`${word} `.repeat(30)}${filler(120)}</p></body></html>`;
+    const { checks } = keywordStuffingRule.run(ctx(html));
+    expect(checks[0].status).toBe("pass");
+  });
+
+  test("the German reproduction excludes its stop words", () => {
+    const paragraph =
+      "Hier findest du alles für den Sommer, alles aus weicher Baumwolle. " +
+      "Unsere Shirts kommen aus fairer Produktion und halten lange. " +
+      "Wähle aus vielen Farben die Bademode, die zu dir passt. " +
+      "Versand und Rückgabe sind kostenlos, die Lieferung dauert zwei Tage. " +
+      "Die Stoffe stammen aus Portugal, genäht wird in kleinen Werkstätten. " +
+      "Pflegehinweise findest du auf jedem Etikett und in unserem Ratgeber.";
+    const html = `<html lang="de"><body><p>${paragraph.repeat(12)}</p></body></html>`;
+    const { checks } = keywordStuffingRule.run(ctx(html));
+    const reported = new Set(checks[0].items?.map((item) => item.id));
+    for (const stopWord of ["alles", "aus", "die", "und"]) {
+      expect(reported.has(stopWord)).toBe(false);
+    }
+  });
+
+  test("a German content word over the threshold is still reported", () => {
+    const html = `<html lang="de"><body><p>${"bademode ".repeat(30)}${filler(120)}</p></body></html>`;
+    const { checks } = keywordStuffingRule.run(ctx(html));
+    expect(checks[0].status).toBe("warn");
+    expect(checks[0].items?.some((item) => item.id === "bademode")).toBe(true);
+  });
+
+  test("an unknown page language keeps the English exclusions", () => {
+    const html = `<html lang="xx"><body><p>${"the ".repeat(30)}${filler(120)}</p></body></html>`;
+    const { checks } = keywordStuffingRule.run(ctx(html));
+    expect(checks[0].status).toBe("pass");
+  });
+});
+
 describe("content/keyword-stuffing ignores the site's own brand name", () => {
   function siteCtx(url: string, html: string): RuleContext {
     const doc = parseHTML(html).document;

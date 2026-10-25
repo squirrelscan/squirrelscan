@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport, EditorSummary } from "../src/types";
+import { REPORT_HTML_VERSION } from "../src/constants";
 import { buildEditorSummaryRequest, editorSummaryView, toEditorSummary } from "../src/editor-summary";
 import { renderHtml } from "../src/output/html";
 import { renderJson } from "../src/output/json";
@@ -234,6 +235,51 @@ describe("renderers with priorities", () => {
     expect(out).toContain('data-issues="ranked"');
     expect(out).toContain("Cache pages with WP Rocket");
     expect(out).not.toContain('data-big-ticket');
+  });
+
+  test("html renders one technology badge per id in first-occurrence order", () => {
+    const out = renderHtml(
+      report({
+        technologies: {
+          items: [
+            {
+              id: "cloudflare",
+              name: "Cloudflare",
+              category: "cdn",
+              version: null,
+              confidence: "high",
+              detectedBy: "headers",
+            },
+            {
+              id: "wordpress",
+              name: "WordPress",
+              category: "cms",
+              version: null,
+              confidence: "high",
+              detectedBy: "html",
+            },
+          ],
+          added: [],
+          removed: [],
+          firstScan: true,
+        },
+        editorSummary: {
+          ...WITH_PRIORITIES,
+          priorities: [
+            {
+              ...WITH_PRIORITIES.priorities![0]!,
+              technologies: ["cloudflare", "wordpress", "cloudflare"],
+            },
+          ],
+        },
+      }),
+    );
+    const start = out.indexOf('data-issues="ranked"');
+    const issues = out.slice(start, out.indexOf("</section>", start));
+    expect(issues.match(/>Cloudflare<\/span>/g)).toHaveLength(1);
+    expect(issues.match(/>WordPress<\/span>/g)).toHaveLength(1);
+    expect(issues.indexOf("Cloudflare")).toBeLessThan(issues.indexOf("WordPress"));
+    expect(REPORT_HTML_VERSION).toBeGreaterThanOrEqual(22);
   });
 
   test("json carries the priorities in the summary", () => {
