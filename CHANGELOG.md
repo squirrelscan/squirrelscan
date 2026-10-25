@@ -34,6 +34,7 @@ How it works:
 - The crawler now recognizes managed challenge pages served with HTTP 403, including Cloudflare, Akamai and other detected providers, while a plain or stalled 403 remains the generic `Request blocked by server` result. Challenge-body sampling is capped at 64 KB and preserves the existing 503 timeout behavior.
 - `install.sh` and `install.ps1` now validate the release version, asset filename and SHA-256 from release metadata before building download URLs or downloading the binary, preventing malformed metadata from retargeting installer requests. Checksum comparison accepts either hexadecimal letter case. See [Installation](https://docs.squirrelscan.com/getting-started/installation).
 - HTML report issue cards now show each detected technology badge once, preserving the order in which distinct technologies first appear (#1093).
+- `a11y/aria-text` and `a11y/aria-hidden-focus` no longer slow an audit down on a page that nests many `role="text"` or `aria-hidden` elements. Each scanned its whole subtree again for every nested element: 1,000 nested `aria-hidden` containers took 56 s and now take 22 ms. The findings are unchanged ([benchmark](https://github.com/squirrelscan/squirrelscan/blob/main/benchmarks/2026-10-a11y-nesting.md)).
 
 ## v0.0.133 (2026-10-24)
 

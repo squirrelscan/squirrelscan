@@ -9,6 +9,7 @@ announcements draw their numbers from these files, never from memory.
 |---|---|---|
 | [2026-09 performance program](./2026-09-perf-program.md) | CLI, engine, hosted runtime | 2,500-page audit: 3.9 GB → 996 MB heap, 502 s → 177 s; cold crawl on a filled cache 833 → 26 ms/page |
 | [2026-10 Content-Encoding bombs](./2026-10-content-encoding-bombs.md) | crawler, fetchers, root probes | audit of a site of 1 GiB compression bombs: 2.3-2.8 GB → 365 MB peak RSS; every fetch path now costs what an uncompressed body over its cap costs |
+| [2026-10 Nested a11y containers](./2026-10-a11y-nesting.md) | rules (`a11y/aria-text`, `a11y/aria-hidden-focus`) | 5,000 nested `role="text"` elements: 35 s → 23 ms; 1,000 nested `aria-hidden` containers: 56 s → 22 ms |
 
 ## Reproducing
 

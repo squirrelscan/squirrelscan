@@ -71,12 +71,18 @@ export function unconfirmedItem(id: string, seen: StaticVisibility): ControlItem
 
 /** The row message for unconfirmed items: names the width reason when every item has it. */
 export function unconfirmedMessage(what: string, items: ReadonlyArray<ControlItem>): string {
-  const allWidth =
-    items.length > 0 &&
-    items.every((item) => typeof item !== "string" && item.meta?.reason === WIDTH_REASON);
-  return allWidth
-    ? `${items.length} ${what} hidden only at some widths by a media query (unconfirmed)`
-    : `${items.length} ${what} may be hidden by a style (unconfirmed)`;
+  return unconfirmedMessageFor(
+    what,
+    items.length,
+    items.every((item) => typeof item !== "string" && item.meta?.reason === WIDTH_REASON),
+  );
+}
+
+/** `unconfirmedMessage` from a count and whether every item is width-only. */
+export function unconfirmedMessageFor(what: string, count: number, allWidth: boolean): string {
+  return count > 0 && allWidth
+    ? `${count} ${what} hidden only at some widths by a media query (unconfirmed)`
+    : `${count} ${what} may be hidden by a style (unconfirmed)`;
 }
 
 export interface StaticVisibilityOptions {
