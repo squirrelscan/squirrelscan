@@ -95,6 +95,8 @@ const LEAVES = [
   '<template aria-hidden="true"><button>b</button></template>',
   '<template role="text"><a href="/t">t</a></template>',
   '<svg><a href="/s">s</a></svg>',
+  // In SVG a template is not hidden by static-hidden, so only the skip keeps it out.
+  '<svg><template><a href="/st">t</a></template></svg>',
 ];
 
 /** A random tree of containers and leaves, `depth` levels at most. */
