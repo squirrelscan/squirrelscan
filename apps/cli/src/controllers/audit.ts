@@ -34,6 +34,7 @@ import {
   createFetchDocumentFetcher,
 } from "@squirrelscan/fetchers";
 import { createProbeBudget, selectDiscoveryProbes } from "@squirrelscan/rules";
+import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
 
 import type { RetentionOutcome } from "@/audit/retention";
 import type { PreflightBalance } from "@/lib/balance";
@@ -2508,9 +2509,15 @@ export function mergeOptionsToConfig(
             ),
           }
         : {}),
-      // CLI --header values override matching [crawler] headers from TOML (#494).
+      // CLI --header values override matching [crawler] headers from TOML (#494),
+      // whatever the casing of either name (#3346).
       ...(options.headers && Object.keys(options.headers).length > 0
-        ? { headers: { ...config.crawler.headers, ...options.headers } }
+        ? {
+            headers: mergeHeaderRecords(
+              config.crawler.headers,
+              options.headers
+            ),
+          }
         : {}),
       // --header-host adds to [crawler] header_hosts (#732).
       ...(options.headerHosts && options.headerHosts.length > 0

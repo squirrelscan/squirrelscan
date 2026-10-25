@@ -10,6 +10,7 @@ import { BUDGET_EXHAUSTED_ERROR, budgetedTimeoutMs, safeFetchWithDeadline } from
 import { noteRefusal } from "./refusals";
 
 import type { PhaseBudget } from "./deadline";
+import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
 
 // Matches the limit Google documents for robots.txt; anything past it is
 // ignored by real crawlers, so there is nothing to gain by reading further.
@@ -100,13 +101,15 @@ export function fetchRobotsEvaluator(
       safeFetchWithDeadline(
         robotsUrl,
         {
-          headers: {
-            "User-Agent": userAgent,
-            Accept: "text/plain",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Upgrade-Insecure-Requests": "1",
-            ...customHeaders,
-          },
+          headers: mergeHeaderRecords(
+            {
+              "User-Agent": userAgent,
+              Accept: "text/plain",
+              "Accept-Language": "en-US,en;q=0.9",
+              "Upgrade-Insecure-Requests": "1",
+            },
+            customHeaders,
+          ),
         },
         timeoutMs,
         async (response) => {

@@ -22,7 +22,7 @@ import {
   TECH_DETECT_HEADER_NAMES,
   TECH_DETECT_PRESENCE_HEADERS,
 } from "@squirrelscan/utils/constants";
-import { headersForRedirect, techCookieNames } from "@squirrelscan/utils/headers";
+import { headersForRedirect, mergeHeaderRecords, techCookieNames } from "@squirrelscan/utils/headers";
 import {
   egressGuardedSend,
   egressRefuses,
@@ -1010,13 +1010,17 @@ function fetchPageStandardOnce(
   };
 
   return Effect.gen(function* () {
-    let headers = new Headers({
-      "User-Agent": options.userAgent,
-      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "Accept-Language": "en-US,en;q=0.9",
-      "Upgrade-Insecure-Requests": "1",
-      ...options.headers,
-    });
+    let headers = new Headers(
+      mergeHeaderRecords(
+        {
+          "User-Agent": options.userAgent,
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9",
+          "Upgrade-Insecure-Requests": "1",
+        },
+        options.headers,
+      ),
+    );
 
     const MAX_REDIRECTS = 10;
     const hops: RedirectHop[] = [];
@@ -1292,13 +1296,15 @@ export function fetchPage(
   const fetcherId = options.fetcher.id;
   // Headers passed to the custom fetcher only; the standard-fetch fallback
   // rebuilds its own from options inside fetchPageStandard.
-  const headers = {
-    "User-Agent": options.userAgent,
-    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Upgrade-Insecure-Requests": "1",
-    ...options.headers,
-  };
+  const headers = mergeHeaderRecords(
+    {
+      "User-Agent": options.userAgent,
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Upgrade-Insecure-Requests": "1",
+    },
+    options.headers,
+  );
 
   // Impersonation/custom fetcher path. On a TLS/status-0 failure, fall back to a
   // standard fetch (dropping impersonation) so the audit can still detect

@@ -19,7 +19,12 @@ import { COVERAGE_PAGE_LIMITS, REPORT_LIMITS } from "@squirrelscan/core-contract
 import { extractCrawlableUrls } from "@squirrelscan/parser/extractors";
 import { parseDocument, parsePage, type ParsedPageCache } from "@squirrelscan/parser";
 import { findClientRedirects } from "@squirrelscan/utils/client-redirects";
-import { createHeaderScope, headerScopeBase, type HeaderScope } from "@squirrelscan/utils/headers";
+import {
+  createHeaderScope,
+  headerScopeBase,
+  mergeHeaderRecords,
+  type HeaderScope,
+} from "@squirrelscan/utils/headers";
 import {
   DEFAULT_MAX_DOCUMENT_BODY_BYTES,
   fetchUndecoded,
@@ -1399,7 +1404,7 @@ export function createCrawler(
             followRedirects: config.followRedirects,
             // Custom headers first (audited origin only, #959); conditional
             // (If-None-Match / If-Modified-Since) wins on collision.
-            headers: { ...customHeadersFor(entry.normalizedUrl), ...conditionalHeaders },
+            headers: mergeHeaderRecords(customHeadersFor(entry.normalizedUrl), conditionalHeaders),
             fetcher: config.documentFetcher,
             // Stored normalized-source hash so the render-all gate can reuse the
             // cached render when the origin rolls its validators (#839). Its

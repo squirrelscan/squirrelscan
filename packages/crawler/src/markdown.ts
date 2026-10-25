@@ -5,6 +5,7 @@ import { noteRefusal } from "./refusals";
 
 import type { PhaseBudget, ProbeGate } from "./deadline";
 import type { MarkdownProbeData } from "@squirrelscan/core-contracts";
+import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
 
 const PROBE_TIMEOUT_MS = 30_000;
 
@@ -63,7 +64,7 @@ async function probeOne(
   try {
     return await safeFetchWithDeadline(
       url,
-      { headers: { "User-Agent": userAgent, Accept: accept, ...customHeaders } },
+      { headers: mergeHeaderRecords({ "User-Agent": userAgent, Accept: accept }, customHeaders) },
       timeoutMs,
       async (res) => {
         if (noteRefusal(budget?.refusals, url, "markdown", res)) {

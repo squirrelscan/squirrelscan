@@ -9,7 +9,7 @@ import type {
   SitemapFetchFailure,
   SitemapUrl,
 } from "@squirrelscan/core-contracts";
-import { createHeaderScope, type HeaderScope } from "@squirrelscan/utils/headers";
+import { createHeaderScope, mergeHeaderRecords, type HeaderScope } from "@squirrelscan/utils/headers";
 import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 import { resolveRobotsSitemapUrl } from "@squirrelscan/utils/robots-txt";
 
@@ -702,13 +702,15 @@ export function fetchSitemap(
   // and port, #959) is in the caller's scope. With no scope, none are sent.
   const originScopedHeaders = headerScope?.(url) ? customHeaders : undefined;
   const init: RequestInit & { decompress: boolean } = {
-    headers: {
-      "User-Agent": userAgent,
-      Accept: "application/xml, text/xml, */*",
-      "Accept-Language": "en-US,en;q=0.9",
-      "Accept-Encoding": "gzip",
-      ...originScopedHeaders,
-    },
+    headers: mergeHeaderRecords(
+      {
+        "User-Agent": userAgent,
+        Accept: "application/xml, text/xml, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip",
+      },
+      originScopedHeaders,
+    ),
     redirect: "follow",
     // #662: a Bun fetch option. Bun's own decoding inflates a whole response
     // before a reader can stop it (a 1 MB gzip bomb cost 1.9 GB that way), so

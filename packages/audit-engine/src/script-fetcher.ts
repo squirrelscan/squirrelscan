@@ -20,6 +20,7 @@ import type { FetchBudget, FetchOutcome } from "./fetch-budget";
 import { customHeadersFor, type HeaderScope } from "./lib/header-scope";
 import { rateLimitedFlag, wafBlockedFlag } from "./lib/asset-status";
 import { normalizeEncoding } from "./resource-checker";
+import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
 
 export interface ScriptFetchResult {
   url: string;
@@ -143,11 +144,10 @@ async function fetchScriptAttempt(
       url,
       {
         method: "GET",
-        headers: {
-          "User-Agent": options.userAgent,
-          Accept: "application/javascript, text/javascript, */*",
-          ...customHeadersFor(url, options.customHeaders, options.headerScope),
-        },
+        headers: mergeHeaderRecords(
+          { "User-Agent": options.userAgent, Accept: "application/javascript, text/javascript, */*" },
+          customHeadersFor(url, options.customHeaders, options.headerScope),
+        ),
         signal: controller.signal,
       },
       // #2717: undecoded on every hop; readBodyCapped decodes within its cap.

@@ -6,6 +6,7 @@ import { CLOUDFLARE_CHALLENGE_SCRIPT } from "@squirrelscan/utils/waf";
 import { BUDGET_EXHAUSTED_ERROR, budgetedTimeoutMs, safeFetchWithDeadline, ungated } from "./deadline";
 
 import type { PhaseBudget, ProbeGate } from "./deadline";
+import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
 import type {
   AgentAccessData,
   AgentAccessProbe,
@@ -84,13 +85,11 @@ async function probeOne(
       {
         // A configured custom User-Agent (any casing) must not replace the probe
         // identity — the whole point is fetching as browser/GPTBot/Claude-User.
-        headers: {
-          Accept: "text/html,*/*",
-          ...Object.fromEntries(
-            Object.entries(customHeaders ?? {}).filter(([k]) => k.toLowerCase() !== "user-agent"),
-          ),
-          "User-Agent": identity.ua,
-        },
+        headers: mergeHeaderRecords(
+          { Accept: "text/html,*/*" },
+          customHeaders,
+          { "User-Agent": identity.ua },
+        ),
         redirect: "follow",
       },
       timeoutMs,

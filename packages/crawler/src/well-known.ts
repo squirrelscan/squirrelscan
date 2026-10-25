@@ -8,6 +8,7 @@ import { BUDGET_EXHAUSTED_ERROR, budgetedTimeoutMs, safeFetchWithDeadline, ungat
 
 import type { PhaseBudget, ProbeGate } from "./deadline";
 import type { WellKnownProbe, WellKnownProbeData } from "@squirrelscan/core-contracts";
+import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
 
 // Fixed probe list, owned by core-contracts so rules can declare the paths they
 // read (#409). Rules decide what each hit/miss means; the crawler only fetches +
@@ -107,11 +108,10 @@ async function probeOne(
     return await safeFetchWithDeadline(
       url,
       {
-        headers: {
-          "User-Agent": userAgent,
-          Accept: "application/json, text/markdown, */*",
-          ...customHeaders,
-        },
+        headers: mergeHeaderRecords(
+          { "User-Agent": userAgent, Accept: "application/json, text/markdown, */*" },
+          customHeaders,
+        ),
       },
       timeoutMs,
       async (response) => {

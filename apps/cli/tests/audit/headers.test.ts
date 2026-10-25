@@ -32,6 +32,20 @@ describe("normalizeHeaderArgs", () => {
 });
 
 describe("parseHeaders", () => {
+  test("a later spec wins over one whose name differs only in case (#3346)", () => {
+    const { headers, errors } = parseHeaders([
+      "x-site-auth: first",
+      "X-Site-Auth: second",
+      "User-Agent: acme/1",
+    ]);
+    expect(errors).toEqual([]);
+    expect(headers).toEqual({
+      "X-Site-Auth": "second",
+      "User-Agent": "acme/1",
+    });
+    expect(new Headers(headers).get("x-site-auth")).toBe("second");
+  });
+
   test("parses Name: Value, splitting on the first colon only", () => {
     const r = parseHeaders(["X-Foo: a:b:c"]);
     expect(r.errors).toEqual([]);

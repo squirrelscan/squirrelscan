@@ -806,7 +806,9 @@ squirrel audit https://example.com \
 
 The repeatable `--header` / `-H` flag takes a `Name: Value` string (split on the
 first colon, so values may contain colons). CLI headers **merge over** the TOML
-`[crawler] headers` map; a flag with the same name wins. Quoting is preserved
+`[crawler] headers` map; a flag with the same name wins, whatever the casing of
+either. A custom header replaces the crawler's own header of the same name on
+every request, so `-H "user-agent: ..."` sends that agent alone. Quoting is preserved
 verbatim, so `Signature-Agent: "https://shopify.com"` keeps its quotes
 end-to-end.
 

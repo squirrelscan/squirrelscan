@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { truncateToBytes } from "@squirrelscan/utils/bytes";
-import { createHeaderScope, type HeaderScope } from "@squirrelscan/utils/headers";
+import { createHeaderScope, mergeHeaderRecords, type HeaderScope } from "@squirrelscan/utils/headers";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
 
@@ -74,11 +74,10 @@ async function fetchLicenseDoc(
     return await safeFetchWithDeadline(
       url,
       {
-        headers: {
-          "User-Agent": userAgent,
-          Accept: "application/rsl+xml, application/xml, text/xml, */*",
-          ...customHeaders,
-        },
+        headers: mergeHeaderRecords(
+          { "User-Agent": userAgent, Accept: "application/rsl+xml, application/xml, text/xml, */*" },
+          customHeaders,
+        ),
       },
       timeoutMs,
       async (response) => {
@@ -131,11 +130,10 @@ export function fetchRslLicensing(
           await safeFetchWithDeadline(
             robotsUrl,
             {
-              headers: {
-                "User-Agent": userAgent,
-                Accept: "text/plain, */*",
-                ...(scope(robotsUrl) ? customHeaders : undefined),
-              },
+              headers: mergeHeaderRecords(
+                { "User-Agent": userAgent, Accept: "text/plain, */*" },
+                scope(robotsUrl) ? customHeaders : undefined,
+              ),
             },
             robotsTimeoutMs,
             async (response) => {
