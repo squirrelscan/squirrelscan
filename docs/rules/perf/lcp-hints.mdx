@@ -13,7 +13,7 @@ Preloading helps when the image is discoverable late, which is the usual case be
 
 The rule runs on every crawled page and emits one check:
 
-- `lcp-preload`, warning with the message `N likely-LCP images loaded without preload`, or `1 likely-LCP image loaded without preload` in the singular. The value is the count. There are no items: the count is per page rather than a list of every image across the site.
+- `lcp-preload`, warning with the message `N likely-LCP images loaded without preload`, or `1 likely-LCP image loaded without preload` in the singular. The value is the count. There are no items: the count is per page rather than a list of every image across the site. `details.page` identifies the page, `details.candidates[].src` names each resolved candidate URL, `details.candidates[].reason` explains why it was included, `details.preloads` lists the resolved image preload URLs compared against it and `details.additionalPreloads` counts preload URLs omitted from that list. Candidate evidence is bounded to the same first three images as the count, at most ten preload URLs are shown and each reported URL is bounded.
 - `lcp-preload`, passing with the message `LCP images appear to be optimized`.
 
 A candidate is one of the first three eligible images in document order. This is the same eligibility [perf/lcp-fetchpriority](/rules/perf/lcp-fetchpriority) uses, from one shared finder, so the two rules pick the same hero image. An image is eligible when it has a `src` that is not a `data:` URI, and it:
@@ -23,7 +23,7 @@ A candidate is one of the first three eligible images in document order. This is
 - is not inside a `<header>` or `<nav>`, where logos live;
 - is not declared small: when both `width` and `height` are declared, the larger must be at least 300. An image with no declared dimensions stays eligible.
 
-A candidate counts as unpreloaded when no `link[rel~="preload"][as="image"]` on the page matches it. A preload matches when its `href` or any `imagesrcset` URL equals the image's `src` or any of its own `srcset` URLs. URLs are compared as absolute URLs without the query string or fragment, so a relative `src`, an absolute preload `href` and a cache-busting `?v=2` all match. A preload for some other image is no evidence about this one. The count is not capped at one: two eligible images that are both unpreloaded report `2 likely-LCP images`.
+A candidate counts as unpreloaded when no `link[rel~="preload"][as="image"]` on the page matches it. A preload matches when its `href` or any `imagesrcset` URL equals the image's `src` or any of its own `srcset` URLs. URLs are compared as absolute URLs without the query string or fragment, so a relative `src`, an absolute preload `href` and a cache-busting `?v=2` all match. A preload for some other image is no evidence about this one. The count is not capped at one: two eligible images that are both unpreloaded report `2 likely-LCP images`. Stored `rule_results` keep this evidence for every page. The JSON report groups the page checks into one finding, so its grouped check shows the evidence for one affected page named by `details.page`; use `rule_results` when every page's evidence is needed.
 
 The candidates come from a shared analysis of the page that six performance rules read, computed once per page.
 

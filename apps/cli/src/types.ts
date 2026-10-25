@@ -733,6 +733,7 @@ export interface HreflangAnalysis {
 export interface CWVHints {
   // LCP hints
   largeImagesWithoutPreload: string[];
+  imagePreloadUrls: string[];
   renderBlockingResources: string[];
   fontsWithoutSwap: string[];
   missingPreconnect: string[];

@@ -2,6 +2,10 @@
 
 import type { RuleContext } from "@squirrelscan/rules";
 
+import {
+  CHECK_DETAILS_LIMITS,
+  REPORT_LIMITS,
+} from "@squirrelscan/core-contracts/limits";
 import { parseHTML } from "@squirrelscan/parser/dom";
 import { perf } from "@squirrelscan/rules";
 import { describe, expect, test } from "bun:test";
@@ -20,7 +24,7 @@ function pageCtx(html: string, url = "https://example.com/"): RuleContext {
 }
 
 describe("perf/lcp-hints output", () => {
-  test("reports a count, not a flat image list", () => {
+  test("reports a count with bounded candidate details, not a flat item list", () => {
     const html = `<!doctype html><html><head></head><body>
       <img src="/hero.jpg"><img src="/banner.png"></body></html>`;
     const { checks } = lcpHintsRule.run(pageCtx(html)) as { checks: any[] };
@@ -32,7 +36,21 @@ describe("perf/lcp-hints output", () => {
     // No explicit items / image dump — the report auto-generates one per-page
     // item from the message, so the count survives grouping per page.
     expect(c.items).toBeUndefined();
-    expect(c.details).toBeUndefined();
+    expect(c.details).toEqual({
+      page: "https://example.com/",
+      candidates: [
+        {
+          src: "https://example.com/hero.jpg",
+          reason: "eager likely-LCP candidate with no matching image preload",
+        },
+        {
+          src: "https://example.com/banner.png",
+          reason: "eager likely-LCP candidate with no matching image preload",
+        },
+      ],
+      preloads: [],
+      additionalPreloads: 0,
+    });
   });
 
   test("singular wording for one image", () => {
@@ -49,6 +67,21 @@ describe("perf/lcp-hints output", () => {
     const { checks } = lcpHintsRule.run(pageCtx(html)) as { checks: any[] };
     const c = checks.find((x) => x.name === "lcp-preload");
     expect(c.status).toBe("pass");
+  });
+
+  test("keeps preload evidence when the runner supplied no parsed document", () => {
+    const html = `<!doctype html><html><head>
+      <link rel="preload" as="image" href="/other.jpg"></head>
+      <body><img src="/hero.jpg"></body></html>`;
+    const { checks } = lcpHintsRule.run({
+      page: { url: "https://example.com/page", html, headers: {} },
+      parsed: { document: null },
+      options: {},
+    } as unknown as RuleContext) as { checks: any[] };
+    const c = checks.find((x) => x.name === "lcp-preload");
+
+    expect(c.details.preloads).toEqual(["https://example.com/other.jpg"]);
+    expect(c.details.candidates[0].src).toBe("https://example.com/hero.jpg");
   });
 });
 
@@ -78,6 +111,13 @@ describe("perf/lcp-hints candidates and preload matching", () => {
     const c = preloadCheck(REPRO.replace(/<link rel="preload"[^>]*>/, ""));
     expect(c.status).toBe("warn");
     expect(c.value).toBe(1);
+    expect(c.details.candidates).toEqual([
+      {
+        src: "https://example.com/hero.png",
+        reason: "eager likely-LCP candidate with no matching image preload",
+      },
+    ]);
+    expect(c.details.preloads).toEqual([]);
   });
 
   test("undimensioned two-image case still warns with value 2", () => {
@@ -132,9 +172,68 @@ describe("perf/lcp-hints candidates and preload matching", () => {
 
   test("a preload for another image does not clear the hero", () => {
     const c = preloadCheck(`<!doctype html><html><head>
-      <link rel="preload" as="image" href="/other.png"></head>
+      <link rel="preload" as="image" href="/other.png"
+        imagesrcset="/other-480.png 480w, https://cdn.example.com/other-1200.png 1200w"></head>
       <body><img src="/hero.png" width="1200" height="800"></body></html>`);
     expect(c.status).toBe("warn");
+    expect(c.details).toEqual({
+      page: "https://example.com/",
+      candidates: [
+        {
+          src: "https://example.com/hero.png",
+          reason: "eager likely-LCP candidate with no matching image preload",
+        },
+      ],
+      preloads: [
+        "https://example.com/other.png",
+        "https://example.com/other-480.png",
+        "https://cdn.example.com/other-1200.png",
+      ],
+      additionalPreloads: 0,
+    });
+  });
+
+  test("candidate and preload evidence stays bounded", () => {
+    const preloadLinks = Array.from(
+      { length: 12 },
+      (_, i) => `<link rel="preload" as="image" href="/other-${i}.png">`
+    ).join("");
+    const c =
+      preloadCheck(`<!doctype html><html><head>${preloadLinks}</head><body>
+      <img src="/one.png"><img src="/two.png"><img src="/three.png"><img src="/four.png">
+      </body></html>`);
+
+    expect(c.value).toBe(3);
+    expect(
+      c.details.candidates.map((candidate: { src: string }) => candidate.src)
+    ).toEqual([
+      "https://example.com/one.png",
+      "https://example.com/two.png",
+      "https://example.com/three.png",
+    ]);
+    expect(c.details.preloads).toHaveLength(10);
+    expect(c.details.additionalPreloads).toBe(2);
+  });
+
+  test("omits non-network preload URLs and byte-bounds long URL evidence", () => {
+    const longPath = `${"a".repeat(2_000)}.png`;
+    const c = preloadCheck(`<!doctype html><html><head>
+      <link rel="preload" as="image" href="data:image/png;base64,${"a".repeat(20_000)}">
+      <link rel="preload" as="image" href="blob:https://example.com/1234">
+      <link rel="preload" as="image" href="/${longPath}"></head>
+      <body><img src="/hero-${longPath}"></body></html>`);
+
+    expect(c.details.preloads).toHaveLength(1);
+    expect(c.details.preloads[0].length).toBeLessThanOrEqual(
+      REPORT_LIMITS.maxShortString
+    );
+    expect(c.details.candidates[0].src.length).toBeLessThanOrEqual(
+      REPORT_LIMITS.maxShortString
+    );
+    expect(
+      new TextEncoder().encode(JSON.stringify(c.details)).byteLength
+    ).toBeLessThanOrEqual(CHECK_DETAILS_LIMITS.maxBytes);
+    expect(c.details.additionalPreloads).toBe(0);
   });
 });
 

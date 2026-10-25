@@ -35,13 +35,29 @@ function urlKey(value: string, base: string): string | null {
   }
 }
 
-// URL keys from a srcset / imagesrcset attribute (drops the descriptors).
-function srcsetKeys(value: string | null, base: string): string[] {
+/** Absolute URL used when exposing an image or preload in report evidence. */
+export function resolveImageUrl(value: string, base: string): string | null {
+  try {
+    return new URL(value, base).href;
+  } catch {
+    return null;
+  }
+}
+
+function srcsetValues(value: string | null): string[] {
   if (!value) return [];
   const out: string[] = [];
   for (const part of value.split(",")) {
     const url = part.trim().split(/\s+/)[0];
-    if (!url) continue;
+    if (url) out.push(url);
+  }
+  return out;
+}
+
+// URL keys from a srcset / imagesrcset attribute (drops the descriptors).
+function srcsetKeys(value: string | null, base: string): string[] {
+  const out: string[] = [];
+  for (const url of srcsetValues(value)) {
     const key = urlKey(url, base);
     if (key) out.push(key);
   }
@@ -84,6 +100,24 @@ export function collectImagePreloadKeys(doc: Document, pageUrl: string): Set<str
     for (const key of srcsetKeys(link.getAttribute("imagesrcset"), pageUrl)) keys.add(key);
   }
   return keys;
+}
+
+/** Resolved href and imagesrcset URLs from every image preload, in document order. */
+export function collectImagePreloadUrls(doc: Document, pageUrl: string): string[] {
+  const urls = new Set<string>();
+  const addResolved = (value: string) => {
+    const resolved = resolveImageUrl(value, pageUrl);
+    if (!resolved || resolved.startsWith("data:") || resolved.startsWith("blob:")) return;
+    urls.add(resolved);
+  };
+  for (const link of querySelectorAllOutsideNoscript(doc, 'link[rel~="preload"][as="image"]')) {
+    const href = link.getAttribute("href");
+    if (href) addResolved(href);
+    for (const value of srcsetValues(link.getAttribute("imagesrcset"))) {
+      addResolved(value);
+    }
+  }
+  return [...urls];
 }
 
 /**

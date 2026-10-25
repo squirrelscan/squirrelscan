@@ -8,6 +8,7 @@ import type { CWVHints } from "@squirrelscan/core-contracts";
 
 import {
   collectImagePreloadKeys,
+  collectImagePreloadUrls,
   findLcpCandidates,
   isImagePreloaded,
 } from "../shared/lcp-candidate";
@@ -125,6 +126,7 @@ export function scriptLoading(script: Element): ScriptLoading {
 function emptyCWVHints(): CWVHints {
   return {
     largeImagesWithoutPreload: [],
+    imagePreloadUrls: [],
     renderBlockingResources: [],
     fontsWithoutSwap: [],
     missingPreconnect: [],
@@ -154,6 +156,7 @@ function analyzeCWVHints(
   const pageDomain = getHostname(pageUrl);
 
   const hints: CWVHints = emptyCWVHints();
+  hints.imagePreloadUrls.push(...collectImagePreloadUrls(doc, pageUrl));
 
   // Every resource below skips <noscript> content: a browser with scripting on
   // never loads what sits in it (#434).
