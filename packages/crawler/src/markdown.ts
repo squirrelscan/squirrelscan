@@ -64,7 +64,8 @@ async function probeOne(
   try {
     return await safeFetchWithDeadline(
       url,
-      { headers: mergeHeaderRecords({ "User-Agent": userAgent, Accept: accept }, customHeaders) },
+      // The negotiation IS the Accept, so it is laid last (repo#3346).
+      { headers: mergeHeaderRecords({ "User-Agent": userAgent }, customHeaders, { Accept: accept }) },
       timeoutMs,
       async (res) => {
         if (noteRefusal(budget?.refusals, url, "markdown", res)) {

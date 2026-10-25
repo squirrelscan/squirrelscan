@@ -646,15 +646,15 @@ async function checkSingleResourceAsync(
     let { response: getResponse, finalUrl: getFinalUrl } = await fetchResource(url, {
       method: "GET",
       headers: mergeHeaderRecords(
+        { "User-Agent": options.userAgent, Accept: "*/*" },
+        customHeadersFor(url, options.customHeaders, options.headerScope),
+        conditional,
+        // The size check reads this range and no more: never the caller's.
         {
-          "User-Agent": options.userAgent,
-          Accept: "*/*",
           Range: readHeader
             ? `bytes=0-${RESOURCE_SIZE_LIMITS.IMAGE_HEADER_BYTES - 1}`
             : "bytes=0-0",
         },
-        customHeadersFor(url, options.customHeaders, options.headerScope),
-        conditional,
       ),
       signal: getController.signal,
     }, options);
