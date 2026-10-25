@@ -8,6 +8,9 @@ import { Effect } from "effect";
 import type { Config } from "@squirrelscan/config";
 import { createCrawler } from "@squirrelscan/crawler";
 
+import { createHeaderScope } from "@squirrelscan/utils/headers";
+
+import { runCloakingProbe } from "../src/cloaking-probe";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
 
 const servers: Array<{ stop: (closeActive?: boolean) => void }> = [];
@@ -79,5 +82,32 @@ describe("asset checks with a custom header that differs only in case (repo#3346
       new Set(["/style.css", "/app.js", "/logo.png"]),
     );
     for (const s of assets) expect(s.userAgent).toBe("custom-agent");
+  });
+
+  test("the cloaking probe's Googlebot fetch keeps its agent over a custom one", async () => {
+    const agents: Array<string | null> = [];
+    const server = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch(req) {
+        agents.push(req.headers.get("user-agent"));
+        return new Response("<!doctype html><title>x</title><p>page</p>", {
+          headers: { "content-type": "text/html" },
+        });
+      },
+    });
+    servers.push(server);
+    const origin = `http://127.0.0.1:${server.port}`;
+    await runCloakingProbe([{ url: `${origin}/page`, reason: "orphan" }], {
+      maxPages: 1,
+      recentDays: 14,
+      queryVariation: false,
+      googlebotUserAgent: "Googlebot/2.1",
+      defaultUserAgent: "Browser",
+      customHeaders: { "user-agent": "custom-agent" },
+      headerScope: createHeaderScope(origin),
+      egress: { allowPrivateNetwork: true },
+    });
+    expect(agents.sort()).toEqual(["Googlebot/2.1", "custom-agent"]);
   });
 });

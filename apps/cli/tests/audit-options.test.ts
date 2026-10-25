@@ -147,6 +147,28 @@ describe("mergeOptionsToConfig", () => {
     expect(merged.crawler.headers).toEqual({ "X-From-Toml": "1" });
   });
 
+  test("CLI headers override TOML headers whose names differ only in case (#3346)", () => {
+    const config = getDefaultConfig();
+    config.crawler.headers = {
+      "x-override": "toml",
+      "User-Agent": "toml-ua",
+      "X-Keep": "toml",
+    };
+    const merged = mergeOptionsToConfig(config, {
+      url: "https://example.com",
+      headers: { "X-Override": "cli", "user-agent": "cli-ua" },
+    });
+
+    expect(merged.crawler.headers).toEqual({
+      "X-Keep": "toml",
+      "X-Override": "cli",
+      "user-agent": "cli-ua",
+    });
+    const sent = new Headers(merged.crawler.headers);
+    expect(sent.get("x-override")).toBe("cli");
+    expect(sent.get("user-agent")).toBe("cli-ua");
+  });
+
   test("CLI headers override matching TOML headers, others kept", () => {
     const config = getDefaultConfig();
     config.crawler.headers = { "X-Keep": "toml", "X-Override": "toml" };

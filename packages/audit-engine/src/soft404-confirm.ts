@@ -38,6 +38,7 @@ import { probeFetch } from "./lib/probe-fetch";
 import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 
 import type { ParsedPage } from "@squirrelscan/rules";
+import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
 
 // Confirmation body is truncated to this length before we retain/parse it, so a
 // huge page can't blow up the reparse. The read itself is streamed and stops at
@@ -154,7 +155,8 @@ function defaultConfirmFetch(timeoutMs: number, egress?: EgressPolicy): ConfirmF
       // Build the SAME browser-like request the crawl sent (UA + sec-fetch/sec-ch
       // headers) so a header/UA-varying origin can't diverge between crawl and
       // confirmation. Custom headers set first win, matching the crawler.
-      const reqHeaders = new Headers(headers);
+      // Merged first: a record holding `x-a` and `X-A` would otherwise send both (repo#3346).
+      const reqHeaders = new Headers(mergeHeaderRecords(headers));
       applyBrowserHeaders(reqHeaders, userAgent);
       // Redirects by hand: custom headers never reach another origin (#2831).
       const res = await probeFetch(

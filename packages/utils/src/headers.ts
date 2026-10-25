@@ -75,10 +75,7 @@ export function mergeHeaderRecords(
   for (const record of records) {
     if (!record) continue;
     for (const [name, value] of Object.entries(record)) {
-      const key = name.toLowerCase();
-      // Deleted first so the winner's spelling takes the slot.
-      merged.delete(key);
-      merged.set(key, [name, value]);
+      merged.set(name.toLowerCase(), [name, value]);
     }
   }
   return Object.fromEntries(merged.values());

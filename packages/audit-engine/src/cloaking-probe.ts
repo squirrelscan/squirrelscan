@@ -220,6 +220,14 @@ function byteLen(s: string): number {
 
 // ── orchestration ───────────────────────────────────────────────────
 
+/** `headers` without any `User-Agent`, whatever its casing. */
+function withoutUserAgent(
+  headers: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+  if (!headers) return headers;
+  return Object.fromEntries(Object.entries(headers).filter(([name]) => name.toLowerCase() !== "user-agent"));
+}
+
 function defaultProbeFetch(timeoutMs: number, egress?: EgressPolicy): ProbeFetch {
   return async (url, userAgent, headers) => {
     const controller = new AbortController();
@@ -274,10 +282,13 @@ async function probeOne(
     customHeadersFor(sel.url, opts.customHeaders, opts.headerScope),
   );
   note("default", def);
+  // The Googlebot fetch IS its agent: a custom User-Agent among the audit's
+  // headers (any casing) must not replace it, or both fetches send the same
+  // agent and agent-based cloaking can never show (repo#3346).
   const gb = await fetchImpl(
     sel.url,
     opts.googlebotUserAgent,
-    customHeadersFor(sel.url, opts.customHeaders, opts.headerScope),
+    withoutUserAgent(customHeadersFor(sel.url, opts.customHeaders, opts.headerScope)),
   );
   note("googlebot", gb);
 
