@@ -24,4 +24,4 @@ Machine: Apple Silicon laptop (macOS, arm64), Bun 1.4.0, run at low priority (`n
 | `a11y/aria-hidden-focus` | 5,000 | not run (cubic: hours) | 150 ms |
 | `a11y/aria-hidden-focus` | 20,000 | not run | 386 ms |
 
-The parse itself takes 9 s at 20,000 levels: the parser has its own depth cost, tracked separately. The audit-engine golden baseline (518 pages, 309 rules) is unchanged.
+The parse itself takes 9 s at 20,000 levels: the parser has its own depth cost, tracked in squirrelscan/repo#3356. The audit-engine golden baseline (518 pages, 309 rules) is unchanged.

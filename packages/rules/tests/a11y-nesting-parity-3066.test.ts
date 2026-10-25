@@ -84,12 +84,23 @@ const LEAVES = [
   '<button style="display:none">b</button>',
   '<button style="visibility:visible">b</button>',
   "<p>text</p>",
+  // Container attributes on the controls themselves.
+  '<input name="hp_field" aria-hidden="true">',
+  '<input id="hp-x" aria-hidden="true" style="display:none">',
+  '<a href="/x" aria-hidden="true">x</a>',
+  '<button aria-hidden="true" class="maybe">b</button>',
+  '<span role="text" tabindex="0">t</span>',
+  // Templates: the old document-wide queries never entered their content.
+  '<template><a href="/t">t</a></template>',
+  '<template aria-hidden="true"><button>b</button></template>',
+  '<template role="text"><a href="/t">t</a></template>',
+  '<svg><a href="/s">s</a></svg>',
 ];
 
 /** A random tree of containers and leaves, `depth` levels at most. */
 function tree(r: () => number, depth: number): string {
   if (depth === 0 || r() < 0.25) return pick(r, LEAVES);
-  const tag = pick(r, ["div", "span", "section", "button", 'a href="/c"', "form"]);
+  const tag = pick(r, ["div", "span", "section", "button", 'a href="/c"', "form", "template"]);
   const name = tag.split(" ")[0]!;
   const id = r() < 0.3 ? ` id="c${Math.floor(r() * 1000)}"` : "";
   const children = Array.from({ length: 1 + Math.floor(r() * 3) }, () => tree(r, depth - 1)).join(
@@ -106,7 +117,19 @@ function page(seed: number): string {
       : "";
   const external = r() < 0.2 ? '<link rel="stylesheet" href="/site.css">' : "";
   const body = Array.from({ length: 1 + Math.floor(r() * 4) }, () => tree(r, 6)).join("");
-  return `<!doctype html><html lang="en"><head>${style}${external}</head><body><main>${body}</main></body></html>`;
+  // Document shapes: wrapped; no <html> tag; a warning printed ahead of the
+  // doctype; content after </html>. All but the first have several top-level
+  // elements in the parsed document.
+  switch (Math.floor(r() * 4)) {
+    case 1:
+      return `<!doctype html><title>t</title>${style}${external}${body}`;
+    case 2:
+      return `<br />\n<b>Warning</b>: x<!doctype html><html><head>${style}${external}</head><body>${body}</body></html>`;
+    case 3:
+      return `<!doctype html><html><head>${style}${external}</head><body><p>p</p></body></html>${body}`;
+    default:
+      return `<!doctype html><html lang="en"><head>${style}${external}</head><body><main>${body}</main></body></html>`;
+  }
 }
 
 describe("the single-pass rewrites report what the old rules did (#3066)", () => {
@@ -114,7 +137,7 @@ describe("the single-pass rewrites report what the old rules did (#3066)", () =>
     ["aria-text", ariaTextRule, referenceAriaTextRule],
     ["aria-hidden-focus", ariaHiddenFocusRule, referenceAriaHiddenFocusRule],
   ] as const) {
-    test(`${name}: identical results on 600 seeded random pages`, () => {
+    test(`${name}: identical results on 600 seeded random pages`, { timeout: 30_000 }, () => {
       let nonTrivial = 0;
       for (let seed = 1; seed <= 600; seed++) {
         const html = page(seed);

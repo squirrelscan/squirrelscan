@@ -107,6 +107,8 @@ describe("a11y/aria-hidden-focus — honeypot annotation (#1100)", () => {
 
     expect(check(checks, "aria-hidden-focus")).toBeUndefined();
     expect(check(checks, "aria-hidden-focus-honeypot")?.status).toBe("warn");
+    // Named like any honeypot, not as "(self is focusable)" (#3066 review).
+    expect(check(checks, "aria-hidden-focus-honeypot")?.items).toEqual([{ id: "input#trap-field" }]);
   });
 
   test("no aria-hidden elements → info (regression)", () => {

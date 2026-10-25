@@ -44,6 +44,14 @@ function focusableDescendantCounts(textElements: Iterable<Element>): Map<Element
         continue;
       }
       if (isFocusable(el)) focusables++;
+      // querySelectorAll never enters a template, so an outer element does
+      // not count its content; a role="text" template counts its own.
+      if (el.localName === "template") {
+        if (isText.has(el)) {
+          counts.set(el, Array.from(el.querySelectorAll("*")).filter(isFocusable).length);
+        }
+        continue;
+      }
       if (isText.has(el)) {
         entered.set(el, focusables);
         stack.push({ el, leaving: true });
