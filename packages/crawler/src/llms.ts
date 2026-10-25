@@ -7,6 +7,7 @@ import { noteRefusal } from "./refusals";
 
 import type { PhaseBudget, ProbeGate } from "./deadline";
 import type { LlmsTxtData, LlmsTxtFile } from "@squirrelscan/core-contracts";
+import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
 
 const LLMS_FETCH_TIMEOUT_MS = 30_000;
 // Cap stored content so a pathological/huge file can't bloat memory or SQLite.
@@ -31,7 +32,12 @@ async function fetchOne(
   try {
     return await safeFetchWithDeadline(
       url,
-      { headers: { "User-Agent": userAgent, Accept: "text/plain, text/markdown, */*", ...customHeaders } },
+      {
+        headers: mergeHeaderRecords(
+          { "User-Agent": userAgent, Accept: "text/plain, text/markdown, */*" },
+          customHeaders,
+        ),
+      },
       timeoutMs,
       async (response) => {
         if (noteRefusal(budget?.refusals, url, "llms.txt", response)) {

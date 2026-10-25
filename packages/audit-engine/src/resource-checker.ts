@@ -21,7 +21,7 @@ import {
   RESOURCE_SIZE_LIMITS,
   SQUIRRELSCAN_USER_AGENT,
 } from "@squirrelscan/utils/constants";
-import { isCompressibleContentType } from "@squirrelscan/utils/headers";
+import { isCompressibleContentType, mergeHeaderRecords } from "@squirrelscan/utils/headers";
 import { isRateLimitedResponse } from "@squirrelscan/utils/rate-limit";
 import { decodedBody, fetchUndecoded } from "@squirrelscan/utils/response-body";
 import {
@@ -341,7 +341,10 @@ async function measureUnrangedSize(
 ): Promise<number | null> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs);
-  const headers = { "User-Agent": options.userAgent, Accept: "*/*", ...customHeadersFor(url, options.customHeaders, options.headerScope) };
+  const headers = mergeHeaderRecords(
+    { "User-Agent": options.userAgent, Accept: "*/*" },
+    customHeadersFor(url, options.customHeaders, options.headerScope),
+  );
   try {
     try {
       const { response } = await fetchResource(url, {
@@ -524,12 +527,11 @@ async function checkSingleResourceAsync(
         // redirect (native redirect:"follow" replays them to the redirect target).
         const { response: headResponse, finalUrl: headFinalUrl } = await fetchResource(url, {
           method: "HEAD",
-          headers: {
-            "User-Agent": options.userAgent,
-            Accept: "*/*",
-            ...customHeadersFor(url, options.customHeaders, options.headerScope),
-            ...conditional,
-          },
+          headers: mergeHeaderRecords(
+            { "User-Agent": options.userAgent, Accept: "*/*" },
+            customHeadersFor(url, options.customHeaders, options.headerScope),
+            conditional,
+          ),
           signal: controller.signal,
         }, options);
 
@@ -643,15 +645,17 @@ async function checkSingleResourceAsync(
     let getController = readHeader ? requestController(controller) : controller;
     let { response: getResponse, finalUrl: getFinalUrl } = await fetchResource(url, {
       method: "GET",
-      headers: {
-        "User-Agent": options.userAgent,
-        Accept: "*/*",
-        Range: readHeader
-          ? `bytes=0-${RESOURCE_SIZE_LIMITS.IMAGE_HEADER_BYTES - 1}`
-          : "bytes=0-0",
-        ...customHeadersFor(url, options.customHeaders, options.headerScope),
-        ...conditional,
-      },
+      headers: mergeHeaderRecords(
+        {
+          "User-Agent": options.userAgent,
+          Accept: "*/*",
+          Range: readHeader
+            ? `bytes=0-${RESOURCE_SIZE_LIMITS.IMAGE_HEADER_BYTES - 1}`
+            : "bytes=0-0",
+        },
+        customHeadersFor(url, options.customHeaders, options.headerScope),
+        conditional,
+      ),
       signal: getController.signal,
     }, options);
 
@@ -668,12 +672,11 @@ async function checkSingleResourceAsync(
       getController = readHeader ? requestController(controller) : controller;
       ({ response: getResponse, finalUrl: getFinalUrl } = await fetchResource(url, {
         method: "GET",
-        headers: {
-          "User-Agent": options.userAgent,
-          Accept: "*/*",
-          ...customHeadersFor(url, options.customHeaders, options.headerScope),
-          ...conditional,
-        },
+        headers: mergeHeaderRecords(
+          { "User-Agent": options.userAgent, Accept: "*/*" },
+          customHeadersFor(url, options.customHeaders, options.headerScope),
+          conditional,
+        ),
         signal: getController.signal,
       }, options));
     }
@@ -753,11 +756,10 @@ async function checkSingleResourceAsync(
       try {
         const { response: confirmResponse } = await fetchResource(url, {
           method: "GET",
-          headers: {
-            "User-Agent": options.userAgent,
-            Accept: "*/*",
-            ...customHeadersFor(url, options.customHeaders, options.headerScope),
-          },
+          headers: mergeHeaderRecords(
+            { "User-Agent": options.userAgent, Accept: "*/*" },
+            customHeadersFor(url, options.customHeaders, options.headerScope),
+          ),
           signal: confirmController.signal,
         }, options);
         if (readHeader) confirmController.abort();

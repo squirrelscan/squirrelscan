@@ -23,6 +23,7 @@ import { probeFetch } from "./lib/probe-fetch";
 import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 
 import type { CloakingProbeData } from "@squirrelscan/core-contracts";
+import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
 
 const DAY_MS = 86_400_000;
 
@@ -228,11 +229,13 @@ function defaultProbeFetch(timeoutMs: number, egress?: EgressPolicy): ProbeFetch
       const res = await probeFetch(
         url,
         {
-          headers: {
-            "User-Agent": userAgent,
-            Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            ...headers,
-          },
+          headers: mergeHeaderRecords(
+            {
+              "User-Agent": userAgent,
+              Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            },
+            headers,
+          ),
           signal: controller.signal,
         },
         egress,

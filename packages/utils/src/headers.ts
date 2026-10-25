@@ -59,6 +59,31 @@ export function headerScopeBase(seedUrl: string | null | undefined, baseUrl: str
   return baseUrl;
 }
 
+/**
+ * Header records merged as HTTP reads them (squirrelscan/repo#3346): names are
+ * case-insensitive, so a later record's `user-agent` replaces an earlier
+ * `User-Agent` instead of sitting beside it. Spread records keep both keys, and
+ * `new Headers(record)` then APPENDS them, sending a combined `a, b` value: a
+ * custom header that differed only in case from a built-in one was sent twice.
+ * Later records win; the winner's spelling of the name is kept. Absent records
+ * are skipped.
+ */
+export function mergeHeaderRecords(
+  ...records: Array<Readonly<Record<string, string>> | null | undefined>
+): Record<string, string> {
+  const merged = new Map<string, [name: string, value: string]>();
+  for (const record of records) {
+    if (!record) continue;
+    for (const [name, value] of Object.entries(record)) {
+      const key = name.toLowerCase();
+      // Deleted first so the winner's spelling takes the slot.
+      merged.delete(key);
+      merged.set(key, [name, value]);
+    }
+  }
+  return Object.fromEntries(merged.values());
+}
+
 /** True if `value` contains only safe RFC 7230 field-value chars (no CR/LF/NUL/CTL). */
 export function isValidHeaderValue(value: string): boolean {
   return HEADER_VALUE_RE.test(value);
