@@ -1,5 +1,5 @@
 // Site-metadata cloud-service contracts: the durable, globally-cached per-domain
-// "site profile" resolved at Stage 0 of the cloud pipeline (Gemini Flash + RDAP).
+// "site profile" resolved at Stage 0 of the cloud pipeline (an LLM call + RDAP).
 // Report-only / non-scoring. Dep-free plain TypeScript — the const arrays below
 // serve BOTH as the TS union source AND the runtime enum (mirrors the
 // TechnologyCategory / AiParsePageType pattern in this package). The API maps
