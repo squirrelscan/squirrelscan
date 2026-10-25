@@ -809,10 +809,11 @@ first colon, so values may contain colons). CLI headers **merge over** the TOML
 `[crawler] headers` map; a flag with the same name wins, whatever the casing of
 either. On a request that carries the custom headers, a custom header replaces
 squirrel's own header of the same name, so `-H "user-agent: ..."` is sent alone,
-never beside squirrel's agent. To change the agent on every request, set
-[`user_agent`](#user_agent). Quoting is preserved
-verbatim, so `Signature-Agent: "https://shopify.com"` keeps its quotes
-end-to-end.
+never beside squirrel's agent. Two probes keep their own agent on purpose: the
+AI agent access probe (which fetches as GPTBot and Claude-User) and the cloaking
+probe's Googlebot fetch. To change the agent on the other requests too, set
+[`user_agent`](#user_agent). Quoting is preserved verbatim, so
+`Signature-Agent: "https://shopify.com"` keeps its quotes end-to-end.
 
 When a page redirects to another origin, the headers are dropped on that hop.
 An `https:` start URL whose redirect lands on plain `http:` keeps its `https:`
