@@ -34,7 +34,7 @@ const CONFIG: Partial<CrawlerConfig> = {
 const METADATA_IP = "http://169.254.169.254/latest/meta-data/";
 const METADATA_HOST = "http://metadata.google.internal/computeMetadata/v1/";
 const LINK_LOCAL = "http://[fe80::1]/x";
-const SECRET = "metadata-secret-marker";
+const MARKER = "metadata-response-marker";
 
 /** A refused destination: a link-local address or a cloud metadata name. */
 function isRefusedHost(url: string): boolean {
@@ -56,7 +56,7 @@ beforeEach(() => {
     requested.push({ url, host: new Headers(init?.headers).get("host") });
     if (isRefusedHost(url)) {
       return new Response(
-        `<html><head><title>${SECRET}</title></head><body>${SECRET}</body></html>`,
+        `<html><head><title>${MARKER}</title></head><body>${MARKER}</body></html>`,
         {
           headers: { "content-type": "text/html" },
         },
@@ -185,7 +185,7 @@ describe.each([
     }
 
     expect(requested.filter((r) => isRefusedHost(r.url)).map((r) => r.url)).toEqual([]);
-    expect(JSON.stringify(stored)).not.toContain(SECRET);
+    expect(JSON.stringify(stored)).not.toContain(MARKER);
   });
 
   test("the localhost site's own pages and root files are still crawled", async () => {
@@ -288,7 +288,7 @@ describe("root files that redirect off the site (repo#2830)", () => {
     expect(requested.filter((r) => isRefusedHost(r.url)).map((r) => r.url)).toEqual([]);
     // Refused at the hop: robots.txt got no answer, which is not a missing file.
     expect(robots?.exists).toBe(false);
-    expect(JSON.stringify(robots)).not.toContain(SECRET);
+    expect(JSON.stringify(robots)).not.toContain(MARKER);
     expect(pages.filter((p) => p.status === 200).map((p) => p.url)).toContain(`${origin}/about`);
   });
 });
