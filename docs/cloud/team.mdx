@@ -85,10 +85,11 @@ The invite page tells you when an invite no longer works. Ask an owner or admin 
 
 ### Limits
 
-To keep invites from being used to send unwanted mail, they are limited. Two limits apply to you and your organization:
+To keep invites from being used to send unwanted mail, they are limited. These limits apply to you and your organization:
 
 - 10 a minute and 20 an hour from one person,
-- 50 a day from one organization.
+- 50 a day from one organization,
+- 100 pending invites in one organization, and 50 pending invites sent by one person across organizations. Revoking a pending invite frees its place.
 
 An invite over one of these is not created. The API answers `429` with the code `invite_rate_limited`, and the Team page says to try again later.
 
