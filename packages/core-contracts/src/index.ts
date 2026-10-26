@@ -186,6 +186,16 @@ export const EXTERNAL_LINKS_OVER_CAP_SKIP_REASON = "external-links-over-cap";
 export const EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON = "external-links-out-of-time";
 
 /**
+ * `skipReason` of the inbound-link rules (`links/orphan-pages`,
+ * `links/weak-internal-links`, `links/no-contextual-inbound`) when the crawl
+ * stopped at its page cap with URLs still queued (#1044, #1128): an uncrawled
+ * page may hold the link that clears the finding, so the counts prove nothing.
+ * Prose rather than an id: published reports already carry this exact text
+ * (#1144).
+ */
+export const CRAWL_CAPPED_SKIP_REASON = "Crawl capped before the frontier was exhausted";
+
+/**
  * Skip reasons that mean "this check did not run for the audit", which every
  * report renders as a visible "Not checked" line instead of leaving the rule
  * looking clean (repo#2729), and which never resolve an open finding.
@@ -197,6 +207,8 @@ export const NOT_CHECKED_SKIP_REASONS: ReadonlySet<string> = new Set([
   EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON,
   // A rule abandoned for its time budget did not check that page (pub#960).
   RULE_TIMED_OUT_SKIP_REASON,
+  // A capped crawl cannot count a page's inbound links (#1144).
+  CRAWL_CAPPED_SKIP_REASON,
 ]);
 
 export type RuleScope = "page" | "site";

@@ -11,6 +11,7 @@
 // checked" line with the reason and what to run instead.
 
 import {
+  CRAWL_CAPPED_SKIP_REASON,
   EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
   EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON,
   EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
@@ -51,6 +52,9 @@ const HINTS: Record<string, string> = {
     "Run the audit again to check them.",
   [RULE_TIMED_OUT_SKIP_REASON]:
     "A timed-out rule did not check those pages, so no finding there is not a clean result. Run the audit again, or raise [rules] time_budget_ms if the machine was busy.",
+  // #1144: the inbound-link rules on a crawl that stopped at its page cap.
+  [CRAWL_CAPPED_SKIP_REASON]:
+    "Raise the page limit (--max-pages, or crawler.max_pages) so the crawl reaches every page, to check them.",
 };
 
 const DEFAULT_HINT = "Run a Surface or Full audit to check them.";

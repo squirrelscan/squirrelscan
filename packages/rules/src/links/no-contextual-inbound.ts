@@ -51,7 +51,7 @@
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-import type { LinkData } from "@squirrelscan/core-contracts";
+import { CRAWL_CAPPED_SKIP_REASON, type LinkData } from "@squirrelscan/core-contracts";
 
 import { matchesExcludePattern } from "@squirrelscan/utils";
 import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
@@ -198,7 +198,7 @@ export const noContextualInboundRule: Rule = {
         name: "no-contextual-inbound",
         status: "skipped",
         message: `Crawl stopped at its ${limits.maxPages}-page cap, so a contextual link may sit on a page not crawled`,
-        skipReason: "Crawl capped before the frontier was exhausted",
+        skipReason: CRAWL_CAPPED_SKIP_REASON,
       });
       return { checks };
     }
