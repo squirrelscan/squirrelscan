@@ -1081,7 +1081,18 @@ function fetchPageStandardOnce(
           finalTiming = timing;
           break;
         }
-        const nextUrl = new URL(location, currentUrl).toString();
+        // An unparseable Location (`http://[`) is a terminal error hop like a
+        // missing one. `new URL` throws, and a throw inside Effect.gen is a
+        // defect, which failed the whole fetch instead of this page (#3382).
+        let nextUrl: string;
+        try {
+          nextUrl = new URL(location, currentUrl).toString();
+        } catch {
+          endsInError = true;
+          finalResponse = response;
+          finalTiming = timing;
+          break;
+        }
         // SECURITY (#1392): this hand-rolled manual-redirect loop bypasses the
         // runtime's native cross-protocol-redirect rejection, so a
         // `Location: file:///…` (or data:/blob:/ftp:/…) would otherwise be
