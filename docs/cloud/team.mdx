@@ -85,16 +85,20 @@ The invite page tells you when an invite no longer works. Ask an owner or admin 
 
 ### Limits
 
-To keep invites from being used to send unwanted mail, they are limited:
+To keep invites from being used to send unwanted mail, they are limited. Two limits apply to you and your organization:
 
 - 10 a minute and 20 an hour from one person,
-- 50 a day from one organization,
-- 3 a day to one mailbox, across all organizations,
-- 20 a day to one company's email domain, across all organizations. Webmail domains such as Gmail or Outlook, and your own email domain, do not count toward this one.
+- 50 a day from one organization.
 
-An invite over one of these limits is not created. The API answers `429` with the code `invite_rate_limited`, and the Team page says to try again later. The limits count one mailbox however it is spelled: case makes no difference, nor does a `+tag`, nor dots in a Gmail address.
+An invite over one of these is not created. The API answers `429` with the code `invite_rate_limited`, and the Team page says to try again later.
 
-One organization also emails one address at most once a day. An invite sent again within 24 hours, for example after you revoke one to change its role, is created but not emailed, and the Team page offers its link to copy instead.
+Three more limits protect the people being invited, across every organization:
+
+- 3 invite emails a day to one mailbox,
+- 20 a day to one company's email domain (webmail domains such as Gmail or Outlook do not count, nor does a domain your organization already has a member at),
+- 1 a day from one organization to one address, so an invite sent again after you revoke one is not emailed again that day.
+
+Going over one of these never blocks you: the invite is created but not emailed, and the Team page offers its link to copy and send yourself. The limits count one mailbox however it is spelled: case makes no difference, nor does a `+tag`, nor dots in a Gmail address.
 
 ## White-label reports
 
