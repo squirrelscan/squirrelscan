@@ -495,7 +495,7 @@ describe("reliability/broken-resources", () => {
     const partial = named(checks, "unchecked-resources");
     expect(partial?.status).toBe("info");
     expect(partial?.message).toContain(
-      "1 referenced resource(s) on a private, loopback or metadata address were not requested",
+      "1 referenced resource(s) were not requested (a private, loopback or metadata address, or another site in an offline audit)",
     );
     expect(partial?.details).toMatchObject({ refused: 1 });
     expect(named(checks, "broken-resources")?.message).toBe(

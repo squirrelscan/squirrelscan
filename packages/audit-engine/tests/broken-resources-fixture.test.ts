@@ -343,7 +343,7 @@ describe("third-party probes stay off private networks and carry no credentials 
     expect(named(checks, "broken-resources")).toBeUndefined();
     expect(named(checks, "unreachable-resources")).toBeUndefined();
     expect(named(checks, "unchecked-resources")?.message).toContain(
-      "6 referenced resource(s) on a private, loopback or metadata address were not requested",
+      "6 referenced resource(s) were not requested (a private, loopback or metadata address, or another site in an offline audit)",
     );
   });
 

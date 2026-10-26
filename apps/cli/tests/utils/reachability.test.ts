@@ -90,3 +90,56 @@ describe("checkReachability and the site's own hosts (repo#3430)", () => {
     }
   });
 });
+
+// squirrelscan/squirrelscan#819: `squirrel audit --offline` sends nothing to
+// another site, so the probe, the first request of the run, does not follow a
+// start URL's redirect to another host. The start URL answered, so it is
+// reachable; the crawl records the redirect.
+describe("checkReachability and an offline audit (#819)", () => {
+  const seen: Array<{ path: string; host: string | null }> = [];
+  let other: ReturnType<typeof Bun.serve>;
+  let site: ReturnType<typeof Bun.serve>;
+
+  beforeEach(() => {
+    seen.length = 0;
+    other = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch(req) {
+        seen.push({
+          path: new URL(req.url).pathname,
+          host: req.headers.get("host"),
+        });
+        return new Response("<html><body>elsewhere</body></html>", {
+          headers: { "content-type": "text/html" },
+        });
+      },
+    });
+    site = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: () =>
+        Response.redirect(`http://localhost:${other.port}/landed`, 302),
+    });
+  });
+
+  afterEach(() => {
+    site.stop(true);
+    other.stop(true);
+  });
+
+  test("offline: the redirect to another host is not followed and the start URL is reachable", async () => {
+    const result = await checkReachability(`http://127.0.0.1:${site.port}/`, {
+      ownSiteOnly: true,
+    });
+    expect(result.reachable).toBe(true);
+    expect(seen).toEqual([]);
+  });
+
+  test("control: without the flag the redirect is followed", async () => {
+    const result = await checkReachability(`http://127.0.0.1:${site.port}/`);
+    expect(result.reachable).toBe(true);
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen[0]?.host).toBe(`localhost:${other.port}`);
+  });
+});

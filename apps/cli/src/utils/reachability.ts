@@ -2,7 +2,9 @@
 // Uses request tool with browser-like headers
 // Detects WAF/bot protection on target site
 
+import { ownSiteHostMatcher } from "@squirrelscan/utils/own-site";
 import {
+  EGRESS_OFF_SITE_REFUSAL,
   EgressRefusedError,
   egressGuardedSend,
   ownHostsPinned,
@@ -159,6 +161,17 @@ async function readBodySample(
   return text || undefined;
 }
 
+/** Which hosts the probe may follow a redirect to (`squirrel audit --offline`, #819). */
+export interface ReachabilityScope {
+  /** Only the audited site: its host, its `www` or apex twin, `domains` and their subdomains. */
+  ownSiteOnly?: boolean;
+  /** `[project] domains`, named as the site's own. */
+  domains?: readonly string[];
+}
+
+/** The status reported for a start URL that redirects off the site in an offline audit (not followed). */
+const OFF_SITE_REDIRECT_STATUS = 302;
+
 /** What the probe says when the site's host resolves to an address it never requests. */
 const EGRESS_REFUSED_REACHABILITY =
   "Not requested: it resolves or redirects to a link-local or cloud metadata address";
@@ -170,13 +183,23 @@ const EGRESS_REFUSED_REACHABILITY =
  * the site's own hosts are not pinned (opted out, or an environment proxy).
  */
 function reachabilitySend(
-  url: string
+  url: string,
+  scope?: ReachabilityScope
 ): ((url: string, init: RequestInit) => Promise<Response>) | undefined {
-  if (!ownHostsPinned({ pinOwnHosts: pinOwnHosts() })) return undefined;
+  const pinned = ownHostsPinned({ pinOwnHosts: pinOwnHosts() });
+  if (!pinned && scope?.ownSiteOnly !== true) return undefined;
   const policy: EgressPolicy = {
     allowPrivateNetwork: true,
     resolve: resolveHostAddresses,
   };
+  // --offline (#819): the start URL's redirects stay on the audited site too.
+  // With the own hosts not pinned (opted out, or an environment proxy) they
+  // still go out by name; only the hops that leave the site are refused.
+  if (scope?.ownSiteOnly === true) {
+    const own = ownSiteHostMatcher({ baseUrl: url, domains: scope.domains });
+    policy.allowHost = own;
+    if (!pinned) policy.trustTarget = (hop) => own(hop.hostname);
+  }
   // An address the user named as the site is theirs to audit, as the crawl
   // treats it: only where the site's DNS or redirects lead is guarded.
   if (refusedWithoutLookup(url, policy)) return undefined;
@@ -197,10 +220,11 @@ function reachabilitySend(
  * isTransientReachabilityError); definitive ones fail on the first attempt.
  */
 export async function checkReachability(
-  url: string
+  url: string,
+  scope?: ReachabilityScope
 ): Promise<ReachabilityResult> {
   const deadline = Date.now() + REACHABILITY_TOTAL_BUDGET_MS;
-  let result = await attemptReachability(url);
+  let result = await attemptReachability(url, scope);
 
   for (let attempt = 2; attempt <= REACHABILITY_MAX_ATTEMPTS; attempt++) {
     if (result.reachable || !isTransientReachabilityError(result.error)) break;
@@ -213,13 +237,16 @@ export async function checkReachability(
       result.error ?? ""
     );
     await sleep(delay);
-    result = await attemptReachability(url);
+    result = await attemptReachability(url, scope);
   }
 
   return result;
 }
 
-async function attemptReachability(url: string): Promise<ReachabilityResult> {
+async function attemptReachability(
+  url: string,
+  scope?: ReachabilityScope
+): Promise<ReachabilityResult> {
   // Fast path for localhost/loopback using native fetch (no WAF detection needed)
   let isLocalhost = false;
   try {
@@ -241,7 +268,7 @@ async function attemptReachability(url: string): Promise<ReachabilityResult> {
     try {
       // Undecoded (#2717): Bun inflates a Content-Encoding body in full even
       // when it is cancelled unread, as this one is.
-      const send = reachabilitySend(url);
+      const send = reachabilitySend(url, scope);
       const response = send
         ? await send(url, {
             method: "GET",
@@ -256,6 +283,15 @@ async function attemptReachability(url: string): Promise<ReachabilityResult> {
       await response.body?.cancel().catch(() => {});
       return { reachable: true, statusCode: response.status };
     } catch (error) {
+      // --offline (#819): the start URL answered with a redirect to another
+      // site, which is not followed. It is reachable; the crawl records the
+      // redirect.
+      if (
+        error instanceof EgressRefusedError &&
+        error.message === EGRESS_OFF_SITE_REFUSAL
+      ) {
+        return { reachable: true, statusCode: OFF_SITE_REDIRECT_STATUS };
+      }
       const message = error instanceof Error ? error.message : String(error);
       return {
         reachable: false,
@@ -312,7 +348,7 @@ async function attemptReachability(url: string): Promise<ReachabilityResult> {
         },
         // Shorter than the crawl timeout
         REACHABILITY_TIMEOUT_MS,
-        reachabilitySend(url)
+        reachabilitySend(url, scope)
       ).pipe(
         Effect.timeoutFail({
           duration: Duration.millis(REACHABILITY_TIMEOUT_MS),
@@ -335,6 +371,9 @@ async function attemptReachability(url: string): Promise<ReachabilityResult> {
   } catch (error) {
     // Handle RequestError from request utility
     if (error instanceof RequestError) {
+      if (error.message === EGRESS_OFF_SITE_REFUSAL) {
+        return { reachable: true, statusCode: OFF_SITE_REDIRECT_STATUS };
+      }
       return {
         reachable: false,
         // Every EgressRefusedError message starts with "refused" (nothing was sent).

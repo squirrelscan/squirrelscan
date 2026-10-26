@@ -7,6 +7,7 @@
     "./constants": "./src/constants.ts",
     "./url": "./src/url.ts",
     "./non-public-host": "./src/non-public-host.ts",
+    "./own-site": "./src/own-site.ts",
     "./public-egress": "./src/public-egress.ts",
     "./dom": "./src/dom.ts",
     "./waf": "./src/waf.ts",

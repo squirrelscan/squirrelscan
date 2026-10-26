@@ -912,7 +912,13 @@ export async function runAudit(
 
     // Check reachability
     logger.debug("checking reachability", url);
-    const reachability = await checkReachability(url);
+    // --offline: the start URL's redirects stay on the audited site (#819).
+    const reachability = await checkReachability(
+      url,
+      options.offline
+        ? { ownSiteOnly: true, domains: mergedConfig.project?.domains }
+        : undefined
+    );
     if (!reachability.reachable) {
       return err(
         commandError(
@@ -1082,6 +1088,8 @@ export async function runAudit(
         // repo#3430: the site's own hosts are resolved once and connected to by
         // address; a metadata or link-local answer is never requested.
         pinOwnHosts: pinOwnHosts(),
+        // --offline: a redirect or a sitemap on another host is not requested (#819).
+        ...(options.offline ? { ownSiteOnly: true } : {}),
         discoveryProbePerHost: crawlConcurrency.discoveryProbePerHost,
         // Only the probes an enabled rule reads, and none when the user turned
         // them off: a firewall can ban the audit for asking for /swagger.json
@@ -1894,6 +1902,8 @@ export async function runAudit(
           retainPageResults: false,
           // repo#3430: the end-of-crawl probes vet and pin the site's own hosts.
           pinOwnHosts: pinOwnHosts(),
+          // --offline: the soft-404 and cloaking probes stay on the audited site (#819).
+          ...(options.offline ? { ownSiteOnly: true } : {}),
           ...(ruleCacheStore
             ? {
                 ruleCache: {

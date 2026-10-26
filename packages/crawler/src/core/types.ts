@@ -183,6 +183,15 @@ export interface CrawlerConfig {
    * environment, which a pinned address would hand the wrong virtual host.
    */
   pinOwnHosts?: boolean;
+  /**
+   * No request to any host outside the audited site (`squirrel audit --offline`,
+   * squirrelscan/squirrelscan#819): the site's own hosts are the audited host,
+   * its `www` or apex twin, the `allowedDomains` and the subdomains of all of
+   * them. A redirect hop to another host ends the chain there (the page is
+   * recorded as the redirect it answered with), and a sitemap named on another
+   * host is skipped, never requested. Off by default.
+   */
+  ownSiteOnly?: boolean;
   /** The resolver behind the crawl's egress checks; the system's when unset (a test seam). */
   resolveHost?: (hostname: string) => Promise<string[]>;
   /**

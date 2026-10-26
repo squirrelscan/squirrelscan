@@ -25,6 +25,10 @@ How it works:
 
 - **The MCP SDK moves to 2.4.0, which bundles `fast-uri` 3.1.8.** The SDK ships its own copy of `fast-uri`, so the root override could not reach it and `bun audit` could not see it: 2.3.1 carried 3.1.0, which has the host-confusion advisory (a backslash as the authority delimiter). It is reachable only through JSON Schema `$ref` parsing in the SDK, whose schemas are squirrel's own, and now matches the override. The bundled `ajv` stays at 8.18.0, which has no advisory. The notices list the embedded `fast-uri` version (#656).
 
+### Security
+
+- **`squirrel audit --offline` now sends nothing to another site.** The site's own hosts are the audited host, its `www` or apex twin, `[project] domains` and the subdomains of all of them. A page redirect to another host ends there (the page is recorded as the redirect it answered with), a sitemap that robots.txt names on another host is not requested (`crawl/sitemap-exists` and `crawl/sitemap-valid` say it was skipped, not missing), a stylesheet, script, image or font on the site that redirects off it is not followed (`reliability/broken-resources` reports it as not requested), and the soft-404 confirmation, the cloaking probe and the AI agent access probe stay on the site. Assets on the `www` or apex twin or on a `[project] domains` host are checked like the site's own. Before, an offline audit still followed those hops to whatever host the site named. See [Fully offline audit](https://docs.squirrelscan.com/cli/audit#fully-offline-audit) (#819).
+
 
 ## v0.0.136 (2026-10-27)
 

@@ -1,5 +1,7 @@
 // crawl/sitemap-exists - XML sitemap existence check
 
+import { SITEMAP_OFF_SITE_SKIPPED_ERROR } from "@squirrelscan/core-contracts/storage";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { refusedCheck, refusedFor } from "../refused";
@@ -50,6 +52,22 @@ export const sitemapExistsRule: Rule = {
         status: "info",
         message: "Sitemap discovery did not complete, so no sitemap check was made",
         value: "Not all candidate locations were reached",
+      });
+      return { checks };
+    }
+
+    // An offline audit never requests a sitemap robots.txt names on another
+    // site (#819), so with nothing found on the site itself it did not look:
+    // "No XML sitemap found" would be a false statement about a site that
+    // points at a sitemap it keeps elsewhere.
+    const offSite = (sitemaps.failed ?? []).filter((f) => f.error === SITEMAP_OFF_SITE_SKIPPED_ERROR);
+    if (sitemaps.discovered.length === 0 && offSite.length > 0) {
+      checks.push({
+        name: "sitemap-exists",
+        status: "info",
+        message: `${offSite.length} sitemap(s) named in robots.txt are on another site and were not requested`,
+        value: "An offline audit only requests the audited site",
+        items: offSite.map((f) => ({ id: f.url, label: f.error })),
       });
       return { checks };
     }

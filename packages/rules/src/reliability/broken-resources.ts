@@ -53,7 +53,8 @@ interface Asset {
  *   status says nothing about the file.
  * - `unchecked`: the fetch was skipped (budget, tarpit) or never ran.
  * - `refused`: the URL, or a redirect it answered with, is on a private,
- *   loopback, link-local or metadata address, so it was never requested.
+ *   loopback, link-local or metadata address (or, in an offline audit, on
+ *   another site), so it was never requested.
  * - `ok`: answered below 400.
  */
 type Verdict = "fail" | "warn" | "unverified" | "unchecked" | "refused" | "ok";
@@ -327,7 +328,7 @@ export const brokenResourcesRule: Rule = {
       }
       if (refused > 0) {
         parts.push(
-          `${refused} referenced resource(s) on a private, loopback or metadata address were not requested`,
+          `${refused} referenced resource(s) were not requested (a private, loopback or metadata address, or another site in an offline audit)`,
         );
       }
       if (unmeasured.length > 0) {

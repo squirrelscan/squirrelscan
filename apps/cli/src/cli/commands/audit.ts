@@ -1103,7 +1103,7 @@ export const audit = defineCommand({
     offline: {
       type: "boolean",
       description:
-        "Run fully offline: skip cloud features, publishing, telemetry, and checks of other sites",
+        "Run fully offline: skip cloud features, publishing, telemetry, and any request to another site",
     },
     // repo#2729: internal and external link checks are on at every level
     // (pub#823). --external-links turns external ones back on over

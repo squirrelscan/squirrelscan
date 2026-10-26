@@ -45,6 +45,8 @@ import {
   type ResourceCheckOverrides,
   type SiteContextPage,
 } from "./adapter";
+import { ownSiteHostMatcher } from "@squirrelscan/utils/own-site";
+
 import { collectDroppedBatch } from "./batch-gc";
 import { createCloudPrefetchCollector, type CloudPrefetchPayloadSet } from "./cloud-prefetch-run";
 import type { ExternalCheckResult, LinkCache } from "./external-checker";
@@ -165,7 +167,14 @@ export function runStreamingPreRules(
       .pipe(Effect.catchAll(() => Effect.succeed(null)));
     const baseUrl = crawl?.baseUrl ?? "";
 
-    const assetCollector = createSiteAssetCollector(baseUrl);
+    // #819: an offline audit reads a reference on the `www` or apex twin or on a
+    // `[project] domains` host as the site's own, as sitemap URLs already are.
+    const assetCollector = createSiteAssetCollector(
+      baseUrl,
+      options?.resourceOverrides?.ownSiteOnly === true
+        ? ownSiteHostMatcher({ baseUrl, domains: config.project?.domains })
+        : undefined,
+    );
     const externalLinksEnabled = options?.externalLinks?.config.enabled === true;
     const externalLinkOccurrences: ExternalLinkOccurrences = new Map();
     const prefetchCollector = options?.cloudPrefetchSiteUrl

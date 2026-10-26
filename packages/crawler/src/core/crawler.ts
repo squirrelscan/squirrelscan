@@ -19,6 +19,7 @@ import { COVERAGE_PAGE_LIMITS, REPORT_LIMITS } from "@squirrelscan/core-contract
 import { extractCrawlableUrls } from "@squirrelscan/parser/extractors";
 import { parseDocument, parsePage, type ParsedPageCache } from "@squirrelscan/parser";
 import { findClientRedirects } from "@squirrelscan/utils/client-redirects";
+import { ownSiteHostMatcher } from "@squirrelscan/utils/own-site";
 import {
   createHeaderScope,
   headerScopeBase,
@@ -528,6 +529,11 @@ export function createCrawler(
         resolve: resolveOnce,
         pin: config.egressPinnedByTransport !== true,
       };
+      // #819: an offline audit reaches the audited site and nothing else, on
+      // the first hop and on every redirect after it.
+      if (config.ownSiteOnly === true) {
+        policy.allowHost = ownSiteHostMatcher({ baseUrl: base, domains: config.allowedDomains });
+      }
       if (pinOwnHosts) return refusedWithoutLookup(base, policy) ? undefined : policy;
       // Otherwise the crawl's own hosts go out by name, unvetted: the audited
       // host on any port too, since its name is the user's and
@@ -2463,7 +2469,10 @@ export function createCrawler(
           // name, or a redirect, that resolves to a link-local or metadata
           // address is never requested. Its final URL is the logical one the
           // chain reached, never the pinned address it connected to.
-          const seedEgress = pinOwnHosts ? egressFor(targetUrl) : undefined;
+          // #819: an own-site-only (offline) crawl holds the seed's redirects to the
+          // site the same way, pinned or not.
+          const seedEgress =
+            pinOwnHosts || config.ownSiteOnly === true ? egressFor(targetUrl) : undefined;
           const seedSend = seedEgress ? egressGuardedSend(fetchUndecoded, seedEgress) : undefined;
           let guardedFinalUrl: string | undefined;
 

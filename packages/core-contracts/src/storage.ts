@@ -1197,6 +1197,14 @@ export const PROBE_NOT_ATTEMPTED_ERROR = "crawl phase budget exhausted";
  */
 export const SITEMAP_NOT_CHECKED_ERROR = "sitemap walk stopped before reaching this location";
 
+/**
+ * Recorded against a sitemap that robots.txt names on another site when the
+ * audit may only reach the audited site (`squirrel audit --offline`,
+ * squirrelscan/squirrelscan#819). Like {@link SITEMAP_NOT_CHECKED_ERROR}, nothing
+ * was requested, so it is no evidence the sitemap is broken or absent.
+ */
+export const SITEMAP_OFF_SITE_SKIPPED_ERROR = "sitemap on another site not requested (offline audit)";
+
 export interface RslLicenseDoc {
   url: string;
   /** Final HTTP status; 0 = network error, or the probe was never attempted. */

@@ -143,6 +143,13 @@ export function ownHostsPinned(options: {
   );
 }
 
+/**
+ * The message of a refusal because `allowHost` excludes the hop (an offline
+ * audit's redirect to another site, #819), as opposed to one for the address
+ * behind the host. A caller that must tell the two apart reads this.
+ */
+export const EGRESS_OFF_SITE_REFUSAL = "refused: host outside the allowed set";
+
 /** Thrown before a request the egress policy refuses. Nothing was sent. */
 export class EgressRefusedError extends Error {
   override name = "EgressRefusedError";
@@ -460,7 +467,7 @@ export async function vetEgressTarget(
   // URL.hostname keeps IPv6 literals bracketed and IPv4 literals canonical.
   const host = parsed.hostname.replace(/^\[|\]$/g, "");
   if (policy.allowHost && !policy.allowHost(host)) {
-    throw new EgressRefusedError("refused: host outside the allowed set");
+    throw new EgressRefusedError(EGRESS_OFF_SITE_REFUSAL);
   }
 
   const allowPrivate = policy.allowPrivateNetwork || policy.allowPrivateTarget?.(parsed) === true;

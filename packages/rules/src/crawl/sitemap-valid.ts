@@ -1,7 +1,10 @@
 // crawl/sitemap-valid - Sitemap validation
 
 import type { CheckItem } from "@squirrelscan/core-contracts";
-import { SITEMAP_NOT_CHECKED_ERROR } from "@squirrelscan/core-contracts/storage";
+import {
+  SITEMAP_NOT_CHECKED_ERROR,
+  SITEMAP_OFF_SITE_SKIPPED_ERROR,
+} from "@squirrelscan/core-contracts/storage";
 import { w3cDatePeriod } from "@squirrelscan/utils/date-period";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
@@ -58,7 +61,10 @@ export const sitemapValidRule: Rule = {
     // of work the audit skipped (squirrelscan/repo#1733).
     const failedFromRobots =
       sitemaps?.failed?.filter(
-        (f) => f.source === "robots.txt" && f.error !== SITEMAP_NOT_CHECKED_ERROR,
+        (f) =>
+          f.source === "robots.txt" &&
+          f.error !== SITEMAP_NOT_CHECKED_ERROR &&
+          f.error !== SITEMAP_OFF_SITE_SKIPPED_ERROR,
       ) ?? [];
 
     if (failedFromRobots.length > 0) {

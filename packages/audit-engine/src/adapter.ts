@@ -170,6 +170,7 @@ import {
   refusedWithoutLookup,
   resolveHostAddresses,
 } from "@squirrelscan/utils/public-egress";
+import { ownSiteHostMatcher } from "@squirrelscan/utils/own-site";
 import { getHostname, normalizeUrl } from "@squirrelscan/utils/url";
 import { isInScope } from "@squirrelscan/crawler/frontier";
 import { createRobotsEvaluator } from "@squirrelscan/crawler/robots";
@@ -751,7 +752,11 @@ export function emptySiteAssetOccurrences(): SiteAssetOccurrences {
  * exactly what {@link fetchResourceAssets} does, so the streamed and resident
  * paths run the same accumulation code.
  */
-export function createSiteAssetCollector(baseUrl: string): {
+export function createSiteAssetCollector(
+  baseUrl: string,
+  /** See {@link absorbResourceOccurrences}. */
+  isOwnHost?: (hostname: string) => boolean,
+): {
   absorb: (siteContext: SiteContextPage[]) => void;
   occurrences: SiteAssetOccurrences;
 } {
@@ -813,7 +818,7 @@ export function createSiteAssetCollector(baseUrl: string): {
       }
 
       // Needs the DOM (stylesheet + script srcs aren't in stored parsedData).
-      absorbResourceOccurrences(occurrences, parsedPages, baseUrl);
+      absorbResourceOccurrences(occurrences, parsedPages, baseUrl, isOwnHost);
 
       // Internal link targets for the link probe (repo#2729), from the same
       // parsed scalars links/broken-links reads, normalized the way it does.
@@ -932,7 +937,12 @@ export function fetchResourceAssets(
     const crawl = yield* storage
       .getCrawl(crawlId)
       .pipe(Effect.catchAll(() => Effect.succeed(null)));
-    const collector = createSiteAssetCollector(crawl?.baseUrl ?? "");
+    const collector = createSiteAssetCollector(
+      crawl?.baseUrl ?? "",
+      overrides?.ownSiteOnly === true
+        ? ownSiteHostMatcher({ baseUrl: crawl?.baseUrl ?? "", domains: config.project?.domains })
+        : undefined,
+    );
     collector.absorb(siteContext);
     return yield* fetchAssetsFromOccurrences(
       storage,
@@ -1095,12 +1105,22 @@ export function fetchAssetsFromOccurrences(
     // The site's own for headers and pools: that scope plus subdomains. A
     // subdomain is still vetted: the crawl never requests it, and its name can
     // point anywhere (`imds.example.com A 169.254.169.254`).
+    // #819: an offline audit holds the site's own assets to the site too: a
+    // first-party URL that redirects to another host is not followed there, and
+    // reads as not requested (broken-resources: "not measured").
+    const offlineOwnHost =
+      overrides?.ownSiteOnly === true
+        ? ownSiteHostMatcher({ baseUrl, domains: config.project?.domains })
+        : undefined;
     const isOwnSiteUrl = (url: string): boolean =>
-      isSameDomainResource(url, ownSiteHost) || inCrawlHostScope(url);
+      isSameDomainResource(url, ownSiteHost) ||
+      inCrawlHostScope(url) ||
+      (offlineOwnHost?.(getHostname(url)) ?? false);
     const ownSiteEgress: EgressPolicy = {
       allowPrivateNetwork: true,
       resolve: resolveOnce,
       pin: overrides?.egressPinnedByTransport !== true,
+      ...(offlineOwnHost ? { allowHost: offlineOwnHost } : {}),
       // repo#3430: with the own hosts pinned, they are vetted like the rest.
       ...(ownHostsPinned(overrides ?? {})
         ? {}
@@ -2739,6 +2759,7 @@ function buildStreamingSiteData(
   fetchedTargets: ParsedUniverse["fetchedTargets"],
   egressPinnedByTransport?: boolean,
   pinOwnHosts?: boolean,
+  ownSiteOnly?: boolean,
 ): Effect.Effect<
   {
     siteDataForPageRules: SiteData;
@@ -2917,7 +2938,13 @@ function buildStreamingSiteData(
           defaultUserAgent: config.crawler?.user_agent || CHROME_USER_AGENT,
           customHeaders: config.crawler?.headers,
           headerScope: headerScopeOf(crawl, config),
-          egress: probeEgress(crawl?.baseUrl ?? "", config, egressPinnedByTransport, pinOwnHosts),
+          egress: probeEgress(
+            crawl?.baseUrl ?? "",
+            config,
+            egressPinnedByTransport,
+            pinOwnHosts,
+            ownSiteOnly,
+          ),
         },
       ),
     );
@@ -2940,7 +2967,13 @@ function buildStreamingSiteData(
           userAgent: crawl?.config?.userAgent || config.crawler?.user_agent || CHROME_USER_AGENT,
           customHeaders: config.crawler?.headers,
           headerScope: headerScopeOf(crawl, config),
-          egress: probeEgress(crawl?.baseUrl ?? "", config, egressPinnedByTransport, pinOwnHosts),
+          egress: probeEgress(
+            crawl?.baseUrl ?? "",
+            config,
+            egressPinnedByTransport,
+            pinOwnHosts,
+            ownSiteOnly,
+          ),
           perHostDelayMs: config.crawler?.per_host_delay_ms,
         },
       ).catch((): undefined => undefined),
@@ -3311,6 +3344,12 @@ export function runStreamingRules(
      */
     pinOwnHosts?: boolean;
     /**
+     * The soft-404 and cloaking probes send nothing to a host outside the
+     * audited site (`squirrel audit --offline`, #819). Same meaning as
+     * `ResourceCheckOverrides.ownSiteOnly`.
+     */
+    ownSiteOnly?: boolean;
+    /**
      * Keep the O(pages × page bytes) result maps. Default TRUE (today's
      * behaviour, and what the cloud path runs on).
      *
@@ -3365,6 +3404,7 @@ export function runStreamingRules(
         fetchedTargets,
         opts?.egressPinnedByTransport,
         opts?.pinOwnHosts,
+        opts?.ownSiteOnly,
       ),
     );
 
@@ -3737,16 +3777,22 @@ function nofollowActionTargets(page: {
  * link-local and metadata addresses refused, the hosts the crawl itself
  * requests sent as the crawl sends them, every other hop vetted.
  */
-function probeEgress(
+export function probeEgress(
   baseUrl: string,
   config: Config,
   egressPinnedByTransport?: boolean,
   pinOwnHosts?: boolean,
+  ownSiteOnly?: boolean,
 ): EgressPolicy {
   const policy: EgressPolicy = {
     allowPrivateNetwork: true,
     resolve: memoizeResolveHost(resolveHostAddresses),
     pin: egressPinnedByTransport !== true,
+    // #819: an offline audit's probes reach the audited site and nothing else,
+    // on the first hop and on every redirect after it.
+    ...(ownSiteOnly === true
+      ? { allowHost: ownSiteHostMatcher({ baseUrl, domains: config.project?.domains }) }
+      : {}),
   };
   // repo#3430: with the own hosts pinned, they are vetted like the rest.
   if (ownHostsPinned({ pinOwnHosts, egressPinnedByTransport })) return policy;
@@ -4197,8 +4243,18 @@ export function absorbResourceOccurrences(
     hasCsp?: boolean;
   }>,
   baseUrl: string,
+  /**
+   * More hosts that are the site's own beyond the base host and its subdomains
+   * (an offline audit's `www` or apex twin and `[project] domains`, #819): a
+   * reference on one is read as the site's own, not as a third party's.
+   */
+  isOwnHost?: (hostname: string) => boolean,
 ): void {
   const baseHost = getHostname(baseUrl).toLowerCase();
+  const ownResource = (url: string): boolean =>
+    isSameDomainResource(url, baseHost) || (isOwnHost?.(getHostname(url)) ?? false);
+  const ownScript = (url: string): boolean =>
+    isSameDomainScript(url, baseHost) || (isOwnHost?.(getHostname(url)) ?? false);
   const { css, images, scripts, preloads, fonts, externalCss, externalScripts, externalFonts } =
     target;
 
@@ -4210,7 +4266,7 @@ export function absorbResourceOccurrences(
     const stylesheetRefs = extractStylesheets(doc, pageUrl);
     for (const sheet of stylesheetRefs) {
       if (!sheet.href || sheet.href.startsWith("data:")) continue;
-      const sheets = isSameDomainResource(sheet.href, baseHost) ? css : externalCss;
+      const sheets = ownResource(sheet.href) ? css : externalCss;
       const sources = sheets.get(sheet.href) ?? new Set<string>();
       sources.add(page.url);
       sheets.set(sheet.href, sources);
@@ -4224,14 +4280,14 @@ export function absorbResourceOccurrences(
       } catch {
         // Ignore invalid URLs
       }
-      if (!isSameDomainResource(resolved, baseHost)) continue;
+      if (!ownResource(resolved)) continue;
       const sources = images.get(resolved) ?? new Set<string>();
       sources.add(page.url);
       images.set(resolved, sources);
     }
 
     for (const fontUrl of extractFontUrls(doc, pageUrl)) {
-      const fontMap = isSameDomainResource(fontUrl, baseHost) ? fonts : externalFonts;
+      const fontMap = ownResource(fontUrl) ? fonts : externalFonts;
       const sources = fontMap.get(fontUrl) ?? new Set<string>();
       sources.add(page.url);
       fontMap.set(fontUrl, sources);
@@ -4241,7 +4297,7 @@ export function absorbResourceOccurrences(
     const scriptRefs = extractScripts(doc, pageUrl);
     for (const script of scriptRefs) {
       if (!script.src || script.src.startsWith("data:")) continue;
-      const scriptMap = isSameDomainScript(script.src, baseHost) ? scripts : externalScripts;
+      const scriptMap = ownScript(script.src) ? scripts : externalScripts;
       const sources = scriptMap.get(script.src) ?? new Set<string>();
       sources.add(page.url);
       scriptMap.set(script.src, sources);
@@ -4251,7 +4307,7 @@ export function absorbResourceOccurrences(
     // their own map so no script rule's input changes, and only pages that
     // enforce a CSP are read, since nothing else needs them.
     for (const src of page.hasCsp ? extractPreloadedScriptUrls(doc, pageUrl) : []) {
-      if (!isSameDomainScript(src, baseHost)) continue;
+      if (!ownScript(src)) continue;
       const sources = preloads.get(src) ?? new Set<string>();
       sources.add(page.url);
       preloads.set(src, sources);

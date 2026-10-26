@@ -96,6 +96,13 @@ beforeEach(() => {
     );
     const host = new Headers(init?.headers).get("host");
     hosts.push(url.hostname, ...(host ? [host.split(":")[0]!] : []));
+    // #819: a start URL of this host redirects to another site.
+    if (url.pathname === "/away") {
+      return new Response(null, {
+        status: 302,
+        headers: { location: "https://www.example.org/landed" },
+      });
+    }
     if (url.pathname === "/" || url.pathname === "") {
       return new Response(HOME, {
         status: 200,
@@ -135,5 +142,35 @@ describe("squirrel audit --offline and third-party assets (pub#807)", () => {
           h.endsWith(".example.net")
       )
     ).toEqual([]);
+  });
+
+  test("a start URL that redirects to another site is not followed there (#819)", async () => {
+    writeFileSync(configPath, "");
+    try {
+      await runCommand(audit, {
+        rawArgs: ["https://example.com/away", "-m", "1", "--offline", "-y"],
+      });
+    } catch (err) {
+      if (!(err instanceof ExitSignal)) throw err;
+    }
+    // The start URL was requested, and nothing went on to the site it names.
+    expect(hosts).toContain("example.com");
+    expect(
+      hosts.filter((h) => h === "example.org" || h.endsWith(".example.org"))
+    ).toEqual([]);
+  });
+
+  test("control: online, the same redirect is followed (#819)", async () => {
+    writeFileSync(configPath, "");
+    try {
+      await runCommand(audit, {
+        rawArgs: ["https://example.com/away", "-m", "1", "-y", "--no-publish"],
+      });
+    } catch (err) {
+      if (!(err instanceof ExitSignal)) throw err;
+    }
+    expect(
+      hosts.some((h) => h === "example.org" || h.endsWith(".example.org"))
+    ).toBe(true);
   });
 });
