@@ -39,7 +39,7 @@ A website's schedule is in one of five states. The dashboard shows the state on 
 | Active | Recurring audits are running. | The cadence, the next run, and a **Turn off** control. |
 | Capped | The site asked for a schedule and your plan's scheduled-website slots are all in use. | A **Capped** chip with an upgrade link, on the website list and on the schedule settings page. |
 | Unschedulable | The site's address can never be reached from the cloud, such as a `localhost` or private-network host. | The reason, in place of a cadence. |
-| Paused | The schedule was running and the system stopped it, after three failed audits in a row or a balance that could not cover a run. | The reason, and where to start it again. |
+| Paused | The schedule was running and the system stopped it, after three audits in a row failed the same permanent way or a balance could not cover a run. | The reason, what the audits kept failing on, since when, and where to resume it. |
 
 <Note>
   A capped website never shows as **Weekly**. It is not running, and saying otherwise is the one thing this state exists to stop.
@@ -139,10 +139,18 @@ To start the audits again, open the website in the dashboard and pick a cadence 
 
 Two conditions stop a schedule without you asking, so a recurring audit cannot keep spending credits on something that is not working:
 
-- **Three failed audits in a row.** Any audit of the site counts, whether it was scheduled, started from the dashboard, or run from the CLI, so retrying a broken site by hand counts towards the same three. A completed or cancelled audit in between clears the streak. Usually an unreachable site, a firewall or WAF blocking our crawler, or a URL that has moved. Failed audits are refunded, so the failures themselves cost nothing.
+- **Three audits in a row that failed the same permanent way.** A permanent failure is one that will happen again on the next run unless something changes on the site:
+  - the domain does not resolve (DNS);
+  - the TLS certificate is not valid, for example expired;
+  - the start URL redirects somewhere the audit cannot follow, usually off the site, or in a loop;
+  - the site refuses the crawler: bot protection or a firewall, a rate limit, or a login wall (HTTP 401, 403 or 429).
+
+  All three failures have to share one of these. A timeout, a server error, a dropped connection, a problem on our side, or a failure we cannot place never counts, and neither does a mix of two different permanent failures. A completed or cancelled audit, or any other kind of failure, in between clears the streak. Any audit of the site counts, whether it was scheduled, started from the dashboard, or run from the CLI. Failed audits are refunded, so the failures themselves cost nothing.
 - **Not enough credits.** A run the balance cannot cover is skipped without a charge, and the schedule pauses instead of skipping again every cycle.
 
-Either way an email says which it was, and it arrives whatever the website's **Settings → Alerts** toggle says, because a credit-spending service switching itself off is account news. Only the account-wide **Account alerts** switch in [Settings → Email](/dashboard/emails#email-settings-and-unsubscribing) stops it. It is throttled to roughly one per account in any rolling 24 hours, so several sites pausing around the same time do not each send mail; the rest appear in the dashboard bell. Turn the schedule back on from **Settings → Schedule** once the cause is fixed.
+Either way you are told once, in the dashboard bell and by email, and a pause after failed audits says what they kept failing on. The email arrives whatever the website's **Settings → Alerts** toggle says, because a credit-spending service switching itself off is account news. Only the account-wide **Account alerts** switch in [Settings → Email](/dashboard/emails#email-settings-and-unsubscribing) stops it. It is throttled to roughly one per account in any rolling 24 hours, so several sites pausing around the same time do not each send mail; the rest appear in the dashboard bell. While a schedule is paused no scheduled audit runs, so none fails or emails you.
+
+Fix the cause, then resume the schedule from **Settings → Schedule** (the email's **Resume recurring audits** button opens it). Resuming a schedule that paused after failed audits runs one audit straight away, rather than waiting for the next slot, so you find out at once whether the fix worked. A successful audit clears the streak; if it fails the same way again, the schedule pauses again straight away. Turning recurring audits back on for many websites at once, and resuming a schedule that paused for credits, waits for each site's next slot as usual.
 
 ## Audit source
 
