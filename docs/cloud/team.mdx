@@ -37,13 +37,32 @@ Every member has a role that controls what they can do in an org:
 
 | Role | Access |
 |------|--------|
-| Owner | Full access, including billing and org deletion. One per org. |
-| Admin | Manage members, websites, and settings. Cannot delete the org. |
-| Editor | Create and manage websites and audits. |
-| Viewer | Read-only access to reports and audits. |
-| Billing | Manage subscription and credits only, no website access. |
+| Owner | Everything, including changing members' roles. One per org. |
+| Admin | Everything except changing roles: members, API keys, org settings, billing, websites and audits. |
+| Editor | Websites and audits: read, run, add, change and delete them, with their settings and schedules. |
+| Viewer | Read only: websites, audits, reports, issues and credits. |
+| Billing | Billing and credits only. No access to websites or audits. |
 
-Admins and owners invite members and set roles from **Settings → Team**.
+What each role can do:
+
+| Action | Owner | Admin | Editor | Viewer | Billing |
+|--------|-------|-------|--------|--------|---------|
+| Read websites, audits, reports and issues | Yes | Yes | Yes | Yes | No |
+| Run audits, including scheduled audits and cloud checks (spends credits) | Yes | Yes | Yes | No | No |
+| Add, change and delete websites, their settings, schedules and issues | Yes | Yes | Yes | No | No |
+| See a website's custom request header values | Yes | Yes | Yes | No | No |
+| Read credits, usage, billing state and the member list | Yes | Yes | Yes | Yes | Yes |
+| Buy credits, change the plan and open the billing portal | Yes | Yes | No | No | Yes |
+| Change org settings: name, logo, white-label and webhooks | Yes | Yes | No | No | No |
+| Invite and remove members | Yes | Yes | No | No | No |
+| Change a member's role | Yes | No | No | No | No |
+| Create and revoke API keys | Yes | Yes | No | No | No |
+
+The roles apply wherever you are signed in: the dashboard, the CLI (`squirrel auth login`) and the hosted [MCP server](/developers/mcp). An action your role does not allow returns `403` with the code `forbidden_role` and names your role; retrying does not help, so ask an owner or admin to change your role. A billing member sees none of an org's websites or audits: those reads answer as if the website were not there.
+
+[API keys](/developers/authentication#scopes) are the org's, not a member's: what a key can do is set by its scopes, whoever created it. An MCP client you sign in to through OAuth gets only the scopes your role holds, and when your role changes to one with less access, your MCP sign-ins end and the client asks you to sign in again.
+
+Admins and owners invite members from **Settings → Team**.
 
 ## White-label reports
 

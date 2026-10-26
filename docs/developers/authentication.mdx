@@ -36,8 +36,8 @@ them apart by prefix.
   days, or **Never**). This is the intended public auth mechanism for anything
   automated.
 - **CLI login tokens** are minted by [`squirrel auth login`](/cli/auth#login),
-  tied to your user, unscoped (full access), and expire. Best for a developer at
-  a terminal.
+  tied to your user, hold what your [role](/cloud/team#roles) in the org allows,
+  and expire. Best for a developer at a terminal.
 
 <Note>
 The [hosted MCP server](/developers/mcp) takes the same `sq_` API key as a bearer
@@ -72,7 +72,12 @@ error naming the missing scope.
 | `org:read` | Read org details |
 | `org:write` | Manage org settings (name, slug, logo). Inviting members needs a signed-in owner or admin |
 
-Login sessions are unscoped (full access). Scopes only apply to API keys.
+Login sessions (the dashboard and CLI login tokens) hold the scopes of your
+[role](/cloud/team#roles) in the organization you are working in: an editor
+holds `audits:read`, `audits:write`, `credits:read` and `org:read`, a viewer
+`audits:read`, `credits:read` and `org:read`, and a billing member
+`credits:read` and `org:read`. A request outside them returns `403` with the
+code `forbidden_role`.
 
 ### Presets
 
