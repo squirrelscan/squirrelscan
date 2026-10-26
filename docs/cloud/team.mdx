@@ -60,7 +60,7 @@ What each role can do:
 
 The roles apply wherever you are signed in: the dashboard, the CLI (`squirrel auth login`) and the hosted [MCP server](/developers/mcp). An action your role does not allow returns `403` with the code `forbidden_role` and names your role; retrying does not help, so ask an owner or admin to change your role. A billing member sees none of an org's websites or audits: those reads answer as if the website were not there.
 
-[API keys](/developers/authentication#scopes) are the org's, not a member's: what a key can do is set by its scopes, whoever created it. An MCP client you sign in to through OAuth gets only the scopes your role holds, and when your role changes to one with less access, your MCP sign-ins end and the client asks you to sign in again.
+[API keys](/developers/authentication#scopes) are the org's, not a member's: what a key can do is set by its scopes, whoever created it. Only owners and admins create and revoke them. A key keeps working when the member who created it is demoted or leaves the organization, so when you demote or remove someone who had a key's token, revoke that key and create a new one (`squirrel keys revoke`, or **Settings → API keys**). An MCP client you sign in to through OAuth gets only the scopes your role holds, and when your role changes to one with less access, your MCP sign-ins end and the client asks you to sign in again.
 
 Admins and owners invite members from **Settings → Team**.
 
