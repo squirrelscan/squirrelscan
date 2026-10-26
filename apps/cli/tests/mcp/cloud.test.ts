@@ -112,6 +112,23 @@ describe("apiResultToTool", () => {
     expect(text(out)).toContain("Forbidden");
   });
 
+  // cloud #3409: the key's scope refusal in the typed envelope.
+  test("403 surfaces an enveloped missing-scope reason", () => {
+    const out = apiResultToTool(
+      make(403, false, {
+        error: {
+          code: "missing_scope",
+          message: "API key missing required scope: audits:write",
+          missing_scope: "audits:write",
+        },
+      })
+    );
+    expect(out.isError).toBe(true);
+    expect(text(out)).toContain(
+      "Forbidden — API key missing required scope: audits:write."
+    );
+  });
+
   test("403 surfaces the server's session-only reason", () => {
     const out = apiResultToTool(
       make(403, false, {
