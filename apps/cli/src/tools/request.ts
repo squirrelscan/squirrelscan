@@ -377,8 +377,9 @@ export function requestOnceScoped<T>(
   use: (response: Response) => Promise<T>,
   timeoutMs: number = config.timeout,
   /**
-   * A guarded send (squirrelscan/repo#3430): the one request goes through it
-   * and redirects are not followed, so no hop goes out unvetted.
+   * A guarded send (squirrelscan/repo#3430) that follows redirects itself, hop
+   * by hop through the egress guard; the runtime's own following is off, so no
+   * hop goes out unvetted.
    */
   guardedSend?: (url: string, init: RequestInit) => Promise<Response>
 ): Effect.Effect<T, RequestError, never> {

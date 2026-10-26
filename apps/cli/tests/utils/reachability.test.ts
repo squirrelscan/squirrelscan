@@ -26,9 +26,9 @@ describe("checkReachability", () => {
 });
 
 // squirrelscan/repo#3430: the probe is the first request of every run. With the
-// site's own hosts pinned it connects to the address it checked and does not
-// follow redirects, so a start URL that redirects to the metadata service is
-// never requested there.
+// site's own hosts pinned it connects to the address it checked and follows
+// redirects through the same guard, so a start URL that redirects to
+// the metadata service is never requested there.
 describe("checkReachability and the site's own hosts (repo#3430)", () => {
   const realFetch = globalThis.fetch;
   const requested: string[] = [];
@@ -62,7 +62,31 @@ describe("checkReachability and the site's own hosts (repo#3430)", () => {
   test("a start URL that redirects to the metadata address is not followed there", async () => {
     const result = await checkReachability(`http://localhost:${server.port}/`);
 
-    expect(result).toMatchObject({ reachable: true, statusCode: 302 });
+    expect(result.reachable).toBe(false);
+    expect(result.error).toContain("Not requested");
     expect(requested.some((u) => u.includes("169.254.169.254"))).toBe(false);
+  });
+
+  test("a redirect to an ordinary page is still followed", async () => {
+    const target = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: () =>
+        new Response("<html><title>t</title></html>", {
+          headers: { "content-type": "text/html" },
+        }),
+    });
+    const hop = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: () => Response.redirect(`http://localhost:${target.port}/`, 302),
+    });
+    try {
+      const result = await checkReachability(`http://localhost:${hop.port}/`);
+      expect(result).toMatchObject({ reachable: true, statusCode: 200 });
+    } finally {
+      hop.stop(true);
+      target.stop(true);
+    }
   });
 });

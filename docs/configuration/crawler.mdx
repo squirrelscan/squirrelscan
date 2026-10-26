@@ -911,9 +911,10 @@ resolved before the crawl begins, are checked too (see the next paragraph).
 host, its `www` twin, and the domains in `[project] domains` with all their
 subdomains, checks every answer, and connects to the address it checked: for
 pages, redirect hops, root files, the start URL's reachability check and its
-redirects, assets and the end-of-crawl probes. A name that resolves to a
-link-local or cloud metadata address is never requested: the page is recorded
-as failed with "Not requested", and an asset as refused. Private networks,
+redirects, assets and the end-of-crawl probes, in `squirrel analyze` too. A
+name that resolves to a link-local or cloud metadata address is never
+requested: the page is recorded as failed with "Not requested", and an asset as
+refused. Private networks,
 `localhost` and mDNS `.local` names keep working; a `.local` name that answers
 only a scoped link-local IPv6 address cannot be connected to by address and is
 refused. Two rule probes still go out by name without that check: the `HEAD`

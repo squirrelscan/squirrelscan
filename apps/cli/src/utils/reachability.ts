@@ -3,6 +3,7 @@
 // Detects WAF/bot protection on target site
 
 import {
+  EgressRefusedError,
   egressGuardedSend,
   ownHostsPinned,
   refusedWithoutLookup,
@@ -10,6 +11,7 @@ import {
   type EgressPolicy,
 } from "@squirrelscan/utils/public-egress";
 import { decodedBody, fetchUndecoded } from "@squirrelscan/utils/response-body";
+import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 import { Effect, Duration } from "effect";
 
 import { pinOwnHosts } from "@/crawl/pin-own-hosts";
@@ -159,7 +161,7 @@ async function readBodySample(
 
 /** What the probe says when the site's host resolves to an address it never requests. */
 const EGRESS_REFUSED_REACHABILITY =
-  "Not requested: the host resolves to a link-local or cloud metadata address";
+  "Not requested: it resolves or redirects to a link-local or cloud metadata address";
 
 /**
  * The send for a pinned probe (squirrelscan/repo#3430): the start URL's host is
@@ -178,7 +180,12 @@ function reachabilitySend(
   // An address the user named as the site is theirs to audit, as the crawl
   // treats it: only where the site's DNS or redirects lead is guarded.
   if (refusedWithoutLookup(url, policy)) return undefined;
-  return egressGuardedSend(fetchUndecoded, policy);
+  // Redirects are followed hop by hop through the guard (safeRedirectFetch), so
+  // the WAF check still reads the page a redirect lands on, and a hop that
+  // resolves to a refused address is never sent.
+  const guarded = egressGuardedSend(fetchUndecoded, policy);
+  return (hopUrl, init) =>
+    safeRedirectFetch(hopUrl, init, guarded).then((result) => result.response);
 }
 
 /**
@@ -250,7 +257,13 @@ async function attemptReachability(url: string): Promise<ReachabilityResult> {
       return { reachable: true, statusCode: response.status };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      return { reachable: false, error: message };
+      return {
+        reachable: false,
+        error:
+          error instanceof EgressRefusedError
+            ? EGRESS_REFUSED_REACHABILITY
+            : message,
+      };
     } finally {
       clearTimeout(timeout);
       // Closes the connection (#766): the cancelled body does not, Bun keeps
