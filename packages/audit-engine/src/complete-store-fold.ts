@@ -86,6 +86,11 @@ export interface CompleteStoreTallyInput {
    * denominator, and the set a finding's page must be in to count as DIRTY.
    */
   crawledUrls: Set<string>;
+  /**
+   * (#3413) Pages crawled and not removed when `crawledUrls` names only some of
+   * them (a clipped signal): the denominator is the larger of the two.
+   */
+  crawledCount?: number;
   /** (#1305) Passing sibling checks on dirty pages; see reconstructCompleteResults. */
   skippedPassCounts?: SkippedPassCounts;
   /**
@@ -323,6 +328,7 @@ export function createCompleteStoreTallyFold(
   const {
     ruleResults,
     crawledUrls,
+    crawledCount,
     skippedPassCounts,
     freshTallies,
     carriedPageUrls,
@@ -331,6 +337,9 @@ export function createCompleteStoreTallyFold(
     retainCarriedChecks,
     requireAggregatableCarried,
   } = input;
+  // (#3413) A clipped signal lists only part of the crawl; its count sizes the rest.
+  const crawledTotal = (): number =>
+    Math.max(crawledUrls.size, Number.isSafeInteger(crawledCount) ? crawledCount! : 0);
 
   const tallies = new Map<string, RuleTally>();
   const metaOf = (ruleId: string): RuleRunResult["meta"] | undefined =>
@@ -559,7 +568,7 @@ export function createCompleteStoreTallyFold(
       // SKIP-AS-PASS approximation documented on reconstructCompleteResults — a page
       // the rule skipped has no finding and is counted here as a pass, exactly as
       // the #918 carried-clean model already does.
-      const clean = crawledUrls.size - (dirtyPagesByRule.get(ruleId) ?? 0);
+      const clean = crawledTotal() - (dirtyPagesByRule.get(ruleId) ?? 0);
       // (#1305) Passing SIBLING checks on dirty pages, with the round-5 SECURITY
       // CLAMP: skippedPassCounts is untrusted finalize-body input, and an inflated
       // count added straight into the pass numerator would drive a genuinely-failing
@@ -569,7 +578,7 @@ export function createCompleteStoreTallyFold(
       let skippedPasses = 0;
       const perCheck = skippedPassCounts?.[ruleId];
       if (perCheck) for (const n of Object.values(perCheck)) skippedPasses += n;
-      skippedPasses = Math.min(skippedPasses, crawledUrls.size);
+      skippedPasses = Math.min(skippedPasses, crawledTotal());
       addChecksToTally(
         entry.tally,
         [],

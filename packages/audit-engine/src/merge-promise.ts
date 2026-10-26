@@ -337,6 +337,15 @@ export interface CloudSmartAuditsInput {
     /** Full crawled-URL list (`resolutionSignal.crawledUrls`); normalized here. */
     crawledUrls: string[];
     /**
+     * (#3413) Pages this run crawled and did not remove, listed or not, when
+     * `crawledUrls` cannot name them all (the compact signal's byte budget
+     * clipped the list and sent the rest as hashes). The page decisions read
+     * `crawledUrls`, so the caller names the unlisted pages it knows of there;
+     * this only sizes the scoring denominator (clean = crawled - failing), which
+     * is the larger of the two.
+     */
+    crawledCount?: number;
+    /**
      * (#1305) Per-(ruleId, checkName) passing-sibling counts on dirty pages — added
      * to `syntheticPassCount` so multi-checkName rules score at the sampled path's
      * granularity. See {@link reconstructCompleteResults}.
@@ -976,6 +985,7 @@ export async function runCloudSmartAudits(
     const fold = createCompleteStoreTallyFold({
       ruleResults: shellResults ?? input.ruleResults,
       crawledUrls,
+      crawledCount: completeStore?.crawledCount,
       skippedPassCounts: completeStore?.skippedPassCounts,
       freshTallies: completeTallies,
       carriedPageUrls,
@@ -1064,6 +1074,7 @@ export async function runCloudSmartAudits(
         ruleResults: shellResults ?? input.ruleResults,
         findingPages: completeStore.findingPages ?? emptyPageSource(),
         crawledUrls,
+        crawledCount: completeStore.crawledCount,
         skippedPassCounts: completeStore.skippedPassCounts,
         freshTallies: completeTallies,
         carriedFindings,
