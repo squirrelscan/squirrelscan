@@ -908,16 +908,17 @@ it follows the same way. Redirects of the start URL itself, resolved before the
 crawl begins, are not covered yet.
 
 **The site's own hostnames are not checked.** The audited host, its `www`
-twin and the domains in `[project] domains` are requested by name through the
-system resolver, as a browser would, and a redirect to one of them is followed
+twin, and the domains in `[project] domains` with all their subdomains are
+requested by name through the system resolver, as a browser would, and a redirect to one of them is followed
 without an address check. A site that controls its own DNS can therefore point
 one of those names at a link-local or metadata address, and the CLI would send
 the request and store the answer as a page. Audit untrusted sites from a
 machine that cannot reach a cloud metadata service, or one whose metadata
 service requires a token or header that squirrel never sends (on AWS, IMDSv2
-only). Cloud audits are not affected: every request they make goes through an
-egress proxy that resolves the name once, refuses private, link-local and
-metadata answers, and connects to the address it checked.
+only). Cloud audits are not affected: every request to the audited site and
+the links it leads to goes through an egress proxy that resolves the name once,
+refuses private, link-local and metadata answers, and connects to the address
+it checked.
 
 **Example:**
 

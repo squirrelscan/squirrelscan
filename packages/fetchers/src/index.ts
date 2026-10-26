@@ -289,7 +289,16 @@ export function createFetchDocumentFetcher(): DocumentFetcher {
               endsInError = true;
               break;
             }
-            const nextUrl = new URL(location, currentUrl).toString();
+            // An unparseable Location (`http://[`) ends the chain like a
+            // missing one, so the page is recorded instead of the whole fetch
+            // rejecting with "Invalid URL" (squirrelscan/repo#3382).
+            let nextUrl: string;
+            try {
+              nextUrl = new URL(location, currentUrl).toString();
+            } catch {
+              endsInError = true;
+              break;
+            }
             // SECURITY (#1392): a hand-rolled manual-redirect loop bypasses the
             // runtime's native cross-protocol-redirect rejection, so a
             // `Location: file:///…` (or data:/blob:/ftp:/…) would otherwise be

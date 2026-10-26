@@ -1,8 +1,8 @@
 // A redirect whose Location the URL parser refuses (`http://[`) used to throw
 // inside the fetcher's Effect generator, which is a defect: it failed the fetch
 // as a crash instead of recording the page (squirrelscan/repo#3382). It is a
-// terminal error hop now, like a redirect with no Location at all, and the
-// crawl goes on to the next URL.
+// terminal error hop now, like a redirect with no Location at all, on both
+// fetchers, and the crawl goes on to the next URL.
 
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect, Exit, Fiber, Stream } from "effect";
@@ -100,11 +100,11 @@ describe("a redirect with an unparseable Location", () => {
     }
   });
 
-  test("the plain fetcher still fails with a normal error", async () => {
+  test("the plain fetcher records the same terminal error hop", async () => {
     const origin = site();
     const fetcher = createFetchDocumentFetcher();
-    await expect(fetcher.fetch({ url: `${origin}bad`, timeoutMs: 5_000 })).rejects.toBeInstanceOf(
-      Error,
-    );
+    const result = await fetcher.fetch({ url: `${origin}bad`, timeoutMs: 5_000 });
+    expect(result.status).toBe(302);
+    expect(result.redirectChain?.endsInError).toBe(true);
   });
 });
