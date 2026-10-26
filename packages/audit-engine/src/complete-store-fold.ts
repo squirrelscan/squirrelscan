@@ -338,8 +338,14 @@ export function createCompleteStoreTallyFold(
     requireAggregatableCarried,
   } = input;
   // (#3413) A clipped signal lists only part of the crawl; its count sizes the rest.
+  // The count rides in from a publish: an untrusted number, so it is bounded by the
+  // crawl ceiling here (the API bounds it by the hashes it holds) and only ever
+  // sizes clean passes; failures are counted from the findings, never from it.
   const crawledTotal = (): number =>
-    Math.max(crawledUrls.size, Number.isSafeInteger(crawledCount) ? crawledCount! : 0);
+    Math.max(
+      crawledUrls.size,
+      Number.isSafeInteger(crawledCount) ? Math.min(Math.max(crawledCount!, 0), REPORT_LIMITS.maxPages) : 0,
+    );
 
   const tallies = new Map<string, RuleTally>();
   const metaOf = (ruleId: string): RuleRunResult["meta"] | undefined =>
