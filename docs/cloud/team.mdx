@@ -66,18 +66,33 @@ Admins and owners invite members from **Settings → Team**.
 
 ## Invites
 
-An invite is sent by email. When an owner or admin invites an address from **Settings → Team**, squirrelscan emails it a link to the invite, and the Team page says the invite was emailed once the email has gone out. If the email could not be sent, for example because that address has bounced our mail before, the page says so instead. The invite then stays under **Pending invites**, where you can revoke it and send a new one.
+An invite is sent by email. When an owner or admin invites an address from **Settings → Team**, squirrelscan emails it from `notifications@mail.squirrelscan.com` with a link to the invite. The email names the organization, the role, and who sent it with their account email. The Team page says the invite was emailed only once the email has gone out.
 
-The link opens an invite page that shows the organization, who sent the invite and the role it grants. To accept, sign in with the address the invite was sent to, or create a free account with it on the way. You can also decline, which removes the invite. An invite can only be accepted by the address it was sent to, so if you are signed in with a different one, the page asks you to sign out first.
+If the email could not be sent, the Team page says so and offers the invite link, which you can copy and send to them yourself. The invite stays under **Pending invites** either way, where you can revoke it. squirrelscan does not mail an address that has bounced or complained about our mail, or one that has unsubscribed.
+
+### Accepting or declining
+
+The link opens an invite page that shows the organization, who sent the invite and the role it grants. To accept, sign in with the address the invite was sent to, or create a free account with it on the way. The address must match the one you sign in with. Case does not matter, but a different spelling of the same mailbox (for example a Gmail address with or without dots, or with a `+tag`) does. If you are signed in with a different address, the page asks you to sign out first. You can also decline, which removes the invite.
 
 An invite stops working when:
 
 - it expires, 7 days after it was sent,
 - an owner or admin revokes it,
 - whoever sent it leaves the organization or stops being an owner or admin,
-- or it has already been accepted.
+- or it has been accepted.
 
-The invite page tells you when an invite no longer works and, where it can, why. Ask an owner or admin of the organization for a new one.
+The invite page tells you when an invite no longer works. Ask an owner or admin of the organization for a new one.
+
+### Limits
+
+To keep invites from being used to send unwanted mail, they are limited:
+
+- 20 an hour from one person,
+- 50 a day from one organization,
+- 3 a day to one address, across all organizations,
+- 1 a day from one organization to one address, so after an invite is revoked or declined it cannot be sent again for 24 hours.
+
+An invite over a limit is not created. The API answers `429` with the code `invite_rate_limited`, and the Team page says to try again later.
 
 ## White-label reports
 
