@@ -677,11 +677,13 @@ export async function runCloudSmartAudits(
 
   // (#508) Page checks this run skipped while the check ran elsewhere, read off the
   // published checks themselves: the signal's key for them can be dropped past the
-  // key cap, and a prior finding there must carry either way. Sampled mode only: a
-  // complete-store finalize holds the findings, not the checks, so it has no skip
-  // evidence to read (see docs/configuration/index.mdx, Smart Audits).
+  // key cap, and a prior finding there must carry either way. A complete-store
+  // finalize holds the findings, not the checks, so without tallies it has no skip
+  // evidence to read (see docs/configuration/index.mdx, Smart Audits). (repo#3348)
+  // With them its shell is the capped report a single POST would have sent, so it
+  // reads the same evidence, and a skip carries on either path.
   let notEvaluated: NotEvaluatedEvidence | undefined;
-  if (!completeStore) {
+  if (!completeStore || completeTallies) {
     const collector = createNotEvaluatedCollector(normalizePageUrl);
     for (const [ruleId, r] of Object.entries(input.ruleResults)) {
       for (const c of r.checks) {
@@ -754,27 +756,28 @@ export async function runCloudSmartAudits(
   // per-page evidence — the resolution override is moot.
   let resolution: MergeResolutionInput | undefined;
   if (!completeStore && input.resolutionSignal) {
-    const signalCrawled = new Set<string>();
-    for (const u of input.resolutionSignal.crawledUrls) signalCrawled.add(normalizePageUrl(u));
-    const failingByCheck = new Map<string, Set<string>>();
-    for (const [key, hashes] of Object.entries(input.resolutionSignal.failing)) {
-      failingByCheck.set(key, new Set(hashes));
-    }
-    const notEvaluatedByCheck = new Map<string, Set<string>>();
-    for (const [key, hashes] of Object.entries(input.resolutionSignal.notEvaluated ?? {})) {
-      notEvaluatedByCheck.set(key, new Set(hashes));
-    }
-    resolution = {
-      crawledUrls: signalCrawled,
-      failingByCheck,
-      notEvaluatedByCheck,
-      truncatedChecks: new Set(input.resolutionSignal.truncated ?? []),
-      ...(input.resolutionSignal.crawledComplete === false ? { crawledComplete: false } : {}),
-      ...(input.resolutionSignal.crawledComplete === false && input.resolutionSignal.crawledHashes
-        ? { crawledHashes: new Set(input.resolutionSignal.crawledHashes) }
-        : {}),
-    };
+    resolution = indexResolutionSignal(input.resolutionSignal);
   }
+  // (repo#3348) A complete store scored from its tallies reads the signal for the
+  // one thing complete findings cannot say: which crawled pages a check did NOT
+  // evaluate. The tallies leave those pages out for that check, so a prior there
+  // must carry and score, as the sampled path's merge carries it (#508, pub#968),
+  // where the absence of a finding would otherwise resolve it. The merge gets the
+  // signal's not-evaluated sets only: its failing sets would overrule the complete
+  // findings, which are the better evidence. `tallySignal`, whole, then decides
+  // which carries the tallies already count, as `notEvaluatedThisRun` does.
+  const tallySignal =
+    completeTallies && input.resolutionSignal
+      ? indexResolutionSignal(input.resolutionSignal)
+      : undefined;
+  const mergeResolution: MergeResolutionInput | undefined =
+    resolution ??
+    (tallySignal && {
+      crawledUrls: tallySignal.crawledUrls,
+      failingByCheck: new Map(),
+      notEvaluatedByCheck: tallySignal.notEvaluatedByCheck,
+      truncatedChecks: new Set(),
+    });
 
   // (#2658) Where the signal lost its say (a truncated key, a page off a clipped
   // list), a prior resolves only on positive evidence in the payload: a pass for
@@ -847,7 +850,7 @@ export async function runCloudSmartAudits(
       priorPages,
       now,
       sampledCheckPages,
-      resolution,
+      resolution: mergeResolution,
       completeItemChecks,
       incompleteItemChecks,
       passedCheckPages,
@@ -960,6 +963,12 @@ export async function runCloudSmartAudits(
   let scoringTallies: Map<string, RuleTally> | undefined;
   let carriedSource: CarriedUnionSource | undefined;
 
+  // (repo#3348) A carry on a page the tallies already count for its check stays
+  // open in the store but is left out of the union, as on the sampled path.
+  const countedByTallies = tallySignal
+    ? (f: CarriedFinding): boolean => evaluatedThisRun(f, crawledUrls, tallySignal)
+    : undefined;
+
   if (streamedComplete) {
     const fold = createCompleteStoreTallyFold({
       ruleResults: shellResults ?? input.ruleResults,
@@ -977,7 +986,7 @@ export async function runCloudSmartAudits(
       requireAggregatableCarried: !!split && split.aggregate.findings > 0,
     });
     onActive = (finding) => {
-      if (finding.provenance !== "carried") return;
+      if (finding.provenance !== "carried" || countedByTallies?.(finding)) return;
       carriedCount += 1;
       if (finding.neverRendered) unrenderedCount += 1;
       // No copy: `MergedFinding` already carries every field `CarriedFinding`
@@ -1019,7 +1028,7 @@ export async function runCloudSmartAudits(
     carriedSource = fold.carriedUnion();
   } else {
     onActive = (finding) => {
-      if (finding.provenance !== "carried") return;
+      if (finding.provenance !== "carried" || countedByTallies?.(finding)) return;
       carriedCount += 1;
       const carried = toCarriedFinding(finding);
       carriedFindings.push(carried);
@@ -1328,41 +1337,71 @@ function notEvaluatedThisRun(
   crawledUrls: ReadonlySet<string>,
   resolution: MergeResolutionInput,
 ): CarriedFinding[] {
-  const evaluated = (f: CarriedFinding): boolean => {
-    const url = f.normalizedUrl;
-    // (#2658, #2673) Off a clipped list the signal has no page sets. A page its
-    // hashes do not name was not crawled (or, without hashes from a producer
-    // before #2673, there is no telling) and keeps its carry. A page they name
-    // was crawled, and the tallies count it for every check that evaluated it,
-    // so a carry there would count it twice. (#2688) With the hashes, the
-    // signal's `notEvaluated` names the unlisted pages each check did not
-    // evaluate as well, so this page was evaluated when the check ran this run,
-    // is not truncated and does not name it. A hash it shares with a page the
-    // check skipped keeps the carry. An uncrawled page whose hash collides with a
-    // crawled one is taken for crawled here too, and its carries drop out of the
-    // union (about 1.6e-6 a page at 7,000 hashes); they stay open in the store
-    // either way.
-    if (resolution.crawledComplete === false && !resolution.crawledUrls.has(url)) {
-      const hash = resolutionUrlHash(url);
-      if (!resolution.crawledHashes?.has(hash)) return false;
-      const key = resolutionCheckKey(f.ruleId, f.checkName);
-      return (
-        resolution.failingByCheck.has(key) &&
-        !resolution.truncatedChecks.has(key) &&
-        !resolution.notEvaluatedByCheck.get(key)?.has(hash)
-      );
-    }
-    if (!crawledUrls.has(url) && !resolution.crawledUrls.has(url)) return false;
+  return carriedFindings.filter((f) => !evaluatedThisRun(f, crawledUrls, resolution));
+}
+
+/** True when the tallies already count `f`'s page for its check: {@link notEvaluatedThisRun}. */
+function evaluatedThisRun(
+  f: CarriedFinding,
+  crawledUrls: ReadonlySet<string>,
+  resolution: MergeResolutionInput,
+): boolean {
+  const url = f.normalizedUrl;
+  // (#2658, #2673) Off a clipped list the signal has no page sets. A page its
+  // hashes do not name was not crawled (or, without hashes from a producer
+  // before #2673, there is no telling) and keeps its carry. A page they name
+  // was crawled, and the tallies count it for every check that evaluated it,
+  // so a carry there would count it twice. (#2688) With the hashes, the
+  // signal's `notEvaluated` names the unlisted pages each check did not
+  // evaluate as well, so this page was evaluated when the check ran this run,
+  // is not truncated and does not name it. A hash it shares with a page the
+  // check skipped keeps the carry. An uncrawled page whose hash collides with a
+  // crawled one is taken for crawled here too, and its carries drop out of the
+  // union (about 1.6e-6 a page at 7,000 hashes); they stay open in the store
+  // either way.
+  if (resolution.crawledComplete === false && !resolution.crawledUrls.has(url)) {
+    const hash = resolutionUrlHash(url);
+    if (!resolution.crawledHashes?.has(hash)) return false;
     const key = resolutionCheckKey(f.ruleId, f.checkName);
-    // No key: the check evaluated no page this run, so nothing counted this one.
-    if (!resolution.failingByCheck.has(key)) return false;
-    const notEvaluated = resolution.notEvaluatedByCheck.get(key);
-    if (!notEvaluated) return true;
-    // `/p` not evaluated says nothing about `/p?id=1`.
-    const crawled = (u: string): boolean => crawledUrls.has(u) || resolution.crawledUrls.has(u);
-    return !signalHashes(url, crawled).some((hash) => notEvaluated.has(hash));
+    return (
+      resolution.failingByCheck.has(key) &&
+      !resolution.truncatedChecks.has(key) &&
+      !resolution.notEvaluatedByCheck.get(key)?.has(hash)
+    );
+  }
+  if (!crawledUrls.has(url) && !resolution.crawledUrls.has(url)) return false;
+  const key = resolutionCheckKey(f.ruleId, f.checkName);
+  // No key: the check evaluated no page this run, so nothing counted this one.
+  if (!resolution.failingByCheck.has(key)) return false;
+  const notEvaluated = resolution.notEvaluatedByCheck.get(key);
+  if (!notEvaluated) return true;
+  // `/p` not evaluated says nothing about `/p?id=1`.
+  const crawled = (u: string): boolean => crawledUrls.has(u) || resolution.crawledUrls.has(u);
+  return !signalHashes(url, crawled).some((hash) => notEvaluated.has(hash));
+}
+
+/** The publish signal indexed for the merge and the scorers (#1185). */
+function indexResolutionSignal(signal: ResolutionSignal): MergeResolutionInput {
+  const crawledUrls = new Set<string>();
+  for (const u of signal.crawledUrls) crawledUrls.add(normalizePageUrl(u));
+  const failingByCheck = new Map<string, Set<string>>();
+  for (const [key, hashes] of Object.entries(signal.failing)) {
+    failingByCheck.set(key, new Set(hashes));
+  }
+  const notEvaluatedByCheck = new Map<string, Set<string>>();
+  for (const [key, hashes] of Object.entries(signal.notEvaluated ?? {})) {
+    notEvaluatedByCheck.set(key, new Set(hashes));
+  }
+  return {
+    crawledUrls,
+    failingByCheck,
+    notEvaluatedByCheck,
+    truncatedChecks: new Set(signal.truncated ?? []),
+    ...(signal.crawledComplete === false ? { crawledComplete: false } : {}),
+    ...(signal.crawledComplete === false && signal.crawledHashes
+      ? { crawledHashes: new Set(signal.crawledHashes) }
+      : {}),
   };
-  return carriedFindings.filter((f) => !evaluated(f));
 }
 
 /**

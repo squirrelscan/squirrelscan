@@ -36,11 +36,17 @@ import {
   RULE_ID_SITEMAP_EXISTS,
 } from "@squirrelscan/utils/constants";
 
+import {
+  aggregateUntouchedCarried,
+  isAggregatableCarriedRow,
+  type UntouchedCarriedPage,
+} from "../src/complete-store-fold";
 import { findingKey } from "../src/merge-core";
 import {
   runCloudSmartAudits,
   type CloudSmartAuditsInput,
   type CloudSmartAuditsResult,
+  type CompleteStoreScope,
   type SmartAuditStore,
 } from "../src/merge-promise";
 import { buildCheckTallies, capReportForPublish } from "../src/publish-cap";
@@ -816,19 +822,26 @@ async function openRowsByPage(store: MemStore): Promise<Array<[string, PageFindi
   return [...byPage];
 }
 
+/** The finalize's three ways of reading the store. */
+const DRIVERS = ["cursor", "arrays", "split"] as const;
+type Driver = (typeof DRIVERS)[number];
+
 /**
  * The same audit as the container publishes it chunked: the full report's
  * findings stream into the store first, then the finalize merges the capped
- * shell. `driver` is the finalize's read: one cursor over the site's open rows,
- * as the API reads them, or this run's rows beside the earlier ones (the
- * whole-array driver). `tallies: false` is a shell without `checkTallies`.
+ * shell. `driver` is the finalize's read of the store:
+ *  - `cursor`: one cursor over the site's open rows;
+ *  - `arrays`: this run's rows beside the earlier ones (the whole-array driver);
+ *  - `split`: the cursor over touched pages only, the untouched ones as one
+ *    aggregate and a sample (pub#497), as the API reads it by default.
+ * `tallies: false` is a shell without `checkTallies`.
  */
 async function publishChunked(
   store: MemStore,
   crawlId: string,
   report: Produced,
   now: number,
-  opts: { driver?: "cursor" | "arrays"; tallies?: boolean } = {},
+  opts: { driver?: Driver; tallies?: boolean } = {},
 ) {
   const body = await cappedBody(report);
   await store.upsertFindings(
@@ -841,14 +854,43 @@ async function publishChunked(
   const pages = await openRowsByPage(store);
   const fresh = (rows: PageFindingRecord[]) => rows.filter((f) => f.lastSeenCrawlId === crawlId);
   const prior = (rows: PageFindingRecord[]) => rows.filter((f) => f.lastSeenCrawlId !== crawlId);
+  const openPage = (normalizedUrl: string, rows: PageFindingRecord[]) => ({
+    normalizedUrl,
+    fresh: fresh(rows),
+    prior: prior(rows),
+  });
   async function* openPages() {
-    for (const [normalizedUrl, rows] of pages) {
-      yield { normalizedUrl, fresh: fresh(rows), prior: prior(rows) };
-    }
+    for (const [normalizedUrl, rows] of pages) yield openPage(normalizedUrl, rows);
   }
   async function* findingPages() {
     for (const [, rows] of pages) if (fresh(rows).length > 0) yield fresh(rows);
   }
+  const untouchedCarried = async (scope: CompleteStoreScope) => {
+    const isTouched = (u: string, rows: PageFindingRecord[]) =>
+      scope.crawledUrls.has(u) || scope.removedUrls.has(u) || fresh(rows).length > 0;
+    const untouched: UntouchedCarriedPage[] = [];
+    for (const [u, rows] of pages) {
+      if (isTouched(u, rows)) continue;
+      expect(rows.every(isAggregatableCarriedRow)).toBe(true);
+      const page = store.pages.get(u);
+      untouched.push({ normalizedUrl: u, rows, rendered: !!page, active: page?.state === "active" });
+    }
+    const { aggregate, sample } = aggregateUntouchedCarried(untouched);
+    const sampleByUrl = new Map(sample.map((p) => [p.normalizedUrl, p]));
+    // The store's own carry of the rows the merge never sees.
+    for (const p of untouched) {
+      for (const r of p.rows) {
+        await store.upsertFindings([{ ...r, provenance: "carried" }]);
+      }
+    }
+    async function* merged() {
+      for (const [u, rows] of pages) {
+        if (isTouched(u, rows)) yield openPage(u, rows);
+        else if (sampleByUrl.has(u)) yield sampleByUrl.get(u)!;
+      }
+    }
+    return { pages: merged(), aggregate };
+  };
   const crawledUrls = body.resolutionSignal!.crawledUrls;
   return runCloudSmartAudits({
     store,
@@ -866,7 +908,9 @@ async function publishChunked(
             priorOpenFindings: pages.flatMap(([, rows]) => prior(rows)),
             crawledUrls,
           }
-        : { openPages: openPages(), crawledUrls },
+        : opts.driver === "split"
+          ? { untouchedCarried, crawledUrls }
+          : { openPages: openPages(), crawledUrls },
   });
 }
 
@@ -899,7 +943,7 @@ describe("a capped report published chunked scores as published in one POST (rep
     const uncapped = await publish(new MemStore(), "audit_1", uncappedBody(report), now);
     expect(comparable(rescored(single))).toEqual(comparable(rescored(uncapped)));
 
-    for (const driver of ["cursor", "arrays"] as const) {
+    for (const driver of DRIVERS) {
       const chunked = await publishChunked(new MemStore(), "audit_1", report, now, { driver });
       expect(chunked.completeStore).toBe(true);
       expect(comparable(rescored(chunked))).toEqual(comparable(rescored(single)));
@@ -972,7 +1016,7 @@ describe("a capped report published chunked scores as published in one POST (rep
     const report = fullReport(shapes);
     const now = 1_780_000_000_000;
     const single = await publish(seed.clone(), "audit_2", await cappedBody(report), now);
-    for (const driver of ["cursor", "arrays"] as const) {
+    for (const driver of DRIVERS) {
       const store = seed.clone();
       const chunked = await publishChunked(store, "audit_2", report, now, { driver });
       expect(chunked.coverage.carriedFindings).toBeGreaterThan(0);
@@ -982,6 +1026,65 @@ describe("a capped report published chunked scores as published in one POST (rep
       for (const i of range(20, 30)) expect(open.has(url(i))).toBe(true);
       for (const i of range(40, 60).filter((i) => i % 3 === 0)) expect(open.has(url(i))).toBe(true);
       expect(open.has(url(30))).toBe(false);
+      expect(chunked.coverage).toEqual(single.coverage);
+    }
+  });
+
+  test("a check skipped on a crawled page keeps its prior open and scored, as in one POST (#508)", async () => {
+    const seed = await seeded(fullReport(busyShapes(range(0, 60))));
+    // Run 1 had slow TTFB on 12, 18 and 24 and no meta description on 0, 3 and 6.
+    // Run 2 could not evaluate those checks there.
+    const shapes = busyShapes(range(0, 40)).map((s) => ({
+      ...s,
+      ttfb: [12, 18, 24].includes(s.i) ? ("skipped" as const) : s.ttfb,
+      metaSkipped: [0, 3, 6].includes(s.i),
+    }));
+    const report = fullReport(shapes);
+    const now = 1_780_000_000_000;
+    const singleStore = seed.clone();
+    const single = await publish(singleStore, "audit_2", await cappedBody(report), now);
+    const skippedOpen = async (store: MemStore) => ({
+      ttfb: [...(await openUrls(store, "perf/ttfb", "ttfb"))].filter((u) =>
+        [12, 18, 24].map(url).includes(u),
+      ).length,
+      meta: [...(await openUrls(store, "core/meta-description", "has-meta-description"))].filter(
+        (u) => [0, 3, 6].map(url).includes(u),
+      ).length,
+    });
+    expect(await skippedOpen(singleStore)).toEqual({ ttfb: 3, meta: 3 });
+    for (const driver of DRIVERS) {
+      const store = seed.clone();
+      const chunked = await publishChunked(store, "audit_2", report, now, { driver });
+      expect(comparable(rescored(chunked))).toEqual(comparable(rescored(single)));
+      expect(chunked.coverage).toEqual(single.coverage);
+      expect(await skippedOpen(store)).toEqual({ ttfb: 3, meta: 3 });
+    }
+  });
+
+  test("first audit with removed pages that hold findings: the one-POST score on every driver", async () => {
+    const shapes = busyShapes(range(0, 50)).map((s) => ({
+      ...s,
+      status: s.i === 9 || s.i === 12 ? 404 : undefined,
+    }));
+    const report = fullReport(shapes, { robotsMissing: true });
+    const now = 1_780_000_000_000;
+    const single = await publish(new MemStore(), "audit_1", await cappedBody(report), now);
+    for (const driver of DRIVERS) {
+      const chunked = await publishChunked(new MemStore(), "audit_1", report, now, { driver });
+      expect(comparable(rescored(chunked))).toEqual(comparable(rescored(single)));
+      expect(chunked.coverage).toEqual(single.coverage);
+    }
+  });
+
+  test("a re-run of a large site carries more rows per rule than the report keeps: still the one-POST score", async () => {
+    const seed = await seeded(fullReport(busyShapes(range(0, 200))));
+    const report = fullReport(busyShapes(range(0, 15)));
+    const now = 1_780_000_000_000;
+    const single = await publish(seed.clone(), "audit_2", await cappedBody(report), now);
+    for (const driver of DRIVERS) {
+      const chunked = await publishChunked(seed.clone(), "audit_2", report, now, { driver });
+      expect(comparable(rescored(chunked))).toEqual(comparable(rescored(single)));
+      expect(chunked.coverage).toEqual(single.coverage);
     }
   });
 });

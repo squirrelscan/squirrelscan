@@ -97,7 +97,9 @@ export interface CompleteStoreTallyInput {
    * crawled page a rule left no finding on as one pass: a page the rule skipped,
    * a rule that evaluated no page at all, and a clean page however many checks the
    * rule ran on it (the SKIP-AS-PASS approximation on reconstructCompleteResults).
-   * `crawledUrls` and `skippedPassCounts` then play no part in the fresh side.
+   * `crawledUrls` and `skippedPassCounts` then play no part in the fresh side, and
+   * the carried findings must leave out any the tallies already count (a carry on
+   * a page its check evaluated this run), as `runCloudSmartAudits` does.
    */
   freshTallies?: CheckTallies;
   /**
@@ -418,14 +420,11 @@ export function createCompleteStoreTallyFold(
         carriedForRule.forEach((f, i) => assertAggregatable(f.payload, carriedChecks[i]!, normalizedUrl));
       }
       if (carriedReport && carriedChecks) retainCarried(carriedReport, ruleId, carriedChecks);
-      // (repo#3348) The tallies count every page this run crawled, for every check
-      // that evaluated it, so a carry there would count the page twice. The merge
-      // resolves each prior on a crawled page in complete mode, so none arrives;
-      // this keeps the sum exact if one ever does, as `notEvaluatedThisRun` does
-      // for the sampled path.
-      const scoredCarried = freshTallies && isCrawled ? undefined : carriedChecks;
-      const checks: CheckResult[] = scoredCarried
-        ? [...(freshChecks ?? []), ...scoredCarried]
+      // (repo#3348) With the tallies, a carry on a crawled page is one its check
+      // did not evaluate there (the caller leaves out the ones the tallies count),
+      // so it scores beside them.
+      const checks: CheckResult[] = carriedChecks
+        ? [...(freshChecks ?? []), ...carriedChecks]
         : (freshChecks ?? []);
       if (checks.length === 0) continue;
       addChecksToTally(entryFor(ruleId, meta).tally, checks, advisory(meta), 0);
@@ -965,13 +964,16 @@ const EMPTY_ROWS: readonly PageFindingRecord[] = [];
  * the counts would protect nothing: a publisher could always reach any score,
  * 100 included, by leaving its fail and warn rows out, with rows or tallies.
  * Nor would a bound by pages crawled be safe: a rule may emit several checks of
- * one name on a page.
+ * one name on a page. Each count is held to the safe integer range only so that
+ * no sum of them can reach Infinity and turn the score into NaN.
  */
 export function freshTally(byName: CheckTallies[string] | undefined): IssueTally {
   const tally = emptyTally();
   if (!byName) return tally;
   const count = (n: unknown): number =>
-    typeof n === "number" && Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+    typeof n === "number" && Number.isFinite(n) && n > 0
+      ? Math.min(Math.floor(n), Number.MAX_SAFE_INTEGER)
+      : 0;
   for (const t of Object.values(byName)) {
     tally.passed += count(t?.passed);
     tally.warnings += count(t?.warnings);
