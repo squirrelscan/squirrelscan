@@ -34,7 +34,10 @@ import {
   createFetchDocumentFetcher,
 } from "@squirrelscan/fetchers";
 import { createProbeBudget, selectDiscoveryProbes } from "@squirrelscan/rules";
-import { customUserAgent, mergeHeaderRecords } from "@squirrelscan/utils/headers";
+import {
+  customUserAgent,
+  mergeHeaderRecords,
+} from "@squirrelscan/utils/headers";
 
 import type { RetentionOutcome } from "@/audit/retention";
 import type { PreflightBalance } from "@/lib/balance";
@@ -974,7 +977,8 @@ export async function runAudit(
       // carries it, so it is also the agent of the probes that send no custom
       // headers (#1152).
       const configuredUserAgent =
-        mergedConfig.crawler.user_agent || customUserAgent(mergedConfig.crawler.headers);
+        mergedConfig.crawler.user_agent ||
+        customUserAgent(mergedConfig.crawler.headers);
       const { userAgent, source: uaSource } = await Effect.runPromise(
         resolveStickyUserAgent(configuredUserAgent, storage, {
           freshUa: options.freshUa,

@@ -1,5 +1,6 @@
 // Crawl controller - runs crawl only without analysis
 
+import { customUserAgent } from "@squirrelscan/utils/headers";
 import { Effect, Stream } from "effect";
 
 import type { Config } from "@/config";
@@ -43,7 +44,6 @@ import { initRequestTool } from "@/tools/request";
 import { configureLogger, logger } from "@/utils/logger";
 import { checkReachability } from "@/utils/reachability";
 import { getHostname, isLoopbackHost, parseUserUrl } from "@/utils/url";
-import { customUserAgent } from "@squirrelscan/utils/headers";
 import { resolveStickyUserAgent } from "@/utils/user-agent";
 
 export type { CrawlerEvent } from "@/crawler/core/types";
