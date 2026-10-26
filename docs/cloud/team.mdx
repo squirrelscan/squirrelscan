@@ -89,10 +89,11 @@ To keep invites from being used to send unwanted mail, they are limited:
 
 - 20 an hour from one person,
 - 50 a day from one organization,
-- 3 a day to one address, across all organizations,
-- 1 a day from one organization to one address, so after an invite is revoked or declined it cannot be sent again for 24 hours.
+- 3 a day to one mailbox, across all organizations.
 
-An invite over a limit is not created. The API answers `429` with the code `invite_rate_limited`, and the Team page says to try again later.
+An invite over one of these limits is not created. The API answers `429` with the code `invite_rate_limited`, and the Team page says to try again later. The limits count one mailbox however it is spelled: case, a `+tag` and, for Gmail, dots make no difference.
+
+One organization also emails one address at most once a day. An invite sent again within 24 hours, for example after you revoke one to change its role, is created but not emailed, and the Team page offers its link to copy instead.
 
 ## White-label reports
 
