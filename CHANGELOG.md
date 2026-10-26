@@ -17,6 +17,16 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- images: new rule `images/hotlinked` reports, as info, a content image (`<img>`, `<picture>` source, inline `background`) that loads from another site's server, grouped per host. First-party hosts, known image CDNs and site-builder storage, launch and badge directories, tracking pixels and avatar services are not reported, and `allowed_hosts` adds your own. An `og:image` or `twitter:image` on another site is reported too (#932).
+- content: new rule `content/h1-title-alignment` reports, as info, a page whose H1 and `<title>` share no meaningful word (stopwords, generic words, stemming and the brand affix are read out; both strings are shown, and `details.confident` marks the stricter cases). It is info only because a minority of such pages (roughly 10 to 20 percent by hand judgement) are real mismatches; the rest are marketing headlines. Homepages and generic marketing pages, identical title and H1, and pages with no or several H1s, noindex pages, titles that are only the brand, glued or non-Latin text and languages without a stopword list are read as info or skipped (English, Spanish, French, German, Portuguese, Italian and Dutch are read) (#929).
+
+### Fixed
+
+- `squirrel audit` with `-f json`, `xml`, `llm`, `markdown`, `text` or `html` sends its progress and log lines ("New crawl: ...", "Found N URLs in sitemap") to stderr, so stdout starts with the report and `squirrel audit <url> -f json | jq` works. The console format is unchanged.
+- `squirrel audit -f <unknown>` exits 1 with "Unknown format", like `squirrel report -f`, before crawling. Before, it ran the whole audit, printed no report and exited 0.
+
 ## v0.0.134 (2026-10-26)
 
 Robots.txt is read the way crawlers read it, a redirect can no longer steer a crawl at a private address, and nested pages stop being slow.
@@ -33,10 +43,6 @@ Robots.txt is read the way crawlers read it, a redirect can no longer steer a cr
 - **A crawl that respects robots.txt now follows a site's `User-agent: SquirrelScan` rules.** The docs already said so. Before, the default browser user agent was matched by its first token, `Mozilla`, so in practice only the `*` rules applied. Requests still send `user_agent`. If you set `user_agent` to your own bot and respect robots.txt, the crawl is now matched as `SquirrelScan` too: set `robots_user_agent` to that bot's token, or to `""` to match on `user_agent` as before.
 - **Config validation runs on zod 4.** The same settings are accepted.
 - **`install.sh` and `install.ps1` check release metadata first.** The version, asset filename and SHA-256 are validated before any download URL is built, so malformed metadata cannot retarget the download. A checksum matches in either letter case. See [Installation](https://docs.squirrelscan.com/getting-started/installation).
-
-### Added
-
-- content: new rule `content/h1-title-alignment` reports, as info, a page whose H1 and `<title>` share no meaningful word (stopwords, generic words, stemming and the brand affix are read out; both strings are shown, and `details.confident` marks the stricter cases). It is info only because a minority of such pages (roughly 10 to 20 percent by hand judgement) are real mismatches; the rest are marketing headlines. Homepages and generic marketing pages, identical title and H1, and pages with no or several H1s, noindex pages, titles that are only the brand, glued or non-Latin text and languages without a stopword list are read as info or skipped (English, Spanish, French, German, Portuguese, Italian and Dutch are read) (#929).
 
 ### Fixed
 
@@ -171,7 +177,6 @@ The CLI moves to Bun 1.4.4, a crawl with a live owner is never retired, and a ch
 - a11y, links: `link-text` and `anchor-text` now recognise generic link text in Spanish, French, German, Portuguese, Italian, Dutch, Japanese, Chinese, Korean and Russian (`cliquez ici`, `mehr`, `haga clic aquí`, `詳しくはこちら` and similar), chosen by the page's `<html lang>`, with English always checked. A page with no or an unknown `lang` keeps the English list, matching is on the whole text, and the conventional account and legal labels are never reported (#840).
 - content: `word-count` skips pages kept out of search (`noindex` meta or `X-Robots-Tag`), like `core/meta-title`, `core/meta-description` and `core/h1`: a login, sign-up or dashboard page is short by design. The page gets one skipped check naming the source, and nothing is skipped on a staging or preview site whose homepage is noindex (#841).
 - Retention and `self disk --prune` now read the crawl lease that v0.0.127 started writing (#946). A crawl whose heartbeat is under 5 minutes old, or whose owner process is still alive on this machine (trusted for up to 24 hours of silence, so a suspended laptop is safe and a reused pid cannot hold a crawl forever), is never retired, including when a later audit of the same project finishes first. A killed `crawled` crawl is retired by the next audit and by `--prune` once its heartbeat is 5 minutes old, and a killed `running` crawl, which `--resume` continues, after 24 hours, in both cases without waiting for a later audit; `stopped`, `paused` and `failed` crawls are never retired sooner by a dead lease: `stopped` and `paused` keep their 7 days, `failed` its 30 minutes. A newer finished audit plus the idle time (30 minutes, or 7 days for `stopped` and `paused`) retires any of them as before. An owner on another host or one that cannot be read counts as live until the 5 minutes pass, and the check runs again inside the retiring transaction. Crawls written by older versions have no lease and follow the previous rules, and `--prune --dry-run` shows a held crawl's owner pid and last heartbeat. A `--resume` after a kill takes the lease over at once when the old owner's process is gone.
-- images: new rule `images/hotlinked` reports, as info, a content image (`<img>`, `<picture>` source, inline `background`) that loads from another site's server, grouped per host. First-party hosts, known image CDNs and site-builder storage, launch and badge directories, tracking pixels and avatar services are not reported, and `allowed_hosts` adds your own. An `og:image` or `twitter:image` on another site is reported too (#932).
 
 ## v0.0.127 (2026-10-22)
 
