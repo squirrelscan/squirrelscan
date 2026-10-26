@@ -101,6 +101,7 @@ afterEach(() => {
   globalThis.fetch = realFetch;
   server.stop(true);
   delete process.env.HTTP_PROXY;
+  delete process.env.NO_PROXY;
 });
 
 /** A resolver from a fixed table that counts every name it is asked for. */
@@ -240,7 +241,11 @@ describe("where something else resolves the name, own hosts still go out by name
     ],
     ["a crawl without pinOwnHosts", {}, false],
   ] as const)("%s", async (_name, config, proxy) => {
-    if (proxy) process.env.HTTP_PROXY = "http://127.0.0.1:9";
+    if (proxy) {
+      process.env.HTTP_PROXY = "http://127.0.0.1:9";
+      // The fixture itself must not go through that proxy (the runtime reads it per request).
+      process.env.NO_PROXY = "127.0.0.1,localhost";
+    }
     const { resolveHost, asked } = resolver({ "site.test": ["127.0.0.1"] });
     const origin = `http://site.test:${server.port}`;
     const { pages } = await crawl(`${origin}/`, { ...config, resolveHost });

@@ -88,6 +88,9 @@ beforeEach(() => {
   process.env.SQUIRREL_API_TOKEN = "sqcli_test_token";
   delete process.env.SQUIRRELSCAN_API_KEY;
   process.env.SQUIRREL_DISABLE_TELEMETRY = "1";
+  // The site is a stubbed fetch keyed by name: send its hosts by name
+  // rather than resolving and pinning them (repo#3430).
+  process.env.SQUIRREL_NO_HOST_PINNING = "1";
   process.env.SQUIRREL_NO_UPDATE = "1";
   globalThis.fetch = (async (
     input: string | URL | Request,
