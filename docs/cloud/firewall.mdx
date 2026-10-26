@@ -31,6 +31,10 @@ Every exception except IP allowlisting is a custom request header. Read [how cus
 
 Every website in the dashboard can send custom HTTP request headers with its cloud audits. You set them under **Settings → Crawl → Custom request headers** (see [crawl settings](/dashboard/crawl-settings#custom-request-headers)). Whether a request carries them depends on the kind of request and, for pages, on the website's **Rendering** setting.
 
+The headers belong to the website they are set on, and an audit uses them only when it crawls that website's own host: the host it is registered under, with or without `www.`. Audits started from the dashboard, over MCP or by a schedule always crawl that host.
+
+An audit started through the API that names the website beside a URL on another host runs without the headers, and without the [authorised](/dashboard/crawl-settings#authorised-crawls) pace they bring. That includes a subdomain: `staging.example.com` named under the website `example.com` gets neither. To audit a subdomain with headers, add it as its own website and set its headers there.
+
 ### Rendering and custom headers \{#rendering-and-custom-headers\}
 
 This table is the reference for which requests of a cloud audit carry your custom request headers. **Rendering** is the setting in the audit level card under **Settings → Crawl**.

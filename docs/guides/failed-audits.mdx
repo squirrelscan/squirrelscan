@@ -471,8 +471,9 @@ Each `location` line is one hop. The last one shows where the audited address en
 **What the crawler observed.** The seed redirect probe never sends your custom request headers, so on a gated site it always lands on the sign-in page or gets the `401`. That alone does not fail the audit: when the sign-in page is on another site, the crawl keeps the audited address and fetches it again with the headers. The audit fails as a redirect when that entry page request also lands on the sign-in page, which happens when:
 
 - no header the gateway accepts is set, or the token or secret in it has expired,
-- the gateway's policy does not cover this hostname (see the [verification checklist](/cloud/firewall#verification-checklist)), or
-- the audited address redirected to another origin before reaching the gateway, which removes the headers (for example `http://` to `https://`, or `example.com` to `www.example.com`).
+- the gateway's policy does not cover this hostname (see the [verification checklist](/cloud/firewall#verification-checklist)),
+- the audited address redirected to another origin before reaching the gateway, which removes the headers (for example `http://` to `https://`, or `example.com` to `www.example.com`), or
+- the audit was started through the API with a website's id and a URL on another host, such as `staging.example.com` under the website `example.com`. The website's headers go only to its own host, so none were sent. Add the staging host as its own website with its own headers (see [how custom request headers are sent](/cloud/firewall#how-custom-request-headers-are-sent)).
 
 **Gateways and the way through.**
 
