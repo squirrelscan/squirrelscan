@@ -9,6 +9,7 @@ import {
   carriedTag,
   coverageLine,
   scanScopeLine,
+  seedRedirectFollowUp,
   seedRedirectLine,
   getGroupName,
   getSubcategoryName,
@@ -130,6 +131,17 @@ export function generateConsoleReport(
     // here with nothing to audit, so this branch needs the disclosure too.
     const redirect = seedRedirectLine(report);
     if (redirect) log(fmt.yellow(redirect));
+    // squirrelscan/repo#3480: the step that fits a site that moved is the
+    // exact command for where it went; a sign-in page needs authentication,
+    // and auditing the sign-in host would grade the wrong site.
+    const followUp = seedRedirectFollowUp(report);
+    if (followUp?.kind === "audit") {
+      log(`Audit the destination instead: ${fmt.bold(followUp.command)}`);
+    } else if (followUp?.kind === "sign_in") {
+      log(
+        `${followUp.origin} is a sign-in page, so the site needs authentication before it can be audited: ${followUp.docsUrl}`
+      );
+    }
     log(divider());
     return;
   }

@@ -55,3 +55,48 @@ describe("renderLlm failed/blocked status (#792)", () => {
     expect(xml).not.toContain("<status");
   });
 });
+
+// squirrelscan/repo#3480: retrying a URL that redirects off-site fails the
+// same way, so the retry line gives way to the destination, offered for the
+// user to confirm, or to "needs authentication" for a sign-in page.
+describe("renderLlm off-site redirect failure (#3480)", () => {
+  const OFF_SITE = "Redirect from example.com could not be followed: redirected off-site to www.example.org";
+
+  test("offers the destination's exact command, for the user to confirm", () => {
+    const xml = renderLlm(
+      baseReport({
+        status: "failed",
+        statusReason: OFF_SITE,
+        finalUrl: "https://www.example.org/welcome",
+      }),
+    );
+    expect(xml).toContain(
+      "The entry URL redirects to https://www.example.org. If the user confirms that is the site they meant, audit it with `squirrel audit https://www.example.org`.",
+    );
+    expect(xml).not.toContain("to retry locally");
+  });
+
+  test("a sign-in page says it needs authentication and offers no command", () => {
+    const xml = renderLlm(
+      baseReport({
+        status: "failed",
+        statusReason: OFF_SITE,
+        finalUrl: "https://login.example.org/oauth?return=%2F",
+      }),
+    );
+    expect(xml).toContain("https://login.example.org is a sign-in page");
+    expect(xml).toContain("guides/failed-audits#access-gateway");
+    expect(xml).not.toContain("squirrel audit https://login.example.org");
+  });
+
+  test("any other failure, or a redirect with no recorded target, keeps the retry line", () => {
+    for (const overrides of [
+      { statusReason: "No pages were crawled", finalUrl: "https://www.example.org/" },
+      { statusReason: OFF_SITE },
+    ]) {
+      const xml = renderLlm(baseReport({ status: "failed", ...overrides }));
+      expect(xml).toContain("Run the CLI with `squirrel audit https://example.com` to retry locally.");
+      expect(xml).not.toContain("The entry URL redirects to");
+    }
+  });
+});

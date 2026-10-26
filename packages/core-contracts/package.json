@@ -11,6 +11,7 @@
     "./clamp": "./src/clamp.ts",
     "./control-chars": "./src/control-chars.ts",
     "./failure-reason": "./src/failure-reason.ts",
+    "./offsite-redirect": "./src/offsite-redirect.ts",
     "./untrusted-keys": "./src/untrusted-keys.ts",
     "./credits": "./src/credits.ts",
     "./schedule": "./src/schedule.ts",

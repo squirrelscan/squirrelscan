@@ -113,3 +113,46 @@ describe("console report discloses a refused off-site seed redirect", () => {
     expect(out).not.toContain(RTL_OVERRIDE);
   });
 });
+
+// squirrelscan/repo#3480: a FAILED audit whose seed went off-site prints the
+// one command that fits, or for a sign-in page that the site needs
+// authentication. Nothing else gets the line.
+describe("console report offers the off-site destination for a failed audit", () => {
+  const OFF_SITE =
+    "Redirect from example.com could not be followed: redirected off-site to other.example";
+
+  test("prints the exact command for the destination's origin", () => {
+    const out = capture(
+      redirected({ status: "failed", statusReason: OFF_SITE })
+    );
+    expect(out).toContain(
+      "Audit the destination instead: squirrel audit https://other.example"
+    );
+    expect(out).not.toContain("squirrel audit https://other.example/landing");
+  });
+
+  test("a sign-in page gets the authentication line and no command", () => {
+    const out = capture(
+      redirected({
+        status: "failed",
+        statusReason: OFF_SITE,
+        finalUrl: "https://team.cloudflareaccess.com/cdn-cgi/access/login",
+      })
+    );
+    expect(out).toContain(
+      "https://team.cloudflareaccess.com is a sign-in page, so the site needs authentication before it can be audited"
+    );
+    expect(out).not.toContain("Audit the destination instead");
+  });
+
+  test("a failure for another reason, or a blocked audit, gets no command", () => {
+    for (const overrides of [
+      { status: "failed" as const, statusReason: "No pages were crawled" },
+      { status: "blocked" as const, statusReason: OFF_SITE },
+    ]) {
+      expect(capture(redirected(overrides))).not.toContain(
+        "Audit the destination instead"
+      );
+    }
+  });
+});

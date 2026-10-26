@@ -164,6 +164,7 @@ export {
   scanScopeUnfetched,
   publishedReportNote,
   seedRedirect,
+  seedRedirectFollowUp,
   seedRedirectLine,
   WITHHELD_SEED_REDIRECT_TARGET,
   type SeedRedirect,

@@ -455,9 +455,9 @@ curl -sS -o /dev/null -D - -L -A "$UA" https://example.com/ | grep -i -E '^(HTTP
 
 Each `location` line is one hop. The last one shows where the audited address ends up. If it is on another site, the audit fails this way. Add your custom request headers with `-H` to see whether they change where it ends up.
 
-**What to do.**
+**What to do.** A failed CLI audit prints the next step under the failure: `Audit the destination instead: squirrel audit https://www.example.com`, with the destination's origin, or, when the destination is a sign-in host, that the site needs authentication and a link to [sign-in page or access gateway](#access-gateway). Only the origin is offered, never the path or query of the redirect. The `llm` output offers the same command, for the user to confirm before an agent runs it.
 
-- **The site moved.** Audit the canonical address, the one the site actually serves: add the destination as a website in the dashboard and audit it there. Audits of the old address keep failing while the redirect is in place.
+- **The site moved.** Audit the canonical address, the one the site actually serves: run the printed command, or add the destination as a website in the dashboard and audit it there. Audits of the old address keep failing while the redirect is in place.
 - **A sign-in page.** See [sign-in page or access gateway](#access-gateway).
 - **Anything else.** Fix the redirect so it stays on the same site, or audit the address the site actually serves.
 

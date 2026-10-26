@@ -7,10 +7,15 @@ import {
   AUDIT_LEVEL_COPY,
   AUDIT_SETTING_COPY,
 } from "@squirrelscan/core-contracts/audit-levels";
+import {
+  offSiteRedirectFollowUp,
+  type OffSiteRedirectFollowUp,
+} from "@squirrelscan/core-contracts/offsite-redirect";
 
 import type { AuditReport, CheckItem } from "./types";
 import type { GroupedCheck } from "./grouping";
 import { checkAffectedPages } from "./affected-pages";
+import { reportFailureReasonCode } from "./failure-notice";
 
 /**
  * One-line audit level summary, e.g.
@@ -337,6 +342,19 @@ export function seedRedirect(report: AuditReport): SeedRedirect | null {
  */
 export function seedRedirectLine(report: AuditReport): string | null {
   return seedRedirect(report)?.note ?? null;
+}
+
+/**
+ * What to do about an audit that FAILED because its seed redirected off-site
+ * (squirrelscan/repo#3480): audit the destination's origin instead, with the
+ * exact command, or, for a sign-in page, that the site needs authentication.
+ * Null for any other report, and for a target that did not survive
+ * {@link seedRedirect}'s canonicalization: nothing unvetted becomes a command.
+ */
+export function seedRedirectFollowUp(report: AuditReport): OffSiteRedirectFollowUp | null {
+  if (report.status !== "failed" || reportFailureReasonCode(report) !== "redirect") return null;
+  const target = seedRedirect(report)?.finalUrl;
+  return target ? offSiteRedirectFollowUp(target) : null;
 }
 
 /**

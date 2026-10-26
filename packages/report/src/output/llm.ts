@@ -23,7 +23,12 @@ import {
   primaryEntities,
   stableIdPercent,
 } from "../entities";
-import { publishedReportNote, scanScopeUnfetched, seedRedirect } from "../coverage";
+import {
+  publishedReportNote,
+  scanScopeUnfetched,
+  seedRedirect,
+  seedRedirectFollowUp,
+} from "../coverage";
 import { LLM_REPORT } from "@squirrelscan/core-contracts/limits";
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 import { AUDIT_FAILURE_NEXT_STEP_THIRD } from "@squirrelscan/core-contracts/failure-reason";
@@ -185,9 +190,23 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
       // `unknown` keeps the pre-#1822 sentence.
       const code = reportFailureReasonCode(report);
       lines.push(`${indent(1)}${escapeXml(AUDIT_FAILURE_NEXT_STEP_THIRD[code])}`);
-      lines.push(
-        `${indent(1)}Run the CLI with \`squirrel audit ${escapeXml(report.baseUrl)}\` to retry locally.`,
-      );
+      // squirrelscan/repo#3480: retrying a URL that redirects off-site fails
+      // the same way. The destination is the SITE's choice, so it is offered
+      // for the user to confirm, never as a target to go and fetch unasked.
+      const followUp = seedRedirectFollowUp(report);
+      if (followUp?.kind === "audit") {
+        lines.push(
+          `${indent(1)}The entry URL redirects to ${escapeXml(followUp.origin)}. If the user confirms that is the site they meant, audit it with \`${escapeXml(followUp.command)}\`.`,
+        );
+      } else if (followUp?.kind === "sign_in") {
+        lines.push(
+          `${indent(1)}${escapeXml(followUp.origin)} is a sign-in page: the site needs authentication before it can be audited. Do not audit the sign-in host. See ${followUp.docsUrl}.`,
+        );
+      } else {
+        lines.push(
+          `${indent(1)}Run the CLI with \`squirrel audit ${escapeXml(report.baseUrl)}\` to retry locally.`,
+        );
+      }
     }
     lines.push("</status>");
   }
