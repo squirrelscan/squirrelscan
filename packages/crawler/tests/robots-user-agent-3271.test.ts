@@ -9,6 +9,7 @@ import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
 import { createCrawler } from "../src/core/crawler";
+import { createTestStorage } from "../src/storage";
 import type { CrawlerConfig } from "../src/core/types";
 import { createRobotsEvaluator, fetchRobotsEvaluator } from "../src/robots";
 
@@ -54,7 +55,12 @@ describe("robots.txt groups are matched on the robots token (#3271)", () => {
       expect(withToken.isAllowed(`${origin}/private/x`)).toBe(false);
       const without = await Effect.runPromise(fetchRobotsEvaluator(origin, BROWSER_STYLE, true));
       expect(without.isAllowed(`${origin}/private/x`)).toBe(true);
-      expect(agents).toEqual([BROWSER_STYLE, BROWSER_STYLE]);
+      // An empty token matches on the user agent, as before.
+      const empty = await Effect.runPromise(
+        fetchRobotsEvaluator(origin, BROWSER_STYLE, true, undefined, undefined, ""),
+      );
+      expect(empty.isAllowed(`${origin}/private/x`)).toBe(true);
+      expect(agents).toEqual([BROWSER_STYLE, BROWSER_STYLE, BROWSER_STYLE]);
     } finally {
       site.stop(true);
     }
@@ -115,6 +121,98 @@ describe("robots.txt groups are matched on the robots token (#3271)", () => {
       // The token travels with the crawl, so a resumed crawl matches the same group.
       const crawl = await Effect.runPromise(crawler.storage.getCrawl(crawlId));
       expect(crawl?.config.robotsUserAgent).toBe("SquirrelScan");
+    } finally {
+      site.stop(true);
+    }
+  });
+
+  test("a resumed crawl matches the group its crawl row records, an older row its user agent", async () => {
+    const requests: string[] = [];
+    const site = Bun.serve({
+      port: 0,
+      fetch(req) {
+        const path = new URL(req.url).pathname;
+        requests.push(path);
+        if (path === "/robots.txt") {
+          return new Response(ROBOTS.replace("Crawl-delay: 1", "Crawl-delay: 0"), {
+            headers: { "content-type": "text/plain" },
+          });
+        }
+        return new Response(
+          `<html><head><title>${path}</title></head><body><a href="/private/a">p</a></body></html>`,
+          { headers: { "content-type": "text/html" } },
+        );
+      },
+    });
+    const origin = `http://127.0.0.1:${site.port}`;
+    const resume = async (recorded: Record<string, unknown>) => {
+      requests.length = 0;
+      const storage = await Effect.runPromise(createTestStorage());
+      const config = {
+        maxPages: 10,
+        concurrency: 1,
+        perHostConcurrency: 1,
+        delayMs: 0,
+        perHostDelayMs: 0,
+        timeoutMs: 5_000,
+        userAgent: BROWSER_STYLE,
+        followRedirects: true,
+        respectRobots: true,
+        incremental: false,
+        include: [],
+        exclude: [],
+        allowQueryParams: [],
+        dropQueryPrefixes: [],
+        allowedDomains: [],
+        ...recorded,
+      };
+      const crawlId = await Effect.runPromise(
+        storage.createCrawl({
+          baseUrl: origin,
+          seedUrl: `${origin}/`,
+          originalUrl: `${origin}/`,
+          startedAt: Date.now(),
+          status: "paused",
+          config: config as never,
+          stats: {
+            pagesTotal: 0,
+            pagesFetched: 0,
+            pagesFailed: 0,
+            pagesSkipped: 0,
+            pagesUnchanged: 0,
+            linksTotal: 0,
+            imagesTotal: 0,
+            bytesTotal: 0,
+            avgLoadTimeMs: 0,
+          },
+        }),
+      );
+      await Effect.runPromise(
+        storage.upsertFrontier(crawlId, {
+          normalizedUrl: `${origin}/`,
+          rawUrl: `${origin}/`,
+          depth: 0,
+          priority: 1,
+          status: "pending",
+          source: "seed",
+          enqueuedAt: Date.now(),
+          retryCount: 0,
+        }),
+      );
+      // This run's own config names the token; the crawl row decides.
+      const crawler = await Effect.runPromise(
+        createCrawler({
+          config: { ...config, robotsUserAgent: "SquirrelScan", discoveryProbes: [] },
+          storage,
+        }),
+      );
+      await Effect.runPromise(crawler.resumeFromStorage(crawlId));
+      return [...requests];
+    };
+    try {
+      expect(await resume({ robotsUserAgent: "SquirrelScan" })).not.toContain("/private/a");
+      // Recorded before the token existed: matched on its user agent, as it started.
+      expect(await resume({})).toContain("/private/a");
     } finally {
       site.stop(true);
     }

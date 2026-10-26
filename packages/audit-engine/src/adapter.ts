@@ -1165,8 +1165,12 @@ export function fetchAssetsFromOccurrences(
         ? createRobotsEvaluator(
             robotsRecord.url,
             robotsRecord.content,
-            // squirrelscan/repo#3271: the group the crawl was matched as.
-            crawl?.config?.robotsUserAgent || config.crawler?.robots_user_agent || probeUserAgent,
+            // squirrelscan/repo#3271: the group the crawl was matched as. A crawl
+            // row records it ("" or absent: matched on its user agent); only
+            // without a row does this run's config say.
+            (crawl?.config
+              ? crawl.config.robotsUserAgent
+              : config.crawler?.robots_user_agent) || probeUserAgent,
           )
         : null;
     const mayProbe = (url: string): boolean => {

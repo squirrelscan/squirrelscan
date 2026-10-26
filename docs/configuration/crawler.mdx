@@ -742,6 +742,8 @@ user_agent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit
 
 **Recommendation:** Leave empty (default) for best results with bot protection.
 
+With [`respect_robots`](#respect_robots) on, robots.txt groups are matched on [`robots_user_agent`](#robots_user_agent), not on this value. If you set `user_agent` to your own bot and want robots.txt read as that bot, set `robots_user_agent` to its token too, or to `""` to match on `user_agent`.
+
 ---
 
 ### `robots_user_agent`
@@ -928,9 +930,9 @@ Enforce robots.txt `Disallow:` rules and honor its `Crawl-delay:` directive.
   uninvited crawl, so directives aimed at bots don't apply unless you opt in
 
 **When `true`:**
-- Respects `Disallow:` rules for the `SquirrelScan` group, or the group of your [`robots_user_agent`](#robots_user_agent), falling back to `*`
-- Honors `Crawl-delay:`, capped at 2 seconds even if the directive asks for
-  longer
+- Respects the `Disallow:` rules of the group your [`robots_user_agent`](#robots_user_agent) names (`SquirrelScan` by default), falling back to `*`
+- Honors that group's `Crawl-delay:`, capped at 2 seconds even if the
+  directive asks for longer
 
 **Example:**
 

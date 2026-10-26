@@ -2761,7 +2761,9 @@ export function createCrawler(
             maxBackoffMs: config.maxBackoffMs,
             timeoutMs: config.timeoutMs,
             userAgent: config.userAgent,
-            ...(config.robotsUserAgent ? { robotsUserAgent: config.robotsUserAgent } : {}),
+            // Always recorded ("" = matched on userAgent), so a resumed crawl and
+            // the analysis after it read the group this crawl was matched as.
+            robotsUserAgent: config.robotsUserAgent ?? "",
             followRedirects: config.followRedirects,
             respectRobots: config.respectRobots,
             incremental: config.incremental,
@@ -3085,6 +3087,9 @@ export function createCrawler(
 
         // Restore config from crawl
         Object.assign(config, crawl.config);
+        // A crawl recorded before robotsUserAgent existed was matched on its user
+        // agent; it keeps that group rather than taking this run's token.
+        if (!("robotsUserAgent" in crawl.config)) config.robotsUserAgent = undefined;
 
         // Fetch robots.txt again — always, regardless of respectRobots (#790).
         // Budgeted like every other preamble fetch (squirrelscan/repo#1733).
