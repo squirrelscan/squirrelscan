@@ -140,12 +140,12 @@ To start the audits again, open the website in the dashboard and pick a cadence 
 Two conditions stop a schedule without you asking, so a recurring audit cannot keep spending credits on something that is not working:
 
 - **Three audits in a row that failed the same permanent way.** A permanent failure is one that will happen again on the next run unless something changes on the site:
-  - the domain does not resolve (DNS);
+  - the domain does not resolve: DNS answers that the name does not exist;
   - the TLS certificate is not valid, for example expired;
   - the start URL redirects somewhere the audit cannot follow, usually off the site, or in a loop;
-  - the site refuses the crawler: bot protection or a firewall, a rate limit, or a login wall (HTTP 401, 403 or 429).
+  - the site refuses the crawler: bot protection or a firewall, or a login wall (HTTP 401 or 403).
 
-  All three failures have to share one of these. A timeout, a server error, a dropped connection, a problem on our side, or a failure we cannot place never counts, and neither does a mix of two different permanent failures. A completed or cancelled audit, or any other kind of failure, in between clears the streak. Any audit of the site counts, whether it was scheduled, started from the dashboard, or run from the CLI. Failed audits are refunded, so the failures themselves cost nothing.
+  All three failures have to share one of these. A timeout, a server error, a dropped connection, a rate limit (HTTP 429), a DNS lookup that only failed for the moment, a problem on our side, or a failure we cannot place never counts, and neither does a mix of two different permanent failures. A completed or cancelled audit, or any other kind of failure, in between clears the streak. Any audit of the site counts, whether it was scheduled, started from the dashboard, or run from the CLI. Failed audits are refunded, so the failures themselves cost nothing.
 - **Not enough credits.** A run the balance cannot cover is skipped without a charge, and the schedule pauses instead of skipping again every cycle.
 
 Either way you are told once, in the dashboard bell and by email, and a pause after failed audits says what they kept failing on. The email arrives whatever the website's **Settings → Alerts** toggle says, because a credit-spending service switching itself off is account news. Only the account-wide **Account alerts** switch in [Settings → Email](/dashboard/emails#email-settings-and-unsubscribing) stops it. It is throttled to roughly one per account in any rolling 24 hours, so several sites pausing around the same time do not each send mail; the rest appear in the dashboard bell. While a schedule is paused no scheduled audit runs, so none fails or emails you.
