@@ -124,7 +124,7 @@ Same-domain scripts, stylesheets and images that appear only inside `<noscript>`
 
 A page marked `noindex` will not show up in search results, so findings about how it would look there are noise. Ten rules leave these pages alone:
 
-- [core/meta-title](/rules/core/meta-title), [core/meta-description](/rules/core/meta-description), [core/h1](/rules/core/h1) [content/word-count](/rules/content/word-count) and [content/h1-title-alignment](/rules/content/h1-title-alignment) skip the page. Each records one skipped check, such as `Skipped: page is set to noindex via robots meta tag` (or `via X-Robots-Tag header`), in place of its usual result.
+- [core/meta-title](/rules/core/meta-title), [core/meta-description](/rules/core/meta-description), [core/h1](/rules/core/h1), [content/word-count](/rules/content/word-count) and [content/h1-title-alignment](/rules/content/h1-title-alignment) skip the page. Each records one skipped check, such as `Skipped: page is set to noindex via robots meta tag` (or `via X-Robots-Tag header`), in place of its usual result.
 - [core/title-unique](/rules/core/title-unique), [content/duplicate-title](/rules/content/duplicate-title) and [content/duplicate-description](/rules/content/duplicate-description) leave the page out when they group pages by title or description.
 - [crawl/sitemap-coverage](/rules/crawl/sitemap-coverage) never lists the page as missing from the sitemap, since a noindex page should not be in it.
 - [content/title-pattern-outlier](/rules/content/title-pattern-outlier) leaves the page out when it learns the site's title template, and never reports it as an outlier.
