@@ -202,16 +202,25 @@ function isNonPublicIpv4(o: number[]): boolean {
   );
 }
 
+/**
+ * Cloud-internal IPv6 endpoints, as exact addresses. All sit in unique local
+ * fc00::/7, so a private-network audit would otherwise reach them: AWS's
+ * metadata service (fd00:ec2::254), the EKS Pod Identity agent (fd00:ec2::23)
+ * and GCP's metadata server (fd20:ce::254).
+ */
+const METADATA_IPV6: readonly (readonly number[])[] = [
+  [0xfd00, 0x0ec2, 0, 0, 0, 0, 0, 0x254],
+  [0xfd00, 0x0ec2, 0, 0, 0, 0, 0, 0x23],
+  [0xfd20, 0x00ce, 0, 0, 0, 0, 0, 0x254],
+];
+
 function isAlwaysRefusedIpv6(g: number[]): boolean {
   const g0 = g[0] ?? 0;
   if ((g0 & 0xffc0) === 0xfe80) return true; // link-local fe80::/10
   // Local-use NAT64 64:ff9b:1::/48 may embed its IPv4 address at any of the
   // RFC 6052 offsets, so the embedded address cannot be read reliably.
   if (g0 === 0x64 && g[1] === 0xff9b && g[2] === 1) return true;
-  // AWS's IPv6 metadata address, fd00:ec2::254.
-  if (g0 === 0xfd00 && g[1] === 0x0ec2 && g.slice(2, 7).every((x) => x === 0) && g[7] === 0x254) {
-    return true;
-  }
+  if (METADATA_IPV6.some((m) => m.every((x, i) => g[i] === x))) return true;
   const v4 = embeddedIpv4(g);
   return v4 !== null && isAlwaysRefusedIpv4(v4);
 }

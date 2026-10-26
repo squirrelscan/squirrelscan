@@ -38,6 +38,10 @@ const PUBLIC_DNS = {
   "rebind.example.net": ["93.184.216.34", "10.0.0.9"],
   "mapped.example.net": ["::ffff:10.0.0.1"],
   "meta.example.net": ["169.254.169.254"],
+  // #3380: GCP's IPv6 metadata server and the EKS Pod Identity agent.
+  "gcp6.example.net": ["fd20:ce::254"],
+  "eks6.example.net": ["2606:2800:220:1::1", "fd00:ec2::23"],
+  "ula.example.net": ["fd12:3456:789a::1"],
   "dev.localhost": ["127.0.0.1"],
   localhost: ["127.0.0.1", "::1"],
 };
@@ -178,9 +182,36 @@ describe("assertEgressAllowed: site on a private network", () => {
     "http://[64:ff9b:1:a9fe:a9:fe00::]/a",
     "http://metadata.google.internal/computeMetadata/v1/",
     "http://meta.example.net/a",
+    // #3380: GCP's IPv6 metadata server and the EKS Pod Identity agent, as
+    // literals (any spelling) and as DNS answers.
+    "http://[fd20:ce::254]/computeMetadata/v1/",
+    "http://[fd20:00ce:0:0:0:0:0:0254]/computeMetadata/v1/",
+    "http://[FD20:CE::254]/a",
+    "http://[fd00:ec2::23]/v1/credentials",
+    "http://[fd00:0ec2:0000::0023]/v1/credentials",
+    "http://gcp6.example.net/computeMetadata/v1/",
+    "http://eks6.example.net/v1/credentials",
   ])("still refuses link-local and metadata: %s", async (url) => {
     expect(await refused(url, privateNetwork())).toBe(true);
   });
+
+  test.each([
+    "http://[fd12:3456:789a::1]/a",
+    "http://[fd20:ce::253]/a",
+    "http://[fd00:ec2::24]/a",
+    "http://ula.example.net/a",
+  ])("allows other unique local addresses: %s", async (url) => {
+    expect(await refused(url, privateNetwork())).toBe(false);
+  });
+
+  test.each(["gcp6.example.net", "eks6.example.net"])(
+    "a pinned send never connects to %s's metadata answer",
+    async (host) => {
+      await expect(vetEgressTarget(`http://${host}/a`, privateNetwork())).rejects.toBeInstanceOf(
+        EgressRefusedError,
+      );
+    },
+  );
 });
 
 describe("isLinkLocalOrMetadataAddress", () => {
@@ -189,6 +220,11 @@ describe("isLinkLocalOrMetadataAddress", () => {
     ["[fe80::1]", true],
     ["febf::1", true],
     ["fd00:ec2::254", true],
+    ["fd00:ec2::23", true],
+    ["[fd20:ce::254]", true],
+    ["fd20:ce::254", true],
+    ["fd00:ec2::253", false],
+    ["fd12:3456:789a::1", false],
     ["::ffff:a9fe:a9fe", true],
     ["10.0.0.1", false],
     ["127.0.0.1", false],
