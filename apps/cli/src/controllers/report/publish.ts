@@ -82,18 +82,22 @@ export interface PublishResult {
 }
 
 interface ApiErrorResponse {
-  error: {
-    code: string;
-    message: string;
-    details?: unknown;
-    issues?: Array<{ path: string; message: string }>;
-    threats?: Array<{
-      path: string;
-      value: string;
-      pattern: string;
-      category: string;
-    }>;
-  };
+  /** The bare-string shape: a role refusal ("forbidden_role") with `message` beside it. */
+  message?: string;
+  error:
+    | string
+    | {
+        code: string;
+        message: string;
+        details?: unknown;
+        issues?: Array<{ path: string; message: string }>;
+        threats?: Array<{
+          path: string;
+          value: string;
+          pattern: string;
+          category: string;
+        }>;
+      };
 }
 
 interface ApiSuccessResponse {
@@ -383,6 +387,27 @@ export async function publishReport(
         errorData = (await response.json()) as ApiErrorResponse;
       } catch {
         // Ignore parse errors
+      }
+
+      // A role refusal (the org's role matrix: a viewer or billing member
+      // cannot publish) comes as a bare `error: "forbidden_role"` with its
+      // message beside it, not the typed envelope below.
+      if (typeof errorData?.error === "string") {
+        if (errorData.error === "forbidden_role") {
+          return err(
+            commandError(
+              "forbidden_role",
+              `${errorData.message ?? "Your role in this organization cannot publish reports"}.\n` +
+                "Ask an owner or admin for a role that runs audits, or run with --no-publish to keep the report local."
+            )
+          );
+        }
+        return err(
+          commandError(
+            "API_ERROR",
+            `Failed to publish report: ${response.status} ${errorData.error}`
+          )
+        );
       }
 
       if (errorData?.error) {

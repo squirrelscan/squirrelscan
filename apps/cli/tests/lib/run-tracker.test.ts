@@ -480,6 +480,36 @@ describe("registerRun", () => {
     expect(warnings).toEqual([]);
   });
 
+  test("warns when the org's role matrix refuses the run (bare forbidden_role)", async () => {
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          error: "forbidden_role",
+          message:
+            "Your role (viewer) in this organization does not include audits:write",
+          role: "viewer",
+          missing_scope: "audits:write",
+        }),
+        { status: 403 }
+      )) as unknown as typeof fetch;
+
+    const warnings: RegisterFailure[] = [];
+    expect(
+      await registerRun({ url: "https://example.com" }, (f) => warnings.push(f))
+    ).toBeNull();
+    expect(warnings).toEqual([
+      {
+        code: "forbidden_role",
+        message:
+          "Your role (viewer) in this organization does not include audits:write",
+        balance: null,
+        required: null,
+        resetAt: null,
+        upgrade: null,
+      },
+    ]);
+  });
+
   test("does NOT warn on a generic 4xx without a definitive code (#816 review)", async () => {
     // A backend hiccup the handler maps to 400 INVALID_URL isn't actionable to
     // the user and must stay silent (only the allowlisted codes warn).

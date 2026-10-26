@@ -193,6 +193,8 @@ When you're **logged in and online, every audit auto-publishes to your dashboard
 
 **Publishing is included in the audit base charge**, whatever the visibility. The auto-publish default is `unlisted`.
 
+Publishing and tracking the run in the dashboard need a [role](/cloud/team#roles) that runs audits in the organization you are signed in to: owner, admin or editor. As a viewer or billing member the audit still runs locally and its results are complete, but the run is not tracked and the report is not published: the CLI prints the reason (`forbidden_role`). Run with `--no-publish` to skip the publish attempt.
+
 ```bash
 # logged in → auto-publishes (unlisted) and prints the URL
 squirrel audit https://example.com

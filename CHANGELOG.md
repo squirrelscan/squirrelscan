@@ -29,6 +29,7 @@ How it works:
 
 ### Fixed
 
+- A signed-in audit by a viewer or billing member of the organization now says why the run was not tracked and the report not published (the organization's role refused it, `forbidden_role`). It used to leave the run out of the dashboard silently, and a publish failed with an error that had no code or message. The local audit and its results are unchanged. See [Publishing to the dashboard](https://docs.squirrelscan.com/cli/audit#publishing-to-the-dashboard).
 - `content/keyword-stuffing` now excludes common function words for German, Spanish, French, Portuguese, Italian and Dutch pages according to `<html lang>`, so natural non-English copy no longer reports those words as overused (#1042).
 - Glossary JSON-LD stays in rendered pages without leaking its raw script text into `llms-full.txt` or per-page agent Markdown (#1113).
 - `links/orphan-pages` and `links/weak-internal-links` now skip when a crawl stops at its page cap, because an uncrawled page may contain the inbound links needed to clear either finding (#1044).
