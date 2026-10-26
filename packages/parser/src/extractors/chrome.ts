@@ -36,3 +36,36 @@ export function isInSiteChrome(element: Element): boolean {
   }
   return false;
 }
+
+/**
+ * {@link isInSiteChrome} for the many anchors of one document
+ * (squirrelscan/repo#3356). Each call walks up only until it meets an element an
+ * earlier call already answered for, and records the answer on every element it
+ * passed, so a page's links cost about one walk of the tree instead of one walk
+ * to the root per link: a page of 20,000 nested links took 34 s to parse.
+ */
+export function createSiteChromeTest(): (element: Element) => boolean {
+  // The answer for an element, itself included, as isInSiteChrome gives it.
+  const known = new Map<Element, boolean>();
+  return (element) => {
+    const passed: Element[] = [];
+    let answer = false;
+    let current: Element | null = element;
+    while (current) {
+      const cached = known.get(current);
+      if (cached !== undefined) {
+        answer = cached;
+        break;
+      }
+      passed.push(current);
+      const tagName = current.tagName?.toLowerCase();
+      if (tagName && CHROME_TAGS.has(tagName)) {
+        answer = true;
+        break;
+      }
+      current = current.parentElement;
+    }
+    for (const el of passed) known.set(el, answer);
+    return answer;
+  };
+}
