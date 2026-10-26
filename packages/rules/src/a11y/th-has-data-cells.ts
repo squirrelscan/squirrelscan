@@ -4,22 +4,24 @@ import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { getAttrCI } from "@squirrelscan/utils";
 
+import { ownTableCells, type OwnRow } from "../shared/own-table-cells";
+
 interface GridCell {
   tag: string;
   el: Element;
 }
 
 /**
- * Build a 2D grid from a table, expanding colspan/rowspan so each
- * grid slot maps to the cell that occupies it.
+ * Build a 2D grid from a table's own rows (squirrelscan/repo#3355: not those of
+ * the tables nested in it), expanding colspan/rowspan so each grid slot maps to
+ * the cell that occupies it.
  */
-function buildGrid(table: Element): (GridCell | null)[][] {
-  const rows = table.querySelectorAll("tr");
+function buildGrid(rows: readonly OwnRow[]): (GridCell | null)[][] {
   const grid: (GridCell | null)[][] = [];
 
   for (let r = 0; r < rows.length; r++) {
     if (!grid[r]) grid[r] = [];
-    const cells = rows[r].querySelectorAll("th, td");
+    const cells = rows[r]!.cells;
 
     for (const cell of cells) {
       const colspan = Math.max(1, Number(getAttrCI(cell, "colspan")) || 1);
@@ -80,9 +82,10 @@ export const thHasDataCellsRule: Rule = {
     const orphanedHeaders: string[] = [];
     // Track already-reported th elements to avoid duplicates from spans
     const reported = new Set<Element>();
+    const own = ownTableCells(doc);
 
     for (const table of tables) {
-      const grid = buildGrid(table);
+      const grid = buildGrid(own.get(table)?.rows ?? []);
       if (grid.length === 0) continue;
 
       for (let r = 0; r < grid.length; r++) {

@@ -13,6 +13,8 @@ Almost always this means the table is being used for layout. The `<th>` came fro
 
 One check, `th-has-data-cells`, at severity warning. For each table that is not `role="presentation"` or `role="none"`, it builds a two-dimensional grid, expanding `colspan` and `rowspan` so every grid slot maps to the cell that occupies it. Both span attributes are read case-insensitively.
 
+The grid holds the table's own rows and cells. A table nested in one of its cells has a grid of its own, so its `<td>` cells never count as data for the outer table's headers.
+
 For each `<th>` in that grid it looks for a `<td>` in the same row, then in the same column.
 
 - Warn when neither is found. Report message: `N <th> element(s) without associated data cells`. Items quote the header's first 30 characters, or read `row 2, col 3` when the header has no text. Up to ten are shown with a count of the rest, and a header that spans several slots is reported once.

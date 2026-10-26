@@ -2,6 +2,8 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { ownTableCells } from "../shared/own-table-cells";
+
 export const tableHeadersRule: Rule = {
   meta: {
     id: "a11y/table-headers",
@@ -37,12 +39,15 @@ export const tableHeadersRule: Rule = {
 
     const tablesWithoutHeaders: number[] = [];
     let tableIndex = 0;
+    // squirrelscan/repo#3355: a table's own header cells, not those of a table
+    // nested in one of its cells.
+    const own = ownTableCells(doc);
 
     for (const table of tables) {
       tableIndex++;
-      const headers = table.querySelectorAll("th");
+      const cells = own.get(table)?.cells ?? [];
 
-      if (headers.length === 0) {
+      if (!cells.some((cell) => cell.localName === "th")) {
         tablesWithoutHeaders.push(tableIndex);
       }
     }
