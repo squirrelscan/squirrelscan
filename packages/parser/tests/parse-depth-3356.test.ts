@@ -8,8 +8,8 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { isInSiteChrome } from "../src/extractors/chrome";
-import { extractLinks } from "../src/extractors/links";
+import { createSiteChromeTest, isInSiteChrome } from "../src/extractors/chrome";
+import { createLinkPositionTest, extractLinks } from "../src/extractors/links";
 import { parseHTML } from "../src/dom";
 import { parsePage } from "../src/html";
 import { referenceDetectLinkPosition } from "./fixtures/reference-3356/link-position";
@@ -130,5 +130,39 @@ describe("nesting costs a walk, not a walk per link (#3356)", () => {
     const found = extractLinks(document as never, URL);
     expect(performance.now() - start).toBeLessThan(1_000);
     expect(found).toHaveLength(20_000);
+  });
+});
+
+describe("the memo holds no page alive (#2343)", () => {
+  /**
+   * A page parsed, walked by every memo, and then let go: only a WeakRef is left.
+   * The anchors are found by walking `children`, not `querySelectorAll`, whose
+   * selector engine keeps the last document it searched alive on its own.
+   */
+  function walkAndDrop(memos: ReadonlyArray<(element: Element) => unknown>): WeakRef<object> {
+    const { document } = parseHTML(
+      `<html><body><nav><div><a href="/a">a</a></div></nav><main><p><a href="/b">b</a></p></main></body></html>`,
+    );
+    const stack: Element[] = [document.documentElement as unknown as Element];
+    while (stack.length > 0) {
+      const element = stack.pop()!;
+      if (element.tagName === "A") for (const memo of memos) memo(element);
+      stack.push(...Array.from(element.children));
+    }
+    return new WeakRef(document);
+  }
+
+  test("a memo that outlives its page keeps none of the page's DOM", async () => {
+    // A stale stack slot can keep a finished parse's memo reachable (JSC scans
+    // the stack conservatively); it must not keep the page with it.
+    const memos = [createSiteChromeTest(), createLinkPositionTest()];
+    const page = walkAndDrop(memos);
+    for (let i = 0; i < 10 && page.deref(); i++) {
+      Bun.gc(true);
+      await Bun.sleep(0);
+    }
+    expect(page.deref()).toBeUndefined();
+    // The memos are still alive here.
+    expect(memos).toHaveLength(2);
   });
 });

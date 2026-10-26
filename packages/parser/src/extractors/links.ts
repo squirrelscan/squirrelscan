@@ -88,9 +88,10 @@ function ownLinkPosition(current: Element): LinkPosition | null {
  * records the answer on every element it passed, so a page's links cost about
  * one walk of the tree instead of one walk to the root per link.
  */
-function createLinkPositionTest(): (element: Element) => LinkPosition {
-  // The answer for an element, itself included.
-  const known = new Map<Element, LinkPosition>();
+export function createLinkPositionTest(): (element: Element) => LinkPosition {
+  // The answer for an element, itself included. Weak, for the same reason as
+  // createSiteChromeTest: the memo must never keep a page's DOM alive.
+  const known = new WeakMap<Element, LinkPosition>();
   return (element) => {
     const passed: Element[] = [];
     let answer: LinkPosition = "unknown";
