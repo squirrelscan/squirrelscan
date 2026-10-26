@@ -279,9 +279,9 @@ export interface CloudSmartAuditsInput {
    * persisted, resolved, carried) reads the rows and the signal exactly as before.
    *
    * (repo#3348) In complete-store mode they are this run's side of the score too,
-   * with or without the signal: the findings decide what the store keeps and
-   * carries, the tallies what this run scores, so one audit scores the same
-   * published chunked or as one POST (see `CompleteStoreTallyInput.freshTallies`).
+   * again with the signal: the findings decide what the store keeps and carries,
+   * the tallies what this run scores, so one audit scores the same published
+   * chunked or as one POST (see `CompleteStoreTallyInput.freshTallies`).
    */
   checkTallies?: CheckTallies;
   /**
@@ -463,9 +463,11 @@ export async function runCloudSmartAudits(
   // Needs the signal too, which is what says which pages the tallies cover.
   const checkTallies =
     !completeStore && input.resolutionSignal ? input.checkTallies : undefined;
-  // (repo#3348) The complete store's twin: the store needs no signal to say which
-  // pages the tallies cover, since its crawled list is the whole crawl.
-  const completeTallies = completeStore ? input.checkTallies : undefined;
+  // (repo#3348) The complete store's twin, on the same condition: the signal is
+  // what says which carries the tallies already count (`tallySignal` below), and
+  // without it a skip carried off the shell's checks would be scored twice.
+  const completeTallies =
+    completeStore && input.resolutionSignal ? input.checkTallies : undefined;
 
   // Rule meta + severity indexes from the report's ruleResults (both modes — the
   // shell always carries every rule that ran, so this is the meta source even in

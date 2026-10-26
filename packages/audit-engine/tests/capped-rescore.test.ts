@@ -841,7 +841,7 @@ async function publishChunked(
   crawlId: string,
   report: Produced,
   now: number,
-  opts: { driver?: Driver; tallies?: boolean } = {},
+  opts: { driver?: Driver; tallies?: boolean; signal?: boolean } = {},
 ) {
   const body = await cappedBody(report);
   await store.upsertFindings(
@@ -899,7 +899,7 @@ async function publishChunked(
     now,
     ruleResults: body.ruleResults,
     pageStatuses: body.pageStatuses,
-    resolutionSignal: body.resolutionSignal,
+    ...(opts.signal === false ? {} : { resolutionSignal: body.resolutionSignal }),
     ...(opts.tallies === false ? {} : { checkTallies: body.checkTallies }),
     completeStore:
       opts.driver === "arrays"
@@ -952,6 +952,18 @@ describe("a capped report published chunked scores as published in one POST (rep
       expect(categoriesOf(chunked)).not.toContain("video");
       expect(categoriesOf(chunked)).not.toContain("local");
     }
+  });
+
+  test("tallies without the signal leave the chunked shell on its findings, as one POST leaves them", async () => {
+    // The signal is what says which carries the tallies already count.
+    const report = withIdleRules(fullReport(skipShapes(range(0, 60)), { robotsMissing: true }));
+    const now = 1_780_000_000_000;
+    const noSignal = await publishChunked(new MemStore(), "audit_1", report, now, { signal: false });
+    const noTallies = await publishChunked(new MemStore(), "audit_1", report, now, { tallies: false });
+    expect(noSignal.reportTotals).toBeUndefined();
+    expect(comparable(rescored(noSignal)).healthScore).toEqual(
+      comparable(rescored(noTallies)).healthScore,
+    );
   });
 
   test("without the tallies the chunked shell scores skipped and idle pages as passes", async () => {

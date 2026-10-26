@@ -170,7 +170,8 @@ SQLite store keyed by site). On a partial re-audit:
   tagged `carried`, when the check ran on other pages (for example `perf/ttfb`
   with no timing data, or a scan that stopped at its work cap). A rule that timed
   out or threw on a page carries all of its issues there. A check skipped on every
-  page and a rule you disabled in config still close the issue. A check that does not apply to the page (no `Link` header, a URL with no file
+  page and a rule you disabled in config still close the issue. A check that
+  does not apply to the page (no `Link` header, a URL with no file
   extension, a page that is not paginated, a small page) is not a skipped run: it
   closes the issue, since there is nothing left for it to find. A skip a fetch,
   parse or rendering problem could cause (an empty response, no body, no images)
