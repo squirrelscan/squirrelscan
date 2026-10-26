@@ -44,7 +44,7 @@ describe("crawl/sitemap-exists", () => {
     expect(checks[0]).toMatchObject({
       name: "sitemap-exists",
       status: "info",
-      message: "1 sitemap(s) named in robots.txt are on another site and were not requested",
+      message: "1 sitemap(s) on another site were not requested",
     });
     expect(checks[0]?.items?.[0]?.id).toBe(OFF_SITE);
   });

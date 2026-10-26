@@ -56,8 +56,8 @@ export const sitemapExistsRule: Rule = {
       return { checks };
     }
 
-    // An offline audit never requests a sitemap robots.txt names on another
-    // site (#819), so with nothing found on the site itself it did not look:
+    // An offline audit never requests a sitemap on another site, whether
+    // robots.txt names it or a sitemap on the site redirects there (#819), so with nothing found on the site itself it did not look:
     // "No XML sitemap found" would be a false statement about a site that
     // points at a sitemap it keeps elsewhere.
     const offSite = (sitemaps.failed ?? []).filter((f) => f.error === SITEMAP_OFF_SITE_SKIPPED_ERROR);
@@ -65,7 +65,7 @@ export const sitemapExistsRule: Rule = {
       checks.push({
         name: "sitemap-exists",
         status: "info",
-        message: `${offSite.length} sitemap(s) named in robots.txt are on another site and were not requested`,
+        message: `${offSite.length} sitemap(s) on another site were not requested`,
         value: "An offline audit only requests the audited site",
         items: offSite.map((f) => ({ id: f.url, label: f.error })),
       });

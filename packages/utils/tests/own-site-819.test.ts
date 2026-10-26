@@ -40,6 +40,19 @@ describe("ownSiteHostMatcher", () => {
     expect(own(host)).toBe(false);
   });
 
+  test("a project domain written with a port, a wildcard or in Unicode still means that host", () => {
+    const matcher = ownSiteHostMatcher({
+      baseUrl: "https://example.com/",
+      domains: ["shop.example.net:8443", "*.cdn.example.org", ".static.example.dev", "bücher.example"],
+    });
+    expect(matcher("shop.example.net")).toBe(true);
+    expect(matcher("x.cdn.example.org")).toBe(true);
+    expect(matcher("cdn.example.org")).toBe(true);
+    expect(matcher("static.example.dev")).toBe(true);
+    expect(matcher("xn--bcher-kva.example")).toBe(true);
+    expect(matcher("other.example")).toBe(false);
+  });
+
   test("an apex base host counts its www twin", () => {
     const apex = ownSiteHostMatcher({ baseUrl: "https://example.com/" });
     expect(apex("www.example.com")).toBe(true);

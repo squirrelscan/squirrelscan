@@ -10,7 +10,11 @@ import type {
   SitemapUrl,
 } from "@squirrelscan/core-contracts";
 import { createHeaderScope, mergeHeaderRecords, type HeaderScope } from "@squirrelscan/utils/headers";
-import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
+import {
+  EGRESS_OFF_SITE_REFUSAL,
+  EgressRefusedError,
+  type EgressPolicy,
+} from "@squirrelscan/utils/public-egress";
 import { resolveRobotsSitemapUrl } from "@squirrelscan/utils/robots-txt";
 
 import {
@@ -773,6 +777,12 @@ export function fetchSitemap(
         egress,
       );
     } catch (error) {
+      // #819: a sitemap on the site that redirects to another host is not
+      // followed there (an offline audit). Nothing was requested off the site,
+      // so it is skipped, not a sitemap that failed to load.
+      if (error instanceof EgressRefusedError && error.message === EGRESS_OFF_SITE_REFUSAL) {
+        return { success: false, url, error: SITEMAP_OFF_SITE_SKIPPED_ERROR, settled: true };
+      }
       return {
         success: false,
         url,

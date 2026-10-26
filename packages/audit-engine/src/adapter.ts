@@ -1370,7 +1370,12 @@ export function fetchAssetsFromOccurrences(
               allowPrivateNetwork: baseHost !== "" && isNonPublicHostname(baseHost),
               allowPrivateTarget: (url) => siteOrigin !== "" && url.origin === siteOrigin,
               allowHost: (host) =>
-                baseHost !== "" && (host === baseHost || host.endsWith(`.${baseHost}`)),
+                baseHost !== "" &&
+                (host === baseHost ||
+                  host.endsWith(`.${baseHost}`) ||
+                  // An offline audit reads the www or apex twin and the project
+                  // domains as the site's own everywhere else (#819).
+                  (offlineOwnHost?.(host) ?? false)),
               resolve: resolveOnce,
               pin: overrides?.egressPinnedByTransport !== true,
             })

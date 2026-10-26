@@ -38,12 +38,19 @@ function twinOf(host: string): string {
   return host.startsWith("www.") ? host.slice(4) : `www.${host}`;
 }
 
-/** `[project] domains` entries are hosts, but a URL pasted there still means its host. */
+/**
+ * `[project] domains` entries are hosts, but a URL, a host with a port or a
+ * wildcard (`*.example.com`, `.example.com`) pasted there still means that
+ * host: read through the URL parser, so an IDN becomes its punycode name.
+ */
 function domainHost(entry: string): string {
-  const trimmed = entry.trim();
+  const trimmed = entry.trim().replace(/^\*?\./, "");
   if (!trimmed) return "";
-  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return normalizeHost(getHostname(trimmed));
-  return normalizeHost(trimmed.split("/")[0] ?? "");
+  try {
+    return normalizeHost(new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`).hostname);
+  } catch {
+    return "";
+  }
 }
 
 /**

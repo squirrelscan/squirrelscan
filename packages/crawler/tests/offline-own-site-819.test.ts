@@ -73,6 +73,12 @@ beforeAll(() => {
         });
       }
       if (path === "/about") return html("About us");
+      if (path === "/moved-sitemap.xml") {
+        return new Response(null, {
+          status: 302,
+          headers: { location: `http://localhost:${other.port}/sitemap.xml` },
+        });
+      }
       if (path === "/seed-away") {
         return new Response(null, {
           status: 302,
@@ -174,6 +180,18 @@ describe("a sitemap that robots.txt names on another host", () => {
       source: "robots.txt",
       error: SITEMAP_OFF_SITE_SKIPPED_ERROR,
     });
+  });
+
+  test("offline: a sitemap on the site that redirects to another host is skipped too, not a failed fetch", async () => {
+    const named = `${siteBase}/moved-sitemap.xml`;
+    const result = await Effect.runPromise(
+      discoverSitemaps(siteBase, robots([named]), "squirrel-test", {
+        egress: egress((host) => host === "127.0.0.1"),
+      }),
+    );
+
+    expect(otherSeen).toEqual([]);
+    expect(result.failed.find((f) => f.url === named)?.error).toBe(SITEMAP_OFF_SITE_SKIPPED_ERROR);
   });
 
   test("control: without the restriction it is requested and read", async () => {
