@@ -8,6 +8,7 @@
     "./fold": "./src/fold.ts",
     "./resolution": "./src/resolution.ts",
     "./resolution-decode": "./src/resolution-decode.ts",
+    "./security-headers": "./src/security-headers.ts",
     "./types": "./src/types.ts"
   },
   "dependencies": {
