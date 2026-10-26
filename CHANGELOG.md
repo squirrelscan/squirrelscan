@@ -26,8 +26,13 @@ How it works:
 
 - `-H "user-agent: ..."` (or a `User-Agent` in `[crawler] headers`) is now also the agent of the internal link check and the soft-404 confirmation, which send no other custom header. They used to send the crawl's random browser agent beside a crawl that sent yours. The reachability check, the cloaking probe and the AI agent access probe still use their own agents on purpose. See [crawler headers](https://docs.squirrelscan.com/configuration/crawler) (#1152).
 - `squirrel audit` with `-f json`, `xml`, `llm`, `markdown`, `text` or `html` sends its progress and log lines ("New crawl: ...", "Found N URLs in sitemap") to stderr, so stdout starts with the report and `squirrel audit <url> -f json | jq` works. The console format is unchanged.
-- robots.txt groups are read the way RFC 9309 and Google read them when a `Sitemap`, `Crawl-delay` or unknown line sits between `User-agent` lines: the group continues, so `User-agent: GPTBot`, `Sitemap: ...`, `User-agent: CCBot`, `Disallow: /` blocks both bots. Before, the second `User-agent` started a new group and the first bot was read as unlisted. A file with CR-only line endings is read too, where before it parsed as empty. AI crawler, indexability and crawl-delay checks read these files the way crawlers do.
+- robots.txt groups are read the way RFC 9309 and Google read them when a `Sitemap`, `Crawl-delay` or unknown line sits between `User-agent` lines: the group continues, so `User-agent: GPTBot`, `Sitemap: ...`, `User-agent: CCBot`, `Disallow: /` blocks both bots. Before, the second `User-agent` started a new group and the first bot was read as unlisted. A file with CR-only line endings is read too, where before it parsed as empty. AI crawler, indexability and crawl-delay checks read these files the way crawlers do, in the CLI and in cloud audits.
 - `squirrel audit -f <unknown>` exits 1 with "Unknown format", like `squirrel report -f`, before crawling. Before, it ran the whole audit, printed no report and exited 0.
+
+### Security
+
+- **A robots.txt built to multiply no longer exhausts memory.** Each group's rules are given to every user agent that heads it, so a file of a few thousand stacked `User-agent` lines over a few thousand rules, or over one very long rule, inside the 512 KiB fetch limit, grew to hundreds of millions of entries or gigabytes of rule text and could take down a CLI audit or a cloud audit container. The parser now keeps at most 100,000 directive entries and 2 million characters of rule paths, in file order, still collects the `Sitemap` lines after that, and records that the rest of the file was not read, which the `crawl/robots-txt` syntax check shows. Page checks against robots.txt also work out each rule's pattern once instead of once per page.
+
 
 ## v0.0.134 (2026-10-26)
 

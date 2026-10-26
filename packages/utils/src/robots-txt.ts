@@ -45,10 +45,13 @@ export function isRobotsTxtDisallowed(
   if (groups.length === 0) return false;
 
   let best: { length: number; allow: boolean } | null = null;
+  // Stacked agents share one group's rule objects: each is matched once.
+  const seen = new Set<object>();
   for (const group of groups) {
     for (const rule of group.rules) {
-      if (!rule.path) continue;
-      const pattern = normalizeRobotsPath(rule.path);
+      if (!rule.path || seen.has(rule)) continue;
+      seen.add(rule);
+      const pattern = normalizedPattern(rule);
       if (!robotsPathMatches(pattern, target)) continue;
       const length = pattern.length;
       const allow = rule.type === "allow";
@@ -58,6 +61,20 @@ export function isRobotsTxtDisallowed(
     }
   }
   return best !== null && !best.allow;
+}
+
+/**
+ * A rule's normalized pattern, worked out once per rule object rather than once
+ * per URL checked (a crawl checks every page against the same rules).
+ */
+const normalizedPatterns = new WeakMap<object, string>();
+function normalizedPattern(rule: { path: string }): string {
+  let pattern = normalizedPatterns.get(rule);
+  if (pattern === undefined) {
+    pattern = normalizeRobotsPath(rule.path);
+    normalizedPatterns.set(rule, pattern);
+  }
+  return pattern;
 }
 
 /**
@@ -111,6 +128,21 @@ function robotsPathMatches(pattern: string, path: string): boolean {
 }
 
 /**
+ * What the parsed data may hold. Each group's rules are given to every user
+ * agent that heads it, so a file of a few thousand stacked `User-agent` lines
+ * over a few thousand rules, or over one very long rule, well inside the 512
+ * KiB fetch cap, multiplies into hundreds of millions of entries or gigabytes
+ * of rule text (out of memory, and minutes per URL checked). Counted across
+ * every agent's copy: an entry is one rule of one agent, or one agent with no
+ * rules, and the characters are the rule paths. Past either budget the rest of
+ * the file's groups are not read, in file order (Google stops at 500 KiB),
+ * and `errors` says so; `Sitemap` lines are still collected. Real files stay
+ * far below both.
+ */
+export const ROBOTS_MAX_DIRECTIVE_ENTRIES = 100_000;
+export const ROBOTS_MAX_RULE_CHARS = 2_000_000;
+
+/**
  * Parse robots.txt content into structured data
  */
 export function parseRobotsTxt(content: string, url: string): RobotsTxtData {
@@ -122,6 +154,8 @@ export function parseRobotsTxt(content: string, url: string): RobotsTxtData {
 
   let currentUserAgents: string[] = [];
   let currentRules: { type: "allow" | "disallow"; path: string }[] = [];
+  // Characters of the current group's rule paths.
+  let currentRuleChars = 0;
   let currentCrawlDelay: number | undefined;
   // Consecutive User-agent records belong to one group. Only an Allow or
   // Disallow record closes that header, so a later User-agent starts a new
@@ -132,19 +166,54 @@ export function parseRobotsTxt(content: string, url: string): RobotsTxtData {
   // Empty Allow/Disallow records do not match a path, but they still make the
   // named group explicit and keep it from falling through to `*`.
   let hasGroupRecord = false;
+  // Held so far, against ROBOTS_MAX_DIRECTIVE_ENTRIES and ROBOTS_MAX_RULE_CHARS.
+  let entries = 0;
+  let chars = 0;
+  let truncated = false;
 
   const flushCurrentGroup = () => {
     if (hasGroupRecord) {
       for (const userAgent of currentUserAgents) {
+        const roomEntries = ROBOTS_MAX_DIRECTIVE_ENTRIES - entries;
+        const roomChars = ROBOTS_MAX_RULE_CHARS - chars;
+        if (roomEntries <= 0 || roomChars <= 0) {
+          truncated = true;
+          break;
+        }
+        let kept: typeof currentRules;
+        let keptChars: number;
+        if (currentRules.length <= roomEntries && currentRuleChars <= roomChars) {
+          kept = [...currentRules];
+          keptChars = currentRuleChars;
+        } else {
+          // The longest prefix inside both budgets: bounded by them, not by the group.
+          let take = 0;
+          keptChars = 0;
+          while (take < currentRules.length && take < roomEntries) {
+            const length = currentRules[take]!.path.length;
+            if (keptChars + length > roomChars) break;
+            keptChars += length;
+            take++;
+          }
+          kept = currentRules.slice(0, take);
+          truncated = true;
+          // An agent whose rules were all cut is left out, not kept as a group
+          // with no rules (which would read as allowing everything).
+          if (take === 0) break;
+        }
+        entries += Math.max(1, kept.length);
+        chars += keptChars;
         rules.push({
           userAgent,
-          rules: [...currentRules],
+          rules: kept,
           crawlDelay: currentCrawlDelay,
         });
+        if (truncated) break;
       }
     }
     currentUserAgents = [];
     currentRules = [];
+    currentRuleChars = 0;
     currentCrawlDelay = undefined;
     collectingUserAgents = true;
     hasGroupRecord = false;
@@ -159,6 +228,9 @@ export function parseRobotsTxt(content: string, url: string): RobotsTxtData {
     if (colonIndex === -1) continue;
 
     const directive = line.substring(0, colonIndex).trim().toLowerCase();
+    // Past a budget only Sitemap lines are still read: the crawl discovers
+    // pages from them, and they cost one string each.
+    if (truncated && directive !== "sitemap") continue;
     const value = line.substring(colonIndex + 1).trim();
 
     switch (directive) {
@@ -172,14 +244,20 @@ export function parseRobotsTxt(content: string, url: string): RobotsTxtData {
         if (currentUserAgents.length > 0) {
           collectingUserAgents = false;
           hasGroupRecord = true;
-          if (value) currentRules.push({ type: "disallow", path: value });
+          if (value) {
+            currentRules.push({ type: "disallow", path: value });
+            currentRuleChars += value.length;
+          }
         }
         break;
       case "allow":
         if (currentUserAgents.length > 0) {
           collectingUserAgents = false;
           hasGroupRecord = true;
-          if (value) currentRules.push({ type: "allow", path: value });
+          if (value) {
+            currentRules.push({ type: "allow", path: value });
+            currentRuleChars += value.length;
+          }
         }
         break;
       case "crawl-delay":
@@ -203,6 +281,11 @@ export function parseRobotsTxt(content: string, url: string): RobotsTxtData {
   }
 
   flushCurrentGroup();
+  if (truncated) {
+    errors.push(
+      `robots.txt has more than ${ROBOTS_MAX_DIRECTIVE_ENTRIES.toLocaleString("en-US")} directives across its user-agent groups; the rest of the file was not read`,
+    );
+  }
 
   return {
     exists: true,
