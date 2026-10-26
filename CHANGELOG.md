@@ -17,6 +17,20 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.136 (2026-10-27)
+
+The CLI now checks the audited site's own hostnames before it connects, so a name that resolves to a cloud metadata or link-local address is never requested. Set SQUIRREL_NO_HOST_PINNING to turn the check off on a network where connecting by address breaks routing.
+
+### Security
+
+- **The CLI checks the site's own hostnames before it connects.** The audited host, its `www` twin and the domains in `[project] domains` went out by name with no address check, so a site that controls its DNS, or rebinds it mid-audit, could point one of them at a cloud metadata service and the audit would request it and store the answer. The CLI now checks every answer for them and connects to the address it checked, for pages, redirect hops, root files, the start URL's reachability check and redirects, assets and the end-of-crawl probes, in `squirrel analyze` too; a link-local or metadata answer is never requested (a page is recorded as failed with "Not requested", an asset as refused). Two rule probes still go out by name: the `security/http-to-https` `HEAD` request and the GraphQL probes of an active or aggressive probing intensity. Behind an HTTP proxy from the environment, or with `SQUIRREL_NO_HOST_PINNING` set, every request goes out by name as before. See [follow_redirects](https://docs.squirrelscan.com/configuration/crawler#follow_redirects).
+
+### Docs
+
+- **`compare_audits` says when a rule could not be checked.** A rule the newer audit could not run is reported as `not_checked`, not as resolved. See [MCP](https://docs.squirrelscan.com/developers/mcp).
+- **The rule-count tables match the 311 rules.** The README and the docs index list Images 16 and Content 25.
+- **The AI-agent guide no longer states a tool count** that goes stale.
+
 ## v0.0.135 (2026-10-27)
 
 Robots.txt groups are read the way crawlers read them when a Sitemap line sits between User-agent lines, a redirect with a Location that cannot be parsed no longer fails a crawl, the egress guard refuses two more cloud metadata addresses, and a custom user-agent header now reaches the link check and the soft-404 confirmation. Two new info rules: images/hotlinked and content/h1-title-alignment.
@@ -41,9 +55,13 @@ Robots.txt groups are read the way crawlers read them when a Sitemap line sits b
 
 ### Security
 
-- **The CLI checks the site's own hostnames before it connects.** The audited host, its `www` twin and the domains in `[project] domains` went out by name with no address check, so a site that controls its DNS, or rebinds it mid-audit, could point one of them at a cloud metadata service and the audit would request it and store the answer. The CLI now checks every answer for them and connects to the address it checked, for pages, redirect hops, root files, the start URL's reachability check and redirects, assets and the end-of-crawl probes, in `squirrel analyze` too; a link-local or metadata answer is never requested (a page is recorded as failed with "Not requested", an asset as refused). Two rule probes still go out by name: the `security/http-to-https` `HEAD` request and the GraphQL probes of an active or aggressive probing intensity. Behind an HTTP proxy from the environment, or with `SQUIRREL_NO_HOST_PINNING` set, every request goes out by name as before. See [follow_redirects](https://docs.squirrelscan.com/configuration/crawler#follow_redirects).
 - **A robots.txt built to multiply no longer exhausts memory.** Each group's rules are given to every user agent that heads it, so a file of a few thousand stacked `User-agent` lines over a few thousand rules, or over one very long rule, inside the 512 KiB fetch limit, grew to hundreds of millions of entries or gigabytes of rule text and could take down a CLI audit or a cloud audit container. The parser now keeps at most 100,000 directive entries and 2 million characters of rule paths, in file order, still collects the `Sitemap` lines after that, and records that the rest of the file was not read, which the `crawl/robots-txt` syntax check shows. Page checks against robots.txt also work out each rule's pattern once instead of once per page.
+
 - **The egress guard refuses GCP's IPv6 metadata server (`fd20:ce::254`) and the EKS Pod Identity agent (`fd00:ec2::23`)**, as literals and as DNS answers, beside AWS's `fd00:ec2::254`. They sit in the unique local range, so an audit on a private network used to let a redirect reach them. Other unique local addresses stay allowed.
+
+### Docs
+
+- **The crawler page states the trusted-hostname residual.** The audited host, its `www` twin and every subdomain of `[project] domains` are requested by name without an address check, so a site that controls its own DNS can point them at a metadata address. The page says how to audit untrusted sites safely; cloud audits are not affected. See [follow_redirects](https://docs.squirrelscan.com/configuration/crawler#follow_redirects).
 
 ## v0.0.134 (2026-10-26)
 
