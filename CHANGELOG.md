@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.135 (2026-10-27)
+
+Robots.txt groups are read the way crawlers read them when a Sitemap line sits between User-agent lines, a redirect with a Location that cannot be parsed no longer fails a crawl, the egress guard refuses two more cloud metadata addresses, and a custom user-agent header now reaches the link check and the soft-404 confirmation. Two new info rules: images/hotlinked and content/h1-title-alignment.
+
 ### Added
 
 - images: new rule `images/hotlinked` reports, as info, a content image (`<img>`, `<picture>` source, inline `background`) that loads from another site's server, grouped per host. First-party hosts, known image CDNs and site-builder storage, launch and badge directories, tracking pixels and avatar services are not reported, and `allowed_hosts` adds your own. An `og:image` or `twitter:image` on another site is reported too (#932).
@@ -30,7 +34,6 @@ How it works:
 
 - `-H "user-agent: ..."` (or a `User-Agent` in `[crawler] headers`) is now also the agent of the internal link check and the soft-404 confirmation, which send no other custom header. They used to send the crawl's random browser agent beside a crawl that sent yours. The reachability check, the cloaking probe and the AI agent access probe still use their own agents on purpose. See [crawler headers](https://docs.squirrelscan.com/configuration/crawler) (#1152).
 - **A role or scope refusal is explained in either shape the cloud sends.** `squirrel audit` (the run is not tracked) and `squirrel report --publish` name a `forbidden_role` refusal in the typed `error: { code, message }` envelope as well as the bare `error: "forbidden_role"`, and an API key missing a scope (`missing_scope`) says which scope a key needs. Before, only the bare shape was recognised.
-- **A redirect whose `Location` cannot be parsed no longer fails the whole crawl.** A `Location: http://[` threw inside the page fetch, the error escaped as a crash, and the audit stopped. That page now ends its redirect chain like a redirect with no `Location`, and the crawl goes on.
 - **A redirect whose `Location` cannot be parsed no longer fails the whole crawl.** A `Location: http://[` threw inside the page fetch, the error escaped as a crash, and the audit stopped. That page now ends its redirect chain like a redirect with no `Location`, and the crawl goes on. The plain fetcher, which rejected the whole fetch with "Invalid URL", does the same.
 - `squirrel audit` with `-f json`, `xml`, `llm`, `markdown`, `text` or `html` sends its progress and log lines ("New crawl: ...", "Found N URLs in sitemap") to stderr, so stdout starts with the report and `squirrel audit <url> -f json | jq` works. The console format is unchanged.
 - robots.txt groups are read the way RFC 9309 and Google read them when a `Sitemap`, `Crawl-delay` or unknown line sits between `User-agent` lines: the group continues, so `User-agent: GPTBot`, `Sitemap: ...`, `User-agent: CCBot`, `Disallow: /` blocks both bots. Before, the second `User-agent` started a new group and the first bot was read as unlisted. A file with CR-only line endings is read too, where before it parsed as empty. AI crawler, indexability and crawl-delay checks read these files the way crawlers do, in the CLI and in cloud audits.
