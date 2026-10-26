@@ -17,7 +17,7 @@ The rule runs on every crawled page and reads a result the cloud service produce
 
 - Skipped when no result is available for the page, whether because the feature was not prefetched or the service skipped it. Message: `Authority signal analysis skipped`, with a readable skip reason.
 - Warn when the page has no author attribution and zero citations. Message: `No author attribution or citations detected on this page`. When the page has outbound links, the details add `4 outbound link(s) present but none read as citations.` Severity warning, weight 3.
-- Pass otherwise. Message: `Authority signals: author attributed, 6 citation(s), 14 outbound reference(s)`, or `no author` in place of the first part. Any specific signals the service identified are listed as items.
+- Pass otherwise. Message: `Authority signals: author attributed, 6 citation(s), 14 outbound reference(s)`, or `no author` in place of the first part. Up to three short signals the service identified are listed as items.
 
 The rule is skipped on soft 404 pages, so a broken template cannot warn about a missing author on every URL.
 
