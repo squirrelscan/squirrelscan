@@ -362,6 +362,11 @@ export interface CrawlerConfigSnapshot {
   maxBackoffMs?: number;
   timeoutMs: number;
   userAgent: string;
+  /**
+   * The robots.txt group token, when it differs from `userAgent`
+   * (squirrelscan/repo#3271). Optional so crawl rows recorded before it read back.
+   */
+  robotsUserAgent?: string;
   followRedirects: boolean;
   respectRobots: boolean;
   incremental: boolean;

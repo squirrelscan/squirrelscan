@@ -272,6 +272,7 @@ export async function runCrawl(
             maxBackoffMs: config.crawler.max_backoff_ms,
             timeoutMs: config.crawler.timeout_ms,
             userAgent,
+            robotsUserAgent: config.crawler.robots_user_agent || undefined,
             followRedirects: config.crawler.follow_redirects,
             respectRobots: config.crawler.respect_robots,
             // A crawl does not know which rules will read it later, so every
@@ -329,6 +330,7 @@ export async function runCrawl(
         maxBackoffMs: config.crawler.max_backoff_ms,
         timeoutMs: config.crawler.timeout_ms,
         userAgent,
+        robotsUserAgent: config.crawler.robots_user_agent || undefined,
         followRedirects: config.crawler.follow_redirects,
         respectRobots: config.crawler.respect_robots,
         incremental: !options.refresh,

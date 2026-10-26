@@ -49,6 +49,11 @@ export const CrawlerConfigSchema = z.object({
   delay_ms: z.number().default(100),
   timeout_ms: z.number().default(30000),
   user_agent: z.string().default(""),
+  // The product token robots.txt groups are matched against (RFC 9309) when
+  // `respect_robots` is on, apart from the user agent the requests send (by
+  // default a browser one, whose own token is `Mozilla`). Empty: the user
+  // agent's token. squirrelscan/repo#3271.
+  robots_user_agent: z.string().default("SquirrelScan"),
   // Custom HTTP request headers attached to EVERY crawl request (pages, assets,
   // robots.txt, sitemap). Use for authorized-crawler schemes (Shopify/Cloudflare
   // Web Bot Auth) that require signed headers. Values are treated as secrets —

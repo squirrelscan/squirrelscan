@@ -1057,6 +1057,8 @@ export async function runAudit(
         maxBackoffMs: mergedConfig.crawler.max_backoff_ms,
         timeoutMs: mergedConfig.crawler.timeout_ms,
         userAgent,
+        // squirrelscan/repo#3271: the robots.txt group token, when set apart from the UA.
+        robotsUserAgent: mergedConfig.crawler.robots_user_agent || undefined,
         headers: mergedConfig.crawler.headers,
         headerHosts: mergedConfig.crawler.header_hosts,
         followRedirects: mergedConfig.crawler.follow_redirects,

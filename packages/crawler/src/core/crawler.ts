@@ -2761,6 +2761,7 @@ export function createCrawler(
             maxBackoffMs: config.maxBackoffMs,
             timeoutMs: config.timeoutMs,
             userAgent: config.userAgent,
+            ...(config.robotsUserAgent ? { robotsUserAgent: config.robotsUserAgent } : {}),
             followRedirects: config.followRedirects,
             respectRobots: config.respectRobots,
             incremental: config.incremental,
@@ -2810,7 +2811,14 @@ export function createCrawler(
         // sitemap discovery and the crawl/robots-txt rule need it. Only
         // Disallow enforcement and Crawl-delay honoring are conditional.
         const robotsResult = yield* Effect.either(
-          fetchRobots(baseUrl, config.userAgent, true, customHeadersFor(baseUrl), preamble),
+          fetchRobots(
+            baseUrl,
+            config.userAgent,
+            true,
+            customHeadersFor(baseUrl),
+            preamble,
+            config.robotsUserAgent,
+          ),
         );
         if (robotsResult._tag === "Right") {
           robots = robotsResult.right;
@@ -3087,6 +3095,7 @@ export function createCrawler(
             true,
             customHeadersFor(baseUrl),
             createPhaseBudget(preambleBudgetMs(config.timeoutMs), Date.now(), undefined, crawlEgress),
+            config.robotsUserAgent,
           ),
         );
         if (robotsResult._tag === "Right") {
@@ -3249,7 +3258,14 @@ export function createCrawler(
 
         // Fetch robots.txt — always, regardless of respectRobots (#790).
         const robotsResult = yield* Effect.either(
-          fetchRobots(baseUrl, config.userAgent, true, customHeadersFor(baseUrl), preamble),
+          fetchRobots(
+            baseUrl,
+            config.userAgent,
+            true,
+            customHeadersFor(baseUrl),
+            preamble,
+            config.robotsUserAgent,
+          ),
         );
         if (robotsResult._tag === "Right") {
           robots = robotsResult.right;

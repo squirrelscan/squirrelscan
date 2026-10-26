@@ -37,6 +37,7 @@ const mockConfig: Config = {
     delay_ms: 100,
     timeout_ms: 30000,
     user_agent: "TestBot/1.0",
+    robots_user_agent: "SquirrelScan",
     headers: {},
     header_hosts: [],
     follow_redirects: true,

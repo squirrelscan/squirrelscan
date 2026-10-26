@@ -27,6 +27,7 @@ incremental = true
 breadth_first = true
 max_prefix_budget = 0.25
 user_agent = ""
+robots_user_agent = "SquirrelScan"
 follow_redirects = true
 ```
 
@@ -743,6 +744,23 @@ user_agent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit
 
 ---
 
+### `robots_user_agent`
+
+**Type:** `string`
+**Default:** `"SquirrelScan"`
+
+The product token robots.txt groups are matched against when [`respect_robots`](#respect_robots) is on. A site writes rules for squirrelscan as `User-agent: SquirrelScan`; a site with no such group gets its `User-agent: *` rules.
+
+It is separate from [`user_agent`](#user_agent) because a robots.txt group is matched on the part of the user agent before its first `/`, and the default browser user agent starts `Mozilla/5.0`. Set it to another token to be matched as that crawler, or to `""` to match on the user agent's own token.
+
+```toml
+[crawler]
+respect_robots = true
+robots_user_agent = "SquirrelScan"
+```
+
+---
+
 ### `headers`
 
 **Type:** `table` (map of header name → value)
@@ -910,7 +928,7 @@ Enforce robots.txt `Disallow:` rules and honor its `Crawl-delay:` directive.
   uninvited crawl, so directives aimed at bots don't apply unless you opt in
 
 **When `true`:**
-- Respects `Disallow:` rules for the `SquirrelScan` and `*` user agents
+- Respects `Disallow:` rules for the `SquirrelScan` group, or the group of your [`robots_user_agent`](#robots_user_agent), falling back to `*`
 - Honors `Crawl-delay:`, capped at 2 seconds even if the directive asks for
   longer
 

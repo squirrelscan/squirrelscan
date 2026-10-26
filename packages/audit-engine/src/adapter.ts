@@ -1162,7 +1162,12 @@ export function fetchAssetsFromOccurrences(
         : null;
     const robots =
       robotsRecord?.exists && robotsRecord.content
-        ? createRobotsEvaluator(robotsRecord.url, robotsRecord.content, probeUserAgent)
+        ? createRobotsEvaluator(
+            robotsRecord.url,
+            robotsRecord.content,
+            // squirrelscan/repo#3271: the group the crawl was matched as.
+            crawl?.config?.robotsUserAgent || config.crawler?.robots_user_agent || probeUserAgent,
+          )
         : null;
     const mayProbe = (url: string): boolean => {
       if (looksLikeAnAction(url)) return false;

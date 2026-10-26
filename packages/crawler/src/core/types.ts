@@ -51,6 +51,14 @@ export interface CrawlerConfig {
   /** User agent string */
   userAgent: string;
   /**
+   * The product token robots.txt groups are matched against (RFC 9309), when it
+   * differs from the user agent the requests send: a crawler that sends a
+   * browser-style user agent such as `Mozilla/5.0 (compatible; SquirrelScan/2.0)`
+   * is still the `SquirrelScan` group. Unset or empty: the user agent itself,
+   * whose token is the part before its first `/`. squirrelscan/repo#3271.
+   */
+  robotsUserAgent?: string;
+  /**
    * Custom HTTP request headers attached to every request (pages, assets,
    * robots.txt, sitemap, llms.txt, markdown probes). Empty by default. Values
    * are secrets — never log them. Threaded into FetchOptions.headers.

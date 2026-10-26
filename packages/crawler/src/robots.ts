@@ -79,11 +79,15 @@ export function fetchRobotsEvaluator(
   respectRobots: boolean,
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
+  /** The token robots.txt groups are matched against; default `userAgent`. */
+  robotsAgent?: string,
 ): Effect.Effect<RobotsEvaluator, never, never> {
   const robotsUrl = new URL("/robots.txt", baseUrl).toString();
+  // The request still says `userAgent`; only the group match uses the token.
+  const agent = robotsAgent || userAgent;
 
   if (!respectRobots) {
-    return Effect.succeed(createRobotsEvaluator(robotsUrl, null, userAgent));
+    return Effect.succeed(createRobotsEvaluator(robotsUrl, null, agent));
   }
 
   const timeoutMs = budgetedTimeoutMs(budget, ROBOTS_FETCH_TIMEOUT_MS);
@@ -108,7 +112,7 @@ export function fetchRobotsEvaluator(
         async (response) => {
           if (response.status === 404) {
             await response.body?.cancel().catch(() => {});
-            return createRobotsEvaluator(robotsUrl, null, userAgent);
+            return createRobotsEvaluator(robotsUrl, null, agent);
           }
 
           if (!response.ok) {
@@ -123,7 +127,7 @@ export function fetchRobotsEvaluator(
           // host, so an unbounded read here is reachable on the very first request
           // of an audit.
           const content = await readBodyCapped(response, ROBOTS_MAX_BYTES);
-          return createRobotsEvaluator(robotsUrl, content, userAgent);
+          return createRobotsEvaluator(robotsUrl, content, agent);
         },
         budget?.egress,
       ),
