@@ -69,6 +69,9 @@ function cellContent(r: () => number): string {
   return pick(r, ["", "text", pick(r, LINKS), `<p>${pick(r, LINKS)}</p>`, "<div>d</div>"]);
 }
 
+/** Span values, junk included, that the previous rule read the same way. */
+const SPANS = ["2", "3", "2", "1.5", "2.7", "0.5", "0", "-1", "abc", "2px", " 2 ", "1e1", ""];
+
 /** One cell: a th or td with optional id, headers, colspan and rowspan. */
 function cell(r: () => number): string {
   const tag = r() < 0.4 ? "th" : "td";
@@ -78,8 +81,8 @@ function cell(r: () => number): string {
     const ids = Array.from({ length: 1 + Math.floor(r() * 2) }, () => pick(r, ID_POOL));
     attrs.push(`headers="${ids.join(" ")}"`);
   }
-  if (r() < 0.15) attrs.push(`colspan="${1 + Math.floor(r() * 3)}"`);
-  if (r() < 0.15) attrs.push(`rowspan="${1 + Math.floor(r() * 3)}"`);
+  if (r() < 0.15) attrs.push(`colspan="${pick(r, SPANS)}"`);
+  if (r() < 0.15) attrs.push(`ROWSPAN="${pick(r, SPANS)}"`);
   return `<${tag}${attrs.length ? ` ${attrs.join(" ")}` : ""}>${cellContent(r)}</${tag}>`;
 }
 
@@ -318,5 +321,53 @@ describe("nested markup costs a walk, not a walk per element (#3355)", () => {
       // The spy sees the previous rule's per-table and per-block queries.
       expect(elementQueries(reference, tables), rule.meta.id).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("spans a browser would not read (#3355)", () => {
+  const judge = (colspan: string, rowspan = "1") =>
+    run(
+      thHasDataCellsRule,
+      parse(
+        `<table><tr><th colspan="${colspan}" rowspan="${rowspan}">h</th><td>d</td></tr>` +
+          "<tr><th>lonely</th></tr></table>",
+      ),
+    ).checks[0]!;
+
+  test("an infinite, unparseable, zero, negative or fractional span reads as before or as 1", { timeout: 10_000 }, () => {
+    // Infinity and 1e999 used to fill slots until the process ran out of memory.
+    const asOne = judge("1");
+    for (const value of ["Infinity", "1e999", "-Infinity", "NaN", "abc", "0", "-1", "0.5"]) {
+      expect(judge(value), `colspan ${value}`).toEqual(asOne);
+      expect(judge("1", value), `rowspan ${value}`).toEqual(asOne);
+    }
+    expect(judge("1.5")).toEqual(run(referenceThHasDataCellsRule, parse(
+      '<table><tr><th colspan="1.5" rowspan="1">h</th><td>d</td></tr><tr><th>lonely</th></tr></table>',
+    )).checks[0]!);
+  });
+
+  test("a span past the spec's limit reads as the limit, and a grid stops at its slot cap", { timeout: 10_000 }, () => {
+    // 1,000 columns: the second row's td sits under the header's 1,000th column.
+    const wide = parse(
+      '<table><tr><th colspan="100000">h</th></tr><tr><td colspan="999"></td><td>d</td></tr></table>',
+    );
+    expect(run(thHasDataCellsRule, wide).checks[0]!.status).toBe("pass");
+    const start = performance.now();
+    const huge = run(
+      thHasDataCellsRule,
+      parse(
+        '<table><tr><th>first</th></tr><tr><td colspan="1000" rowspan="65534">x</td><th>after</th></tr></table>',
+      ),
+    ).checks[0]!;
+    expect(performance.now() - start).toBeLessThan(1_000);
+    // The cell past the cap is not placed: the table is judged on what came before.
+    expect(huge.items).toEqual([{ id: "first" }]);
+  });
+
+  test("wide rows cost a walk of the row, not one per cell", { timeout: 60_000 }, () => {
+    const headers = `<table><tr>${"<th>h</th>".repeat(20_000)}</tr></table>`;
+    expect(ruleMs(thHasDataCellsRule, headers)).toBeLessThan(1_000);
+    const spans = `<table><tr>${'<td colspan="1000">x</td>'.repeat(500)}<th>h</th></tr></table>`;
+    expect(ruleMs(thHasDataCellsRule, spans)).toBeLessThan(1_000);
   });
 });

@@ -11,13 +11,35 @@ interface GridCell {
   el: Element;
 }
 
+/** The HTML spec's span limits: a browser reads a larger span as these. */
+const MAX_COLSPAN = 1000;
+const MAX_ROWSPAN = 65534;
+/**
+ * The slots one table's grid may hold. A table past it is judged on the cells
+ * placed before it: spans multiply, so a single cell of `colspan="1000"
+ * rowspan="65534"` would otherwise ask for 65 million slots.
+ */
+export const MAX_GRID_SLOTS = 1_000_000;
+
+/**
+ * A cell's span. Not a finite number of at least 1 (NaN, `Infinity`, `1e999`, 0
+ * or negative): 1, as a browser reads a span it cannot parse. Before
+ * squirrelscan/repo#3355 an infinite span filled slots until the process ran
+ * out of memory. Past the spec's limit: the limit.
+ */
+function span(cell: Element, name: string, max: number): number {
+  const n = Number(getAttrCI(cell, name));
+  return Number.isFinite(n) && n >= 1 ? Math.min(n, max) : 1;
+}
+
 /**
  * Build a 2D grid from a table's own rows (squirrelscan/repo#3355: not those of
  * the tables nested in it), expanding colspan/rowspan so each grid slot maps to
- * the cell that occupies it.
+ * the cell that occupies it, up to {@link MAX_GRID_SLOTS}.
  */
 function buildGrid(rows: readonly OwnRow[]): (GridCell | null)[][] {
   const grid: (GridCell | null)[][] = [];
+  let slots = 0;
 
   for (let r = 0; r < rows.length; r++) {
     if (!grid[r]) grid[r] = [];
@@ -25,8 +47,11 @@ function buildGrid(rows: readonly OwnRow[]): (GridCell | null)[][] {
     let cursor = 0;
 
     for (const cell of cells) {
-      const colspan = Math.max(1, Number(getAttrCI(cell, "colspan")) || 1);
-      const rowspan = Math.max(1, Number(getAttrCI(cell, "rowspan")) || 1);
+      const colspan = span(cell, "colspan", MAX_COLSPAN);
+      const rowspan = span(cell, "rowspan", MAX_ROWSPAN);
+      // The fill loops below run ceil(span) times for a fractional span.
+      slots += Math.ceil(colspan) * Math.ceil(rowspan);
+      if (slots > MAX_GRID_SLOTS) return grid;
       const tag = cell.tagName.toLowerCase();
       const entry: GridCell = { tag, el: cell };
 
