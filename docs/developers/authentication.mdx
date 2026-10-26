@@ -79,6 +79,50 @@ holds `audits:read`, `audits:write`, `credits:read` and `org:read`, a viewer
 `credits:read` and `org:read`. A request outside them returns `403` with the
 code `forbidden_role`.
 
+### Refusals for a role or a scope
+
+A `403` for a role or a scope comes in one of these shapes. Check `error` when it
+is a string, and `error.code` when it is an object.
+
+- **A route needs a scope your role does not hold** (the scope list above), on a
+  login session:
+
+  ```json
+  {
+    "error": "forbidden_role",
+    "message": "Your role (viewer) in this organization does not include audits:write",
+    "role": "viewer",
+    "missing_scope": "audits:write"
+  }
+  ```
+
+- **An action needs a permission your role does not have** in the organization
+  that owns the resource (running an audit on a website, changing org
+  settings, inviting a member):
+
+  ```json
+  {
+    "error": {
+      "code": "forbidden_role",
+      "message": "Your role (viewer) may not run audits for this organization",
+      "role": "viewer",
+      "permission": "audits:run"
+    }
+  }
+  ```
+
+- **An API key is missing a scope**:
+
+  ```json
+  { "error": "API key missing required scope: audits:write" }
+  ```
+
+- **MCP tools** answer a tool error with the code `FORBIDDEN` and the
+  `missing_scope`, plus your `role` on a sign-in or the key's `key_scopes` on a
+  key (see [MCP](/developers/mcp)).
+
+None of these succeed on a retry: change the role, or use a key with the scope.
+
 ### Presets
 
 When creating a key, pick a preset instead of hand-picking scopes:
