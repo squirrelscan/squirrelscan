@@ -42,7 +42,7 @@
 // with the touched pages in cursor order. {@link aggregateUntouchedCarried} is the
 // reference the store's twin is measured against.
 
-import type { CheckResult, PageFindingRecord } from "@squirrelscan/core-contracts";
+import type { CheckResult, CheckTallies, PageFindingRecord } from "@squirrelscan/core-contracts";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { DEFAULT_FOLD_LIMITS, foldGroupKey, foldOverflowChecks } from "@squirrelscan/rules/fold";
 import type { RuleRunResult } from "@squirrelscan/rules/types";
@@ -50,10 +50,12 @@ import type { RuleRunResult } from "@squirrelscan/rules/types";
 import { reconstructPageRuleChecks } from "./reconstruct";
 import {
   addChecksToTally,
+  addTally,
   carriedFindingToCheck,
   emptyTally,
   type CarriedFinding,
   type CarriedUnionSource,
+  type IssueTally,
   type PageUrlSet,
   type RuleTally,
 } from "./scoring";
@@ -85,6 +87,19 @@ export interface CompleteStoreTallyInput {
   crawledUrls: Set<string>;
   /** (#1305) Passing sibling checks on dirty pages; see reconstructCompleteResults. */
   skippedPassCounts?: SkippedPassCounts;
+  /**
+   * (repo#3348) The shell's `checkTallies`: the publish capper's counts of every
+   * fresh check, taken from the full report before it sampled the rows. When set,
+   * they ARE this run's side of the score, as on the sampled path
+   * (`scoreFromCheckTallies`), and the findings decide only what the store keeps.
+   * One audit then scores the same whether it was published chunked or as one
+   * POST. Without them the fresh side comes from the findings, which count every
+   * crawled page a rule left no finding on as one pass: a page the rule skipped,
+   * a rule that evaluated no page at all, and a clean page however many checks the
+   * rule ran on it (the SKIP-AS-PASS approximation on reconstructCompleteResults).
+   * `crawledUrls` and `skippedPassCounts` then play no part in the fresh side.
+   */
+  freshTallies?: CheckTallies;
   /**
    * Normalized URLs that returned 404/410 this run. Their fresh checks are NOT
    * scored: the page is gone, so it is not one of the "known non-removed" pages
@@ -306,6 +321,7 @@ export function createCompleteStoreTallyFold(
     ruleResults,
     crawledUrls,
     skippedPassCounts,
+    freshTallies,
     carriedPageUrls,
     ruleMetaIndex,
     removedUrls,
@@ -325,6 +341,11 @@ export function createCompleteStoreTallyFold(
     return entry;
   };
   const advisory = (meta: RuleRunResult["meta"]): boolean => meta.severity === "info";
+  // (repo#3348) The shell's rules first, in the shell's order, as the sampled
+  // path's tallies walk them: the scorer sums in map order.
+  if (freshTallies) {
+    for (const [ruleId, r] of Object.entries(ruleResults)) entryFor(ruleId, r.meta);
+  }
 
   // Pages this run has a finding on, per rule — the fresh-clean denominator's
   // subtrahend. Counted (not collected) so it stays O(rules), and counted only for
@@ -349,7 +370,9 @@ export function createCompleteStoreTallyFold(
   const carriedReport = retainCarriedChecks ? new Map<string, CarriedRuleReport>() : undefined;
 
   const foldPage: CompleteStoreTallyFold["foldPage"] = (normalizedUrl, fresh, carried) => {
-    const freshByRule = fresh.length > 0 ? reconstructPageRuleChecks(fresh) : undefined;
+    // (repo#3348) With the tallies, this run's findings are already counted there.
+    const freshByRule =
+      !freshTallies && fresh.length > 0 ? reconstructPageRuleChecks(fresh) : undefined;
     // Carried findings for this page, grouped per rule. Bounded by ONE page.
     let carriedByRule: Map<string, CarriedFinding[]> | undefined;
     for (const f of carried) {
@@ -395,8 +418,14 @@ export function createCompleteStoreTallyFold(
         carriedForRule.forEach((f, i) => assertAggregatable(f.payload, carriedChecks[i]!, normalizedUrl));
       }
       if (carriedReport && carriedChecks) retainCarried(carriedReport, ruleId, carriedChecks);
-      const checks: CheckResult[] = carriedChecks
-        ? [...(freshChecks ?? []), ...carriedChecks]
+      // (repo#3348) The tallies count every page this run crawled, for every check
+      // that evaluated it, so a carry there would count the page twice. The merge
+      // resolves each prior on a crawled page in complete mode, so none arrives;
+      // this keeps the sum exact if one ever does, as `notEvaluatedThisRun` does
+      // for the sampled path.
+      const scoredCarried = freshTallies && isCrawled ? undefined : carriedChecks;
+      const checks: CheckResult[] = scoredCarried
+        ? [...(freshChecks ?? []), ...scoredCarried]
         : (freshChecks ?? []);
       if (checks.length === 0) continue;
       addChecksToTally(entryFor(ruleId, meta).tally, checks, advisory(meta), 0);
@@ -504,6 +533,19 @@ export function createCompleteStoreTallyFold(
     carriedPageUrls.size - (carriedDirtyPagesByRule.get(ruleId) ?? 0);
 
   const foldShellRules: CompleteStoreTallyFold["foldShellRules"] = () => {
+    if (freshTallies) {
+      // (repo#3348) This run's side of every rule, site-scope ones included, from
+      // the counts the capper took over the full report; page rules add their
+      // clean carried pages, as `scoreFromCheckTallies` adds them.
+      for (const [ruleId, r] of Object.entries(ruleResults)) {
+        const { tally } = entryFor(ruleId, r.meta);
+        addTally(tally, freshTally(freshTallies[ruleId]));
+        if (r.meta.scope === "page") {
+          addChecksToTally(tally, [], advisory(r.meta), cleanCarriedPasses(ruleId));
+        }
+      }
+      return;
+    }
     for (const [ruleId, r] of Object.entries(ruleResults)) {
       if (r.meta.scope !== "page") {
         // Site-scope rule: findings never carry these (flattenChecks skips
@@ -910,6 +952,35 @@ export async function foldCompleteStoreTallies(
 }
 
 const EMPTY_ROWS: readonly PageFindingRecord[] = [];
+
+/**
+ * One rule's fresh counts, summed over its check names. A rule or check name
+ * with no entry scored nothing this run (`buildCheckTallies` leaves out classes
+ * of info checks only), so it is 0, never unknown. The tallies arrive in a
+ * publish body, so anything that is not a non-negative count counts as 0.
+ *
+ * Otherwise trusted as far as the rows they replace were: both are the
+ * publisher's own account of its audit, under the same key, for its own site,
+ * and the rescore has no evidence of its own to check them against. A bound on
+ * the counts would protect nothing: a publisher could always reach any score,
+ * 100 included, by leaving its fail and warn rows out, with rows or tallies.
+ * Nor would a bound by pages crawled be safe: a rule may emit several checks of
+ * one name on a page.
+ */
+export function freshTally(byName: CheckTallies[string] | undefined): IssueTally {
+  const tally = emptyTally();
+  if (!byName) return tally;
+  const count = (n: unknown): number =>
+    typeof n === "number" && Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  for (const t of Object.values(byName)) {
+    tally.passed += count(t?.passed);
+    tally.warnings += count(t?.warnings);
+    tally.failed += count(t?.failed);
+    tally.warnUnits += count(t?.warnUnits);
+    tally.failUnits += count(t?.failUnits);
+  }
+  return tally;
+}
 
 /** Split a batch of findings into per-page groups, preserving arrival order. */
 function groupByPage(

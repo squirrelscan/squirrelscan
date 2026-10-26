@@ -47,6 +47,7 @@ import {
 import {
   createCompleteStoreTallyFold,
   foldCompleteStoreTallies,
+  freshTally,
   untouchedCarriedFinding,
   type FindingPageSource,
   type UntouchedCarriedAggregate,
@@ -57,10 +58,8 @@ import type { SkippedPassCounts } from "./stream-findings";
 import {
   addChecksToTally,
   buildScoringResultsFromMerged,
-  emptyTally,
   type CarriedFinding,
   type CarriedUnionSource,
-  type IssueTally,
   type PageUrlSet,
   type RuleTally,
 } from "./scoring";
@@ -278,7 +277,11 @@ export interface CloudSmartAuditsInput {
    * counts instead, the carried side from the merge, and the result comes back
    * as {@link CloudSmartAuditsResult.scoringTallies}. The merge itself (what is
    * persisted, resolved, carried) reads the rows and the signal exactly as before.
-   * Ignored in complete-store mode, whose findings are unsampled.
+   *
+   * (repo#3348) In complete-store mode they are this run's side of the score too,
+   * with or without the signal: the findings decide what the store keeps and
+   * carries, the tallies what this run scores, so one audit scores the same
+   * published chunked or as one POST (see `CompleteStoreTallyInput.freshTallies`).
    */
   checkTallies?: CheckTallies;
   /**
@@ -374,9 +377,10 @@ export interface CloudSmartAuditsResult {
   scoringTallies?: Map<string, RuleTally>;
   /**
    * (repo#2657) The report's passed/warnings/failed when {@link scoringTallies}
-   * came from a capped report's `checkTallies`. Not a plain sum of the tallies:
-   * the sampled path has never counted carried-clean synthetic passes into
-   * `report.passed` (only into the score), and a capped report must not start.
+   * came from a capped report's `checkTallies`, on either path (repo#3348). Not a
+   * plain sum of the tallies: the sampled path has never counted carried-clean
+   * synthetic passes into `report.passed` (only into the score), and a capped
+   * report must not start.
    */
   reportTotals?: { passed: number; warnings: number; failed: number };
   /** Coverage line data for surfacing. */
@@ -430,7 +434,8 @@ export interface CloudSmartAuditsResult {
   replayedUnknownPages: number;
   /**
    * (#1023 R-D3) True when scoring ran off the reconstructed complete store
-   * (freshResults from findings + `syntheticPassCount` for fresh clean pages).
+   * (freshResults from findings + `syntheticPassCount` for fresh clean pages, or,
+   * repo#3348, the shell's `checkTallies` beside the store's carried side).
    * The caller uses it to fold `syntheticPassCount` into `report.passed`
    * (page-rule passes are counts here, not materialized checks).
    */
@@ -458,6 +463,9 @@ export async function runCloudSmartAudits(
   // Needs the signal too, which is what says which pages the tallies cover.
   const checkTallies =
     !completeStore && input.resolutionSignal ? input.checkTallies : undefined;
+  // (repo#3348) The complete store's twin: the store needs no signal to say which
+  // pages the tallies cover, since its crawled list is the whole crawl.
+  const completeTallies = completeStore ? input.checkTallies : undefined;
 
   // Rule meta + severity indexes from the report's ruleResults (both modes — the
   // shell always carries every rule that ran, so this is the meta source even in
@@ -957,6 +965,7 @@ export async function runCloudSmartAudits(
       ruleResults: shellResults ?? input.ruleResults,
       crawledUrls,
       skippedPassCounts: completeStore?.skippedPassCounts,
+      freshTallies: completeTallies,
       carriedPageUrls,
       ruleMetaIndex,
       // Same exclusion the union scoring applies below via `freshForUnion`: a
@@ -1042,6 +1051,7 @@ export async function runCloudSmartAudits(
         findingPages: completeStore.findingPages ?? emptyPageSource(),
         crawledUrls,
         skippedPassCounts: completeStore.skippedPassCounts,
+        freshTallies: completeTallies,
         carriedFindings,
         carriedPageUrls,
         ruleMetaIndex,
@@ -1139,6 +1149,8 @@ export async function runCloudSmartAudits(
       unionCarried.map((f) => carriedKey(f.normalizedUrl, f.ruleId, f.checkName)),
     );
     shownLastSeen = new Map([...carriedLastSeen].filter(([key]) => shown.has(key)));
+  } else if (completeTallies && scoringTallies) {
+    reportTotals = tallyReportTotals(scoringTallies, completeTallies);
   }
 
   return {
@@ -1439,32 +1451,23 @@ function scoreFromCheckTallies(input: {
 }
 
 /**
- * One rule's fresh counts, summed over its check names. A rule or check name
- * with no entry scored nothing this run (`buildCheckTallies` leaves out classes
- * of info checks only), so it is 0, never unknown. The tallies arrive in a
- * publish body, so anything that is not a non-negative count counts as 0.
- *
- * Otherwise trusted as far as the rows they replace were: both are the
- * publisher's own account of its audit, under the same key, for its own site,
- * and the rescore has no evidence of its own to check them against. A bound on
- * the counts would protect nothing: a publisher could always reach any score,
- * 100 included, by leaving its fail and warn rows out, with rows or tallies.
- * Nor would a bound by pages crawled be safe: a rule may emit several checks of
- * one name on a page.
+ * (repo#3348) The report's totals beside a complete-store score taken from the
+ * shell's `checkTallies`, counted as {@link scoreFromCheckTallies} counts them:
+ * this run's passes from its tallies, every warning and failure from the union's
+ * tallies. A carried row is never a pass, so what is left out of `passed` is the
+ * clean carried pages, which the sampled path has never counted there either.
  */
-function freshTally(byName: CheckTallies[string] | undefined): IssueTally {
-  const tally = emptyTally();
-  if (!byName) return tally;
-  const count = (n: unknown): number =>
-    typeof n === "number" && Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
-  for (const t of Object.values(byName)) {
-    tally.passed += count(t?.passed);
-    tally.warnings += count(t?.warnings);
-    tally.failed += count(t?.failed);
-    tally.warnUnits += count(t?.warnUnits);
-    tally.failUnits += count(t?.failUnits);
+function tallyReportTotals(
+  scoringTallies: Map<string, RuleTally>,
+  checkTallies: CheckTallies,
+): NonNullable<CloudSmartAuditsResult["reportTotals"]> {
+  const totals = { passed: 0, warnings: 0, failed: 0 };
+  for (const [ruleId, { tally }] of scoringTallies) {
+    totals.passed += freshTally(checkTallies[ruleId]).passed;
+    totals.warnings += tally.warnings;
+    totals.failed += tally.failed;
   }
-  return tally;
+  return totals;
 }
 
 /** No fresh side at all — a complete-store caller that passed only priors. */

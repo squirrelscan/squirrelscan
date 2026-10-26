@@ -45,6 +45,7 @@ import {
 } from "../src/merge-promise";
 import { buildCheckTallies, capReportForPublish } from "../src/publish-cap";
 import { calculateHealthScore, calculateHealthScoreFromTallies } from "../src/scoring";
+import { buildStreamFindings } from "../src/stream-findings";
 import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 class MemStore implements SmartAuditStore {
@@ -794,6 +795,194 @@ describe("rescore of a capped report (repo#2657)", () => {
     const r = await publish(new MemStore(), "audit_1", uncappedBody(report), 1);
     expect(r.scoringTallies).toBeUndefined();
     expect(r.reportTotals).toBeUndefined();
+  });
+});
+
+// ── repo#3348: the same capped report, published chunked ─────────────────────
+
+/** The store's open rows, one page at a time in primary-key order. */
+async function openRowsByPage(store: MemStore): Promise<Array<[string, PageFindingRecord[]]>> {
+  const rows = (await store.getFindings("site", ["open"])).sort((a, b) => {
+    const ka = findingKey(a.normalizedUrl, a.ruleId, a.checkName, a.locator);
+    const kb = findingKey(b.normalizedUrl, b.ruleId, b.checkName, b.locator);
+    return ka < kb ? -1 : ka > kb ? 1 : 0;
+  });
+  const byPage = new Map<string, PageFindingRecord[]>();
+  for (const f of rows) {
+    const list = byPage.get(f.normalizedUrl);
+    if (list) list.push(f);
+    else byPage.set(f.normalizedUrl, [f]);
+  }
+  return [...byPage];
+}
+
+/**
+ * The same audit as the container publishes it chunked: the full report's
+ * findings stream into the store first, then the finalize merges the capped
+ * shell. `driver` is the finalize's read: one cursor over the site's open rows,
+ * as the API reads them, or this run's rows beside the earlier ones (the
+ * whole-array driver). `tallies: false` is a shell without `checkTallies`.
+ */
+async function publishChunked(
+  store: MemStore,
+  crawlId: string,
+  report: Produced,
+  now: number,
+  opts: { driver?: "cursor" | "arrays"; tallies?: boolean } = {},
+) {
+  const body = await cappedBody(report);
+  await store.upsertFindings(
+    buildStreamFindings(report.ruleResults, now).map((line) => ({
+      ...line,
+      siteKey: "site",
+      lastSeenCrawlId: crawlId,
+    })),
+  );
+  const pages = await openRowsByPage(store);
+  const fresh = (rows: PageFindingRecord[]) => rows.filter((f) => f.lastSeenCrawlId === crawlId);
+  const prior = (rows: PageFindingRecord[]) => rows.filter((f) => f.lastSeenCrawlId !== crawlId);
+  async function* openPages() {
+    for (const [normalizedUrl, rows] of pages) {
+      yield { normalizedUrl, fresh: fresh(rows), prior: prior(rows) };
+    }
+  }
+  async function* findingPages() {
+    for (const [, rows] of pages) if (fresh(rows).length > 0) yield fresh(rows);
+  }
+  const crawledUrls = body.resolutionSignal!.crawledUrls;
+  return runCloudSmartAudits({
+    store,
+    siteKey: "site",
+    crawlId,
+    now,
+    ruleResults: body.ruleResults,
+    pageStatuses: body.pageStatuses,
+    resolutionSignal: body.resolutionSignal,
+    ...(opts.tallies === false ? {} : { checkTallies: body.checkTallies }),
+    completeStore:
+      opts.driver === "arrays"
+        ? {
+            findingPages: findingPages(),
+            priorOpenFindings: pages.flatMap(([, rows]) => prior(rows)),
+            crawledUrls,
+          }
+        : { openPages: openPages(), crawledUrls },
+  });
+}
+
+/** Rules that ran and evaluated no page: a site with no video and no address. */
+function withIdleRules(report: ReturnType<typeof fullReport>) {
+  report.ruleResults["video/video-schema"] = {
+    meta: meta("video/video-schema", "video", "page", "warning", 5),
+    checks: [],
+  };
+  report.ruleResults["local/nap"] = {
+    meta: meta("local/nap", "local", "page", "warning", 5),
+    checks: [],
+  };
+  return report;
+}
+
+/** busyShapes, plus meta descriptions the rule could not evaluate on some pages. */
+function skipShapes(pages: number[]): PageShape[] {
+  return busyShapes(pages).map((s) => ({ ...s, metaSkipped: s.i % 13 === 0 }));
+}
+
+const categoriesOf = (r: CloudSmartAuditsResult): string[] =>
+  rescored(r).healthScore.categories.map((c) => c.category);
+
+describe("a capped report published chunked scores as published in one POST (repo#3348)", () => {
+  test("first audit: either finalize driver gives the one-POST score, totals and coverage", async () => {
+    const report = withIdleRules(fullReport(skipShapes(range(0, 60)), { robotsMissing: true }));
+    const now = 1_780_000_000_000;
+    const single = await publish(new MemStore(), "audit_1", await cappedBody(report), now);
+    const uncapped = await publish(new MemStore(), "audit_1", uncappedBody(report), now);
+    expect(comparable(rescored(single))).toEqual(comparable(rescored(uncapped)));
+
+    for (const driver of ["cursor", "arrays"] as const) {
+      const chunked = await publishChunked(new MemStore(), "audit_1", report, now, { driver });
+      expect(chunked.completeStore).toBe(true);
+      expect(comparable(rescored(chunked))).toEqual(comparable(rescored(single)));
+      expect(chunked.coverage).toEqual(single.coverage);
+      // Rules that evaluated no page score nothing, so their categories stay out.
+      expect(categoriesOf(chunked)).not.toContain("video");
+      expect(categoriesOf(chunked)).not.toContain("local");
+    }
+  });
+
+  test("without the tallies the chunked shell scores skipped and idle pages as passes", async () => {
+    // The drift the tallies remove, measured on the fixture above.
+    const report = withIdleRules(fullReport(skipShapes(range(0, 60)), { robotsMissing: true }));
+    const now = 1_780_000_000_000;
+    const single = await publish(new MemStore(), "audit_1", await cappedBody(report), now);
+    const control = await publishChunked(new MemStore(), "audit_1", report, now, { tallies: false });
+    expect(control.reportTotals).toBeUndefined();
+    expect(categoriesOf(control)).toContain("video");
+    expect(rescored(control).healthScore.overall).toBeGreaterThan(
+      rescored(single).healthScore.overall!,
+    );
+  });
+
+  test("a chunked publish stores every failing page, so a partial re-run after it scores as after an uncapped one", async () => {
+    const full = fullReport(busyShapes(range(0, 60)));
+    const t1 = 1_779_000_000_000;
+    const viaChunked = new MemStore();
+    const first = await publishChunked(viaChunked, "audit_1", full, t1);
+    const viaUncapped = new MemStore();
+    await publish(viaUncapped, "audit_1", uncappedBody(full), t1);
+    const viaCapped = new MemStore();
+    await publish(viaCapped, "audit_1", await cappedBody(full), t1);
+
+    const keys = async (store: MemStore) =>
+      (await store.getFindings("site", ["open"]))
+        .map((f) => findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator))
+        .sort();
+    expect(await keys(viaChunked)).toEqual(await keys(viaUncapped));
+    const failing = range(0, 60).filter((i) => i % 3 === 0).length;
+    const metaOpen = (store: MemStore) =>
+      openUrls(store, "core/meta-description", "has-meta-description");
+    expect((await metaOpen(viaChunked)).size).toBe(failing);
+    // One POST of the capped body stores its 10-page sample of the class.
+    expect((await metaOpen(viaCapped)).size).toBeLessThanOrEqual(10);
+
+    // Run 2 re-crawls three unchanged pages and publishes them as one POST.
+    const rerun = await cappedBody(fullReport(busyShapes(range(0, 3))));
+    const now = 1_780_000_000_000;
+    const afterChunked = await publish(viaChunked, "audit_2", rerun, now);
+    const afterUncapped = await publish(viaUncapped, "audit_2", rerun, now);
+    const afterCapped = await publish(viaCapped, "audit_2", rerun, now);
+    expect(comparable(rescored(afterChunked))).toEqual(comparable(rescored(afterUncapped)));
+    expect(afterChunked.coverage).toEqual(afterUncapped.coverage);
+    // The carried side is the whole class, so nothing scores better than the full
+    // audit did. (It scores a little worse: the replay counts each stored item as
+    // a check of its own, squirrelscan/repo#3360.)
+    const fullScore = rescored(first).healthScore.overall!;
+    expect(rescored(afterChunked).healthScore.overall!).toBeLessThanOrEqual(fullScore);
+    // After the sampled store the re-run scores the clipped pages clean.
+    expect(rescored(afterCapped).healthScore.overall!).toBeGreaterThan(fullScore);
+  });
+
+  test("partial re-audit published chunked: the one-POST score, crawled-clean resolves, uncrawled carries", async () => {
+    const seed = await seeded(fullReport(busyShapes(range(0, 60))));
+    const shapes = busyShapes(range(0, 40)).map((s) => ({
+      ...s,
+      metaMissing: s.i >= 20 && s.i < 30 ? true : s.i < 20 ? false : s.metaMissing,
+      status: s.i === 30 ? 404 : undefined,
+    }));
+    const report = fullReport(shapes);
+    const now = 1_780_000_000_000;
+    const single = await publish(seed.clone(), "audit_2", await cappedBody(report), now);
+    for (const driver of ["cursor", "arrays"] as const) {
+      const store = seed.clone();
+      const chunked = await publishChunked(store, "audit_2", report, now, { driver });
+      expect(chunked.coverage.carriedFindings).toBeGreaterThan(0);
+      expect(comparable(rescored(chunked))).toEqual(comparable(rescored(single)));
+      const open = await openUrls(store, "core/meta-description", "has-meta-description");
+      for (const i of range(0, 20)) expect(open.has(url(i))).toBe(false);
+      for (const i of range(20, 30)) expect(open.has(url(i))).toBe(true);
+      for (const i of range(40, 60).filter((i) => i % 3 === 0)) expect(open.has(url(i))).toBe(true);
+      expect(open.has(url(30))).toBe(false);
+    }
   });
 });
 
