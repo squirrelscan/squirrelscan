@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  CRAWL_CAPPED_SKIP_REASON,
   EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
   EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
   LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
@@ -121,6 +122,30 @@ describe("notCheckedRules / notCheckedLines", () => {
     };
     expect(notCheckedLines(report)).toEqual([
       `Not checked: Broken External Links. ${message}. Raise the limit with external_links.max_links, or audit more pages, to check them.`,
+    ]);
+  });
+
+  test("a crawl that stopped at its page cap leaves the inbound-link rules not checked (#1144)", () => {
+    const message = "Crawl stopped at its 100-page cap, so an inbound link may sit on a page not crawled";
+    const report = {
+      ruleResults: {
+        "links/orphan-pages": rule("links/orphan-pages", "Orphan Pages", "warning", [
+          {
+            name: "orphan-pages",
+            status: "skipped",
+            message,
+            skipReason: CRAWL_CAPPED_SKIP_REASON,
+          },
+        ]),
+      },
+    };
+    expect(notCheckedRules(report)).toEqual([
+      expect.objectContaining({
+        ruleId: "links/orphan-pages",
+        reason: CRAWL_CAPPED_SKIP_REASON,
+        message,
+        hint: expect.stringContaining("--max-pages"),
+      }),
     ]);
   });
 

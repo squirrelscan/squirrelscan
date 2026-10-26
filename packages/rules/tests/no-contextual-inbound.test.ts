@@ -12,7 +12,11 @@ import { noContextualInboundRule } from "../src/links/no-contextual-inbound";
 import { orphanPagesRule } from "../src/links/orphan-pages";
 import { weakInternalLinksRule } from "../src/links/weak-internal-links";
 import type { CheckResult, ParsedPage, Rule, RuleContext, RuleResult } from "../src/types";
-import type { LinkData } from "@squirrelscan/core-contracts";
+import {
+  CRAWL_CAPPED_SKIP_REASON,
+  NOT_CHECKED_SKIP_REASONS,
+  type LinkData,
+} from "@squirrelscan/core-contracts";
 
 const BASE = "https://example.com/";
 
@@ -205,9 +209,14 @@ describe("links/no-contextual-inbound — a capped crawl", () => {
     for (const rule of [noContextualInboundRule, orphanPagesRule, weakInternalLinksRule]) {
       const result = check(rule, capped(4, 4));
       expect(result.status).toBe("skipped");
-      expect(result.skipReason).toBe("Crawl capped before the frontier was exhausted");
+      expect(result.skipReason).toBe(CRAWL_CAPPED_SKIP_REASON);
       expect(result.items).toBeUndefined();
     }
+  });
+
+  test("the reason is a not-checked one, with the text published reports carry (#1144)", () => {
+    expect(CRAWL_CAPPED_SKIP_REASON).toBe("Crawl capped before the frontier was exhausted");
+    expect(NOT_CHECKED_SKIP_REASONS.has(CRAWL_CAPPED_SKIP_REASON)).toBe(true);
   });
 
   test("still warns when the crawl finished under its cap", () => {

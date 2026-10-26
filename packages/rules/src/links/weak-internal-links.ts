@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { CRAWL_CAPPED_SKIP_REASON } from "@squirrelscan/core-contracts";
 import { matchesExcludePattern } from "@squirrelscan/utils";
 import { getPathname, normalizeUrl } from "@squirrelscan/utils";
 
@@ -106,7 +107,7 @@ export const weakInternalLinksRule: Rule = {
         name: "weak-internal-links",
         status: "skipped",
         message: `Crawl stopped at its ${limits.maxPages}-page cap, so an inbound link may sit on a page not crawled`,
-        skipReason: "Crawl capped before the frontier was exhausted",
+        skipReason: CRAWL_CAPPED_SKIP_REASON,
       });
       return { checks };
     }

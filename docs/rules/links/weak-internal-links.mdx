@@ -14,7 +14,7 @@ It is the band just above an orphan. Nothing is broken, and the single link make
 The rule is site-wide and reads the same dofollow inbound counts as `links/orphan-pages`. The homepage is never flagged, and neither is the page the audit started from (the URL you gave and where its redirects landed) or any URL matching an exclusion pattern. It emits a single check named `weak-internal-links`:
 
 - Skipped when fewer than two pages were crawled. Message: `Insufficient pages for internal link analysis`.
-- Skipped when the crawl stopped at its page cap. Message: `Crawl stopped at its 10-page cap, so an inbound link may sit on a page not crawled`. A page the crawl did not reach may contain the second inbound link. Raise `max_pages` or use a deeper coverage profile to get a verdict.
+- Skipped when the crawl stopped at its page cap. Message: `Crawl stopped at its 10-page cap, so an inbound link may sit on a page not crawled`. A page the crawl did not reach may contain the second inbound link. Raise `max_pages` or use a deeper coverage profile to get a verdict. Every report shows the rule as **Not checked** with that reason, and a finding it reported on an earlier audit stays open.
 - Warn when any page has exactly one inbound internal link. Message: `12 page(s) have only 1 internal link`. Severity warning, weight 3.
 - Pass otherwise. Message: `All pages have sufficient internal link support`.
 
