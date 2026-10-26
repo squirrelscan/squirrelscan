@@ -80,6 +80,40 @@ Crawl-delay: 10
     expect(result.rules).toEqual([{ userAgent: "*", rules: [], crawlDelay: 10 }]);
   });
 
+  // #1145: only a real delay is stored. A negative one, or one past a double
+  // (`1e999` is Infinity, which a published report serializes as null), is
+  // ignored like an unparseable one, so a strict reader of the report never
+  // sees it.
+  it.each([["-1"], ["1e999"], ["-1e999"], ["Infinity"], ["NaN"], ["soon"]])(
+    "ignores a Crawl-delay of %s",
+    (delay) => {
+      const alone = parseRobotsTxt(
+        `User-agent: *\nCrawl-delay: ${delay}\n`,
+        "https://example.com/robots.txt",
+      );
+      expect(alone.rules).toEqual([]);
+      const withRules = parseRobotsTxt(
+        `User-agent: *\nCrawl-delay: ${delay}\nDisallow: /x\n`,
+        "https://example.com/robots.txt",
+      );
+      expect(withRules.rules).toEqual([
+        { userAgent: "*", rules: [{ type: "disallow", path: "/x" }], crawlDelay: undefined },
+      ]);
+    },
+  );
+
+  it.each([
+    ["0", 0],
+    ["2.5", 2.5],
+    ["10", 10],
+  ])("keeps a Crawl-delay of %s", (delay, expected) => {
+    const result = parseRobotsTxt(
+      `User-agent: *\nCrawl-delay: ${delay}\n`,
+      "https://example.com/robots.txt",
+    );
+    expect(result.rules).toEqual([{ userAgent: "*", rules: [], crawlDelay: expected }]);
+  });
+
   it("applies one group's directives to every stacked user agent", () => {
     const content = `
 User-agent: BingBot
