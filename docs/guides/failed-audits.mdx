@@ -312,6 +312,8 @@ An unchallenged request shows `HTTP/2 200`. A Cloudflare challenge shows a `403`
 2. Add a WAF rule that skips the challenge only for requests carrying that header with that exact value. [Firewall and WAF exceptions](/cloud/firewall) has the rule for Cloudflare, nginx and other WAFs. On Cloudflare, Bot Fight Mode cannot be skipped by any rule; the firewall page says what to do instead.
 3. Run the audit again.
 
+The header is sent only on audits of the website it is set on, at its own host (the address and its `www` or apex twin). If you audited a subdomain or another port, such as `staging.example.com` under the website `example.com`, the audit ran without the header: add that host as its own website and give it the header there. See [a website's headers belong to its own host](/cloud/firewall#headers-own-host).
+
 Avoid switching bot protection off for the whole site, and avoid allowlisting IP ranges: cloud audits leave from Cloudflare's shared addresses, so an IP rule opens your site to far more than squirrelscan. If your platform verifies crawlers with signed requests, [Web Bot Auth](/guides/web-bot-auth) is another way in.
 
 ### Access denied (403) \{#access-denied\}

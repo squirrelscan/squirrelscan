@@ -66,6 +66,10 @@ On a plain HTTP request that is sent with them, the headers are removed at the f
 
 Headers that are sent go to every host the audit fetches from on your site: the audited host, and any of its subdomains whose stylesheets, scripts, images or fonts the pages load. Hosts on other domains, such as a CDN or an analytics provider, never get them. A credential in a custom request header therefore reaches your subdomains too, but nothing off your domain. Give the audit a credential of its own, scoped as narrowly as the gateway allows.
 
+### A website's headers belong to its own host \{#headers-own-host\}
+
+A website's custom request headers, and the [authorised crawl](/dashboard/crawl-settings#authorised-crawls) they unlock, apply only to an audit whose target is the website's own host: the website's address, plus its `www` or apex twin. An audit started for any other host, another subdomain (for example `staging.example.com` under the website `example.com`) or another port runs without the headers and without the authorised profile. The audit still goes ahead, so a firewall that needs the header may now refuse it. To audit a staging host with a header, add it as its own website and give it its own headers.
+
 ### Accepted names and limits
 
 The header card accepts any valid HTTP header name, `Authorization` included. Nothing is reserved. A website can have up to 50 headers, each name up to 255 characters and each value up to 8,192 characters. A value may contain tabs but no other control characters. Values are stored as secrets and never shown in reports or logs. Setting any header also makes the crawl [authorised](/dashboard/crawl-settings#authorised-crawls), which raises its pace and stops `robots.txt` being applied.

@@ -178,6 +178,8 @@ The card accepts any valid header name, `Authorization` included, up to 50 heade
 
 The usual reason to add one is a firewall exception: [Firewall and WAF exceptions](/cloud/firewall) has the rules. A header is also how a cloud audit gets past an access gateway in front of a staging site, such as [Cloudflare Access](/cloud/firewall#cloudflare-access), [Vercel deployment protection](/cloud/firewall#vercel-deployment-protection) or [HTTP basic auth](/cloud/firewall#http-basic-auth). Every **Rendering** setting sends them, the cloud browser included (to the rendered page's own origin only). When an audit fails anyway, [failed audits](/guides/failed-audits#access-gateway) says what the crawler saw. A header also makes the crawl [authorised](#authorised-crawls).
 
+Headers belong to the website's own host. They go only with audits whose target is the website's address or its `www` or apex twin. An audit of another subdomain or another port, for example `staging.example.com` under the website `example.com`, runs without them and is not an [authorised crawl](#authorised-crawls). To audit that host with a header, add it as its own website with its own headers. See [a website's headers belong to its own host](/cloud/firewall#headers-own-host).
+
 ## Authorised crawls
 
 Configure a **custom request header** for this website and its cloud audits run as **authorised**. The header card shows the status, *Authorised crawl: on (custom header)*.
