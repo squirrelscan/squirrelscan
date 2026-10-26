@@ -24,6 +24,7 @@ How it works:
 
 ### Fixed
 
+- `-H "user-agent: ..."` (or a `User-Agent` in `[crawler] headers`) is now also the agent of the internal link check and the soft-404 confirmation, which send no other custom header. They used to send the crawl's random browser agent beside a crawl that sent yours. The reachability check, the cloaking probe and the AI agent access probe still use their own agents on purpose. See [crawler headers](https://docs.squirrelscan.com/configuration/crawler) (#1152).
 - `squirrel audit` with `-f json`, `xml`, `llm`, `markdown`, `text` or `html` sends its progress and log lines ("New crawl: ...", "Found N URLs in sitemap") to stderr, so stdout starts with the report and `squirrel audit <url> -f json | jq` works. The console format is unchanged.
 - `squirrel audit -f <unknown>` exits 1 with "Unknown format", like `squirrel report -f`, before crawling. Before, it ran the whole audit, printed no report and exited 0.
 

@@ -43,6 +43,7 @@ import { initRequestTool } from "@/tools/request";
 import { configureLogger, logger } from "@/utils/logger";
 import { checkReachability } from "@/utils/reachability";
 import { getHostname, isLoopbackHost, parseUserUrl } from "@/utils/url";
+import { customUserAgent } from "@squirrelscan/utils/headers";
 import { resolveStickyUserAgent } from "@/utils/user-agent";
 
 export type { CrawlerEvent } from "@/crawler/core/types";
@@ -250,8 +251,13 @@ export async function runCrawl(
     try {
       // Resolve user-agent: empty string = random browser UA, pinned per
       // project so re-runs serve the same markup (#875)
+      // A custom `User-Agent` header is the crawl's agent on every request that
+      // carries it, so it is also the agent of the probes that send no custom
+      // headers (#1152).
+      const configuredUserAgent =
+        config.crawler.user_agent || customUserAgent(config.crawler.headers);
       const { userAgent, source: uaSource } = await Effect.runPromise(
-        resolveStickyUserAgent(config.crawler.user_agent, storage, {
+        resolveStickyUserAgent(configuredUserAgent, storage, {
           freshUa: options.freshUa,
         })
       );

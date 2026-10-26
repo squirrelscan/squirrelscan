@@ -81,6 +81,24 @@ export function mergeHeaderRecords(
   return Object.fromEntries(merged.values());
 }
 
+/**
+ * The agent a custom `User-Agent` header sets (case-insensitive name, last one
+ * wins as in {@link mergeHeaderRecords}), or "" when none is set. A request that
+ * carries the custom headers sends it, so the crawl's effective agent is this
+ * value, not the sticky random one: probes that send no custom headers (the
+ * internal link check, the soft-404 confirmation) take the crawl's agent from
+ * here so they match the crawl (#1152).
+ */
+export function customUserAgent(
+  headers: Readonly<Record<string, string>> | null | undefined,
+): string {
+  const found = mergeHeaderRecords(headers);
+  for (const [name, value] of Object.entries(found)) {
+    if (name.toLowerCase() === "user-agent") return value.trim();
+  }
+  return "";
+}
+
 /** True if `value` contains only safe RFC 7230 field-value chars (no CR/LF/NUL/CTL). */
 export function isValidHeaderValue(value: string): boolean {
   return HEADER_VALUE_RE.test(value);

@@ -34,7 +34,7 @@ import {
   createFetchDocumentFetcher,
 } from "@squirrelscan/fetchers";
 import { createProbeBudget, selectDiscoveryProbes } from "@squirrelscan/rules";
-import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
+import { customUserAgent, mergeHeaderRecords } from "@squirrelscan/utils/headers";
 
 import type { RetentionOutcome } from "@/audit/retention";
 import type { PreflightBalance } from "@/lib/balance";
@@ -970,8 +970,13 @@ export async function runAudit(
       phaseTimer.enter("crawl");
       // Resolve user-agent: empty string = random browser UA, pinned per
       // project so re-runs serve the same markup (#875)
+      // A custom `User-Agent` header is the crawl's agent on every request that
+      // carries it, so it is also the agent of the probes that send no custom
+      // headers (#1152).
+      const configuredUserAgent =
+        mergedConfig.crawler.user_agent || customUserAgent(mergedConfig.crawler.headers);
       const { userAgent, source: uaSource } = await Effect.runPromise(
-        resolveStickyUserAgent(mergedConfig.crawler.user_agent, storage, {
+        resolveStickyUserAgent(configuredUserAgent, storage, {
           freshUa: options.freshUa,
         })
       );
