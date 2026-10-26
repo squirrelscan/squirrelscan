@@ -182,7 +182,10 @@ export function parseRobotsTxt(content: string, url: string): RobotsTxtData {
         if (currentUserAgents.length > 0) {
           collectingUserAgents = false;
           const delay = Number.parseFloat(value);
-          if (!Number.isNaN(delay)) {
+          // Only a real delay: a negative one, or one past a double (`1e999`
+          // parses to Infinity and serializes as null), is ignored like an
+          // unparseable one (#1145).
+          if (Number.isFinite(delay) && delay >= 0) {
             currentCrawlDelay = delay;
             hasGroupRecord = true;
           }
