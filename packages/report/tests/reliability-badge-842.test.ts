@@ -44,9 +44,9 @@ function report(rules: ReportRuleResult[]): AuditReport {
   } as unknown as AuditReport;
 }
 
-/** Every `group-label` pill as `title|text`. */
+/** Every `gtag` pill as `title|text`. */
 function badges(html: string): string[] {
-  return [...html.matchAll(/class="group-label" title="([^"]*)"[^>]*>([^<]*)<\/span>/g)].map(
+  return [...html.matchAll(/class="gtag" data-g="[^"]*" title="([^"]*)"[^>]*>([^<]*)<\/span>/g)].map(
     (m) => `${m[1]}|${m[2]}`,
   );
 }
