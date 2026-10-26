@@ -66,6 +66,7 @@ import type {
   SitemapUrlStatusData,
 } from "@/types";
 
+import { pinOwnHosts } from "@/crawl/pin-own-hosts";
 import { logger } from "@/utils/logger";
 
 // ============================================
@@ -475,6 +476,8 @@ export function runStreamingRules(
     pageSink?: PageResultSink;
     /** False → the O(pages × page bytes) result maps are never built (#2343). */
     retainPageResults?: boolean;
+    /** Vet and pin the site's own hosts in the end-of-crawl probes (repo#3430). */
+    pinOwnHosts?: boolean;
   }
 ): Effect.Effect<
   RuleExecutionResult & {
@@ -514,7 +517,10 @@ export function runRulesOnStorage(
     siteContext,
     config,
     assets,
-    scope
+    scope,
+    undefined,
+    // repo#3430: the end-of-crawl probes vet and pin the site's own hosts.
+    pinOwnHosts()
   );
 }
 

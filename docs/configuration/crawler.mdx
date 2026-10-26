@@ -909,13 +909,16 @@ resolved before the crawl begins, are checked too (see the next paragraph).
 
 **The site's own hostnames are checked too.** The CLI resolves the audited
 host, its `www` twin, and the domains in `[project] domains` with all their
-subdomains once per audit, and connects every request to them (pages, redirect
-hops, root files and the start URL's own redirects) to the address it checked.
-A name that resolves to a link-local or cloud metadata address is never
-requested: the page is recorded as failed with "Not requested". Private
-networks, `localhost` and mDNS `.local` names keep working; a `.local` name that
-answers only a scoped link-local IPv6 address cannot be connected to by address
-and is refused.
+subdomains, checks every answer, and connects to the address it checked: for
+pages, redirect hops, root files, the start URL's reachability check and its
+redirects, assets and the end-of-crawl probes. A name that resolves to a
+link-local or cloud metadata address is never requested: the page is recorded
+as failed with "Not requested", and an asset as refused. Private networks,
+`localhost` and mDNS `.local` names keep working; a `.local` name that answers
+only a scoped link-local IPv6 address cannot be connected to by address and is
+refused. Two rule probes still go out by name without that check: the `HEAD`
+request `security/http-to-https` sends to the site's `http://` address, and the
+GraphQL probes an active or aggressive probing intensity sends.
 
 Two cases send the site's own hostnames by name instead, without that check:
 an HTTP proxy set in the environment (`HTTP_PROXY` or `HTTPS_PROXY`), which

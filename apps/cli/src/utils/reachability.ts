@@ -2,9 +2,17 @@
 // Uses request tool with browser-like headers
 // Detects WAF/bot protection on target site
 
+import {
+  egressGuardedSend,
+  ownHostsPinned,
+  refusedWithoutLookup,
+  resolveHostAddresses,
+  type EgressPolicy,
+} from "@squirrelscan/utils/public-egress";
 import { decodedBody, fetchUndecoded } from "@squirrelscan/utils/response-body";
 import { Effect, Duration } from "effect";
 
+import { pinOwnHosts } from "@/crawl/pin-own-hosts";
 import { requestOnceScoped, RequestError } from "@/tools/request";
 import { logger } from "@/utils/logger";
 import { detectWaf, type WafProvider } from "@/utils/waf";
@@ -149,6 +157,30 @@ async function readBodySample(
   return text || undefined;
 }
 
+/** What the probe says when the site's host resolves to an address it never requests. */
+const EGRESS_REFUSED_REACHABILITY =
+  "Not requested: the host resolves to a link-local or cloud metadata address";
+
+/**
+ * The send for a pinned probe (squirrelscan/repo#3430): the start URL's host is
+ * resolved, refused when it answers a link-local or metadata address, and
+ * connected to by the address checked, the way the crawl will. Undefined when
+ * the site's own hosts are not pinned (opted out, or an environment proxy).
+ */
+function reachabilitySend(
+  url: string
+): ((url: string, init: RequestInit) => Promise<Response>) | undefined {
+  if (!ownHostsPinned({ pinOwnHosts: pinOwnHosts() })) return undefined;
+  const policy: EgressPolicy = {
+    allowPrivateNetwork: true,
+    resolve: resolveHostAddresses,
+  };
+  // An address the user named as the site is theirs to audit, as the crawl
+  // treats it: only where the site's DNS or redirects lead is guarded.
+  if (refusedWithoutLookup(url, policy)) return undefined;
+  return egressGuardedSend(fetchUndecoded, policy);
+}
+
 /**
  * Check if a URL is reachable
  * Uses browser-like headers for WAF compatibility
@@ -202,11 +234,18 @@ async function attemptReachability(url: string): Promise<ReachabilityResult> {
     try {
       // Undecoded (#2717): Bun inflates a Content-Encoding body in full even
       // when it is cancelled unread, as this one is.
-      const response = await fetchUndecoded(url, {
-        method: "GET",
-        redirect: "follow",
-        signal: controller.signal,
-      });
+      const send = reachabilitySend(url);
+      const response = send
+        ? await send(url, {
+            method: "GET",
+            redirect: "manual",
+            signal: controller.signal,
+          })
+        : await fetchUndecoded(url, {
+            method: "GET",
+            redirect: "follow",
+            signal: controller.signal,
+          });
       await response.body?.cancel().catch(() => {});
       return { reachable: true, statusCode: response.status };
     } catch (error) {
@@ -259,7 +298,8 @@ async function attemptReachability(url: string): Promise<ReachabilityResult> {
           };
         },
         // Shorter than the crawl timeout
-        REACHABILITY_TIMEOUT_MS
+        REACHABILITY_TIMEOUT_MS,
+        reachabilitySend(url)
       ).pipe(
         Effect.timeoutFail({
           duration: Duration.millis(REACHABILITY_TIMEOUT_MS),
@@ -284,7 +324,10 @@ async function attemptReachability(url: string): Promise<ReachabilityResult> {
     if (error instanceof RequestError) {
       return {
         reachable: false,
-        error: error.message,
+        // Every EgressRefusedError message starts with "refused" (nothing was sent).
+        error: /^refused\b/.test(error.message)
+          ? EGRESS_REFUSED_REACHABILITY
+          : error.message,
       };
     }
 

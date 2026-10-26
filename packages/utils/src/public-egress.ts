@@ -113,6 +113,36 @@ export interface EgressPolicy {
   trustTarget?: (url: URL) => boolean;
 }
 
+/**
+ * Whether an HTTP proxy from the environment carries this process's requests
+ * (the runtime's fetch honours these variables). The proxy then resolves and
+ * connects, so a request cannot be pinned to an address it vetted: a pinned
+ * plain-http request would reach the proxy with the address in place of the
+ * name (repo#3430).
+ */
+export function proxiedByEnvironment(): boolean {
+  return ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"].some(
+    (name) => (process.env[name] ?? "").trim() !== "",
+  );
+}
+
+/**
+ * Whether the audited site's own hosts are vetted and pinned like any other
+ * (repo#3430): asked for (`pinOwnHosts`, the CLI) and possible, which it is not
+ * where something else resolves the name, a transport that pins
+ * (`egressPinnedByTransport`, the hosted container) or an environment proxy.
+ */
+export function ownHostsPinned(options: {
+  pinOwnHosts?: boolean;
+  egressPinnedByTransport?: boolean;
+}): boolean {
+  return (
+    options.pinOwnHosts === true &&
+    options.egressPinnedByTransport !== true &&
+    !proxiedByEnvironment()
+  );
+}
+
 /** Thrown before a request the egress policy refuses. Nothing was sent. */
 export class EgressRefusedError extends Error {
   override name = "EgressRefusedError";

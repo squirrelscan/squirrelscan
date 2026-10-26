@@ -166,6 +166,7 @@ import { isNonPublicHostname } from "@squirrelscan/utils/non-public-host";
 import {
   type EgressPolicy,
   memoizeResolveHost,
+  ownHostsPinned,
   refusedWithoutLookup,
   resolveHostAddresses,
 } from "@squirrelscan/utils/public-egress";
@@ -554,6 +555,17 @@ export interface ResourceCheckOverrides {
    * name. Defaults to false, the CLI, where the engine pins them itself.
    */
   egressPinnedByTransport?: boolean;
+  /**
+   * Vet and pin the site's own hosts too (repo#3430): the assets and probes
+   * on the audited host, its www twin and `project.domains` are checked and
+   * connected to by address like every other host, so a site that points one
+   * of them at a metadata address in DNS is never requested there. The CLI
+   * sets it; it does nothing where the transport pins or an environment proxy
+   * resolves the names (`ownHostsPinned`).
+   */
+  pinOwnHosts?: boolean;
+  /** The resolver behind the asset phase's egress checks; the system's when unset (a test seam). */
+  resolveHost?: (hostname: string) => Promise<string[]>;
   /**
    * No request to any host outside the audited site and its subdomains
    * (`squirrel audit --offline`, pub#807): the third-party asset status checks
@@ -1063,7 +1075,7 @@ export function fetchAssetsFromOccurrences(
     // as it sends them; every other hop, subdomains included, is vetted
     // (private networks allowed: a LAN or dev-server audit) and connects to
     // the address it was vetted on.
-    const resolveOnce = memoizeResolveHost(resolveHostAddresses);
+    const resolveOnce = memoizeResolveHost(overrides?.resolveHost ?? resolveHostAddresses);
     const ownSiteHost = getHostname(baseUrl).toLowerCase();
     // The crawl's own host scope: the base host, its www/apex pair and
     // `project.domains`. These are requested as the crawl requests them.
@@ -1089,7 +1101,10 @@ export function fetchAssetsFromOccurrences(
       allowPrivateNetwork: true,
       resolve: resolveOnce,
       pin: overrides?.egressPinnedByTransport !== true,
-      trustTarget: (url) => inCrawlHostScope(url.href),
+      // repo#3430: with the own hosts pinned, they are vetted like the rest.
+      ...(ownHostsPinned(overrides ?? {})
+        ? {}
+        : { trustTarget: (url: URL) => inCrawlHostScope(url.href) }),
     };
 
     // The custom headers go to the audited origin and the hosts the user named,
@@ -1744,6 +1759,8 @@ export function runRulesOnStorage(
   // passes them so the (sync CPU) loop yields to the event loop and reports
   // progress; the CLI omits them (byte-identical local behavior).
   pageLoopHooks?: PageRuleLoopHooks,
+  // repo#3430: the end-of-crawl probes vet and pin the site's own hosts (the CLI).
+  pinOwnHosts?: boolean,
 ): Effect.Effect<RuleExecutionResult, never, never> {
   return Effect.gen(function* () {
     const rulesSpan = logger.traceStart("runRulesOnStorage");
@@ -2087,7 +2104,7 @@ export function runRulesOnStorage(
           defaultUserAgent: config.crawler?.user_agent || CHROME_USER_AGENT,
           customHeaders: config.crawler?.headers,
           headerScope: headerScopeOf(crawl, config),
-          egress: probeEgress(crawl?.baseUrl ?? "", config),
+          egress: probeEgress(crawl?.baseUrl ?? "", config, undefined, pinOwnHosts),
         },
       ),
     );
@@ -2119,7 +2136,7 @@ export function runRulesOnStorage(
           userAgent: crawl?.config?.userAgent || config.crawler?.user_agent || CHROME_USER_AGENT,
           customHeaders: config.crawler?.headers,
           headerScope: headerScopeOf(crawl, config),
-          egress: probeEgress(crawl?.baseUrl ?? "", config),
+          egress: probeEgress(crawl?.baseUrl ?? "", config, undefined, pinOwnHosts),
           // Honor the crawl's per-host politeness delay between same-host confirms.
           perHostDelayMs: config.crawler?.per_host_delay_ms,
         },
@@ -2721,6 +2738,7 @@ function buildStreamingSiteData(
   totalPageCount: number,
   fetchedTargets: ParsedUniverse["fetchedTargets"],
   egressPinnedByTransport?: boolean,
+  pinOwnHosts?: boolean,
 ): Effect.Effect<
   {
     siteDataForPageRules: SiteData;
@@ -2899,7 +2917,7 @@ function buildStreamingSiteData(
           defaultUserAgent: config.crawler?.user_agent || CHROME_USER_AGENT,
           customHeaders: config.crawler?.headers,
           headerScope: headerScopeOf(crawl, config),
-          egress: probeEgress(crawl?.baseUrl ?? "", config, egressPinnedByTransport),
+          egress: probeEgress(crawl?.baseUrl ?? "", config, egressPinnedByTransport, pinOwnHosts),
         },
       ),
     );
@@ -2922,7 +2940,7 @@ function buildStreamingSiteData(
           userAgent: crawl?.config?.userAgent || config.crawler?.user_agent || CHROME_USER_AGENT,
           customHeaders: config.crawler?.headers,
           headerScope: headerScopeOf(crawl, config),
-          egress: probeEgress(crawl?.baseUrl ?? "", config, egressPinnedByTransport),
+          egress: probeEgress(crawl?.baseUrl ?? "", config, egressPinnedByTransport, pinOwnHosts),
           perHostDelayMs: config.crawler?.per_host_delay_ms,
         },
       ).catch((): undefined => undefined),
@@ -3288,6 +3306,11 @@ export function runStreamingRules(
      */
     egressPinnedByTransport?: boolean;
     /**
+     * Vet and pin the site's own hosts in the soft-404 and cloaking probes too
+     * (repo#3430). Same meaning as `ResourceCheckOverrides.pinOwnHosts`.
+     */
+    pinOwnHosts?: boolean;
+    /**
      * Keep the O(pages × page bytes) result maps. Default TRUE (today's
      * behaviour, and what the cloud path runs on).
      *
@@ -3341,6 +3364,7 @@ export function runStreamingRules(
         totalPageCount,
         fetchedTargets,
         opts?.egressPinnedByTransport,
+        opts?.pinOwnHosts,
       ),
     );
 
@@ -3717,11 +3741,17 @@ function probeEgress(
   baseUrl: string,
   config: Config,
   egressPinnedByTransport?: boolean,
+  pinOwnHosts?: boolean,
 ): EgressPolicy {
-  return {
+  const policy: EgressPolicy = {
     allowPrivateNetwork: true,
     resolve: memoizeResolveHost(resolveHostAddresses),
     pin: egressPinnedByTransport !== true,
+  };
+  // repo#3430: with the own hosts pinned, they are vetted like the rest.
+  if (ownHostsPinned({ pinOwnHosts, egressPinnedByTransport })) return policy;
+  return {
+    ...policy,
     trustTarget: (url) => {
       if (!baseUrl) return false;
       try {

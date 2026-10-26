@@ -334,9 +334,9 @@ export function createFetchDocumentFetcher(): DocumentFetcher {
             // Body-time decode failure (large/streamed bodies) — recover the raw body, else keep an empty page.
             if (!isDecompressionError(error)) throw error;
             try {
-              // The same address as the request it repeats (repo#2830): a
-              // fresh lookup here could answer differently.
-              const raw = await guardedBy(fetchRaw, i > 0 ? req.egress : undefined)(
+              // The same address as the request it repeats (repo#2830,
+              // repo#3430): a fresh lookup here could answer differently.
+              const raw = await guardedBy(fetchRaw, req.egress)(
                 currentUrl,
                 requestInit,
               );

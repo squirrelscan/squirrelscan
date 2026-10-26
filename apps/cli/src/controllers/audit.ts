@@ -107,7 +107,7 @@ import {
   ErrorCodes,
 } from "@/controllers/types";
 import { createHybridDocumentFetcher } from "@/crawl/hybrid-fetcher";
-import { pinOwnHosts } from "@/crawl/pin-own-hosts";
+import { hostPinningNotice, pinOwnHosts } from "@/crawl/pin-own-hosts";
 import { resolveSeedRedirect } from "@/crawler/frontier";
 import { createStorage, domainToProjectName } from "@/crawler/storage";
 import { retainGlobalContentStore } from "@/crawler/storage/content-store";
@@ -1058,6 +1058,8 @@ export async function runAudit(
         mergedConfig.crawler.incremental
       );
 
+      const pinningNotice = hostPinningNotice();
+      if (pinningNotice) logger.info(pinningNotice);
       const crawlerConfig = {
         maxPages: mergedConfig.crawler.max_pages,
         maxDepth: mergedConfig.crawler.max_depth,
@@ -1557,6 +1559,9 @@ export async function runAudit(
             // --offline: nothing goes to a host outside the audited site, the
             // third-party asset checks included (pub#807).
             ...(options.offline ? { ownSiteOnly: true } : {}),
+            // repo#3430: the asset and end-of-crawl probes vet and pin the
+            // site's own hosts as the crawl does.
+            pinOwnHosts: pinOwnHosts(),
           },
           ...(externalLinksEnabled
             ? {
@@ -1887,6 +1892,8 @@ export async function runAudit(
           onPhase: streamPhaseMemoryLogger(),
           pageSink,
           retainPageResults: false,
+          // repo#3430: the end-of-crawl probes vet and pin the site's own hosts.
+          pinOwnHosts: pinOwnHosts(),
           ...(ruleCacheStore
             ? {
                 ruleCache: {

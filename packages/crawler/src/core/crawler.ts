@@ -33,6 +33,7 @@ import {
 import {
   egressGuardedSend,
   memoizeResolveHost,
+  ownHostsPinned,
   refusedWithoutLookup,
   resolveHostAddresses,
   type EgressPolicy,
@@ -218,18 +219,6 @@ function entryRetryFailure(
 function failureHostOf(url: string): string | undefined {
   const host = urlHostKey(url);
   return host === "unknown" ? undefined : host;
-}
-
-/**
- * Whether an HTTP proxy from the environment carries this process's requests
- * (the runtime's fetch honours these variables). The proxy then resolves and
- * connects, so the crawl cannot pin its own hosts: a pinned plain-http request
- * would reach the proxy with the address in place of the name (repo#3430).
- */
-function proxiedByEnvironment(): boolean {
-  return ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"].some(
-    (name) => (process.env[name] ?? "").trim() !== "",
-  );
 }
 
 /**
@@ -531,10 +520,7 @@ export function createCrawler(
     // sending them by name would request it. One lookup per host per crawl, so
     // a rebinding answer later cannot move the connection either.
     const resolveOnce = memoizeResolveHost(config.resolveHost ?? resolveHostAddresses);
-    const pinOwnHosts =
-      config.pinOwnHosts === true &&
-      config.egressPinnedByTransport !== true &&
-      !proxiedByEnvironment();
+    const pinOwnHosts = ownHostsPinned(config);
     const egressFor = (base: string): EgressPolicy | undefined => {
       const baseHost = getHostname(base).toLowerCase();
       const policy: EgressPolicy = {

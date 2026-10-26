@@ -295,14 +295,18 @@ export const NEVER_CONNECTED_STATUS = 0;
  * A page the crawl's egress policy refused before sending anything (repo#3430):
  * its host is, or resolves to, a link-local or cloud metadata address.
  */
-function egressRefusal(url: string, error: EgressRefusedError): CrawlError {
+function egressRefusal(url: string, _error: EgressRefusedError): CrawlError {
+  // Short enough for a failure reason's 120 characters, and says why.
   return CrawlError.network(
     url,
-    `Not requested: the host is or resolves to a link-local or cloud metadata address (${error.message})`,
+    "Not requested: the host resolves to a link-local or cloud metadata address",
     undefined,
-    "EGRESS_REFUSED",
+    EGRESS_REFUSED,
   );
 }
+
+/** `CrawlError.errorCode` of a request the egress policy refused before sending. */
+export const EGRESS_REFUSED = "EGRESS_REFUSED";
 
 /**
  * Detect whether a thrown fetch error / status code indicates a TLS,
@@ -363,6 +367,8 @@ const defaultRetryPolicy: RetryPolicy = {
 export { isDecompressionError };
 
 function isRetryable(error: CrawlError): boolean {
+  // An egress refusal (repo#3430) is a decision, not a failure: a retry refuses again.
+  if (error.errorCode === EGRESS_REFUSED) return false;
   return error.type === "timeout" || error.type === "network" || error.type === "tls";
 }
 
