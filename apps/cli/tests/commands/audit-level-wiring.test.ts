@@ -365,7 +365,7 @@ describe("squirrel audit --level", () => {
     await runAudit([], '[crawler]\ncoverage = "deep"\n');
     const text = output.join("\n");
     expect(text).toContain("Failed to load config file");
-    expect(text).toContain("'quick' | 'surface' | 'full', received 'deep'");
+    expect(text).toContain('expected one of "quick"|"surface"|"full"');
     expect(runs).toEqual([]);
   });
 
