@@ -9,8 +9,8 @@ runtime dependency closure of `apps/cli`.
 | Package | License | Source |
 | --- | --- | --- |
 | `@cfworker/json-schema@4.1.1` | MIT | [source](https://github.com/cfworker/cfworker) |
-| `@modelcontextprotocol/core@2.3.1` | Apache-2.0 | [source](https://github.com/modelcontextprotocol/typescript-sdk) |
-| `@modelcontextprotocol/server@2.3.1` | Apache-2.0 | [source](https://github.com/modelcontextprotocol/typescript-sdk) |
+| `@modelcontextprotocol/core@2.4.0` | Apache-2.0 | [source](https://github.com/modelcontextprotocol/typescript-sdk) |
+| `@modelcontextprotocol/server@2.4.0` | Apache-2.0 | [source](https://github.com/modelcontextprotocol/typescript-sdk) |
 | `@nodable/entities@3.0.0` | MIT | [source](https://github.com/nodable/val-parsers) |
 | `@sinclair/typebox@0.34.52` | MIT | [source](https://github.com/sinclairzx81/sinclair-typebox) |
 | `@standard-schema/spec@1.1.0` | MIT | [source](https://github.com/standard-schema/standard-schema) |
@@ -40,7 +40,7 @@ runtime dependency closure of `apps/cli`.
 | `entities@8.0.0` | BSD-2-Clause | [source](https://github.com/fb55/entities) |
 | `fast-check@3.23.2` | MIT | [source](https://github.com/dubzzz/fast-check) |
 | `fast-deep-equal@3.1.3` | MIT | [source](https://github.com/epoberezkin/fast-deep-equal) |
-| `fast-uri@3.1.0` | BSD-3-Clause | [source](https://github.com/fastify/fast-uri) |
+| `fast-uri@3.1.8` | BSD-3-Clause | [source](https://github.com/fastify/fast-uri) |
 | `fast-xml-builder@1.3.0` | MIT | [source](https://github.com/NaturalIntelligence/fast-xml-builder) |
 | `fast-xml-parser@5.10.1` | MIT | [source](https://github.com/NaturalIntelligence/fast-xml-parser) |
 | `gradient-string@3.0.0` | MIT | [source](https://github.com/bokub/gradient-string) |
@@ -185,43 +185,6 @@ Packages: `html-escaper@3.0.3`
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
     THE SOFTWARE.
-
-### LICENSE (185ef4f37774)
-
-Packages: `fast-uri@3.1.0`
-
-    Copyright (c) 2011-2021, Gary Court until https://github.com/garycourt/uri-js/commit/a1acf730b4bba3f1097c9f52e7d9d3aba8cdcaae
-    Copyright (c) 2021-present The Fastify team
-    All rights reserved.
-
-    The Fastify team members are listed at https://github.com/fastify/fastify#team.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are met:
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in the
-          documentation and/or other materials provided with the distribution.
-        * The names of any contributors may not be used to endorse or promote
-          products derived from this software without specific prior written
-          permission.
-
-    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-    ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS AND CONTRIBUTORS BE LIABLE FOR ANY
-    DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-    LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-    ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-                                      *   *   *
-
-    The complete list of contributors can be found at:
-    - https://github.com/garycourt/uri-js/graphs/contributors
 
 ### LICENSE (186fa9e312ae)
 
@@ -1047,6 +1010,41 @@ Packages: `fast-deep-equal@3.1.3`, `json-schema-traverse@1.0.0`
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
 
+### LICENSE (b010b0dfdfdb)
+
+Packages: `fast-uri@3.1.8`
+
+    Copyright (c) 2011-2021, Gary Court until https://github.com/garycourt/uri-js/commit/a1acf730b4bba3f1097c9f52e7d9d3aba8cdcaae
+    Copyright (c) 2021-present The Fastify team <https://github.com/fastify/fastify#team>
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+        * Redistributions of source code must retain the above copyright
+          notice, this list of conditions and the following disclaimer.
+        * Redistributions in binary form must reproduce the above copyright
+          notice, this list of conditions and the following disclaimer in the
+          documentation and/or other materials provided with the distribution.
+        * The names of any contributors may not be used to endorse or promote
+          products derived from this software without specific prior written
+          permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+    ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+    DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS AND CONTRIBUTORS BE LIABLE FOR ANY
+    DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+    LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+    ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+                                      *   *   *
+
+    The complete list of contributors can be found at:
+    - https://github.com/garycourt/uri-js/graphs/contributors
+
 ### LICENSE (b0905ba7fbb5)
 
 Packages: `user-agents@1.1.675`
@@ -1342,7 +1340,7 @@ Packages: `ajv@8.18.0`
 
 ### LICENSE (f5854c00454b)
 
-Packages: `@modelcontextprotocol/core@2.3.1`, `@modelcontextprotocol/server@2.3.1`
+Packages: `@modelcontextprotocol/core@2.4.0`, `@modelcontextprotocol/server@2.4.0`
 
     The MCP project is undergoing a licensing transition from the MIT License to the Apache License, Version 2.0 ("Apache-2.0"). All new code and specification contributions to the project are licensed under Apache-2.0. Documentation contributions (excluding specifications) are licensed under CC-BY-4.0.
 
