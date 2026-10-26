@@ -188,6 +188,29 @@ pages**, so re-auditing a subset never inflates the score by hiding the issues o
 the pages you skipped. Reports show a coverage line ("audited N of M known
 pages") and tag carried and unrendered findings.
 
+What the coverage counts mean:
+
+- **audited** is the pages this run crawled, less the ones that came back 404 or
+  410.
+- **known** is every page the site's store holds an active page record for: the
+  pages any earlier run crawled and that have not since been removed, plus this
+  run's, plus the URLs this run found but never fetched because the host was
+  rate limiting it. It is never lower than **audited**.
+- **carried** is the findings a previous run observed on pages this run did not
+  crawl. They are keyed by the page's URL, not by the page record, so a carried
+  finding does not by itself prove the page is counted in **known**. A page
+  whose record is missing from the store can carry findings while **known**
+  equals **audited**. That is a gap in the store, not a statement that the
+  finding is gone: the finding
+  stays in the score and the report until the page is crawled again or comes
+  back 404 or 410.
+
+Carried findings do not expire on a timer: they last until you re-crawl the page
+(the fresh result replaces them) or it is removed. If a capped run rotates the
+pages it audits, the carried findings of the pages it left out stay in the score
+and show their last-seen time, so a stale one is visible rather than silently
+dropped.
+
 ```toml
 smart_audits = true
 ```

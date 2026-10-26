@@ -31,6 +31,11 @@ How it works:
 
 - **A failed audit whose start URL redirects to another site says what to run next.** The terminal prints `Audit the destination instead: squirrel audit <origin>` under the failure, and the `llm` format offers the same command for the user to confirm instead of retrying the URL that redirects. When the destination is a sign-in host (Cloudflare Access, Okta, `accounts.shopify.com` and the rest of the documented list), it says the site needs authentication and links the guide, with no command. Only the destination's origin is offered, never the redirect's path or query. See [redirected to another site](https://docs.squirrelscan.com/guides/failed-audits#offsite-redirect).
 
+### Docs
+
+- **The docs say what the smart-audit coverage counts mean.** "Audited", "known" and "carried" are defined on the [configuration page](https://docs.squirrelscan.com/configuration#smart-audits): known pages are the ones with an active page record, carried findings are keyed by URL and do not expire until the page is re-crawled or removed, so a report can carry findings from a page whose record is missing from the store while known equals audited (#1031).
+
+
 ## v0.0.136 (2026-10-27)
 
 The CLI now checks the audited site's own hostnames before it connects, so a name that resolves to a cloud metadata or link-local address is never requested. Set SQUIRREL_NO_HOST_PINNING to turn the check off on a network where connecting by address breaks routing.
