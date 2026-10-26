@@ -91,7 +91,7 @@ To keep invites from being used to send unwanted mail, they are limited:
 - 50 a day from one organization,
 - 3 a day to one mailbox, across all organizations.
 
-An invite over one of these limits is not created. The API answers `429` with the code `invite_rate_limited`, and the Team page says to try again later. The limits count one mailbox however it is spelled: case, a `+tag` and, for Gmail, dots make no difference.
+An invite over one of these limits is not created. The API answers `429` with the code `invite_rate_limited`, and the Team page says to try again later. The limits count one mailbox however it is spelled: case makes no difference, nor does a `+tag` at providers that treat it as the same mailbox (Gmail, Outlook, iCloud, Fastmail and Proton among them), nor dots in a Gmail address.
 
 One organization also emails one address at most once a day. An invite sent again within 24 hours, for example after you revoke one to change its role, is created but not emailed, and the Team page offers its link to copy instead.
 
