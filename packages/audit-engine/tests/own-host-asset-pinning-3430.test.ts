@@ -123,7 +123,9 @@ describe("the asset phase and the site's own hosts (repo#3430)", () => {
     expect(css.get(`http://www.site.test:${server.port}/twin.css`)?.error).toBe(
       ASSET_FETCH_REFUSED_ERROR,
     );
-    const script = assets.scripts.find((s) => s.url.startsWith("http://cdn.site.test"));
+    const script = assets.scripts.find(
+      (s) => s.url === `http://cdn.site.test:${server.port}/app.js`,
+    );
     expect(script?.error).toBe(ASSET_FETCH_REFUSED_ERROR);
 
     expect(
