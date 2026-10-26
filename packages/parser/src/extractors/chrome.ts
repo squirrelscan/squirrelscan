@@ -46,7 +46,9 @@ export function isInSiteChrome(element: Element): boolean {
  */
 export function createSiteChromeTest(): (element: Element) => boolean {
   // The answer for an element, itself included, as isInSiteChrome gives it.
-  const known = new Map<Element, boolean>();
+  // Weak: the memo never keeps a page's DOM alive, even if something (a stale
+  // conservative stack slot, #2343) still points at it after the page is done.
+  const known = new WeakMap<Element, boolean>();
   return (element) => {
     const passed: Element[] = [];
     let answer = false;
