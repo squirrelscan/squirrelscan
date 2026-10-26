@@ -31,12 +31,13 @@ import {
   readBodyCapped,
 } from "@squirrelscan/utils/response-body";
 import {
+  egressGuardedSend,
   memoizeResolveHost,
   refusedWithoutLookup,
   resolveHostAddresses,
   type EgressPolicy,
 } from "@squirrelscan/utils/public-egress";
-import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
+import { isHttpOrHttpsUrl, safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 import { isCloudflareEmailProtectionUrl } from "@squirrelscan/utils/cloudflare-email";
 import { getHostname, urlHostKey } from "@squirrelscan/utils/url";
 
@@ -217,6 +218,18 @@ function entryRetryFailure(
 function failureHostOf(url: string): string | undefined {
   const host = urlHostKey(url);
   return host === "unknown" ? undefined : host;
+}
+
+/**
+ * Whether an HTTP proxy from the environment carries this process's requests
+ * (the runtime's fetch honours these variables). The proxy then resolves and
+ * connects, so the crawl cannot pin its own hosts: a pinned plain-http request
+ * would reach the proxy with the address in place of the name (repo#3430).
+ */
+function proxiedByEnvironment(): boolean {
+  return ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"].some(
+    (name) => (process.env[name] ?? "").trim() !== "",
+  );
 }
 
 /**
@@ -511,28 +524,40 @@ export function createCrawler(
     // refused, never sent, and the rest connect to the address they were
     // vetted on unless the transport pins. None when the user named such an
     // address as the site: the guard is for where the site sends the crawl.
-    const resolveOnce = memoizeResolveHost(resolveHostAddresses);
+    //
+    // repo#3430: with `pinOwnHosts` (the CLI), the crawl's own hosts are vetted
+    // and pinned the same way, every page fetch included: a site that controls
+    // its DNS can point `www.` or a project domain at the metadata service, and
+    // sending them by name would request it. One lookup per host per crawl, so
+    // a rebinding answer later cannot move the connection either.
+    const resolveOnce = memoizeResolveHost(config.resolveHost ?? resolveHostAddresses);
+    const pinOwnHosts =
+      config.pinOwnHosts === true &&
+      config.egressPinnedByTransport !== true &&
+      !proxiedByEnvironment();
     const egressFor = (base: string): EgressPolicy | undefined => {
       const baseHost = getHostname(base).toLowerCase();
       const policy: EgressPolicy = {
         allowPrivateNetwork: true,
         resolve: resolveOnce,
         pin: config.egressPinnedByTransport !== true,
-        // The audited host on any port too: its name is the user's, and
-        // `allowedDomains` alone (a hard allowlist) may not list it.
-        trustTarget: (url) => {
-          if (url.hostname.toLowerCase() === baseHost) return true;
-          try {
-            return isInScope(url.href, {
-              baseUrl: base,
-              include: [],
-              exclude: [],
-              allowedDomains: config.allowedDomains,
-            }).allowed;
-          } catch {
-            return false;
-          }
-        },
+      };
+      if (pinOwnHosts) return refusedWithoutLookup(base, policy) ? undefined : policy;
+      // Otherwise the crawl's own hosts go out by name, unvetted: the audited
+      // host on any port too, since its name is the user's and
+      // `allowedDomains` alone (a hard allowlist) may not list it.
+      policy.trustTarget = (url) => {
+        if (url.hostname.toLowerCase() === baseHost) return true;
+        try {
+          return isInScope(url.href, {
+            baseUrl: base,
+            include: [],
+            exclude: [],
+            allowedDomains: config.allowedDomains,
+          }).allowed;
+        } catch {
+          return false;
+        }
       };
       return refusedWithoutLookup(base, policy) ? undefined : policy;
     };
@@ -2447,6 +2472,14 @@ export function createCrawler(
           );
           let currentUrl = targetUrl;
           const visited = new Set<string>();
+          // repo#3430: with the crawl's own hosts pinned, the seed probe goes
+          // out through the same guard, hop by hop (manual redirects): a seed
+          // name, or a redirect, that resolves to a link-local or metadata
+          // address is never requested. Its final URL is the logical one the
+          // chain reached, never the pinned address it connected to.
+          const seedEgress = pinOwnHosts ? egressFor(targetUrl) : undefined;
+          const seedSend = seedEgress ? egressGuardedSend(fetchUndecoded, seedEgress) : undefined;
+          let guardedFinalUrl: string | undefined;
 
           for (let i = 0; i < MAX_REDIRECTS; i++) {
             const remainingMs = deadline - Date.now();
@@ -2463,34 +2496,48 @@ export function createCrawler(
             visited.add(currentUrl);
 
             const hopUrl = currentUrl;
+            guardedFinalUrl = undefined;
             const redirectTo = await withRequestDeadline(
               Math.min(hopTimeoutMs, remainingMs),
               // Undecoded (#2717): `redirect: "follow"` carries it to every
               // hop, and the capped read below decodes within its cap.
               (signal) =>
-                fetchUndecoded(hopUrl, {
-                  method: "GET",
-                  signal,
-                  redirect: "follow",
-                  // Identify as the crawl does (squirrelscan/repo#1899). This was
-                  // the only request in the whole crawl going out under the
-                  // runtime's default agent, and origins behind a WAF refuse
-                  // that agent — with a 403 that carries no `Location`, which
-                  // this loop then reads as "the seed does not redirect". The
-                  // base gets pinned to the seed, every `www.` link goes
-                  // cross_domain, and the audit is one page.
-                  //
-                  // The crawl's own `config.headers` deliberately do NOT ride
-                  // along: `redirect: "follow"` hands them to whatever origin
-                  // the chain lands on, and a custom header may be a credential
-                  // (#1395). The agent is not a secret; the rest are.
-                  //
-                  // Only when there is one to send. A header object built from
-                  // an absent value does not omit the header, it sends the
-                  // string "undefined", and an empty one asks the origin to
-                  // treat the request as agentless — the very thing being fixed.
-                  ...(config.userAgent ? { headers: { "User-Agent": config.userAgent } } : {}),
-                }),
+                seedSend
+                  ? safeRedirectFetch(
+                      hopUrl,
+                      {
+                        method: "GET",
+                        signal,
+                        ...(config.userAgent ? { headers: { "User-Agent": config.userAgent } } : {}),
+                      },
+                      seedSend,
+                    ).then(({ response, finalUrl }) => {
+                      guardedFinalUrl = finalUrl;
+                      return response;
+                    })
+                  : fetchUndecoded(hopUrl, {
+                      method: "GET",
+                      signal,
+                      redirect: "follow",
+                      // Identify as the crawl does (squirrelscan/repo#1899). This was
+                      // the only request in the whole crawl going out under the
+                      // runtime's default agent, and origins behind a WAF refuse
+                      // that agent — with a 403 that carries no `Location`, which
+                      // this loop then reads as "the seed does not redirect". The
+                      // base gets pinned to the seed, every `www.` link goes
+                      // cross_domain, and the audit is one page.
+                      //
+                      // The crawl's own `config.headers` deliberately do NOT ride
+                      // along: `redirect: "follow"` hands them to whatever origin
+                      // the chain lands on, and a custom header may be a credential
+                      // (#1395). The agent is not a secret; the rest are.
+                      //
+                      // Only when there is one to send. A header object built from
+                      // an absent value does not omit the header, it sends the
+                      // string "undefined", and an empty one asks the origin to
+                      // treat the request as agentless — the very thing being fixed.
+                      ...(config.userAgent ? { headers: { "User-Agent": config.userAgent } } : {}),
+                    }),
               // The deadline stays armed for the whole callback, so the body
               // read below is bounded too — before #1699 the timer was cleared
               // as soon as the headers landed and a stalled body hung here
@@ -2500,7 +2547,7 @@ export function createCrawler(
                 // BEFORE the body read, which is the step that can still time
                 // out. response.url is post-redirect; the fallback covers
                 // runtimes and mocks that leave it empty.
-                const served = response.url || hopUrl;
+                const served = guardedFinalUrl ?? (response.url || hopUrl);
                 settledUrl = served;
 
                 // A refusal is not an answer (squirrelscan/repo#1899). A 403 or

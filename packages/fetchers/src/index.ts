@@ -266,13 +266,12 @@ export function createFetchDocumentFetcher(): DocumentFetcher {
             redirect: "manual",
             signal,
           };
-          // A redirect hop goes out vetted (and pinned, outside the hosted
-          // proxy) by the policy that let it through below (repo#2830).
-          const response = await fetchTolerant(
-            currentUrl,
-            requestInit,
-            i > 0 ? req.egress : undefined,
-          );
+          // Every hop goes out through the caller's egress policy: a redirect
+          // hop vetted (and pinned, outside the hosted proxy) by the policy
+          // that let it through below (repo#2830), and the page itself, which
+          // the policy trusts by name unless the crawl pins its own hosts
+          // (repo#3430).
+          const response = await fetchTolerant(currentUrl, requestInit, req.egress);
 
           responseAt = Date.now();
           finalStatus = response.status;

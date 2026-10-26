@@ -24,6 +24,7 @@ import {
 } from "@squirrelscan/utils/constants";
 import { headersForRedirect, mergeHeaderRecords, techCookieNames } from "@squirrelscan/utils/headers";
 import {
+  EgressRefusedError,
   egressGuardedSend,
   egressRefuses,
   type EgressPolicy,
@@ -291,6 +292,19 @@ const MAX_CAUSE_DEPTH = 5;
 export const NEVER_CONNECTED_STATUS = 0;
 
 /**
+ * A page the crawl's egress policy refused before sending anything (repo#3430):
+ * its host is, or resolves to, a link-local or cloud metadata address.
+ */
+function egressRefusal(url: string, error: EgressRefusedError): CrawlError {
+  return CrawlError.network(
+    url,
+    `Not requested: the host is or resolves to a link-local or cloud metadata address (${error.message})`,
+    undefined,
+    "EGRESS_REFUSED",
+  );
+}
+
+/**
  * Detect whether a thrown fetch error / status code indicates a TLS,
  * client-certificate, or status-0 ("never connected") failure.
  *
@@ -487,6 +501,7 @@ function requestWithTiming(
       const message = (error as Error).message?.toLowerCase() ?? "";
       const isAbort = (error as Error).name === "AbortError" || message.includes("timed out");
       if (isAbort) return CrawlError.timeout(url);
+      if (error instanceof EgressRefusedError) return egressRefusal(url, error);
       if (isTlsError(error)) return CrawlError.tls(url, (error as Error).message);
       // #1822: the runtime code is captured HERE because this is the last place
       // the original error object exists; everything downstream sees only the
@@ -912,6 +927,7 @@ function fetchWithDocumentFetcher(
             `page fetch via ${options.fetcher!.id} was aborted (deadline ${options.timeoutMs}ms)`,
           );
         }
+        if (error instanceof EgressRefusedError) return egressRefusal(url, error);
         return CrawlError.network(url, (error as Error).message, undefined, fetchErrorCode(error));
       },
     });
@@ -1051,9 +1067,11 @@ function fetchPageStandardOnce(
         },
         options.timeoutMs,
         options.userAgent,
-        // A redirect hop goes out vetted (and pinned, outside the hosted proxy)
-        // by the same policy that let it through above.
-        i > 0 && egress ? guardedSend : fetchUndecoded,
+        // Every hop goes out through the crawl's egress policy: a redirect hop
+        // vetted (and pinned, outside the hosted proxy) by the same policy that
+        // let it through above, and the page itself, which the policy trusts
+        // by name unless the crawl pins its own hosts (repo#3430).
+        egress ? guardedSend : fetchUndecoded,
       );
       const { response, timing } = timed;
 

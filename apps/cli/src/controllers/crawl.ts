@@ -28,6 +28,7 @@ import {
   commandError,
   ErrorCodes,
 } from "@/controllers/types";
+import { pinOwnHosts } from "@/crawl/pin-own-hosts";
 import { createCrawler } from "@/crawler/core";
 import { createStorage, domainToProjectName } from "@/crawler/storage";
 import { retainGlobalContentStore } from "@/crawler/storage/content-store";
@@ -284,6 +285,9 @@ export async function runCrawl(
             robotsUserAgent: config.crawler.robots_user_agent || undefined,
             followRedirects: config.crawler.follow_redirects,
             respectRobots: config.crawler.respect_robots,
+            // repo#3430: the site's own hosts are resolved once and connected
+            // to by address; a metadata or link-local answer is never requested.
+            pinOwnHosts: pinOwnHosts(),
             // A crawl does not know which rules will read it later, so every
             // probe goes out unless [crawler] disable_discovery_probes = true
             // (#409).

@@ -49,6 +49,9 @@ beforeEach(() => {
   requested = [];
   process.env.SQUIRREL_API_TOKEN = "sqcli_test_token";
   process.env.SQUIRREL_DISABLE_TELEMETRY = "1";
+  // The site is a stubbed fetch keyed by name: send its hosts by name
+  // rather than resolving and pinning them (repo#3430).
+  process.env.SQUIRREL_NO_HOST_PINNING = "1";
   // File-local, restored below. `safeExit` ends in process.exit, and a command
   // that exits mid-test would take the whole runner with it.
   process.exit = ((code?: number) => {

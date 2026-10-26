@@ -107,6 +107,7 @@ import {
   ErrorCodes,
 } from "@/controllers/types";
 import { createHybridDocumentFetcher } from "@/crawl/hybrid-fetcher";
+import { pinOwnHosts } from "@/crawl/pin-own-hosts";
 import { resolveSeedRedirect } from "@/crawler/frontier";
 import { createStorage, domainToProjectName } from "@/crawler/storage";
 import { retainGlobalContentStore } from "@/crawler/storage/content-store";
@@ -1076,6 +1077,9 @@ export async function runAudit(
         headerHosts: mergedConfig.crawler.header_hosts,
         followRedirects: mergedConfig.crawler.follow_redirects,
         respectRobots: mergedConfig.crawler.respect_robots,
+        // repo#3430: the site's own hosts are resolved once and connected to by
+        // address; a metadata or link-local answer is never requested.
+        pinOwnHosts: pinOwnHosts(),
         discoveryProbePerHost: crawlConcurrency.discoveryProbePerHost,
         // Only the probes an enabled rule reads, and none when the user turned
         // them off: a firewall can ban the audit for asking for /swagger.json

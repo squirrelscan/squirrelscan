@@ -172,6 +172,20 @@ export interface CrawlerConfig {
    */
   egressPinnedByTransport?: boolean;
   /**
+   * Vet and pin the crawl's own hosts too (repo#3430): the audited host, its
+   * `www` twin and the `allowedDomains` are resolved once per crawl, a name
+   * that answers a link-local or cloud metadata address is never requested,
+   * and every request connects to the address that was checked, so a site that
+   * controls (or rebinds) its DNS cannot point the crawl at the auditor's
+   * metadata service. Off by default; the CLI turns it on. It does nothing
+   * where something else connects and resolves the name itself: a transport
+   * that pins (`egressPinnedByTransport`) or an HTTP proxy from the
+   * environment, which a pinned address would hand the wrong virtual host.
+   */
+  pinOwnHosts?: boolean;
+  /** The resolver behind the crawl's egress checks; the system's when unset (a test seam). */
+  resolveHost?: (hostname: string) => Promise<string[]>;
+  /**
    * Optional hook for structured TLS/status-0 failure + standard-fetch fallback
    * events. Lets consumers (CLI/cloud) surface these with TLS context instead
    * of them being swallowed into a generic network error. Defaults to unset.
