@@ -11,7 +11,7 @@ It controls crawling, not indexing. A URL blocked in robots.txt can still be ind
 
 ## What squirrel checks
 
-The rule is site-wide and reads the robots.txt the crawl fetched. It emits these checks:
+The rule is site-wide and reads the robots.txt the crawl fetched, as RFC 9309 and Google's parser group it: consecutive `User-agent` lines share the rules that follow them, only an `Allow` or `Disallow` line ends that run of `User-agent` lines, and a `Sitemap`, `Crawl-delay` or unknown line between them does not split the group. Lines may end in CR, LF or CRLF. It emits these checks:
 
 - `robots-txt-exists` reports info when no robots.txt data is available at all. Message: `robots.txt data not available`.
 - `robots-txt-exists` reports info when the site refused the request (a 401, 403 or 429, or a bot challenge). Message: `robots.txt could not be checked`, with `The site refused the request (HTTP 403 (Cloudflare)), so this is unknown, not missing` as the value.

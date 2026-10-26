@@ -180,6 +180,64 @@ Disallow: /
     ]);
   });
 
+  // RFC 9309 2.2.4: records outside the protocol (Sitemap, Crawl-delay, unknown
+  // lines) must not change how groups are read. Only Allow and Disallow close
+  // a group's user-agent lines, as in Google's parser.
+  it.each([
+    ["a Sitemap", "Sitemap: https://example.com/sitemap.xml"],
+    ["a Crawl-delay", "Crawl-delay: 5"],
+    ["an unknown record", "Host: example.com"],
+  ])("%s between user-agent lines does not split their group", (_name, record) => {
+    const result = parseRobotsTxt(
+      `User-agent: GPTBot\n${record}\nUser-agent: CCBot\nDisallow: /\n`,
+      "https://example.com/robots.txt",
+    );
+
+    expect(result.rules.map((g) => [g.userAgent, g.rules])).toEqual([
+      ["GPTBot", [{ type: "disallow", path: "/" }]],
+      ["CCBot", [{ type: "disallow", path: "/" }]],
+    ]);
+  });
+
+  it("a Crawl-delay before stacked user agents applies to the whole group", () => {
+    const result = parseRobotsTxt(
+      "User-agent: BingBot\nCrawl-delay: 10\nUser-agent: AhrefsBot\nDisallow: /slow/\n",
+      "https://example.com/robots.txt",
+    );
+
+    expect(result.rules.map((g) => [g.userAgent, g.crawlDelay])).toEqual([
+      ["BingBot", 10],
+      ["AhrefsBot", 10],
+    ]);
+  });
+
+  it("a user-agent after an Allow or Disallow still starts a new group", () => {
+    const result = parseRobotsTxt(
+      "User-agent: A\nDisallow: /\nSitemap: https://example.com/s.xml\nUser-agent: B\nAllow: /\n",
+      "https://example.com/robots.txt",
+    );
+
+    expect(result.rules).toEqual([
+      { userAgent: "A", rules: [{ type: "disallow", path: "/" }] },
+      { userAgent: "B", rules: [{ type: "allow", path: "/" }] },
+    ]);
+    expect(result.sitemaps).toEqual(["https://example.com/s.xml"]);
+  });
+
+  it("reads CR-only and CRLF line endings", () => {
+    for (const eol of ["\r", "\r\n"]) {
+      const result = parseRobotsTxt(
+        `User-agent: *${eol}Disallow: /private/${eol}Sitemap: https://example.com/s.xml${eol}`,
+        "https://example.com/robots.txt",
+      );
+
+      expect(result.rules).toEqual([
+        { userAgent: "*", rules: [{ type: "disallow", path: "/private/" }] },
+      ]);
+      expect(result.sitemaps).toEqual(["https://example.com/s.xml"]);
+    }
+  });
+
   it("handles empty content", () => {
     const result = parseRobotsTxt("", "https://example.com/robots.txt");
 

@@ -114,7 +114,8 @@ function robotsPathMatches(pattern: string, path: string): boolean {
  * Parse robots.txt content into structured data
  */
 export function parseRobotsTxt(content: string, url: string): RobotsTxtData {
-  const lines = content.split("\n");
+  // RFC 9309 ends a line with CR, LF or CRLF.
+  const lines = content.split(/\r\n|\r|\n/);
   const rules: RobotsRule[] = [];
   const sitemaps: string[] = [];
   const errors: string[] = [];
@@ -122,8 +123,11 @@ export function parseRobotsTxt(content: string, url: string): RobotsTxtData {
   let currentUserAgents: string[] = [];
   let currentRules: { type: "allow" | "disallow"; path: string }[] = [];
   let currentCrawlDelay: number | undefined;
-  // Consecutive User-agent records belong to one group. The first non-UA
-  // record closes that header, so a later User-agent starts a new group.
+  // Consecutive User-agent records belong to one group. Only an Allow or
+  // Disallow record closes that header, so a later User-agent starts a new
+  // group. Other records (Sitemap, Crawl-delay, anything unknown) must not
+  // change how the groups are read (RFC 9309 2.2.4, and Google's parser), so a
+  // User-agent after one of them still joins the group.
   let collectingUserAgents = true;
   // Empty Allow/Disallow records do not match a path, but they still make the
   // named group explicit and keep it from falling through to `*`.
@@ -180,7 +184,6 @@ export function parseRobotsTxt(content: string, url: string): RobotsTxtData {
         break;
       case "crawl-delay":
         if (currentUserAgents.length > 0) {
-          collectingUserAgents = false;
           const delay = Number.parseFloat(value);
           // Only a real delay: a negative one, or one past a double (`1e999`
           // parses to Infinity and serializes as null), is ignored like an
@@ -192,13 +195,10 @@ export function parseRobotsTxt(content: string, url: string): RobotsTxtData {
         }
         break;
       case "sitemap":
-        if (currentUserAgents.length > 0) collectingUserAgents = false;
         if (value) {
           sitemaps.push(value.trim());
         }
         break;
-      default:
-        if (currentUserAgents.length > 0) collectingUserAgents = false;
     }
   }
 
