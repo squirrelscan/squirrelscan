@@ -55,7 +55,7 @@ export const linkInTextBlockRule: Rule = {
     const checks: CheckResult[] = [];
 
     let linksInText = 0;
-    const linksWithoutUnderline: string[] = [];
+    const linksWithoutUnderline: Element[] = [];
 
     // Check links within text-heavy elements
     for (const link of linksInTextBlocks(doc)) {
@@ -74,12 +74,7 @@ export const linkInTextBlockRule: Rule = {
         className.includes("no-underline") ||
         className.includes("text-decoration-none");
 
-      if (hasNoUnderlineStyle || hasNoUnderlineClass) {
-        const text = link.textContent?.trim().slice(0, 30);
-        linksWithoutUnderline.push(
-          `"${text}${text && text.length >= 30 ? "..." : ""}"`
-        );
-      }
+      if (hasNoUnderlineStyle || hasNoUnderlineClass) linksWithoutUnderline.push(link);
     }
 
     if (linksWithoutUnderline.length > 0) {
@@ -87,7 +82,11 @@ export const linkInTextBlockRule: Rule = {
         name: "link-in-text-block",
         status: "warn",
         message: `${linksWithoutUnderline.length} link(s) in text may lack underlines`,
-        items: linksWithoutUnderline.slice(0, 10).map((id) => ({ id })),
+        // Text read for the shown ten only: a link's text is its whole subtree's.
+        items: linksWithoutUnderline.slice(0, 10).map((link) => {
+          const text = link.textContent?.trim().slice(0, 30);
+          return { id: `"${text}${text && text.length >= 30 ? "..." : ""}"` };
+        }),
         details: {
           note: "Links need visual distinction beyond color",
           suggestion:

@@ -13,7 +13,7 @@ Styling a `<td>` to look like a header gives none of that. It looks identical an
 
 One check, `table-headers`, at severity warning. It covers every `<table>` except those with `role="presentation"` or `role="none"`.
 
-- Warn when a table has no `<th>` of its own. A header cell inside a table nested in one of its cells belongs to the nested table, so it does not count for the outer one. Report message: `N table(s) without <th> headers`. Each is listed as `Table 1`, numbered in document order across the tables the rule looked at, and every offender is listed.
+- Warn when a table contains no `<th>` at all. Report message: `N table(s) without <th> headers`. Each is listed as `Table 1`, numbered in document order across the tables the rule looked at, and every offender is listed.
 - Pass with `All N data table(s) have headers`.
 - Info with `No data tables found`.
 

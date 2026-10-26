@@ -22,6 +22,7 @@ function buildGrid(rows: readonly OwnRow[]): (GridCell | null)[][] {
   for (let r = 0; r < rows.length; r++) {
     if (!grid[r]) grid[r] = [];
     const cells = rows[r]!.cells;
+    let cursor = 0;
 
     for (const cell of cells) {
       const colspan = Math.max(1, Number(getAttrCI(cell, "colspan")) || 1);
@@ -29,9 +30,12 @@ function buildGrid(rows: readonly OwnRow[]): (GridCell | null)[][] {
       const tag = cell.tagName.toLowerCase();
       const entry: GridCell = { tag, el: cell };
 
-      // Find next available column in current row
-      let col = 0;
+      // Find next available column in current row. Every slot left of the
+      // previous cell's column is filled, so the search starts there, not at
+      // column 0 (a fractional span would make any other start point drift).
+      let col = cursor;
       while (grid[r][col]) col++;
+      cursor = col;
 
       // Fill the grid for the span area
       for (let dr = 0; dr < rowspan; dr++) {
@@ -79,7 +83,7 @@ export const thHasDataCellsRule: Rule = {
       return { checks };
     }
 
-    const orphanedHeaders: string[] = [];
+    const orphanedHeaders: Array<{ el: Element; r: number; c: number }> = [];
     // Track already-reported th elements to avoid duplicates from spans
     const reported = new Set<Element>();
     const own = ownTableCells(doc);
@@ -87,6 +91,18 @@ export const thHasDataCellsRule: Rule = {
     for (const table of tables) {
       const grid = buildGrid(own.get(table)?.rows ?? []);
       if (grid.length === 0) continue;
+
+      // Which rows hold a td, and how many td slots each column holds, read
+      // once rather than rescanned per header. A header's own slot is a th, so
+      // a td anywhere in its column is in another row.
+      const rowHasTd = grid.map((row) => !!row?.some((slot) => slot && slot.tag === "td"));
+      const columnTds: number[] = [];
+      for (const row of grid) {
+        if (!row) continue;
+        for (let c = 0; c < row.length; c++) {
+          if (row[c]?.tag === "td") columnTds[c] = (columnTds[c] ?? 0) + 1;
+        }
+      }
 
       for (let r = 0; r < grid.length; r++) {
         const row = grid[r];
@@ -96,25 +112,11 @@ export const thHasDataCellsRule: Rule = {
           if (!cell || cell.tag !== "th") continue;
           if (reported.has(cell.el)) continue;
 
-          // Check same row for td
-          const rowHasTd = row.some((slot) => slot && slot.tag === "td");
-          if (rowHasTd) continue;
-
-          // Check same column for td
-          let colHasTd = false;
-          for (let ri = 0; ri < grid.length; ri++) {
-            if (ri !== r && grid[ri]?.[c]?.tag === "td") {
-              colHasTd = true;
-              break;
-            }
-          }
-          if (colHasTd) continue;
+          // Check same row, then same column, for td
+          if (rowHasTd[r] || (columnTds[c] ?? 0) > 0) continue;
 
           reported.add(cell.el);
-          const text =
-            cell.el.textContent?.trim().slice(0, 30) ||
-            `row ${r + 1}, col ${c + 1}`;
-          orphanedHeaders.push(text);
+          orphanedHeaders.push({ el: cell.el, r, c });
         }
       }
     }
@@ -124,7 +126,11 @@ export const thHasDataCellsRule: Rule = {
         name: "th-has-data-cells",
         status: "warn",
         message: `${orphanedHeaders.length} <th> element(s) without associated data cells`,
-        items: orphanedHeaders.slice(0, 10).map((id) => ({ id })),
+        // Text read for the shown ten only: on nested markup each header's
+        // text is its whole subtree's.
+        items: orphanedHeaders.slice(0, 10).map(({ el, r, c }) => ({
+          id: el.textContent?.trim().slice(0, 30) || `row ${r + 1}, col ${c + 1}`,
+        })),
         details:
           orphanedHeaders.length > 10
             ? { additional: orphanedHeaders.length - 10 }

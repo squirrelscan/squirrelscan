@@ -110,7 +110,18 @@ function flatTablePage(r: () => number): string {
     const inner = r() < 0.3 ? `${table}<p>${pick(r, LINKS)}</p>` : table;
     return wrap ? `<${wrap}>${inner}</${wrap}>` : inner;
   });
-  return `<!doctype html><html><body>${parts.join("")}</body></html>`;
+  const stray = r() < 0.2 ? `<div><td headers="${pick(r, ID_POOL)}">stray</td></div>` : "";
+  return `<!doctype html><html><body>${parts.join("")}${stray}</body></html>`;
+}
+
+/** A table nested in a cell of another, `depth` levels at most. */
+function nestedTable(r: () => number, depth: number): string {
+  const table = flatTable(r);
+  if (depth === 0 || r() < 0.3) return table;
+  const inner = nestedTable(r, depth - 1);
+  const at = table.lastIndexOf("</td>") >= 0 ? table.lastIndexOf("</td>") : table.lastIndexOf("</th>");
+  if (at < 0) return `${table}${inner}`;
+  return `${table.slice(0, at)}${inner}${table.slice(at)}`;
 }
 
 /** Text blocks nested in each other and in other containers, with links. */
@@ -145,6 +156,16 @@ describe("the rewrites report what the previous implementations did (#3355)", ()
     }
   });
 
+  test("table-headers: identical results on 600 seeded random pages of nested tables", { timeout: 30_000 }, () => {
+    // A table counts the headers of the tables nested in it, as before.
+    for (let seed = 1; seed <= 600; seed++) {
+      const r = rng(seed);
+      const html = `<!doctype html><html><body>${nestedTable(r, 4)}${nestedTable(r, 2)}</body></html>`;
+      const parsed = parse(html);
+      expect(run(tableHeadersRule, parsed), `seed ${seed}`).toEqual(run(referenceTableHeadersRule, parsed));
+    }
+  });
+
   test("link-in-text-block: identical results on 600 seeded random pages of nested blocks, each link once", { timeout: 30_000 }, () => {
     for (let seed = 1; seed <= 600; seed++) {
       const parsed = parse(blockPage(rng(seed)));
@@ -169,6 +190,14 @@ describe("a nested table is judged as its own table (#3355)", () => {
     const rowless =
       "<table><tr><th>Outer</th></tr><tr><th>Side<table><td>inner data</td></table></th></tr></table>";
     expect(run(thHasDataCellsRule, parse(rowless)).checks[0]!.items).toHaveLength(2);
+  });
+
+  test("th-has-data-cells: a row inside a cell is a row of its own, as a browser builds it", () => {
+    // The previous rule read the inner row's td into the outer row and passed.
+    const html = "<table><tr><th>A</th><th>B<div><tr><td>x</td></tr></div></th></tr></table>";
+    const [check] = run(thHasDataCellsRule, parse(html)).checks;
+    expect(check!.items!.map((i) => i.id)).toEqual(["Bx"]);
+    expect(run(referenceThHasDataCellsRule, parse(html)).checks[0]!.status).toBe("pass");
   });
 
   test("th-has-data-cells: a nested table's own orphaned header is still reported, once", () => {
@@ -198,13 +227,13 @@ describe("a nested table is judged as its own table (#3355)", () => {
     ]);
   });
 
-  test("table-headers: an outer table with no header cells of its own is reported", () => {
+  test("table-headers: a table wrapping a table with headers still passes, as a layout table", () => {
     const html =
-      "<table><tr><td><table><tr><th>h</th></tr><tr><td>d</td></tr></table></td></tr></table>";
+      "<table><tr><td><table><tr><th>h</th></tr><tr><td>d</td></tr></table></td></tr></table>" +
+      "<table><tr><td><table><tr><td>no headers</td></tr></table></td></tr></table>";
     const [check] = run(tableHeadersRule, parse(html)).checks;
     expect(check!.status).toBe("warn");
-    expect(check!.items).toEqual([{ id: "Table 1" }]);
-    expect(run(referenceTableHeadersRule, parse(html)).checks[0]!.status).toBe("pass");
+    expect(check!.items).toEqual([{ id: "Table 3" }, { id: "Table 4" }]);
   });
 
   test("link-in-text-block: a link in nested list items is counted once", () => {
@@ -226,15 +255,41 @@ function ruleMs(rule: Rule, html: string): number {
 const nested = (depth: number, open: (i: number) => string, close: string) =>
   `<!doctype html><html><body>${Array.from({ length: depth }, (_, i) => open(i)).join("")}x${close.repeat(depth)}</body></html>`;
 
+/**
+ * Subtree queries the rule makes while it runs: `querySelectorAll` called on
+ * an element rather than on the document. The previous rules made one per
+ * table or text block; the rewrites make none, however deep the page.
+ */
+function elementQueries(rule: Rule, parsed: ParsedPage): number {
+  const doc = parsed.document as unknown as Document;
+  let proto = Object.getPrototypeOf(doc.querySelector("body"));
+  while (proto && !Object.prototype.hasOwnProperty.call(proto, "querySelectorAll")) {
+    proto = Object.getPrototypeOf(proto);
+  }
+  const original = proto.querySelectorAll;
+  let calls = 0;
+  proto.querySelectorAll = function (this: Node, ...args: unknown[]) {
+    // An element (nodeType 1), not the document (9) the page-wide queries run on.
+    if (this.nodeType === 1) calls++;
+    return original.apply(this, args);
+  };
+  try {
+    run(rule, parsed);
+  } finally {
+    proto.querySelectorAll = original;
+  }
+  return calls;
+}
+
 describe("nested markup costs a walk, not a walk per element (#3355)", () => {
-  test("th-has-data-cells: 1,000 nested tables in under 1 s", { timeout: 60_000 }, () => {
-    const html = nested(1_000, () => "<table><tr><th>h</th><td>", "</td></tr></table>");
+  test("th-has-data-cells: 20,000 nested tables in under 1 s", { timeout: 60_000 }, () => {
+    const html = nested(20_000, () => "<table><tr><th>h</th><td>", "</td></tr></table>");
     expect(ruleMs(thHasDataCellsRule, html)).toBeLessThan(1_000);
   });
 
-  test("td-headers-attr and table-headers: 5,000 nested tables in under 1 s each", { timeout: 60_000 }, () => {
+  test("td-headers-attr and table-headers: 20,000 nested tables in under 1 s each", { timeout: 60_000 }, () => {
     const html = nested(
-      5_000,
+      20_000,
       (i) => `<table><tr><th id="h${i}">h</th><td headers="h${i}">`,
       "</td></tr></table>",
     );
@@ -249,5 +304,19 @@ describe("nested markup costs a walk, not a walk per element (#3355)", () => {
       "</blockquote>",
     );
     expect(ruleMs(linkInTextBlockRule, html)).toBeLessThan(1_000);
+  });
+
+  test("none of the four queries a subtree per table or block", () => {
+    const tables = parse(
+      nested(50, (i) => `<table><tr><th id="h${i}">h</th><td headers="h${i}"><p><a href="/x">l</a>`, "</p></td></tr></table>"),
+    );
+    for (const [rule, reference] of [
+      ...TABLE_RULES,
+      [linkInTextBlockRule, referenceLinkInTextBlockRule] as const,
+    ]) {
+      expect(elementQueries(rule, tables), rule.meta.id).toBe(0);
+      // The spy sees the previous rule's per-table and per-block queries.
+      expect(elementQueries(reference, tables), rule.meta.id).toBeGreaterThan(0);
+    }
   });
 });

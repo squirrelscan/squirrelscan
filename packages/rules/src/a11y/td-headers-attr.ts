@@ -24,7 +24,7 @@ export const tdHeadersAttrRule: Rule = {
     const checks: CheckResult[] = [];
 
     const tables = doc.querySelectorAll("table");
-    const invalidReferences: string[] = [];
+    const invalidReferences: Array<{ td: Element; headerId: string }> = [];
     // squirrelscan/repo#3355: each table's own cells, so a cell is checked once,
     // against the header cells of its own table, as the HTML table model
     // resolves `headers`; the cells of a nested table are not the outer one's.
@@ -47,12 +47,7 @@ export const tdHeadersAttrRule: Rule = {
         const headerIds = headers.split(/\s+/).filter(Boolean);
 
         for (const headerId of headerIds) {
-          if (!validIds.has(headerId)) {
-            const cellContent = td.textContent?.trim().slice(0, 15) || "";
-            invalidReferences.push(
-              `td references non-existent header "${headerId}"${cellContent ? ` (content: "${cellContent}...")` : ""}`
-            );
-          }
+          if (!validIds.has(headerId)) invalidReferences.push({ td, headerId });
         }
       }
     }
@@ -64,7 +59,14 @@ export const tdHeadersAttrRule: Rule = {
         name: "td-headers-attr",
         status: "fail",
         message: `${invalidReferences.length} invalid header reference(s) in table cells`,
-        items: invalidReferences.slice(0, 10).map((id) => ({ id })),
+        // Text read for the shown ten only: on nested tables a cell's text is
+        // its whole subtree's.
+        items: invalidReferences.slice(0, 10).map(({ td, headerId }) => {
+          const cellContent = td.textContent?.trim().slice(0, 15) || "";
+          return {
+            id: `td references non-existent header "${headerId}"${cellContent ? ` (content: "${cellContent}...")` : ""}`,
+          };
+        }),
         details:
           invalidReferences.length > 10
             ? { additional: invalidReferences.length - 10 }
