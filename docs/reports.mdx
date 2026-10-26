@@ -714,7 +714,7 @@ https://example.com/reset?token=REDACTED&lang=en
 https://example.com/shop;jsessionid=REDACTED
 ```
 
-The parameter name stays, so you can still see which page it was and which link to fix. The same page gets the same redacted URL in every audit, so issue history and audit diffs still match it. Session parameters on links to other sites are kept as written, and credentials such as `token` or a signature are redacted there too.
+A value that looks like ordinary content is kept: a short number or a word under a name such as `?session=2026` or `?sid=42` is a page, not a secret, and a short one-time code such as `?otp=123456` has the same shape as a page number and is not redacted. The parameter name stays, so you can still see which page it was and which link to fix. The same page gets the same redacted URL in every audit, so issue history and audit diffs still match it. Session parameters on links to other sites are kept as written, and credentials such as `token` or a signature are redacted there too.
 
 Your local report keeps the URLs exactly as the crawler saw them.
 
