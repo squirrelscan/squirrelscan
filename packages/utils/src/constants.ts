@@ -76,10 +76,6 @@ export const HTTP_PROBE_LIMITS = {
 // User agent for external checks
 export const SQUIRRELSCAN_USER_AGENT = "SquirrelScan/2.0 (+https://squirrelscan.com)";
 
-// The cloud audit's default model: Luna, the one LLM the cloud runs (aligned with
-// @squirrelscan/models DEFAULT_MIX.audit) #364/#506.
-export const DEFAULT_CLOUD_AUDIT_MODEL = "openai/gpt-6-luna";
-
 // Leaked secrets scanning window
 export const SECRET_CONTEXT_WINDOW_SIZE = 500;
 
