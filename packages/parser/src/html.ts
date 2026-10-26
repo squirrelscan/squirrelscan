@@ -31,7 +31,7 @@ import type {
   TwitterData,
 } from "@squirrelscan/core-contracts";
 
-import { isInSiteChrome } from "./extractors/chrome";
+import { createSiteChromeTest } from "./extractors/chrome";
 import { isHiddenFromMarkup } from "./hidden-markup";
 
 import type { AuthorInfo } from "./schema";
@@ -172,6 +172,8 @@ export function extractLinks(doc: Document, baseUrl: string): LinkData[] {
   const shouldSkip = (href: string): boolean => {
     return shouldSkipUrl(href);
   };
+  // squirrelscan/repo#3356: one ancestor walk for the page, not one per link.
+  const isInSiteChrome = createSiteChromeTest();
 
   for (const anchor of anchors) {
     const href = (anchor as Element).getAttribute("href");

@@ -18,75 +18,100 @@ const logger = {
 
 import type { ExtractedLink, LinkPosition } from "./types";
 
-import { isInSiteChrome } from "./chrome";
+import { createSiteChromeTest } from "./chrome";
 
 /**
- * Detect link position in document structure.
+ * The position an element names itself, or null when it names none.
  *
- * Walks ancestors (closest first), preserving the original precedence exactly:
- * within a level, semantic tag/role groups win over class/id groups, and groups
- * are checked header → footer → nav → sidebar → content. Output is byte-identical
- * to the previous implementation; the optimization is to skip the class/id string
- * work entirely on elements that have neither a `class` nor an `id` (the common
- * case for wrapper `<div>`s), avoiding redundant lowercase allocations and the
- * `.includes` scans on every ancestor.
+ * Preserves the original precedence exactly: semantic tag/role groups win over
+ * class/id groups, and groups are checked header → footer → nav → sidebar →
+ * content. The class/id string work is skipped entirely on elements that have
+ * neither a `class` nor an `id` (the common case for wrapper `<div>`s).
  */
-function detectLinkPosition(element: Element): LinkPosition {
-  let current: Element | null = element;
+function ownLinkPosition(current: Element): LinkPosition | null {
+  const tagName = current.tagName?.toLowerCase();
+  const role = current.getAttribute?.("role")?.toLowerCase();
 
-  while (current) {
-    const tagName = current.tagName?.toLowerCase();
-    const role = current.getAttribute?.("role")?.toLowerCase();
+  // Semantic tag/role groups (same combination & precedence as before).
+  if (tagName === "header" || role === "banner") return "header";
+  if (tagName === "footer" || role === "contentinfo") return "footer";
+  if (tagName === "nav" || role === "navigation") return "nav";
+  if (tagName === "aside" || role === "complementary") return "sidebar";
+  if (tagName === "main" || tagName === "article" || role === "main") return "content";
 
-    // Semantic tag/role groups (same combination & precedence as before).
-    if (tagName === "header" || role === "banner") return "header";
-    if (tagName === "footer" || role === "contentinfo") return "footer";
-    if (tagName === "nav" || role === "navigation") return "nav";
-    if (tagName === "aside" || role === "complementary") return "sidebar";
-    if (tagName === "main" || tagName === "article" || role === "main") return "content";
+  // Class/id pattern groups — only computed when the element actually has a
+  // class or id (use getAttribute for className: SVG elements expose an
+  // SVGAnimatedString, not a string).
+  const rawClass = current.getAttribute?.("class");
+  const rawId = current.id;
+  if (rawClass || rawId) {
+    const className = rawClass ? rawClass.toLowerCase() : "";
+    const id = rawId ? rawId.toLowerCase() : "";
 
-    // Class/id pattern groups — only computed when the element actually has a
-    // class or id (use getAttribute for className: SVG elements expose an
-    // SVGAnimatedString, not a string).
-    const rawClass = current.getAttribute?.("class");
-    const rawId = current.id;
-    if (rawClass || rawId) {
-      const className = rawClass ? rawClass.toLowerCase() : "";
-      const id = rawId ? rawId.toLowerCase() : "";
-
-      if (className.includes("header") || className.includes("masthead") || id.includes("header")) {
-        return "header";
-      }
-      if (className.includes("footer") || className.includes("colophon") || id.includes("footer")) {
-        return "footer";
-      }
-      if (
-        className.includes("nav") ||
-        className.includes("menu") ||
-        className.includes("navigation") ||
-        id.includes("nav")
-      ) {
-        return "nav";
-      }
-      if (className.includes("sidebar") || className.includes("aside") || id.includes("sidebar")) {
-        return "sidebar";
-      }
-      if (
-        className.includes("content") ||
-        className.includes("main") ||
-        className.includes("article") ||
-        className.includes("post") ||
-        id.includes("content") ||
-        id.includes("main")
-      ) {
-        return "content";
-      }
+    if (className.includes("header") || className.includes("masthead") || id.includes("header")) {
+      return "header";
     }
-
-    current = current.parentElement;
+    if (className.includes("footer") || className.includes("colophon") || id.includes("footer")) {
+      return "footer";
+    }
+    if (
+      className.includes("nav") ||
+      className.includes("menu") ||
+      className.includes("navigation") ||
+      id.includes("nav")
+    ) {
+      return "nav";
+    }
+    if (className.includes("sidebar") || className.includes("aside") || id.includes("sidebar")) {
+      return "sidebar";
+    }
+    if (
+      className.includes("content") ||
+      className.includes("main") ||
+      className.includes("article") ||
+      className.includes("post") ||
+      id.includes("content") ||
+      id.includes("main")
+    ) {
+      return "content";
+    }
   }
+  return null;
+}
 
-  return "unknown";
+/**
+ * Detect link position in document structure: the position the closest
+ * ancestor (or the element itself) names, else "unknown".
+ *
+ * (squirrelscan/repo#3356) For the many anchors of one document: each call walks
+ * up only until it meets an element an earlier call already answered for, and
+ * records the answer on every element it passed, so a page's links cost about
+ * one walk of the tree instead of one walk to the root per link.
+ */
+function createLinkPositionTest(): (element: Element) => LinkPosition {
+  // The answer for an element, itself included.
+  const known = new Map<Element, LinkPosition>();
+  return (element) => {
+    const passed: Element[] = [];
+    let answer: LinkPosition = "unknown";
+    let current: Element | null = element;
+    while (current) {
+      const cached = known.get(current);
+      if (cached !== undefined) {
+        answer = cached;
+        break;
+      }
+      passed.push(current);
+      const own = ownLinkPosition(current);
+      if (own) {
+        answer = own;
+        break;
+      }
+      current = current.parentElement;
+    }
+    for (const el of passed) known.set(el, answer);
+    return answer;
+  };
 }
 
 /**
@@ -116,6 +141,8 @@ export function extractLinks(doc: Document, baseUrl: string): ExtractedLink[] {
   const spanId = logger.traceStart("extractLinks");
   const anchors = doc.querySelectorAll("a[href]");
   const links: ExtractedLink[] = [];
+  const detectLinkPosition = createLinkPositionTest();
+  const isInSiteChrome = createSiteChromeTest();
   const baseUrlObj = new URL(baseUrl);
 
   for (const anchor of anchors) {
