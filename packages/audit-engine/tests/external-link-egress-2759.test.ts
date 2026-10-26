@@ -48,7 +48,7 @@ function serve(): number {
         case "/hop-private":
           return redirect(`http://localhost:${url.port}/landed`);
         case "/hop-public":
-          return redirect(`http://public-b.test:${url.port}/landed`);
+          return redirect(`http://public-b.example.com:${url.port}/landed`);
         case "/":
           return new Response(
             `<!doctype html><html><head><title>Fixture</title></head><body><a href="http://localhost:${url.port}/landed">Elsewhere</a></body></html>`,
@@ -70,8 +70,8 @@ function serve(): number {
  */
 function publicSite(): EgressPolicy {
   const names: Record<string, string[]> = {
-    "public-a.test": ["127.0.0.1"],
-    "public-b.test": ["127.0.0.1"],
+    "public-a.example.com": ["127.0.0.1"],
+    "public-b.example.com": ["127.0.0.1"],
   };
   return {
     allowPrivateNetwork: false,
@@ -97,24 +97,24 @@ describe("every hop of the external check goes through the egress guard", () => 
   test("each hop is vetted by its own name and pinned to the vetted address, Host kept", async () => {
     const port = serve();
     const [result] = await Effect.runPromise(
-      checkExternalLinks([`http://public-a.test:${port}/hop-public`], null, options(publicSite())),
+      checkExternalLinks([`http://public-a.example.com:${port}/hop-public`], null, options(publicSite())),
     );
     expect(result).toMatchObject({
       status: 200,
       error: null,
-      redirectTarget: `http://public-b.test:${port}/landed`,
+      redirectTarget: `http://public-b.example.com:${port}/landed`,
     });
     // Both names reached the server through the vetted 127.0.0.1, by name.
     expect(seen.map((r) => `${r.host} ${r.path}`)).toEqual([
-      `public-a.test:${port} /hop-public`,
-      `public-b.test:${port} /landed`,
+      `public-a.example.com:${port} /hop-public`,
+      `public-b.example.com:${port} /landed`,
     ]);
   });
 
   test("a redirect into a private, link-local or metadata address, or a non-http scheme, is not followed", async () => {
     const port = serve();
     const urls = ["hop-private", "hop-meta", "hop-meta-name", "hop-link-local", "hop-file"].map(
-      (path) => `http://public-a.test:${port}/${path}`,
+      (path) => `http://public-a.example.com:${port}/${path}`,
     );
     const results = await Effect.runPromise(checkExternalLinks(urls, null, options(publicSite())));
     for (const r of results) {
@@ -162,7 +162,7 @@ describe("every hop of the external check goes through the egress guard", () => 
   test("no request carries anything but User-Agent and Accept", async () => {
     const port = serve();
     await Effect.runPromise(
-      checkExternalLinks([`http://public-a.test:${port}/hop-public`], null, options(publicSite())),
+      checkExternalLinks([`http://public-a.example.com:${port}/hop-public`], null, options(publicSite())),
     );
     expect(seen.length).toBeGreaterThan(0);
     for (const r of seen) {

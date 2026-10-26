@@ -19,6 +19,8 @@ The rule runs on every crawled page against the parsed canonical value. It emits
 - At info status with the message `Canonical points to different URL` when it parses and does not match the page's own URL exactly.
 - Passing with the message `Self-referential canonical present` when it matches.
 
+For a URL that answers with an HTTP redirect, the page's own URL is the one the redirect ended on, since that is the page whose canonical is read: `/en/old-slug` redirecting to `/en/new-slug` is self-referential when `/en/new-slug` names itself. The crawled URL is used when no HTTP redirect was observed, when any hop was a client-side one (JavaScript or meta refresh), or when the final URL does not parse.
+
 The comparison is between the two full URLs after parsing, so a difference in trailing slash, in scheme, or in query string is enough to make it a different URL. That result is informational rather than a warning, because pointing elsewhere is often correct.
 
 ## How to fix it
@@ -72,6 +74,12 @@ enable = ["core/canonical"]
 - [crawl/schema-noindex-conflict](/rules/crawl/schema-noindex-conflict): rich-result markup on a page that is blocked from indexing.
 
 Core SEO findings ship in every audit next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Canonical URL](/glossary/canonical-url), [Duplicate content](/glossary/duplicate-content).
+
+{/* glossary:backlinks:end */}
 
 ## References
 

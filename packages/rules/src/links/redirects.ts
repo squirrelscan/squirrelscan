@@ -4,11 +4,53 @@
 import type { CheckResult, RedirectChain, RedirectHop } from "@squirrelscan/core-contracts";
 
 import { HTTP_PROBE_LIMITS } from "@squirrelscan/utils/constants";
+import {
+  egressRefuses,
+  memoizeResolveHost,
+  resolveHostAddresses,
+  type EgressPolicy,
+  type ResolveHost,
+} from "@squirrelscan/utils/public-egress";
 import { isRateLimitedResponse } from "@squirrelscan/utils/rate-limit";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import { requestAsync } from "../tools";
 
-export async function followRedirects(url: string): Promise<RedirectChain> {
+/**
+ * Where this probe's hops may go (repo#2830): anywhere http(s), private
+ * networks included (the rules that use it skip a private site anyway), except
+ * a link-local or cloud metadata address, which a redirect on the audited site
+ * could otherwise send the auditor's machine to. The probed URL's own host is
+ * sent as before; any other is looked up first, once per name, and refused if
+ * ANY of its A/AAAA answers is link-local or metadata.
+ *
+ * `pin: false`: the injected request tool connects by name and does its own
+ * lookup, so a name whose DNS answer changes between this check and that
+ * connect (rebinding) is not caught here. That residual window is accepted
+ * for a HEAD status probe: the hosted container's egress proxy pins every
+ * request, and on the CLI the crawl, root files and link checks, which read
+ * bodies, connect to the address they vetted.
+ */
+function redirectEgress(url: string, resolve: ResolveHost): EgressPolicy {
+  let host = "";
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    // An unparseable URL fails its own request.
+  }
+  return {
+    allowPrivateNetwork: true,
+    pin: false,
+    resolve: memoizeResolveHost(resolve),
+    trustTarget: (target) => host !== "" && target.hostname.toLowerCase() === host,
+  };
+}
+
+export async function followRedirects(
+  url: string,
+  /** Test seam: DNS for the hops that leave the probed host. */
+  resolve: ResolveHost = resolveHostAddresses,
+): Promise<RedirectChain> {
+  const egress = redirectEgress(url, resolve);
   const hops: RedirectHop[] = [];
   let currentUrl = url;
   const visitedUrls = new Set<string>();
@@ -78,6 +120,13 @@ export async function followRedirects(url: string): Promise<RedirectChain> {
         // response, and this probe exists to report the per-hop status codes.
         // Record the hop we observed, then refuse to fetch the target.
         if (!isHttpOrHttpsUrl(nextUrl)) {
+          endsInError = true;
+          break;
+        }
+        // repo#2830: nor to a link-local or metadata address. Fails closed: a
+        // hop off the probed host whose lookup fails or times out is not
+        // followed either (the probed host itself is never looked up).
+        if (await egressRefuses(nextUrl, egress, controller.signal).catch(() => true)) {
           endsInError = true;
           break;
         }

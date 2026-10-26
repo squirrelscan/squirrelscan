@@ -10,6 +10,7 @@ import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 import { Effect } from "effect";
 
 import type { SQLiteStorage } from "@/crawler/storage/sqlite";
+import type { CrawlMetadata } from "@/crawler/storage/types";
 import type {
   AuditReport,
   CheckResult,
@@ -48,6 +49,36 @@ function rateLimitedHosts(baseUrl: string, rateLimitedCount: number): string[] {
   } catch {
     return [];
   }
+}
+
+/**
+ * What a crawl's own outcome says about the audit, before any smart-audit
+ * carry-over: the one derivation `reconstructReport` and `squirrel analyze`'s
+ * retention gate (#955) share, so both read a blocked or failed run alike.
+ */
+export function deriveCrawlRunStatus(
+  crawl: Pick<CrawlMetadata, "baseUrl" | "stats">,
+  pageStatuses: ReadonlyArray<{ status: number }>
+): ReturnType<typeof deriveAuditStatusFromPages> {
+  return deriveAuditStatusFromPages(
+    pageStatuses,
+    crawl.stats?.pagesBlocked ?? 0,
+    {
+      // #1829: a rate-limited fetch stores no page, so the count comes from
+      // crawl stats. A crawl that gathered content but lost pages to
+      // throttling reports `partial`, not `completed`.
+      errors: crawl.stats?.pagesRateLimited ?? 0,
+      hosts: rateLimitedHosts(
+        crawl.baseUrl,
+        crawl.stats?.pagesRateLimited ?? 0
+      ),
+    },
+    // #1822: the CLI forks the engine's report path, so the crawler's root
+    // failure has to be threaded here too or `squirrel audit` keeps printing
+    // the generic reason the cloud no longer prints.
+    crawl.stats?.rootFailure,
+    crawl.stats?.pagesUndecodable ?? 0
+  );
 }
 
 export interface SmartMergeOverride {
@@ -346,7 +377,9 @@ export function reconstructReport(
       yield* storage.getRuleResultsGrouped(crawlId);
 
     // 7. Load rule registry to get metadata
-    const ruleRegistry = loadAllRules();
+    // Stored results can include explicitly enabled opt-in rules. Reconstruction
+    // needs their metadata even though a default audit does not select them.
+    const ruleRegistry = loadAllRules({ includeOptIn: true });
 
     // 8. Build PageAudit[] from page records with parsed data and rule results
     const pages: PageAudit[] = [];
@@ -769,25 +802,7 @@ export function reconstructReport(
     const rateLimitedCount =
       (crawl.stats?.pagesRateLimited ?? 0) +
       pageStatuses.filter((p) => isRateLimitStatus(p.status)).length;
-    const runStatus = deriveAuditStatusFromPages(
-      pageStatuses,
-      crawl.stats?.pagesBlocked ?? 0,
-      {
-        // #1829: a rate-limited fetch stores no page, so the count comes from
-        // crawl stats. A crawl that gathered content but lost pages to
-        // throttling reports `partial`, not `completed`.
-        errors: crawl.stats?.pagesRateLimited ?? 0,
-        hosts: rateLimitedHosts(
-          crawl.baseUrl,
-          crawl.stats?.pagesRateLimited ?? 0
-        ),
-      },
-      // #1822: the CLI forks the engine's report path, so the crawler's root
-      // failure has to be threaded here too or `squirrel audit` keeps printing
-      // the generic reason the cloud no longer prints.
-      crawl.stats?.rootFailure,
-      crawl.stats?.pagesUndecodable ?? 0
-    );
+    const runStatus = deriveCrawlRunStatus(crawl, pageStatuses);
 
     // Smart re-audits reflect carried prior state, so keep "completed" when
     // some known pages were not re-crawled this run — knownPages > auditedPages
@@ -866,6 +881,10 @@ export function reconstructReport(
         ? { refusedFetches: crawl.stats.refusedFetches }
         : {}),
       ...(smartMerge ? { coverage: smartMerge.coverage } : {}),
+      // The original audit stamps this after reconstruction and persists it on
+      // the crawl (#1050). A later database report restores that exact scope;
+      // old crawl rows have no stamp and deliberately gain no inferred one.
+      ...(crawl.scanScope ? { scanScope: crawl.scanScope } : {}),
       ...(cacheStats ? { cacheStats } : {}),
       ...(renderBlockRecovered > 0
         ? { fetchFallbacks: { recovered: renderBlockRecovered } }

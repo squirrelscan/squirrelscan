@@ -86,6 +86,9 @@ beforeEach(() => {
   delete process.env.SQUIRREL_API_TOKEN;
   process.env.SQUIRREL_API_SERVER = "http://127.0.0.1:9";
   process.env.SQUIRREL_DISABLE_TELEMETRY = "1";
+  // The site is a stubbed fetch keyed by name: send its hosts by name
+  // rather than resolving and pinning them (repo#3430).
+  process.env.SQUIRREL_NO_HOST_PINNING = "1";
   process.env.SQUIRREL_NO_UPDATE = "1";
   process.exit = ((code?: number) => {
     throw new ExitSignal(code ?? 0);
@@ -190,9 +193,9 @@ describe("squirrel audit --level", () => {
     const options = runs[0]!;
     expect(options.coverageMode).toBe("quick");
     expect(options.maxPages).toBe(25);
-    // repo#2729: internal link checks are on at every level; external ones
-    // are off at quick until EXTERNAL_LINKS_DEFAULT_ON turns them on.
-    expect(options.externalLinksEnabled).toBe(false);
+    // repo#2729: internal and external link checks are on at every level
+    // (EXTERNAL_LINKS_DEFAULT_ON).
+    expect(options.externalLinksEnabled).toBe(true);
     expect(options.internalLinksEnabled).toBeUndefined();
     expect(options.renderStrategy).toBe("auto");
     expect(options.probe?.level).toBe("passive");
@@ -259,7 +262,7 @@ describe("squirrel audit --level", () => {
       "[crawler]\nmax_pages = 100\n\n[external_links]\nenabled = true\n"
     );
     expect(line("Level")).toBe("quick · max 25 pages");
-    expect(runs[0]?.externalLinksEnabled).toBe(false);
+    expect(runs[0]?.externalLinksEnabled).toBe(true);
   });
 
   test("--no-external-links and --no-internal-links switch link checks off (repo#2729)", async () => {
@@ -276,16 +279,15 @@ describe("squirrel audit --level", () => {
     expect(runs[0]?.internalLinksEnabled).toBe(false);
   });
 
-  test("--external-links checks external links at quick, over the config (repo#2729)", async () => {
+  test("--external-links checks external links at quick, over a config that switched them off (repo#2729)", async () => {
     await runAudit(
       ["--level", "quick", "--external-links", "-m", "1"],
       "[external_links]\nenabled = false\n",
       { online: true }
     );
     expect(process.exitCode).toBe(0);
-    expect(line("Level")).toBe(
-      "custom (quick + max_pages 1, external_links on)"
-    );
+    // Quick checks them by default now, so the flag changes nothing from it.
+    expect(line("Level")).toBe("custom (quick + max_pages 1)");
     expect(runs[0]?.externalLinksEnabled).toBe(true);
     expect(runs[0]?.internalLinksEnabled).toBeUndefined();
   });
@@ -366,7 +368,7 @@ describe("squirrel audit --level", () => {
     await runAudit([], '[crawler]\ncoverage = "deep"\n');
     const text = output.join("\n");
     expect(text).toContain("Failed to load config file");
-    expect(text).toContain("'quick' | 'surface' | 'full', received 'deep'");
+    expect(text).toContain('expected one of "quick"|"surface"|"full"');
     expect(runs).toEqual([]);
   });
 

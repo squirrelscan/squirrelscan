@@ -193,13 +193,18 @@ type RegisterResponseBody = Partial<Omit<RegisteredRun, "websiteId">> & {
    * failure balance off the top level (as this did until #2183) silently found
    * nothing, so the credit wall printed no balance at all.
    */
-  error?: {
-    code?: string;
-    message?: string;
-    required?: number;
-    balance?: { total?: number; periodEnd?: string | null } | null;
-    upgrade?: UpgradeOffer | null;
-  };
+  error?:
+    | {
+        code?: string;
+        message?: string;
+        required?: number;
+        balance?: { total?: number; periodEnd?: string | null } | null;
+        upgrade?: UpgradeOffer | null;
+      }
+    /** The bare-string shape: a role refusal ("forbidden_role") or a rate limit. */
+    | string;
+  /** Beside a bare `error: "forbidden_role"`: what the role may not do. */
+  message?: string;
   /**
    * #1841. Present only when the server declined to create a hosted website for
    * this run. Absent on every older server and on every ordinary register, so
@@ -223,6 +228,47 @@ const DEFINITIVE_REGISTER_FAILURE_CODES = new Set([
   "INSUFFICIENT_CREDITS",
   "ORG_LOCKED",
 ]);
+
+/** The org role matrix's refusal code (squirrelscan cloud, #3293 there). */
+const FORBIDDEN_ROLE = "forbidden_role";
+/** An org API key without the scope the request needs (cloud #3409). */
+const MISSING_SCOPE = "missing_scope";
+
+/**
+ * A refusal by the org's role matrix or by an API key's scopes, in either shape
+ * the cloud sends: the bare `error: "forbidden_role"` with `message` beside it,
+ * or the typed envelope `error: { code, message }` (cloud #3409 moves to it).
+ * Definitive and actionable (ask for another role, or a key with the scope).
+ */
+function roleOrScopeRefusal(
+  data: RegisterResponseBody | null | undefined
+): { code: string; message: string } | null {
+  if (data?.error === FORBIDDEN_ROLE) {
+    return {
+      code: FORBIDDEN_ROLE,
+      message:
+        data.message ?? "your role in this organization does not run audits",
+    };
+  }
+  const envelope = typeof data?.error === "object" ? data.error : undefined;
+  if (envelope?.code === FORBIDDEN_ROLE) {
+    return {
+      code: FORBIDDEN_ROLE,
+      message:
+        envelope.message ??
+        "your role in this organization does not run audits",
+    };
+  }
+  if (envelope?.code === MISSING_SCOPE) {
+    return {
+      code: MISSING_SCOPE,
+      message:
+        envelope.message ??
+        "your API key does not include the scope to run audits",
+    };
+  }
+  return null;
+}
 
 /**
  * What the caller is told about a definitive register failure. The `code` is
@@ -339,13 +385,28 @@ export async function registerRun(
       logger.debug("run-tracker: register non-2xx", { status, body: data });
       // Surface only definitive, actionable failures to the user (#816); a bare
       // string `error` body (e.g. rate-limit) has no `.code` → stays silent.
-      const code = data?.error?.code;
+      // A role refusal (the org's role matrix: a viewer or billing member
+      // cannot run audits) or a key without the scope is definitive and
+      // actionable, so the user hears it rather than finding the run missing
+      // from the dashboard.
+      const refusal = roleOrScopeRefusal(data);
+      if (onWarn && refusal) {
+        onWarn({
+          ...refusal,
+          balance: null,
+          required: null,
+          resetAt: null,
+          upgrade: null,
+        });
+        return null;
+      }
+      const envelope = typeof data?.error === "object" ? data.error : undefined;
+      const code = envelope?.code;
       if (onWarn && code && DEFINITIVE_REGISTER_FAILURE_CODES.has(code)) {
         // Everything below reads the ENVELOPE (`error.*`). The top-level
         // `balance` is the success shape and is never present on a refusal —
         // reading it here left `registerFailureLines` with a balance branch
         // that could not fire, so the wall never showed a number (#2183).
-        const envelope = data?.error;
         onWarn({
           code,
           message:

@@ -53,6 +53,14 @@ const PAGES_NAMED = 5;
  */
 const MAX_QUOTED = 120;
 
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
 function clip(value: string): string {
   return value.length > MAX_QUOTED ? `${value.slice(0, MAX_QUOTED)}...` : value;
 }
@@ -189,7 +197,8 @@ function checkManifest(manifest: WebAppManifestData): CheckResult {
 
   if (manifest.content === null) {
     // Throttled or answered by a WAF: the status says nothing about the file.
-    const unverifiable = manifest.rateLimited === true || manifest.wafBlocked === true;
+    const withheld = manifest.headersWithheld === true;
+    const unverifiable = manifest.rateLimited === true || manifest.wafBlocked === true || withheld;
     if (!unverifiable && manifest.status !== null && manifest.status >= 400) {
       return {
         name: CHECK_NAME,
@@ -200,7 +209,9 @@ function checkManifest(manifest: WebAppManifestData): CheckResult {
       };
     }
     const reason = unverifiable
-      ? `HTTP ${manifest.status} was ${manifest.rateLimited ? "a rate limit" : "a WAF or bot challenge"}, not the file`
+      ? withheld
+        ? `${hostOf(manifest.url)} answered HTTP ${manifest.status} to a request without the custom headers; name it in header_hosts or --header-host to send them`
+        : `HTTP ${manifest.status} was ${manifest.rateLimited ? "a rate limit" : "a WAF or bot challenge"}, not the file`
       : manifest.error === ASSET_FETCH_REFUSED_ERROR
         ? "it redirects off the site, which is not followed"
         : clip(manifest.error ?? "no response");
@@ -293,11 +304,15 @@ function checkManifest(manifest: WebAppManifestData): CheckResult {
       continue;
     }
     // A throttled or WAF-challenged icon request says nothing about the icon.
-    if (check.rateLimited === true || check.wafBlocked === true) {
+    if (check.rateLimited === true || check.wafBlocked === true || check.headersWithheld === true) {
       problems.push({
         id: "icon-unverified",
         status: "info",
-        message: `icon ${clip(icon.url)} not checked: HTTP ${check.status} was ${check.rateLimited ? "a rate limit" : "a WAF or bot challenge"}`,
+        message: `icon ${clip(icon.url)} not checked: ${
+          check.headersWithheld === true
+            ? `${hostOf(icon.url)} answered HTTP ${check.status} to a request without the custom headers; name it in header_hosts or --header-host to send them`
+            : `HTTP ${check.status} was ${check.rateLimited ? "a rate limit" : "a WAF or bot challenge"}`
+        }`,
       });
       continue;
     }

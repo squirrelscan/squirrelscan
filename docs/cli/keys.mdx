@@ -23,6 +23,10 @@ whoami`](/cli/auth#whoami) to see which org your cloud runs currently act for.
 squirrel keys create --org acme
 ```
 
+An audit signed in with a key is billed differently from a logged-in one: no
+audit base or page charge, and its external links are checked on the runner
+for free. See [What an API-key audit costs](/guides/ci#what-an-api-key-audit-costs).
+
 `--org` takes an org **slug** (the name in your dashboard URL) or its **id**. It
 is an exact match, never a prefix, so a typo is refused rather than resolved to
 the wrong org.
@@ -148,8 +152,8 @@ With `--json`, stdout is a flat array in which each key carries `orgId`,
 `orgSlug`, and `orgName`.
 
 Listing keys needs the **owner** or **admin** role in that org. An org where you
-are a plain member is listed with the reason its keys could not be read, rather
-than failing the whole command. Under `--json` that reason is written to
+are an editor, viewer or billing member is listed with the reason its keys could
+not be read, rather than failing the whole command. Under `--json` that reason is written to
 **stderr** as a `Warning:` line, so the array on stdout is never silently short.
 
 ---

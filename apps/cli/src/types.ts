@@ -575,6 +575,8 @@ export interface AuditReport {
     capped: boolean;
     /** The crawl time budget ended the crawl early (the page cap was not the reason). */
     stopReason?: "time";
+    /** In-scope URLs left queued, never fetched, when the crawl stopped. */
+    unfetched?: number;
   };
   /**
    * Rule-result cache disclosure (#1990): how many pages replayed a previous
@@ -686,6 +688,8 @@ export interface AuditOptions {
   // Custom HTTP request headers attached to every crawl request (#494); merged
   // over [crawler] headers. Values are secrets — never echo them, redact in logs.
   headers?: Record<string, string>;
+  /** `--header-host`: extra hosts that get the custom headers on asset requests (#732). */
+  headerHosts?: string[];
   // --rule-include/--rule-exclude (#1066): resolved patterns from
   // parseRuleFilters, applied over config.rules by mergeOptionsToConfig via
   // resolveRulesConfig. include REPLACES config.rules.enable, exclude APPENDS
@@ -729,6 +733,7 @@ export interface HreflangAnalysis {
 export interface CWVHints {
   // LCP hints
   largeImagesWithoutPreload: string[];
+  imagePreloadUrls: string[];
   renderBlockingResources: string[];
   fontsWithoutSwap: string[];
   missingPreconnect: string[];
@@ -748,39 +753,6 @@ export interface CWVHints {
   deferScripts: number;
   blockingScripts: number;
   totalScripts: number;
-}
-
-// ============================================
-// ENHANCED LINK TYPES (Phase 4)
-// ============================================
-
-export interface EnhancedLinkData extends LinkData {
-  rel?: string[];
-  isNofollow: boolean;
-  isSponsored: boolean;
-  isUgc: boolean;
-  hasNoopener: boolean;
-  target?: string;
-  anchorType: "text" | "image" | "empty" | "generic";
-}
-
-export interface InternalLinkAnalysis {
-  totalInternalLinks: number;
-  totalExternalLinks: number;
-  orphanPages: string[];
-  deepPages: { url: string; depth: number }[]; // > 3 clicks
-  crawlDepth: Map<string, number>;
-  linkEquity: Map<string, number>; // incoming link count
-  pagesWithFewLinks: { url: string; count: number }[];
-  pagesWithManyLinks: { url: string; count: number }[];
-}
-
-export interface AnchorTextAnalysis {
-  genericAnchors: { url: string; text: string }[];
-  emptyAnchors: string[];
-  imageOnlyLinks: string[];
-  keywordRichAnchors: { url: string; text: string }[];
-  anchorDistribution: Map<string, number>;
 }
 
 // ============================================

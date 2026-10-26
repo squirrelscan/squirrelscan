@@ -3089,7 +3089,7 @@ export const leakedSecretsRule: Rule = {
 
     // Pages whose page-time scan ran past the rule time budget were not scanned:
     // their empty secret list is "unknown", never "clean". The runner records the
-    // timeout itself as a `-error` check; this keeps the rule from also saying
+    // timeout itself as a skipped `-error` check; this keeps the rule from also saying
     // nothing was found.
     const unscanned = (ctx.collectedSignals?.pages ?? []).filter((p) =>
       p.timedOut?.ruleIds.includes("security/leaked-secrets")

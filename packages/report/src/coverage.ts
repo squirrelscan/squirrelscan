@@ -74,7 +74,7 @@ export function coverageLine(report: AuditReport): string | null {
  * alone, so a producer that echoes the same number both ways does not render a
  * reduction that never happened.
  */
-function clampedPageLimit(
+export function clampedPageLimit(
   scope: NonNullable<AuditReport["scanScope"]>,
 ): { requested: number; effective: number } | null {
   const requested = scope.requestedMaxPages;
@@ -95,8 +95,13 @@ function clampedPageLimit(
  * printing only the requested one describes a crawl that did not happen.
  */
 export function scanScopeLine(report: AuditReport): string | null {
-  const s = report.scanScope;
-  if (!s) return null;
+  const raw = report.scanScope;
+  if (!raw) return null;
+  // Stored reports of any origin reach this line: a count that is not a whole
+  // number (NaN, Infinity, a string) is left out rather than printed.
+  const whole = (v: unknown) =>
+    typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.floor(v) : undefined;
+  const s = { ...raw, pagesCrawled: whole(raw.pagesCrawled) ?? 0, maxPages: whole(raw.maxPages) };
   const origin = s.origin === "cloud" ? "squirrelscan cloud" : s.origin === "ci" ? "CI" : "the CLI";
   const version = report.generatorVersion ? ` v${report.generatorVersion}` : "";
   // The UNCLAMPED wording is byte-for-byte what it has always been — a comma
@@ -109,8 +114,29 @@ export function scanScopeLine(report: AuditReport): string | null {
   const limit = clamped
     ? `page limit ${clamped.effective} of ${clamped.requested} requested${s.capped ? ", reached" : ""}${timeStop}`
     : `page limit ${s.maxPages}${s.capped ? " reached" : ""}${timeStop}`;
-  const cap = s.maxPages !== undefined ? ` (${limit})` : "";
+  // What the crawl knew of beyond the pages it fetched: present only when some
+  // URLs were left queued, so every other report's line is unchanged. A
+  // rate-limited run's own line already counts them (`rateLimited.unfetched`
+  // is the abandoned URLs plus these), so saying it twice would read as more.
+  const unfetched = (report.rateLimited?.unfetched ?? 0) > 0 ? 0 : scanScopeUnfetched(report);
+  const parts = [
+    s.maxPages !== undefined ? limit : "",
+    unfetched > 0 ? `${unfetched} more discovered but not fetched` : "",
+  ].filter(Boolean);
+  const cap = parts.length > 0 ? ` (${parts.join("; ")})` : "";
   return `Scan: ${s.pagesCrawled} page${s.pagesCrawled === 1 ? "" : "s"} crawled from ${origin}${version}${cap}.`;
+}
+
+/**
+ * In-scope URLs the crawl queued but never fetched (`scanScope.unfetched`), as
+ * a whole number, or 0. Read off stored reports of any origin, so a value that
+ * is not a safe non-negative integer counts as none.
+ */
+export function scanScopeUnfetched(report: Pick<AuditReport, "scanScope">): number {
+  const unfetched = report.scanScope?.unfetched;
+  return typeof unfetched === "number" && Number.isSafeInteger(unfetched) && unfetched >= 0
+    ? unfetched
+    : 0;
 }
 
 /**

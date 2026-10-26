@@ -86,6 +86,9 @@ beforeEach(() => {
   delete process.env.SQUIRREL_API_TOKEN;
   process.env.SQUIRREL_API_SERVER = "http://127.0.0.1:9";
   process.env.SQUIRREL_DISABLE_TELEMETRY = "1";
+  // The site is a stubbed fetch keyed by name: send its hosts by name
+  // rather than resolving and pinning them (repo#3430).
+  process.env.SQUIRREL_NO_HOST_PINNING = "1";
   process.env.SQUIRREL_NO_UPDATE = "1";
   // Batches of 5 pages, so the crawl folds in more than one batch.
   process.env.SQUIRREL_STREAM_BATCH_PAGES = "5";

@@ -207,6 +207,12 @@ export interface RuleMeta {
   // Zod schema for rule options - self-describing with defaults
   optionsSchema?: z.ZodObject<z.ZodRawShape>;
   disabled?: boolean; // Internal flag - hides rule from all listings and execution
+  /**
+   * The rule is available but excluded by the default `enable = ["*"]` selection.
+   * A concrete enable pattern (the exact id or its category) or
+   * `[rule_options."id"] enabled = true` opts it in.
+   */
+  optIn?: boolean;
   // Cloud-backed rules declare the credit-gated service they read (prefetched).
   cloud?: RuleCloudSpec;
   // Context-aware rules declare when they apply; gated by the Stage-0 metadata.
@@ -374,6 +380,12 @@ export interface ExternalLinkCheckData {
   /** Detected WAF provider if wafBlocked is true */
   wafProvider?: string;
   /**
+   * Why a `wafBlocked` link is unverifiable (pub#821): `blocked`,
+   * `unreachable`, or `awaiting-confirmation` for a first 404 the cloud link
+   * checker has not confirmed yet. Absent when the checker did not say.
+   */
+  unverifiedReason?: "blocked" | "unreachable" | "awaiting-confirmation";
+  /**
    * The target answered with rate limiting (429/430, or 503 + `Retry-After`),
    * so its status is unverified rather than broken (#1829). Link rules must
    * report these as info, never as dead links.
@@ -395,6 +407,8 @@ export interface WebAppManifestIconCheck {
   rateLimited?: boolean;
   /** A WAF or bot challenge answered in place of the icon. */
   wafBlocked?: boolean;
+  /** Custom headers were withheld from this host: a 401 or 403 is unverified (#732). */
+  headersWithheld?: boolean;
 }
 
 /** A `<meta name="theme-color">` one linking page carries. */
@@ -416,6 +430,8 @@ export interface WebAppManifestData {
   rateLimited?: boolean;
   /** A WAF or bot challenge answered in place of the manifest. */
   wafBlocked?: boolean;
+  /** Custom headers were withheld from this host: a 401 or 403 is unverified (#732). */
+  headersWithheld?: boolean;
   /** Pages that link this manifest, sorted. */
   sourcePages: string[];
   /** Each linking page's theme-color metas, keyed by page URL. */
@@ -423,8 +439,23 @@ export interface WebAppManifestData {
   icons: WebAppManifestIconCheck[];
 }
 
+/** A page the crawl fetched that `SiteData.pages` leaves out (pub#798). */
+export interface FetchedTarget {
+  url: string;
+  status: number;
+  rateLimited?: boolean;
+  wafChallenge?: boolean;
+}
+
 export interface SiteData {
   baseUrl: string;
+  /**
+   * Where the crawl started: the URL it was given and where that URL's
+   * redirects resolved (the crawl's `originalUrl` and `seedUrl`). The entry
+   * page is the site's front door even when it is not `/`, as when the root
+   * redirects to `/en/` or a sign-in page (#788). Absent on older callers.
+   */
+  entryUrls?: string[];
   pages: Array<{
     url: string;
     finalUrl?: string;
@@ -495,12 +526,22 @@ export interface SiteData {
     /** Of those, the ones refused on the URL alone, before any were selected under the limit. */
     refusedByUrl?: number;
     refusedLinks?: Array<{ href: string; sourcePages: string[]; pageCount?: number }>;
+    /** repo#2613: of the `checked` links, the ones the check ran out of time on. */
+    outOfTime?: number;
   };
   /**
    * Status of internal link targets the crawl did not fetch, from the link
    * probe (repo#2729). Undefined when internal link checks were off.
    */
   linkTargetStatuses?: SitemapUrlStatusData[];
+  /**
+   * Pages the crawl fetched that are not in `pages`, so a link to one still has
+   * a known answer (pub#798): one that did not parse as HTML (a PDF, or an
+   * empty or corrupt body) and answered 2xx, or a 3xx whose redirect resolved;
+   * one that answered with rate limiting (429/430); and a bot-wall challenge.
+   * Absent on older callers.
+   */
+  fetchedTargets?: FetchedTarget[];
   /** What the internal link probe covered. Undefined when it did not run. */
   internalLinkProbe?: {
     unfetched: number;
@@ -546,6 +587,9 @@ export interface SiteData {
   };
   pdfSizes?: ResourceSizeData[];
   sitemapUrlStatuses?: SitemapUrlStatusData[];
+  // Sitemap URLs on another site an own-site-only audit (`--offline`) left
+  // unchecked (pub#807). Absent or zero means none were dropped.
+  sitemapOffSiteSkipped?: number;
   // Web app manifests the pages link (`<link rel="manifest">`), one entry per
   // same-site manifest URL, with its icons checked (#710). Undefined when the
   // asset pass did not run (not checked); an empty array means no page links one.

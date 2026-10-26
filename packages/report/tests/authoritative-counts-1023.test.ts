@@ -81,8 +81,9 @@ describe("#1023 R-F: authoritative affected-page count across all 6 renderers", 
 
   test("html: rule header + per-check message + PagesList all read 600", () => {
     const out = renderHtml(foldedReport);
+    expect(out).toContain('class="ir-reach">600 pages');
     expect(out).toContain("600 pages affected");
-    expect(out).toContain("(600 pages)");
+    expect(out).toContain(" · 600 pages");
     expect(out).toContain("Showing 3 of 600 affected pages.");
   });
 
@@ -216,11 +217,11 @@ describe("#1306: multi-check rule rollup floors at max and marks the floor", () 
   test("html: rule header reads '400+ pages affected' (floor + marker, never summed)", () => {
     const out = renderHtml(multiCheckReport);
     // Floor = max(400, 300) with a "+" — NOT the sum (700) and NOT bare "400".
-    expect(out).toContain("400+ pages affected");
-    expect(out).not.toContain("700 pages affected");
+    expect(out).toContain('class="ir-reach">400+ pages');
+    expect(out).not.toContain("700 pages");
     // Per-check counts still surface each check's own authoritative total.
-    expect(out).toContain("(400 pages)");
-    expect(out).toContain("(300 pages)");
+    expect(out).toContain(" · 400 pages");
+    expect(out).toContain(" · 300 pages");
   });
 
   test("llm: rule 'Pages (N/400+)' — floor over the sampled union, marked", () => {

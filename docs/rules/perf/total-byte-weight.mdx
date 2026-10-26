@@ -11,7 +11,7 @@ Images are usually the largest share and the easiest to cut, through a modern fo
 
 ## What squirrel checks
 
-The rule scores each crawled page on its own weight and reports the heaviest one. A page's weight is its HTML document, which already holds its inline CSS and JavaScript, plus the external CSS, script, image and font files it loads. The 1,600 KB and 5,000 KB thresholds describe one page load, so nothing is summed across the site and the result does not depend on how many pages were crawled.
+The rule scores each crawled page on its own weight and reports the heaviest one. A page's weight is its HTML document, which already holds its inline CSS and JavaScript, plus the external CSS, script, image and font files it loads. The 1,600 KB and 5,000 KB thresholds describe one page load, so the score sums nothing across the site and the result does not depend on how many pages were crawled. The site figures below are information only.
 
 A resource shared by several pages counts toward every page that loads it, and counts once within a page, by URL. The rule emits one check named `total-byte-weight`, scored on the heaviest page:
 
@@ -25,13 +25,22 @@ When the crawl produced no resource-size record and no script record at all, the
 
 The details carry the heaviest page's URL and weight, the number of pages analyzed, the number over each threshold, and that page's breakdown: the HTML total, inline code included, and the external CSS, JavaScript, image and font totals. A bucket with nothing in it is left out.
 
+### Site total and average page weight
+
+Two site figures show how heavy the site is overall and how a change moves the whole site, which the heaviest page alone does not. They are information only: neither changes whether the check passes, warns or fails.
+
+- **Site total** (`siteTotalKb`): every scored page's HTML, plus each external resource those pages load, counted once however many pages share it.
+- **Average page** (`pageAverageKb`): the mean of the per-page weights the score uses, so a shared stylesheet counts toward every page that loads it.
+
+Both are in KB and appear in the details and at the end of the message, after any `(heavy page)` or `(very heavy)`: `Heaviest page: https://example.com/gallery 2010KB (1 over 1600KB, 0 over 5000KB) (heavy page). Not scored: site total 2020KB across 2 pages, shared files counted once; average page 1010KB`. A resource that could not be sized adds nothing to either. When the rule falls back to the estimate, it reports neither.
+
 ### Size basis
 
 The HTML size is the response size the crawler recorded for the page: the `Content-Length` the server sent, which is the transfer size, or the decoded body length when it sent none. It is applied the same way on the streaming and resident engines. Error pages, pages blocked by a bot challenge and non-HTML responses are not scored. Inline `<style>` and `<script>` code is part of that size, so it is not counted a second time. A page with no recorded size is weighed by its inline CSS and JavaScript instead, measured by text length. That inline JavaScript excludes any `<script>` whose type mentions `json` or `template`, so JSON-LD is not counted as code. External resources use the size from a HEAD request, or the fetched body for scripts.
 
 ### Limits
 
-If a resource cannot be sized, for example a HEAD response with no `Content-Length`, it adds nothing to the page's weight and the rule says so: the message ends with the number of resources that could not be sized, and the details carry `unsizedResources`. Treat the weight as a lower bound in that case.
+If a resource cannot be sized, for example a HEAD response with no `Content-Length`, it adds nothing to the page's weight and the rule says so: the message gives the number of resources that could not be sized, right after the threshold counts, and the details carry `unsizedResources`. Treat the weight as a lower bound in that case.
 
 Fonts are the woff, woff2, ttf, otf and eot files a page names directly: a `<link rel="preload" as="font">`, or a `url()` source in an `@font-face` rule inside an inline `<style>`. Only same-site files are sized, so a font, stylesheet or image served from another host, such as a CDN, is not counted. A font that only an external stylesheet declares is not found, because stylesheet files are not read, so a site that loads all its fonts from a `.css` file adds nothing for fonts. Resource checks run under a time budget, so on a very large crawl some resources may go unmeasured.
 
@@ -109,6 +118,12 @@ enable = ["perf/total-byte-weight"]
 - [perf/asset-compression](/rules/perf/asset-compression): whether those bytes are at least compressed in transit.
 
 Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Page weight](/glossary#page-weight).
+
+{/* glossary:backlinks:end */}
 
 ## References
 

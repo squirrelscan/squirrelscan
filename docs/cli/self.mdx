@@ -264,7 +264,7 @@ The content store line reads like this:
 It warns when the store is over its cap, which happens after an audit larger
 than the cap (an audit never evicts its own pages): the next audit evicts the
 least recently used pages first. Change the cap with
-[`[storage] content_store_max_bytes`](/configuration/storage#content-store-max-bytes)
+[`[storage] content_store_max_bytes`](/configuration/storage#content_store_max_bytes)
 or `SQUIRREL_CONTENT_STORE_MAX_BYTES`. The cap shown is the default or the
 environment variable; a project's `squirrel.toml` applies during its own audits.
 
@@ -349,6 +349,74 @@ A retired audit's report can no longer be rendered, and `report --list`,
 `report --diff` and `report --regression-since` all reach back into that
 history, so how many audits to keep is your call rather than a number this
 command picks for you.
+
+### Abandoned crawls
+
+An audit killed before it finishes (`kill -9`, a watchdog, an out-of-memory
+kill) leaves its crawl behind as `running`, `paused`, `stopped` or `crawled`.
+Once a newer audit of the project has finished and the crawl has had no activity
+(no page fetched) for 30 minutes, nothing can resume or analyze it, so `--prune`
+treats it as abandoned. `stopped` and `paused` crawls, which `--resume` continues
+(Ctrl-C leaves one), wait 7 days idle instead. A `failed` crawl follows the same
+rule as the others and never takes a slot of the `--keep` window: it retires it, and it takes no
+slot of the `--keep` window. `--dry-run` lists these apart from the finished
+audits, with each crawl's status and age:
+
+```text
+acme-docs  2.3 GB  retiring 2 of 5 audits
+    2026-09-07  6a1b45df
+    abandoned (never finished, older than the newest finished audit):
+    2026-10-02  7021c515  crawled, 17d old
+```
+
+### Crawl leases
+
+While an audit, `crawl` or `analyze` runs, the process records itself on the
+crawl: its pid, host name and a heartbeat refreshed every 15 seconds, and it
+clears the owner when the command ends. `--prune` and the automatic retirement
+read it, so liveness is recorded rather than guessed from newer audits:
+
+- A crawl whose heartbeat is under 5 minutes old is never retired, even when a
+  later audit of the project finished first (two audits running at once).
+- A heartbeat older than that does not retire it while its owner process is
+  still alive on this machine, for up to 24 hours of silence. That covers a busy
+  or suspended audit (a sleeping laptop: the heartbeat resumes within 15 seconds
+  of waking). After 24 hours a pid is not trusted, because it may have been
+  reused by another program. A container that shares a host name with the host
+  cannot see the host's pids, so it cannot tell a live owner from a dead one
+  that way.
+- An owner on another machine, or one that cannot be read, counts as live
+  until the 5 minutes pass.
+- A killed crawl whose owner is gone is retired without waiting for a later
+  audit to finish, once its heartbeat is stale: a `crawled` crawl after 5
+  minutes, a `running` crawl (what `--resume` continues) after 24 hours. A
+  `stopped`, `paused` or `failed` crawl is never retired sooner by a dead lease;
+  it follows the idle rules above (7 days for `stopped` and `paused`). In every
+  case a newer finished audit plus 30 minutes idle retires it as before.
+- A crawl written by an older version carries no lease and follows the rules
+  above. A crawl whose command ended normally (Ctrl-C, or `crawl` waiting for
+  `analyze`) clears its owner and follows them too.
+
+`--dry-run` lists a held crawl as skipped with its owner pid, host and the age of
+its last heartbeat.
+
+An unfinished crawl (including a `failed` one) newer than the newest finished
+audit, or still within its idle time, is never retired. It may be a live audit, or a crawl waiting for `squirrel analyze`, so it is listed
+as skipped with that reason instead.
+
+### Summary and exit code
+
+Each project is handled on its own. A project that cannot be planned or pruned
+(a locked or unreadable database, for example) is reported with its reason and
+the rest still run. A crawl that becomes active between the plan and the write is
+skipped on its own, and the rest of that project is still retired. When the volume does not have room for the rebuild, the
+project's crawls are still retired, the rebuild is skipped and the project is
+reported as skipped. A final line counts the projects pruned, skipped and failed,
+and the bytes reclaimed. The command exits 1 only when at least one project
+failed; a skip is not a failure.
+
+Pressing Ctrl-C during `squirrel audit` records the interrupted crawl as
+`stopped`, so `--resume` continues it and it is not mistaken for a killed one.
 
 A project whose old audits an audit already retired has nothing left to retire
 and is still holding the space those deletes freed, so the plan offers the

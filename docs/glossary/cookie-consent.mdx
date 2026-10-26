@@ -1,0 +1,86 @@
+---
+title: "Cookie consent banners: what an audit can verify"
+description: "Cookie consent is the banner and mechanism that asks visitors before setting non-essential cookies. What EU rules expect, and what an audit can verify."
+sidebarTitle: "Cookie consent"
+---
+
+**Cookie consent** is the banner, and the mechanism behind it, that asks visitors whether a site may set non-essential cookies and only loads the tags that use them once they agree.
+
+In the EU, a site has to get consent before storing cookies that are not strictly necessary, and informing the visitor is not enough on its own. The European Commission's web guide gives examples: third-party advertising cookies and social plug-in trackers generally need consent, while cookies that remember what a user typed into a form generally do not. Google's consent mode is the technical side for its own tags. Consent types such as `ad_storage`, `analytics_storage`, `ad_user_data` and `ad_personalization` tell Google tags what the visitor allowed. This page describes what squirrelscan detects. It is not legal advice.
+
+{/* glossary:hub:start */}
+
+Category: [Legal Compliance](/rules/legal)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+A banner is the easy part. The part that matters is the gating: non-essential cookies set before the visitor answers, or after they decline, defeat the purpose whatever the banner says. Consent mode adds a further step for sites that use Google's tags: the visitor's answer has to reach the tags as consent states, including `ad_user_data` and `ad_personalization`, which govern sending user data to Google for advertising and personalised ads.
+
+## How squirrelscan checks it
+
+[legal/cookie-consent](/rules/legal/cookie-consent) looks for a consent mechanism on each page, skipping soft 404s and sites classified as personal sites or portfolios: a script from one of about twenty consent platforms, such as Cookiebot, OneTrust or Usercentrics, a known banner container, or a cookie dialog with an accept or reject control. It warns when none is found on a site whose audience the audit places under the GDPR, and reports at info level otherwise. [analytics/consent-mode](/rules/analytics/consent-mode) runs on pages with Google tags. It passes when the HTML carries consent mode with the v2 signals, notes consent mode without them, and notes when there is none. Consent mode configured only inside a tag manager container is not visible in the HTML.
+
+Neither rule can tell whether tags actually wait for consent. That needs a browser and a person clicking the banner.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Cookie consent banner: detecting a consent mechanism](/rules/legal/cookie-consent) | Setting non-essential cookies without consent is unlawful for an EU audience. squirrel looks for a consent platform or a consent-keyed banner. | info |
+| [Google Consent Mode v2: the four consent parameters](/rules/analytics/consent-mode) | Google Ads in the EEA requires Consent Mode v2. squirrel checks for the consent call and for the two parameters v2 added. | info |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Install a consent platform, or build one that holds every non-essential tag until the visitor answers. For Google tags, set defaults before any tag loads:
+
+```html
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('consent', 'default', {
+    ad_storage: 'denied', analytics_storage: 'denied',
+    ad_user_data: 'denied', ad_personalization: 'denied'
+  });
+</script>
+```
+
+Then call `gtag('consent', 'update', …)` with the visitor's answer ([the consent mode fix](/rules/analytics/consent-mode#how-to-fix-it)). Do not pre-tick optional categories, make rejecting as easy as accepting, and store the answer ([the consent fix](/rules/legal/cookie-consent#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include legal/cookie-consent,analytics/consent-mode
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Cookie attributes](/glossary/cookie-attributes): The Secure, HttpOnly and SameSite flags on Set-Cookie that limit where a cookie is sent and whether scripts can read it.
+- [Privacy policy](/glossary#privacy-policy): The page explaining what personal data a site collects and why; required by law in many places and a trust signal for search.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Cookies and similar technologies, European Commission web guide](https://commission.europa.eu/resources/europa-web-guide/design-content-and-development/privacy-security-and-legal-notices/cookies-and-similar-technologies_en)
+- [Consent mode overview, Google Tag Platform](https://developers.google.com/tag-platform/security/concepts/consent-mode)
+- [Data protection and online privacy, Your Europe](https://europa.eu/youreurope/citizens/consumers/internet-telecoms/data-protection-online-privacy/index_en.htm)
+
+{/* glossary:jsonld:start */}
+
+import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";
+
+<GlossaryJsonLd slug="cookie-consent" />
+
+{/* glossary:jsonld:end */}

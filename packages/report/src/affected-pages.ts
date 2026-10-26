@@ -172,3 +172,25 @@ export function ruleCarriedPageCount(checks: GroupedCheck[]): number {
   for (const check of checks) for (const page of check.carriedPages ?? []) acc.add(page);
   return acc.size;
 }
+
+/**
+ * repo#2661: how many of a check's items its report left out of `items`, from
+ * `details.additional` (the fold's and the publish capper's dropped count, and
+ * every rule's own "first N, the rest as additional" remainder). A capped report
+ * keeps 5 items per class, so a renderer that shows only `items.length` would
+ * read "5 items" for a class that has 1,147. 0 when the check left none out.
+ */
+export function itemsNotListed(check: Pick<CheckResult, "details">): number {
+  const additional = (check.details as { additional?: unknown } | undefined)?.additional;
+  return typeof additional === "number" && Number.isFinite(additional) && additional > 0
+    ? Math.floor(additional)
+    : 0;
+}
+
+/**
+ * repo#2661: the line for a check that lists none of its items but left some
+ * out (a counts-only class in a capped report keeps no rows at all).
+ */
+export function itemsNotListedLine(count: number): string {
+  return `${count.toLocaleString("en-US")} item${count === 1 ? "" : "s"} not listed`;
+}

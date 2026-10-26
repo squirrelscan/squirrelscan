@@ -1,5 +1,6 @@
 // a11y/aria-treeitem-name - Treeitems have accessible names
 
+import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 function hasAccessibleName(el: Element, doc: Document): boolean {
@@ -31,7 +32,7 @@ export const ariaTreeitemNameRule: Rule = {
     name: "ARIA Treeitem Name",
     description: "Checks that treeitem elements have accessible names",
     solution:
-      "Treeitem elements must have accessible names. Add text content, aria-label, or aria-labelledby. The text content within the treeitem typically serves as its name.",
+      "Treeitem elements must have accessible names. Add text content, aria-label, or aria-labelledby. The text content within the treeitem typically serves as its name. An element hidden by the hidden attribute, aria-hidden, a closed dialog or an inline style='display:none' is out of the accessibility tree and is not reported, but it needs a name before it is shown. A <style> rule squirrel can decide counts too. A treeitem carrying a no-js class (itself or an ancestor other than <html>) on a page with an external stylesheet or @import is reported as unconfirmed, because the theme may hide it when JavaScript runs. One a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet) is reported as unconfirmed. External stylesheets are not read, so an element hidden only by one is still reported.",
     category: "a11y",
     scope: "page",
     verdictScope: "page",
@@ -45,15 +46,19 @@ export const ariaTreeitemNameRule: Rule = {
     const checks: CheckResult[] = [];
 
     const treeitems = doc.querySelectorAll('[role="treeitem"]');
-    const missingNames: string[] = [];
+    // pub#993: out of the accessibility tree is skipped, a style that may hide
+    // it is unconfirmed, like button-name.
+    const unnamed = sortUnnamedControls<string>();
 
     for (const item of treeitems) {
       if (!hasAccessibleName(item, doc)) {
         const tagName = item.tagName.toLowerCase();
         const id = item.getAttribute("id") || "";
-        missingNames.push(id ? `${tagName}#${id}` : tagName);
+        unnamed.add(item, id ? `${tagName}#${id}` : tagName);
       }
     }
+
+    const missingNames = unnamed.failures;
 
     if (missingNames.length > 0) {
       checks.push({
@@ -61,23 +66,32 @@ export const ariaTreeitemNameRule: Rule = {
         status: "fail",
         message: `${missingNames.length} treeitem(s) without accessible names`,
         items: missingNames.slice(0, 10).map((id) => ({ id })),
-        details:
-          missingNames.length > 10
-            ? { additional: missingNames.length - 10 }
-            : undefined,
+        details: missingNames.length > 10 ? { additional: missingNames.length - 10 } : undefined,
       });
-    } else if (treeitems.length > 0) {
-      checks.push({
-        name: "aria-treeitem-name",
-        status: "pass",
-        message: `${treeitems.length} treeitem(s) have accessible names`,
-      });
-    } else {
-      checks.push({
-        name: "aria-treeitem-name",
-        status: "info",
-        message: "No treeitem elements found",
-      });
+    }
+    if (unnamed.unconfirmed.length > 0) {
+      checks.push(
+        unconfirmedRow("aria-treeitem-name", "treeitem(s) without accessible names", unnamed.unconfirmed),
+      );
+    }
+    if (missingNames.length === 0 && unnamed.unconfirmed.length === 0) {
+      if (treeitems.length > 0) {
+        checks.push({
+          name: "aria-treeitem-name",
+          status: "pass",
+          message:
+            unnamed.hidden > 0
+              ? "All treeitems in the accessibility tree have accessible names"
+              : `${treeitems.length} treeitem(s) have accessible names`,
+          ...(unnamed.hidden > 0 ? { details: { hiddenWithoutName: unnamed.hidden } } : {}),
+        });
+      } else {
+        checks.push({
+          name: "aria-treeitem-name",
+          status: "info",
+          message: "No treeitem elements found",
+        });
+      }
     }
 
     return { checks };

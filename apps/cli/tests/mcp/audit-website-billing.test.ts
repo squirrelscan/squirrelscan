@@ -88,6 +88,9 @@ beforeEach(() => {
   process.env.SQUIRREL_API_TOKEN = "sqcli_test_token";
   delete process.env.SQUIRRELSCAN_API_KEY;
   process.env.SQUIRREL_DISABLE_TELEMETRY = "1";
+  // The site is a stubbed fetch keyed by name: send its hosts by name
+  // rather than resolving and pinning them (repo#3430).
+  process.env.SQUIRREL_NO_HOST_PINNING = "1";
   process.env.SQUIRREL_NO_UPDATE = "1";
   globalThis.fetch = (async (
     input: string | URL | Request,
@@ -275,6 +278,31 @@ describe("signed in, audit_website is a billed cloud audit", () => {
     expect(out.text).toContain(
       `Billed cloud audit, run ${runId}: 1 audited page, about 52 credits`
     );
+  });
+
+  test("#801: a surface estimate reserves one external link per page and names its price", async () => {
+    const out = await call("audit_website", { ...AUDIT, level: "surface" });
+    const body = JSON.parse(out.text);
+    expect(body.status).toBe("confirmation_required");
+    // 50 base + 3 per page (2 for the page, up to 1 for its external link).
+    expect(body.estimate.credits).toBe(50 + body.estimate.pages * 3);
+    expect(body.estimate.creditsPerExternalLink).toBe(1);
+    expect(body.next).toContain(
+      "1 per external link the cloud verifies, at most 1 per page"
+    );
+    expect(registered()).toBe(false);
+  });
+
+  test("#801: quick with externalLinks checks its links on this machine, so it quotes none", async () => {
+    const out = await call("audit_website", {
+      ...AUDIT,
+      level: "quick",
+      externalLinks: true,
+    });
+    const body = JSON.parse(out.text);
+    expect(body.status).toBe("confirmation_required");
+    expect(body.estimate.creditsPerExternalLink).toBeUndefined();
+    expect(body.estimate.credits).toBe(50 + body.estimate.pages * 2);
   });
 
   test("surface with confirm registers too", async () => {

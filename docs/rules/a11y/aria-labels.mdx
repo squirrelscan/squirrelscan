@@ -13,8 +13,14 @@ Most elements do not need it. Visible text is the accessible name, so `<button>S
 
 The rule runs on every crawled page and reports two checks:
 
-- `aria-buttons`: every `<button>` and every element with `role="button"`. A button fails when it has no text content, no `aria-label`, no `aria-labelledby`, no `title`, no `<img alt>` inside it and no `<svg><title>` inside it. Report message: `N button(s) without accessible names`, with the id or class of each one. Severity error.
+- `aria-buttons`: every `<button>` and every element with `role="button"`. A button fails when it has no text content, no `aria-label`, no `aria-labelledby`, no `title`, no `<img alt>` inside it and no `<svg><title>` inside it. Report message: `N button(s) without accessible names`, with the id or class of each one. Severity error. `aria-buttons-unconfirmed` warns with `N button(s) without accessible names may be hidden by a style (unconfirmed)` for unnamed buttons a style may hide in a way squirrel cannot settle, and the pass reads `All buttons in the accessibility tree have accessible names`, with `hiddenWithoutName`, when unnamed buttons were skipped as hidden.
 - `aria-svg`: every `<svg>` that carries an `onclick` or a `tabindex`. It warns when the svg has no `aria-label`, no `aria-labelledby` and no `<title>` child. Report message: `N interactive SVG(s) without accessible names`.
+
+A button out of the accessibility tree has nothing to announce, so it is not reported: one with the `hidden` attribute (except `hidden="until-found"`), `aria-hidden="true"`, `display: none` on itself or an ancestor or `visibility: hidden` on itself or an ancestor, set inline or by a `<style>` rule squirrel can decide (such as `.closed { display: none }`), or inside a closed `<dialog>` or an unopened `popover`. It still needs a name before it can be shown. Hiding squirrel cannot settle is reported as unconfirmed instead: an inline style it cannot read exactly, a `<style>` rule it cannot decide, and, on a page that also loads an external stylesheet, hiding from a `<style>` rule or visibility inherited from an ancestor. External stylesheets are not read, so a button hidden only by the site's external CSS, such as a closed modal, is still reported. See [What squirrel can see](/rules/a11y/button-name#what-squirrel-can-see) for the details. An interactive SVG inside a hidden ancestor, or with `aria-hidden="true"`, is not counted by `aria-svg` either.
+
+A page past squirrel's style limits (more than 5,000 style rules, a `<style>` block over the size limit, a very long selector, a no-break or other non-ASCII space in a style block, or a rule nested inside another) is read as unconfirmed for every element a style might hide: the rules past the limit could hide or show any of them, so an unnamed control is reported as unconfirmed, not as a failure. CSS nesting is not read: a nested rule that sets `display` or `visibility` (`b { @media (min-width: 0) { display: none } }`, `.a { & .b { display: none } }`) leaves the elements it could reach unconfirmed, and a nested rule that sets neither changes nothing.
+
+A control that carries a `no-js` class, itself or on an ancestor other than `<html>`, is reported as unconfirmed on a page with an external stylesheet or an `@import`, with the reason that it may be hidden when JavaScript runs. A theme usually hides that fallback with a rule such as `.js .no-js { display: none }` in a stylesheet squirrel does not read. The same control on a page whose styles were all read keeps its verdict, and a class such as `no-js-hidden` is not a marker.
 
 
 ## How to fix it
@@ -70,6 +76,12 @@ enable = ["a11y/aria-labels"]
 - [a11y/aria-hidden-focus](/rules/a11y/aria-hidden-focus): focusable elements hidden from assistive technology, the mirror problem.
 
 Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Accessible name](/glossary/accessible-name).
+
+{/* glossary:backlinks:end */}
 
 ## References
 

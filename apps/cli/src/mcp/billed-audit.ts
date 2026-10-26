@@ -18,7 +18,10 @@ import type { Config } from "@squirrelscan/config";
 import type { ResolvedAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
 
 import { CloudClientError } from "@squirrelscan/cloud-client";
-import { CREDIT_PRICING_VERSION } from "@squirrelscan/core-contracts";
+import {
+  CREDIT_PRICING_VERSION,
+  minimumAuditCredits,
+} from "@squirrelscan/core-contracts";
 
 import type { AuditLevel } from "@/cli/audit-level";
 import type { RunAuditOptions } from "@/controllers/audit";
@@ -47,6 +50,7 @@ import {
 import {
   AUDIT_BASE_CREDITS,
   AUDIT_PAGE_CREDITS,
+  EXTERNAL_LINK_CREDITS,
   MIN_AUDIT_CREDITS,
   upgradeUrl,
 } from "@/lib/upgrade";
@@ -96,6 +100,8 @@ export type McpAuditPlan =
   | { kind: "billed"; billed: BilledAudit };
 
 const PRICING = `${AUDIT_BASE_CREDITS} base + ${AUDIT_PAGE_CREDITS} per audited page`;
+/** #801: the same, for a level whose external links the cloud checks. */
+const PRICING_WITH_LINKS = `${PRICING} + ${EXTERNAL_LINK_CREDITS} per external link the cloud verifies, at most 1 per page of the page limit`;
 
 /**
  * One billed run from register to its terminal PATCH. `running` is the
@@ -253,6 +259,12 @@ export async function planMcpAudit(input: {
     };
   }
 
+  // #801: only a level with the cloud checks on sends its links to the cloud
+  // (quick with externalLinks checks them on this machine, free).
+  const links =
+    level.auditLevel.settings.externalLinks &&
+    level.auditLevel.settings.cloudChecks;
+  const pricing = links ? PRICING_WITH_LINKS : PRICING;
   const preflight = computePreflightAffordability({
     balance: balance.balance.total,
     maxPages: level.maxPages,
@@ -260,12 +272,17 @@ export async function planMcpAudit(input: {
     topUpUrl,
     unlimited,
     resetAt: balance.balance.periodEnd ?? null,
+    // #801: the cloud bills this audit's link checks, one per page at most.
+    cloudExternalLinks: links,
   });
   if (preflight.maxPages === 0) {
+    const needed = minimumAuditCredits(links);
     return {
       kind: "stop",
       result: errorResult(
-        `[cloud] max_credits_per_audit = ${config.cloud.max_credits_per_audit} is below the ${MIN_AUDIT_CREDITS} credits a one-page audit needs (${PRICING}); the balance is ${balanceLabel(balance.balance.total, unlimited)}. Nothing was registered or charged. Raise the cap (0 = no cap). ${LOCAL_HINT}`
+        preflight.limitedBy === "balance"
+          ? `This audit needs at least ${needed} credits (${pricing}), and the balance is ${balanceLabel(balance.balance.total, unlimited)}. Nothing was registered or charged. Top up at ${topUpUrl}. ${LOCAL_HINT}`
+          : `[cloud] max_credits_per_audit = ${config.cloud.max_credits_per_audit} is below the ${needed} credits a one-page audit needs (${pricing}); the balance is ${balanceLabel(balance.balance.total, unlimited)}. Nothing was registered or charged. Raise the cap (0 = no cap). ${LOCAL_HINT}`
       ),
     };
   }
@@ -283,11 +300,12 @@ export async function planMcpAudit(input: {
           pages: preflight.maxPages,
           baseCredits: AUDIT_BASE_CREDITS,
           creditsPerPage: AUDIT_PAGE_CREDITS,
+          ...(links ? { creditsPerExternalLink: EXTERNAL_LINK_CREDITS } : {}),
         },
         balance: unlimited ? "unlimited" : balance.balance.total,
         sufficient: true,
         ...(notices.length > 0 ? { notices } : {}),
-        next: `Show the user the estimate (up to ${preflight.estimate} credits for up to ${preflight.maxPages} pages, ${PRICING}), then call audit_website again with confirm: true to start the billed cloud audit. ${LOCAL_HINT}`,
+        next: `Show the user the estimate (up to ${preflight.estimate} credits for up to ${preflight.maxPages} pages, ${pricing}), then call audit_website again with confirm: true to start the billed cloud audit. ${LOCAL_HINT}`,
       }),
     };
   }
@@ -318,6 +336,7 @@ export async function planMcpAudit(input: {
       balance: balance.balance.total,
       maxCredits: config.cloud.max_credits_per_audit,
       unlimited,
+      externalLinks: links,
     },
     persist: () => ({ ok: true }),
   });
@@ -470,9 +489,18 @@ export function billedAuditSummary(
     return `Cloud audit run ${billed.run.runId} did not complete (${report.status}${report.statusReason ? `: ${report.statusReason}` : ""}), so it was closed as failed: no page charge, and the audit base is refunded.`;
   }
   const pages = auditedPageCount(report);
-  const credits = AUDIT_BASE_CREDITS + pages * AUDIT_PAGE_CREDITS;
+  // #801: what the cloud billed the run for its link checks, as the server
+  // reported it batch by batch.
+  const linkCredits = (report.cloudSpend?.lines ?? [])
+    .filter((line) => line.feature === "external_link")
+    .reduce((sum, line) => sum + line.credits, 0);
+  const credits = AUDIT_BASE_CREDITS + pages * AUDIT_PAGE_CREDITS + linkCredits;
+  const links =
+    linkCredits > 0
+      ? ` (${linkCredits.toLocaleString("en-US")} of them for external link checks)`
+      : "";
   return [
-    `Billed cloud audit, run ${billed.run.runId}: ${pages} audited ${pages === 1 ? "page" : "pages"}, about ${credits} credits (${PRICING}). The page charge settles when the run closes.`,
+    `Billed cloud audit, run ${billed.run.runId}: ${pages} audited ${pages === 1 ? "page" : "pages"}, about ${credits} credits${links} (${linkCredits > 0 ? PRICING_WITH_LINKS : PRICING}). The page charge settles when the run closes.`,
     ...billed.notices,
   ].join("\n");
 }

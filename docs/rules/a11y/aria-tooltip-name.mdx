@@ -18,6 +18,13 @@ A name is accepted from a non-empty `aria-label`, an `aria-labelledby` pointing 
 - Fail with `N tooltip(s) without accessible content`. Every offender is listed, as `div#tip-save` or bare tag name.
 - Pass with `N tooltip(s) have accessible names`.
 - Info with `No tooltip elements found`.
+- `aria-tooltip-name-unconfirmed` warns with `N tooltip(s) without accessible content may be hidden by a style (unconfirmed)` for a tooltip a style may hide in a way squirrel cannot settle.
+
+### Hidden tooltips
+
+A tooltip out of the accessibility tree has nothing to announce, so it is not reported: one with the `hidden` attribute (except `hidden="until-found"`), `aria-hidden="true"` on itself or an ancestor, `display: none` on itself or an ancestor (set inline or by a `<style>` rule squirrel can decide), or inside a closed `<dialog>` or an unopened `popover`. It still needs a name before it is shown. When every unnamed one is skipped this way, the pass reads `All tooltips in the accessibility tree have accessible names`, with `hiddenWithoutName` in its details.
+
+squirrel reads the markup, inline styles and the page's `<style>` blocks, the same way as `form-labels`; see [form-labels](/rules/a11y/form-labels) for what it can and cannot decide. External stylesheets are not read. A tooltip that carries a `no-js` class, itself or on an ancestor other than `<html>`, is reported as unconfirmed on a page with an external stylesheet or an `@import`, because a theme usually hides that fallback with a rule such as `.js .no-js { display: none }` once JavaScript runs.
 
 ## How to fix it
 
@@ -71,6 +78,12 @@ enable = ["a11y/aria-tooltip-name"]
 - [a11y/aria-valid-attr](/rules/a11y/aria-valid-attr): typos in `aria-describedby` itself.
 
 Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Accessible name](/glossary/accessible-name).
+
+{/* glossary:backlinks:end */}
 
 ## References
 

@@ -23,7 +23,7 @@ Each item names the element's selector and the techniques that hid it, and carri
 
 The walk stops after 20,000 elements, and stylesheets are read up to 400,000 characters or 4,000 rules. The finding's details carry `scanTruncated`, which is true when either budget cut the scan short, because what lies past it was never inspected. When a cut-short scan found nothing, the rule skips the page rather than passing it: a pass would say the page is clean, and on a re-audit it would close an earlier finding that may sit past the budget. The skip has `skipReason: "scan-truncated"`, the page counts as not evaluated, and its earlier findings stay open.
 
-Hiding is read from inline `style` attributes and from `<style>` rules whose selector is a single class or id. Stylesheets are read the way a browser tokenizes them: a `{`, `}` or `;` inside a string, a comment, an unquoted `url(...)`, a `(` or `[` block, or after a backslash does not end a rule or a declaration. A sheet such as `.a{background:url(}.b{display:none}.c{)}` is one rule to a browser, so it hides nothing here either.
+Hiding is read from inline `style` attributes and from `<style>` rules whose selector is a single class or id. Comments are dropped from a selector first, as a browser does, so `/* Header */ .promo { display: none }` is a single class rule, and `.a /* x */ .b` is still a descendant selector. Stylesheets are read the way a browser tokenizes them: a `{`, `}` or `;` inside a string, a comment, an unquoted `url(...)`, a `(` or `[` block, or after a backslash does not end a rule or a declaration. A sheet such as `.a{background:url(}.b{display:none}.c{)}` is one rule to a browser, so it hides nothing here either.
 
 An element is exempt before any technique is considered when it carries a known screen-reader-only class such as `sr-only`, `visually-hidden` or `screen-reader-text`, or one you add through `a11y_classes`, and when it is marked as intentionally hidden UI through `aria-hidden`, the `hidden` attribute, or a role such as `tabpanel` or `dialog`. An element must hold at least `min_hidden_chars` characters to be reported. Severity for the rule is warning, weight 6.
 
@@ -97,6 +97,12 @@ enable = ["content/hidden-text"]
 - [integrity/seo-doorway](/rules/integrity/seo-doorway): injected pages carrying the same kind of block.
 
 Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Cloaking](/glossary#cloaking), [Keyword stuffing](/glossary#keyword-stuffing).
+
+{/* glossary:backlinks:end */}
 
 ## References
 

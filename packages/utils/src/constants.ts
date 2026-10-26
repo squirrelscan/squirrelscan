@@ -76,9 +76,6 @@ export const HTTP_PROBE_LIMITS = {
 // User agent for external checks
 export const SQUIRRELSCAN_USER_AGENT = "SquirrelScan/2.0 (+https://squirrelscan.com)";
 
-// Canonical Gemini Flash default (aligned with @squirrelscan/models DEFAULT_MIX.audit) #364/#506.
-export const DEFAULT_CLOUD_AUDIT_MODEL = "google/gemini-3.1-flash-lite";
-
 // Leaked secrets scanning window
 export const SECRET_CONTEXT_WINDOW_SIZE = 500;
 
@@ -473,7 +470,7 @@ export type OrgLogoContentType = (typeof ORG_LOGO_CONTENT_TYPES)[number];
 // Public rule/category counts for marketing and doc copy that can't read the
 // live catalog (MDX, plugin manifests, skill files, MCP tool descriptions).
 // PUBLIC_RULE_COUNT_FLOOR is deliberately rounded DOWN to the nearest 50 from the
-// live total (currently 308 enabled rules) so copy doesn't need a bump on every
+// live total (currently 310 enabled rules) so copy doesn't need a bump on every
 // rule add/remove. PUBLIC_CATEGORY_COUNT tracks exactly since categories change
 // far less often. The rule-count-consistency guard fails if the floor exceeds the
 // live count or the live count reaches floor + 50. Bump both by hand when the
@@ -506,3 +503,99 @@ export type FeedbackCategory = (typeof FEEDBACK_CATEGORIES)[number];
 
 export const FEEDBACK_SOURCES = ["website", "dashboard", "cli", "api", "mcp"] as const;
 export type FeedbackSource = (typeof FEEDBACK_SOURCES)[number];
+
+// Response headers technology detection reads (pub#871): the tech-detect
+// fingerprints and the WAF providers the technologies section reports. A local
+// audit detects from the page records the crawler stores, so the crawler keeps
+// these beside its curated headers (Set-Cookie as cookie names only, see
+// `techHeaders` in core-contracts). audit-engine's tests fail when a
+// fingerprint or WAF provider names a header missing here.
+export const TECH_DETECT_HEADER_NAMES = [
+  "cdn-pullzone",
+  "cf-cache-status",
+  "cf-ray",
+  "fly-request-id",
+  "server",
+  "vary",
+  "via",
+  "x-akamai-request-id",
+  "x-akamai-transformed",
+  "x-amz-cf-id",
+  "x-amz-cf-pop",
+  "x-amz-request-id",
+  "x-amzn-waf-action",
+  "x-aspnet-version",
+  "x-backend-server",
+  "x-cdn",
+  "x-datadome",
+  "x-dd-b",
+  "x-drupal-cache",
+  "x-ec-debug",
+  "x-fastly-request-id",
+  "x-generator",
+  "x-ghost-cache-status",
+  "x-github-request-id",
+  "x-id",
+  "x-id-fe",
+  "x-iinfo",
+  "x-ik-request-id",
+  "x-kpsdk-cd",
+  "x-kpsdk-ct",
+  "x-kpsdk-r",
+  "x-nf-request-id",
+  "x-powered-by",
+  "x-provided-by",
+  "x-px-gt",
+  "x-px-pp",
+  "x-render-origin-server",
+  "x-served-by",
+  "x-shopify-stage",
+  "x-sucuri-cache",
+  "x-sucuri-id",
+  "x-umbraco-version",
+  "x-varnish",
+  "x-vercel-cache",
+  "x-vercel-id",
+] as const;
+/** Longest value kept per header in TECH_DETECT_HEADER_NAMES. */
+export const TECH_DETECT_HEADER_MAX_CHARS = 512;
+/** Most cookie names kept for detection from one response's Set-Cookie headers. */
+export const TECH_DETECT_MAX_COOKIE_NAMES = 50;
+/**
+ * The listed headers detection only tests for presence: request ids and bot
+ * protection tokens. The crawler keeps "1" for them, not the value, so a token
+ * is never stored or sent on. A test fails when a reader starts to match one
+ * of them by value, or a new presence-only reader is not listed
+ * (packages/audit-engine/tests/tech-detect-header-names-871.test.ts).
+ */
+export const TECH_DETECT_PRESENCE_HEADERS: ReadonlySet<string> = new Set([
+  "cdn-pullzone",
+  "cf-cache-status",
+  "cf-ray",
+  "fly-request-id",
+  "x-akamai-request-id",
+  "x-akamai-transformed",
+  "x-amz-cf-id",
+  "x-amz-cf-pop",
+  "x-amz-request-id",
+  "x-amzn-waf-action",
+  "x-datadome",
+  "x-dd-b",
+  "x-ec-debug",
+  "x-fastly-request-id",
+  "x-github-request-id",
+  "x-iinfo",
+  "x-ik-request-id",
+  "x-kpsdk-cd",
+  "x-kpsdk-ct",
+  "x-kpsdk-r",
+  "x-nf-request-id",
+  "x-px-gt",
+  "x-px-pp",
+  "x-render-origin-server",
+  "x-shopify-stage",
+  "x-sucuri-cache",
+  "x-sucuri-id",
+  "x-vercel-cache",
+  "x-vercel-id",
+]);

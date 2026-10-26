@@ -23,6 +23,11 @@ export interface LinkCacheEntry {
   // results are simply not cached, so there is nothing to store.
 }
 
+// `public_only` is 1 on every row this version writes. The engine reads and
+// writes this cache only for checks held to public addresses (pub#775), so a
+// row without it predates that rule: an audit of a private site may have
+// written it, or a cloud refusal of a private address cached as a broken
+// link. Reads skip those rows, and the next check of the link replaces them.
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS link_cache (
   href TEXT PRIMARY KEY,
@@ -31,16 +36,18 @@ CREATE TABLE IF NOT EXISTS link_cache (
   redirect_target TEXT,
   checked_at INTEGER NOT NULL,
   waf_blocked INTEGER,
-  waf_provider TEXT
+  waf_provider TEXT,
+  public_only INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_link_cache_checked_at ON link_cache(checked_at);
 `;
 
-// Migration to add WAF columns to existing databases
-const WAF_MIGRATION = [
+// Migrations to add the WAF and public-only columns to existing databases
+const COLUMN_MIGRATIONS = [
   "ALTER TABLE link_cache ADD COLUMN waf_blocked INTEGER",
   "ALTER TABLE link_cache ADD COLUMN waf_provider TEXT",
+  "ALTER TABLE link_cache ADD COLUMN public_only INTEGER",
 ];
 
 const SQLITE_BUSY_TIMEOUT_MS = 15000;
@@ -68,7 +75,7 @@ export class LinkCacheStorage {
       this.db.run(SCHEMA);
 
       // Run migrations for existing databases (ignore duplicate column errors)
-      for (const sql of WAF_MIGRATION) {
+      for (const sql of COLUMN_MIGRATIONS) {
         try {
           this.db.run(sql);
         } catch (e) {
@@ -94,7 +101,7 @@ export class LinkCacheStorage {
       .prepare(
         `SELECT href, status, error, redirect_target, checked_at, waf_blocked, waf_provider
          FROM link_cache
-         WHERE href = ? AND checked_at > ?`
+         WHERE href = ? AND checked_at > ? AND public_only = 1`
       )
       .get(href, cutoff) as
       | {
@@ -127,8 +134,8 @@ export class LinkCacheStorage {
   setCached(entry: LinkCacheEntry): void {
     const db = this.getDb();
     db.prepare(
-      `INSERT OR REPLACE INTO link_cache (href, status, error, redirect_target, checked_at, waf_blocked, waf_provider)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+      `INSERT OR REPLACE INTO link_cache (href, status, error, redirect_target, checked_at, waf_blocked, waf_provider, public_only)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`
     ).run(
       entry.href,
       entry.status,
@@ -166,7 +173,7 @@ export class LinkCacheStorage {
         .prepare(
           `SELECT href, status, error, redirect_target, checked_at, waf_blocked, waf_provider
            FROM link_cache
-           WHERE href IN (${placeholders}) AND checked_at > ?`
+           WHERE href IN (${placeholders}) AND checked_at > ? AND public_only = 1`
         )
         .all(...batch, cutoff) as Array<{
         href: string;
@@ -202,8 +209,8 @@ export class LinkCacheStorage {
 
     const db = this.getDb();
     const stmt = db.prepare(
-      `INSERT OR REPLACE INTO link_cache (href, status, error, redirect_target, checked_at, waf_blocked, waf_provider)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+      `INSERT OR REPLACE INTO link_cache (href, status, error, redirect_target, checked_at, waf_blocked, waf_provider, public_only)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`
     );
 
     db.transaction(() => {

@@ -69,10 +69,16 @@ const HTML = `<html><body>
   <a href="/internal">internal</a>
 </body></html>`;
 
-function deadLinksClient(opts: { fail?: boolean; calls: string[][] }) {
+function deadLinksClient(opts: {
+  fail?: boolean;
+  calls: string[][];
+  runIds?: Array<string | undefined>;
+  charged?: number;
+}) {
   return {
-    deadLinks: async (req: { urls: string[] }) => {
+    deadLinks: async (req: { urls: string[]; runId?: string }) => {
       opts.calls.push(req.urls);
+      opts.runIds?.push(req.runId);
       if (opts.fail) throw new Error("service_unavailable");
       return {
         results: req.urls.map((url) => ({
@@ -82,6 +88,7 @@ function deadLinksClient(opts: { fail?: boolean; calls: string[][] }) {
           redirectUrl: null,
           fromCache: false,
         })),
+        ...(opts.charged !== undefined ? { charged: opts.charged } : {}),
       };
     },
   } as never;
@@ -91,6 +98,9 @@ async function makeChecker(opts: {
   fail?: boolean;
   calls: string[][];
   onSpend: (units: number, credits: number) => void;
+  runIds?: Array<string | undefined>;
+  charged?: number;
+  runId?: string | null;
 }) {
   const config = getDefaultConfig();
   config.cloud.enabled = true;
@@ -103,6 +113,7 @@ async function makeChecker(opts: {
     auditId: "audit-1",
     siteContext,
     onSpend: opts.onSpend,
+    getRunId: async () => (opts.runId === undefined ? "run-1" : opts.runId),
   });
 }
 
@@ -119,9 +130,99 @@ describe("dead-links bulk checker spend accounting", () => {
     const urls = ["https://external-one.com/a", "https://external-two.com/b"];
     const results = await checker!(urls);
     expect(results.size).toBe(2);
-    // Pricing v10: dead-link checks are folded into the audit base → 0cr,
-    // but units still report for coverage accounting.
+    // An older server sends no `charged`: nothing is counted.
     expect(spend).toEqual([[2, 0]]);
+  });
+
+  test("#801: each call carries the run, and the server's charge is what is counted", async () => {
+    const calls: string[][] = [];
+    const runIds: Array<string | undefined> = [];
+    const spend: Array<[number, number]> = [];
+    const checker = await makeChecker({
+      calls,
+      runIds,
+      charged: 2,
+      onSpend: (units, credits) => spend.push([units, credits]),
+    });
+    await checker!([
+      "https://external-one.com/a",
+      "https://external-two.com/b",
+    ]);
+    expect(runIds).toEqual(["run-1"]);
+    expect(spend).toEqual([[2, 2]]);
+  });
+
+  test("#801: units are the links the cloud answered; the rest are checked here, free", async () => {
+    const spend: Array<[number, number]> = [];
+    const config = getDefaultConfig();
+    config.cloud.enabled = true;
+    const siteContext = await Effect.runPromise(
+      buildSiteContext([pageRecord(HTML)])
+    );
+    const checker = await resolveDeadLinksBulkChecker({
+      client: {
+        // Answers only the first url, as the server does past its deadline.
+        deadLinks: async (req: { urls: string[] }) => ({
+          results: req.urls.slice(0, 1).map((url) => ({
+            url,
+            status: 200,
+            error: null,
+            redirectUrl: null,
+            fromCache: false,
+          })),
+          charged: 1,
+        }),
+      } as never,
+      config,
+      auditId: "audit-1",
+      siteContext,
+      getRunId: () => "run-1",
+      onSpend: (units, credits) => spend.push([units, credits]),
+    });
+    await checker!([
+      "https://external-one.com/a",
+      "https://external-two.com/b",
+    ]);
+    expect(spend).toEqual([[1, 1]]);
+  });
+
+  test("#801: no registered run (an API key, a failed register) means no cloud checks", async () => {
+    const calls: string[][] = [];
+    const checker = await makeChecker({
+      calls,
+      runId: null,
+      onSpend: () => {},
+    });
+    expect(checker).toBeNull();
+    expect(calls).toEqual([]);
+  });
+
+  test("#801: the spend confirm prices 1 credit per link, at most 1 per page of the cap", async () => {
+    const config = getDefaultConfig();
+    config.cloud.enabled = true;
+    config.cloud.confirm_threshold = 0;
+    const siteContext = await Effect.runPromise(
+      buildSiteContext([pageRecord(HTML)])
+    );
+    const asked: number[] = [];
+    const resolve = (maxPages?: number) =>
+      resolveDeadLinksBulkChecker({
+        client: deadLinksClient({ calls: [] }),
+        config,
+        auditId: "audit-1",
+        siteContext,
+        getRunId: () => "run-1",
+        ...(maxPages !== undefined ? { maxPages } : {}),
+        getBalance: async () => 1000,
+        confirm: async (estimate) => {
+          asked.push(estimate);
+          return true;
+        },
+      });
+    await resolve(10);
+    await resolve(1);
+    // Two external links on the page; one page of cap bills one.
+    expect(asked).toEqual([2, 1]);
   });
 
   test("each successful call is accounted separately (per-call ceil)", async () => {
@@ -138,7 +239,7 @@ describe("dead-links bulk checker spend accounting", () => {
 
     await checker!(["https://external-one.com/a"]);
     await checker!(["https://external-two.com/b"]);
-    // Two calls of 1 url each: 2 units; folded pricing → 0cr per call.
+    // Two calls of 1 url each: 2 units; this server sends no `charged`.
     expect(units).toBe(2);
     expect(credits).toBe(0);
   });
@@ -312,6 +413,7 @@ describe("dead-links results the service could not verify", () => {
       auditId: "audit-1",
       siteContext,
       onSpend: () => {},
+      getRunId: () => "run-1",
     });
   }
 
@@ -351,6 +453,46 @@ describe("dead-links results the service could not verify", () => {
       wafBlocked: true,
       wafProvider: "unknown",
     });
+  });
+
+  test("pub#821: the reason a result is unverifiable is kept when known and dropped otherwise", async () => {
+    const base = {
+      ok: false,
+      status: null,
+      error: null,
+      redirectUrl: null,
+      fromCache: false,
+      wafBlocked: true,
+      wafProvider: "unknown",
+    };
+    const checker = await checkerAnswering([
+      {
+        ...base,
+        url: "https://external-one.com/a",
+        unverifiedReason: "awaiting-confirmation",
+      },
+      {
+        ...base,
+        url: "https://external-two.com/b",
+        unverifiedReason: "<script>",
+      },
+      { ...base, url: "https://external-three.com/c" },
+    ]);
+    const results = await checker!([
+      "https://external-one.com/a",
+      "https://external-two.com/b",
+      "https://external-three.com/c",
+    ]);
+    expect(results.get("https://external-one.com/a")?.unverifiedReason).toBe(
+      "awaiting-confirmation"
+    );
+    expect(
+      results.get("https://external-two.com/b")?.unverifiedReason
+    ).toBeUndefined();
+    expect(results.get("https://external-two.com/b")?.wafBlocked).toBe(true);
+    expect(
+      results.get("https://external-three.com/c")?.unverifiedReason
+    ).toBeUndefined();
   });
 
   test("a result without the flag, from this or an older service, carries none", async () => {

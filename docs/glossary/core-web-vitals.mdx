@@ -1,0 +1,98 @@
+---
+title: "What are Core Web Vitals? LCP, INP and CLS defined"
+description: "Core Web Vitals are Google's field metrics for loading, responsiveness and layout stability: LCP, INP and CLS. The thresholds and what squirrelscan checks."
+sidebarTitle: "Core Web Vitals"
+---
+
+**Core Web Vitals** are the three metrics Google uses to describe how a page feels to real visitors: Largest Contentful Paint (LCP) for loading, Interaction to Next Paint (INP) for responsiveness and Cumulative Layout Shift (CLS) for visual stability.
+
+Each metric has a "good" threshold, and web.dev judges it at the 75th percentile of page loads, split by mobile and desktop. A page passes a metric when at least 75 percent of visits meet it. INP replaced First Input Delay (FID) as the responsiveness metric in March 2024.
+
+| Metric | Good | Poor |
+|---|---|---|
+| LCP | 2.5 seconds or less | over 4 seconds |
+| INP | 200 milliseconds or less | over 500 milliseconds |
+| CLS | 0.1 or less | over 0.25 |
+
+{/* glossary:hub:start */}
+
+Category: [Performance](/rules/perf)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+The thresholds describe field data: what real visitors on real devices experienced. The Chrome UX Report collects that data from Chrome users, and it is what PageSpeed Insights and the Core Web Vitals report in Search Console show. Google Search Central recommends good Core Web Vitals "for success with Search", and says they are part of what its core ranking systems seek to reward, alongside other page experience signals.
+
+## How squirrelscan checks it
+
+squirrelscan does not measure LCP, INP or CLS. All three are runtime measurements of a page in a browser, INP also needs interactions, and the thresholds apply to field data from real visits. A crawl produces none of that. [perf/browser-required](/rules/perf/browser-required) writes that boundary into every report as an info result listing the runtime measurements a static audit cannot make.
+
+What the rules do is flag the markup that causes bad values. [perf/lcp-hints](/rules/perf/lcp-hints) counts likely hero images loaded with no matching preload. [perf/inp-hints](/rules/perf/inp-hints) counts known third-party scripts and classic scripts that block the parser. [perf/cls-hints](/rules/perf/cls-hints) lists images with no declared size and iframes missing a width or height. The pages for [LCP](/glossary/lcp), [INP](/glossary/inp) and [CLS](/glossary/cls) list the rest of the rules for each metric.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [LCP image not preloaded: what squirrel counts as a hero](/rules/perf/lcp-hints) | Likely Largest Contentful Paint images loaded with no preload. squirrel checks the first three eligible candidate images on every page. | warning |
+| [Third-party scripts and INP: what squirrel counts per page](/rules/perf/inp-hints) | More than five known third-party scripts, or more than three that block the parser. squirrel counts both on every page. | info |
+| [Images without width and height: the CLS risk squirrel finds](/rules/perf/cls-hints) | Images and iframes with no dimensions, so the browser cannot reserve space before they load. squirrel lists every one by page. | warning |
+| [Audits that need a browser: what a static crawl cannot see](/rules/perf/browser-required) | The runtime metrics no HTML analysis can produce. squirrel lists them so the gap in a static audit is explicit. | info |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Start from field data, so you know which metric fails and on which pages. Then fix the causes the rules report, page by page:
+
+```html
+<link rel="preload" as="image" href="/hero.jpg" fetchpriority="high" />
+<script src="/app.js" defer></script>
+<img src="/photo.jpg" width="1200" height="630" style="width:100%;height:auto" alt="" />
+```
+
+The preload is for one hero image only (see [the LCP hint fix](/rules/perf/lcp-hints#how-to-fix-it)). `defer` keeps scripts from blocking the parser, and deleting a third-party tag beats any attribute ([the INP hint fix](/rules/perf/inp-hints#how-to-fix-it)). The `width` and `height` attributes give the browser the image's aspect ratio before it loads ([the CLS hint fix](/rules/perf/cls-hints#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include perf/lcp-hints,perf/inp-hints,perf/cls-hints,perf/browser-required
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Largest Contentful Paint (LCP)](/glossary/lcp): The time until the largest image or text block in the viewport renders; good is 2.5 seconds or less.
+- [Interaction to Next Paint (INP)](/glossary/inp): The latency from a user interaction to the next frame, taken across the visit; good is 200 milliseconds or less. It replaced FID in March 2024.
+- [Cumulative Layout Shift (CLS)](/glossary/cls): A score for how much visible content moves unexpectedly while the page is in use; good is 0.1 or less.
+- [Time to First Byte (TTFB)](/glossary#ttfb): The time from the request until the first byte of the response arrives, covering redirects, DNS, connection and server time.
+- [HTTP caching](/glossary/http-caching): Response headers (Cache-Control, ETag, Expires) that let browsers and CDNs reuse a response instead of fetching it again.
+
+{/* glossary:related:end */}
+
+## Learn more
+
+- [Core Web Vitals guide](https://squirrelscan.com/learn/core-web-vitals)
+- [Lighthouse alternative](https://squirrelscan.com/learn/lighthouse-alternative)
+- [Core Web Vitals checker](https://squirrelscan.com/tools/core-web-vitals-checker)
+
+## References
+
+- [Web Vitals, web.dev](https://web.dev/articles/vitals)
+- [How the Core Web Vitals metrics thresholds were defined, web.dev](https://web.dev/articles/defining-core-web-vitals-thresholds)
+- [Understanding Core Web Vitals and Google search results, Google Search Central](https://developers.google.com/search/docs/appearance/core-web-vitals)
+
+{/* glossary:jsonld:start */}
+
+import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";
+
+<GlossaryJsonLd slug="core-web-vitals" />
+
+{/* glossary:jsonld:end */}

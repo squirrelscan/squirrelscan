@@ -1,0 +1,4 @@
+{
+  "$comment": "Findings on pages written before glossary.ts existed. A listed finding is not reported; an entry that stops matching fails the check, so remove it in the PR that fixes the page. Never add an entry for a new page. Each is due to be fixed when its hub is upgraded (squirrelscan/repo#3113, hub tasks G4 to G8).",
+  "entries": []
+}

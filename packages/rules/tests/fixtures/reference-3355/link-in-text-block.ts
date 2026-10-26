@@ -1,0 +1,100 @@
+// The rule as it was before squirrelscan/repo#3355, kept as the parity oracle
+// for a11y-nested-tables-3355.test.ts, with one change: a link is counted once
+// (`counted`), where nested blocks used to count it once per enclosing block.
+// The rewrite must report exactly what this does. Not loaded by the rule registry.
+
+// a11y/link-in-text-block - Links distinguishable from text
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../../../src/types";
+
+export const referenceLinkInTextBlockRule: Rule = {
+  meta: {
+    id: "a11y/link-in-text-block",
+    name: "Link in Text Block",
+    description:
+      "Checks that links in text blocks are visually distinguishable",
+    solution:
+      "Links within text blocks must be distinguishable by more than just color (for color-blind users). Use underlines, bold, borders, or other visual indicators. Exception: Links can rely on color alone if the contrast ratio between link and surrounding text is at least 3:1 and you provide additional cues on hover/focus.",
+    category: "a11y",
+    scope: "page",
+    verdictScope: "page",
+    severity: "warning",
+    weight: 4,
+  },
+
+  run(ctx: RuleContext): RuleResult {
+    const doc = ctx.parsed.document;
+    if (!doc) return { checks: [] };
+    const checks: CheckResult[] = [];
+
+    // Check links within text-heavy elements
+    const textBlocks = doc.querySelectorAll(
+      "p, li, td, th, dd, blockquote, figcaption"
+    );
+    let linksInText = 0;
+    const linksWithoutUnderline: string[] = [];
+    const counted = new Set<Element>();
+
+    for (const block of textBlocks) {
+      const links = block.querySelectorAll("a[href]");
+
+      for (const link of links) {
+        if (counted.has(link)) continue;
+        counted.add(link);
+        linksInText++;
+
+        // Check inline styles for text-decoration: none
+        const style = link.getAttribute("style") || "";
+        const hasNoUnderlineStyle =
+          style.toLowerCase().includes("text-decoration") &&
+          (style.toLowerCase().includes("none") ||
+            !style.toLowerCase().includes("underline"));
+
+        // Also check for common class patterns that remove underlines
+        const className = link.getAttribute("class") || "";
+        const hasNoUnderlineClass =
+          className.includes("no-underline") ||
+          className.includes("text-decoration-none");
+
+        if (hasNoUnderlineStyle || hasNoUnderlineClass) {
+          const text = link.textContent?.trim().slice(0, 30);
+          linksWithoutUnderline.push(
+            `"${text}${text && text.length >= 30 ? "..." : ""}"`
+          );
+        }
+      }
+    }
+
+    if (linksWithoutUnderline.length > 0) {
+      checks.push({
+        name: "link-in-text-block",
+        status: "warn",
+        message: `${linksWithoutUnderline.length} link(s) in text may lack underlines`,
+        items: linksWithoutUnderline.slice(0, 10).map((id) => ({ id })),
+        details: {
+          note: "Links need visual distinction beyond color",
+          suggestion:
+            "Ensure 3:1 contrast with surrounding text or add underlines",
+          ...(linksWithoutUnderline.length > 10
+            ? { additional: linksWithoutUnderline.length - 10 }
+            : {}),
+        },
+      });
+    } else if (linksInText > 0) {
+      checks.push({
+        name: "link-in-text-block",
+        status: "pass",
+        message: "Links in text blocks appear distinguishable",
+        details: { linksChecked: linksInText },
+      });
+    } else {
+      checks.push({
+        name: "link-in-text-block",
+        status: "info",
+        message: "No links found in text blocks",
+      });
+    }
+
+    return { checks };
+  },
+};

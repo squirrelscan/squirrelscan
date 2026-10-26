@@ -14,8 +14,8 @@ const QUICK_COPY = "the quick level skips the cloud checks";
 const OUTAGE_COPY = "temporarily unavailable";
 const HTTP_COPY = "without cloud rendering (--http)";
 const FAILED_COPY = "need a completed audit to run";
-const SIGNUP_COPY = "free squirrelscan account";
-const LOCKED_SLOT = 'class="group-circle group-circle-locked"';
+const UPSELL_COPY = "Get the full audit with squirrelscan cloud";
+const LOCKED_SLOT = 'data-group-locked="ai"';
 
 function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
   return {
@@ -72,10 +72,25 @@ describe("LockedRulesSection quick-coverage copy (#747)", () => {
     }
   });
 
-  test("anonymous + quick keeps the signup upsell", () => {
+  test("anonymous + quick gets the cloud upsell card, listing the checks that did not run", () => {
     const html = renderHtml(baseReport({ coverageMode: "quick" }));
-    expect(html).toContain(SIGNUP_COPY);
+    expect(html).toContain('<section id="cloud"');
+    expect(html).toContain(UPSELL_COPY);
+    expect(html).toContain("2 checks on this site need the cloud and did not run:");
+    expect(html).toContain("LLM Parsability");
     expect(html).not.toContain(QUICK_COPY);
+  });
+
+  test("white-label never shows the cloud upsell", () => {
+    const html = renderHtml(baseReport({ coverageMode: "quick" }), {
+      branding: { whiteLabel: true, orgName: "Acme Inc" },
+    });
+    expect(html).not.toContain(UPSELL_COPY);
+  });
+
+  test("signed-in runs get no upsell card", () => {
+    const html = renderHtml(baseReport({ cloudPlan: "free", coverageMode: "quick" }));
+    expect(html).not.toContain(UPSELL_COPY);
   });
 
   test("failed audit wins over quick — nothing ran, cloud or local", () => {
@@ -110,7 +125,7 @@ describe("Agents locked score slot (#747)", () => {
     );
     expect(html).toContain(LOCKED_SLOT);
     expect(html).toContain("Agents");
-    expect(html).toContain("not scored at the quick level");
+    expect(html).toContain("Not scored at the quick level");
   });
 
   test("no placeholder when the ai group scored (cloud checks ran)", () => {

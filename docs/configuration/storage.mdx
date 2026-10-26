@@ -26,6 +26,33 @@ How many audits of this project stay fully renderable. After a successful audit,
 anything older than the newest `keep_audits` is retired: its per-check results
 are deleted and its report can no longer be opened.
 
+The same pass runs at the end of `squirrel analyze`, the step that finishes an
+audit when you run `crawl`, `analyze` and `report` separately, so a project
+audited that way keeps the same bound as one audited with `squirrel audit`. It
+uses the `keep_audits` of the `squirrel.toml` in the directory you run it from,
+and only for the project that file names (with no `[project] name`, only for the
+latest crawl's project), so analyzing another project's crawl with `--id` never
+cuts its history. An analysis of a crawl that was blocked or
+failed retires nothing, as with `squirrel audit`.
+
+Crawls left behind by audits that were killed before they finished (a watchdog,
+an out-of-memory kill, a deploy) are retired too, once a newer audit of the
+project has finished and the crawl has had no activity (no page fetched) for 30
+minutes. `stopped` and `paused` crawls are what `squirrel audit --resume`
+continues, and Ctrl-C leaves one, so they wait 7 days idle instead. A `failed`
+crawl follows the same rule as the rest: retired once a newer audit has finished
+and it is idle, otherwise left alone, and it never takes a slot of the window.
+Abandoned crawls never count toward `keep_audits` and never take a slot from a
+finished audit. A crawl newer than the newest finished audit, or one still
+fetching pages, is never touched, because it may be a live audit or a crawl
+waiting for `squirrel analyze`.
+
+While a command runs on a crawl it writes a lease on it (the process id, host
+name and a heartbeat every 15 seconds), cleared when the command ends. Retention
+reads it: a crawl with a live lease is never retired, even when a later audit
+finished first, and a `crawled` or `running` crawl whose owner was killed is retired without
+waiting for a later audit (after 5 minutes and 24 hours of silence). See [`self disk`](/cli/self#abandoned-crawls) for the exact rules.
+
 Every audit writes a fresh set of rows, so without a window a project grows by
 about one audit each time you run it. On a 1,000-page site that is roughly 95 MB
 per audit, forever. Three is the default because it covers

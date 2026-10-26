@@ -10,7 +10,9 @@ It's informational: technology detection **never affects your health score**. It
 
 ## What it detects
 
-Detection runs against response headers, HTML, inline and external scripts, cookies, and meta tags, and reports versions where they can be determined. Results are grouped by category:
+Detection runs against response headers, HTML, inline and external scripts, cookies, and meta tags, and reports versions where they can be determined. The crawler keeps every response header a signature reads, such as `X-CDN`, `X-Sucuri-ID` or `Via` (each value cut to 512 characters), so a header-only signature matches in a local audit too. A header a signature only checks for presence, such as a request id or a bot protection token, is kept as a marker, not its value. In an audit the CLI runs, a cookie is matched by its name: only the names of the cookies a page sets are passed to detection, never their values. A page squirrel stored before it kept these headers, and that the crawl cache reuses, is read without them until it is fetched again.
+
+Results are grouped by category:
 
 | Category | Examples |
 |----------|----------|
@@ -44,7 +46,7 @@ Technologies appear in **every output format** - console, HTML, Markdown, JSON, 
 ## When it runs
 
 - **Logged in** - detection runs automatically as part of every cloud audit. One detection per domain, regardless of how many pages you crawl.
-- **Logged out or `--offline`** - skipped, like every other cloud feature. Your local rules still complete.
+- **Logged out or `--offline`** - the cloud detection is skipped, like every other cloud feature. The CLI runs the same signatures over the crawled pages instead, so the Technologies section still appears, without the change history.
 
 Detection is best-effort and never fails the audit: if the service is unavailable, the Technologies section is simply omitted and you're not charged.
 

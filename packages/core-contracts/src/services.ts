@@ -1,8 +1,13 @@
 // Shared cloud-service contracts: request/response shapes for the credit-gated
-// Gemini-backed enrichment services (CLI -> API). Dep-free plain TypeScript
+// LLM-backed enrichment services (CLI -> API). Dep-free plain TypeScript
 // (type-only imports below are erased at compile time).
 
-import type { DomainStatsMetrics, ReportTechnology, SoftwareAdvisory } from "./index";
+import type {
+  DomainStatsMetrics,
+  EditorSummaryPriority,
+  ReportTechnology,
+  SoftwareAdvisory,
+} from "./index";
 
 export type CloudServiceId =
   | "ai-parse"
@@ -83,6 +88,37 @@ export interface AuthorityResponse {
 export interface DeadLinksRequest {
   auditId?: string;
   urls: string[];
+  /**
+   * The signed-in CLI audit's registered run (#801): the batch's link checks
+   * are billed to it, 1 credit per distinct external link the cloud answers,
+   * at most one per page of its page cap. A call without one is billed to the
+   * caller's org, 1 credit per distinct link it verifies, except from a CLI
+   * before v0.0.114: that one is refused (426), never charged, and the CLI
+   * checks its links locally.
+   */
+  runId?: string;
+}
+
+/**
+ * Why a link could not be verified (pub#821): bot protection refused the check
+ * (`blocked`), it timed out or failed to connect from the checker's network
+ * (`unreachable`), or it answered 404 once and waits for a second check to
+ * confirm it (`awaiting-confirmation`), a likely-broken link rather than a
+ * blocked one.
+ */
+export type UnverifiedReason = "blocked" | "unreachable" | "awaiting-confirmation";
+
+export const UNVERIFIED_REASONS: readonly UnverifiedReason[] = [
+  "blocked",
+  "unreachable",
+  "awaiting-confirmation",
+];
+
+/** `value` as an {@link UnverifiedReason}, or undefined for anything else (untrusted input). */
+export function parseUnverifiedReason(value: unknown): UnverifiedReason | undefined {
+  return typeof value === "string" && (UNVERIFIED_REASONS as readonly string[]).includes(value)
+    ? (value as UnverifiedReason)
+    : undefined;
 }
 
 export interface DeadLinkResult {
@@ -115,6 +151,23 @@ export interface DeadLinkResult {
   wafBlocked?: boolean;
   /** The bot-protection vendor when the checker named one (`cloudflare`, `akamai`, ...), else `unknown`. */
   wafProvider?: string;
+  /**
+   * Why the link is unverifiable, with `wafBlocked` (pub#821). Optional so
+   * older service responses, and a value this client does not know, keep
+   * parsing: the link then reads as plainly unverified.
+   */
+  unverifiedReason?: UnverifiedReason;
+  /**
+   * The checker refused to request the link because its name resolved to a
+   * non-public address (or a redirect led to one), so it said nothing about
+   * the link. Sent with `wafBlocked` and `unverifiedReason: "unreachable"`, so
+   * a client that predates this field reads the link as unverifiable. A
+   * client that reads it checks the link itself: an audit of a site on a
+   * private network can reach it, and a public site's audit refuses it
+   * locally as well. The refusal itself is never a broken link. Optional so
+   * older service responses keep parsing.
+   */
+  egressRefused?: boolean;
 }
 
 export interface DeadLinksResponse {
@@ -250,8 +303,8 @@ export interface TechDetectResponse {
 // --- editor-summary ---------------------------------------------------------
 // An auto-generated "editor's-style" audit summary (credit-only, any signed-in
 // plan), framed like a
-// quick exec-email to management: prose narrative + point-form big-ticket items.
-// ONE Sonnet 4.6 call per audit from the audit aggregate. Credited,
+// quick exec-email to management: prose narrative + ranked priorities.
+// ONE model call per audit from the audit aggregate. Credited,
 // report-only / non-scoring. The CLI sends a slim, pre-aggregated digest (never
 // the full report) — the server is a thin, untrusted wrapper around the model.
 
@@ -318,6 +371,56 @@ export interface EditorSummaryRequest {
    * site has no broken links. Absent when every check ran.
    */
   notChecked?: EditorSummaryNotCheckedInput[];
+  /**
+   * Technologies the audit detected, so action points can name the platform,
+   * plugin or setting to change. Capped by the CLI; absent when tech detection
+   * found nothing. Older servers ignore it.
+   */
+  technologies?: EditorSummaryTechnologyInput[];
+  /**
+   * Every rule id that failed or warned (not just the ranked top issues),
+   * capped by the CLI. Older servers ignore it.
+   */
+  failingRuleIds?: string[];
+  /**
+   * How much of the site this audit covered, so the summary can say plainly
+   * when it read only part of it and suggest a deeper audit. Engine counts,
+   * never estimated. Absent when the report has no scan scope. Older servers
+   * ignore it.
+   */
+  coverage?: EditorSummaryCoverageInput;
+}
+
+/** The audit's coverage facts for the summary (from scanScope, coverage, rateLimited). */
+export interface EditorSummaryCoverageInput {
+  /** Pages freshly crawled this run (`scanScope.pagesCrawled`). */
+  scannedPages: number;
+  /** Page cap in effect, when the runner had one. */
+  maxPages?: number;
+  /** The page cap was the binding constraint. */
+  capped: boolean;
+  /** The crawl time budget stopped the crawl (`scanScope.stopReason === "time"`). */
+  timeStopped: boolean;
+  /** Pages the audit knows exist (`coverage.knownPages`), when reported. */
+  knownPages?: number;
+  /**
+   * Pages discovered but never fetched (`rateLimited.unfetched`, else
+   * `scanScope.unfetched`), when reported.
+   */
+  unfetchedPages?: number;
+}
+
+/** One detected technology fed to the summary. */
+export interface EditorSummaryTechnologyInput {
+  /** Fingerprint id, e.g. "wordpress". */
+  id: string;
+  /** Display name, e.g. "WordPress". */
+  name: string;
+  /** Category, e.g. "cms", "cdn", "web-server". */
+  category: string;
+  version?: string | null;
+  /** Detector that matched, e.g. "header:server" or "html:wp-content/". */
+  detectedBy?: string;
 }
 
 /** One check the audit did not run, for the summary prompt. */
@@ -352,7 +455,12 @@ export interface EditorSummaryResponse {
   bigTicket: string[];
   /** One-line bottom-line verdict. */
   verdict: string;
-  /** Model id that produced this (e.g. "google/gemini-3.1-flash-lite"). */
+  /**
+   * Ranked next steps, highest impact first, when the server supports them.
+   * `bigTicket` is still sent for older clients.
+   */
+  priorities?: EditorSummaryPriority[];
+  /** Model id that produced this (e.g. "openai/gpt-6-luna"). */
   model: string;
   /** ISO timestamp the summary was generated. */
   generatedAt: string;

@@ -62,13 +62,19 @@ export function apiResultToTool(
   }
 }
 
-// Pull a server error string: object `error`/`message`, or a JSON string body (response.json() yields a string). Capped so a verbose body can't flood the agent context.
+// Pull a server error string: the typed envelope's `error.message`, a bare string `error`/`message`, or a JSON string body (response.json() yields a string). Capped so a verbose body can't flood the agent context.
 function extractApiError(result: ApiResult<unknown>): string | null {
   const cap = (s: string): string | null =>
     s.length > 0 ? s.slice(0, 300) : null;
   const data = result.data;
   if (typeof data === "string") return cap(data);
   if (data && typeof data === "object") {
+    const error = (data as Record<string, unknown>).error;
+    if (error && typeof error === "object") {
+      const message = (error as Record<string, unknown>).message;
+      if (typeof message === "string" && message.length > 0)
+        return cap(message);
+    }
     for (const key of ["error", "message"] as const) {
       const value = (data as Record<string, unknown>)[key];
       if (typeof value === "string" && value.length > 0) return cap(value);

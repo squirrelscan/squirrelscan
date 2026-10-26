@@ -61,3 +61,38 @@ the docs theme's KaTeX styles and the plugins above were not built against. The
 docs render only our own math, so there is no untrusted input to bypass.
 
 Remove this exception when every consumer above accepts KaTeX `0.18`.
+
+## GHSA-98hj-9722-w3j8 and GHSA-mpr7-6m5w-76rw
+
+Astro: unescaped `<script>`/`<style>` content in JSX/MDX rendering (moderate,
+fixed in `7.3.2`), and CSS injection through View Transitions (low, fixed in
+`7.3.3`). The tree resolves `7.2.9`, held by the root `overrides` range
+`>=7.2.8 <7.2.10` (#301). Astro `7.2.10` and `7.3.x` need
+`@astrojs/markdown-remark` `^7.3.0` and `markdown-satteri` `0.4.x`, while the
+`@astrojs/mdx` `7.0.x` that tangly is built against (tangly `0.5.2`, the latest,
+still asks for `^7.0.8`) pins `markdown-remark` `7.2.4` and peers on
+`markdown-satteri` `^0.3.1`. Lifting the cap leaves the MDX integration with
+unsatisfied peers and duplicate copies.
+
+Astro is docs-workspace only: nothing in the compiled `squirrel` binary loads it.
+docs.squirrelscan.com is a static build served as Cloudflare assets, so nothing
+renders at request time, and every page is our own MDX with no untrusted props or
+view-transition values. Neither advisory has untrusted input to work with.
+
+Remove this exception, and the cap, when tangly moves to `@astrojs/mdx` `8`.
+
+## GHSA-mrhx-c7xc-m3w5
+
+Zod: memory exhaustion while validating oversized constrained collections (high,
+fixed in `4.6.6`). `cli` and `rules` ask for `^4.6.6`, and that copy (`4.6.7`)
+is also the one the MCP packages, tangly/astro and ultracite resolve. Two
+affected copies remain. `config` and `crawler` ask for `^3.25.76`, and reaching
+`4.6.6` there is a zod 3 to 4 migration, not a bump (#1085).
+`@vercel/cli-config` (docs only, through `@vercel/oidc`) pins `4.1.11` exactly
+and is not in the compiled binary.
+
+Public zod validates trusted local config and our own cloud API responses. The
+attack needs an attacker-sized array inside the validated input, and neither
+source carries one from an untrusted party.
+
+Remove this exception when zod is at `4.6.6` or later everywhere (#1085).

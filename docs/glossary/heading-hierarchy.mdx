@@ -1,0 +1,85 @@
+---
+title: "Heading hierarchy: h1 to h6 for people and parsers"
+description: "Heading hierarchy is the nesting of h1 to h6 that gives a page its outline for readers, screen readers and parsers. Skipped levels, empty headings, one h1."
+sidebarTitle: "Heading hierarchy"
+---
+
+**Heading hierarchy** is the nesting of `<h1>` to `<h6>` headings that gives a page its outline, for people scanning it, for screen reader users moving through it and for software that parses it.
+
+The W3C's page structure tutorial puts it simply: headings communicate the organization of the content, and browsers and assistive technology use them for in-page navigation. A heading of equal or higher rank starts a new section, and a lower rank starts a subsection. The tutorial says skipping ranks, an `<h2>` followed directly by an `<h4>`, can be confusing and should be avoided where possible. Closing subsections is the exception: an `<h4>` followed by an `<h2>` is fine.
+
+{/* glossary:hub:start */}
+
+Category: [Content](/rules/content)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+A screen reader user can list a page's headings and jump between them, so the outline is the table of contents. A skipped level suggests a missing section. An empty heading is announced as a heading with nothing in it. Headings are also structure under WCAG success criterion 1.3.1, Info and Relationships, which asks that relationships shown visually are also available in the markup. The common cause is choosing a heading level for its font size.
+
+## How squirrelscan checks it
+
+[a11y/heading-order](/rules/a11y/heading-order) reads every heading in document order and warns when one is more than a level deeper than the one before, listing each skip as `H3 after H1`. The first heading on the page never counts as a skip. [content/heading-hierarchy](/rules/content/heading-hierarchy) also warns on skipped levels and on empty headings, and notes headings over 70 characters and repeated heading text at info level. [a11y/empty-heading](/rules/a11y/empty-heading) warns on a heading with no text, no label and no image alt, skipping headings that are hidden from the accessibility tree. [core/h1](/rules/core/h1) fails a page with no `<h1>` and warns on more than one, or on an empty one.
+
+All four read the HTML the server sent, so headings rendered by JavaScript are only seen when browser rendering is on.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Skipped heading levels: h1 to h3 and other outline problems](/rules/content/heading-hierarchy) | Headings are the page's outline, and a skipped level breaks it for anyone navigating by structure. squirrel checks order, emptiness, length and repeats. | warning |
+| [Heading order: why skipping from h1 to h3 matters](/rules/a11y/heading-order) | Screen reader users navigate by heading level, and a skipped level makes the outline harder to follow. squirrel checks document order on every page. | warning |
+| [Empty headings: what counts as empty and how to check](/rules/a11y/empty-heading) | A heading with no text still shows up in the screen reader outline, as a blank entry. squirrel flags every one on every page. | warning |
+| [Missing or multiple H1: what squirrel expects on a page](/rules/core/h1) | A page with no H1, more than one, or an empty one. squirrel checks the heading on every crawled page. | error |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Choose each level from its place in the outline, and set the size in CSS:
+
+```html
+<h1>Pricing</h1>
+<h2>Plans</h2>
+<h3>Team</h3>
+<h2>Frequently asked questions</h2>
+```
+
+Two components stacked on one page often skip a level at the seam. Pass the starting level into the component as a prop ([the heading order fix](/rules/a11y/heading-order#how-to-fix-it)). Turn a heading used only for styling into a `<div>` or `<p>` ([the empty heading fix](/rules/a11y/empty-heading#how-to-fix-it)). Give each page one `<h1>` at the top of the main content. A logo in an `<h1>` in the site header belongs to the site, not the page ([the h1 fix](/rules/core/h1#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include content/heading-hierarchy,a11y/heading-order,a11y/empty-heading,core/h1
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [WCAG](/glossary/wcag): The W3C's Web Content Accessibility Guidelines, organised as testable success criteria at levels A, AA and AAA; 2.2 is current.
+- [Landmark regions](/glossary#landmark): The page regions (main, nav, header, footer) that screen reader users jump between, plus the skip link to main content.
+- [Thin content](/glossary/thin-content): A page with too little substantive content to be useful, judged here against word count and the site's own norm.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Headings, W3C WAI page structure tutorial](https://www.w3.org/WAI/tutorials/page-structure/headings/)
+- [Understanding SC 1.3.1 Info and Relationships, W3C](https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html)
+- [Understanding SC 2.4.6 Headings and Labels, W3C](https://www.w3.org/WAI/WCAG22/Understanding/headings-and-labels.html)
+
+{/* glossary:jsonld:start */}
+
+import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";
+
+<GlossaryJsonLd slug="heading-hierarchy" />
+
+{/* glossary:jsonld:end */}

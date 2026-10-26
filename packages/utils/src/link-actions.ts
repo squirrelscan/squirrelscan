@@ -241,6 +241,13 @@ function words(text: string): string[] {
     .filter((w) => w !== "");
 }
 
+/** `out2` as `out`. A backward scan: `/\d+$/` retries across a long digit run (#779). */
+function withoutTrailingDigits(word: string): string {
+  let end = word.length;
+  while (end > 0 && word.charCodeAt(end - 1) >= 48 && word.charCodeAt(end - 1) <= 57) end--;
+  return word.slice(0, end);
+}
+
 function decode(text: string): string | null {
   try {
     return decodeURIComponent(text.replace(/\+/g, " "));
@@ -282,7 +289,10 @@ function hasActionWords(
     if (reach <= 3 && STRONG_ACTION_WORDS.has(word)) return true;
     if (reach <= 2 && WEAK_ACTION_WORDS.has(word)) return true;
     if (i + 1 < parts.length) {
-      const pair = `${word} ${parts[i + 1]}`;
+      // A version digit after the sign-out word (`/LogOut2`, `/SignOut1.aspx`)
+      // is not another word. Dropped here and not in `words()`, so `oauth2`
+      // stays one word and `/oauth2/docs` is still a page.
+      const pair = `${word} ${withoutTrailingDigits(parts[i + 1]!)}`;
       if (reach <= 4 && ACTION_PAIRS.has(pair)) return true;
       if (reach <= 5 && SIGN_OUT_PAIRS.has(pair)) return true;
     }
@@ -291,8 +301,29 @@ function hasActionWords(
 }
 
 /**
+ * Whether a fragment written as `key=value` pairs (`#access_token=…`,
+ * `#id_token=…`) carries a secret: a key that names one, as in a query, or a
+ * value that looks like a token. A plain anchor (`#pricing`) or a hash route
+ * without pairs (`#/settings`) carries none.
+ */
+function fragmentCarriesCredential(hash: string): boolean {
+  const fragment = hash.startsWith("#") ? hash.slice(1) : hash;
+  if (!fragment.includes("=")) return false;
+  for (const [rawKey, rawValue] of new URLSearchParams(fragment)) {
+    const key = rawKey.toLowerCase();
+    const keyWords = words(rawKey);
+    if (SECRET_KEYS.has(key) || keyWords.some((w) => SECRET_KEY_WORDS.has(w) || SESSION_ID_WORDS.has(w))) {
+      return true;
+    }
+    if (isCredentialParam(rawKey) || looksLikeAToken(rawValue)) return true;
+  }
+  return false;
+}
+
+/**
  * A link whose path or query reads like an action rather than a page, or that
- * carries a secret or a one-time token. The internal link probe never
+ * carries a secret or a one-time token (in its query, path, userinfo or a
+ * `key=value` fragment). The internal link probe never
  * requests these: a status-only request is still a request, and a crawl that
  * did not follow links never would have. A crawl that follows links reaches
  * pages through the crawler, which is unchanged.
@@ -320,8 +351,31 @@ export function looksLikeAnAction(url: string): boolean {
     if (hasActionWords(parts, false, reach)) return true;
     if (parts.some((w) => SESSION_ID_WORDS.has(w))) return true;
     if (reach <= 2 && parts.some((w) => SECRET_KEY_WORDS.has(w))) return true;
-    for (const piece of segment.split(/[;,/]/)) {
+    const [head = "", ...matrix] = segment.split(";");
+    for (const piece of head.split(/[,/]/)) {
       if (looksLikeAToken(piece)) pathTokens.push(piece);
+    }
+    // A matrix parameter (`/file;sig=…`, `/a.zip;X-Amz-Credential=…`) is a key
+    // and a value: the key can name a credential and the value can be a token,
+    // and the whole piece is neither because `=` joins them. Only after a `;`,
+    // so an `=` elsewhere in a path (`/guides/password-policy=examples`) is not
+    // a parameter (#779).
+    for (const param of matrix) {
+      const equals = param.indexOf("=");
+      if (equals > 0) {
+        const key = param.slice(0, equals);
+        const value = param.slice(equals + 1);
+        if (
+          isCredentialParam(key, value) ||
+          words(key).some((w) => SECRET_KEY_WORDS.has(w) || SESSION_ID_WORDS.has(w))
+        ) {
+          return true;
+        }
+        if (looksLikeAToken(value)) pathTokens.push(value);
+      }
+      for (const piece of param.split(/[,/]/)) {
+        if (looksLikeAToken(piece)) pathTokens.push(piece);
+      }
     }
   }
   for (const [rawKey, rawValue] of parsed.searchParams) {
@@ -337,6 +391,10 @@ export function looksLikeAnAction(url: string): boolean {
     if (looksLikeAToken(rawKey) || looksLikeAToken(rawValue)) return true;
     if (hasActionWords(keyWords, true) || hasActionWords(valueWords, true)) return true;
   }
+  // A credential in the fragment (an OAuth implicit-flow redirect,
+  // `#access_token=…&token_type=bearer`) is never sent with a request, but the
+  // URL is still the credential, and stored or listed it would leak.
+  if (fragmentCarriesCredential(parsed.hash)) return true;
   // A token in the path is a credential when the URL says so; a bare id
   // (`/posts/<uuid>`) is still a page. A JWT is always a credential.
   if (pathTokens.some((t) => t.includes("."))) return true;

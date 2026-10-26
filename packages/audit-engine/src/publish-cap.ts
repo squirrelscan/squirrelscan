@@ -13,15 +13,19 @@
 // In order:
 //  1. Count what sampling is about to throw away, from the FULL report:
 //     `checkTallies` (this run's fresh checks per rule and check name, in the
-//     scorer's own units), and build the scoring transport: the compact
-//     resolution signal and `pageStatuses`, together within their byte share.
+//     scorer's own units), `linkTargetSets` (every target each link rule
+//     lists broken or unverifiable, as hashes, repo#2861), and build the
+//     scoring transport: the compact resolution signal and `pageStatuses`,
+//     together within their byte share.
 //  2. Fold every rule's issue classes ONCE, one aggregate per (check name,
 //     status, provenance, foldKey), and drop the per-page pass rows (their
 //     counts are in the tallies). Folding once matters: `foldGroup` appends
 //     "(+N more pages)", so folding an aggregate again stacks the suffix.
 //     Each class's page sample leads with the page it hits hardest, and its
 //     items are ranked by how many pages they are on. Top-level `siteChecks`
-//     entries that repeat a site check of `ruleResults` are left out.
+//     entries that repeat a site check of `ruleResults` are left out. A rule
+//     whose classes reach pages its largest class does not gets its distinct
+//     page count in `rulePageCounts` (repo#2935).
 //  3. Sample each class at REPORT_CAPS.tiers[0] and measure. Over budget, fill
 //     breadth first: every class gets a counts row, then a small sample, then
 //     the full one, highest priority first, while the budget lasts. If the
@@ -45,11 +49,16 @@ import type {
   CheckResult,
   CheckTallies,
   CheckTally,
+  LinkTargetSets,
   PublishedReportDetail,
   ResolutionSignal,
   RuleMetaLite,
 } from "@squirrelscan/core-contracts";
-import { NOT_CHECKED_SKIP_REASONS } from "@squirrelscan/core-contracts";
+import {
+  LINK_COVERAGE_DETAIL_KEYS,
+  LINK_TARGET_SET_RULES,
+  NOT_CHECKED_SKIP_REASONS,
+} from "@squirrelscan/core-contracts";
 import type { CompactResolutionSignal } from "@squirrelscan/core-contracts/resolution";
 import { clampItemString } from "@squirrelscan/core-contracts/clamp";
 import { ENTITY_MAP_PUBLISH_LIMITS, type EntityMap } from "@squirrelscan/core-contracts/entity-map";
@@ -81,6 +90,7 @@ import {
 } from "@squirrelscan/rules/resolution";
 import { byteLength } from "@squirrelscan/utils/bytes";
 import { RULE_ID_ROBOTS_TXT, RULE_ID_SITEMAP_EXISTS } from "@squirrelscan/utils/constants";
+import { encodeLinkTargetSet } from "@squirrelscan/utils/link-target-set";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
 
 import { isReplayedCheck, REMOVED_STATUSES } from "./published-checks";
@@ -119,6 +129,10 @@ export interface CappableReport {
   sitemapUrlStatuses?: unknown;
   rulesCache?: unknown;
   checkTallies?: unknown;
+  /** Never trusted from the input: the capper counts its own (repo#2935). */
+  rulePageCounts?: unknown;
+  /** Never trusted from the input: the capper builds its own (repo#2861). */
+  linkTargetSets?: unknown;
   detail?: unknown;
 }
 
@@ -131,6 +145,8 @@ export type CappedReport<T extends CappableReport> = Omit<
   | "entityMap"
   | "rulesCache"
   | "checkTallies"
+  | "rulePageCounts"
+  | "linkTargetSets"
   | "detail"
   | "resolutionSignal"
   | "resolutionSignalCompact"
@@ -141,6 +157,10 @@ export type CappedReport<T extends CappableReport> = Omit<
   siteChecks: CheckResult[];
   entityMap?: EntityMap;
   checkTallies: CheckTallies;
+  /** Absent when no rule needs one (see {@link rulePageCount}). */
+  rulePageCounts?: Record<string, number>;
+  /** Absent when no link rule ran (see {@link buildLinkTargetSets}). */
+  linkTargetSets?: Record<string, LinkTargetSets>;
   detail: PublishedReportDetail;
   resolutionSignalCompact?: CompactResolutionSignal;
   pageStatuses?: Array<{ url: string; status: number }>;
@@ -188,6 +208,75 @@ export class PublishedReportTooLargeError extends Error {
     this.tier = context.tier ?? 0;
     this.pages = context.pages ?? 0;
   }
+}
+
+// ── Link target sets ────────────────────────────────────────────
+
+/** A count a rule recorded in a row's `details`, or 0. */
+function detailNumber(details: unknown, key: string): number {
+  const value = (details as Record<string, unknown> | undefined)?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+/**
+ * A row that lists fewer targets than it found, before the capper samples
+ * anything: the rule's own sample (`details.listed`, `details.totalBroken` past
+ * its items, or a `value` past them: the refused and not-requested external
+ * rows count their links in `value`), an input aggregate's `additional`, or the
+ * per-check item cap. A row whose `value` is something else only reads as
+ * partial, which fails safe: an incomplete set never says a target is absent.
+ */
+function listsPartially(check: CheckResult): boolean {
+  const items = check.items?.length ?? 0;
+  return (
+    detailNumber(check.details, "listed") > 0 ||
+    detailNumber(check.details, "additional") > 0 ||
+    detailNumber(check.details, "totalBroken") > items ||
+    (typeof check.value === "number" && check.value > items) ||
+    items >= REPORT_LIMITS.maxItemsPerCheck
+  );
+}
+
+/**
+ * repo#2861: per link rule in {@link LINK_TARGET_SET_RULES} that ran, the set
+ * of every target its failing rows list and every one its unverifiable rows
+ * list, hashed (`encodeLinkTargetSet`), from the rows as the producer sent
+ * them, before anything is sampled. Kept whole at every tier: a broken link
+ * alert compares two audits' sets to tell a link that broke since the previous
+ * audit from one that was already broken, which the sampled rows cannot.
+ *
+ * A rule that did not run this audit (no fresh pass or failing row: skipped, or
+ * only rows replayed from an earlier audit) gets none. A replayed row's
+ * targets do count when the rule ran: one listed broken last time and not
+ * re-checked may still be, and reading it as listed can only hold an alert
+ * back.
+ */
+function buildLinkTargetSets(
+  ruleResults: Record<string, { checks: CheckResult[] }>,
+): Record<string, LinkTargetSets> {
+  const out: Record<string, LinkTargetSets> = {};
+  for (const [ruleId, rows] of Object.entries(LINK_TARGET_SET_RULES)) {
+    const checks = ruleResults[ruleId]?.checks;
+    if (!Array.isArray(checks)) continue;
+    const main = checks.filter((c) => c.name === rows.broken);
+    const ran = main.some(
+      (c) =>
+        (c.status === "pass" || c.status === "fail" || c.status === "warn") &&
+        c.provenance !== "carried" &&
+        c.provenance !== "unrendered",
+    );
+    if (!ran) continue;
+    const broken = main.filter((c) => c.status === "fail" || c.status === "warn");
+    const unverified = checks.filter((c) => rows.unverified.includes(c.name));
+    const ids = (list: CheckResult[]) => list.flatMap((c) => (c.items ?? []).map((item) => item.id));
+    out[ruleId] = {
+      broken: encodeLinkTargetSet(ids(broken), { partial: broken.some(listsPartially) }),
+      unverified: encodeLinkTargetSet(ids(unverified), {
+        partial: unverified.some(listsPartially),
+      }),
+    };
+  }
+  return out;
 }
 
 // ── Tallies ─────────────────────────────────────────────────────
@@ -248,6 +337,44 @@ export function buildCheckTallies(
   return out;
 }
 
+// ── Rule page counts ────────────────────────────────────────────
+
+/**
+ * The distinct pages a rule fails or warns on this run (squirrelscan/repo#2935),
+ * when its issue classes reach pages its largest class does not; undefined
+ * when the largest class holds every page.
+ *
+ * The published rows sample every class with its true count, but the pages a
+ * sample leaves out cannot be told apart across classes, so a reader can only
+ * take the largest class as a floor: two disjoint classes of 46 and 4 pages
+ * read 46. This is the union, from the full report before sampling: the pages
+ * of this run's page-attributed fail and warn checks (a per-page check's
+ * `pageUrl`, a folded aggregate's `pages`). Replays are left out, as the
+ * tallies leave them out (the server's merge replaces them from its own
+ * store), so a reader that adds replayed pages back knows the count is then a
+ * floor. `classes` are the originals of each class as foldRule keys them. A
+ * rule with an input aggregate that was itself already sampled gets no count:
+ * its union would be a floor too, and a published count is exact.
+ */
+function rulePageCount(classes: Iterable<CheckResult[]>): number | undefined {
+  const union = new Set<string>();
+  let largest = 0;
+  for (const originals of classes) {
+    const pages = new Set<string>();
+    for (const check of originals) {
+      // An input aggregate that was itself already sampled hides pages this
+      // union cannot see: no exact count, so none is published.
+      const truncated = check.details?.pagesTruncated;
+      if (typeof truncated === "number" && truncated > (check.pages?.length ?? 0)) return undefined;
+      if (check.pageUrl) pages.add(check.pageUrl);
+      for (const page of check.pages ?? []) pages.add(page);
+    }
+    for (const page of pages) union.add(page);
+    largest = Math.max(largest, pages.size);
+  }
+  return union.size > largest ? union.size : undefined;
+}
+
 // ── Issue classes ───────────────────────────────────────────────
 
 /** What `foldGroup` appends to an aggregate's message. */
@@ -290,6 +417,8 @@ interface FoldedRule {
   kept: ClassUnit[];
   /** True class total, reconciled with any total an earlier cap recorded. */
   total: number;
+  /** The rule's distinct failing pages, when its classes cannot add up to it ({@link rulePageCount}). */
+  pageCount?: number;
 }
 
 function occurrencesOf(check: CheckResult): number {
@@ -578,7 +707,24 @@ function foldRule(ruleId: string, rule: { meta: CappableRuleMeta; checks: CheckR
       .slice(0, REPORT_CAPS.classesPerRule)
       .sort((a, b) => a.order - b.order);
   }
-  return { id: ruleId, meta: capMeta(rule.meta), kept, total };
+  // A class is one status and one provenance (foldGroupKey): its first member
+  // says which. Replays are left out, as the tallies leave them out: the
+  // server's merge replaces them from its own store.
+  const pageCount = rulePageCount(
+    [...classes.values()]
+      .filter((entry) => {
+        const first = entry.members[0]!;
+        return (first.status === "fail" || first.status === "warn") && !isReplayedCheck(first);
+      })
+      .map((entry) => entry.originals),
+  );
+  return {
+    id: ruleId,
+    meta: capMeta(rule.meta),
+    kept,
+    total,
+    ...(pageCount !== undefined ? { pageCount } : {}),
+  };
 }
 
 // ── Sampling ────────────────────────────────────────────────────
@@ -592,7 +738,11 @@ interface SampleCaps {
   countsOnly: boolean;
 }
 
-/** The `details` keys that carry a class's true totals and identity. */
+/**
+ * The `details` keys that carry a class's true totals and identity, and what
+ * links/broken-links covered (pub#794): a reader comparing two audits' broken
+ * links needs those counts most on the large reports a counts row comes from.
+ */
 const COUNT_KEYS = [
   "aggregated",
   "occurrences",
@@ -600,6 +750,7 @@ const COUNT_KEYS = [
   "additional",
   "checksTruncated",
   "foldKey",
+  ...LINK_COVERAGE_DETAIL_KEYS,
 ] as const;
 
 function additionalOf(check: CheckResult): number {
@@ -1117,6 +1268,9 @@ export function capReportForPublish<T extends CappableReport>(
   // The rows the server scores and shows: none on a page that 404'd or 410'd.
   const live = withoutRemovedPages(report.ruleResults, removedPageUrls(report));
   const checkTallies = buildCheckTallies(live);
+  // From the rows as they came, not `live`: unfolding an input aggregate moves
+  // its `additional` marker onto one page, and dropping that page would lose it.
+  const linkTargetSets = buildLinkTargetSets(report.ruleResults);
   // Exactly what the two fields add to the body. Their builder holds them to
   // REPORT_CAPS.signalMaxBytes together, keys included.
   const transportBytes =
@@ -1128,6 +1282,8 @@ export function capReportForPublish<T extends CappableReport>(
 
   // 2. Every rule's classes folded once, in rule-id order.
   const rules = ruleIds.map((id) => foldRule(id, live[id]!));
+  const rulePageCounts: Record<string, number> = {};
+  for (const rule of rules) if (rule.pageCount !== undefined) rulePageCounts[rule.id] = rule.pageCount;
   // Top-level `siteChecks` repeats the site checks of `ruleResults` (9,137 of
   // 9,138 entries over 187 real reports), and nothing reads it but the schema
   // bounds and the publish counts, so a copy of a check `ruleResults` already
@@ -1151,6 +1307,8 @@ export function capReportForPublish<T extends CappableReport>(
     entityMap: _entityMap,
     rulesCache: _rulesCache,
     checkTallies: _checkTallies,
+    rulePageCounts: _rulePageCounts,
+    linkTargetSets: _linkTargetSets,
     detail: _detail,
     resolutionSignal: _resolutionSignal,
     resolutionSignalCompact: _resolutionSignalCompact,
@@ -1177,6 +1335,8 @@ export function capReportForPublish<T extends CappableReport>(
         }
       : {}),
     checkTallies,
+    ...(Object.keys(rulePageCounts).length > 0 ? { rulePageCounts } : {}),
+    ...(Object.keys(linkTargetSets).length > 0 ? { linkTargetSets } : {}),
   });
   const { map: entityMap, failed: entityMapFailed } = slimEntityMap(report.entityMap);
   const tiers = REPORT_CAPS.tiers;

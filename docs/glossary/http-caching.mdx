@@ -1,0 +1,84 @@
+---
+title: "HTTP caching: Cache-Control for static assets and HTML"
+description: "HTTP caching lets browsers and CDNs reuse a response instead of fetching it again, controlled by Cache-Control and ETag. Values for assets and for HTML."
+sidebarTitle: "HTTP caching"
+---
+
+**HTTP caching** is the reuse of a stored response by a browser or a shared cache such as a CDN, governed by response headers like `Cache-Control`, `ETag` and `Last-Modified`.
+
+`Cache-Control: max-age` sets how many seconds a response stays fresh. `no-cache` allows storing it but requires a check with the server before each reuse. `no-store` forbids storing it at all, and `immutable` says the body will not change while it is fresh. A validator, an `ETag` or a `Last-Modified` date, makes that check cheap: when the `ETag` still matches the request's `If-None-Match`, the server answers `304 Not Modified` with no body.
+
+{/* glossary:hub:start */}
+
+Category: [Performance](/rules/perf)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+A repeat visit that reuses its CSS, JavaScript and images skips most of its downloads. A file whose name carries a content hash never changes, because a new version gets a new URL, so web.dev's advice is to cache it for a year. HTML does change, so it gets a short lifetime or `no-cache` with a validator. A response with neither a lifetime nor a validator is not uncacheable, but how long it is reused is left to each cache's heuristics.
+
+## How squirrelscan checks it
+
+[perf/cache-headers](/rules/perf/cache-headers) reads each page's response headers. It warns when there is no `Cache-Control` or `Expires`, when `no-cache` comes with no validator, or when any other `Cache-Control` has no `max-age`. `no-store` gets an info note. Responses it treats as HTML get an info note above one hour, and static assets get a warning when cached for less than a day. A response also counts as HTML when the whole URL, query string included, does not end in a dot and two to four lowercase letters, so a hashed asset behind a cache-busting parameter gets the HTML treatment.
+
+[perf/bad-caching](/rules/perf/bad-caching) looks across the site's HTML responses and warns when fewer than 60% expose an `ETag` or `Last-Modified`. It also records, at info level and without moving the score, the share of pages that declare a caching policy and the share served compressed. A CDN can strip the `ETag` your server sends, so visitors never get it, and when the validator check warns, the rule adds a note if at least half of the pages with no validator came through Cloudflare. Both rules skip `localhost` and private-network hosts, where a dev server is not the production edge.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Cache-Control on a page: what squirrel reads and expects](/rules/perf/cache-headers) | A response with no caching headers, no-cache with no validator, or a static asset cached for under a day. squirrel reads the headers per page. | warning |
+| [Weak caching across a site: freshness, validators, gzip](/rules/perf/bad-caching) | Most pages missing a freshness lifetime, an ETag, or compression. squirrel measures the share across every crawled HTML response. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Cache hashed assets for a year and keep HTML short, with a validator:
+
+```
+# /assets/app.3f9a1c.js
+Cache-Control: public, max-age=31536000, immutable
+
+# HTML
+Cache-Control: public, max-age=0, s-maxage=600
+ETag: "a1b2c3"
+```
+
+`s-maxage` lets a CDN hold the page for ten minutes while browsers revalidate ([the per-page fix](/rules/perf/cache-headers#how-to-fix-it)). Set the headers at the edge rather than per route, so every page gets them ([the site-wide fix](/rules/perf/bad-caching#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include perf/cache-headers,perf/bad-caching
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Time to First Byte (TTFB)](/glossary#ttfb): The time from the request until the first byte of the response arrives, covering redirects, DNS, connection and server time.
+- [Page weight](/glossary#page-weight): The total bytes a page downloads across HTML, CSS, JavaScript, images and fonts.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Prevent unnecessary network requests with the HTTP Cache, web.dev](https://web.dev/articles/http-cache)
+- [Cache-Control, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control)
+- [HTTP caching, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Caching)
+
+{/* glossary:jsonld:start */}
+
+import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";
+
+<GlossaryJsonLd slug="http-caching" />
+
+{/* glossary:jsonld:end */}

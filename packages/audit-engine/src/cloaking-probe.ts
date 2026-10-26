@@ -13,12 +13,17 @@
 // inbound-link analysis that only exists once pages are parsed. OFF by default and
 // capped to `maxPages` so it never multiplies crawl cost.
 
+import { datePeriod } from "@squirrelscan/utils/date-period";
 import { getPathname, normalizeUrl } from "@squirrelscan/utils/url";
 import { stripHtmlForText } from "@squirrelscan/utils";
 
-import { DEFAULT_MAX_BODY_BYTES, fetchUndecoded, readBodyCapped } from "./lib/capped-body-read";
+import { DEFAULT_MAX_BODY_BYTES, readBodyCapped } from "./lib/capped-body-read";
+import { customHeadersFor, type ScopedHeaderOptions } from "./lib/header-scope";
+import { probeFetch } from "./lib/probe-fetch";
+import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 
 import type { CloakingProbeData } from "@squirrelscan/core-contracts";
+import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
 
 const DAY_MS = 86_400_000;
 
@@ -37,7 +42,9 @@ export const TOKEN_SIMILARITY_THRESHOLD = 0.5;
 /** Query param appended to detect token-/query-gated responses. */
 export const PROBE_QUERY_PARAM = "ss_cloak_probe";
 
-export interface CloakingProbeOptions {
+export type CloakingProbeOptions = CloakingProbeBaseOptions & ScopedHeaderOptions;
+
+interface CloakingProbeBaseOptions {
   /** Hard cap on probed paths. */
   maxPages: number;
   /** A sitemap lastmod within this many days counts as "recent". */
@@ -48,8 +55,8 @@ export interface CloakingProbeOptions {
   googlebotUserAgent: string;
   /** UA used for the baseline fetch (the crawl's own UA). */
   defaultUserAgent: string;
-  /** Custom request headers forwarded to every probe fetch (same as the crawl). */
-  customHeaders?: Record<string, string>;
+  /** Egress policy for every hop of a probe fetch (#2831). */
+  egress?: EgressPolicy;
   /** Per-fetch timeout. Default 15s. */
   timeoutMs?: number;
   /** Concurrent probe paths. Default 3. */
@@ -91,11 +98,16 @@ export type ProbeFetch = (
 
 // ── selection ───────────────────────────────────────────────────────
 
-/** Parse a lastmod string to ms epoch, or null if absent/unparseable. */
-export function parseLastmod(value: string | null): number | null {
-  if (!value) return null;
-  const t = Date.parse(value);
-  return Number.isNaN(t) ? null : t;
+/**
+ * When a lastmod last says the page changed, as ms epoch, or null if absent or
+ * unparseable (#772): the END of the period it names, capped at `now`. A bare
+ * `2026` names the whole year, so with `now` inside it the page may have
+ * changed today; read as 1 January it would never be recent.
+ */
+export function parseLastmod(value: string | null, now: number = Date.now()): number | null {
+  const period = datePeriod(value);
+  if (!period || period.start > now) return period ? period.start : null;
+  return Math.min(period.end, now);
 }
 
 /**
@@ -103,13 +115,16 @@ export function parseLastmod(value: string | null): number | null {
  * from the sitemap — same heuristic as integrity/orphan-page) and recently
  * modified pages (sitemap lastmod within `recentDays`). Orphans rank first (the
  * stronger compromise signal), then most-recently-modified. Capped at `maxPages`.
+ * Recent pages are ranked by the START of their lastmod's period, so a page
+ * dated yesterday outranks one stamped only with the current year, which may
+ * name today but says least about when (#772).
  */
 export function selectSuspiciousPaths(
   candidates: CloakingCandidate[],
   opts: { maxPages: number; recentDays: number; hasSitemap: boolean; now: number },
 ): SelectedProbe[] {
   const orphans: SelectedProbe[] = [];
-  const recent: { probe: SelectedProbe; lastmodMs: number }[] = [];
+  const recent: { probe: SelectedProbe; rankMs: number }[] = [];
   const seen = new Set<string>();
 
   for (const c of candidates) {
@@ -121,7 +136,7 @@ export function selectSuspiciousPaths(
     // no sitemap at all, absence is meaningless → zero inbound links alone.
     const isOrphan = c.inboundCount === 0 && (opts.hasSitemap ? !c.inSitemap : true);
 
-    const lastmodMs = parseLastmod(c.lastmod);
+    const lastmodMs = parseLastmod(c.lastmod, opts.now);
     const isRecent =
       lastmodMs !== null &&
       lastmodMs <= opts.now &&
@@ -133,12 +148,13 @@ export function selectSuspiciousPaths(
     if (isOrphan) {
       orphans.push({ url: c.url, reason: "orphan" });
     } else {
-      // lastmodMs is non-null here: isRecent requires it.
-      recent.push({ probe: { url: c.url, reason: "recent-lastmod" }, lastmodMs: lastmodMs! });
+      // The period is non-null here: isRecent requires it.
+      const rankMs = datePeriod(c.lastmod)!.start;
+      recent.push({ probe: { url: c.url, reason: "recent-lastmod" }, rankMs });
     }
   }
 
-  recent.sort((a, b) => b.lastmodMs - a.lastmodMs);
+  recent.sort((a, b) => b.rankMs - a.rankMs);
   return [...orphans, ...recent.map((r) => r.probe)].slice(0, Math.max(0, opts.maxPages));
 }
 
@@ -204,21 +220,34 @@ function byteLen(s: string): number {
 
 // ── orchestration ───────────────────────────────────────────────────
 
-function defaultProbeFetch(timeoutMs: number): ProbeFetch {
+/** `headers` without any `User-Agent`, whatever its casing. */
+function withoutUserAgent(
+  headers: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+  if (!headers) return headers;
+  return Object.fromEntries(Object.entries(headers).filter(([name]) => name.toLowerCase() !== "user-agent"));
+}
+
+function defaultProbeFetch(timeoutMs: number, egress?: EgressPolicy): ProbeFetch {
   return async (url, userAgent, headers) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      // Undecoded on every hop (#2717): readBodyCapped decodes within its cap.
-      const res = await fetchUndecoded(url, {
-        headers: {
-          "User-Agent": userAgent,
-          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          ...headers,
+      // Redirects by hand: custom headers never reach another origin (#2831).
+      const res = await probeFetch(
+        url,
+        {
+          headers: mergeHeaderRecords(
+            {
+              "User-Agent": userAgent,
+              Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            },
+            headers,
+          ),
+          signal: controller.signal,
         },
-        redirect: "follow",
-        signal: controller.signal,
-      });
+        egress,
+      );
       let body = "";
       try {
         body = await readBodyCapped(res, MAX_BODY_BYTES);
@@ -247,9 +276,20 @@ async function probeOne(
     if (res.error) errors.push(`${label}: ${res.error}`);
   };
 
-  const def = await fetchImpl(sel.url, opts.defaultUserAgent, opts.customHeaders);
+  const def = await fetchImpl(
+    sel.url,
+    opts.defaultUserAgent,
+    customHeadersFor(sel.url, opts.customHeaders, opts.headerScope),
+  );
   note("default", def);
-  const gb = await fetchImpl(sel.url, opts.googlebotUserAgent, opts.customHeaders);
+  // The Googlebot fetch IS its agent: a custom User-Agent among the audit's
+  // headers (any casing) must not replace it, or both fetches send the same
+  // agent and agent-based cloaking can never show (repo#3346).
+  const gb = await fetchImpl(
+    sel.url,
+    opts.googlebotUserAgent,
+    withoutUserAgent(customHeadersFor(sel.url, opts.customHeaders, opts.headerScope)),
+  );
   note("googlebot", gb);
 
   const ua = classifyDivergence(def, gb, UA_SIMILARITY_THRESHOLD);
@@ -262,7 +302,11 @@ async function probeOne(
 
   if (opts.queryVariation) {
     queryUrl = appendProbeToken(sel.url);
-    const q = await fetchImpl(queryUrl, opts.defaultUserAgent, opts.customHeaders);
+    const q = await fetchImpl(
+      queryUrl,
+      opts.defaultUserAgent,
+      customHeadersFor(queryUrl, opts.customHeaders, opts.headerScope),
+    );
     note("query", q);
     queryStatus = q.status;
     queryBytes = byteLen(q.body);
@@ -307,7 +351,7 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise
 export function runCloakingProbe(
   selected: SelectedProbe[],
   opts: CloakingProbeOptions,
-  fetchImpl: ProbeFetch = defaultProbeFetch(opts.timeoutMs ?? 15_000),
+  fetchImpl: ProbeFetch = defaultProbeFetch(opts.timeoutMs ?? 15_000, opts.egress),
 ): Promise<CloakingProbeData[]> {
   const limited = selected.slice(0, Math.max(0, opts.maxPages));
   return mapPool(limited, opts.concurrency ?? 3, (sel) => probeOne(sel, opts, fetchImpl));
@@ -324,6 +368,8 @@ export interface CloakingProbePage {
 
 export interface CloakingProbeSiteInput {
   baseUrl: string;
+  /** Where the crawl started (seed after redirects + the URL given); never probed (#788). */
+  entryUrls?: string[];
   pages: CloakingProbePage[];
   /** Flat list of sitemap URLs (loc + optional lastmod). */
   sitemapUrls: { loc: string; lastmod?: string }[];
@@ -366,10 +412,12 @@ export function probeSiteForCloaking(
   }
 
   const normalizedBase = input.baseUrl ? normalizeUrl(input.baseUrl) : "";
+  const entryPages = new Set((input.entryUrls ?? []).map((u) => normalizeUrl(u)));
   const candidates: CloakingCandidate[] = [];
   for (const p of input.pages) {
     const n = normalizeUrl(p.url);
-    if (n === normalizedBase || getPathname(p.url) === "/") continue; // never the homepage
+    // Never the homepage, nor the page the crawl started on (integrity/orphan-page).
+    if (n === normalizedBase || getPathname(p.url) === "/" || entryPages.has(n)) continue;
     candidates.push({
       url: p.url,
       normalizedUrl: n,
@@ -408,7 +456,10 @@ export interface CloakingProbeToggle {
 export async function resolveCloakingProbes(
   cfg: CloakingProbeToggle | undefined,
   site: CloakingProbeSiteInput,
-  runtime: { defaultUserAgent: string; customHeaders?: Record<string, string> },
+  runtime: {
+    defaultUserAgent: string;
+    egress?: EgressPolicy;
+  } & ScopedHeaderOptions,
   fetchImpl?: ProbeFetch,
 ): Promise<CloakingProbeData[] | undefined> {
   if (!cfg?.enabled) return undefined;
@@ -421,7 +472,10 @@ export async function resolveCloakingProbes(
         queryVariation: cfg.query_variation,
         googlebotUserAgent: cfg.googlebot_user_agent,
         defaultUserAgent: runtime.defaultUserAgent,
-        customHeaders: runtime.customHeaders,
+        ...(runtime.customHeaders
+          ? { customHeaders: runtime.customHeaders, headerScope: runtime.headerScope }
+          : { headerScope: runtime.headerScope }),
+        egress: runtime.egress,
       },
       fetchImpl,
     );

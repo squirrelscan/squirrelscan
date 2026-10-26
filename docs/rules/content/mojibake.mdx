@@ -11,7 +11,7 @@ Two other shapes appear alongside it. The replacement character, U+FFFD, is what
 
 ## What squirrel checks
 
-The rule runs on every crawled page over the prose in `<body>`, excluding `<script>`, `<style>`, `<noscript>` and the code-like elements `<code>`, `<pre>`, `<samp>` and `<kbd>`. Attributes and raw HTML are not read, since a reader never sees them. It emits a single check named `encoding-corruption`:
+The rule runs on every crawled page over the rendered prose in `<body>`, the same text [content/placeholder-text](/rules/content/placeholder-text) reads. It leaves out `<script>`, `<style>`, `<noscript>`, the code-like elements `<code>`, `<pre>`, `<samp>` and `<kbd>`, `<template>` content the browser never renders, and the containers of in-page code editors and syntax highlighters (classes `hljs`, `shiki`, `prism`, `torchlight`, `codeblock`, `code-block`, `cm-editor`, `monaco-editor`, and any class starting `language-`, `cm-` or `monaco-`). Every block boundary, such as one table cell to the next, counts as a line break, so adjacent blocks do not fuse into one sequence. Attributes and raw HTML are not read, since a reader never sees them. It emits a single check named `encoding-corruption`:
 
 - Skipped when there is no parsed document. Message: `No document available`.
 - Skipped when there is no `<body>`. Message: `No body element to read visible text from`.
@@ -73,6 +73,12 @@ enable = ["content/mojibake"]
 - [content/mime-type](/rules/content/mime-type): the header that carries the same charset parameter.
 
 Content findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Character encoding](/glossary/character-encoding).
+
+{/* glossary:backlinks:end */}
 
 ## References
 

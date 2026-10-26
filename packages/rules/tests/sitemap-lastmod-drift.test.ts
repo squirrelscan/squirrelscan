@@ -203,7 +203,9 @@ describe("crawl/sitemap-lastmod-drift", () => {
     expect(check.items?.[0]?.meta).toMatchObject({ deltaDays: 433 });
   });
 
-  test("behind by 5 days does not warn; behind by 8 does (7-day floor)", () => {
+  test("behind by 4 days does not warn; behind by 8 does (7-day floor)", () => {
+    // A date-only lastmod is its whole day (#772), so the gap runs from the
+    // end of 1 March: to 6 March is 4 days, to 10 March is 8.
     const ok = sitemapLastmodDriftRule.run(
       ctx(
         [{ url: "https://example.com/a", schemaDateModified: "2024-03-06T00:00:00Z" }],
@@ -214,7 +216,7 @@ describe("crawl/sitemap-lastmod-drift", () => {
 
     const warned = sitemapLastmodDriftRule.run(
       ctx(
-        [{ url: "https://example.com/a", schemaDateModified: "2024-03-09T00:00:00Z" }],
+        [{ url: "https://example.com/a", schemaDateModified: "2024-03-10T00:00:00Z" }],
         [{ loc: "https://example.com/a", lastmod: "2024-03-01" }]
       )
     );

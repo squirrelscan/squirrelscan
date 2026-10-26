@@ -34,6 +34,12 @@ interface PageSpec {
   status?: number;
   /** Raw head markup, when a fixture needs more than the three simple fields. */
   head?: string;
+  /** Paths this page lists as hreflang alternates (parser-extracted form). */
+  alternates?: string[];
+}
+
+function alternatesOf(spec: PageSpec) {
+  return spec.alternates?.map((path, i) => ({ hreflang: `l${i}`, href: url(path) })) ?? null;
 }
 
 function url(path: string): string {
@@ -60,6 +66,7 @@ function parsedFor(spec: PageSpec): ParsedPage {
     document,
     og: { image: spec.ogImage ?? null },
     pageType: spec.pageType ?? "unknown",
+    hreflangAlternates: alternatesOf(spec) ?? undefined,
   } as unknown as ParsedPage;
 }
 
@@ -125,6 +132,7 @@ function featureRow(spec: PageSpec): PageFeatureRow {
     faviconHref: chrome.faviconHref,
     themeColor: chrome.themeColor,
     ogImage: chrome.ogImage,
+    hreflangAlternates: alternatesOf(spec),
   };
 }
 
@@ -406,6 +414,108 @@ describe("social/asset-divergence — findings", () => {
     expect(check.status).toBe("pass");
     expect(check.message).toContain("favicon, theme-color and default OG image");
     expect(check.items).toBeUndefined();
+  });
+});
+
+/** One entity page plus its locale variants, every page listing all the others. */
+function localeCluster(prefix: string, count: number, ogImage: string): PageSpec[] {
+  const paths = Array.from({ length: count }, (_, i) => `/${prefix}-${pad(i)}/collections/gloves`);
+  return paths.map((path) => ({
+    path,
+    favicon: "/favicon.ico",
+    themeColor: "#0a5c36",
+    ogImage,
+    pageType: "category",
+    alternates: paths.filter((other) => other !== path),
+  }));
+}
+
+describe("social/asset-divergence — hreflang alternates are one og-image voter (pub#937)", () => {
+  const ENTITY_OG = "https://cdn.example.com/collections/gloves.webp";
+
+  test("a collection and its 15 alternates sharing an entity image are not a fallback", async () => {
+    const check = await bothPaths([...uniformSite(60), ...localeCluster("loc", 16, ENTITY_OG)]);
+    expect(check.status).toBe("pass");
+    expect(itemFor(check, "og-image")).toBeUndefined();
+  });
+
+  test("the same 16 pages WITHOUT hreflang links still read as a fallback pocket", async () => {
+    const pocket = localeCluster("loc", 16, ENTITY_OG).map((spec) => ({
+      ...spec,
+      alternates: undefined,
+    }));
+    const check = await bothPaths([...uniformSite(60), ...pocket]);
+    expect(itemFor(check, "og-image")?.meta?.pageCount).toBe(16);
+  });
+
+  test("a one-way hreflang claim does not merge pages", async () => {
+    const cluster = localeCluster("loc", 16, ENTITY_OG);
+    // Only the first page lists the others; none link back.
+    const oneWay = cluster.map((spec, i) => ({ ...spec, alternates: i === 0 ? spec.alternates : [] }));
+    const check = await bothPaths([...uniformSite(60), ...oneWay]);
+    expect(itemFor(check, "og-image")?.meta?.pageCount).toBe(16);
+  });
+
+  test("a real fallback pocket of unrelated pages is still reported next to a cluster", async () => {
+    const pocket = template(12, (i) => ({
+      path: `/old/page-${pad(i)}`,
+      favicon: "/favicon.ico",
+      themeColor: "#0a5c36",
+      ogImage: "https://cdn.example.com/old-brand.png",
+    }));
+    const check = await bothPaths([
+      ...uniformSite(60),
+      ...localeCluster("loc", 16, ENTITY_OG),
+      ...pocket,
+    ]);
+    const item = itemFor(check, "og-image");
+    expect(item?.meta?.value).toBe("https://cdn.example.com/old-brand.png");
+    expect(item?.meta?.pageCount).toBe(12);
+    expect(check.status).not.toBe("pass");
+  });
+
+  test("a cluster on the site default counts once, so the norm is not inflated by locales", async () => {
+    const check = await bothPaths([
+      ...uniformSite(10),
+      ...localeCluster("loc", 16, "https://cdn.example.com/default-share.png"),
+    ]);
+    const norms = (check.details?.norms ?? []) as Array<{ dimension: string; pages: number }>;
+    const norm = norms.find((n) => n.dimension === "og-image");
+    expect(norm?.pages).toBe(11);
+  });
+
+  test("a variant with no og:image still links its neighbours into one cluster", async () => {
+    const cluster = localeCluster("loc", 3, ENTITY_OG);
+    // Middle page lists both ends and is listed by both, but declares no og:image;
+    // the ends do not list each other.
+    const [a, b, c] = cluster as [PageSpec, PageSpec, PageSpec];
+    const chain: PageSpec[] = [
+      { ...a, alternates: [b.path] },
+      { ...b, ogImage: null, alternates: [a.path, c.path] },
+      { ...c, alternates: [b.path] },
+    ];
+    const check = await bothPaths([...uniformSite(60), ...chain]);
+    expect(itemFor(check, "og-image")).toBeUndefined();
+  });
+
+  test("a stale-template pocket made of clusters still counts every page toward severity", async () => {
+    const OLD = "https://cdn.example.com/old-brand.png";
+    const check = await bothPaths([
+      ...uniformSite(40),
+      ...localeCluster("aa", 16, OLD),
+      ...localeCluster("bb", 16, OLD),
+    ]);
+    expect(itemFor(check, "og-image")?.meta?.pageCount).toBe(32);
+    expect(check.status).toBe("fail");
+  });
+
+  test("favicon divergence inside a locale cluster is still reported per page", async () => {
+    const cluster = localeCluster("loc", 16, ENTITY_OG).map((spec) => ({
+      ...spec,
+      favicon: "/old/favicon.ico",
+    }));
+    const check = await bothPaths([...uniformSite(60), ...cluster]);
+    expect(itemFor(check, "favicon")?.meta?.pageCount).toBe(16);
   });
 });
 

@@ -50,7 +50,7 @@ describe("renderHtml carried-forward provenance (#1135/#1136)", () => {
         ]),
       }),
     );
-    expect(html).toContain('class="carried-badge"');
+    expect(html).toContain("carried-badge");
     expect(html).toContain("Not re-checked this run");
     expect(html).toContain("3 days ago");
   });
@@ -78,7 +78,7 @@ describe("renderHtml carried-forward provenance (#1135/#1136)", () => {
       }),
     );
     expect(html).toContain("1 of 2 pages carried from previous crawls.");
-    expect(html).not.toContain('class="carried-badge"');
+    expect(html).not.toContain("carried-badge");
   });
 
   test("mixedProvenanceNote renders: clean everywhere checked, red only from carried pages", () => {
@@ -117,8 +117,8 @@ describe("renderHtml carried-forward provenance (#1135/#1136)", () => {
         ]),
       }),
     );
-    expect(html).toContain("+10 more — show all");
-    expect(html).toContain("Copy as plain text");
+    expect(html).toContain("+10 more</summary>");
+    expect(html).toContain("Copy as text");
     expect(html).toContain("<textarea");
     // All 60 URLs are present somewhere (inline + nested "show all").
     for (const p of pages) expect(html).toContain(p);
@@ -132,7 +132,7 @@ describe("renderHtml carried-forward provenance (#1135/#1136)", () => {
         ]),
       }),
     );
-    expect(html).not.toContain("Copy as plain text");
+    expect(html).not.toContain("Copy as text");
   });
 
   // #1136 codex review (round 2): a slice-only "cap" that still embeds every
@@ -157,7 +157,7 @@ describe("renderHtml carried-forward provenance (#1135/#1136)", () => {
     );
     // Truncation is disclosed with the real total, never silently dropped.
     expect(html).toContain("Showing 200 of 1,043 affected pages.");
-    expect(html).toContain("Copy as plain text (first 200)");
+    expect(html).toContain("Copy as text");
     // Only the first 200 URLs ever get materialized — as an href AND as
     // plain text in the copy textarea, so each page URL appears at most
     // twice. Page #250 (well past the cap) must not appear anywhere.
@@ -197,8 +197,8 @@ describe("renderHtml carried-forward provenance (#1135/#1136)", () => {
     for (const p of sourcePages) expect(html).toContain(`href="${p}"`);
     // ...with expand/copy affordance, and the redundant preview note now
     // points at the real list instead of dead-ending.
-    expect(html).toContain("Copy as plain text");
-    expect(html).toContain("more (see full list above)");
+    expect(html).toContain("Copy as text");
+    expect(html).toContain("+9 more pages");
   });
 
   test("an item that IS a page (no sourcePages) isn't listed twice (PagesList + items block)", () => {

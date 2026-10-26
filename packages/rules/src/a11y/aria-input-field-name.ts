@@ -2,6 +2,7 @@
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 import { inputRoles } from "./aria-data";
 
 function getAccessibleName(el: Element, doc: Document): string | null {
@@ -53,7 +54,7 @@ export const ariaInputFieldNameRule: Rule = {
     name: "ARIA Input Field Name",
     description: "Checks that input fields have accessible names",
     solution:
-      "All input fields need accessible names. Best options: 1) Use <label for='inputId'>. 2) Use aria-label or aria-labelledby. 3) Wrap input in <label>. Placeholder alone is not sufficient as it disappears when typing.",
+      "All input fields need accessible names. Best options: 1) Use <label for='inputId'>. 2) Use aria-label or aria-labelledby. 3) Wrap input in <label>. Placeholder alone is not sufficient as it disappears when typing. A field hidden by the hidden attribute, aria-hidden, a closed dialog or an inline style='display:none' is out of the accessibility tree and is not reported, but it needs a name before it is shown. A <style> rule squirrel can decide (a plain selector, no media query) counts too. Vendor-prefixed display values (-webkit-box, -webkit-flex, -ms-flexbox) are read as shown, including the old fallback chain that ends in display: flex. An attribute selector with an operator ([id$=x], [href^=x], [data-a*=x], [class~=x], [lang|=en]) reaches only elements that have the attribute and a value that could satisfy it. A control carrying a no-js class (itself or an ancestor other than <html>) on a page with an external stylesheet or @import is reported as unconfirmed, because the theme may hide it when JavaScript runs. A field a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet) is reported as unconfirmed. External stylesheets are not read, so a field hidden only by one is still reported.",
     category: "a11y",
     scope: "page",
     verdictScope: "page",
@@ -66,7 +67,8 @@ export const ariaInputFieldNameRule: Rule = {
     if (!doc) return { checks: [] };
     const checks: CheckResult[] = [];
 
-    const missingNames: string[] = [];
+    // pub#671: a control out of the accessibility tree is not reported.
+    const unnamed = sortUnnamedControls<string>();
 
     // Check elements with input roles
     for (const role of inputRoles) {
@@ -74,7 +76,7 @@ export const ariaInputFieldNameRule: Rule = {
       for (const el of elements) {
         if (!getAccessibleName(el, doc)) {
           const tagName = el.tagName.toLowerCase();
-          missingNames.push(`${tagName}[role="${role}"]`);
+          unnamed.add(el, `${tagName}[role="${role}"]`);
         }
       }
     }
@@ -88,7 +90,8 @@ export const ariaInputFieldNameRule: Rule = {
       if (!getAccessibleName(input, doc)) {
         const type = input.getAttribute("type") || "text";
         const name = input.getAttribute("name") || "";
-        missingNames.push(
+        unnamed.add(
+          input,
           name ? `input[name="${name}"]` : `input[type="${type}"]`
         );
       }
@@ -100,7 +103,7 @@ export const ariaInputFieldNameRule: Rule = {
       if (textarea.hasAttribute("role")) continue;
       if (!getAccessibleName(textarea, doc)) {
         const name = textarea.getAttribute("name") || "";
-        missingNames.push(name ? `textarea[name="${name}"]` : "textarea");
+        unnamed.add(textarea, name ? `textarea[name="${name}"]` : "textarea");
       }
     }
 
@@ -110,10 +113,11 @@ export const ariaInputFieldNameRule: Rule = {
       if (select.hasAttribute("role")) continue;
       if (!getAccessibleName(select, doc)) {
         const name = select.getAttribute("name") || "";
-        missingNames.push(name ? `select[name="${name}"]` : "select");
+        unnamed.add(select, name ? `select[name="${name}"]` : "select");
       }
     }
 
+    const missingNames = unnamed.failures;
     if (missingNames.length > 0) {
       checks.push({
         name: "aria-input-field-name",
@@ -125,11 +129,27 @@ export const ariaInputFieldNameRule: Rule = {
             ? { additional: missingNames.length - 10 }
             : undefined,
       });
-    } else {
+    }
+    if (unnamed.unconfirmed.length > 0) {
+      checks.push(
+        unconfirmedRow(
+          "aria-input-field-name",
+          "input field(s) without accessible names",
+          unnamed.unconfirmed
+        )
+      );
+    }
+    if (missingNames.length === 0 && unnamed.unconfirmed.length === 0) {
       checks.push({
         name: "aria-input-field-name",
         status: "pass",
-        message: "All input fields have accessible names",
+        ...(unnamed.hidden > 0
+          ? {
+              message:
+                "All input fields in the accessibility tree have accessible names",
+              details: { hiddenWithoutName: unnamed.hidden },
+            }
+          : { message: "All input fields have accessible names" }),
       });
     }
 

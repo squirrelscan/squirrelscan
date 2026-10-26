@@ -4,14 +4,14 @@ import type { DocumentFetcher } from "@squirrelscan/fetchers";
 import type { Stream, Effect } from "effect";
 
 import type {
-  CrawlWarningCode,
+  CrawlerEvent,
   DiscoveryProbe,
   RedirectChain,
 } from "@squirrelscan/core-contracts";
 
 import type { AuditLevel } from "@squirrelscan/core-contracts/audit-levels";
 
-import type { CrawlStorage, CrawlStats, StorageError } from "../storage/types";
+import type { CrawlStorage, StorageError } from "../storage/types";
 import type { TlsEvent } from "../fetcher";
 
 // ============================================
@@ -51,11 +51,27 @@ export interface CrawlerConfig {
   /** User agent string */
   userAgent: string;
   /**
+   * The product token robots.txt groups are matched against (RFC 9309), when it
+   * differs from the user agent the requests send: a crawler that sends a
+   * browser-style user agent such as `Mozilla/5.0 (compatible; SquirrelScan/2.0)`
+   * is still the `SquirrelScan` group. Unset or empty: the user agent itself,
+   * whose token is the part before its first `/`. squirrelscan/repo#3271.
+   */
+  robotsUserAgent?: string;
+  /**
    * Custom HTTP request headers attached to every request (pages, assets,
    * robots.txt, sitemap, llms.txt, markdown probes). Empty by default. Values
    * are secrets — never log them. Threaded into FetchOptions.headers.
    */
   headers?: Record<string, string>;
+  /**
+   * Hosts, besides the audited origin, that also get `headers` (`[crawler]
+   * header_hosts`, `--header-host`). Matched by host alone. Unset: the audited
+   * origin only (scheme, host and port), so a page on another scheme, port or
+   * host, including one `allowedDomains` or an include pattern admits, is
+   * crawled without the custom headers (#959).
+   */
+  headerHosts?: string[];
   /** Follow redirects */
   followRedirects: boolean;
   /**
@@ -150,6 +166,26 @@ export interface CrawlerConfig {
   /** Optional pluggable document fetcher implementation */
   documentFetcher?: DocumentFetcher;
   /**
+   * The transport resolves once and connects to what it validated (the hosted
+   * container's egress proxy), so a redirect hop the crawl vets is sent by
+   * name, not pinned to the vetted address (repo#2830). Unset on the CLI.
+   */
+  egressPinnedByTransport?: boolean;
+  /**
+   * Vet and pin the crawl's own hosts too (repo#3430): the audited host, its
+   * `www` twin and the `allowedDomains` are resolved once per crawl, a name
+   * that answers a link-local or cloud metadata address is never requested,
+   * and every request connects to the address that was checked, so a site that
+   * controls (or rebinds) its DNS cannot point the crawl at the auditor's
+   * metadata service. Off by default; the CLI turns it on. It does nothing
+   * where something else connects and resolves the name itself: a transport
+   * that pins (`egressPinnedByTransport`) or an HTTP proxy from the
+   * environment, which a pinned address would hand the wrong virtual host.
+   */
+  pinOwnHosts?: boolean;
+  /** The resolver behind the crawl's egress checks; the system's when unset (a test seam). */
+  resolveHost?: (hostname: string) => Promise<string[]>;
+  /**
    * Optional hook for structured TLS/status-0 failure + standard-fetch fallback
    * events. Lets consumers (CLI/cloud) surface these with TLS context instead
    * of them being swallowed into a generic network error. Defaults to unset.
@@ -219,181 +255,27 @@ export const DEFAULT_CRAWLER_CONFIG: CrawlerConfig = {
 // CRAWLER EVENTS
 // ============================================
 
-export type CrawlerEvent =
-  | CrawlerStartedEvent
-  | CrawlerPageFetchingEvent
-  | CrawlerPageFetchedEvent
-  | CrawlerPageFailedEvent
-  | CrawlerPageSkippedEvent
-  | CrawlerPageUnchangedEvent
-  | CrawlerUrlDiscoveredEvent
-  | CrawlerUrlEnqueuedEvent
-  | CrawlerProgressEvent
-  | CrawlerPausedEvent
-  | CrawlerResumedEvent
-  | CrawlerRateLimitedEvent
-  | CrawlerCompletedEvent
-  | CrawlerWarningEvent
-  | CrawlerErrorEvent;
-
-export interface CrawlerStartedEvent {
-  type: "started";
-  crawlId: string;
-  baseUrl: string;
-  timestamp: number;
-}
-
-export interface CrawlerPageFetchingEvent {
-  type: "page:fetching";
-  url: string;
-  depth: number;
-  timestamp: number;
-}
-
-export interface CrawlerPageFetchedEvent {
-  type: "page:fetched";
-  url: string;
-  status: number;
-  loadTimeMs: number;
-  sizeBytes: number;
-  depth: number;
-  timestamp: number;
-  /** Browser render cost only, set only for browser-queue-rendered pages (#826). */
-  renderTimeMs?: number;
-  /** Queue delivery lag + browser-pool acquisition + concurrency-slot wait, set only for browser-queue-rendered pages (#826). */
-  queueWaitMs?: number;
-}
-
-export interface CrawlerPageFailedEvent {
-  type: "page:failed";
-  url: string;
-  error: string;
-  retryable: boolean;
-  depth: number;
-  timestamp: number;
-}
-
-export interface CrawlerPageSkippedEvent {
-  type: "page:skipped";
-  url: string;
-  reason: string;
-  depth: number;
-  timestamp: number;
-}
-
-export interface CrawlerPageUnchangedEvent {
-  type: "page:unchanged";
-  url: string;
-  reason:
-    | "304"
-    | "hash_match"
-    | "etag_match"
-    // Served from cache without any request (origin freshness honored)
-    | "max-age"
-    | "s-maxage"
-    | "expires"
-    | "immutable"
-    // Served stale from cache while a background revalidation refreshes it
-    | "stale-while-revalidate";
-  depth: number;
-  timestamp: number;
-}
-
-export interface CrawlerUrlDiscoveredEvent {
-  type: "url:discovered";
-  url: string;
-  fromUrl: string;
-  depth: number;
-  timestamp: number;
-}
-
-export interface CrawlerUrlEnqueuedEvent {
-  type: "url:enqueued";
-  url: string;
-  priority: number;
-  source: "seed" | "sitemap" | "discovered" | "carried";
-  depth: number;
-  timestamp: number;
-}
-
-export interface CrawlerProgressEvent {
-  type: "progress";
-  fetched: number;
-  pending: number;
-  failed: number;
-  skipped: number;
-  unchanged: number;
-  total: number;
-  bytesTotal: number;
-  avgLoadTimeMs: number;
-  timestamp: number;
-}
-
-export interface CrawlerPausedEvent {
-  type: "paused";
-  reason: string;
-  timestamp: number;
-}
-
-export interface CrawlerResumedEvent {
-  type: "resumed";
-  timestamp: number;
-}
-
-/**
- * A host is throttling us and the crawl is waiting it out (#1829).
- *
- * Distinct from `paused`, which means the USER paused the crawl. Emitted once
- * per backoff wait so the CLI progress line and the cloud phase timeline can
- * say why a crawl went quiet instead of looking wedged. `backoffMs` of 0 with
- * `exhausted: true` means the host spent its whole budget and its remaining
- * URLs are being recorded as rate-limited without further requests.
- */
-export interface CrawlerRateLimitedEvent {
-  type: "rate-limited";
-  /** Host key being backed off from. */
-  host: string;
-  /** URL whose response triggered this backoff. */
-  url: string;
-  /** How long the crawl will wait before the next request to this host. */
-  backoffMs: number;
-  /** Minimum wait the origin asked for, when it sent `Retry-After`. */
-  retryAfterMs?: number;
-  /** Rate-limit responses seen for this URL so far (1-based). */
-  attempt: number;
-  /** The host gave up its backoff budget; remaining URLs are not fetched. */
-  exhausted: boolean;
-  timestamp: number;
-}
-
-export interface CrawlerCompletedEvent {
-  type: "completed";
-  stats: CrawlStats;
-  durationMs: number;
-  timestamp: number;
-}
-
-/**
- * Something a human should see that did not stop the crawl (#1899).
- *
- * `code` is the machine key and lives in core-contracts, because THIS UNION IS A
- * DUPLICATE of the one there: a consumer outside this package reads that copy,
- * so an event added to one and not the other type-checks locally and is invisible
- * to every consumer. Both must move together.
- */
-export interface CrawlerWarningEvent {
-  type: "warning";
-  code: CrawlWarningCode;
-  message: string;
-  timestamp: number;
-}
-
-export interface CrawlerErrorEvent {
-  type: "error";
-  error: string;
-  fatal: boolean;
-  timestamp: number;
-}
+// One declaration, in core-contracts (#251). Re-exported, never restated: a copy
+// here once drifted from it, so an event added to one side type-checked locally
+// and was invisible to every consumer reading the other.
+export type {
+  CrawlerCompletedEvent,
+  CrawlerErrorEvent,
+  CrawlerEvent,
+  CrawlerPageFailedEvent,
+  CrawlerPageFetchedEvent,
+  CrawlerPageFetchingEvent,
+  CrawlerPageSkippedEvent,
+  CrawlerPageUnchangedEvent,
+  CrawlerPausedEvent,
+  CrawlerProgressEvent,
+  CrawlerRateLimitedEvent,
+  CrawlerResumedEvent,
+  CrawlerStartedEvent,
+  CrawlerUrlDiscoveredEvent,
+  CrawlerUrlEnqueuedEvent,
+  CrawlerWarningEvent,
+} from "@squirrelscan/core-contracts";
 
 // ============================================
 // CRAWLER ERROR

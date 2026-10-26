@@ -93,3 +93,15 @@ enable = ["security/token-storage"]
 ```
 
 `enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [security/cookie-flags](/rules/security/cookie-flags): the `HttpOnly`, `Secure` and `SameSite` attributes on the cookie a token should move into.
+- [security/csp](/rules/security/csp): a policy that limits which scripts run on the page, and so which can read web storage.
+- [security/leaked-secrets](/rules/security/leaked-secrets): API keys and secrets shipped in HTML or a bundle.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Token storage](/glossary#token-storage).
+
+{/* glossary:backlinks:end */}

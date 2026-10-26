@@ -59,6 +59,10 @@ export function getGoldenBaselineConfig(): Config {
   const base = getDefaultConfig();
   return {
     ...base,
+    // The canonical fixture materializes more than 500 pages once redirect
+    // targets are included. Keep its inbound-link rules on their complete-crawl
+    // path so this gate continues to compare their findings, not only skips.
+    crawler: { ...base.crawler, max_pages: 1_000 },
     cloud: { ...base.cloud, enabled: false },
     intel: { ...base.intel, enabled: false },
   };

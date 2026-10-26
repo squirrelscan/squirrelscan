@@ -3,17 +3,16 @@
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import type { RobotsTxtData, SiteQuery } from "@squirrelscan/core-contracts";
 
-// Robots.txt `*`-agent disallow test for one path — identical in both paths.
-function isPathBlockedByStar(path: string, robotsTxt: RobotsTxtData): boolean {
-  return robotsTxt.rules.some((rule) => {
-    if (rule.userAgent !== "*") return false;
-    return rule.rules.some((r) => {
-      if (r.type !== "disallow") return false;
-      if (r.path === "/") return true;
-      return path.startsWith(r.path);
-    });
-  });
+import { isPageIndexable, isRobotsTxtDisallowed } from "@squirrelscan/utils";
+
+/** noindex from the meta tag or the header; an unparseable page is not noindex. */
+function hasNoindex(reasons: readonly string[]): boolean {
+  return reasons.includes("meta:noindex") || reasons.includes("header:noindex");
 }
+
+// pub#556: "blocked by robots.txt" is the shared isRobotsTxtDisallowed, the
+// same decision crawl/indexability-conflicts makes (Allow, Disallow, longest
+// match, wildcards), and noindex is the meta tag or the X-Robots-Tag header.
 
 // Shared output builder — identical CheckResult[] given the same collected lists.
 // `conflicts` is vestigial (never populated in either path — the "robots-conflict"
@@ -27,6 +26,7 @@ function buildChecks(conflicts: string[], redundantNoindex: string[]): CheckResu
       status: "info",
       message: `${redundantNoindex.length} page(s) blocked in robots.txt also have noindex`,
       value: "noindex won't be seen if page is blocked from crawling",
+      pages: redundantNoindex,
     });
   }
 
@@ -47,9 +47,10 @@ function buildChecks(conflicts: string[], redundantNoindex: string[]): CheckResu
   return checks;
 }
 
-// Streaming path (#1022): meta-only noindex is the pre-extracted `metaNoindex`
-// scalar; the robots.txt `*`-disallow test stays a run-time computation over the
-// (site-level) robotsTxt. `conflicts` is never populated (mirrors the legacy path).
+// Streaming path (#1022): noindex is the pre-extracted `indexableReasons`
+// (meta tag and X-Robots-Tag header); the robots.txt test stays a run-time
+// computation over the site-level robotsTxt. `conflicts` is never populated
+// (mirrors the legacy path).
 async function runViaSiteQuery(
   siteQuery: SiteQuery,
   robotsTxt: RobotsTxtData
@@ -57,8 +58,7 @@ async function runViaSiteQuery(
   const conflicts: string[] = [];
   const redundantNoindex: string[] = [];
   for await (const row of siteQuery.pagesMatching(() => true)) {
-    const path = new URL(row.normalizedUrl).pathname;
-    if (isPathBlockedByStar(path, robotsTxt) && row.metaNoindex) {
+    if (hasNoindex(row.indexableReasons) && isRobotsTxtDisallowed(row.normalizedUrl, robotsTxt)) {
       redundantNoindex.push(row.normalizedUrl);
     }
   }
@@ -71,7 +71,7 @@ export const robotsMetaConflictRule: Rule = {
     name: "Robots Meta Conflict",
     description: "Detects conflicts between robots meta tags and robots.txt",
     solution:
-      "Robots.txt and robots meta tags should work together, not conflict. If robots.txt blocks a URL, search engines won't see the meta robots tag at all. Common conflicts: blocking a page in robots.txt while trying to noindex it (unnecessary), or allowing in robots.txt but noindexing (works but confusing). For noindex, let the page be crawled so the directive is seen. For blocked pages, robots.txt alone is sufficient.",
+      "If robots.txt blocks a URL, search engines never fetch it, so they never see its noindex, from a meta tag or an X-Robots-Tag header. To keep a page out of search results, allow it in robots.txt and add noindex; that is the supported way. To only save crawl budget, the Disallow alone is enough and the noindex does nothing.",
     category: "crawl",
     scope: "site",
     severity: "warning",
@@ -112,21 +112,11 @@ export const robotsMetaConflictRule: Rule = {
     const redundantNoindex: string[] = [];
 
     for (const page of pages) {
-      const url = new URL(page.url);
-      const path = url.pathname;
-      const robotsMeta = page.parsed.meta.robots;
+      const isBlocked = isRobotsTxtDisallowed(page.url, robotsTxt);
+      // noindex from the meta tag or the X-Robots-Tag header (pub#556).
+      const noindex = hasNoindex(isPageIndexable(page.parsed, page.headers).reasons);
 
-      // Check if this path is disallowed by robots.txt
-      const isBlocked = isPathBlockedByStar(path, robotsTxt);
-
-      // Check if page has noindex meta
-      const hasNoindex = robotsMeta
-        ?.toLowerCase()
-        .split(",")
-        .map((d) => d.trim())
-        .includes("noindex");
-
-      if (isBlocked && hasNoindex) {
+      if (isBlocked && noindex) {
         // Blocked in robots.txt AND has noindex - redundant
         redundantNoindex.push(page.url);
       }

@@ -343,6 +343,13 @@ async function runPrune(
   }
 ): Promise<void> {
   const { formatBytes, planProjectPrune, runProjectPrune } = deps;
+  const {
+    formatAge,
+    planIsActionable,
+    planProjects,
+    pruneExitCode,
+    runPrunePlans,
+  } = await import("@/self/disk");
   const { existsSync, readdirSync } = await import("node:fs");
   const { join } = await import("node:path");
   const { getProjectsPath } = await import("@/self/paths");
@@ -375,13 +382,22 @@ async function runPrune(
     process.exit(1);
   }
 
-  const plans = [];
-  for (const name of names) {
-    const plan = await planProjectPrune(join(root, name, "project.db"), keep);
-    if (plan) plans.push({ name, plan });
+  // One project that cannot be planned (locked, unreadable, from a newer
+  // version) is reported and skipped; the rest still run (#941).
+  const { plans, failed: planFailures } = await planProjects(
+    names.map((name) => ({ name, dbPath: join(root, name, "project.db") })),
+    keep,
+    planProjectPrune
+  );
+  for (const f of planFailures) {
+    console.error(`${f.name}: FAILED ${f.reason}`);
   }
 
   if (plans.length === 0) {
+    if (planFailures.length > 0) {
+      console.log(`\n0 project(s) pruned, ${planFailures.length} failed.`);
+      process.exit(1);
+    }
     console.log(
       `Nothing to retire or reclaim: every project holds at most ${keep} ` +
         "audit(s), with no space waiting to be returned."
@@ -402,11 +418,15 @@ async function runPrune(
   // whole point.
   let retiringAudits = 0;
   for (const { name, plan } of plans) {
-    rows += plan.rows;
-    reclaimable += plan.reclaimableBytes;
-    retiringAudits += plan.retiring.length;
-    const what =
-      plan.retiring.length > 0
+    const actionable = planIsActionable(plan);
+    if (actionable) {
+      rows += plan.rows;
+      reclaimable += plan.reclaimableBytes;
+      retiringAudits += plan.retiring.length + plan.abandoned.length;
+    }
+    const what = !actionable
+      ? "nothing to retire"
+      : plan.retiring.length > 0
         ? `retiring ${plan.retiring.length} of ${
             plan.retiring.length + plan.keeping
           } audits`
@@ -415,19 +435,48 @@ async function runPrune(
     for (const crawl of plan.retiring) {
       console.log(`    ${date(crawl.startedAt)}  ${crawl.id.slice(0, 8)}`);
     }
+    if (plan.abandoned.length > 0) {
+      console.log(
+        `    abandoned (never finished: its owner is gone, or it is idle and older than the newest finished audit):`
+      );
+      for (const crawl of plan.abandoned) {
+        console.log(
+          `    ${date(crawl.startedAt)}  ${crawl.id.slice(0, 8)}  ${crawl.status}, ${formatAge(crawl.startedAt)} old`
+        );
+      }
+    }
+    for (const crawl of plan.skippedLive) {
+      console.log(
+        `    skipped ${crawl.id.slice(0, 8)}  ${crawl.status}, ${formatAge(crawl.startedAt)} old, last activity ${formatAge(crawl.lastActivityAt ?? crawl.startedAt)} ago${
+          crawl.heartbeatAt !== undefined
+            ? `, owner pid ${crawl.ownerPid ?? "?"} on ${crawl.ownerHost ?? "?"}, last heartbeat ${formatAge(crawl.heartbeatAt)} ago`
+            : ""
+        }: ${
+          crawl.heartbeatAt !== undefined
+            ? "held by a process that may still be running"
+            : "newer than the newest finished audit or recently active, so it may be live or resumable"
+        }`
+      );
+    }
   }
   console.log(
     retiringAudits > 0
       ? `\n${retiringAudits} audit(s) and ${rows.toLocaleString()} rows across ` +
-          `${plans.length} project(s). Their reports stop being renderable; ` +
+          `${plans.filter((p) => planIsActionable(p.plan)).length} project(s). Their reports stop being renderable; ` +
           "the audits stay listed."
       : `\nNothing left to retire: ${formatBytes(reclaimable)} across ` +
-          `${plans.length} project(s) is already free inside the files and ` +
+          `${plans.filter((p) => planIsActionable(p.plan)).length} project(s) is already free inside the files and ` +
           "only a rebuild returns it."
   );
 
   if (args["dry-run"]) {
     console.log("\nDry run: nothing was deleted.");
+    if (planFailures.length > 0) process.exit(1);
+    return;
+  }
+
+  if (!plans.some((p) => planIsActionable(p.plan))) {
+    if (planFailures.length > 0) process.exit(1);
     return;
   }
 
@@ -450,17 +499,31 @@ async function runPrune(
     }
   }
 
+  const outcomes = [
+    ...(await runPrunePlans(plans, runProjectPrune)),
+    ...planFailures,
+  ];
   let before = 0;
   let after = 0;
-  for (const { name, plan } of plans) {
-    const result = await runProjectPrune(plan);
-    before += result.bytesBefore;
-    after += result.bytesAfter;
+  for (const o of outcomes) {
+    if (o.status === "failed") {
+      console.error(`${o.name}: FAILED ${o.reason}`);
+      continue;
+    }
+    before += o.bytesBefore;
+    after += o.bytesAfter;
     console.log(
-      `${name}: ${formatBytes(result.bytesBefore)} -> ${formatBytes(result.bytesAfter)}`
+      `${o.name}: ${formatBytes(o.bytesBefore)} -> ${formatBytes(o.bytesAfter)}` +
+        (o.status === "skipped" ? ` (retired, not rebuilt: ${o.reason})` : "")
     );
   }
-  console.log(`\nReclaimed ${formatBytes(Math.max(0, before - after))}.`);
+  const count = (status: string) =>
+    outcomes.filter((o) => o.status === status).length;
+  console.log(
+    `\nReclaimed ${formatBytes(Math.max(0, before - after))}. ` +
+      `${count("ok")} pruned, ${count("skipped")} skipped, ${count("failed")} failed.`
+  );
+  if (pruneExitCode(outcomes) !== 0) process.exit(1);
 }
 
 const selfDisk = defineCommand({

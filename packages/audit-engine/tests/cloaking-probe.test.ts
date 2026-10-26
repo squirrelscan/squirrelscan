@@ -82,6 +82,39 @@ describe("selectSuspiciousPaths", () => {
     expect(sel).toEqual([]);
   });
 
+  test("a lastmod of the current year or month is recent; an earlier month only near its end (#772)", () => {
+    const pick = (lastmod: string, recentDays = 14) =>
+      selectSuspiciousPaths([candidate({ lastmod })], {
+        maxPages: 10,
+        recentDays,
+        hasSitemap: true,
+        now: NOW,
+      }).length;
+    // NOW is 2026-06-28: `2026` and `2026-06` may name today; `2026-05`
+    // ended 28 days ago, `2025` long before.
+    expect(pick("2026")).toBe(1);
+    expect(pick("2026-06")).toBe(1);
+    expect(pick("2026-05")).toBe(0);
+    expect(pick("2026-05", 30)).toBe(1);
+    expect(pick("2025")).toBe(0);
+    expect(pick("2027")).toBe(0);
+  });
+
+  test("a page dated precisely outranks one stamped only with the year (#772)", () => {
+    const day = (offset: number) => new Date(NOW - offset * 86_400_000).toISOString().slice(0, 10);
+    const sel = selectSuspiciousPaths(
+      [
+        ...[1, 2, 3, 4, 5].map((i) =>
+          candidate({ url: `${SITE}/y${i}`, normalizedUrl: `${SITE}/y${i}`, lastmod: "2026" }),
+        ),
+        candidate({ url: `${SITE}/yesterday`, normalizedUrl: `${SITE}/yesterday`, lastmod: day(1) }),
+        candidate({ url: `${SITE}/today`, normalizedUrl: `${SITE}/today`, lastmod: day(0) }),
+      ],
+      { maxPages: 3, recentDays: 14, hasSitemap: true, now: NOW },
+    );
+    expect(sel.map((s) => s.url)).toEqual([`${SITE}/today`, `${SITE}/yesterday`, `${SITE}/y1`]);
+  });
+
   test("skips non-2xx pages", () => {
     const sel = selectSuspiciousPaths(
       [candidate({ status: 404, inboundCount: 0, inSitemap: false })],
@@ -125,9 +158,22 @@ describe("selectSuspiciousPaths", () => {
 
 describe("parseLastmod", () => {
   test("parses ISO + RFC dates, rejects junk", () => {
-    expect(parseLastmod("2026-06-01")).toBe(Date.parse("2026-06-01"));
-    expect(parseLastmod(null)).toBeNull();
-    expect(parseLastmod("not-a-date")).toBeNull();
+    const now = Date.UTC(2026, 9, 15, 12);
+    // A day is the whole day: the page may have changed at any time in it.
+    expect(parseLastmod("2026-06-01", now)).toBe(Date.UTC(2026, 5, 1, 23, 59, 59, 999));
+    expect(parseLastmod("Mon, 01 Jun 2026 08:00:00 GMT", now)).toBe(Date.UTC(2026, 5, 1, 8));
+    expect(parseLastmod(null, now)).toBeNull();
+    expect(parseLastmod("not-a-date", now)).toBeNull();
+  });
+
+  test("a year or month is read as the period, its end capped at now (#772)", () => {
+    const now = Date.UTC(2026, 9, 15, 12);
+    expect(parseLastmod("2026", now)).toBe(now);
+    expect(parseLastmod("2026-10", now)).toBe(now);
+    expect(parseLastmod("2026-09", now)).toBe(Date.UTC(2026, 9, 1) - 1);
+    expect(parseLastmod("2025", now)).toBe(Date.UTC(2026, 0, 1) - 1);
+    // Wholly in the future: its start, which selection treats as not yet.
+    expect(parseLastmod("2027", now)).toBe(Date.UTC(2027, 0, 1));
   });
 });
 
@@ -362,6 +408,30 @@ describe("probeSiteForCloaking", () => {
       stubFetch({}),
     );
     expect(probes).toEqual([]);
+  });
+
+  test("never probes the page the crawl started on, even when the root redirected to it (#788)", async () => {
+    const landing = `${SITE}/v3/signin/identifier?continue=x`;
+    const site = {
+      baseUrl: SITE,
+      pages: [
+        { url: landing, statusCode: 200, parsed: { links: [] } },
+        { url: `${SITE}/help`, statusCode: 200, parsed: { links: [] } },
+      ],
+      sitemapUrls: [],
+    };
+    const opts = {
+      maxPages: 10,
+      recentDays: 14,
+      queryVariation: false,
+      googlebotUserAgent: GOOGLEBOT,
+      defaultUserAgent: DEFAULT_UA,
+      now: NOW,
+    };
+    const urls = async (entryUrls?: string[]) =>
+      (await probeSiteForCloaking({ ...site, entryUrls }, opts, stubFetch({}))).map((p) => p.url);
+    expect(await urls()).toEqual([landing, `${SITE}/help`]);
+    expect(await urls([landing, `${SITE}/`])).toEqual([`${SITE}/help`]);
   });
 });
 

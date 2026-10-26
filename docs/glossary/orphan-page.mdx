@@ -1,0 +1,81 @@
+---
+title: "What is an orphan page? Finding and fixing them"
+description: "An orphan page is one no other crawled page links to, reachable only from a sitemap or a direct URL. Why it matters, and when it signals a hacked site."
+sidebarTitle: "Orphan page"
+---
+
+An **orphan page** is a page that no other crawled page on the site links to, so crawlers and readers can only reach it through a sitemap, an external link or a typed URL.
+
+Orphans usually come from routine changes. A page drops out of the navigation in a redesign, a campaign landing page is never linked from the site, or a product stays live after its category is removed. Google says it uses links to find new pages to crawl, and its sitemap documentation notes that on large sites it is harder to make sure every page is linked from at least one other page.
+
+{/* glossary:hub:start */}
+
+Category: [Links](/rules/links)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+A sitemap entry makes a URL discoverable, but internal links are what place a page in the site's structure and tell readers it exists. An orphaned page gets no visitors from the site itself. There is a second kind of orphan that matters more. Pages an attacker injects, which Google's spam policies class as hacked content, are rarely linked from the site's own navigation or listed in its sitemap.
+
+## How squirrelscan checks it
+
+The answer depends on what the crawl reached, so all three rules are site-wide. [links/orphan-pages](/rules/links/orphan-pages) counts the followed, resolvable internal links pointing at every crawled page and reports pages with fewer than 2, a configurable threshold. A page the crawl reached only from the sitemap shows up here. [links/no-contextual-inbound](/rules/links/no-contextual-inbound) catches the near-orphans: pages whose only inbound links sit in navigation, header, footer or aside landmarks. [integrity/orphan-page](/rules/integrity/orphan-page) looks for hidden pages: no inbound internal links and, when the site has a sitemap, absent from it. A hidden page that also carries a page-level compromise signal fails as likely injected, and the rest are listed for review at info level.
+
+The homepage and the page the audit started from are never reported. The inbound-link rules skip when the crawl stops at its page cap. A crawl that stops early for another reason, such as a time limit or interruption, or starts from a sitemap it cannot reach can still produce orphans that only exist in the crawl, so check coverage before acting on a long list.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Orphan pages: pages with too few inbound internal links](/rules/links/orphan-pages) | A page nothing links to is hard to discover and reads as unimportant. squirrel counts dofollow inbound internal links for every crawled page. | warning |
+| [Linked only from the nav and footer: no editorial links](/rules/links/no-contextual-inbound) | A footer link on every page looks like hundreds of inbound links and carries none of the signal. squirrel counts only links outside sitewide chrome. | warning |
+| [Hidden orphan page: reachable but linked from nowhere](/rules/integrity/orphan-page) | An injected page hides by being in no sitemap and linked from no page. squirrel finds crawled pages with zero inbound links and no sitemap entry. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Link the page from where it belongs, with text that names it:
+
+```html
+<a href="/guides/build-cache">Configuring the build cache</a>
+```
+
+Use a hub or category page, the body of a related article, or the navigation ([the orphan fix](/rules/links/orphan-pages#how-to-fix-it)). A link from body copy beats another footer entry ([the contextual link fix](/rules/links/no-contextual-inbound#how-to-fix-it)). For a hidden page you did not create, treat the site as compromised: remove the page, review recently modified files and read the access logs ([the hidden page fix](/rules/integrity/orphan-page#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include links/orphan-pages,links/no-contextual-inbound,integrity/orphan-page
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Internal linking](/glossary/internal-linking): Links between pages of the same site, which carry crawlers and readers through it and signal which pages matter.
+- [XML sitemap](/glossary/xml-sitemap): An XML file listing the URLs a site wants crawled, with optional lastmod dates, referenced from robots.txt or submitted to search engines.
+- [Hacked site signals](/glossary/hacked-site): The traces a compromise leaves on a site: injected pages off the theme, phishing kits, obfuscated scripts and known malicious URLs.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Link best practices for Google, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/links-crawlable)
+- [Learn about sitemaps, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview)
+- [Spam policies: hacked content, Google Search Central](https://developers.google.com/search/docs/essentials/spam-policies#hacked-content)
+
+{/* glossary:jsonld:start */}
+
+import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";
+
+<GlossaryJsonLd slug="orphan-page" />
+
+{/* glossary:jsonld:end */}

@@ -92,6 +92,11 @@ beforeAll(async () => {
           { headers: { "content-type": "text/css", "content-encoding": "gzip" } },
         );
       }
+      if (path === "/bomb.js") {
+        return new Response(bomb, {
+          headers: { "content-type": "application/javascript", "content-encoding": "gzip" },
+        });
+      }
       if (path === "/waf") {
         // A Cloudflare interstitial, told apart from a broken link by its body.
         return new Response(gzipSync(WAF_PAGE), {
@@ -146,6 +151,19 @@ describe("engine fetches of site-controlled URLs", () => {
     expect(result?.contentEncoding).toBe("gzip");
     expect(sent.map((s) => s.path)).toEqual(["/moved/app.js", "/app.js"]);
     expect(sent.every((s) => s.decompress === false)).toBe(true);
+  });
+
+  test("script contents: a script that inflates to 1 GiB is refused at the size limit, not inflated", async () => {
+    Bun.gc(true);
+    const before = process.memoryUsage().rss;
+    let peak = before;
+    const sampler = setInterval(() => {
+      peak = Math.max(peak, process.memoryUsage().rss);
+    }, 1);
+    const [result] = await Effect.runPromise(fetchScriptContents([`${origin}/bomb.js`]));
+    clearInterval(sampler);
+    expect(result?.error).toBe("script too large");
+    expect(Math.max(peak, process.memoryUsage().rss) - before).toBeLessThan(256 * 1024 * 1024);
   });
 
   test("resource sizes: every hop undecoded, the size measured on the decoded body", async () => {

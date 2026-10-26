@@ -18,7 +18,7 @@ The rule runs on every crawled page. It takes every `a[href]`, skips fragment-on
 An accessible name comes from the link's text content, an `alt` on an image inside it, an `aria-label`, an `aria-labelledby` pointing at an element with text, a `title`, a `<title>` or `aria-label` on an `<svg>` inside it, or an `aria-label` on a descendant with `role="img"`. Generic means the trimmed lowercased text is exactly one of `click here`, `here`, `read more`, `learn more`, `more`, `link`, `this`, `this link`, `go` or `continue`.
 
 - `empty-anchor` warns for groups where no member has any accessible name. Message: `3 link(s) have empty anchor text`, each item carrying the destination and a markup snippet of the first link.
-- `generic-anchor` reports info for groups where every named member has generic text. Message: `8 link(s) use generic anchor text`, listing the distinct phrases found. The generic test reads the link's trimmed, lowercased text content only, not its accessible name, so a `Read more` link with a descriptive `aria-label` is still reported, and an image-only link with `alt="click here"` is not.
+- `generic-anchor` reports info for groups where every named member has generic text. Message: `8 link(s) use generic anchor text`, listing the distinct phrases found. The generic test reads the link's trimmed, lowercased text content only, not its accessible name, so a `Read more` link with a descriptive `aria-label` is still reported, and an image-only link with `alt="click here"` is not. On a page whose `<html lang>` is Spanish, French, German, Portuguese, Italian, Dutch, Japanese, Chinese, Korean or Russian, that language's generic phrases (`cliquez ici`, `mehr`, `haga clic aquí`, `詳しくはこちら`, `点击这里` and the like) are reported as well as the English ones; a page with no or another `lang` gets English only. Matching is on the whole text after Unicode normalisation, and a conventional account or legal label such as `Connexion` or `Impressum` is never reported. See [link-text](/rules/a11y/link-text#generic-phrases-in-other-languages).
 - `anchor-text` passes when neither fired. Message: `Link anchor text is descriptive`.
 
 Severity warning, weight 4.
@@ -77,6 +77,12 @@ enable = ["links/anchor-text"]
 - [links/no-contextual-inbound](/rules/links/no-contextual-inbound): whether those links sit in body copy or in chrome.
 
 Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Anchor text](/glossary/anchor-text).
+
+{/* glossary:backlinks:end */}
 
 ## References
 

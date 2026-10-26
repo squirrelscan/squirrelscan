@@ -4,7 +4,9 @@
 import type { Effect } from "effect";
 
 import type { AuditFailureDetail } from "./failure-reason";
+import type { ScanScope } from "./index";
 import type { RefusedFetch } from "./refused-fetch";
+import type { UnverifiedReason } from "./services";
 
 // ============================================
 // SHARED DOMAIN TYPES (used by storage + report)
@@ -258,6 +260,11 @@ export interface CrawlStats {
    */
   externalLinkCheck?: {
     found: number;
+    /**
+     * The links selected to check under the limit. Includes any the time budget
+     * then ran out on (`outOfTime`), so `found - checked` stays the over-limit
+     * count the rules report.
+     */
     checked: number;
     cap: number;
     notRequested?: number;
@@ -267,6 +274,12 @@ export interface CrawlStats {
     /** Of those, the ones refused on the URL alone, before any were selected under the limit. */
     refusedByUrl?: number;
     refusedLinks?: Array<{ href: string; sourcePages: string[]; pageCount?: number }>;
+    /**
+     * repo#2613: of the `checked` links, the ones the check's time budget ran
+     * out on before they were answered. Never requested or never waited on,
+     * so not checked; absent when the check finished.
+     */
+    outOfTime?: number;
   };
   /**
    * Root fetches (robots.txt, sitemaps, llms.txt, the Markdown probe) the site
@@ -327,6 +340,12 @@ export interface CrawlMetadata {
   config: CrawlerConfigSnapshot;
   stats: CrawlStats;
   /**
+   * The report scope stamped after this crawl was analyzed. Kept on the crawl
+   * so a later `squirrel report` can reconstruct the same coverage disclosure
+   * the original audit printed. Absent on crawls written before it was stored.
+   */
+  scanScope?: ScanScope;
+  /**
    * When `squirrel self disk --prune` reclaimed this audit's derived data
    * (#1912). Absent for every audit that has not been reclaimed.
    *
@@ -350,6 +369,11 @@ export interface CrawlerConfigSnapshot {
   maxBackoffMs?: number;
   timeoutMs: number;
   userAgent: string;
+  /**
+   * The robots.txt group token, when it differs from `userAgent`
+   * (squirrelscan/repo#3271). Optional so crawl rows recorded before it read back.
+   */
+  robotsUserAgent?: string;
   followRedirects: boolean;
   respectRobots: boolean;
   incremental: boolean;
@@ -365,7 +389,14 @@ export interface CrawlerConfigSnapshot {
 // ============================================
 
 export interface ResponseHeaders {
+  /** The media type of the Content-Type header only, lowercased (`text/html`). */
   contentType: string | null;
+  /**
+   * The `charset` parameter of the Content-Type header, as sent with quotes
+   * dropped (pub#674), so core/charset can read a header-only declaration.
+   * Optional for records that predate it; absent reads as "no charset".
+   */
+  contentTypeCharset?: string | null;
   contentEncoding: string | null;
   cacheControl: string | null;
   /**
@@ -403,6 +434,15 @@ export interface ResponseHeaders {
    * rule (#748).
    */
   setCookie?: string | null;
+  /**
+   * The response headers technology detection reads (`TECH_DETECT_HEADER_NAMES`
+   * in @squirrelscan/utils), by lower-cased name, each value cut to
+   * `TECH_DETECT_HEADER_MAX_CHARS` (pub#871). A header detection only tests for
+   * presence (`TECH_DETECT_PRESENCE_HEADERS`) holds "1", and `set-cookie` holds
+   * the cookie names (`name=`, one per line), never their values. Optional for
+   * records that predate it; absent reads as "none sent".
+   */
+  techHeaders?: Record<string, string> | null;
 }
 
 export interface PageRecord {
@@ -506,6 +546,8 @@ export interface LinkRecord {
   checkedAt?: number;
   wafBlocked?: boolean;
   wafProvider?: string;
+  /** Why a `wafBlocked` link is unverifiable (pub#821), when the checker said. */
+  unverifiedReason?: UnverifiedReason;
   /**
    * The target answered with rate limiting (429/430, or 503 + `Retry-After`),
    * so its real status is unknown (#1829). Persisted rather than re-derived

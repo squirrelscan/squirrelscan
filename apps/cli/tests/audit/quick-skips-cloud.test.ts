@@ -151,6 +151,7 @@ describe("quick coverage skips cloud enrichment", () => {
       config,
       auditId: "audit-surface",
       siteContext,
+      getRunId: () => "run-surface",
     });
     expect(checker).not.toBeNull();
   });

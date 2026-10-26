@@ -125,8 +125,8 @@ const isBlockElement = tagExcluder(BLOCK_TAGS);
  * subtrees and code containers, with a newline where each skipped subtree was
  * AND at every block boundary.
  *
- * For rules that judge only what a visitor's eyes land on. Kept separate from
- * `getProseTextExcludingCode` so existing callers keep their exact behaviour.
+ * For rules that judge only what a visitor's eyes land on: content/placeholder-text
+ * and, since pub#216, content/mojibake.
  */
 export function getRenderedProseText(element: Element): string {
   return collectTextExcluding(

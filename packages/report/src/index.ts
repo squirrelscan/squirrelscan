@@ -40,11 +40,25 @@ export type { CategoryInfo, GroupInfo, RuleGroup } from "./categories";
 export { checkOccurrences } from "./occurrences";
 
 // Grouping
-export { groupIssuesByCategory, groupCategoriesByGroup, flattenIssuesBySeverity } from "./grouping";
+export {
+  groupIssuesByCategory,
+  groupCategoriesByGroup,
+  flattenIssuesBySeverity,
+  listPassedRules,
+  passedRuleScope,
+  reportPassedRules,
+} from "./grouping";
 // Merged check messages (#2231). Exported so the cloud API groups the same
 // findings from its own store and reaches the same text.
 export { mergeCheckMessages, messageMergeKey } from "./message-merge";
-export type { GroupedCheck, GroupedRule, GroupedCategory, GroupedGroup, FlatIssue } from "./grouping";
+export type {
+  GroupedCheck,
+  GroupedRule,
+  GroupedCategory,
+  GroupedGroup,
+  FlatIssue,
+  PassedRule,
+} from "./grouping";
 
 // Scoring
 export { getScoreGrade, getScoreColor, getGroupColor, GROUP_COLORS } from "./scoring";
@@ -84,7 +98,7 @@ export { ruleCatalogLookup, withCatalogRuleText } from "./rule-catalog";
 export type { RuleCatalogLookup, RuleCatalogText } from "./rule-catalog";
 
 // Output formatters
-export { renderHtml } from "./output/html";
+export { renderHtml, type HtmlRenderOptions } from "./output/html";
 export { renderMarkdown } from "./output/markdown";
 export { renderText } from "./output/text";
 export { renderXml } from "./output/xml";
@@ -132,6 +146,9 @@ export {
   notCheckedLine,
   notCheckedLines,
   notCheckedRules,
+  timedOutMessage,
+  timedOutRules,
+  type TimedOutRule,
   type NotCheckedReportShape,
   type NotCheckedRule,
 } from "./not-checked";
@@ -144,6 +161,7 @@ export {
   carriedTag,
   timeAgo,
   scanScopeLine,
+  scanScopeUnfetched,
   publishedReportNote,
   seedRedirect,
   seedRedirectLine,
@@ -162,13 +180,14 @@ export {
   EDITOR_SUMMARY_NOTE,
   buildEditorSummaryRequest,
   editorSummaryView,
+  priorityEffortLabel,
   toEditorSummary,
   type BuildEditorSummaryRequestOptions,
   type EditorSummaryView,
 } from "./editor-summary";
 
 // Re-export the persisted editor-summary report type for renderers + consumers.
-export type { EditorSummary } from "@squirrelscan/core-contracts";
+export type { EditorSummary, EditorSummaryPriority } from "@squirrelscan/core-contracts";
 
 // White-label report branding (#810) — threaded through every renderer option.
 export type { ReportBranding } from "@squirrelscan/core-contracts";
@@ -261,6 +280,8 @@ export {
   ruleCarriedPageCount,
   isPageUrl,
   isRedundantPageItem,
+  itemsNotListed,
+  itemsNotListedLine,
 } from "./affected-pages";
 export type { AffectedPages, RuleAffectedRollup } from "./affected-pages";
 

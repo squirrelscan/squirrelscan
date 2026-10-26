@@ -24,6 +24,8 @@ The rule runs on every crawled page and emits one check named `compression`:
 
 The size test measures the decoded HTML the crawl holds, in characters rather than bytes. A content type counts as compressible when it contains `text/`, `application/json`, `application/javascript`, `application/xml`, `+xml` or `+json`.
 
+This rule is the one that scores a page served without compression. [perf/bad-caching](/rules/perf/bad-caching) also counts the uncompressed pages across the site, in its `bad-caching-compression` check, at info status, which does not move the score, so one missing compression setting costs the score once.
+
 On a local or private-network host, such as `localhost` or `192.168.1.10`, the rule is skipped and left out of the score, because a dev server is not the production edge. See [Transport and delivery rules do not apply](/guides/local-audits-cli#transport-and-delivery-rules-do-not-apply).
 
 ## How to fix it
@@ -82,6 +84,12 @@ enable = ["perf/compression"]
 - [perf/http2](/rules/perf/http2): the protocol carrying the compressed body.
 
 Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [HTTP compression](/glossary#http-compression).
+
+{/* glossary:backlinks:end */}
 
 ## References
 

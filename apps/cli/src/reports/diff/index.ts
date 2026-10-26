@@ -1,3 +1,5 @@
+import { LINK_COVERAGE_DETAIL_KEYS } from "@squirrelscan/core-contracts";
+
 import type { SeverityLevel } from "@/reports/filters";
 import type {
   AuditReport,
@@ -53,14 +55,27 @@ function shouldIncludeCheck(
   return check.status === "warn";
 }
 
+// What links/broken-links covered (pub#794) describes the audit, not any one
+// broken link: left out of each issue's meta, or a change in coverage would
+// mark every broken link as changed.
+function issueDetails(
+  details: Record<string, unknown> | undefined
+): Record<string, unknown> | undefined {
+  if (!details) return undefined;
+  const out = { ...details };
+  for (const key of LINK_COVERAGE_DETAIL_KEYS) delete out[key];
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function buildMeta(
   check: CheckResult,
   item?: CheckItem
 ): Record<string, unknown> | undefined {
-  if (item?.meta && check.details) {
-    return { ...check.details, ...item.meta };
+  const details = issueDetails(check.details);
+  if (item?.meta && details) {
+    return { ...details, ...item.meta };
   }
-  return item?.meta ?? check.details ?? undefined;
+  return item?.meta ?? details ?? undefined;
 }
 
 function buildIssueInstance(

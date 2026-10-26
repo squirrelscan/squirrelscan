@@ -51,6 +51,21 @@ describe("ax/token-weight", () => {
     expect(checks[0]?.status).toBe("skipped");
   });
 
+  // pub#1011: only a genuine small 2xx page is "does not apply"; a missing document or a
+  // small non-2xx body is the check not running, so a prior finding carries.
+  test("a small 2xx page is not applicable; a missing document or a small non-2xx page is a gap", () => {
+    expect(run("<html></html>", { textToHtmlRatio: 0 })[0]?.skipReason).toBe("not-applicable");
+    const gap = (html: string, statusCode: number, document: unknown) =>
+      tokenWeightRule.run({
+        page: { url: "https://example.com/", html, statusCode, loadTime: 0, headers: {} },
+        parsed: { document, content: content() } as unknown as ParsedPage,
+        options: {},
+      }).checks[0];
+    expect(gap(PAD, 404, null)?.skipReason).toBe("below minimum size");
+    expect(gap("<html></html>", 503, {})?.skipReason).toBe("below minimum size");
+    expect(gap("<html></html>", 503, {})?.details).toBeUndefined();
+  });
+
   test("healthy ratio + reasonable size → both checks pass", () => {
     const checks = run(PAD, { textToHtmlRatio: 0.3 });
     const ratio = checks.find((c) => c.name === "token-weight-ratio");

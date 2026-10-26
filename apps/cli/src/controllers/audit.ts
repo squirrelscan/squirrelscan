@@ -20,9 +20,11 @@ import type { ParsedPageCache } from "@squirrelscan/parser";
 
 import {
   createCloudDocumentFetcher,
+  createNotEvaluatedCollector,
   flattenChecks,
   type FlatFinding,
   type PageResultSink,
+  unfetchedFrontierCount,
 } from "@squirrelscan/audit-engine";
 import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
 import { computeCost } from "@squirrelscan/core-contracts/credits";
@@ -32,6 +34,10 @@ import {
   createFetchDocumentFetcher,
 } from "@squirrelscan/fetchers";
 import { createProbeBudget, selectDiscoveryProbes } from "@squirrelscan/rules";
+import {
+  customUserAgent,
+  mergeHeaderRecords,
+} from "@squirrelscan/utils/headers";
 
 import type { RetentionOutcome } from "@/audit/retention";
 import type { PreflightBalance } from "@/lib/balance";
@@ -55,6 +61,10 @@ import {
   type CloudTechDetectResult,
 } from "@/audit/cloud";
 import { gateStage1 } from "@/audit/cloud-gating";
+import {
+  formatResumeClaimWarning,
+  startLeaseForStorage,
+} from "@/audit/crawl-lease";
 import { entityMapSite, storeEntityMap } from "@/audit/entity-map";
 import { guardCollector } from "@/audit/guard-collector";
 import {
@@ -72,6 +82,7 @@ import {
   runSmartAudits,
   REMOVED_STATUSES as SMART_REMOVED_STATUSES,
 } from "@/audit/smart-audits";
+import { registerOwnedCrawl } from "@/audit/stop-interrupted-crawl";
 import {
   resolveStreamBatchBytes,
   resolveStreamBatchPagesOverride,
@@ -96,6 +107,7 @@ import {
   ErrorCodes,
 } from "@/controllers/types";
 import { createHybridDocumentFetcher } from "@/crawl/hybrid-fetcher";
+import { hostPinningNotice, pinOwnHosts } from "@/crawl/pin-own-hosts";
 import { resolveSeedRedirect } from "@/crawler/frontier";
 import { createStorage, domainToProjectName } from "@/crawler/storage";
 import { retainGlobalContentStore } from "@/crawler/storage/content-store";
@@ -160,10 +172,19 @@ function isDirtyConfig(
 }
 
 export interface AuditProgress {
-  phase: "crawling" | "external-links" | "cloud" | "rules" | "complete";
+  phase:
+    | "crawling"
+    | "external-links"
+    | "cloud"
+    | "rules"
+    | "walk"
+    | "complete";
   current?: number;
   total?: number;
-  /** Free-text detail for the cloud phase (service + batch progress). */
+  /**
+   * Free-text detail for the cloud phase (service + batch progress). For `walk`,
+   * `current` is the pages of the pre-rules walk done so far out of `total`.
+   */
   detail?: string;
 }
 
@@ -205,7 +226,8 @@ export interface RunAuditOptions extends AuditOptions {
     balance: PreflightBalance
   ) => Promise<boolean>;
   /** User accepted the cost-disclosing consent prompt under a cap → skip the
-   * post-crawl prefetch confirm. Uncapped spend (dead-links) is still gated. */
+   * post-crawl prefetch confirm, and the link-check confirm (#801: its charge
+   * is in the capped estimate). Tech/editor keep their own gates. */
   cloudConsented?: boolean;
   /**
    * Concrete fetch mode for this run, already resolved by the caller from
@@ -917,6 +939,8 @@ export async function runAudit(
 
     // Fiber handle for event subscription (declared outside try for finally cleanup)
     let eventsFiber: ReturnType<typeof Effect.runFork> | undefined;
+    // Crawl lease (#946), released in the finally below.
+    let crawlLease: ReturnType<typeof startLeaseForStorage> | undefined;
 
     // Cloud spend charged OUTSIDE the prefetch: render submits during the
     // crawl and dead-links bulk calls during the external-links phase. Both
@@ -950,8 +974,14 @@ export async function runAudit(
       phaseTimer.enter("crawl");
       // Resolve user-agent: empty string = random browser UA, pinned per
       // project so re-runs serve the same markup (#875)
+      // A custom `User-Agent` header is the crawl's agent on every request that
+      // carries it, so it is also the agent of the probes that send no custom
+      // headers (#1152).
+      const configuredUserAgent =
+        mergedConfig.crawler.user_agent ||
+        customUserAgent(mergedConfig.crawler.headers);
       const { userAgent, source: uaSource } = await Effect.runPromise(
-        resolveStickyUserAgent(mergedConfig.crawler.user_agent, storage, {
+        resolveStickyUserAgent(configuredUserAgent, storage, {
           freshUa: options.freshUa,
         })
       );
@@ -1028,6 +1058,8 @@ export async function runAudit(
         mergedConfig.crawler.incremental
       );
 
+      const pinningNotice = hostPinningNotice();
+      if (pinningNotice) logger.info(pinningNotice);
       const crawlerConfig = {
         maxPages: mergedConfig.crawler.max_pages,
         maxDepth: mergedConfig.crawler.max_depth,
@@ -1041,9 +1073,15 @@ export async function runAudit(
         maxBackoffMs: mergedConfig.crawler.max_backoff_ms,
         timeoutMs: mergedConfig.crawler.timeout_ms,
         userAgent,
+        // squirrelscan/repo#3271: the robots.txt group token, when set apart from the UA.
+        robotsUserAgent: mergedConfig.crawler.robots_user_agent || undefined,
         headers: mergedConfig.crawler.headers,
+        headerHosts: mergedConfig.crawler.header_hosts,
         followRedirects: mergedConfig.crawler.follow_redirects,
         respectRobots: mergedConfig.crawler.respect_robots,
+        // repo#3430: the site's own hosts are resolved once and connected to by
+        // address; a metadata or link-local answer is never requested.
+        pinOwnHosts: pinOwnHosts(),
         discoveryProbePerHost: crawlConcurrency.discoveryProbePerHost,
         // Only the probes an enabled rule reads, and none when the user turned
         // them off: a firewall can ban the audit for asking for /swagger.json
@@ -1104,6 +1142,12 @@ export async function runAudit(
           parsedPageCache,
         })
       );
+
+      // #941: lets a Ctrl-C mark this crawl `stopped` instead of leaving it
+      // `running`, by id.
+      registerOwnedCrawl(() => crawler.currentCrawlId);
+      // #946: record that this process drives the crawl, for the whole command.
+      crawlLease = startLeaseForStorage(storage, () => crawler.currentCrawlId);
 
       logger.debug("step 1: crawling", url);
       onProgress({ phase: "crawling" });
@@ -1202,7 +1246,7 @@ export async function runAudit(
       );
 
       // Resume decision logic
-      const shouldResume =
+      const resumeCandidate =
         options.resume && // User explicitly requested resume
         !!existingCrawl &&
         !options.refresh && // Can't resume if refresh requested
@@ -1212,6 +1256,11 @@ export async function runAudit(
           existingCrawl.status === "paused" ||
           existingCrawl.status === "stopped") &&
         !isDirtyConfig(existingCrawl.config, crawlerConfig);
+      const resumeClaim =
+        resumeCandidate && existingCrawl
+          ? crawlLease.claim(existingCrawl.id)
+          : null;
+      const shouldResume = resumeCandidate && resumeClaim?.acquired === true;
 
       // Crawl-phase wall-clock backstop: a wedged fetch (e.g. a cloud render
       // that never returns) must never hang the audit. On expiry stop the
@@ -1255,7 +1304,11 @@ export async function runAudit(
         } else {
           // Create new crawl
           // Warn if resume conditions not met
-          if (options.resume && !existingCrawl) {
+          if (resumeClaim && !resumeClaim.acquired && existingCrawl) {
+            logger.warn(
+              formatResumeClaimWarning(existingCrawl.id, resumeClaim)
+            );
+          } else if (options.resume && !existingCrawl) {
             logger.warn("--resume requested but no previous crawl found");
           } else if (
             options.resume &&
@@ -1429,7 +1482,7 @@ export async function runAudit(
       // Cloud bulk dead-link checks (shared global cache) when authed and
       // the links/dead-links rule is enabled; null → plain local checking.
       // Gated behind the SAME spend confirmation as STEP 2.4 prefetch so the
-      // dead_links charge (which happens here, before that confirm) can't be
+      // link-check charge (which happens here, before that confirm) can't be
       // a surprise: when the estimate exceeds [cloud].confirm_threshold and a
       // TTY confirm callback exists, the user is prompted first; a decline
       // falls back to local per-link checks.
@@ -1490,6 +1543,11 @@ export async function runAudit(
         cloudPrefetchEnabled && externalLinksEnabled;
       const externalLinkUrls = new Set<string>();
 
+      // Per-batch page count of the walk (#950), for a caller with no terminal to
+      // show liveness on.
+      let pagesWalked = 0;
+      onProgress({ phase: "walk", current: 0, total: pageCount });
+
       const preRules = await Effect.runPromise(
         runStreamingPreRules(sqliteStorage, crawlId, mergedConfig, {
           batchSize: streamBatchSize,
@@ -1498,6 +1556,12 @@ export async function runAudit(
             resourceCheckTimeoutMs: options.resourceCheckTimeoutMs,
             // Sub-resource cache reuse (#107): mirrors the crawler's incremental flag.
             incremental: incrementalEnabled,
+            // --offline: nothing goes to a host outside the audited site, the
+            // third-party asset checks included (pub#807).
+            ...(options.offline ? { ownSiteOnly: true } : {}),
+            // repo#3430: the asset and end-of-crawl probes vet and pin the
+            // site's own hosts as the crawl does.
+            pinOwnHosts: pinOwnHosts(),
           },
           ...(externalLinksEnabled
             ? {
@@ -1531,6 +1595,10 @@ export async function runAudit(
                       client: deadLinksClient,
                       config: mergedConfig,
                       auditId: crawlId,
+                      // #801: the cloud bills the checks to the registered run;
+                      // no run, no cloud checks (local, free).
+                      getRunId: options.getRunId,
+                      maxPages: mergedConfig.crawler.max_pages,
                       externalLinkCount: externalLinkUrls.size,
                       getBalance: deadLinksClient
                         ? async () =>
@@ -1538,7 +1606,12 @@ export async function runAudit(
                               (await deadLinksClient.getBalance()).balance
                             )
                         : undefined,
-                      confirm: options.confirmCloudSpend,
+                      // #801: the link charge is in the consented, capped
+                      // estimate now (one per page of the limit), so a
+                      // consented run is not stopped mid-audit to confirm it.
+                      confirm: options.cloudConsented
+                        ? undefined
+                        : options.confirmCloudSpend,
                       onSpend: (units, credits) => {
                         deadLinksUnits += units;
                         deadLinksCredits += credits;
@@ -1559,9 +1632,17 @@ export async function runAudit(
                 status: page.status,
               });
             }
+            pagesWalked += batchContext.length;
+            onProgress({
+              phase: "walk",
+              current: pagesWalked,
+              total: pageCount,
+            });
           },
         })
       );
+      // The walk is over whatever the batch counts added up to.
+      onProgress({ phase: "walk", current: pageCount, total: pageCount });
       const assets = preRules.assets;
       const techSample = techSampleCollector.build();
       // v1 opened the external-links phase and then the rules phase separately,
@@ -1718,9 +1799,11 @@ export async function runAudit(
       // has already run.
       // Spilling as we go means a run killed mid-phase leaves rows behind where
       // it used to leave none, so re-running rules over the same crawl would
-      // append a second copy of every check. Unreachable today (see
-      // `clearRuleResults`), and a no-op on every normal run, but it keeps the
-      // invariant next to the code that now depends on it.
+      // append a second copy of every check. An audit never re-runs rules over
+      // a crawl (see `clearRuleResults`), so this is a no-op on every normal
+      // run, but it keeps the invariant next to the code that depends on it.
+      // `squirrel analyze`, which does re-run them, replaces the crawl's
+      // results in one transaction instead (#844).
       await Effect.runPromise(
         sqliteStorage
           .clearRuleResults(crawlId)
@@ -1734,6 +1817,10 @@ export async function runAudit(
           .map((p) => p.normalizedUrl)
       );
       const freshFindings: FlatFinding[] = [];
+      // (#508) The checks a page skipped, which only the sink sees: a skipped check
+      // is no finding, but its page's prior finding must carry, not resolve. Pages
+      // reach the sink by normalized URL already.
+      const notEvaluatedCollector = createNotEvaluatedCollector((url) => url);
       const scoredPageUrls: string[] = [];
       let pendingRuleRows = new Map<
         string,
@@ -1755,6 +1842,8 @@ export async function runAudit(
           // (mostly passing) check set.
           if (!smartAuditsOn || removedPageUrls.has(pageUrl)) return;
           for (const [ruleId, checks] of entries) {
+            for (const check of checks)
+              notEvaluatedCollector.add(ruleId, check, pageUrl);
             const flat = flattenChecks(
               pageUrl,
               ruleId,
@@ -1803,6 +1892,8 @@ export async function runAudit(
           onPhase: streamPhaseMemoryLogger(),
           pageSink,
           retainPageResults: false,
+          // repo#3430: the end-of-crawl probes vet and pin the site's own hosts.
+          pinOwnHosts: pinOwnHosts(),
           ...(ruleCacheStore
             ? {
                 ruleCache: {
@@ -1907,6 +1998,7 @@ export async function runAudit(
               // from the bounded tallies — neither needs the O(pages) result
               // maps the phase no longer builds.
               freshFindings,
+              notEvaluated: notEvaluatedCollector.result(),
               scoredPageUrls,
               ruleMeta: ruleResults.tallies,
               // Collected during the pre-rules walk in the same
@@ -1963,7 +2055,13 @@ export async function runAudit(
         // "asked for everything" — worse than leaving it out.
         const recordRequested =
           scopeLimit.clamped && Number.isFinite(scopeLimit.requested);
-        report.scanScope = {
+        // Queued but never fetched, so a capped report can say how much of
+        // the site it knew of beyond the pages it audited.
+        // This is one cheap indexed COUNT(*) and intentionally runs on every audit.
+        const unfetched = await Effect.runPromise(
+          unfetchedFrontierCount(sqliteStorage, crawlId)
+        );
+        const scanScope: NonNullable<AuditReport["scanScope"]> = {
           origin: detectRunner().ci ? "ci" : "cli",
           maxPages: scopeMaxPages,
           ...(recordRequested
@@ -1971,7 +2069,24 @@ export async function runAudit(
             : {}),
           pagesCrawled: report.pages.length,
           capped: report.pages.length >= scopeMaxPages,
+          ...(unfetched > 0 ? { unfetched } : {}),
         };
+        report.scanScope = scanScope;
+        // `squirrel report` rebuilds from this crawl after the audit process is
+        // gone. Persist the exact disclosure rather than making that later path
+        // guess the runner, the requested limit or how much frontier remained.
+        await Effect.runPromise(
+          storage.updateCrawl(crawlId, { scanScope }).pipe(
+            Effect.catchAll((error) => {
+              // The disclosure is report-only. A busy or read-only database
+              // must not turn an otherwise finished audit into a failure.
+              logger.warn(
+                `Could not store this audit's scan scope: ${String(error)}`
+              );
+              return Effect.void;
+            })
+          )
+        );
       }
 
       // Rule-result cache disclosure (#1990). REPORT-ONLY, and stripped on
@@ -2098,14 +2213,17 @@ export async function runAudit(
       const spendLines = [
         // render misses + render_cached hits, at the actual server debit #279.
         ...foldRenderSpendLines(renderCharges),
-        ...(deadLinksUnits > 0
+        // A batch can be charged with no answers (a settle that could not
+        // run keeps its reservation), so credits alone keep the line (#801).
+        ...(deadLinksUnits > 0 || deadLinksCredits > 0
           ? [
               {
-                service: "dead-links",
-                feature: "dead_links",
+                // Pricing v12 (#801): the cloud's link checks bill the run
+                // `external_link`, 1 per distinct link it answered.
+                service: "external links",
+                feature: "external_link",
                 units: deadLinksUnits,
-                // Accumulated per call — the server rounds ceil(urls/100)
-                // per call, so recomputing from total units would undercount.
+                // Accumulated per call: the server's own `charged` figure.
                 credits: deadLinksCredits,
               },
             ]
@@ -2295,6 +2413,7 @@ export async function runAudit(
       if (eventsFiber) {
         await Effect.runPromise(Fiber.interrupt(eventsFiber));
       }
+      crawlLease?.release();
       releaseContentStore();
       await Effect.runPromise(storage.close());
     }
@@ -2375,10 +2494,14 @@ export function mergeOptionsToConfig(
     smart_audits: options.smartAudits ?? config.smart_audits,
     // --rule-include/--rule-exclude (#1066): same merge the CLI command uses to
     // pre-validate --fail-on against excluded categories (resolveRulesConfig).
-    rules: resolveRulesConfig(config.rules, {
-      enable: options.ruleInclude ?? [],
-      disable: options.ruleExclude ?? [],
-    }),
+    // The rest of `[rules]`, such as `time_budget_ms` (#578), passes through.
+    rules: {
+      ...config.rules,
+      ...resolveRulesConfig(config.rules, {
+        enable: options.ruleInclude ?? [],
+        disable: options.ruleExclude ?? [],
+      }),
+    },
     crawler: {
       ...config.crawler,
       // Same clamp as the commands, through the same helper so the five cannot
@@ -2406,9 +2529,24 @@ export function mergeOptionsToConfig(
             ),
           }
         : {}),
-      // CLI --header values override matching [crawler] headers from TOML (#494).
+      // CLI --header values override matching [crawler] headers from TOML (#494),
+      // whatever the casing of either name (#3346).
       ...(options.headers && Object.keys(options.headers).length > 0
-        ? { headers: { ...config.crawler.headers, ...options.headers } }
+        ? {
+            headers: mergeHeaderRecords(
+              config.crawler.headers,
+              options.headers
+            ),
+          }
+        : {}),
+      // --header-host adds to [crawler] header_hosts (#732).
+      ...(options.headerHosts && options.headerHosts.length > 0
+        ? {
+            header_hosts: [
+              ...config.crawler.header_hosts,
+              ...options.headerHosts,
+            ],
+          }
         : {}),
       // --disable-discovery-probes[=false] overrides [crawler]
       // disable_discovery_probes (#409), in both directions.

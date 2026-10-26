@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  CRAWL_CAPPED_SKIP_REASON,
   EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
   EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
   LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
@@ -92,7 +93,7 @@ function quickReport(): AuditReport {
   };
 }
 
-const EXTERNAL_LINE = `Not checked: Broken External Links. ${EXTERNAL_MESSAGE}. Turn external link checks on to check them: in the CLI pass --external-links, or run a Surface or Full audit, without --offline; in the cloud they are a website setting.`;
+const EXTERNAL_LINE = `Not checked: Broken External Links. ${EXTERNAL_MESSAGE}. Turn external link checks on to check them: in the CLI pass --external-links (or drop --no-external-links, --offline, or external_links.enabled = false); in the cloud they are a website setting.`;
 const INTERNAL_LINE = `Not checked: Broken Links. ${INTERNAL_MESSAGE}. Turn internal link checks back on (they are off with --no-internal-links or internal_links.enabled = false), raise internal_links.max_targets, or run a Surface or Full audit, which follows links, to check them.`;
 
 describe("notCheckedRules / notCheckedLines", () => {
@@ -124,6 +125,30 @@ describe("notCheckedRules / notCheckedLines", () => {
     ]);
   });
 
+  test("a crawl that stopped at its page cap leaves the inbound-link rules not checked (#1144)", () => {
+    const message = "Crawl stopped at its 100-page cap, so an inbound link may sit on a page not crawled";
+    const report = {
+      ruleResults: {
+        "links/orphan-pages": rule("links/orphan-pages", "Orphan Pages", "warning", [
+          {
+            name: "orphan-pages",
+            status: "skipped",
+            message,
+            skipReason: CRAWL_CAPPED_SKIP_REASON,
+          },
+        ]),
+      },
+    };
+    expect(notCheckedRules(report)).toEqual([
+      expect.objectContaining({
+        ruleId: "links/orphan-pages",
+        reason: CRAWL_CAPPED_SKIP_REASON,
+        message,
+        hint: expect.stringContaining("--max-pages"),
+      }),
+    ]);
+  });
+
   test("other skip reasons are not 'not checked'", () => {
     const report = quickReport();
     report.ruleResults = {
@@ -132,6 +157,53 @@ describe("notCheckedRules / notCheckedLines", () => {
       ]),
     };
     expect(notCheckedRules(report)).toEqual([]);
+  });
+
+  test("a rule abandoned for its time budget is shown as not checked, a security rule included (pub#960)", () => {
+    const report = quickReport();
+    const message = "Rule not evaluated: exceeded its 1000 ms time budget and was abandoned";
+    report.ruleResults = {
+      "security/leaked-secrets": rule("security/leaked-secrets", "Leaked Secrets", "error", [
+        { name: "leaked-secrets", status: "pass", message: "ok", pageUrl: "https://example.com/a" },
+        {
+          name: "security/leaked-secrets-error",
+          status: "skipped",
+          message,
+          skipReason: "rule-timed-out",
+          pageUrl: "https://example.com/b",
+          details: { timedOut: true, ruleId: "security/leaked-secrets", budgetMs: 1000, elapsedMs: 1400 },
+        },
+      ]),
+    };
+    expect(notCheckedLines(report)).toEqual([
+      `Not checked: Leaked Secrets. Leaked Secrets timed out on 1 page (exceeded its 1000 ms time budget). A timed-out rule did not check those pages, so no finding there is not a clean result. Run the audit again, or raise [rules] time_budget_ms if the machine was busy.`,
+    ]);
+    // The rule and the page count come from the `-timeouts` row when it is there.
+    report.ruleResults["security/leaked-secrets"]!.checks.push({
+      name: "security/leaked-secrets-timeouts",
+      status: "info",
+      message: "2 pages not checked",
+      details: { timedOut: true, budgetMs: 1000, pagesNotChecked: 2 },
+    });
+    expect(notCheckedLines(report)[0]).toContain("Leaked Secrets timed out on 2 pages (exceeded its 1000 ms time budget).");
+    // Without the summary row (a published report may cut it) the folded skip's
+    // own counts still say how many pages.
+    const cut = quickReport();
+    cut.ruleResults = {
+      "security/leaked-secrets": rule("security/leaked-secrets", "Leaked Secrets", "error", [
+        {
+          name: "security/leaked-secrets-error",
+          status: "skipped",
+          message,
+          skipReason: "rule-timed-out",
+          details: { timedOut: true, budgetMs: 1000, occurrences: 20, pagesTruncated: 20 },
+        },
+      ]),
+    };
+    expect(notCheckedLines(cut)[0]).toContain("Leaked Secrets timed out on 20 pages");
+    // The console and the other formats print it, not only the info row.
+    expect(renderText(report)).toContain("Not checked: Leaked Secrets.");
+    expect(renderMarkdown(report)).toContain("Leaked Secrets");
   });
 
   test("no em-dash in the copy", () => {

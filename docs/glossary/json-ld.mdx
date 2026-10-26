@@ -1,0 +1,86 @@
+---
+title: "What is JSON-LD? Syntax, @id and common errors"
+sidebarTitle: "JSON-LD"
+description: "JSON-LD is the JSON format for linked data that most sites use for structured data. The syntax, why every @id should be an absolute URL, and what to check."
+---
+
+**JSON-LD** (JSON for Linking Data) is a W3C format for writing linked data as JSON, and the format Google recommends for structured data, placed in a `<script type="application/ld+json">` block.
+
+A block names its vocabulary with `@context`, usually `https://schema.org`, and what each node describes with `@type`. A node can carry an `@id`, an identifier other nodes point at, and a `@graph` array holds several nodes in one block. Because the block sits beside the page content rather than inside it, nothing on the rendered page changes when it is wrong.
+
+{/* glossary:hub:start */}
+
+Category: [Structured Data](/rules/schema)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+Two faults show up. A syntax error, usually a trailing comma, an unescaped quote or a raw newline inside a string, makes the whole block unreadable. A validation error means the JSON parsed but a type is missing a property a consumer expects. Identifiers fail more quietly: `"@id": "#organization"` resolves against each page's own URL, so the home page and an article declare two different organizations, and the entity never builds up across the site.
+
+## How squirrelscan checks it
+
+[schema/json-ld-valid](/rules/schema/json-ld-valid) parses each block and reports syntax errors and missing or invalid properties, with the property path for each. Nodes that share an `@id` on the same page are checked together, which is how generators such as Yoast link their nodes. Two rules read the [entity map](/guides/entity-map) built from the whole crawl: [schema/entity-id-format](/rules/schema/entity-id-format) warns about an `@id` that is still not an absolute URL after the audit tries to resolve it against its page (`urn:`, `doi:`, `info:`, `tag:` and `isbn:` identifiers are accepted), and [schema/entity-dangling](/rules/schema/entity-dangling) fails a reference to an `@id` that no crawled page declares. `sameAs` links are exempt, because they point outside the site by design.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Invalid JSON-LD syntax: what breaks it and how to fix](/rules/schema/json-ld-valid) | A structured data block that will not parse, or parses but omits properties schema.org requires. squirrel names the exact type and property. | warning |
+| [A bare #organization is one entity per page, not one entity](/rules/schema/entity-id-format) | A relative @id resolves against the page it sits on, so the same fragment on forty pages is forty identifiers. The markup validates and the entity still never accumulates. | warning |
+| [A publisher that points at nothing](/rules/schema/entity-dangling) | A reference to an @id that nothing in the crawl declares. squirrel checks against the whole site, so a publisher the homepage declares still resolves. | error |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Write every `@id` as a full URL, and declare each node you reference on every page that references it (see [the dangling reference fix](/rules/schema/entity-dangling#how-to-fix-it)):
+
+```json
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    { "@type": "Article", "@id": "https://example.com/post#article",
+      "publisher": { "@id": "https://example.com/#organization" } },
+    { "@type": "Organization", "@id": "https://example.com/#organization",
+      "name": "Example Ltd", "url": "https://example.com/" }
+  ]
+}
+```
+
+Serialise the block from an object with `JSON.stringify`, and fix a relative `@id` in the template that builds it rather than page by page.
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include schema/json-ld-valid,schema/entity-id-format,schema/entity-dangling
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Structured data](/glossary/structured-data): Machine-readable statements about a page's content, usually schema.org vocabulary in JSON-LD, that search engines and agents can parse.
+- [@id (JSON-LD node identifier)](/glossary/entity-id): The JSON-LD @id that gives a node a stable IRI, so other nodes and pages can reference the same entity instead of redeclaring it.
+
+{/* glossary:related:end */}
+
+## References
+
+- [JSON-LD 1.1, W3C Recommendation](https://www.w3.org/TR/json-ld11/)
+- [Node identifiers, JSON-LD 1.1](https://www.w3.org/TR/json-ld11/#node-identifiers)
+- [Introduction to structured data markup, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/intro-structured-data)
+
+{/* glossary:jsonld:start */}
+
+import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";
+
+<GlossaryJsonLd slug="json-ld" />
+
+{/* glossary:jsonld:end */}

@@ -62,7 +62,7 @@ const CONFIG = {
   external_links: { enabled: false, concurrency: 1, timeout_ms: 1000, cache_ttl_days: 1 },
 } as unknown as Config;
 
-const SITE_URL = "http://synthetic.test";
+const SITE_URL = "http://synthetic.example.com";
 
 const EMPTY_ASSETS: PreFetchedAssets = {
   resourceSizes: { css: [], images: [] },

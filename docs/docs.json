@@ -64,7 +64,8 @@
             "pages": [
               "index",
               "agent-setup/index",
-              "quickstart"
+              "quickstart",
+              "faq"
             ]
           },
           {
@@ -93,7 +94,9 @@
               "projects",
               "crawl",
               "guides/audit-levels",
+              "guides/link-checking",
               "reports",
+              "guides/read-your-report",
               "guides/failed-audits",
               "guides/badges",
               "guides/browser-rendering",
@@ -260,6 +263,7 @@
                 "group": "Content",
                 "pages": [
                   "rules/content/index",
+                  "rules/content/h1-title-alignment",
                   "rules/content/heading-hierarchy",
                   "rules/content/hidden-text",
                   "rules/content/word-count",
@@ -336,7 +340,8 @@
                   "rules/images/image-file-size",
                   "rules/images/responsive-size",
                   "rules/images/offscreen-lazy",
-                  "rules/images/optimized"
+                  "rules/images/optimized",
+                  "rules/images/hotlinked"
                 ]
               },
               {
@@ -425,6 +430,7 @@
                   "rules/mobile/viewport-zoom",
                   "rules/mobile/tap-targets",
                   "rules/mobile/font-size",
+                  "rules/mobile/input-zoom",
                   "rules/mobile/horizontal-scroll",
                   "rules/mobile/interstitials",
                   "rules/mobile/web-app-manifest"
@@ -651,6 +657,102 @@
               "rules/ai/page-type-match",
               "rules/ai/ai-content",
               "rules/ai/site-metadata"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Glossary",
+        "icon": "book-a",
+        "groups": [
+          {
+            "group": "Glossary",
+            "pages": [
+              "glossary/index"
+            ]
+          },
+          {
+            "group": "SEO",
+            "pages": [
+              "glossary/accessible-name",
+              "glossary/alt-text",
+              "glossary/anchor-text",
+              "glossary/aria",
+              "glossary/broken-link",
+              "glossary/canonical-url",
+              "glossary/character-encoding",
+              "glossary/color-contrast",
+              "glossary/content-freshness",
+              "glossary/crawl-budget",
+              "glossary/duplicate-content",
+              "glossary/e-e-a-t",
+              "glossary/entity",
+              "glossary/geo-meta-tags",
+              "glossary/heading-hierarchy",
+              "glossary/hreflang",
+              "glossary/http-status-code",
+              "glossary/entity-id",
+              "glossary/indexability",
+              "glossary/internal-linking",
+              "glossary/json-ld",
+              "glossary/lazy-loading",
+              "glossary/local-business-schema",
+              "glossary/meta-description",
+              "glossary/mobile-friendly",
+              "glossary/nap-consistency",
+              "glossary/noindex",
+              "glossary/open-graph",
+              "glossary/organization-schema",
+              "glossary/orphan-page",
+              "glossary/product-schema",
+              "glossary/redirect-chain",
+              "glossary/responsive-images",
+              "glossary/rich-results",
+              "glossary/robots-meta-tag",
+              "glossary/robots-txt",
+              "glossary/lastmod",
+              "glossary/structured-data",
+              "glossary/thin-content",
+              "glossary/title-tag",
+              "glossary/url-slug",
+              "glossary/viewport-meta-tag",
+              "glossary/wcag",
+              "glossary/xml-sitemap",
+              "glossary/ymyl"
+            ]
+          },
+          {
+            "group": "Performance",
+            "pages": [
+              "glossary/core-web-vitals",
+              "glossary/cls",
+              "glossary/http-caching",
+              "glossary/inp",
+              "glossary/lcp",
+              "glossary/render-blocking-resources"
+            ]
+          },
+          {
+            "group": "Security",
+            "pages": [
+              "glossary/content-security-policy",
+              "glossary/cookie-attributes",
+              "glossary/cookie-consent",
+              "glossary/hacked-site",
+              "glossary/hsts",
+              "glossary/https",
+              "glossary/leaked-secrets",
+              "glossary/security-headers"
+            ]
+          },
+          {
+            "group": "Agent experience",
+            "pages": [
+              "glossary/agent-experience",
+              "glossary/ai-crawler",
+              "glossary/client-side-rendering",
+              "glossary/generative-engine-optimization",
+              "glossary/llms-txt"
             ]
           }
         ]

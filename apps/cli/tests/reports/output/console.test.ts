@@ -244,4 +244,42 @@ describe("generateConsoleReport", () => {
       );
     });
   });
+
+  describe("includePassed", () => {
+    const pass = (pageUrl: string) => ({
+      name: "c",
+      status: "pass" as const,
+      message: "ok",
+      pageUrl,
+    });
+
+    function reportWithPasses(): AuditReport {
+      const report = createMinimalReport();
+      report.ruleResults = {
+        "core/canonical": rule("core/canonical", "core", "error", [
+          pass("https://example.com/"),
+          pass("https://example.com/about"),
+        ]),
+        "content/warn-rule": rule("content/warn-rule", "content", "warning", [
+          pass("https://example.com/"),
+          warn("thin content"),
+        ]),
+      };
+      return report;
+    }
+
+    test("off by default: no PASSED section", () => {
+      const out = capture(reportWithPasses());
+      expect(out).not.toContain("PASSED");
+    });
+
+    test("lists rules with no issues, with their page count", () => {
+      const out = capture(reportWithPasses(), { includePassed: true });
+      expect(out).toContain("PASSED (1 rule)");
+      expect(out).toContain("core/canonical core/canonical (2 pages)");
+      // A rule with a warning is an issue, not a pass.
+      const passed = out.slice(out.indexOf("PASSED"));
+      expect(passed).not.toContain("content/warn-rule");
+    });
+  });
 });

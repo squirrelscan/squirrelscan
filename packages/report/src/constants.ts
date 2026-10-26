@@ -3,9 +3,9 @@
 // Grouping key separator (null byte - cannot appear in strings)
 export const KEY_SEPARATOR = "\x00";
 
-// Bump on any HTML renderer/CSS change (output/html.tsx) — the API folds this
+// Bump on any HTML renderer/CSS change (output/html.tsx, output/page/) — the API folds this
 // into the cached-HTML R2 key, so a bump invalidates cached reports (re-render on next view).
-export const REPORT_HTML_VERSION = 14;
+export const REPORT_HTML_VERSION = 22;
 
 // Report output constants
 export const REPORT_COLLAPSE_THRESHOLD = 3;

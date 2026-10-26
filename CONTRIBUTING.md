@@ -2,9 +2,11 @@
 
 Thanks for contributing to squirrelscan. Bug fixes, rules, tests, documentation, and focused performance improvements are welcome.
 
+Working with a coding agent, or want the long version? [AGENTS.md](AGENTS.md) covers the repo layout, adding a rule or a CLI command, test conventions, untrusted-input rules and the CI checks that catch people out.
+
 ## Development
 
-Use Bun 1.4.0 or the version in `package.json`.
+Use Bun 1.4.4 or the version in `package.json`.
 
 ```bash
 bun install --frozen-lockfile
@@ -22,6 +24,23 @@ Add focused tests for behavioral changes. Keep changes scoped and avoid generate
 Documentation source lives in `docs/`. Run `bun run docs:check` after editing links,
 navigation, or MDX content, and `bun run docs:build` before submitting structural or
 configuration changes.
+
+`docs:check` (and `make validate` in `docs/`) runs `tangly check --strict`, then
+`docs/scripts/check-links.ts`, because tangly does not check internal links. The
+script fails on a link to a page that does not exist, a `#anchor` the target page
+does not render, a missing anchor from `docs/scripts/required-anchors.json` (the
+cloud app links to those sections, so keep a heading's `{#id}` when you rename it),
+and a rule page `## Options` row that prints `unknown` or `undefined`.
+
+It then runs `docs/scripts/glossary.ts --check`. The glossary and the rule-category
+hubs are built from `docs/scripts/glossary/terms.json` and `hubs.json`: the content
+between `{/* glossary:...:start */}` or `{/* hub:...:start */}` markers is generated,
+so edit the data files and run `bun scripts/glossary.ts --write` in `docs/` instead
+of editing it by hand. The check also fails on a term naming a rule with no docs
+page, a hub that does not link one of its rules, a category hub with a category
+`<Card>` or a stated rule count, a glossary or hub title over 60 or description over
+155 characters, an em-dash, and two pages with the same title. Last, it runs the
+tests for both scripts (`docs/scripts/glossary.test.ts` and `check-links.test.ts`).
 
 ## Issues
 

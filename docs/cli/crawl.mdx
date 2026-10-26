@@ -89,6 +89,13 @@ squirrel crawl https://example.com --refresh
 squirrel crawl https://example.com --resume
 ```
 
+Resume only continues a crawl when this process can claim it. If another live
+process already owns that crawl, the command names its PID and host and starts a
+new crawl instead. A lease becomes stale after 5 minutes without a heartbeat;
+a live same-host PID remains protected longer. Stop the other process (Ctrl-C
+releases its lease immediately), wait 5 minutes for a silent remote owner to go
+stale, or use `--refresh` for a fresh crawl. See [crawl leases](/cli/self#crawl-leases).
+
 ## Crawl behavior
 
 The crawl command:

@@ -358,28 +358,41 @@ describe("pub#629: a clean dev site scores like the clean public site", () => {
   });
 });
 
-describe("pub#629: one cause is not charged several times on a private target", () => {
-  // Each condition a dev server has by design, with the rules that charge for
-  // it on a public host. On a public host each costs the score more than once,
-  // which is the multiplication the issue reported; on a private target none
-  // of them is charged at all.
-  const CONDITIONS: Record<string, string[]> = {
-    "no compression": ["perf/compression", "perf/bad-caching"],
-    "no caching policy": ["perf/cache-headers", "perf/bad-caching"],
+describe("pub#629 / pub#633: one cause costs the score once", () => {
+  // Each condition a dev server has by design, with the two checks that report
+  // it. On a public host the per-page rule scores it and perf/bad-caching
+  // reports the site share as info (pub#633: before, both scored it); on a
+  // private target neither is charged (pub#629).
+  type Check = [ruleId: string, checkName: string];
+  const CONDITIONS: Record<string, { scoredBy: Check; alsoReportedBy: Check }> = {
+    "no compression": {
+      scoredBy: ["perf/compression", "compression"],
+      alsoReportedBy: ["perf/bad-caching", "bad-caching-compression"],
+    },
+    "no caching policy": {
+      scoredBy: ["perf/cache-headers", "cache-headers-missing"],
+      alsoReportedBy: ["perf/bad-caching", "bad-caching-freshness"],
+    },
   };
 
   test.each(Object.entries(CONDITIONS))(
-    "%s: charged by several rules on a public host",
-    (_condition, rules) => {
-      const charging = rules.filter((id) => scored(devRun.checks(id), id).length > 0);
-      expect(charging).toEqual(rules);
+    "%s: scored by exactly one check on a public host, still reported by the other",
+    (_condition, { scoredBy, alsoReportedBy }) => {
+      const charging = [scoredBy, alsoReportedBy].filter(([id, name]) =>
+        scored(devRun.checks(id), id).some((c) => c.name === name),
+      );
+      expect(charging).toEqual([scoredBy]);
+      const [id, name] = alsoReportedBy;
+      expect(devRun.checks(id).find((c) => c.name === name)?.status).toBe("info");
     },
   );
 
   test.each(Object.entries(CONDITIONS))(
     "%s: charged by no rule on localhost",
-    (_condition, rules) => {
-      for (const id of rules) expect(scored(privateRun.checks(id), id)).toEqual([]);
+    (_condition, { scoredBy, alsoReportedBy }) => {
+      for (const [id] of [scoredBy, alsoReportedBy]) {
+        expect(scored(privateRun.checks(id), id)).toEqual([]);
+      }
     },
   );
 

@@ -51,6 +51,7 @@ const CWV_HINTS: Reviewed = {
     "@width",
     "helper:analyzeCWVHints",
     "helper:collectImagePreloadKeys",
+    "helper:collectImagePreloadUrls",
     "helper:findLcpCandidates",
     "helper:get",
     "helper:getCWVHints",

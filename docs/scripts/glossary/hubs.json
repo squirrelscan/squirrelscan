@@ -1,0 +1,435 @@
+{
+  "$comment": "Rule-category hubs (docs/rules/<code>/index.mdx). category is the CLI category for --rule-include; group is the score group the glossary nav files terms under; title is the hub's search title (<= 60 chars), sidebarTitle its nav label; related are other hub codes. Applied to a hub once it carries hub: markers. rule_backlinks: true puts the generated Glossary line on the category rule pages that a term lists (squirrelscan/repo#3152), one batch of categories at a time.",
+  "hubs": [
+    {
+      "code": "ax",
+      "category": "ax",
+      "group": "agents",
+      "sidebarTitle": "Agent Experience",
+      "title": "Agent experience (AX) audit rules: llms.txt, AI crawlers",
+      "learn": [
+        "https://squirrelscan.com/learn/ai-crawlers",
+        "https://squirrelscan.com/learn/llms-txt",
+        "https://squirrelscan.com/learn/generative-engine-optimization"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/llms-txt-validator",
+        "https://squirrelscan.com/tools/robots-txt-generator"
+      ],
+      "related": [
+        "crawl",
+        "perf",
+        "schema"
+      ],
+      "rule_backlinks": true
+    },
+    {
+      "code": "perf",
+      "category": "perf",
+      "group": "performance",
+      "sidebarTitle": "Performance",
+      "title": "Performance audit rules: page speed and Core Web Vitals",
+      "learn": [
+        "https://squirrelscan.com/learn/core-web-vitals",
+        "https://squirrelscan.com/learn/lighthouse-alternative"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/core-web-vitals-checker"
+      ],
+      "related": [
+        "images",
+        "a11y",
+        "ax"
+      ],
+      "rule_backlinks": true
+    },
+    {
+      "code": "crawl",
+      "category": "crawl",
+      "group": "seo",
+      "sidebarTitle": "Crawlability",
+      "title": "Crawlability audit rules: robots.txt, sitemaps, indexing",
+      "learn": [
+        "https://squirrelscan.com/learn/fix-seo-issues-with-ai"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/robots-txt-generator"
+      ],
+      "related": [
+        "core",
+        "links",
+        "ax"
+      ],
+      "rule_backlinks": true
+    },
+    {
+      "code": "a11y",
+      "category": "a11y",
+      "group": "seo",
+      "sidebarTitle": "Accessibility",
+      "title": "Accessibility audit rules: WCAG and ARIA checks",
+      "learn": [],
+      "tools": [
+        "https://squirrelscan.com/tools/website-audit"
+      ],
+      "related": [
+        "images",
+        "mobile",
+        "content"
+      ],
+      "rule_backlinks": true
+    },
+    {
+      "code": "schema",
+      "category": "schema",
+      "group": "seo",
+      "sidebarTitle": "Structured Data",
+      "title": "Structured data audit rules: JSON-LD and schema.org",
+      "learn": [
+        "https://squirrelscan.com/learn/fix-seo-issues-with-ai"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/website-audit"
+      ],
+      "related": [
+        "crawl",
+        "eeat",
+        "local"
+      ],
+      "rule_backlinks": true
+    },
+    {
+      "code": "local",
+      "category": "local",
+      "group": "seo",
+      "sidebarTitle": "Local SEO",
+      "title": "Local SEO audit rules: NAP, LocalBusiness and geo tags",
+      "learn": [
+        "https://squirrelscan.com/learn/fix-seo-issues-with-ai"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/website-audit"
+      ],
+      "related": [
+        "schema",
+        "eeat",
+        "integrity"
+      ],
+      "rule_backlinks": true
+    },
+    {
+      "code": "url",
+      "category": "url",
+      "group": "seo",
+      "sidebarTitle": "URL Structure",
+      "title": "URL structure audit rules: slugs, case and parameters",
+      "learn": [
+        "https://squirrelscan.com/learn/fix-seo-issues-with-ai"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/website-audit"
+      ],
+      "related": [
+        "core",
+        "content",
+        "crawl"
+      ],
+      "rule_backlinks": true
+    },
+    {
+      "code": "links",
+      "category": "links",
+      "group": "seo",
+      "sidebarTitle": "Links",
+      "title": "Link audit rules: broken links, orphans and redirects",
+      "learn": [
+        "https://squirrelscan.com/learn/fix-seo-issues-with-ai"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/broken-link-checker"
+      ],
+      "related": [
+        "crawl",
+        "images",
+        "a11y"
+      ],
+      "rule_backlinks": true
+    },
+    {
+      "code": "security",
+      "category": "security",
+      "group": "security",
+      "sidebarTitle": "Security",
+      "title": "Security audit rules: HTTPS, headers and leaked secrets",
+      "learn": [
+        "https://squirrelscan.com/learn/audit-website-security-with-ai"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/security-headers-checker"
+      ],
+      "related": [
+        "content",
+        "ax",
+        "links"
+      ],
+      "rule_backlinks": true
+    },
+    {
+      "code": "core",
+      "category": "core",
+      "group": "seo",
+      "sidebarTitle": "Core SEO",
+      "title": "Core SEO audit rules: titles, canonicals and meta tags",
+      "learn": [
+        "https://squirrelscan.com/learn/fix-seo-issues-with-ai"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/website-audit"
+      ],
+      "related": [
+        "content",
+        "crawl",
+        "social"
+      ],
+      "rule_backlinks": true
+    },
+    {
+      "code": "content",
+      "category": "content",
+      "group": "seo",
+      "sidebarTitle": "Content",
+      "title": "Content audit rules: thin, duplicate and stale content",
+      "learn": [
+        "https://squirrelscan.com/learn/seo-for-vibe-coded-sites"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/website-audit"
+      ],
+      "related": [
+        "core",
+        "eeat",
+        "security"
+      ],
+      "rule_backlinks": true
+    },
+    {
+      "code": "images",
+      "category": "images",
+      "group": "seo",
+      "sidebarTitle": "Images",
+      "title": "Image audit rules: alt text, formats and lazy loading",
+      "learn": [
+        "https://squirrelscan.com/learn/core-web-vitals"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/core-web-vitals-checker"
+      ],
+      "related": [
+        "perf",
+        "a11y",
+        "links"
+      ],
+      "rule_backlinks": true
+    },
+    {
+      "code": "eeat",
+      "category": "eeat",
+      "group": "seo",
+      "sidebarTitle": "E-E-A-T",
+      "title": "E-E-A-T audit rules: authors, trust and YMYL signals",
+      "learn": [
+        "https://squirrelscan.com/learn/fix-seo-issues-with-ai"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/website-audit"
+      ],
+      "related": [
+        "content",
+        "schema",
+        "crawl"
+      ],
+      "rule_backlinks": true
+    },
+    {
+      "code": "mobile",
+      "category": "mobile",
+      "group": "seo",
+      "sidebarTitle": "Mobile",
+      "title": "Mobile audit rules: viewport, tap targets and font size",
+      "learn": [
+        "https://squirrelscan.com/learn/fix-seo-issues-with-ai"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/website-audit"
+      ],
+      "related": [
+        "a11y"
+      ],
+      "rule_backlinks": true
+    },
+    {
+      "code": "i18n",
+      "category": "i18n",
+      "group": "seo",
+      "sidebarTitle": "Internationalization",
+      "title": "Internationalization audit rules: hreflang and lang",
+      "learn": [
+        "https://squirrelscan.com/learn/fix-seo-issues-with-ai"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/website-audit"
+      ],
+      "related": [
+        "a11y"
+      ],
+      "rule_backlinks": true
+    },
+    {
+      "code": "social",
+      "category": "social",
+      "group": "seo",
+      "sidebarTitle": "Social Media",
+      "title": "Social audit rules: Open Graph and share previews",
+      "learn": [
+        "https://squirrelscan.com/learn/fix-seo-issues-with-ai"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/website-audit"
+      ],
+      "related": [
+        "core",
+        "crawl",
+        "schema"
+      ],
+      "rule_backlinks": true
+    },
+    {
+      "code": "integrity",
+      "category": "integrity",
+      "group": "security",
+      "sidebarTitle": "Site Integrity",
+      "title": "Site integrity rules: hacked pages, phishing, cloaking",
+      "learn": [
+        "https://squirrelscan.com/learn/audit-website-security-with-ai"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/security-headers-checker"
+      ],
+      "related": [
+        "content",
+        "links",
+        "local"
+      ],
+      "rule_backlinks": true
+    },
+    {
+      "code": "legal",
+      "category": "legal",
+      "group": "security",
+      "sidebarTitle": "Legal Compliance",
+      "title": "Legal compliance audit rules: privacy and cookie consent",
+      "learn": [
+        "https://squirrelscan.com/learn/audit-website-security-with-ai"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/website-audit"
+      ],
+      "related": [
+        "analytics",
+        "eeat"
+      ],
+      "rule_backlinks": true
+    },
+    {
+      "code": "reliability",
+      "category": "reliability",
+      "group": "performance",
+      "sidebarTitle": "Reliability",
+      "title": "Reliability audit rules: broken scripts, fonts and forms",
+      "learn": [
+        "https://squirrelscan.com/learn/fix-seo-issues-with-ai"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/website-audit"
+      ],
+      "related": [
+        "crawl",
+        "images",
+        "links"
+      ],
+      "rule_backlinks": true
+    },
+    {
+      "code": "video",
+      "category": "video",
+      "group": "seo",
+      "sidebarTitle": "Video",
+      "title": "Video audit rules: VideoObject, captions and thumbnails",
+      "learn": [
+        "https://squirrelscan.com/learn/fix-seo-issues-with-ai"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/website-audit"
+      ],
+      "related": [
+        "a11y",
+        "schema"
+      ],
+      "rule_backlinks": true
+    },
+    {
+      "code": "analytics",
+      "category": "analytics",
+      "group": "seo",
+      "sidebarTitle": "Analytics",
+      "title": "Analytics audit rules: tag presence and consent mode",
+      "learn": [
+        "https://squirrelscan.com/learn/fix-seo-issues-with-ai"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/website-audit"
+      ],
+      "related": [
+        "legal"
+      ],
+      "rule_backlinks": true
+    },
+    {
+      "code": "adblock",
+      "category": "blocking",
+      "group": "security",
+      "sidebarTitle": "Blocking",
+      "title": "Ad blocker audit rules: filter lists and blocked content",
+      "learn": [
+        "https://squirrelscan.com/learn/fix-seo-issues-with-ai"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/website-audit"
+      ],
+      "related": [
+        "security",
+        "analytics",
+        "legal"
+      ],
+      "rule_backlinks": true
+    },
+    {
+      "code": "gaps",
+      "category": "gaps",
+      "group": "seo",
+      "sidebarTitle": "Gap Analysis",
+      "title": "Keyword and content gap analysis (cloud)",
+      "learn": [
+        "https://squirrelscan.com/learn/geo-tools"
+      ],
+      "tools": [
+        "https://squirrelscan.com/tools/website-audit"
+      ],
+      "related": [
+        "content",
+        "ax"
+      ],
+      "rule_backlinks": true
+    }
+  ]
+}

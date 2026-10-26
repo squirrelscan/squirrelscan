@@ -1,0 +1,81 @@
+---
+title: "Title tag: length, uniqueness and what search shows"
+description: "The title tag is the title element in a page's head, shown in the browser tab and usually used as the search result headline. Length and uniqueness."
+sidebarTitle: "Title tag"
+---
+
+The **title tag** is the `<title>` element in a page's `<head>`: the text in the browser tab, and what search engines usually use as the headline of the result.
+
+Google calls that headline the title link and generates it automatically. The `<title>` element is the first source on its list, followed by the main visible title, headings, `og:title`, other prominent text and the anchor text of links to the page. There is no length limit on the element, but the title link is cut to fit the device width.
+
+{/* glossary:hub:start */}
+
+Category: [Core SEO](/rules/core)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+The title is the first thing a searcher reads about a page, and often the only thing a person sees of it in a list of tabs or bookmarks. Google's title link guidance asks for a distinct, descriptive title on each page and warns against boilerplate repeated across pages and against keyword stuffing. Templates are where titles go wrong: a missing variable leaves every product page called "Acme", or a section prints the same title on every page of a paginated list.
+
+## How squirrelscan checks it
+
+[core/meta-title](/rules/core/meta-title) fails a page with no title or a blank one, and warns when the visible text is shorter than 30 or longer than 75 characters by default. It measures the title the way a browser shows it, with runs of whitespace collapsed. [core/title-unique](/rules/core/title-unique) and [content/duplicate-title](/rules/content/duplicate-title) report titles shared by more than one page. They differ only in whether runs of whitespace are collapsed before comparing. [content/title-pattern-outlier](/rules/content/title-pattern-outlier) learns the site's own template, such as the brand last after a `|`, once 10 titled pages agree at 70%, and reports pages that break it. The homepage is exempt.
+
+The rules read the HTML the server sent, so a title set by JavaScript after load is reported as missing unless browser rendering is on. Noindexed pages are skipped on a site that is itself indexed.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Title tag length: the 30 to 75 character range squirrel uses](/rules/core/meta-title) | A page with no title element, or one outside 30 to 75 characters. squirrel measures the title on every crawled page. | error |
+| [Duplicate page titles: the site-wide uniqueness check](/rules/core/title-unique) | Two or more pages sharing a title after case and whitespace are normalised. squirrel groups them and lists every URL. | warning |
+| [Duplicate title tags: the same title on several pages](/rules/content/duplicate-title) | Two pages with the same title compete with each other in search and look identical in results. squirrel groups every crawled page by its title. | warning |
+| [Inconsistent page titles: pages breaking the template](/rules/content/title-pattern-outlier) | Most sites title pages the same way and then ship a pocket that does not. squirrel infers your template and reports the pages that break it. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Put the specific part first and the brand last, since the end is what gets cut:
+
+```html
+<title>Configuring the build cache | Acme Docs</title>
+<title>Guides, page 2 | Acme Docs</title>
+```
+
+Build the title from the page's own data in the layout, with one separator and one brand position everywhere ([the template fix](/rules/content/title-pattern-outlier#how-to-fix-it)). Add the page number or the distinguishing attribute to listings and variants ([the duplicate title fix](/rules/content/duplicate-title#how-to-fix-it)). When duplicates come from parameter URLs that serve the same content, the fix is a canonical, not a new title ([the unique title fix](/rules/core/title-unique#how-to-fix-it)). Tune the length limits if your brand suffix is long ([the title length fix](/rules/core/meta-title#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include core/meta-title,core/title-unique,content/duplicate-title,content/title-pattern-outlier
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Meta description](/glossary/meta-description): A `<meta name="description">` summary of the page that search engines may use as the result snippet.
+- [Duplicate content](/glossary/duplicate-content): The same or near-identical content reachable at more than one URL, or repeated titles and descriptions across pages.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Influencing your title links, Google Search Central](https://developers.google.com/search/docs/appearance/title-link)
+- [The title element, HTML Standard](https://html.spec.whatwg.org/multipage/semantics.html#the-title-element)
+
+{/* glossary:jsonld:start */}
+
+import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";
+
+<GlossaryJsonLd slug="title-tag" />
+
+{/* glossary:jsonld:end */}

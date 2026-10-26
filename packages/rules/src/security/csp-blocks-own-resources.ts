@@ -27,7 +27,7 @@ import {
   type VendorCategory,
 } from "./csp-vendors";
 
-import type { Rule, RuleContext, RuleResult } from "../types";
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 const MAX_ITEMS = 25;
 /** Bytes of one chunk scanned for script URLs, and of all chunks of one page. */
@@ -58,6 +58,8 @@ interface Blocked {
   directive: string;
   host: string;
   origin: Origin;
+  /** pub#776: every source that named this host, to tell chunk-only hosts apart. */
+  origins: Set<Origin>;
   category?: VendorCategory;
   example: string;
   count: number;
@@ -293,6 +295,12 @@ export const cspBlocksOwnResourcesRule: Rule = {
       const seen = blocked.get(key);
       if (seen) {
         seen.count++;
+        seen.origins.add(ref.origin);
+        // A load the HTML or a vendor makes outranks a chunk sighting.
+        if (seen.origin === "chunk" && ref.origin !== "chunk") {
+          seen.origin = ref.origin;
+          seen.example = ref.origin === "vendor" ? ref.url.origin : ref.url.href;
+        }
         // A vendor or known category outranks the first sighting of a bare host.
         if (!seen.category && ref.category) {
           seen.category = ref.category;
@@ -304,6 +312,7 @@ export const cspBlocksOwnResourcesRule: Rule = {
         directive: verdict.directive,
         host: ref.url.hostname,
         origin: ref.origin,
+        origins: new Set([ref.origin]),
         category: ref.category ?? hostCategory(ref.url.hostname),
         example: ref.origin === "vendor" ? ref.url.origin : ref.url.href,
         count: 1,
@@ -311,7 +320,14 @@ export const cspBlocksOwnResourcesRule: Rule = {
       });
     }
 
-    if (blocked.size === 0) {
+    // pub#776: a host named only as a URL inside a script chunk may never be
+    // requested (an SDK's fallback behind a feature flag), so it is a note,
+    // never counted as a blocked dependency.
+    const chunkOnly = [...blocked.values()].filter((b) => b.origins.size === 1 && b.origins.has("chunk"));
+    const all = [...blocked.values()].filter((b) => !chunkOnly.includes(b));
+    const note = chunkOnly.length > 0 ? chunkOnlyNote(chunkOnly) : null;
+
+    if (all.length === 0) {
       return {
         checks: [
           {
@@ -319,11 +335,11 @@ export const cspBlocksOwnResourcesRule: Rule = {
             status: "pass",
             message: "The page's CSP allows the resources it references and the vendor hosts it uses",
           },
+          ...(note ? [note] : []),
         ],
       };
     }
 
-    const all = [...blocked.values()];
     const hasKnownVendor = all.some((b) => b.category !== undefined);
     const byDirective = new Map<string, string[]>();
     for (const b of all) byDirective.set(b.directive, [...(byDirective.get(b.directive) ?? []), b.host]);
@@ -352,7 +368,30 @@ export const cspBlocksOwnResourcesRule: Rule = {
           message: `The page's CSP blocks ${all.length} host${all.length === 1 ? "" : "s"} it depends on (${summary})`,
           items,
         },
+        ...(note ? [note] : []),
       ],
     };
   },
 };
+
+/** The informational row for hosts named only inside script chunks (pub#776). */
+function chunkOnlyNote(hosts: Blocked[]): CheckResult {
+  const byDirective = new Map<string, string[]>();
+  for (const b of hosts) byDirective.set(b.directive, [...(byDirective.get(b.directive) ?? []), b.host]);
+  const summary = [...byDirective]
+    .map(([directive, list]) => `${directive}: ${list.slice(0, 5).join(", ")}${list.length > 5 ? ` and ${list.length - 5} more` : ""}`)
+    .join("; ");
+  const one = hosts.length === 1;
+  return {
+    name: "csp-chunk-only-hosts",
+    status: "info",
+    message: `${hosts.length} host${one ? "" : "s"} the page's CSP would block ${one ? "appears" : "appear"} only as ${one ? "a URL" : "URLs"} inside the page's scripts, which may never load ${one ? "it" : "them"} (${summary})`,
+    items: hosts.slice(0, MAX_ITEMS).map((b) => ({
+      id: `${b.directive} ${b.host}`,
+      label: `${b.directive}: ${b.host} (named in a script)`,
+      snippet: b.example,
+      meta: { directive: b.directive, host: b.host, found: "chunk" },
+    })),
+    ...(hosts.length > MAX_ITEMS ? { details: { additional: hosts.length - MAX_ITEMS } } : {}),
+  };
+}

@@ -14,10 +14,12 @@ export {
 
 export function generateLlmReport(
   report: AuditReport,
-  outputPath?: string
+  outputPath?: string,
+  includePassed = false
 ): void {
   const content = renderLlm(report as Parameters<typeof renderLlm>[0], {
     version,
+    includePassed,
   });
 
   if (outputPath) {

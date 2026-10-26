@@ -3,6 +3,7 @@
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 
 export const optionsSchema = z.object({
   // Injected so a test never depends on the wall clock: a rule that reads the
@@ -112,7 +113,8 @@ export const staleCopyrightRule: Rule = {
         name: "footer-copyright-year",
         status: "skipped",
         message: "No copyright year in the footer",
-        skipReason: "no-copyright-year",
+        skipReason: CHECK_NOT_APPLICABLE_SKIP_REASON,
+        details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON },
       });
       return { checks };
     }

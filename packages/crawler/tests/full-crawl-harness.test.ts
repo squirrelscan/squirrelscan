@@ -279,6 +279,20 @@ describe("full-crawl integration harness (#315)", () => {
     expect(byUrl.get(`${ORIGIN}/a`)?.fallbackReason).toBe("render-block");
   });
 
+  test("#890: page:fetched carries the plain fetch timing and fetcher id", async () => {
+    const out = await runCrawl({
+      site: { [`${ORIGIN}/`]: { body: html(), fetcherId: "fetch" } },
+    });
+
+    const fetched = out.events.find((event) => event.type === "page:fetched");
+    expect(fetched).toMatchObject({
+      type: "page:fetched",
+      url: `${ORIGIN}/`,
+      ttfbMs: 1,
+      fetcherId: "fetch",
+    });
+  });
+
   // #748: security/cookie-flags reads PageRecord.headers.setCookie — a header
   // added to the fetch result but never threaded into the PageRecord the
   // crawler stores would make that rule silently inert against every real

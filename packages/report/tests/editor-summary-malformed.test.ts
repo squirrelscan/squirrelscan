@@ -117,9 +117,9 @@ describe.each(MALFORMED)("renderers with %s", (_label, body) => {
   });
 
   test("html renders without the section and without throwing", () => {
-    // Match the attribute, not the class name: the stylesheet always ships the rule.
+    // The Summary section is the only element with this id.
     const out = renderHtml(report);
-    expect(out).not.toContain('class="editor-summary-section"');
+    expect(out).not.toContain('id="summary"');
   });
 
   test("json omits the section rather than emitting a half-built one", () => {
@@ -136,7 +136,7 @@ describe("renderers with a well-formed summary still render it", () => {
     expect(renderText(report)).toContain("First paragraph.");
     expect(renderLlm(report)).toContain("<para>First paragraph.</para>");
     expect(renderXml(report)).toContain("<para>First paragraph.</para>");
-    expect(renderHtml(report)).toContain('class="editor-summary-section"');
+    expect(renderHtml(report)).toContain('id="summary"');
   });
 
   test("json emits the section byte-for-byte unchanged", () => {
@@ -178,6 +178,6 @@ describe("renderers with a well-formed summary still render it", () => {
     expect(renderText(partial)).toContain("Body text.");
     expect(renderLlm(partial)).toContain("<para>Body text.</para>");
     expect(renderXml(partial)).toContain("<para>Body text.</para>");
-    expect(renderHtml(partial)).toContain('class="editor-summary-section"');
+    expect(renderHtml(partial)).toContain('id="summary"');
   });
 });

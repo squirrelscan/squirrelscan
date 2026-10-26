@@ -22,6 +22,8 @@ The rule runs once per crawl, reads the [entity map](/guides/entity-map) rather 
 
 The test is against the whole crawl, not against the referencing page. A publisher declared on the home page and referenced from two hundred articles is NOT reported: it resolves. The rule fires only when nothing in the crawl declares the target at all.
 
+`sameAs` references are exempt. A `sameAs` names the same thing on another site, such as its Wikidata entry, a LinkedIn page or a company register, so pointing at an `@id` this site does not declare is what it is for. An organization whose `sameAs` is `{ "@id": "https://www.wikidata.org/wiki/Q42" }` passes. The usual form, a plain URL string, is a value rather than an `@id` reference and never dangles under any predicate. Every other predicate written as `{ "@id": … }`, such as `publisher`, `author` or `isPartOf`, is still checked.
+
 Findings are grouped by target. One undeclared publisher referenced from three hundred article pages is one thing to fix, not three hundred, and each item carries the predicates that point at it and how many entities do.
 
 Findings are capped at 10 items, and the count in the message is always the true total rather than the capped length. Run `squirrel entities --problem dangling` for the full list.
@@ -87,6 +89,12 @@ For one run without editing the config: `squirrel audit https://example.com --ru
 - [schema/json-ld-valid](/rules/schema/json-ld-valid): the per-page check that the JSON-LD parses at all.
 
 Entity findings are site-wide and ship in every audit, next to the per-page structured data rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [@id (JSON-LD node identifier)](/glossary/entity-id), [JSON-LD](/glossary/json-ld).
+
+{/* glossary:backlinks:end */}
 
 ## References
 

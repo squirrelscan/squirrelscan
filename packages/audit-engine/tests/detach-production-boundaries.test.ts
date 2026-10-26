@@ -51,7 +51,7 @@ const EMPTY_ASSETS: PreFetchedAssets = {
 };
 
 const EMPTY_SITE_DATA = {
-  baseUrl: "http://synthetic.test",
+  baseUrl: "http://synthetic.example.com",
   pages: [],
   robotsTxt: null,
   sitemaps: null,
@@ -306,7 +306,7 @@ describe("detach at the production boundaries", () => {
  * and would make the attached control look detached.
  */
 function externalLinkPage(i: number, fillerChars: number): SiteContextPage[] {
-  const url = `http://synthetic.test/p/${i}`;
+  const url = `http://synthetic.example.com/p/${i}`;
   // Long text per node rather than many tiny nodes: the size that matters here
   // is the html BUFFER, and a node-dense page of the same byte count costs
   // several times as much to hold as a live DOM for no extra signal.

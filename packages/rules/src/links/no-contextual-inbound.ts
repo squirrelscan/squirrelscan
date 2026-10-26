@@ -19,7 +19,15 @@
 //     (`minInboundLinks`, the same default 2) — i.e. exactly when orphan-pages
 //     stays silent. Keep the two thresholds in sync when tuning.
 //   * THE HOMEPAGE. Reached from every page's header/footer by design; it has no
-//     contextual-equity problem. Skipped, exactly as orphan-pages skips it.
+//     contextual-equity problem. Skipped, exactly as orphan-pages skips it, and
+//     so is the page the crawl started on (pub#796), the front door a root
+//     redirect leads to.
+//   * LEGAL PAGES (pub#981). Privacy, terms, imprint and `/legal` pages are
+//     footer-only by design on almost every site, so "linked only from chrome" is
+//     the expected shape, not a finding. Matched on the URL path: the shared
+//     privacy and terms slugs (localized, e.g. `/impressum`, `/datenschutz`,
+//     `/agb`) plus `/legal`, `/legal-notice`, `/imprint`, `/rechtliches`, with
+//     any path prefix (`/en/legal`).
 //   * A CHROME-ONLY CRAWL. Not special-cased: if a whole site links only through
 //     chrome, every one of its pages genuinely lacks contextual support. The
 //     `value` sample is capped so the finding stays readable; `details.total`
@@ -43,12 +51,14 @@
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-import type { LinkData } from "@squirrelscan/core-contracts";
+import { CRAWL_CAPPED_SKIP_REASON, type LinkData } from "@squirrelscan/core-contracts";
 
 import { matchesExcludePattern } from "@squirrelscan/utils";
+import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
 import { getPathname, normalizeUrl } from "@squirrelscan/utils";
 
 import { logger } from "../logger";
+import { frontDoorTest } from "../shared/front-door";
 
 const SKIP_CHECK: CheckResult = {
   name: "no-contextual-inbound",
@@ -58,6 +68,27 @@ const SKIP_CHECK: CheckResult = {
 
 // Sampled paths shown in `value`; `details.total` always carries the real count.
 const MAX_SAMPLE = 5;
+
+// Legal page slugs: the shared privacy and terms sets, plus the generic legal /
+// imprint slugs the EEAT sets do not carry.
+const LEGAL_PATH_PATTERNS: readonly RegExp[] = [
+  ...EEAT_PAGE_PATTERNS.privacy,
+  ...EEAT_PAGE_PATTERNS.terms,
+  /\/legal(?:\/|\.html?)?$/i,
+  /\/legal-notice(?:\/|\.html?)?$/i,
+  /\/legal-information(?:\/|\.html?)?$/i,
+  /\/imprint(?:\/|\.html?)?$/i,
+  /\/rechtliches(?:\/|\.html?)?$/i,
+  /\/aviso-legal(?:\/|\.html?)?$/i,
+  /\/note-legali(?:\/|\.html?)?$/i,
+  /\/juridisch(?:\/|\.html?)?$/i,
+];
+
+/** Whether the URL's path names a legal page (privacy, terms, imprint, legal). */
+function isLegalPage(url: string): boolean {
+  const path = getPathname(url);
+  return LEGAL_PATH_PATTERNS.some((re) => re.test(path));
+}
 
 /** One page's raw and contextual (non-chrome) inbound dofollow-internal counts. */
 interface InboundCounts {
@@ -99,18 +130,17 @@ function collectChromeOnlyPages(
   entries: Iterable<[string, InboundCounts]>,
   minInboundLinks: number,
   excludePatterns: string[],
-  baseUrl: string
+  baseUrl: string,
+  entryUrls: readonly string[]
 ): string[] {
-  const normalizedBase = normalizeUrl(baseUrl);
+  const isFrontDoor = frontDoorTest(baseUrl, entryUrls);
   const flagged: string[] = [];
   for (const [url, counts] of entries) {
-    const normalizedUrl = normalizeUrl(url);
-
-    // Skip homepage — same test orphan-pages uses.
-    const isHomepage = normalizedUrl === normalizedBase || getPathname(url) === "/";
+    // Skip the front door: the same test orphan-pages uses.
+    const isHomepage = isFrontDoor(url);
     const isExcluded = matchesExcludePattern(url, excludePatterns);
 
-    if (isHomepage || isExcluded) {
+    if (isHomepage || isExcluded || isLegalPage(url)) {
       continue;
     }
 
@@ -168,7 +198,7 @@ export const noContextualInboundRule: Rule = {
         name: "no-contextual-inbound",
         status: "skipped",
         message: `Crawl stopped at its ${limits.maxPages}-page cap, so a contextual link may sit on a page not crawled`,
-        skipReason: "Crawl capped before the frontier was exhausted",
+        skipReason: CRAWL_CAPPED_SKIP_REASON,
       });
       return { checks };
     }
@@ -193,7 +223,8 @@ export const noContextualInboundRule: Rule = {
             entries,
             minInboundLinks,
             excludePatterns,
-            ctx.site?.baseUrl || ""
+            ctx.site?.baseUrl || "",
+            ctx.site?.entryUrls ?? []
           )
         )
       );
@@ -257,7 +288,8 @@ export const noContextualInboundRule: Rule = {
       ),
       minInboundLinks,
       excludePatterns,
-      ctx.site?.baseUrl || ""
+      ctx.site?.baseUrl || "",
+      ctx.site?.entryUrls ?? []
     );
 
     checks.push(buildCheck(flagged));

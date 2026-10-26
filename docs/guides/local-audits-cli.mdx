@@ -86,7 +86,7 @@ Auditing a site you are building? Point it at your dev server: `squirrel audit h
 
 ### Local and private hosts stay local
 
-An audit of a host no squirrelscan server can reach runs and prints its report exactly as any other audit does. That covers `localhost`, loopback and link-local addresses, private ranges such as `192.168.1.10` or `10.0.0.5`, and internal names such as `box.local` or anything under `.internal` or `.lan`. What changes is everything that would need a squirrelscan server to reach the address itself:
+An audit of a host no squirrelscan server can reach runs and prints its report exactly as any other audit does. That covers `localhost`, loopback and link-local addresses, private ranges such as `192.168.1.10` or `10.0.0.5`, and internal names such as `box.local`, a Laravel Valet or Herd site such as `myapp.test`, or anything under `.internal` or `.lan`. What changes is everything that would need a squirrelscan server to reach the address itself:
 
 - The report is not published, so no shareable link is created and no site appears in your dashboard. The same applies to publishing it later with `squirrel report --publish`.
 - The run is not registered, so it does not cost the audit base even when you are signed in.
@@ -97,6 +97,8 @@ The reason is reachability, not policy: hosted services would have to fetch the 
 Cloud analysis that works from pages the CLI has already crawled is unaffected, so a signed-in local audit still gets the AI summary, technology detection, and the other content-based checks.
 
 To get a shareable report for a site you are developing, audit it once it is on a public URL, such as a preview deployment.
+
+Type a local host without a scheme and it is audited over `http://`, since most dev servers and local boxes serve plain http: `squirrel audit myapp.test` audits `http://myapp.test/`, and the same goes for `localhost:3000`, `192.168.1.10` and `box.local`. That covers every host the list at the end of [Transport and delivery rules do not apply](#transport-and-delivery-rules-do-not-apply) counts as local. Any other host without a scheme is audited over `https://`. Type the scheme to choose it yourself, for example `squirrel audit https://myapp.test` for a Valet or Herd site you have secured.
 
 ### Transport and delivery rules do not apply
 
@@ -121,7 +123,7 @@ Local or private-network host: {count} transport and delivery rules do not apply
 
 The JSON report carries the same fact as a top-level `notApplicable` object with `reason: "private-target"` and the skipped `rules`, and the `llm` format as a `<not-applicable reason="private-target">` element. Inside the report data, each skipped check has `status: "skipped"` and `skipReason: "private-target"`.
 
-The host is classified from the URL you audit, not from where it redirects, with no DNS lookup, the same way the cloud handoff above is decided: `localhost` and anything under `.localhost`, loopback (`127.0.0.0/8`, `::1`), private ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`), link-local (`169.254.0.0/16`, `fe80::/10`), shared address space (`100.64.0.0/10`), internal names under `.local`, `.internal`, `.lan`, `.home.arpa`, `.corp` and similar, and single-label names such as `intranet`. A public name is public even when it resolves to your machine, so `localhost.example.com` and a hosts-file entry for `staging.example.com` are audited like any public site.
+The host is classified from the URL you audit, not from where it redirects, with no DNS lookup, the same way the cloud handoff above is decided: `localhost` and anything under `.localhost`, loopback (`127.0.0.0/8`, `::1`), private ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`), link-local (`169.254.0.0/16`, `fe80::/10`), shared address space (`100.64.0.0/10`), internal names under `.local`, `.internal`, `.lan`, `.home.arpa`, `.corp` and similar, names under the reserved `.test`, `.example` and `.invalid`, under `.localdomain` and `.home`, and under `.onion` and `.alt`, which public DNS never resolves, and single-label names such as `intranet`. A public name is public even when it resolves to your machine, so `localhost.example.com` and a hosts-file entry for `staging.example.com` are audited like any public site.
 
 Everything else still runs on a local host, including the rules that judge your markup or headers your app sets itself: [`security/mixed-content`](/rules/security/mixed-content), [`security/form-https`](/rules/security/form-https), [`security/csp`](/rules/security/csp), [`security/x-frame-options`](/rules/security/x-frame-options), [`perf/unminified-js`](/rules/perf/unminified-js) and [`perf/ttfb`](/rules/perf/ttfb).
 

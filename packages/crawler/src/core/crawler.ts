@@ -20,12 +20,27 @@ import { extractCrawlableUrls } from "@squirrelscan/parser/extractors";
 import { parseDocument, parsePage, type ParsedPageCache } from "@squirrelscan/parser";
 import { findClientRedirects } from "@squirrelscan/utils/client-redirects";
 import {
+  createHeaderScope,
+  headerScopeBase,
+  mergeHeaderRecords,
+  type HeaderScope,
+} from "@squirrelscan/utils/headers";
+import {
   DEFAULT_MAX_DOCUMENT_BODY_BYTES,
   fetchUndecoded,
   readBodyCapped,
 } from "@squirrelscan/utils/response-body";
-import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
-import { urlHostKey } from "@squirrelscan/utils/url";
+import {
+  egressGuardedSend,
+  memoizeResolveHost,
+  ownHostsPinned,
+  refusedWithoutLookup,
+  resolveHostAddresses,
+  type EgressPolicy,
+} from "@squirrelscan/utils/public-egress";
+import { isHttpOrHttpsUrl, safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
+import { isCloudflareEmailProtectionUrl } from "@squirrelscan/utils/cloudflare-email";
+import { getHostname, urlHostKey } from "@squirrelscan/utils/url";
 
 import { budgetRemainingMs, createPhaseBudget, withRequestDeadline } from "../deadline";
 import type { PhaseBudget, ProbeGate } from "../deadline";
@@ -62,6 +77,7 @@ import type {
 
 import { createHostBackoff, type HostBackoffRegistry } from "../host-backoff";
 import {
+  contentTypeCharset,
   crawlErrorToFailureDetail,
   CrawlError,
   fetchPageWithRetry,
@@ -69,7 +85,12 @@ import {
   type FetchOptions,
   type RateLimitControl,
 } from "../fetcher";
-import { normalizeUrl, isInScope, isOffSiteFinalUrl, resolveSeedRedirect } from "../frontier";
+import {
+  isInScope,
+  isOffSiteFinalUrl,
+  normalizeUrl,
+  resolveSeedRedirect,
+} from "../frontier";
 import {
   buildConditionalHeaders,
   extractChangeDetection,
@@ -462,6 +483,71 @@ export function createCrawler(
     let stopSignal: Deferred.Deferred<void, never> | null = null;
     let robots: RobotsEvaluator | null = null;
     let baseUrl: string = "";
+    // The custom headers go only to the audited origin (scheme, host and port,
+    // after the seed's redirects) and the hosts the user named in `headerHosts`
+    // (#959). A page on another scheme, port or host is still crawled, without
+    // them. The origin is the base URL's, except that an https start URL whose
+    // redirect lands on http: keeps its https origin (see headerScopeBase).
+    // Rebuilt when the seed or the base URL changes.
+    let headerSeed = "";
+    let headerScope: HeaderScope | undefined;
+    let headerScopeKey = "";
+    const getHeaderScope = (): HeaderScope => {
+      const key = `${headerSeed}\n${baseUrl}`;
+      if (!headerScope || headerScopeKey !== key) {
+        headerScope = createHeaderScope(
+          headerScopeBase(headerSeed, baseUrl),
+          config.headerHosts ?? [],
+        );
+        headerScopeKey = key;
+      }
+      return headerScope;
+    };
+    const customHeadersFor = (url: string): Record<string, string> | undefined =>
+      config.headers && getHeaderScope()(url) ? config.headers : undefined;
+    // repo#2830: the asset phase's own-site policy (#2764) for every request
+    // the site can steer: a page's redirect hops, the root probes and theirs,
+    // and the sitemaps robots.txt or an index names. The crawl's own hosts go
+    // out as before and private networks stay allowed (a LAN or dev-server
+    // audit); a hop anywhere else to a link-local or cloud metadata address is
+    // refused, never sent, and the rest connect to the address they were
+    // vetted on unless the transport pins. None when the user named such an
+    // address as the site: the guard is for where the site sends the crawl.
+    //
+    // repo#3430: with `pinOwnHosts` (the CLI), the crawl's own hosts are vetted
+    // and pinned the same way, every page fetch included: a site that controls
+    // its DNS can point `www.` or a project domain at the metadata service, and
+    // sending them by name would request it. One lookup per host per crawl, so
+    // a rebinding answer later cannot move the connection either.
+    const resolveOnce = memoizeResolveHost(config.resolveHost ?? resolveHostAddresses);
+    const pinOwnHosts = ownHostsPinned(config);
+    const egressFor = (base: string): EgressPolicy | undefined => {
+      const baseHost = getHostname(base).toLowerCase();
+      const policy: EgressPolicy = {
+        allowPrivateNetwork: true,
+        resolve: resolveOnce,
+        pin: config.egressPinnedByTransport !== true,
+      };
+      if (pinOwnHosts) return refusedWithoutLookup(base, policy) ? undefined : policy;
+      // Otherwise the crawl's own hosts go out by name, unvetted: the audited
+      // host on any port too, since its name is the user's and
+      // `allowedDomains` alone (a hard allowlist) may not list it.
+      policy.trustTarget = (url) => {
+        if (url.hostname.toLowerCase() === baseHost) return true;
+        try {
+          return isInScope(url.href, {
+            baseUrl: base,
+            include: [],
+            exclude: [],
+            allowedDomains: config.allowedDomains,
+          }).allowed;
+        } catch {
+          return false;
+        }
+      };
+      return refusedWithoutLookup(base, policy) ? undefined : policy;
+    };
+    let crawlEgress: EgressPolicy | undefined;
     // In-memory mirror of getPageCount (rows in `pages`): seeded at
     // runCrawlLoop start (resume-safe), bumped per upsertPage — avoids a
     // hot-path COUNT(*) per enqueue/dispatch (#268).
@@ -772,6 +858,11 @@ export function createCrawler(
 
         if (!normalized) return;
 
+        // Cloudflare's email-protection link is an email address, never a page (pub#811,
+        // pub#838), whichever source names it: a sitemap, a carried finding, or a link from a
+        // page parsed before the parser left them out. A seed is the user's own choice.
+        if (source !== "seed" && isCloudflareEmailProtectionUrl(normalized)) return;
+
         // Depth ceiling (#318): never enqueue past maxDepth. Unset = unlimited (no-op).
         if (config.maxDepth != null && depth > config.maxDepth) return;
 
@@ -1020,7 +1111,12 @@ export function createCrawler(
             };
             if (parsed.links) {
               crawlableUrls = parsed.links
-                .filter((link) => link.isInternal && !link.isNofollow)
+                // A page cached before pub#811 still lists Cloudflare's email-protection link as
+                // internal; it is an email address, never a page to queue.
+                .filter(
+                  (link) =>
+                    link.isInternal && !link.isNofollow && !isCloudflareEmailProtectionUrl(link.url),
+                )
                 .map((link) => {
                   try {
                     const url = new URL(link.url);
@@ -1317,8 +1413,9 @@ export function createCrawler(
             userAgent: config.userAgent,
             timeoutMs: config.timeoutMs,
             followRedirects: config.followRedirects,
-            // Custom headers first; conditional (If-None-Match / If-Modified-Since) wins on collision.
-            headers: { ...config.headers, ...conditionalHeaders },
+            // Custom headers first (audited origin only, #959); conditional
+            // (If-None-Match / If-Modified-Since) wins on collision.
+            headers: mergeHeaderRecords(customHeadersFor(entry.normalizedUrl), conditionalHeaders),
             fetcher: config.documentFetcher,
             // Stored normalized-source hash so the render-all gate can reuse the
             // cached render when the origin rolls its validators (#839). Its
@@ -1333,6 +1430,8 @@ export function createCrawler(
             // Crawl-wide backoff (#1829): a rate-limit response here pauses
             // every other worker aimed at this host, not just this fetch.
             rateLimit: rateLimitControlFor(host, entry, startedAt),
+            // Redirect hops only (repo#2830): the URL itself is the crawl's.
+            ...(crawlEgress ? { egress: crawlEgress } : {}),
           };
           let fetchResult = yield* Effect.either(fetchPage(entry.normalizedUrl, fetchOptions));
 
@@ -1621,6 +1720,15 @@ export function createCrawler(
               // deemed the content unchanged, so the hash represents current
               // content and is safe to trust.
               if (result.sourceHash) cachedPage.sourceHash = result.sourceHash;
+              // The response WAS fetched, so its Content-Type charset is current:
+              // a record stored before pub#674 has none, and the charset can
+              // change while the body does not.
+              cachedPage.headers = {
+                ...cachedPage.headers,
+                contentTypeCharset: contentTypeCharset(result.headers.contentType),
+                // Likewise the headers technology detection reads (pub#871).
+                techHeaders: result.headers.techHeaders ?? null,
+              };
               yield* reuseCachedPage(crawlId, entry, cachedPage, "hash_match", {
                 cacheFresh: false,
               });
@@ -1631,6 +1739,9 @@ export function createCrawler(
           // Build page record - use headers from result
           const headers: ResponseHeaders = {
             contentType: result.contentType,
+            // `contentType` is the media type only; the charset rides beside it
+            // so core/charset sees a header-only declaration (pub#674).
+            contentTypeCharset: contentTypeCharset(result.headers.contentType),
             contentEncoding: result.headers.contentEncoding ?? null,
             cacheControl: result.headers.cacheControl ?? null,
             expires: result.headers.expires ?? null,
@@ -1653,6 +1764,8 @@ export function createCrawler(
             xGenerator: result.headers.xGenerator ?? null,
             // security/cookie-flags rule (#748).
             setCookie: result.headers.setCookie ?? null,
+            // Technology detection in a local audit (pub#871).
+            techHeaders: result.headers.techHeaders ?? null,
           };
 
           const securityHeaders: SecurityHeaders = {
@@ -1837,8 +1950,10 @@ export function createCrawler(
             url: entry.normalizedUrl,
             status: result.status,
             loadTimeMs: result.loadTime,
+            ttfbMs: result.ttfb,
             sizeBytes: result.sizeBytes,
             depth: entry.depth,
+            fetcherId: result.fetcherId,
             timestamp: Date.now(),
             renderTimeMs: result.renderTimeMs,
             queueWaitMs: result.queueWaitMs,
@@ -2343,6 +2458,14 @@ export function createCrawler(
           );
           let currentUrl = targetUrl;
           const visited = new Set<string>();
+          // repo#3430: with the crawl's own hosts pinned, the seed probe goes
+          // out through the same guard, hop by hop (manual redirects): a seed
+          // name, or a redirect, that resolves to a link-local or metadata
+          // address is never requested. Its final URL is the logical one the
+          // chain reached, never the pinned address it connected to.
+          const seedEgress = pinOwnHosts ? egressFor(targetUrl) : undefined;
+          const seedSend = seedEgress ? egressGuardedSend(fetchUndecoded, seedEgress) : undefined;
+          let guardedFinalUrl: string | undefined;
 
           for (let i = 0; i < MAX_REDIRECTS; i++) {
             const remainingMs = deadline - Date.now();
@@ -2359,34 +2482,48 @@ export function createCrawler(
             visited.add(currentUrl);
 
             const hopUrl = currentUrl;
+            guardedFinalUrl = undefined;
             const redirectTo = await withRequestDeadline(
               Math.min(hopTimeoutMs, remainingMs),
               // Undecoded (#2717): `redirect: "follow"` carries it to every
               // hop, and the capped read below decodes within its cap.
               (signal) =>
-                fetchUndecoded(hopUrl, {
-                  method: "GET",
-                  signal,
-                  redirect: "follow",
-                  // Identify as the crawl does (squirrelscan/repo#1899). This was
-                  // the only request in the whole crawl going out under the
-                  // runtime's default agent, and origins behind a WAF refuse
-                  // that agent — with a 403 that carries no `Location`, which
-                  // this loop then reads as "the seed does not redirect". The
-                  // base gets pinned to the seed, every `www.` link goes
-                  // cross_domain, and the audit is one page.
-                  //
-                  // The crawl's own `config.headers` deliberately do NOT ride
-                  // along: `redirect: "follow"` hands them to whatever origin
-                  // the chain lands on, and a custom header may be a credential
-                  // (#1395). The agent is not a secret; the rest are.
-                  //
-                  // Only when there is one to send. A header object built from
-                  // an absent value does not omit the header, it sends the
-                  // string "undefined", and an empty one asks the origin to
-                  // treat the request as agentless — the very thing being fixed.
-                  ...(config.userAgent ? { headers: { "User-Agent": config.userAgent } } : {}),
-                }),
+                seedSend
+                  ? safeRedirectFetch(
+                      hopUrl,
+                      {
+                        method: "GET",
+                        signal,
+                        ...(config.userAgent ? { headers: { "User-Agent": config.userAgent } } : {}),
+                      },
+                      seedSend,
+                    ).then(({ response, finalUrl }) => {
+                      guardedFinalUrl = finalUrl;
+                      return response;
+                    })
+                  : fetchUndecoded(hopUrl, {
+                      method: "GET",
+                      signal,
+                      redirect: "follow",
+                      // Identify as the crawl does (squirrelscan/repo#1899). This was
+                      // the only request in the whole crawl going out under the
+                      // runtime's default agent, and origins behind a WAF refuse
+                      // that agent — with a 403 that carries no `Location`, which
+                      // this loop then reads as "the seed does not redirect". The
+                      // base gets pinned to the seed, every `www.` link goes
+                      // cross_domain, and the audit is one page.
+                      //
+                      // The crawl's own `config.headers` deliberately do NOT ride
+                      // along: `redirect: "follow"` hands them to whatever origin
+                      // the chain lands on, and a custom header may be a credential
+                      // (#1395). The agent is not a secret; the rest are.
+                      //
+                      // Only when there is one to send. A header object built from
+                      // an absent value does not omit the header, it sends the
+                      // string "undefined", and an empty one asks the origin to
+                      // treat the request as agentless — the very thing being fixed.
+                      ...(config.userAgent ? { headers: { "User-Agent": config.userAgent } } : {}),
+                    }),
               // The deadline stays armed for the whole callback, so the body
               // read below is bounded too — before #1699 the timer was cleared
               // as soon as the headers landed and a stalled body hung here
@@ -2396,7 +2533,7 @@ export function createCrawler(
                 // BEFORE the body read, which is the step that can still time
                 // out. response.url is post-redirect; the fallback covers
                 // runtimes and mocks that leave it empty.
-                const served = response.url || hopUrl;
+                const served = guardedFinalUrl ?? (response.url || hopUrl);
                 settledUrl = served;
 
                 // A refusal is not an answer (squirrelscan/repo#1899). A 403 or
@@ -2486,7 +2623,7 @@ export function createCrawler(
           const llms = yield* fetchLlmsTxt(
             baseUrl,
             config.userAgent,
-            config.headers,
+            customHeadersFor(baseUrl),
             preamble,
             gate,
           );
@@ -2515,7 +2652,7 @@ export function createCrawler(
           const markdown = yield* probeMarkdownResponse(
             baseUrl,
             config.userAgent,
-            config.headers,
+            customHeadersFor(baseUrl),
             preamble,
             gate,
           );
@@ -2531,7 +2668,7 @@ export function createCrawler(
           const agentAccess = yield* probeAgentAccess(
             baseUrl,
             config.userAgent,
-            config.headers,
+            customHeadersFor(baseUrl),
             preamble,
             gate,
           );
@@ -2544,7 +2681,7 @@ export function createCrawler(
           const wellKnown = yield* probeWellKnown(
             baseUrl,
             config.userAgent,
-            config.headers,
+            customHeadersFor(baseUrl),
             preamble,
             { paths: wellKnownPaths, gate },
           );
@@ -2558,6 +2695,7 @@ export function createCrawler(
             config.headers,
             preamble,
             gate,
+            getHeaderScope(),
           );
           if (rsl) yield* storage.setRsl(crawlId, { ...rsl, fetchedAt: Date.now() });
         }
@@ -2583,10 +2721,10 @@ export function createCrawler(
         // The log rides on the budget so every root probe can note a request the
         // site refused; persisted below so the rules say "refused", not "absent".
         const refusals = new RefusalLog();
-        const preamble = createPhaseBudget(preambleBudgetMs(config.timeoutMs), Date.now(), refusals);
+        const seedPhase = createPhaseBudget(preambleBudgetMs(config.timeoutMs), Date.now(), refusals);
 
         // Follow redirects to get final URL (both HTTP and client-side)
-        const rawFinalTargetUrl = yield* detectRedirects(targetUrl, preamble);
+        const rawFinalTargetUrl = yield* detectRedirects(targetUrl, seedPhase);
         // SECURITY (#1396) defense-in-depth: detectRedirects follows client-side
         // redirects (meta refresh / JS) whose target is page-controlled.
         // findMetaRefresh / findJavaScriptRedirect already restrict to
@@ -2619,6 +2757,10 @@ export function createCrawler(
         // `targetUrl` with the user's own URL as `originalUrl`.
         const seedResolution = resolveSeedRedirect(userProvidedUrl, finalTargetUrl);
         baseUrl = seedResolution.baseUrl;
+        headerSeed = userProvidedUrl;
+        crawlEgress = egressFor(baseUrl);
+        // The same budget and refusal log, now with the crawl's egress policy.
+        const preamble: PhaseBudget = crawlEgress ? { ...seedPhase, egress: crawlEgress } : seedPhase;
         if (seedResolution.offSite) {
           logger.warn(
             "off-site redirect refused",
@@ -2657,6 +2799,9 @@ export function createCrawler(
             maxBackoffMs: config.maxBackoffMs,
             timeoutMs: config.timeoutMs,
             userAgent: config.userAgent,
+            // Always recorded ("" = matched on userAgent), so a resumed crawl and
+            // the analysis after it read the group this crawl was matched as.
+            robotsUserAgent: config.robotsUserAgent ?? "",
             followRedirects: config.followRedirects,
             respectRobots: config.respectRobots,
             incremental: config.incremental,
@@ -2706,7 +2851,14 @@ export function createCrawler(
         // sitemap discovery and the crawl/robots-txt rule need it. Only
         // Disallow enforcement and Crawl-delay honoring are conditional.
         const robotsResult = yield* Effect.either(
-          fetchRobots(baseUrl, config.userAgent, true, config.headers, preamble),
+          fetchRobots(
+            baseUrl,
+            config.userAgent,
+            true,
+            customHeadersFor(baseUrl),
+            preamble,
+            config.robotsUserAgent,
+          ),
         );
         if (robotsResult._tag === "Right") {
           robots = robotsResult.right;
@@ -2772,8 +2924,10 @@ export function createCrawler(
           {
             maxUrls: sitemapUrlCap,
             customHeaders: config.headers,
+            headerScope: getHeaderScope(),
             walkWindowMs: sitemapWalkWindowMs(config.timeoutMs),
             refusals,
+            ...(crawlEgress ? { egress: crawlEgress } : {}),
           },
         );
 
@@ -2963,12 +3117,17 @@ export function createCrawler(
         }
 
         baseUrl = crawl.baseUrl;
+        headerSeed = crawl.originalUrl ?? crawl.seedUrl ?? "";
+        crawlEgress = egressFor(baseUrl);
         currentCrawlId = crawlId;
         isRunning = true;
         isPaused = false;
 
         // Restore config from crawl
         Object.assign(config, crawl.config);
+        // A crawl recorded before robotsUserAgent existed was matched on its user
+        // agent; it keeps that group rather than taking this run's token.
+        if (!("robotsUserAgent" in crawl.config)) config.robotsUserAgent = undefined;
 
         // Fetch robots.txt again — always, regardless of respectRobots (#790).
         // Budgeted like every other preamble fetch (squirrelscan/repo#1733).
@@ -2977,8 +3136,9 @@ export function createCrawler(
             baseUrl,
             config.userAgent,
             true,
-            config.headers,
-            createPhaseBudget(preambleBudgetMs(config.timeoutMs)),
+            customHeadersFor(baseUrl),
+            createPhaseBudget(preambleBudgetMs(config.timeoutMs), Date.now(), undefined, crawlEgress),
+            config.robotsUserAgent,
           ),
         );
         if (robotsResult._tag === "Right") {
@@ -3082,6 +3242,8 @@ export function createCrawler(
         }
 
         baseUrl = crawl.baseUrl;
+        headerSeed = crawl.originalUrl ?? crawl.seedUrl ?? "";
+        crawlEgress = egressFor(baseUrl);
         currentCrawlId = crawlId;
         isRunning = true;
         isPaused = false;
@@ -3130,11 +3292,23 @@ export function createCrawler(
         });
 
         // One wall-clock budget for this restart's preamble, same as start().
-        const preamble = createPhaseBudget(preambleBudgetMs(config.timeoutMs));
+        const preamble = createPhaseBudget(
+          preambleBudgetMs(config.timeoutMs),
+          Date.now(),
+          undefined,
+          crawlEgress,
+        );
 
         // Fetch robots.txt — always, regardless of respectRobots (#790).
         const robotsResult = yield* Effect.either(
-          fetchRobots(baseUrl, config.userAgent, true, config.headers, preamble),
+          fetchRobots(
+            baseUrl,
+            config.userAgent,
+            true,
+            customHeadersFor(baseUrl),
+            preamble,
+            config.robotsUserAgent,
+          ),
         );
         if (robotsResult._tag === "Right") {
           robots = robotsResult.right;

@@ -19,7 +19,7 @@ const STORE_TOUCHING = new RegExp(
     String.raw`\b(?:audit|report|crawl)\.run(?:!|\?\.)?\(`,
     // citty's runner, which is how most command tests drive the real command.
     String.raw`\brunCommand\(`,
-    String.raw`\b(?:publishReport|savePublishedReportInfo|runAudit|runCrawl|createStorage|getStoredAudit|getStoredAuditByPrefix|getLatestAudit|listStoredAudits)\(`,
+    String.raw`\b(?:publishReport|savePublishedReportInfo|runAnalyze|runAudit|runCrawl|createStorage|getStoredAudit|getStoredAuditByPrefix|getLatestAudit|listStoredAudits)\(`,
     // The local MCP tools that audit or read the projects: `name: "audit_website"`.
     String.raw`name:\s*"(?:audit_website|quick_check|list_entities|get_entity|get_entity_graph|get_entity_findings|compare_entities)"`,
   ].join("|")
@@ -80,6 +80,9 @@ describe("CLI tests never touch the real ~/.squirrel (#626)", () => {
     expect(unisolated(file(`await publishReport(r, {})`))).toEqual([
       "x.test.ts",
     ]);
+    expect(
+      unisolated(file(`await runAnalyze({ crawlId: "missing" })`))
+    ).toEqual(["x.test.ts"]);
     expect(
       unisolated(file(`client.callTool({ name: "list_entities", arguments })`))
     ).toEqual(["x.test.ts"]);

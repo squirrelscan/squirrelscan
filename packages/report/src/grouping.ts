@@ -551,3 +551,110 @@ export function flattenIssuesBySeverity(categories: GroupedCategory[]): FlatIssu
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
 }
+
+/** A rule that ran and found nothing to report, for `--include-passed`. */
+export interface PassedRule {
+  id: string;
+  name: string;
+  /** Category code, e.g. "core". */
+  categoryCode: string;
+  /** Category display name, e.g. "Core SEO". */
+  categoryName: string;
+  /** The rule's declared scope: a site rule checks the site once. */
+  scope: "page" | "site";
+  /**
+   * Distinct pages with a passing check. Usually 0 for a site-scope rule, and
+   * 0 for a page-scope rule whose pass rows carry no page.
+   */
+  pages: number;
+}
+
+/**
+ * The rules that passed: at least one passing check and no failing or warning
+ * one. {@link groupIssuesByCategory} drops passes, so without this a report
+ * says how many checks passed but never which.
+ *
+ * Info and skipped checks neither qualify nor disqualify a rule. A capped
+ * published report and a JSON report read back with `--input` hold no pass
+ * rows, so they list nothing.
+ *
+ * Ordered like {@link flattenIssuesBySeverity} without the severity key:
+ * category priority, category code, rule weight, rule id.
+ */
+export function listPassedRules(
+  ruleResults: Record<
+    string,
+    {
+      meta: { name: string; category: string; weight: number; scope?: string };
+      checks: ReadonlyArray<{ status: string; pageUrl?: string; pages?: string[] }>;
+    }
+  >
+): PassedRule[] {
+  const passed: Array<PassedRule & { weight: number }> = [];
+  for (const [ruleId, result] of Object.entries(ruleResults)) {
+    const pages = new Set<string>();
+    let hasPass = false;
+    let hasIssue = false;
+    for (const check of result.checks) {
+      if (check.status === "fail" || check.status === "warn") {
+        hasIssue = true;
+        break;
+      }
+      if (check.status !== "pass") continue;
+      hasPass = true;
+      if (check.pageUrl) pages.add(check.pageUrl);
+      for (const page of check.pages ?? []) pages.add(page);
+    }
+    if (!hasPass || hasIssue) continue;
+
+    const category = normalizeCategoryCode(result.meta.category);
+    const categoryCode = isValidCategory(category) ? category : OTHER_CATEGORY;
+    passed.push({
+      id: ruleId,
+      name: result.meta.name,
+      categoryCode,
+      categoryName: getCategoryName(categoryCode),
+      // Read from the rule, never inferred from missing pageUrls: a page rule
+      // whose pass rows carry no page is not site-wide.
+      scope: result.meta.scope === "site" ? "site" : "page",
+      pages: pages.size,
+      weight: result.meta.weight,
+    });
+  }
+
+  return passed
+    .sort((a, b) => {
+      const priDiff = getCategoryPriority(b.categoryCode) - getCategoryPriority(a.categoryCode);
+      if (priDiff !== 0) return priDiff;
+      if (a.categoryCode !== b.categoryCode) {
+        return a.categoryCode < b.categoryCode ? -1 : 1;
+      }
+      const weightDiff = b.weight - a.weight;
+      if (weightDiff !== 0) return weightDiff;
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    })
+    .map(({ weight: _, ...rule }) => rule);
+}
+
+/**
+ * The passed rules a report lists with `--include-passed`: none without the
+ * flag, and none for a failed or blocked run, whose few passes (site checks run
+ * against the seed) say nothing about the site.
+ */
+export function reportPassedRules(
+  report: { status?: string; ruleResults: Parameters<typeof listPassedRules>[0] },
+  includePassed: boolean | undefined
+): PassedRule[] {
+  if (!includePassed || report.status === "failed" || report.status === "blocked") return [];
+  return listPassedRules(report.ruleResults);
+}
+
+/**
+ * Where a passed rule held: "site-wide", "12 pages", "1 page", or "pages not
+ * recorded" for a page rule whose pass rows carry no page.
+ */
+export function passedRuleScope(rule: PassedRule): string {
+  if (rule.scope === "site") return "site-wide";
+  if (rule.pages === 0) return "pages not recorded";
+  return `${rule.pages} page${rule.pages === 1 ? "" : "s"}`;
+}

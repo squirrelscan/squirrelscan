@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { truncateToBytes } from "@squirrelscan/utils/bytes";
+import { createHeaderScope, mergeHeaderRecords, type HeaderScope } from "@squirrelscan/utils/headers";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import { readBodyCapped } from "@squirrelscan/utils/response-body";
 
@@ -73,11 +74,10 @@ async function fetchLicenseDoc(
     return await safeFetchWithDeadline(
       url,
       {
-        headers: {
-          "User-Agent": userAgent,
-          Accept: "application/rsl+xml, application/xml, text/xml, */*",
-          ...customHeaders,
-        },
+        headers: mergeHeaderRecords(
+          { "User-Agent": userAgent, Accept: "application/rsl+xml, application/xml, text/xml, */*" },
+          customHeaders,
+        ),
       },
       timeoutMs,
       async (response) => {
@@ -94,6 +94,7 @@ async function fetchLicenseDoc(
           error: null,
         };
       },
+      budget?.egress,
     );
   } catch (e) {
     return unreachableDoc(url, (e as Error).message);
@@ -112,8 +113,11 @@ export function fetchRslLicensing(
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
   gate: ProbeGate = ungated,
+  headerScope?: HeaderScope,
 ): Effect.Effect<RslData | null, never, never> {
   const robotsUrl = new URL("/robots.txt", baseUrl).toString();
+  // Which URLs get the caller's custom headers; without a scope, the audited origin only.
+  const scope = headerScope ?? createHeaderScope(baseUrl);
   return Effect.promise(async () => {
     let robotsBody = "";
     let linkHeader: string | null = null;
@@ -125,7 +129,12 @@ export function fetchRslLicensing(
         if (robotsTimeoutMs !== null) {
           await safeFetchWithDeadline(
             robotsUrl,
-            { headers: { "User-Agent": userAgent, Accept: "text/plain, */*", ...customHeaders } },
+            {
+              headers: mergeHeaderRecords(
+                { "User-Agent": userAgent, Accept: "text/plain, */*" },
+                scope(robotsUrl) ? customHeaders : undefined,
+              ),
+            },
             robotsTimeoutMs,
             async (response) => {
               if (response.ok) {
@@ -136,6 +145,7 @@ export function fetchRslLicensing(
                 await response.body?.cancel().catch(() => {});
               }
             },
+            budget?.egress,
           );
         }
       } catch {
@@ -163,11 +173,11 @@ export function fetchRslLicensing(
     });
 
     // #1394: the caller's secret customHeaders are scoped to the audited origin —
-    // a license doc hosted off-origin must not receive them.
-    const baseHost = new URL(baseUrl).host;
+    // a license doc hosted off-origin (another host, scheme or port, #959) must not
+    // receive them.
     const documents = await Promise.all(
       licenseUrls.map((url) => {
-        const sameOrigin = new URL(url).host === baseHost;
+        const sameOrigin = scope(url);
         return gate(url, () =>
           fetchLicenseDoc(url, userAgent, sameOrigin ? customHeaders : undefined, budget),
         );

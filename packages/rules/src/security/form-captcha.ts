@@ -135,6 +135,103 @@ function hasPageLevelCaptchaScript(doc: Document): boolean {
   return false;
 }
 
+// A provider's site key in the page's own config (pub#919). Client-rendered
+// widgets (`@nuxtjs/turnstile`, a React reCAPTCHA component) mount after
+// hydration, so the static HTML holds no widget, no response field and no
+// provider script, only the key the runtime will render with: Nuxt's
+// `window.__NUXT__.config = {public:{turnstile:{siteKey:"0x4…"}}}`, or a
+// `"recaptchaSiteKey":"6L…"` entry in a JSON data script. The key has to sit
+// under the provider's name, as a `siteKey` in the provider's own object or as
+// `<provider>SiteKey`, so a script that merely mentions a provider is not
+// protection, and the value has to have that provider's key format, so a
+// translated "Site key" label is not one either. A provider object that
+// switches itself off (`enabled: false`) is not protection.
+const UUID_KEY = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+const SITE_KEY_FORMATS: Record<string, string> = {
+  // Production keys start 0x4. Cloudflare documents the test keys
+  // 1x00000000000000000000AA (passes), 2x00000000000000000000AB (blocks) and
+  // 3x00000000000000000000FF (forces a challenge).
+  turnstile: "(?:0x4[\\w-]{10,60}|[123]x0{20}[A-F]{2})",
+  recaptcha: "6L[\\w-]{38}",
+  hcaptcha: UUID_KEY,
+  friendlycaptcha: `(?:FC[A-Z0-9]{8,40}|${UUID_KEY})`,
+};
+const CAPTCHA_PROVIDERS = Object.keys(SITE_KEY_FORMATS);
+// Not `\b`: an env-style name (`NUXT_PUBLIC_TURNSTILE_SITE_KEY`) puts an
+// underscore, a word character, before the provider.
+const PROVIDER_OBJECT_START = new RegExp(
+  `(?<![a-z0-9])(${CAPTCHA_PROVIDERS.join("|")})["']?\\s*:\\s*\\{`,
+  "gi",
+);
+const NESTED_SITE_KEY = Object.fromEntries(
+  Object.entries(SITE_KEY_FORMATS).map(([provider, key]) => [
+    provider,
+    new RegExp(`(?<![a-z0-9])site_?key["']?\\s*:\\s*["']${key}["']`, "i"),
+  ]),
+);
+const FLAT_SITE_KEYS = Object.entries(SITE_KEY_FORMATS).map(([provider, key]) => ({
+  key: new RegExp(`(?<![a-z0-9])${provider}_?site_?key["']?\\s*[:=]\\s*["']${key}["']`, "i"),
+  // A sibling switch for the same provider: `recaptchaEnabled: false`,
+  // `TURNSTILE_ENABLED = "false"`, `hcaptchaDisabled: true`.
+  off: new RegExp(
+    `(?<![a-z0-9])${provider}_?(?:(?:enabled?|active)["']?\\s*[:=]\\s*(?:false|0|["']false["'])|disabled["']?\\s*[:=]\\s*(?:true|1|["']true["']))`,
+    "i",
+  ),
+}));
+const PROVIDER_SWITCHED_OFF =
+  /(?<![a-z0-9])(?:enabled?|active)["']?\s*:\s*(?:false|0|["']false["'])|(?<![a-z0-9])disabled["']?\s*:\s*(?:true|1|["']true["'])/i;
+/** How far one provider object is read, and how many are read per script. */
+const PROVIDER_OBJECT_MAX_CHARS = 4000;
+const PROVIDER_OBJECTS_PER_SCRIPT = 50;
+
+/**
+ * The top level of the object that opens at `start` (just past its `{`):
+ * nested objects are skipped, strings are kept whole, so a flag or key inside
+ * a sub-object (`options: {…}`) is not read as the provider's own. Null when
+ * the object does not close within the bound: an unread switch-off flag could
+ * follow, so a half-read object is never credited.
+ */
+function objectTopLevel(content: string, start: number): string | null {
+  let out = "";
+  let depth = 1;
+  const end = Math.min(content.length, start + PROVIDER_OBJECT_MAX_CHARS);
+  for (let i = start; i < end; i++) {
+    const ch = content[i]!;
+    if (ch === '"' || ch === "'") {
+      let j = i + 1;
+      while (j < end && content[j] !== ch) j += content[j] === "\\" ? 2 : 1;
+      if (depth === 1) out += content.slice(i, j + 1);
+      i = j;
+    } else if (ch === "{") {
+      depth++;
+    } else if (ch === "}") {
+      if (--depth === 0) return out;
+    } else if (depth === 1) {
+      out += ch;
+    }
+  }
+  return null;
+}
+
+function hasPageLevelCaptchaConfig(doc: Document): boolean {
+  for (const script of doc.querySelectorAll("script:not([src])")) {
+    const content = script.textContent || "";
+    if (!content) continue;
+    // A flat key has no object of its own: a sibling switch for the same
+    // provider anywhere in the script turns it off.
+    if (FLAT_SITE_KEYS.some(({ key, off }) => key.test(content) && !off.test(content))) return true;
+    let seen = 0;
+    for (const match of content.matchAll(PROVIDER_OBJECT_START)) {
+      if (++seen > PROVIDER_OBJECTS_PER_SCRIPT) break;
+      const provider = match[1]!.toLowerCase();
+      const own = objectTopLevel(content, match.index + match[0].length);
+      if (own === null) continue;
+      if (NESTED_SITE_KEY[provider]?.test(own) && !PROVIDER_SWITCHED_OFF.test(own)) return true;
+    }
+  }
+  return false;
+}
+
 // #696: matches by host-anchored script src OR data-fs-project-key attr (covers proxied/self-hosted script paths).
 function hasFormShieldProtection(doc: Document, baseUrl: string): boolean {
   const scripts = doc.querySelectorAll("script[src]");
@@ -414,7 +511,8 @@ export const formCaptchaRule: Rule = {
       hasPageLevelCaptchaScript(doc) ||
       hasPageLevelCaptchaIframe(doc) ||
       hasPageLevelCaptchaClass(doc) ||
-      hasExplicitCaptchaContainer(doc);
+      hasExplicitCaptchaContainer(doc) ||
+      hasPageLevelCaptchaConfig(doc);
 
     // FormShield covers every public form regardless of form count (no per-form widget to check).
     const hasFormShield = hasFormShieldProtection(doc, ctx.page.url);

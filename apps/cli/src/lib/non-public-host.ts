@@ -43,7 +43,7 @@ export const LOCAL_HOST_NOT_PUBLISHED_LINE =
  * What the CLI prints when the SERVER is the one that classified the host
  * (`websiteRegistration.skipped` with reason `non_public_host`).
  *
- * Kept even though the two classifiers now agree on every case we know of: the
+ * Kept even though the two classifiers agree on almost every case we know of: the
  * API's is authoritative and may tighten first, and a client that answered a
  * server refusal with silence would leave the user hunting for a missing site.
  */

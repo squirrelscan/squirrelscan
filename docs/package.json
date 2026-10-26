@@ -4,12 +4,12 @@
   "scripts": {
     "dev": "tangly dev",
     "build": "tangly build",
-    "check": "tangly check --strict",
+    "check": "tangly check --strict && bun scripts/check-links.ts && bun scripts/glossary.ts --check && bun test ./scripts/glossary.test.ts ./scripts/check-links.test.ts",
     "preview": "tangly preview",
     "deploy": "tangly build && wrangler deploy"
   },
   "devDependencies": {
-    "tangly": "0.5.0",
+    "tangly": "0.6.0",
     "wrangler": "^4.144.0"
   }
 }

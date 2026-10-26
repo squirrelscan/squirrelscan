@@ -29,6 +29,7 @@ import {
 } from "@squirrelscan/rules/resolution";
 import type { RuleRunResult } from "@squirrelscan/rules/types";
 import { byteLength } from "@squirrelscan/utils/bytes";
+import { decodeLinkTargetSet, linkTargetHash } from "@squirrelscan/utils/link-target-set";
 
 import {
   buildCheckTallies,
@@ -628,6 +629,56 @@ describe("capReportForPublish: the sample and its counts", () => {
     expect(check.message).toBe(skip.message);
   });
 
+  test("broken-links coverage survives the full sample and a counts-only row (pub#794)", () => {
+    // Comparing two audits' broken links reads what each covered; the large
+    // reports that get a counts row are the ones it matters most on.
+    const coverage = {
+      linkTargets: 2_400,
+      unfetchedTargets: 7,
+      probedTargets: 40,
+      notFetched: { overLimit: 5, skipped: 2 },
+    };
+    const fail: CheckResult = {
+      name: "broken-links",
+      status: "fail",
+      message: "1500 broken internal link(s) (4xx/5xx)",
+      items: Array.from({ length: 1_500 }, (_, k) => ({
+        id: `${pageUrl(k)}/gone`,
+        sourcePages: [pageUrl(k)],
+        meta: { statusCode: 404, linkedFrom: 1 },
+      })),
+      details: coverage,
+    };
+    const input: Report = {
+      ruleResults: {
+        "links/broken-links": { meta: meta(SITE_RULES[2]!, "site"), checks: [fail] },
+      },
+    };
+    const full = capReportForPublish(input).ruleResults["links/broken-links"]!.checks[0]!;
+    expect(full.items!.length).toBeGreaterThan(0);
+    expect(full.details).toMatchObject(coverage);
+
+    // The smallest body that still carries the check holds it as counts only.
+    const kept = (maxBytes: number): CheckResult | undefined => {
+      try {
+        return capReportForPublish(input, { maxBytes }).ruleResults["links/broken-links"]?.checks[0];
+      } catch (err) {
+        if (err instanceof PublishedReportTooLargeError) return undefined;
+        throw err;
+      }
+    };
+    let lo = REPORT_CAPS.envelopeBytes;
+    let hi = REPORT_CAPS.envelopeBytes + 64 * 1024;
+    while (hi - lo > 1) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (kept(mid)) hi = mid;
+      else lo = mid;
+    }
+    const counts = kept(hi)!;
+    expect(counts.items).toBeUndefined();
+    expect(counts.details).toMatchObject({ ...coverage, additional: 1_500 });
+  });
+
   test("pages named by more items than a check may carry are all counted", () => {
     const items = Array.from({ length: 1_500 }, (_, k) => ({ id: pageUrl(k) }));
     const input: Report = {
@@ -1149,6 +1200,290 @@ describe("capReportForPublish: tallies", () => {
     const large = bytesOf(buildCheckTallies(report(2_000).ruleResults));
     // Only the digits grow.
     expect(large - small).toBeLessThan(2 * 1024);
+  }, SLOW);
+});
+
+describe("capReportForPublish: rule page counts (repo#2935)", () => {
+  /** A rule with one class per entry of `classes`, each failing on its own pages. */
+  function rule(classes: Array<{ name: string; pages: number[] }>): Report {
+    const checks: CheckResult[] = classes.flatMap(({ name, pages }) =>
+      pages.map((i) => ({ name, status: "fail" as const, message: `${name} fails`, pageUrl: pageUrl(i) })),
+    );
+    return { ruleResults: { "perf/cache-headers": { meta: meta(PAGE_RULES[0]!, "page"), checks } } };
+  }
+  const range = (from: number, to: number) => Array.from({ length: to - from }, (_, i) => from + i);
+
+  test("two disjoint classes count every page, where the samples can only show the larger", () => {
+    const capped = capReportForPublish(
+      rule([
+        { name: "cache-control", pages: range(0, 46) },
+        { name: "cache-headers-missing", pages: range(46, 50) },
+      ]),
+    );
+    expect(capped.rulePageCounts).toEqual({ "perf/cache-headers": 50 });
+    // What a reader of the rows alone gets: the largest class, 46.
+    const largest = Math.max(
+      ...capped.ruleResults["perf/cache-headers"]!.checks.map((c) =>
+        Math.max((c.details?.pagesTruncated as number | undefined) ?? 0, c.pages?.length ?? 1),
+      ),
+    );
+    expect(largest).toBe(46);
+  });
+
+  test("classes on the same pages need no count, and none is published", () => {
+    const capped = capReportForPublish(
+      rule([
+        { name: "cache-control", pages: range(0, 40) },
+        { name: "cache-headers-missing", pages: range(10, 20) },
+      ]),
+    );
+    expect(capped.rulePageCounts).toBeUndefined();
+  });
+
+  test("replayed findings are left out of the count, as the tallies leave them out", () => {
+    const input = rule([
+      { name: "cache-control", pages: range(0, 46) },
+      { name: "cache-headers-missing", pages: range(46, 50) },
+    ]);
+    // The 4-page class was carried over from an earlier audit.
+    for (const c of input.ruleResults["perf/cache-headers"]!.checks) {
+      if (c.name === "cache-headers-missing") c.provenance = "carried";
+    }
+    expect(capReportForPublish(input).rulePageCounts).toBeUndefined();
+  });
+
+  test("a rule with an input aggregate that was already sampled publishes no count", () => {
+    const input = rule([{ name: "cache-headers-missing", pages: range(600, 604) }]);
+    input.ruleResults["perf/cache-headers"]!.checks.push({
+      name: "cache-control",
+      status: "fail",
+      message: "cache-control fails",
+      pages: range(0, 100).map(pageUrl),
+      details: { aggregated: true, occurrences: 600, pagesTruncated: 600 },
+    });
+    expect(capReportForPublish(input).rulePageCounts).toBeUndefined();
+  });
+
+  test("a count on the input is never trusted", () => {
+    const input = {
+      ...rule([{ name: "cache-control", pages: range(0, 30) }]),
+      rulePageCounts: { "perf/cache-headers": 9_999, "made/up": 1 },
+    };
+    expect(capReportForPublish(input).rulePageCounts).toBeUndefined();
+  });
+
+  test("on a real-shaped report, each count is the union of its rule's failing pages", () => {
+    const input = report(300);
+    const capped = capReportForPublish(input);
+    const removed = new Set(input.pages!.filter((p) => p.statusCode === 404).map((p) => p.url));
+    for (const [ruleId, count] of Object.entries(capped.rulePageCounts ?? {})) {
+      const pages = new Set<string>();
+      for (const c of input.ruleResults[ruleId]!.checks) {
+        const replayed = c.provenance === "carried" || c.provenance === "unrendered";
+        if ((c.status === "fail" || c.status === "warn") && c.pageUrl && !removed.has(c.pageUrl) && !replayed) {
+          pages.add(c.pageUrl);
+        }
+      }
+      expect({ ruleId, count }).toEqual({ ruleId, count: pages.size });
+    }
+    expect(Object.keys(capped.rulePageCounts ?? {}).length).toBeGreaterThan(0);
+  });
+});
+
+describe("capReportForPublish: link target sets (repo#2861)", () => {
+  const linkMeta = (id: string) => ({
+    id,
+    name: id,
+    category: "links",
+    scope: "site" as const,
+    severity: "error" as const,
+    weight: 5,
+  });
+  const targets = (n: number, prefix: string) =>
+    Array.from({ length: n }, (_, i) => `${prefix}${String(i).padStart(3, "0")}`);
+  const row = (name: string, status: CheckResult["status"], ids: string[], extra: Partial<CheckResult> = {}) => ({
+    name,
+    status,
+    message: `${ids.length} ${name}`,
+    items: ids.map((id) => ({ id, sourcePages: [`${SITE}/`] })),
+    ...extra,
+  });
+  const has = (set: unknown, url: string) => decodeLinkTargetSet(set)?.has(linkTargetHash(url)) ?? false;
+
+  test("every target a link rule lists, though its rows publish a sample", () => {
+    const broken = targets(40, `${SITE}/gone-`);
+    const refused = targets(3, `${SITE}/walled-`);
+    const input: Report = {
+      ruleResults: {
+        "links/broken-links": {
+          meta: linkMeta("links/broken-links"),
+          checks: [row("broken-links", "fail", broken), row("refused-links", "info", refused)],
+        },
+      },
+    };
+    const capped = capReportForPublish(input);
+    const items = capped.ruleResults["links/broken-links"]!.checks.find((c) => c.name === "broken-links")!.items!;
+    expect(items.length).toBeLessThan(40);
+    const sets = capped.linkTargetSets!["links/broken-links"]!;
+    expect(sets.broken).toMatchObject({ count: 40, complete: true });
+    expect(sets.unverified).toMatchObject({ count: 3, complete: true });
+    for (const url of broken) expect(has(sets.broken, url)).toBe(true);
+    for (const url of refused) expect(has(sets.unverified, url)).toBe(true);
+    // Query-blind: a trailing slash, the host's case, a query and a fragment do not matter.
+    expect(has(sets.broken, `${SITE.toUpperCase()}/gone-000/?utm_source=x#top`)).toBe(true);
+    expect(has(sets.broken, `${SITE}/fine`)).toBe(false);
+  });
+
+  test("a rule that passed carries empty sets; one that did not run carries none", () => {
+    const input: Report = {
+      ruleResults: {
+        "links/broken-links": {
+          meta: linkMeta("links/broken-links"),
+          checks: [{ name: "broken-links", status: "pass", message: "none broken" }],
+        },
+        "links/broken-external-links": {
+          meta: linkMeta("links/broken-external-links"),
+          checks: [{ name: "broken-external-links", status: "skipped", message: "checks off" }],
+        },
+      },
+    };
+    const capped = capReportForPublish(input);
+    expect(capped.linkTargetSets).toEqual({
+      "links/broken-links": {
+        broken: { hashes: "", count: 0, complete: true },
+        unverified: { hashes: "", count: 0, complete: true },
+      },
+    });
+  });
+
+  test("a row the rule itself sampled, and a set over its cap, say they are not complete", () => {
+    const input: Report = {
+      ruleResults: {
+        "links/broken-external-links": {
+          meta: linkMeta("links/broken-external-links"),
+          checks: [
+            row("broken-external-links", "warn", targets(2, "https://vendor.test/dead-")),
+            row("not-requested-external-links", "info", targets(5, "https://vendor.test/logout-"), {
+              value: 12,
+              details: { notRequested: 12, listed: 5 },
+            }),
+          ],
+        },
+        "links/broken-links": {
+          meta: linkMeta("links/broken-links"),
+          checks: [row("broken-links", "fail", targets(2100, `${SITE}/gone-`))],
+        },
+      },
+    };
+    const capped = capReportForPublish(input);
+    const external = capped.linkTargetSets!["links/broken-external-links"]!;
+    expect(external.broken).toMatchObject({ count: 2, complete: true });
+    expect(external.unverified).toMatchObject({ count: 5, complete: false });
+    const internal = capped.linkTargetSets!["links/broken-links"]!.broken;
+    expect(internal).toMatchObject({ count: 2100, complete: false });
+    expect(decodeLinkTargetSet(internal)?.size).toBe(2000);
+  });
+
+  test("an input row that was already sampled (`additional`) is not complete, whatever page it sits on", () => {
+    const input: Report = {
+      pages: [{ url: `${SITE}/a`, statusCode: 404 }],
+      ruleResults: {
+        "links/broken-links": {
+          meta: linkMeta("links/broken-links"),
+          checks: [
+            row("broken-links", "fail", targets(2, `${SITE}/gone-`), {
+              pageUrl: `${SITE}/a`,
+              details: { additional: 5 },
+            }),
+          ],
+        },
+      },
+    };
+    expect(capReportForPublish(input).linkTargetSets!["links/broken-links"]!.broken.complete).toBe(
+      false,
+    );
+  });
+
+  test("a rule whose only rows are replayed did not run; a fresh one keeps its replayed rows' targets", () => {
+    const carried = row("broken-links", "fail", [`${SITE}/old-gone`], {
+      pageUrl: `${SITE}/b`,
+      provenance: "carried",
+    });
+    const only: Report = {
+      ruleResults: {
+        "links/broken-links": { meta: linkMeta("links/broken-links"), checks: [carried] },
+      },
+    };
+    expect(capReportForPublish(only).linkTargetSets).toBeUndefined();
+    const mixed: Report = {
+      ruleResults: {
+        "links/broken-links": {
+          meta: linkMeta("links/broken-links"),
+          checks: [row("broken-links", "fail", [`${SITE}/new-gone`], { pageUrl: `${SITE}/c` }), carried],
+        },
+      },
+    };
+    const set = capReportForPublish(mixed).linkTargetSets!["links/broken-links"]!.broken;
+    expect(set.count).toBe(2);
+    expect(has(set, `${SITE}/old-gone`)).toBe(true);
+  });
+
+  test("four full sets are priced in the body: a full report still fits its ceiling", () => {
+    // A row lists at most REPORT_LIMITS.maxItemsPerCheck items (one more reads
+    // as capped), so a set fed by one row holds up to 999 targets; two rows of
+    // a rule fill it towards LINK_TARGET_SET_MAX_HASHES.
+    const full = (prefix: string) => [targets(999, `${prefix}a-`), targets(999, `${prefix}b-`)];
+    const [goneA, goneB] = full(`${SITE}/gone-`);
+    const [walledA, walledB] = full(`${SITE}/walled-`);
+    const [deadA, deadB] = full("https://vendor.test/dead-");
+    const [wafA, wafB] = full("https://vendor.test/walled-");
+    const input = report(300);
+    input.ruleResults["links/broken-links"] = {
+      meta: linkMeta("links/broken-links"),
+      checks: [
+        row("broken-links", "fail", goneA!, { pageUrl: `${SITE}/x` }),
+        row("broken-links", "fail", goneB!, { pageUrl: `${SITE}/y` }),
+        row("refused-links", "info", walledA!),
+        row("rate-limited-links", "info", walledB!),
+      ],
+    };
+    input.ruleResults["links/broken-external-links"] = {
+      meta: linkMeta("links/broken-external-links"),
+      checks: [
+        row("broken-external-links", "warn", deadA!, { pageUrl: `${SITE}/x` }),
+        row("broken-external-links", "warn", deadB!, { pageUrl: `${SITE}/y` }),
+        row("waf-blocked-external-links", "info", wafA!),
+        row("rate-limited-external-links", "info", wafB!),
+      ],
+    };
+    const capped = capReportForPublish(input);
+    expect(bytesOf(capped)).toBeLessThanOrEqual(PUBLISHED_REPORT_MAX_BYTES - REPORT_CAPS.envelopeBytes);
+    for (const sets of Object.values(capped.linkTargetSets!)) {
+      expect(sets.broken).toMatchObject({ count: 1998, complete: true });
+      expect(sets.unverified).toMatchObject({ count: 1998, complete: true });
+    }
+    // The sets are part of what the fill measures, not added on top of it.
+    expect(bytesOf(capped.linkTargetSets)).toBeGreaterThan(80_000);
+  }, SLOW);
+
+  test("kept whole when the fill reduces the report, and never taken from the input", () => {
+    const rules: RuleSpec[] = Array.from({ length: 60 }, (_, r) => ({
+      id: `content/many-${String(r).padStart(2, "0")}`,
+      category: "content",
+      severity: "warning" as const,
+      weight: 3,
+      names: Array.from({ length: 25 }, (_, n) => `check-${n}`),
+    }));
+    const input = report(4, { rules, everyClassFails: 1, maxStrings: true });
+    input.ruleResults["links/broken-links"] = {
+      meta: linkMeta("links/broken-links"),
+      checks: [row("broken-links", "fail", targets(300, `${SITE}/gone-`))],
+    };
+    (input as Record<string, unknown>).linkTargetSets = { "made/up": { broken: { hashes: "x", count: 1, complete: true } } };
+    const capped = capReportForPublish(input, { maxBytes: 256 * 1024 });
+    expect(capped.detail.tier).toBeGreaterThan(0);
+    expect(Object.keys(capped.linkTargetSets ?? {})).toEqual(["links/broken-links"]);
+    expect(capped.linkTargetSets!["links/broken-links"]!.broken).toMatchObject({ count: 300, complete: true });
   }, SLOW);
 });
 

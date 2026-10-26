@@ -128,7 +128,7 @@ describe("resolveLocalAuditLevel: level + overrides → settings and banner", ()
       crawlStrategy: "seed-and-sitemap",
       cloudChecks: false,
       render: "auto",
-      externalLinks: false,
+      externalLinks: true,
       probe: "passive",
     });
     expect(levelBannerValue(quick)).toBe("quick · max 25 pages");
@@ -173,11 +173,11 @@ describe("resolveLocalAuditLevel: level + overrides → settings and banner", ()
     const resolved = resolveLocalAuditLevel("quick", {
       probe: "active",
       pages: 50,
-      externalLinks: true,
+      externalLinks: false,
     });
     expect(resolved.changes).toEqual(["pages", "externalLinks", "probe"]);
     expect(describeAuditLevel(resolved)).toBe(
-      "custom (quick + max_pages 50, external_links on, probe active)"
+      "custom (quick + max_pages 50, external_links off, probe active)"
     );
   });
 

@@ -37,7 +37,7 @@ const { values } = parseArgs({
     serve: { type: "boolean", default: false },
     "write-db": { type: "string" },
     port: { type: "string", default: "0" },
-    "base-url": { type: "string", default: "http://synthetic.test" },
+    "base-url": { type: "string", default: "http://synthetic.example.com" },
     "template-count": { type: "string" },
     "min-size": { type: "string" },
     "max-size": { type: "string" },
@@ -70,7 +70,7 @@ if (values.help || !values.pages) {
   --serve                      Start an HTTP server serving the generated site
   --write-db <path>            Write a crawl directly into a SQLite storage file at <path>
   --port <n>                   Port for --serve (default: random free port)
-  --base-url <url>             Origin used for --write-db page URLs (default: http://synthetic.test)
+  --base-url <url>             Origin used for --write-db page URLs (default: http://synthetic.example.com)
   --template-count <n>         Distinct structural page templates (default: 5)
   --min-size / --max-size <n>  Target page HTML size range in bytes (default: 30000-80000)
   --clean-ratio <0..1>         Approximate share of issue-free pages (default: 0.5)

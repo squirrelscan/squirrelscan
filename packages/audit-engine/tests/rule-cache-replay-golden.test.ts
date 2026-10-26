@@ -337,7 +337,7 @@ describe("per-page rule-result cache — replay parity", () => {
     await withStorage(dbPath, async (storage) => {
       const runner = createRunner(getGoldenBaselineConfig());
       const siteData = {
-        baseUrl: "http://synthetic.test",
+        baseUrl: "http://synthetic.example.com",
         pages: [],
         robotsTxt: null,
         sitemaps: null,
@@ -407,7 +407,7 @@ describe("per-page rule-result cache — replay parity", () => {
         ],
       });
       const siteData = {
-        baseUrl: "http://synthetic.test",
+        baseUrl: "http://synthetic.example.com",
         pages: [],
         robotsTxt: null,
         sitemaps: null,
@@ -440,7 +440,7 @@ describe("per-page rule-result cache — replay parity", () => {
     await withStorage(dbPath, async (storage) => {
       const runner = createRunner(getGoldenBaselineConfig());
       const siteData = {
-        baseUrl: "http://synthetic.test",
+        baseUrl: "http://synthetic.example.com",
         pages: [],
         robotsTxt: null,
         sitemaps: null,

@@ -5,6 +5,7 @@ import {
   HEADER_PATTERNS,
   PROVIDER_PRECEDENCE,
 } from "./providers";
+import { signatureViews } from "./views";
 
 type Confidence = WafDetectionResult["confidence"];
 
@@ -105,9 +106,11 @@ function cookieSignals(names: readonly string[]): Signals {
 
 function contentSignals(html: string): Signals {
   const signals = emptySignals();
-  // Only check first 10KB to avoid performance issues
-  const sample = html.slice(0, 10240);
-  for (const { provider, patterns, confidence } of CONTENT_PATTERNS) {
+  // Only check first 10KB to avoid performance issues. Each pattern reads the
+  // view it acts in, so a page quoting a signature is not attributed (#693).
+  const views = signatureViews(html.slice(0, 10240));
+  for (const { provider, patterns, confidence, view } of CONTENT_PATTERNS) {
+    const sample = views[view];
     for (const pattern of patterns) {
       if (pattern.test(sample)) {
         note(signals, provider, confidence, `content:${pattern.source.slice(0, 30)}`);

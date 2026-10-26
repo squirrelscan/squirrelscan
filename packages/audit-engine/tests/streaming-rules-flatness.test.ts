@@ -25,7 +25,7 @@ const CONFIG = { rule_options: {}, rules: { enable: ["*"] } };
 
 // Page rules read only non-`pages` site fields; a minimal SiteData suffices.
 function siteData(): SiteData {
-  return { baseUrl: "http://synthetic.test", pages: [], robotsTxt: null, sitemaps: null };
+  return { baseUrl: "http://synthetic.example.com", pages: [], robotsTxt: null, sitemaps: null };
 }
 
 function median(xs: number[]): number {

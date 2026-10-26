@@ -17,44 +17,73 @@ env:
   NO_TELEMETRY: "1"
 
 jobs:
-  # Docs-only changes (everything under docs/) skip the code jobs. This is
-  # job-level gating on purpose, NOT `on.push.paths`: a filtered-out push
-  # produces no CI run at all, so every ruleset-required check would sit at
-  # "Expected" forever and the PR could never merge. A skipped job satisfies a
-  # required check; an absent one does not.
+  # Which jobs a change needs. Gating is job-level on purpose, NOT
+  # `on.push.paths`: a filtered-out push produces no CI run at all, so every
+  # ruleset-required check would sit at "Expected" forever and the PR could
+  # never merge. A skipped job satisfies a required check; an absent one does
+  # not.
+  #
+  # scripts/ci-classify.sh maps the changed paths to five outputs. Its header
+  # holds the path rules and how to add one; scripts/test-ci-classify.sh is
+  # its table test.
+  #
+  #   code       false for a docs-only change (docs/**, the root README,
+  #              CONTRIBUTING, CODE_OF_CONDUCT, SECURITY and TRADEMARKS, issue
+  #              and PR templates): only Docs check and build and Secret scan run
+  #   engine     Audit engine golden tests
+  #   installer  Installer script syntax
+  #   release    Release tooling tests
+  #   build      Compile CLI
+  #
+  # Format, lint, and typecheck, CLI tests and Dependency audit run on every
+  # code change: CLI tests is the only job that runs every test file, and bun
+  # audit's answer moves with the advisory database, not only with bun.lock.
+  #
+  # Fail open, twice. This job writes every output `true` when the base is
+  # unknown or unreachable, the diff is empty, or the classifier fails or
+  # prints anything unexpected. And every gate also runs when this job did not
+  # succeed: a job that dies after writing `false` (a failed post-checkout
+  # step, say) keeps its outputs, and its outputs are empty if it never ran.
   changes:
     name: Classify changed files
     runs-on: ubuntu-latest
     timeout-minutes: 2
     outputs:
       code: ${{ steps.classify.outputs.code }}
+      engine: ${{ steps.classify.outputs.engine }}
+      installer: ${{ steps.classify.outputs.installer }}
+      release: ${{ steps.classify.outputs.release }}
+      build: ${{ steps.classify.outputs.build }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: classify
         env:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: |
-          set -eu
+          set -u
+          run_everything() {
+            echo "$1: running every job"
+            printf '%s=true\n' code engine installer release build >> "$GITHUB_OUTPUT"
+            exit 0
+          }
           # Unknown base (first push, force-push, empty sha) → run everything.
           if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
-            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+            run_everything "no base commit"
           fi
-          if ! git fetch --no-tags --depth=1 origin "$BASE" 2>/dev/null; then
-            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
-          fi
-          changed=$(git diff --name-only "$BASE" HEAD)
+          git fetch --no-tags --depth=1 origin "$BASE" 2>/dev/null || run_everything "cannot fetch base $BASE"
+          # --no-renames: a move lists both paths, so source moved under docs/
+          # still counts as the code change it is.
+          changed=$(git -c core.quotepath=false diff --name-only --no-renames "$BASE" HEAD) || run_everything "git diff failed"
           echo "$changed"
-          if [ -z "$changed" ] || echo "$changed" | grep -qv '^docs/'; then
-            echo "code=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "docs-only change: skipping code jobs"
-            echo "code=false" >> "$GITHUB_OUTPUT"
-          fi
+          result=$(printf '%s\n' "$changed" | bash scripts/ci-classify.sh) || run_everything "classifier failed"
+          shape=$'^code=(true|false)\nengine=(true|false)\ninstaller=(true|false)\nrelease=(true|false)\nbuild=(true|false)$'
+          [[ "$result" =~ $shape ]] || run_everything "unexpected classifier output"
+          echo "$result" | tee -a "$GITHUB_OUTPUT"
 
   quality:
     name: Format, lint, and typecheck
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code != 'false') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -66,6 +95,8 @@ jobs:
       # the CLI tests job stops matching scripts/test-suites.ts.
       - name: Check every test suite is wired into CI
         run: bun run scripts/test-suites.ts --check
+      - name: Check the CI path classifier
+        run: bash scripts/test-ci-classify.sh
       - name: Check formatting
         run: bun run format:check
       - name: Lint
@@ -124,6 +155,10 @@ jobs:
   cli-tests:
     name: CLI tests
     needs: quality
+    # Explicit, not the implicit success(): that also looks at `changes`, so a
+    # dead classifier would skip this job (and pass its required check) even
+    # though quality, failing open, ran.
+    if: ${{ !cancelled() && needs.quality.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -154,7 +189,8 @@ jobs:
 
   installer-scripts:
     name: Installer script syntax
-    needs: quality
+    needs: [changes, quality]
+    if: ${{ !cancelled() && needs.quality.result == 'success' && (needs.changes.result != 'success' || needs.changes.outputs.installer != 'false') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -189,6 +225,7 @@ jobs:
   dependency-audit:
     name: Dependency audit
     needs: quality
+    if: ${{ !cancelled() && needs.quality.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -198,7 +235,8 @@ jobs:
 
   engine-tests:
     name: Audit engine golden tests
-    needs: quality
+    needs: [changes, quality]
+    if: ${{ !cancelled() && needs.quality.result == 'success' && (needs.changes.result != 'success' || needs.changes.outputs.engine != 'false') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -208,7 +246,8 @@ jobs:
 
   release-tooling:
     name: Release tooling tests
-    needs: quality
+    needs: [changes, quality]
+    if: ${{ !cancelled() && needs.quality.result == 'success' && (needs.changes.result != 'success' || needs.changes.outputs.release != 'false') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -218,32 +257,62 @@ jobs:
 
   # Runs on every change (docs cross-reference rule ids and CLI flags), and is
   # the only build job a docs-only change triggers. Deliberately not behind
-  # `quality`: nothing in docs:check depends on the code lint passing.
+  # `quality`, or `changes`: nothing in docs:check depends on the code lint
+  # passing, and a dead classifier must not take the docs check with it.
   docs:
     name: Docs check and build
-    needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-bun
       - run: bun run docs:check
+      # The code tests that read docs/ pages. CLI tests runs them too, but a
+      # docs-only change skips CLI tests, and these are the ones it can break.
+      # A new test that reads docs/ belongs in this list.
+      - name: Code tests that read docs pages
+        run: >-
+          bun test
+          ./packages/rules/tests/docs-rule-pages.test.ts
+          ./packages/rules/tests/docs-category-table.test.ts
+          ./apps/cli/tests/mcp/docs-sync.test.ts
       - run: bun run docs:build
 
   build:
     name: Compile CLI
-    needs: [cli-tests, engine-tests, release-tooling]
+    needs: [changes, cli-tests, engine-tests, release-tooling]
+    # engine-tests and release-tooling may be skipped by their own gates; a
+    # failure in any of the three still stops the build.
+    if: >-
+      ${{ !cancelled()
+      && (needs.changes.result != 'success' || needs.changes.outputs.build != 'false')
+      && needs.cli-tests.result == 'success'
+      && contains(fromJSON('["success", "skipped"]'), needs.engine-tests.result)
+      && contains(fromJSON('["success", "skipped"]'), needs.release-tooling.result) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-bun
       - run: bun run build
+      - name: Verify compiled rules version
+        run: |
+          expected=$(bun -e 'import { fingerprintRuleSources } from "./apps/cli/src/audit/rules-fingerprint"; console.log(fingerprintRuleSources(process.cwd(), undefined, { strict: true }))')
+          # An empty value would make `grep -F ""` match any file.
+          if ! [[ "$expected" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Could not compute the rules fingerprint for this checkout: '$expected'" >&2
+            exit 1
+          fi
+          if ! grep -aFq "$expected" apps/cli/build/squirrelscan; then
+            echo "Compiled CLI does not embed the rules version for this checkout: $expected" >&2
+            exit 1
+          fi
+          echo "Compiled CLI embeds rules version $expected"
 
   psl-freshness:
     name: Public suffix data freshness
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code != 'false') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     continue-on-error: true

@@ -19,10 +19,12 @@ import {
   computeCost,
   CREDIT_PRICING_VERSION,
   estimateAuditCap,
+  externalLinkBudget,
   minimumAuditCredits,
 } from "@squirrelscan/core-contracts";
 import { AUDIT_LEVEL_PRESETS } from "@squirrelscan/core-contracts/audit-levels";
 import { fullScanHint } from "@squirrelscan/report";
+import { isValidHeaderHost } from "@squirrelscan/utils/headers";
 import { defineCommand } from "citty";
 import { existsSync } from "node:fs";
 import { platform } from "node:os";
@@ -44,6 +46,7 @@ import {
   parseHeaders,
   redactHeaders,
 } from "@/audit/headers";
+import { localUnverifiedLinksNotice } from "@/audit/local-link-notice";
 import {
   generateConsoleReport,
   generateTextReport,
@@ -61,6 +64,7 @@ import {
   resolveRulesConfig,
 } from "@/audit/rule-filter";
 import { preflightRuleOptions } from "@/audit/rule-options-preflight";
+import { stopInterruptedCrawls } from "@/audit/stop-interrupted-crawl";
 import { findConfigFile, getGlobalConfigPath, loadConfig } from "@/config";
 import {
   DASHBOARD_URL,
@@ -73,6 +77,7 @@ import {
   runAudit,
   withAuditPageSettlement,
 } from "@/controllers/audit";
+import { validateFormat } from "@/controllers/report";
 import {
   publishReport,
   savePublishedReportInfo,
@@ -109,6 +114,8 @@ import {
   AUDIT_BASE_CREDITS,
   AUDIT_PAGE_CREDITS,
   AUDIT_PRICING_LINE,
+  EXTERNAL_LINK_CREDITS,
+  LINK_PRICING_NOTICE,
   MIN_AUDIT_CREDITS,
   offerPitchLines,
   proPitchLines,
@@ -173,6 +180,7 @@ import {
   shouldShowPublishNudge,
 } from "../publish-nudge";
 import { pickTip, shouldShowTip, tipLabel } from "../tips";
+import { createWalkHeartbeat } from "../walk-heartbeat";
 
 /** Operator-facing labels for cloud services in coverage warnings. */
 const CLOUD_SERVICE_LABELS: Record<string, string> = {
@@ -190,6 +198,8 @@ export interface CloudConsentEstimate {
   maxCredits: number;
   /** Unmetered plan (enterprise): the balance sentence reads "unlimited". */
   unlimited?: boolean;
+  /** The audit's external links go to the cloud link checker (pricing v12, #801). */
+  externalLinks?: boolean;
 }
 
 /** The single up-front spend disclosure (pricing v11, #2290): flat audit base
@@ -206,7 +216,34 @@ export function consentEstimateLine(est: CloudConsentEstimate): string {
       ? ` Balance: ${est.balance.toLocaleString("en-US")} credits.`
       : "";
   const pages = est.maxPages === 1 ? "page" : "pages";
-  return `About ${estimateAuditCap({ maxPages: est.maxPages })} credits: ${base} audit base + ${pagesEst} for up to ${est.maxPages} audited ${pages} (${AUDIT_PAGE_CREDITS} each, however the page is fetched), all analysis included${cap}.${bal}`;
+  const links = est.externalLinks
+    ? ` + up to ${computeCost("external_link", externalLinkBudget(est.maxPages))} for external links (${EXTERNAL_LINK_CREDITS} each the cloud verifies, at most 1 per page)`
+    : "";
+  const total = estimateAuditCap({
+    maxPages: est.maxPages,
+    cloudExternalLinks: est.externalLinks === true,
+  });
+  return `About ${total} credits: ${base} audit base + ${pagesEst} for up to ${est.maxPages} audited ${pages} (${AUDIT_PAGE_CREDITS} each, however the page is fetched)${links}, all analysis included${cap}.${bal}`;
+}
+
+/**
+ * #801: whether this audit prints the one-time notice that a signed-in audit's
+ * cloud link checks now cost credits: it registers (so it is billed), it checks
+ * external links, and the notice has not been shown on this machine.
+ */
+export function linkPricingNoticeDue(opts: {
+  registers: boolean;
+  externalLinks: boolean;
+  shown: boolean;
+  /** This run printed the cost line, which already prices the links. */
+  disclosedThisRun: boolean;
+}): boolean {
+  return (
+    opts.registers &&
+    opts.externalLinks &&
+    !opts.shown &&
+    !opts.disclosedThisRun
+  );
 }
 
 /** #1169 / #2290 preflight: what the audit will cost and the page cap its credits can pay for. */
@@ -256,17 +293,30 @@ export function computePreflightAffordability(opts: {
    * a real answer to a clamped audit, but only once it has a date on it.
    */
   resetAt?: string | null;
+  /**
+   * The audit's external links go to the cloud link checker (pricing v12,
+   * #801): each page of the cap also reserves one external link's credit.
+   */
+  cloudExternalLinks?: boolean;
 }): PreflightAffordability {
   const base = computeCost("audit_base", 1);
+  const links = opts.cloudExternalLinks === true;
   const budget = clampAuditPages({
     maxPages: opts.maxPages,
     balance: opts.balance,
     unlimited: opts.unlimited,
     cap: opts.maxCreditsPerAudit,
+    cloudExternalLinks: links,
   });
-  const pagesCost = computeCost("audit_page", budget.maxPages);
+  const pagesCost =
+    computeCost("audit_page", budget.maxPages) +
+    (links && budget.maxPages > 0
+      ? computeCost("external_link", externalLinkBudget(budget.maxPages))
+      : 0);
   const estimate = base + pagesCost;
-  const pricing = `${base} base + ${AUDIT_PAGE_CREDITS} per audited page`;
+  const pricing = links
+    ? `${base} base + ${AUDIT_PAGE_CREDITS} per audited page + up to ${EXTERNAL_LINK_CREDITS} per page for external links`
+    : `${base} base + ${AUDIT_PAGE_CREDITS} per audited page`;
   const requested = budget.requestedMaxPages.toLocaleString("en-US");
   const covered = budget.maxPages.toLocaleString("en-US");
   const stopsAt = budget.maxPages === 1 ? "1 page" : `${covered} pages`;
@@ -611,6 +661,8 @@ export interface CloudRenderingDecision {
   /** User accepted the cost-disclosing prompt AND a per-audit cap bounds it →
    * caller may skip the prefetch confirm. False for legacy/uncapped/--render. */
   consented: boolean;
+  /** The cost line was printed this run (#801: it prices the links too). */
+  disclosed?: boolean;
 }
 
 /**
@@ -689,13 +741,19 @@ export async function resolveCloudRendering(opts: {
         }`
       )
     );
-    const saved = persist({ cloud_spend_ack: true });
+    // #801: the line just priced the links, so the one-time link notice is
+    // not owed on top of it.
+    const saved = persist({
+      cloud_spend_ack: true,
+      ...(estimate.externalLinks ? { link_pricing_notice_shown: true } : {}),
+    });
     if (!saved.ok) {
       logger.debug(
         "could not persist cloud_spend_ack; will re-notify next run"
       );
-      return { mode: "browser", consented: false };
+      return { mode: "browser", consented: false, disclosed: true };
     }
+    return { mode: "browser", consented: capped, disclosed: true };
   }
   return { mode: "browser", consented: capped };
 }
@@ -1045,14 +1103,16 @@ export const audit = defineCommand({
     offline: {
       type: "boolean",
       description:
-        "Run fully offline: skip cloud features, publishing, and telemetry",
+        "Run fully offline: skip cloud features, publishing, telemetry, and checks of other sites",
     },
-    // repo#2729: internal link checks are on at every level, external ones at
-    // Surface and Full. Read from rawArgs like --publish / --no-publish.
+    // repo#2729: internal and external link checks are on at every level
+    // (pub#823). --external-links turns external ones back on over
+    // `[external_links] enabled = false`. Read from rawArgs like --publish /
+    // --no-publish.
     "external-links": {
       type: "boolean",
       description:
-        "Check links to other sites this run, at any level, even where the level does not",
+        "Check links to other sites this run, even where the config turns them off",
     },
     "no-external-links": {
       type: "boolean",
@@ -1079,6 +1139,11 @@ export const audit = defineCommand({
       alias: "H",
       description:
         'Custom HTTP header on every crawl request (repeatable), format "Name: Value"; merges over [crawler] headers. Values are secrets (redacted in output)',
+    },
+    "header-host": {
+      type: "string",
+      description:
+        "Host that also gets the custom headers on page and asset requests, over https (repeatable or comma-separated), e.g. assets.example.com; prefix http:// to allow plain http. Only the audited origin gets them by default",
     },
     "rule-include": {
       type: "string",
@@ -1122,6 +1187,11 @@ export const audit = defineCommand({
       type: "boolean",
       description:
         "Print only the score, category breakdown, and issue counts, with no per-issue detail (console format only)",
+    },
+    includePassed: {
+      type: "boolean",
+      description:
+        "Also list the rules that passed, with how many pages each passed on",
     },
   },
   async run({ args, rawArgs }) {
@@ -1183,6 +1253,17 @@ export const audit = defineCommand({
       return;
     }
 
+    // Same check as `squirrel report -f`: an unknown format used to run the
+    // whole audit, print no report and exit 0.
+    if (args.format !== undefined) {
+      const formatResult = validateFormat(args.format);
+      if (!formatResult.ok) {
+        console.error(`${fmt.red("Error:")} ${formatResult.error.message}`);
+        process.exitCode = 1;
+        return;
+      }
+    }
+
     // Parse --fail-on early so a malformed expression fails before crawling.
     // citty accumulates repeated string flags into an array at runtime (see
     // toVal in citty/dist) even though its type says `string`, so widen the cast.
@@ -1206,6 +1287,20 @@ export const audit = defineCommand({
       return;
     }
     const customHeaders = headerParse.headers;
+    const headerHosts = normalizeHeaderArgs(
+      args["header-host"] as string | string[] | undefined
+    )
+      .flatMap((v) => v.split(","))
+      .map((v) => v.trim().toLowerCase())
+      .filter((v) => v.length > 0);
+    const badHeaderHost = headerHosts.find((v) => !isValidHeaderHost(v));
+    if (badHeaderHost !== undefined) {
+      console.error(
+        `Invalid --header-host "${badHeaderHost}": use a host name, optionally with an http:// or https:// prefix (no wildcard or userinfo)`
+      );
+      process.exitCode = 1;
+      return;
+    }
 
     // Parse --rule-include/--rule-exclude early so an unknown category fails
     // before crawling (same widening as --fail-on/--header). #1066
@@ -1724,6 +1819,7 @@ export const audit = defineCommand({
         ...(Object.keys(customHeaders).length > 0
           ? { headers: customHeaders }
           : {}),
+        ...(headerHosts.length > 0 ? { headerHosts } : {}),
         ...(ruleFilter.enable.length > 0
           ? { ruleInclude: ruleFilter.enable }
           : {}),
@@ -1871,6 +1967,11 @@ export const audit = defineCommand({
       // never for a local/private host, which does not register — left in, a
       // low-balance user auditing localhost got a top-up warning for money
       // nothing was going to take.
+      // #801: the cloud checks (and bills) this audit's external links only
+      // when the level checks them AND has the cloud checks on: quick with
+      // --external-links checks them on this machine, free.
+      const cloudLinkChecks =
+        auditLevel.settings.externalLinks && auditLevel.settings.cloudChecks;
       let creditClamp:
         | {
             requestedMaxPages: number;
@@ -1894,15 +1995,21 @@ export const audit = defineCommand({
           topUpUrl: upgradeOffer?.url ?? upgradeUrl("cli-audit"),
           unlimited: unlimitedCredits,
           resetAt: creditsResetAt,
+          // #801: the cloud bills this audit's link checks, so each page of
+          // the cap reserves one external link's credit too.
+          cloudExternalLinks: cloudLinkChecks,
         });
         if (preflight.maxPages === 0) {
-          // Only the user's own cap can get here: canStartCloudAudit already
-          // guaranteed the balance covers one page. Their cap forbids any
-          // charged audit at all, so run the free local audit instead.
+          // The user's own cap forbids any charged audit at all, or (#801) the
+          // balance covers a page but not its external link: run the free
+          // local audit instead.
+          const needed = minimumAuditCredits(cloudLinkChecks);
           log("");
           log(
             fmt.yellow(
-              `⚠ [cloud] max_credits_per_audit = ${config.cloud.max_credits_per_audit} is below the ${MIN_AUDIT_CREDITS} credits a one-page audit needs, running local-only.`
+              preflight.limitedBy === "balance"
+                ? `⚠ Your balance of ${startingBalance.toLocaleString("en-US")} credits is below the ${needed} credits a one-page audit with external link checks needs, running local-only.`
+                : `⚠ [cloud] max_credits_per_audit = ${config.cloud.max_credits_per_audit} is below the ${needed} credits a one-page audit needs, running local-only.`
             )
           );
           signedIn = false;
@@ -1961,34 +2068,60 @@ export const audit = defineCommand({
             ? levelRender
             : undefined;
 
-      const { mode: cloudRendering, consented: cloudConsented } =
-        await resolveCloudRendering({
-          // Mirror the resolved on/off into the existing flag inputs so
-          // --render-mode and [cloud].render route through the unchanged path.
-          args: {
-            ...args,
-            http: explicitRenderMode === "off",
-            render:
-              explicitRenderMode === "auto" || explicitRenderMode === "all",
-          },
-          configRendering:
-            explicitRenderMode === "off"
-              ? "http"
-              : explicitRenderMode
-                ? "browser"
-                : config.cloud.rendering,
-          signedIn,
-          consent: effectiveSettings?.cloud_render_consent,
-          spendAck: effectiveSettings?.cloud_spend_ack,
-          log,
-          // Cost shown up front so the user can decline before the crawl.
-          estimate: {
-            maxPages,
-            balance: startingBalance,
-            maxCredits: config.cloud.max_credits_per_audit,
-            unlimited: unlimitedCredits,
-          },
-        });
+      const {
+        mode: cloudRendering,
+        consented: cloudConsented,
+        disclosed: costDisclosed,
+      } = await resolveCloudRendering({
+        // Mirror the resolved on/off into the existing flag inputs so
+        // --render-mode and [cloud].render route through the unchanged path.
+        args: {
+          ...args,
+          http: explicitRenderMode === "off",
+          render: explicitRenderMode === "auto" || explicitRenderMode === "all",
+        },
+        configRendering:
+          explicitRenderMode === "off"
+            ? "http"
+            : explicitRenderMode
+              ? "browser"
+              : config.cloud.rendering,
+        signedIn,
+        consent: effectiveSettings?.cloud_render_consent,
+        spendAck: effectiveSettings?.cloud_spend_ack,
+        log,
+        // Cost shown up front so the user can decline before the crawl.
+        estimate: {
+          maxPages,
+          balance: startingBalance,
+          maxCredits: config.cloud.max_credits_per_audit,
+          unlimited: unlimitedCredits,
+          externalLinks: cloudLinkChecks,
+        },
+      });
+
+      // #801: from pricing v12 the cloud bills a signed-in audit's link checks;
+      // every earlier release said they were free. Said once, on the first
+      // audit that will be billed for them, unless this run's cost line (which
+      // prices them) was just printed. Every rendering choice reaches here:
+      // --http, --render, a config render setting or a stored decline skip the
+      // cost line, never this notice.
+      if (
+        linkPricingNoticeDue({
+          registers: resolveRegisterDecision({
+            signedIn,
+            offline: !!args.offline,
+            nonPublicHost: !!nonPublicHost,
+          }),
+          externalLinks: cloudLinkChecks,
+          shown: effectiveSettings?.link_pricing_notice_shown === true,
+          disclosedThisRun: costDisclosed === true,
+        })
+      ) {
+        log(fmt.dim(LINK_PRICING_NOTICE));
+        // Non-fatal: a failed write just shows the notice again next run.
+        updateSettings({ link_pricing_notice_shown: true });
+      }
 
       const startTime = Date.now();
       // #271 phase 6: capture the runner context once (env reads) and reuse it for
@@ -2090,6 +2223,11 @@ export const audit = defineCommand({
             `${lastPagesFetched} pages are saved. Resume with:\n  squirrel audit ${args.url} --resume\n`
           );
         }
+        // #941: record the interruption on the crawl, so it reads as a stopped
+        // crawl `--resume` continues rather than as a killed one.
+        if (storeProject) {
+          stopInterruptedCrawls(resolveProjectDbPath(storeProject));
+        }
         void finalizeTracked({
           status: "cancelled",
           completedAt: new Date().toISOString(),
@@ -2147,7 +2285,17 @@ export const audit = defineCommand({
         );
       });
 
-      const progress = createProgress("Initializing");
+      // A machine-readable report owns stdout, so its progress and log lines
+      // go to stderr: `squirrel audit URL -f json | jq` must see only JSON.
+      const progress = createProgress(
+        "Initializing",
+        isConsoleFormat ? "stdout" : "stderr"
+      );
+      // #950: one stderr line at a steady interval through the pre-rules walk
+      // when there is no terminal; the spinner covers a TTY.
+      const walkHeartbeat = createWalkHeartbeat({
+        enabled: process.stdout.isTTY !== true,
+      });
       let currentPhase = "init";
       let discoveredCount = 0;
       let sitemapUrlCount = 0;
@@ -2332,6 +2480,11 @@ export const audit = defineCommand({
                   currentPhase = "rules";
                 }
                 break;
+              case "walk":
+                if (p.current !== undefined && p.total !== undefined) {
+                  walkHeartbeat.update(p.current, p.total);
+                }
+                break;
               case "complete":
                 break;
             }
@@ -2339,6 +2492,7 @@ export const audit = defineCommand({
         });
       } finally {
         // Always clean up progress and log interceptor
+        walkHeartbeat.stop();
         setLogInterceptor(undefined);
         progress.stop();
       }
@@ -2559,6 +2713,13 @@ export const audit = defineCommand({
           log(`⚠ ${label} failed (${f.detail})`);
         }
       }
+      const unverifiedNotice = localUnverifiedLinksNotice(report, {
+        signedIn,
+        hasAccount: Boolean(accountLabel),
+        // pub#823: Quick checks links only from this machine, signed in too.
+        cloudLevel: auditLevel.settings.cloudChecks,
+      });
+      if (unverifiedNotice) log(fmt.yellow(`⚠ ${unverifiedNotice}`));
       log("");
 
       // Audit is stored in SQLite database
@@ -2584,27 +2745,44 @@ export const audit = defineCommand({
           `⚠ --rule-include/--rule-exclude active — this ${format} report is partial and does not mark itself as such (see #1082)`
         );
       }
+      const includePassed = args.includePassed ?? false;
       if (format === "console") {
         generateConsoleReport(report, {
           summaryOnly: args.summary,
+          includePassed,
           ...(ruleFilterActive ? { ruleFilter } : {}),
         });
       } else if (format === "text") {
-        generateTextReport(report, options.outputPath, reportBranding);
+        generateTextReport(
+          report,
+          options.outputPath,
+          reportBranding,
+          includePassed
+        );
       } else if (format === "json") {
         // stdout by default, file if -o provided
-        generateJsonReport(report, options.outputPath);
+        generateJsonReport(report, options.outputPath, includePassed);
       } else if (format === "html") {
         // file by default - HTML needs a browser
         const hostname = new URL(report.baseUrl).hostname;
         const htmlPath = options.outputPath ?? `${hostname}-report.html`;
-        generateHtmlReport(report, htmlPath, reportBranding);
+        generateHtmlReport(report, htmlPath, reportBranding, includePassed);
       } else if (format === "markdown") {
-        generateMarkdownReport(report, options.outputPath, reportBranding);
+        generateMarkdownReport(
+          report,
+          options.outputPath,
+          reportBranding,
+          includePassed
+        );
       } else if (format === "xml") {
-        generateXmlReport(report, options.outputPath, reportBranding);
+        generateXmlReport(
+          report,
+          options.outputPath,
+          reportBranding,
+          includePassed
+        );
       } else if (format === "llm") {
-        generateLlmReport(report, options.outputPath);
+        generateLlmReport(report, options.outputPath, includePassed);
       }
 
       // Publish to the dashboard (auto when signed in + online, or forced with

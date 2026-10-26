@@ -3,7 +3,7 @@
 import type { AuditReport, CheckItem } from "../types";
 import { getScoreGrade } from "../scoring";
 import { getGroupName } from "../categories";
-import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
+import { groupIssuesByCategory, flattenIssuesBySeverity, reportPassedRules } from "../grouping";
 import { ruleAffectedPages, ruleAffectedRollup, ruleCarriedPageCount } from "../affected-pages";
 import { getDocsUrl } from "../docs";
 import { domainAgeYears } from "../site-metadata";
@@ -23,7 +23,7 @@ import {
   primaryEntities,
   stableIdPercent,
 } from "../entities";
-import { publishedReportNote, seedRedirect } from "../coverage";
+import { publishedReportNote, scanScopeUnfetched, seedRedirect } from "../coverage";
 import { LLM_REPORT } from "@squirrelscan/core-contracts/limits";
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 import { AUDIT_FAILURE_NEXT_STEP_THIRD } from "@squirrelscan/core-contracts/failure-reason";
@@ -31,6 +31,8 @@ import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
 
 export interface LlmRenderOptions {
   version?: string;
+  /** List the rules that passed after the issues (`--include-passed`). */
+  includePassed?: boolean;
 }
 
 function escapeXml(str: string): string {
@@ -250,8 +252,11 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
         : "";
     // Present only on a time stop: the crawl budget, not the page limit, ended it.
     const stop = s.stopReason ? ` stop-reason="${s.stopReason}"` : "";
+    // In-scope URLs left queued: how much more of the site the crawl knew of.
+    const left = scanScopeUnfetched(report);
+    const unfetched = left > 0 ? ` unfetched="${left}"` : "";
     lines.push(
-      `<scan-scope origin="${s.origin}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}/>`,
+      `<scan-scope origin="${s.origin}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}/>`,
     );
   }
 
@@ -285,13 +290,13 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   }
 
   // Editor's summary — report-only exec narrative for the agent (does not affect the score).
-  const es = editorSummaryView(report.editorSummary);
+  const es = editorSummaryView(report.editorSummary, report);
   if (es) {
     lines.push(`<editor-summary model="${escapeXml(es.model)}">`);
     for (const para of es.paragraphs) {
       lines.push(`${indent(1)}<para>${escapeXml(para)}</para>`);
     }
-    if (es.bigTicket.length > 0) {
+    if (es.priorities.length === 0 && es.bigTicket.length > 0) {
       lines.push(`${indent(1)}<big-ticket>`);
       for (const item of es.bigTicket) {
         lines.push(`${indent(2)}<item>${escapeXml(item)}</item>`);
@@ -300,6 +305,22 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     }
     if (es.verdict) lines.push(`${indent(1)}<verdict>${escapeXml(es.verdict)}</verdict>`);
     lines.push("</editor-summary>");
+  }
+
+  // Ranked priorities from the editor's summary: the agent's ordered to-do list.
+  if (es && es.priorities.length > 0) {
+    lines.push("<priorities>");
+    for (const [i, p] of es.priorities.entries()) {
+      const attrs = [`rank="${i + 1}"`, `effort="${escapeXml(p.effort)}"`];
+      if (p.ruleIds.length > 0) attrs.push(`rules="${escapeXml(p.ruleIds.join(" "))}"`);
+      if (p.technologies.length > 0) attrs.push(`tech="${escapeXml(p.technologies.join(" "))}"`);
+      lines.push(`${indent(1)}<priority ${attrs.join(" ")}>`);
+      lines.push(`${indent(2)}<title>${escapeXml(p.title)}</title>`);
+      if (p.why) lines.push(`${indent(2)}<why>${escapeXml(p.why)}</why>`);
+      lines.push(`${indent(2)}<action>${escapeXml(p.action)}</action>`);
+      lines.push(`${indent(1)}</priority>`);
+    }
+    lines.push("</priorities>");
   }
 
   // Site profile — report-only context for the agent (Stage 0; does not affect the score).
@@ -490,6 +511,9 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
           }
           lines.push(itemLine);
         }
+      } else if (itemsLeftOut > 0) {
+        // pub#866: a check that keeps no items still says how many it has.
+        lines.push(`${indent(2)}Items (0/${itemsLeftOut}): none listed`);
       }
 
       lines.push(`${indent(1)}</rule>`);
@@ -497,6 +521,17 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     lines.push("</issues>");
   } else {
     lines.push("<issues/>");
+  }
+
+  const passedRules = reportPassedRules(report, options?.includePassed);
+  if (passedRules.length > 0) {
+    lines.push(`<passed count="${passedRules.length}">`);
+    for (const rule of passedRules) {
+      lines.push(
+        `${indent(1)}<rule id="${escapeXml(rule.id)}" name="${escapeXml(rule.name)}" category="${escapeXml(rule.categoryName)}" scope="${rule.scope}" pages="${rule.pages}"/>`,
+      );
+    }
+    lines.push("</passed>");
   }
 
   // pub#629: rules that do not apply to a local or private-network host. An

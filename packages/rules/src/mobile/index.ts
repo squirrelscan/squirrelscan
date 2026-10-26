@@ -1,10 +1,11 @@
 // Mobile rules - mobile-specific checks
-// viewport, tap targets, font size, web app manifest
+// viewport, tap targets, font size, form field zoom, web app manifest
 
 import type { Rule } from "../types";
 
 import { fontSizeRule } from "./font-size";
 import { horizontalScrollRule } from "./horizontal-scroll";
+import { inputZoomRule } from "./input-zoom";
 import { interstitialsRule } from "./interstitials";
 import { tapTargetsRule } from "./tap-targets";
 import { viewportRule } from "./viewport";
@@ -16,6 +17,7 @@ export const rules: Rule[] = [
   viewportZoomRule,
   tapTargetsRule,
   fontSizeRule,
+  inputZoomRule,
   horizontalScrollRule,
   interstitialsRule,
   webAppManifestRule,
@@ -24,6 +26,7 @@ export const rules: Rule[] = [
 export {
   fontSizeRule,
   horizontalScrollRule,
+  inputZoomRule,
   interstitialsRule,
   tapTargetsRule,
   viewportRule,

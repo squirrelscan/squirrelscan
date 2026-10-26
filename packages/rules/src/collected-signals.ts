@@ -79,7 +79,7 @@ export interface CollectedPageSignal {
    * abandoned (its field holds the empty value). The site pass records each as a
    * rule error for this page. Absent when nothing timed out.
    */
-  timedOut?: { budgetMs: number; ruleIds: string[] };
+  timedOut?: { budgetMs: number; ruleIds: string[]; /** Observed ms per rule id before it was stopped (pub#960). */ elapsedMs?: Record<string, number> };
 }
 
 /** The collected per-page signals for one crawl, in page-stream (crawl) order. */
@@ -153,6 +153,7 @@ export function buildCollectedPageSignal(input: {
   // that runs past it yields its empty value and is listed in `timedOut`.
   const budgetMs = input.budgetMs ?? RULE_TIME_BUDGET_MS;
   const timedOutRuleIds: string[] = [];
+  const timedOutElapsedMs: Record<string, number> = {};
   const timed = <T>(ruleId: string, fallback: T, fn: () => T): T => {
     const started = profileRules ? performance.now() : 0;
     let out: T;
@@ -160,8 +161,9 @@ export function buildCollectedPageSignal(input: {
       out = runWithinBudget(fn, budgetMs);
     } catch (e) {
       if (!(e instanceof RuleTimeoutError)) throw e;
-      logger.warn("rule timed out", { ruleId, scope: "collect", pageUrl: url, budgetMs });
+      logger.warn("rule timed out", { ruleId, scope: "collect", pageUrl: url, budgetMs, elapsedMs: e.elapsedMs });
       if (!timedOutRuleIds.includes(ruleId)) timedOutRuleIds.push(ruleId);
+      if (e.elapsedMs !== undefined) timedOutElapsedMs[ruleId] = e.elapsedMs;
       out = fallback;
     }
     if (profileRules) {
@@ -217,6 +219,9 @@ export function buildCollectedPageSignal(input: {
       scanPageForMisspellings(doc)
     ),
   };
-  if (timedOutRuleIds.length > 0) signal.timedOut = { budgetMs, ruleIds: timedOutRuleIds };
+  if (timedOutRuleIds.length > 0) {
+    signal.timedOut = { budgetMs, ruleIds: timedOutRuleIds };
+    if (Object.keys(timedOutElapsedMs).length > 0) signal.timedOut.elapsedMs = timedOutElapsedMs;
+  }
   return signal;
 }

@@ -2,6 +2,8 @@
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { ownTableCells } from "../shared/own-table-cells";
+
 export const tdHeadersAttrRule: Rule = {
   meta: {
     id: "a11y/td-headers-attr",
@@ -22,41 +24,49 @@ export const tdHeadersAttrRule: Rule = {
     const checks: CheckResult[] = [];
 
     const tables = doc.querySelectorAll("table");
-    const invalidReferences: string[] = [];
+    const invalidReferences: Array<{ td: Element; headerId: string }> = [];
+    // squirrelscan/repo#3355: each table's own cells, so a cell is checked once,
+    // against the header cells of its own table, as the HTML table model
+    // resolves `headers`; the cells of a nested table are not the outer one's.
+    const own = ownTableCells(doc);
+    const isThWithId = new Set(doc.querySelectorAll("th[id]"));
+    const isTdWithHeaders = new Set(doc.querySelectorAll("td[headers]"));
 
     for (const table of tables) {
+      const cells = own.get(table)?.cells ?? [];
       // Get all th ids in this table
-      const thElements = table.querySelectorAll("th[id]");
       const validIds = new Set(
-        Array.from(thElements).map((th) => th.getAttribute("id"))
+        cells.filter((cell) => isThWithId.has(cell)).map((th) => th.getAttribute("id"))
       );
 
       // Check all td elements with headers attribute
-      const tdWithHeaders = table.querySelectorAll("td[headers]");
+      const tdWithHeaders = cells.filter((cell) => isTdWithHeaders.has(cell));
 
       for (const td of tdWithHeaders) {
         const headers = td.getAttribute("headers") || "";
         const headerIds = headers.split(/\s+/).filter(Boolean);
 
         for (const headerId of headerIds) {
-          if (!validIds.has(headerId)) {
-            const cellContent = td.textContent?.trim().slice(0, 15) || "";
-            invalidReferences.push(
-              `td references non-existent header "${headerId}"${cellContent ? ` (content: "${cellContent}...")` : ""}`
-            );
-          }
+          if (!validIds.has(headerId)) invalidReferences.push({ td, headerId });
         }
       }
     }
 
-    const tdWithHeadersCount = doc.querySelectorAll("td[headers]").length;
+    const tdWithHeadersCount = isTdWithHeaders.size;
 
     if (invalidReferences.length > 0) {
       checks.push({
         name: "td-headers-attr",
         status: "fail",
         message: `${invalidReferences.length} invalid header reference(s) in table cells`,
-        items: invalidReferences.slice(0, 10).map((id) => ({ id })),
+        // Text read for the shown ten only: on nested tables a cell's text is
+        // its whole subtree's.
+        items: invalidReferences.slice(0, 10).map(({ td, headerId }) => {
+          const cellContent = td.textContent?.trim().slice(0, 15) || "";
+          return {
+            id: `td references non-existent header "${headerId}"${cellContent ? ` (content: "${cellContent}...")` : ""}`,
+          };
+        }),
         details:
           invalidReferences.length > 10
             ? { additional: invalidReferences.length - 10 }

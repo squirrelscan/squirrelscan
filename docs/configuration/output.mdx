@@ -191,23 +191,15 @@ squirrel audit https://example.com --format json | jq '.score.overall'
 
 Interactive HTML report that opens in your browser.
 
-**Features:**
-
-- Visual charts and graphs
-- Filterable issue list
-- Page-by-page breakdown
-- Click-to-navigate
-- Responsive design
-- Shareable standalone file
-
 **Includes:**
 
-- Health score gauge
-- Issue distribution charts
-- Rule category breakdown
-- Page list with status
-- Link analysis graphs
-- Image optimization metrics
+- Health score and the four group scores
+- Issues to fix first, and every finding banded by severity, filterable by group
+- A **Copy fix prompt** button on each finding for your coding agent
+- The same findings by page
+- Site profile, tech stack and the entity map
+
+It is one standalone file that makes no network request when opened. See [the html format](/reports#html) for each section and the fix prompts.
 
 **Configuration:**
 
@@ -326,22 +318,17 @@ See [OUTPUT-FORMAT.md](https://github.com/squirrelscan/skills/blob/main/skills/a
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
-<audit version="0.0.13">
+<squirrelscan-audit version="0.0.117">
   <site>
     <url>https://example.com</url>
-    <crawled>42</crawled>
-    <date>2025-01-18T10:30:00Z</date>
+    <pages-crawled>42</pages-crawled>
+    <audit-date>2025-01-18T10:30:00.000Z</audit-date>
+    <scan-scope origin="cli" crawled="42" max-pages="100" capped="false"/>
   </site>
-  <score>
-    <overall>87</overall>
-    <grade>B</grade>
-    <categories>
-      <category>
-        <name>Core SEO</name>
-        <score>100</score>
-      </category>
-    </categories>
-  </score>
+  <health-score overall="87" grade="B">
+    <category name="Core SEO" score="100"/>
+  </health-score>
+  <summary passed="180" warnings="6" failed="2"/>
   <issues>
     <rule id="content/word-count" severity="warning" category="Content" group="seo">
       <name>Word Count</name>
@@ -356,8 +343,10 @@ See [OUTPUT-FORMAT.md](https://github.com/squirrelscan/skills/blob/main/skills/a
       </check>
     </rule>
   </issues>
-</audit>
+</squirrelscan-audit>
 ```
+
+`<scan-scope>` says where the audit ran (`origin`: `cli`, `ci` or `cloud`), how many pages it crawled, the page limit in force (`max-pages`), and whether that limit stopped the crawl (`capped`). `requested-max-pages` appears only when the limit you asked for was lowered, and `stop-reason="time"` only when the crawl time budget ended the crawl. `unfetched` appears when the crawl stopped with in-scope URLs still queued: pages it found (in a sitemap, linked from a crawled page, or carried from an earlier audit) but never fetched. `crawled` plus `unfetched` is how many pages the crawl knew of. It is a floor: the links on the pages still queued are unknown, so the site may have more. On a rate-limited run, the `unfetched` count on `<rate-limited>` already includes these. A report from before scan scope existed has no `<scan-scope>`. A white-label report's root element is `<audit>`.
 
 **Comparison: LLM vs XML**
 
@@ -592,6 +581,7 @@ Top-level keys. Keys marked optional are omitted when they do not apply.
     "maxPages": 0,
     "requestedMaxPages": 0,
     "stopReason": "time",
+    "unfetched": 0,
     "seedRedirect": {},
     "coverage": {},
     "auditLevel": {},
@@ -655,6 +645,15 @@ Top-level keys. Keys marked optional are omitted when they do not apply.
       "message": "string"
     }
   ],
+  "passedRules": [
+    {
+      "ruleId": "core/canonical",
+      "name": "string",
+      "category": "string",
+      "scope": "page|site",
+      "pages": 0
+    }
+  ],
   "editorSummary": {},
   "technologies": {},
   "entities": {},
@@ -662,7 +661,7 @@ Top-level keys. Keys marked optional are omitted when they do not apply.
 }
 ```
 
-**Always present:** `meta`, `status`, `score`, `summary`, `issues`. The rest are optional. `statusReason` and `statusReasonCode` appear when `status` is `failed` or `blocked`. `meta.maxPages`, `meta.requestedMaxPages`, `meta.stopReason`, `meta.seedRedirect`, `meta.coverage`, `meta.auditLevel` and `meta.rulesCache` appear when they apply. `meta.auditLevel` is the [audit level](/guides/audit-levels) the audit ran at: `level` (a level's name, or `custom`), `basedOn`, `changes` (the settings changed from the level) and `settings` (every setting's value). `rateLimited`, `refusedFetches`, `editorSummary`, `technologies`, `entities` and `siteProfile` appear when the audit produced that data.
+**Always present:** `meta`, `status`, `score`, `summary`, `issues`. The rest are optional. `statusReason` and `statusReasonCode` appear when `status` is `failed` or `blocked`. `meta.maxPages`, `meta.requestedMaxPages`, `meta.stopReason`, `meta.unfetched`, `meta.seedRedirect`, `meta.coverage`, `meta.auditLevel` and `meta.rulesCache` appear when they apply. `meta.unfetched` counts the in-scope URLs the crawl had queued but never fetched when it stopped. Added to the pages this run crawled (`meta.coverage.auditedPages` on a smart audit, `meta.totalPages` otherwise) it is a lower bound on the pages the crawl found. On a rate-limited run, `rateLimited.unfetched` already includes it. `meta.auditLevel` is the [audit level](/guides/audit-levels) the audit ran at: `level` (a level's name, or `custom`), `basedOn`, `changes` (the settings changed from the level) and `settings` (every setting's value). `rateLimited`, `refusedFetches`, `editorSummary`, `technologies`, `entities` and `siteProfile` appear when the audit produced that data. `editorSummary.priorities` is the [editor's summary](/cloud/editor-summary) ranked to-do list: each entry has `title`, `why`, `action`, `effort` (`quick-win`, `moderate` or `significant`), `ruleIds` and `technologies`.
 
 **Issues:** `issues` holds findings only. Every check in it has status `fail` or `warn`. `affectedPages` is a sample, and `affectedPagesCount` is the true total, so compare the two (or read `affectedPagesHasMore`) before treating the list as complete.
 
@@ -689,10 +688,12 @@ A consumer that closes a finding when a rule stops reporting it should leave the
 | `ruleId` | Rule that was not checked, e.g. `links/broken-external-links` |
 | `name` | Rule display name |
 | `check` | Check name within the rule |
-| `reason` | `external-links-not-checked`: external link checking was off (the Quick level without `--external-links`, `--offline`, `--no-external-links`, `[external_links] enabled = false`, or switched off for the website or run). `external-links-over-cap`: more external links than the audit's limit (`[external_links] max_links`, by default the page budget or 200, whichever is more); the most-linked were checked. `link-targets-not-fetched`: the crawl did not follow links (Quick level, Sitemap crawl strategy) and some internal link targets were fetched neither by the crawl nor by the internal link check (one `HEAD` per target, on by default; `[internal_links] enabled = false` or `--no-internal-links` turns it off) |
-| `message` | The line every report format shows, e.g. `Not checked: Broken External Links. External link checking was off for this audit, so 12 external link(s) on the audited pages were not checked. Turn external link checks on to check them: in the CLI pass --external-links, or run a Surface or Full audit, without --offline; in the cloud they are a website setting.` |
+| `reason` | `external-links-not-checked`: external link checking was off (`--offline`, `--no-external-links`, `[external_links] enabled = false`, or switched off for the website or run). `external-links-over-cap`: more external links than the audit's limit (`[external_links] max_links`, by default the page budget or 200, whichever is more); the most-linked were checked. `external-links-out-of-time`: a cloud audit's link check ran out of time, or waited too long on one request, before these links were answered. `link-targets-not-fetched`: the crawl did not follow links (Quick level, Sitemap crawl strategy) and some internal link targets were fetched neither by the crawl nor by the internal link check (one `HEAD` per target, on by default; `[internal_links] enabled = false` or `--no-internal-links` turns it off). `Crawl capped before the frontier was exhausted`: the crawl stopped at its page cap with pages still queued, so `links/orphan-pages`, `links/weak-internal-links` and `links/no-contextual-inbound` could not count every inbound link (`--max-pages` or `[crawler] max_pages` raises the cap) |
+| `message` | The line every report format shows, e.g. `Not checked: Broken External Links. External link checking was off for this audit, so 12 external link(s) on the audited pages were not checked. Turn external link checks on to check them: in the CLI pass --external-links (or drop --no-external-links, --offline, or external_links.enabled = false); in the cloud they are a website setting.` |
 
 The text, Markdown and HTML reports print the same `Not checked:` line under the score, and the LLM and XML reports have a `<not-checked>` element with one `<rule>` per entry. A consumer that closes a finding when a rule stops reporting it should leave findings for these rules open.
+
+**Passed rules:** `passedRules` appears only with [`--include-passed`](/cli/report#list-what-passed), and only when at least one rule passed. Each entry is a rule with at least one passing check and no warning or error. `scope` is the rule's own (`page` or `site`). `pages` counts the distinct pages with a passing check. It is usually 0 for a site rule, and 0 for a page rule whose passing checks carry no page, which the other formats show as `pages not recorded`. A failed or blocked audit lists none.
 
 **Use for:**
 - Automated analysis

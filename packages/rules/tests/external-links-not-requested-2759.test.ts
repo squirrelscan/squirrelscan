@@ -196,7 +196,7 @@ describe("links/broken-external-links: links never requested (repo#2759)", () =>
     expect(checks[0]!.message).toBe("All 1 external link(s) are working");
     expect(checks[1]).toMatchObject({
       message:
-        "1 external link(s) point at a private, link-local or cloud metadata address, so they were not requested and their status was not checked",
+        "1 external link(s) point at a private, link-local or cloud metadata address, or a name public DNS does not resolve, so they were not requested and their status was not checked",
       items: [{ id: "http://192.168.1.1/admin", sourcePages: [`${BASE}/`] }],
       details: { refused: 1 },
     });

@@ -5,6 +5,7 @@ import { noteRefusal } from "./refusals";
 
 import type { PhaseBudget, ProbeGate } from "./deadline";
 import type { MarkdownProbeData } from "@squirrelscan/core-contracts";
+import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
 
 const PROBE_TIMEOUT_MS = 30_000;
 
@@ -63,7 +64,8 @@ async function probeOne(
   try {
     return await safeFetchWithDeadline(
       url,
-      { headers: { "User-Agent": userAgent, Accept: accept, ...customHeaders } },
+      // The negotiation IS the Accept, so it is laid last (repo#3346).
+      { headers: mergeHeaderRecords({ "User-Agent": userAgent }, customHeaders, { Accept: accept }) },
       timeoutMs,
       async (res) => {
         if (noteRefusal(budget?.refusals, url, "markdown", res)) {
@@ -82,6 +84,7 @@ async function probeOne(
         await res.body?.cancel().catch(() => {});
         return result;
       },
+      budget?.egress,
     );
   } catch {
     return null;

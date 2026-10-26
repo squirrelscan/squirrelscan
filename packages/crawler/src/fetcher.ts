@@ -16,8 +16,19 @@ import {
   classifyFetchErrorCode,
   fetchErrorCode,
 } from "@squirrelscan/core-contracts/failure-reason";
-import { CHROME_SEC_CH_UA } from "@squirrelscan/utils/constants";
-import { headersForRedirect } from "@squirrelscan/utils/headers";
+import {
+  CHROME_SEC_CH_UA,
+  TECH_DETECT_HEADER_MAX_CHARS,
+  TECH_DETECT_HEADER_NAMES,
+  TECH_DETECT_PRESENCE_HEADERS,
+} from "@squirrelscan/utils/constants";
+import { headersForRedirect, mergeHeaderRecords, techCookieNames } from "@squirrelscan/utils/headers";
+import {
+  EgressRefusedError,
+  egressGuardedSend,
+  egressRefuses,
+  type EgressPolicy,
+} from "@squirrelscan/utils/public-egress";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
 import {
   DEFAULT_MAX_DOCUMENT_BODY_BYTES,
@@ -43,6 +54,9 @@ export type CrawlErrorType =
 
 /** The generic timeout sentence; a `timeout` error carrying anything else is naming its deadline. */
 const TIMEOUT_MESSAGE = "Crawl request timed out";
+
+/** Bound refusal-body reads while leaving enough context to reject real pages. */
+const WAF_CHALLENGE_BODY_BYTES = 64 * 1024;
 
 export class CrawlError extends Error {
   constructor(
@@ -278,6 +292,23 @@ const MAX_CAUSE_DEPTH = 5;
 export const NEVER_CONNECTED_STATUS = 0;
 
 /**
+ * A page the crawl's egress policy refused before sending anything (repo#3430):
+ * its host is, or resolves to, a link-local or cloud metadata address.
+ */
+function egressRefusal(url: string, _error: EgressRefusedError): CrawlError {
+  // Short enough for a failure reason's 120 characters, and says why.
+  return CrawlError.network(
+    url,
+    "Not requested: the host resolves to a link-local or cloud metadata address",
+    undefined,
+    EGRESS_REFUSED,
+  );
+}
+
+/** `CrawlError.errorCode` of a request the egress policy refused before sending. */
+export const EGRESS_REFUSED = "EGRESS_REFUSED";
+
+/**
  * Detect whether a thrown fetch error / status code indicates a TLS,
  * client-certificate, or status-0 ("never connected") failure.
  *
@@ -336,6 +367,8 @@ const defaultRetryPolicy: RetryPolicy = {
 export { isDecompressionError };
 
 function isRetryable(error: CrawlError): boolean {
+  // An egress refusal (repo#3430) is a decision, not a failure: a retry refuses again.
+  if (error.errorCode === EGRESS_REFUSED) return false;
   return error.type === "timeout" || error.type === "network" || error.type === "tls";
 }
 
@@ -423,6 +456,7 @@ function requestWithTiming(
   options: RequestInit,
   timeoutMs: number,
   userAgent: string,
+  send: (url: string, init: RequestInit) => Promise<Response> = fetchUndecoded,
 ): Effect.Effect<TimedResponse, CrawlError, never> {
   return Effect.tryPromise({
     // Forward the fiber-interrupt signal so a wedged socket is aborted and the host-slot release runs (#405).
@@ -442,7 +476,7 @@ function requestWithTiming(
         // #2717: undecoded on every hop, or the runtime inflates a
         // Content-Encoding body in full before the capped read below (or the
         // abort of a discarded 3xx) can stop it.
-        const response = await fetchUndecoded(url, {
+        const response = await send(url, {
           ...options,
           headers,
           signal: controller.signal,
@@ -473,6 +507,7 @@ function requestWithTiming(
       const message = (error as Error).message?.toLowerCase() ?? "";
       const isAbort = (error as Error).name === "AbortError" || message.includes("timed out");
       if (isAbort) return CrawlError.timeout(url);
+      if (error instanceof EgressRefusedError) return egressRefusal(url, error);
       if (isTlsError(error)) return CrawlError.tls(url, (error as Error).message);
       // #1822: the runtime code is captured HERE because this is the last place
       // the original error object exists; everything downstream sees only the
@@ -537,6 +572,13 @@ export interface FetchOptions {
   followRedirects: boolean;
   headers?: Record<string, string>;
   fetcher?: DocumentFetcher;
+  /**
+   * Egress policy for every REDIRECT hop (repo#2830): a redirect that leaves the
+   * crawl's hosts for a link-local or cloud metadata address ends the fetch at
+   * that hop, never requested. The URL asked for is the crawl's own and is not
+   * vetted. Unset, redirects are checked for scheme only (#1392).
+   */
+  egress?: EgressPolicy;
   /**
    * Outer attempts `fetchPageWithRetry` may make for a retryable transport
    * failure. Unset, the path decides (one through a document fetcher, three
@@ -635,7 +677,32 @@ function extractResponseHeaders(headers: Headers): ResponseHeaders {
     xAspNetMvcVersion: headers.get("x-aspnetmvc-version"),
     xGenerator: headers.get("x-generator"),
     setCookie: setCookies.length > 0 ? setCookies.join("\n") : null,
+    techHeaders: extractTechHeaders(headers, setCookies),
   };
+}
+
+/**
+ * The headers technology detection reads, kept so a local audit can detect
+ * from the stored page (pub#871). Only listed names, each value capped, so a
+ * page record cannot grow with whatever a server sends. A header detection
+ * only tests for presence keeps "1", and Set-Cookie keeps its cookie names
+ * (`name=`, one per line), so no token or session value is kept here.
+ */
+function extractTechHeaders(headers: Headers, setCookies: string[]): Record<string, string> | null {
+  const out: Record<string, string> = {};
+  let any = false;
+  for (const name of TECH_DETECT_HEADER_NAMES) {
+    const value = headers.get(name);
+    if (value === null) continue;
+    out[name] = TECH_DETECT_PRESENCE_HEADERS.has(name) ? "1" : value.slice(0, TECH_DETECT_HEADER_MAX_CHARS);
+    any = true;
+  }
+  const cookieNames = techCookieNames(setCookies);
+  if (cookieNames) {
+    out["set-cookie"] = cookieNames;
+    any = true;
+  }
+  return any ? out : null;
 }
 
 function extractSecurityHeaders(headers: Headers): SecurityHeaders {
@@ -653,6 +720,43 @@ function extractSecurityHeaders(headers: Headers): SecurityHeaders {
 function normalizeContentType(value: string | null): string | null {
   if (!value) return null;
   return value.split(";")[0]?.trim().toLowerCase() ?? null;
+}
+
+/**
+ * The `charset` parameter of a Content-Type value, unquoted (pub#674):
+ * `text/html; charset="UTF-8"` gives `UTF-8`. Parameters split on `;` outside
+ * quoted strings, and a quoted value drops its escapes (RFC 9110 5.6.4). Only a
+ * token (RFC 9110 5.6.2) of at most 40 characters counts as a label.
+ */
+export function contentTypeCharset(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const params: string[] = [];
+  let current = "";
+  let quoted = false;
+  for (let i = 0; i < value.length; i++) {
+    const ch = value[i]!;
+    if (quoted && ch === "\\" && i + 1 < value.length) {
+      current += ch + value[++i];
+      continue;
+    }
+    if (ch === '"') quoted = !quoted;
+    if (ch === ";" && !quoted) {
+      params.push(current);
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  params.push(current);
+  for (const param of params.slice(1)) {
+    const eq = param.indexOf("=");
+    if (eq === -1 || param.slice(0, eq).trim().toLowerCase() !== "charset") continue;
+    let label = param.slice(eq + 1).trim();
+    const quotedLabel = /^"((?:[^"\\]|\\.)*)"$/.exec(label);
+    if (quotedLabel) label = quotedLabel[1]!.replace(/\\(.)/g, "$1");
+    return /^[A-Za-z0-9!#$%&'*+.^_`|~-]{1,40}$/.test(label) ? label : null;
+  }
+  return null;
 }
 
 function normalizeServerTimingValue(value: string): string {
@@ -731,8 +835,38 @@ export function applyStatusGuards(
     );
   }
 
-  if (status === 403) {
-    return Effect.fail(CrawlError.blocked(url, undefined, 403));
+  // A managed challenge can answer 403 or 503. Only proof carried by the
+  // refused response itself names the mechanism: Server: cloudflare alone is
+  // not enough, because ordinary auth/geo blocks carry it too (#446).
+  if (status === 403 || status === 503) {
+    if (headers.get("cf-mitigated") === "challenge") {
+      return Effect.fail(
+        CrawlError.blocked(url, `Blocked by Cloudflare challenge (${status})`, status),
+      );
+    }
+    if (body) {
+      const challenge = detectWafChallengePage({
+        status,
+        headers: {
+          server: headers.get("server"),
+          cfCacheStatus: headers.get("cf-cache-status"),
+          xCache: headers.get("x-cache"),
+        },
+        html: body,
+      });
+      if (challenge.detected) {
+        return Effect.fail(
+          CrawlError.blocked(
+            url,
+            `Blocked by ${challenge.provider ?? "bot protection"} challenge (${status})`,
+            status,
+          ),
+        );
+      }
+    }
+    if (status === 403) {
+      return Effect.fail(CrawlError.blocked(url, undefined, 403));
+    }
   }
 
   if (status >= 500) {
@@ -741,32 +875,6 @@ export function applyStatusGuards(
     // blocked (non-retryable; a challenge never clears on retry) so a walled
     // root gets the actionable blocked notice instead of "unreachable" (#802).
     if (status === 503) {
-      // Cloudflare stamps challenge responses explicitly — a body-independent
-      // signal (a 503 passed through from a down origin never carries it).
-      if (headers.get("cf-mitigated") === "challenge") {
-        return Effect.fail(CrawlError.blocked(url, "Blocked by Cloudflare challenge (503)", 503));
-      }
-      if (body) {
-        const challenge = detectWafChallengePage({
-          status,
-          headers: {
-            server: headers.get("server"),
-            cfCacheStatus: headers.get("cf-cache-status"),
-            xCache: headers.get("x-cache"),
-          },
-          html: body,
-        });
-        if (challenge.detected) {
-          return Effect.fail(
-            CrawlError.blocked(
-              url,
-              `Blocked by ${challenge.provider ?? "bot protection"} challenge (503)`,
-              503,
-            ),
-          );
-        }
-      }
-
       // A 503 that carries Retry-After is the origin asking us to come back
       // later, which is the same contract as a 429 — back off instead of
       // recording the page as a server error (#1829). A bare 503 is a real
@@ -808,6 +916,7 @@ function fetchWithDocumentFetcher(
           followRedirects: options.followRedirects,
           signal,
           storedSourceHash: options.storedSourceHash,
+          ...(options.egress ? { egress: options.egress } : {}),
         }),
       catch: (error) => {
         if (isTlsError(error)) return CrawlError.tls(url, (error as Error).message);
@@ -824,6 +933,7 @@ function fetchWithDocumentFetcher(
             `page fetch via ${options.fetcher!.id} was aborted (deadline ${options.timeoutMs}ms)`,
           );
         }
+        if (error instanceof EgressRefusedError) return egressRefusal(url, error);
         return CrawlError.network(url, (error as Error).message, undefined, fetchErrorCode(error));
       },
     });
@@ -922,17 +1032,23 @@ function fetchPageStandardOnce(
   };
 
   return Effect.gen(function* () {
-    let headers = new Headers({
-      "User-Agent": options.userAgent,
-      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "Accept-Language": "en-US,en;q=0.9",
-      "Upgrade-Insecure-Requests": "1",
-      ...options.headers,
-    });
+    let headers = new Headers(
+      mergeHeaderRecords(
+        {
+          "User-Agent": options.userAgent,
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9",
+          "Upgrade-Insecure-Requests": "1",
+        },
+        options.headers,
+      ),
+    );
 
     const MAX_REDIRECTS = 10;
     const hops: RedirectHop[] = [];
     const visited = new Set<string>();
+    const egress = options.egress;
+    const guardedSend = egress ? egressGuardedSend(fetchUndecoded, egress) : fetchUndecoded;
     let currentUrl = url;
     let isLoop = false;
     let endsInError = false;
@@ -957,6 +1073,11 @@ function fetchPageStandardOnce(
         },
         options.timeoutMs,
         options.userAgent,
+        // Every hop goes out through the crawl's egress policy: a redirect hop
+        // vetted (and pinned, outside the hosted proxy) by the same policy that
+        // let it through above, and the page itself, which the policy trusts
+        // by name unless the crawl pins its own hosts (repo#3430).
+        egress ? guardedSend : fetchUndecoded,
       );
       const { response, timing } = timed;
 
@@ -984,7 +1105,18 @@ function fetchPageStandardOnce(
           finalTiming = timing;
           break;
         }
-        const nextUrl = new URL(location, currentUrl).toString();
+        // An unparseable Location (`http://[`) is a terminal error hop like a
+        // missing one. `new URL` throws, and a throw inside Effect.gen is a
+        // defect, which failed the whole fetch instead of this page (#3382).
+        let nextUrl: string;
+        try {
+          nextUrl = new URL(location, currentUrl).toString();
+        } catch {
+          endsInError = true;
+          finalResponse = response;
+          finalTiming = timing;
+          break;
+        }
         // SECURITY (#1392): this hand-rolled manual-redirect loop bypasses the
         // runtime's native cross-protocol-redirect rejection, so a
         // `Location: file:///…` (or data:/blob:/ftp:/…) would otherwise be
@@ -993,6 +1125,25 @@ function fetchPageStandardOnce(
         // a terminal error hop, never fetch it. Scheme-only: private/loopback
         // HOSTS stay allowed so internal-site audits keep working.
         if (!isHttpOrHttpsUrl(nextUrl)) {
+          endsInError = true;
+          finalResponse = response;
+          finalTiming = timing;
+          break;
+        }
+        // repo#2830: an open redirect on the site (`/go?u=http://169.254.169.254/`)
+        // must not send the auditor's machine to a metadata or link-local
+        // address. Ends here like the refused scheme above. A resolver failure
+        // or timeout here falls through to the guarded send, which vets the hop
+        // again and fails it with that error (a retryable network or timeout
+        // failure, DNS reason kept); nothing is sent unvetted.
+        const refused =
+          egress &&
+          (yield* Effect.promise(() =>
+            egressRefuses(nextUrl, egress, AbortSignal.timeout(options.timeoutMs)).catch(
+              () => false,
+            ),
+          ));
+        if (refused) {
           endsInError = true;
           finalResponse = response;
           finalTiming = timing;
@@ -1024,13 +1175,13 @@ function fetchPageStandardOnce(
 
     const ttfb = finalTiming.responseTime - finalTiming.fetchStart;
 
-    const readBody = Effect.tryPromise({
+    const readBody = (maxBytes = DEFAULT_MAX_DOCUMENT_BODY_BYTES) => Effect.tryPromise({
       // Race the body read against the interrupt signal so a stalled stream doesn't leak the host slot (#405).
       try: async (signal) => {
         let onAbort: (() => void) | undefined;
         try {
           return await Promise.race([
-            readBodyCapped(finalResponse, DEFAULT_MAX_DOCUMENT_BODY_BYTES),
+            readBodyCapped(finalResponse, maxBytes),
             new Promise<never>((_, reject) => {
               // #1729: aborting the request as well as losing the race is what
               // actually cancels the read. Rejecting alone only frees the FIBER
@@ -1068,28 +1219,34 @@ function fetchPageStandardOnce(
       },
     });
 
-    // A 503 needs its body to tell a bot-challenge interstitial from a real
-    // outage (#802). 503 always fails the guard below, so consuming the stream
-    // here is safe; an unreadable body falls through to the generic server error.
+    // A 403/503 needs a bounded body prefix to tell a bot-challenge
+    // interstitial from an ordinary refusal/outage (#446/#802). Both statuses
+    // always fail the guard below, so consuming the stream here is safe. The
+    // explicit Cloudflare header is already enough and avoids the read.
+    const statusMayBeChallenge = finalResponse.status === 403 || finalResponse.status === 503;
     const challengeBody =
-      finalResponse.status === 503
-        ? yield* readBody.pipe(
-            Effect.catchAll((error) =>
-              // #1729: a deadline firing on a stalled body is a TIMEOUT, and
-              // swallowing it here reclassified it as the generic "Server error:
-              // 503" — the origin blamed for what was actually our own deadline.
-              // Every other read failure still degrades to "no body" so the
-              // guard can classify the 503 from its headers alone.
-              error.type === "timeout"
+      statusMayBeChallenge && finalResponse.headers.get("cf-mitigated") !== "challenge"
+        ? yield* readBody(WAF_CHALLENGE_BODY_BYTES).pipe(
+            Effect.catchAll((error) => {
+              // A 403 already proves the request was refused. The body is only
+              // sampled to name the challenge provider, so an unreadable or
+              // stalled sample degrades to the generic blocked result.
+              if (finalResponse.status === 403) return Effect.succeed(undefined);
+
+              // #1729: for a 503, a deadline firing on a stalled body is a
+              // TIMEOUT. Swallowing it here would blame the origin with the
+              // generic "Server error: 503" for what was actually our deadline.
+              // Every other read failure still degrades to "no body".
+              return error.type === "timeout"
                 ? Effect.fail(error)
-                : Effect.succeed(undefined),
-            ),
+                : Effect.succeed(undefined);
+            }),
           )
         : undefined;
 
     yield* applyStatusGuards(url, finalResponse.status, finalResponse.headers, challengeBody);
 
-    const body = yield* readBody;
+    const body = yield* readBody();
 
     const loadTime = Date.now() - finalTiming.fetchStart;
     const downloadTime = loadTime - ttfb;
@@ -1174,13 +1331,15 @@ export function fetchPage(
   const fetcherId = options.fetcher.id;
   // Headers passed to the custom fetcher only; the standard-fetch fallback
   // rebuilds its own from options inside fetchPageStandard.
-  const headers = {
-    "User-Agent": options.userAgent,
-    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Upgrade-Insecure-Requests": "1",
-    ...options.headers,
-  };
+  const headers = mergeHeaderRecords(
+    {
+      "User-Agent": options.userAgent,
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Upgrade-Insecure-Requests": "1",
+    },
+    options.headers,
+  );
 
   // Impersonation/custom fetcher path. On a TLS/status-0 failure, fall back to a
   // standard fetch (dropping impersonation) so the audit can still detect

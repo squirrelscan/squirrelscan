@@ -1,10 +1,11 @@
 ---
-title: "Performance"
+title: "Performance score group: how page speed is scored"
+sidebarTitle: "Performance"
 description: "The Performance score group: page speed and loading behavior"
 icon: "gauge"
 ---
 
-Performance is one of the four score groups on every report, alongside SEO, Security and Agents. It measures page speed and loading behaviour: the markup patterns behind LCP, CLS and INP, render blocking, resource weight, caching, compression and delivery. The group holds two categories: Performance, whose rules mostly run against the HTML and response headers, with a few that need [browser rendering](/guides/browser-rendering) for measurements only a real browser can take; and [Reliability](/rules/reliability), which checks that the scripts and stylesheets a page references actually load and that its forms can be submitted.
+Performance is one of the four score groups on every report, alongside SEO, Security and Agents. It covers page speed and loading behaviour: the markup patterns behind LCP, CLS and INP, render blocking, resource weight, caching, compression and delivery. The group holds two categories: [Performance](/rules/perf), whose rules read the HTML and response headers and flag the causes of a slow page rather than measuring LCP, INP or CLS; and [Reliability](/rules/reliability), which checks that the scripts and stylesheets a page references actually load and that its forms can be submitted.
 
 See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
 

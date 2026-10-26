@@ -61,13 +61,14 @@ export function truncateUtf8Bytes(text: string, maxBytes: number): string {
 
 /** Cloud-gated rules that are enabled under this config (drives which services run). */
 export function selectCloudRules(config: Config): Array<{ id: string; cloud: RuleCloudSpec }> {
-  const all = loadAllRules();
+  const all = loadAllRules({ includeOptIn: true });
   const enabledIds = new Set(
     filterRules(
       [...all.keys()],
       config.rules.enable,
       config.rules.disable,
       config.rule_options as Record<string, { enabled?: boolean }>,
+      all,
     ),
   );
   const selected: Array<{ id: string; cloud: RuleCloudSpec }> = [];

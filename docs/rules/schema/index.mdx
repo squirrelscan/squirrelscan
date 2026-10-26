@@ -1,93 +1,99 @@
 ---
-title: "Structured Data"
-description: "Structured data and rich snippet eligibility"
+title: "Structured data audit rules: JSON-LD and schema.org"
+sidebarTitle: "Structured Data"
+description: "Audit rules for structured data: JSON-LD syntax, required schema.org properties for each type, and entity identity across the whole site."
 ---
 
 Structured Data rules work at two scales. Per-page rules read the JSON-LD a page carries and name the exact property each schema.org type is missing; markup that will not parse is reported before anything else, since nothing downstream can read it.
 
-The rest read the [entity map](/guides/entity-map), the whole site's JSON-LD collapsed into one graph. That is where the expensive failures live: sixty valid `Organization` blocks with nothing to say they are one organization pass every per-page check and still leave a search engine with sixty companies. Thirteen rules cover identity, agreement and reachability across the crawl, and [fixing structured data identity](/guides/entity-map/fixing) has the change to make in each generator.
+The rest read the [entity map](/guides/entity-map), the whole site's JSON-LD collapsed into one graph. That is where the expensive failures live: sixty valid `Organization` blocks with nothing to say they are one organization pass every per-page check and still leave a search engine with sixty companies. The `schema/entity-*` rules cover identity, agreement and reachability across the crawl, and [fixing structured data identity](/guides/entity-map/fixing) has the change to make in each generator.
 
-See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+## Run only these rules
+
+```bash
+squirrel audit https://example.com --rule-include schema
+```
+
+{/* hub:start-here:start */}
+
+## Where to start
+
+These carry the highest severity and weight in the category.
+
+- [One organization, or sixty? Entities declared without an @id](/rules/schema/entity-identity): Your site declares the same organization on every page with nothing to say they are one thing. A search engine reading 60 pages sees 60 organizations.
+- [Two plugins, two @ids, one organization split in half](/rules/schema/entity-split-identity): Yoast declares your organization under one @id and WordLift under another. A search engine reads two companies, and neither gets the full picture.
+- [A publisher that points at nothing](/rules/schema/entity-dangling): A reference to an @id that nothing in the crawl declares. squirrel checks against the whole site, so a publisher the homepage declares still resolves.
+- [LocalBusiness schema: required name, address or areaServed](/rules/schema/local-business): LocalBusiness markup with no name, an incomplete PostalAddress, or neither an address nor a service area. squirrel checks all three.
+- [Product schema: name, image, offers and review checks](/rules/schema/product): Product markup with no name or image, an Offer missing price or availability, and no rating data. squirrel checks each product page.
+
+{/* hub:start-here:end */}
+
+{/* hub:rules:start */}
 
 ## Rules
 
-<CardGroup cols={2}>
-  <Card title="Article schema: headline, author and datePublished checks" icon="triangle-exclamation" href="/rules/schema/article">
-    Article JSON-LD missing headline, author or datePublished, or carrying a date that is not ISO 8601. squirrel checks both on every page.
-  </Card>
-  <Card title="BreadcrumbList schema: positions, names and what breaks" icon="circle-info" href="/rules/schema/breadcrumb">
-    Breadcrumb markup with no itemListElement, items missing position or name, or positions out of order. squirrel checks every non-homepage URL.
-  </Card>
-  <Card title="FAQPage schema: mainEntity, Question and acceptedAnswer" icon="triangle-exclamation" href="/rules/schema/faq">
-    FAQ markup with no mainEntity, or Question entries missing name or acceptedAnswer. squirrel checks the structure on every page that carries it.
-  </Card>
-  <Card title="Invalid JSON-LD syntax: what breaks it and how to fix" icon="triangle-exclamation" href="/rules/schema/json-ld-valid">
-    A structured data block that will not parse, or parses but omits properties schema.org requires. squirrel names the exact type and property.
-  </Card>
-  <Card title="LocalBusiness schema: required name, address or areaServed" icon="triangle-exclamation" href="/rules/schema/local-business">
-    LocalBusiness markup with no name, an incomplete PostalAddress, or neither an address nor a service area. squirrel checks all three.
-  </Card>
-  <Card title="Organization schema: name, url, logo and sameAs checks" icon="circle-info" href="/rules/schema/organization">
-    Organization JSON-LD missing name or url, with no logo, or a sameAs list that omits a social profile the site clearly runs. squirrel finds all three.
-  </Card>
-  <Card title="Product schema: name, image, offers and review checks" icon="triangle-exclamation" href="/rules/schema/product">
-    Product markup with no name or image, an Offer missing price or availability, and no rating data. squirrel checks each product page.
-  </Card>
-  <Card title="AggregateRating on the wrong page: visible and on-topic" icon="triangle-exclamation" href="/rules/schema/rating-scope">
-    A sitewide star rating stamped on privacy, terms and blog pages, or one no reader can see. squirrel flags both as policy risks.
-  </Card>
-  <Card title="AggregateRating: ratingValue, ratingCount and review checks" icon="triangle-exclamation" href="/rules/schema/review">
-    Rating markup missing ratingValue or a review count, and Review nodes with no author or reviewRating. squirrel checks both shapes.
-  </Card>
-  <Card title="Structured data coverage: pages that break your own norm" icon="triangle-exclamation" href="/rules/schema/coverage-outlier">
-    Forty of forty-five product pages carry Product markup and five do not. squirrel finds the gap against the site's own pattern, not a generic rule.
-  </Card>
-  <Card title="VideoObject schema: required props and duration format" icon="triangle-exclamation" href="/rules/schema/video">
-    A page with an embedded video and no VideoObject markup, or markup missing thumbnailUrl, uploadDate or an ISO 8601 duration. squirrel checks both.
-  </Card>
-  <Card title="WebSite SearchAction and the retired sitelinks searchbox" icon="circle-info" href="/rules/schema/website-search">
-    WebSite schema on a homepage with no SearchAction, or a SearchAction missing target or query-input. squirrel checks the homepage markup.
-  </Card>
-  <Card title="One organization, or sixty? Entities declared without an @id" icon="triangle-exclamation" href="/rules/schema/entity-identity">
-    The same organization on every page with nothing to say they are one thing. squirrel reads the whole crawl, not one page.
-  </Card>
-  <Card title="Two plugins, two @ids, one organization split in half" icon="triangle-exclamation" href="/rules/schema/entity-split-identity">
-    Yoast declares your organization under one @id and WordLift under another. A search engine reads two companies.
-  </Card>
-  <Card title="A publisher that points at nothing" icon="triangle-exclamation" href="/rules/schema/entity-dangling">
-    Every article references an organization by @id and only the homepage declares it. squirrel checks against the whole crawl.
-  </Card>
-  <Card title="The same entity, two different logos" icon="circle-info" href="/rules/schema/entity-conflicts">
-    One organization declared on forty pages with two logos or two phone numbers. A search engine picks one.
-  </Card>
-  <Card title="A bare #organization is one entity per page, not one entity" icon="circle-info" href="/rules/schema/entity-id-format">
-    A relative @id resolves against the page it sits on, so the same fragment on forty pages is forty identifiers.
-  </Card>
-  <Card title="An Organization on one page, a LocalBusiness on another" icon="circle-info" href="/rules/schema/entity-type-drift">
-    The same @id with different @type sets. Types drive eligibility, and which set wins is not specified.
-  </Card>
-  <Card title="An author who is only a name string is not an entity" icon="circle-info" href="/rules/schema/entity-authors">
-    Articles with a byline and no Person entity. Most of what E-E-A-T is built on needs an identifier.
-  </Card>
-  <Card title="Your pages disagree about who publishes this site" icon="circle-info" href="/rules/schema/entity-publisher-mismatch">
-    Two hundred articles name one publisher and three name another. squirrel weighs them by how much of the site says each.
-  </Card>
-  <Card title="The whole LocalBusiness block, on every single page" icon="circle-info" href="/rules/schema/entity-local-business-per-page">
-    The default of most page builders, and why so many local sites disagree with themselves about their own phone number.
-  </Card>
-  <Card title="Nothing says these pages are one site" icon="circle-info" href="/rules/schema/entity-website-missing">
-    A WebSite entity carries your site name in search results and is what every page should point back to with isPartOf.
-  </Card>
-  <Card title="A business with nothing to attach its reputation to" icon="circle-info" href="/rules/schema/entity-organization-missing">
-    This site has the pages a business has and no Organization entity for a search engine to hang any of it on.
-  </Card>
-  <Card title="Your organization is not connected to anything that corroborates it" icon="circle-info" href="/rules/schema/entity-sameas-missing">
-    sameAs is how a search engine learns the company on your site is the company on LinkedIn and Wikidata.
-  </Card>
-  <Card title="An @id that nothing points at" icon="circle-info" href="/rules/schema/entity-orphan">
-    Giving an entity an identifier is the expensive part. One that nothing references is doing no more than an inline block.
-  </Card>
-</CardGroup>
+| Rule | What it flags | Severity | Scope |
+|---|---|---|---|
+| [A bare #organization is one entity per page, not one entity](/rules/schema/entity-id-format) | A relative @id resolves against the page it sits on, so the same fragment on forty pages is forty identifiers. The markup validates and the entity still never accumulates. | warning | Site-wide |
+| [A business with nothing to attach its reputation to](/rules/schema/entity-organization-missing) | This site has the pages a business has and no Organization entity for a search engine to hang any of it on. | info | Site-wide |
+| [A publisher that points at nothing](/rules/schema/entity-dangling) | A reference to an @id that nothing in the crawl declares. squirrel checks against the whole site, so a publisher the homepage declares still resolves. | error | Site-wide |
+| [AggregateRating on the wrong page: visible and on-topic](/rules/schema/rating-scope) | A sitewide star rating stamped on privacy, terms and blog pages, or one no reader can see. squirrel flags both as policy risks. | warning | Per-page |
+| [AggregateRating: ratingValue, ratingCount and review checks](/rules/schema/review) | Rating markup missing ratingValue or a review count, and Review nodes with no author or reviewRating. squirrel checks both shapes. | warning | Per-page |
+| [An @id that nothing points at](/rules/schema/entity-orphan) | Giving an entity an identifier is the expensive part. One that nothing references and that appears on a single page is doing no more than an inline block. | info | Site-wide |
+| [An author who is only a name string is not an entity](/rules/schema/entity-authors) | Articles with a byline and no Person entity, or a Person with nothing to identify them by. Most of what E-E-A-T is built on needs an identifier. | warning | Site-wide |
+| [An Organization on one page, a LocalBusiness on another](/rules/schema/entity-type-drift) | The same @id declared with different @type sets on different pages. A search engine merges them and then has to decide which types are authoritative. | warning | Site-wide |
+| [Article schema: headline, author and datePublished checks](/rules/schema/article) | Article JSON-LD missing headline, author or datePublished, or carrying a date that is not ISO 8601. squirrel checks both on every page. | warning | Per-page |
+| [BreadcrumbList schema: positions, names and what breaks](/rules/schema/breadcrumb) | Breadcrumb markup with no itemListElement, items missing position or name, or positions out of order. squirrel checks every non-homepage URL. | info | Per-page |
+| [FAQPage schema: mainEntity, Question and acceptedAnswer](/rules/schema/faq) | FAQ markup with no mainEntity, or Question entries missing name or acceptedAnswer. squirrel checks the structure on every page that carries it. | warning | Per-page |
+| [Invalid JSON-LD syntax: what breaks it and how to fix](/rules/schema/json-ld-valid) | A structured data block that will not parse, or parses but omits properties schema.org requires. squirrel names the exact type and property. | warning | Per-page |
+| [LocalBusiness schema: required name, address or areaServed](/rules/schema/local-business) | LocalBusiness markup with no name, an incomplete PostalAddress, or neither an address nor a service area. squirrel checks all three. | warning | Per-page |
+| [Nothing says these pages are one site](/rules/schema/entity-website-missing) | A WebSite entity is what carries your site name in search results and what every page should point back to with isPartOf. | info | Site-wide |
+| [One organization, or sixty? Entities declared without an @id](/rules/schema/entity-identity) | Your site declares the same organization on every page with nothing to say they are one thing. A search engine reading 60 pages sees 60 organizations. | error | Site-wide |
+| [Organization schema: name, url, logo and sameAs checks](/rules/schema/organization) | Organization JSON-LD missing name or url, with no logo, or a sameAs list that omits a social profile the site clearly runs. squirrel finds all three. | info | Per-page |
+| [Product schema: name, image, offers and review checks](/rules/schema/product) | Product markup with no name or image, an Offer missing price or availability, and no rating data. squirrel checks each product page. | warning | Per-page |
+| [Structured data coverage: pages that break your own norm](/rules/schema/coverage-outlier) | Forty of forty-five product pages carry Product markup and five do not. squirrel finds the gap against the site's own pattern, not a generic rule. | warning | Site-wide |
+| [The same entity, two different logos](/rules/schema/entity-conflicts) | One organization declared on forty pages with two logos, two phone numbers or two names. A search engine picks one, and which one is not yours to choose. | warning | Site-wide |
+| [The whole LocalBusiness block, on every single page](/rules/schema/entity-local-business-per-page) | Declaring the business in full on every page is the default of most page builders, and it is why so many local sites disagree with themselves about their own phone number. | warning | Site-wide |
+| [Two plugins, two @ids, one organization split in half](/rules/schema/entity-split-identity) | Yoast declares your organization under one @id and WordLift under another. A search engine reads two companies, and neither gets the full picture. | error | Site-wide |
+| [VideoObject schema: required props and duration format](/rules/schema/video) | A page with an embedded video and no VideoObject markup, or markup missing thumbnailUrl, uploadDate or an ISO 8601 duration. squirrel checks both. | warning | Per-page |
+| [WebSite SearchAction and the retired sitelinks searchbox](/rules/schema/website-search) | WebSite schema on a homepage with no SearchAction, or a SearchAction missing target or query-input. squirrel checks the homepage markup. | info | Per-page |
+| [Your organization is not connected to anything that corroborates it](/rules/schema/entity-sameas-missing) | sameAs is how a search engine learns the company on your site is the company on LinkedIn and Wikidata. Without it the entity stands alone. | info | Site-wide |
+| [Your pages disagree about who publishes this site](/rules/schema/entity-publisher-mismatch) | Two hundred articles name one publisher and three name another. The authority that should accumulate against one organization is divided. | warning | Site-wide |
+
+{/* hub:rules:end */}
+
+{/* hub:terms:start */}
+
+## Key terms
+
+- [Article schema](/glossary#article-schema): Article, NewsArticle or BlogPosting structured data with headline, dates, author and publisher.
+- [Author byline](/glossary#author-byline): The visible author name on an article, ideally linked to an author page and matched by an author entity in structured data.
+- [Entity](/glossary/entity): A thing a site describes in structured data, such as an organization, person or product, identified across pages so search engines and agents can tell it is one thing.
+- [FAQ schema](/glossary#faq-schema): FAQPage structured data marking up question-and-answer pairs; Google now shows FAQ rich results only for a narrow set of sites.
+- [Generative engine optimization (GEO)](/glossary/generative-engine-optimization): Making content more likely to be retrieved, cited and quoted by AI answer engines; the term comes from a 2023 research paper.
+- [@id (JSON-LD node identifier)](/glossary/entity-id): The JSON-LD @id that gives a node a stable IRI, so other nodes and pages can reference the same entity instead of redeclaring it.
+- [JSON-LD](/glossary/json-ld): JSON for Linking Data, the format Google recommends for structured data, embedded in a `<script type="application/ld+json">` block.
+- [LocalBusiness schema](/glossary/local-business-schema): LocalBusiness structured data with address, opening hours and geo coordinates for a physical business.
+- [NAP consistency](/glossary/nap-consistency): Name, address and phone number stated the same way across a site's pages, schema and listings.
+- [Organization schema](/glossary/organization-schema): Organization structured data naming the business behind a site, its logo, contact points and sameAs profiles.
+- [Product schema](/glossary/product-schema): Product structured data with offers, price, availability and reviews, used for product rich results and merchant listings.
+- [Rich results](/glossary/rich-results): Search result features (stars, breadcrumbs, product prices, video thumbnails) that Google can show when a page has eligible structured data.
+- [Structured data](/glossary/structured-data): Machine-readable statements about a page's content, usually schema.org vocabulary in JSON-LD, that search engines and agents can parse.
+- [VideoObject schema](/glossary#video-schema): VideoObject structured data with name, thumbnail, upload date and duration so a video can appear in video results.
+- [WebSite schema](/glossary#website-schema): WebSite structured data naming the site, which Google reads for the site name in results, and optionally describing its internal search with a SearchAction.
+
+{/* hub:terms:end */}
+
+## Related categories
+
+[Crawlability](/rules/crawl) flags rich result markup on a page that is noindexed. [E-E-A-T](/rules/eeat) looks for author and address markup among its trust signals, and [Local SEO](/rules/local) checks that the phone number and address agree across pages.
+
+## Learn more
+
+- [Entity map guide](/guides/entity-map), for reading the site-wide graph these rules check
+- [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai), the coding agent workflow for working through a report
+- [Website audit tool](https://squirrelscan.com/tools/website-audit)
+- [Sample report](https://squirrelscan.com/reports/squirrelscan-sample), with the Structured Data section on a real site
 
 ## Disable all Structured Data rules
 

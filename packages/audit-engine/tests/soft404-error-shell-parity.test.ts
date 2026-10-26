@@ -40,14 +40,14 @@ const ASSETS: PreFetchedAssets = {
   sitemapUrlStatuses: [],
 };
 
-const SHELL_URL = "http://synthetic.test/gone";
+const SHELL_URL = "http://synthetic.example.com/gone";
 // The issue's repro: a root `__next_error__` id and only a few words, so the
 // error-shell signal is what makes it a candidate (tiny content is supporting).
 const SHELL_HTML = `<!doctype html><html id="__next_error__"><head><title>Acme Store</title></head>
 <body><h1>Acme Store</h1><p>Just a few words here.</p></body></html>`;
 // Negative control: the same tiny page without the marker has only the
 // supporting tiny-content signal, so it is not a candidate.
-const CONTROL_URL = "http://synthetic.test/tiny";
+const CONTROL_URL = "http://synthetic.example.com/tiny";
 const CONTROL_HTML = `<!doctype html><html><head><title>Acme Store</title></head>
 <body><h1>Acme Store</h1><p>Just a few words here.</p></body></html>`;
 

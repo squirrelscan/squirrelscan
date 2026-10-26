@@ -183,15 +183,65 @@ export function encodeIndexGaps(sortedIndexes: readonly number[]): number[] {
 export const SCAN_TRUNCATED_SKIP_REASON = "scan-truncated";
 
 /**
+ * `skipReason` of the `<rule>-error` check of a rule abandoned for its time
+ * budget (pub#960). The rule did not finish on that page, so nothing was found
+ * there: a not-evaluated state, never a failed finding. A skip that is neither a
+ * verdict nor a registered gap, so the resolution signal lists the page as not
+ * evaluated for the checks the rule did emit elsewhere and a prior finding on
+ * it is carried, not resolved.
+ */
+export const RULE_TIMED_OUT_SKIP_REASON = "rule-timed-out";
+
+/**
  * The runner's noindex gate (pub#457): a skip that is a "does not apply"
  * verdict for every check of its rule on that page, so the signal and the merge
  * read it as clean, not as a gap. Also the skip's `details.foldKey`.
  */
 export const NOT_APPLICABLE_SKIP_REASON = "noindex";
 
+/**
+ * A check that does not apply to THIS page: nothing for it to look at (no images,
+ * no form fields, no body, no `Link` header, a page below the minimum size, a
+ * `<picture>`-less page, a URL with no extension). Unlike a gap (`scan-truncated`,
+ * a timeout, no timing data), it is not "the check did not run": the signal and
+ * the merge read the page as evaluated and clean for that check, so a prior
+ * finding of it on the page resolves instead of carrying forever (pub#1011).
+ * Also the skip's `details.foldKey`, so a fold never mixes it with a gap.
+ */
+export const CHECK_NOT_APPLICABLE_SKIP_REASON = "not-applicable";
+
+/**
+ * Suffix of a check that reports what its rule could not settle on a page:
+ * `<check>-unconfirmed` (pub#921). A rule emits it IN PLACE of `<check>` for
+ * the controls a style may hide, so the row is evaluation evidence for
+ * `<check>` too: the rule evaluated `<check>` on that page and found nothing it
+ * could confirm. The signal counts the page as evaluated for `<check>`
+ * (pub#935), so the previous audit's `<check>` fail there resolves instead of
+ * being carried forever beside the new unconfirmed row. A page the rule
+ * reported neither for is still not evaluated.
+ */
+export const UNCONFIRMED_CHECK_SUFFIX = "-unconfirmed";
+
 /** Signal map key — same `ruleId|checkName` shape the merge core keys on. */
 export function resolutionCheckKey(ruleId: string, checkName: string): string {
   return `${ruleId}|${checkName}`;
+}
+
+/**
+ * Check-name half of a rule-wide `notEvaluated` key (pub#968): `<ruleId>|*`
+ * lists the crawled pages on which the rule as a whole did not run (it timed
+ * out), whatever checks it would have emitted there. A timed-out rule emits no
+ * check under its real names, so without it a rule that timed out on every page
+ * has no key at all, and the merge reads that as "no signal" and resolves its
+ * prior findings. Only ever in `notEvaluated` (and `truncated`), never in
+ * `failing`. A consumer from before it does not know the key and ignores it,
+ * which is today's behaviour.
+ */
+export const RESOLUTION_ANY_CHECK = "*";
+
+/** The rule-wide key (see {@link RESOLUTION_ANY_CHECK}). */
+export function resolutionRuleKey(ruleId: string): string {
+  return resolutionCheckKey(ruleId, RESOLUTION_ANY_CHECK);
 }
 
 const FNV32_OFFSET = 0x811c9dc5;

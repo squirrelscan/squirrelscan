@@ -113,6 +113,36 @@ export interface EgressPolicy {
   trustTarget?: (url: URL) => boolean;
 }
 
+/**
+ * Whether an HTTP proxy from the environment carries this process's requests
+ * (the runtime's fetch honours these variables). The proxy then resolves and
+ * connects, so a request cannot be pinned to an address it vetted: a pinned
+ * plain-http request would reach the proxy with the address in place of the
+ * name (repo#3430).
+ */
+export function proxiedByEnvironment(): boolean {
+  return ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"].some(
+    (name) => (process.env[name] ?? "").trim() !== "",
+  );
+}
+
+/**
+ * Whether the audited site's own hosts are vetted and pinned like any other
+ * (repo#3430): asked for (`pinOwnHosts`, the CLI) and possible, which it is not
+ * where something else resolves the name, a transport that pins
+ * (`egressPinnedByTransport`, the hosted container) or an environment proxy.
+ */
+export function ownHostsPinned(options: {
+  pinOwnHosts?: boolean;
+  egressPinnedByTransport?: boolean;
+}): boolean {
+  return (
+    options.pinOwnHosts === true &&
+    options.egressPinnedByTransport !== true &&
+    !proxiedByEnvironment()
+  );
+}
+
 /** Thrown before a request the egress policy refuses. Nothing was sent. */
 export class EgressRefusedError extends Error {
   override name = "EgressRefusedError";
@@ -202,16 +232,25 @@ function isNonPublicIpv4(o: number[]): boolean {
   );
 }
 
+/**
+ * Cloud-internal IPv6 endpoints, as exact addresses. All sit in unique local
+ * fc00::/7, so a private-network audit would otherwise reach them: AWS's
+ * metadata service (fd00:ec2::254), the EKS Pod Identity agent (fd00:ec2::23)
+ * and GCP's metadata server (fd20:ce::254).
+ */
+const METADATA_IPV6: readonly (readonly number[])[] = [
+  [0xfd00, 0x0ec2, 0, 0, 0, 0, 0, 0x254],
+  [0xfd00, 0x0ec2, 0, 0, 0, 0, 0, 0x23],
+  [0xfd20, 0x00ce, 0, 0, 0, 0, 0, 0x254],
+];
+
 function isAlwaysRefusedIpv6(g: number[]): boolean {
   const g0 = g[0] ?? 0;
   if ((g0 & 0xffc0) === 0xfe80) return true; // link-local fe80::/10
   // Local-use NAT64 64:ff9b:1::/48 may embed its IPv4 address at any of the
   // RFC 6052 offsets, so the embedded address cannot be read reliably.
   if (g0 === 0x64 && g[1] === 0xff9b && g[2] === 1) return true;
-  // AWS's IPv6 metadata address, fd00:ec2::254.
-  if (g0 === 0xfd00 && g[1] === 0x0ec2 && g.slice(2, 7).every((x) => x === 0) && g[7] === 0x254) {
-    return true;
-  }
+  if (METADATA_IPV6.some((m) => m.every((x, i) => g[i] === x))) return true;
   const v4 = embeddedIpv4(g);
   return v4 !== null && isAlwaysRefusedIpv4(v4);
 }
@@ -348,6 +387,33 @@ export async function assertEgressAllowed(
 }
 
 /**
+ * True when `policy` refuses a request to `url` ({@link vetEgressTarget} throws
+ * {@link EgressRefusedError}); nothing is sent either way. For a hand-rolled
+ * redirect loop that ends at a refused hop instead of failing the whole fetch
+ * (repo#2830). Any other error (a resolver failure) propagates: a caller that
+ * would otherwise follow the hop treats it as refused (fail closed).
+ *
+ * False holds only for a request sent through {@link egressGuardedSend} with
+ * the same policy, which connects to the vetted address. A pinning policy (pin
+ * unset) sets scoped link-local answers aside, which is safe only because the
+ * pinned connect never uses them; a caller that checks here and then sends by
+ * name must pass `pin: false`, which judges every answer.
+ */
+export async function egressRefuses(
+  url: string,
+  policy: EgressPolicy,
+  signal?: AbortSignal | null,
+): Promise<boolean> {
+  try {
+    await vetEgressTarget(url, policy, signal);
+    return false;
+  } catch (error) {
+    if (error instanceof EgressRefusedError) return true;
+    throw error;
+  }
+}
+
+/**
  * True when `policy` refuses `url` on what the URL itself says, with no DNS
  * lookup: a non-http(s) scheme, a host outside `allowHost`, a refused IP
  * literal, a metadata hostname, or a non-public name the policy does not
@@ -409,7 +475,14 @@ export async function vetEgressTarget(
     throw new EgressRefusedError("refused non-public host");
   }
 
-  const addresses = await raceAbort((policy.resolve ?? resolveHostAddresses)(host), signal);
+  const answers = await raceAbort((policy.resolve ?? resolveHostAddresses)(host), signal);
+  // A scoped link-local answer (`fe80::1%en0`) cannot be pinned in a URL, so a
+  // pinned request never connects to it. A LAN name (`nas.local`) answers one
+  // beside its routable addresses on macOS, and refusing the whole name for it
+  // refused every redirect between LAN hosts (repo#2830), so it is set aside.
+  // Not when the transport connects by name: it might pick that address.
+  const addresses =
+    policy.pin === false ? answers : answers.filter((address) => !address.includes("%"));
   if (
     addresses.length === 0 ||
     addresses.some((address) => refusesAddress(address, allowPrivate))

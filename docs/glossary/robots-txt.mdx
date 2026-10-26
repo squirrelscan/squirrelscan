@@ -1,0 +1,90 @@
+---
+title: "What is robots.txt? Rules, syntax and common mistakes"
+sidebarTitle: "robots.txt"
+description: "robots.txt is the plain-text file at a site's root that tells crawlers which paths they may fetch. Syntax, what it does not do, and how to check it."
+---
+
+**robots.txt** is a plain-text file at the root of a host that tells crawlers which paths they may request, with rules grouped by user-agent token.
+
+The format is the Robots Exclusion Protocol, first defined by Martijn Koster in 1994 and published as RFC 9309 in 2022. A file holds `User-agent` groups, each with `Allow` and `Disallow` rules, plus optional `Sitemap` lines that can appear anywhere.
+
+{/* glossary:hub:start */}
+
+Category: [Crawlability](/rules/crawl)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+robots.txt controls crawling, not indexing. Google says a disallowed page can still be indexed if other sites link to it, and the URL can show in results without a description. A `noindex` on a disallowed page is never read, because the crawler never fetches the page. The file is also a request: cooperative crawlers honour it, and nothing enforces it. Each AI crawler has its own token, so one file now carries separate decisions about search, AI search and training.
+
+## How squirrelscan checks it
+
+[crawl/robots-txt](/rules/crawl/robots-txt) checks that the file exists, parses without syntax errors, does not block all crawling for `User-agent: *`, references a sitemap and stays under Google's 500 KB limit. A request the site refused is reported as unknown, not missing. Two rules check robots.txt against the pages: [crawl/robots-meta-conflict](/rules/crawl/robots-meta-conflict) lists pages that are blocked and also carry `noindex`, and [crawl/indexability-conflicts](/rules/crawl/indexability-conflicts) lists pages blocked without one. Both decide blocking the way Google does, with the longest matching rule winning. [ax/ai-crawlers](/rules/ax/ai-crawlers) and [ax/content-signals](/rules/ax/content-signals) read the AI crawler groups and any `Content-Signal` lines.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [robots.txt: what to put in it and how squirrel checks it](/rules/crawl/robots-txt) | A missing robots.txt, a Disallow: / left in production, or an excessive Crawl-delay changes what gets crawled. squirrel checks existence, syntax and rules. | error |
+| [Redundant noindex: a blocked page nobody reads it on](/rules/crawl/robots-meta-conflict) | A page disallowed in robots.txt is never fetched, so its noindex is never seen. squirrel lists the pages carrying both. | warning |
+| [robots.txt blocked pages without noindex](/rules/crawl/indexability-conflicts) | Allow plus noindex is the correct way to deindex a page. squirrel only reports pages robots.txt blocks that carry no noindex, at info level. | warning |
+| [AI crawlers in robots.txt: which bots you block, by class](/rules/ax/ai-crawlers) | robots.txt blocking Claude-User or PerplexityBot alongside the training bots. squirrel classifies all 24 known AI crawlers and names what each block costs. | warning |
+| [Content-Signal in robots.txt: search, ai-input, ai-train](/rules/ax/content-signals) | A Content-Signal line with a typo, or one declaring ai-train=yes while robots.txt blocks the training crawlers. squirrel parses and cross-checks both. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Serve the file from the host root as `text/plain` (see [the robots.txt fix](/rules/crawl/robots-txt#how-to-fix-it)):
+
+```
+User-agent: *
+Allow: /
+
+Sitemap: https://example.com/sitemap.xml
+```
+
+Keep `Disallow` for paths that waste crawl budget, such as faceted search and session URLs. To keep a page out of search results, allow the crawl and use `noindex` instead. Do not block the CSS, JavaScript or image paths a renderer needs.
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include crawl/robots-txt,crawl/robots-meta-conflict,crawl/indexability-conflicts,ax/ai-crawlers,ax/content-signals
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [noindex](/glossary/noindex): A robots directive, in a meta tag or the X-Robots-Tag header, that asks search engines to keep a page out of their index.
+- [XML sitemap](/glossary/xml-sitemap): An XML file listing the URLs a site wants crawled, with optional lastmod dates, referenced from robots.txt or submitted to search engines.
+- [AI crawler](/glossary/ai-crawler): A bot that fetches pages for AI companies, in three classes: training crawlers, AI search indexers and user-triggered fetchers, each with its own user-agent token.
+- [Content Signals](/glossary#content-signals): Content-Signal lines in robots.txt that state whether content may be used for search, AI input or AI training.
+- [Crawl budget](/glossary/crawl-budget): The number of URLs a search engine is willing and able to crawl on a site in a given time, set by crawl capacity and crawl demand.
+
+{/* glossary:related:end */}
+
+## Learn more
+
+- [robots.txt generator](https://squirrelscan.com/tools/robots-txt-generator)
+
+## References
+
+- [RFC 9309: Robots Exclusion Protocol](https://www.rfc-editor.org/rfc/rfc9309.html)
+- [Introduction to robots.txt, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/robots/intro)
+- [Robots meta tag specifications, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag)
+
+{/* glossary:jsonld:start */}
+
+import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";
+
+<GlossaryJsonLd slug="robots-txt" />
+
+{/* glossary:jsonld:end */}

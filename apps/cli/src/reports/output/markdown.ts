@@ -9,11 +9,12 @@ import { version } from "../../../package.json";
 export function generateMarkdownReport(
   report: AuditReport,
   outputPath?: string,
-  branding?: ReportBranding
+  branding?: ReportBranding,
+  includePassed = false
 ): void {
   const content = renderMarkdown(
     report as Parameters<typeof renderMarkdown>[0],
-    { version, branding }
+    { version, branding, includePassed }
   );
 
   if (outputPath) {

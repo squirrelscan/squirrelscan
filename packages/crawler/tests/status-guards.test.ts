@@ -38,9 +38,31 @@ describe("applyStatusGuards (#792/#802)", () => {
     expect(await guard(404)).toBeNull();
   });
 
-  test("403 → blocked", async () => {
-    const error = await guard(403);
+  test("plain 403, including a Cloudflare server header → generic blocked", async () => {
+    const error = await guard(403, {
+      body: "Forbidden",
+      headers: { server: "cloudflare" },
+    });
     expect(error?.type).toBe("blocked");
+    expect(error?.message).toBe("Request blocked by server");
+  });
+
+  test("403 with cf-mitigated: challenge → blocked, names Cloudflare", async () => {
+    const error = await guard(403, { headers: { "cf-mitigated": "challenge" } });
+    expect(error?.type).toBe("blocked");
+    expect(error?.message).toBe("Blocked by Cloudflare challenge (403)");
+  });
+
+  test("Cloudflare challenge body at 403 → blocked, names the provider", async () => {
+    const error = await guard(403, { body: CLOUDFLARE_CHALLENGE });
+    expect(error?.type).toBe("blocked");
+    expect(error?.message).toBe("Blocked by Cloudflare challenge (403)");
+  });
+
+  test("Akamai challenge body at 403 → blocked, names the provider", async () => {
+    const error = await guard(403, { body: AKAMAI_CHALLENGE });
+    expect(error?.type).toBe("blocked");
+    expect(error?.message).toBe("Blocked by Akamai challenge (403)");
   });
 
   test("429 → rate_limit with retry-after (ms, #1829)", async () => {

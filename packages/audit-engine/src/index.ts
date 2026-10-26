@@ -11,6 +11,7 @@ export {
   runStreamingRules,
   generateReportFromStorage,
   emptyRuleExecutionResult,
+  unfetchedFrontierCount,
   parsePageRecord,
   parseHtmlForRules,
   getParsedPages,
@@ -35,6 +36,7 @@ export type {
   PreFetchedAssets,
   ResourceCheckOverrides,
   ExternalLinkCheckProgress,
+  ExternalLinkCheckLimits,
   ExternalLinkOccurrences,
   SiteAssetOccurrences,
   BuildV1ReportOptions,
@@ -80,13 +82,21 @@ export {
 export type { LocalTechInput, TechScanDiff } from "./technologies";
 
 // Smart audits — finding merge / supplant (#110/#195)
-export { mergeFindings, flattenChecks, findingKey, fingerprint, computeMerge } from "./merge";
+export {
+  mergeFindings,
+  flattenChecks,
+  findingKey,
+  fingerprint,
+  computeMerge,
+  createNotEvaluatedCollector,
+} from "./merge";
 export type {
   FlatFinding,
   MergedFinding,
   MergedState,
   MergeInput,
   ComputeMergeInput,
+  NotEvaluatedEvidence,
 } from "./merge";
 export { findingFingerprint } from "./fingerprint";
 // Cloud (Worker) merge — also available leak-free via the `./smart-audits` entry.

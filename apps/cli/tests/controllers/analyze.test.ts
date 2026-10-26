@@ -17,6 +17,9 @@ import {
   type AnalyzeResult,
   pickLatestAnalyzeReadyCrawl,
 } from "../../src/controllers/analyze";
+import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
+
+isolateSquirrelHome("squirrel-analyze-controller");
 
 function createMockCrawl(overrides: Partial<CrawlMetadata>): CrawlMetadata {
   return {

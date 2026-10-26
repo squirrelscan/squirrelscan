@@ -1,0 +1,79 @@
+---
+title: "Color contrast ratio: WCAG AA thresholds and checks"
+description: "Color contrast ratio compares the luminance of text and its background. WCAG AA asks for 4.5:1, or 3:1 for large text. What squirrelscan can measure."
+sidebarTitle: "Color contrast ratio"
+---
+
+**Color contrast ratio** is a measure of the difference in luminance between text and its background, from 1:1 for identical colors to 21:1 for black on white.
+
+WCAG 2.2 success criterion 1.4.3, Contrast (Minimum), at level AA, asks for at least 4.5:1 for normal text and 3:1 for large text. Large means at least 18 point, or 14 point bold. Logos and text in inactive controls are exempt. A separate criterion, 1.4.1 Use of Color, says color must not be the only way information is conveyed, so a link in a paragraph that differs from the text around it only by color needs another cue, such as an underline.
+
+{/* glossary:hub:start */}
+
+Category: [Accessibility](/rules/a11y)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+W3C's Understanding document starts from the plain case: some people cannot read faint text. Light grey on white is the usual offender, often chosen for placeholder text, captions or "secondary" copy that turns out to carry information. Contrast failures also tend to be systematic, because one color token in a design system is used on every page.
+
+## How squirrelscan checks it
+
+[a11y/color-contrast](/rules/a11y/color-contrast) reports an element only when it could measure the ratio and found it under 4.5:1. It measures a pair only when the element's own `style` attribute sets both a text color and an opaque background color, written as a hex value, `rgb()` or one of 31 named colors. Colors from stylesheets, utility classes such as Tailwind's `text-gray-300`, inherited colors, transparency and CSS variables are left unresolved, and an unresolved pair is not a finding. The 3:1 allowance for large text is not applied, so a large heading at 3.5:1 is reported. Most text gets its colors from stylesheets, so a pass covers only the pairs the rule could measure.
+
+[a11y/link-in-text-block](/rules/a11y/link-in-text-block) looks at links inside paragraphs, list items, table cells and similar text, and flags those whose inline style or class removes the underline. A stylesheet rule that removes underlines is not seen.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Color contrast: the 4.5:1 rule and how to check it](/rules/a11y/color-contrast) | Light gray text on white fails WCAG AA. squirrel measures the contrast of text whose color and background are both set inline, and reports pairs under 4.5:1. | warning |
+| [Links in a paragraph told apart by color alone](/rules/a11y/link-in-text-block) | A link inside body text needs more than color to be visible. squirrel flags links whose markup removes the underline. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Darken the text or lighten the background until the pair clears the ratio, and check the pair rather than one color:
+
+```css
+.muted { color: #595959; } /* 7:1 on white */
+article a { text-decoration: underline; text-underline-offset: 0.15em; }
+```
+
+Fix the color token in the design system so every page picks it up ([the contrast fix](/rules/a11y/color-contrast#how-to-fix-it)). Underline links in running text, and keep undecorated links for navigation and buttons ([the link fix](/rules/a11y/link-in-text-block#how-to-fix-it)). Check the rendered page with browser developer tools or a contrast checker as well.
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include a11y/color-contrast,a11y/link-in-text-block
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [WCAG](/glossary/wcag): The W3C's Web Content Accessibility Guidelines, organised as testable success criteria at levels A, AA and AAA; 2.2 is current.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Understanding SC 1.4.3 Contrast (Minimum), W3C](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)
+- [Contrast ratio definition, WCAG 2.2](https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio)
+- [Understanding SC 1.4.1 Use of Color, W3C](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html)
+
+{/* glossary:jsonld:start */}
+
+import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";
+
+<GlossaryJsonLd slug="color-contrast" />
+
+{/* glossary:jsonld:end */}

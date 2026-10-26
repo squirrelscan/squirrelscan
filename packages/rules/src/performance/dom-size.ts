@@ -80,27 +80,27 @@ Fixes for large DOMs:
     const checks: CheckResult[] = [];
     if (!document) return { checks: [] };
 
-    const root = document.documentElement;
-    if (!root) {
+    // All three numbers are measured from <body>, as Lighthouse's DOM size
+    // audit does: <head> holds metadata (hreflang alternates, preload hints)
+    // that costs no layout (#483, pub#548). Like Lighthouse's
+    // `totalBodyElements`, the count is the body's descendants and the body
+    // itself is depth 1.
+    // linkedom's `body` getter throws on a document with no root (empty,
+    // text-only or comment-only HTML), so the root is checked first.
+    const body = document.documentElement ? document.body : null;
+    if (!body) {
       checks.push({
         name: "dom-total-nodes",
         status: "skipped",
-        message: "No document root found",
+        message: document.documentElement ? "No body element found" : "No document root found",
         skipReason: "Invalid document structure",
       });
       return { checks };
     }
 
-    // Count total nodes
-    const totalNodes = countNodes(root);
-
-    // Calculate max depth
-    const maxDepth = calculateMaxDepth(root);
-
-    // Find elements with too many children. <head> holds metadata (hreflang
-    // alternates, preload hints) and does not cost layout, so walk <body> only.
-    const body = document.body;
-    const maxChildrenCount = body ? findMaxChildren(body) : 0;
+    const totalNodes = countNodes(body) - 1;
+    const maxDepth = calculateMaxDepth(body);
+    const maxChildrenCount = findMaxChildren(body);
 
     // Check total nodes
     if (totalNodes < opts.warn_threshold) {

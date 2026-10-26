@@ -11,7 +11,7 @@ Token-gating is the same idea keyed on the URL instead. The page returns nothing
 
 ## What squirrel checks
 
-The rule reads the results of an opt-in differential probe that runs after the crawl and before the rules. The probe picks a small, capped set of suspicious paths, meaning pages that are orphaned, with no inbound internal links and absent from the sitemap, or recently modified according to sitemap `lastmod`. It re-fetches each one with the default user-agent, again with a Googlebot user-agent, and optionally once more with an appended query token, then compares HTTP status and visible-text similarity.
+The rule reads the results of an opt-in differential probe that runs after the crawl and before the rules. The probe picks a small, capped set of suspicious paths, meaning pages that are orphaned, with no inbound internal links and absent from the sitemap, or recently modified according to sitemap `lastmod`. It never picks the homepage or the page the audit started from. A `lastmod` that names only a year, a month or a day (`2026`, `2026-10`, `2026-10-14`) counts from the end of that period, or from now when the period has not ended, so a page stamped with the current year or month is recent. It re-fetches each one with the default user-agent, again with a Googlebot user-agent, and optionally once more with an appended query token, then compares HTTP status and visible-text similarity.
 
 The rule emits these checks:
 
@@ -77,6 +77,12 @@ disable = ["integrity/*"]
 - [crawl/soft-404](/rules/crawl/soft-404): pages that return 200 while showing an error, a different status mismatch.
 
 Site Integrity findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Cloaking](/glossary#cloaking).
+
+{/* glossary:backlinks:end */}
 
 ## References
 

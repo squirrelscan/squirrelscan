@@ -7,11 +7,16 @@ import { cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
 import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
 import { getScoreGrade } from "../scoring";
 import { REPORT_SOURCE_PAGES_PREVIEW, REPORT_PAGES_HARD_CAP } from "../constants";
-import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
+import {
+  groupIssuesByCategory,
+  flattenIssuesBySeverity,
+  passedRuleScope,
+  reportPassedRules,
+} from "../grouping";
 import { entityMarkdownSection } from "../entities";
 import { groupTechnologies, techChangeSummary, techIconUrl } from "../technologies";
 import { SITE_PROFILE_NOTE, siteProfileFlags, siteProfileRows } from "../site-metadata";
-import { EDITOR_SUMMARY_NOTE, editorSummaryView } from "../editor-summary";
+import { EDITOR_SUMMARY_NOTE, editorSummaryView, priorityEffortLabel } from "../editor-summary";
 import { getGroupName, getSubcategoryName, severityLabel } from "../categories";
 import {
   carriedTag,
@@ -30,6 +35,8 @@ import {
   ruleAffectedPageCount,
   ruleCarriedPageCount,
   isRedundantPageItem,
+  itemsNotListed,
+  itemsNotListedLine,
 } from "../affected-pages";
 import { formatReportDate } from "../utils";
 import { getPathname } from "../url";
@@ -37,10 +44,18 @@ import { lockedRulesMessage } from "../locked-rules";
 import { privateTargetLine } from "../private-target";
 import { notCheckedLines } from "../not-checked";
 
+/** repo#2661: ", N more not listed" when the report left items out of a check. */
+function notListedSuffix(check: Parameters<typeof itemsNotListed>[0]): string {
+  const left = itemsNotListed(check);
+  return left > 0 ? `, ${left.toLocaleString("en-US")} more not listed` : "";
+}
+
 export interface MarkdownRenderOptions {
   version?: string;
   /** White-label branding (#810) — Team orgs drop the squirrelscan header/footer. */
   branding?: ReportBranding;
+  /** List the rules that passed after the issues (`--include-passed`). */
+  includePassed?: boolean;
 }
 
 function escapeMarkdownTableCell(value: string, escapeBrackets = false): string {
@@ -84,6 +99,36 @@ function escapeMarkdownDestination(value: string): string {
  * http/https/www/mailto, so it cannot produce a `javascript:` link, and the URL
  * is displayed in full either way.
  */
+/** Collapse a value to one line so a blank line in it cannot end a list item early. */
+function oneMdLine(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * A line-leading block marker (heading, list, numbered list, quote) rendered
+ * as text, for a value that starts a line of its own. Twin of
+ * `escapeBlockStart` in the cloud's report-markdown template.
+ */
+function escapeBlockStart(value: string): string {
+  return value.replace(/^([#+>-])/, "\\$1").replace(/^(\d+)([.)])/, "$1\\$2");
+}
+
+/**
+ * The white-label footer line: the org's footer text, escaped, then its
+ * website as an autolink. Only an https URL with nothing in it that could
+ * close the autolink is shown. Null when neither is set. Twin of the cloud's
+ * report-markdown template.
+ */
+function whiteLabelFooterLine(branding: ReportBranding | undefined): string | null {
+  const parts: string[] = [];
+  if (branding?.footerText) parts.push(escapeMarkdownInline(oneMdLine(branding.footerText)));
+  const website = branding?.websiteUrl;
+  if (website && /^https:\/\//i.test(website) && !/[\s<>]/.test(website)) {
+    parts.push(`<${website}>`);
+  }
+  return parts.length > 0 ? escapeBlockStart(parts.join(" · ")) : null;
+}
+
 function escapeMarkdownInline(value: string): string {
   const output: string[] = [];
   for (const char of value) {
@@ -126,7 +171,7 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   // the report instead.
   lines.push(
     whiteLabel
-      ? `# ${options?.branding?.orgName ? `${options.branding.orgName} ` : ""}Audit Report`
+      ? `# ${options?.branding?.orgName ? `${escapeMarkdownInline(options.branding.orgName)} ` : ""}Audit Report`
       : "# squirrelscan Audit Report",
   );
   lines.push("");
@@ -178,24 +223,40 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   lines.push("");
 
   // Editor's summary — report-only (Pro exec-email narrative), surfaced first.
-  const es = editorSummaryView(report.editorSummary);
+  const es = editorSummaryView(report.editorSummary, report);
   if (es) {
     lines.push("## Editor's Summary");
     lines.push("");
     lines.push(`_${EDITOR_SUMMARY_NOTE}_`);
     lines.push("");
+    // Model-authored and site-influenced: escaped like every other value here.
     for (const para of es.paragraphs) {
-      lines.push(para);
+      lines.push(escapeMarkdownInline(para));
       lines.push("");
     }
-    if (es.bigTicket.length > 0) {
+    if (es.priorities.length === 0 && es.bigTicket.length > 0) {
       lines.push("**Big-ticket items:**");
       lines.push("");
-      for (const item of es.bigTicket) lines.push(`- ${item}`);
+      for (const item of es.bigTicket) lines.push(`- ${escapeMarkdownInline(oneMdLine(item))}`);
       lines.push("");
     }
     if (es.verdict) {
-      lines.push(`**Verdict:** ${es.verdict}`);
+      lines.push(`**Verdict:** ${escapeMarkdownInline(oneMdLine(es.verdict))}`);
+      lines.push("");
+    }
+  }
+
+  // Ranked priorities from the editor's summary, as their own section.
+  if (es && es.priorities.length > 0) {
+    lines.push("## Priorities");
+    lines.push("");
+    for (const [i, p] of es.priorities.entries()) {
+      lines.push(
+        `${i + 1}. **${escapeMarkdownInline(p.title)}** (${priorityEffortLabel(p.effort)})`,
+      );
+      // Trailing two spaces: a hard break, so why and action stay separate lines.
+      if (p.why) lines.push(`   ${escapeMarkdownInline(oneMdLine(p.why))}  `);
+      lines.push(`   ${escapeMarkdownInline(oneMdLine(p.action))}`);
       lines.push("");
     }
   }
@@ -477,7 +538,7 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
         const visibleItems = check.items?.filter((item) => !isRedundantPageItem(item));
         if (visibleItems && visibleItems.length > 0) {
           lines.push(
-            `<details><summary><strong>${check.name}:</strong> ${visibleItems.length} item(s)</summary>`,
+            `<details><summary><strong>${check.name}:</strong> ${visibleItems.length} item(s)${notListedSuffix(check)}</summary>`,
           );
           lines.push("");
           for (const item of visibleItems) {
@@ -505,6 +566,9 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
           lines.push("");
           lines.push("</details>");
           lines.push("");
+        } else if (itemsNotListed(check) > 0) {
+          lines.push(`**${check.name}:** ${itemsNotListedLine(itemsNotListed(check))}`);
+          lines.push("");
         }
       }
 
@@ -518,6 +582,22 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
     lines.push("## Issues");
     lines.push("");
     lines.push("No issues found.");
+    lines.push("");
+  }
+
+  const passedRules = reportPassedRules(report, options?.includePassed);
+  if (passedRules.length > 0) {
+    lines.push("## Passed");
+    lines.push("");
+    lines.push(`*${passedRules.length} rule${passedRules.length === 1 ? "" : "s"} with no issues*`);
+    lines.push("");
+    lines.push("| Rule | Category | Checked |");
+    lines.push("|------|----------|---------|");
+    for (const rule of passedRules) {
+      lines.push(
+        `| ${escapeMarkdownTableCell(rule.name)} \`${rule.id}\` | ${rule.categoryName} | ${passedRuleScope(rule)} |`,
+      );
+    }
     lines.push("");
   }
 
@@ -547,12 +627,20 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
     }
   }
 
-  // White-label drops the squirrelscan "Generated by" credit line entirely.
+  // White-label drops the squirrelscan "Generated by" credit line entirely,
+  // and shows the org's own footer text and website in its place.
   if (!whiteLabel) {
     lines.push("---");
     lines.push("");
     const versionStr = version ? ` v${version}` : "";
     lines.push(`*Generated by [squirrelscan](https://squirrelscan.com)${versionStr}*`);
+  } else {
+    const footer = whiteLabelFooterLine(options?.branding);
+    if (footer) {
+      lines.push("---");
+      lines.push("");
+      lines.push(footer);
+    }
   }
 
   return lines.join("\n");

@@ -11,7 +11,7 @@ A single `Review` is the other half. Google's review snippet guidance asks for a
 
 ## What squirrel checks
 
-The rule reads every `script[type="application/ld+json"]` on the page and flattens each one, so a node nested in an `@graph` wrapper counts the same as a top-level node. It does not walk into ordinary properties. From those nodes it collects an `aggregateRating` property, a node whose `@type` is exactly `AggregateRating`, a `review` property, and any node whose `@type` is exactly `Review`. It emits one to three checks:
+The rule reads every `script[type="application/ld+json"]` on the page and flattens each one, so a node nested in an `@graph` wrapper counts the same as a top-level node. It does not walk into ordinary properties. From those nodes it collects an `aggregateRating` property, a node whose `@type` is exactly `AggregateRating`, a `review` property, and any node whose `@type` is exactly `Review`. A `review` entry or an `aggregateRating` written as a node reference (`{"@id": "…#r1"}`) is read from the node with that `@id` anywhere in the page's JSON-LD, and a review both referenced and present as its own node is judged once. It emits one to three checks:
 
 - `review-schema`: reports at info status with the message `No Review or AggregateRating schema found` when neither is present. No further checks run.
 - `aggregate-rating`: warns with the message `AggregateRating missing ratingValue` when `ratingValue` is falsy. Only when it is present does the count get checked, warning with `AggregateRating missing ratingCount/reviewCount` when neither `ratingCount` nor `reviewCount` is present. With both it passes with `AggregateRating: 4.7/5 (218 reviews)`, filling in the value and the count.
@@ -82,6 +82,12 @@ enable = ["schema/review"]
 - [schema/json-ld-valid](/rules/schema/json-ld-valid): whether the JSON-LD parses and passes schema.org validation at all.
 
 Structured data findings ship in every audit next to the core SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Product schema](/glossary/product-schema), [Rich results](/glossary/rich-results).
+
+{/* glossary:backlinks:end */}
 
 ## References
 

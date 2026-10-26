@@ -1,5 +1,6 @@
 // a11y/aria-toggle-field-name - Toggle fields have accessible names
 
+import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 function hasAccessibleName(el: Element, doc: Document): boolean {
@@ -42,7 +43,7 @@ export const ariaToggleFieldNameRule: Rule = {
     description:
       "Checks that toggle fields (checkbox, radio, switch) have accessible names",
     solution:
-      "Toggle fields need accessible names to describe what they control. Use <label for='id'>, aria-label, aria-labelledby, or wrap in <label>. Example: <label><input type='checkbox'> Subscribe to newsletter</label>",
+      "Toggle fields need accessible names to describe what they control. Use <label for='id'>, aria-label, aria-labelledby, or wrap in <label>. Example: <label><input type='checkbox'> Subscribe to newsletter</label> An element hidden by the hidden attribute, aria-hidden, a closed dialog or an inline style='display:none' is out of the accessibility tree and is not reported, but it needs a name before it is shown. A <style> rule squirrel can decide counts too. A toggle field carrying a no-js class (itself or an ancestor other than <html>) on a page with an external stylesheet or @import is reported as unconfirmed, because the theme may hide it when JavaScript runs. One a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet) is reported as unconfirmed. External stylesheets are not read, so an element hidden only by one is still reported.",
     category: "a11y",
     scope: "page",
     verdictScope: "page",
@@ -55,7 +56,9 @@ export const ariaToggleFieldNameRule: Rule = {
     if (!doc) return { checks: [] };
     const checks: CheckResult[] = [];
 
-    const missingNames: string[] = [];
+    // pub#993: out of the accessibility tree is skipped, a style that may hide
+    // it is unconfirmed, like button-name.
+    const unnamed = sortUnnamedControls<string>();
 
     // Check elements with toggle roles
     const toggleRoles = ["checkbox", "radio", "switch"];
@@ -64,7 +67,7 @@ export const ariaToggleFieldNameRule: Rule = {
       for (const el of elements) {
         if (!hasAccessibleName(el, doc)) {
           const tagName = el.tagName.toLowerCase();
-          missingNames.push(`${tagName}[role="${role}"]`);
+          unnamed.add(el, `${tagName}[role="${role}"]`);
         }
       }
     }
@@ -75,7 +78,7 @@ export const ariaToggleFieldNameRule: Rule = {
       if (checkbox.hasAttribute("role")) continue;
       if (!hasAccessibleName(checkbox, doc)) {
         const name = checkbox.getAttribute("name") || "";
-        missingNames.push(name ? `checkbox[name="${name}"]` : "checkbox");
+        unnamed.add(checkbox, name ? `checkbox[name="${name}"]` : "checkbox");
       }
     }
 
@@ -86,7 +89,8 @@ export const ariaToggleFieldNameRule: Rule = {
       if (!hasAccessibleName(radio, doc)) {
         const name = radio.getAttribute("name") || "";
         const value = radio.getAttribute("value") || "";
-        missingNames.push(
+        unnamed.add(
+          radio,
           name
             ? `radio[name="${name}"]${value ? `[value="${value}"]` : ""}`
             : "radio"
@@ -94,22 +98,31 @@ export const ariaToggleFieldNameRule: Rule = {
       }
     }
 
+    const missingNames = unnamed.failures;
+
     if (missingNames.length > 0) {
       checks.push({
         name: "aria-toggle-field-name",
         status: "fail",
         message: `${missingNames.length} toggle field(s) without accessible names`,
         items: missingNames.slice(0, 10).map((id) => ({ id })),
-        details:
-          missingNames.length > 10
-            ? { additional: missingNames.length - 10 }
-            : undefined,
+        details: missingNames.length > 10 ? { additional: missingNames.length - 10 } : undefined,
       });
-    } else {
+    }
+    if (unnamed.unconfirmed.length > 0) {
+      checks.push(
+        unconfirmedRow("aria-toggle-field-name", "toggle field(s) without accessible names", unnamed.unconfirmed),
+      );
+    }
+    if (missingNames.length === 0 && unnamed.unconfirmed.length === 0) {
       checks.push({
         name: "aria-toggle-field-name",
         status: "pass",
-        message: "All toggle fields have accessible names",
+        message:
+          unnamed.hidden > 0
+            ? "All toggle fields in the accessibility tree have accessible names"
+            : "All toggle fields have accessible names",
+        ...(unnamed.hidden > 0 ? { details: { hiddenWithoutName: unnamed.hidden } } : {}),
       });
     }
 

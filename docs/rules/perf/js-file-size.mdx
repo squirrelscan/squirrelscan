@@ -18,7 +18,7 @@ The rule runs once per crawl over the script resources the crawl collected, with
 - `js-file-size-warn`, warning with the message `N JS file(s) exceed 250.0 KB` for files above the warning threshold but not above the error one, with the same items.
 - `js-file-size`, passing with the message `All JavaScript files are within size limits` when nothing crossed either threshold.
 
-Sizes are the transferred sizes the crawl observed. A file whose size could not be determined is counted in neither bucket. The fail and warn checks can both appear on the same audit, since they cover different files.
+Sizes are decoded sizes: the byte length of the script text after any gzip or Brotli compression is undone, not the bytes sent over the network. A compressed 1.2 MB bundle that transfers as 300 KB is measured as 1.2 MB, which matches the parse and execute cost rather than the download. The one exception is a file whose `Content-Length` header declares more than 5 MB: it is not downloaded, and that declared length is its size. A file whose size could not be determined, such as one that answered with an error status, is counted in neither bucket. The fail and warn checks can both appear on the same audit, since they cover different files.
 
 ## How to fix it
 
@@ -88,6 +88,12 @@ enable = ["perf/js-file-size"]
 - [perf/asset-compression](/rules/perf/asset-compression): whether the file is at least served compressed.
 
 Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Interaction to Next Paint (INP)](/glossary/inp), [Page weight](/glossary#page-weight).
+
+{/* glossary:backlinks:end */}
 
 ## References
 

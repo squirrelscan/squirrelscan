@@ -375,7 +375,13 @@ export function requestOnceScoped<T>(
   url: string,
   options: RequestInit | undefined,
   use: (response: Response) => Promise<T>,
-  timeoutMs: number = config.timeout
+  timeoutMs: number = config.timeout,
+  /**
+   * A guarded send (squirrelscan/repo#3430) that follows redirects itself, hop
+   * by hop through the egress guard; the runtime's own following is off, so no
+   * hop goes out unvetted.
+   */
+  guardedSend?: (url: string, init: RequestInit) => Promise<Response>
 ): Effect.Effect<T, RequestError, never> {
   return Effect.suspend(() => {
     const headers = new Headers(options?.headers);
@@ -384,10 +390,10 @@ export function requestOnceScoped<T>(
       url,
       options,
       headers,
-      config.followRedirects ? "follow" : "manual",
+      guardedSend ? "manual" : config.followRedirects ? "follow" : "manual",
       timeoutMs,
       (response) => use(response),
-      fetchUndecoded
+      guardedSend ?? fetchUndecoded
     );
   });
 }

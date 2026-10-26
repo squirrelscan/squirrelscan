@@ -2,7 +2,7 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import { flattenJsonLdNodes } from "@squirrelscan/utils";
+import { flattenJsonLdNodes, indexJsonLdIds, resolveJsonLdRef } from "@squirrelscan/utils";
 
 export const reviewSchemaRule: Rule = {
   meta: {
@@ -27,43 +27,61 @@ export const reviewSchemaRule: Rule = {
       'script[type="application/ld+json"]'
     );
     let aggregateRating: Record<string, unknown> | null = null;
-    let reviews: Record<string, unknown>[] = [];
+    // A Set, so a review both referenced by `@id` and present as its own node
+    // is judged once (pub#817).
+    const reviewSet = new Set<Record<string, unknown>>();
 
+    // Flattened per script, so a Yoast / Rank Math `@graph` wrapper is
+    // descended into rather than read as one typeless node (#317). Per
+    // SCRIPT and not over the joined `schema.raw`, because that join can
+    // mis-split a pretty-printed block (#1099). Unparseable JSON yields an
+    // empty list, which is what the old try/catch was for.
+    const pageNodes: Record<string, unknown>[] = [];
     for (const script of schemaScripts) {
-      // Flattened per script, so a Yoast / Rank Math `@graph` wrapper is
-      // descended into rather than read as one typeless node (#317). Per
-      // SCRIPT and not over the joined `schema.raw`, because that join can
-      // mis-split a pretty-printed block (#1099). Unparseable JSON yields an
-      // empty list, which is what the old try/catch was for.
-      const schemas = flattenJsonLdNodes(script.textContent || "");
+      pageNodes.push(...flattenJsonLdNodes(script.textContent || ""));
+    }
+    // pub#817: `review` and `aggregateRating` may reference their nodes by
+    // `@id`, anywhere on the page.
+    const ids = indexJsonLdIds(pageNodes, ctx.page.url);
+    const resolve = (value: unknown) => resolveJsonLdRef(value, ids, ctx.page.url);
 
-      for (const schema of schemas) {
-        // Look for aggregateRating in any schema
-        if (schema["aggregateRating"]) {
-          const raw = schema["aggregateRating"];
-          // Some generators array-wrap AggregateRating (#721); take first object entry.
-          const candidate = Array.isArray(raw)
+    for (const schema of pageNodes) {
+      // Look for aggregateRating in any schema
+      if (schema["aggregateRating"]) {
+        const raw = schema["aggregateRating"];
+        // Some generators array-wrap AggregateRating (#721); take first object entry.
+        const candidate = resolve(
+          Array.isArray(raw)
             ? raw.find((r) => r && typeof r === "object" && !Array.isArray(r))
-            : raw;
-          if (candidate) {
-            aggregateRating = candidate as Record<string, unknown>;
-          }
-        }
-        if (schema["review"]) {
-          const r = schema["review"];
-          reviews = reviews.concat(Array.isArray(r) ? r : [r]);
-        }
-
-        // Direct AggregateRating type
-        if (schema["@type"] === "AggregateRating") {
-          aggregateRating = schema;
-        }
-        // Direct Review type
-        if (schema["@type"] === "Review") {
-          reviews.push(schema);
+            : raw
+        );
+        if (candidate) {
+          aggregateRating = candidate as Record<string, unknown>;
         }
       }
+      if (schema["review"]) {
+        const r = schema["review"];
+        for (const entry of Array.isArray(r) ? r : [r]) {
+          // A null or bare string in `review` is not a review to judge.
+          const node = resolve(entry);
+          if (node && typeof node === "object" && !Array.isArray(node)) {
+            reviewSet.add(node as Record<string, unknown>);
+          }
+        }
+      }
+
+      // Direct AggregateRating type. A stub (`{"@id", "@type"}`) stands for
+      // the node with its id, so it never replaces a resolved rating with
+      // an empty one.
+      if (schema["@type"] === "AggregateRating") {
+        aggregateRating = resolve(schema) as Record<string, unknown>;
+      }
+      // Direct Review type
+      if (schema["@type"] === "Review") {
+        reviewSet.add(resolve(schema) as Record<string, unknown>);
+      }
     }
+    const reviews = [...reviewSet];
 
     if (!aggregateRating && reviews.length === 0) {
       checks.push({

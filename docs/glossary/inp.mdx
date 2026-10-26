@@ -1,0 +1,96 @@
+---
+title: "What is INP? Interaction to Next Paint explained"
+description: "INP measures how long a page takes to paint after a click, tap or key press. Good is 200 ms or less. What causes slow INP and what squirrelscan flags."
+sidebarTitle: "Interaction to Next Paint (INP)"
+---
+
+**Interaction to Next Paint (INP)** is the Core Web Vitals metric for responsiveness: the time from a click, tap or key press until the browser paints the next frame, observed across the whole visit.
+
+web.dev describes INP as observing the latency of every click, tap and keyboard interaction during a visit and reporting the longest one, ignoring outliers. 200 milliseconds or less is good and more than 500 is poor, at the 75th percentile of page loads. INP replaced First Input Delay (FID) as a Core Web Vital in March 2024. FID only measured the input delay of the first interaction. INP covers every interaction, up to the next paint.
+
+{/* glossary:hub:start */}
+
+Category: [Performance](/rules/perf)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+A slow interaction feels like a broken page. The usual cause is a busy main thread. A long task started by a script has to finish before the browser can handle the click, and third-party tags run on every page whether the visitor uses them or not. A large DOM makes the style and layout work after an interaction more expensive, and JavaScript running on the main thread competes with the response.
+
+## How squirrelscan checks it
+
+squirrelscan does not measure INP, which needs interactions with a running page, and in the field, real visitors. The rules count what the HTML says about main-thread work.
+
+[perf/inp-hints](/rules/perf/inp-hints) counts third-party scripts from about twenty-five known analytics, advertising, support and monitoring hosts, so the number is a floor, and warns when more than three classic scripts have neither `async` nor `defer`. [perf/dom-size](/rules/perf/dom-size) counts the elements in `<body>`, the nesting depth and the most children on one element. [perf/js-file-size](/rules/perf/js-file-size) checks the size of every script the crawl collected. [perf/duplicate-js](/rules/perf/duplicate-js) finds one library loaded twice or at two versions, and [perf/legacy-js](/rules/perf/legacy-js) finds polyfill bundles and ES5 transpilation helpers that modern browsers do not need.
+
+A tag manager that loads one script, which then pulls in ten more, shows up as one script in the HTML.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Third-party scripts and INP: what squirrel counts per page](/rules/perf/inp-hints) | More than five known third-party scripts, or more than three that block the parser. squirrel counts both on every page. | info |
+| [Large DOM: node count, depth and children per element](/rules/perf/dom-size) | A page at 1,500 DOM nodes or more, deeper than 32 levels, or with an element holding more than 60 children. squirrel counts all three. | warning |
+| [JavaScript bundle too large: the 250 KB and 1 MB limits](/rules/perf/js-file-size) | Scripts over 250 KB warn and over 1 MB fail. squirrel measures every JavaScript file the crawl found and names the pages that load it. | error |
+| [Same library loaded twice: duplicate JavaScript on a page](/rules/perf/duplicate-js) | One library loaded from two script tags, or at two different versions. squirrel reads library names out of the script URLs. | warning |
+| [core-js and Babel helpers: legacy JavaScript in a bundle](/rules/perf/legacy-js) | Polyfill bundles and ES5 transpilation helpers shipped to browsers that do not need them. squirrel reads script URLs and inline code. | info |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Defer the scripts you keep, and load heavy code when it is first needed:
+
+```html
+<script src="/app.js" defer></script>
+<script type="module">
+  document.querySelector("#edit").addEventListener("click", async () => {
+    const { openEditor } = await import("/editor.js");
+    openEditor();
+  });
+</script>
+```
+
+For third-party tags the fix is usually deletion, one tag at a time ([the INP hint fix](/rules/perf/inp-hints#how-to-fix-it)). Render only the rows of a long list that are on screen ([the DOM size fix](/rules/perf/dom-size#how-to-fix-it)). Split bundles by route and look for the one dependency that dominates ([the bundle size fix](/rules/perf/js-file-size#how-to-fix-it)). Load each library once, and set a modern build target so the transpiler emits fewer helpers ([the legacy JavaScript fix](/rules/perf/legacy-js#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include perf/inp-hints,perf/dom-size,perf/js-file-size,perf/duplicate-js,perf/legacy-js
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Core Web Vitals](/glossary/core-web-vitals): Google's three user-experience metrics: LCP for loading, INP for responsiveness and CLS for visual stability, judged at the 75th percentile of real visits.
+- [DOM size](/glossary#dom-size): The number and depth of elements in a page's document tree; large DOMs slow style calculation and interactions.
+- [Page weight](/glossary#page-weight): The total bytes a page downloads across HTML, CSS, JavaScript, images and fonts.
+
+{/* glossary:related:end */}
+
+## Learn more
+
+- [Core Web Vitals guide](https://squirrelscan.com/learn/core-web-vitals)
+- [Core Web Vitals checker](https://squirrelscan.com/tools/core-web-vitals-checker)
+
+## References
+
+- [Interaction to Next Paint, web.dev](https://web.dev/articles/inp)
+- [How large DOM sizes affect interactivity, web.dev](https://web.dev/articles/dom-size-and-interactivity)
+- [INP becomes a Core Web Vital, web.dev](https://web.dev/blog/inp-cwv-launch)
+
+{/* glossary:jsonld:start */}
+
+import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";
+
+<GlossaryJsonLd slug="inp" />
+
+{/* glossary:jsonld:end */}

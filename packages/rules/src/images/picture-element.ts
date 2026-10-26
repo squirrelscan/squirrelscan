@@ -3,6 +3,7 @@
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 
 export const pictureElementRule: Rule = {
   meta: {
@@ -42,7 +43,8 @@ The <img> provides fallback for:
         name: "picture-element",
         status: "skipped",
         message: "No <picture> elements found",
-        skipReason: "Page has no picture elements",
+        skipReason: CHECK_NOT_APPLICABLE_SKIP_REASON,
+        details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON },
       });
       return { checks };
     }

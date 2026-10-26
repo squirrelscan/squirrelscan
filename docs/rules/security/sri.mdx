@@ -19,6 +19,8 @@ The rule runs on every crawled page. It looks at every `<script src>` and every 
 
 Relative and protocol-relative URLs are resolved against the page URL before the origin comparison, so `//cdn.example.com/x.js` counts as cross-origin and `/local.js` does not. Eleven hostnames are exempt because their vendors document SRI as unsupported: `js.stripe.com`, `checkout.stripe.com`, `www.paypal.com`, `www.paypalobjects.com`, `www.google.com`, `www.gstatic.com`, `js.hcaptcha.com`, `www.googletagmanager.com`, `www.google-analytics.com`, `ssl.google-analytics.com` and `connect.facebook.net`.
 
+Two paths on `cdn.shopify.com` are exempt too: `/shopifycloud/` and `/storefront/`. Shopify injects the scripts under them into every store and updates them in place, so a store owner cannot pin a hash. The rest of `cdn.shopify.com`, such as theme assets under `/s/files/` and theme app extensions under `/extensions/`, is still checked: those files are versioned and can carry `integrity`. Add more hosts with the [`exempt_hosts` option](#options).
+
 Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
 
 ## How to fix it
@@ -33,7 +35,7 @@ Elements inside `<noscript>` are skipped: a browser with scripting enabled reads
 
 The attribute goes on the tag that loads the resource. For a cross-origin classic script like this one, add `crossorigin="anonymous"` and make sure the host returns a permissive `Access-Control-Allow-Origin`, or the browser cannot read the body to hash it. Module scripts already fetch with CORS, and a same-origin resource needs no `crossorigin` attribute at all. jsDelivr, cdnjs and unpkg publish the hash next to the file URL.
 
-A self-updating third-party script that is not on the exemption list still gets flagged. Pinning a hash there breaks the embed on the vendor's next release, so disable the rule instead of inventing an `integrity` value.
+A self-updating third-party script that is not on the exemption list still gets flagged. Pinning a hash there breaks the embed on the vendor's next release, so list its host in `exempt_hosts` instead of inventing an `integrity` value.
 
 | | |
 |---|---|
@@ -42,6 +44,21 @@ A self-updating third-party script that is not on the exemption list still gets 
 | **Scope** | Per-page |
 | **Severity** | warning |
 | **Weight** | 5/10 |
+
+## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `exempt_hosts` | array of hostnames | `[]` | Extra hostnames whose scripts and stylesheets update in place, exempt from the check |
+
+Each entry is a bare hostname such as `static.klaviyo.com`, matched exactly, ignoring case and a terminal dot: no scheme, port, path or `*` wildcard. Every resource from that host is exempt, so list only hosts whose files change at the same URL. An entry that is not a hostname is reported by `squirrel config validate`, and `squirrel audit` stops before it crawls, naming the entry: `[rule_options."security/sri"] exempt_hosts.0: must be a hostname such as static.example.com, with no scheme, port or path`.
+
+### Configuration example
+
+```toml squirrel.toml
+[rule_options."security/sri"]
+exempt_hosts = ["static.klaviyo.com", "plausible.io"]
+```
 
 ## Enable / disable
 
@@ -76,6 +93,12 @@ enable = ["security/sri"]
 - [integrity/obfuscated-script](/rules/integrity/obfuscated-script): scripts that are already on the page and are hiding what they do.
 
 Security findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Subresource Integrity (SRI)](/glossary#subresource-integrity).
+
+{/* glossary:backlinks:end */}
 
 ## References
 

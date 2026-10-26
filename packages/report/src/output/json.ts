@@ -1,23 +1,29 @@
 // JSON report output
 
-import type { AuditFailureReasonCode, RefusedFetch } from "@squirrelscan/core-contracts";
+import type {
+  AuditFailureReasonCode,
+  EditorSummaryPriority,
+  RefusedFetch,
+} from "@squirrelscan/core-contracts";
 import type { ResolvedAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
 import type { AuditReport, AuditStatus, CheckItem, EntityMap } from "../types";
 import { reportFailureReasonCode } from "../failure-notice";
 import { getScoreGrade } from "../scoring";
 import { getGroupName } from "../categories";
-import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
+import { groupIssuesByCategory, flattenIssuesBySeverity, reportPassedRules } from "../grouping";
 import { affectedPages } from "../affected-pages";
 import { techIconUrl } from "../technologies";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
-import { seedRedirect } from "../coverage";
+import { scanScopeUnfetched, seedRedirect } from "../coverage";
 import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
 import { collectSkippedChecks, type SkippedCheck } from "../skipped";
 
 export interface JsonRenderOptions {
   version?: string;
+  /** Add `passedRules`, the rules that passed (`--include-passed`). */
+  includePassed?: boolean;
 }
 
 interface SlimJsonReport {
@@ -57,6 +63,13 @@ interface SlimJsonReport {
      * run that finished or hit the page cap.
      */
     stopReason?: "time";
+    /**
+     * In-scope URLs the crawl queued but never fetched before it stopped. Added
+     * to the pages this run crawled (`coverage.auditedPages` on a smart audit,
+     * else `totalPages`) it is a floor on the pages the crawl knew of. Absent
+     * when nothing was left queued.
+     */
+    unfetched?: number;
     /** The audit level and the settings it resolved to. Absent before audit levels. */
     auditLevel?: ResolvedAuditSettings;
     /** Smart audits (#110): present only when `smart_audits` ran. */
@@ -153,6 +166,19 @@ interface SlimJsonReport {
    */
   skippedChecks?: SkippedCheck[];
   /**
+   * Rules that passed: at least one passing check and no failing or warning
+   * one. `scope` is the rule's own; `pages` counts distinct pages with a pass,
+   * and is 0 when the pass rows carry none. Present only with
+   * `--include-passed`, and only when non-empty.
+   */
+  passedRules?: Array<{
+    ruleId: string;
+    name: string;
+    category: string;
+    scope: "page" | "site";
+    pages: number;
+  }>;
+  /**
    * Rules that do not apply to this audit's host (pub#629): the transport and
    * delivery rules, skipped because the host is local or private-network. Not
    * findings, not evaluation gaps, and never scored. Present only when a rule
@@ -184,6 +210,8 @@ interface SlimJsonReport {
     verdict: string;
     model: string;
     generatedAt: string;
+    /** Ranked next steps, when the server returned them. */
+    priorities?: EditorSummaryPriority[];
   };
   // Report-only — never part of the score. The entity-map document (#2091),
   // emitted verbatim so it still validates against the core-contracts schema.
@@ -231,13 +259,19 @@ interface SlimJsonReport {
   };
 }
 
-function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
+function buildSlimReport(
+  report: AuditReport,
+  version: string,
+  includePassed: boolean
+): SlimJsonReport {
   const categoryIssues = groupIssuesByCategory(report.ruleResults, report.checkTallies);
-  const es = editorSummaryView(report.editorSummary);
+  const passedRules = reportPassedRules(report, includePassed);
+  const es = editorSummaryView(report.editorSummary, report);
   const refusedSeedRedirect = seedRedirect(report);
   const skippedChecks = collectSkippedChecks(report.ruleResults);
   const privateTarget = privateTargetLine(report);
   const notChecked = notCheckedRules(report);
+  const unfetched = scanScopeUnfetched(report);
   return {
     meta: {
       version,
@@ -264,6 +298,7 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
       ...(report.scanScope?.stopReason !== undefined
         ? { stopReason: report.scanScope.stopReason }
         : {}),
+      ...(unfetched > 0 ? { unfetched } : {}),
       ...(report.coverage ? { coverage: report.coverage } : {}),
       // The audit level and the settings it resolved to: `level` (a level's
       // name, or `custom`), `basedOn`, `changes` and `settings`. Absent on
@@ -325,6 +360,7 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
             verdict: es.verdict,
             model: es.model,
             generatedAt: es.generatedAt,
+            ...(es.priorities.length > 0 ? { priorities: es.priorities } : {}),
           },
         }
       : {}),
@@ -367,6 +403,17 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
       }),
     })),
     ...(skippedChecks.length > 0 ? { skippedChecks } : {}),
+    ...(passedRules.length > 0
+      ? {
+          passedRules: passedRules.map((r) => ({
+            ruleId: r.id,
+            name: r.name,
+            category: r.categoryName,
+            scope: r.scope,
+            pages: r.pages,
+          })),
+        }
+      : {}),
     ...(privateTarget
       ? {
           notApplicable: {
@@ -464,6 +511,6 @@ function buildSlimReport(report: AuditReport, version: string): SlimJsonReport {
 
 export function renderJson(report: AuditReport, options?: JsonRenderOptions): string {
   const version = options?.version ?? "";
-  const slim = buildSlimReport(report, version);
+  const slim = buildSlimReport(report, version, options?.includePassed ?? false);
   return JSON.stringify(slim, null, 2);
 }

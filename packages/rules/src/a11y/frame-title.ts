@@ -1,5 +1,6 @@
 // a11y/frame-title - Frames/iframes have titles
 
+import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
@@ -10,7 +11,7 @@ export const frameTitleRule: Rule = {
     name: "Frame Title",
     description: "Checks that iframes and frames have title attributes",
     solution:
-      "All iframes must have a title attribute describing their content. This helps screen reader users understand what the iframe contains. Example: <iframe src='video.html' title='Product demo video'>",
+      "All iframes must have a title attribute describing their content. This helps screen reader users understand what the iframe contains. Example: <iframe src='video.html' title='Product demo video'>. An element hidden by the hidden attribute, aria-hidden, a closed dialog or an inline style='display:none' is out of the accessibility tree and is not reported, but it needs a name before it is shown. A <style> rule squirrel can decide counts too. An iframe carrying a no-js class (itself or an ancestor other than <html>) on a page with an external stylesheet or @import is reported as unconfirmed, because the theme may hide it when JavaScript runs. One a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet) is reported as unconfirmed. External stylesheets are not read, so an element hidden only by one is still reported.",
     category: "a11y",
     scope: "page",
     verdictScope: "page",
@@ -24,16 +25,14 @@ export const frameTitleRule: Rule = {
     const checks: CheckResult[] = [];
 
     const frames = querySelectorAllOutsideNoscript(doc, "iframe, frame");
-    const missingTitles: string[] = [];
+    // pub#1002: out of the accessibility tree is skipped, a style that may hide
+    // it is unconfirmed, like button-name.
+    const unnamed = sortUnnamedControls<string>();
 
     for (const frame of frames) {
       const title = frame.getAttribute("title");
       const ariaLabel = frame.getAttribute("aria-label");
       const ariaLabelledby = frame.getAttribute("aria-labelledby");
-      const ariaHidden = frame.getAttribute("aria-hidden");
-
-      // Skip hidden frames
-      if (ariaHidden === "true") continue;
 
       // Skip frames with role=presentation or role=none
       const role = frame.getAttribute("role");
@@ -54,9 +53,11 @@ export const frameTitleRule: Rule = {
           identifier = `iframe (${hostname})`;
         }
 
-        missingTitles.push(identifier);
+        unnamed.add(frame, identifier);
       }
     }
+
+    const missingTitles = unnamed.failures;
 
     if (missingTitles.length > 0) {
       checks.push({
@@ -69,18 +70,28 @@ export const frameTitleRule: Rule = {
             ? { additional: missingTitles.length - 10 }
             : undefined,
       });
-    } else if (frames.length > 0) {
-      checks.push({
-        name: "frame-title",
-        status: "pass",
-        message: `${frames.length} iframe(s) have title attributes`,
-      });
-    } else {
-      checks.push({
-        name: "frame-title",
-        status: "info",
-        message: "No iframes found",
-      });
+    }
+    if (unnamed.unconfirmed.length > 0) {
+      checks.push(unconfirmedRow("frame-title", "iframe(s) without title attribute", unnamed.unconfirmed));
+    }
+    if (missingTitles.length === 0 && unnamed.unconfirmed.length === 0) {
+      if (frames.length > 0) {
+        checks.push({
+          name: "frame-title",
+          status: "pass",
+          message:
+            unnamed.hidden > 0
+              ? "All iframes in the accessibility tree have title attributes"
+              : `${frames.length} iframe(s) have title attributes`,
+          ...(unnamed.hidden > 0 ? { details: { hiddenWithoutName: unnamed.hidden } } : {}),
+        });
+      } else {
+        checks.push({
+          name: "frame-title",
+          status: "info",
+          message: "No iframes found",
+        });
+      }
     }
 
     return { checks };

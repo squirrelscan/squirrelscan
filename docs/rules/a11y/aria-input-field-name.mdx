@@ -16,7 +16,14 @@ One check, `aria-input-field-name`, at severity error. It covers three sets: eve
 A name is resolved from, in order: `aria-label`, `aria-labelledby`, a `<label for="...">` matching the field's `id`, a wrapping `<label>`, `title`, then `placeholder`.
 
 - Fail with `N input field(s) without accessible names`. Items are listed as `div[role="textbox"]`, `input[name="q"]`, `input[type="text"]`, `textarea` or `select`, up to ten with a count of the rest.
-- Pass with `All input fields have accessible names`.
+- `aria-input-field-name-unconfirmed` warns with `N input field(s) without accessible names may be hidden by a style (unconfirmed)` for unnamed fields a style may hide in a way squirrel cannot settle.
+- Pass with `All input fields have accessible names`, or `All input fields in the accessibility tree have accessible names` with `hiddenWithoutName` when unnamed fields were skipped as hidden.
+
+A field out of the accessibility tree has nothing to announce, so it is not reported: one with the `hidden` attribute (except `hidden="until-found"`), `aria-hidden="true"`, `display: none` on itself or an ancestor or `visibility: hidden` on itself or an ancestor, set inline or by a `<style>` rule squirrel can decide (such as `.closed { display: none }`), or inside a closed `<dialog>` or an unopened `popover`. It still needs a name before it can be shown. Hiding squirrel cannot settle is reported as unconfirmed instead: an inline style it cannot read exactly, a `<style>` rule it cannot decide, and, on a page that also loads an external stylesheet, hiding from a `<style>` rule or visibility inherited from an ancestor. External stylesheets are not read, so a field hidden only by the site's external CSS, such as a closed modal, is still reported. See [What squirrel can see](/rules/a11y/button-name#what-squirrel-can-see) for the details.
+
+A page past squirrel's style limits (more than 5,000 style rules, a `<style>` block over the size limit, a very long selector, a no-break or other non-ASCII space in a style block, or a rule nested inside another) is read as unconfirmed for every element a style might hide: the rules past the limit could hide or show any of them, so an unnamed control is reported as unconfirmed, not as a failure. CSS nesting is not read: a nested rule that sets `display` or `visibility` (`b { @media (min-width: 0) { display: none } }`, `.a { & .b { display: none } }`) leaves the elements it could reach unconfirmed, and a nested rule that sets neither changes nothing.
+
+A control that carries a `no-js` class, itself or on an ancestor other than `<html>`, is reported as unconfirmed on a page with an external stylesheet or an `@import`, with the reason that it may be hidden when JavaScript runs. A theme usually hides that fallback with a rule such as `.js .no-js { display: none }` in a stylesheet squirrel does not read. The same control on a page whose styles were all read keeps its verdict, and a class such as `no-js-hidden` is not a marker.
 
 `placeholder` counts here as a last resort. That makes this rule more forgiving than `a11y/form-labels`, which rejects it, so a placeholder-only field passes this check and fails that one.
 
@@ -73,6 +80,12 @@ enable = ["a11y/aria-input-field-name"]
 - [a11y/aria-required-attr](/rules/a11y/aria-required-attr): the state attributes a custom input role has to declare.
 
 Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Accessible name](/glossary/accessible-name).
+
+{/* glossary:backlinks:end */}
 
 ## References
 

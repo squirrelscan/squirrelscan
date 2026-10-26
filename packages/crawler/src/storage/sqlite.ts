@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 import { Effect } from "effect";
 
 import type { CheckResult } from "@squirrelscan/core-contracts";
-import { isCacheHitReason } from "@squirrelscan/core-contracts";
+import { isCacheHitReason, parseUnverifiedReason } from "@squirrelscan/core-contracts";
 import { urlHostKey } from "@squirrelscan/utils/url";
 
 import type {
@@ -50,7 +50,17 @@ import type {
   TemplateCluster,
 } from "./types";
 
-import { StorageError } from "./types";
+import {
+  isCrawlAbandoned,
+  REAL_LEASE_ENV,
+  type LeaseCrawlRow,
+  type LeaseEnv,
+} from "./crawl-liveness";
+import {
+  ABANDONED_IDLE_MS,
+  ABANDONED_RESUMABLE_IDLE_MS,
+  StorageError,
+} from "./types";
 
 /** Injectable content store for HTML deduplication + compression.
  *  CLI provides the global content store; cloud runner passes nothing (HTML stored inline). */
@@ -73,7 +83,13 @@ export interface ContentStoreAdapter {
 // Schema version - increment when schema changes.
 // Exported so migration tests can assert "this DB reached the CURRENT version" rather than pinning a
 // literal, which turned every schema bump into two unrelated test failures.
-export const SCHEMA_VERSION = 33;
+interface UnfinishedCrawlRow extends LeaseCrawlRow {
+  id: string;
+  started_at: number;
+  last_activity: number;
+}
+
+export const SCHEMA_VERSION = 36;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -493,6 +509,28 @@ const MIGRATIONS: Record<number, string[]> = {
   // nullable: a row written before this reads as "no alternates", which
   // exempts nothing and is the behaviour before #489. Local sqlite only.
   33: [`ALTER TABLE page_features ADD COLUMN hreflang_alternates TEXT`],
+  // Version 34: why an external link is unverifiable (squirrelscan/squirrelscan#821):
+  // blocked, unreachable or awaiting a confirming check, so a re-rendered report
+  // and `squirrel analyze` keep the label. ADDITIVE and nullable: a row written
+  // before this reads as plainly unverified. Local sqlite only.
+  34: [`ALTER TABLE links ADD COLUMN unverified_reason TEXT`],
+  // Version 35: a liveness lease on crawls (#946). The CLI process driving a
+  // crawl writes its pid and host and refreshes a heartbeat, so a later change
+  // can tell a live crawl from a dead one instead of inferring it from newer
+  // audits. ADDITIVE and nullable, no defaults, no index: NULL means "written
+  // by a CLI without leases" and nothing reads these columns yet. Local sqlite
+  // only; an older CLI ignores them (reads map known keys, inserts name their
+  // columns).
+  35: [
+    `ALTER TABLE crawls ADD COLUMN owner_pid INTEGER`,
+    `ALTER TABLE crawls ADD COLUMN owner_host TEXT`,
+    `ALTER TABLE crawls ADD COLUMN heartbeat_at INTEGER`,
+  ],
+  // Version 36: the exact coverage disclosure printed by the audit (#1050).
+  // ADDITIVE and nullable: NULL means the crawl predates persisted scan scope,
+  // so a reconstructed report omits the scope instead of inventing one from
+  // config and page counts. Local sqlite only.
+  36: [`ALTER TABLE crawls ADD COLUMN scan_scope TEXT`],
 };
 
 // Every `pages` column but the two that hold a page's body, for
@@ -579,6 +617,7 @@ const LINKS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   { name: "waf_blocked", type: "INTEGER" },
   { name: "waf_provider", type: "TEXT" },
   { name: "rate_limited", type: "INTEGER" },
+  { name: "unverified_reason", type: "TEXT" },
 ];
 
 const SITEMAP_URL_STATUSES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
@@ -600,6 +639,14 @@ const CRAWLS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   // a database that skipped migration 27 would quietly put failed runs back in
   // the retention window instead of failing loudly.
   { name: "report_status", type: "TEXT" },
+  // Migration 35 (#946): the crawl lease. Nothing reads them yet, but the
+  // lease writer UPDATEs all three, which would throw on a DB that skipped 35.
+  { name: "owner_pid", type: "INTEGER" },
+  { name: "owner_host", type: "TEXT" },
+  { name: "heartbeat_at", type: "INTEGER" },
+  // Migration 36 (#1050): a missing value has defined back-compat semantics,
+  // but the writer still needs the column to exist on every current database.
+  { name: "scan_scope", type: "TEXT" },
 ];
 
 // Same guard for `entity_edges` (#492). Migration 31 added both columns, and
@@ -645,7 +692,15 @@ CREATE TABLE IF NOT EXISTS crawls (
   -- failed, blocked, or the sentinel "building" while its report is still being
   -- reconstructed. Distinct from status, which is the crawl lifecycle and says
   -- analyzed for all of them. NULL for crawls written before migration 27.
-  report_status TEXT
+  report_status TEXT,
+  -- Crawl lease (#946): which process drives this crawl and when it last said
+  -- so. NULL = no lease.
+  owner_pid INTEGER,
+  owner_host TEXT,
+  heartbeat_at INTEGER,
+  -- Exact report coverage for a later database reconstruction (#1050). NULL
+  -- on crawls stored before schema 36, which means "scope not recorded".
+  scan_scope TEXT
 );
 -- NO index on retired_at here. SCHEMA is exec'd BEFORE runMigrations(), and on a
 -- database written before migration 25 the crawls table exists WITHOUT the
@@ -729,6 +784,7 @@ CREATE TABLE IF NOT EXISTS links (
   waf_blocked INTEGER,
   waf_provider TEXT,
   rate_limited INTEGER,
+  unverified_reason TEXT,
   PRIMARY KEY (crawl_id, href),
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
@@ -1219,12 +1275,21 @@ function capBatchPerHost(
 export class SQLiteStorage implements CrawlStorage {
   private db: Database | null = null;
   private readonly path: string;
+  /** The database file, for a second connection (the crawl lease heartbeat). */
+  get dbPath(): string {
+    return this.path;
+  }
   private readonly contentStore: ContentStoreAdapter | null;
   /**
    * URLs whose cached entry was skipped because the content store had evicted
    * its body (#2342). See {@link getCachedPage}.
    */
   private readonly evictedCacheEntries = new Set<string>();
+  /**
+   * Clock, host name and pid probe behind the crawl-lease verdict (#946).
+   * Replaceable so a test can put a crawl on another host or move the clock.
+   */
+  leaseEnv: LeaseEnv = REAL_LEASE_ENV;
 
   constructor(path: string = ":memory:", contentStore?: ContentStoreAdapter) {
     this.path = path;
@@ -1454,8 +1519,8 @@ export class SQLiteStorage implements CrawlStorage {
         const id = randomUUID();
         const db = this.getDb();
         const stmt = db.prepare(`
-          INSERT INTO crawls (id, base_url, seed_url, original_url, started_at, completed_at, status, config, stats)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO crawls (id, base_url, seed_url, original_url, started_at, completed_at, status, config, stats, scan_scope)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         stmt.run(
           id,
@@ -1466,7 +1531,8 @@ export class SQLiteStorage implements CrawlStorage {
           metadata.completedAt ?? null,
           metadata.status,
           JSON.stringify(metadata.config),
-          JSON.stringify(metadata.stats)
+          JSON.stringify(metadata.stats),
+          metadata.scanScope ? JSON.stringify(metadata.scanScope) : null
         );
         return id;
       },
@@ -1531,12 +1597,16 @@ export class SQLiteStorage implements CrawlStorage {
           sets.push("stats = ?");
           values.push(JSON.stringify(updates.stats));
         }
+        if (updates.scanScope !== undefined) {
+          sets.push("scan_scope = ?");
+          values.push(JSON.stringify(updates.scanScope));
+        }
 
         if (sets.length > 0) {
           values.push(id);
           // Cached, and safe to cache even though the SQL is built here. The
-          // cache is keyed by TEXT and `sets` is drawn from eight fixed
-          // optional columns in a fixed order, so there are at most 255 distinct
+          // cache is keyed by TEXT and `sets` is drawn from nine fixed
+          // optional columns in a fixed order, so there are at most 511 distinct
           // texts however a caller mixes them.
           //
           // The hazard is not an unbounded cache. On Bun 1.3.14 the cache holds
@@ -1649,6 +1719,13 @@ export class SQLiteStorage implements CrawlStorage {
         bytesTotal: 0,
         avgLoadTimeMs: 0,
       }),
+      scanScope:
+        typeof row.scan_scope === "string"
+          ? this.safeJsonParse(
+              row.scan_scope,
+              undefined as CrawlMetadata["scanScope"]
+            )
+          : undefined,
     };
   }
 
@@ -2430,11 +2507,13 @@ export class SQLiteStorage implements CrawlStorage {
    * Since the rules phase spills its checks as it produces them, a run killed
    * part way through leaves rows behind where it used to leave none, and running
    * rules again over the same crawl_id would append a second copy of every
-   * check. No path reaches that today (a resume calls `clearCrawlData` before
-   * re-crawling, and every other path takes a fresh crawl id), and a half-written
-   * crawl is stuck at `crawled`, which the report refuses. This makes the
-   * invariant local to the phase that now depends on it rather than an
-   * inference across three call sites.
+   * check. An audit does not re-run rules over a crawl (a resume calls
+   * `clearCrawlData` before re-crawling, and every other path takes a fresh
+   * crawl id), and a half-written crawl is stuck at `crawled`, which the report
+   * refuses. This makes the invariant local to the phase that now depends on it
+   * rather than an inference across three call sites. `squirrel analyze` does
+   * re-run rules over a stored crawl; it replaces the results through
+   * `saveRuleResultsBatch(..., { replace: true })` (#844).
    */
   clearRuleResults(crawlId: string): Effect.Effect<void, StorageError, never> {
     return Effect.try({
@@ -2501,8 +2580,8 @@ export class SQLiteStorage implements CrawlStorage {
       try: () => {
         const db = this.getDb();
         const stmt = db.prepare(`
-          INSERT OR REPLACE INTO links (crawl_id, href, is_internal, status, error, checked_at, waf_blocked, waf_provider, rate_limited)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT OR REPLACE INTO links (crawl_id, href, is_internal, status, error, checked_at, waf_blocked, waf_provider, rate_limited, unverified_reason)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         stmt.run(
           crawlId,
@@ -2513,7 +2592,8 @@ export class SQLiteStorage implements CrawlStorage {
           link.checkedAt ?? null,
           link.wafBlocked ? 1 : null,
           link.wafProvider ?? null,
-          link.rateLimited ? 1 : null
+          link.rateLimited ? 1 : null,
+          link.unverifiedReason ?? null
         );
       },
       catch: (e) => StorageError.write(e),
@@ -2722,6 +2802,7 @@ export class SQLiteStorage implements CrawlStorage {
       wafBlocked: (row.waf_blocked as number | null) === 1 ? true : undefined,
       rateLimited: (row.rate_limited as number | null) === 1 ? true : undefined,
       wafProvider: (row.waf_provider as string | null) ?? undefined,
+      unverifiedReason: parseUnverifiedReason(row.unverified_reason),
     };
   }
 
@@ -3888,13 +3969,21 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
+  /**
+   * Insert a batch of rule results in one transaction. `replace` first deletes
+   * the crawl's existing rule results in the same transaction, so re-running
+   * the rules over a stored crawl (`squirrel analyze`, #844) leaves exactly one
+   * set, and a failed write leaves the old set in place.
+   */
   saveRuleResultsBatch(
     crawlId: string,
-    pageResults: Map<string, { ruleId: string; checks: CheckResult[] }[]>
+    pageResults: Map<string, { ruleId: string; checks: CheckResult[] }[]>,
+    options: { replace?: boolean } = {}
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
         const db = this.getDb();
+        const clear = db.prepare("DELETE FROM rule_results WHERE crawl_id = ?");
         const stmt = db.prepare(`
           INSERT INTO rule_results (
             crawl_id, page_url, rule_id, check_name, status, message,
@@ -3905,6 +3994,7 @@ export class SQLiteStorage implements CrawlStorage {
 
         const timestamp = Date.now();
         const transaction = db.transaction(() => {
+          if (options.replace) clear.run(crawlId);
           for (const [pageUrl, results] of pageResults) {
             for (const { ruleId, checks } of results) {
               for (const check of checks) {
@@ -4353,6 +4443,95 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   /**
+   * Crawls that were never finished and never will be: an audit killed before
+   * its analyze step (watchdog, OOM, deploy, kill -9) leaves its crawl at
+   * `running`, `paused`, `stopped` or `crawled` forever (#941).
+   *
+   * The predicate is "not finished, not already retired, STARTED BEFORE the
+   * newest finished crawl of the project, and idle for 30 minutes" (7 days for
+   * `stopped` and `paused`; latest page or frontier timestamp, not its start). A newer finished audit proves the
+   * default flow moved on: `--resume` only continues the newest crawl of a base
+   * URL, and `analyze` reads the newest, so nothing can reach the older one. A
+   * non-finished crawl newer than every finished one may be a live audit or a
+   * resting `crawled` crawl awaiting `analyze`, and is NOT abandoned.
+   *
+   * That is the rule for a crawl with no lease. A crawl whose owner is recorded
+   * (#946) is decided by {@link isCrawlAbandoned} instead: a live lease is never
+   * abandoned, a dead one is abandoned without waiting for a newer audit.
+   *
+   * `stopped` and `paused` are what `--resume` continues, so they need 7 days
+   * idle instead of 30 minutes. `failed` is unfinished like the others: abandoned
+   * under the same rule, and when newer than the newest finished audit it is
+   * listed as possibly live rather than holding a retention slot. The listings
+   * and {@link retireCrawlsDetailed} all use the one definition of "finished"
+   * (`completed`, `analyzed`).
+   */
+  listAbandonedCrawls(): Effect.Effect<
+    Array<{ id: string; status: string; startedAt: number }>,
+    StorageError,
+    never
+  > {
+    return Effect.try({
+      try: () => {
+        return this.unfinishedCrawlRows()
+          .filter((row) => isCrawlAbandoned(row, this.leaseEnv))
+          .map((row) => ({
+            id: row.id,
+            status: row.status,
+            startedAt: row.started_at,
+          }));
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
+  /**
+   * Not-finished, not-retired crawls that are NOT abandoned: newer than the
+   * newest finished audit, or active in the last 30 minutes, so possibly a live
+   * audit or a crawl awaiting `analyze`. Prune lists these as skipped, with their status and age.
+   */
+  listPossiblyLiveCrawls(): Effect.Effect<
+    Array<{
+      id: string;
+      status: string;
+      startedAt: number;
+      lastActivityAt: number;
+      /** The crawl lease (#946), when the crawl has an owner recorded. */
+      ownerPid?: number;
+      ownerHost?: string;
+      heartbeatAt?: number;
+    }>,
+    StorageError,
+    never
+  > {
+    return Effect.try({
+      try: () => {
+        return this.unfinishedCrawlRows()
+          .filter((row) => !isCrawlAbandoned(row, this.leaseEnv))
+          .map((row) => ({
+            id: row.id,
+            status: row.status,
+            startedAt: row.started_at,
+            lastActivityAt: row.last_activity,
+            ...(row.owner_pid != null || row.owner_host != null
+              ? {
+                  ownerPid:
+                    typeof row.owner_pid === "number" ? row.owner_pid : undefined,
+                  ownerHost:
+                    typeof row.owner_host === "string" ? row.owner_host : undefined,
+                  heartbeatAt:
+                    typeof row.heartbeat_at === "number"
+                      ? row.heartbeat_at
+                      : undefined,
+                }
+              : {}),
+          }));
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
+  /**
    * Record what the audit this crawl produced said (#1912).
    *
    * `building` is stamped when the crawl reaches `analyzed`, before its report
@@ -4364,12 +4543,20 @@ export class SQLiteStorage implements CrawlStorage {
    */
   setReportStatus(
     crawlId: string,
-    reportStatus: string
+    reportStatus: string,
+    // `squirrel analyze` records an outcome on a crawl it did not run the audit
+    // for: it must not clear the `building` sentinel of an audit that is still
+    // reconstructing its report (#955).
+    options?: { keepBuilding?: boolean }
   ): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
         this.getDb()
-          .prepare("UPDATE crawls SET report_status = ? WHERE id = ?")
+          .prepare(
+            options?.keepBuilding
+              ? "UPDATE crawls SET report_status = ? WHERE id = ? AND (report_status IS NULL OR report_status != 'building')"
+              : "UPDATE crawls SET report_status = ? WHERE id = ?"
+          )
           .run(reportStatus, crawlId);
       },
       catch: (e) => StorageError.write(e),
@@ -4531,6 +4718,62 @@ export class SQLiteStorage implements CrawlStorage {
   }
 
   /**
+   * Every unfinished, not-retired crawl (newest first) with what
+   * {@link isCrawlAbandoned} needs: the lease columns and the #945 rule computed
+   * in SQL. The ONE read behind both listings and the re-check inside the
+   * retirement transaction, so they cannot disagree. `ids` narrows it.
+   */
+  private unfinishedCrawlRows(ids?: string[]): UnfinishedCrawlRow[] {
+    const now = this.leaseEnv.now();
+    const where = ids
+      ? `AND id IN (${ids.map(() => "?").join(", ")})`
+      : "";
+    return this.getDb()
+      .prepare(
+        `SELECT id, status, started_at, heartbeat_at, owner_pid, owner_host,
+                ${SQLiteStorage.LAST_ACTIVITY_SQL} AS last_activity,
+                (${SQLiteStorage.abandonedSql(now)}) AS legacy_abandoned
+         FROM crawls
+         WHERE retired_at IS NULL
+           AND status NOT IN ('completed', 'analyzed')
+           ${where}
+         ORDER BY started_at DESC, rowid DESC`
+      )
+      .all(...(ids ?? [])) as UnfinishedCrawlRow[];
+  }
+
+  /**
+   * The abandoned-crawl predicate (#945, the legacy rule for a crawl with no
+   * live-readable lease), shared by the listing and by the re-check
+   * inside {@link retireCrawls}' transaction so the two cannot drift. Scoped to
+   * `crawls` rows (unaliased).
+   */
+  private static abandonedSql(now: number = Date.now()): string {
+    const idleCutoff = Math.floor(now - ABANDONED_IDLE_MS);
+    const resumableCutoff = Math.floor(now - ABANDONED_RESUMABLE_IDLE_MS);
+    return `
+    retired_at IS NULL
+    AND status NOT IN ('completed', 'analyzed')
+    AND started_at < COALESCE(
+      (SELECT MAX(f.started_at) FROM crawls f
+       WHERE f.status IN ('completed', 'analyzed')),
+      0)
+    AND ${SQLiteStorage.LAST_ACTIVITY_SQL} < (
+      CASE WHEN status IN ('stopped', 'paused')
+        THEN ${resumableCutoff} ELSE ${idleCutoff} END)`;
+  }
+
+  /**
+   * The latest sign of life of a crawl: its start, its newest page and its
+   * newest processed frontier entry. Correlated on the outer `crawls` row.
+   */
+  private static readonly LAST_ACTIVITY_SQL = `MAX(
+      started_at,
+      COALESCE((SELECT MAX(p.fetched_at) FROM pages p WHERE p.crawl_id = crawls.id), 0),
+      COALESCE((SELECT MAX(fr.fetched_at) FROM frontier fr WHERE fr.crawl_id = crawls.id), 0)
+    )`;
+
+  /**
    * Retire the derived output of the named crawls (#1912).
    *
    * Their reports stop being renderable and they are stamped `retired_at`, which
@@ -4542,46 +4785,92 @@ export class SQLiteStorage implements CrawlStorage {
    */
   retireCrawls(
     crawlIds: string[],
-    retiredAt: number = Date.now()
+    retiredAt: number = Date.now(),
+    options: { allowAbandoned?: boolean } = {}
   ): Effect.Effect<number, StorageError, never> {
-    // Never a crawl that is still being written. A prune racing a live audit
-    // would delete the frontier out from under it and leave a half-written run.
-    // Checked HERE rather than only in the caller so the guard cannot be
-    // bypassed by a future caller that forgets it.
+    return Effect.map(
+      this.retireCrawlsDetailed(crawlIds, retiredAt, options),
+      (result) => result.deleted
+    );
+  }
 
+  /**
+   * {@link retireCrawls}, reporting which ids were retired and which skipped.
+   *
+   * Never a crawl that is still being written. A prune racing a live audit
+   * would delete the frontier out from under it and leave a half-written run.
+   * Checked HERE rather than only in the caller so the guard cannot be
+   * bypassed by a future caller that forgets it.
+   *
+   * Without `allowAbandoned` an unfinished crawl in the batch throws. With it,
+   * an unfinished crawl is retired only while it still satisfies the abandoned
+   * predicate, re-checked INSIDE the transaction. One that stopped qualifying
+   * between the caller's listing and this write (resumed, newer activity) is
+   * SKIPPED and reported, and the rest of the batch is retired: one live crawl
+   * must not roll back the whole pass.
+   */
+  retireCrawlsDetailed(
+    crawlIds: string[],
+    retiredAt: number = Date.now(),
+    options: { allowAbandoned?: boolean } = {}
+  ): Effect.Effect<
+    { deleted: number; retired: string[]; skipped: string[] },
+    StorageError,
+    never
+  > {
     return Effect.try({
       try: () => {
-        if (crawlIds.length === 0) return 0;
+        if (crawlIds.length === 0)
+          return { deleted: 0, retired: [], skipped: [] };
         const db = this.getDb();
-        const idList = crawlIds.map(() => "?").join(", ");
-        const active = db
-          .prepare(
-            `SELECT id FROM crawls WHERE id IN (${idList}) AND status NOT IN ('completed', 'analyzed', 'failed')`
-          )
-          .all(...crawlIds) as Array<{ id: string }>;
-        if (active.length > 0) {
-          throw new Error(
-            `Refusing to retire ${active.length} crawl(s) that are not finished: ${active
-              .map((c) => c.id)
-              .join(", ")}`
-          );
-        }
-        const placeholders = idList;
+        const marks = (n: number): string =>
+          Array.from({ length: n }, () => "?").join(", ");
         let deleted = 0;
+        let retired: string[] = [];
+        let skipped: string[] = [];
         const run = db.transaction(() => {
+          const unfinished = db
+            .prepare(
+              `SELECT id FROM crawls WHERE id IN (${marks(crawlIds.length)}) AND status NOT IN ('completed', 'analyzed')`
+            )
+            .all(...crawlIds) as Array<{ id: string }>;
+          if (unfinished.length > 0 && !options.allowAbandoned) {
+            throw new Error(
+              `Refusing to retire ${unfinished.length} crawl(s) that are not finished: ${unfinished
+                .map((c) => c.id)
+                .join(", ")}`
+            );
+          }
+          const unfinishedIds = new Set(unfinished.map((c) => c.id));
+          // Re-decided HERE, inside the transaction, from the rows as they are
+          // now (a heartbeat may have landed since the listing). The pid probe
+          // is a synchronous syscall, so it is legal in this transaction.
+          const stillAbandoned = new Set(
+            unfinished.length === 0
+              ? []
+              : this.unfinishedCrawlRows(crawlIds)
+                  .filter((row) => isCrawlAbandoned(row, this.leaseEnv))
+                  .map((row) => row.id)
+          );
+          retired = crawlIds.filter(
+            (id) => !unfinishedIds.has(id) || stillAbandoned.has(id)
+          );
+          skipped = crawlIds.filter((id) => !retired.includes(id));
+          if (retired.length === 0) return;
+          const placeholders = marks(retired.length);
           for (const table of SQLiteStorage.RETIREABLE_TABLES) {
             const result = db
               .prepare(
                 `DELETE FROM ${table} WHERE crawl_id IN (${placeholders})`
               )
-              .run(...crawlIds);
+              .run(...retired);
             deleted += Number(result.changes ?? 0);
           }
           const pageResult = db
             .prepare(
               `DELETE FROM pages WHERE rowid IN (${this.supersededPagesSql("p.rowid", placeholders)})`
             )
-            .run(...crawlIds);
+            .run(...retired);
           deleted += Number(pageResult.changes ?? 0);
           // Stamp INSIDE the transaction, so a crash can never leave a crawl
           // whose data is gone but which still reads as renderable. That state
@@ -4589,10 +4878,14 @@ export class SQLiteStorage implements CrawlStorage {
           // confident empty report from the pages that survive.
           db.prepare(
             `UPDATE crawls SET retired_at = ? WHERE id IN (${placeholders})`
-          ).run(retiredAt, ...crawlIds);
+          ).run(retiredAt, ...retired);
         });
-        run();
-        return deleted;
+        // IMMEDIATE: take the write lock before the liveness read. A deferred
+        // transaction would read under a snapshot and then fail with
+        // SQLITE_BUSY_SNAPSHOT when a heartbeat committed in between; this way
+        // a beat waits for the lock and the verdict is made against current rows.
+        run.immediate();
+        return { deleted, retired, skipped };
       },
       catch: (e) => StorageError.write(e),
     });

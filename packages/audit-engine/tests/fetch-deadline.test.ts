@@ -161,10 +161,11 @@ describe("external checker deadline (#1729)", () => {
     const elapsed = Date.now() - startedAt;
 
     // The status is known from the headers. With no WAF signature in the
-    // headers and no body to read, this stays a plain 403 — the pre-existing
-    // ambiguity, unchanged by this fix.
+    // headers and no body to read, no vendor can be named, but a 403 is a
+    // wall either way: unverifiable, never broken (pub#800).
     expect(results[0]?.status).toBe(403);
-    expect(results[0]?.wafBlocked).toBeUndefined();
+    expect(results[0]?.wafBlocked).toBe(true);
+    expect(results[0]?.wafProvider).toBe("unknown");
     expect(elapsed).toBeLessThan(DEADLINE_MS * 8);
   });
 

@@ -1,0 +1,49 @@
+---
+import docsConfig from "../docs.json";
+import { buildGlossaryJsonLd } from "../scripts/glossary-jsonld";
+import termsData from "../scripts/glossary/terms.json";
+
+interface Props {
+  slug?: string;
+}
+
+type NavItem = string | { pages?: NavItem[] };
+interface Config {
+  siteUrl?: string;
+  navigation?: {
+    tabs?: Array<{
+      tab?: string;
+      groups?: Array<{ pages?: NavItem[] }>;
+    }>;
+  };
+}
+
+function routesOf(items: readonly NavItem[]): string[] {
+  return items.flatMap((item) =>
+    typeof item === "string" ? [item] : routesOf(item.pages ?? []),
+  );
+}
+
+const config = docsConfig as Config;
+const glossary = config.navigation?.tabs?.find((tab) => tab.tab === "Glossary");
+const written = new Set(
+  (glossary?.groups ?? [])
+    .flatMap((group) => routesOf(group.pages ?? []))
+    .flatMap((route) =>
+      route.startsWith("glossary/") && route !== "glossary/index"
+        ? [route.slice("glossary/".length)]
+        : [],
+    ),
+);
+const data = buildGlossaryJsonLd({
+  origin: config.siteUrl ?? "https://docs.squirrelscan.com",
+  terms: termsData.terms,
+  written,
+  slug: Astro.props.slug,
+});
+if (!data)
+  throw new Error(`No glossary term found for slug ${Astro.props.slug}`);
+const jsonLdText = JSON.stringify(data).replace(/</g, "\\u003c");
+---
+
+<script type="application/ld+json" is:inline set:html={jsonLdText} />

@@ -2,6 +2,9 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { documentUrl } from "../shared/redirect-evidence";
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+
 export const paginationRule: Rule = {
   meta: {
     id: "crawl/pagination",
@@ -21,11 +24,10 @@ export const paginationRule: Rule = {
     const doc = ctx.parsed.document;
     if (!doc) return { checks: [] };
 
-    // Detect if this is a paginated page
-    const url = new URL(ctx.page.url);
-    const isPaginatedByParam = /[?&](page|p|pg|offset|start)=/i.test(
-      ctx.page.url
-    );
+    // Detect if this is a paginated page, by the URL it ended on (pub#864).
+    const pageUrl = documentUrl(ctx.page);
+    const url = new URL(pageUrl);
+    const isPaginatedByParam = /[?&](page|p|pg|offset|start)=/i.test(pageUrl);
     const isPaginatedByPath = /\/page\/\d+\/?$/.test(url.pathname);
     const isPaginated = isPaginatedByParam || isPaginatedByPath;
 
@@ -39,6 +41,8 @@ export const paginationRule: Rule = {
         name: "pagination",
         status: "skipped",
         message: "Page does not appear to be paginated",
+        skipReason: CHECK_NOT_APPLICABLE_SKIP_REASON,
+        details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON },
       });
       return { checks };
     }
@@ -49,17 +53,23 @@ export const paginationRule: Rule = {
 
     if (isPaginated && canonicalUrl) {
       // Check if canonical points to page 1
-      const canonicalParsed = new URL(canonicalUrl, ctx.page.url);
+      const canonicalParsed = new URL(canonicalUrl, pageUrl);
       const canonicalIsPaginated =
         /[?&](page|p|pg|offset|start)=/i.test(canonicalParsed.href) ||
         /\/page\/\d+\/?$/.test(canonicalParsed.pathname);
 
-      if (!canonicalIsPaginated && isPaginated) {
+      // pub#826: page 1 of a list is the same content as its unpaginated URL,
+      // so a canonical pointing at that URL is correct. Only page 2 and later
+      // must canonicalize to themselves. A first page canonicalizing anywhere
+      // else still warns.
+      const firstPageToBase =
+        isFirstPage(url) && sameResource(canonicalParsed, unpaginated(url));
+      if (!canonicalIsPaginated && isPaginated && !firstPageToBase) {
         checks.push({
           name: "pagination-canonical",
           status: "warn",
           message: "Paginated page canonicalizes to non-paginated URL",
-          value: `Page ${extractPageNumber(ctx.page.url)} → ${canonicalUrl}`,
+          value: `Page ${extractPageNumber(pageUrl)} → ${canonicalUrl}`,
         });
       } else {
         checks.push({
@@ -89,6 +99,57 @@ export const paginationRule: Rule = {
     return { checks };
   },
 };
+
+const PAGINATION_PARAMS = new Set(["page", "p", "pg", "offset", "start"]);
+
+/** `url` with its pagination markers removed: the params above, and a trailing `/page/N`. */
+function unpaginated(url: URL): URL {
+  const out = new URL(url.href);
+  for (const key of [...out.searchParams.keys()]) {
+    if (PAGINATION_PARAMS.has(key.toLowerCase())) out.searchParams.delete(key);
+  }
+  out.pathname = out.pathname.replace(/\/page\/\d+\/?$/, "/");
+  return out;
+}
+
+/** Same origin, path (trailing slash ignored) and query, fragment ignored. */
+function sameResource(a: URL, b: URL): boolean {
+  const path = (u: URL) => u.pathname.replace(/\/+$/, "") || "/";
+  // Keys sorted, each key's values in their own order (a server may read the
+  // first), and every pair re-encoded so `a%26b=c` is not `a&b=c`.
+  const query = (u: URL) =>
+    JSON.stringify(
+      [...new Set(u.searchParams.keys())]
+        .sort()
+        .map((key) => [key, u.searchParams.getAll(key)]),
+    );
+  return a.origin === b.origin && path(a) === path(b) && query(a) === query(b);
+}
+
+/**
+ * True for the first page of a list in any of the spellings this rule
+ * recognises. `p` is one of them, as the rule's pagination detection already
+ * counts it, though WordPress also uses `?p=` for a post id; a `?p=1` page is
+ * exempt only when its canonical is the same URL without it.
+ * The spellings: `?page=1` (or `p`, `pg`), an empty or `0` page value (0-indexed
+ * lists), `?offset=0` / `?start=0`, and `/page/1`.
+ */
+function isFirstPage(url: URL): boolean {
+  // Every pagination marker on the URL has to say "first page": `/page/1?page=2`
+  // is page 2.
+  const path = url.pathname.match(/\/page\/(\d+)\/?$/);
+  if (path && !/^0*[01]$/.test(path[1] ?? "")) return false;
+  for (const [key, value] of url.searchParams) {
+    const name = key.toLowerCase();
+    const v = value.trim();
+    if (name === "page" || name === "p" || name === "pg") {
+      if (v !== "" && !/^0*[01]$/.test(v)) return false;
+    } else if (name === "offset" || name === "start") {
+      if (v !== "" && !/^0+$/.test(v)) return false;
+    }
+  }
+  return true;
+}
 
 function extractPageNumber(url: string): string {
   // Try query param

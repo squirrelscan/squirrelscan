@@ -12,7 +12,11 @@ import { noContextualInboundRule } from "../src/links/no-contextual-inbound";
 import { orphanPagesRule } from "../src/links/orphan-pages";
 import { weakInternalLinksRule } from "../src/links/weak-internal-links";
 import type { CheckResult, ParsedPage, Rule, RuleContext, RuleResult } from "../src/types";
-import type { LinkData } from "@squirrelscan/core-contracts";
+import {
+  CRAWL_CAPPED_SKIP_REASON,
+  NOT_CHECKED_SKIP_REASONS,
+  type LinkData,
+} from "@squirrelscan/core-contracts";
 
 const BASE = "https://example.com/";
 
@@ -62,13 +66,13 @@ function ids(c: CheckResult): string[] {
   return (c.items ?? []).map((i) => String(i.id));
 }
 
-// Three content pages all cross-link each other in body copy; /legal is reached
+// Three content pages all cross-link each other in body copy; /pricing is reached
 // ONLY through the sitewide footer that every page carries.
 const FOOTER_ONLY: PageSpec[] = [
-  { url: BASE, links: [body("/a"), body("/b"), chrome("/legal")] },
-  { url: "https://example.com/a", links: [body("/b"), chrome("/legal")] },
-  { url: "https://example.com/b", links: [body("/a"), chrome("/legal")] },
-  { url: "https://example.com/legal", links: [chrome("/legal")] },
+  { url: BASE, links: [body("/a"), body("/b"), chrome("/pricing")] },
+  { url: "https://example.com/a", links: [body("/b"), chrome("/pricing")] },
+  { url: "https://example.com/b", links: [body("/a"), chrome("/pricing")] },
+  { url: "https://example.com/pricing", links: [chrome("/pricing")] },
 ];
 
 describe("links/no-contextual-inbound — the acceptance fixtures", () => {
@@ -76,14 +80,14 @@ describe("links/no-contextual-inbound — the acceptance fixtures", () => {
     const result = check(noContextualInboundRule, ctx(FOOTER_ONLY));
 
     expect(result.status).toBe("warn");
-    expect(ids(result)).toEqual(["https://example.com/legal"]);
+    expect(ids(result)).toEqual(["https://example.com/pricing"]);
     expect(result.details).toEqual({ total: 1 });
-    expect(result.value).toBe("/legal");
+    expect(result.value).toBe("/pricing");
     expect(result.message).toBe("1 page(s) are linked only from sitewide chrome");
   });
 
   test("…and links/orphan-pages does NOT report it (the blind spot)", () => {
-    // 4 footer links (one per page) put /legal well above the orphan threshold.
+    // 4 footer links (one per page) put /pricing well above the orphan threshold.
     const orphans = check(orphanPagesRule, ctx(FOOTER_ONLY));
     expect(orphans.status).toBe("pass");
     // Nor does weak-internal-links: its raw count is 4, not 1.
@@ -119,44 +123,44 @@ describe("links/no-contextual-inbound — scoping", () => {
   });
 
   test("excludePatterns are honoured, same as links/orphan-pages", () => {
-    const excluded = ctx(FOOTER_ONLY, { excludePatterns: ["/legal"] });
+    const excluded = ctx(FOOTER_ONLY, { excludePatterns: ["/pricing"] });
     expect(check(noContextualInboundRule, excluded).status).toBe("pass");
   });
 
   test("a chrome-only page BELOW the orphan threshold is left to orphan-pages", () => {
-    // Only one page carries the footer link, so /legal's raw count is 1 (< 2).
+    // Only one page carries the footer link, so /pricing's raw count is 1 (< 2).
     const pages: PageSpec[] = [
-      { url: BASE, links: [body("/a"), chrome("/legal")] },
+      { url: BASE, links: [body("/a"), chrome("/pricing")] },
       { url: "https://example.com/a", links: [body(BASE)] },
-      { url: "https://example.com/legal", links: [] },
+      { url: "https://example.com/pricing", links: [] },
     ];
 
     expect(check(noContextualInboundRule, ctx(pages)).status).toBe("pass");
-    expect(ids(check(orphanPagesRule, ctx(pages)))).toContain("https://example.com/legal");
+    expect(ids(check(orphanPagesRule, ctx(pages)))).toContain("https://example.com/pricing");
   });
 
   test("minInboundLinks moves the handoff point in step with orphan-pages", () => {
     const pages: PageSpec[] = [
-      { url: BASE, links: [body("/a"), chrome("/legal")] },
+      { url: BASE, links: [body("/a"), chrome("/pricing")] },
       { url: "https://example.com/a", links: [body(BASE)] },
-      { url: "https://example.com/legal", links: [] },
+      { url: "https://example.com/pricing", links: [] },
     ];
-    // At a threshold of 1, /legal (raw 1) is no longer an orphan — so it becomes
+    // At a threshold of 1, /pricing (raw 1) is no longer an orphan — so it becomes
     // ours. Neither rule may drop it.
     const opts = { minInboundLinks: 1 };
     expect(check(orphanPagesRule, ctx(pages, opts)).status).toBe("pass");
     expect(ids(check(noContextualInboundRule, ctx(pages, opts)))).toEqual([
-      "https://example.com/legal",
+      "https://example.com/pricing",
     ]);
   });
 
   test("nofollow chrome links do not count on either side of the comparison", () => {
-    // /legal's only inbound links are nofollowed chrome → raw 0 → an orphan,
+    // /pricing's only inbound links are nofollowed chrome → raw 0 → an orphan,
     // not our case.
     const pages: PageSpec[] = [
-      { url: BASE, links: [body("/a"), { ...chrome("/legal"), isNofollow: true }] },
-      { url: "https://example.com/a", links: [body(BASE), { ...chrome("/legal"), isNofollow: true }] },
-      { url: "https://example.com/legal", links: [] },
+      { url: BASE, links: [body("/a"), { ...chrome("/pricing"), isNofollow: true }] },
+      { url: "https://example.com/a", links: [body(BASE), { ...chrome("/pricing"), isNofollow: true }] },
+      { url: "https://example.com/pricing", links: [] },
     ];
     expect(check(noContextualInboundRule, ctx(pages)).status).toBe("pass");
   });
@@ -168,9 +172,9 @@ describe("links/no-contextual-inbound — scoping", () => {
 
   test("links stored without isChrome (pre-#109 crawls) count as contextual", () => {
     const pages: PageSpec[] = [
-      { url: BASE, links: [legacyLink("/a"), legacyLink("/legal")] },
-      { url: "https://example.com/a", links: [legacyLink("/legal")] },
-      { url: "https://example.com/legal", links: [] },
+      { url: BASE, links: [legacyLink("/a"), legacyLink("/pricing")] },
+      { url: "https://example.com/a", links: [legacyLink("/pricing")] },
+      { url: "https://example.com/pricing", links: [] },
     ];
     // Degrades to the pre-#109 behaviour: no site-wide false alarm.
     expect(check(noContextualInboundRule, ctx(pages)).status).toBe("pass");
@@ -202,15 +206,119 @@ describe("links/no-contextual-inbound — a capped crawl", () => {
   }
 
   test("skips when the crawl stopped at its page cap", () => {
-    const result = check(noContextualInboundRule, capped(4, 4));
-    expect(result.status).toBe("skipped");
-    expect(result.skipReason).toBe("Crawl capped before the frontier was exhausted");
-    expect(result.items).toBeUndefined();
+    for (const rule of [noContextualInboundRule, orphanPagesRule, weakInternalLinksRule]) {
+      const result = check(rule, capped(4, 4));
+      expect(result.status).toBe("skipped");
+      expect(result.skipReason).toBe(CRAWL_CAPPED_SKIP_REASON);
+      expect(result.items).toBeUndefined();
+    }
+  });
+
+  test("the reason is a not-checked one, with the text published reports carry (#1144)", () => {
+    expect(CRAWL_CAPPED_SKIP_REASON).toBe("Crawl capped before the frontier was exhausted");
+    expect(NOT_CHECKED_SKIP_REASONS.has(CRAWL_CAPPED_SKIP_REASON)).toBe(true);
   });
 
   test("still warns when the crawl finished under its cap", () => {
     const result = check(noContextualInboundRule, capped(4, 10));
     expect(result.status).toBe("warn");
-    expect(ids(result)).toEqual(["https://example.com/legal"]);
+    expect(ids(result)).toEqual(["https://example.com/pricing"]);
+  });
+});
+
+// pub#796: a root that redirects to `/en/` lands the crawl on `/en/`, which the
+// redirect leads to rather than a link: the site's front door. All three
+// inbound-link rules skip it, as they skip the homepage.
+describe("the page the crawl started on is never flagged (pub#796)", () => {
+  const EN = "https://example.com/en/";
+  // /en/ is reached only from every page's logo (chrome): three raw links and
+  // no contextual one, so with no exemption it is flagged as chrome-only.
+  const pages: PageSpec[] = [
+    { url: EN, links: [body("/en/a"), chrome("/en/")] },
+    { url: "https://example.com/en/a", links: [body("/en/b"), chrome("/en/")] },
+    { url: "https://example.com/en/b", links: [body("/en/a"), chrome("/en/")] },
+    { url: "https://example.com/en/c", links: [body("/en/a"), body("/en/b")] },
+  ];
+  const withEntry = (c: RuleContext): RuleContext => ({
+    ...c,
+    site: { ...c.site!, entryUrls: [EN, "https://example.com/"] },
+  });
+
+  test("no-contextual-inbound: control flags the landing page; with entryUrls it does not", () => {
+    expect(ids(check(noContextualInboundRule, ctx(pages)))).toContain(EN);
+    expect(ids(check(noContextualInboundRule, withEntry(ctx(pages))))).not.toContain(EN);
+  });
+
+  test("weak-internal-links: a landing page linked once is not weak once it is the entry", () => {
+    const once: PageSpec[] = [
+      { url: EN, links: [body("/en/a")] },
+      { url: "https://example.com/en/a", links: [body("/en/")] },
+    ];
+    expect(ids(check(weakInternalLinksRule, ctx(once)))).toContain(EN);
+    expect(ids(check(weakInternalLinksRule, withEntry(ctx(once))))).not.toContain(EN);
+  });
+
+  test("orphan-pages: an unlinked landing page is not an orphan once it is the entry", () => {
+    const unlinked: PageSpec[] = [
+      { url: EN, links: [body("/en/a"), body("/en/b")] },
+      { url: "https://example.com/en/a", links: [body("/en/b")] },
+      { url: "https://example.com/en/b", links: [body("/en/a")] },
+    ];
+    expect(ids(check(orphanPagesRule, ctx(unlinked)))).toContain(EN);
+    expect(ids(check(orphanPagesRule, withEntry(ctx(unlinked))))).not.toContain(EN);
+  });
+});
+
+// pub#981: legal pages are footer-only by design, so they are not reported.
+describe("links/no-contextual-inbound: legal pages", () => {
+  const LEGAL_PATHS = [
+    "/impressum",
+    "/datenschutz",
+    "/agb",
+    "/legal",
+    "/en/legal",
+    "/privacy-policy",
+    "/terms-of-service",
+    "/imprint",
+    "/legal-notice",
+  ];
+
+  // Every page carries the footer; `target` is reached only through it.
+  function footerOnly(target: string): PageSpec[] {
+    return [
+      { url: BASE, links: [body("/a"), body("/b"), chrome(target)] },
+      { url: "https://example.com/a", links: [body("/b"), chrome(target)] },
+      { url: "https://example.com/b", links: [body("/a"), chrome(target)] },
+      { url: `https://example.com${target}`, links: [chrome(target)] },
+    ];
+  }
+
+  test.each(LEGAL_PATHS)("%s linked only from the footer is not reported", (path) => {
+    const result = check(noContextualInboundRule, ctx(footerOnly(path)));
+    expect(result.status).toBe("pass");
+    expect(ids(result)).toEqual([]);
+  });
+
+  test("the reporter's repro: three footer-only legal pages report nothing", () => {
+    const footer = [chrome("/impressum"), chrome("/datenschutz"), chrome("/agb")];
+    const pages: PageSpec[] = [
+      { url: BASE, links: [body("/about"), ...footer] },
+      { url: "https://example.com/about", links: [...footer] },
+      { url: "https://example.com/impressum", links: [...footer] },
+      { url: "https://example.com/datenschutz", links: [...footer] },
+      { url: "https://example.com/agb", links: [...footer] },
+    ];
+    expect(check(noContextualInboundRule, ctx(pages)).status).toBe("pass");
+  });
+
+  test("a non-legal page linked only from the footer is still reported", () => {
+    const result = check(noContextualInboundRule, ctx(footerOnly("/pricing")));
+    expect(result.status).toBe("warn");
+    expect(ids(result)).toEqual(["https://example.com/pricing"]);
+  });
+
+  test("a slug that merely contains a legal word is still reported", () => {
+    const result = check(noContextualInboundRule, ctx(footerOnly("/legalese-guide")));
+    expect(ids(result)).toEqual(["https://example.com/legalese-guide"]);
   });
 });

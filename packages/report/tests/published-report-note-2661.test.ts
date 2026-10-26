@@ -153,6 +153,42 @@ describe("every renderer says it once on a capped report, never on an uncapped o
     expect(line.slice("<published-summary>".length, -"</published-summary>".length)).not.toMatch(/[<>&]/);
   });
 
+  // repo#2661: the hosted HTML, markdown and text said only how many items they
+  // LISTED, so a capped class with 1,147 items read "1 item". Each now says how
+  // many more the report left out, and says nothing when it left none.
+  for (const [name, render, expected] of [
+    ["html", renderHtml, "1 item, 37 more not listed"],
+    ["markdown", renderMarkdown, "1 item(s), 37 more not listed"],
+    ["text", renderText, "... and 37 more items not listed"],
+  ] as const) {
+    test(`${name} counts the items a capped check left out`, () => {
+      expect(render(capped)).toContain(expected);
+    });
+
+    test(`${name} says nothing more when no item was left out`, () => {
+      expect(render(reportWithItems(3, 0))).not.toContain("not listed");
+    });
+  }
+
+  // A counts-only class in a capped report keeps no item rows at all.
+  for (const [name, render, expected] of [
+    ["html", renderHtml, "1,500 items not listed"],
+    ["markdown", renderMarkdown, "**missing-alt:** 1,500 items not listed"],
+    ["text", renderText, "        1,500 items not listed"],
+  ] as const) {
+    test(`${name} counts the items of a check that lists none`, () => {
+      expect(render(reportWithItems(0, 1_500))).toContain(expected);
+    });
+  }
+
+  test("one item left out is one item", () => {
+    expect(renderText(reportWithItems(0, 1))).toContain("        1 item not listed");
+  });
+
+  test("thousands are grouped in the not-listed count", () => {
+    expect(renderText(reportWithItems(2, 1_142))).toContain("... and 1,142 more items not listed");
+  });
+
   // `details.additional` counts items a check LEFT OUT of `items` (the fold's
   // and the publish clamp's dropped count, plus a rule's own remainder), never
   // items it lists, so adding it to the listed count is the true total.

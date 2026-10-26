@@ -36,8 +36,8 @@ them apart by prefix.
   days, or **Never**). This is the intended public auth mechanism for anything
   automated.
 - **CLI login tokens** are minted by [`squirrel auth login`](/cli/auth#login),
-  tied to your user, unscoped (full access), and expire. Best for a developer at
-  a terminal.
+  tied to your user, hold what your [role](/cloud/team#roles) in the org allows,
+  and expire. Best for a developer at a terminal.
 
 <Note>
 The [hosted MCP server](/developers/mcp) takes the same `sq_` API key as a bearer
@@ -70,9 +70,64 @@ error naming the missing scope.
 | `audits:read` | Read published reports |
 | `credits:read` | Read credit balance + ledger |
 | `org:read` | Read org details |
-| `org:write` | Manage org (invites, settings) |
+| `org:write` | Manage org settings (name, slug, logo). Inviting members needs a signed-in owner or admin |
 
-Login sessions are unscoped (full access). Scopes only apply to API keys.
+Login sessions (the dashboard and CLI login tokens) hold the scopes of your
+[role](/cloud/team#roles) in the organization you are working in: an editor
+holds `audits:read`, `audits:write`, `credits:read` and `org:read`, a viewer
+`audits:read`, `credits:read` and `org:read`, and a billing member
+`credits:read` and `org:read`. A request outside them returns `403` with the
+code `forbidden_role`.
+
+### Refusals for a role or a scope
+
+A `403` for a role or a scope comes in one of these shapes. Check `error` when it
+is a string, and `error.code` when it is an object.
+
+- **A route needs a scope your role does not hold** (the scope list above), on a
+  login session:
+
+  ```json
+  {
+    "error": "forbidden_role",
+    "message": "Your role (viewer) in this organization does not include audits:write",
+    "role": "viewer",
+    "missing_scope": "audits:write"
+  }
+  ```
+
+- **An action needs a permission your role does not have** in the organization
+  that owns the resource (running an audit on a website, changing org
+  settings, inviting a member):
+
+  ```json
+  {
+    "error": {
+      "code": "forbidden_role",
+      "message": "Your role (viewer) may not run audits for this organization",
+      "role": "viewer",
+      "permission": "audits:run"
+    }
+  }
+  ```
+
+- **An API key is missing a scope**:
+
+  ```json
+  {
+    "error": {
+      "code": "missing_scope",
+      "message": "API key missing required scope: audits:write",
+      "missing_scope": "audits:write"
+    }
+  }
+  ```
+
+- **MCP tools** answer a tool error with the code `FORBIDDEN` and the
+  `missing_scope`, plus your `role` on a sign-in or the key's `key_scopes` on a
+  key (see [MCP](/developers/mcp)).
+
+None of these succeed on a retry: change the role, or use a key with the scope.
 
 ### Presets
 

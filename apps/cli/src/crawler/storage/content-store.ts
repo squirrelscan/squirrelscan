@@ -2,9 +2,9 @@
 // Stores gzip-compressed content by SHA-256 hash for deduplication
 // Location: ~/.squirrel/content-store.db
 //
-// Shared across all projects for:
-// - HTML pages (dedup across incremental crawls)
-// - JavaScript files (dedup CDN scripts across sites)
+// Shared across all projects for HTML pages (dedup across incremental crawls).
+// It also held URL-keyed scripts for `squirrel analyze` until #768; those rows
+// age out under the size cap like any other.
 
 import { parseByteSize } from "@squirrelscan/config";
 import { Database } from "bun:sqlite";

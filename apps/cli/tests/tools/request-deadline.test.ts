@@ -11,7 +11,6 @@ import {
 } from "bun:test";
 import { Effect } from "effect";
 
-import { fetchRobotsTxt } from "../../src/crawl/robots";
 import {
   initRequestTool,
   request,
@@ -53,9 +52,6 @@ beforeAll(() => {
         });
       }
       if (path === "/empty") return new Response(null, { status: 204 });
-      if (path === "/robots.txt") {
-        return stalledBody(200, { "content-type": "text/plain" });
-      }
       return stalledBody(200, { "content-type": "text/html" });
     },
   });
@@ -136,15 +132,9 @@ describe("request helpers: regression for healthy responses", () => {
   });
 });
 
+// robots.txt is fetched by the crawler, whose preamble-budget test covers a
+// stalled body; the CLI's own robots fetcher was removed (#756).
 describe("callers covered through the shared helper", () => {
-  test("fetchRobotsTxt gives up on a stalled body and reports no robots.txt", async () => {
-    const started = Date.now();
-    const robots = await Effect.runPromise(fetchRobotsTxt(base, "test-agent"));
-    expect(Date.now() - started).toBeLessThan(MAX_ELAPSED_MS);
-    expect(robots.exists).toBe(false);
-    expect(robots.errors[0]).toContain("timed out");
-  });
-
   test("checkReachability returns instead of hanging on a stalled body", async () => {
     // 127.0.0.2 is loopback but not on the localhost fast path, so this goes
     // through the request tool.

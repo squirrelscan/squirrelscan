@@ -124,16 +124,20 @@ describe("runBulkChecker", () => {
 });
 
 describe("checkExternalLinks with a bulk checker", () => {
-  // The targets are on loopback: the policy a private site's audit uses.
+  // The targets are on loopback: the policy a private site's audit uses. They
+  // are named by a public-looking name that resolves there, because the bulk
+  // checker is never sent a link whose URL names a non-public host (pub#775).
   const OPTIONS = {
     concurrency: 25,
     timeoutMs: 5_000,
     userAgent: "squirrel-test",
-    egress: { allowPrivateNetwork: true },
+    egress: { allowPrivateNetwork: true, resolve: async () => ["127.0.0.1"] },
   };
+  const byName = (origin: string) =>
+    origin.replace("http://127.0.0.1", "http://targets.example.com");
 
   test("urls the service leaves out of a chunk are checked locally, with their local status", async () => {
-    const origin = serveTargets();
+    const origin = byName(serveTargets());
     const [answered, gone, unanswered] = [`${origin}/ok-1`, `${origin}/gone-1`, `${origin}/ok-2`];
     const { calls, checker } = service(() => [answered]);
 
@@ -151,7 +155,7 @@ describe("checkExternalLinks with a bulk checker", () => {
   });
 
   test("a first chunk with no answers: no further chunks are sent, every url is checked locally", async () => {
-    const origin = serveTargets();
+    const origin = byName(serveTargets());
     // Three chunks' worth; every tenth url is a 404.
     const urls = Array.from({ length: BULK_CHECK_CHUNK_SIZE * 2 + 50 }, (_, i) =>
       i % 10 === 0 ? `${origin}/gone-${i}` : `${origin}/ok-${i}`,
@@ -173,7 +177,7 @@ describe("checkExternalLinks with a bulk checker", () => {
   });
 
   test("chunks that answer some of their urls do not stop the pass", async () => {
-    const origin = serveTargets();
+    const origin = byName(serveTargets());
     const urls = Array.from(
       { length: BULK_CHECK_CHUNK_SIZE * 2 + 50 },
       (_, i) => `${origin}/ok-${i}`,
@@ -191,8 +195,12 @@ describe("checkExternalLinks with a bulk checker", () => {
   });
 });
 
-describe("the dead-links summary after an unanswered chunk", () => {
-  test("reports the locally checked results, never all links fine", async () => {
+describe("a local site's external links and the dead-links service", () => {
+  // pub#775: the page's external links are on loopback, so the service is
+  // never sent one; every one is checked locally, and the summary reports those
+  // results, never all links fine (pub#753). The unanswered-chunk path itself is
+  // covered by the checkExternalLinks tests above.
+  test("are never sent to it, and the summary reports the local results", async () => {
     const port = new URL(serveTargets()).port;
     const home = `http://localhost:${port}/`;
     const { calls, checker } = service(() => []);
@@ -227,7 +235,7 @@ describe("the dead-links summary after an unanswered chunk", () => {
         externalLinks: { config: config.external_links, linkCache: null, bulkChecker: checker },
       }),
     );
-    expect(calls).toHaveLength(1);
+    expect(calls).toEqual([]);
     expect(requested).toContain("/gone");
 
     const ran = await Effect.runPromise(

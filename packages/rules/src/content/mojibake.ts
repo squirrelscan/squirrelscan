@@ -2,7 +2,7 @@
 
 import { getAttrCI, querySelectorByAttrValueCI } from "@squirrelscan/utils";
 
-import { getProseTextExcludingCode } from "./text-content";
+import { getRenderedProseText } from "./text-content";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
@@ -144,7 +144,10 @@ export const mojibakeRule: Rule = {
     // elements are excluded for the opposite reason — a reader DOES see them, but
     // <code>â€™</code> is a page quoting the sequence on purpose, not a page whose
     // bytes are broken. Without this the rule fires on its own documentation.
-    const text = getProseTextExcludingCode(body);
+    // The same rendered prose content/placeholder-text reads (pub#216): no
+    // <template> markup the browser never renders, no code-editor or
+    // highlighter containers, and a break at every block boundary.
+    const text = getRenderedProseText(body);
     const found = findMojibake(text);
 
     if (found.length === 0) {

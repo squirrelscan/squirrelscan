@@ -80,7 +80,7 @@ async function fixture(seed: number, pageCount: number) {
 // Page rules read only non-`pages` site fields; both paths get this identical
 // minimal SiteData (pages:[] for streaming, ignored by page rules).
 function siteData(): SiteData {
-  return { baseUrl: "http://synthetic.test", pages: [], robotsTxt: null, sitemaps: null };
+  return { baseUrl: "http://synthetic.example.com", pages: [], robotsTxt: null, sitemaps: null };
 }
 
 describe("streaming page-rule pass — GOLDEN INVARIANT vs resident loop", () => {

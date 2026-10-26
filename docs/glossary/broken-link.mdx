@@ -1,0 +1,87 @@
+---
+title: "Broken links: internal, external and how to find them"
+description: "A broken link points at a target that answers with an error, does not resolve or is malformed. Internal, external and fragment links, and how to find them."
+sidebarTitle: "Broken link"
+---
+
+A **broken link** is a link whose target answers with an error status, fails to resolve at all, or is written so badly that it cannot be followed.
+
+There are several kinds. An internal link to a page that answers 404 or 500 is a dead end on your own site. An external link can break when another site moves or shuts down, and the request may fail outright on DNS or TLS. A fragment link such as `/pricing#team` breaks when the target page has no element with `id="team"` and no `<a name="team">`. A malformed `href` never had a target in the first place. Google treats a 4xx response other than 429 as content that does not exist.
+
+{/* glossary:hub:start */}
+
+Category: [Links](/rules/links)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+A broken link costs a visitor a click and a crawler a request, on every page that carries it. Internal links break quietly when a page is renamed and the old links stay in body copy and menus. External links decay with time. Some links only look broken, though. A site behind bot protection can refuse an automated check and still load fine in a browser, so a link checker has to keep "broken" and "could not verify" apart.
+
+## How squirrelscan checks it
+
+[links/broken-links](/rules/links/broken-links) compares every internal link with the status the crawl recorded and fails targets that answered 400 or above, listing the pages that link to each. Rate-limited and refused targets are reported as unverifiable, and targets the audit never fetched are not counted as broken. [links/broken-external-links](/rules/links/broken-external-links) reads the external link check, which runs only when external link checking is on, and groups failures by status. Links that bot protection refused, or that timed out, are listed as unverified. [links/dead-links](/rules/links/dead-links) is an info-level summary of the same check. [links/broken-anchors](/rules/links/broken-anchors) checks each fragment against the ids on the crawled target page, case-sensitively, as browsers do. [links/invalid-links](/rules/links/invalid-links) reports hrefs the parser could not resolve. [images/broken-images](/rules/images/broken-images) flags an empty, `#` or `data:error` image source. It sends no request, so a well-formed image URL that answers 404 passes.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Broken internal links: 404s inside your own site](/rules/links/broken-links) | An internal link to a page that returns 404 or 500 is a dead end you control. squirrel cross-references every internal link against the crawl. | error |
+| [Broken external links: link rot on pages you cannot fix](/rules/links/broken-external-links) | External links die without warning when the other site changes. squirrel checks each one and separates dead links from unverifiable ones. | warning |
+| [Cloud dead-link checking: the shared external link cache](/rules/links/dead-links) | Checking every external link from your machine is slow and rude to the sites you link to. The cloud service checks against a shared cache instead. | info |
+| [Invalid links: hrefs that do not parse as a URL](/rules/links/invalid-links) | A malformed href is a link that goes nowhere, and javascript:void(0) is a button wearing a link costume. squirrel reports every href the parser rejected. | warning |
+| [Broken anchor links: #fragments that point at nothing](/rules/links/broken-anchors) | A link to #pricing whose target id is gone still loads, and the reader lands at the top of the page. squirrel checks every in-page anchor against the element it names. | warning |
+| [Broken images: empty and placeholder src attributes](/rules/images/broken-images) | An img with an empty or placeholder src renders as a broken icon. squirrel collects image sources across the crawl and flags the malformed ones. | error |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Point each link at the URL that works now, and fix it at the source:
+
+```html
+<a href="/guides/build-cache">Build cache guide</a>
+<a href="/pricing#team-plan">Team plan</a>
+```
+
+The report lists every page that carries a broken link, so a link in a template is one change ([the internal link fix](/rules/links/broken-links#how-to-fix-it)). Where you cannot update every link, redirect the old URL permanently. Replace dead external links with a working page or an archived copy, and check unverified ones in a browser before changing them ([the external link fix](/rules/links/broken-external-links#how-to-fix-it)). Update a fragment to the id that exists now ([the anchor fix](/rules/links/broken-anchors#how-to-fix-it)), and replace a click-target anchor with a `<button>` ([the invalid link fix](/rules/links/invalid-links#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include links/broken-links,links/broken-external-links,links/dead-links,links/invalid-links,links/broken-anchors,images/broken-images
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [HTTP status code](/glossary/http-status-code): The three-digit code a server returns with every response; 2xx success, 3xx redirect, 4xx client error, 5xx server error.
+- [Fragment link](/glossary#anchor-link): A link to an id within a page (#section); it is broken when no element on the target page carries that id.
+- [Redirect chain](/glossary/redirect-chain): A sequence of two or more redirects between the requested URL and the final response.
+
+{/* glossary:related:end */}
+
+## Learn more
+
+- [Broken link checker](https://squirrelscan.com/tools/broken-link-checker)
+
+## References
+
+- [How HTTP status codes affect Google's crawlers](https://developers.google.com/crawling/docs/troubleshooting/http-status-codes)
+- [Link best practices for Google, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/links-crawlable)
+- [The a element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/a)
+
+{/* glossary:jsonld:start */}
+
+import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";
+
+<GlossaryJsonLd slug="broken-link" />
+
+{/* glossary:jsonld:end */}

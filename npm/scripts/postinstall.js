@@ -17,6 +17,7 @@ const { spawnSync } = require("child_process");
 const { getPlatform, getBinaryExtension } = require("../lib/platform");
 
 const REPO = "squirrelscan/squirrelscan";
+const MAX_REDIRECTS = 3;
 
 // Colors for terminal output
 const supportsColor = process.stdout.isTTY;
@@ -34,13 +35,41 @@ const error = (msg) => {
 };
 
 /**
- * HTTPS GET with redirect following
+ * HTTPS GET with bounded redirect following.
  */
-function httpsGet(url) {
+function httpsGet(url, get = https.get) {
+  return httpsGetAt(url, 0, get);
+}
+
+function httpsGetAt(url, redirects, get) {
   return new Promise((resolve, reject) => {
-    const request = https.get(url, { headers: { "User-Agent": "squirrelscan-npm" } }, (res) => {
+    let current;
+    try {
+      current = new URL(url);
+    } catch {
+      reject(new Error(`Invalid download URL: ${url}`));
+      return;
+    }
+    if (current.protocol !== "https:") {
+      reject(new Error(`Refusing non-HTTPS download URL: ${current.href}`));
+      return;
+    }
+
+    const request = get(current.href, { headers: { "User-Agent": "squirrelscan-npm" } }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        return httpsGet(res.headers.location).then(resolve).catch(reject);
+        res.resume();
+        if (redirects >= MAX_REDIRECTS) {
+          reject(new Error(`Too many redirects (maximum ${MAX_REDIRECTS}): ${current.href}`));
+          return;
+        }
+        let next;
+        try {
+          next = new URL(res.headers.location, current);
+        } catch {
+          reject(new Error(`Invalid redirect URL: ${res.headers.location}`));
+          return;
+        }
+        return httpsGetAt(next.href, redirects + 1, get).then(resolve).catch(reject);
       }
 
       if (res.statusCode !== 200) {
@@ -241,7 +270,7 @@ async function main() {
   info("Install agent integrations explicitly with 'squirrel skills install'");
 }
 
-module.exports = { normalizeVersion, resolveVersion };
+module.exports = { httpsGet, normalizeVersion, resolveVersion };
 
 if (require.main === module) {
   main().catch((err) => {

@@ -1,0 +1,82 @@
+---
+title: "What is Content Security Policy? CSP directives explained"
+description: "Content Security Policy is a response header listing where a page may load scripts, styles and frames from, which limits what injected code can do."
+sidebarTitle: "Content Security Policy (CSP)"
+---
+
+**Content Security Policy (CSP)** is a response header, `Content-Security-Policy`, that lists where a page may load scripts, styles, images, frames and other resources from, so the browser refuses anything else.
+
+The policy is a set of directives. `default-src` is the fallback, `script-src` covers scripts, `object-src` plugins, and `frame-ancestors` who may embed the page. Sources can be origins such as `https://cdn.example.com`, keywords such as `'self'`, or a per-response nonce or hash that marks specific inline scripts as trusted. A `Content-Security-Policy-Report-Only` header reports violations without blocking anything, which is how a policy is tested. web.dev recommends a "strict" CSP built on nonces or hashes, because host allowlists can be bypassed in most configurations.
+
+{/* glossary:hub:start */}
+
+Category: [Security](/rules/security)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+CSP is a defence against cross-site scripting. If an attacker gets markup into a page, a good policy stops the browser from running their script. That protection depends on the script directive. `'unsafe-inline'` lets any inline script run, which is exactly what injected code is, unless a nonce, a hash or `'strict-dynamic'` in the same list makes browsers ignore it. `'unsafe-eval'` allows code built from strings. A bare `*` lets scripts load from any host. A policy that is too tight fails in the other direction: it silently blocks the site's own analytics, payment form or captcha, and only the browser console shows why.
+
+## How squirrelscan checks it
+
+[security/csp](/rules/security/csp) reads the first crawled page's headers. It warns when there is no policy or only a report-only one, and when the policy has no `script-src` or `default-src`. It warns when the effective script sources allow `'unsafe-eval'`, or `'unsafe-inline'` without a nonce, hash or `'strict-dynamic'`, and when they contain a bare `*` host without `'strict-dynamic'`. It notes a missing `frame-ancestors` when there is no `X-Frame-Options` either. [security/csp-blocks-own-resources](/rules/security/csp-blocks-own-resources) works page by page. It reads each page's enforced policy, from the header and any `<meta http-equiv>`, and lists the hosts the page loads that the policy would block. It fails when one belongs to a known analytics, ads, payment, captcha, form or booking vendor.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Content-Security-Policy: what to set and how to check it](/rules/security/csp) | A missing CSP, a report-only policy or an unsafe-inline script-src leaves XSS unmitigated. squirrel parses the header and names each gap. | warning |
+| [CSP blocks your own scripts, frames and analytics endpoints](/rules/security/csp-blocks-own-resources) | A Content-Security-Policy that leaves out a host your page depends on breaks a widget or a tracker silently. squirrel matches each page's policy against what the page loads. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Start in report-only mode, fix what it reports, then enforce the same value:
+
+```
+Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-r4nd0m'; object-src 'none'; frame-ancestors 'self'
+```
+
+Generate a fresh nonce for each response and put it on the inline scripts you cannot remove ([the CSP fix](/rules/security/csp#how-to-fix-it)). Add each host the page really depends on to the directive the finding names, then reload with the console open to confirm no violation is left ([the blocked resources fix](/rules/security/csp-blocks-own-resources#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include security/csp,security/csp-blocks-own-resources
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Security headers](/glossary/security-headers): HTTP response headers (CSP, HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy) that tell browsers to restrict risky behaviour.
+- [Subresource Integrity (SRI)](/glossary#subresource-integrity): An integrity attribute holding a hash of a third-party script or stylesheet, so the browser refuses a tampered file.
+- [X-Frame-Options](/glossary#x-frame-options): A response header that controls whether other sites may embed the page in a frame; CSP frame-ancestors is its successor.
+
+{/* glossary:related:end */}
+
+## Learn more
+
+- [Security headers checker](https://squirrelscan.com/tools/security-headers-checker)
+
+## References
+
+- [Content-Security-Policy, MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy)
+- [Mitigate cross-site scripting with a strict Content Security Policy, web.dev](https://web.dev/articles/strict-csp)
+- [Content Security Policy Level 3, W3C](https://www.w3.org/TR/CSP3/)
+
+{/* glossary:jsonld:start */}
+
+import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";
+
+<GlossaryJsonLd slug="content-security-policy" />
+
+{/* glossary:jsonld:end */}

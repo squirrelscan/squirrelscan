@@ -1,7 +1,7 @@
 import { brotliDecompressSync, gunzipSync, inflateRawSync, inflateSync } from "node:zlib";
 
 import { Effect } from "effect";
-import { XMLParser } from "fast-xml-parser";
+import { XMLParser, XMLValidator } from "fast-xml-parser";
 
 import type {
   RobotsTxtData,
@@ -9,6 +9,8 @@ import type {
   SitemapFetchFailure,
   SitemapUrl,
 } from "@squirrelscan/core-contracts";
+import { createHeaderScope, mergeHeaderRecords, type HeaderScope } from "@squirrelscan/utils/headers";
+import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 import { resolveRobotsSitemapUrl } from "@squirrelscan/utils/robots-txt";
 
 import { SITEMAP_NOT_CHECKED_ERROR } from "@squirrelscan/core-contracts/storage";
@@ -140,6 +142,115 @@ function createFieldReader(element: "url" | "sitemap") {
   };
 }
 
+/**
+ * Namespaces a sitemap's elements may be bound to. The protocol's own, in
+ * either scheme, and Google's earlier one, which old generators still write.
+ */
+const SITEMAP_NAMESPACES = new Set([
+  "http://www.sitemaps.org/schemas/sitemap/0.9",
+  "https://www.sitemaps.org/schemas/sitemap/0.9",
+  "http://www.google.com/schemas/sitemap/0.84",
+  "http://www.google.com/schemas/sitemap/0.9",
+]);
+
+/**
+ * `value` with the `prefix:` taken off every element name in it, so a sitemap
+ * written as `<ns0:urlset><ns0:url><ns0:loc>` reads as the unprefixed form
+ * (#759). Attributes, and elements in any other prefix, are left as they are.
+ */
+function withoutElementPrefix(value: unknown, prefix: string): unknown {
+  if (Array.isArray(value)) return value.map((item) => withoutElementPrefix(item, prefix));
+  if (value === null || typeof value !== "object") return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    const name = key.startsWith(`${prefix}:`) ? key.slice(prefix.length + 1) : key;
+    // The parser refuses an element named `__proto__`; `ns0:__proto__` is
+    // another name to it, so the bare one would reach here and replace the
+    // copy's prototype. Refused the same way.
+    if (name === "__proto__") throw new Error('[SECURITY] Invalid name: "__proto__"');
+    const stripped = withoutElementPrefix(child, prefix);
+    // `<ns0:loc>` beside `<loc>` is two of the same element, as the parser
+    // reports a repeat: kept as a list, so a doubled field is still flagged.
+    out[name] = Object.hasOwn(out, name) ? [out[name], stripped].flat() : stripped;
+  }
+  return out;
+}
+
+/**
+ * A root written with a prefix bound to a sitemap namespace
+ * (`<ns0:urlset xmlns:ns0="http://www.sitemaps.org/schemas/sitemap/0.9">`,
+ * as Python's ElementTree writes one), read as the unprefixed root. A root
+ * whose prefix is bound to any other namespace is left alone, so it stays an
+ * unknown format.
+ */
+function unprefixedRoot(parsed: Record<string, unknown>): Record<string, unknown> {
+  // An unprefixed root is read as before, whatever else the document holds.
+  if ("urlset" in parsed || "sitemapindex" in parsed) return parsed;
+  for (const [key, element] of Object.entries(parsed)) {
+    const colon = key.indexOf(":");
+    if (colon <= 0 || element === null || typeof element !== "object") continue;
+    const prefix = key.slice(0, colon);
+    const name = key.slice(colon + 1);
+    if (name !== "urlset" && name !== "sitemapindex") continue;
+    const namespace = (element as Record<string, unknown>)[`@_xmlns:${prefix}`];
+    if (typeof namespace !== "string" || !SITEMAP_NAMESPACES.has(namespace.trim())) continue;
+    return { [name]: withoutElementPrefix(element, prefix) };
+  }
+  return parsed;
+}
+
+/** Prefix for a sitemap that is not well-formed XML (#760). */
+export const SITEMAP_NOT_WELL_FORMED_ERROR = "XML is not well formed";
+
+/**
+ * Why `content` is not well-formed XML, or null when it is (#760). The parser
+ * reads past a mismatched closing tag (`</lox>` for `</loc>`), an element left
+ * open, or a raw `&`, so a file a strict consumer rejects still yielded its
+ * URLs with no error. The validator from the same package reports them, in
+ * one linear pass. The URLs the parser reads are kept either way.
+ */
+function wellFormednessError(content: string): string | null {
+  // Whitespace before the XML declaration is outside the spec too, but it is a
+  // common generator quirk that every reader of a sitemap tolerates, and the
+  // walk already reads past it, so it is not reported.
+  const body = content.trimStart();
+  // A file that declares its own entities is not checked: the validator
+  // misreads a quoted `>` in the subset and rejects a long entity name, so a
+  // valid one would fail. Rare in a sitemap, and the parser refuses the
+  // entities anyway.
+  if (hasInternalSubset(body)) return null;
+  const result = XMLValidator.validate(body);
+  if (result === true) return null;
+  // Positions in the body as served: past the whitespace taken off the front.
+  const skippedLines = content.slice(0, content.length - body.length).split("\n");
+  const lineOffset = skippedLines.length - 1;
+  const lastSkipped = skippedLines[lineOffset]!.length;
+  const at = (line: number, col: number) =>
+    [line + lineOffset, line === 1 ? col + lastSkipped : col] as const;
+  const { msg, line, col } = result.err;
+  const message = msg.replace(/opened in line (\d+), col (\d+)/g, (_match, l: string, c: string) => {
+    const [openLine, openCol] = at(Number(l), Number(c));
+    return `opened in line ${openLine}, col ${openCol}`;
+  });
+  const [errLine, errCol] = at(line, col);
+  return `${SITEMAP_NOT_WELL_FORMED_ERROR}: ${message} (line ${errLine}, column ${errCol})`;
+}
+
+/**
+ * Whether `text` has a DOCTYPE with an internal subset (`<!DOCTYPE urlset [`).
+ * A scan, not a regex: each DOCTYPE is read up to its first `>` or `[` once,
+ * so a body of repeated `<!DOCTYPE` costs its length, not its square.
+ */
+function hasInternalSubset(text: string): boolean {
+  for (let at = text.indexOf("<!DOCTYPE"); at !== -1; ) {
+    let i = at + 9;
+    while (i < text.length && text[i] !== ">" && text[i] !== "[") i++;
+    if (text[i] === "[") return true;
+    at = text.indexOf("<!DOCTYPE", i);
+  }
+  return false;
+}
+
 export function parseSitemap(content: string, url: string): SitemapData {
   const errors: string[] = [];
   const parser = new XMLParser({
@@ -154,7 +265,11 @@ export function parseSitemap(content: string, url: string): SitemapData {
   });
 
   try {
-    const parsed = parser.parse(content) as Record<string, unknown>;
+    const parsed = unprefixedRoot(parser.parse(content) as Record<string, unknown>);
+    // Checked once a sitemap root is found: anything else is already an error.
+    const notWellFormed =
+      parsed.sitemapindex || parsed.urlset ? wellFormednessError(content) : null;
+    if (notWellFormed) errors.push(notWellFormed);
 
     if (parsed.sitemapindex) {
       const sitemapIndex = parsed.sitemapindex as { sitemap?: unknown };
@@ -210,7 +325,10 @@ export function parseSitemap(content: string, url: string): SitemapData {
         urlCount: urls.length,
         // Namespace, not filename: `google-news-sitemap.xml` is convention, and a news sitemap served
         // from any path still declares xmlns:news. See SitemapData.isNewsSitemap for why it matters.
-        isNewsSitemap: typeof urlset["@_xmlns:news"] === "string",
+        // A root prefixed `news:` and bound to the sitemap namespace is not news.
+        isNewsSitemap:
+          typeof urlset["@_xmlns:news"] === "string" &&
+          !SITEMAP_NAMESPACES.has(urlset["@_xmlns:news"].trim()),
       };
     }
 
@@ -419,7 +537,10 @@ export function decodeSitemapBody(
   }
 
   const data = parseSitemap(text, url);
-  if (opening === "sitemap" || data.errors.length === 0) return { data };
+  // A well-formedness error (#760) does not make a parsed sitemap a page: its
+  // URLs were read, and are kept.
+  const readable = data.errors.every((error) => error.startsWith(SITEMAP_NOT_WELL_FORMED_ERROR));
+  if (opening === "sitemap" || readable) return { data };
   // A page that opens with something other than a doctype (a fragment, a
   // script) still says what it is in its Content-Type.
   if (isHtmlContentType(contentType)) {
@@ -564,28 +685,33 @@ export function fetchSitemap(
   url: string,
   userAgent: string,
   customHeaders?: Record<string, string>,
-  baseHost?: string,
+  headerScope?: HeaderScope,
   // squirrelscan/repo#1733: deadline for this one fetch, tightened by the
   // caller when the walk's progress window has less than a full timeout left.
   timeoutMs: number = SITEMAP_FETCH_TIMEOUT_MS,
   // Where a refusal (401/403/429, a bot wall) is noted, so the report can
   // say the sitemap request was refused rather than that no sitemap exists.
   refusals?: RefusalLog,
+  // repo#2830: every hop vetted, the first included: a `Sitemap:` line or an
+  // index entry is the site's to name, and so is every redirect.
+  egress?: EgressPolicy,
 ): Effect.Effect<SitemapFetchResult, never, never> {
   // #1393: the caller's secret customHeaders are scoped to the audited origin. A
   // `Sitemap:` directive (robots.txt) or child-sitemap reference can point at an
-  // off-origin host, so only forward them when the target host matches baseHost.
-  // When baseHost is unset (direct callers/tests), preserve prior behavior.
-  const originScopedHeaders =
-    baseHost !== undefined && new URL(url).host !== baseHost ? undefined : customHeaders;
+  // off-origin host, so only forward them when the target origin (scheme, host
+  // and port, #959) is in the caller's scope. With no scope, none are sent.
+  const originScopedHeaders = headerScope?.(url) ? customHeaders : undefined;
   const init: RequestInit & { decompress: boolean } = {
-    headers: {
-      "User-Agent": userAgent,
-      Accept: "application/xml, text/xml, */*",
-      "Accept-Language": "en-US,en;q=0.9",
-      "Accept-Encoding": "gzip",
-      ...originScopedHeaders,
-    },
+    headers: mergeHeaderRecords(
+      {
+        "User-Agent": userAgent,
+        Accept: "application/xml, text/xml, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+      originScopedHeaders,
+      // Only codings decodeSitemapBody undoes within its cap: never the caller's.
+      { "Accept-Encoding": "gzip" },
+    ),
     redirect: "follow",
     // #662: a Bun fetch option. Bun's own decoding inflates a whole response
     // before a reader can stop it (a 1 MB gzip bomb cost 1.9 GB that way), so
@@ -641,6 +767,7 @@ export function fetchSitemap(
             ),
           };
         },
+        egress,
       );
     } catch (error) {
       return {
@@ -683,14 +810,15 @@ export function fetchSitemapsRecursive(
   seen: Set<string> = new Set(),
   urlBudget?: SitemapUrlBudget,
   customHeaders?: Record<string, string>,
-  // #1393: host of the audited origin; customHeaders are only forwarded to
-  // matching-host sitemap fetches. Threaded through the recursion.
-  baseHost?: string,
+  // #1393: audited origin (scheme, host, port, #959); customHeaders are only
+  // forwarded to matching-origin sitemap fetches. Threaded through the recursion.
+  headerScope?: HeaderScope,
   // squirrelscan/repo#1733: progress window shared across the whole walk, so a
   // stalled origin ends the descent after one dead chunk while a slow-but-
   // healthy one keeps going. Created on the first call and threaded down.
   walkWindow: WalkWindow = newWalkWindow(),
   refusals?: RefusalLog,
+  egress?: EgressPolicy,
 ): Effect.Effect<SitemapFetchResult[], never, never> {
   if (urls.length === 0) return Effect.succeed([]);
   // Candidates exist but the walk will not visit them: that is a gap in
@@ -741,7 +869,15 @@ export function fetchSitemapsRecursive(
       const chunkTimeoutMs = Math.min(SITEMAP_FETCH_TIMEOUT_MS, remainingMs);
       const chunkResults = yield* Effect.all(
         chunk.map((url) =>
-          fetchSitemap(url, userAgent, customHeaders, baseHost, chunkTimeoutMs, refusals),
+          fetchSitemap(
+            url,
+            userAgent,
+            customHeaders,
+            headerScope,
+            chunkTimeoutMs,
+            refusals,
+            egress,
+          ),
         ),
         { concurrency: SITEMAP_FETCH_CONCURRENCY },
       );
@@ -796,9 +932,10 @@ export function fetchSitemapsRecursive(
       seen,
       urlBudget,
       customHeaders,
-      baseHost,
+      headerScope,
       walkWindow,
       refusals,
+      egress,
     );
 
     return [...fetchResults, ...childResults];
@@ -833,6 +970,8 @@ export interface DiscoverSitemapsOptions {
   maxUrls?: number;
   /** Custom HTTP headers attached to every sitemap fetch (e.g. Web Bot Auth signatures). */
   customHeaders?: Record<string, string>;
+  /** Which URLs get `customHeaders`. Default: the audited origin (scheme, host, port) only. */
+  headerScope?: HeaderScope;
   /**
    * How long the walk may go without completing a fetch before it gives up.
    * Defaults to SITEMAP_WALK_WINDOW_MS; pass `sitemapWalkWindowMs(timeoutMs)` to
@@ -843,6 +982,11 @@ export interface DiscoverSitemapsOptions {
   walkTotalMs?: number;
   /** Notes sitemap requests the site refused. */
   refusals?: RefusalLog;
+  /**
+   * Egress policy for every sitemap request and redirect hop (repo#2830): a
+   * link-local or cloud metadata address off the crawl's hosts is not requested.
+   */
+  egress?: EgressPolicy;
 }
 
 export function discoverSitemaps(
@@ -859,10 +1003,11 @@ export function discoverSitemaps(
     // carry any scheme/host, so `resolveRobotsSitemapUrl` rejects non-http(s)
     // targets (a `file://` sitemap would otherwise be fetched and its body
     // parsed/stored). Off-origin http(s) sitemaps are still fetched (legit CDN
-    // case) but without customHeaders, enforced by the baseHost gate passed to
+    // case) but without customHeaders, enforced by the header scope passed to
     // fetchSitemapsRecursive below. #2316: the same resolver reads a scheme-less
     // line as a HOST, so the URL fetched here is the one the report stores.
-    const baseHost = new URL(baseUrl).host;
+    // Which URLs get the custom headers: the audited origin and any host the caller named.
+    const headerScope = options.headerScope ?? createHeaderScope(baseUrl);
     if (robotsTxt?.sitemaps) {
       for (const sitemap of robotsTxt.sitemaps) {
         const resolvedUrl = resolveRobotsSitemapUrl(sitemap, baseUrl).url;
@@ -895,9 +1040,10 @@ export function discoverSitemaps(
       undefined,
       urlBudget,
       options.customHeaders,
-      baseHost,
+      headerScope,
       walkWindow,
       options.refusals,
+      options.egress,
     );
 
     // #670: a server that answers 200 with a page for every path makes each

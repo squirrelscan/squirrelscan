@@ -4,6 +4,7 @@ import type { Rule, RuleContext, RuleResult } from "../types";
 
 import { MIN_INTERNAL_LINKS } from "@squirrelscan/utils/constants";
 import { normalizeUrl, matchesExcludePattern } from "@squirrelscan/utils";
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 
 export const deadEndPages: Rule = {
   meta: {
@@ -65,7 +66,8 @@ export const deadEndPages: Rule = {
             name: "dead-end",
             status: "skipped",
             message: "Page excluded by pattern",
-            skipReason: "Page excluded by pattern",
+            skipReason: CHECK_NOT_APPLICABLE_SKIP_REASON,
+            details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON },
           },
         ],
       };

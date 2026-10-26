@@ -25,15 +25,19 @@ Combine your coding agent with a deterministic and extensible audit tool.
 
 ## Features
 
-- **300+ Rules, 22 Categories** - Comprehensive coverage across SEO, accessibility, performance, and security
-- **Fast crawler** - Highly optimized memory efficient crawler
-- **Agent Experience** - Audit agent experience to assist agents in using your site
-- **Security Audit** - Detect phishing kits, leaked credentials, and more
-- **Smart Incremental Crawling** - ETag, Last-Modified, content hashing. Resume from checkpoints.
-- **Developer-First CLI** - Single binary, zero dependencies, shell completions, self-update
-- **Crawl History & Changes** - Track site evolution, compare crawls, spot regressions
-- **Multiple Output Formats** - Console, JSON, HTML, Markdown, Text, LLM, XML
-- **MCP Connection** - Connect your agent to local or cloud MCP to run audits, fixes, etc.
+- **[Built for coding agents](https://docs.squirrelscan.com/developers/agents)** - Skills for Claude Code, Cursor, Codex and any coding agent run the audit, fix and re-audit loop. Connect over the CLI, the hosted or local MCP server, or the API.
+- **[Enriched fixes for you and your coding agent](https://docs.squirrelscan.com/guides/fix-your-site-with-an-ai-agent)** - Every finding says how to fix it, in LLM-optimized output your agent can apply, and every rule has its own docs page. Signed in, the report adds an editor's summary of what to fix first and the technology stack the site runs on.
+- **[300+ rules, 22 categories](https://docs.squirrelscan.com/rules)** - Audit coverage across SEO, accessibility, performance, security, content and more.
+- **[Agent experience](https://docs.squirrelscan.com/rules/ax)** - Audit how well AI agents can read, discover and act on your site: llms.txt, AGENTS.md, Markdown responses, and what AI crawlers are served.
+- **[Link checking and monitoring](https://docs.squirrelscan.com/guides/link-checking)** - Perch, the cloud link checker, tells a broken link from a blocked one and confirms a failure before reporting it. On Pro and Team, scheduled audits email you when a link breaks.
+- **[Security and site integrity](https://docs.squirrelscan.com/rules/integrity)** - Detect phishing kits, injected pages, leaked credentials and missing security headers.
+- **[Entity map](https://docs.squirrelscan.com/guides/entity-map)** - Your site's JSON-LD collapsed into one graph: one identity, or a new one on every page.
+- **[Browser rendering in the cloud](https://docs.squirrelscan.com/guides/browser-rendering)** - Signed in, pages are rendered in a real browser in the cloud, so single-page apps and JavaScript-heavy sites are audited as visitors see them, at no extra cost per page.
+- **[Cloud audits](https://docs.squirrelscan.com/guides/cloud-audits)** - AI page analysis, scheduled audits, a per-website issue tracker and shareable reports.
+- **[Smart crawling](https://docs.squirrelscan.com/crawl)** - Fast and memory efficient, incremental with ETag, Last-Modified and content hashing, and resumable from checkpoints.
+- **[Crawl history and changes](https://docs.squirrelscan.com/cli/report)** - Track site evolution, compare crawls, spot regressions.
+- **[Developer-first CLI](https://docs.squirrelscan.com/cli)** - Single binary, zero dependencies, shell completions, self-update.
+- **[Multiple output formats](https://docs.squirrelscan.com/cli/report#output-formats)** - Console, JSON, HTML, Markdown, Text, LLM, XML.
 
 ## Rule categories
 
@@ -47,13 +51,13 @@ Ordered by how much a failure usually costs you, not by how many rules each one 
 | Site Integrity | 9 | Signs the site has been compromised: injected doorway pages, phishing kit signatures, obfuscated scripts, brand impersonation, cloaking, known-malicious URLs |
 | Security | 22 | Transport and header hygiene: HTTPS and HSTS, CSP, cookie flags, mixed content, subresource integrity, leaked secrets, tokens in web storage, unprotected and downgraded forms, open GraphQL introspection and mutations over GET |
 | Links | 16 | Internal and external link health: broken and dead links, in-page anchors whose target is gone, redirect chains, anchor-text quality, orphan and dead-end pages, pages linked only from sitewide chrome, HTTPS downgrades |
-| Content | 24 | Text quality and honesty: common misspellings, duplicate titles and descriptions, title-template consistency, readability, word count, freshness, heading hierarchy, keyword stuffing, hidden text, placeholder media and contact details, encoding damage |
+| Content | 25 | Text quality and honesty: common misspellings, duplicate titles and descriptions, title-template consistency, readability, word count, freshness, heading hierarchy, keyword stuffing, hidden text, placeholder media and contact details, encoding damage |
 | Performance | 30 | Core Web Vitals and delivery: LCP, CLS and INP hints, TTFB, compression, caching, render-blocking resources, DOM size, font delivery, legacy and unminified JS/CSS |
 | Reliability | 2 | Scripts, stylesheets and fonts that fail to load (a first-party bundle that answers 404 or 500 after a deploy, third-party and font failures), and forms that lose submissions |
-| Images | 15 | Alt text, modern formats, responsive `srcset`, intrinsic dimensions and aspect-ratio mismatches, lazy loading above versus below the fold, file weight |
+| Images | 16 | Alt text, modern formats, responsive `srcset`, intrinsic dimensions and aspect-ratio mismatches, lazy loading above versus below the fold, file weight |
 | Structured Data | 25 | JSON-LD validity and rich-result eligibility for Article, Product, FAQ, Review, Breadcrumb, Organization, LocalBusiness, Video and site search, plus thirteen site-wide checks on the entity map: whether the site declares one identity for itself or a new one on every page, and rating markup that is not about the page it sits on |
 | Accessibility | 61 | WCAG coverage: ARIA roles and names, form labels and autocomplete tokens, colour contrast, heading order, landmarks, tables and lists, focus visibility, touch targets, captions |
-| Mobile | 7 | Viewport configuration, tap-target size, legible font sizes, horizontal scroll, blocked zoom, intrusive interstitials, the web app manifest and its icons |
+| Mobile | 8 | Viewport configuration, tap-target size, legible font sizes, horizontal scroll, blocked zoom, form fields small enough to zoom the page on focus, intrusive interstitials, the web app manifest and its icons |
 | Social Media | 5 | Open Graph and Twitter Card completeness, image dimensions, canonical URL match, social profile links, site-chrome assets that disagree across pages |
 | URL Structure | 9 | Length, casing, hyphenation, stop words, query parameters, special characters, trailing-slash consistency, site-wide convention consistency |
 | E-E-A-T | 15 | Experience, expertise, authority and trust signals: author bylines and credentials, about and contact pages, citations, editorial policy, disclaimers, YMYL detection |
@@ -128,11 +132,11 @@ squirrel auth login
 
 ## Reports
 
-Category scores for SEO, performance, security and Agent Experience (AX). Publish reports to the web to share with team members or coding agents (fix instructions are embedded)
+A health score and grade, group scores for SEO, performance, security and Agent Experience (AX) colored by score, a ranked list of issues, and a copy fix prompt for each one that you can paste into your coding agent. Publish reports to the web to share with team members or coding agents (fix instructions are embedded).
 
-![squirrelscan report](https://squirrelscan.com/images/html-report-screenshot.webp)
+![A squirrelscan report for squirrelscan.com. The header shows the site, 220 of 220 pages scanned, the Full audit level and a health score of 79 (C). A notice says 912 of 1412 external links were not checked. Four group cards show SEO 86 (B), Performance 59 (F), Security 95 (A) and Agents 42 (F), each with its error and warning counts. Below are pass, warning and fail totals, an auto-generated summary, and the first three ranked issues, each with a Copy fix prompt button.](docs/images/report/example-report.webp)
 
-[see an example report](https://reports.squirrelscan.com/01KWKSVT79R6SZDQE7K6WWZCFY)
+[See an example report](https://reports.squirrelscan.com/01M5NJH51Q6FNRAA3QGW8GYWB6), or read [how to read your report](https://docs.squirrelscan.com/guides/read-your-report).
 
 ## Add to your coding agent
 
@@ -239,7 +243,7 @@ Use the audit-website skill to audit this site and fix all issues but only crawl
 
 The complete local CLI, crawler, audit engine, rules, report generators, CLI-facing cloud clients, and documentation site are open source in this repository. The hosted API, website, dashboard, and cloud worker implementations are separate private services.
 
-Prerequisites: [Bun 1.4.0](https://bun.sh/) and Git.
+Prerequisites: [Bun 1.4.4](https://bun.sh/) and Git.
 
 ```bash
 git clone https://github.com/squirrelscan/squirrelscan.git
@@ -282,6 +286,7 @@ NO_TELEMETRY=1 squirrel audit https://example.com
 
 - [Website](https://squirrelscan.com)
 - [Documentation](https://docs.squirrelscan.com)
+- [FAQ](https://docs.squirrelscan.com/faq)
 - [Coding agent integration](https://docs.squirrelscan.com/agents)
 - [Share feedback](https://squirrelscan.com/feedback)
 - [Bugs, issues and feature requests](https://github.com/squirrelscan/squirrelscan/issues)

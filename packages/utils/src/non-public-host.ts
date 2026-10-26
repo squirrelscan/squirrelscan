@@ -24,7 +24,8 @@
  * loopback names, the cloud metadata names, the internal-only zones, and the
  * dotless-host rule) so the two sides agree on the cases a private-IP check
  * alone cannot see: `box.local`, `metadata.google.internal`, `intranet`,
- * `localhost.`.
+ * `localhost.`. The reserved and special-use zones added for pub#805 (`test`
+ * through `alt` below) reach the API's list separately.
  *
  * SYNTACTIC ONLY: no DNS lookup. A public name that happens to resolve to a
  * private address (`127.0.0.1.nip.io`, an `/etc/hosts` entry) is public here,
@@ -57,18 +58,21 @@ const METADATA_HOSTNAMES = new Set([
 ]);
 
 /**
- * Zones that can only denote something inside a private network, matched at the
- * apex AND as a suffix. `local` is mDNS, `internal` / `intranet` / `lan` /
- * `home.arpa` are private-use zones, `localhost` is loopback by RFC 6761, `svc`
- * is a Kubernetes service name, `consul` / `nomad` are service-discovery zones.
+ * Zones that cannot name a public site, matched at the apex AND as a suffix.
+ * `local` is mDNS, `internal` / `intranet` / `lan` / `home.arpa` are
+ * private-use zones, `localhost` is loopback by RFC 6761, `svc` is a Kubernetes
+ * service name, and `consul` / `nomad` are service-discovery zones.
  * Not all of them are formally reserved: `localhost` (RFC 6761), `local`
  * (RFC 6762), `home.arpa` (RFC 8375) and `internal` (ICANN, for private use)
- * are; `corp` is indefinitely deferred by ICANN; the rest are simply not
- * delegated public TLDs today, so no public site can sit under one. The list
- * is the API's `classifyHostedEgressHost` list, entry for entry: if a zone is
- * ever delegated, both change together.
+ * are; `test`, `example` and `invalid` are special-use names (RFC 2606 / RFC
+ * 6761), `onion` is special-use (RFC 7686), and `alt` is reserved for
+ * non-DNS namespaces (RFC 9476). `corp` is indefinitely deferred by ICANN;
+ * the remaining conventional local-only zones are not delegated public TLDs,
+ * so no public site can sit under one. The API's `classifyHostedEgressHost`
+ * list is meant to match this one entry for entry, and gains the pub#805 zones
+ * separately: if a zone is ever delegated, both change together.
  */
-const INTERNAL_NAME_ZONES = [
+const NON_PUBLIC_NAME_ZONES = [
   "localhost",
   "local",
   "internal",
@@ -80,6 +84,13 @@ const INTERNAL_NAME_ZONES = [
   "svc",
   "consul",
   "nomad",
+  "test",
+  "example",
+  "invalid",
+  "localdomain",
+  "home",
+  "onion",
+  "alt",
 ];
 
 /**
@@ -135,7 +146,7 @@ export function isNonPublicHostname(rawHost: string): boolean {
   if (LOOPBACK_NAMES.has(host)) return true;
   if (METADATA_HOSTNAMES.has(host)) return true;
   // Both the apex (`home.arpa`) and anything under it (`router.home.arpa`).
-  if (INTERNAL_NAME_ZONES.some((zone) => host === zone || host.endsWith(`.${zone}`))) {
+  if (NON_PUBLIC_NAME_ZONES.some((zone) => host === zone || host.endsWith(`.${zone}`))) {
     return true;
   }
   // A dotless host resolves through the machine's own search domain in practice

@@ -1,10 +1,12 @@
 import { logger } from "../logger";
+import { frontDoorTest } from "../shared/front-door";
 // links/weak-internal-links - Pages with minimal internal link support
 
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { CRAWL_CAPPED_SKIP_REASON } from "@squirrelscan/core-contracts";
 import { matchesExcludePattern } from "@squirrelscan/utils";
 import { getPathname, normalizeUrl } from "@squirrelscan/utils";
 
@@ -50,15 +52,14 @@ function buildWeakLinksCheck(weakPages: string[]): CheckResult {
 function collectWeakPages(
   entries: Iterable<[string, number]>,
   excludePatterns: string[],
-  baseUrl: string
+  baseUrl: string,
+  entryUrls: readonly string[]
 ): string[] {
-  const normalizedBase = normalizeUrl(baseUrl);
+  const isFrontDoor = frontDoorTest(baseUrl, entryUrls);
   const weakPages: string[] = [];
   for (const [url, count] of entries) {
-    const normalizedUrl = normalizeUrl(url);
-
-    // Skip homepage
-    const isHomepage = normalizedUrl === normalizedBase || getPathname(url) === "/";
+    // Skip the homepage, and the page the crawl started on (pub#796)
+    const isHomepage = isFrontDoor(url);
     const isExcluded = matchesExcludePattern(url, excludePatterns);
 
     if (isHomepage || isExcluded) {
@@ -98,6 +99,19 @@ export const weakInternalLinksRule: Rule = {
     const options = ctx.options;
     const excludePatterns = options.excludePatterns as string[];
 
+    // A capped crawl cannot prove that a page has exactly one inbound link: an
+    // uncrawled page may contain another link to it.
+    const limits = ctx.site?.crawlLimits;
+    if (limits && limits.pagesCrawled >= limits.maxPages) {
+      checks.push({
+        name: "weak-internal-links",
+        status: "skipped",
+        message: `Crawl stopped at its ${limits.maxPages}-page cap, so an inbound link may sit on a page not crawled`,
+        skipReason: CRAWL_CAPPED_SKIP_REASON,
+      });
+      return { checks };
+    }
+
     // Streaming path (#1022): read pre-materialized incoming-link counts instead
     // of holding every parsed page resident. `incomingLinkCounts()` is keyed by
     // each crawled page's stored URL (crawl order) with its dofollow internal
@@ -111,7 +125,8 @@ export const weakInternalLinksRule: Rule = {
       const weakPages = collectWeakPages(
         counts,
         excludePatterns,
-        ctx.site?.baseUrl || ""
+        ctx.site?.baseUrl || "",
+        ctx.site?.entryUrls ?? []
       );
       checks.push(buildWeakLinksCheck(weakPages));
       return { checks };
@@ -176,7 +191,8 @@ export const weakInternalLinksRule: Rule = {
           ]
       ),
       excludePatterns,
-      ctx.site?.baseUrl || ""
+      ctx.site?.baseUrl || "",
+      ctx.site?.entryUrls ?? []
     );
 
     // Report results

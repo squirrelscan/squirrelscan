@@ -1,68 +1,63 @@
 ---
-title: "Links"
-description: "Internal and external link health and structure"
+title: "Link audit rules: broken links, orphans and redirects"
+sidebarTitle: "Links"
+description: "Audit rules for links: broken internal and external links, fragments that point at nothing, orphan and dead-end pages, redirects and anchor text."
 ---
 
 Links rules read the link graph the crawl built. Half of them are health checks: internal and external targets that return an error, hrefs that do not parse, links that drop to plain HTTP, links that resolve only through a redirect. The other half describe structure: how many links point at a page, whether any of them sit in body copy rather than the footer, and whether the anchor text says what the destination is.
 
+## Run only these rules
+
+```bash
+squirrel audit https://example.com --rule-include links
+```
+
+[Cloud dead-link checking](/rules/links/dead-links) runs only when you are signed in. Logged out, external links are checked from your machine instead.
+
+{/* hub:start-here:start */}
+
+## Where to start
+
+These carry the highest severity and weight in the category.
+
+- [Broken internal links: 404s inside your own site](/rules/links/broken-links): An internal link to a page that returns 404 or 500 is a dead end you control. squirrel cross-references every internal link against the crawl.
+- [Broken external links: link rot on pages you cannot fix](/rules/links/broken-external-links): External links die without warning when the other site changes. squirrel checks each one and separates dead links from unverifiable ones.
+- [Links from an HTTPS page to an http:// destination](/rules/links/https-downgrade): A link that drops the visitor to plain HTTP hands their next request to the network. squirrel flags every explicit http:// link on an HTTPS page.
+- [Orphan pages: pages with too few inbound internal links](/rules/links/orphan-pages): A page nothing links to is hard to discover and reads as unimportant. squirrel counts dofollow inbound internal links for every crawled page.
+- [rel=nofollow on an internal link: usually a mistake](/rules/links/nofollow-internal): Nofollow on your own links tells search engines to ignore your site's internal structure. squirrel flags every internal link carrying it.
+
+{/* hub:start-here:end */}
+
+{/* hub:rules:start */}
+
 ## Rules
 
-<CardGroup cols={2}>
-  <Card title="Empty and generic anchor text: click here and icons" icon="triangle-exclamation" href="/rules/links/anchor-text">
-    A link with no text has no name, and click here describes nothing. squirrel groups links by destination and checks each group for a descriptive name.
-  </Card>
-  <Card title="Broken external links: link rot on pages you cannot fix" icon="triangle-exclamation" href="/rules/links/broken-external-links">
-    External links die without warning when the other site changes. squirrel checks each one and separates dead links from unverifiable ones.
-  </Card>
-  <Card title="Broken internal links: 404s inside your own site" icon="circle-exclamation" href="/rules/links/broken-links">
-    An internal link to a page that returns 404 or 500 is a dead end you control. squirrel cross-references every internal link against the crawl.
-  </Card>
-  <Card title="Broken anchor links: #fragments that point at nothing" icon="circle-exclamation" href="/rules/links/broken-anchors">
-    A link to #pricing whose target id is gone still loads, and the reader lands at the top of the page. squirrel checks every in-page anchor against its element.
-  </Card>
-  <Card title="Cloud dead-link checking: the shared external link cache" icon="circle-info" href="/rules/links/dead-links">
-    Checking every external link from your machine is slow and rude to the sites you link to. The cloud service checks against a shared cache instead.
-  </Card>
-  <Card title="Dead-end page: no outgoing internal links to continue with" icon="triangle-exclamation" href="/rules/links/dead-end-pages">
-    A page with no onward links leaves the reader and the crawler with nowhere to go. squirrel counts outgoing internal links, excluding self-links.
-  </Card>
-  <Card title="External link count: how many outbound links a page has" icon="circle-info" href="/rules/links/external-links">
-    External links are normal and this rule does not penalise them. squirrel counts them per page so you can see where they concentrate.
-  </Card>
-  <Card title="Links from an HTTPS page to an http:// destination" icon="triangle-exclamation" href="/rules/links/https-downgrade">
-    A link that drops the visitor to plain HTTP hands their next request to the network. squirrel flags every explicit http:// link on an HTTPS page.
-  </Card>
-  <Card title="Internal link count per page: too few and too many" icon="triangle-exclamation" href="/rules/links/internal-links">
-    A page with no internal links leads nowhere and a page with hundreds dilutes each one. squirrel counts internal links against a configurable range.
-  </Card>
-  <Card title="Invalid links: hrefs that do not parse as a URL" icon="triangle-exclamation" href="/rules/links/invalid-links">
-    A malformed href is a link that goes nowhere, and javascript:void(0) is a button wearing a link costume. squirrel reports every href the parser rejected.
-  </Card>
-  <Card title="Linked only from the nav and footer: no editorial links" icon="triangle-exclamation" href="/rules/links/no-contextual-inbound">
-    A footer link on every page looks like hundreds of inbound links and carries none of the signal. squirrel counts only links outside sitewide chrome.
-  </Card>
-  <Card title="rel=nofollow on an internal link: usually a mistake" icon="triangle-exclamation" href="/rules/links/nofollow-internal">
-    Nofollow on your own links tells search engines to ignore your site's internal structure. squirrel flags every internal link carrying it.
-  </Card>
-  <Card title="Orphan pages: pages with too few inbound internal links" icon="triangle-exclamation" href="/rules/links/orphan-pages">
-    A page nothing links to is hard to discover and reads as unimportant. squirrel counts dofollow inbound internal links for every crawled page.
-  </Card>
-  <Card title="Links pointing at redirecting URLs: the hop on every click" icon="triangle-exclamation" href="/rules/links/redirect-chains">
-    An internal link to a URL that redirects costs a round trip every time anyone follows it. squirrel finds redirecting pages and who links to them.
-  </Card>
-  <Card title="tel: and mailto: links: format and href/text mismatches" icon="circle-info" href="/rules/links/tel-mailto">
-    A phone link whose href differs from the number on screen dials the wrong person. squirrel validates both formats and compares them with the visible text.
-  </Card>
-  <Card title="Pages with only one internal link pointing to them" icon="triangle-exclamation" href="/rules/links/weak-internal-links">
-    One inbound link is enough to be found and not enough to look important. squirrel lists every page whose dofollow inbound count is exactly one.
-  </Card>
-</CardGroup>
+| Rule | What it flags | Severity | Scope |
+|---|---|---|---|
+| [Broken anchor links: #fragments that point at nothing](/rules/links/broken-anchors) | A link to #pricing whose target id is gone still loads, and the reader lands at the top of the page. squirrel checks every in-page anchor against the element it names. | warning | Site-wide |
+| [Broken external links: link rot on pages you cannot fix](/rules/links/broken-external-links) | External links die without warning when the other site changes. squirrel checks each one and separates dead links from unverifiable ones. | warning | Site-wide |
+| [Broken internal links: 404s inside your own site](/rules/links/broken-links) | An internal link to a page that returns 404 or 500 is a dead end you control. squirrel cross-references every internal link against the crawl. | error | Site-wide |
+| [Cloud dead-link checking: the shared external link cache](/rules/links/dead-links) | Checking every external link from your machine is slow and rude to the sites you link to. The cloud service checks against a shared cache instead. | info | Site-wide |
+| [Dead-end page: no outgoing internal links to continue with](/rules/links/dead-end-pages) | A page with no onward links leaves the reader and the crawler with nowhere to go. squirrel counts outgoing internal links, excluding self-links. | warning | Per-page |
+| [Empty and generic anchor text: click here and icons](/rules/links/anchor-text) | A link with no text has no name, and click here describes nothing. squirrel groups links by destination and checks each group for a descriptive name. | warning | Per-page |
+| [External link count: how many outbound links a page has](/rules/links/external-links) | External links are normal and this rule does not penalise them. squirrel counts them per page so you can see where they concentrate. | info | Per-page |
+| [Internal link count per page: too few and too many](/rules/links/internal-links) | A page with no internal links leads nowhere and a page with hundreds dilutes each one. squirrel counts internal links against a configurable range. | warning | Per-page |
+| [Invalid links: hrefs that do not parse as a URL](/rules/links/invalid-links) | A malformed href is a link that goes nowhere, and javascript:void(0) is a button wearing a link costume. squirrel reports every href the parser rejected. | warning | Per-page |
+| [Linked only from the nav and footer: no editorial links](/rules/links/no-contextual-inbound) | A footer link on every page looks like hundreds of inbound links and carries none of the signal. squirrel counts only links outside sitewide chrome. | warning | Site-wide |
+| [Links from an HTTPS page to an http:// destination](/rules/links/https-downgrade) | A link that drops the visitor to plain HTTP hands their next request to the network. squirrel flags every explicit http:// link on an HTTPS page. | warning | Per-page |
+| [Links pointing at redirecting URLs: the hop on every click](/rules/links/redirect-chains) | An internal link to a URL that redirects costs a round trip every time anyone follows it. squirrel finds redirecting pages and who links to them. | warning | Site-wide |
+| [Orphan pages: pages with too few inbound internal links](/rules/links/orphan-pages) | A page nothing links to is hard to discover and reads as unimportant. squirrel counts dofollow inbound internal links for every crawled page. | warning | Site-wide |
+| [Pages with only one internal link pointing to them](/rules/links/weak-internal-links) | One inbound link is enough to be found and not enough to look important. squirrel lists every page whose dofollow inbound count is exactly one. | warning | Site-wide |
+| [rel=nofollow on an internal link: usually a mistake](/rules/links/nofollow-internal) | Nofollow on your own links tells search engines to ignore your site's internal structure. squirrel flags every internal link carrying it. | warning | Per-page |
+| [tel: and mailto: links: format and href/text mismatches](/rules/links/tel-mailto) | A phone link whose href differs from the number on screen dials the wrong person. squirrel validates both formats and compares them with the visible text. | info | Per-page |
+
+{/* hub:rules:end */}
 
 ## Link checking defaults
 
 Internal link checks run at every [audit level](/guides/audit-levels), Quick included, and are free. Each internal link target the crawl did not fetch gets a status-only request (up to 200 per audit, most-linked first), so a linked 404 is found even when the crawl did not follow links or ran out of page budget. It is built not to change anything on your site: it skips links that look like actions (log out, unsubscribe, delete, confirm, add to cart) or carry a token, sends no cookies, credentials or custom headers, and sends `HEAD`, never a `GET` unless the server does not support `HEAD`. See [What the internal link check never requests](/configuration/external-links#what-the-internal-link-check-never-requests).
 
-External link checks run at Surface and Full. At Quick they are opt-in for now: pass `--external-links`, or turn on the website's **External link checks** setting in the cloud. An audit that checks them requests up to its page budget or 200 distinct external links, whichever is more, most-linked first. In a cloud audit each checked external link costs 1 credit, at most one per page of the audit's budget.
+External link checks run at every level, Quick included. Skip them with `--no-external-links`, `[external_links] enabled = false`, or the website's **External link checks** setting in the cloud. An audit that checks them requests up to its page budget or 200 distinct external links, whichever is more, most-linked first. In a cloud audit, or a signed-in CLI audit at Surface or Full, each external link the cloud verifies costs 1 credit, at most one per page of the audit's budget. Links checked on your machine are free, a Quick CLI audit's included.
 
 | Where | External links | Internal links |
 |-------|----------------|----------------|
@@ -72,11 +67,36 @@ External link checks run at Surface and Full. At Quick they are opt-in for now: 
 
 `--offline` skips external links, since it promises no requests beyond the audited site. A check that did not run is reported as **Not checked** with the reason, never as a pass.
 
+{/* hub:terms:start */}
+
+## Key terms
+
+- [Anchor text](/glossary/anchor-text): The visible, clickable text of a link, which tells readers and search engines what the target is about.
+- [Broken link](/glossary/broken-link): A link whose target answers with an error, does not resolve, or is malformed.
+- [Crawl budget](/glossary/crawl-budget): The number of URLs a search engine is willing and able to crawl on a site in a given time, set by crawl capacity and crawl demand.
+- [Fragment link](/glossary#anchor-link): A link to an id within a page (#section); it is broken when no element on the target page carries that id.
+- [HTTP status code](/glossary/http-status-code): The three-digit code a server returns with every response; 2xx success, 3xx redirect, 4xx client error, 5xx server error.
+- [HTTPS](/glossary/https): HTTP over TLS, which encrypts traffic and proves the server's identity; every page and form should use it.
+- [Internal linking](/glossary/internal-linking): Links between pages of the same site, which carry crawlers and readers through it and signal which pages matter.
+- [Orphan page](/glossary/orphan-page): A page that no other crawled page links to, so crawlers and readers only reach it through a sitemap or a direct URL.
+- [Redirect chain](/glossary/redirect-chain): A sequence of two or more redirects between the requested URL and the final response.
+- [rel=nofollow](/glossary#nofollow): A link attribute value asking search engines not to associate the linking page with the target; a hint, not a block.
+
+{/* hub:terms:end */}
+
+## Related categories
+
+[Crawlability](/rules/crawl) checks the redirect chains and sitemaps that sit alongside the link graph. [Images](/rules/images) checks image sources, and [Accessibility](/rules/a11y) checks link text from a screen reader's side.
+
+## Learn more
+
+- [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai), the coding agent workflow for working through a report
+- [Broken link checker](https://squirrelscan.com/tools/broken-link-checker)
+- [Sample report](https://squirrelscan.com/reports/squirrelscan-sample), with the Links section on a real site
+
 ## Disable all Links rules
 
 ```toml squirrel.toml
 [rules]
 disable = ["links/*"]
 ```
-
-Every audit reports Links findings next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.

@@ -66,7 +66,7 @@ describe("synthetic-site direct-storage mode", () => {
     expect(result.linkAppearanceCount).toBe(0);
 
     const home = model.pages.find((p) => p.path === "/")!;
-    const homeUrl = `http://synthetic.test${home.path}`;
+    const homeUrl = `http://synthetic.example.com${home.path}`;
     // Home is linked from nearly every page, but ONLY internally — must never
     // show up in link_appearances.
     const appearances = await run(result.storage.getLinkAppearances(result.crawlId, homeUrl));
@@ -94,10 +94,10 @@ describe("synthetic-site direct-storage mode", () => {
       result.storage.getLinkAppearances(result.crawlId, externalHref),
     );
     expect(externalAppearances.length).toBe(1);
-    expect(externalAppearances[0]?.pageUrl).toBe(`http://synthetic.test${source.path}`);
+    expect(externalAppearances[0]?.pageUrl).toBe(`http://synthetic.example.com${source.path}`);
 
     // The internal home link that `source` also carries must NOT appear.
-    const homeUrl = `http://synthetic.test${home.path}`;
+    const homeUrl = `http://synthetic.example.com${home.path}`;
     const homeAppearances = await run(result.storage.getLinkAppearances(result.crawlId, homeUrl));
     expect(homeAppearances.length).toBe(0);
   });
@@ -117,7 +117,7 @@ describe("synthetic-site direct-storage mode", () => {
     expect(robots?.content).toContain("Sitemap:");
 
     const sitemapUrls = await run(
-      result.storage.getSitemapUrls(result.crawlId, "http://synthetic.test/sitemap.xml"),
+      result.storage.getSitemapUrls(result.crawlId, "http://synthetic.example.com/sitemap.xml"),
     );
     expect(sitemapUrls.length).toBe(model.sitemapPaths.length);
 
@@ -125,7 +125,9 @@ describe("synthetic-site direct-storage mode", () => {
     expect(orphanPages.length).toBe(3);
     for (const orphan of orphanPages) {
       expect(model.sitemapPaths).toContain(orphan.path);
-      expect(sitemapUrls.some((u) => u.loc === `http://synthetic.test${orphan.path}`)).toBe(true);
+      expect(sitemapUrls.some((u) => u.loc === `http://synthetic.example.com${orphan.path}`)).toBe(
+        true,
+      );
     }
   });
 

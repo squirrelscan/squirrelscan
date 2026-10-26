@@ -52,11 +52,12 @@ import { resetSharedRegexes } from "./shared-regex";
  * Chosen from measured rule times on the golden corpus (500-page fixture, 3 runs,
  * `packages/audit-engine/scripts/rule-time-percentiles.ts`): the slowest page
  * rule's p99 is 6 ms and the slowest single page-rule run 90 ms; the heaviest
- * synchronous site rule spends about 2 ms per page. 1000 ms leaves more than 10x
+ * synchronous site rule spends about 2 ms per page. 2000 ms leaves more than 20x
  * headroom over the worst observed run on a slow, shared CPU, so it only fires
- * on pathological input.
+ * on pathological input. Raised from 1000 ms, so a rule that finishes late on a busy
+ * machine is not abandoned; there is no retry.
  */
-export const RULE_TIME_BUDGET_MS = 1000;
+export const RULE_TIME_BUDGET_MS = 2000;
 
 /**
  * Ceiling on one site-rule evaluation, in ms. Without it the per-page scaling
@@ -80,7 +81,16 @@ export function siteRuleBudgetMs(
 
 /** Thrown when a rule's synchronous work runs past its budget. */
 export class RuleTimeoutError extends Error {
-  constructor(readonly budgetMs: number) {
+  /**
+   * `elapsedMs` is the wall-clock time the call ran before the watchdog stopped
+   * it (pub#960): over `budgetMs` by however long the host took to interrupt it,
+   * and what tells a rule that is slow from a host that is starved. Unset when a
+   * caller builds one without a measurement.
+   */
+  constructor(
+    readonly budgetMs: number,
+    readonly elapsedMs?: number
+  ) {
     super(`exceeded its ${budgetMs} ms time budget and was abandoned`);
     this.name = "RuleTimeoutError";
   }
@@ -94,6 +104,27 @@ const slot: { fn?: () => unknown } = {};
 const context = vm.createContext(slot);
 const callSlot = new vm.Script("fn()");
 
+// Bun (1.3.14) leaves the watchdog armed after `runInContext` returns, until the
+// current macrotask ends. Code that then runs past the deadline in the same task
+// (the rest of the page loop, a chain of microtasks) was terminated: uncatchably,
+// so the process drained its event loop and exited 0 with no report, and one fast
+// rule followed by a slow stretch of anything ended the audit (#578). A no-op call
+// with the longest timeout moves the deadline out of reach; a call without a
+// timeout, or `runInThisContext`, does not. tests/rule-time-budget-disarm-578.test.ts
+// pins it in a child process. Still open: a rule that ends just AFTER its deadline
+// can have the termination land in the caller instead of in this catch (#880).
+const DISARMED_TIMEOUT_MS = 2 ** 31 - 1;
+const noop = () => undefined;
+
+function disarm(): void {
+  slot.fn = noop;
+  try {
+    callSlot.runInContext(context, { timeout: DISARMED_TIMEOUT_MS });
+  } catch {
+    // Never replace the rule's own result or error with this call's.
+  }
+}
+
 /**
  * Call `fn` and return its result, or throw {@link RuleTimeoutError} if its
  * synchronous execution exceeds `budgetMs`. Errors `fn` throws pass through
@@ -104,6 +135,7 @@ export function runWithinBudget<T>(fn: () => T, budgetMs: number): T {
   if (active) return fn();
   active = true;
   slot.fn = fn;
+  const started = performance.now();
   try {
     return callSlot.runInContext(context, { timeout: Math.ceil(budgetMs) }) as T;
   } catch (e) {
@@ -111,11 +143,15 @@ export function runWithinBudget<T>(fn: () => T, budgetMs: number): T {
       // The rule stopped at an arbitrary point, possibly mid `exec()` loop on a
       // shared `/g` or `/y` regex whose `lastIndex` would carry into the next rule.
       resetSharedRegexes();
-      throw new RuleTimeoutError(budgetMs);
+      throw new RuleTimeoutError(budgetMs, Math.round(performance.now() - started));
     }
     throw e;
   } finally {
-    slot.fn = undefined;
-    active = false;
+    try {
+      disarm();
+    } finally {
+      slot.fn = undefined;
+      active = false;
+    }
   }
 }

@@ -103,6 +103,7 @@ describe.each(seams)("%s", (_name, run) => {
     ["http://127.0.0.1:4321/"],
     ["http://192.168.1.10:8000/"],
     ["http://box.local/"],
+    ["http://myapp.test/"],
     ["http://intranet/"],
   ])(
     "a %s base marks the host unreachable, whatever the pages say",

@@ -3,6 +3,7 @@
 import { getDomainWithoutSuffix } from "tldts";
 import { z } from "zod";
 
+import { primaryLangSubtag } from "../shared/generic-link-phrases";
 import type { Rule, RuleContext, RuleResult, CheckResult, ParsedPage } from "../types";
 import { getTextExcludingScripts } from "./text-content";
 
@@ -19,6 +20,66 @@ export const optionsSchema = z.object({
 // (getacme.com, acmehq.com, tryacme.app).
 const DOMAIN_PREFIXES = ["get", "try", "use", "join", "hey", "with", "go"];
 const DOMAIN_SUFFIXES = ["hq", "app", "labs", "lab", "ai", "io", "inc"];
+
+// English applies on every page to preserve the rule's existing behaviour
+// when lang is absent or unknown. A recognised page language adds its own
+// grammatical filler, using the same primary-subtag parsing as link-text.
+function wordSet(...groups: string[]): ReadonlySet<string> {
+  return new Set(groups.flatMap((group) => group.split(" ")));
+}
+
+const COMMON_WORDS = wordSet(
+  "the and that have for not with you this but from they will would there their what about which when make can like been more some than them other into could just also",
+  // Function words / generic verbs (#695) that read as high density on
+  // ordinary pages, never as a real SEO target.
+  "your our his her its who whom whose get here very such same each any all most much many even still yet",
+);
+
+const LANGUAGE_STOP_WORDS = new Map<string, ReadonlySet<string>>([
+  [
+    "de",
+    wordSet(
+      "aber alle allem allen aller alles als also ander andere anderem anderen anderer anderes auch auf aus bei bin bis bist damit dann das dass dein deine dem den denn der des die dies diese",
+      "ein eine einem einen einer eines etwas hat haben hier ich ihr ihre ist jede kein keine man mehr mein meine mit nach nicht noch nun nur oder sein seine sind solche und uns unser",
+      "vom von war waren was wenn wer wie wir wird zum zur",
+    ),
+  ],
+  [
+    "es",
+    wordSet(
+      "algo algunas algunos ante antes aquel aqui bajo bien cada como con contra cual cuando del desde donde durante ella ellas ellos entre era eran esta estas este estos fue fueron",
+      "hacia hasta hay las los mas mientras muy nada nos nosotros otra otras otro otros para pero poco por porque que quien ser sin sobre son sus tanto tiene todo todos una unas uno unos",
+    ),
+  ],
+  [
+    "fr",
+    wordSet(
+      "alors aucun aussi autre aux avec avoir car ceci cela ces cette comme dans des donc elle elles encore entre est eux faire fois ils les leur leurs mais mes moins mon nos notre nous",
+      "par parce pas peut plus pourquoi quand que quel quelle qui sans ses son sont sous sur tous tout tres une vos votre vous",
+    ),
+  ],
+  [
+    "pt",
+    wordSet(
+      "ainda algo algumas alguns assim ate bem cada como com contra das dela dele deles depois desde dos durante ela elas ele eles entre essa essas esse esses esta estas este estes foi foram",
+      "isso isto mais mas mesmo muito nao nas nos nossa nosso numa onde outra outras outro outros para pela pelas pelo pelos por porque qual quando que quem sem ser seus sua suas sobre sao tem todo todos uma umas uns voce voces",
+    ),
+  ],
+  [
+    "it",
+    wordSet(
+      "alcune alcuni altro anche ancora avere che chi come con contro cui dagli dai dal dalla dalle degli dei del della delle dentro deve dove due era erano essere fare fra gli hanno lei loro",
+      "mai molto nei nel nella nelle noi non ogni per pero piu quale quando questa queste questi questo sara senza sia siamo sono sua sue sul sulla tra tutti tutto una uno voi",
+    ),
+  ],
+  [
+    "nl",
+    wordSet(
+      "aan alle als bij dan dat deze die dit door een had hebben heeft hem het hier hij hoe hun kan maar meer met mij moet naar niet nog ook ons onze over tot uit van veel voor want",
+      "waren was wat wel werd worden zal zijn zonder zou",
+    ),
+  ],
+]);
 
 /**
  * The site's own brand / product name as lowercase word tokens, from the page's
@@ -120,67 +181,11 @@ export const keywordStuffingRule: Rule = {
       wordCounts.set(word, (wordCounts.get(word) || 0) + 1);
     }
 
-    // Find words with high density (excluding common words)
-    const commonWords = new Set([
-      "the",
-      "and",
-      "that",
-      "have",
-      "for",
-      "not",
-      "with",
-      "you",
-      "this",
-      "but",
-      "from",
-      "they",
-      "will",
-      "would",
-      "there",
-      "their",
-      "what",
-      "about",
-      "which",
-      "when",
-      "make",
-      "can",
-      "like",
-      "been",
-      "more",
-      "some",
-      "than",
-      "them",
-      "other",
-      "into",
-      "could",
-      "just",
-      "also",
-      // Function words / generic verbs (#695) — grammatical filler that reads
-      // as "high density" on normal pages (privacy policies about "your"
-      // data, CTA-heavy landing pages saying "get"), never a real SEO target.
-      "your",
-      "our",
-      "his",
-      "her",
-      "its",
-      "who",
-      "whom",
-      "whose",
-      "get",
-      "here",
-      "very",
-      "such",
-      "same",
-      "each",
-      "any",
-      "all",
-      "most",
-      "much",
-      "many",
-      "even",
-      "still",
-      "yet",
-    ]);
+    // Find words with high density, excluding English common words and the
+    // grammatical filler for the page's declared language (#1042).
+    const pageStopWords = LANGUAGE_STOP_WORDS.get(
+      primaryLangSubtag(doc.documentElement?.getAttribute("lang")),
+    );
 
     // Repeated generic nav/CTA labels ("Learn more" x11 cards) are a UI
     // component, not organic content — don't count their words toward
@@ -252,7 +257,7 @@ export const keywordStuffingRule: Rule = {
 
     if (organicTotal > 0) {
       for (const [word, rawCount] of wordCounts) {
-        if (commonWords.has(word)) continue;
+        if (COMMON_WORDS.has(word) || pageStopWords?.has(word)) continue;
         if (whitelist.has(word)) continue;
 
         const count = rawCount - (ctaWordDeductions.get(word) ?? 0);

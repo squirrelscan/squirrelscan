@@ -4,6 +4,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { CheckResult, RobotsTxtData } from "@squirrelscan/core-contracts";
+import { parseRobotsTxt } from "@squirrelscan/utils/robots-txt";
 
 import { aiCrawlersRule, evaluateAiCrawlers, AI_CRAWLERS } from "../src/ax/ai-crawlers";
 import type { ParsedPage, RuleContext } from "../src/types";
@@ -62,6 +63,17 @@ describe("ax/ai-crawlers", () => {
     expect(gpt?.explicitlyListed).toBe(true);
     // A different bot is unaffected.
     expect(verdicts.find((v) => v.token === "ClaudeBot")?.blocked).toBe(false);
+  });
+
+  test("stacked user agents parsed from robots.txt are both reported as blocked", () => {
+    const data = parseRobotsTxt(
+      "User-agent: GPTBot\nUser-agent: ClaudeBot\nDisallow: /\n",
+      "https://example.com/robots.txt",
+    );
+    const verdicts = evaluateAiCrawlers(data);
+
+    expect(verdicts.find((v) => v.token === "GPTBot")?.blocked).toBe(true);
+    expect(verdicts.find((v) => v.token === "ClaudeBot")?.blocked).toBe(true);
   });
 
   test("a wildcard Disallow: / blocks every AI crawler not given its own group", () => {

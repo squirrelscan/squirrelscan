@@ -144,7 +144,8 @@ function parseLinks(parsedData: string | null): LinkData[] {
 async function runBothWays(
   store: SQLiteStorage,
   rule: Rule,
-  options: Record<string, unknown>
+  options: Record<string, unknown>,
+  crawlLimits?: { pagesCrawled: number; maxPages: number }
 ) {
   const pages = await run(store.getPages(CRAWL));
   const sitePages = pages.map((p) => ({
@@ -162,7 +163,13 @@ async function runBothWays(
 
   const legacyCtx: RuleContext = {
     ...base,
-    site: { baseUrl: BASE, pages: sitePages, robotsTxt: null, sitemaps: null },
+    site: {
+      baseUrl: BASE,
+      pages: sitePages,
+      robotsTxt: null,
+      sitemaps: null,
+      ...(crawlLimits ? { crawlLimits } : {}),
+    },
   };
   const legacy = (await Promise.resolve(rule.run(legacyCtx))).checks;
 
@@ -170,7 +177,13 @@ async function runBothWays(
   const streamedCtx: RuleContext = {
     ...base,
     // EMPTY pages — the streaming path must not read them.
-    site: { baseUrl: BASE, pages: [], robotsTxt: null, sitemaps: null },
+    site: {
+      baseUrl: BASE,
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+      ...(crawlLimits ? { crawlLimits } : {}),
+    },
     siteQuery,
   };
   const streamed = (await Promise.resolve(rule.run(streamedCtx))).checks;
@@ -270,15 +283,15 @@ describe("SiteQuery dual-path — links/weak-internal-links", () => {
 
 // ── #109: contextual (non-chrome) inbound links ───────────────────────────────
 
-// Every page carries the same footer link to /legal, so /legal has a HEALTHY raw
+// Every page carries the same footer link to /pricing, so /pricing has a HEALTHY raw
 // inbound count (4) and zero contextual support — the exact case orphan-pages and
 // weak-internal-links cannot see. /deep is linked once, from body copy.
 const CHROME_FIXTURE: PageRecord[] = [
-  pageRow(BASE, [link("/a"), link("/b"), chrome("/legal")]),
-  pageRow("https://example.com/a", [link("/b"), link("/deep"), chrome("/legal")]),
-  pageRow("https://example.com/b", [link("/a"), chrome("/legal")]),
+  pageRow(BASE, [link("/a"), link("/b"), chrome("/pricing")]),
+  pageRow("https://example.com/a", [link("/b"), link("/deep"), chrome("/pricing")]),
+  pageRow("https://example.com/b", [link("/a"), chrome("/pricing")]),
   pageRow("https://example.com/deep", [link("/a")]),
-  pageRow("https://example.com/legal", [chrome("/legal")]),
+  pageRow("https://example.com/pricing", [chrome("/pricing")]),
 ];
 
 async function seedChromeFixture(store: SQLiteStorage): Promise<void> {
@@ -326,9 +339,9 @@ describe("SiteQuery — contextual inbound link counts (#109)", () => {
     // Same keys, same order — the two maps are built in one pass.
     expect([...contextual.keys()]).toEqual([...all.keys()]);
 
-    // /legal: four footer links, zero contextual → healthy on paper, unsupported.
-    expect(all.get("https://example.com/legal")).toBe(4);
-    expect(contextual.get("https://example.com/legal")).toBe(0);
+    // /pricing: four footer links, zero contextual → healthy on paper, unsupported.
+    expect(all.get("https://example.com/pricing")).toBe(4);
+    expect(contextual.get("https://example.com/pricing")).toBe(0);
     // /deep: one body-copy link.
     expect(all.get("https://example.com/deep")).toBe(1);
     expect(contextual.get("https://example.com/deep")).toBe(1);
@@ -370,9 +383,9 @@ describe("SiteQuery dual-path — links/no-contextual-inbound", () => {
         name: "no-contextual-inbound",
         status: "warn",
         message: "1 page(s) are linked only from sitewide chrome",
-        items: [{ id: "https://example.com/legal" }],
+        items: [{ id: "https://example.com/pricing" }],
         details: { total: 1 },
-        value: "/legal",
+        value: "/pricing",
       },
     ]);
     await run(store.close());
@@ -388,7 +401,7 @@ describe("SiteQuery dual-path — links/no-contextual-inbound", () => {
     });
 
     expect(streamed).toEqual(legacy);
-    // Only /deep (one inbound link) is an orphan; /legal's four footer links
+    // Only /deep (one inbound link) is an orphan; /pricing's four footer links
     // keep it comfortably above the threshold on both paths.
     expect(legacy[0]!.items).toEqual([{ id: "https://example.com/deep" }]);
     await run(store.close());
@@ -406,7 +419,7 @@ describe("SiteQuery dual-path — links/no-contextual-inbound", () => {
     });
 
     expect(streamed).toEqual(legacy);
-    expect(legacy[0]!.items).toEqual([{ id: "https://example.com/legal" }]);
+    expect(legacy[0]!.items).toEqual([{ id: "https://example.com/pricing" }]);
     await run(store.close());
   });
 
@@ -416,7 +429,7 @@ describe("SiteQuery dual-path — links/no-contextual-inbound", () => {
 
     const { legacy, streamed } = await runBothWays(store, contextualRule, {
       minInboundLinks: 2,
-      excludePatterns: ["/legal"],
+      excludePatterns: ["/pricing"],
     });
 
     expect(streamed).toEqual(legacy);
@@ -426,6 +439,49 @@ describe("SiteQuery dual-path — links/no-contextual-inbound", () => {
 });
 
 describe("SiteQuery dual-path — edge cases parity", () => {
+  test("a capped crawl skips both inbound-count rules on both paths", async () => {
+    const store = await freshStore();
+    await seedFixture(store);
+
+    for (const [rule, options, name] of [
+      [orphanRule, { minInboundLinks: 2, excludePatterns: [] }, "orphan-pages"],
+      [weakRule, { excludePatterns: [] }, "weak-internal-links"],
+    ] as const) {
+      const { legacy, streamed } = await runBothWays(store, rule, options, {
+        pagesCrawled: FIXTURE.length,
+        maxPages: FIXTURE.length,
+      });
+      expect(streamed).toEqual(legacy);
+      expect(legacy).toEqual([
+        {
+          name,
+          status: "skipped",
+          message: `Crawl stopped at its ${FIXTURE.length}-page cap, so an inbound link may sit on a page not crawled`,
+          skipReason: "Crawl capped before the frontier was exhausted",
+        },
+      ]);
+    }
+    await run(store.close());
+  });
+
+  test("a crawl that finishes under its cap still warns on both inbound-count rules", async () => {
+    const store = await freshStore();
+    await seedFixture(store);
+
+    for (const [rule, options, name] of [
+      [orphanRule, { minInboundLinks: 2, excludePatterns: [] }, "orphan-pages"],
+      [weakRule, { excludePatterns: [] }, "weak-internal-links"],
+    ] as const) {
+      const { legacy, streamed } = await runBothWays(store, rule, options, {
+        pagesCrawled: FIXTURE.length,
+        maxPages: FIXTURE.length + 1,
+      });
+      expect(streamed).toEqual(legacy);
+      expect(legacy[0]).toMatchObject({ name, status: "warn" });
+    }
+    await run(store.close());
+  });
+
   test("a crawl with <2 pages skips identically on both paths", async () => {
     const store = await freshStore();
     await run(store.upsertPage(CRAWL, pageRow(BASE, [link("/a")])));

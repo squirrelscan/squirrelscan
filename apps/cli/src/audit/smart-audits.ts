@@ -23,6 +23,7 @@ import {
   mergeFindings,
   type CarriedFinding,
   type FlatFinding,
+  type NotEvaluatedEvidence,
   type RuleTally,
 } from "@squirrelscan/audit-engine";
 import { loadAllRules, type RuleRunResult } from "@squirrelscan/rules";
@@ -116,6 +117,8 @@ export interface RunSmartAuditsInput {
    * — produced a page at a time instead of over a map held for the whole run.
    */
   freshFindings: FlatFinding[];
+  /** (#508) Page checks this run skipped while the check ran elsewhere: they carry, never resolve. */
+  notEvaluated?: NotEvaluatedEvidence;
   /** Normalized URLs page rules actually ran on, in crawl order. */
   scoredPageUrls: readonly string[];
   /** ruleId -> folded tally; read for `meta` only (the bounded rule index). */
@@ -136,6 +139,7 @@ export function runSmartAudits(
     crawlId,
     siteKey,
     freshFindings,
+    notEvaluated,
     scoredPageUrls,
     ruleMeta,
     pages,
@@ -174,6 +178,7 @@ export function runSmartAudits(
       removedUrls,
       severityByRule,
       statusByUrl,
+      ...(notEvaluated ? { notEvaluated } : {}),
     });
 
     // Persist: removed pages (transactional stale) first, then the rest.

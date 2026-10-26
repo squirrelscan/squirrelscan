@@ -1,0 +1,88 @@
+---
+title: "JSON-LD @id: stable identifiers for your entities"
+description: "The JSON-LD @id gives a node a stable IRI, so other nodes and pages can reference one entity, not redeclare it. How to write it and what breaks it."
+sidebarTitle: "@id (JSON-LD node identifier)"
+---
+
+The **`@id`** in JSON-LD is a node's identifier: an IRI, normally an absolute URL, that names the thing the node describes, so other nodes and other pages can refer to the same thing instead of describing it again.
+
+The JSON-LD 1.1 specification uses `@id` to uniquely identify node objects, and calls a node that contains only an `@id` a node reference. A relative `@id` is resolved against the document's base, so `#organization` on the homepage and `#organization` on a blog post become two different identifiers. The fragment itself is a convention. Yoast uses `https://example.com/#organization`, and what matters is that the full value is absolute and byte-identical on every page.
+
+{/* glossary:hub:start */}
+
+Category: [Structured Data](/rules/schema)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+An `@id` is what turns forty copies of a company's details into one company. Without it, every page's organization is a separate node that only shares a name. With a relative or per-page id, it is worse, because the markup now claims forty different identities. Two plugins that each give the organization their own `@id` split it in two. A reference to an `@id` that nothing on the site declares points at nothing.
+
+## How squirrelscan checks it
+
+These rules read squirrelscan's site-wide entity map. [schema/entity-identity](/rules/schema/entity-identity) fails when a named organization, local business, person or website is declared on several pages without an `@id`. [schema/entity-split-identity](/rules/schema/entity-split-identity) fails when one entity, meaning the same `@type` set and name declared together on at least one page, appears under more than one `@id`. Two different authors with the same name on different pages are not merged. [schema/entity-dangling](/rules/schema/entity-dangling) fails when a referenced `@id`, other than a `sameAs` link, is declared nowhere in the crawl. A publisher declared on the homepage and referenced from articles resolves. [schema/entity-id-format](/rules/schema/entity-id-format) warns about identifiers that are neither an absolute `http` or `https` URL nor a global scheme such as `urn:` or `doi:`, after resolving relative ones where it can. [schema/entity-orphan](/rules/schema/entity-orphan) notes `@id`s declared on one page and referenced by nothing, leaving out page-level types such as articles, products and breadcrumbs.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [One organization, or sixty? Entities declared without an @id](/rules/schema/entity-identity) | Your site declares the same organization on every page with nothing to say they are one thing. A search engine reading 60 pages sees 60 organizations. | error |
+| [Two plugins, two @ids, one organization split in half](/rules/schema/entity-split-identity) | Yoast declares your organization under one @id and WordLift under another. A search engine reads two companies, and neither gets the full picture. | error |
+| [A publisher that points at nothing](/rules/schema/entity-dangling) | A reference to an @id that nothing in the crawl declares. squirrel checks against the whole site, so a publisher the homepage declares still resolves. | error |
+| [A bare #organization is one entity per page, not one entity](/rules/schema/entity-id-format) | A relative @id resolves against the page it sits on, so the same fragment on forty pages is forty identifiers. The markup validates and the entity still never accumulates. | warning |
+| [An @id that nothing points at](/rules/schema/entity-orphan) | Giving an entity an identifier is the expensive part. One that nothing references and that appears on a single page is doing no more than an inline block. | info |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Write the full URL, and reuse it byte for byte:
+
+```json
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    { "@type": "Article", "@id": "https://example.com/post#article",
+      "publisher": { "@id": "https://example.com/#organization" } },
+    { "@type": "Organization", "@id": "https://example.com/#organization",
+      "name": "Example Ltd", "url": "https://example.com/" }
+  ]
+}
+```
+
+Fix a template that concatenates a bare fragment without the site URL ([the format fix](/rules/schema/entity-id-format#how-to-fix-it)). Choose one `@id` when two plugins compete, and turn off schema output in one of them ([the split identity fix](/rules/schema/entity-split-identity#how-to-fix-it)). Declare every referenced node somewhere in the crawl ([the dangling fix](/rules/schema/entity-dangling#how-to-fix-it)), and give repeated entities an `@id` ([the identity fix](/rules/schema/entity-identity#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include schema/entity-identity,schema/entity-split-identity,schema/entity-dangling,schema/entity-id-format,schema/entity-orphan
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Entity](/glossary/entity): A thing a site describes in structured data, such as an organization, person or product, identified across pages so search engines and agents can tell it is one thing.
+- [JSON-LD](/glossary/json-ld): JSON for Linking Data, the format Google recommends for structured data, embedded in a `<script type="application/ld+json">` block.
+
+{/* glossary:related:end */}
+
+## References
+
+- [JSON-LD 1.1: node identifiers, W3C](https://www.w3.org/TR/json-ld11/#node-identifiers)
+- [JSON-LD 1.1: node objects, W3C](https://www.w3.org/TR/json-ld11/#node-objects)
+- [JSON-LD 1.1: IRIs, W3C](https://www.w3.org/TR/json-ld11/#iris)
+
+{/* glossary:jsonld:start */}
+
+import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";
+
+<GlossaryJsonLd slug="entity-id" />
+
+{/* glossary:jsonld:end */}

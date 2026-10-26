@@ -87,18 +87,33 @@ function rateLimitedHostsFor(baseUrl: string, rateLimitedCount: number): string[
 }
 
 /**
+ * URLs still queued when the crawl stopped: frontier rows that passed the
+ * scope, robots and dedupe checks and were never fetched. This is
+ * `scanScope.unfetched`, the part of the site a capped or time-stopped crawl
+ * knew of but did not reach. Disjoint from the pages it fetched.
+ *
+ * A failed read counts as none: a coverage caveat must never fail the report
+ * it annotates.
+ */
+export function unfetchedFrontierCount(
+  storage: CrawlStorage,
+  crawlId: string,
+): Effect.Effect<number, never, never> {
+  return storage.getPendingCount(crawlId).pipe(Effect.catchAll(() => Effect.succeed(0)));
+}
+
+/**
  * URLs the crawl found but never fetched: the ones it abandoned because
  * the host kept answering 429/430, plus the ones still queued when it stopped.
  *
  * Zero unless the run was rate limited. A crawl that simply ran out of page
- * budget leaves URLs queued too, but that case is already told by
- * `scanScope.capped`, and counting it here would hang a throttling claim on a
- * run nothing throttled. The two parts are disjoint (an abandoned URL is
- * `failed`, never `pending`), and neither is a page the report grades, which is
- * what lets `coverage` add this to `auditedPages`.
+ * budget leaves URLs queued too, but that case is told by `scanScope.unfetched`
+ * ({@link unfetchedFrontierCount}), and counting it here would hang a
+ * throttling claim on a run nothing throttled. The two parts are disjoint (an
+ * abandoned URL is `failed`, never `pending`), and neither is a page the report
+ * grades, which is what lets `coverage` add this to `auditedPages`.
  *
- * Pending rows are read only for a throttled run and a failed read counts as
- * none: a coverage caveat must never fail the report it annotates.
+ * Pending rows are read only for a throttled run.
  */
 function unfetchedUrlCount(
   storage: CrawlStorage,
@@ -108,8 +123,7 @@ function unfetchedUrlCount(
 ): Effect.Effect<number, never, never> {
   if (rateLimitedCount <= 0) return Effect.succeed(0);
   const abandoned = crawl?.stats?.pagesRateLimited ?? 0;
-  return storage.getPendingCount(crawlId).pipe(
-    Effect.catchAll(() => Effect.succeed(0)),
+  return unfetchedFrontierCount(storage, crawlId).pipe(
     Effect.map((pending) => abandoned + pending),
   );
 }

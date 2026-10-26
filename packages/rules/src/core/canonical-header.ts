@@ -1,6 +1,7 @@
 // core/canonical-header - Validates Link header canonical matches HTML canonical
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 
 // Parse Link header for canonical URL
 // Format: Link: <https://example.com/page>; rel="canonical"
@@ -76,7 +77,8 @@ Best practice: Use HTML canonical tag only. Only add Link header if unable to mo
         name: "canonical-header",
         status: "skipped",
         message: "No Link header canonical found",
-        skipReason: "Page has no HTTP Link canonical header",
+        skipReason: CHECK_NOT_APPLICABLE_SKIP_REASON,
+        details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON },
       });
       return { checks };
     }

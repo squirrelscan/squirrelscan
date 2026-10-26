@@ -213,3 +213,30 @@ describe("mojibakeRule", () => {
     expect(check?.status).toBe("skipped");
   });
 });
+
+// pub#216: the same rendered prose content/placeholder-text reads.
+describe("mojibakeRule — what a reader never sees", () => {
+  const status = (body: string) => run(page(body)).find((c) => c.name === "encoding-corruption")?.status;
+
+  test("a sequence only inside a <template> is not reported", () => {
+    expect(status("<p>Fine copy.</p><template><p>Itâ€™s broken</p></template>")).toBe("pass");
+  });
+
+  test.each(["cm-editor", "monaco-editor", "hljs", "language-html"])(
+    "a sequence only inside a %s container is not reported",
+    (cls) => {
+      expect(status(`<p>Fine copy.</p><div class="${cls}"><span>Itâ€™s broken</span></div>`)).toBe("pass");
+    },
+  );
+
+  test("mojibake in ordinary prose is reported as before", () => {
+    const checks = run(page("<p>Itâ€™s a cafÃ©.</p>"));
+    expect(checks.find((c) => c.name === "encoding-corruption")).toMatchObject({ status: "warn", value: 2 });
+  });
+
+  test("adjacent blocks do not fuse into a sequence", () => {
+    // `Ã` ending one cell and a space-led cell after it read as `Ã ` (à) when
+    // the cells are joined with nothing between them.
+    expect(status("<table><tr><td>Ã</td><td> x</td></tr></table>")).toBe("pass");
+  });
+});

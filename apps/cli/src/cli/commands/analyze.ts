@@ -2,6 +2,10 @@
 
 import { defineCommand } from "citty";
 
+import {
+  formatRetentionNotice,
+  type RetentionOutcome,
+} from "@/audit/retention";
 import { runAnalyze } from "@/controllers/analyze";
 import { warnIfSessionUnreadable } from "@/self/credentials";
 import { loadUserSettings, updateSettings } from "@/self/settings";
@@ -58,8 +62,12 @@ export const analyze = defineCommand({
     // Route logs through progress to keep progress line at bottom
     setLogInterceptor((msg) => progress.log(msg));
 
+    let retention: RetentionOutcome | undefined;
     const result = await runAnalyze({
       crawlId: args.id,
+      onRetention: (outcome) => {
+        retention = outcome;
+      },
       onProgress: (p) => {
         if (p.phase === "rules" && p.current !== undefined) {
           progress.update(p.current, p.total);
@@ -78,6 +86,10 @@ export const analyze = defineCommand({
 
     const durationSec = ((Date.now() - startTime) / 1000).toFixed(1);
     progress.succeed(`Ran ${result.data.rulesRun} rules in ${durationSec}s`);
+
+    // stderr, as `squirrel audit` prints it: this is the line that says older
+    // reports are gone, and stdout belongs to the results.
+    if (retention) console.error(formatRetentionNotice(retention));
 
     console.log("");
     console.log(`Analysis complete: ${result.data.crawlId.slice(0, 8)}`);

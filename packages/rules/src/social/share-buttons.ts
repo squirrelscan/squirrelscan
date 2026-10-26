@@ -2,6 +2,20 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+// The four patterns are `/i`, and were historically tested against
+// `html.toLowerCase()`. For these ASCII patterns the two agree except where
+// toLowerCase() PRODUCES an ASCII letter from a non-ASCII one, which the regex
+// `i` flag never does: U+212A (Kelvin sign) -> "k" and U+0130 -> "i" + U+0307.
+// Testing the raw page skips the 1 MB lowercase copy; a page holding either
+// character keeps the lowercased path so every answer is unchanged.
+function matchesLowercased(patterns: RegExp[], html: string): boolean {
+  if (html.includes("\u212a") || html.includes("\u0130")) {
+    const lower = html.toLowerCase();
+    return patterns.some((p) => p.test(lower));
+  }
+  return patterns.some((p) => p.test(html));
+}
+
 export const shareButtonsRule: Rule = {
   meta: {
     id: "social/share-buttons",
@@ -29,8 +43,7 @@ export const shareButtonsRule: Rule = {
       /addthis|addtoany|shareaholic|sumo-share/i,
     ];
 
-    const html = ctx.page.html.toLowerCase();
-    const hasShareButtons = sharePatterns.some((p) => p.test(html));
+    const hasShareButtons = matchesLowercased(sharePatterns, ctx.page.html);
 
     // Check for share URLs
     const shareUrls = [

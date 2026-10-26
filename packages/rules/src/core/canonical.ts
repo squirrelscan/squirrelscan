@@ -2,6 +2,8 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { documentUrl } from "../shared/redirect-evidence";
+
 export const canonicalRule: Rule = {
   meta: {
     id: "core/canonical",
@@ -44,7 +46,8 @@ export const canonicalRule: Rule = {
     // Check if canonical matches current URL (self-referential)
     try {
       const canonicalUrl = new URL(canonical);
-      const pageUrl = new URL(ctx.page.url);
+      // The URL the page ended on: a redirect target's canonical names itself.
+      const pageUrl = new URL(documentUrl(ctx.page));
 
       if (canonicalUrl.href !== pageUrl.href) {
         checks.push({

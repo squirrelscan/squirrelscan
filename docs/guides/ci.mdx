@@ -4,14 +4,22 @@ icon: "git-branch"
 description: "Gate your CI builds on squirrelscan audits: GitHub Actions, GitLab, and generic runners"
 ---
 
-Run squirrelscan in CI to catch audit regressions (performance, security,
-content, and more) before they ship. The audit produces a non-zero exit code
-when results regress, so your pipeline fails like any other check.
+Run squirrelscan in CI to catch audit problems (performance, security,
+content, and more) before they ship. Set thresholds with `--fail-on` and the
+audit exits non-zero when one trips, so your pipeline fails like any other
+check.
+
+`--fail-on` compares each run against the thresholds you set, not against an
+earlier audit. There is no baseline gating: the build does not fail because a
+score dropped since the last run, only because it is below your threshold. To
+see what changed between two audits, use
+[`squirrel report --regression-since`](/cli/report), which prints the
+comparison but does not set a failing exit code.
 
 ## Exit codes
 
-`squirrel audit` uses distinct exit codes so CI can tell a *regression* apart
-from a *broken run*:
+`squirrel audit` uses distinct exit codes so CI can tell a *tripped threshold*
+apart from a *broken run*:
 
 | Code | Meaning |
 |------|---------|
@@ -91,7 +99,7 @@ squirrel audit https://example.com \
   --fail-on 'score<90,score:perf<80'
 ```
 
-The command exits `2` if a threshold trips, so the script stops on a regression.
+The command exits `2` if a threshold trips, so the script stops there.
 
 ## Authentication
 
@@ -106,3 +114,22 @@ and exposed as `SQUIRRELSCAN_API_KEY`:
 When `SQUIRRELSCAN_API_KEY` is set, the CLI uses it automatically (the older
 `SQUIRREL_API_TOKEN` name still works as a back-compat alias). Without either,
 the audit still runs deterministically; it just skips cloud enrichment.
+
+## What an API-key audit costs
+
+An audit signed in with an org API key is not registered as a cloud run, so it
+is billed differently from a `squirrel auth login` audit:
+
+- **No audit or page charge.** It pays no 50-credit audit base and no
+  per-page charge.
+- **Links checked on the runner, free.** Its external links are always checked
+  from the CI machine, never by the cloud's [link checker](/guides/link-checking),
+  and cost nothing. Expect more false positives from sites that block
+  automated traffic.
+- **Cloud renders are billed.** A page it renders in the cloud is billed as a
+  standalone render, 2 credits per page. An HTTP-only audit (`--http`) renders
+  nothing.
+
+This is deliberate. A CI audit gates a build, and the full billed audit is a
+signed-in `squirrel audit` or a [cloud audit](/guides/cloud-audits). See
+[Credits and pricing](/cloud/credits).

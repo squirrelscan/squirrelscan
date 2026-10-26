@@ -21,7 +21,7 @@ import {
   RESOURCE_SIZE_LIMITS,
   SQUIRRELSCAN_USER_AGENT,
 } from "@squirrelscan/utils/constants";
-import { isCompressibleContentType } from "@squirrelscan/utils/headers";
+import { isCompressibleContentType, mergeHeaderRecords } from "@squirrelscan/utils/headers";
 import { isRateLimitedResponse } from "@squirrelscan/utils/rate-limit";
 import { decodedBody, fetchUndecoded } from "@squirrelscan/utils/response-body";
 import {
@@ -32,6 +32,7 @@ import {
 import { isHttpOrHttpsUrl, safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 import { wafBlockedFlag } from "./lib/asset-status";
 import type { FetchBudget, FetchOutcome } from "./fetch-budget";
+import { customHeadersFor, type HeaderScope } from "./lib/header-scope";
 import { parseImageHeader, type ImageHeaderInfo } from "./image-header";
 
 /**
@@ -123,6 +124,11 @@ export interface ResourceCheckerOptions {
    * Auth signatures), matching the page crawl. Secret values — never logged.
    */
   customHeaders?: Record<string, string>;
+  /**
+   * Hosts that get `customHeaders` (#732). Absent: every request does. The
+   * adapter sets it to the audited origin plus the hosts the user named.
+   */
+  headerScope?: HeaderScope;
   /**
    * #1252: shared tarpit-aware budget. When present, a resource is skipped
    * before its fetch if the total budget is spent or its host is tarpitting, and
@@ -335,7 +341,10 @@ async function measureUnrangedSize(
 ): Promise<number | null> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs);
-  const headers = { "User-Agent": options.userAgent, Accept: "*/*", ...options.customHeaders };
+  const headers = mergeHeaderRecords(
+    { "User-Agent": options.userAgent, Accept: "*/*" },
+    customHeadersFor(url, options.customHeaders, options.headerScope),
+  );
   try {
     try {
       const { response } = await fetchResource(url, {
@@ -518,12 +527,11 @@ async function checkSingleResourceAsync(
         // redirect (native redirect:"follow" replays them to the redirect target).
         const { response: headResponse, finalUrl: headFinalUrl } = await fetchResource(url, {
           method: "HEAD",
-          headers: {
-            "User-Agent": options.userAgent,
-            Accept: "*/*",
-            ...options.customHeaders,
-            ...conditional,
-          },
+          headers: mergeHeaderRecords(
+            { "User-Agent": options.userAgent, Accept: "*/*" },
+            customHeadersFor(url, options.customHeaders, options.headerScope),
+            conditional,
+          ),
           signal: controller.signal,
         }, options);
 
@@ -637,15 +645,17 @@ async function checkSingleResourceAsync(
     let getController = readHeader ? requestController(controller) : controller;
     let { response: getResponse, finalUrl: getFinalUrl } = await fetchResource(url, {
       method: "GET",
-      headers: {
-        "User-Agent": options.userAgent,
-        Accept: "*/*",
-        Range: readHeader
-          ? `bytes=0-${RESOURCE_SIZE_LIMITS.IMAGE_HEADER_BYTES - 1}`
-          : "bytes=0-0",
-        ...options.customHeaders,
-        ...conditional,
-      },
+      headers: mergeHeaderRecords(
+        { "User-Agent": options.userAgent, Accept: "*/*" },
+        customHeadersFor(url, options.customHeaders, options.headerScope),
+        conditional,
+        // The size check reads this range and no more: never the caller's.
+        {
+          Range: readHeader
+            ? `bytes=0-${RESOURCE_SIZE_LIMITS.IMAGE_HEADER_BYTES - 1}`
+            : "bytes=0-0",
+        },
+      ),
       signal: getController.signal,
     }, options);
 
@@ -662,12 +672,11 @@ async function checkSingleResourceAsync(
       getController = readHeader ? requestController(controller) : controller;
       ({ response: getResponse, finalUrl: getFinalUrl } = await fetchResource(url, {
         method: "GET",
-        headers: {
-          "User-Agent": options.userAgent,
-          Accept: "*/*",
-          ...options.customHeaders,
-          ...conditional,
-        },
+        headers: mergeHeaderRecords(
+          { "User-Agent": options.userAgent, Accept: "*/*" },
+          customHeadersFor(url, options.customHeaders, options.headerScope),
+          conditional,
+        ),
         signal: getController.signal,
       }, options));
     }
@@ -747,11 +756,10 @@ async function checkSingleResourceAsync(
       try {
         const { response: confirmResponse } = await fetchResource(url, {
           method: "GET",
-          headers: {
-            "User-Agent": options.userAgent,
-            Accept: "*/*",
-            ...options.customHeaders,
-          },
+          headers: mergeHeaderRecords(
+            { "User-Agent": options.userAgent, Accept: "*/*" },
+            customHeadersFor(url, options.customHeaders, options.headerScope),
+          ),
           signal: confirmController.signal,
         }, options);
         if (readHeader) confirmController.abort();

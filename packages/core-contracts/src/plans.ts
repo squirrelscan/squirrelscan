@@ -53,6 +53,9 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     // Free on purpose: custom headers are how you audit a staging site behind
     // auth, which is evaluation, not a paid job.
     customHeaders: true,
+    // Pro and up (squirrelscan/repo#2772): alerts about new broken links are
+    // ongoing monitoring, not evaluation.
+    brokenLinkAlerts: false,
     // #1020 ladder: matches Screaming Frog's free-tier crawl cap and today's
     // `full` coverage preset ceiling. Held at 500 through #1028's raise: free
     // audits run on the 4 GiB container class, and a 10,000-page audit retains
@@ -87,6 +90,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     maxScheduledWebsites: -1,
     scheduleFrequencies: SCHEDULE_FREQUENCIES,
     customHeaders: true,
+    brokenLinkAlerts: true,
     // #1028 ladder: unchanged at 2,000. Pro is a single-seat plan for ordinary
     // sites; Team is where the raised ceiling is the product.
     maxPagesPerAudit: 2000,
@@ -117,6 +121,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     maxScheduledWebsites: -1,
     scheduleFrequencies: SCHEDULE_FREQUENCIES,
     customHeaders: true,
+    brokenLinkAlerts: true,
     // #1028 ladder: Team is where large-site auditing lives. 10,000 is the
     // measured ceiling of the paid standard-4 container class (#1869): a
     // 10,000-page audit retains ~4.4 GB, which fits 8/12 GiB and does not fit
@@ -165,6 +170,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     maxScheduledWebsites: -1,
     scheduleFrequencies: SCHEDULE_FREQUENCIES,
     customHeaders: true,
+    brokenLinkAlerts: true,
     // At least Team's ceiling, never below it (#1028) — a contracted plan that
     // audited fewer pages than the tier under it would be a pricing bug. Kept
     // as its own literal rather than a reference to Team's so a Team-tier
@@ -189,7 +195,7 @@ export const SELF_SERVE_PLAN_IDS: readonly PlanId[] = (Object.keys(PLANS) as Pla
 // Accepts a raw string (DB columns are plain text) and falls back to the free
 // plan for any unknown id — callers never need to cast or null-check.
 export function getPlan(planId: string): PlanDefinition {
-  return PLANS[planId as PlanId] ?? PLANS.free;
+  return Object.hasOwn(PLANS, planId) ? PLANS[planId as PlanId] : PLANS.free;
 }
 
 // Tier hierarchy: free < starter < team < enterprise. Keep in sync with PlanId —
@@ -364,15 +370,20 @@ export function isSelfServePlan(planId: string): boolean {
 
 /**
  * White-label report branding (#810). Resolved from the owning org's plan and
- * logo: Team plan grants `whiteLabel: true`, which hides squirrelscan branding
- * in rendered reports and shows the org's own logo (or its name as plain text
- * when no logo is set). Omitted / undefined = default squirrelscan-branded
- * output, so every existing render path is unchanged.
+ * its white-label settings: Team and Enterprise orgs that turn it on get
+ * `whiteLabel: true`, which hides squirrelscan branding in rendered reports
+ * and shows the org's own logo (or its name as plain text when no logo is
+ * set). Omitted / undefined = default squirrelscan-branded output, so every
+ * existing render path is unchanged.
  */
 export interface ReportBranding {
   whiteLabel: boolean;
-  /** Public org logo URL (organizations.avatar_url, #807). */
+  /** Public logo URL for the report header. */
   orgLogoUrl?: string;
-  /** Org display name — the header fallback when no logo is set. */
+  /** Brand name — the header fallback when no logo is set, and the logo's alt text. */
   orgName?: string;
+  /** https URL the header logo or name links to. Anything else is not linked. */
+  websiteUrl?: string;
+  /** Plain-text footer shown in place of the squirrelscan footer credit. */
+  footerText?: string;
 }

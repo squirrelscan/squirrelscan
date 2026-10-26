@@ -59,6 +59,19 @@ export const deadLinksRule: Rule = {
       return { checks };
     }
 
+    // repo#2613: links were selected, but the check ran out of time before any
+    // was answered. Nothing was verified; that is not "no links".
+    if (externalLinks.length === 0 && linkCheck?.outOfTime) {
+      checks.push({
+        name: "dead-links",
+        status: "info",
+        message: `No external links were verified: the link check ran out of time before reaching any of the ${linkCheck.outOfTime} selected`,
+        value: 0,
+        expected: 0,
+      });
+      return { checks };
+    }
+
     if (externalLinks.length === 0) {
       checks.push({
         name: "dead-links",
@@ -71,15 +84,15 @@ export const deadLinksRule: Rule = {
     }
 
     const checked = externalLinks.filter((l) => l.status !== null || l.error !== null);
-    // Mirror links/broken-external-links: WAF-blocked 403s and rate-limited
-    // targets are not broken (#1829).
+    // Mirror links/broken-external-links: unverifiable (a wall, a timeout,
+    // pub#800) and rate-limited targets are not broken (#1829).
     const rateLimited = checked.filter(
       (l) => l.rateLimited === true || isRateLimitStatus(l.status),
     );
     const rateLimitedSet = new Set(rateLimited.map((l) => l.href));
     const broken = checked.filter((l) => {
       if (l.error) return true;
-      if (l.status === 403 && l.wafBlocked) return false;
+      if (l.wafBlocked) return false;
       if (rateLimitedSet.has(l.href)) return false;
       if (l.status && l.status >= 400) return true;
       return false;

@@ -9,11 +9,13 @@ import { version } from "../../../package.json";
 export function generateXmlReport(
   report: AuditReport,
   outputPath?: string,
-  branding?: ReportBranding
+  branding?: ReportBranding,
+  includePassed = false
 ): void {
   const content = renderXml(report as Parameters<typeof renderXml>[0], {
     version,
     branding,
+    includePassed,
   });
 
   if (outputPath) {

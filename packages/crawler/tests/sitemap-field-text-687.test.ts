@@ -6,7 +6,7 @@
 // costs the others.
 import { describe, expect, test } from "bun:test";
 
-import { decodeSitemapBody, parseSitemap } from "../src/sitemaps";
+import { decodeSitemapBody, parseSitemap, SITEMAP_NOT_WELL_FORMED_ERROR } from "../src/sitemaps";
 
 const SITEMAP_URL = "https://example.com/sitemap.xml";
 
@@ -107,7 +107,10 @@ describe("one malformed entry does not discard the others (#687)", () => {
       );
       expect(data.urls[0]?.loc).toBe("https://example.com/a");
       expect(data.urls.map((u) => u.loc)).not.toContain("https://example.com/?q=a");
-      expect(data.errors).toEqual([error]);
+      // The raw `<` also makes the file not well formed (#760), reported first.
+      expect(data.errors).toHaveLength(2);
+      expect(data.errors[0]).toStartWith(`${SITEMAP_NOT_WELL_FORMED_ERROR}: `);
+      expect(data.errors[1]).toBe(error);
     }
   });
 
@@ -147,7 +150,9 @@ describe("one malformed entry does not discard the others (#687)", () => {
       `<sitemap><loc>https://example.com/s2.xml</loc></sitemap></sitemapindex>`;
     const data = parseSitemap(xml, "https://example.com/sitemap-index.xml");
     expect(data.childSitemaps[0]).toBe("https://example.com/s1.xml");
-    expect(data.errors).toEqual(["1 <lastmod> value ignored: not a single text value"]);
+    expect(data.errors).toHaveLength(2);
+    expect(data.errors[0]).toStartWith(`${SITEMAP_NOT_WELL_FORMED_ERROR}: `);
+    expect(data.errors[1]).toBe("1 <lastmod> value ignored: not a single text value");
   });
 
   test("empty and text-only entries are still ignored without an error", () => {

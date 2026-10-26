@@ -1,6 +1,6 @@
 {
   "name": "@squirrelscan/cli",
-  "version": "0.0.113",
+  "version": "0.0.136",
   "description": "Free CLI for SEO, performance & security audits. Built for Claude Code, Cursor, and AI workflows.",
   "bin": {
     "squirrelscan": "./build/squirrelscan"
@@ -43,7 +43,7 @@
     "user-agents": "^1.1.675",
     "uuidv7": "^1.2.1",
     "xml2js": "^0.6.2",
-    "zod": "^4.4.3"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@modelcontextprotocol/client": "2.3.1",

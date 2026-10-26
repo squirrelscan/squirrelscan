@@ -222,7 +222,7 @@ describe("runStreamingRules — GOLDEN INVARIANT vs runRulesOnStorage", () => {
     await run(
       storage.upsertPage(
         crawlId,
-        injectedPage({ url: "http://synthetic.test/missing-page", status: 404 }),
+        injectedPage({ url: "http://synthetic.example.com/missing-page", status: 404 }),
       ),
     );
     // A 503 WAF-challenge interstitial → excluded from page scoring + surfaced as
@@ -231,7 +231,7 @@ describe("runStreamingRules — GOLDEN INVARIANT vs runRulesOnStorage", () => {
       storage.upsertPage(
         crawlId,
         injectedPage({
-          url: "http://synthetic.test/blocked",
+          url: "http://synthetic.example.com/blocked",
           status: 503,
           contentType: "text/html",
           html: "<html><head><title>Just a moment...</title></head><body>Just a moment...</body></html>",

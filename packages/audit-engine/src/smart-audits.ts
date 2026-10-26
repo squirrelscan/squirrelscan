@@ -10,6 +10,7 @@
 export {
   computeMerge,
   createMergeSession,
+  createNotEvaluatedCollector,
   fingerprint,
   findingKey,
   flattenChecks,
@@ -22,6 +23,7 @@ export type {
   MergeSession,
   MergeSessionInput,
   MergedState,
+  NotEvaluatedEvidence,
 } from "./merge-core";
 
 export { findingFingerprint } from "./fingerprint";

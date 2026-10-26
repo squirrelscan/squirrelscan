@@ -28,6 +28,8 @@ export {
 
 export { isNonPublicHostname, isNonPublicUrl, nonPublicHostLabel } from "./non-public-host";
 
+export { decodeCloudflareEmail, isCloudflareEmailProtectionUrl } from "./cloudflare-email";
+
 export {
   getAttrCI,
   hasAttrCI,
@@ -70,6 +72,8 @@ export {
   hasRichResultSchema,
   getRichResultTypes,
   flattenJsonLdNodes,
+  indexJsonLdIds,
+  resolveJsonLdRef,
 } from "./schema-rich-results";
 
 export {

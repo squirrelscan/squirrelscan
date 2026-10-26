@@ -87,7 +87,7 @@ describe("page rules read only the SiteData fields the cache key covers", () => 
       // populates it, so a rule that looks for one finds it rather than
       // short-circuiting on undefined and never recording the read.
       const siteData: SiteData = {
-        baseUrl: "http://synthetic.test",
+        baseUrl: "http://synthetic.example.com",
         pages: [],
         robotsTxt: null,
         sitemaps: null,
@@ -103,12 +103,12 @@ describe("page rules read only the SiteData fields the cache key covers", () => 
           css: [
             recordFields(
               {
-                url: "http://synthetic.test/app.css",
+                url: "http://synthetic.example.com/app.css",
                 status: 200,
                 error: null,
                 contentType: "text/css",
                 sizeBytes: 40_000,
-                sourcePages: ["http://synthetic.test/"],
+                sourcePages: ["http://synthetic.example.com/"],
                 cacheControl: "public, max-age=3600",
                 cacheReason: null,
                 contentEncoding: null,
@@ -123,12 +123,12 @@ describe("page rules read only the SiteData fields the cache key covers", () => 
           images: [
             recordFields(
               {
-                url: "http://synthetic.test/photo.jpg",
+                url: "http://synthetic.example.com/photo.jpg",
                 status: 200,
                 error: null,
                 contentType: "image/jpeg",
                 sizeBytes: 400_000,
-                sourcePages: ["http://synthetic.test/"],
+                sourcePages: ["http://synthetic.example.com/"],
                 cacheControl: "public, max-age=3600",
                 cacheReason: null,
                 contentEncoding: null,
@@ -148,15 +148,15 @@ describe("page rules read only the SiteData fields the cache key covers", () => 
         scripts: [
           recordFields(
             {
-              url: "http://synthetic.test/app.js",
+              url: "http://synthetic.example.com/app.js",
               status: 200,
               error: null,
               contentType: "application/javascript",
               sizeBytes: 90_000,
               content: "var a = 1;\n//# sourceMappingURL=app.js.map\n",
-              sourcePages: ["http://synthetic.test/"],
+              sourcePages: ["http://synthetic.example.com/"],
               redirected: false,
-              finalUrl: "http://synthetic.test/app.js",
+              finalUrl: "http://synthetic.example.com/app.js",
               sourceMapHeader: "app.js.map",
               contentEncoding: null,
             },
@@ -225,12 +225,12 @@ describe("page rules read only the SiteData fields the cache key covers", () => 
       });
     const entry = (path: string, header: { naturalWidth: number | null; naturalHeight: number | null; animated: boolean | null }) =>
       recordFields({
-        url: `http://synthetic.test/${path}`,
+        url: `http://synthetic.example.com/${path}`,
         status: 206,
         error: null,
         contentType: "image/jpeg",
         sizeBytes: 400_000,
-        sourcePages: ["http://synthetic.test/gallery"],
+        sourcePages: ["http://synthetic.example.com/gallery"],
         cacheControl: "public, max-age=3600",
         cacheReason: null,
         contentEncoding: null,
@@ -241,7 +241,7 @@ describe("page rules read only the SiteData fields the cache key covers", () => 
         ...header,
       });
     const siteData: SiteData = {
-      baseUrl: "http://synthetic.test",
+      baseUrl: "http://synthetic.example.com",
       pages: [],
       robotsTxt: null,
       sitemaps: null,
@@ -270,7 +270,7 @@ describe("page rules read only the SiteData fields the cache key covers", () => 
       `</main></body></html>`;
     const result = await runner.runPageRules(
       {
-        url: "http://synthetic.test/gallery",
+        url: "http://synthetic.example.com/gallery",
         html,
         statusCode: 200,
         loadTime: 10,

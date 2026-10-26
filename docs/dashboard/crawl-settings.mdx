@@ -34,7 +34,7 @@ The top card is the site's [audit level](/guides/audit-levels): the same **Quick
 | **Crawl strategy** | **Sitemap**: the start page and your sitemaps, no link following. **Sampled**: follows links, one page per URL pattern first. **All pages**: every page it can reach. |
 | **Cloud checks** | On or off: AI and authority signals, the editor's summary, tech detection and domain stats. |
 | **Rendering** | **Off** (plain HTTP), **Auto** (only pages that need JavaScript) or **All** (every page in a browser). |
-| **External link checks** | On or off. Each distinct external destination checked costs 1 credit. |
+| **External link checks** | On or off. Each distinct external destination the cloud verifies costs 1 credit. |
 
 Probing is not on the list: cloud audits probe passively whatever the level says, so a choice there would do nothing.
 
@@ -48,7 +48,7 @@ On the **Free** plan the slider's Full stop and the **All pages** crawl strategy
 
 ### Sites added before audit levels
 
-A site added before audit levels existed was moved onto them as **Custom**, with exactly the settings it already had, so what it crawls, what it costs and when it runs did not change (apart from the Free plan's Full limit above). The slider sits on the level its old depth maps to: Fast on Quick, Surface and Deep on Surface, Full on Full. A site on the old Surface depth, for instance, reads **Custom · Based on Surface, 2 changes: Pages, External link checks.**: the old depth read 50 pages and did not check external links.
+A site added before audit levels existed was moved onto them as **Custom**, with the settings it already had, so what it crawls and when it runs did not change (apart from the Free plan's Full limit above). External link checks are now on for these sites too, as they are at every level, unless you turn them off, and each distinct external link a cloud audit verifies costs 1 credit. The slider sits on the level its old depth maps to: Fast on Quick, Surface and Deep on Surface, Full on Full. A site on the old Surface depth, for instance, reads **Custom · Based on Surface, 1 change: Pages.**: the old depth read 50 pages.
 
 It stays that way until you change it. Reset it, or pick another level, and the site moves onto that level's settings, and its price.
 
@@ -172,11 +172,13 @@ An API or MCP request can set it for one run: `internalLinks` on `POST /v1/agent
 
 ## Custom request headers
 
-Custom request headers are available on every plan, Free included. The bottom card sets them for this website, and its cloud audits send them with the requests they make to your site over plain HTTP: pages, assets on your host and its subdomains, `robots.txt` and sitemaps. The probe that checks where the audited address redirects before the crawl starts never sends them. For which requests carry them under each **Rendering** setting, including pages rendered in the cloud browser, see [rendering and custom headers](/cloud/firewall#rendering-and-custom-headers). On any request, the headers are removed at a redirect to a different origin, except `User-Agent`, `Accept`, `Accept-Language` and `Upgrade-Insecure-Requests`.
+Custom request headers are available on every plan, Free included. The bottom card sets them for this website, and its cloud audits send them with the requests they make to your site: pages, whether fetched over plain HTTP or rendered in the cloud browser, assets on your audited origin (a subdomain such as `cdn.example.com` does not get them), `robots.txt` and sitemaps. The probe that checks where the audited address redirects before the crawl starts never sends them. For which requests carry them under each **Rendering** setting, including pages rendered in the cloud browser, see [rendering and custom headers](/cloud/firewall#rendering-and-custom-headers). On a plain HTTP request, the headers are removed at a redirect to a different origin, except `User-Agent`, `Accept`, `Accept-Language` and `Upgrade-Insecure-Requests`. In the cloud browser they go only to the rendered page's own origin (see [which renders carry them](/cloud/firewall#which-renders-carry-them)).
+
+They apply to this website's own host only, the host it is registered under, with or without `www.`. An audit started through the API that names this website beside a URL on another host runs without them, and that includes a subdomain. To give a subdomain such as a staging host its own headers, add it as its own website.
 
 The card accepts any valid header name, `Authorization` included, up to 50 headers per website, with names up to 255 characters and values up to 8,192 characters (tabs allowed, no other control characters). Header values are stored as secrets and never shown in reports or logs.
 
-The usual reason to add one is a firewall exception: [Firewall and WAF exceptions](/cloud/firewall) has the rules. A header is also how a cloud audit gets past an access gateway in front of a staging site, such as [Cloudflare Access](/cloud/firewall#cloudflare-access), [Vercel deployment protection](/cloud/firewall#vercel-deployment-protection) or [HTTP basic auth](/cloud/firewall#http-basic-auth); for a gateway that redirects to a sign-in page, also set **Rendering** to **Off** in the [audit level](#audit-level) card. When an audit fails anyway, [failed audits](/guides/failed-audits#access-gateway) says what the crawler saw. A header also makes the crawl [authorised](#authorised-crawls).
+The usual reason to add one is a firewall exception: [Firewall and WAF exceptions](/cloud/firewall) has the rules. A header is also how a cloud audit gets past an access gateway in front of a staging site, such as [Cloudflare Access](/cloud/firewall#cloudflare-access), [Vercel deployment protection](/cloud/firewall#vercel-deployment-protection) or [HTTP basic auth](/cloud/firewall#http-basic-auth). Every **Rendering** setting sends them, the cloud browser included (to the rendered page's own origin only). When an audit fails anyway, [failed audits](/guides/failed-audits#access-gateway) says what the crawler saw. A header also makes the crawl [authorised](#authorised-crawls).
 
 ## Authorised crawls
 

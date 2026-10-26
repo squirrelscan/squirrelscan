@@ -66,7 +66,7 @@ describe("acceptance fixtures", () => {
     expect(check.message).toContain("connect-src: add analytics.google.com, www.google.com, stats.g.doubleclick.net");
   });
 
-  test("a third-party script URL named only inside a preloaded same-origin chunk is a finding", () => {
+  test("a third-party script URL named only inside a preloaded same-origin chunk is a note, not a warning (pub#776)", () => {
     const check = run(
       `<link rel="modulepreload" href="/assets/booking-4f2a.js">`,
       "default-src 'self'; script-src 'self'",
@@ -79,9 +79,8 @@ describe("acceptance fixtures", () => {
         ],
       },
     );
-    expect(check.status).toBe("warn");
-    expect(hostsOf(check)).toEqual(["script-src:widget.bookings.example"]);
-    expect(check.items?.[0]?.meta?.found).toBe("chunk");
+    // The page may never call open(), so the host is not counted as blocked.
+    expect(check.status).toBe("pass");
   });
 
   test("a *.example.com source allows cdn.example.com and blocks example.com", () => {

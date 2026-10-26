@@ -1,58 +1,81 @@
 ---
-title: "Core SEO"
-description: "Essential meta tags and page structure for search engines"
+title: "Core SEO audit rules: titles, canonicals and meta tags"
+sidebarTitle: "Core SEO"
+description: "Audit rules for the basics every page declares: title tag, meta description, canonical URL, H1, doctype, charset, robots meta and Open Graph tags."
 ---
 
 Core SEO rules cover the declarations every page makes about itself: the title and description a search result is built from, the canonical URL that consolidates duplicates, the doctype and charset the browser needs before it parses anything, the H1, the favicon, and the robots directives that decide whether the page appears at all. Most run per page; two compare titles and canonical form across the whole crawl.
 
-See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+## Run only these rules
+
+```bash
+squirrel audit https://example.com --rule-include core
+```
+
+{/* hub:start-here:start */}
+
+## Where to start
+
+These carry the highest severity and weight in the category.
+
+- [Title tag length: the 30 to 75 character range squirrel uses](/rules/core/meta-title): A page with no title element, or one outside 30 to 75 characters. squirrel measures the title on every crawled page.
+- [Meta description length: the 120 to 160 character range](/rules/core/meta-description): A page with no meta description, or one outside 120 to 160 characters. squirrel measures it on every crawled page.
+- [Missing or multiple H1: what squirrel expects on a page](/rules/core/h1): A page with no H1, more than one, or an empty one. squirrel checks the heading on every crawled page.
+- [Link rel=canonical header vs the HTML tag: the mismatch](/rules/core/canonical-header): A page declaring one canonical in an HTTP header and a different one in the markup. squirrel parses the header and compares.
+- [nosnippet and max-snippet:0: pages with no search snippet](/rules/core/nosnippet): A robots directive that stops search engines showing any description under the result. squirrel reads the robots meta on every page.
+
+{/* hub:start-here:end */}
+
+{/* hub:rules:start */}
 
 ## Rules
 
-<CardGroup cols={2}>
-  <Card title="Canonicals in two forms: www, scheme and trailing slash" icon="triangle-exclamation" href="/rules/core/canonical-form-drift">
-    Half the site canonicalising to www and half to the apex domain. squirrel compares four form axes across the crawl.
-  </Card>
-  <Card title="Link rel=canonical header vs the HTML tag: the mismatch" icon="triangle-exclamation" href="/rules/core/canonical-header">
-    A page declaring one canonical in an HTTP header and a different one in the markup. squirrel parses the header and compares.
-  </Card>
-  <Card title="rel=canonical: presence, absolute form and self-reference" icon="triangle-exclamation" href="/rules/core/canonical">
-    A page with no canonical link, a relative one, or one that points somewhere else. squirrel checks every crawled page.
-  </Card>
-  <Card title="meta charset UTF-8: where it goes and what squirrel checks" icon="triangle-exclamation" href="/rules/core/charset">
-    A page with no charset declaration, one that is not UTF-8, or a meta charset that is not first in head. squirrel checks all three sources.
-  </Card>
-  <Card title="Doctype must be declared first: what it means and the fix" icon="triangle-exclamation" href="/rules/core/doctype">
-    A page with no doctype, an old one, or a doctype that is not the first thing in the document. squirrel reads the raw response.
-  </Card>
-  <Card title="No favicon found: the link rel icon tags squirrel looks for" icon="triangle-exclamation" href="/rules/core/favicon">
-    A page with no icon link at all, or only one format. squirrel reads the rel and the file extension on every link.
-  </Card>
-  <Card title="Missing or multiple H1: what squirrel expects on a page" icon="circle-exclamation" href="/rules/core/h1">
-    A page with no H1, more than one, or an empty one. squirrel checks the heading on every crawled page.
-  </Card>
-  <Card title="Meta description length: the 120 to 160 character range" icon="circle-exclamation" href="/rules/core/meta-description">
-    A page with no meta description, or one outside 120 to 160 characters. squirrel measures it on every crawled page.
-  </Card>
-  <Card title="Title tag length: the 30 to 75 character range squirrel uses" icon="circle-exclamation" href="/rules/core/meta-title">
-    A page with no title element, or one outside 30 to 75 characters. squirrel measures the title on every crawled page.
-  </Card>
-  <Card title="nosnippet and max-snippet:0: pages with no search snippet" icon="triangle-exclamation" href="/rules/core/nosnippet">
-    A robots directive that stops search engines showing any description under the result. squirrel reads the robots meta on every page.
-  </Card>
-  <Card title="Missing og:image: the Open Graph tags squirrel checks" icon="triangle-exclamation" href="/rules/core/og-tags">
-    A page missing og:title, og:description or og:image, so shares render without a preview. squirrel checks four tags per page.
-  </Card>
-  <Card title="noindex in a robots meta tag or X-Robots-Tag header: what squirrel reports per page" icon="triangle-exclamation" href="/rules/core/robots-meta">
-    A page declaring noindex or nofollow in its robots meta tag or X-Robots-Tag header. squirrel reads both on every crawled page and names the directive and where it was set.
-  </Card>
-  <Card title="Duplicate page titles: the site-wide uniqueness check" icon="triangle-exclamation" href="/rules/core/title-unique">
-    Two or more pages sharing a title after case and whitespace are normalised. squirrel groups them and lists every URL.
-  </Card>
-  <Card title="twitter:card: the card types and the Open Graph fallback" icon="circle-info" href="/rules/core/twitter-cards">
-    A page with no twitter:card, an unrecognised type, or a large-image card with no image. squirrel checks the type and the fallback.
-  </Card>
-</CardGroup>
+| Rule | What it flags | Severity | Scope |
+|---|---|---|---|
+| [Canonicals in two forms: www, scheme and trailing slash](/rules/core/canonical-form-drift) | Half the site canonicalising to www and half to the apex domain. squirrel compares four form axes across the crawl. | warning | Site-wide |
+| [Doctype must be declared first: what it means and the fix](/rules/core/doctype) | A page with no doctype, an old one, or a doctype that is not the first thing in the document. squirrel reads the raw response. | warning | Per-page |
+| [Duplicate page titles: the site-wide uniqueness check](/rules/core/title-unique) | Two or more pages sharing a title after case and whitespace are normalised. squirrel groups them and lists every URL. | warning | Site-wide |
+| [Link rel=canonical header vs the HTML tag: the mismatch](/rules/core/canonical-header) | A page declaring one canonical in an HTTP header and a different one in the markup. squirrel parses the header and compares. | warning | Per-page |
+| [meta charset UTF-8: where it goes and what squirrel checks](/rules/core/charset) | A page with no charset declaration, one that is not UTF-8, a header that disagrees with the page, or a meta charset past the first 1024 bytes. squirrel checks all three sources. | warning | Per-page |
+| [Meta description length: the 120 to 160 character range](/rules/core/meta-description) | A page with no meta description, or one outside 120 to 160 characters. squirrel measures it on every crawled page. | error | Per-page |
+| [Missing og:image: the Open Graph tags squirrel checks](/rules/core/og-tags) | A page missing og:title, og:description or og:image, so shares render without a preview. squirrel checks four tags per page. | warning | Per-page |
+| [Missing or multiple H1: what squirrel expects on a page](/rules/core/h1) | A page with no H1, more than one, or an empty one. squirrel checks the heading on every crawled page. | error | Per-page |
+| [No favicon found: the link rel icon tags squirrel looks for](/rules/core/favicon) | A page with no icon link at all, or only one format. squirrel reads the rel and the file extension on every link. | warning | Per-page |
+| [noindex in a robots meta tag or X-Robots-Tag header: what squirrel reports per page](/rules/core/robots-meta) | A page declaring noindex or nofollow in its robots meta tag or X-Robots-Tag header. squirrel reads both on every crawled page and names the directive and where it was set. | warning | Per-page |
+| [nosnippet and max-snippet:0: pages with no search snippet](/rules/core/nosnippet) | A robots directive that stops search engines showing any description under the result. squirrel reads the robots meta on every page. | warning | Per-page |
+| [rel=canonical: presence, absolute form and self-reference](/rules/core/canonical) | A page with no canonical link, a relative one, or one that points somewhere else. squirrel checks every crawled page. | warning | Per-page |
+| [Title tag length: the 30 to 75 character range squirrel uses](/rules/core/meta-title) | A page with no title element, or one outside 30 to 75 characters. squirrel measures the title on every crawled page. | error | Per-page |
+| [twitter:card: the card types and the Open Graph fallback](/rules/core/twitter-cards) | A page with no twitter:card, an unrecognised type, or a large-image card with no image. squirrel checks the type and the fallback. | info | Per-page |
+
+{/* hub:rules:end */}
+
+{/* hub:terms:start */}
+
+## Key terms
+
+- [Canonical URL](/glossary/canonical-url): The URL a page declares, with `<link rel="canonical">` or a Link header, as the preferred address for its content.
+- [Character encoding](/glossary/character-encoding): The mapping from bytes to characters (normally UTF-8) declared in the Content-Type header or a meta charset tag; a mismatch produces mojibake.
+- [Duplicate content](/glossary/duplicate-content): The same or near-identical content reachable at more than one URL, or repeated titles and descriptions across pages.
+- [Heading hierarchy](/glossary/heading-hierarchy): The nesting of h1 to h6 headings that gives a page its outline for readers, screen readers and parsers.
+- [HTML validity](/glossary#html-validation): Whether the markup parses as intended: closed elements, head-only tags in the head, and no raw markup printed as text.
+- [Meta description](/glossary/meta-description): A `<meta name="description">` summary of the page that search engines may use as the result snippet.
+- [noindex](/glossary/noindex): A robots directive, in a meta tag or the X-Robots-Tag header, that asks search engines to keep a page out of their index.
+- [Open Graph](/glossary/open-graph): A set of og: meta properties (title, description, image, url) that controls how a link previews when it is shared.
+- [Robots meta tag](/glossary/robots-meta-tag): A `<meta name="robots">` tag carrying page-level directives such as noindex, nofollow, nosnippet and max-snippet.
+- [Title tag](/glossary/title-tag): The `<title>` element in the page head; browsers show it in the tab and search engines usually use it as the result headline.
+- [Trailing slash](/glossary#trailing-slash): Whether URLs end in /; /page and /page/ are different URLs, so a site should pick one and redirect the other.
+
+{/* hub:terms:end */}
+
+## Related categories
+
+[Content](/rules/content) checks titles and descriptions repeated across pages, and the text of each page. [Crawlability](/rules/crawl) follows the canonical and the robots directives through sitemaps and redirects. [Social Media](/rules/social) checks the og:image size and whether og:url agrees with the canonical.
+
+## Learn more
+
+- [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai), the coding agent workflow for working through a report
+- [Website audit tool](https://squirrelscan.com/tools/website-audit)
+- [Sample report](https://squirrelscan.com/reports/squirrelscan-sample), with the Core SEO section on a real site
 
 ## Disable all Core SEO rules
 

@@ -11,10 +11,11 @@ import { Effect } from "effect";
 
 import type { Config } from "@squirrelscan/config";
 import type { CheckResult } from "@squirrelscan/core-contracts";
-import { createCrawler } from "@squirrelscan/crawler";
+import { createCrawler, SQLiteStorage } from "@squirrelscan/crawler";
 
 import {
   buildSiteContext,
+  checkCollectedExternalLinks,
   runRulesOnStorage,
   runStreamingRules,
   splitNotRequestedExternalLinks,
@@ -105,41 +106,41 @@ const occurrence = (text = "link", isNofollow = false) => ({
 describe("splitNotRequestedExternalLinks", () => {
   test("action and token URLs, and action-worded links, are left out; pages stay", () => {
     const occurrences: ExternalLinkOccurrences = new Map([
-      ["https://partner.example/pricing", [occurrence()]],
+      ["https://partner.example.com/pricing", [occurrence()]],
       [
-        `https://mail.example${UNSUBSCRIBE}`,
+        `https://mail.example.com${UNSUBSCRIBE}`,
         [occurrence("Manage email"), occurrence("Manage email")],
       ],
-      [`https://cdn.example${SIGNED}`, [occurrence("Report")]],
+      [`https://cdn.example.com${SIGNED}`, [occurrence("Report")]],
       [
-        "https://auth.example/magic-login/eyJhbGciOiJIUzI1.eyJzdWIiOiIxMjM0.SflKxwRJSMeKKF2Q",
+        "https://auth.example.com/magic-login/eyJhbGciOiJIUzI1.eyJzdWIiOiIxMjM0.SflKxwRJSMeKKF2Q",
         [occurrence()],
       ],
-      ["https://app.example/account", [occurrence("Log out")]],
-      ["https://shop.example/basket", [occurrence()]],
-      ["https://blog.example/how-to-verify-your-domain", [occurrence()]],
+      ["https://app.example.com/account", [occurrence("Log out")]],
+      ["https://shop.example.com/basket", [occurrence()]],
+      ["https://blog.example.com/how-to-verify-your-domain", [occurrence()]],
       // rel=nofollow on an external link marks a paid or untrusted link, not
       // an action: an affiliate "Buy on Amazon" is still checked.
-      ["https://www.amazon.example/dp/B00EXAMPLE", [occurrence("Buy on Amazon", true)]],
-      ["https://social.example/squirrelscan", [occurrence("Follow us", true)]],
+      ["https://www.amazon.example.com/dp/B00EXAMPLE", [occurrence("Buy on Amazon", true)]],
+      ["https://social.example.com/squirrelscan", [occurrence("Follow us", true)]],
     ]);
     const { requestable, notRequested } = splitNotRequestedExternalLinks(occurrences);
     expect([...requestable.keys()]).toEqual([
-      "https://partner.example/pricing",
-      "https://blog.example/how-to-verify-your-domain",
-      "https://www.amazon.example/dp/B00EXAMPLE",
-      "https://social.example/squirrelscan",
+      "https://partner.example.com/pricing",
+      "https://blog.example.com/how-to-verify-your-domain",
+      "https://www.amazon.example.com/dp/B00EXAMPLE",
+      "https://social.example.com/squirrelscan",
     ]);
     expect(notRequested.count).toBe(5);
     // The sample masks every query value and token-like path segment, so a
     // published report never carries the credential.
     expect(notRequested.sample.map((l) => l.href).sort()).toEqual(
       [
-        "https://mail.example/unsubscribe?token=…",
-        "https://cdn.example/files/report.pdf?sig=…",
-        "https://auth.example/magic-login/…",
-        "https://app.example/account",
-        "https://shop.example/basket",
+        "https://mail.example.com/unsubscribe?token=…",
+        "https://cdn.example.com/files/report.pdf?sig=…",
+        "https://auth.example.com/magic-login/…",
+        "https://app.example.com/account",
+        "https://shop.example.com/basket",
       ].sort(),
     );
     expect(notRequested.sample[0]).toMatchObject({
@@ -151,11 +152,11 @@ describe("splitNotRequestedExternalLinks", () => {
   test("links that mask the same are one sample entry, with their pages merged", () => {
     const occurrences: ExternalLinkOccurrences = new Map([
       [
-        "https://mail.example/unsubscribe?u=1",
+        "https://mail.example.com/unsubscribe?u=1",
         [{ ...occurrence(), pageUrl: "https://example.com/a" }],
       ],
       [
-        "https://mail.example/unsubscribe?u=2",
+        "https://mail.example.com/unsubscribe?u=2",
         [{ ...occurrence(), pageUrl: "https://example.com/b" }],
       ],
     ]);
@@ -163,7 +164,7 @@ describe("splitNotRequestedExternalLinks", () => {
     expect(notRequested.count).toBe(2);
     expect(notRequested.sample).toEqual([
       {
-        href: "https://mail.example/unsubscribe?u=…",
+        href: "https://mail.example.com/unsubscribe?u=…",
         sourcePages: ["https://example.com/a", "https://example.com/b"],
         pageCount: 2,
       },
@@ -177,13 +178,13 @@ describe("splitNotRequestedExternalLinks", () => {
         ...occurrence(),
         pageUrl: `https://example.com/p${p}`,
       }));
-      occurrences.set(`https://mail.example/unsubscribe/${i}`, pages);
+      occurrences.set(`https://mail.example.com/unsubscribe/${i}`, pages);
     }
     const { notRequested } = splitNotRequestedExternalLinks(occurrences);
     expect(notRequested.count).toBe(60);
     expect(notRequested.sample).toHaveLength(50);
     expect(notRequested.sample[0]).toMatchObject({
-      href: "https://mail.example/unsubscribe/0",
+      href: "https://mail.example.com/unsubscribe/0",
       pageCount: 25,
     });
     expect(notRequested.sample[0]!.sourcePages).toHaveLength(10);
@@ -248,11 +249,15 @@ describe("checkExternalLinks redirects", () => {
   });
 
   test("an action URL handed to it directly is not requested, by the bulk checker or locally", async () => {
-    const { third } = serve();
+    // A public name for the fixture: the bulk checker never gets a non-public
+    // host (pub#775), so a loopback address would not reach it at all.
+    const { port } = serve();
+    const third = `http://third.example.com:${port}`;
     const bulkAsked: string[][] = [];
     const results = await Effect.runPromise(
       checkExternalLinks([`${third}${UNSUBSCRIBE}`, `${third}/partner`], null, {
         ...options,
+        egress: { allowPrivateNetwork: true, resolve: async () => ["127.0.0.1"] },
         bulkChecker: async (urls) => {
           bulkAsked.push(urls);
           return new Map<string, ExternalCheckResult>();
@@ -263,6 +268,60 @@ describe("checkExternalLinks redirects", () => {
     expect(requested).toEqual(["/partner"]);
     const byHref = new Map(results.map((r) => [r.href, r]));
     expect(byHref.get(`${third}${UNSUBSCRIBE}`)).toMatchObject({ status: null, error: null });
+  });
+});
+
+describe("the cloud's dead-links service and not-requested links (repo#2759)", () => {
+  test("a public site's action and token links, by URL or by link text, are never sent to it", async () => {
+    const storage = new SQLiteStorage(":memory:");
+    await Effect.runPromise(Effect.orDie(storage.init()));
+    const crawlId = await Effect.runPromise(
+      Effect.orDie(
+        storage.createCrawl({
+          baseUrl: "https://example.com",
+          seedUrl: "https://example.com",
+          originalUrl: "https://example.com",
+          startedAt: Date.now(),
+          status: "running",
+          config: {},
+          stats: {},
+        } as never),
+      ),
+    );
+    const third = "https://third.example.com";
+    const occurrences: ExternalLinkOccurrences = new Map();
+    for (const [path, text] of [
+      ["/partner", "Our partner"],
+      [UNSUBSCRIBE, "Unsubscribe"],
+      [SIGNED, "Report"],
+      ["/account", "Log out"],
+    ] as const) {
+      occurrences.set(`${third}${path}`, [
+        { pageUrl: "https://example.com/", text, position: "content" as const, isNofollow: false },
+      ]);
+    }
+    const bulkAsked: string[] = [];
+    await Effect.runPromise(
+      checkCollectedExternalLinks(
+        storage,
+        crawlId,
+        occurrences,
+        { enabled: true, concurrency: 1, timeout_ms: 2_000, cache_ttl_days: 1 } as never,
+        undefined,
+        null,
+        // Answers everything it is asked, so nothing is checked locally.
+        async (urls) => {
+          bulkAsked.push(...urls);
+          return new Map(
+            urls.map((url) => [
+              url,
+              { href: url, status: 200, error: null, redirectTarget: null, fromCache: false },
+            ]),
+          );
+        },
+      ),
+    );
+    expect(bulkAsked).toEqual([`${third}/partner`]);
   });
 });
 
@@ -301,8 +360,9 @@ describe("an audit with external link checks on (repo#2759)", () => {
         externalLinks: {
           config: config.external_links,
           linkCache: null,
-          // The cloud's dead-links service stands in here: it must never be
-          // asked about them either.
+          // The cloud's dead-links service stands in here. These links are on
+          // loopback, so it is never asked about any of them (pub#775); the
+          // test above shows the not-requested ones stay out on a public name.
           bulkChecker: async (urls) => {
             bulkAsked.push(...urls);
             return new Map<string, ExternalCheckResult>();

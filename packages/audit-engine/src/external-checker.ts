@@ -28,7 +28,8 @@ import {
   type EgressPolicy,
 } from "@squirrelscan/utils/public-egress";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
-import { detectWaf, type WafProvider } from "@squirrelscan/waf-detect";
+import type { UnverifiedReason } from "@squirrelscan/core-contracts";
+import { detectWaf, detectWafChallengePage, type WafProvider } from "@squirrelscan/waf-detect";
 
 // ============================================
 // LINK CACHE INTERFACE (implemented by CLI's LinkCacheStorage)
@@ -47,7 +48,11 @@ export interface LinkCacheEntry {
   // "unverifiable" long after the host recovered.
 }
 
-/** Injectable link cache — CLI provides SQLite-backed cache; cloud passes null (no caching). */
+/**
+ * Injectable link cache — CLI provides SQLite-backed cache; cloud passes null (no caching).
+ * Shared by every audit on the machine, so it is read and written only under a
+ * public-only egress policy (pub#775, {@link isPublicOnlyEgress}).
+ */
 export interface LinkCache {
   getCachedBulk(urls: string[], ttlSeconds: number): Map<string, LinkCacheEntry>;
   setCachedBulk(entries: LinkCacheEntry[]): void;
@@ -65,6 +70,12 @@ export interface ExternalCheckResult {
   fromCache: boolean;
   wafBlocked?: boolean;
   wafProvider?: WafProvider;
+  /**
+   * Why a `wafBlocked` link is unverifiable (pub#821): a wall or challenge is
+   * `blocked`, running out of time is `unreachable`, and the cloud link
+   * checker adds `awaiting-confirmation` for a first 404.
+   */
+  unverifiedReason?: UnverifiedReason;
   /**
    * The target answered with rate limiting (429/430, or 503 + `Retry-After`),
    * so its status is unverified rather than broken (#1829).
@@ -90,6 +101,12 @@ export interface ExternalCheckerOptions {
    * chunk answered with none of its urls, falls back to the existing per-link
    * local path for the remaining urls. The map is keyed by the exact requested
    * url.
+   *
+   * pub#775: never sent a url whose host is non-public by the URL alone (a
+   * private IP literal, `localhost`, a `.local` or single-label name), whatever
+   * {@link egress} allows: those take the local path. A url it answers with
+   * its non-public refusal ({@link BULK_NON_PUBLIC_REFUSAL}) takes the local
+   * path too, so the refusal is never recorded as the link's verdict.
    */
   bulkChecker?: (urls: string[]) => Promise<Map<string, ExternalCheckResult>>;
   /**
@@ -102,6 +119,86 @@ export interface ExternalCheckerOptions {
    * auditing a private site passes `allowPrivateNetwork: true`.
    */
   egress?: EgressPolicy;
+  /**
+   * repo#2613: when the whole check must be over, in epoch ms. No bulk call or
+   * local check starts after it, and none still in flight is waited on past
+   * it. The links it did not reach are left out of the results, so the caller
+   * can report them as not checked. Absent: no deadline.
+   */
+  deadlineAt?: number;
+  /**
+   * repo#2613: the longest one bulk call or one local check is waited on,
+   * whatever its own timeout says (a stalled body read can outlive a request
+   * timeout). A backstop, so set it above both a bulk call's normal latency and
+   * {@link timeoutMs}: an abandoned bulk call ends the bulk pass like one that
+   * failed, and an abandoned local check is left out of the results like one
+   * the deadline cut, while its request may still be running. Absent, zero or
+   * not finite: no limit.
+   */
+  maxWaitMs?: number;
+  /**
+   * repo#2613: called each time a bulk call or a local check settles, with how
+   * many of the links have an answer so far (`done`, cache hits included) out
+   * of `total`. Without it a long check says nothing until it ends, and a
+   * watchdog cannot tell it from a hang.
+   */
+  onProgress?: (progress: { done: number; total: number; fromCache: number }) => void;
+  /** The clock {@link deadlineAt} is read against. Absent: `Date.now`. */
+  now?: () => number;
+}
+
+/** What {@link waitAtMost} resolves when the wait ran out first. */
+const NOT_ANSWERED = Symbol("not answered");
+
+/** The longest delay `setTimeout` honours; past it, the timer fires at once. */
+const MAX_TIMER_MS = 2 ** 31 - 1;
+
+/**
+ * `work`, or {@link NOT_ANSWERED} once `ms` pass without it settling (repo#2613).
+ * Resolves rather than rejects, and leaves `work` running: a request whose own
+ * abort is ignored cannot be stopped from here, only stopped being waited on.
+ * Its later rejection, if any, is swallowed.
+ */
+function waitAtMost<T>(work: Promise<T>, ms: number): Promise<T | typeof NOT_ANSWERED> {
+  if (ms >= MAX_TIMER_MS) return work;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<typeof NOT_ANSWERED>((resolve) => {
+    timer = setTimeout(() => resolve(NOT_ANSWERED), Math.max(0, ms));
+  });
+  return Promise.race([work, timeout]).finally(() => {
+    clearTimeout(timer);
+    work.catch(() => {});
+  });
+}
+
+/** A limit in ms, or `Infinity` for one that is absent, zero or less, or not a number. */
+function limitMs(value: number | undefined): number {
+  return value !== undefined && Number.isFinite(value) && value > 0
+    ? value
+    : Number.POSITIVE_INFINITY;
+}
+
+/**
+ * How long the next call may be waited on under {@link ExternalCheckerOptions}'
+ * deadline and per-call limit: `Infinity` with neither, zero or less once the
+ * deadline has passed.
+ */
+function waitAllowance(opts: Pick<ExternalCheckerOptions, "deadlineAt" | "maxWaitMs" | "now">): number {
+  const now = opts.now ?? Date.now;
+  const untilDeadline =
+    opts.deadlineAt === undefined || !Number.isFinite(opts.deadlineAt)
+      ? Number.POSITIVE_INFINITY
+      : opts.deadlineAt - now();
+  return Math.min(untilDeadline, limitMs(opts.maxWaitMs));
+}
+
+/** A progress callback that throws is the caller's bug, never the check's. */
+function tell(callback: () => void): void {
+  try {
+    callback();
+  } catch {
+    // ignored: progress is a report, and a failing report must not fail the check
+  }
 }
 
 /**
@@ -110,6 +207,35 @@ export interface ExternalCheckerOptions {
  */
 export const DEFAULT_EGRESS: EgressPolicy = { allowPrivateNetwork: false };
 
+/**
+ * True when `policy` only ever reaches public addresses, and any host, so a
+ * verdict it produced holds for any audit. One that allows private addresses (an audit of
+ * a private site) may have reached the auditor's own network through a public
+ * name or a redirect, and the shared link cache would hand that verdict to a
+ * public site's audit (pub#775): its checks neither read nor write the cache.
+ */
+export function isPublicOnlyEgress(policy: EgressPolicy): boolean {
+  return (
+    !policy.allowPrivateNetwork &&
+    !policy.allowPrivateTarget &&
+    !policy.trustTarget &&
+    // A host-restricted check stops where others would not: its verdict is its own.
+    !policy.allowHost
+  );
+}
+
+/**
+ * The `error` prefix of the cloud dead-links service's answer for a link it
+ * would not request because the link, or a redirect it led to, is not on a
+ * public address (`blocked_non_public_host:<reason>`). A refusal, not a
+ * verdict on the link: it takes the local check (pub#775).
+ */
+export const BULK_NON_PUBLIC_REFUSAL = "blocked_non_public_host";
+
+function isBulkNonPublicRefusal(result: ExternalCheckResult): boolean {
+  return result.status === null && (result.error?.startsWith(`${BULK_NON_PUBLIC_REFUSAL}:`) ?? false);
+}
+
 /** Max urls per bulk-checker call — mirrors SERVICE_LIMITS.deadLinksBatchUrls. */
 export const BULK_CHECK_CHUNK_SIZE = 200;
 
@@ -117,18 +243,36 @@ export const BULK_CHECK_CHUNK_SIZE = 200;
  * Run a bulk checker over `urls` in chunks, accumulating whatever it resolves.
  * Never throws: a failing chunk, or one that answers none of its urls, stops
  * the bulk pass and the unresolved remainder takes the per-link local path.
+ *
+ * repo#2613: `limits` bounds the pass. A chunk not answered within the
+ * allowance is abandoned and ends the pass, like a failed one. No chunk is sent
+ * once the deadline has passed, nor when the time left is shorter than the
+ * slowest chunk so far: the service may charge for a chunk whose answer would
+ * then be thrown away. `onChunk` is told after every chunk that settles, with
+ * how many urls are resolved so far.
  */
 export async function runBulkChecker(
   bulkChecker: (urls: string[]) => Promise<Map<string, ExternalCheckResult>>,
   urls: string[],
-  chunkSize: number = BULK_CHECK_CHUNK_SIZE
+  chunkSize: number = BULK_CHECK_CHUNK_SIZE,
+  limits: Pick<ExternalCheckerOptions, "deadlineAt" | "maxWaitMs" | "now"> & {
+    onChunk?: (resolvedSoFar: number) => void;
+  } = {}
 ): Promise<Map<string, ExternalCheckResult>> {
+  const now = limits.now ?? Date.now;
   const resolved = new Map<string, ExternalCheckResult>();
+  let slowestChunkMs = 0;
   for (let i = 0; i < urls.length; i += chunkSize) {
     const requested = urls.slice(i, i + chunkSize);
+    const allowance = waitAllowance(limits);
+    if (allowance <= 0 || allowance < slowestChunkMs) break;
     try {
-      const chunk = await bulkChecker(requested);
+      const sentAt = now();
+      const chunk = await waitAtMost(bulkChecker(requested), allowance);
+      if (chunk === NOT_ANSWERED) break;
+      slowestChunkMs = Math.max(slowestChunkMs, now() - sentAt);
       for (const [url, result] of chunk) resolved.set(url, result);
+      tell(() => limits.onChunk?.(resolved.size));
       // pub#753: a service that answered nothing for a whole chunk (overloaded,
       // or out of time on links it has not seen) will most likely do the same
       // for the next one, and each such chunk costs its full wait. Stop asking:
@@ -155,6 +299,8 @@ interface CheckUrlResult {
   redirectTarget: string | null;
   wafBlocked?: boolean;
   wafProvider?: WafProvider;
+  /** pub#821: why a `wafBlocked` answer is unverifiable. */
+  unverifiedReason?: UnverifiedReason;
   /**
    * The target answered with rate limiting (429/430, or 503 + `Retry-After`),
    * so its status is unverified rather than broken (#1829).
@@ -162,6 +308,60 @@ interface CheckUrlResult {
   rateLimited?: boolean;
   /** The egress policy refused the first request: nothing was sent, and nothing is cached. */
   refused?: boolean;
+}
+
+/**
+ * What a site answers a request it takes for a robot's: a sign-in or bot wall
+ * (401, 403), a method or content refusal bot rules send (405, 406), and
+ * LinkedIn's 999. Asked from this machine, none of them says the page is gone,
+ * so a link answering one is unverifiable, never broken (pub#800). The cloud
+ * link checker takes the same statuses to a browser-grade check.
+ */
+const BOT_WALL_STATUSES = new Set([401, 403, 405, 406, 999]);
+
+/**
+ * A cached wall or timeout written before this was counted broken by a client
+ * from before pub#800, and is asked again. After it, a cached wall status is a
+ * real answer (a cloud-confirmed broken 403, say): walls and timeouts are no
+ * longer cached at all. A month past the change, so an older client still in
+ * use for a while, and the cache's 7-day default life, are both covered.
+ */
+const WALL_VERDICT_CUTOFF_MS = Date.parse("2026-11-16T00:00:00Z");
+
+/** A cached answer from before pub#800, which counted a wall or a timeout as broken: asked again. */
+function staleWallVerdict(entry: LinkCacheEntry): boolean {
+  if (entry.wafBlocked || entry.checkedAt >= WALL_VERDICT_CUTOFF_MS) return false;
+  return (entry.status !== null && BOT_WALL_STATUSES.has(entry.status)) || entry.error === "timeout";
+}
+
+/**
+ * A wall status that, from these headers, is the site's own answer rather than
+ * a robot check, so it stays broken (pub#800 review):
+ * - an object store's 403 for a key it will not list (S3, GCS), which is how a
+ *   deleted download answers: by its headers, or by its XML error body when a
+ *   CDN in front (CloudFront) strips them;
+ * - an HTTP authentication challenge (`WWW-Authenticate` naming Basic, Digest,
+ *   Negotiate or NTLM, in any position), which a person meets too;
+ * - a 405 whose `Allow` header leaves out GET: the link points at an endpoint
+ *   nobody can open.
+ */
+function realRefusal(status: number, headers: Headers, body: string | undefined): boolean {
+  if (status === 403) {
+    return (
+      headers.has("x-amz-request-id") ||
+      /^amazons3$/i.test(headers.get("server") ?? "") ||
+      headers.has("x-guploader-uploadid") ||
+      /<Code>(?:AccessDenied|NoSuchKey)<\/Code>/.test(body ?? "")
+    );
+  }
+  if (status === 401) {
+    return /\b(?:basic|digest|negotiate|ntlm)\b/i.test(headers.get("www-authenticate") ?? "");
+  }
+  if (status === 405) {
+    const allow = headers.get("allow");
+    return allow !== null && !/\bGET\b/i.test(allow);
+  }
+  return false;
 }
 
 /** Redirects followed per request, a browser's limit. */
@@ -263,7 +463,11 @@ async function checkSingleUrlAsync(
     const getResponse = get.response;
     const redirectTarget = get.redirectTarget;
 
-    if (getResponse.status === 403) {
+    // pub#800: a wall says nothing about the page behind it, whether or not
+    // its vendor can be named, so it is listed as unverifiable. A 503 is a
+    // wall only when it is a challenge page; otherwise it is the site's own
+    // error (or, with Retry-After, throttling, below).
+    if (BOT_WALL_STATUSES.has(getResponse.status) || getResponse.status === 503) {
       let body: string | undefined;
       try {
         // Capped, and decoded no further than the cap (#2717): the WAF
@@ -271,20 +475,33 @@ async function checkSingleUrlAsync(
         body = await readBodyCapped(getResponse, DEFAULT_MAX_BODY_BYTES);
       } catch {
         // The body never arrived: the deadline above fired mid-read, or the
-        // connection dropped. Do NOT give up on detection here — falling
-        // through reports a live, bot-guarded link as broken. Most WAFs are
-        // identifiable from their response headers alone (cf-ray, x-sucuri-id,
-        // a provider `server` value), so run detection on the headers we DO
-        // have. `detectWaf` treats an absent body as headers-only (#1729).
+        // connection dropped. Most WAFs are identifiable from their response
+        // headers alone (cf-ray, x-sucuri-id, a provider `server` value), so
+        // run detection on the headers we DO have. `detectWaf` treats an
+        // absent body as headers-only (#1729).
       }
-      const wafResult = detectWaf(getResponse.headers, body);
-      if (wafResult.detected) {
+      const headers = getResponse.headers;
+      const challenge =
+        getResponse.status !== 503 ||
+        headers.get("cf-mitigated") === "challenge" ||
+        detectWafChallengePage({
+          status: 503,
+          headers: {
+            server: headers.get("server"),
+            cfCacheStatus: headers.get("cf-cache-status"),
+            xCache: headers.get("x-cache"),
+          },
+          html: body ?? null,
+        }).detected;
+      if (challenge && !realRefusal(getResponse.status, headers, body)) {
+        const wafResult = detectWaf(headers, body);
         return {
-          status: 403,
+          status: getResponse.status,
           error: null,
           redirectTarget,
           wafBlocked: true,
-          wafProvider: wafResult.provider ?? "unknown",
+          wafProvider: wafResult.detected ? (wafResult.provider ?? "unknown") : "unknown",
+          unverifiedReason: "blocked",
         };
       }
     }
@@ -307,7 +524,16 @@ async function checkSingleUrlAsync(
       return { status: null, error: null, redirectTarget: null, refused: true };
     }
     if ((error as Error).name === "AbortError") {
-      return { status: null, error: "timeout", redirectTarget: null };
+      // pub#800: a site that stalls robots looks exactly like a dead one from
+      // here, so out of time is unverifiable, never broken. Not cached.
+      return {
+        status: null,
+        error: null,
+        redirectTarget: null,
+        wafBlocked: true,
+        wafProvider: "unknown",
+        unverifiedReason: "unreachable",
+      };
     }
     return { status: null, error: (error as Error).message || "Unknown error", redirectTarget: null };
   } finally {
@@ -316,13 +542,6 @@ async function checkSingleUrlAsync(
     // nor a cancelled body does: Bun keeps downloading until the signal aborts.
     controller.abort();
   }
-}
-
-function checkSingleUrl(
-  href: string,
-  options: ExternalCheckerOptions
-): Effect.Effect<CheckUrlResult, never, never> {
-  return Effect.promise(() => checkSingleUrlAsync(href, options));
 }
 
 export function checkExternalLinks(
@@ -367,11 +586,13 @@ export function checkExternalLinks(
     }
     if (uniqueUrls.length === 0) return results;
 
-    if (cache) {
-      const cachedEntries = cache.getCachedBulk(uniqueUrls, opts.ttlSeconds);
+    // pub#775: a private site's checks stay out of the cache every audit shares.
+    const sharedCache = isPublicOnlyEgress(egress) ? cache : null;
+    if (sharedCache) {
+      const cachedEntries = sharedCache.getCachedBulk(uniqueUrls, opts.ttlSeconds);
       for (const url of uniqueUrls) {
         const cached = cachedEntries.get(url);
-        if (cached) {
+        if (cached && !staleWallVerdict(cached)) {
           results.push({
             href: cached.href,
             status: cached.status,
@@ -391,24 +612,45 @@ export function checkExternalLinks(
 
     if (urlsToCheck.length === 0) return results;
 
+    // repo#2613: how far along the check is, for a caller whose watchdog would
+    // otherwise hear nothing until it ends.
+    const total = results.length + urlsToCheck.length;
+    const fromCache = results.filter((r) => r.fromCache).length;
+    const report = (done: number) => tell(() => opts.onProgress?.({ done, total, fromCache }));
+
     // Cloud bulk path: resolve local-cache misses via the bulk checker first.
     // Resolved urls are surfaced as-is and written into the local cache so the
     // next run is a pure local hit; the unresolved remainder (or everything,
     // if the bulk checker failed) takes the per-link local path below.
     if (opts.bulkChecker) {
-      const bulkResolved = yield* Effect.promise(() =>
-        runBulkChecker(opts.bulkChecker!, urlsToCheck)
-      );
+      // pub#775: a public service, so never sent a link whose URL names a
+      // non-public host, whatever this audit's policy allows. Those take the
+      // local check, which a private site's audit may make.
+      const bulkUrls = urlsToCheck.filter((url) => !refusedWithoutLookup(url, DEFAULT_EGRESS));
+      const answeredBefore = results.length;
+      const bulkResolved =
+        bulkUrls.length > 0
+          ? yield* Effect.promise(() =>
+              runBulkChecker(opts.bulkChecker!, bulkUrls, BULK_CHECK_CHUNK_SIZE, {
+                deadlineAt: opts.deadlineAt,
+                maxWaitMs: opts.maxWaitMs,
+                now: opts.now,
+                onChunk: (resolvedSoFar) => report(answeredBefore + resolvedSoFar),
+              })
+            )
+          : new Map<string, ExternalCheckResult>();
       if (bulkResolved.size > 0) {
         const stillToCheck: string[] = [];
         const bulkCacheEntries: LinkCacheEntry[] = [];
         for (const url of urlsToCheck) {
           const resolved = bulkResolved.get(url);
-          if (resolved) {
+          // Its refusal of a non-public address is no answer: checked locally.
+          if (resolved && !isBulkNonPublicRefusal(resolved)) {
             results.push({ ...resolved, href: url });
             // #1829: never cache a throttled verdict — see the per-link cache
-            // write below for why.
-            if (!isRateLimited(resolved)) {
+            // write below for why. Nor an unverifiable one (pub#800): asked
+            // again next run, which may be signed in where this one was not.
+            if (cacheableVerdict(resolved)) {
               bulkCacheEntries.push({
                 href: url,
                 status: resolved.status,
@@ -423,8 +665,8 @@ export function checkExternalLinks(
             stillToCheck.push(url);
           }
         }
-        if (cache && bulkCacheEntries.length > 0) {
-          cache.setCachedBulk(bulkCacheEntries);
+        if (sharedCache && bulkCacheEntries.length > 0) {
+          sharedCache.setCachedBulk(bulkCacheEntries);
         }
         urlsToCheck = stillToCheck;
       }
@@ -432,24 +674,40 @@ export function checkExternalLinks(
 
     if (urlsToCheck.length === 0) return results;
 
+    // Shared by the concurrent checks below; each update runs to completion on
+    // the one JS thread, so no count is lost.
+    let answered = results.length;
     const checkEffects = urlsToCheck.map((href) =>
-      checkSingleUrl(href, opts).pipe(
-        Effect.map((result) => ({ href, ...result }))
-      )
+      Effect.promise(async () => {
+        // repo#2613: past the deadline nothing more is requested, and a check
+        // that outlives its allowance is no longer waited on. Either way the
+        // link is left out of the results, for the caller to report as not
+        // checked rather than as broken.
+        const allowance = waitAllowance(opts);
+        if (allowance <= 0) return null;
+        const result = await waitAtMost(checkSingleUrlAsync(href, opts), allowance);
+        if (result !== NOT_ANSWERED) answered += 1;
+        report(answered);
+        return result === NOT_ANSWERED ? null : { href, ...result };
+      })
     );
 
-    const checkedResults = yield* Effect.all(checkEffects, {
-      concurrency: opts.concurrency,
-    });
+    const checkedResults = (
+      yield* Effect.all(checkEffects, {
+        concurrency: opts.concurrency,
+      })
+    ).filter((r) => r !== null);
 
-    if (cache) {
+    if (sharedCache) {
       // #1829: a throttled result is a fact about the MOMENT, not the link. The
       // TTL is 7 days by default, so caching one 429 would keep a live link
       // reported as "unverifiable" for a week after the host recovered. Cache
       // the verified results only; throttled ones are re-checked next run.
       const cacheEntries: LinkCacheEntry[] = checkedResults
-        // Nor a refused one: nothing was asked.
-        .filter((r) => !isRateLimited(r) && !r.refused)
+        // Nor a refused one: nothing was asked. Nor an unverifiable one, a
+        // wall or a timeout: like throttling, a fact about the moment, and the
+        // next run may ask the cloud link checker instead (pub#800).
+        .filter((r) => cacheableVerdict(r))
         .map((r) => ({
           href: r.href,
           status: r.status,
@@ -459,7 +717,7 @@ export function checkExternalLinks(
           wafBlocked: r.wafBlocked,
           wafProvider: r.wafProvider,
         }));
-      if (cacheEntries.length > 0) cache.setCachedBulk(cacheEntries);
+      if (cacheEntries.length > 0) sharedCache.setCachedBulk(cacheEntries);
     }
 
     for (const r of checkedResults) {
@@ -471,6 +729,7 @@ export function checkExternalLinks(
         fromCache: false,
         wafBlocked: r.wafBlocked,
         wafProvider: r.wafProvider,
+        ...(r.unverifiedReason ? { unverifiedReason: r.unverifiedReason } : {}),
         rateLimited: r.rateLimited,
         ...(r.refused ? { refused: true } : {}),
       });
@@ -495,7 +754,8 @@ export function filterBrokenLinks(
 ): ExternalCheckResult[] {
   return results.filter((r) => {
     if (r.error) return true;
-    if (r.status === 403 && r.wafBlocked) return false;
+    // Unverifiable, whatever its status: a wall or a timeout (pub#800).
+    if (r.wafBlocked) return false;
     // Rate limiting means the status is UNVERIFIED, not that the link is dead
     // (#1829). Checked before the >= 400 test, which 429/430 would otherwise
     // satisfy.
@@ -503,6 +763,21 @@ export function filterBrokenLinks(
     if (r.status && r.status >= 400) return true;
     return false;
   });
+}
+
+/**
+ * Whether a verdict goes into the link cache: a real answer about the link.
+ * Not throttling (#1829), not a request that was never sent (pub#770), and not
+ * an unverifiable one, a wall or a timeout (pub#800): each is a fact about the
+ * moment, and the next audit, maybe signed in, asks again.
+ */
+export function cacheableVerdict(result: {
+  status: number | null;
+  rateLimited?: boolean;
+  refused?: boolean;
+  wafBlocked?: boolean;
+}): boolean {
+  return !isRateLimited(result) && result.refused !== true && result.wafBlocked !== true;
 }
 
 /** True when this result reflects throttling rather than the target's real state. */

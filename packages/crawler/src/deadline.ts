@@ -2,6 +2,7 @@
 // budget that bounds a whole sequence of them (squirrelscan/repo#1733).
 
 import { PROBE_NOT_ATTEMPTED_ERROR } from "@squirrelscan/core-contracts/storage";
+import { egressGuardedSend, type EgressPolicy } from "@squirrelscan/utils/public-egress";
 import { fetchUndecoded } from "@squirrelscan/utils/response-body";
 import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 
@@ -51,19 +52,23 @@ export async function withRequestDeadline<T>(
  * Every hop is fetched undecoded, so a Content-Encoding bomb on any of them is
  * never inflated by the runtime; `readBodyCapped` decodes the final body
  * within its cap (#2717).
+ *
+ * With `egress`, every hop, the first included, is vetted and sent by
+ * `egressGuardedSend` (repo#2830): a refused one rejects with
+ * `EgressRefusedError`, never requested, and the probe records no answer.
  */
 export function safeFetchWithDeadline<T>(
   url: string,
   options: RequestInit,
   timeoutMs: number,
   use: (response: Response) => Promise<T>,
+  egress?: EgressPolicy,
 ): Promise<T> {
+  const send = egress ? egressGuardedSend(fetchUndecoded, egress) : fetchUndecoded;
   return withRequestDeadline(
     timeoutMs,
     (signal) =>
-      safeRedirectFetch(url, { ...options, signal }, fetchUndecoded).then(
-        (result) => result.response,
-      ),
+      safeRedirectFetch(url, { ...options, signal }, send).then((result) => result.response),
     use,
   );
 }
@@ -106,6 +111,11 @@ export interface PhaseBudget {
    * crawl, where a refusal is still treated as unanswered but not recorded.
    */
   readonly refusals?: RefusalLog;
+  /**
+   * The crawl's egress policy for the phase's requests and their redirect hops
+   * (repo#2830), carried here for the same reason. Absent outside a crawl.
+   */
+  readonly egress?: EgressPolicy;
 }
 
 /**
@@ -120,8 +130,13 @@ export function createPhaseBudget(
   totalMs: number,
   startedAt: number = Date.now(),
   refusals?: RefusalLog,
+  egress?: EgressPolicy,
 ): PhaseBudget {
-  return { deadlineAt: startedAt + Math.max(0, totalMs), ...(refusals ? { refusals } : {}) };
+  return {
+    deadlineAt: startedAt + Math.max(0, totalMs),
+    ...(refusals ? { refusals } : {}),
+    ...(egress ? { egress } : {}),
+  };
 }
 
 /** Milliseconds left on the budget, floored at 0. `Infinity` when unbudgeted. */

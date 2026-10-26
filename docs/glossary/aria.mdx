@@ -1,0 +1,91 @@
+---
+title: "What is ARIA? Roles, states and the first rule of ARIA"
+description: "ARIA is the W3C's set of roles, states and properties that describe custom widgets to assistive technology. The first rule of ARIA, and the common errors."
+sidebarTitle: "ARIA"
+---
+
+**ARIA**, Accessible Rich Internet Applications, is a W3C specification of roles, states and properties, such as `role="tab"`, `aria-expanded` and `aria-label`, that describe an element to assistive technology when HTML alone does not.
+
+ARIA changes what a screen reader announces, not how an element behaves. A `<div role="button">` is announced as a button but does not get focus or respond to Enter until a script makes it. That is why W3C's guidance on using ARIA starts with its first rule: if a native HTML element or attribute already has the semantics and behavior you need, use it instead of adding a role to something else. The ARIA Authoring Practices Guide puts the same point more bluntly: no ARIA is better than bad ARIA.
+
+{/* glossary:hub:start */}
+
+Category: [Accessibility](/rules/a11y)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+The Authoring Practices Guide compares ARIA to CSS for assistive technology: for a screen reader user, it controls the non-visual experience. Wrong ARIA describes a page that is not there. A misspelled role means nothing, a checkbox without `aria-checked` has no state, `aria-hidden="true"` on the body hides the whole page, and a focusable link inside an `aria-hidden` region lands the keyboard on something the screen reader cannot announce. Most of these come from component libraries and copy-paste, and they repeat on every page that uses the component.
+
+## How squirrelscan checks it
+
+Twelve hand-written rules cover the common ARIA errors. [a11y/aria-roles](/rules/a11y/aria-roles) and [a11y/aria-deprecated-role](/rules/a11y/aria-deprecated-role) check role names against core ARIA and flag deprecated and abstract roles. DPUB and Graphics ARIA module roles are reported as invalid. [a11y/aria-valid-attr](/rules/a11y/aria-valid-attr) checks attribute names, [a11y/aria-valid-attr-value](/rules/a11y/aria-valid-attr-value) checks values for 26 attributes, and [a11y/aria-allowed-attr](/rules/a11y/aria-allowed-attr) catches two specific contradictions, such as an `aria-label` on a presentational element. [a11y/aria-required-attr](/rules/a11y/aria-required-attr), [a11y/aria-required-children](/rules/a11y/aria-required-children) and [a11y/aria-required-parent](/rules/a11y/aria-required-parent) check that roles have the states, children and parents they need. [a11y/aria-hidden-body](/rules/a11y/aria-hidden-body) and [a11y/aria-hidden-focus](/rules/a11y/aria-hidden-focus) catch hidden content that should not be. [a11y/duplicate-id-aria](/rules/a11y/duplicate-id-aria) finds ARIA references to missing or duplicate ids, and [a11y/aria-text](/rules/a11y/aria-text) finds focusable elements inside `role="text"`.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Invalid ARIA role values and how to check them](/rules/a11y/aria-roles) | A misspelled or invented role gives an element no semantics at all. squirrel validates every role attribute against the ARIA vocabulary. | error |
+| [Invalid aria-* attribute names, aria-labeledby included](/rules/a11y/aria-valid-attr) | A misspelled ARIA attribute is ignored by every browser and warns nobody. squirrel checks each aria-* name against the ARIA vocabulary. | error |
+| [Invalid ARIA attribute values and the types they need](/rules/a11y/aria-valid-attr-value) | aria-checked=yes and aria-level=two are ignored by browsers. squirrel type-checks 26 ARIA attributes against their allowed values. | error |
+| [ARIA attributes that are not allowed on an element](/rules/a11y/aria-allowed-attr) | role=presentation with an aria-label, or a decorative image with one, contradicts itself. squirrel reports both on every page. | warning |
+| [Required ARIA attributes for a role, and what is missing](/rules/a11y/aria-required-attr) | role=checkbox with no aria-checked has a state screen readers cannot read. squirrel checks the roles whose attributes are mandatory. | error |
+| [ARIA roles that require particular child roles](/rules/a11y/aria-required-children) | role=list with no listitem, or role=tablist with no tab, is an incomplete widget. squirrel checks thirteen container roles for their children. | error |
+| [ARIA roles that require a particular parent role](/rules/a11y/aria-required-parent) | role=listitem outside a list, or a tab outside a tablist, loses its meaning. squirrel checks explicit roles and native li, tr, td and option. | error |
+| [Deprecated and abstract ARIA roles, and what to use instead](/rules/a11y/aria-deprecated-role) | role=directory is deprecated and abstract roles were never meant for markup. squirrel names every one it finds and its replacement. | error |
+| [aria-hidden on body or html: what it breaks](/rules/a11y/aria-hidden-body) | aria-hidden=true on the body or html element asks assistive technology to ignore the entire page. squirrel checks both, at the highest weight. | error |
+| [Focusable elements inside aria-hidden: the tab trap](/rules/a11y/aria-hidden-focus) | A hidden element that still takes focus lets keyboard users tab into nothing. squirrel finds them, and tells anti-spam honeypots apart. | error |
+| [ARIA references pointing at duplicate or missing ids](/rules/a11y/duplicate-id-aria) | aria-labelledby resolving to two elements, or to none, names the wrong thing silently. squirrel checks all eight ARIA id references. | error |
+| [role=text with focusable children: why it breaks](/rules/a11y/aria-text) | role=text flattens a subtree into one announced string, so a link inside it cannot be operated. squirrel reports every case it finds. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Prefer the native element, and keep ARIA states in step with the visible state:
+
+```html
+<button aria-pressed="false" aria-controls="filters">Filters</button>
+<div role="tablist" aria-label="Account settings">
+  <button role="tab" aria-selected="true" aria-controls="profile">Profile</button>
+</div>
+```
+
+Replace a `<div role="button">` with a `<button>` ([the roles fix](/rules/a11y/aria-roles#how-to-fix-it)). Use the literal values each attribute expects, such as `aria-expanded="false"` ([the values fix](/rules/a11y/aria-valid-attr-value#how-to-fix-it)). Use `aria-modal` on a dialog rather than `aria-hidden` on the body ([the hidden body fix](/rules/a11y/aria-hidden-body#how-to-fix-it)). Add `inert` to a hidden region that holds links ([the hidden focus fix](/rules/a11y/aria-hidden-focus#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include a11y/aria-roles,a11y/aria-valid-attr,a11y/aria-valid-attr-value,a11y/aria-allowed-attr,a11y/aria-required-attr,a11y/aria-required-children,a11y/aria-required-parent,a11y/aria-deprecated-role,a11y/aria-hidden-body,a11y/aria-hidden-focus,a11y/duplicate-id-aria,a11y/aria-text
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Accessible name](/glossary/accessible-name): The name assistive technology announces for an element, computed from its content, label, aria-label or aria-labelledby.
+- [WCAG](/glossary/wcag): The W3C's Web Content Accessibility Guidelines, organised as testable success criteria at levels A, AA and AAA; 2.2 is current.
+- [Landmark regions](/glossary#landmark): The page regions (main, nav, header, footer) that screen reader users jump between, plus the skip link to main content.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Using ARIA, W3C](https://www.w3.org/TR/using-aria/)
+- [Accessible Rich Internet Applications (WAI-ARIA) 1.2, W3C](https://www.w3.org/TR/wai-aria-1.2/)
+- [Read me first: no ARIA is better than bad ARIA, ARIA Authoring Practices Guide](https://www.w3.org/WAI/ARIA/apg/practices/read-me-first/)
+
+{/* glossary:jsonld:start */}
+
+import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";
+
+<GlossaryJsonLd slug="aria" />
+
+{/* glossary:jsonld:end */}

@@ -24,6 +24,15 @@
 // and theme-color have no such exemption: they are browser chrome, not content,
 // and are globally uniform on every correctly built site.
 //
+// Hreflang alternates are ONE voter on the og-image axis (pub#937). A collection
+// page and its locale variants (/de-ch/, /da/, ...) all carry the same entity
+// image by design, so counting each URL would let one entity image look like a
+// 16-page layout fallback purely by repetition. Pages that list each other as
+// hreflang alternates (reciprocally, any language) are merged into one cluster,
+// and a cluster carrying one image casts one vote for it. Unrelated pages that
+// share a fallback are not alternates and still count one each. Favicon and
+// theme-color are chrome, not content, and keep one vote per page.
+//
 // Guards, in the order they matter:
 //   1. Site floor (ASSET_NORM_MIN_PAGES) - a small crawl has no norm to speak of.
 //   2. Per-axis sample floor (ASSET_NORM_MIN_SAMPLE) - too few pages DECLARE the
@@ -45,9 +54,11 @@
 // crawl order (same shape as content/duplicate-title, #1021/#1022).
 
 import type { Rule, RuleContext, RuleResult, CheckResult, ParsedPage } from "../types";
-import type { CheckItem, SiteQuery } from "@squirrelscan/core-contracts";
+import type { CheckItem, HreflangAlternate, SiteQuery } from "@squirrelscan/core-contracts";
 
 import { getAttrCI } from "@squirrelscan/utils";
+
+import { identity } from "../shared/region-variants";
 
 /** Crawl-wide page floor: below this there is no site norm to judge against. */
 export const ASSET_NORM_MIN_PAGES = 10;
@@ -218,6 +229,8 @@ interface ChromePageRecord {
   status: number;
   pageType: string | null;
   chrome: SiteChromeSignal;
+  /** Parser-extracted hreflang alternates, null when the page has none stored. */
+  hreflangAlternates: readonly HreflangAlternate[] | null;
 }
 
 /** A 2xx page the rule can judge. */
@@ -226,12 +239,16 @@ interface ChromeSample {
   /** True when this page type legitimately ships its own OG image. */
   perPageOg: boolean;
   chrome: SiteChromeSignal;
+  /** Voter identity on a clustered axis: the page's hreflang cluster root. */
+  cluster: string;
 }
 
 interface ChromeRollup {
   /** Pages seen by the rule (both paths count the same universe). */
   pageCount: number;
   samples: ChromeSample[];
+  /** Page identity -> identities it lists as hreflang alternates. */
+  alternates: Map<string, Set<string>>;
 }
 
 type AxisKey = "favicon" | "theme-color" | "og-image";
@@ -254,6 +271,12 @@ interface Axis {
    * whole pocket of pages with it, so it survives this filter.
    */
   dropSingletons?: boolean;
+  /**
+   * Merge pages that are hreflang alternates of each other into one voter per
+   * value (pub#937), so a locale-variant set sharing one entity image is not
+   * mistaken for a fallback by repetition.
+   */
+  clusterAlternates?: boolean;
 }
 
 /** Fixed axis order — the report's item order never depends on crawl order. */
@@ -279,6 +302,7 @@ const AXES: readonly Axis[] = [
     value: (s) => s.chrome.ogImage,
     eligible: (s) => !s.perPageOg,
     dropSingletons: true,
+    clusterAlternates: true,
   },
 ];
 
@@ -298,7 +322,7 @@ interface AxisVerdict {
 }
 
 function emptyRollup(): ChromeRollup {
-  return { pageCount: 0, samples: [] };
+  return { pageCount: 0, samples: [], alternates: new Map() };
 }
 
 /**
@@ -310,22 +334,91 @@ function accumulatePage(rollup: ChromeRollup, record: ChromePageRecord): void {
   rollup.pageCount += 1;
 
   if (record.status < 200 || record.status >= 300) return;
+  const perPageOg = PER_PAGE_OG_PAGE_TYPES.has(record.pageType ?? "");
   rollup.samples.push({
     url: record.url,
-    perPageOg: PER_PAGE_OG_PAGE_TYPES.has(record.pageType ?? ""),
+    perPageOg,
     chrome: record.chrome,
+    cluster: record.url,
   });
+
+  // Any page with alternates joins the graph, even one that casts no og vote
+  // itself (an article, a page with no og:image): it can still be the link that
+  // ties two voting variants into one cluster.
+  if (!record.hreflangAlternates?.length) return;
+  const self = identity(record.url);
+  if (!self) return;
+  const targets = new Set<string>();
+  for (const alt of record.hreflangAlternates) {
+    const target = identity(alt.href);
+    if (target && target !== self) targets.add(target);
+  }
+  if (targets.size > 0) rollup.alternates.set(self, targets);
+}
+
+/**
+ * Set each sample's `cluster` to the smallest url of its hreflang cluster. Only
+ * RECIPROCAL links merge (A lists B and B lists A): a one-way claim proves
+ * nothing about B, and search engines ignore it too. Language is not compared,
+ * unlike the duplicate-title merge: here a de/da/fi variant set sharing one
+ * entity image is exactly the case to fold.
+ */
+function clusterByHreflang(rollup: ChromeRollup): void {
+  if (rollup.alternates.size === 0) return;
+  const parent = new Map<string, string>();
+  const find = (id: string): string => {
+    let root = id;
+    while ((parent.get(root) ?? root) !== root) root = parent.get(root)!;
+    parent.set(id, root);
+    return root;
+  };
+  for (const [self, targets] of rollup.alternates) {
+    for (const target of targets) {
+      if (!rollup.alternates.get(target)?.has(self)) continue;
+      const a = find(self);
+      const b = find(target);
+      if (a === b) continue;
+      // Smaller identity wins so the root never depends on crawl order.
+      if (a < b) parent.set(b, a);
+      else parent.set(a, b);
+    }
+  }
+  for (const sample of rollup.samples) {
+    const id = identity(sample.url);
+    if (id !== null && rollup.alternates.has(id)) sample.cluster = find(id);
+  }
 }
 
 /** The pages an axis judges: eligible, declaring, and (optionally) not one-offs. */
-function votersFor(axis: Axis, samples: ChromeSample[]): Array<{ url: string; value: string }> {
-  const declared: Array<{ url: string; value: string }> = [];
+interface Voter {
+  /** Representative url: the smallest of `members`. */
+  url: string;
+  value: string;
+  /** Every page this vote stands for (one, unless hreflang alternates merged). */
+  members: string[];
+}
+
+function votersFor(axis: Axis, samples: ChromeSample[]): Voter[] {
+  const declared: Voter[] = [];
   const seen = new Map<string, number>();
+  const clusterVoters = new Map<string, number>();
   for (const sample of samples) {
     if (!axis.eligible(sample)) continue;
     const value = axis.value(sample);
     if (value === null) continue;
-    declared.push({ url: sample.url, value });
+    if (axis.clusterAlternates) {
+      // One voter per (cluster, value); the smallest url stands for it.
+      const key = `${sample.cluster}\u0000${value}`;
+      const at = clusterVoters.get(key);
+      if (at !== undefined) {
+        const voter = declared[at]!;
+        voter.members.push(sample.url);
+        if (sample.url < voter.url) voter.url = sample.url;
+        continue;
+      }
+      clusterVoters.set(key, declared.length);
+    }
+    declared.push({ url: sample.url, value, members: [sample.url] });
     seen.set(value, (seen.get(value) ?? 0) + 1);
   }
   if (!axis.dropSingletons) return declared;
@@ -354,12 +447,14 @@ function judgeAxis(axis: Axis, samples: ChromeSample[]): AxisVerdict | null {
   return {
     axis,
     norm,
-    judged: voters.map((voter) => voter.url),
-    voters: voters.length,
+    judged: voters.flatMap((voter) => voter.members),
+    // Pages, not votes: the item labels and the fail share count pages.
+    voters: voters.reduce((n, voter) => n + voter.members.length, 0),
     agreeing: best.count,
     share,
     deviants: voters
       .filter((voter) => voter.value !== norm)
+      .flatMap((voter) => voter.members.map((url) => ({ url, value: voter.value })))
       .sort((a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0)),
   };
 }
@@ -394,6 +489,7 @@ function buildChecks(rollup: ChromeRollup, sitePageCount: number): CheckResult[]
     ];
   }
 
+  clusterByHreflang(rollup);
   const verdicts = AXES.map((axis) => judgeAxis(axis, rollup.samples)).filter(
     (verdict): verdict is AxisVerdict => verdict !== null
   );
@@ -520,6 +616,7 @@ async function runViaSiteQuery(siteQuery: SiteQuery): Promise<RuleResult> {
         themeColor: row.themeColor,
         ogImage: row.ogImage,
       },
+      hreflangAlternates: row.hreflangAlternates,
     });
   }
 
@@ -559,6 +656,7 @@ export const assetDivergenceRule: Rule = {
         status: page.statusCode,
         pageType: page.parsed?.pageType ?? null,
         chrome: extractSiteChromeSignal(page.parsed, page.url),
+        hreflangAlternates: page.parsed?.hreflangAlternates ?? null,
       });
     }
 

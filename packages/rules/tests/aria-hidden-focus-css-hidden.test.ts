@@ -3,9 +3,9 @@
 //
 // squirrel 0.0.108 reported `1 focusable element(s) inside aria-hidden` for a
 // button inside a container that is not rendered. The rule now asks the shared
-// check in src/shared/static-hidden.ts, which reads markup and inline `style`
-// attributes only. `<style>` blocks and stylesheets are not read, so the
-// issue's two `<style>`-based fixtures still fail (a follow-up).
+// check in src/shared/static-hidden.ts, which reads markup, inline `style`
+// attributes and the `<style>` rules shared/page-styles.ts can decide
+// (pub#678). External stylesheets are not read.
 
 import { describe, expect, test } from "bun:test";
 
@@ -68,23 +68,38 @@ describe("a11y/aria-hidden-focus: the six repro fixtures (pub#664)", () => {
     });
   }
 
-  test("display-none and visibility-hidden come from a <style> block, which is not read: still fail", () => {
+  test("display-none and visibility-hidden come from a <style> block: pass (pub#678)", () => {
     for (const name of ["display-none", "visibility-hidden"] as const) {
-      expect(statuses(fixture(VARIANTS[name]))).toEqual({ "aria-hidden-focus": "fail" });
+      expect(statuses(fixture(VARIANTS[name]))).toEqual({ "aria-hidden-focus": "pass" });
     }
   });
 
-  test("written as inline styles: display:none passes, inherited visibility:hidden is unconfirmed", () => {
+  test("with an external stylesheet, which could show the button again: unconfirmed", () => {
+    const external = '<link rel="stylesheet" href="/site.css">';
+    for (const name of ["display-none", "visibility-hidden"] as const) {
+      expect(statuses(fixture(external + VARIANTS[name]))).toEqual({ "aria-hidden-focus-unconfirmed": "warn" });
+    }
+  });
+
+  test("written as inline styles: display:none passes, inherited visibility:hidden too unless a stylesheet could undo it", () => {
     expect(
       statuses(
         fixture('<div style="display:none" aria-hidden="true"><button>Close</button></div>'),
       ),
     ).toEqual({ "aria-hidden-focus": "pass" });
-    // A stylesheet rule can make the button visible again (`button{visibility:visible}`),
-    // so inherited visibility is never taken as settled.
+    // With every stylesheet read, inherited visibility is settled.
     expect(
       statuses(
         fixture('<div style="visibility:hidden" aria-hidden="true"><button>Close</button></div>'),
+      ),
+    ).toEqual({ "aria-hidden-focus": "pass" });
+    // An external stylesheet could make the button visible again
+    // (`button{visibility:visible}`), so then it is not settled.
+    expect(
+      statuses(
+        fixture(
+          '<link rel="stylesheet" href="/site.css"><div style="visibility:hidden" aria-hidden="true"><button>Close</button></div>',
+        ),
       ),
     ).toEqual({ "aria-hidden-focus-unconfirmed": "warn" });
   });
@@ -160,7 +175,7 @@ describe("a11y/aria-hidden-focus: inline styles the check cannot read exactly", 
       expect(check(checks, "aria-hidden-focus-unconfirmed")).toMatchObject({
         status: "warn",
         message:
-          "1 focusable element(s) inside aria-hidden may be hidden by an inline style (unconfirmed)",
+          "1 focusable element(s) inside aria-hidden may be hidden by a style (unconfirmed)",
         items: [{ id: "a" }],
       });
     }

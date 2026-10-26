@@ -3,7 +3,7 @@
 // TOML loading and file discovery are NOT here — those are CLI adapters.
 
 import { AUDIT_LEVELS, parseAuditLevel } from "@squirrelscan/core-contracts/audit-levels";
-import { isValidHeaderName, isValidHeaderValue } from "@squirrelscan/utils/headers";
+import { isValidHeaderHost, isValidHeaderName, isValidHeaderValue } from "@squirrelscan/utils/headers";
 import { z } from "zod";
 
 import { parseByteSize } from "./byte-size";
@@ -49,6 +49,11 @@ export const CrawlerConfigSchema = z.object({
   delay_ms: z.number().default(100),
   timeout_ms: z.number().default(30000),
   user_agent: z.string().default(""),
+  // The product token robots.txt groups are matched against (RFC 9309) when
+  // `respect_robots` is on, apart from the user agent the requests send (by
+  // default a browser one, whose own token is `Mozilla`). Empty: the user
+  // agent's token. squirrelscan/repo#3271.
+  robots_user_agent: z.string().default("SquirrelScan"),
   // Custom HTTP request headers attached to EVERY crawl request (pages, assets,
   // robots.txt, sitemap). Use for authorized-crawler schemes (Shopify/Cloudflare
   // Web Bot Auth) that require signed headers. Values are treated as secrets —
@@ -65,6 +70,23 @@ export const CrawlerConfigSchema = z.object({
       message: "Too many custom headers (max 50)",
     })
     .default({}),
+  // Hosts, besides the audited origin, that get the custom headers on page and
+  // asset requests (a signed CDN, Cloudflare Access on assets.example.com).
+  // Without it only the audited origin does; a subdomain is not trusted by
+  // default (#732). A host matches on any port, over https only; write it with
+  // an explicit `http://` prefix to allow plain http too. A port, path or
+  // trailing slash is ignored; a wildcard, userinfo, empty label or trailing dot
+  // is refused (#959).
+  // TOML: `[crawler] header_hosts = ["assets.example.com"]`.
+  header_hosts: z
+    .array(
+      z.string().min(1).max(255).refine(isValidHeaderHost, {
+        message:
+          "header_hosts entries are host names, optionally with an http:// or https:// prefix: no wildcard, userinfo, empty label or trailing dot",
+      }),
+    )
+    .max(50)
+    .default([]),
   follow_redirects: z.boolean().default(true),
   concurrency: z.number().default(DEFAULT_CRAWLER_CONCURRENCY),
   // Single-host bump (#265): per-host caps gate throughput; robots crawl-delay
@@ -124,6 +146,20 @@ export const ProjectConfigSchema = z.object({
 export const RulesConfigSchema = z.object({
   enable: z.array(z.string()).default(["*"]),
   disable: z.array(z.string()).default([]),
+  /**
+   * Wall-clock budget (ms) for one rule on one page; a site rule gets this much
+   * per page, capped at 60 s. A backstop against a pattern that matches slowly
+   * on hostile content. Unset = the engine default (2000); 0 turns it off (#578).
+   * Below 1000 is refused: a rule that ends just past its deadline can stop
+   * the audit (#880), and a lower budget makes that common.
+   */
+  time_budget_ms: z
+    .number()
+    .int()
+    .refine((ms) => ms === 0 || ms >= 1000, {
+      message: "time_budget_ms must be 0 (off) or at least 1000",
+    })
+    .optional(),
 });
 
 export const PluginCapabilitySchema = z.enum(["rules", "listeners"]);
@@ -216,7 +252,7 @@ export const StorageConfigSchema = z.object({
       const bytes = parseByteSize(value);
       if (bytes === null) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           message:
             'content_store_max_bytes must be a positive size, such as 4294967296 or "4GB"',
         });

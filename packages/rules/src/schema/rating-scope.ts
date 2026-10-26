@@ -31,7 +31,7 @@
 //   - Structural validity is untouched: schema/review still owns ratingValue /
 //     ratingCount and its messages are unchanged.
 
-import { getPathname } from "@squirrelscan/utils";
+import { getPathname, indexJsonLdIds, resolveJsonLdRef } from "@squirrelscan/utils";
 import { EEAT_PAGE_PATTERNS, LOCAL_BUSINESS_TYPES } from "@squirrelscan/utils/constants";
 
 import type { Document } from "linkedom";
@@ -212,11 +212,37 @@ function collectRatedEntities(ctx: RuleContext): RatedEntity[] {
     found.push(entity);
   };
 
-  for (const node of ctx.parsed.schemas.all) {
-    walkForRatings(node, null, 0, push);
+  // pub#869: `aggregateRating` may be a node reference (`{"@id": …}`) to an
+  // AggregateRating elsewhere on the page. It is read from that node, for the
+  // entity that references it, and the node is not counted again on its own
+  // with no entity. A dangling reference is judged as written.
+  const nodes = ctx.parsed.schemas.all as Record<string, unknown>[];
+  // The id index also takes the untyped nodes: a referenced rating may carry
+  // no `@type` of its own.
+  const ids = indexJsonLdIds([...nodes, ...ctx.parsed.schemas.untypedNodes], ctx.page.url);
+  const walk: RatingWalk = {
+    push,
+    resolve: (value) => resolveJsonLdRef(value, ids, ctx.page.url),
+    referenced: new Set(),
+    unattributed: [],
+  };
+  for (const node of nodes) {
+    walkForRatings(node, null, 0, walk);
+  }
+  for (const rating of walk.unattributed) {
+    if (!walk.referenced.has(rating)) push(toEntity(null, rating));
   }
 
   return found;
+}
+
+interface RatingWalk {
+  push: (entity: RatedEntity) => void;
+  resolve: (value: unknown) => unknown;
+  /** AggregateRating nodes some entity reached by reference. */
+  referenced: Set<Record<string, unknown>>;
+  /** Standalone AggregateRating nodes with no enclosing entity, pushed last. */
+  unattributed: Record<string, unknown>[];
 }
 
 /**
@@ -227,12 +253,12 @@ function walkForRatings(
   value: unknown,
   carrier: Record<string, unknown> | null,
   depth: number,
-  push: (entity: RatedEntity) => void,
+  walk: RatingWalk,
 ): void {
   if (depth > MAX_DEPTH || !value || typeof value !== "object") return;
 
   if (Array.isArray(value)) {
-    for (const item of value) walkForRatings(item, carrier, depth + 1, push);
+    for (const item of value) walkForRatings(item, carrier, depth + 1, walk);
     return;
   }
 
@@ -241,15 +267,20 @@ function walkForRatings(
   const nextCarrier = isRatingNode ? carrier : hasType(node) ? node : carrier;
 
   if (isRatingNode) {
-    push(toEntity(nextCarrier, node));
+    if (nextCarrier) walk.push(toEntity(nextCarrier, node));
+    else walk.unattributed.push(node);
   } else if (node["aggregateRating"]) {
-    const rating = firstObject(node["aggregateRating"]);
-    if (rating) push(toEntity(node, rating));
+    const ref = firstObject(node["aggregateRating"]);
+    const rating = ref ? firstObject(walk.resolve(ref)) : null;
+    if (rating) {
+      if (rating !== ref) walk.referenced.add(rating);
+      walk.push(toEntity(node, rating));
+    }
   }
 
   for (const [key, child] of Object.entries(node)) {
     if (key === "aggregateRating" || key.startsWith("@")) continue;
-    walkForRatings(child, nextCarrier, depth + 1, push);
+    walkForRatings(child, nextCarrier, depth + 1, walk);
   }
 }
 

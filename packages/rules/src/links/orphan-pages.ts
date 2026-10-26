@@ -4,11 +4,12 @@ import { logger } from "../logger";
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-import type { SiteQuery } from "@squirrelscan/core-contracts";
+import { CRAWL_CAPPED_SKIP_REASON, type SiteQuery } from "@squirrelscan/core-contracts";
 
 import { matchesExcludePattern } from "@squirrelscan/utils";
 import { getPathname, normalizeUrl } from "@squirrelscan/utils";
 
+import { frontDoorTest } from "../shared/front-door";
 import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
 
 const SKIP_CHECK: CheckResult = {
@@ -51,21 +52,22 @@ function buildOrphanCheck(orphans: string[], minLinks: number): CheckResult {
 // legacy path reads as `page.url` — so homepage/exclude/output all match.
 // `noindexUrls` holds stored urls of noindex pages to leave out (pub#457): a page
 // kept out of the index needs no links to be found by search engines. Their own
-// outgoing links still count toward other pages.
+// outgoing links still count toward other pages. `entryUrls` are where the crawl
+// started (pub#796): a root that redirects to `/en/` or a sign-in page lands the
+// crawl on a page the redirect, not a link, leads to, the site's front door.
 function collectOrphans(
   entries: Iterable<[string, number]>,
   minLinks: number,
   excludePatterns: string[],
   baseUrl: string,
-  noindexUrls: ReadonlySet<string>
+  noindexUrls: ReadonlySet<string>,
+  entryUrls: readonly string[]
 ): string[] {
-  const normalizedBase = normalizeUrl(baseUrl);
+  const isFrontDoor = frontDoorTest(baseUrl, entryUrls);
   const orphans: string[] = [];
   for (const [url, count] of entries) {
-    const normalizedUrl = normalizeUrl(url);
-
-    // Skip homepage
-    const isHomepage = normalizedUrl === normalizedBase || getPathname(url) === "/";
+    // Skip the homepage, and the page the crawl started on
+    const isHomepage = isFrontDoor(url);
     const isExcluded = matchesExcludePattern(url, excludePatterns);
 
     if (isHomepage || isExcluded || noindexUrls.has(url)) {
@@ -121,6 +123,19 @@ export const orphanPagesRule: Rule = {
     const minLinks = options.minInboundLinks as number;
     const excludePatterns = options.excludePatterns as string[];
 
+    // A capped crawl cannot prove that a page has too few inbound links: an
+    // uncrawled page may contain the links that would put it over the threshold.
+    const limits = ctx.site?.crawlLimits;
+    if (limits && limits.pagesCrawled >= limits.maxPages) {
+      checks.push({
+        name: "orphan-pages",
+        status: "skipped",
+        message: `Crawl stopped at its ${limits.maxPages}-page cap, so an inbound link may sit on a page not crawled`,
+        skipReason: CRAWL_CAPPED_SKIP_REASON,
+      });
+      return { checks };
+    }
+
     // Streaming path (#1022): read pre-materialized incoming-link counts instead
     // of holding every parsed page resident. `incomingLinkCounts()` is keyed by
     // each crawled page's stored URL (crawl order) with its dofollow internal
@@ -138,7 +153,8 @@ export const orphanPagesRule: Rule = {
           minLinks,
           excludePatterns,
           ctx.site?.baseUrl || "",
-          noindexUrls
+          noindexUrls,
+          ctx.site?.entryUrls ?? []
         );
         checks.push(buildOrphanCheck(orphans, minLinks));
         return { checks };
@@ -216,7 +232,8 @@ export const orphanPagesRule: Rule = {
       minLinks,
       excludePatterns,
       ctx.site?.baseUrl || "",
-      noindexUrls
+      noindexUrls,
+      ctx.site?.entryUrls ?? []
     );
 
     // Report results

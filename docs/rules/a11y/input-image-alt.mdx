@@ -16,6 +16,13 @@ One check, `input-image-alt`, at severity error and weight 8. It finds every `in
 - Fail when the element has no non-empty `alt`, no non-empty `aria-label` and no `aria-labelledby`. Report message: `N image input(s) without alt text`. Every offender is listed, identified by its `name`, then by the filename taken from its `src`, then as `input[type=image]`.
 - Pass with `N image input(s) have alt text`.
 - Info with `No image inputs found`.
+- `input-image-alt-unconfirmed` warns with `N image input(s) without alt text may be hidden by a style (unconfirmed)` for an image input a style may hide in a way squirrel cannot settle.
+
+### Hidden image inputs
+
+An image input out of the accessibility tree has nothing to announce, so it is not reported: one with the `hidden` attribute (except `hidden="until-found"`), `aria-hidden="true"` on itself or an ancestor, `display: none` on itself or an ancestor (set inline or by a `<style>` rule squirrel can decide), or inside a closed `<dialog>` or an unopened `popover`. It still needs a name before it is shown. When every unnamed one is skipped this way, the pass reads `All image inputs in the accessibility tree have alt text`, with `hiddenWithoutName` in its details.
+
+squirrel reads the markup, inline styles and the page's `<style>` blocks, the same way as `form-labels`; see [form-labels](/rules/a11y/form-labels) for what it can and cannot decide. External stylesheets are not read. An image input that carries a `no-js` class, itself or on an ancestor other than `<html>`, is reported as unconfirmed on a page with an external stylesheet or an `@import`, because a theme usually hides that fallback with a rule such as `.js .no-js { display: none }` once JavaScript runs.
 
 ## How to fix it
 
@@ -70,6 +77,12 @@ enable = ["a11y/input-image-alt"]
 - [a11y/form-labels](/rules/a11y/form-labels): the other controls in the same form, checked for an associated label.
 
 Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Alt text](/glossary/alt-text).
+
+{/* glossary:backlinks:end */}
 
 ## References
 

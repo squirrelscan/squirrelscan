@@ -81,19 +81,26 @@ export interface PublishResult {
   totalPages?: number;
 }
 
+/** The server's sentence without its final period, to end it with ours. */
+const trimPeriod = (text: string): string => text.replace(/\.+$/, "");
+
 interface ApiErrorResponse {
-  error: {
-    code: string;
-    message: string;
-    details?: unknown;
-    issues?: Array<{ path: string; message: string }>;
-    threats?: Array<{
-      path: string;
-      value: string;
-      pattern: string;
-      category: string;
-    }>;
-  };
+  /** The bare-string shape: a role refusal ("forbidden_role") with `message` beside it. */
+  message?: string;
+  error:
+    | string
+    | {
+        code: string;
+        message: string;
+        details?: unknown;
+        issues?: Array<{ path: string; message: string }>;
+        threats?: Array<{
+          path: string;
+          value: string;
+          pattern: string;
+          category: string;
+        }>;
+      };
 }
 
 interface ApiSuccessResponse {
@@ -383,6 +390,49 @@ export async function publishReport(
         errorData = (await response.json()) as ApiErrorResponse;
       } catch {
         // Ignore parse errors
+      }
+
+      // A role refusal (the org's role matrix: a viewer or billing member
+      // cannot publish) comes as a bare `error: "forbidden_role"` with its
+      // message beside it, or as the typed envelope (cloud #3409); an API key
+      // without the scope gets `missing_scope` in the envelope.
+      const envelopeCode =
+        typeof errorData?.error === "object" ? errorData.error.code : undefined;
+      if (
+        errorData?.error === "forbidden_role" ||
+        envelopeCode === "forbidden_role"
+      ) {
+        const said =
+          typeof errorData?.error === "object"
+            ? errorData.error.message
+            : errorData?.message;
+        return err(
+          commandError(
+            "forbidden_role",
+            `${trimPeriod(said ?? "Your role in this organization cannot publish reports")}.\n` +
+              "Ask an owner or admin for a role that runs audits, or run with --no-publish to keep the report local."
+          )
+        );
+      }
+      if (
+        envelopeCode === "missing_scope" &&
+        typeof errorData?.error === "object"
+      ) {
+        return err(
+          commandError(
+            "missing_scope",
+            `${trimPeriod(errorData.error.message)}.\n` +
+              "Use an API key with the audits:write scope (squirrel keys create), or run with --no-publish to keep the report local."
+          )
+        );
+      }
+      if (typeof errorData?.error === "string") {
+        return err(
+          commandError(
+            "API_ERROR",
+            `Failed to publish report: ${response.status} ${errorData.error}`
+          )
+        );
       }
 
       if (errorData?.error) {

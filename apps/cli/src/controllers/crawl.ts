@@ -1,5 +1,6 @@
 // Crawl controller - runs crawl only without analysis
 
+import { customUserAgent } from "@squirrelscan/utils/headers";
 import { Effect, Stream } from "effect";
 
 import type { Config } from "@/config";
@@ -8,6 +9,10 @@ import type { TlsEvent } from "@/crawler/fetcher";
 import type { CrawlerConfigSnapshot } from "@/crawler/storage/types";
 import type { CoverageMode } from "@/types";
 
+import {
+  formatResumeClaimWarning,
+  startLeaseForStorage,
+} from "@/audit/crawl-lease";
 import { loadConfig } from "@/config";
 import { MAX_PAGES_CAP } from "@/constants";
 import {
@@ -23,6 +28,7 @@ import {
   commandError,
   ErrorCodes,
 } from "@/controllers/types";
+import { pinOwnHosts } from "@/crawl/pin-own-hosts";
 import { createCrawler } from "@/crawler/core";
 import { createStorage, domainToProjectName } from "@/crawler/storage";
 import { retainGlobalContentStore } from "@/crawler/storage/content-store";
@@ -235,6 +241,8 @@ export async function runCrawl(
     logger.debug("creating storage", projectName);
 
     const storage = await Effect.runPromise(createStorage({ projectName }));
+    // Crawl lease (#946), released in the finally below.
+    let crawlLease: ReturnType<typeof startLeaseForStorage> | undefined;
     // #2342: the project's cap, and a lease so the crawl's own pages are not
     // evicted while it runs. Released in the finally below.
     const releaseContentStore = retainGlobalContentStore({
@@ -244,8 +252,13 @@ export async function runCrawl(
     try {
       // Resolve user-agent: empty string = random browser UA, pinned per
       // project so re-runs serve the same markup (#875)
+      // A custom `User-Agent` header is the crawl's agent on every request that
+      // carries it, so it is also the agent of the probes that send no custom
+      // headers (#1152).
+      const configuredUserAgent =
+        config.crawler.user_agent || customUserAgent(config.crawler.headers);
       const { userAgent, source: uaSource } = await Effect.runPromise(
-        resolveStickyUserAgent(config.crawler.user_agent, storage, {
+        resolveStickyUserAgent(configuredUserAgent, storage, {
           freshUa: options.freshUa,
         })
       );
@@ -269,8 +282,12 @@ export async function runCrawl(
             maxBackoffMs: config.crawler.max_backoff_ms,
             timeoutMs: config.crawler.timeout_ms,
             userAgent,
+            robotsUserAgent: config.crawler.robots_user_agent || undefined,
             followRedirects: config.crawler.follow_redirects,
             respectRobots: config.crawler.respect_robots,
+            // repo#3430: the site's own hosts are resolved once and connected
+            // to by address; a metadata or link-local answer is never requested.
+            pinOwnHosts: pinOwnHosts(),
             // A crawl does not know which rules will read it later, so every
             // probe goes out unless [crawler] disable_discovery_probes = true
             // (#409).
@@ -294,6 +311,8 @@ export async function runCrawl(
 
       logger.debug("starting crawler", url);
       onProgress({ phase: "crawling" });
+      // #946: record that this process drives the crawl.
+      crawlLease = startLeaseForStorage(storage, () => crawler.currentCrawlId);
 
       // Subscribe to event stream if callback provided
       const onEvent = options.onEvent;
@@ -324,6 +343,7 @@ export async function runCrawl(
         maxBackoffMs: config.crawler.max_backoff_ms,
         timeoutMs: config.crawler.timeout_ms,
         userAgent,
+        robotsUserAgent: config.crawler.robots_user_agent || undefined,
         followRedirects: config.crawler.follow_redirects,
         respectRobots: config.crawler.respect_robots,
         incremental: !options.refresh,
@@ -359,7 +379,7 @@ export async function runCrawl(
       };
 
       // Resume decision logic
-      const shouldResume =
+      const resumeCandidate =
         options.resume && // User explicitly requested resume
         !!existingCrawl &&
         !options.refresh && // Can't resume if refresh requested
@@ -369,6 +389,11 @@ export async function runCrawl(
           existingCrawl.status === "paused" ||
           existingCrawl.status === "stopped") &&
         !isDirtyConfig(existingCrawl.config, crawlerConfig);
+      const resumeClaim =
+        resumeCandidate && existingCrawl
+          ? crawlLease.claim(existingCrawl.id)
+          : null;
+      const shouldResume = resumeCandidate && resumeClaim?.acquired === true;
 
       let crawlId: string;
       if (shouldResume) {
@@ -380,7 +405,9 @@ export async function runCrawl(
       } else {
         // Create new crawl
         // Warn if resume conditions not met
-        if (options.resume && !existingCrawl) {
+        if (resumeClaim && !resumeClaim.acquired && existingCrawl) {
+          logger.warn(formatResumeClaimWarning(existingCrawl.id, resumeClaim));
+        } else if (options.resume && !existingCrawl) {
           logger.warn("--resume requested but no previous crawl found");
         } else if (
           options.resume &&
@@ -454,6 +481,7 @@ export async function runCrawl(
         limitReached,
       });
     } finally {
+      crawlLease?.release();
       releaseContentStore();
       await Effect.runPromise(storage.close());
     }

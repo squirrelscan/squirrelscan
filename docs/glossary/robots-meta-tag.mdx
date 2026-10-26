@@ -1,0 +1,85 @@
+---
+title: "Robots meta tag: directives, defaults and conflicts"
+description: "The robots meta tag sets page-level rules for search engines: noindex, nofollow, nosnippet, max-snippet. The defaults, the header form and conflicts."
+sidebarTitle: "Robots meta tag"
+---
+
+The **robots meta tag** is a `<meta name="robots">` element in a page's head that gives search engines page-level rules, such as `noindex`, `nofollow`, `nosnippet` and `max-snippet`.
+
+With no tag, the default is no restriction: Google's documentation names it `all`, the same as `index, follow`. Rules are case-insensitive and can be combined in one comma-separated value. `name="robots"` addresses every crawler, and a name such as `googlebot` addresses one. The `X-Robots-Tag` response header carries the same rules for any response, including files that have no HTML.
+
+{/* glossary:hub:start */}
+
+Category: [Core SEO](/rules/core)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+The tag decides what search does with a page after crawling it. `noindex` keeps it out of results. `nofollow` asks the crawler not to follow its links, and Google treats that as a hint. `nosnippet` removes the text snippet under the result, and `max-snippet:0` does the same by setting the allowed length to zero. A positive `max-snippet` only caps the length.
+
+The tag only works when the page can be fetched. robots.txt decides whether a crawler requests the page at all, so a page blocked there never has its meta tag read. The two are different tools: robots.txt controls crawling and the meta tag controls indexing.
+
+## How squirrelscan checks it
+
+[core/robots-meta](/rules/core/robots-meta) reads the robots meta tag and the `X-Robots-Tag` header on every page. It warns on `noindex`, notes `nofollow` at info level, and says which source set each directive. It does not read crawler-specific tags such as `<meta name="googlebot">`. [core/nosnippet](/rules/core/nosnippet) warns on `nosnippet` and on the exact form `max-snippet:0`, and notes any other `max-snippet` value. It reads the meta tag only, not the header.
+
+Two rules compare the tag with robots.txt, deciding blocking the way Google does, with the longest matching rule winning. [crawl/robots-meta-conflict](/rules/crawl/robots-meta-conflict) lists pages that are blocked and also carry `noindex`. [crawl/indexability-conflicts](/rules/crawl/indexability-conflicts) lists blocked pages that carry no `noindex`, which can still be listed in results from links elsewhere.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [noindex in a robots meta tag or X-Robots-Tag header: what squirrel reports per page](/rules/core/robots-meta) | A page declaring noindex or nofollow in its robots meta tag or X-Robots-Tag header. squirrel reads both on every crawled page and names the directive and where it was set. | warning |
+| [nosnippet and max-snippet:0: pages with no search snippet](/rules/core/nosnippet) | A robots directive that stops search engines showing any description under the result. squirrel reads the robots meta on every page. | warning |
+| [Redundant noindex: a blocked page nobody reads it on](/rules/crawl/robots-meta-conflict) | A page disallowed in robots.txt is never fetched, so its noindex is never seen. squirrel lists the pages carrying both. | warning |
+| [robots.txt blocked pages without noindex](/rules/crawl/indexability-conflicts) | Allow plus noindex is the correct way to deindex a page. squirrel only reports pages robots.txt blocks that carry no noindex, at info level. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Leave the tag out on pages that should be indexed with a normal snippet, or state the defaults:
+
+```html
+<meta name="robots" content="index, follow" />
+<meta name="robots" content="max-snippet:160" />
+```
+
+The second line caps the snippet instead of removing it ([the snippet fix](/rules/core/nosnippet#how-to-fix-it)). Remove `noindex` from pages meant for search, and look for it in server or CDN headers when the report names `X-Robots-Tag` ([the robots meta fix](/rules/core/robots-meta#how-to-fix-it)). To remove a page from results, allow the crawl in robots.txt and add `noindex` ([the robots.txt conflict fix](/rules/crawl/indexability-conflicts#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include core/robots-meta,core/nosnippet,crawl/robots-meta-conflict,crawl/indexability-conflicts
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [noindex](/glossary/noindex): A robots directive, in a meta tag or the X-Robots-Tag header, that asks search engines to keep a page out of their index.
+- [X-Robots-Tag](/glossary#x-robots-tag): An HTTP response header that carries the same directives as the robots meta tag, and works for non-HTML files such as PDFs.
+- [robots.txt](/glossary/robots-txt): A plain-text file at the site root that tells crawlers which paths they may fetch, per user-agent token (RFC 9309).
+
+{/* glossary:related:end */}
+
+## References
+
+- [Robots meta tag, data-nosnippet, and X-Robots-Tag specifications, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag)
+- [Control your snippets in search results, Google Search Central](https://developers.google.com/search/docs/appearance/snippet)
+- [meta name=robots, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name#robots)
+
+{/* glossary:jsonld:start */}
+
+import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";
+
+<GlossaryJsonLd slug="robots-meta-tag" />
+
+{/* glossary:jsonld:end */}

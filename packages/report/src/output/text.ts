@@ -7,8 +7,13 @@ import { cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
 import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
 import { getScoreGrade } from "../scoring";
 import { REPORT_TEXT_WRAP_WIDTH } from "../constants";
-import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
-import { affectedPages } from "../affected-pages";
+import {
+  groupIssuesByCategory,
+  flattenIssuesBySeverity,
+  passedRuleScope,
+  reportPassedRules,
+} from "../grouping";
+import { affectedPages, itemsNotListed, itemsNotListedLine } from "../affected-pages";
 import {
   ENTITY_CONSOLE_LIMIT,
   ENTITY_EMPTY_MESSAGE,
@@ -19,7 +24,7 @@ import {
 } from "../entities";
 import { groupTechnologies, techChangeSummary } from "../technologies";
 import { SITE_PROFILE_NOTE, siteProfileFlags, siteProfileRows } from "../site-metadata";
-import { EDITOR_SUMMARY_NOTE, editorSummaryView } from "../editor-summary";
+import { EDITOR_SUMMARY_NOTE, editorSummaryView, priorityEffortLabel } from "../editor-summary";
 import { getGroupName, getSubcategoryName, severityLabel } from "../categories";
 import {
   carriedTag,
@@ -42,6 +47,8 @@ export interface TextRenderOptions {
   version?: string;
   /** White-label branding (#810) — Team orgs drop the squirrelscan header/footer. */
   branding?: ReportBranding;
+  /** List the rules that passed after the issues (`--include-passed`). */
+  includePassed?: boolean;
 }
 
 function pathOnly(url: string): string {
@@ -156,7 +163,7 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
 
   // Editor's summary — report-only (Pro exec-email narrative; not part of the score).
   // Surfaced at the very top of the report, before the health score.
-  const es = editorSummaryView(report.editorSummary);
+  const es = editorSummaryView(report.editorSummary, report);
   if (es) {
     write("EDITOR'S SUMMARY");
     write("-".repeat(40));
@@ -166,13 +173,26 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
       for (const line of wrapText(para, REPORT_TEXT_WRAP_WIDTH)) write(line);
       write("");
     }
-    if (es.bigTicket.length > 0) {
+    if (es.priorities.length === 0 && es.bigTicket.length > 0) {
       write("Big-ticket items:");
       for (const item of es.bigTicket) write(`  - ${item}`);
       write("");
     }
     if (es.verdict) {
       write(`Verdict: ${es.verdict}`);
+      write("");
+    }
+  }
+
+  // Ranked priorities from the editor's summary, as their own section.
+  if (es && es.priorities.length > 0) {
+    write("PRIORITIES");
+    write("-".repeat(40));
+    for (const [i, p] of es.priorities.entries()) {
+      write(`${i + 1}. ${p.title} [${priorityEffortLabel(p.effort)}]`);
+      for (const text of [p.why, p.action].filter(Boolean)) {
+        for (const line of wrapText(text, REPORT_TEXT_WRAP_WIDTH - 3)) write(`   ${line}`);
+      }
       write("");
     }
   }
@@ -337,6 +357,9 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
           if (hasMore) write(`        ... and ${count - sample.length} more`);
         }
 
+        // repo#2661: a capped report keeps a sample of items, or none for a
+        // counts-only class; say how many it left out.
+        const left = itemsNotListed(check);
         if (check.items && check.items.length > 0) {
           for (const item of check.items) {
             const label = item.label ?? item.id;
@@ -346,6 +369,9 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
               for (const src of item.sourcePages) write(`            from: ${pathOnly(src)}`);
             }
           }
+          if (left > 0) write(`        ... and ${left.toLocaleString("en-US")} more items not listed`);
+        } else if (left > 0) {
+          write(`        ${itemsNotListedLine(left)}`);
         }
       }
       write("");
@@ -354,6 +380,22 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
     // #792: don't claim "No issues found" for a 0-page failed/blocked run —
     // nothing was audited (state shown above), the site isn't necessarily clean.
     write("No issues found");
+    write("");
+  }
+
+  const passedRules = reportPassedRules(report, options?.includePassed);
+  if (passedRules.length > 0) {
+    write(`PASSED (${passedRules.length} rule${passedRules.length === 1 ? "" : "s"})`);
+    write("-".repeat(40));
+    let lastCategory: string | undefined;
+    for (const rule of passedRules) {
+      if (rule.categoryCode !== lastCategory) {
+        lastCategory = rule.categoryCode;
+        write("");
+        write(`[${rule.categoryName.toUpperCase()}]`);
+      }
+      write(`  ${rule.id} - ${rule.name} (${passedRuleScope(rule)})`);
+    }
     write("");
   }
 
@@ -404,8 +446,16 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
 
   write("=".repeat(60));
   write(`${report.passed} passed, ${report.warnings} warnings, ${report.failed} failed`);
-  // White-label drops the squirrelscan "Generated by" credit line.
+  // White-label drops the squirrelscan "Generated by" credit line, and shows
+  // the org's own footer text and website in its place.
   if (!whiteLabel) write("Generated by squirrelscan.com");
+  else {
+    if (options?.branding?.footerText) {
+      for (const line of wrapText(options.branding.footerText, REPORT_TEXT_WRAP_WIDTH)) write(line);
+    }
+    const website = options?.branding?.websiteUrl;
+    if (website && /^https:\/\//i.test(website)) write(website);
+  }
 
   // Sanitise once, at the boundary. Page-derived strings reach this output
   // through many fields (messages, snippets, titles, meta values), so stripping

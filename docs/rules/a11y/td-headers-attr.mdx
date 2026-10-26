@@ -17,7 +17,7 @@ One check, `td-headers-attr`, at severity error and weight 6. For each `<table>`
 - Pass with `All td headers attributes reference valid th ids`.
 - Info with `No td elements with headers attribute found`, or `No tables found`.
 
-References are scoped per table, so a `headers` value pointing at a `<th>` in a different table is reported even though the id exists on the page.
+References are scoped per table, so a `headers` value pointing at a `<th>` in a different table is reported even though the id exists on the page. A table nested in a cell is a different table: its cells are checked against its own headers only, and each bad reference is reported once.
 
 ## How to fix it
 

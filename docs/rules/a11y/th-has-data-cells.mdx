@@ -11,7 +11,9 @@ Almost always this means the table is being used for layout. The `<th>` came fro
 
 ## What squirrel checks
 
-One check, `th-has-data-cells`, at severity warning. For each table that is not `role="presentation"` or `role="none"`, it builds a two-dimensional grid, expanding `colspan` and `rowspan` so every grid slot maps to the cell that occupies it. Both span attributes are read case-insensitively.
+One check, `th-has-data-cells`, at severity warning. For each table that is not `role="presentation"` or `role="none"`, it builds a two-dimensional grid, expanding `colspan` and `rowspan` so every grid slot maps to the cell that occupies it. Both span attributes are read case-insensitively. A span that is not a number of at least 1, `Infinity` included, counts as 1. A span past the HTML limits (1,000 columns, 65,534 rows) counts as the limit, and a table whose grid would pass 1,000,000 slots is judged on the cells placed before that.
+
+The grid holds the table's own rows and cells. A table nested in one of its cells has a grid of its own, so its `<td>` cells never count as data for the outer table's headers.
 
 For each `<th>` in that grid it looks for a `<td>` in the same row, then in the same column.
 

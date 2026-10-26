@@ -19,11 +19,18 @@
 //   that leaves them is not followed: its 3xx is the target's status.
 // - The caller holds it to the crawl's scope, robots.txt, per-host concurrency
 //   and a per-audit limit (`[internal_links] max_targets`).
+// - Every request goes through the caller's egress policy (repo#2830): a hop
+//   to a link-local or cloud metadata address is never sent.
 
 import { Effect } from "effect";
 
 import { LINK_PROBE_HEAD_UNRELIABLE_ERROR } from "@squirrelscan/core-contracts";
 
+import {
+  EgressRefusedError,
+  egressGuardedSend,
+  type EgressPolicy,
+} from "@squirrelscan/utils/public-egress";
 import { isRateLimitedResponse } from "@squirrelscan/utils/rate-limit";
 import { fetchUndecoded } from "@squirrelscan/utils/response-body";
 import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
@@ -46,6 +53,12 @@ export interface LinkTargetProbeOptions {
    */
   mayRequest: (url: string) => boolean;
   budget?: FetchBudget;
+  /**
+   * Vets and sends every request, the first and each redirect hop: a refused
+   * hop is not requested, and the 3xx that pointed there is the target's
+   * status; a refused target is not requested at all.
+   */
+  egress?: EgressPolicy;
   /**
    * A page on the same site the crawl fetched with a 2xx, asked first. A
    * server that answers its HEAD with 4xx or 5xx (some frameworks route only
@@ -73,21 +86,30 @@ async function requestStatus(
   options: LinkTargetProbeOptions,
   signal: AbortSignal,
 ): Promise<Response> {
-  const send = options.send ?? fetchUndecoded;
+  const plainSend = options.send ?? fetchUndecoded;
+  const send = options.egress ? egressGuardedSend(plainSend, options.egress) : plainSend;
   let current = url;
+  let previous: Response | null = null;
   for (let hop = 0; ; hop++) {
-    const response = await send(current, {
-      method,
-      // No cookies, no Authorization, no custom headers: see the top of this file.
-      headers: {
-        "User-Agent": options.userAgent,
-        Accept: "*/*",
-        ...(method === "GET" ? { Range: "bytes=0-0" } : {}),
-      },
-      credentials: "omit",
-      redirect: "manual",
-      signal,
-    });
+    let response: Response;
+    try {
+      response = await send(current, {
+        method,
+        // No cookies, no Authorization, no custom headers: see the top of this file.
+        headers: {
+          "User-Agent": options.userAgent,
+          Accept: "*/*",
+          ...(method === "GET" ? { Range: "bytes=0-0" } : {}),
+        },
+        credentials: "omit",
+        redirect: "manual",
+        signal,
+      });
+    } catch (error) {
+      // Refused before it was sent: the redirect that pointed here answers.
+      if (previous && error instanceof EgressRefusedError) return previous;
+      throw error;
+    }
     response.body?.cancel().catch(() => {});
     const location =
       response.status >= 300 && response.status < 400 ? response.headers.get("location") : null;
@@ -99,6 +121,7 @@ async function requestStatus(
       return response;
     }
     if (!isHttpOrHttpsUrl(next) || !options.mayRequest(next)) return response;
+    previous = response;
     current = next;
   }
 }
@@ -121,6 +144,8 @@ async function probeOne(url: string, options: LinkTargetProbeOptions): Promise<L
     const rateLimited = isRateLimitedResponse(response.status, response.headers.get("retry-after"));
     return { url, status: response.status, error: null, ...(rateLimited ? { rateLimited } : {}) };
   } catch (error) {
+    // The target itself was refused by the egress policy: never sent.
+    if (error instanceof EgressRefusedError) return { url, status: null, error: "not requested" };
     const timedOut = controller.signal.aborted;
     options.budget?.record(url, Date.now() - started, timedOut ? "timeout" : "error");
     return {

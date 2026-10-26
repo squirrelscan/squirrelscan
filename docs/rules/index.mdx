@@ -23,13 +23,13 @@ Search visibility: crawling, indexing, content, markup, and accessibility.
     Internal and external link health and structure (16 rules)
   </Card>
   <Card title="Content" icon="folder" href="/rules/content">
-    Text quality, readability, and content structure (24 rules)
+    Text quality, readability, and content structure (25 rules)
   </Card>
   <Card title="Structured Data" icon="folder" href="/rules/schema">
     Structured data and rich snippet eligibility (25 rules)
   </Card>
   <Card title="Images" icon="folder" href="/rules/images">
-    Image optimization and accessibility (15 rules)
+    Image optimization and accessibility (16 rules)
   </Card>
   <Card title="Social Media" icon="folder" href="/rules/social">
     Open Graph and social sharing metadata (5 rules)
@@ -38,7 +38,7 @@ Search visibility: crawling, indexing, content, markup, and accessibility.
     Accessibility for users with disabilities (61 rules)
   </Card>
   <Card title="Mobile" icon="folder" href="/rules/mobile">
-    Mobile-friendliness and responsive design (7 rules)
+    Mobile-friendliness and responsive design (8 rules)
   </Card>
   <Card title="URL Structure" icon="folder" href="/rules/url">
     URL structure, length, and formatting (9 rules)
@@ -122,9 +122,9 @@ Same-domain scripts, stylesheets and images that appear only inside `<noscript>`
 
 ## Pages kept out of search
 
-A page marked `noindex` will not show up in search results, so findings about how it would look there are noise. Nine rules leave these pages alone:
+A page marked `noindex` will not show up in search results, so findings about how it would look there are noise. Ten rules leave these pages alone:
 
-- [core/meta-title](/rules/core/meta-title), [core/meta-description](/rules/core/meta-description) and [core/h1](/rules/core/h1) skip the page. Each records one skipped check, such as `Skipped: page is set to noindex via robots meta tag` (or `via X-Robots-Tag header`), in place of its usual result.
+- [core/meta-title](/rules/core/meta-title), [core/meta-description](/rules/core/meta-description), [core/h1](/rules/core/h1), [content/word-count](/rules/content/word-count) and [content/h1-title-alignment](/rules/content/h1-title-alignment) skip the page. Each records one skipped check, such as `Skipped: page is set to noindex via robots meta tag` (or `via X-Robots-Tag header`), in place of its usual result.
 - [core/title-unique](/rules/core/title-unique), [content/duplicate-title](/rules/content/duplicate-title) and [content/duplicate-description](/rules/content/duplicate-description) leave the page out when they group pages by title or description.
 - [crawl/sitemap-coverage](/rules/crawl/sitemap-coverage) never lists the page as missing from the sitemap, since a noindex page should not be in it.
 - [content/title-pattern-outlier](/rules/content/title-pattern-outlier) leaves the page out when it learns the site's title template, and never reports it as an outlier.
@@ -148,13 +148,26 @@ A site-wide `noindex` usually means the audit is checking a site before launch, 
 
 ## Rule time budget
 
-Rules read content the audited site controls, so a page can be built to make a pattern match very slowly. Every rule runs under a time budget: one second per page for a page rule, and one second per page of the site for a site rule, capped at 60 seconds. A rule that runs past it is stopped for that page, and the audit carries on with the next rule.
+Rules read content the audited site controls, so a page can be built to make a pattern match very slowly. The first line of defence is the rules themselves: their patterns are written to avoid catastrophic backtracking. The time budget is the backstop for whatever still gets through, such as a rule repeating a slow match across thousands of elements or pages.
 
-The report records it as a failed check named after the rule with `-error` on the end, such as `content/hidden-text-error`, against the first page where it happened (or the whole site, for a site rule), with the message `Rule error: exceeded its 1000 ms time budget and was abandoned`. Its details carry `timedOut: true` and `pages`, the number of pages it timed out on. A rule that times out is reported once per audit, not once per page: later pages show a skipped check, so one slow pattern cannot flood the report or lower the score. The audit also gets one info check named after the rule with `-timeouts` on the end, such as `content/hidden-text-timeouts`, whose details carry `pagesNotChecked`: the final count of pages that rule did not check. That rule's own result for those pages is not in the report.
+Every rule runs under it: two seconds per page for a page rule, and two seconds per page of the site for a site rule, capped at 60 seconds. A rule that runs past it is abandoned for that page, and the audit carries on with the next rule. The budget is checked between operations, not in the middle of a single pattern match, so a rule can overrun it by about one runaway match before it is abandoned: in testing, a 200 ms budget abandoned a catastrophic pattern after about 430 ms, roughly twice the budget. It is wall-clock time, so on a heavily loaded machine an ordinary page can run out of time too.
 
-A timed-out rule did not check those pages. For a security rule, such as `security/leaked-secrets`, that means no finding on those pages is not a clean result: the pages were not scanned, so treat them as unchecked and look at them yourself.
+The report records it as a skipped check named after the rule with `-error` on the end, such as `content/hidden-text-error`, on every page where it happened, the first one included (or on the whole site, for a site rule). Its `skipReason` is `rule-timed-out` and its message is `Rule not evaluated: exceeded its 2000 ms time budget and was abandoned` (the number is the budget in force). Its details carry `timedOut: true`, the `ruleId`, the `budgetMs` in force, `elapsedMs` (how long the rule had actually run when it was stopped, which is a little over the budget on an idle machine and far over it when the machine was starved of CPU) and `pages`, the number of pages it timed out on. `elapsedMs` is for diagnosing a timeout and is never scored or counted. A timed-out rule is not a finding: the rule did not finish, so nothing was found on that page, and the page is not evaluated for it. It is not counted as a failed check and it does not lower the score: the health score is the same as if that page had been left unchecked for that rule. The audit also gets one info check named after the rule with `-timeouts` on the end, such as `content/hidden-text-timeouts`, whose details carry `pagesNotChecked`, the final count of pages that rule did not check, and `maxElapsedMs`, the longest the rule ran before it was stopped. The console, text, markdown, HTML, XML and LLM reports also print a yellow `Not checked: <rule>.` line for each rule that timed out, with a hint to run the audit again or raise `time_budget_ms`, so a timed-out security rule is never mistaken for a clean one. That rule's own result for those pages is not in the report.
 
-Ordinary pages never come close: the slowest rule takes a few milliseconds per page. If you see this on a page that looks normal, [open an issue](https://github.com/squirrelscan/squirrelscan/issues) with the page URL.
+A timed-out rule did not check those pages. For a security rule, such as `security/leaked-secrets`, that means no finding on those pages is not a clean result: the pages were not scanned, so treat them as unchecked and look at them yourself. So a security rule that times out is counted by [`--fail-on`](/cli/audit#gate-ci-on-audit-results) as one warning-severity finding (`warnings>0` and `severity>=warning` trip on it, `errors` and `score` do not, so a gate that only uses those two passes: add a warning gate or raise `time_budget_ms`), while the score stays as if the page had been left unchecked. The count appears only in the gate summary, never as a finding in the report. The report and the gate summary name the rule and the number of pages it did not check, so a page built to make a security rule time out cannot leave a quiet pass. Rules in other categories are not counted by the gate.
+
+Ordinary pages never come close on an idle machine: the slowest rule takes a few milliseconds per page. If you see this on a page that looks normal and the machine was not busy, [open an issue](https://github.com/squirrelscan/squirrelscan/issues) with the page URL.
+
+### Changing the budget
+
+Set [`time_budget_ms`](/configuration/rules#time_budget_ms) in the `[rules]` section of `squirrel.toml`:
+
+```toml squirrel.toml
+[rules]
+time_budget_ms = 3000  # three seconds per rule per page
+```
+
+Raise it when rules time out on ordinary pages because the machine is slow or busy, such as a shared CI runner. A value below 1000 is refused. A site rule gets the same amount per page of the site, capped at 60 seconds, or at the budget itself if you set it above that. `0` turns the budget off, which lets one hostile page stall the audit, so leave it on for sites you do not control. The setting applies to audits the CLI runs; cloud audits use the default.
 
 ## Configuration
 

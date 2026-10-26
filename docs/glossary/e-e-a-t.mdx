@@ -1,0 +1,90 @@
+---
+title: "What is E-E-A-T? The signals a site can show"
+description: "E-E-A-T is experience, expertise, authoritativeness and trust, the qualities Google's raters assess. It is not a score or a ranking factor."
+sidebarTitle: "E-E-A-T"
+---
+
+**E-E-A-T** stands for experience, expertise, authoritativeness and trustworthiness: the qualities Google's search quality raters are asked to look for in content, with trust at the centre.
+
+Google added the first E, for experience, in December 2022, to cover content written from first-hand use of a product or a visit to a place. Its guide to helpful content says that of the four, trust is the most important, that the others contribute to it, and that content does not have to show all of them.
+
+**E-E-A-T is not a score and not a ranking factor.** Google says so directly: "While E-E-A-T itself isn't a specific ranking factor", its systems use a mix of factors that can identify content with good E-E-A-T. The raters do not set rankings either. Google's overview of the rater guidelines says no single rating, and no single rater, directly affects how a page ranks. Their ratings are used in aggregate to check whether the ranking systems work.
+
+{/* glossary:hub:start */}
+
+Category: [E-E-A-T](/rules/eeat)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+The idea is a checklist for a reader's question: why should I believe this page? Google says its systems give even more weight to content with strong E-E-A-T on topics that could affect people's health, finances or safety, which it calls [YMYL](/glossary/ymyl). A page earns trust through things a reader can check, such as who wrote it, what they know, where the claims come from and who runs the site.
+
+## How squirrelscan checks it
+
+squirrelscan does not measure E-E-A-T and gives no E-E-A-T score. Its rules detect on-page signals that a reader, or a rater, would look for. [eeat/author-byline](/rules/eeat/author-byline) measures the share of content pages with an attributed author, and [eeat/author-expertise](/rules/eeat/author-expertise) looks for author pages or `Person` markup without reading the bios. [eeat/about-page](/rules/eeat/about-page) and [eeat/contact-page](/rules/eeat/contact-page) look for those pages and their contact methods. [eeat/citations](/rules/eeat/citations) counts links to a short, US-centric list of authoritative domains. [eeat/trust-signals](/rules/eeat/trust-signals) and [eeat/editorial-policy](/rules/eeat/editorial-policy) look for review markup, testimonial pages and policy pages by URL. [eeat/authority-signals](/rules/eeat/authority-signals) is a cloud check that warns when a page has neither an author nor citations.
+
+When the audit is confident of the site type, several of these run only on blog, news, health, education or nonprofit sites. Most report at info level.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Author bylines on content pages: what share carry one](/rules/eeat/author-byline) | Content published by nobody in particular is harder to trust. squirrel measures what share of your content pages attribute an author. | warning |
+| [Author expertise: bio pages and Person schema](/rules/eeat/author-expertise) | A name is attribution; a bio is expertise. squirrel looks for author pages and Person structured data across the crawl. | info |
+| [About page: what it establishes and how squirrel finds it](/rules/eeat/about-page) | An About page is where a reader decides whether you are a real organisation. squirrel finds it by URL or schema and checks it has content. | warning |
+| [Contact page: finding it and counting the contact methods](/rules/eeat/contact-page) | A site with no reachable human is a site a reader has no reason to trust. squirrel finds the contact page and counts its email and phone links. | warning |
+| [Authoritative citations: sources a reader can check](/rules/eeat/citations) | A factual claim with a source a reader can follow is stronger than one without. squirrel counts outbound links to a list of authoritative domains. | info |
+| [Trust signals: reviews, testimonials and social proof](/rules/eeat/trust-signals) | Reviews and testimonials are what a hesitant visitor looks for. squirrel checks for review schema and testimonial pages across the crawl. | info |
+| [Editorial policy: publishing how the content gets made](/rules/eeat/editorial-policy) | A stated editorial process is a claim a reader can hold you to. squirrel looks for policy pages by their multilingual URL patterns. | info |
+| [Authority signals: an AI read of authorship and citations](/rules/eeat/authority-signals) | Pattern matching sees markup; this rule reads the page. The cloud service reports whether it is attributed and what its claims rest on. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Show the reader who is behind the content and what it rests on:
+
+```html
+<p class="byline">
+  By <a rel="author" href="/authors/jane-diaz">Jane Diaz</a>, Registered Dietitian
+</p>
+```
+
+Link each byline to an author page that says what the person knows and how ([the byline fix](/rules/eeat/author-byline#how-to-fix-it), [the expertise fix](/rules/eeat/author-expertise#how-to-fix-it)). Cite sources in the sentence that makes the claim ([the citations fix](/rules/eeat/citations#how-to-fix-it)). Write an About page for someone who has never heard of you, and publish real contact details ([the About page fix](/rules/eeat/about-page#how-to-fix-it), [the contact fix](/rules/eeat/contact-page#how-to-fix-it)). It only helps if it is true.
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include eeat/author-byline,eeat/author-expertise,eeat/about-page,eeat/contact-page,eeat/citations,eeat/trust-signals,eeat/editorial-policy,eeat/authority-signals
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [YMYL](/glossary/ymyl): Topics that could significantly affect a person's health, finances, safety or society, which Google's raters hold to a higher standard.
+- [Author byline](/glossary#author-byline): The visible author name on an article, ideally linked to an author page and matched by an author entity in structured data.
+- [Content freshness](/glossary/content-freshness): How current a page is and how consistently it says so: visible dates, dateModified, sitemap lastmod and copyright year.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Creating helpful, reliable, people-first content, Google Search Central](https://developers.google.com/search/docs/fundamentals/creating-helpful-content)
+- [Our latest update to the quality rater guidelines: E-A-T gets an extra E for Experience, Google Search Central Blog](https://developers.google.com/search/blog/2022/12/google-raters-guidelines-e-e-a-t)
+- [Search Quality Rater Guidelines: an overview, Google (PDF)](https://services.google.com/fh/files/misc/hsw-sqrg.pdf)
+
+{/* glossary:jsonld:start */}
+
+import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";
+
+<GlossaryJsonLd slug="e-e-a-t" />
+
+{/* glossary:jsonld:end */}

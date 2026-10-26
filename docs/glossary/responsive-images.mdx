@@ -1,0 +1,85 @@
+---
+title: "Responsive images: srcset, sizes and picture explained"
+description: "Responsive images use srcset, sizes and picture so each device downloads an image file that fits its screen. The syntax, and what squirrelscan checks."
+sidebarTitle: "Responsive images"
+---
+
+**Responsive images** are the HTML features, `srcset`, `sizes` and `<picture>`, that let the browser choose an image file sized and formatted for the screen it is drawing on.
+
+`srcset` lists candidate files for one image. With width descriptors such as `800w`, the `sizes` attribute tells the browser how wide the image will render, and it picks a file before downloading anything. With density descriptors such as `2x`, no `sizes` is needed. `<picture>` wraps `<source>` elements chosen by media query or file type, for a different crop at a breakpoint or a newer format with a fallback. The `<img>` inside it is the element that renders, and it is required.
+
+{/* glossary:hub:start */}
+
+Category: [Images](/rules/images)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+Without `srcset`, every device downloads the same file. A hero sized for a 2560-pixel display is downloaded in full by a phone that shows it 390 pixels wide. Thumbnails make it worse: an avatar or product tile drawn at 64 pixels that loads the full-size photo pays for every copy on the page. And when a width-descriptor set has no `sizes`, the browser assumes the image fills the viewport, which usually means a bigger file than it needs.
+
+## How squirrelscan checks it
+
+[images/srcset](/rules/images/srcset) counts the images on each page with and without `srcset`, plus `<picture>` elements, and reports the mix at info level. [images/responsive-size](/rules/images/responsive-size) goes further for small images. For each image on the site's domain or its subdomains that is declared at thumbnail size, with no `srcset` and no `<picture>` around it, it reads the first 32 KB of the file to get its real pixel size, then applies Lighthouse's test: the pixels beyond what a 2x screen draws in the declared box are waste, and at least 4 KB of waste is reported. When the header gives no pixel size, a byte budget for the box stands in. [images/picture-element](/rules/images/picture-element) fails a `<picture>` with no `<img>` inside it.
+
+The declared `width` and `height` attributes stand in for the displayed size. CSS that resizes an image is not read, and images on unrelated hosts are not fetched.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [srcset: serving the right image size for the screen](/rules/images/srcset) | Without srcset every visitor downloads the same file, sized for the largest screen. squirrel counts responsive images against fixed-size ones. | info |
+| [Thumbnails without srcset: small images serving large files](/rules/images/responsive-size) | A 60 by 60 avatar that loads a 2000 pixel photo wastes almost all of it. squirrel reads each image's real pixel size and flags small images that serve far more pixels than they display. | warning |
+| [\<picture\> without an \<img\>: the fallback that is required](/rules/images/picture-element) | A picture element with no img child renders nothing at all. squirrel checks every picture on the page for its required fallback. | error |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Generate a few widths at build time or through an image CDN, and say how wide the image renders:
+
+```html
+<img
+  src="/photo-800.jpg"
+  srcset="/photo-400.jpg 400w, /photo-800.jpg 800w, /photo-1600.jpg 1600w"
+  sizes="(max-width: 640px) 100vw, 50vw"
+  width="800" height="533" alt="…"
+/>
+```
+
+For a fixed-size image, the density form is shorter: `srcset="/logo.png 1x, /logo@2x.png 2x"` ([the srcset fix](/rules/images/srcset#how-to-fix-it)). A thumbnail needs two candidates, one for standard screens and one for high-density ones ([the thumbnail fix](/rules/images/responsive-size#how-to-fix-it)). Inside `<picture>`, put the `<img>` last, after every `<source>`, and give it the `alt` ([the picture fix](/rules/images/picture-element#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include images/srcset,images/responsive-size,images/picture-element
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Modern image formats](/glossary#modern-image-formats): WebP and AVIF, which encode the same image in fewer bytes than JPEG or PNG.
+- [Page weight](/glossary#page-weight): The total bytes a page downloads across HTML, CSS, JavaScript, images and fonts.
+
+{/* glossary:related:end */}
+
+## References
+
+- [Responsive images, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Responsive_images)
+- [The picture element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/picture)
+- [The img element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/img)
+
+{/* glossary:jsonld:start */}
+
+import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";
+
+<GlossaryJsonLd slug="responsive-images" />
+
+{/* glossary:jsonld:end */}

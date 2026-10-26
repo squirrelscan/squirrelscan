@@ -124,7 +124,7 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // markdown, so healthScore.overall was still 48 at that point.
       // 99221 -> 99721: content/dev-leakage (#1353) is the same shape again and
       // adds the same 500. All 500 pass: the fixture's origin is
-      // `http://synthetic.test`, which is neither a dev host nor HTTPS, so
+      // `http://synthetic.example.com`, which is neither a dev host nor HTTPS, so
       // neither the host families nor the http-self-link kind can fire.
       // 99721 -> 99734: the thirteen schema/entity-* rules (#2093), site-scoped,
       // each adding exactly one whole-crawl check. +13 and not one more is the
@@ -173,7 +173,21 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 101742 -> 101743: content/common-misspellings is site-scoped and adds one
       // whole-crawl check (#709). It passes: the synthetic copy has no listed
       // misspelling or doubled word, so healthScore.overall is unmoved at 51.
-      expect(v1.findings.length).toBe(101743);
+      // 101743 -> 102243: images/hotlinked is page-scoped and adds one check to
+      // each of the 500 pages that have a document (#932): a pass or the info
+      // "No content images found" on synthetic pages. healthScore.overall is
+      // unmoved at 51.
+      // 102243 -> 102743: content/h1-title-alignment is page-scoped and adds one
+      // check to each of the 500 pages that have a document (#929): 459 pass, 31 info
+      // (an H1 and title with no shared word, about 6% of the synthetic copy, which
+      // is templated marketing text) and 10 skipped. Info never scores, so
+      // healthScore.overall is unmoved at 51.
+      // Unmoved by pub#215/#216: content/mojibake now reads the rendered prose
+      // content/placeholder-text reads, and the synthetic copy has no <template>
+      // or code-editor markup and no mojibake for it to change; the new
+      // placeholder-title check adds a row only for a broken title, and every
+      // synthetic title is real copy.
+      expect(v1.findings.length).toBe(102743);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -198,9 +212,11 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 303 -> 305 security/security-txt and security/version-disclosure,
       // 305 -> 306 mobile/web-app-manifest,
       // 306 -> 307 reliability/broken-forms,
-      // 307 -> 308 content/common-misspellings;
+      // 307 -> 308 content/common-misspellings,
+      // 308 -> 309 mobile/input-zoom,
+      // 309 -> 310 images/hotlinked, 310 -> 311 content/h1-title-alignment;
       // anything else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(308);
+      expect(v1.perRuleTally.length).toBe(311);
       expect(v1.perRuleTally.find((t) => t.ruleId === "reliability/broken-forms")).toEqual({
         ruleId: "reliability/broken-forms",
         pass: 0,

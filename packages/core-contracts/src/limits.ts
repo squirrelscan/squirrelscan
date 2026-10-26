@@ -708,8 +708,8 @@ export const COVERAGE_PAGE_LIMITS = {
 } as const satisfies Record<CoverageMode, number>;
 
 /**
- * Link checking bounds (repo#2729). Internal link checks are on at every level
- * and external ones are meant to be (`EXTERNAL_LINKS_DEFAULT_ON`), so each
+ * Link checking bounds (repo#2729). Internal and external link checks are on at
+ * every level (`EXTERNAL_LINKS_DEFAULT_ON`), so each
  * needs a ceiling an audit can never exceed.
  *
  * - `externalPerAuditMin`: an audit requests at most `max(pages, this)` distinct
@@ -811,6 +811,12 @@ export const SERVICE_LIMITS = {
   editorSummaryMaxCategories: 24,
   /** Max top issues accepted per editor-summary call (CLI pre-ranks + pre-caps). */
   editorSummaryMaxIssues: 30,
+  /** Max detected technologies sent per editor-summary call. */
+  editorSummaryMaxTechnologies: 60,
+  /** Max failing rule ids sent per editor-summary call (the catalog has about 320 rules). */
+  editorSummaryMaxFailingRuleIds: 500,
+  /** Max ranked priorities kept in a stored editor's summary. */
+  editorSummaryMaxPriorities: 8,
   blocklistBatchValues: 2000,
   gapsMaxCompetitors: 5,
   gapsMaxSeeds: 50,

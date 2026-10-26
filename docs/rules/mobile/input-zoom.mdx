@@ -1,0 +1,113 @@
+---
+title: "Form fields under 16px: why iOS Safari zooms in when one is focused"
+description: "On an iPhone, focusing a text field under 16px zooms the page in. squirrel reads form field sizes from inline styles and style blocks and reports the small ones."
+---
+
+## Why iOS zooms into small fields
+
+On an iPhone, tapping into a text field whose font size is below 16px makes Safari zoom the page in. The layout jumps sideways, the submit button goes off screen, and the visitor has to pinch back out before they can carry on. It shows up on checkout, login and newsletter forms styled at 14px, which is a common default: Tailwind's `text-sm` on an input is 14px, and many component libraries ship 14px fields.
+
+The usual workaround found online makes things worse. Adding `maximum-scale=1` or `user-scalable=no` to the viewport stops the zoom by also stopping people who need zoom from using it. squirrel already reports that ([mobile/viewport-zoom](/rules/mobile/viewport-zoom), [a11y/zoom-disabled](/rules/a11y/zoom-disabled)). The real fix is a 16px field.
+
+## What squirrel checks
+
+The rule runs on every crawled page that has a text field. It checks `select`, `textarea`, and every `input` that opens a keyboard or a picker: text, email, password, search, tel, url, number, the date and time types, and an `input` with no `type`. It skips `hidden`, `checkbox`, `radio`, `range`, `color`, `file`, `submit`, `button`, `reset` and `image`, a field a visitor cannot focus (`disabled` or inside a disabled `fieldset`, or under a `hidden` or `inert` element, an inline `display: none` or `visibility: hidden`, a closed `<dialog>` or `<details>`, or a `<template>` or `<noscript>`), and, as a precaution, a field under an `aria-hidden="true"` element, which is how spam-trap fields are usually hidden. A page with no text field gets no check. The first 200 focusable fields on a page are judged; any more are counted as not read, as are all fields past the 2,000th, unchecked.
+
+A field's font size is read from what a static audit can see: the field's inline `style` and the `<style>` blocks on the page, including a `font` shorthand such as `font: 14px/1.4 sans-serif`. Sizes are applied in cascade order: an `!important` inline size, then `!important` rules, then the inline size, then plain rules. Within one rule the last `!important` declaration wins, else the last one. `rem` is resolved against the root size the page's `<style>` blocks or the `html` element's inline style set, or 16px when nothing sets one. `pt` and the size keywords (`small`, `medium` and so on) are converted to px. A `<style media="print">` block, and a `<style>` inside `<noscript>` or `<template>`, never styles the live screen, so it is skipped.
+
+Fields do not take the page's font size. iOS Safari gives every `input`, `textarea` and `select` its own size of 11px, so a field nothing on the page sizes, on a page with no external stylesheet and no nested rules, is reported at `11px (iOS default)`.
+
+A field is only judged when its size can be read plainly. It is counted as not read, and never guessed, when:
+
+- the page links an external stylesheet (or preloads one as a style, or imports one), or a `<style>` block nests rules (CSS nesting), and the size would come from a `<style>` rule or the browser default: a rule the audit cannot see may outrank it, a utility class such as `text-sm` defined in an external sheet included. An inline `style` size is still judged, the one size an unseen rule can beat only with `!important` on a field's font size, which is rare; `rem` is not judged, because the unseen rules may set the root size;
+- the rule that would size it sits inside `@media`, `@supports` or `@layer`, or in a `<style media="…">` block, because the phone-width size is the one that matters;
+- two rules that match it set different sizes, which needs specificity to order, or the root size is set by rules that disagree;
+- its size is relative (`em`, `%`, `inherit`, `var()`, `calc()`, `font: inherit`, `all: unset`), or comes from a `font` shorthand the rule does not parse (it reads style, weight and stretch keywords, a size, a line height and a family list);
+- a rule uses a selector the audit cannot run as a browser would, such as `input:focus` or `:scope`;
+- a `<style>` rule hides it or a wrapper around it (`display: none`, `visibility: hidden`);
+- it is past one of the rule's reading budgets, which keep a hostile page from stalling the audit: style blocks past 400,000 characters, 4,000 rules or 256 blocks, a selector longer than 256 characters, an inline `style` longer than 4,096 characters, a field nested more than 128 elements deep, or past 10,000 selector tests or 250 ms of them on the page.
+
+It emits a single check named `input-zoom`:
+
+- Warn when at least one field is under 16px. Message: `{count} form field(s) under 16px make iOS Safari zoom in on focus.`, listing each field as `{tag} type="{type}" name="{name}"` with its size and where it came from, for example `14px (inline style)`, `14px (<style>: input)` or `11px (iOS default)`, up to 20. When the viewport tag sets `maximum-scale=1` or `user-scalable=no`, the message adds `The viewport's maximum-scale=1 or user-scalable=no hides the zoom on iOS but blocks zoom for everyone; a 16px field size fixes both.` When some fields were not read, it adds `{count} more field(s) were not read: their size comes from a stylesheet or rule a static audit cannot resolve.`
+- Info when no field read is under 16px but some were not read. Message: `No form field read is under 16px.` followed by the not-read sentence.
+- Pass when every field was read and none is under 16px. Message: `No form field is under 16px`.
+
+`details` carries `fields` (text fields on the page), `under16px` and `notRead`. Severity warning, weight 3.
+
+A static audit cannot see external stylesheets, so on most sites built with a CSS framework the check reports fields as not read rather than judging them. Checking those needs each field's computed size from a rendered page, which is planned.
+
+## How to fix it
+
+```css
+input, select, textarea {
+  font-size: 16px; /* or 1rem on a 16px root */
+}
+```
+
+With Tailwind, use `text-base` on fields at phone widths and keep a smaller size from a breakpoint up, for example `text-base md:text-sm`. Remove `maximum-scale=1` and `user-scalable=no` from the viewport tag once the fields are 16px: they are no longer needed, and they block zoom for everyone.
+
+| | |
+|---|---|
+| **Rule ID** | `mobile/input-zoom` |
+| **Category** | [Mobile](/rules/mobile) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["mobile/input-zoom"]
+```
+
+### Disable all Mobile rules
+
+```toml squirrel.toml
+[rules]
+disable = ["mobile/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["mobile/input-zoom"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [mobile/viewport-zoom](/rules/mobile/viewport-zoom): the viewport workaround that blocks zoom.
+- [a11y/zoom-disabled](/rules/a11y/zoom-disabled): the accessibility rule covering the same workaround.
+- [mobile/font-size](/rules/mobile/font-size): body text too small to read.
+- [mobile/tap-targets](/rules/mobile/tap-targets): controls too small to tap.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Mobile-friendly](/glossary/mobile-friendly).
+
+{/* glossary:backlinks:end */}
+
+## References
+
+- [Viewport meta element, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Viewport_meta_element)
+- [Understanding resize text, WCAG 2.2](https://www.w3.org/WAI/WCAG22/Understanding/resize-text.html)
+- [WebKit's default form field styles, html.css](https://github.com/WebKit/WebKit/blob/main/Source/WebCore/css/html.css)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Mobile section of the report. Each page with a small field lists the fields and their sizes. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Mobile section looks like on a real site.
+  </Card>
+</CardGroup>

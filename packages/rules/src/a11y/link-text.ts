@@ -3,6 +3,14 @@
 
 import { hasUnsafeUrlScheme } from "@squirrelscan/utils";
 
+import {
+  createStaticVisibility,
+  SCRIPT_STATE_LABEL,
+  sortUnnamedControls,
+  unconfirmedRow,
+} from "../shared/static-hidden";
+import { isConventionalLinkLabel } from "../shared/conventional-link-labels";
+import { isGenericInPageLanguage } from "../shared/generic-link-phrases";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 // Generic link text that doesn't describe the destination
@@ -30,15 +38,11 @@ const GENERIC_LINK_TEXT = [
   "get",
   "start",
   "begin",
-  // Sign up/account related
-  "sign up",
-  "signup",
-  "register",
+  // Sign up/account related. The conventional account labels (sign in, sign up,
+  // log in, register, ...) live in shared/conventional-link-labels.ts and win
+  // over this list (pub#839).
   "subscribe",
   "join",
-  "login",
-  "log in",
-  "sign in",
   // Navigation
   "next",
   "previous",
@@ -70,6 +74,11 @@ const GENERIC_LINK_TEXT = [
   "discover",
   "explore",
 ];
+
+/** Generic text, unless the whole text is a conventional account or utility label. */
+function isGenericLinkText(normalized: string): boolean {
+  return GENERIC_LINK_TEXT.includes(normalized) && !isConventionalLinkLabel(normalized);
+}
 
 /**
  * Get accessible name from an element
@@ -167,7 +176,7 @@ export const linkTextRule: Rule = {
     name: "Link Text",
     description: "Checks for descriptive link text",
     solution:
-      "Link text should describe the destination, not generic phrases like 'click here'. Screen reader users often navigate by links, hearing them out of context. Good: 'View our pricing plans'. Bad: 'Click here'. For icon-only links, add aria-label: <a href='/search' aria-label='Search'><svg>...</svg></a>. Empty links are especially problematic - add text or aria-label.",
+      "Link text should describe the destination, not generic phrases like 'click here'. Screen reader users often navigate by links, hearing them out of context. Good: 'View our pricing plans'. Bad: 'Click here'. For icon-only links, add aria-label: <a href='/search' aria-label='Search'><svg>...</svg></a>. Empty links are especially problematic - add text or aria-label. A link hidden by the hidden attribute, aria-hidden, a closed dialog or an inline style='display:none' is out of the accessibility tree and is not reported, but it needs text before it is shown. A <style> rule squirrel can decide counts too. An empty link carrying a no-js class (itself or an ancestor other than <html>) on a page with an external stylesheet or @import is reported as unconfirmed, because the theme may hide it when JavaScript runs. One a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet) is reported as unconfirmed. External stylesheets are not read, so a link hidden only by one is still reported.",
     category: "a11y",
     scope: "page",
     verdictScope: "page",
@@ -182,7 +191,17 @@ export const linkTextRule: Rule = {
 
     const links = doc.querySelectorAll("a[href]");
     const genericLinks: string[] = [];
-    const emptyLinks: Array<{ href: string; reason: string }> = [];
+    // pub#993: a link out of the accessibility tree is skipped, and an empty
+    // one a style may hide is unconfirmed, like button-name.
+    const visibility = createStaticVisibility({ ariaHidden: true });
+    const empty = sortUnnamedControls<{ id: string; label: string }>(visibility);
+    const emptyLinks = empty.failures;
+
+    const isHidden = (el: Element): boolean => visibility.visibility(el).state === "hidden";
+    // pub#840: the page language adds its own generic phrases; English always applies.
+    const lang = doc.documentElement?.getAttribute("lang");
+    const isGeneric = (raw: string, normalized: string): boolean =>
+      isGenericLinkText(normalized) || isGenericInPageLanguage(raw, lang);
 
     for (const link of links) {
       const href = link.getAttribute("href") || "";
@@ -200,7 +219,7 @@ export const linkTextRule: Rule = {
           .toLowerCase()
           .replace(/[.,!?;:'"]+/g, "")
           .trim();
-        if (GENERIC_LINK_TEXT.includes(normalizedName)) {
+        if (isGeneric(accessibleName, normalizedName) && !isHidden(link)) {
           genericLinks.push(accessibleName);
         }
         continue;
@@ -210,17 +229,14 @@ export const linkTextRule: Rule = {
       const { hasContent, contentType } = hasAccessibleContent(link);
 
       if (!hasContent) {
-        emptyLinks.push({
-          href: href.substring(0, 50),
-          reason: contentType,
-        });
+        empty.add(link, { id: href.substring(0, 50), label: contentType });
         continue;
       }
 
       // Has content - check if it's generic
       const text = link.textContent?.trim().toLowerCase() || "";
       const normalizedText = text.replace(/[.,!?;:'"]+/g, "").trim();
-      if (GENERIC_LINK_TEXT.includes(normalizedText)) {
+      if (isGeneric(text, normalizedText) && !isHidden(link)) {
         genericLinks.push(text);
       }
     }
@@ -231,13 +247,27 @@ export const linkTextRule: Rule = {
         status: "fail",
         message: `${emptyLinks.length} link(s) with no accessible text`,
         items: emptyLinks.map((item) => ({
-          id: item.href,
-          label: item.reason,
+          id: item.id,
+          label: item.label,
         })),
         details: {
-          reasons: [...new Set(emptyLinks.map((e) => e.reason))],
+          reasons: [...new Set(emptyLinks.map((e) => e.label))],
         },
       });
+    }
+
+    if (empty.unconfirmed.length > 0) {
+      checks.push(
+        unconfirmedRow(
+          "link-text",
+          "link(s) with no accessible text",
+          // The reason an unconfirmed link is empty is dropped: the row's own
+          // label says why it is unconfirmed.
+          empty.unconfirmed.map((item) =>
+            typeof item === "string" || item.label === SCRIPT_STATE_LABEL ? item : { id: item.id },
+          ),
+        ),
+      );
     }
 
     if (genericLinks.length > 0) {
@@ -250,7 +280,12 @@ export const linkTextRule: Rule = {
       });
     }
 
-    if (emptyLinks.length === 0 && genericLinks.length === 0 && links.length > 0) {
+    if (
+      emptyLinks.length === 0 &&
+      empty.unconfirmed.length === 0 &&
+      genericLinks.length === 0 &&
+      links.length > 0
+    ) {
       checks.push({
         name: "link-text",
         status: "pass",

@@ -46,6 +46,18 @@ function check(checks: CheckResult[], name: string): CheckResult | undefined {
   return checks.find((c) => c.name === name);
 }
 
+/**
+ * The freshness and compression checks are info either way (pub#633): the
+ * per-page rules score them. Whether the site share fell below the threshold
+ * is read from the message.
+ */
+function verdict(checks: CheckResult[], name: "bad-caching-freshness" | "bad-caching-compression") {
+  const c = check(checks, name);
+  if (!c) return undefined;
+  expect(c.status).toBe("info");
+  return /no caching policy|served without/.test(c.message) ? "flagged" : "ok";
+}
+
 const goodHeaders = {
   "cache-control": "public, max-age=3600",
   etag: '"abc123"',
@@ -64,9 +76,9 @@ describe("perf/bad-caching", () => {
       headers: goodHeaders,
     }));
     const checks = run(badCachingRule, siteCtx(pages));
-    expect(check(checks, "bad-caching-freshness")?.status).toBe("pass");
+    expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
     expect(check(checks, "bad-caching-validators")?.status).toBe("pass");
-    expect(check(checks, "bad-caching-compression")?.status).toBe("pass");
+    expect(verdict(checks, "bad-caching-compression")).toBe("ok");
   });
 
   test("flags missing freshness across the site", () => {
@@ -76,7 +88,7 @@ describe("perf/bad-caching", () => {
     }));
     const checks = run(badCachingRule, siteCtx(pages));
     const freshness = check(checks, "bad-caching-freshness");
-    expect(freshness?.status).toBe("fail");
+    expect(freshness?.status).toBe("info");
     expect(freshness?.pages?.length).toBeGreaterThan(0);
   });
 
@@ -90,7 +102,7 @@ describe("perf/bad-caching", () => {
       },
     }));
     const checks = run(badCachingRule, siteCtx(pages));
-    expect(check(checks, "bad-caching-freshness")?.status).toBe("fail");
+    expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
   });
 
   // #2230 — `no-cache` and `s-maxage=0` still mean "no freshness lifetime",
@@ -110,7 +122,7 @@ describe("perf/bad-caching", () => {
       },
     }));
     const checks = run(badCachingRule, siteCtx(pages));
-    expect(check(checks, "bad-caching-freshness")?.status).toBe("pass");
+    expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
   });
 
   test("no-cache with no validator has no caching policy at all", () => {
@@ -119,7 +131,7 @@ describe("perf/bad-caching", () => {
       headers: { "cache-control": "no-cache, max-age=3600", "content-encoding": "gzip" },
     }));
     const checks = run(badCachingRule, siteCtx(pages));
-    expect(check(checks, "bad-caching-freshness")?.status).toBe("fail");
+    expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
   });
 
   test("s-maxage=0 with a validator is a revalidation policy", () => {
@@ -132,7 +144,7 @@ describe("perf/bad-caching", () => {
       },
     }));
     const checks = run(badCachingRule, siteCtx(pages));
-    expect(check(checks, "bad-caching-freshness")?.status).toBe("pass");
+    expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
   });
 
   test("s-maxage=0 with no validator has no caching policy at all", () => {
@@ -141,7 +153,7 @@ describe("perf/bad-caching", () => {
       headers: { "cache-control": "max-age=3600, s-maxage=0", "content-encoding": "gzip" },
     }));
     const checks = run(badCachingRule, siteCtx(pages));
-    expect(check(checks, "bad-caching-freshness")?.status).toBe("fail");
+    expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
   });
 
   // The shape the issue was filed for: the default a framework or CDN emits
@@ -156,7 +168,7 @@ describe("perf/bad-caching", () => {
       },
     }));
     const checks = run(badCachingRule, siteCtx(pages));
-    expect(check(checks, "bad-caching-freshness")?.status).toBe("pass");
+    expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
   });
 
   test("max-age=0, must-revalidate with Last-Modified instead of an ETag passes", () => {
@@ -169,7 +181,7 @@ describe("perf/bad-caching", () => {
       },
     }));
     const checks = run(badCachingRule, siteCtx(pages));
-    expect(check(checks, "bad-caching-freshness")?.status).toBe("pass");
+    expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
   });
 
   test("max-age=0 with neither validator still fails, and says why", () => {
@@ -179,7 +191,7 @@ describe("perf/bad-caching", () => {
     }));
     const checks = run(badCachingRule, siteCtx(pages));
     const freshness = check(checks, "bad-caching-freshness");
-    expect(freshness?.status).toBe("fail");
+    expect(freshness?.status).toBe("info");
     expect(freshness?.message).toBe(
       "4/4 pages set no caching policy (no freshness lifetime and no validator)"
     );
@@ -198,7 +210,7 @@ describe("perf/bad-caching", () => {
       },
     }));
     const checks = run(badCachingRule, siteCtx(pages));
-    expect(check(checks, "bad-caching-freshness")?.status).toBe("fail");
+    expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
   });
 
   test("a validator with no Cache-Control at all is not a declared policy", () => {
@@ -210,7 +222,7 @@ describe("perf/bad-caching", () => {
       headers: { etag: '"x"', "content-encoding": "br" },
     }));
     const checks = run(badCachingRule, siteCtx(pages));
-    expect(check(checks, "bad-caching-freshness")?.status).toBe("fail");
+    expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
   });
 
   test("a freshness lifetime alone is still a policy", () => {
@@ -219,7 +231,7 @@ describe("perf/bad-caching", () => {
       headers: { "cache-control": "public, max-age=600", "content-encoding": "br" },
     }));
     const checks = run(badCachingRule, siteCtx(pages));
-    expect(check(checks, "bad-caching-freshness")?.status).toBe("pass");
+    expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
   });
 
   // pub#600: the validators check warns and never fails. A page with no
@@ -253,7 +265,7 @@ describe("perf/bad-caching", () => {
       headers: { "cache-control": "public, max-age=0, must-revalidate", "content-encoding": "br" },
     }));
     const checks = run(badCachingRule, siteCtx(pages));
-    expect(check(checks, "bad-caching-freshness")?.status).toBe("fail");
+    expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
     expect(check(checks, "bad-caching-validators")?.status).toBe("warn");
   });
 
@@ -271,7 +283,7 @@ describe("perf/bad-caching", () => {
         },
       }));
       const checks = run(badCachingRule, siteCtx(pages));
-      expect(check(checks, "bad-caching-freshness")?.status).toBe("pass");
+      expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
       expect(check(checks, "bad-caching-validators")?.status).toBe("pass");
     });
   }
@@ -282,7 +294,7 @@ describe("perf/bad-caching", () => {
       headers: { "cache-control": "max-age=600", etag: '"x"' }, // no content-encoding
     }));
     const checks = run(badCachingRule, siteCtx(pages));
-    expect(check(checks, "bad-caching-compression")?.status).toBe("fail");
+    expect(verdict(checks, "bad-caching-compression")).toBe("flagged");
   });
 
   test("Expires header satisfies freshness", () => {
@@ -292,7 +304,7 @@ describe("perf/bad-caching", () => {
       headers: { expires, "last-modified": "x", "content-encoding": "gzip" },
     }));
     const checks = run(badCachingRule, siteCtx(pages));
-    expect(check(checks, "bad-caching-freshness")?.status).toBe("pass");
+    expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
     expect(check(checks, "bad-caching-validators")?.status).toBe("pass");
   });
 
@@ -308,7 +320,7 @@ describe("perf/bad-caching", () => {
       headers: { expires: past, "content-encoding": "gzip" },
     }));
     const checks = run(badCachingRule, siteCtx(pages));
-    expect(check(checks, "bad-caching-freshness")?.status).toBe("pass");
+    expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
     // No validator anywhere, so that check still reports the real gap.
     expect(check(checks, "bad-caching-validators")?.status).toBe("warn");
   });
@@ -319,7 +331,7 @@ describe("perf/bad-caching", () => {
       headers: { expires: "0", "content-encoding": "gzip" },
     }));
     const checks = run(badCachingRule, siteCtx(pages));
-    expect(check(checks, "bad-caching-freshness")?.status).toBe("pass");
+    expect(verdict(checks, "bad-caching-freshness")).toBe("ok");
   });
 
   test("an empty Expires is not a lifetime", () => {
@@ -328,7 +340,7 @@ describe("perf/bad-caching", () => {
       headers: { expires: "", "content-encoding": "gzip" },
     }));
     const checks = run(badCachingRule, siteCtx(pages));
-    expect(check(checks, "bad-caching-freshness")?.status).toBe("fail");
+    expect(verdict(checks, "bad-caching-freshness")).toBe("flagged");
   });
 });
 
@@ -362,9 +374,9 @@ describe("perf/bad-caching Cloudflare note", () => {
       `14/14 pages lack an ETag or Last-Modified validator. 14 of them ${NOTE}`
     );
     expect(validators?.details?.cloudflarePages).toBe(14);
-    // Freshness is unchanged: same status, same message, no note.
+    // Freshness is unchanged: same message, no note.
     const freshness = check(checks, "bad-caching-freshness");
-    expect(freshness?.status).toBe("fail");
+    expect(freshness?.status).toBe("info");
     expect(freshness?.message).toBe(
       "14/14 pages set no caching policy (no freshness lifetime and no validator)"
     );
@@ -453,5 +465,34 @@ describe("perf/bad-caching Cloudflare note", () => {
     const validators = check(run(badCachingRule, siteCtx(pages)), "bad-caching-validators");
     expect(validators?.status).toBe("pass");
     expect(validators?.message).toBe("4/5 pages expose a revalidation validator");
+  });
+});
+
+// pub#633: one missing server setting costs the score once. The per-page rules
+// score freshness and compression; this rule reports the site share as info.
+describe("perf/bad-caching freshness and compression are info (pub#633)", () => {
+  test.each([
+    ["no caching headers, no compression", {}],
+    ["a healthy site", goodHeaders],
+  ])("%s: neither check moves the score", (_name, headers) => {
+    const pages = Array.from({ length: 4 }, (_, i) => ({ url: `https://example.com/p${i}`, headers }));
+    const checks = run(badCachingRule, siteCtx(pages));
+    for (const name of ["bad-caching-freshness", "bad-caching-compression"]) {
+      expect(check(checks, name)?.status).toBe("info");
+    }
+  });
+
+  test("below the threshold, the messages and example pages are as before", () => {
+    const pages = Array.from({ length: 4 }, (_, i) => ({ url: `https://example.com/p${i}`, headers: {} }));
+    const checks = run(badCachingRule, siteCtx(pages));
+    expect(check(checks, "bad-caching-freshness")?.message).toBe(
+      "4/4 pages set no caching policy (no freshness lifetime and no validator)"
+    );
+    expect(check(checks, "bad-caching-compression")?.message).toBe(
+      "4/4 compressible pages served without gzip/Brotli"
+    );
+    // The pages are still listed.
+    expect(check(checks, "bad-caching-freshness")?.pages).toHaveLength(4);
+    expect(check(checks, "bad-caching-compression")?.pages).toHaveLength(4);
   });
 });

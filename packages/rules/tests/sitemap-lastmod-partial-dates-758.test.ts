@@ -5,9 +5,10 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { w3cDatePeriod } from "@squirrelscan/utils/date-period";
+
 import { sitemapLastmodChurnRule } from "../src/crawl/sitemap-lastmod-churn";
 import { sitemapLastmodDriftRule } from "../src/crawl/sitemap-lastmod-drift";
-import { w3cDatePeriod } from "../src/shared/w3c-date-period";
 import type { ParsedPage, RuleContext } from "../src/types";
 
 function siteWith(
@@ -72,7 +73,7 @@ function drift(lastmod: string, dateModified: string) {
 }
 
 describe("w3cDatePeriod", () => {
-  test("a year and a year-month are the whole period, in UTC; anything finer is an instant", () => {
+  test("a year and a year-month are the whole period, in UTC; a datetime is an instant", () => {
     expect(w3cDatePeriod("2024")).toEqual({
       start: Date.UTC(2024, 0, 1),
       end: Date.UTC(2025, 0, 1) - 1,
@@ -88,6 +89,7 @@ describe("w3cDatePeriod", () => {
       start: instant,
       end: instant,
       precision: "instant",
+      day: "2024-09-10",
     });
     // December rolls into the next year; a leap February ends on the 29th.
     expect(w3cDatePeriod("2024-12")?.end).toBe(Date.UTC(2025, 0, 1) - 1);
@@ -198,5 +200,93 @@ describe("crawl/sitemap-lastmod-churn with a year or year-month lastmod (#758)",
     expect(checks[0]!.message).toContain("2024-09-10");
     expect(checks[0]!.message).not.toContain("2024-01-01");
     expect(checks[0]!.details).toMatchObject({ urlsWithLastmod: 30, coarseLastmodsExcluded: 5 });
+  });
+});
+
+describe("crawl/sitemap-lastmod-drift: the page's date and a date-only lastmod are periods too (#772)", () => {
+  test("a page dated with a bare year agrees with a lastmod inside it", () => {
+    // Read as 1 January, `2024` warned 253 days ahead of `2024-09-10`.
+    expect(drift("2024-09-10", "2024").map((c) => c.status)).toEqual(["pass"]);
+    // Measured from the end of the page's year: 19 days ahead passes, 32 warns.
+    expect(drift("2025-01-20", "2024").map((c) => c.status)).toEqual(["pass"]);
+    expect(drift("2025-02-02", "2024")[0]!.name).toBe("sitemap-lastmod-ahead-of-page");
+  });
+
+  test("a date-only lastmod and a month lastmod agree about the same page", () => {
+    // Against 2025-01-08T12:00Z, `2024-12-31` was 8 days behind and warned,
+    // while `2024-12` was 7 and passed.
+    expect(drift("2024-12-31", "2025-01-08T12:00:00Z").map((c) => c.status)).toEqual(["pass"]);
+    expect(drift("2024-12", "2025-01-08T12:00:00Z").map((c) => c.status)).toEqual(["pass"]);
+    const late = drift("2024-12-31", "2025-01-10T12:00:00Z");
+    expect(late[0]!.name).toBe("sitemap-lastmod-behind-page");
+    expect(late[0]!.items![0]!.meta).toMatchObject({ deltaDays: 9 });
+  });
+
+  test("a lastmod outside the W3C format reads the same on every machine", () => {
+    // Bun keeps the last zone set when TZ is deleted, so it is put back by
+    // assignment.
+    const original = process.env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+    try {
+      for (const zone of ["UTC", "Asia/Tokyo", "America/New_York", "Pacific/Kiritimati"]) {
+        process.env.TZ = zone;
+        // Read as written: the 10th, which agrees with a page dated that day.
+        expect(drift("2024/09/10", "2024-09-10T12:00:00Z").map((c) => c.status)).toEqual(["pass"]);
+        expect(drift("Tue, 10 Sep 2024", "2024-09-10T12:00:00Z").map((c) => c.status)).toEqual([
+          "pass",
+        ]);
+        // ISO-shaped but not a W3C form: not read, rather than guessed.
+        for (const lastmod of ["2024-9", "2024-09-1"]) {
+          expect(drift(lastmod, "2024-09-10T12:00:00Z")[0]!.skipReason).toBe("No comparable dates");
+        }
+      }
+    } finally {
+      process.env.TZ = original;
+    }
+  });
+});
+
+describe("crawl/sitemap-lastmod-churn counts the day the sitemap wrote (#772)", () => {
+  test("an offset datetime late in the evening is its own day, not the UTC one", () => {
+    const urls = Array.from({ length: 30 }, (_, i) => ({
+      loc: `https://example.com/p${i}`,
+      lastmod: "2024-09-10T23:30:00-05:00",
+    }));
+    const { checks } = sitemapLastmodChurnRule.run(siteWith([], urls));
+    expect(checks[0]).toMatchObject({ status: "warn" });
+    expect(checks[0]!.details).toMatchObject({ dates: ["2024-09-10"] });
+  });
+
+  test("a lastmod outside the W3C format counts on the day written, on every machine", () => {
+    const urls = Array.from({ length: 30 }, (_, i) => ({
+      loc: `https://example.com/p${i}`,
+      lastmod: "2024/09/10",
+    }));
+    const original = process.env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+    try {
+      for (const zone of ["UTC", "Asia/Tokyo", "America/New_York"]) {
+        process.env.TZ = zone;
+        const { checks } = sitemapLastmodChurnRule.run(siteWith([], urls));
+        expect(checks[0]!.details).toMatchObject({ dates: ["2024-09-10"], urlsWithLastmod: 30 });
+      }
+    } finally {
+      process.env.TZ = original;
+    }
+  });
+});
+
+describe("crawl/sitemap-lastmod-churn counts lastmods it cannot read (#780 review)", () => {
+  test("a sitemap of ISO-shaped non-W3C values says so instead of reporting no lastmod", () => {
+    const urls = Array.from({ length: 30 }, (_, i) => ({
+      loc: `https://example.com/p${i}`,
+      lastmod: "2024-9-10",
+    }));
+    const { checks } = sitemapLastmodChurnRule.run(siteWith([], urls));
+    expect(checks[0]).toMatchObject({
+      status: "skipped",
+      skipReason: "Lastmod values are not readable dates",
+      message:
+        "30 sitemap lastmod value(s) are not dates squirrel can read the same way on every machine; 0 name a day, too few to judge lastmod churn",
+      details: { unreadableLastmods: 30, urlsWithLastmod: 0 },
+    });
   });
 });

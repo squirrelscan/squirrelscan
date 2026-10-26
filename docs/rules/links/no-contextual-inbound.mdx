@@ -14,11 +14,13 @@ Counting the two together hides a real problem. A page reachable only through th
 The rule is site-wide. For each crawled page it counts internal, resolvable, dofollow inbound links twice: all of them, and only those whose anchor sat outside a `nav`, `header`, `footer` or `aside` landmark. It emits a single check named `no-contextual-inbound`:
 
 - Skipped when there are too few pages. Message: `Insufficient pages for contextual inbound link analysis`.
-- Skipped when the crawl stopped at its page cap. Message: `Crawl stopped at its 10-page cap, so a contextual link may sit on a page not crawled`. The finding rests on a link being absent, and a capped crawl has not seen every page that could carry one. Raise `max_pages` or use a deeper coverage profile to get a verdict.
+- Skipped when the crawl stopped at its page cap. Message: `Crawl stopped at its 10-page cap, so a contextual link may sit on a page not crawled`. The finding rests on a link being absent, and a capped crawl has not seen every page that could carry one. Raise `max_pages` or use a deeper coverage profile to get a verdict. Every report shows the rule as **Not checked** with that reason, and a finding it reported on an earlier audit stays open.
 - Warn for pages with zero contextual inbound links. Message: `9 page(s) are linked only from sitewide chrome`. The value lists up to five paths with a `+N more` suffix, and every URL is listed as an item. Severity warning, weight 4.
 - Pass otherwise. Message: `All pages have at least one contextual inbound link`.
 
-A page is only considered when its raw inbound count is at or above `minInboundLinks`, default 2. Below that it is already reported by `links/orphan-pages`, and the two thresholds should be kept in sync when either is tuned. The homepage is skipped, since it is linked from every header by design.
+A page is only considered when its raw inbound count is at or above `minInboundLinks`, default 2. Below that it is already reported by `links/orphan-pages`, and the two thresholds should be kept in sync when either is tuned. The homepage is skipped, since it is linked from every header by design, and so is the page the audit started from: the URL you gave and where its redirects landed (a root that redirects to `/en/`).
+
+Legal pages are skipped too: privacy, terms and imprint pages are footer-only by design, so being linked only from chrome is expected. They are recognised by the last segment of the path, under any prefix, so `/impressum`, `/datenschutz`, `/agb`, `/privacy-policy`, `/terms-of-service`, `/imprint`, `/legal`, `/legal-notice` and `/en/legal` are not reported, in the languages the privacy and terms checks of [eeat/privacy-policy](/rules/eeat/privacy-policy) recognise. A page whose slug only contains one of those words (`/legalese-guide`) is still reported.
 
 Crawls stored before the chrome flag existed report every link as contextual, so an old crawl passes rather than producing a site-wide false alarm.
 
@@ -26,7 +28,7 @@ Crawls stored before the chrome flag existed report every link as contextual, so
 
 Link to the page from the body of the content it belongs with, using anchor text that describes it. A category page that introduces its members in prose, rather than only listing them, produces contextual links as a side effect.
 
-A whole site that links only through chrome reports every page that is not the homepage, is not excluded, and has at least `minInboundLinks` raw inbound links. That is accurate rather than a false positive, and it usually means the content does not cross-reference itself.
+A whole site that links only through chrome reports every page that is not the homepage or the page the audit started from, is not excluded, and has at least `minInboundLinks` raw inbound links. That is accurate rather than a false positive, and it usually means the content does not cross-reference itself.
 
 | | |
 |---|---|
@@ -84,6 +86,12 @@ enable = ["links/no-contextual-inbound"]
 - [content/article-links](/rules/content/article-links): whether the body copy links out at all.
 
 Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Internal linking](/glossary/internal-linking), [Orphan page](/glossary/orphan-page).
+
+{/* glossary:backlinks:end */}
 
 ## References
 

@@ -31,13 +31,17 @@ export interface DiscoveryProbeSelectionInput {
  */
 export function selectDiscoveryProbes(input: DiscoveryProbeSelectionInput): DiscoveryProbe[] {
   if (!input.enabled) return [];
-  const rules = loadAllRules({ additionalNamespaces: input.additionalNamespaces });
+  const rules = loadAllRules({
+    additionalNamespaces: input.additionalNamespaces,
+    includeOptIn: true,
+  });
   const wanted = new Set<DiscoveryProbe>();
   for (const id of filterRules(
     [...rules.keys()],
     input.rules.enable,
     input.rules.disable,
     input.ruleOptions ?? {},
+    rules,
   )) {
     for (const probe of rules.get(id)?.meta.discoveryProbes ?? []) wanted.add(probe);
   }

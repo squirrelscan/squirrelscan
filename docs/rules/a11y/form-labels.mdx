@@ -14,8 +14,15 @@ Where a visible label does not fit the design, `aria-label` or `aria-labelledby`
 One check, `form-labels`, at severity error. It covers every `<input>` except types `hidden`, `submit`, `button`, `reset` and `image`, plus every `<textarea>` and `<select>`.
 
 - Fail when a control has none of the following: an ancestor `<label>`; a `<label for="...">` whose value matches the control's `id`; an `aria-label`; an `aria-labelledby`; a `title`. Report message: `N form input(s) without labels`. Each control is listed by its `name`, falling back to its `id` and then to its type.
-- Pass with `All form inputs have labels`.
+- `form-labels-unconfirmed` warns with `N form input(s) without labels may be hidden by a style (unconfirmed)` for unlabeled controls a style may hide in a way squirrel cannot settle.
+- Pass with `All form inputs have labels`, or `All form inputs in the accessibility tree have labels` with `hiddenWithoutLabel` when unlabeled controls were skipped as hidden. The pass carries `inputsChecked`.
 - Info with `No form inputs found`.
+
+A control out of the accessibility tree has nothing to announce, so it is not reported: one with the `hidden` attribute (except `hidden="until-found"`), `aria-hidden="true"`, `display: none` on itself or an ancestor or `visibility: hidden` on itself or an ancestor, set inline or by a `<style>` rule squirrel can decide (such as `.closed { display: none }`), or inside a closed `<dialog>` or an unopened `popover`. It still needs a label before it can be shown. Hiding squirrel cannot settle is reported as unconfirmed instead: an inline style it cannot read exactly, a `<style>` rule it cannot decide, and, on a page that also loads an external stylesheet, hiding from a `<style>` rule or visibility inherited from an ancestor. External stylesheets are not read, so a control hidden only by the site's external CSS, such as a closed modal, is still reported. See [What squirrel can see](/rules/a11y/button-name#what-squirrel-can-see) for the details.
+
+A page past squirrel's style limits (more than 5,000 style rules, a `<style>` block over the size limit, a very long selector, a no-break or other non-ASCII space in a style block, or a rule nested inside another) is read as unconfirmed for every element a style might hide: the rules past the limit could hide or show any of them, so an unnamed control is reported as unconfirmed, not as a failure. CSS nesting is not read: a nested rule that sets `display` or `visibility` (`b { @media (min-width: 0) { display: none } }`, `.a { & .b { display: none } }`) leaves the elements it could reach unconfirmed, and a nested rule that sets neither changes nothing.
+
+A control that carries a `no-js` class, itself or on an ancestor other than `<html>`, is reported as unconfirmed on a page with an external stylesheet or an `@import`, with the reason that it may be hidden when JavaScript runs. A theme usually hides that fallback with a rule such as `.js .no-js { display: none }` in a stylesheet squirrel does not read. The same control on a page whose styles were all read keeps its verdict, and a class such as `no-js-hidden` is not a marker.
 
 A `title` attribute satisfies this check. It shows only on hover, so it is a weaker fix than a real label, but it does produce an accessible name.
 
@@ -71,6 +78,12 @@ enable = ["a11y/form-labels"]
 - [a11y/autocomplete-tokens](/rules/a11y/autocomplete-tokens): the autofill token that belongs on the same field.
 
 Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Form labels](/glossary#form-labels), [WCAG](/glossary/wcag).
+
+{/* glossary:backlinks:end */}
 
 ## References
 

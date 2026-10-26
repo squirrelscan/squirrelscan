@@ -8,10 +8,12 @@ import { version } from "../../../package.json";
 
 export function generateJsonReport(
   report: AuditReport,
-  outputPath?: string
+  outputPath?: string,
+  includePassed = false
 ): void {
   const content = renderJson(report as Parameters<typeof renderJson>[0], {
     version,
+    includePassed,
   });
 
   if (outputPath) {

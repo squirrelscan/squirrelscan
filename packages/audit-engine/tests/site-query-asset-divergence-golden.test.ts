@@ -45,6 +45,8 @@ interface Spec {
   ogImage: string;
   /** Adds Article JSON-LD, which is what makes `pageType` "article". */
   article?: boolean;
+  /** Absolute urls this page lists as hreflang alternates. */
+  alternates?: string[];
 }
 
 function specHtml(spec: Spec): string {
@@ -60,6 +62,9 @@ function specHtml(spec: Spec): string {
     `<link rel="icon" href="${spec.favicon}">` +
     `<meta name="theme-color" content="${spec.themeColor}">` +
     `<meta property="og:image" content="${spec.ogImage}">` +
+    (spec.alternates ?? [])
+      .map((href, i) => `<link rel="alternate" hreflang="l${i}" href="${href}">`)
+      .join("") +
     `${schema}</head><body><p>hi</p></body></html>`
   );
 }
@@ -131,9 +136,9 @@ const FIXTURE: Spec[] = [
   },
 ];
 
-async function seedAndRun(rule: Rule) {
+async function seedAndRun(rule: Rule, fixture: Spec[] = FIXTURE) {
   const store = await freshStore();
-  const built = FIXTURE.map(mkPage);
+  const built = fixture.map(mkPage);
 
   for (const { page, parsed } of built) {
     await run(store.upsertPageFeatures(CRAWL, extractPageFeatures(page, parsed)));
@@ -217,6 +222,45 @@ describe("dual-path golden — social/asset-divergence (extractor → v21 column
     const reported = check.items?.flatMap((i) => i.sourcePages ?? []) ?? [];
     expect(reported).not.toContain("https://example.com/p13");
     expect(reported).not.toContain("https://example.com/p14");
+  });
+});
+
+describe("dual-path golden: social/asset-divergence hreflang cluster (pub#937)", () => {
+  // 40 pages on the default image plus one collection and 15 locale variants that
+  // list each other and share ONE entity image: the stored hreflang_alternates
+  // column must let the streaming path fold them exactly as the legacy path does.
+  const ENTITY_OG = "https://cdn.example.com/collections/gloves.webp";
+  const locales = Array.from(
+    { length: 16 },
+    (_, i) => `https://example.com/l${String(i).padStart(2, "0")}/collections/gloves`
+  );
+  const cluster: Spec[] = locales.map((normalizedUrl) => ({
+    normalizedUrl,
+    favicon: "/favicon.ico",
+    themeColor: "#0a5c36",
+    ogImage: ENTITY_OG,
+    alternates: locales.filter((other) => other !== normalizedUrl),
+  }));
+  const uniformPages = Array.from({ length: 40 }, (_, i) => uniform(i + 1));
+
+  test("both paths agree and report no og-image divergence", async () => {
+    const { legacy, streamed } = await seedAndRun(assetDivergenceRule, [
+      ...uniformPages,
+      ...cluster,
+    ]);
+    expect(streamed).toEqual(legacy);
+    expect(JSON.stringify(streamed)).toBe(JSON.stringify(legacy));
+    expect(legacy[0]!.status).toBe("pass");
+    expect(legacy[0]!.items).toBeUndefined();
+  });
+
+  test("without hreflang links the same pages are still a fallback pocket", async () => {
+    const { legacy, streamed } = await seedAndRun(assetDivergenceRule, [
+      ...uniformPages,
+      ...cluster.map((spec) => ({ ...spec, alternates: undefined })),
+    ]);
+    expect(streamed).toEqual(legacy);
+    expect(legacy[0]!.items?.map((i) => i.meta?.dimension)).toEqual(["og-image"]);
   });
 });
 

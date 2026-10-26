@@ -9,10 +9,12 @@ import {
   EgressRefusedError,
   assertEgressAllowed,
   egressGuardedSend,
+  egressRefuses,
   isLinkLocalOrMetadataAddress,
   isNonPublicAddress,
   memoizeResolveHost,
   refusedWithoutLookup,
+  vetEgressTarget,
   type EgressPolicy,
   type ResolveHost,
 } from "../src/public-egress";
@@ -36,6 +38,10 @@ const PUBLIC_DNS = {
   "rebind.example.net": ["93.184.216.34", "10.0.0.9"],
   "mapped.example.net": ["::ffff:10.0.0.1"],
   "meta.example.net": ["169.254.169.254"],
+  // #3380: GCP's IPv6 metadata server and the EKS Pod Identity agent.
+  "gcp6.example.net": ["fd20:ce::254"],
+  "eks6.example.net": ["2606:2800:220:1::1", "fd00:ec2::23"],
+  "ula.example.net": ["fd12:3456:789a::1"],
   "dev.localhost": ["127.0.0.1"],
   localhost: ["127.0.0.1", "::1"],
 };
@@ -103,6 +109,7 @@ describe("assertEgressAllowed: public site", () => {
     "http://localhost./a",
     "http://metadata.google.internal/computeMetadata/v1/",
     "http://box.local/a",
+    "http://service.test/a",
     "http://intranet/a",
     "ftp://cdn.example.net/a",
     "file:///etc/passwd",
@@ -175,9 +182,36 @@ describe("assertEgressAllowed: site on a private network", () => {
     "http://[64:ff9b:1:a9fe:a9:fe00::]/a",
     "http://metadata.google.internal/computeMetadata/v1/",
     "http://meta.example.net/a",
+    // #3380: GCP's IPv6 metadata server and the EKS Pod Identity agent, as
+    // literals (any spelling) and as DNS answers.
+    "http://[fd20:ce::254]/computeMetadata/v1/",
+    "http://[fd20:00ce:0:0:0:0:0:0254]/computeMetadata/v1/",
+    "http://[FD20:CE::254]/a",
+    "http://[fd00:ec2::23]/v1/credentials",
+    "http://[fd00:0ec2:0000::0023]/v1/credentials",
+    "http://gcp6.example.net/computeMetadata/v1/",
+    "http://eks6.example.net/v1/credentials",
   ])("still refuses link-local and metadata: %s", async (url) => {
     expect(await refused(url, privateNetwork())).toBe(true);
   });
+
+  test.each([
+    "http://[fd12:3456:789a::1]/a",
+    "http://[fd20:ce::253]/a",
+    "http://[fd00:ec2::24]/a",
+    "http://ula.example.net/a",
+  ])("allows other unique local addresses: %s", async (url) => {
+    expect(await refused(url, privateNetwork())).toBe(false);
+  });
+
+  test.each(["gcp6.example.net", "eks6.example.net"])(
+    "a pinned send never connects to %s's metadata answer",
+    async (host) => {
+      await expect(vetEgressTarget(`http://${host}/a`, privateNetwork())).rejects.toBeInstanceOf(
+        EgressRefusedError,
+      );
+    },
+  );
 });
 
 describe("isLinkLocalOrMetadataAddress", () => {
@@ -186,6 +220,11 @@ describe("isLinkLocalOrMetadataAddress", () => {
     ["[fe80::1]", true],
     ["febf::1", true],
     ["fd00:ec2::254", true],
+    ["fd00:ec2::23", true],
+    ["[fd20:ce::254]", true],
+    ["fd20:ce::254", true],
+    ["fd00:ec2::253", false],
+    ["fd12:3456:789a::1", false],
     ["::ffff:a9fe:a9fe", true],
     ["10.0.0.1", false],
     ["127.0.0.1", false],
@@ -742,7 +781,7 @@ describe("refusedWithoutLookup: what the URL alone settles (pub#770)", () => {
   });
 
   test("a public name is left to the request's own vetting", () => {
-    expect(refusedWithoutLookup("https://partner.example/pricing", publicSite)).toBe(false);
+    expect(refusedWithoutLookup("https://partner.example.com/pricing", publicSite)).toBe(false);
   });
 
   test("a private site's audit allows private addresses, never link-local or metadata", () => {
@@ -751,5 +790,62 @@ describe("refusedWithoutLookup: what the URL alone settles (pub#770)", () => {
     expect(refusedWithoutLookup("http://169.254.169.254/", privateSite)).toBe(true);
     expect(refusedWithoutLookup("http://[fe80::1]/", privateSite)).toBe(true);
     expect(refusedWithoutLookup("http://metadata.google.internal/", privateSite)).toBe(true);
+  });
+});
+
+describe("egressRefuses: a redirect loop's pre-check (repo#2830)", () => {
+  const policy: EgressPolicy = {
+    allowPrivateNetwork: true,
+    resolve: table({ "intranet.test": ["10.0.0.5"], "imds.example.com": ["169.254.169.254"] }),
+  };
+
+  test("true for what the policy refuses, false for what it allows; nothing is sent", async () => {
+    expect(await egressRefuses("http://169.254.169.254/latest/", policy)).toBe(true);
+    expect(await egressRefuses("http://metadata.google.internal/", policy)).toBe(true);
+    expect(await egressRefuses("http://imds.example.com/", policy)).toBe(true);
+    expect(await egressRefuses("http://intranet.test/", policy)).toBe(false);
+  });
+
+  test("a resolver failure is not a refusal: it propagates", async () => {
+    await expect(egressRefuses("http://unknown.test/", policy)).rejects.toThrow("ENOTFOUND");
+  });
+});
+
+describe("a scoped link-local answer beside routable ones (repo#2830)", () => {
+  // What macOS answers for a LAN mDNS name such as `nas.local`.
+  const lan = ["::1", "fe80::1c2b:3a4d:5e6f:7081%en0", "fd07::5", "127.0.0.1", "192.168.1.5"];
+
+  test("is set aside for a pinned request, which connects to a routable address", async () => {
+    const target = await vetEgressTarget("http://nas.local:5000/", {
+      allowPrivateNetwork: true,
+      resolve: table({ "nas.local": lan }),
+    });
+    expect(target?.urls.some((url) => url.includes("fe80"))).toBe(false);
+    expect(target?.urls).toContain("http://127.0.0.1:5000/");
+  });
+
+  test("still refuses a name whose only answers are scoped link-local", async () => {
+    await expect(
+      vetEgressTarget("http://printer.local/", {
+        allowPrivateNetwork: true,
+        resolve: table({ "printer.local": ["fe80::1%en0"] }),
+      }),
+    ).rejects.toThrow(EgressRefusedError);
+  });
+
+  test("still refuses an unscoped link-local answer, and any when the transport connects by name", async () => {
+    await expect(
+      vetEgressTarget("http://nas.local/", {
+        allowPrivateNetwork: true,
+        resolve: table({ "nas.local": ["192.168.1.5", "fe80::1"] }),
+      }),
+    ).rejects.toThrow(EgressRefusedError);
+    await expect(
+      vetEgressTarget("http://nas.local/", {
+        allowPrivateNetwork: true,
+        pin: false,
+        resolve: table({ "nas.local": lan }),
+      }),
+    ).rejects.toThrow(EgressRefusedError);
   });
 });

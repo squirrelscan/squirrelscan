@@ -10,7 +10,7 @@ Cloud audits are priced in **credits** - small integers, not dollars. A signed-i
 
 | Source | Credits | Notes |
 |--------|---------|-------|
-| Free plan | 500/month | Every account, no card required; resets monthly on your signup date |
+| Free plan | 500/month | One account per email inbox, no card required; resets monthly on your signup date ([details](#one-free-allowance-per-inbox)) |
 | Pro plan ($19/mo or $190/yr) | 3,000/month | Resets each billing period; unused monthly credits expire |
 | Team plan ($29/seat/mo or $290/seat/yr) | 3,000/seat/month | Pooled across the org; see [Team plan](/cloud/team) for seat billing rules |
 | Credit top-up (min $10) | 100 per $1 | Paid plan only; pick any amount; never expire |
@@ -18,6 +18,26 @@ Cloud audits are priced in **credits** - small integers, not dollars. A signed-i
 Annual billing is 12 months for the price of 10. Your monthly credits still arrive every month; you just pay once a year.
 
 Monthly credits are spent before purchased top-up credits. Subscribe and top up from the **Billing & Credits** page in the [dashboard](/dashboard).
+
+### One free allowance per inbox
+
+The Free plan's 500 monthly credits go to one account per email inbox. The first account on an inbox to receive them keeps them. A newer account on the same inbox starts with 0 free credits, and so does an account on a throwaway-inbox service such as Mailinator or YOPmail. The account itself still works: you can sign in and use the dashboard, and a signed-in `squirrel audit` [runs locally](#when-credits-run-out), the same as for any account that is out of credits. It just has no free cloud credits.
+
+The same applies to a second free organization created by the same account: it starts with 0 free credits. Sign in to your first organization to use the free credits.
+
+Two addresses count as the same inbox when they deliver to the same mailbox:
+
+- A `+tag` is ignored on Gmail, Outlook, Hotmail, Live, MSN, iCloud, Proton and Fastmail addresses, so `name+test@gmail.com` is the same inbox as `name@gmail.com`. On any other domain, `staff+alice@example.com` and `staff+bob@example.com` are separate inboxes.
+- Dots in a Gmail address are ignored, and `googlemail.com` is `gmail.com`, so `j.doe@gmail.com` is the same inbox as `jdoe@gmail.com`.
+- Capital letters never matter.
+
+Deleting the first account, or changing its email address, does not free the inbox for a new account. Accounts whose organization was created before 24 October 2026 keep their free credits whatever their address.
+
+If your account shows 0 free credits:
+
+- Sign in with the account you created first on that inbox. Its free credits are still there.
+- Upgrade to [Pro or Team](https://squirrelscan.com/pricing). Paid plans get their own monthly credits and can top up.
+- If you think this is a mistake, [contact support](/dashboard/support) from the dashboard.
 
 Free, Pro, and Team run the **same** audit at the same price: the base charge includes every cloud service (AI analysis, editor's summary, blocking check, tech + site metadata, report publishing) on every plan. The one difference is the [Full level](/guides/audit-levels#full-on-the-free-plan): its every-page crawl is Pro and Team, and on Free a Full audit samples one page per URL pattern first instead, the way Surface does. [Scheduled audits](/cloud/scheduled-audits) are on every plan: free re-audits one website weekly or monthly, Pro and Team re-audit every website daily. Pro and Team just grant more monthly credits and unlock top-ups, that daily cadence and extra scheduled sites, and higher render concurrency - Team adds pooled credits, invites, and roles on top. [Custom request headers](/dashboard/crawl-settings#custom-request-headers) are on every plan. [Broken link alerts](/dashboard/emails#new-broken-links) are Pro and Team, and cost nothing extra.
 
@@ -51,10 +71,9 @@ Balance: 2340 credits (2000 monthly + 340 purchased)
 Pricing:
   audit                 50 base + 2 per audited page
                            (analysis, tech detection, publishing included)
-  external links         1 per link a cloud audit checks
-                           (internal links and the CLI's own checks are free)
+  external links         1 per link the cloud verifies for an audit, at most 1 per page
+                           (internal links, and links checked from your machine, are free)
   content_gaps          25 per run
-  issue_enrich           3 per issue
   keyword_gaps          25 per run
 
 Top up: https://app.squirrelscan.com/upgrade?plan=pro&interval=month&org=01J0ORGEXAMPLE0000000000A&src=cli
@@ -70,15 +89,23 @@ Every signed-in audit has one flat price:
 |------|------|-------|
 | Audit base | 50 per audit | covers every included service below |
 | Audited page | 2 per page | every page the report shows as audited, however it was fetched: plain HTTP, a [cloud browser render](/cloud/rendering), the local or cloud render cache, a `304 Not Modified`, or a plain fetch after a render failed |
-| External link check | 1 per link | cloud audits only: each distinct external destination the cloud checks, whatever status it returns |
+| External link check | 1 per link | each distinct external destination the cloud verifies for an audit (it works, redirects or is broken), cloud or signed-in CLI, at most 1 per page of the audit's page limit. A link it cannot verify, or does not answer in time, costs nothing (see below) |
 
 A page is charged once per audit. Rendering it, serving it from a cache, or retrying a request never adds a second charge, and the same external link on twenty pages is one check. Run the audit again and it is charged again: it is a new audit.
 
 The page count is the one in the report's coverage line ("Coverage: audited 12 of 12 known pages"), or its page count when there is no coverage line. A URL the crawl fetched but could not audit, such as a `404` kept for its broken-link finding or a `500`, is not an audited page. A cloud render paid for one while the audit ran is refunded when the audit completes, so an audit's page charge always matches the pages its report shows. A re-audit is only charged for the pages it fetched itself: pages a [smart audit](/configuration#smart-audits) carries forward from an earlier audit are not charged again.
 
-Internal links (on the site you are auditing) are always free. The external-link charge applies to [cloud audits](/guides/cloud-audits) with external link checking turned on, which the surface and full [audit levels](/guides/audit-levels) do and quick does not.
+Internal links (on the site you are auditing: its own host and its `www` twin) are always free. A link to another of your domains, such as `example.co.uk` linking to `example.com`, is an external link and is charged like one. The external-link charge applies to any audit that sends its external links to the cloud: a [cloud audit](/guides/cloud-audits) with external link checking turned on, which every [audit level](/guides/audit-levels) does unless the website or the run switches it off, and a signed-in `squirrel audit` at surface or full. A quick `squirrel audit` checks its external links on your machine, for free.
 
-The links the CLI checks for an audit you run with `squirrel audit` are free too. At the surface and full levels, a signed-in CLI audit sends its external links to the cloud's [dead-link check](/rules/links/dead-links), which answers the ones it can within a time limit and leaves the rest. The CLI checks every link the cloud left unanswered on your machine, so nothing is charged. Signed out, with `--offline`, or at the quick level, the CLI checks links on your machine and nothing is charged.
+An external link costs a credit only when the cloud verifies it: it works, redirects or is broken. A link it cannot verify costs nothing: one behind a bot wall, a throttled one, one the run's limit on deeper checks for its site left unverified, or a 404 waiting for its confirming check. The report lists those as unverified. A link it does not answer in time costs nothing either. An audit reserves its link credits up front, and the reserve is settled down to the links the cloud verified.
+
+A signed-in `squirrel audit` sends its external links to the cloud's [dead-link check](/rules/links/dead-links), which answers the ones it can within a time limit, and pays 1 credit for each distinct link the cloud verifies, at most 1 per page of the audit's page limit. A link the cloud answers as unverifiable costs nothing, as above. The CLI checks every link the cloud left unanswered on your machine, and those are free. Its estimate before the audit includes the link reserve. Signed out, or at the quick level, the CLI checks links on your machine and nothing is charged; `--offline` checks no external links at all.
+
+Signed-in CLI link checks were free before v0.0.114. A CLI from before it no longer gets cloud link checks: the cloud refuses them and charges nothing, and the CLI checks its links on your machine until you run `squirrel self update`.
+
+An audit signed in with an org API key (CI) is not registered as a cloud run: it pays no audit base, no page charge and nothing for its links, which it checks on the runner. Pages it renders in the cloud are billed as standalone renders, 2 credits each. See [What an API-key audit costs](/guides/ci#what-an-api-key-audit-costs).
+
+A dead-link check called directly, outside an audit (`POST /v1/services/dead-links` with no run), costs 1 credit for each distinct link it verifies, counted as an audit counts them (by scheme, host and path, so the same page with a different query string or fragment is one link). A link it cannot verify or does not answer costs nothing.
 
 The base includes everything else: AI page analysis ([`ai/llm-parsability`](/rules/ai/llm-parsability), [`ai/page-type-match`](/rules/ai/page-type-match)), [authority signals](/rules/eeat/authority-signals), the [Blocking check](/rules/adblock), [technology detection](/cloud/technologies), [site metadata](/cloud/site-metadata), the [editor's summary](/cloud/editor-summary), and publishing the report. None of these are charged separately.
 
@@ -90,7 +117,6 @@ Opt-in add-ons are the only extra charges:
 |--------|------|-------|
 | Keyword gaps | 25 per audit | [`gaps/keywords`](/rules/gaps/keywords) (opt-in) |
 | Content gaps | 25 per audit | [`gaps/content`](/rules/gaps/content) (opt-in) |
-| Issue enrichment | 3 per issue | AI recommendations in the dashboard |
 
 A 19-page audit costs **88 credits**: 50 base + 38 for its pages. A 100-page audit costs 250. A cloud audit of the same 19 pages that checks 7 distinct external links costs 95.
 
@@ -105,7 +131,7 @@ confirm_threshold = 50        # estimates above this prompt before spending
 enabled = true                # master switch for all cloud features
 ```
 
-- **Per-audit cap** - if a full audit would cost more than `max_credits_per_audit`, the page limit comes down to what the cap covers (475 pages at the default of 1000) and the run tells you. Cloud enrichment past the cap is truncated deterministically and the remaining rules report `skipped` with reason `credit-cap-reached`.
+- **Per-audit cap** - if a full audit would cost more than `max_credits_per_audit`, the page limit comes down to what the cap covers (475 pages at the default of 1000, or 316 for an audit whose external links the cloud checks, at 3 credits per page) and the run tells you. Cloud enrichment past the cap is truncated deterministically and the remaining rules report `skipped` with reason `credit-cap-reached`.
 - **Confirmation prompt** - in a terminal, an estimate above `confirm_threshold` asks before proceeding. Use `--yes` to skip prompts (e.g. in CI or agent workflows). Non-interactive runs proceed without prompting, bounded by the cap.
 - **Master switch** - `enabled = false` turns off all cloud calls for the project.
 
@@ -113,7 +139,7 @@ See the [cloud configuration reference](/configuration/cloud) for all options.
 
 ## When credits run out
 
-Nothing breaks. A signed-in audit needs at least 52 credits (the base plus one page) to start: below that, the CLI runs the audit locally instead and tells you so. Above that, an audit your balance can't fully cover is not refused and does not stop part-way: its page limit comes down to what the balance pays for (50 base + 2 per page, or 3 per page for a cloud audit that checks external links), and the run says how many pages it kept. Cloud audits started from the dashboard, the API, the MCP server, or a schedule work the same way. If credits still run out mid-audit, cloud rules report `skipped` with reason `insufficient-credits`, the audit completes with all local rules, and you see a single warning with a top-up link. If an audit fails after you were charged, the charge is automatically refunded.
+Nothing breaks. A signed-in audit needs at least 52 credits (the base plus one page) to start, or 53 when the cloud checks its external links (one page plus its link): below that, the CLI runs the audit locally instead and tells you so. Above that, an audit your balance can't fully cover is not refused and does not stop part-way: its page limit comes down to what the balance pays for (50 base + 2 per page, or 3 per page for an audit whose external links the cloud checks, cloud or signed-in CLI), and the run says how many pages it kept. Cloud audits started from the dashboard, the API, the MCP server, or a schedule work the same way. If credits still run out mid-audit, cloud rules report `skipped` with reason `insufficient-credits`, the audit completes with all local rules, and you see a single warning with a top-up link. If an audit fails after you were charged, the charge is automatically refunded.
 
 The audit engine can also keep cloud results it has already paid for when the cloud analysis step (AI page analysis, authority signals, gap analysis, the raw vs rendered comparison and the rest) is stopped early. A caller that runs the engine can give that step a deadline, so a slow provider cannot hold the audit up. When the deadline is reached, every result that had already come back is kept and used by the rules, rules whose results had not come back report `skipped` with reason `service-unavailable`, and no new cloud call is started. The spend lists each call known to be charged, once: every call that came back, plus any render batch the cloud had accepted. A call still running at the deadline is not listed and may still be charged, so the estimated balance after the run is marked approximate. Your balance is always the authoritative figure. The CLI does not set a deadline on this step, so a CLI audit always waits for the cloud analysis to finish.
 

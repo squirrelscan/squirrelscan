@@ -17,8 +17,10 @@ import {
 import { fetchUndecoded, readBodyCapped } from "@squirrelscan/utils/response-body";
 import { isHttpOrHttpsUrl, safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
 import type { FetchBudget, FetchOutcome } from "./fetch-budget";
+import { customHeadersFor, type HeaderScope } from "./lib/header-scope";
 import { rateLimitedFlag, wafBlockedFlag } from "./lib/asset-status";
 import { normalizeEncoding } from "./resource-checker";
+import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
 
 export interface ScriptFetchResult {
   url: string;
@@ -51,6 +53,8 @@ export interface ScriptFetcherOptions {
   pageCount?: number;
   /** Custom HTTP request headers attached to every script fetch (#494). Secret values — never logged. */
   customHeaders?: Record<string, string>;
+  /** Hosts that get `customHeaders` (#732); absent: every request does. */
+  headerScope?: HeaderScope;
   /**
    * #1252: shared tarpit-aware budget (same object as the resource checker's, so
    * scripts + assets share ONE budget). Skips a script before its fetch once the
@@ -140,11 +144,10 @@ async function fetchScriptAttempt(
       url,
       {
         method: "GET",
-        headers: {
-          "User-Agent": options.userAgent,
-          Accept: "application/javascript, text/javascript, */*",
-          ...options.customHeaders,
-        },
+        headers: mergeHeaderRecords(
+          { "User-Agent": options.userAgent, Accept: "application/javascript, text/javascript, */*" },
+          customHeadersFor(url, options.customHeaders, options.headerScope),
+        ),
         signal: controller.signal,
       },
       // #2717: undecoded on every hop; readBodyCapped decodes within its cap.
@@ -319,7 +322,7 @@ function fetchSingleScript(
   url: string,
   options: ScriptFetcherOptions
 ): Effect.Effect<ScriptFetchResult, never, never> {
-  // No caching in package version — CLI wraps with content-store caching
+  // No cache: every audit, and `squirrel analyze`, fetches its scripts afresh.
   return Effect.promise(async () => {
     // #1252: skip before launching once the budget is spent or the host tarpits.
     if (options.budget?.shouldSkip(url)) {

@@ -1,0 +1,107 @@
+---
+title: "What is agent experience (AX)? Five pillars, checked"
+sidebarTitle: "Agent experience (AX)"
+description: "Agent experience (AX) is how well a site works for AI agents that read it, find their way around it and act on it. The five pillars and the rules."
+---
+
+**Agent experience (AX)** is how well a site serves the AI agents that read it, find their way around it and act on it, the way UX describes how it serves people.
+
+The client might be a chat assistant fetching a page a person asked about, an answer engine building its index, or an autonomous agent calling an API. Most agent fetchers, such as `ChatGPT-User` and `Claude-User`, are plain HTTP clients with no JavaScript engine: they read the HTML the server sent and nothing else.
+
+{/* glossary:hub:start */}
+
+Category: [Agent Experience](/rules/ax)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+A page whose raw HTML is an empty shell reads to an agent as a page with nothing on it, even when a person sees a full article. Access breaks in less visible ways too. AI vendors use separate user-agent tokens for training, search and user requests: Anthropic, for example, runs `ClaudeBot`, `Claude-SearchBot` and `Claude-User` as three bots. A block meant for training can end up stopping the fetch a person is waiting on inside an assistant.
+
+## How squirrelscan checks it
+
+squirrelscan splits AX into five pillars, each with its own rules on the [Agent Experience hub](/rules/ax#the-five-pillars):
+
+- Readable: is the content in the raw HTML, and how many tokens does the page cost?
+- Reachable: do robots.txt and the edge let AI crawlers and fetchers in?
+- Discoverable: is there a machine-readable entry point, such as `llms.txt` or a `.well-known` manifest?
+- Declared: has the site stated a policy for AI use, such as a `Content-Signal` line?
+- Actionable: can an agent find the API and the OAuth metadata it needs?
+
+Agent experience is one of the four score groups on every report. Most AX rules are informational and do not move the score. AI crawler access, agent blocking and token weight always score.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [Content that needs JavaScript: invisible to raw-HTML agents](/rules/ax/content-without-js) | Most of a page's text arriving only after JavaScript runs. squirrel compares the raw HTML against the rendered DOM and reports the gap. | info |
+| [Text to HTML ratio: the token cost of a page for an agent](/rules/ax/token-weight) | Visible text under 15% of the HTML, or a page over a 100,000-token budget. squirrel estimates both from the raw response. | warning |
+| [Accept: text/markdown: serving Markdown to AI agents](/rules/ax/markdown-response) | No Markdown representation of a page, through content negotiation, a .md variant, or a link rel=alternate header. squirrel probes all three. | info |
+| [AI crawlers in robots.txt: which bots you block, by class](/rules/ax/ai-crawlers) | robots.txt blocking Claude-User or PerplexityBot alongside the training bots. squirrel classifies all 24 known AI crawlers and names what each block costs. | warning |
+| [Blocking AI agents at the edge: what robots.txt hides](/rules/ax/agent-blocking) | A WAF or bot-management rule serving GPTBot or Claude-User a challenge the browser never sees. squirrel probes the homepage as all three. | error |
+| [llms.txt: what the file is and how squirrel validates it](/rules/ax/llms-txt) | No /llms.txt at the root, an SPA fallback served in its place, or a file with no H1 and no links. squirrel checks the file and its format. | info |
+| [AGENTS.md: the paths squirrel probes and what counts](/rules/ax/agents-md) | No AGENTS.md at the repository root or any conventional path, or an SPA fallback served in its place. squirrel probes four paths and sniffs the body. | info |
+| [MCP and A2A manifests under .well-known: what squirrel finds](/rules/ax/well-known-agent) | No MCP server card, A2A agent card or agent-skills manifest, or a leftover ai-plugin.json from the ChatGPT plugin era. squirrel probes for all four. | info |
+| [Content-Signal in robots.txt: search, ai-input, ai-train](/rules/ax/content-signals) | A Content-Signal line with a typo, or one declaring ai-train=yes while robots.txt blocks the training crawlers. squirrel parses and cross-checks both. | warning |
+| [api-catalog and OpenAPI: how an agent finds your API](/rules/ax/api-discovery) | No OpenAPI spec at a conventional path, or OAuth metadata with no way for an agent to register a client. squirrel probes both. | info |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Start with Readable and Reachable, because the other pillars depend on an agent getting the page at all. Render the main content on the server so it is in the response body (see [the content-without-JavaScript fix](/rules/ax/content-without-js#how-to-fix-it)), and make sure robots.txt and the WAF let in the fetchers that act for a person:
+
+```
+User-agent: GPTBot
+Disallow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+```
+
+This example opts out of OpenAI's training crawl and lets in its search crawler and the fetches a person starts in ChatGPT. The [AI crawler access fix](/rules/ax/ai-crawlers#how-to-fix-it) and the [agent blocking fix](/rules/ax/agent-blocking#how-to-fix-it) cover the other vendors and the edge.
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include ax/content-without-js,ax/token-weight,ax/markdown-response,ax/ai-crawlers,ax/agent-blocking,ax/llms-txt,ax/agents-md,ax/well-known-agent,ax/content-signals,ax/api-discovery
+```
+
+{/* glossary:run:end */}
+
+To run every agent experience rule, use `--rule-include ax`. A signed-out local audit costs nothing. The raw-versus-rendered comparison in [ax/content-without-js](/rules/ax/content-without-js) needs a cloud audit, because rendering is a cloud service.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [llms.txt](/glossary/llms-txt): A proposed Markdown file at /llms.txt that gives language models a curated map of a site's key content.
+- [AI crawler](/glossary/ai-crawler): A bot that fetches pages for AI companies, in three classes: training crawlers, AI search indexers and user-triggered fetchers, each with its own user-agent token.
+- [Generative engine optimization (GEO)](/glossary/generative-engine-optimization): Making content more likely to be retrieved, cited and quoted by AI answer engines; the term comes from a 2023 research paper.
+- [Client-side rendering](/glossary/client-side-rendering): Building page content in the browser with JavaScript; agents and many fetchers that do not run JavaScript see an empty page.
+
+{/* glossary:related:end */}
+
+## Learn more
+
+- [AI crawlers guide](https://squirrelscan.com/learn/ai-crawlers)
+- [llms.txt guide](https://squirrelscan.com/learn/llms-txt)
+
+## References
+
+- [Does Anthropic crawl data from the web, and how can site owners block the crawler?](https://support.claude.com/en/articles/8896518-does-anthropic-crawl-data-from-the-web-and-how-can-site-owners-block-the-crawler)
+- [Understand JavaScript SEO basics, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics)
+- [Rendering on the web, web.dev](https://web.dev/articles/rendering-on-the-web)
+
+{/* glossary:jsonld:start */}
+
+import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";
+
+<GlossaryJsonLd slug="agent-experience" />
+
+{/* glossary:jsonld:end */}

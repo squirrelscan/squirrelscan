@@ -2,6 +2,8 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { ownTableCells, type OwnTable } from "../shared/own-table-cells";
+
 export const tableHeadersRule: Rule = {
   meta: {
     id: "a11y/table-headers",
@@ -37,12 +39,28 @@ export const tableHeadersRule: Rule = {
 
     const tablesWithoutHeaders: number[] = [];
     let tableIndex = 0;
+    // squirrelscan/repo#3355: whether a table holds a <th>, its own or a nested
+    // table's, as `table.querySelectorAll("th")` answered, without querying
+    // every table's subtree. A table wrapping a data table is a layout table
+    // (axe reads it so too), so the nested table's headers still clear it.
+    // Tables come in document order, so walking them backwards sees every nested
+    // table before the one around it.
+    const own = ownTableCells(doc);
+    const withHeaders = new Set<OwnTable>();
+    const owned = [...own.values()];
+    for (let i = owned.length - 1; i >= 0; i--) {
+      const t = owned[i]!;
+      if (withHeaders.has(t) || t.cells.some((cell) => cell.localName === "th")) {
+        withHeaders.add(t);
+        if (t.parent) withHeaders.add(t.parent);
+      }
+    }
 
     for (const table of tables) {
       tableIndex++;
-      const headers = table.querySelectorAll("th");
+      const t = own.get(table);
 
-      if (headers.length === 0) {
+      if (!t || !withHeaders.has(t)) {
         tablesWithoutHeaders.push(tableIndex);
       }
     }

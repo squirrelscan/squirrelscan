@@ -16,7 +16,7 @@ squirrel audit <url> [options]
 
 | Argument | Description |
 |----------|-------------|
-| `url` | The URL to audit (required) |
+| `url` | The URL to audit (required). Without a scheme, `https://` is assumed, or `http://` for a local or private host such as `localhost:3000`, `192.168.1.10` or `myapp.test` (see [local audits](/guides/local-audits-cli#local-and-private-hosts-stay-local)) |
 
 ## Options
 
@@ -46,8 +46,8 @@ squirrel audit <url> [options]
 | `--render` | | Force cloud browser rendering for this run: alias of `--render-mode all` ([uses credits](/guides/browser-rendering); requires login) | auto |
 | `--render-mode` | | Render strategy: `off` (HTTP only) · `auto` (render only client-rendered pages) · `all` (render every page). Overrides `[cloud].render` | the level's: `auto` for quick, `all` for surface and full |
 | `--http` | | Force plain HTTP for this run: alias of `--render-mode off` (never render in the cloud; pages cost the same either way) | auto |
-| `--offline` | | Run fully offline: skip cloud features, publishing, and telemetry. External links are not checked; internal link targets still are | `false` |
-| `--external-links` | | Check links to other sites this run, at any level. Cannot be combined with `--offline` or `--no-external-links` | the level's: off for quick, on for surface and full |
+| `--offline` | | Run fully offline: skip cloud features, publishing, and telemetry. Nothing on another site is checked: external links, third-party scripts, stylesheets and fonts, and sitemap URLs on another site are skipped. Internal link targets still are checked. See [Fully offline audit](#fully-offline-audit) for what a redirect can still reach | `false` |
+| `--external-links` | | Check links to other sites this run, even where `[external_links] enabled = false` turns them off. Cannot be combined with `--offline` or `--no-external-links` | the level's: on at every level |
 | `--no-external-links` | | Do not check links to other sites this run. The report shows them as **Not checked** | the level's |
 | `--no-internal-links` | | Do not status-check internal link targets the crawl did not fetch (one `HEAD` request each, on by default at every level). See [Link checking defaults](/rules/links#link-checking-defaults) | checked |
 | `--header` | `-H` | Custom HTTP header on every crawl request, `Name: Value` (repeatable). Merges over `[crawler] headers`; values are redacted in output. See [Web Bot Auth](/guides/web-bot-auth) | none |
@@ -61,6 +61,7 @@ squirrel audit <url> [options]
 | `--probe-budget` | | Wall-clock cap for all probing in this run, such as `30s` or `2m` (max `1h`). Overrides `[security] budget` | `30s` active, `2m` aggressive |
 | `--pentest` | | Shortcut for `--level full --probe aggressive` | `false` |
 | `--summary` | | Print only the score, category breakdown, and issue counts — no per-issue detail. Console format only | `false` |
+| `--include-passed` | | Also list the rules that passed, with how many pages each passed on | `false` |
 
 ### Audit levels
 
@@ -186,11 +187,26 @@ squirrel audit https://example.com -f html -o report.html
 squirrel audit https://example.com --refresh
 ```
 
+### Resume an interrupted crawl
+
+```bash
+squirrel audit https://example.com --resume
+```
+
+Resume only continues a crawl when this process can claim it. If another live
+process already owns that crawl, the command names its PID and host and starts a
+new crawl instead. A lease becomes stale after 5 minutes without a heartbeat;
+a live same-host PID remains protected longer. Stop the other process (Ctrl-C
+releases its lease immediately), wait 5 minutes for a silent remote owner to go
+stale, or use `--refresh` for a fresh crawl. See [crawl leases](/cli/self#crawl-leases).
+
 ### Publishing to the dashboard
 
 When you're **logged in and online, every audit auto-publishes to your dashboard as `unlisted`**, independent of cloud rendering or enrichment. You get a shareable link plus issue history with no extra flags. Not logged in (or `--offline`)? Nothing publishes.
 
 **Publishing is included in the audit base charge**, whatever the visibility. The auto-publish default is `unlisted`.
+
+Publishing and tracking the run in the dashboard need a [role](/cloud/team#roles) that runs audits in the organization you are signed in to: owner, admin or editor. As a viewer or billing member the audit still runs locally and its results are complete, but the run is not tracked and the report is not published: the CLI prints the reason (`forbidden_role`). Run with `--no-publish` to skip the publish attempt.
 
 ```bash
 # logged in → auto-publishes (unlisted) and prints the URL
@@ -245,7 +261,7 @@ An audit of a host no squirrelscan server can reach never publishes, never regis
 
 ### Browser rendering
 
-When you're **logged in, audits render every page in a cloud browser by default**, so JavaScript-heavy sites are audited against their fully rendered HTML. A signed-in audit costs 50 credits plus 2 per audited page whether a page is rendered or fetched over plain HTTP, so rendering never changes the bill. The first time an audit would spend credits the CLI asks once and remembers your answer, and if your balance can't cover the page limit the CLI lowers the limit to what it covers and tells you. See [Credits and pricing](/cloud/credits).
+When you're **logged in, audits render every page in a cloud browser by default**, so JavaScript-heavy sites are audited against their fully rendered HTML. A signed-in audit costs 50 credits plus 2 per audited page whether a page is rendered or fetched over plain HTTP, so rendering never changes the bill. At the levels that check external links it also pays 1 credit per external link the cloud verifies, at most 1 per page; links the cloud cannot answer in time are checked on your machine for free. The first time an audit would spend credits the CLI asks once and remembers your answer, and if your balance can't cover the page limit the CLI lowers the limit to what it covers and tells you. See [Credits and pricing](/cloud/credits).
 
 Force plain HTTP for a run (no cloud browser):
 
@@ -263,9 +279,15 @@ For finer control, `--render-mode auto` renders **only** pages that need it (cli
 
 ### Fully offline audit
 
-Run an audit with zero network calls beyond the site being audited: no cloud
-analysis, no publishing, no update checks, no telemetry. Results are stored in
-the local database as usual:
+Run an audit with no cloud and no checks of other sites: no cloud analysis, no
+publishing, no update checks, no telemetry. External links are not checked, and
+neither are the third-party scripts, stylesheets and fonts the pages load, or
+sitemap URLs on another site. `reliability/broken-resources` reports the
+third-party ones as not measured, and `crawl/sitemap-4xx` says how many sitemap
+URLs on another site it skipped. Requests to the audited site can still end up
+on another host when the site sends them there: a page or asset redirect, or a
+sitemap that robots.txt lists on another host. Results are stored in the local
+database as usual:
 
 ```bash
 squirrel audit https://example.com --offline
@@ -276,7 +298,8 @@ cloud access and login).
 
 ### Gate CI on audit results
 
-Use `--fail-on` to fail a CI build when an audit regresses. The command exits
+Use `--fail-on` to fail a CI build when an audit crosses a threshold you set.
+Thresholds are absolute, not a comparison with an earlier audit. The command exits
 with code `2` when **any** threshold trips (vs `1` for operational errors and
 `0` when everything passes), and prints a summary of what tripped:
 
@@ -303,6 +326,8 @@ Operators: `<`, `<=`, `>`, `>=`, `=`; all five work on the numeric metrics
 (`score`, `score:<category>`, `errors`, `warnings`). For `severity`, `=` means
 the **exact** rank (e.g. `severity=warning` trips on warnings but not errors);
 use `>=` for "at least" (e.g. `severity>=warning` trips on warnings *or* errors).
+
+A security rule that ran past its [time budget](/rules#rule-time-budget) did not check some pages, so an empty result there is not a clean one. It stays out of the score, and the gate counts each such rule as one warning-severity finding: `warnings>0` and `severity>=warning` trip on it, `errors` and `score` do not. A gate that only uses `errors` or `score` therefore passes when a security rule timed out: add a `warnings` or `severity>=warning` gate, or raise [`[rules] time_budget_ms`](/configuration/rules#time_budget_ms) and run again. The count appears only in the gate summary (`+1 timed-out security rule`), never as a finding in the report. The summary says which rule timed out and on how many pages. Other rules that time out are not counted.
 
 The gate summary is written to stderr, so machine formats like `--format json`
 keep a clean stdout for piping. A malformed expression fails fast (exit `1`)
@@ -353,6 +378,16 @@ This prints the header, health score, category breakdown, editor's summary
 (when present), and per-category issue counts, but skips individual rule
 findings and affected-page lists. Console format only — combine with a
 non-console `--format` and the command errors up front.
+
+### Passed rules
+
+Use `--include-passed` to list the rules that passed after the issues, with how many pages each passed on:
+
+```bash
+squirrel audit https://example.com --include-passed
+```
+
+It works with every `--format`. To list them for an audit you already ran, use [`squirrel report --include-passed`](/cli/report#list-what-passed).
 
 ### Verbose output
 
@@ -419,6 +454,16 @@ Visual report you can open in a browser:
 squirrel audit https://example.com -f html -o report.html
 open report.html
 ```
+
+### Progress without a terminal
+
+With no terminal on stdout (a CI job, a pipe, a supervisor), the audit has no spinner. The step after the crawl walks every crawled page before the rules run, and on a big site that takes minutes, so it writes a progress line to stderr about every 15 seconds while it runs. The line is written between batches of pages (a batch is sized by bytes, so on any site one ends every few seconds), which means a single batch that takes longer than 15 seconds shows no line until it ends:
+
+```text
+Walking pages: 40/104
+```
+
+It goes to stderr, so `--format json` and piped stdout stay clean, and it stops when the walk ends. A terminal keeps its spinner and prints no extra lines. There is no `--quiet` flag; redirect stderr (`2>/dev/null`) to drop the line. Set `SQUIRREL_WALK_HEARTBEAT_MS` to a number of milliseconds to change the 15 seconds, for a supervisor with a shorter watchdog.
 
 ## Crawl behavior
 

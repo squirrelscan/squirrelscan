@@ -15,7 +15,7 @@ The rule reads every `script[type="application/ld+json"]` on the page and keeps 
 
 - `faq-schema`: reports at info status with the message `No FAQPage schema found` when no such node exists. No further checks run.
 - `faq-mainEntity`: warns with the message `FAQPage missing mainEntity` and the value `Add array of Question items` when `mainEntity` is absent.
-- `faq-questions`: warns with the message `FAQPage has no questions` when `mainEntity` is an empty array. It warns with the message `N question(s) missing required properties` and the value `Each Question needs @type, name, acceptedAnswer` when at least one entry lacks any of the three.
+- `faq-questions`: warns with the message `FAQPage has no questions` when `mainEntity` is an empty array. It warns with the message `N question(s) missing required properties` and the value `Each Question needs @type, name, acceptedAnswer` when at least one entry lacks any of the three. A `mainEntity` entry that is a node reference, `{"@id": "…#q1"}` as Yoast writes it, is read from the node with that `@id` anywhere in the page's JSON-LD, in the same `@graph` or another script. A reference to a node the page does not have is counted as missing its properties.
 - `faq-valid`: emitted only when at least one entry is valid, passing with the message `FAQPage has N valid question(s)`.
 
 An entry counts as valid only when its `@type` is exactly the string `Question`. An entry whose `@type` is an array containing `Question` is counted as invalid. A `mainEntity` holding a single object rather than an array is accepted and treated as one question. Every property test is a truthiness test rather than a presence test, so a property present but empty, `0` or `false` counts as missing. A `mainEntity` of `""` or `0` therefore reports as missing.
@@ -81,6 +81,12 @@ enable = ["schema/faq"]
 - [schema/article](/rules/schema/article): the type to use when the page is a written article rather than a question list.
 
 Structured data findings ship in every audit next to the core SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [FAQ schema](/glossary#faq-schema).
+
+{/* glossary:backlinks:end */}
 
 ## References
 

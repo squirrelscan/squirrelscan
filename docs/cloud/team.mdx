@@ -1,6 +1,6 @@
 ---
 title: "Team Plan"
-description: "Per-seat pricing, pooled credits, and roles for multi-person orgs"
+description: "Per-seat pricing, pooled credits, roles and white-label reports for multi-person orgs"
 icon: "users"
 ---
 
@@ -37,17 +37,103 @@ Every member has a role that controls what they can do in an org:
 
 | Role | Access |
 |------|--------|
-| Owner | Full access, including billing and org deletion. One per org. |
-| Admin | Manage members, websites, and settings. Cannot delete the org. |
-| Editor | Create and manage websites and audits. |
-| Viewer | Read-only access to reports and audits. |
-| Billing | Manage subscription and credits only, no website access. |
+| Owner | Everything, including changing members' roles. One per org. |
+| Admin | Everything except changing roles: members, API keys, org settings, billing, websites and audits. |
+| Editor | Websites and audits: read, run, add, change and delete them, with their settings and schedules. |
+| Viewer | Read only: websites, audits, reports, issues and credits. |
+| Billing | Billing and credits only. No access to websites or audits. |
 
-Admins and owners invite members and set roles from **Settings → Team**.
+What each role can do:
+
+| Action | Owner | Admin | Editor | Viewer | Billing |
+|--------|-------|-------|--------|--------|---------|
+| Read websites, audits, reports and issues | Yes | Yes | Yes | Yes | No |
+| Run audits, including scheduled audits and cloud checks (spends credits) | Yes | Yes | Yes | No | No |
+| Add, change and delete websites, their settings, schedules and issues | Yes | Yes | Yes | No | No |
+| See a website's custom request header values | Yes | Yes | Yes | No | No |
+| Read credits, usage, billing state and the member list | Yes | Yes | Yes | Yes | Yes |
+| Buy credits, change the plan and open the billing portal | Yes | Yes | No | No | Yes |
+| Change org settings: name, logo, white-label and webhooks | Yes | Yes | No | No | No |
+| Invite and remove members | Yes | Yes | No | No | No |
+| Change a member's role | Yes | No | No | No | No |
+| Create and revoke API keys | Yes | Yes | No | No | No |
+
+The roles apply wherever you are signed in: the dashboard, the CLI (`squirrel auth login`) and the hosted [MCP server](/developers/mcp). An action your role does not allow returns `403` with the code `forbidden_role` and names your role; retrying does not help, so ask an owner to change your role (only owners change roles). A billing member sees none of an org's websites or audits: those reads answer as if the website were not there.
+
+[API keys](/developers/authentication#scopes) are the org's, not a member's: what a key can do is set by its scopes, whoever created it. Only owners and admins create and revoke them. A key keeps working when the member who created it is demoted or leaves the organization, so when you demote or remove someone who had a key's token, revoke that key and create a new one (`squirrel keys revoke`, or **Settings → API keys**). An MCP client you sign in to through OAuth gets only the scopes your role holds, and when your role changes to one with less access, your MCP sign-ins end and the client asks you to sign in again.
+
+Admins and owners invite members from **Settings → Team**.
+
+## Invites
+
+An invite is sent by email. When an owner or admin invites an address from **Settings → Team**, squirrelscan emails it from `notifications@mail.squirrelscan.com` with a link to the invite. The email names the organization, the role, and who sent it with their account email. The Team page says the invite was emailed only once the email has gone out.
+
+If the email could not be sent, the Team page says so and offers the invite link, which you can copy and send to them yourself. The invite stays under **Pending invites** either way, where you can revoke it. squirrelscan does not mail an address that has bounced or complained about our mail, or one that has unsubscribed.
+
+### Accepting or declining
+
+The link opens an invite page that shows the organization, who sent the invite and the role it grants. To accept, sign in with the address the invite was sent to, or create a free account with it on the way. The address must match the one you sign in with. Case does not matter, but a different spelling of the same mailbox (for example a Gmail address with or without dots, or with a `+tag`) does. If you are signed in with a different address, the page asks you to sign out first. You can also decline, which removes the invite.
+
+An invite stops working when:
+
+- it expires, 7 days after it was sent,
+- an owner or admin revokes it,
+- whoever sent it leaves the organization or stops being an owner or admin,
+- or it has been accepted.
+
+The invite page tells you when an invite no longer works. Ask an owner or admin of the organization for a new one.
+
+### Limits
+
+To keep invites from being used to send unwanted mail, they are limited. These limits apply to you and your organization:
+
+- 10 a minute and 20 an hour from one person,
+- 50 a day from one organization,
+- 100 pending invites in one organization, and 50 pending invites sent by one person across organizations. Revoking a pending invite frees its place.
+
+An invite over one of these is not created. The API answers `429` with the code `invite_rate_limited`, and the Team page says to try again later.
+
+Three more limits protect the people being invited, across every organization:
+
+- 3 invite emails a day to one mailbox,
+- 20 a day to one company's email domain (webmail domains such as Gmail or Outlook do not count, nor does a domain your organization already has a member at),
+- 1 a day from one organization to one address, so an invite sent again after you revoke one is not emailed again that day.
+
+Going over one of these never blocks you: the invite is created but not emailed, and the Team page offers its link to copy and send yourself. The limits count one mailbox however it is spelled: case makes no difference, nor does a `+tag`, nor dots in a Gmail address.
+
+## White-label reports
+
+White-label reports carry your brand in place of squirrelscan's. They are a Team and Enterprise feature and are off until you turn them on: go to **Settings → White-label** in the [dashboard](/dashboard), switch **White-label reports** on, and under **Branding** set the **Logo**, **Brand name**, **Website** and **Footer** your reports use. The website link and the footer, such as a copyright line, are optional. A **Preview** on the page shows the report header and footer with your branding. On Free and Pro the page offers the upgrade to Team instead, and their reports always use squirrelscan branding.
+
+The white-label brand name and logo are set on that page and kept separate from your organization's own name and avatar, so you can show clients one brand and keep another in the dashboard. Changing the organization name or avatar does not change your reports. Owners and admins can change the white-label settings; other members can see them. Organizations already on Team or Enterprise when the page arrived start with white-label reports on, using the organization's name and logo at that time.
+
+### What changes
+
+- The report header shows your white-label logo, or the brand name as text when there is no logo, and does not link to squirrelscan.com.
+- The "Generated by squirrelscan.com" credit at the foot of the report is gone.
+- The logo or brand name in the header links to your website when you set one, and the footer shows your footer text and a link to the website, labelled with its host, where the credit was. The Markdown and text reports end with the same footer text and website. Only an `https://` website is linked.
+- So are the squirrelscan sign-up and upgrade prompts, including the list of checks your plan did not run.
+- A shared link's preview card names your brand as the site.
+- The Markdown version of a published report has no squirrelscan credit.
+- Reports the CLI writes locally follow the same branding when `squirrel` is signed in to the organization and not run with `--offline`: the HTML, Markdown, text and XML files. The Markdown and text reports are titled with your brand name, and the XML root element is `<audit>` instead of `<squirrelscan-audit>`. Signed-in audits spend [credits](/cloud/credits).
+
+A local HTML report with a logo loads the logo from its URL when the file is opened, so unlike other [local HTML reports](/reports#local-reports) it makes one network request. [White-label reports](/reports#white-label-reports) in the Reports docs covers how each report format shows the branding.
+
+### What stays squirrelscan's
+
+- **Colors and design.** Reports keep squirrelscan's theme.
+- **The domain.** Published reports live at `reports.squirrelscan.com`. There is no custom domain.
+- **The link preview image.** Paste a report link into Slack, email or a social post and the preview image still shows squirrelscan.
+- **PDF.** There is no PDF export. Share the report link, or export HTML or Markdown from the CLI.
+- **Copied fix prompts.** A [copied fix prompt](/reports#copy-fix-prompts) still says it comes from a squirrelscan audit, links the squirrelscan rule docs and ends with a `squirrel audit` command.
+- **One brand per organization.** Every report the organization publishes gets the same brand name and logo. There is no per-client or per-website branding.
+- **Emails.** Alert, digest and account emails are sent from squirrelscan with squirrelscan branding, go to your own team, and link to the dashboard rather than to white-labelled reports.
+
+A report keeps the branding it was published with. Turning white-label reports on or off, changing the brand name or logo, or changing plan reaches only reports published afterwards. Reports published before the **White-label** page existed keep the rule they were always shown with: your organization's own name and logo while it is on Team or Enterprise, and squirrelscan branding otherwise.
 
 ## Enterprise
 
-Larger teams needing SAML/SCIM, verified-domain auto-join, or a custom contract should [contact us](https://squirrelscan.com/pricing) - these ship as part of an Enterprise plan alongside Team.
+Larger teams that need a custom contract or invoiced billing can [contact us](https://squirrelscan.com/feedback). squirrelscan does not support SAML, SCIM or verified-domain auto-join today. Members join an organization by invite only, so if you need single sign-on, tell us what your identity provider requires.
 
 ## Related
 

@@ -78,10 +78,10 @@ beforeAll(() => {
         }
         if (pathname === "/probe/to-private-ip") return redirect("http://10.0.0.7/x");
         if (pathname === "/probe/to-private-name") {
-          return redirect(`http://inside.public.test:${server.port}/probe/never`);
+          return redirect(`http://inside.public.example.com:${server.port}/probe/never`);
         }
         if (pathname === "/probe/to-public") {
-          return redirect(`http://cdn.public.test:${server.port}/probe/landed`);
+          return redirect(`http://cdn.public.example.com:${server.port}/probe/landed`);
         }
         // HEAD refused, so the probe falls back to a GET; and a same-host hop.
         if (pathname === "/probe/head-405" && req.method === "HEAD") {
@@ -349,16 +349,16 @@ describe("third-party probes stay off private networks and carry no credentials 
 
   test("a public probe that redirects to a private or metadata address stops before that hop", async () => {
     const port = server.port;
-    // Every *.public.test name resolves publicly except inside.public.test.
+    // Every *.public.example.com name resolves publicly except inside.public.example.com.
     const resolve = async (host: string) =>
-      host === "inside.public.test" ? ["10.0.0.8"] : [PUBLIC_STAND_IN];
+      host === "inside.public.example.com" ? ["10.0.0.8"] : [PUBLIC_STAND_IN];
     const files = ["to-metadata", "to-private-ip", "to-private-name", "to-public"];
 
     probeHits.length = 0;
     spyOnFetch();
     const results = await Effect.runPromise(
       checkResourceSizes(
-        files.map((file) => `http://cdn.public.test:${port}/probe/${file}`),
+        files.map((file) => `http://cdn.public.example.com:${port}/probe/${file}`),
         { statusOnly: true, egress: { allowPrivateNetwork: false, resolve }, concurrency: 1 },
       ),
     );
@@ -378,7 +378,8 @@ describe("third-party probes stay off private networks and carry no credentials 
       probeHits.filter((h) => h.path !== "/probe/landed" && h.path !== "/probe/to-public"),
     ).toHaveLength(3);
     // Pinned by address, addressed by name: each hop kept its own Host header.
-    for (const hit of probeHits) expect(hit.headers.get("host")).toBe(`cdn.public.test:${port}`);
+    for (const hit of probeHits)
+      expect(hit.headers.get("host")).toBe(`cdn.public.example.com:${port}`);
   });
 
   test("a refused probe is not a tarpit strike against its host", async () => {
@@ -388,7 +389,9 @@ describe("third-party probes stay off private networks and carry no credentials 
     spyOnFetch();
     await Effect.runPromise(
       checkResourceSizes(
-        ["to-metadata", "to-private-ip"].map((f) => `http://cdn.public.test:${port}/probe/${f}`),
+        ["to-metadata", "to-private-ip"].map(
+          (f) => `http://cdn.public.example.com:${port}/probe/${f}`,
+        ),
         {
           statusOnly: true,
           egress: { allowPrivateNetwork: false, resolve },
@@ -398,7 +401,7 @@ describe("third-party probes stay off private networks and carry no credentials 
       ),
     );
     expect(budget.summary().tarpitHosts).toEqual([]);
-    expect(budget.shouldSkip(`http://cdn.public.test:${port}/probe/landed`)).toBe(false);
+    expect(budget.shouldSkip(`http://cdn.public.example.com:${port}/probe/landed`)).toBe(false);
   });
 
   test("a site on a private network may probe private hosts, never the metadata address", async () => {

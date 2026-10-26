@@ -24,13 +24,13 @@ Internal links have a section of their own, [`[internal_links]`](#internal-links
 ### `enabled`
 
 **Type:** `boolean`
-**Default:** `true`, which leaves the [audit level](/guides/audit-levels) in charge: checked at the surface and full levels, not at quick
+**Default:** `true`, which leaves the [audit level](/guides/audit-levels) in charge: checked at every level
 
 Enable external link checking during crawl.
 
 When enabled, squirrelscan validates all external links found during crawling to detect broken outbound links (404s, timeouts, DNS failures).
 
-External link checks are one of the audit level's settings. `true` is the default `squirrel init` writes into every config, so it reads as unset: surface and full audits check external links, quick audits do not. `false` turns them off at every level, and makes a surface or full audit custom. For one run, `--external-links` checks them at any level and `--no-external-links` skips them; either beats this setting. With them off, `links/broken-external-links` reports **Not checked**, never a pass.
+External link checks are one of the audit level's settings. `true` is the default `squirrel init` writes into every config, so it reads as unset: every level checks external links. `false` turns them off at every level, and makes the audit custom. For one run, `--external-links` checks them at any level and `--no-external-links` skips them; either beats this setting. With them off, `links/broken-external-links` reports **Not checked**, never a pass.
 
 **Examples:**
 
@@ -91,6 +91,8 @@ External link checks are cached globally per URL to avoid repeatedly checking th
 2. Result cached for 7 days (default)
 3. Next crawl within 7 days reuses cached result
 4. After 7 days, link is re-checked
+
+Only audits of public sites read and write the cache. An audit of a site on a private network (`localhost`, a private address, a `.local` name) checks every link afresh and caches nothing. Whatever it reached from inside your network is never handed to another audit.
 
 **Examples:**
 
@@ -255,7 +257,7 @@ The internal link check requests links the crawl did not choose to follow, and a
 **It skips links that look like actions.** Each path segment, query key and query value is split into words on anything but letters and digits, and at camelCase humps. So `/users/sign_out`, `?route=account/logout`, `?task=user.logout`, `/logout;jsessionid=…`, `/account%2Flogout` and `?action=deleteItem` all count. How far a word reaches depends on how clearly it means an action, counted in words with a server-script extension (`.aspx`, `.php`, `.jsp`, `.do`) left out (`/MyAccountLogOut.aspx` is four words):
 
 - `logout`, `logoff`, `signout`, `signoff` and `unsubscribe` count anywhere, even run together with other words (`/UserLogout.aspx`, `/dologout`), and so do `unsub` and `optout`.
-- The pairs log out, log off, sign out, sign off, opt out and add to (`/add-to-cart`) count in a path segment of up to four words, and in a query. Log out, log off and sign out also count in a segment of five words (`/my-account-log-out-now`).
+- The pairs log out, log off, sign out, sign off, opt out and add to (`/add-to-cart`) count in a path segment of up to four words, and in a query. A version number stuck to the second word (`/LogOut2`, `/SignOut1.aspx`) does not stop a pair from counting; `oauth2` stays one word, so `/oauth2/docs` is still a page. Log out, log off and sign out also count in a segment of five words (`/my-account-log-out-now`).
 - `delete`, `destroy`, `trash`, `revoke`, `deactivate`, `confirm`, `verify`, `activate`, `approve`, `unlock`, `purchase` and `callback` count in a path segment of up to three words (`/delete-your-account`), and in a query.
 - `remove`, `cancel`, `disable`, `reset`, `checkout`, `cart`, `basket`, `buy`, `vote`, `like`, `follow`, `subscribe`, `oauth`, `invite`, `accept` and `decline` count in a path segment of up to two words (`/cart`, `/remove-item`, `/password/reset`), and in a query.
 
@@ -267,16 +269,21 @@ A longer slug that only mentions one of them is still a page and is checked: `/w
 - A query key that is exactly `code`, `key`, `hash`, `auth`, `session`, `sid`, `ticket` or `state`.
 - A query key that names a credential, matched in any case, ignoring `-`, `_` and `.`, and inside brackets (`x_api_key`, `config[api_key]`, `pwd[]`, `pwd[0]`): `access_token`, `access-token`, `accesstoken`, `token`, `id_token`, `refresh_token`, `auth`, `auth_token`, `auth-token`, `authorization`, `jwt`, `sig`, `signature`, `x-amz-signature`, `x-amz-credential`, `x-amz-security-token`, `x-goog-signature`, `x-goog-credential`, `api_key`, `api-key`, `x-api-key`, `apikey`, `password`, `passwd`, `pwd`, `secret`, `client_secret`, `sessionid`, `session_id`, `access_key`, `auth_key` or `private_key`.
 - A session id anywhere (`jsessionid`, `phpsessid`, `sessionid`).
+- A credential in a matrix parameter, the `;key=value` pieces of a path segment (`/file;sig=…`, `/a.zip;X-Amz-Credential=…`, `/x;token=…`): a key from the lists above, or a value that looks like a token when the URL also says one of the path-token words below. Ordinary matrix parameters (`/shoes;color=red;size=10`) are pages.
 - A query key or value that looks like a token: a long hex string, a long run of letters and digits with no separator, a long mixed-case base64 string, or a JWT.
+- A user name or password in the URL itself (`https://user:{password}@example.com/`).
+- A fragment written as `key=value` pairs with a secret in it: a key from the lists above or a value that looks like a token, such as an OAuth sign-in redirect's `#access_token=…&token_type=bearer`. The key lists are the query's, so `#state=…` or `#code=…` is skipped as `?state=…` is. A fragment is never sent with a request, but the URL still carries the credential. A plain anchor (`#pricing`), a hash route (`#/settings`) and other state (`#q=shoes`, `#page=3`) are pages.
 - A token in the path: a JWT always, and any other token-like segment when the URL also says `login`, `signin`, `magic`, `token`, `auth`, `session`, `password`, `email`, `invite`, `reset`, `verify`, `confirm`, `activate`, `unsubscribe` or `unsub` (`/magic-login/…`, `/login/token/…`). A plain id such as `/posts/<uuid>` is still checked.
 
 **It skips links whose text is an action.** Short text that is clearly one ("Log out", "Unsubscribe", "Delete account") is skipped whatever its URL says. Any action text ("Remove", "Buy now") is skipped on a `rel="nofollow"` link.
+
+**It skips Cloudflare email-protection links.** A link to `/cdn-cgi/l/email-protection` is an email address Cloudflare's email obfuscation rewrote, not a page, so it is never requested. See [links/broken-links](/rules/links/broken-links).
 
 **It sends no credentials**: no cookies, no `Authorization`, and none of the audit's custom request headers (`[crawler] headers`, `-H`), which can carry auth. It identifies itself with the crawl's `User-Agent`.
 
 **It uses `HEAD` only.** A `GET` asking for one byte (the body is discarded) is sent only when the server answers the `HEAD` with `405` or `501`, which say it does not support `HEAD`. Some servers answer `HEAD` with an error on pages they serve. So the check first sends `HEAD` to the audited URL, which the crawl already fetched. If that answer is an error, the targets' errors are not trusted. They are never reported as broken, and in an audit that did not follow links they are listed as **Not checked**.
 
-**It re-checks every redirect hop.** It does not follow a redirect to another host, out of the crawl scope, to a path robots.txt disallows, or to an action link; that redirect is the target's status. It follows at most 5 hops.
+**It re-checks every redirect hop.** It does not follow a redirect to another host, out of the crawl scope, to a path robots.txt disallows, to an action link, or to a link-local or cloud metadata address; that redirect is the target's status. It follows at most 5 hops.
 
 **It stays polite.** It stays inside the crawl scope and, when the crawl respects it, robots.txt. It never has more of its own requests in flight than the crawl's per-host concurrency, and checks at most `max_targets` targets an audit, each with one `HEAD` and the redirect hops that follow it.
 
@@ -301,15 +308,15 @@ These rules are a careful default, not a guarantee. The word lists are English, 
 3. **User agent**
    - Uses browser-like headers and user agent
    - Detects WAF/bot protection (Cloudflare, Akamai, etc.)
-   - WAF-blocked 403s reported separately from broken links
+   - Sign-in and bot walls (401, 403, 405, 406, 999), challenge pages and timeouts listed as unverifiable, apart from broken links
 
 ### What the external link check never requests
 
-An external link can carry its own credential: a newsletter's one-click unsubscribe link, a magic sign-in link, a signed download URL. Requesting it, even with `HEAD`, can use it up or act on it. So the external link check never requests a link that the internal link check would skip as an action or token link, using the same word lists and token shapes as [What the internal link check never requests](#what-the-internal-link-check-never-requests), and it skips a link whose text is plainly an action ("Log out", "Unsubscribe", "Delete account"). `rel="nofollow"` does not widen that here: on an external link it marks a paid or untrusted link such as "Buy on Amazon", not an action. A signed-in audit does not send these links to the cloud's dead-link check either.
+An external link can carry its own credential: a newsletter's one-click unsubscribe link, a magic sign-in link, a signed download URL. Requesting it, even with `HEAD`, can use it up or act on it. So the external link check never requests a link that the internal link check would skip as an action or token link, using the same word lists and token shapes as [What the internal link check never requests](#what-the-internal-link-check-never-requests), and it skips a link whose text is plainly an action ("Log out", "Unsubscribe", "Delete account"). `rel="nofollow"` does not widen that here: on an external link it marks a paid or untrusted link such as "Buy on Amazon", not an action. A signed-in audit does not send these links to the cloud's dead-link check either. Nor does it check a Cloudflare email-protection link (`/cdn-cgi/l/email-protection`) on another site: it is an email address, not a page.
 
-When squirrel checks a link itself, it follows redirects by hand, at most 20. A redirect into an action or token link, or to anything but `http` or `https`, is not followed, and that redirect is the link's status. Every request it sends, the first and each redirect hop, goes only to a public address (or a private one when the audited site is itself on a private network), never to a link-local or cloud metadata address, and connects to the address it checked, so a DNS answer cannot change between the check and the request. A link whose own address is refused is not requested, never reported as working or broken, and listed in `links/broken-external-links` as `refused-external-links`. One refused on the URL alone (a private or metadata IP literal, a metadata hostname, `localhost` on a public site's audit) also takes no slot under `max_links`, and is never answered from the link cache or sent to the cloud's dead-link check. A redirect toward a refused address is not followed. Each request carries only squirrel's `User-Agent` and `Accept`, plus the `Accept-Encoding` it decodes, never your custom request headers.
+When squirrel checks a link itself, it follows redirects by hand, at most 20. A redirect into an action or token link, or to anything but `http` or `https`, is not followed, and that redirect is the link's status. Every request it sends, the first and each redirect hop, goes only to a public address (or a private one when the audited site is itself on a private network), never to a link-local or cloud metadata address, and connects to the address it checked, so a DNS answer cannot change between the check and the request. A link whose own address is refused is not requested, never reported as working or broken, and listed in `links/broken-external-links` as `refused-external-links`. One refused on the URL alone (a private or metadata IP literal, a metadata hostname, `localhost` on a public site's audit) also takes no slot under `max_links`, and is never answered from the link cache or sent to the cloud's dead-link check. A redirect toward a refused address is not followed. Whatever site it audits, a signed-in audit never sends the cloud's dead-link check a link whose URL names a non-public host (a private or loopback address, `localhost`, a `.local`, `.test` or single-label name, or another [name public DNS does not resolve](/guides/local-audits-cli#local-and-private-hosts-stay-local)). An audit of a site on a private network checks those itself, and a public site's audit refuses them. The cloud check's refusal of a link, because the link or a redirect it leads to is on a non-public address, is never reported as a broken link. squirrel checks that link itself instead, as it checks a link the cloud left unanswered: an audit of a site on a private network gets its real status, and a public site's audit refuses it on your machine too. Each request carries only squirrel's `User-Agent` and `Accept`, plus the `Accept-Encoding` it decodes, never your custom request headers.
 
-These links are listed in `links/broken-external-links` as not requested, never as working or broken, with their query values, token-like parts and email addresses masked (a best effort; an asset name such as `logo@2x.png` is kept), and they do not count against `max_links`.
+These links are listed in `links/broken-external-links` as not requested, never as working or broken, with their query values, token-like parts and email addresses masked and any fragment left off (a best effort; an asset name such as `logo@2x.png` is kept), and they do not count against `max_links`.
 
 These rules are a careful default, not a guarantee: the word lists are English, and no list can recognize every link that acts on a `GET`. If your pages link to third-party URLs that change state when requested and read like pages, switch external link checks off with `--no-external-links` or `[external_links] enabled = false`.
 
@@ -320,10 +327,13 @@ These rules are a careful default, not a guarantee: the word lists are English, 
 | 200-299 | Success | Working link |
 | 301, 302, 303, 307, 308 | Redirect | Followed to the end; one into an action or token link is not followed, and the link counts as working |
 | 300, 304, other 3xx | Answer | Working |
-| 400-499 | Client error | Broken link |
-| 500-599 | Server error | Broken link |
-| Timeout | No response | Broken link |
+| 400-499 | Client error | Broken link, except a sign-in or bot wall (401, 403, 405, 406), listed as unverifiable, and 429 or 430, listed as rate-limited |
+| 500-599 | Server error | Broken link, except a challenge page served as a 503, listed as unverifiable, and a 503 with `Retry-After`, listed as rate-limited |
+| 999 | LinkedIn's wall | Unverifiable |
+| Timeout | No response | Unverifiable, never broken |
 | DNS failure | Domain not found | Broken link |
+
+This is how squirrel reads a link it checks itself. A storage bucket's 403 for a missing file, an HTTP sign-in prompt and a 405 that does not allow `GET` are the site's own answers and stay broken; [links/broken-external-links](/rules/links/broken-external-links) has the details.
 
 ### Caching behavior
 
@@ -525,9 +535,9 @@ curl -I https://example.com  # Test external access
 **Solution:** External link checker automatically:
 - Falls back to GET requests when HEAD fails
 - Detects WAF/bot protection (Cloudflare, Akamai, etc.)
-- Reports WAF-blocked 403s as "unverifiable" (not broken)
+- Lists walls, challenge pages and timeouts as unverifiable (not broken)
 
-If a site truly blocks bot traffic, the link will be reported as WAF-blocked with the provider name.
+If a site truly blocks bot traffic, the link is listed as unverifiable under `waf-blocked-external-links`, with the vendor in its label when one was named.
 
 ---
 

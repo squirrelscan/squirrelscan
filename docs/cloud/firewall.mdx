@@ -31,14 +31,18 @@ Every exception except IP allowlisting is a custom request header. Read [how cus
 
 Every website in the dashboard can send custom HTTP request headers with its cloud audits. You set them under **Settings → Crawl → Custom request headers** (see [crawl settings](/dashboard/crawl-settings#custom-request-headers)). Whether a request carries them depends on the kind of request and, for pages, on the website's **Rendering** setting.
 
+The headers belong to the website they are set on, and an audit uses them only when it crawls that website's own host: the host it is registered under, with or without `www.`. Audits started from the dashboard, over MCP or by a schedule always crawl that host.
+
+An audit started through the API that names the website beside a URL on another host runs without the headers, and without the [authorised](/dashboard/crawl-settings#authorised-crawls) pace they bring. That includes a subdomain: `staging.example.com` named under the website `example.com` gets neither. To audit a subdomain with headers, add it as its own website and set its headers there.
+
 ### Rendering and custom headers \{#rendering-and-custom-headers\}
 
 This table is the reference for which requests of a cloud audit carry your custom request headers. **Rendering** is the setting in the audit level card under **Settings → Crawl**.
 
 | Request | Rendering: Off | Rendering: Auto | Rendering: All |
 |---|---|---|---|
-| Page request | Sent. Every page is a plain HTTP request | Sent on the plain HTTP request every page starts with. Not sent when a page that needs JavaScript is then rendered in the cloud browser | Not sent on the cloud browser render. Sent on the plain HTTP request that replaces a render the site refuses, or that starts when the render has no result after 18 s |
-| Subresources the cloud browser loads while it renders a page: scripts, stylesheets, images, and the requests its scripts make | No browser is used | Not sent | Not sent |
+| Page request | Sent. Every page is a plain HTTP request | Sent on the plain HTTP request every page starts with, and on the cloud browser render of a page that needs JavaScript (see [which renders carry them](#which-renders-carry-them)) | Sent on the cloud browser render (see [which renders carry them](#which-renders-carry-them)), and on the plain HTTP request that replaces a render the site refuses, or that starts when the render has no result after 18 s |
+| Subresources the cloud browser loads while it renders a page: scripts, stylesheets, images, and the requests its scripts make | No browser is used | When the page's render carries them: sent to the rendered page's own origin only. Never to another origin, such as a CDN, an analytics script or a sign-in page | When the page's render carries them: sent to the rendered page's own origin only. Never to another origin, such as a CDN, an analytics script or a sign-in page |
 | Asset checks: stylesheets, scripts, images and fonts on the audited host and its subdomains | Sent | Sent | Sent |
 | Status checks of scripts, stylesheets and fonts on other hosts ([reliability/broken-resources](/rules/reliability/broken-resources)) | Not sent | Not sent | Not sent |
 | Seed redirect probe, which checks where the audited address redirects before the crawl starts | Not sent | Not sent | Not sent |
@@ -46,18 +50,23 @@ This table is the reference for which requests of a cloud audit carry your custo
 
 External link checks and the [GitHub check](/dashboard/crawl-settings) never send them, whatever the setting.
 
-**Rendering: Off** is therefore the setting in which every page request carries the headers. Use it for a site that is only reachable with a header, such as one behind Cloudflare Access or Vercel deployment protection.
+Every **Rendering** setting therefore sends the headers on the requests for your pages, so a site that is only reachable with a header, such as one behind Cloudflare Access or Vercel deployment protection, can keep rendering on.
 
-Two behaviours follow from the table:
+### Which renders carry them \{#which-renders-carry-them\}
 
-- **A refusal is retried without the browser.** When the site answers a cloud browser render with `401`, `403`, `429`, `503` or a challenge page, the page is fetched again over plain HTTP, which does carry the headers. A WAF exception keyed on a header therefore still lets the page through, unrendered.
-- **A sign-in redirect is not a refusal.** A render that lands on a sign-in page on another site is not retried, and the audit fails as a [redirect to another site](/guides/failed-audits#offsite-redirect). This is why a gateway that redirects needs **Rendering: Off**.
+A cloud browser render carries the headers when the page is on the audited address's host or its `www` twin, with the audited address's scheme and port. For an audit of `https://staging.example.com/`, that is every page on `https://staging.example.com` and `https://www.staging.example.com`. A page on another subdomain, or on `http://` for a site audited over `https://`, is rendered without them, so a secret never travels over plain `http://` for a site you audit over `https://`. A site you audit over `http://` gets them over `http://`, unencrypted, as its plain requests do, so audit a gated site over `https://`.
 
-An audit started through the API or the MCP server with a level of its own uses that level's rendering instead of the website's, and Surface and Full render every page. Start audits of a gated site from the dashboard or a schedule. A signed-in `squirrel audit` renders in the cloud browser too: add `--http` when the audit depends on headers passed with `-H`.
+Inside the browser, the headers go only to the origin of the page being rendered: the page itself, and the scripts, stylesheets, images and API calls it loads from that origin. A redirect to another origin drops them, and a redirect back to the page's origin carries them again, because that is the origin they are for. If the browser cannot attach them to one of those requests, the render is dropped and the page is fetched over plain HTTP instead, never rendered without them.
+
+Three behaviours follow:
+
+- **A refusal is retried without the browser.** When the site answers a cloud browser render with `401`, `403`, `429`, `503` or a challenge page, the page is fetched again over plain HTTP, which carries the headers. A WAF exception keyed on a header therefore still lets the page through, unrendered.
+- **A gateway's sign-in page is never kept as your page.** When custom request headers are set and a render still lands on the sign-in page of a known access gateway (Cloudflare Access, Vercel, Okta, Auth0, Microsoft Entra ID and the others in [access gateways](/guides/failed-audits#access-gateway)), the page is fetched again over plain HTTP with the headers. If that request lands on the sign-in page too, the gateway did not accept the headers, and the audit fails as a [redirect to another site](/guides/failed-audits#offsite-redirect).
+- **The CLI's renders never carry `-H` headers.** A signed-in `squirrel audit` renders in the cloud browser too, but without the headers passed with `-H`: add `--http` when the audit depends on them.
 
 ### Redirects and scope
 
-On a request that is sent with them, the headers are removed at the first redirect to a different origin (scheme, host and port), and stay removed for the rest of that redirect chain. Only `User-Agent`, `Accept`, `Accept-Language` and `Upgrade-Insecure-Requests` are kept across it. `http://` to `https://` is a different origin, and so is `example.com` to `www.example.com`.
+On a plain HTTP request that is sent with them, the headers are removed at the first redirect to a different origin (scheme, host and port), and stay removed for the rest of that redirect chain. Only `User-Agent`, `Accept`, `Accept-Language` and `Upgrade-Insecure-Requests` are kept across it. `http://` to `https://` is a different origin, and so is `example.com` to `www.example.com`. For the cloud browser, see [which renders carry them](#which-renders-carry-them).
 
 Headers that are sent go to every host the audit fetches from on your site: the audited host, and any of its subdomains whose stylesheets, scripts, images or fonts the pages load. Hosts on other domains, such as a CDN or an analytics provider, never get them. A credential in a custom request header therefore reaches your subdomains too, but nothing off your domain. Give the audit a credential of its own, scoped as narrowly as the gateway allows.
 
@@ -140,9 +149,8 @@ Access lets a machine through with a **service token**: a Client ID and a Client
    | `CF-Access-Client-Id` | `<client-id>` |
    | `CF-Access-Client-Secret` | `<client-secret>` |
 
-4. **Turn rendering off.** In the audit level card on the same page, set **Rendering** to **Off** and save the level. Every page is then fetched with a request that carries the headers (see [rendering and custom headers](#rendering-and-custom-headers)). The audit reads the HTML your server sends, without running JavaScript, so content that only scripts build is not audited.
-5. **Audit the exact origin Access protects**, with `https://` and the exact hostname, so no redirect to another origin removes the headers before Access sees them.
-6. **Check it** with the [verification checklist](#verification-checklist).
+4. **Audit the exact origin Access protects**, with `https://` and the exact hostname, so no redirect to another origin removes the headers before Access sees them. Rendering can stay on: pages rendered in the cloud browser carry the headers too (see [which renders carry them](#which-renders-carry-them)).
+5. **Check it** with the [verification checklist](#verification-checklist).
 
 From your own machine, the difference looks like this:
 
@@ -175,8 +183,7 @@ Vercel lets automation through with **Protection Bypass for Automation**, availa
 1. **Create the secret.** In the Vercel project, open **Settings → Deployment Protection** and create a secret under **Protection Bypass for Automation**.
 2. **Add the header to squirrelscan.** Under **Settings → Crawl → Custom request headers**, add `x-vercel-protection-bypass` with the secret as its value, and select **Save headers**.
 3. **Leave out `x-vercel-set-bypass-cookie`.** It makes Vercel answer with a redirect that sets a cookie, which a crawl does not need: the header goes with every request.
-4. **Turn rendering off** in the audit level card, as for [Cloudflare Access](#cloudflare-access).
-5. **Check it** with the [verification checklist](#verification-checklist).
+4. **Check it** with the [verification checklist](#verification-checklist).
 
 ```bash
 curl -sS -o /dev/null -D - https://my-project-git-staging-team.vercel.app/ | grep -i -E '^(HTTP/|location)'
@@ -208,7 +215,7 @@ A site with HTTP basic auth, such as nginx `auth_basic` or Apache `AuthType Basi
    # 200
    ```
 
-Rendering can stay on: a render that gets the `401` is fetched again over plain HTTP with the header. Every rendered page then costs a render and a plain fetch in time, so **Rendering: Off** is faster for a site where every page needs the login.
+Rendering can stay on: pages rendered in the cloud browser send the header too (see [which renders carry them](#which-renders-carry-them)), and a render that still gets the `401` is fetched again over plain HTTP with it.
 
 Use an account that exists only for the audit, because the credentials go with every request to the site and to the subdomains it loads assets from. HTTP Digest authentication cannot be passed this way: its `Authorization` value depends on a one-time value the server sends with each challenge, so a fixed header never matches.
 
@@ -259,7 +266,7 @@ Before the audit:
 2. **With the same headers** as the website's custom request headers, added with `-H`, the same request answers `200` and has no `location` on a sign-in host.
 3. The audited address is the exact URL that second request used, scheme and host included.
 4. **Settings → Crawl** shows the headers saved, and the header card shows **Authorised crawl: on (custom header)**.
-5. For a gateway that redirects (Cloudflare Access, Vercel deployment protection), **Rendering** is **Off**, and the audit is started from the dashboard or a schedule, not through the API or the MCP server with a level that renders.
+5. The pages you expect to audit are on the audited address's host or its `www` twin, with the same scheme, so their cloud browser renders carry the headers too (see [which renders carry them](#which-renders-carry-them)).
 
 After the audit:
 
@@ -269,7 +276,7 @@ After the audit:
    | Recorded attempt | What it means |
    |---|---|
    | A crawler or direct attempt redirected to the gateway's origin | The request reached the sign-in page: either the headers did not reach the protected origin (a redirect to another origin removed them) or the gateway did not accept them. Check the audited address, the token or secret, the policy (for Cloudflare Access, the **Service Auth** action and the selector), that the policy covers this hostname, and that the token has not expired |
-   | A browser attempt | Rendering was on for the run. See [rendering and custom headers](#rendering-and-custom-headers) |
+   | A browser attempt that landed on the gateway's sign-in, then a direct attempt | The render did not get through, so the page was fetched over plain HTTP with the headers instead. If the direct attempt landed on the sign-in too, read the first row |
    | A direct attempt with status `401` or `403` | The request was refused: by the gateway (for example Cloudflare Access with strict service token authentication and a token that does not match), or by another firewall or access rule in front of the site |
    | A `cf-ray` id | Search for it in **Security → Events** on Cloudflare to see which product acted on the request |
 

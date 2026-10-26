@@ -1,0 +1,99 @@
+---
+title: "What is GEO? Generative engine optimization defined"
+sidebarTitle: "Generative engine optimization (GEO)"
+description: "GEO is the practice of making content easier for AI answer engines to retrieve, cite and quote. Where the term comes from, and what an audit can check."
+---
+
+**Generative engine optimization (GEO)** is the practice of shaping web content so AI answer engines are more likely to retrieve it, cite it and quote it in their responses.
+
+The name comes from a 2023 research paper, [GEO: Generative Engine Optimization](https://arxiv.org/abs/2311.09735), which framed it as a creator-centric way to raise a source's visibility in generative engine responses. The authors released a benchmark of queries, GEO-bench, and reported visibility gains of up to 40% for some content changes on it. You will also see the practice called AEO, answer engine optimization.
+
+GEO is not the same thing as [geo meta tags](/glossary/geo-meta-tags), the `geo.placename` and `geo.position` tags that state a page's location.
+
+{/* glossary:hub:start */}
+
+Category: [Agent Experience](/rules/ax)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+An answer engine quotes what its crawlers could fetch and read. A page they are blocked from may still appear as a bare link. Google's guidance for its own AI features is that no special files, markup or Markdown are needed to appear in them, and that structured data is not required for generative AI search.
+
+## How squirrelscan checks it
+
+No squirrelscan rule measures GEO, and no audit can tell you whether an answer engine will cite a page. The rules below check the preconditions: whether AI crawlers and fetchers can reach the page, whether the text is in the raw HTML, whether the site offers a curated entry point, and whether its structured data parses. [LLM parsability](/rules/ai/llm-parsability) is a cloud rule that scores how reliably a language model reads each page; it is not a ranking factor.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [AI crawlers in robots.txt: which bots you block, by class](/rules/ax/ai-crawlers) | robots.txt blocking Claude-User or PerplexityBot alongside the training bots. squirrel classifies all 24 known AI crawlers and names what each block costs. | warning |
+| [Content that needs JavaScript: invisible to raw-HTML agents](/rules/ax/content-without-js) | Most of a page's text arriving only after JavaScript runs. squirrel compares the raw HTML against the rendered DOM and reports the gap. | info |
+| [llms.txt: what the file is and how squirrel validates it](/rules/ax/llms-txt) | No /llms.txt at the root, an SPA fallback served in its place, or a file with no H1 and no links. squirrel checks the file and its format. | info |
+| [LLM parsability score: what it measures and how to raise it](/rules/ai/llm-parsability) | A page a language model reads badly, scored under 70 out of 100. squirrel scores every crawled page and names the ones below the mark. | info |
+| [Invalid JSON-LD syntax: what breaks it and how to fix](/rules/schema/json-ld-valid) | A structured data block that will not parse, or parses but omits properties schema.org requires. squirrel names the exact type and property. | warning |
+| [Blocking AI agents at the edge: what robots.txt hides](/rules/ax/agent-blocking) | A WAF or bot-management rule serving GPTBot or Claude-User a challenge the browser never sees. squirrel probes the homepage as all three. | error |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Fix access first. Check that robots.txt does not block the AI search indexers and user-action fetchers you want citing you, and that the WAF does not challenge them (see [the AI crawler access fix](/rules/ax/ai-crawlers#how-to-fix-it) and [the agent blocking fix](/rules/ax/agent-blocking#how-to-fix-it)):
+
+```
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+```
+
+Then render the main content on the server ([content without JavaScript](/rules/ax/content-without-js#how-to-fix-it)) and fix any JSON-LD that fails to parse ([JSON-LD validation](/rules/schema/json-ld-valid#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include ax/ai-crawlers,ax/content-without-js,ax/llms-txt,ai/llm-parsability,schema/json-ld-valid,ax/agent-blocking
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing. LLM parsability runs only when you are signed in, and the raw-versus-rendered comparison needs a cloud audit.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Agent experience (AX)](/glossary/agent-experience): How well a site serves AI agents that read it, find their way around it and act on it, the way UX serves people.
+- [AI crawler](/glossary/ai-crawler): A bot that fetches pages for AI companies, in three classes: training crawlers, AI search indexers and user-triggered fetchers, each with its own user-agent token.
+- [llms.txt](/glossary/llms-txt): A proposed Markdown file at /llms.txt that gives language models a curated map of a site's key content.
+- [Structured data](/glossary/structured-data): Machine-readable statements about a page's content, usually schema.org vocabulary in JSON-LD, that search engines and agents can parse.
+- [Geo meta tags](/glossary/geo-meta-tags): Legacy geo.region, geo.placename and geo.position meta tags that state a page's location; not to be confused with GEO, generative engine optimization.
+
+{/* glossary:related:end */}
+
+## Learn more
+
+- [Generative engine optimization guide](https://squirrelscan.com/learn/generative-engine-optimization)
+- [GEO tools](https://squirrelscan.com/learn/geo-tools)
+- [GEO checker](https://squirrelscan.com/learn/geo-checker)
+
+## References
+
+- [GEO: Generative Engine Optimization (arXiv:2311.09735)](https://arxiv.org/abs/2311.09735)
+- [Optimizing your website for generative AI features on Google Search](https://developers.google.com/search/docs/fundamentals/ai-optimization-guide)
+- [Overview of Google crawlers and fetchers](https://developers.google.com/crawling/docs/crawlers-fetchers/overview-google-crawlers)
+
+{/* glossary:jsonld:start */}
+
+import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";
+
+<GlossaryJsonLd slug="generative-engine-optimization" />
+
+{/* glossary:jsonld:end */}

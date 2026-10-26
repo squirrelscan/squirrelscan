@@ -1,0 +1,305 @@
+/* The HTML report's stylesheet. scripts/build-css.ts compiles it with Tailwind
+   into styles.generated.ts, so rendering needs no Tailwind at runtime. Only the
+   report page and its UI pieces are scanned for classes. */
+@import "tailwindcss" source(none);
+@source "./ui/";
+@source "../html.tsx";
+
+/* Tokens: the same as the squirrelscan.com site. */
+:root {
+  --background: oklch(0.97 0.006 85);
+  --foreground: oklch(0.22 0.01 85);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.01 85);
+  --primary: oklch(0.48 0.14 145);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.94 0.006 85);
+  --secondary-foreground: oklch(0.28 0.01 85);
+  --muted: oklch(0.94 0.004 85);
+  --muted-foreground: oklch(0.4 0.01 85);
+  --accent: oklch(0.58 0.16 45);
+  --accent-foreground: oklch(0.99 0 0);
+  --destructive: oklch(0.55 0.18 25);
+  --border: oklch(0.88 0.008 85);
+  --ring: oklch(0.48 0.14 145);
+  --radius: 0;
+}
+
+@theme inline {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", "Segoe UI Mono", "Roboto Mono", Menlo, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-variant-numeric: tabular-nums;
+    text-rendering: optimizeLegibility;
+  }
+  /* Headings stay mono: identity-bearing, same as the public site. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-mono);
+  }
+  summary {
+    list-style: none;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+}
+
+/* Header backdrop (DecorativeHeader): a faint pixel grid with drifting icons. */
+@keyframes drift {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  25% {
+    transform: translate3d(3px, -4px, 0);
+  }
+  50% {
+    transform: translate3d(-2px, -6px, 0);
+  }
+  75% {
+    transform: translate3d(4px, -3px, 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+.animate-drift {
+  will-change: transform;
+  animation: drift 8s ease-in-out infinite;
+}
+.pixel-grid {
+  background-image:
+    linear-gradient(to right, oklch(0.85 0.01 85 / 0.3) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(0.85 0.01 85 / 0.3) 1px, transparent 1px);
+  background-size: 8px 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .animate-drift {
+    animation: none;
+  }
+}
+
+/* No-JS group filter: the scorecard and chips link to #g-<group>; the matching
+   anchor's :target hides every issue outside that group. */
+.filter-anchor {
+  display: block;
+  height: 0;
+  position: relative;
+  top: -72px;
+}
+.chip-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8125rem;
+}
+.chip-link:hover {
+  border-color: color-mix(in oklab, var(--primary) 40%, transparent);
+}
+.chip-link[href="#g-all"] {
+  background: var(--foreground);
+  color: var(--background);
+  border-color: var(--foreground);
+}
+.group-filter:target ~ .chips .chip-link {
+  background: var(--card);
+  color: inherit;
+  border-color: var(--border);
+}
+.group-filter:target ~ .chips .chip-link[href="#g-all"] {
+  background: var(--card);
+  color: inherit;
+}
+/* Group chips carry their group colour (--gc, set inline from GROUP_COLORS). */
+.chip-group::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  background: var(--gc);
+}
+.chip-group:hover {
+  border-color: var(--gc);
+}
+#g-seo:target ~ .chips .chip-link[href="#g-seo"],
+#g-performance:target ~ .chips .chip-link[href="#g-performance"],
+#g-security:target ~ .chips .chip-link[href="#g-security"],
+#g-ai:target ~ .chips .chip-link[href="#g-ai"] {
+  background: var(--gc);
+  color: var(--primary-foreground);
+  border-color: var(--gc);
+}
+#g-seo:target ~ .chips .chip-link[href="#g-seo"]::before,
+#g-performance:target ~ .chips .chip-link[href="#g-performance"]::before,
+#g-security:target ~ .chips .chip-link[href="#g-security"]::before,
+#g-ai:target ~ .chips .chip-link[href="#g-ai"]::before {
+  background: var(--primary-foreground);
+}
+#g-seo:target ~ .bands .issue:not([data-group="seo"]),
+#g-performance:target ~ .bands .issue:not([data-group="performance"]),
+#g-security:target ~ .bands .issue:not([data-group="security"]),
+#g-ai:target ~ .bands .issue:not([data-group="ai"]) {
+  display: none;
+}
+#g-seo:target ~ .bands .band:not(:has(.issue[data-group="seo"])),
+#g-performance:target ~ .bands .band:not(:has(.issue[data-group="performance"])),
+#g-security:target ~ .bands .band:not(:has(.issue[data-group="security"])),
+#g-ai:target ~ .bands .band:not(:has(.issue[data-group="ai"])) {
+  display: none;
+}
+.issue[open] .issue-msg {
+  display: none;
+}
+.issue[open] > summary .chev,
+.prow[open] > summary .chev {
+  transform: rotate(90deg);
+}
+section {
+  scroll-margin-top: 4rem;
+}
+
+/* Short classes for markup repeated hundreds of times (page links, Pages rows,
+   finding rows). Same look as Badge/GroupBadge in ui/; defined
+   once here instead of a long utility string on every element. */
+@layer components {
+  .lnk {
+    @apply text-primary hover:underline;
+  }
+  .lnk-b {
+    @apply break-all text-primary hover:underline;
+  }
+  .more {
+    @apply cursor-pointer text-xs text-muted-foreground hover:text-foreground;
+  }
+  .plist {
+    @apply mt-2 grid gap-0.5 font-mono text-xs;
+  }
+  .ind {
+    @apply pl-3 text-muted-foreground;
+  }
+  .row {
+    @apply flex items-center gap-2;
+  }
+  .ir {
+    @apply border-b border-l-[3px] border-border border-l-[var(--gc)] last:border-b-0;
+  }
+  .ir-sum {
+    @apply grid cursor-pointer grid-cols-[1rem_minmax(0,1fr)] items-center gap-3 px-4 py-3 hover:bg-muted/50 group-open:bg-muted/50 sm:grid-cols-[1rem_minmax(0,1fr)_9rem];
+  }
+  .ir-reach {
+    @apply col-start-2 text-xs text-muted-foreground sm:col-start-auto sm:text-right;
+  }
+  .ir-msg {
+    @apply mt-0.5 truncate text-[13px] text-muted-foreground;
+  }
+  .ir-chev {
+    @apply size-3.5 text-muted-foreground transition-transform;
+  }
+  .ir-foot {
+    @apply flex items-center gap-4 text-xs text-muted-foreground;
+  }
+  .ir-docs {
+    @apply inline-flex items-center gap-1 text-primary hover:underline;
+  }
+  .cb-mark {
+    @apply w-4 shrink-0 font-bold;
+  }
+  .cb-fail {
+    @apply text-destructive;
+  }
+  .cb-warn {
+    @apply text-amber-600;
+  }
+  .sub-tag {
+    @apply ml-2 border border-border px-1 text-[9px] font-semibold uppercase text-muted-foreground;
+  }
+  /* Severity tag: Badge appearance="tag" size="sm". */
+  .tag {
+    @apply inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold uppercase;
+  }
+  .tag-red {
+    @apply bg-[oklch(0.55_0.18_25/0.1)] text-[oklch(0.45_0.18_25)];
+  }
+  .tag-blue {
+    @apply bg-[oklch(0.5_0.15_260/0.1)] text-[oklch(0.40_0.15_260)];
+  }
+  .tag-yellow {
+    @apply bg-[oklch(0.7_0.1_60/0.1)] text-[oklch(0.50_0.12_60)];
+  }
+  /* Group tag: GroupBadge, coloured by data-g from GROUP_COLORS (see GROUP_TAG_CSS). */
+  .gtag {
+    @apply inline-flex items-center border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider;
+  }
+}
+
+/* Copy prompt: the check icon replaces the copy icon for a moment after a copy. */
+@layer components {
+  .cp-btn {
+    @apply inline-flex cursor-pointer select-none items-center gap-1.5 border border-border bg-card px-2 py-1 text-xs font-medium text-foreground hover:border-primary/40;
+  }
+}
+.copy-prompt .copied-icon,
+.cp-btn .copied-icon {
+  display: none;
+}
+.copy-prompt summary[data-copied],
+.cp-btn[data-copied] {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.copy-prompt summary[data-copied] .copy-icon,
+.cp-btn[data-copied] .copy-icon {
+  display: none;
+}
+.copy-prompt summary[data-copied] .copied-icon,
+.cp-btn[data-copied] .copied-icon {
+  display: inline;
+}
+
+/* Entity viewer (public package) themed to the tokens above. */
+#em-root {
+  --em-panel: var(--card);
+  --em-ink: var(--foreground);
+  --em-muted: var(--muted-foreground);
+  --em-line: var(--border);
+  --em-warn: var(--accent);
+  --em-danger: var(--destructive);
+  font-family: var(--font-sans);
+}

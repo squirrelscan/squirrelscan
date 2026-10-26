@@ -1,0 +1,82 @@
+---
+title: "Entities in structured data: one thing, one identity"
+description: "An entity is a thing a site describes in structured data, such as an organization, person or product, identified across pages so it reads as one thing."
+sidebarTitle: "Entity"
+---
+
+An **entity** is a thing a site describes in structured data, such as an organization, a person, a product or the website itself, identified consistently enough across pages that search engines and agents can tell every mention is the same thing.
+
+In JSON-LD each entity is a node object, usually with a `@type` that says what kind of thing it is and, ideally, an `@id` that names it. The JSON-LD 1.1 specification defines `@id` as the way to uniquely identify a node, and a node that holds only an `@id` is a reference to it. Two nodes with the same `@id` describe one thing, even on different pages. Two nodes without one are separate things that happen to share a name, so a reader of the data has to guess whether they are the same.
+
+{/* glossary:hub:start */}
+
+Category: [Structured Data](/rules/schema)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+Structured data is usually checked one page at a time, and every page can pass while the site as a whole contradicts itself. Forty pages may declare the organization with one logo and two with another. A business may be a `LocalBusiness` on the contact page and a plain `Organization` everywhere else. Two plugins may each declare the company under their own `@id`. None of these breaks a page, and all of them make the site's description of itself ambiguous. Search engines reconcile organizations, people and websites across a site, so this is where the ambiguity costs.
+
+## How squirrelscan checks it
+
+squirrelscan builds a site-wide entity map from the typed JSON-LD nodes in the crawl and the links between them, and these rules read the map rather than single pages. [schema/entity-identity](/rules/schema/entity-identity) fails when an `Organization`, `LocalBusiness`, `Person` or `WebSite` with a name is declared on several pages with no `@id`. [schema/entity-conflicts](/rules/schema/entity-conflicts) compares nine properties, such as `name`, `logo`, `telephone` and `address`, across the pages that declare one entity, and reports each property that disagrees. [schema/entity-type-drift](/rules/schema/entity-type-drift) warns when one `@id` carries different `@type` sets on different pages. [schema/entity-organization-missing](/rules/schema/entity-organization-missing) and [schema/entity-sameas-missing](/rules/schema/entity-sameas-missing) note a business with no organization entity, or one with no `sameAs`. [schema/entity-orphan](/rules/schema/entity-orphan) notes `@id`s that nothing references and that appear on one page only, leaving out page-level types such as breadcrumbs, articles and products.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [One organization, or sixty? Entities declared without an @id](/rules/schema/entity-identity) | Your site declares the same organization on every page with nothing to say they are one thing. A search engine reading 60 pages sees 60 organizations. | error |
+| [A business with nothing to attach its reputation to](/rules/schema/entity-organization-missing) | This site has the pages a business has and no Organization entity for a search engine to hang any of it on. | info |
+| [Your organization is not connected to anything that corroborates it](/rules/schema/entity-sameas-missing) | sameAs is how a search engine learns the company on your site is the company on LinkedIn and Wikidata. Without it the entity stands alone. | info |
+| [The same entity, two different logos](/rules/schema/entity-conflicts) | One organization declared on forty pages with two logos, two phone numbers or two names. A search engine picks one, and which one is not yours to choose. | warning |
+| [An Organization on one page, a LocalBusiness on another](/rules/schema/entity-type-drift) | The same @id declared with different @type sets on different pages. A search engine merges them and then has to decide which types are authoritative. | warning |
+| [An @id that nothing points at](/rules/schema/entity-orphan) | Giving an entity an identifier is the expensive part. One that nothing references and that appears on a single page is doing no more than an inline block. | info |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Declare each entity in full once, with an absolute `@id`, and point to it everywhere else:
+
+```json
+{ "@type": "Article", "publisher": { "@id": "https://example.com/#organization" } }
+```
+
+Give the repeated identities an `@id` ([the identity fix](/rules/schema/entity-identity#how-to-fix-it)). Make every declaration agree, or stop repeating it ([the conflicts fix](/rules/schema/entity-conflicts#how-to-fix-it)). Keep one `@type` set per `@id` ([the type drift fix](/rules/schema/entity-type-drift#how-to-fix-it)). Link or drop identifiers nothing uses ([the orphan fix](/rules/schema/entity-orphan#how-to-fix-it)). The [entity map guide](/guides/entity-map) explains how to read the map with `squirrel entities`.
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include schema/entity-identity,schema/entity-organization-missing,schema/entity-sameas-missing,schema/entity-conflicts,schema/entity-type-drift,schema/entity-orphan
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [@id (JSON-LD node identifier)](/glossary/entity-id): The JSON-LD @id that gives a node a stable IRI, so other nodes and pages can reference the same entity instead of redeclaring it.
+- [Organization schema](/glossary/organization-schema): Organization structured data naming the business behind a site, its logo, contact points and sameAs profiles.
+- [JSON-LD](/glossary/json-ld): JSON for Linking Data, the format Google recommends for structured data, embedded in a `<script type="application/ld+json">` block.
+
+{/* glossary:related:end */}
+
+## References
+
+- [JSON-LD 1.1: node identifiers, W3C](https://www.w3.org/TR/json-ld11/#node-identifiers)
+- [JSON-LD 1.1: specifying the type, W3C](https://www.w3.org/TR/json-ld11/#specifying-the-type)
+- [General structured data guidelines, Google Search Central](https://developers.google.com/search/docs/appearance/structured-data/sd-policies)
+
+{/* glossary:jsonld:start */}
+
+import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";
+
+<GlossaryJsonLd slug="entity" />
+
+{/* glossary:jsonld:end */}

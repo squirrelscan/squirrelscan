@@ -1,0 +1,93 @@
+---
+title: "What is LCP? Largest Contentful Paint and its causes"
+description: "LCP is the time until the largest image, text block or video in the viewport renders. Good is 2.5 seconds. Its causes, and the hints squirrelscan checks."
+sidebarTitle: "Largest Contentful Paint (LCP)"
+---
+
+**Largest Contentful Paint (LCP)** is the time from the start of a page load until the largest image, text block or video visible in the viewport has rendered.
+
+It is the loading metric of the [Core Web Vitals](/glossary/core-web-vitals). web.dev counts 2.5 seconds or less as good and more than 4 seconds as poor, judged at the 75th percentile of page loads. Its optimization guide splits LCP into four parts that add up to the whole: time to first byte, resource load delay (until the browser starts fetching the LCP resource), resource load duration and element render delay.
+
+{/* glossary:hub:start */}
+
+Category: [Performance](/rules/perf)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+On most pages the LCP element is an image, and most of what delays it is in the markup. A hero the preload scanner cannot find starts late. One marked `loading="lazy"` waits for layout before it is requested at all. Stylesheets and scripts in `<head>` hold up the first paint, and a slow server response pushes everything back, because nothing paints before the HTML arrives. web.dev also warns that shrinking the image alone can just move the saved time into render delay.
+
+## How squirrelscan checks it
+
+squirrelscan does not measure LCP. A crawl has no paint timing, so the rules look for the causes instead.
+
+[perf/lcp-hints](/rules/perf/lcp-hints) and [perf/lcp-fetchpriority](/rules/perf/lcp-fetchpriority) pick the likely hero from the first eligible images in document order, skipping lazy images, SVG and ICO files, tracking pixels, images inside `<header>` or `<nav>` and images declared smaller than 300 pixels. The first wants a matching image preload. The second accepts `fetchpriority="high"` or a preload. [perf/lazy-above-fold](/rules/perf/lazy-above-fold) flags `loading="lazy"` on the first three images that could be above the fold. [perf/render-blocking](/rules/perf/render-blocking) counts blocking stylesheets and scripts in `<head>`, and [perf/preconnect](/rules/perf/preconnect) looks for missing connection hints to thirteen common CDN hosts. [perf/ttfb](/rules/perf/ttfb) is the one measurement here: it times the first byte of each fresh fetch.
+
+The hero is a guess from markup. When the real LCP element is text or a CSS background image, the rules cannot see it and may flag another `<img>` instead.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [LCP image not preloaded: what squirrel counts as a hero](/rules/perf/lcp-hints) | Likely Largest Contentful Paint images loaded with no preload. squirrel checks the first three eligible candidate images on every page. | warning |
+| [fetchpriority='high': the LCP image hint squirrel checks](/rules/perf/lcp-fetchpriority) | A hero image loaded eagerly with neither fetchpriority='high' nor a matching preload. squirrel picks the likely LCP candidate per page. | warning |
+| [loading=lazy on a hero image: the LCP delay squirrel finds](/rules/perf/lazy-above-fold) | An above-fold image marked loading=lazy, which delays the paint that matters. squirrel checks the first three eligible images. | warning |
+| [Render-blocking resources: the ones squirrel counts in head](/rules/perf/render-blocking) | Stylesheets and scripts in head that hold up first paint. squirrel counts them per page and lists each URL. | warning |
+| [rel=preconnect: the CDN origins squirrel checks for a hint](/rules/perf/preconnect) | A page loading from a known CDN with no preconnect for that origin. squirrel checks thirteen common hosts. | info |
+| [Time to First Byte: the 600ms and 1000ms thresholds](/rules/perf/ttfb) | A server that takes over 600ms to send the first byte, or over 1000ms. squirrel measures TTFB on every fresh fetch. | warning |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Leave the hero image eager and raise its priority:
+
+```html
+<img src="/hero.jpg" width="1200" height="630" fetchpriority="high" alt="" />
+```
+
+Add a preload in `<head>` when the image is discovered late, for example from CSS or a script ([the preload fix](/rules/perf/lcp-hints#how-to-fix-it)). Keep `loading="lazy"` for images below the fold ([the lazy-loading fix](/rules/perf/lazy-above-fold#how-to-fix-it)). Give scripts `defer` and inline the CSS the first screen needs ([the render-blocking fix](/rules/perf/render-blocking#how-to-fix-it)). If the first byte is slow, cache the HTML at the edge ([the TTFB fix](/rules/perf/ttfb#how-to-fix-it)).
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include perf/lcp-hints,perf/lcp-fetchpriority,perf/lazy-above-fold,perf/render-blocking,perf/preconnect,perf/ttfb
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Core Web Vitals](/glossary/core-web-vitals): Google's three user-experience metrics: LCP for loading, INP for responsiveness and CLS for visual stability, judged at the 75th percentile of real visits.
+- [fetchpriority](/glossary#fetchpriority): An HTML attribute (high, low, auto) that hints how urgently the browser should fetch an image, script or link.
+- [Render-blocking resources](/glossary/render-blocking-resources): Stylesheets and synchronous scripts in the head that the browser must fetch before it can paint anything.
+- [Lazy loading](/glossary/lazy-loading): Deferring off-screen images and iframes with loading="lazy" so they load as the visitor scrolls.
+- [HTTP caching](/glossary/http-caching): Response headers (Cache-Control, ETag, Expires) that let browsers and CDNs reuse a response instead of fetching it again.
+
+{/* glossary:related:end */}
+
+## Learn more
+
+- [Core Web Vitals guide](https://squirrelscan.com/learn/core-web-vitals)
+- [Core Web Vitals checker](https://squirrelscan.com/tools/core-web-vitals-checker)
+
+## References
+
+- [Largest Contentful Paint, web.dev](https://web.dev/articles/lcp)
+- [Optimize Largest Contentful Paint, web.dev](https://web.dev/articles/optimize-lcp)
+- [Time to First Byte, web.dev](https://web.dev/articles/ttfb)
+
+{/* glossary:jsonld:start */}
+
+import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";
+
+<GlossaryJsonLd slug="lcp" />
+
+{/* glossary:jsonld:end */}

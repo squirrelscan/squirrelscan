@@ -21,6 +21,7 @@ import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
 import { getRenderedProseText, isInsideCodeOrUnrendered } from "./text-content";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 
 export type PlaceholderContactKind = "email" | "phone" | "address" | "social";
 
@@ -218,7 +219,8 @@ export const placeholderContactRule: Rule = {
         name: "placeholder-contact",
         status: "skipped",
         message: "Documentation page: placeholder contact details are samples here",
-        skipReason: "documentation-page",
+        skipReason: CHECK_NOT_APPLICABLE_SKIP_REASON,
+        details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON },
       });
       return { checks };
     }

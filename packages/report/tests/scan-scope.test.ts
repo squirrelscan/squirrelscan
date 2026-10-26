@@ -10,6 +10,7 @@ import { renderText } from "../src/output/text";
 import { renderMarkdown } from "../src/output/markdown";
 import { renderHtml } from "../src/output/html";
 import { renderLlm } from "../src/output/llm";
+import { renderXml } from "../src/output/xml";
 
 function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
   return {
@@ -123,7 +124,10 @@ describe("time-stopped scans", () => {
   test("renderers carry the note; llm output names the stop reason", () => {
     expect(renderText(timeStopped)).toContain("stopped early on time");
     expect(renderMarkdown(timeStopped)).toContain("Partial scan: the crawl ran out of time");
-    expect(renderHtml(timeStopped, { reportId: "TESTID" })).toContain("stopped early on time");
+    // The HTML page has no scope line: the coverage notice says the report is partial.
+    const html = renderHtml(timeStopped, { reportId: "TESTID" });
+    expect(html).toContain('id="coverage-notice"');
+    expect(html).not.toContain("Scan: ");
     expect(renderLlm(timeStopped)).toContain('stop-reason="time"');
   });
 
@@ -173,6 +177,7 @@ describe("fullScanHint (#1180)", () => {
 describe("renderer wiring (#1180)", () => {
   const report = baseReport({
     generatorVersion: "0.0.76",
+    totalPages: 100,
     scanScope: { origin: "cli", maxPages: 100, pagesCrawled: 100, capped: true },
     coverage: { auditedPages: 100, knownPages: 505, carriedFindings: 12 },
   });
@@ -189,10 +194,18 @@ describe("renderer wiring (#1180)", () => {
     expect(out).toContain("Partial scan:");
   });
 
-  test("html output carries scope line + hint", () => {
+  test("html output carries the one-line coverage notice in place of the scope line and hint", () => {
     const out = renderHtml(report, { reportId: "TESTID" });
-    expect(out).toContain("Scan: 100 pages crawled from the CLI v0.0.76");
-    expect(out).toContain("Partial scan:");
+    // The header says what was scanned; no separate scope line.
+    expect(out).not.toContain("Scan: 100 pages crawled");
+    // pub#1046: one line says the report may not cover the site and how to go deeper.
+    expect(out).toContain('id="coverage-notice"');
+    // Smart-audit carry: the rest is carried forward, not missing.
+    expect(out).toContain(
+      "This report may not cover the whole site (405 more known pages carried from earlier audits).",
+    );
+    expect(out).not.toContain("Partial scan:");
+    expect(out).not.toContain("squirrel audit &#x27;https://example.com/&#x27; --max-pages");
   });
 
   test("llm output emits a structured scan-scope element", () => {
@@ -289,12 +302,66 @@ describe("a reduced page limit (#1909)", () => {
     // The gap this closes: json and llm already emitted `requestedMaxPages`,
     // and the three renderers a person actually reads did not.
     const report = baseReport({ scanScope: clampedScope });
-    for (const rendered of [
-      renderText(report),
-      renderMarkdown(report),
-      renderHtml(report),
-    ]) {
+    for (const rendered of [renderText(report), renderMarkdown(report)]) {
       expect(rendered).toContain("4320 of 10000 requested");
     }
+    // The HTML page says it in the coverage notice.
+    expect(renderHtml(report)).toContain("limited to 4,320 of the 10,000 pages requested");
+  });
+});
+
+describe("XML scan scope (#350)", () => {
+  test("states origin, pages crawled, the limit, whether it bound, and a clamped request", () => {
+    const out = renderXml(
+      baseReport({
+        totalPages: 500,
+        scanScope: {
+          origin: "cloud",
+          maxPages: 500,
+          requestedMaxPages: 5000,
+          pagesCrawled: 500,
+          capped: true,
+        },
+      }),
+    );
+    expect(out).toContain(
+      '    <scan-scope origin="cloud" crawled="500" max-pages="500" requested-max-pages="5000" capped="true"/>',
+    );
+    // Inside <site>, after the raw count it qualifies.
+    expect(out.indexOf("<scan-scope")).toBeGreaterThan(out.indexOf("<pages-crawled>"));
+    expect(out.indexOf("<scan-scope")).toBeLessThan(out.indexOf("</site>"));
+  });
+
+  test("an uncapped run, and a time stop", () => {
+    const uncapped = renderXml(
+      baseReport({ scanScope: { origin: "cli", pagesCrawled: 12, capped: false } }),
+    );
+    expect(uncapped).toContain('<scan-scope origin="cli" crawled="12" capped="false"/>');
+    const timed = renderXml(
+      baseReport({
+        scanScope: { origin: "ci", maxPages: 100, pagesCrawled: 40, capped: false, stopReason: "time" },
+      }),
+    );
+    expect(timed).toContain(
+      '<scan-scope origin="ci" crawled="40" max-pages="100" capped="false" stop-reason="time"/>',
+    );
+  });
+
+  test("a report with no scanScope renders exactly as before, with no empty element", () => {
+    const out = renderXml(baseReport());
+    expect(out).not.toContain("scan-scope");
+    expect(out).toContain(
+      "  <site>\n    <url>https://example.com</url>\n    <pages-crawled>1</pages-crawled>\n    <audit-date>2026-06-16T14:30:00.000Z</audit-date>\n  </site>",
+    );
+  });
+
+  test("escapes the values through escapeXml", () => {
+    const out = renderXml(
+      baseReport({
+        scanScope: { origin: '"><x' as never, pagesCrawled: 1, capped: false },
+      }),
+    );
+    expect(out).toContain('origin="&quot;&gt;&lt;x"');
+    expect(out).not.toContain('origin=""><x');
   });
 });

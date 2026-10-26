@@ -5,6 +5,7 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import { formatRedirectHop } from "@squirrelscan/core-contracts";
 
 import { didRedirect, requestTarget } from "../shared/redirect-evidence";
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 
 export const canonicalChainRule: Rule = {
   meta: {
@@ -60,6 +61,8 @@ export const canonicalChainRule: Rule = {
         name: "canonical-chain",
         status: "skipped",
         message: "No canonical tag found",
+        skipReason: CHECK_NOT_APPLICABLE_SKIP_REASON,
+        details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON },
       });
       return { checks };
     }

@@ -3,7 +3,7 @@ title: "Cloud dead-link checking: the shared external link cache"
 description: "Checking every external link from your machine is slow and rude to the sites you link to. The cloud service checks against a shared cache instead."
 ---
 
-<Note>**Cloud rule** - requires login (`squirrel auth login`). **Free for audits you run with the CLI.** In a [cloud audit](/guides/cloud-audits) with external link checking on, each distinct external link costs 1 credit, retries and browser escalation included. Internal links are always free. Skipped when not logged in (external links are then checked locally as usual). See [Credits and pricing](/cloud/credits).</Note>
+<Note>**Cloud rule** - requires login (`squirrel auth login`). In an audit with external link checking on, a [cloud audit](/guides/cloud-audits) or a signed-in `squirrel audit`, each distinct external link the service verifies (it works, redirects or is broken) costs 1 credit, at most one per page of the audit's page limit, retries and browser escalation included. A link it cannot verify costs nothing. Links the CLI checks on your machine are free. Internal links are always free. Skipped when not logged in (external links are then checked locally as usual). See [Credits and pricing](/cloud/credits).</Note>
 
 ## What the cloud dead-links service is
 
@@ -17,16 +17,17 @@ For an audit you run with the CLI, the service replies within about a minute, so
 
 The rule is a summary. The per-link findings belong to `links/broken-external-links`, and this check never re-scores them, which is why its status is always informational. It emits a single check named `dead-links`:
 
-- Skipped when external link checking did not run for the audit (the Quick level without `--external-links`, `--offline`, `--no-external-links`, or external link checks off), with skip reason `external-links-not-checked`. Message: `External link checking was off for this audit, so external links were not verified`. It is not listed among the cloud checks a cloud audit would unlock, because turning external link checks on is what runs it.
+- Skipped when external link checking did not run for the audit (`--offline`, `--no-external-links`, or external link checks off), with skip reason `external-links-not-checked`. Message: `External link checking was off for this audit, so external links were not verified`. It is not listed among the cloud checks a cloud audit would unlock, because turning external link checks on is what runs it.
 - Info when the site has no external links. Message: `No external links found to verify`, with a value of 0.
+- Info when a cloud audit's link check ran out of time before answering any of the links it selected. Message: `No external links were verified: the link check ran out of time before reaching any of the N selected`, with a value of 0. `links/broken-external-links` reports those links as not checked.
 - Info when every external link was one squirrel never requests because it looks like an action or carries a token. Message: `No external links were verified: all N look like actions or carry a token, so they were not requested`, with a value of 0. See [What the external link check never requests](/configuration/external-links#what-the-external-link-check-never-requests).
 - Info otherwise, with one of two wordings: `Checked 128 external link(s); none are dead` or `Checked 128 external link(s); 4 dead`. When some targets were throttled, `; 2 rate-limited (status unverifiable)` is appended.
 
-A link counts as dead on the same basis as `links/broken-external-links`: a fetch error, or a status of 400 or above that is neither a firewall-blocked 403 nor a rate-limit response. Severity info, weight 1, the lowest of any rule in the Links category.
+A link counts as dead on the same basis as `links/broken-external-links`: a fetch error, or a status of 400 or above that is neither unverifiable (a wall or a timeout) nor a rate-limit response. Severity info, weight 1, the lowest of any rule in the Links category.
 
 ## How to fix it
 
-Log in with `squirrel auth login` to use the service. The CLI's checks are free, so they do not produce a separate spend prompt; a cloud audit pays 1 credit per distinct external link it checks. Being logged out falls back to local per-link checking.
+Log in with `squirrel auth login` to use the service. A signed-in CLI audit pays 1 credit per distinct external link the service verifies, at most one per page of the audit's page limit, the same as a cloud audit. Its estimate before the audit includes them. An audit that has the cloud's spend disclosure accepted under `[cloud] max_credits_per_audit` (the default for a signed-in audit) asks nothing more; one without a per-audit cap, one that declined the cloud rendering prompt before, or one that chose its rendering with `--http`, `--render`, `--render-mode`, `[cloud] render` or `[cloud] rendering`, still gets a spend prompt in a terminal when the links alone would pass `[cloud] confirm_threshold`. A link the service leaves unanswered is checked on your machine for free. Being logged out falls back to local per-link checking.
 
 The findings themselves are on `links/broken-external-links`. Fix them there.
 
@@ -63,6 +64,12 @@ enabled = false
 - [integrity/known-malicious-url](/rules/integrity/known-malicious-url): the reputation check over the same outbound links.
 
 Links findings ship in every audit next to the SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Broken link](/glossary/broken-link).
+
+{/* glossary:backlinks:end */}
 
 ## References
 

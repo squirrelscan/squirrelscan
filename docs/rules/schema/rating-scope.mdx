@@ -18,6 +18,8 @@ The rule walks the page's flattened JSON-LD to a depth of 6. An `aggregateRating
 
 The rule is deliberately hard to trip. A review widget clears the visibility check outright, because a client-side badge is legitimately absent from crawled HTML. A whole-number rating such as `5` printed in the page text does not clear it on its own, since the digit is too common to be evidence; a decimal such as `4.7` does. On an article page only a carrier that represents the site itself is reported: every LocalBusiness subtype plus `Organization`, `Corporation`, `OnlineBusiness`, `OnlineStore`, `NGO`, `EducationalOrganization`, `GovernmentOrganization`, `PerformingGroup`, `SportsOrganization`, `Brand`, `WebSite` and `WebPage`. An article that reviews a `Product` keeps its rating. On privacy and terms pages every rating is reported, because those pages have no rateable subject at all. Entities listed per check are capped at 10, with a count of the rest, and the rule is skipped on a page detected as a soft 404.
 
+An `aggregateRating` written as a node reference, `{"@id": "…#rating"}`, is read from the `AggregateRating` node with that `@id` anywhere in the page's JSON-LD, and belongs to the entity that references it, so it is counted once. A relative `@id` resolves against the page URL. A reference to a node the page does not have is judged as written.
+
 ## How to fix it
 
 ```html
@@ -71,6 +73,12 @@ enable = ["schema/rating-scope"]
 - [content/hidden-text](/rules/content/hidden-text): text and links hidden from readers but left visible to search engines.
 
 Structured data findings ship in every audit next to the core SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Product schema](/glossary/product-schema), [Rich results](/glossary/rich-results).
+
+{/* glossary:backlinks:end */}
 
 ## References
 

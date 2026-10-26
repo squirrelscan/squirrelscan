@@ -262,6 +262,10 @@ export function reconstructCompleteResults(
     // exactly, at the cost of coupling the reconstruction to the signal internals;
     // the divergence is measured + bounded (complete-store-parity.test.ts, the
     // skip-rule fixture) and revisited only if a real rule mix shows it's large.
+    // (repo#3348) A real mix did: a 50-page cloud audit scored 49 chunked and 47
+    // as one POST. A shell carrying the capper's `checkTallies` is now scored from
+    // them instead (CompleteStoreTallyInput.freshTallies); this path remains for
+    // a shell without them.
     const failingPages = new Set<string>();
     for (const f of findings) failingPages.add(f.normalizedUrl);
     let clean = 0;

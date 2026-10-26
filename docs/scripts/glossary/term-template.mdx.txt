@@ -1,0 +1,51 @@
+---
+title: "Set by glossary.ts from terms.json: do not edit here"
+description: "One or two plain sentences, at most 155 characters, that answer the term's primary query. No em-dash."
+sidebarTitle: "Set by glossary.ts from terms.json"
+---
+
+{/* Copy to docs/glossary/<slug>.mdx, set "format": "page" on the term in
+terms.json, then run `bun scripts/glossary.ts --write`. See AUTHORING.txt. */}
+
+A **Term name** is one quotable sentence of at most 30 words that defines it.
+
+One short paragraph of context that cites the standard or spec (Google Search Central, W3C, MDN, an RFC).
+
+{/* glossary:hub:start */}
+{/* glossary:hub:end */}
+
+## Why it matters
+
+Two to four sentences on the consequence, each one backed by a source in References or a rule page. No ranking promises.
+
+## How squirrelscan checks it
+
+Two to five plain sentences on what the rules look at, written from the rule pages. Link to the rule page for thresholds instead of restating them.
+
+{/* glossary:rules:start */}
+{/* glossary:rules:end */}
+
+## How to fix it
+
+The short version and one snippet. Link each rule's fix section, for example [the rule's fix](/rules/core/canonical#how-to-fix-it).
+
+## Run the check
+
+{/* glossary:run:start */}
+{/* glossary:run:end */}
+
+Signed-out local audits need no account and cost nothing.
+
+{/* glossary:related:start */}
+{/* glossary:related:end */}
+
+## Learn more
+
+Only when the term has `learn` or `tools` links in terms.json. Delete the section otherwise.
+
+## References
+
+One to three links from the term's `authority` list.
+
+{/* glossary:jsonld:start */}
+{/* glossary:jsonld:end */}

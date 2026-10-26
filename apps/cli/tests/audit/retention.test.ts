@@ -285,27 +285,106 @@ describe("retainRecentAudits", () => {
     store.close?.();
   });
 
-  test("leaves a running crawl alone, and does not spend a window slot on it", async () => {
+  test("leaves a running crawl newer than every finished audit alone, and gives it no window slot", async () => {
     const store = await open();
-    // Oldest to newest: a running crawl, then four finished ones.
-    const running = await audit(store, 0, "running");
+    // Oldest to newest: four finished audits, then a crawl still running.
     const finished: string[] = [];
-    for (let i = 1; i < 5; i++) finished.push(await audit(store, i));
+    for (let i = 0; i < 4; i++) finished.push(await audit(store, i));
+    const running = await audit(store, 4, "running", null);
 
     const outcome = await retainRecentAudits(store, {
       keep: 3,
       currentCrawlId: finished[3]!,
     });
 
-    // One finished audit went. The running one is older than all of them and
-    // would have been first out if it were a candidate.
+    // One finished audit went: the running crawl did not take a slot. It is
+    // newer than every finished audit, so it may be live, and it stays whole.
     expect(outcome?.retired).toBe(1);
     const byId = new Map((await run(store.listCrawls())).map((c) => [c.id, c]));
     expect(byId.get(running)?.retiredAt).toBeUndefined();
     expect(byId.get(finished[0]!)?.retiredAt).toBeDefined();
-    // Its frontier and results are untouched: deleting them mid-audit is the
-    // half-written run this guard exists for.
     expect((await run(store.getRuleResultsByPage(running))).size).toBe(3);
+    store.close?.();
+  });
+
+  test("retires crawls from killed audits once a newer audit has finished, and they take no window slot (#941)", async () => {
+    const store = await open();
+    // The issue's repro: three audits killed after the crawl, then one that
+    // completed. keep_audits = 1.
+    const killed: string[] = [];
+    killed.push(await audit(store, 0, "crawled", null));
+    killed.push(await audit(store, 1, "running", null));
+    killed.push(await audit(store, 2, "stopped", null));
+    killed.push(await audit(store, 3, "paused", null));
+    const failed = await audit(store, 4, "failed", null);
+    const older = await audit(store, 5);
+    const current = await audit(store, 6);
+
+    const outcome = await retainRecentAudits(store, {
+      keep: 1,
+      currentCrawlId: current,
+    });
+
+    // 5 unfinished + the one older finished audit outside the window.
+    expect(outcome?.retired).toBe(killed.length + 2);
+    const byId = new Map((await run(store.listCrawls())).map((c) => [c.id, c]));
+    for (const id of [...killed, failed, older]) {
+      expect(byId.get(id)?.retiredAt).toBeDefined();
+    }
+    expect(byId.get(current)?.retiredAt).toBeUndefined();
+    expect(await renderable(store)).toEqual([current]);
+    store.close?.();
+  });
+
+  test("an unfinished crawl older than a finished audit but active 5 minutes ago is kept (#941)", async () => {
+    const store = await open();
+    const overlapping = await audit(store, 0, "running", null);
+    // A live overlapping audit just fetched a page.
+    await run(
+      store.upsertPage(
+        overlapping,
+        page("https://e.test/live", Date.now() - 5 * 60_000, "live")
+      )
+    );
+    const current = await audit(store, 1);
+
+    expect(
+      await retainRecentAudits(store, { keep: 3, currentCrawlId: current })
+    ).toBeNull();
+    const crawl = (await run(store.listCrawls())).find(
+      (c) => c.id === overlapping
+    );
+    expect(crawl?.retiredAt).toBeUndefined();
+    expect((await run(store.getRuleResultsByPage(overlapping))).size).toBe(3);
+    store.close?.();
+  });
+
+  test("a crawl that went live after the listing is skipped alone; the rest of the pass retires (#941)", async () => {
+    const store = await open();
+    const stale = await audit(store, 0, "running", null);
+    const old = await audit(store, 1);
+    await audit(store, 2);
+    const abandoned = await run(store.listAbandonedCrawls());
+    expect(abandoned.map((c) => c.id)).toEqual([stale]);
+
+    // Between the listing and the write the crawl fetches a page: a live
+    // audit. The same batch also holds an ordinary keep_audits retirement.
+    await run(
+      store.upsertPage(
+        stale,
+        page("https://e.test/live", Date.now() - 60_000, "live")
+      )
+    );
+    const result = await run(
+      store.retireCrawlsDetailed([stale, old], Date.now(), {
+        allowAbandoned: true,
+      })
+    );
+    expect(result.retired).toEqual([old]);
+    expect(result.skipped).toEqual([stale]);
+    const byId = new Map((await run(store.listCrawls())).map((c) => [c.id, c]));
+    expect(byId.get(stale)?.retiredAt).toBeUndefined();
+    expect(byId.get(old)?.retiredAt).toBeDefined();
     store.close?.();
   });
 
@@ -373,19 +452,22 @@ describe("retainRecentAudits", () => {
     store.close?.();
   });
 
-  test("leaves a failed crawl alone: it is not a report, so it is not one of the three", async () => {
+  test("a failed crawl takes no window slot; one older than a finished audit is retired as abandoned (#941)", async () => {
     const store = await open();
     const failed = await audit(store, 0, "failed");
     const finished: string[] = [];
     for (let i = 1; i < 4; i++) finished.push(await audit(store, i));
 
     // Three finished audits and one failed one. Counting the failure would put
-    // the oldest finished audit outside a window of 3.
-    expect(
-      await retainRecentAudits(store, { keep: 3, currentCrawlId: finished[2]! })
-    ).toBeNull();
+    // the oldest finished audit outside a window of 3: it must not, so only the
+    // failed crawl itself goes, as an unfinished crawl no one can resume.
+    const outcome = await retainRecentAudits(store, {
+      keep: 3,
+      currentCrawlId: finished[2]!,
+    });
+    expect(outcome?.retired).toBe(1);
     const byId = new Map((await run(store.listCrawls())).map((c) => [c.id, c]));
-    expect(byId.get(failed)?.retiredAt).toBeUndefined();
+    expect(byId.get(failed)?.retiredAt).toBeDefined();
     expect(await renderable(store)).toHaveLength(3);
     store.close?.();
   });

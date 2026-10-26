@@ -40,6 +40,25 @@ export function getScoreColor(score: number): string {
   return SCORE_COLORS[getScoreBand(score)];
 }
 
+/**
+ * The same bands in a darker tone, for a score drawn on a white or near-white
+ * surface (the report's score rings, their numbers and grade letters). The
+ * band colors above sit at about 2:1 on white for green and amber; these are
+ * about 5:1, so the number passes WCAG AA text (4.5:1) and the ring passes
+ * non-text contrast (3:1). Same thresholds, not a second scale.
+ */
+export const SCORE_INK_COLORS = {
+  good: "#15803d", // green-700
+  fair: "#b45309", // amber-700
+  poor: "#dc2626", // red-600
+  none: "#6b7280", // gray-500
+} as const;
+
+/** Score → band ink color (hex), for a score ring and number on a light surface. */
+export function getScoreInkColor(score: number): string {
+  return SCORE_INK_COLORS[getScoreBand(score)];
+}
+
 /** Score → letter grade. Finer-grained than color bands (A/B/C/D/F). */
 export function getScoreGrade(score: number): string {
   if (score >= 90) return "A";

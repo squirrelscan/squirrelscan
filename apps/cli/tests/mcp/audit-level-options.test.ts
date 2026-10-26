@@ -46,12 +46,12 @@ describe("levelRunOptions", () => {
     expect(options.cloudRendering).toBeUndefined();
   });
 
-  test("quick: passive, no external links", async () => {
+  test("quick: passive, external links on (repo#2729)", async () => {
     const options = await optionsFor("", "quick");
     expect(options).toMatchObject({
       coverageMode: "quick",
       maxPages: 25,
-      externalLinksEnabled: false,
+      externalLinksEnabled: true,
       probe: { level: "passive", budgetMs: 0 },
     });
   });
@@ -99,15 +99,14 @@ describe("levelRunOptions", () => {
   // --external-links, --no-external-links and --no-internal-links.
   test("the tool's link switches beat the level and the config", async () => {
     writeFileSync(configPath, "[external_links]\nenabled = false\n");
+    // Quick checks them by default, so the switch restores what the config
+    // turned off, and the level is quick again.
     const on = await levelRunOptions("quick", undefined, undefined, {
       external: true,
     });
     expect(on.externalLinksEnabled).toBe(true);
     expect(on.internalLinksEnabled).toBeUndefined();
-    expect(on.auditLevel).toMatchObject({
-      level: "custom",
-      changes: ["externalLinks"],
-    });
+    expect(on.auditLevel).toMatchObject({ level: "quick", changes: [] });
 
     writeFileSync(configPath, "");
     const off = await levelRunOptions("surface", undefined, undefined, {

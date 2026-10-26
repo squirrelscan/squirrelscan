@@ -1,20 +1,56 @@
 ---
-title: "Analytics"
-description: "Tracking and measurement implementation"
+title: "Analytics audit rules: tag presence and consent mode"
+sidebarTitle: "Analytics"
+description: "Audit rules for analytics: which measurement platforms each page loads, and whether Google Consent Mode v2 is set up."
 ---
 
 Analytics rules read what a page loads for measurement and whether it respects consent. One inventories the platforms present, from tag managers to privacy-focused alternatives. The other checks for Google Consent Mode v2, which Google requires for advertising traffic from the EEA. Both are informational: what you measure with is your decision, and this category reports it rather than judging it.
 
+## Run only these rules
+
+```bash
+squirrel audit https://example.com --rule-include analytics
+```
+
+{/* hub:start-here:start */}
+
+## Where to start
+
+These carry the highest severity and weight in the category.
+
+- [Google Consent Mode v2: the four consent parameters](/rules/analytics/consent-mode): Google Ads in the EEA requires Consent Mode v2. squirrel checks for the consent call and for the two parameters v2 added.
+- [Analytics tracking: which platforms a page loads](/rules/analytics/gtm-present): squirrel inventories the analytics on each page, from Google Tag Manager and GA4 to Plausible, Matomo, Segment and session-replay tools.
+
+{/* hub:start-here:end */}
+
+{/* hub:rules:start */}
+
 ## Rules
 
-<CardGroup cols={2}>
-  <Card title="Analytics tracking: which platforms a page loads" icon="circle-info" href="/rules/analytics/gtm-present">
-    squirrel inventories the analytics on each page, from Google Tag Manager and GA4 to Plausible, Matomo, Segment and session-replay tools.
-  </Card>
-  <Card title="Google Consent Mode v2: the four consent parameters" icon="circle-info" href="/rules/analytics/consent-mode">
-    Google Ads in the EEA requires Consent Mode v2. squirrel checks for the consent call and for the two parameters v2 added.
-  </Card>
-</CardGroup>
+| Rule | What it flags | Severity | Scope |
+|---|---|---|---|
+| [Analytics tracking: which platforms a page loads](/rules/analytics/gtm-present) | squirrel inventories the analytics on each page, from Google Tag Manager and GA4 to Plausible, Matomo, Segment and session-replay tools. | info | Per-page |
+| [Google Consent Mode v2: the four consent parameters](/rules/analytics/consent-mode) | Google Ads in the EEA requires Consent Mode v2. squirrel checks for the consent call and for the two parameters v2 added. | info | Per-page |
+
+{/* hub:rules:end */}
+
+{/* hub:terms:start */}
+
+## Key terms
+
+- [Cookie consent](/glossary/cookie-consent): The banner and mechanism that asks visitors before setting non-essential cookies, as GDPR and ePrivacy require in the EU.
+
+{/* hub:terms:end */}
+
+## Related categories
+
+[Legal Compliance](/rules/legal) checks for a cookie consent mechanism and a privacy policy.
+
+## Learn more
+
+- [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai), the coding agent workflow for working through a report
+- [Website audit tool](https://squirrelscan.com/tools/website-audit)
+- [Sample report](https://squirrelscan.com/reports/squirrelscan-sample), with the Analytics section on a real site
 
 ## Disable all Analytics rules
 
@@ -22,5 +58,3 @@ Analytics rules read what a page loads for measurement and whether it respects c
 [rules]
 disable = ["analytics/*"]
 ```
-
-Every audit reports Analytics findings next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.

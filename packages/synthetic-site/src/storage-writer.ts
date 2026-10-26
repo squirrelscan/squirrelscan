@@ -25,7 +25,7 @@ import { absoluteHref, buildRobotsTxt, linkText, renderPageHtml } from "./html-r
 import { hashString32, hashStringHex } from "./prng";
 
 export interface WriteCrawlOptions {
-  /** Synthetic origin used to build absolute page/link URLs. Default "http://synthetic.test". */
+  /** Synthetic origin used to build absolute page/link URLs. Default "http://synthetic.example.com". */
   baseUrl?: string;
   crawlStatus?: CrawlStatus;
   /** Upsert pages in batches within a transaction for speed at 25k scale. Default 200. */
@@ -168,7 +168,7 @@ export async function writeCrawlToStorage(
   storagePath: string,
   opts: WriteCrawlOptions = {},
 ): Promise<{ storage: SQLiteStorage } & WriteCrawlResult> {
-  const baseUrl = opts.baseUrl ?? "http://synthetic.test";
+  const baseUrl = opts.baseUrl ?? "http://synthetic.example.com";
   const now = opts.now ?? deterministicTimestamp(model.seed);
   const storage = new SQLiteStorage(storagePath);
 

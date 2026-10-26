@@ -11,11 +11,17 @@ With nothing between the tags and no label, a screen reader has an element it ca
 
 ## What squirrel checks
 
-One check, `object-alt`, at severity warning and weight 6. It covers every `<object>`, skipping any with `aria-hidden="true"` or with `role="presentation"` or `role="none"`.
+One check, `object-alt`, at severity warning and weight 6. It covers every `<object>`, skipping any with `role="presentation"` or `role="none"` and any hidden from the accessibility tree (see below).
 
 - Warn when the element has no non-empty `aria-label`, no `aria-labelledby` and no text content between its tags. Report message: `N object element(s) without alternative content`. Every offender is listed, identified by `name`, then by the subtype of its `type` as `object[type="pdf"]`, then by the filename from its `data` attribute as `object (report.pdf)`, then as a bare `object`.
 - Pass with `N object element(s) have alternative content`.
 - Info with `No object elements found`.
+
+### Hidden object elements
+
+An object element out of the accessibility tree has nothing to announce, so it is not reported: one with the `hidden` attribute (except `hidden="until-found"`), `aria-hidden="true"` on itself or an ancestor, `display: none` on itself or an ancestor (set inline or by a `<style>` rule squirrel can decide), or inside a closed `<dialog>` or an unopened `popover`. The pass message then reads "in the accessibility tree" and the count of skipped elements is kept in `hiddenWithoutName`. It still needs a name before it is shown.
+
+squirrel reads the markup, inline styles and the page's `<style>` blocks, the same way as `form-labels`; see [form-labels](/rules/a11y/form-labels) for what it can and cannot decide. External stylesheets are not read. An unnamed object element that carries a `no-js` class, itself or on an ancestor other than `<html>`, is reported as unconfirmed on a page with an external stylesheet or an `@import`, because a theme usually hides that fallback once JavaScript runs. One a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet) is unconfirmed too. Report message: `N object element(s) without alternative content may be hidden by a style (unconfirmed)`, under the check name `object-alt-unconfirmed`.
 
 ## How to fix it
 
@@ -70,6 +76,12 @@ enable = ["a11y/object-alt"]
 - [a11y/input-image-alt](/rules/a11y/input-image-alt): image inputs, which need `alt` as a button name.
 
 Accessibility findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Alt text](/glossary/alt-text).
+
+{/* glossary:backlinks:end */}
 
 ## References
 

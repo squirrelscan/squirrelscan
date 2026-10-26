@@ -1,0 +1,88 @@
+---
+title: "What is llms.txt? Format, adoption and what it is not"
+sidebarTitle: "llms.txt"
+description: "llms.txt is a proposed Markdown file at /llms.txt that points language models at a site's key content. The format, who reads it, and what to check."
+---
+
+**llms.txt** is a proposed Markdown file, served at `/llms.txt`, that gives language models and AI agents a curated map of a site's most useful content.
+
+The proposal at [llmstxt.org](https://llmstxt.org/) was published in September 2024. A file starts with an H1 naming the site or project, the only required section, followed by a blockquote summary and sections of Markdown links to key pages. The file can also sit under a path, such as `/docs/llms.txt`. A companion `llms-full.txt` inlines the content instead of linking to it.
+
+{/* glossary:hub:start */}
+
+Category: [Agent Experience](/rules/ax)
+
+{/* glossary:hub:end */}
+
+## Why it matters
+
+llms.txt is a proposal, not a standard, and no crawler has to fetch it. It costs one static file and gives an agent a short list of entry points instead of a sitemap of every URL. The proposal's changelog says documentation platforms now generate one automatically and coding agents use them. Google Search does not use it: Google says you do not need AI text files or Markdown to appear in Search or its AI features, and that publishing one for other services is fine. A missing llms.txt is never a defect.
+
+## How squirrelscan checks it
+
+[ax/llms-txt](/rules/ax/llms-txt) requests `/llms.txt` at the root, with `/.well-known/llms.txt` and `/docs/llms.txt` as fallbacks. It fails a file that returns 200 but is really an HTML page, the fallback a single-page app serves for every unknown path. For a real root file it checks the format: an H1 title on the first non-empty line, at least one Markdown link, and link URLs that parse. It also notes when `/llms-full.txt` exists. The rule is info severity, so a missing file or a format note does not move the score.
+
+{/* glossary:rules:start */}
+
+| Rule | What it flags | Severity |
+|---|---|---|
+| [llms.txt: what the file is and how squirrel validates it](/rules/ax/llms-txt) | No /llms.txt at the root, an SPA fallback served in its place, or a file with no H1 and no links. squirrel checks the file and its format. | info |
+
+{/* glossary:rules:end */}
+
+## How to fix it
+
+Write a short file by hand, or generate one from your docs, and serve it at the root with a `text/plain` or `text/markdown` content type (see [the llms.txt fix](/rules/ax/llms-txt#how-to-fix-it)):
+
+```markdown
+# Acme Docs
+
+> Deployment and configuration guides for Acme.
+
+## Guides
+- [Quickstart](https://example.com/docs/quickstart): install and first deploy.
+- [Configuration](https://example.com/docs/config): every option, with defaults.
+```
+
+If your server returns `index.html` for unmatched paths, add a real file or a route, or the audit will report the HTML fallback.
+
+## Run the check
+
+{/* glossary:run:start */}
+
+```bash
+squirrel audit https://example.com --rule-include ax/llms-txt
+```
+
+{/* glossary:run:end */}
+
+A signed-out local audit costs nothing.
+
+{/* glossary:related:start */}
+
+## Related terms
+
+- [Agent experience (AX)](/glossary/agent-experience): How well a site serves AI agents that read it, find their way around it and act on it, the way UX serves people.
+- [AGENTS.md](/glossary#agents-md): A Markdown file of instructions for coding agents working in a repository or against a docs site.
+- [Markdown for agents](/glossary#markdown-for-agents): Serving a clean Markdown version of a page, through Accept: text/markdown or a .md URL, so agents read fewer tokens.
+
+{/* glossary:related:end */}
+
+## Learn more
+
+- [llms.txt guide](https://squirrelscan.com/learn/llms-txt)
+- [llms.txt validator](https://squirrelscan.com/tools/llms-txt-validator)
+
+## References
+
+- [The /llms.txt file proposal](https://llmstxt.org/)
+- [Optimizing your website for generative AI features on Google Search](https://developers.google.com/search/docs/fundamentals/ai-optimization-guide)
+- [text/markdown media type, RFC 7763](https://www.rfc-editor.org/rfc/rfc7763.html)
+
+{/* glossary:jsonld:start */}
+
+import GlossaryJsonLd from "../components/GlossaryJsonLd.astro";
+
+<GlossaryJsonLd slug="llms-txt" />
+
+{/* glossary:jsonld:end */}

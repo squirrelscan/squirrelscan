@@ -4,13 +4,19 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { hasAttrCI } from "@squirrelscan/utils";
 
+import {
+  createStaticVisibility,
+  sortUnnamedControls,
+  unconfirmedRow,
+} from "../shared/static-hidden";
+
 export const ariaLabelsRule: Rule = {
   meta: {
     id: "a11y/aria-labels",
     name: "ARIA Labels",
     description: "Checks that interactive elements have accessible names",
     solution:
-      "All interactive elements (buttons, links, inputs) need accessible names for screen readers. Use: visible text content, aria-label for icon-only buttons, aria-labelledby to reference existing text, or the title attribute as a fallback. Icon buttons especially need aria-label: <button aria-label='Close'>×</button>. Test with a screen reader or browser accessibility inspector.",
+      "All interactive elements (buttons, links, inputs) need accessible names for screen readers. Use: visible text content, aria-label for icon-only buttons, aria-labelledby to reference existing text, or the title attribute as a fallback. Icon buttons especially need aria-label: <button aria-label='Close'>×</button>. Test with a screen reader or browser accessibility inspector. A button hidden by the hidden attribute, aria-hidden, a closed dialog or an inline style='display:none' is out of the accessibility tree and is not reported, but it needs a name before it is shown. A <style> rule squirrel can decide (a plain selector, no media query) counts too. Vendor-prefixed display values (-webkit-box, -webkit-flex, -ms-flexbox) are read as shown, including the old fallback chain that ends in display: flex. An attribute selector with an operator ([id$=x], [href^=x], [data-a*=x], [class~=x], [lang|=en]) reaches only elements that have the attribute and a value that could satisfy it. A control carrying a no-js class (itself or an ancestor other than <html>) on a page with an external stylesheet or @import is reported as unconfirmed, because the theme may hide it when JavaScript runs. A button a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet) is reported as unconfirmed. External stylesheets are not read, so a button hidden only by one is still reported.",
     category: "a11y",
     scope: "page",
     verdictScope: "page",
@@ -25,7 +31,9 @@ export const ariaLabelsRule: Rule = {
 
     // Check buttons without accessible names
     const buttons = doc.querySelectorAll("button, [role='button']");
-    const unlabeledButtons: string[] = [];
+    // pub#671: a control out of the accessibility tree is not reported.
+    const visibility = createStaticVisibility({ ariaHidden: true });
+    const unlabeled = sortUnnamedControls<string>(visibility);
 
     for (const button of buttons) {
       const text = (button.textContent || "").trim();
@@ -43,11 +51,12 @@ export const ariaLabelsRule: Rule = {
             button.getAttribute("id") ||
             button.getAttribute("class") ||
             "button";
-          unlabeledButtons.push(id.substring(0, 30));
+          unlabeled.add(button, id.substring(0, 30));
         }
       }
     }
 
+    const unlabeledButtons = unlabeled.failures;
     if (unlabeledButtons.length > 0) {
       checks.push({
         name: "aria-buttons",
@@ -55,19 +64,47 @@ export const ariaLabelsRule: Rule = {
         message: `${unlabeledButtons.length} button(s) without accessible names`,
         items: unlabeledButtons.map((id) => ({ id })),
       });
-    } else if (buttons.length > 0) {
+    }
+    if (unlabeled.unconfirmed.length > 0) {
+      checks.push(
+        unconfirmedRow(
+          "aria-buttons",
+          "button(s) without accessible names",
+          unlabeled.unconfirmed
+        )
+      );
+    }
+    if (
+      unlabeledButtons.length === 0 &&
+      unlabeled.unconfirmed.length === 0 &&
+      buttons.length > 0
+    ) {
       checks.push({
         name: "aria-buttons",
         status: "pass",
-        message: "All buttons have accessible names",
-        details: { buttonsChecked: buttons.length },
+        ...(unlabeled.hidden > 0
+          ? {
+              message:
+                "All buttons in the accessibility tree have accessible names",
+              details: {
+                buttonsChecked: buttons.length,
+                hiddenWithoutName: unlabeled.hidden,
+              },
+            }
+          : {
+              message: "All buttons have accessible names",
+              details: { buttonsChecked: buttons.length },
+            }),
       });
     }
 
     // Check for interactive SVGs without accessible names (case-insensitive for React SSR)
     const allSvgs = doc.querySelectorAll("svg");
+    // Not one out of the accessibility tree (pub#671).
     const interactiveSvgs = Array.from(allSvgs).filter(
-      (svg) => hasAttrCI(svg, "onclick") || hasAttrCI(svg, "tabindex")
+      (svg) =>
+        (hasAttrCI(svg, "onclick") || hasAttrCI(svg, "tabindex")) &&
+        visibility.visibility(svg).state !== "hidden"
     );
     const unlabeledSvgs: number = Array.from(interactiveSvgs).filter((svg) => {
       const ariaLabel = svg.getAttribute("aria-label");

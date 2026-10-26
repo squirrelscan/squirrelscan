@@ -11,6 +11,7 @@
 import {
   isValidHeaderName,
   isValidHeaderValue,
+  mergeHeaderRecords,
 } from "@squirrelscan/utils/headers";
 
 export interface ParsedHeadersResult {
@@ -35,11 +36,12 @@ export function normalizeHeaderArgs(
 /**
  * Parse `Name: Value` specs into a header map. Splits on the first colon only;
  * trims surrounding whitespace from name and value but preserves the value's
- * inner content (including quotes). Later duplicates of a name win. Invalid
+ * inner content (including quotes). Later duplicates of a name win, whatever
+ * their casing (#3346: `-H "x-foo: a" -H "X-Foo: b"` sends `b` alone). Invalid
  * specs (no colon, empty/invalid name) are collected as errors.
  */
 export function parseHeaders(specs: string[]): ParsedHeadersResult {
-  const headers: Record<string, string> = {};
+  let headers: Record<string, string> = {};
   const errors: string[] = [];
 
   for (const spec of specs) {
@@ -68,7 +70,7 @@ export function parseHeaders(specs: string[]): ParsedHeadersResult {
       );
       continue;
     }
-    headers[name] = value;
+    headers = mergeHeaderRecords(headers, { [name]: value });
   }
 
   return { headers, errors };

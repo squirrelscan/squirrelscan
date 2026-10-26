@@ -11,10 +11,13 @@
 // checked" line with the reason and what to run instead.
 
 import {
+  CRAWL_CAPPED_SKIP_REASON,
   EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
+  EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON,
   EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
   LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
   NOT_CHECKED_SKIP_REASONS,
+  RULE_TIMED_OUT_SKIP_REASON,
 } from "@squirrelscan/core-contracts";
 
 import type { ReportRuleResult } from "./types";
@@ -40,11 +43,18 @@ export interface NotCheckedReportShape {
 
 const HINTS: Record<string, string> = {
   [EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON]:
-    "Turn external link checks on to check them: in the CLI pass --external-links, or run a Surface or Full audit, without --offline; in the cloud they are a website setting.",
+    "Turn external link checks on to check them: in the CLI pass --external-links (or drop --no-external-links, --offline, or external_links.enabled = false); in the cloud they are a website setting.",
   [LINK_TARGETS_NOT_FETCHED_SKIP_REASON]:
     "Turn internal link checks back on (they are off with --no-internal-links or internal_links.enabled = false), raise internal_links.max_targets, or run a Surface or Full audit, which follows links, to check them.",
   [EXTERNAL_LINKS_OVER_CAP_SKIP_REASON]:
     "Raise the limit with external_links.max_links, or audit more pages, to check them.",
+  [EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON]:
+    "Run the audit again to check them.",
+  [RULE_TIMED_OUT_SKIP_REASON]:
+    "A timed-out rule did not check those pages, so no finding there is not a clean result. Run the audit again, or raise [rules] time_budget_ms if the machine was busy.",
+  // #1144: the inbound-link rules on a crawl that stopped at its page cap.
+  [CRAWL_CAPPED_SKIP_REASON]:
+    "Raise the page limit (--max-pages, or crawler.max_pages) so the crawl reaches every page, to check them.",
 };
 
 const DEFAULT_HINT = "Run a Surface or Full audit to check them.";
@@ -94,6 +104,68 @@ function hintFor(check: { skipReason?: string; details?: Record<string, unknown>
  * restates links/broken-external-links), so listing them would say the same
  * thing twice. Empty for reports written before repo#2729.
  */
+/** A rule abandoned for its time budget on at least one page (pub#970). */
+export interface TimedOutRule {
+  ruleId: string;
+  name: string;
+  category: string;
+  /** Pages it did not check. */
+  pages: number;
+  budgetMs?: number;
+}
+
+/**
+ * Rules that ran past their time budget in this audit, from their skipped
+ * `rule-timed-out` checks. The page count is the `<rule>-timeouts` row's
+ * `pagesNotChecked` (the final count) when the report has it, else the most the
+ * skipped rows themselves say, else the rows counted.
+ */
+export function timedOutRules(report: NotCheckedReportShape): TimedOutRule[] {
+  const out: TimedOutRule[] = [];
+  for (const ruleId of Object.keys(report.ruleResults)) {
+    const result = report.ruleResults[ruleId];
+    if (!result) continue;
+    const skipped = result.checks.filter(
+      (c) => c.status === "skipped" && c.skipReason === RULE_TIMED_OUT_SKIP_REASON,
+    );
+    if (skipped.length === 0) continue;
+    const num = (value: unknown): number | undefined =>
+      typeof value === "number" && Number.isFinite(value) ? value : undefined;
+    const summary = result.checks.find((c) => c.name === `${ruleId}-timeouts`);
+    // The summary's count is final. Without it (a published report may have cut the
+    // row) the most any skipped row says: a fold keeps the pages it covered in
+    // `occurrences` / `pagesTruncated`, a live row its running `pages`, else the
+    // rows themselves.
+    const pages =
+      num(summary?.details?.pagesNotChecked) ??
+      Math.max(
+        skipped.length,
+        ...skipped.map((c) =>
+          Math.max(
+            num(c.details?.pages) ?? 0,
+            num(c.details?.occurrences) ?? 0,
+            num(c.details?.pagesTruncated) ?? 0,
+            c.pages?.length ?? 0,
+          ),
+        ),
+      );
+    out.push({
+      ruleId,
+      name: result.meta.name,
+      category: result.meta.category,
+      pages,
+      budgetMs: num(skipped[0]!.details?.budgetMs),
+    });
+  }
+  return out;
+}
+
+/** "Leaked Secrets timed out on 2 pages (exceeded its 1000 ms time budget)". */
+export function timedOutMessage(rule: TimedOutRule): string {
+  const budget = rule.budgetMs !== undefined ? ` (exceeded its ${rule.budgetMs} ms time budget)` : "";
+  return `${rule.name} timed out on ${rule.pages} page${rule.pages === 1 ? "" : "s"}${budget}`;
+}
+
 export function notCheckedRules(report: NotCheckedReportShape): NotCheckedRule[] {
   const out: NotCheckedRule[] = [];
   for (const ruleId of Object.keys(report.ruleResults)) {
@@ -106,12 +178,17 @@ export function notCheckedRules(report: NotCheckedReportShape): NotCheckedRule[]
         NOT_CHECKED_SKIP_REASONS.has(c.skipReason),
     );
     if (!check || check.skipReason === undefined) continue;
+    const timedOut =
+      check.skipReason === RULE_TIMED_OUT_SKIP_REASON
+        ? timedOutRules({ ruleResults: { [ruleId]: result } })[0]
+        : undefined;
     out.push({
       ruleId,
       name: result.meta.name,
       check: check.name,
       reason: check.skipReason,
-      message: check.message,
+      // A timeout names the rule and the pages it did not check.
+      message: timedOut ? timedOutMessage(timedOut) : check.message,
       hint: hintFor(check),
     });
   }

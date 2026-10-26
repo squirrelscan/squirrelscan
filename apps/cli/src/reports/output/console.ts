@@ -13,6 +13,10 @@ import {
   getGroupName,
   getSubcategoryName,
   groupTechnologies,
+  itemsNotListed,
+  itemsNotListedLine,
+  passedRuleScope,
+  reportPassedRules,
   techChangeSummary,
   ENTITY_CONSOLE_LIMIT,
   ENTITY_EMPTY_MESSAGE,
@@ -27,6 +31,7 @@ import {
   positionBands,
   EDITOR_SUMMARY_NOTE,
   editorSummaryView,
+  priorityEffortLabel,
   SITE_PROFILE_NOTE,
   siteProfileFlags,
   siteProfileRows,
@@ -88,6 +93,8 @@ export interface ConsoleReportOptions {
   /** #1066: when set, the run excluded some rule categories — print a
    * partial-audit notice under the header. */
   ruleFilter?: ConsoleRuleFilter;
+  /** List the rules that passed after the issues (`--include-passed`). */
+  includePassed?: boolean;
 }
 
 export function generateConsoleReport(
@@ -173,10 +180,14 @@ export function generateConsoleReport(
   log(divider());
 
   // Editor's summary — report-only Pro exec narrative, surfaced at the top.
-  const editorSummary = editorSummaryView(report.editorSummary);
+  const editorSummary = editorSummaryView(report.editorSummary, report);
   if (editorSummary) {
     log("");
     printEditorSummary(editorSummary);
+    if (editorSummary.priorities.length > 0) {
+      log("");
+      printPriorities(editorSummary);
+    }
   }
 
   // Category breakdown
@@ -291,7 +302,9 @@ export function generateConsoleReport(
               );
             }
           }
-          // Show structured items (preferred)
+          // Show structured items (preferred). pub#866: the "more" count adds
+          // the items the audit left out of the list to those past the preview.
+          const notListed = itemsNotListed(check);
           if (check.items && check.items.length > 0) {
             const maxItems = 5;
             const itemsToShow = check.items.slice(0, maxItems);
@@ -316,13 +329,16 @@ export function generateConsoleReport(
                 }
               }
             }
-            if (check.items.length > maxItems) {
+            const more = Math.max(0, check.items.length - maxItems) + notListed;
+            if (more > 0) {
               log(
                 box.line(
-                  `     ${fmt.dim(`... +${check.items.length - maxItems} more`)}`
+                  `     ${fmt.dim(`... +${more.toLocaleString("en-US")} more`)}`
                 )
               );
             }
+          } else if (notListed > 0) {
+            log(box.line(`     ${fmt.dim(itemsNotListedLine(notListed))}`));
           }
           // Legacy check.value omitted - message already contains relevant info
         }
@@ -339,6 +355,24 @@ export function generateConsoleReport(
   } else {
     log("");
     log(fmt.green("✓ No issues found"));
+  }
+
+  const passedRules = reportPassedRules(report, opts.includePassed);
+  if (passedRules.length > 0) {
+    log("");
+    const ruleCount = `${passedRules.length} rule${passedRules.length === 1 ? "" : "s"}`;
+    log(fmt.bold(`PASSED ${fmt.dim(`(${ruleCount})`)}`));
+    let lastCategory: string | undefined;
+    for (const rule of passedRules) {
+      if (rule.categoryCode !== lastCategory) {
+        lastCategory = rule.categoryCode;
+        log("");
+        log(` ${fmt.bold(rule.categoryName)}`);
+      }
+      log(
+        `   ${icon("pass")} ${fmt.dim(rule.id)} ${rule.name} ${fmt.dim(`(${passedRuleScope(rule)})`)}`
+      );
+    }
   }
 
   // Footer
@@ -395,12 +429,25 @@ function printEditorSummary(es: EditorSummaryView): void {
     log(para);
     log("");
   }
-  if (es.bigTicket.length > 0) {
+  if (es.priorities.length === 0 && es.bigTicket.length > 0) {
     log(fmt.bold("Big-ticket items:"));
     for (const item of es.bigTicket) log(`  ${fmt.dim("•")} ${item}`);
     log("");
   }
   if (es.verdict) log(`${fmt.bold("Verdict:")} ${es.verdict}`);
+}
+
+function printPriorities(es: EditorSummaryView): void {
+  // One line each: model text with an embedded newline would break the indent.
+  const line = (value: string) => value.replace(/\s+/g, " ").trim();
+  log(fmt.bold("PRIORITIES"));
+  for (const [i, p] of es.priorities.entries()) {
+    log(
+      `  ${fmt.bold(`${i + 1}.`)} ${fmt.bold(line(p.title))} ${fmt.dim(`(${priorityEffortLabel(p.effort)})`)}`
+    );
+    if (p.why) log(`     ${fmt.dim(line(p.why))}`);
+    log(`     ${line(p.action)}`);
+  }
 }
 
 function printSiteProfile(meta: SiteMetadata): void {

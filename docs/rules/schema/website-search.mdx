@@ -19,6 +19,8 @@ The rule reads every `script[type="application/ld+json"]` on the page and keeps 
 
 A `SearchAction` is recognised only when its `@type` is exactly the string `SearchAction`; an `@type` array containing it is not matched. Every property test is a truthiness test rather than a presence test, so a property present but empty, `0` or `false` counts as missing. The rule checks that `target` and `query-input` are truthy and stops there. It does not parse the target template or confirm that the placeholder in `query-input` matches the one in `target`.
 
+A `potentialAction` written as a node reference, `{"@id": "…#search"}`, is read from the node with that `@id` anywhere in the page's JSON-LD, in the same `@graph` or another script. A relative `@id` resolves against the page URL. A reference to a node the page does not have is not a `SearchAction`.
+
 ## How to fix it
 
 ```html
@@ -81,6 +83,12 @@ enable = ["schema/website-search"]
 - [schema/coverage-outlier](/rules/schema/coverage-outlier): pages missing the structured data the rest of their page type carries.
 
 Structured data findings ship in every audit next to the core SEO, performance and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [WebSite schema](/glossary#website-schema).
+
+{/* glossary:backlinks:end */}
 
 ## References
 

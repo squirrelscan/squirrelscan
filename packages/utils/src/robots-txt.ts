@@ -6,10 +6,18 @@ import type { RobotsTxtData, RobotsRule } from "@squirrelscan/core-contracts";
 
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 
-import { getPathname } from "./url";
-
 /**
- * Check if a URL is disallowed by robots.txt rules
+ * Check if a URL is disallowed by robots.txt rules, the way Google reads them
+ * (pub#556), so every rule that asks "is this page blocked" gets one answer:
+ *
+ * - the groups for `userAgent` (matched without case, several merged), else
+ *   the `*` groups;
+ * - of the rules whose path matches, the longest wins, and Allow wins a tie;
+ * - `*` in a rule matches any run of characters and a trailing `$` anchors
+ *   the end;
+ * - the path includes the query string;
+ * - the rule and the URL are compared with their percent-encoding
+ *   normalised, so `/café` matches `/caf%C3%A9` and `/%66oo` matches `/foo`.
  *
  * @param url - URL to check
  * @param robotsTxt - Parsed robots.txt data
@@ -23,90 +31,244 @@ export function isRobotsTxtDisallowed(
 ): boolean {
   if (!robotsTxt?.exists) return false;
 
-  const pathname = getPathname(url);
-  if (!pathname) return false;
-
-  // Find matching user-agent rules (priority: exact match > wildcard *)
-  let matchedRules = robotsTxt.rules.find(
-    (r: { userAgent: string }) => r.userAgent === userAgent
-  );
-
-  // Fallback to wildcard if specific user-agent not found
-  if (!matchedRules) {
-    matchedRules = robotsTxt.rules.find(
-      (r: { userAgent: string }) => r.userAgent === "*"
-    );
+  let target: string;
+  try {
+    const parsed = new URL(url);
+    target = normalizeRobotsPath(parsed.pathname + parsed.search);
+  } catch {
+    return false;
   }
 
-  if (!matchedRules) return false;
+  const agent = userAgent.toLowerCase();
+  let groups = robotsTxt.rules.filter((r) => r.userAgent.toLowerCase() === agent);
+  if (groups.length === 0) groups = robotsTxt.rules.filter((r) => r.userAgent === "*");
+  if (groups.length === 0) return false;
 
-  // Check disallow/allow rules in order
-  // First matching rule wins
-  for (const rule of matchedRules.rules) {
-    if (pathname.startsWith(rule.path)) {
-      return rule.type === "disallow";
+  let best: { length: number; allow: boolean } | null = null;
+  // Stacked agents share one group's rule objects: each is matched once.
+  const seen = new Set<object>();
+  for (const group of groups) {
+    for (const rule of group.rules) {
+      if (!rule.path || seen.has(rule)) continue;
+      seen.add(rule);
+      const pattern = normalizedPattern(rule);
+      if (!robotsPathMatches(pattern, target)) continue;
+      const length = pattern.length;
+      const allow = rule.type === "allow";
+      if (!best || length > best.length || (length === best.length && allow && !best.allow)) {
+        best = { length, allow };
+      }
     }
   }
-
-  // Default: allowed
-  return false;
+  return best !== null && !best.allow;
 }
+
+/**
+ * A rule's normalized pattern, worked out once per rule object rather than once
+ * per URL checked (a crawl checks every page against the same rules).
+ */
+const normalizedPatterns = new WeakMap<object, string>();
+function normalizedPattern(rule: { path: string }): string {
+  let pattern = normalizedPatterns.get(rule);
+  if (pattern === undefined) {
+    pattern = normalizeRobotsPath(rule.path);
+    normalizedPatterns.set(rule, pattern);
+  }
+  return pattern;
+}
+
+/**
+ * A rule path or URL path in one spelling: non-ASCII characters, controls,
+ * spaces and the quote and angle-bracket characters percent-encoded as UTF-8
+ * (as the URL parser encodes a path), `%XX` escapes of unreserved characters decoded, and every other
+ * escape upper-cased. `*` and `$` are ASCII, so a pattern keeps its operators.
+ */
+function normalizeRobotsPath(path: string): string {
+  let encoded = "";
+  for (const ch of path) {
+    const code = ch.charCodeAt(0);
+    if (code > 0x20 && code < 0x7f && !'"<>`'.includes(ch)) {
+      encoded += ch;
+      continue;
+    }
+    try {
+      encoded += encodeURIComponent(ch);
+    } catch {
+      encoded += ch; // a lone surrogate cannot be encoded
+    }
+  }
+  return encoded.replace(/%([0-9a-fA-F]{2})/g, (_, hex: string) => {
+    const char = String.fromCharCode(Number.parseInt(hex, 16));
+    return /[A-Za-z0-9\-._~]/.test(char) ? char : `%${hex.toUpperCase()}`;
+  });
+}
+
+/**
+ * Whether a robots.txt path pattern matches `path` from its start. `*` is any
+ * run of characters and a trailing `$` anchors the end. Greedy leftmost
+ * matching of the literal pieces is exact for `*`-only patterns and linear in
+ * the path, so a site's pattern full of `*` cannot make it backtrack.
+ */
+function robotsPathMatches(pattern: string, path: string): boolean {
+  const anchored = pattern.endsWith("$");
+  const parts = (anchored ? pattern.slice(0, -1) : pattern).split("*");
+  const first = parts[0] ?? "";
+  if (!path.startsWith(first)) return false;
+  let pos = first.length;
+  if (parts.length === 1) return anchored ? path.length === pos : true;
+  for (let i = 1; i < parts.length - 1; i++) {
+    const part = parts[i] ?? "";
+    const at = path.indexOf(part, pos);
+    if (at === -1) return false;
+    pos = at + part.length;
+  }
+  const last = parts[parts.length - 1] ?? "";
+  if (anchored) return path.length - last.length >= pos && path.endsWith(last);
+  return path.indexOf(last, pos) !== -1;
+}
+
+/**
+ * What the parsed data may hold. Each group's rules are given to every user
+ * agent that heads it, so a file of a few thousand stacked `User-agent` lines
+ * over a few thousand rules, or over one very long rule, well inside the 512
+ * KiB fetch cap, multiplies into hundreds of millions of entries or gigabytes
+ * of rule text (out of memory, and minutes per URL checked). Counted across
+ * every agent's copy: an entry is one rule of one agent, or one agent with no
+ * rules, and the characters are the rule paths. Past either budget the rest of
+ * the file's groups are not read, in file order (Google stops at 500 KiB),
+ * and `errors` says so; `Sitemap` lines are still collected. Real files stay
+ * far below both.
+ */
+export const ROBOTS_MAX_DIRECTIVE_ENTRIES = 100_000;
+export const ROBOTS_MAX_RULE_CHARS = 2_000_000;
 
 /**
  * Parse robots.txt content into structured data
  */
 export function parseRobotsTxt(content: string, url: string): RobotsTxtData {
-  const lines = content.split("\n");
+  // RFC 9309 ends a line with CR, LF or CRLF.
+  const lines = content.split(/\r\n|\r|\n/);
   const rules: RobotsRule[] = [];
   const sitemaps: string[] = [];
   const errors: string[] = [];
 
-  let currentUserAgent: string | null = null;
+  let currentUserAgents: string[] = [];
   let currentRules: { type: "allow" | "disallow"; path: string }[] = [];
+  // Characters of the current group's rule paths.
+  let currentRuleChars = 0;
   let currentCrawlDelay: number | undefined;
+  // Consecutive User-agent records belong to one group. Only an Allow or
+  // Disallow record closes that header, so a later User-agent starts a new
+  // group. Other records (Sitemap, Crawl-delay, anything unknown) must not
+  // change how the groups are read (RFC 9309 2.2.4, and Google's parser), so a
+  // User-agent after one of them still joins the group.
+  let collectingUserAgents = true;
+  // Empty Allow/Disallow records do not match a path, but they still make the
+  // named group explicit and keep it from falling through to `*`.
+  let hasGroupRecord = false;
+  // Held so far, against ROBOTS_MAX_DIRECTIVE_ENTRIES and ROBOTS_MAX_RULE_CHARS.
+  let entries = 0;
+  let chars = 0;
+  let truncated = false;
 
-  const flushCurrentRule = () => {
-    if (currentUserAgent && currentRules.length > 0) {
-      rules.push({
-        userAgent: currentUserAgent,
-        rules: [...currentRules],
-        crawlDelay: currentCrawlDelay,
-      });
+  const flushCurrentGroup = () => {
+    if (hasGroupRecord) {
+      for (const userAgent of currentUserAgents) {
+        const roomEntries = ROBOTS_MAX_DIRECTIVE_ENTRIES - entries;
+        const roomChars = ROBOTS_MAX_RULE_CHARS - chars;
+        if (roomEntries <= 0 || roomChars <= 0) {
+          truncated = true;
+          break;
+        }
+        let kept: typeof currentRules;
+        let keptChars: number;
+        if (currentRules.length <= roomEntries && currentRuleChars <= roomChars) {
+          kept = [...currentRules];
+          keptChars = currentRuleChars;
+        } else {
+          // The longest prefix inside both budgets: bounded by them, not by the group.
+          let take = 0;
+          keptChars = 0;
+          while (take < currentRules.length && take < roomEntries) {
+            const length = currentRules[take]!.path.length;
+            if (keptChars + length > roomChars) break;
+            keptChars += length;
+            take++;
+          }
+          kept = currentRules.slice(0, take);
+          truncated = true;
+          // An agent whose rules were all cut is left out, not kept as a group
+          // with no rules (which would read as allowing everything).
+          if (take === 0) break;
+        }
+        entries += Math.max(1, kept.length);
+        chars += keptChars;
+        rules.push({
+          userAgent,
+          rules: kept,
+          crawlDelay: currentCrawlDelay,
+        });
+        if (truncated) break;
+      }
     }
+    currentUserAgents = [];
     currentRules = [];
+    currentRuleChars = 0;
     currentCrawlDelay = undefined;
+    collectingUserAgents = true;
+    hasGroupRecord = false;
   };
 
   for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
+    const commentIndex = rawLine.indexOf("#");
+    const line = (commentIndex === -1 ? rawLine : rawLine.slice(0, commentIndex)).trim();
+    if (!line) continue;
 
     const colonIndex = line.indexOf(":");
     if (colonIndex === -1) continue;
 
     const directive = line.substring(0, colonIndex).trim().toLowerCase();
+    // Past a budget only Sitemap lines are still read: the crawl discovers
+    // pages from them, and they cost one string each.
+    if (truncated && directive !== "sitemap") continue;
     const value = line.substring(colonIndex + 1).trim();
 
     switch (directive) {
-      case "user-agent":
-        flushCurrentRule();
-        currentUserAgent = value;
+      case "user-agent": {
+        if (!value) break;
+        if (!collectingUserAgents) flushCurrentGroup();
+        currentUserAgents.push(value);
         break;
+      }
       case "disallow":
-        if (currentUserAgent && value) {
-          currentRules.push({ type: "disallow", path: value });
+        if (currentUserAgents.length > 0) {
+          collectingUserAgents = false;
+          hasGroupRecord = true;
+          if (value) {
+            currentRules.push({ type: "disallow", path: value });
+            currentRuleChars += value.length;
+          }
         }
         break;
       case "allow":
-        if (currentUserAgent && value) {
-          currentRules.push({ type: "allow", path: value });
+        if (currentUserAgents.length > 0) {
+          collectingUserAgents = false;
+          hasGroupRecord = true;
+          if (value) {
+            currentRules.push({ type: "allow", path: value });
+            currentRuleChars += value.length;
+          }
         }
         break;
       case "crawl-delay":
-        if (currentUserAgent) {
+        if (currentUserAgents.length > 0) {
           const delay = Number.parseFloat(value);
-          if (!Number.isNaN(delay)) {
+          // Only a real delay: a negative one, or one past a double (`1e999`
+          // parses to Infinity and serializes as null), is ignored like an
+          // unparseable one (#1145).
+          if (Number.isFinite(delay) && delay >= 0) {
             currentCrawlDelay = delay;
+            hasGroupRecord = true;
           }
         }
         break;
@@ -118,7 +280,12 @@ export function parseRobotsTxt(content: string, url: string): RobotsTxtData {
     }
   }
 
-  flushCurrentRule();
+  flushCurrentGroup();
+  if (truncated) {
+    errors.push(
+      `robots.txt has more than ${ROBOTS_MAX_DIRECTIVE_ENTRIES.toLocaleString("en-US")} directives across its user-agent groups; the rest of the file was not read`,
+    );
+  }
 
   return {
     exists: true,

@@ -261,7 +261,7 @@ describe("templateClusters over the stored key", () => {
 
 const CONFIG = { rule_options: {}, rules: { enable: ["*"] } } as unknown as Config;
 const EMPTY_SITE_DATA = {
-  baseUrl: "http://synthetic.test",
+  baseUrl: "http://synthetic.example.com",
   pages: [],
   robotsTxt: null,
   sitemaps: null,

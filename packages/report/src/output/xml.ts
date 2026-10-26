@@ -4,18 +4,20 @@ import type { ReportBranding } from "@squirrelscan/core-contracts";
 import type { AuditReport } from "../types";
 import { getScoreGrade } from "../scoring";
 import { getGroupName } from "../categories";
-import { groupIssuesByCategory, flattenIssuesBySeverity } from "../grouping";
-import { affectedPages } from "../affected-pages";
+import { groupIssuesByCategory, flattenIssuesBySeverity, reportPassedRules } from "../grouping";
+import { affectedPages, itemsNotListed } from "../affected-pages";
 import { domainAgeYears } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import { entityPageTotal, stableIdPercent } from "../entities";
-import { seedRedirect } from "../coverage";
+import { scanScopeUnfetched, seedRedirect } from "../coverage";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
 
 export interface XmlRenderOptions {
   version?: string;
   /** White-label branding (#810) — Team orgs get a neutral `<audit>` root. */
   branding?: ReportBranding;
+  /** List the rules that passed after the issues (`--include-passed`). */
+  includePassed?: boolean;
 }
 
 function escapeXml(str: string): string {
@@ -44,6 +46,24 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   lines.push(`${indent(2)}<url>${escapeXml(report.baseUrl)}</url>`);
   lines.push(`${indent(2)}<pages-crawled>${report.totalPages}</pages-crawled>`);
   lines.push(`${indent(2)}<audit-date>${escapeXml(report.timestamp)}</audit-date>`);
+  // Scan scope (#350, as in every other renderer since #1180): where the audit
+  // ran, the page limit in force, and whether it bound, so a consumer diffing two
+  // reports can tell a site that shrank from a crawl that was capped.
+  // `requested-max-pages` only when the request was clamped (#1909), and
+  // `stop-reason` only when the crawl time budget ended it. Absent on a report
+  // from before #1180.
+  if (report.scanScope) {
+    const s = report.scanScope;
+    const cap = s.maxPages !== undefined ? ` max-pages="${s.maxPages}"` : "";
+    const requested =
+      s.requestedMaxPages !== undefined ? ` requested-max-pages="${s.requestedMaxPages}"` : "";
+    const stop = s.stopReason ? ` stop-reason="${escapeXml(s.stopReason)}"` : "";
+    const left = scanScopeUnfetched(report);
+    const unfetched = left > 0 ? ` unfetched="${left}"` : "";
+    lines.push(
+      `${indent(2)}<scan-scope origin="${escapeXml(s.origin)}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}/>`,
+    );
+  }
   lines.push(`${indent(1)}</site>`);
 
   // Refused off-site seed redirect (#1418): the seed left its own registrable
@@ -80,13 +100,13 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   lines.push(`${indent(1)}<summary passed="${report.passed}" warnings="${report.warnings}" failed="${report.failed}"/>`);
 
   // Editor's summary — report-only exec narrative (does not affect the health score).
-  const es = editorSummaryView(report.editorSummary);
+  const es = editorSummaryView(report.editorSummary, report);
   if (es) {
     lines.push(`${indent(1)}<editor-summary model="${escapeXml(es.model)}">`);
     for (const para of es.paragraphs) {
       lines.push(`${indent(2)}<para>${escapeXml(para)}</para>`);
     }
-    if (es.bigTicket.length > 0) {
+    if (es.priorities.length === 0 && es.bigTicket.length > 0) {
       lines.push(`${indent(2)}<big-ticket>`);
       for (const item of es.bigTicket) {
         lines.push(`${indent(3)}<item>${escapeXml(item)}</item>`);
@@ -95,6 +115,21 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     }
     if (es.verdict) lines.push(`${indent(2)}<verdict>${escapeXml(es.verdict)}</verdict>`);
     lines.push(`${indent(1)}</editor-summary>`);
+  }
+
+  // Ranked priorities from the editor's summary (report-only; not scored).
+  if (es && es.priorities.length > 0) {
+    lines.push(`${indent(1)}<priorities>`);
+    for (const [i, p] of es.priorities.entries()) {
+      const rules = p.ruleIds.length > 0 ? ` rules="${escapeXml(p.ruleIds.join(" "))}"` : "";
+      const tech = p.technologies.length > 0 ? ` technologies="${escapeXml(p.technologies.join(" "))}"` : "";
+      lines.push(`${indent(2)}<priority rank="${i + 1}" effort="${escapeXml(p.effort)}"${rules}${tech}>`);
+      lines.push(`${indent(3)}<title>${escapeXml(p.title)}</title>`);
+      if (p.why) lines.push(`${indent(3)}<why>${escapeXml(p.why)}</why>`);
+      lines.push(`${indent(3)}<action>${escapeXml(p.action)}</action>`);
+      lines.push(`${indent(2)}</priority>`);
+    }
+    lines.push(`${indent(1)}</priorities>`);
   }
 
   // Site profile — report-only (Stage-0 context; does not affect the health score).
@@ -187,8 +222,11 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
           lines.push(`${indent(4)}</affected-pages>`);
         }
 
+        // pub#866: `not-listed` counts the items the report left out of the list.
+        const left = itemsNotListed(check);
+        const notListed = left > 0 ? ` not-listed="${left}"` : "";
         if (check.items && check.items.length > 0) {
-          lines.push(`${indent(4)}<items count="${check.items.length}">`);
+          lines.push(`${indent(4)}<items count="${check.items.length}"${notListed}>`);
           for (const item of check.items) {
             lines.push(`${indent(5)}<item id="${escapeXml(item.id)}">`);
             if (item.label && item.label !== item.id) lines.push(`${indent(6)}<label>${escapeXml(item.label)}</label>`);
@@ -205,6 +243,8 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
             lines.push(`${indent(5)}</item>`);
           }
           lines.push(`${indent(4)}</items>`);
+        } else if (left > 0) {
+          lines.push(`${indent(4)}<items count="0"${notListed}/>`);
         }
 
         lines.push(`${indent(3)}</check>`);
@@ -214,6 +254,19 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     lines.push(`${indent(1)}</issues>`);
   } else {
     lines.push(`${indent(1)}<issues/>`);
+  }
+
+  const passedRules = reportPassedRules(report, options?.includePassed);
+  if (passedRules.length > 0) {
+    lines.push(`${indent(1)}<passed count="${passedRules.length}">`);
+    for (const rule of passedRules) {
+      lines.push(
+        `${indent(2)}<rule id="${escapeXml(rule.id)}" category="${escapeXml(rule.categoryName)}" scope="${rule.scope}" pages="${rule.pages}">`,
+      );
+      lines.push(`${indent(3)}<name>${escapeXml(rule.name)}</name>`);
+      lines.push(`${indent(2)}</rule>`);
+    }
+    lines.push(`${indent(1)}</passed>`);
   }
 
   // repo#2729: checks this audit did not run. Not issues, and not clean either.

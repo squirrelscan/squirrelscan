@@ -1,6 +1,7 @@
 ---
-title: "Security"
-description: "The Security score group: transport security, compromise signals, compliance, and blocked content"
+title: "Security audit rules: HTTPS, headers and leaked secrets"
+sidebarTitle: "Security"
+description: "Security audit rules: HTTPS, security headers, cookie flags, forms and leaked secrets, with links to the other categories in the Security score group."
 icon: "shield-check"
 ---
 
@@ -24,74 +25,90 @@ Security is one of the four score groups on every report. This page covers trans
 
 HTTPS, headers, and safe link practices (22 rules).
 
-<CardGroup cols={2}>
-  <Card title="Content-Security-Policy: what to set and how to check it" icon="triangle-exclamation" href="/rules/security/csp">
-    A missing CSP, a report-only policy or an unsafe-inline script-src leaves XSS unmitigated. squirrel parses the header and names each gap.
-  </Card>
-  <Card title="CSP blocks your own scripts, frames and analytics endpoints" icon="triangle-exclamation" href="/rules/security/csp-blocks-own-resources">
-    A policy that leaves out a host your page depends on breaks a widget or a tracker silently. squirrel matches each page's policy against what the page loads.
-  </Card>
-  <Card title="Cookie flags: Secure, HttpOnly and SameSite on Set-Cookie" icon="triangle-exclamation" href="/rules/security/cookie-flags">
-    SameSite=None without Secure is rejected outright, and a session cookie without HttpOnly is readable by any script. squirrel parses every Set-Cookie.
-  </Card>
-  <Card title="rel=noopener: external target=_blank links and tabnabbing" icon="triangle-exclamation" href="/rules/security/new-tab">
-    An external link with target=_blank and an explicit rel=opener gives the opened page a handle on yours. squirrel lists every one, per page.
-  </Card>
-  <Card title="Public forms without CAPTCHA: what counts as public" icon="triangle-exclamation" href="/rules/security/form-captcha">
-    A contact or newsletter form with no bot protection collects spam within days. squirrel classifies forms and flags the unprotected public ones.
-  </Card>
-  <Card title="Form action over HTTP: the insecure form submission warning" icon="triangle-exclamation" href="/rules/security/form-https">
-    A form on an HTTPS page that posts to http:// sends the data in the clear and browsers interstitial it. squirrel checks action and formaction.
-  </Card>
-  <Card title="GraphQL mutations over GET: why they open the door to CSRF" icon="circle-exclamation" href="/rules/security/graphql-get-mutations">
-    A server that runs a mutation sent as a GET lets any site fire it with your visitors' cookies. squirrel sends a no-op mutation that cannot write and checks the answer.
-  </Card>
-  <Card title="GraphQL introspection in production: what an open schema exposes" icon="triangle-exclamation" href="/rules/security/graphql-introspection">
-    Open introspection hands anyone a map of every type in your API. squirrel sends one read-only introspection query per endpoint and counts the types it gets back.
-  </Card>
-  <Card title="HSTS: what Strict-Transport-Security needs to be valid" icon="triangle-exclamation" href="/rules/security/hsts">
-    A missing or short Strict-Transport-Security header leaves the first request downgradeable. squirrel reads the header and checks max-age.
-  </Card>
-  <Card title="HTTP to HTTPS redirect: how squirrel probes for it" icon="triangle-exclamation" href="/rules/security/http-to-https">
-    squirrel requests the http:// version of a sample of your URLs and reports which ones redirect to HTTPS, with the status code of the first hop.
-  </Card>
-  <Card title="HTTPS: what it means when a page is not served over HTTPS" icon="circle-exclamation" href="/rules/security/https">
-    A page delivered over plain HTTP can be read and rewritten in transit. squirrel flags every crawled URL whose protocol is not https.
-  </Card>
-  <Card title="Leaked API key in client-side code: how to find one" icon="circle-exclamation" href="/rules/security/leaked-secrets">
-    An API key shipped in HTML or a bundle can be read by anyone who views source. squirrel scans every page and script against 88 key patterns.
-  </Card>
-  <Card title="Mixed content: HTTP resources on an HTTPS page" icon="circle-exclamation" href="/rules/security/mixed-content">
-    An HTTPS page that loads a script or stylesheet over HTTP is not secure and browsers block it. squirrel lists every HTTP resource per page.
-  </Card>
-  <Card title="Permissions-Policy: what the header does and how to set it" icon="circle-info" href="/rules/security/permissions-policy">
-    Without a Permissions-Policy, embedded frames inherit access to camera, microphone and geolocation. squirrel reads the header once per site.
-  </Card>
-  <Card title="Referrer-Policy: which value to send and what leaks" icon="circle-info" href="/rules/security/referrer-policy">
-    unsafe-url sends the full URL, query string included, to every site you link to. squirrel reads the header and flags the leaky values.
-  </Card>
-  <Card title="security.txt: how to publish a vulnerability disclosure contact" icon="circle-info" href="/rules/security/security-txt">
-    Without a security.txt a researcher who finds a bug has no published route to report it. squirrel checks the RFC 9116 file and flags catch-all HTML pages.
-  </Card>
-  <Card title="Subresource Integrity: which scripts need an integrity hash" icon="triangle-exclamation" href="/rules/security/sri">
-    Cross-origin scripts and stylesheets with no integrity hash can be swapped by a compromised CDN. squirrel lists every one, page by page.
-  </Card>
-  <Card title="Third-party cookies: which external domains a page loads" icon="circle-info" href="/rules/security/third-party-cookies">
-    Trackers and 1x1 pixels set cookies from domains you do not control. squirrel inventories the third-party scripts, iframes and pixels per page.
-  </Card>
-  <Card title="Auth tokens in localStorage: why a stored JWT is exposed" icon="triangle-exclamation" href="/rules/security/token-storage">
-    A JWT or session token in localStorage or sessionStorage is readable by any script on the page. squirrel finds the writes in your scripts and names the key.
-  </Card>
-  <Card title="Version-revealing headers: why Server and X-Powered-By should not name a version" icon="circle-info" href="/rules/security/version-disclosure">
-    A Server or X-Powered-By header with a version number tells a scanner which known vulnerabilities to try. squirrel flags each version it finds.
-  </Card>
-  <Card title="X-Content-Type-Options: nosniff and why it matters" icon="circle-info" href="/rules/security/x-content-type">
-    Without nosniff a browser may execute an uploaded file as script because the bytes look like one. squirrel reads the header once per site.
-  </Card>
-  <Card title="X-Frame-Options: how to stop your pages being framed" icon="triangle-exclamation" href="/rules/security/x-frame-options">
-    With no X-Frame-Options and no frame-ancestors, any site can iframe your pages and overlay them. squirrel checks both headers together.
-  </Card>
-</CardGroup>
+## Run only these rules
+
+```bash
+squirrel audit https://example.com --rule-include security
+```
+
+`security` runs this category only. Add the other categories in the group with `--rule-include security,integrity,legal,blocking`.
+
+{/* hub:start-here:start */}
+
+## Where to start
+
+These carry the highest severity and weight in the category.
+
+- [Leaked API key in client-side code: how to find one](/rules/security/leaked-secrets): An API key shipped in HTML or a bundle can be read by anyone who views source. squirrel scans every page and script against more than 90 key patterns.
+- [HTTPS: what it means when a page is not served over HTTPS](/rules/security/https): A page delivered over plain HTTP can be read and rewritten in transit. squirrel flags every crawled URL whose protocol is not https.
+- [GraphQL mutations over GET: why they open the door to CSRF](/rules/security/graphql-get-mutations): A server that runs a mutation sent as a GET lets any site fire it with your visitors' cookies. squirrel sends a no-op mutation that cannot write and checks the answer.
+- [Mixed content: HTTP resources on an HTTPS page](/rules/security/mixed-content): An HTTPS page that loads a script or stylesheet over HTTP is not secure and browsers block it. squirrel lists every HTTP resource per page.
+- [Form action over HTTP: the insecure form submission warning](/rules/security/form-https): A form on an HTTPS page that posts to http:// sends the data in the clear and browsers interstitial it. squirrel checks action and formaction.
+
+{/* hub:start-here:end */}
+
+{/* hub:rules:start */}
+
+## Rules
+
+| Rule | What it flags | Severity | Scope |
+|---|---|---|---|
+| [Auth tokens in localStorage: why a stored JWT is exposed](/rules/security/token-storage) | A JWT or session token in localStorage or sessionStorage is readable by any script on the page. squirrel finds the writes in your scripts and names the key. | warning | Per-page |
+| [Content-Security-Policy: what to set and how to check it](/rules/security/csp) | A missing CSP, a report-only policy or an unsafe-inline script-src leaves XSS unmitigated. squirrel parses the header and names each gap. | warning | Site-wide |
+| [Cookie flags: Secure, HttpOnly and SameSite on Set-Cookie](/rules/security/cookie-flags) | SameSite=None without Secure is rejected outright, and a session cookie without HttpOnly is readable by any script. squirrel parses every Set-Cookie. | warning | Per-page |
+| [CSP blocks your own scripts, frames and analytics endpoints](/rules/security/csp-blocks-own-resources) | A Content-Security-Policy that leaves out a host your page depends on breaks a widget or a tracker silently. squirrel matches each page's policy against what the page loads. | warning | Per-page |
+| [Form action over HTTP: the insecure form submission warning](/rules/security/form-https) | A form on an HTTPS page that posts to http:// sends the data in the clear and browsers interstitial it. squirrel checks action and formaction. | error | Per-page |
+| [GraphQL introspection in production: what an open schema exposes](/rules/security/graphql-introspection) | Open introspection hands anyone a map of every type in your API. squirrel sends one read-only introspection query per endpoint and counts the types it gets back. | warning | Site-wide |
+| [GraphQL mutations over GET: why they open the door to CSRF](/rules/security/graphql-get-mutations) | A server that runs a mutation sent as a GET lets any site fire it with your visitors' cookies. squirrel sends a no-op mutation that cannot write and checks the answer. | error | Site-wide |
+| [HSTS: what Strict-Transport-Security needs to be valid](/rules/security/hsts) | A missing or short Strict-Transport-Security header leaves the first request downgradeable. squirrel reads the header and checks max-age. | warning | Site-wide |
+| [HTTP to HTTPS redirect: how squirrel probes for it](/rules/security/http-to-https) | squirrel requests the http:// version of a sample of your URLs and reports which ones redirect to HTTPS, with the status code of the first hop. | warning | Site-wide |
+| [HTTPS: what it means when a page is not served over HTTPS](/rules/security/https) | A page delivered over plain HTTP can be read and rewritten in transit. squirrel flags every crawled URL whose protocol is not https. | error | Per-page |
+| [Leaked API key in client-side code: how to find one](/rules/security/leaked-secrets) | An API key shipped in HTML or a bundle can be read by anyone who views source. squirrel scans every page and script against more than 90 key patterns. | error | Site-wide |
+| [Mixed content: HTTP resources on an HTTPS page](/rules/security/mixed-content) | An HTTPS page that loads a script or stylesheet over HTTP is not secure and browsers block it. squirrel lists every HTTP resource per page. | error | Per-page |
+| [Permissions-Policy: what the header does and how to set it](/rules/security/permissions-policy) | Without a Permissions-Policy, embedded frames inherit access to camera, microphone and geolocation. squirrel reads the header once per site. | info | Site-wide |
+| [Public forms without CAPTCHA: what counts as public](/rules/security/form-captcha) | A contact or newsletter form with no bot protection collects spam within days. squirrel classifies forms and flags the unprotected public ones. | warning | Per-page |
+| [Referrer-Policy: which value to send and what leaks](/rules/security/referrer-policy) | unsafe-url sends the full URL, query string included, to every site you link to. squirrel reads the header and flags the leaky values. | info | Site-wide |
+| [rel=noopener: external target=_blank links and tabnabbing](/rules/security/new-tab) | An external link with target=_blank and an explicit rel=opener gives the opened page a handle on yours. squirrel lists every one, per page. | warning | Per-page |
+| [security.txt: how to publish a vulnerability disclosure contact](/rules/security/security-txt) | Without a security.txt a researcher who finds a bug has no published route to report it. squirrel checks /.well-known/security.txt against RFC 9116 and flags catch-all HTML pages. | warning | Site-wide |
+| [Subresource Integrity: which scripts need an integrity hash](/rules/security/sri) | Cross-origin scripts and stylesheets with no integrity hash can be swapped by a compromised CDN. squirrel lists every one, page by page. | warning | Per-page |
+| [Third-party cookies: which external domains a page loads](/rules/security/third-party-cookies) | Trackers and 1x1 pixels set cookies from domains you do not control. squirrel inventories the third-party scripts, iframes and pixels per page. | info | Per-page |
+| [Version-revealing headers: why Server and X-Powered-By should not name a version](/rules/security/version-disclosure) | A Server or X-Powered-By header with a version number tells a scanner which known vulnerabilities to try. squirrel reads five headers and flags each version it finds. | warning | Site-wide |
+| [X-Content-Type-Options: nosniff and why it matters](/rules/security/x-content-type) | Without nosniff a browser may execute an uploaded file as script because the bytes look like one. squirrel reads the header once per site. | info | Site-wide |
+| [X-Frame-Options: how to stop your pages being framed](/rules/security/x-frame-options) | With no X-Frame-Options and no frame-ancestors, any site can iframe your pages and overlay them. squirrel checks both headers together. | warning | Site-wide |
+
+{/* hub:rules:end */}
+
+{/* hub:terms:start */}
+
+## Key terms
+
+- [Content Security Policy (CSP)](/glossary/content-security-policy): A response header listing where a page may load scripts, styles, frames and other resources from, limiting what injected code can do.
+- [Cookie attributes](/glossary/cookie-attributes): The Secure, HttpOnly and SameSite flags on Set-Cookie that limit where a cookie is sent and whether scripts can read it.
+- [GraphQL introspection](/glossary#graphql-introspection): The GraphQL feature that returns the full schema on request; left on in production it maps the API for attackers.
+- [HSTS](/glossary/hsts): The Strict-Transport-Security header that tells browsers to use only HTTPS for a host for a set time.
+- [HTTPS](/glossary/https): HTTP over TLS, which encrypts traffic and proves the server's identity; every page and form should use it.
+- [Leaked secrets](/glossary/leaked-secrets): Credentials or private keys shipped to the browser in HTML, scripts or source maps.
+- [Mixed content](/glossary#mixed-content): An HTTPS page loading scripts, styles, images or media over plain HTTP.
+- [rel=noopener](/glossary#noopener): A link attribute that stops a page opened with `target=_blank` from controlling the page that opened it (tabnabbing).
+- [Security headers](/glossary/security-headers): HTTP response headers (CSP, HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy) that tell browsers to restrict risky behaviour.
+- [security.txt](/glossary#security-txt): A file at /.well-known/security.txt (RFC 9116) that tells researchers how to report a vulnerability.
+- [Subresource Integrity (SRI)](/glossary#subresource-integrity): An integrity attribute holding a hash of a third-party script or stylesheet, so the browser refuses a tampered file.
+- [Token storage](/glossary#token-storage): Where a web app keeps session or auth tokens; tokens in localStorage are readable by any script on the page.
+- [Well-known URIs](/glossary#well-known-uri): Fixed paths under /.well-known/ (RFC 8615) where sites publish machine-readable files: security.txt, api-catalog, OAuth metadata and agent manifests.
+- [X-Content-Type-Options](/glossary#x-content-type-options): The nosniff header that stops browsers guessing a response's type instead of trusting Content-Type.
+- [X-Frame-Options](/glossary#x-frame-options): A response header that controls whether other sites may embed the page in a frame; CSP frame-ancestors is its successor.
+
+{/* hub:terms:end */}
+
+## Related categories
+
+[Content](/rules/content) flags development hosts such as localhost left in the markup. [Agent experience](/rules/ax) checks what an agent can discover under `/.well-known/`, next to the security.txt rule here, and [Links](/rules/links) flags links from HTTPS pages to `http://` destinations.
+
+## Learn more
+
+- [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai), the hygiene an AI-assisted security audit finds and how an agent patches it
+- [Security headers checker](https://squirrelscan.com/tools/security-headers-checker)
+- [Sample report](https://squirrelscan.com/reports/squirrelscan-sample), with the Security section on a real site
 
 ## Disable all Security rules
 
@@ -99,5 +116,3 @@ HTTPS, headers, and safe link practices (22 rules).
 [rules]
 disable = ["security/*"]
 ```
-
-Every audit reports Security findings next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.

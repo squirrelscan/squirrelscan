@@ -27,6 +27,7 @@ incremental = true
 breadth_first = true
 max_prefix_budget = 0.25
 user_agent = ""
+robots_user_agent = "SquirrelScan"
 follow_redirects = true
 ```
 
@@ -741,6 +742,25 @@ user_agent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit
 
 **Recommendation:** Leave empty (default) for best results with bot protection.
 
+With [`respect_robots`](#respect_robots) on, robots.txt groups are matched on [`robots_user_agent`](#robots_user_agent), not on this value. If you set `user_agent` to your own bot and want robots.txt read as that bot, set `robots_user_agent` to its token too, or to `""` to match on `user_agent`.
+
+---
+
+### `robots_user_agent`
+
+**Type:** `string`
+**Default:** `"SquirrelScan"`
+
+The product token robots.txt groups are matched against when [`respect_robots`](#respect_robots) is on. A site writes rules for squirrelscan as `User-agent: SquirrelScan`; a site with no such group gets its `User-agent: *` rules.
+
+It is separate from [`user_agent`](#user_agent) because a robots.txt group is matched on the part of the user agent before its first `/`, and the default browser user agent starts `Mozilla/5.0`. Set it to another token to be matched as that crawler, or to `""` to match on the user agent's own token.
+
+```toml
+[crawler]
+respect_robots = true
+robots_user_agent = "SquirrelScan"
+```
+
 ---
 
 ### `headers`
@@ -748,9 +768,15 @@ user_agent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit
 **Type:** `table` (map of header name → value)
 **Default:** `{}` (no custom headers)
 
-Custom HTTP request headers attached to **every** crawl request: pages, assets
-on the audited host and its subdomains, `robots.txt`, sitemaps, `llms.txt`, and
-markdown probes. The status checks
+Custom HTTP request headers attached to every crawl request to the audited
+origin: pages, assets, `robots.txt`, sitemaps, `llms.txt`, markdown probes and
+the soft-404 and cloaking re-fetches. The audited origin is the scheme, host and
+port of the start URL after its redirects. A URL on another scheme (`http:` when
+you audit `https:`), another port or another host is still crawled and reported
+when it is in the crawl's scope, but is requested without them, including a host that
+the `domains` list in `[project]` or an include pattern admits. A subdomain such as `cdn.example.com` does not get them unless you
+name it in [`header_hosts`](#header_hosts), because a subdomain is not always
+run by the site's owner. The status checks
 [reliability/broken-resources](/rules/reliability/broken-resources) sends to
 scripts, stylesheets and fonts on other hosts never carry them, and neither
 does the status check of a sitemap URL on another host. Use this to authorize
@@ -780,9 +806,25 @@ squirrel audit https://example.com \
 
 The repeatable `--header` / `-H` flag takes a `Name: Value` string (split on the
 first colon, so values may contain colons). CLI headers **merge over** the TOML
-`[crawler] headers` map; a flag with the same name wins. Quoting is preserved
-verbatim, so `Signature-Agent: "https://shopify.com"` keeps its quotes
-end-to-end.
+`[crawler] headers` map; a flag with the same name wins, whatever the casing of
+either. On a request that carries the custom headers, a custom header replaces
+squirrel's own header of the same name, so `-H "user-agent: ..."` is sent alone,
+never beside squirrel's agent. The requests that send no other custom header, the
+internal link check and the soft-404 confirmation, use that agent too, so the
+crawl and its probes agree. A few requests keep their own agent on purpose: the
+reachability check that runs before the crawl, the cloaking probe's browser and
+Googlebot fetches, and the AI agent access probe (which fetches as GPTBot and
+Claude-User). Quoting is preserved verbatim, so
+`Signature-Agent: "https://shopify.com"` keeps its quotes end-to-end.
+
+When a page redirects to another origin, the headers are dropped on that hop,
+except the generic client headers (`User-Agent`, `Accept`, `Accept-Language`,
+`Accept-Encoding`, `Upgrade-Insecure-Requests`), which describe the client
+rather than prove who you are. Never put a secret in one of those.
+An `https:` start URL whose redirect lands on plain `http:` keeps its `https:`
+scope: the crawl follows the redirect, and the headers stay withheld.
+The soft-404 confirmation and the cloaking probe follow redirects the same way,
+and refuse a hop to a link-local or cloud metadata address.
 
 <Warning>
   Header values are treated as **secrets**. squirrelscan never echoes them in CLI
@@ -792,14 +834,46 @@ end-to-end.
   sourced from secrets.
 </Warning>
 
+### `header_hosts`
+
+**Type:** `array` of hosts
+**Default:** `[]` (the audited origin only)
+
+Hosts, besides the audited origin, that also get the [custom headers](#headers)
+on page and asset requests: a signed CDN, or Cloudflare Access on
+`assets.example.com`. Only the hosts you name get them, so a `www` host of an apex
+site is named here too. An entry is a host name, optionally with an
+`http://` or `https://` prefix and a port; a path or trailing slash is ignored and
+an internationalised name is matched in its punycode form. A wildcard, userinfo,
+empty label or trailing dot is refused.
+A name matches the host on any port, over `https:` only; write it with an
+`http://` prefix (`header_hosts = ["http://assets.example.com"]`) to allow plain
+http too.
+
+```toml
+[crawler]
+header_hosts = ["assets.example.com"]
+```
+
+**CLI override:** the repeatable `--header-host` flag adds to the TOML list.
+
+```bash
+squirrel audit https://example.com -H 'X-Api-Key: ...' --header-host assets.example.com
+```
+
+If an asset on another host answers 401 or 403 to a request sent without the
+headers, it is reported as not checked rather than as a broken resource, and the
+message names the host to add here.
+
 **Cloud audits:** custom headers for dashboard **cloud** audits are available on
 [every plan](/dashboard/crawl-settings#custom-request-headers), Free included.
 Set them per-website under **Settings → Crawl → Custom request headers**. Plain
 HTTP requests carry them. For pages rendered in the cloud browser, by cloud
 audits and by signed-in CLI audits, see
 [rendering and custom headers](/cloud/firewall#rendering-and-custom-headers).
-Use `--http` (or **Rendering: Off** for a cloud audit) when the site is only
-reachable with the headers.
+A signed-in CLI audit's cloud renders never carry `-H` headers, so use
+`--http` when the site is only reachable with them. A cloud audit's renders
+carry the website's custom headers.
 
 ---
 
@@ -819,6 +893,42 @@ Follow HTTP 3xx redirects.
 - Stops at redirect
 - Does not fetch redirect destination
 - Useful for debugging redirect issues
+
+**Where a redirect may lead.** A redirect is followed to any `http` or `https`
+URL, private networks included, so a `localhost`, LAN or staging audit still
+crawls its own pages and root files. A redirect found while crawling that
+leaves the site's hosts for a link-local or cloud metadata address
+(`169.254.169.254`, `fe80::/10`, `metadata.google.internal`) is not followed:
+the crawl stops at that redirect and never sends the request. The same holds
+for the root files the crawl fetches (robots.txt, sitemaps, llms.txt, the
+well-known and markdown probes), for a sitemap that robots.txt or a sitemap
+index points at such an address, and for the redirects the internal link check
+follows. The `security/http-to-https` rule checks the address of each redirect
+it follows the same way. On the CLI, the redirects of the start URL itself,
+resolved before the crawl begins, are checked too (see the next paragraph).
+
+**The site's own hostnames are checked too.** The CLI resolves the audited
+host, its `www` twin, and the domains in `[project] domains` with all their
+subdomains, checks every answer, and connects to the address it checked: for
+pages, redirect hops, root files, the start URL's reachability check and its
+redirects, assets and the end-of-crawl probes, in `squirrel analyze` too. A
+name that resolves to a link-local or cloud metadata address is never
+requested: the page is recorded as failed with "Not requested", and an asset as
+refused. Private networks,
+`localhost` and mDNS `.local` names keep working; a `.local` name that answers
+only a scoped link-local IPv6 address cannot be connected to by address and is
+refused. Two rule probes still go out by name without that check: the `HEAD`
+request `security/http-to-https` sends to the site's `http://` address, and the
+GraphQL probes an active or aggressive probing intensity sends.
+
+Two cases send the site's own hostnames by name instead, without that check:
+an HTTP proxy set in the environment (`HTTP_PROXY` or `HTTPS_PROXY`), which
+resolves the name itself and would get the wrong site if handed an address, and
+`SQUIRREL_NO_HOST_PINNING` set to anything other than empty, `0` or `false`,
+for a network where connecting by address breaks routing. Cloud audits are not
+affected either way: every request to the audited site and the links it leads
+to goes through an egress proxy that resolves the name once, refuses private,
+link-local and metadata answers, and connects to the address it checked.
 
 **Example:**
 
@@ -853,9 +963,9 @@ Enforce robots.txt `Disallow:` rules and honor its `Crawl-delay:` directive.
   uninvited crawl, so directives aimed at bots don't apply unless you opt in
 
 **When `true`:**
-- Respects `Disallow:` rules for the `SquirrelScan` and `*` user agents
-- Honors `Crawl-delay:`, capped at 2 seconds even if the directive asks for
-  longer
+- Respects the `Disallow:` rules of the group your [`robots_user_agent`](#robots_user_agent) names (`SquirrelScan` by default), falling back to `*`
+- Honors that group's `Crawl-delay:`, capped at 2 seconds even if the
+  directive asks for longer
 
 **Example:**
 

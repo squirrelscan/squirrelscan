@@ -26,7 +26,7 @@ import { RuleRunner, type RulesConfig } from "../src/runner";
 import { isSiteIndexable, noindexSource } from "../src/shared/noindex";
 import type { PageData, ParsedPage, Rule, RuleContext, SiteData } from "../src/types";
 
-const GATED = ["core/meta-title", "core/meta-description", "core/h1"];
+const GATED = ["core/meta-title", "core/meta-description", "core/h1", "content/word-count"];
 // Rules that must keep running on a noindex page.
 const UNGATED = [
   "a11y/landmark-one-main",
@@ -67,12 +67,18 @@ async function runPage(page: PageData, siteData?: SiteData) {
 }
 
 describe("the skip list is explicit and conservative", () => {
-  test("exactly core/meta-title, core/meta-description and core/h1 declare skipOnNoindex", () => {
+  test("exactly core/meta-title, core/meta-description, core/h1, content/word-count and content/h1-title-alignment declare skipOnNoindex", () => {
     const declared = [...loadAllRules().values()]
       .filter((r) => r.meta.skipOnNoindex)
       .map((r) => r.meta.id)
       .sort();
-    expect(declared).toEqual(["core/h1", "core/meta-description", "core/meta-title"]);
+    expect(declared).toEqual([
+      "content/h1-title-alignment",
+      "content/word-count",
+      "core/h1",
+      "core/meta-description",
+      "core/meta-title",
+    ]);
   });
 
   test("no accessibility, security, performance or link rule declares it", () => {

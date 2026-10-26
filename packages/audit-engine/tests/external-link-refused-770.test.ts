@@ -25,6 +25,7 @@ import {
 
 const PRIVATE = "http://192.168.1.1/admin";
 const LOOPBACK = "http://127.0.0.1:9/status";
+const TEST_ZONE = "http://service.test/status";
 
 describe("a refused address is settled before the cache and the bulk checker", () => {
   test("neither answers for it, and it comes back refused", async () => {
@@ -44,7 +45,7 @@ describe("a refused address is settled before the cache and the bulk checker", (
     };
     const bulkAsked: string[][] = [];
     const results = await Effect.runPromise(
-      checkExternalLinks([PRIVATE, LOOPBACK], cache, {
+      checkExternalLinks([PRIVATE, LOOPBACK, TEST_ZONE], cache, {
         concurrency: 2,
         timeoutMs: 2_000,
         userAgent: "squirrel-test",
@@ -60,6 +61,7 @@ describe("a refused address is settled before the cache and the bulk checker", (
     expect(results.map((r) => [r.href, r.status, r.error, r.refused, r.fromCache])).toEqual([
       [PRIVATE, null, null, true, false],
       [LOOPBACK, null, null, true, false],
+      [TEST_ZONE, null, null, true, false],
     ]);
   });
 });

@@ -2,7 +2,19 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { clampItemString } from "@squirrelscan/core-contracts/clamp";
+import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
+
+import { resolveImageUrl } from "../shared/lcp-candidate";
+
 import { getCWVHints } from "./cwv";
+
+const MAX_REPORTED_PRELOAD_URLS = 10;
+const MAX_REPORTED_URL_LENGTH = REPORT_LIMITS.maxShortString;
+
+function reportedUrl(value: string): string {
+  return clampItemString(value, MAX_REPORTED_URL_LENGTH);
+}
 
 export const lcpHintsRule: Rule = {
   meta: {
@@ -26,12 +38,22 @@ export const lcpHintsRule: Rule = {
     // Check for LCP images without preload
     if (hints.largeImagesWithoutPreload.length > 0) {
       const n = hints.largeImagesWithoutPreload.length;
+      const preloadUrls = hints.imagePreloadUrls;
       // No items → per-page count, not a cross-page image dump (squirrelscan/squirrelscan#16).
       checks.push({
         name: "lcp-preload",
         status: "warn",
         message: `${n} likely-LCP image${n === 1 ? "" : "s"} loaded without preload`,
         value: n,
+        details: {
+          page: ctx.page.url,
+          candidates: hints.largeImagesWithoutPreload.map((src) => ({
+            src: reportedUrl(resolveImageUrl(src, ctx.page.url) ?? src),
+            reason: "eager likely-LCP candidate with no matching image preload",
+          })),
+          preloads: preloadUrls.slice(0, MAX_REPORTED_PRELOAD_URLS).map(reportedUrl),
+          additionalPreloads: Math.max(0, preloadUrls.length - MAX_REPORTED_PRELOAD_URLS),
+        },
       });
     } else {
       checks.push({

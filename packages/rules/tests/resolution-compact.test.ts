@@ -754,3 +754,105 @@ describe("decodeResolutionSignal refuses what it cannot bound", () => {
     await expect(decodeResolutionSignal({ v: 1, data: "bm90IGRlZmxhdGU=" })).rejects.toThrow();
   });
 });
+
+// pub#935: a `<check>-unconfirmed` row is evaluation evidence for `<check>` on
+// its page, in both signal shapes, and never failing evidence or a key of its own.
+describe("an unconfirmed row counts as its base check evaluated (pub#935)", () => {
+  const row = (name: string, url: string, status: CheckResult["status"]): CheckResult => ({
+    name,
+    status,
+    message: name,
+    pageUrl: url,
+  });
+  const KEY = resolutionCheckKey("a11y/r", "c");
+
+  test("only unconfirmed on P1: P1 evaluated and not failing for c, both shapes", async () => {
+    const rules: Rules = {
+      "a11y/r": { checks: [row("c-unconfirmed", P1, "warn"), row("c", P2, "pass")] },
+    };
+    const { legacy, decoded } = await roundTrip(rules, [P1, P2, P3]);
+    for (const signal of [legacy, decoded]) {
+      const sets = asSets(signal);
+      expect(sets.failing[KEY]).toEqual(new Set());
+      expect(sets.notEvaluated[KEY]).toEqual(new Set([h(P3)]));
+    }
+  });
+
+  test("a page that reports c without an unconfirmed row is evaluated for c-unconfirmed", async () => {
+    const rules: Rules = {
+      "a11y/r": {
+        checks: [row("c-unconfirmed", P1, "warn"), row("c", P2, "pass"), row("c", P3, "fail")],
+      },
+    };
+    const { legacy, decoded } = await roundTrip(rules, [P1, P2, P3, P4]);
+    const unconfirmedKey = resolutionCheckKey("a11y/r", "c-unconfirmed");
+    for (const signal of [legacy, decoded]) {
+      const sets = asSets(signal);
+      expect(sets.failing[unconfirmedKey]).toEqual(new Set([h(P1)]));
+      expect(sets.notEvaluated[unconfirmedKey]).toEqual(new Set([h(P4)]));
+    }
+  });
+
+  test("a page failing c and also unconfirmed for it stays failing", async () => {
+    const rules: Rules = {
+      "a11y/r": {
+        checks: [row("c", P1, "fail"), row("c-unconfirmed", P1, "warn"), row("c", P2, "pass")],
+      },
+    };
+    const { legacy, decoded } = await roundTrip(rules, [P1, P2]);
+    for (const signal of [legacy, decoded]) {
+      expect(asSets(signal).failing[KEY]).toEqual(new Set([h(P1)]));
+    }
+  });
+
+  test("no page reports c itself: the unconfirmed row creates no c key", () => {
+    const rules: Rules = { "a11y/r": { checks: [row("c-unconfirmed", P1, "warn")] } };
+    const legacy = buildResolutionSignal(rules, [P1, P2])!;
+    expect(legacy.failing).not.toHaveProperty(KEY);
+    expect(legacy.notEvaluated ?? {}).not.toHaveProperty(KEY);
+  });
+
+  test("a folded unconfirmed aggregate evaluates every page it lists", () => {
+    const folded: CheckResult = {
+      name: "c-unconfirmed",
+      status: "warn",
+      message: "c-unconfirmed",
+      pages: [P1, P3],
+      details: { aggregated: true },
+    };
+    const rules: Rules = { "a11y/r": { checks: [folded, row("c", P2, "pass")] } };
+    const legacy = buildResolutionSignal(rules, [P1, P2, P3, P4])!;
+    expect(new Set(legacy.notEvaluated?.[KEY] ?? [])).toEqual(new Set([h(P4)]));
+  });
+
+  test("a scan-truncated page is still not evaluated beside an unconfirmed one", () => {
+    const truncated: CheckResult = {
+      name: "c",
+      status: "skipped",
+      message: "stopped at the cap",
+      skipReason: "scan-truncated",
+      pageUrl: P3,
+    };
+    const rules: Rules = {
+      "a11y/r": { checks: [row("c-unconfirmed", P1, "warn"), row("c", P2, "pass"), truncated] },
+    };
+    const legacy = buildResolutionSignal(rules, [P1, P2, P3])!;
+    expect(new Set(legacy.notEvaluated?.[KEY] ?? [])).toEqual(new Set([h(P3)]));
+  });
+
+  test("a rule-timed-out page is not evaluated: a prior finding on it carries (pub#960)", () => {
+    const timedOut: CheckResult = {
+      name: "a11y/r-error",
+      status: "skipped",
+      message: "Rule not evaluated: exceeded its 1000 ms time budget and was abandoned",
+      skipReason: "rule-timed-out",
+      pageUrl: P3,
+      details: { timedOut: true, budgetMs: 1000, pages: 1 },
+    };
+    const rules: Rules = { "a11y/r": { checks: [row("c", P1, "fail"), row("c", P2, "pass"), timedOut] } };
+    const legacy = buildResolutionSignal(rules, [P1, P2, P3])!;
+    // P3 is neither failing nor evaluated for `c`, so the merge carries it.
+    expect(new Set(legacy.notEvaluated?.[KEY] ?? [])).toEqual(new Set([h(P3)]));
+    expect(new Set(legacy.failing[KEY])).toEqual(new Set([h(P1)]));
+  });
+});

@@ -11,13 +11,13 @@ Three numbers describe the shape of the problem. Total node count is the size of
 
 ## What squirrel checks
 
-The rule runs on every crawled page, counting element nodes only, starting from the root `<html>` element and including it. Total nodes and depth include `<head>`; the widest-element check does not. It emits three checks:
+The rule runs on every crawled page and counts element nodes in `<body>` only, for all three checks, as Lighthouse's DOM size audit does. `<head>` holds metadata such as hreflang alternates, preload hints and meta tags, which cost no layout, so a page with a large head and a small body reports the body's numbers. It emits three checks:
 
-- `dom-total-nodes`: passes with the message `DOM size OK (N nodes)` under 1,500 nodes, warns with `Large DOM (N nodes)` from 1,500 to 2,999, and fails with `Excessive DOM size (N nodes)` at 3,000 or more.
-- `dom-depth`: passes with the message `DOM depth OK (N levels)` at 32 levels or fewer, and warns with `DOM depth excessive (N levels)` above that. The root element counts as level 1.
-- `dom-max-children`: passes with the message `Max children per element OK (N)` when no element has more than 60 direct children, and warns with `Element with N children found` above that, naming the largest count on the page. Only `<body>` and its descendants are counted. `<head>` is skipped, so hreflang alternates and preload hints do not trigger it, and a document with no `<body>` reports 0.
+- `dom-total-nodes`: the number of elements inside `<body>`, not counting `<body>` itself. Passes with the message `DOM size OK (N nodes)` under 1,500 nodes, warns with `Large DOM (N nodes)` from 1,500 to 2,999, and fails with `Excessive DOM size (N nodes)` at 3,000 or more.
+- `dom-depth`: passes with the message `DOM depth OK (N levels)` at 32 levels or fewer, and warns with `DOM depth excessive (N levels)` above that. `<body>` counts as level 1.
+- `dom-max-children`: passes with the message `Max children per element OK (N)` when no element has more than 60 direct children, and warns with `Element with N children found` above that, naming the largest count on the page. `<body>` itself counts as an element here, so a body with 61 direct children warns.
 
-Instead of all three, a single `dom-total-nodes` check is emitted as skipped with the message `No document root found` when the parse produced no root element. A page with no parsed document emits nothing at all.
+Instead of all three, a single `dom-total-nodes` check is emitted as skipped with the message `No document root found` when the parse produced no root element (empty, text-only or comment-only HTML), or `No body element found` when the document has no `<body>`. A page with no parsed document emits nothing at all.
 
 The counts are taken from the HTML the crawl fetched. On a [browser-rendered](/guides/browser-rendering) audit that is the hydrated DOM, and on a raw crawl it is the markup the server sent, which can be far smaller on a client-rendered page.
 
@@ -95,6 +95,12 @@ enable = ["perf/dom-size"]
 - [perf/cls-hints](/rules/perf/cls-hints): layout shifts, which a deep tree makes more expensive to recover from.
 
 Performance findings ship in every audit next to the SEO, security and agent experience rules. See [Core Web Vitals](https://squirrelscan.com/learn/core-web-vitals) for how an agent works through a report.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [DOM size](/glossary#dom-size), [Interaction to Next Paint (INP)](/glossary/inp).
+
+{/* glossary:backlinks:end */}
 
 ## References
 
