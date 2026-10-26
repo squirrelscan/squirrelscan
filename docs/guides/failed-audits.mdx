@@ -40,7 +40,7 @@ The JSON report carries the same list as `refusedFetches`, one entry per refused
 | `robots` | `robots.txt` disallows the crawler on this URL. | Allow the squirrelscan crawler in `robots.txt`, or point the audit at a path it permits. |
 | `unknown` | The cause could not be attributed. The reason still carries whatever the fetch reported. | Check that the site is reachable and try again. If it keeps failing, send us the report link. |
 
-A cloud audit has two more codes of its own: `audit_timeout`, when the audit reached its overall time limit, and `stalled`, when it stopped making progress. Both are on squirrelscan's side; see [the audit ran out of time](#audit-timeout) and [the audit stalled](#stalled).
+A cloud audit has three more codes of its own: `audit_timeout`, when the audit reached its overall time limit, `stalled`, when it stopped making progress, and `api_deadline`, when a request from the audit to our own servers ran out of the time we give it. All three are on squirrelscan's side; see [the audit ran out of time](#audit-timeout), [the audit stalled](#stalled) and [something failed on our side](#our-side).
 
 ## Reading the reason
 
@@ -559,7 +559,7 @@ Look for a `Disallow` rule covering the audited path, under `User-agent: *` or a
 
 **What the crawler observed.** A step of ours failed after the site was reached, such as a call to our own API or publishing the report, or the audit's container refused to start because one of its own safety checks failed.
 
-**How it is classified.** Failed on our side.
+**How it is classified.** Failed on our side. When the step was a request to our own servers that ran out of the time we give it, the code is `api_deadline`, shown as our servers did not answer in time.
 
 **Attribution.** squirrelscan. Your site was not the cause.
 
