@@ -114,7 +114,13 @@ is a string, and `error.code` when it is an object.
 - **An API key is missing a scope**:
 
   ```json
-  { "error": "API key missing required scope: audits:write" }
+  {
+    "error": {
+      "code": "missing_scope",
+      "message": "API key missing required scope: audits:write",
+      "missing_scope": "audits:write"
+    }
+  }
   ```
 
 - **MCP tools** answer a tool error with the code `FORBIDDEN` and the

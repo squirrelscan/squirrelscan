@@ -510,6 +510,49 @@ describe("registerRun", () => {
     ]);
   });
 
+  // cloud #3409: the same refusals in the typed envelope, and a key's scope.
+  test.each([
+    [
+      "forbidden_role",
+      {
+        code: "forbidden_role",
+        message: "Your role (viewer) may not run audits",
+        role: "viewer",
+        permission: "audits:write",
+      },
+      "Your role (viewer) may not run audits",
+    ],
+    [
+      "missing_scope",
+      {
+        code: "missing_scope",
+        message: "API key missing required scope: audits:write",
+        missing_scope: "audits:write",
+      },
+      "API key missing required scope: audits:write",
+    ],
+  ])("warns on an enveloped %s refusal", async (code, error, message) => {
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ error }), {
+        status: 403,
+      })) as unknown as typeof fetch;
+
+    const warnings: RegisterFailure[] = [];
+    expect(
+      await registerRun({ url: "https://example.com" }, (f) => warnings.push(f))
+    ).toBeNull();
+    expect(warnings).toEqual([
+      {
+        code,
+        message,
+        balance: null,
+        required: null,
+        resetAt: null,
+        upgrade: null,
+      },
+    ]);
+  });
+
   test("does NOT warn on a generic 4xx without a definitive code (#816 review)", async () => {
     // A backend hiccup the handler maps to 400 INVALID_URL isn't actionable to
     // the user and must stay silent (only the allowlisted codes warn).

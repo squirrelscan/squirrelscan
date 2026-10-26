@@ -57,6 +57,52 @@ describe("a publish the org's role matrix refuses", () => {
     expect(result.error.message).toContain("--no-publish");
   });
 
+  // cloud #3409: the typed envelope says the same, and a key names its scope.
+  test("reads the refusal in the typed envelope too", async () => {
+    respond = () =>
+      Response.json(
+        {
+          error: {
+            code: "forbidden_role",
+            message: "Your role (viewer) may not run audits",
+            role: "viewer",
+            permission: "audits:write",
+          },
+        },
+        { status: 403 }
+      );
+    const result = await publishReport(publishReportShape(5));
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("forbidden_role");
+    expect(result.error.message).toContain(
+      "Your role (viewer) may not run audits.\n"
+    );
+    expect(result.error.message).toContain("--no-publish");
+  });
+
+  test("an API key without the scope says which scope to use", async () => {
+    respond = () =>
+      Response.json(
+        {
+          error: {
+            code: "missing_scope",
+            message: "API key missing required scope: audits:write",
+            missing_scope: "audits:write",
+          },
+        },
+        { status: 403 }
+      );
+    const result = await publishReport(publishReportShape(5));
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("missing_scope");
+    expect(result.error.message).toContain(
+      "API key missing required scope: audits:write."
+    );
+    expect(result.error.message).toContain("squirrel keys create");
+  });
+
   test("another bare-string error still names the status and the error", async () => {
     respond = () =>
       Response.json({ error: "Rate limit exceeded" }, { status: 429 });
