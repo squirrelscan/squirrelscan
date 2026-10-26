@@ -904,21 +904,27 @@ for the root files the crawl fetches (robots.txt, sitemaps, llms.txt, the
 well-known and markdown probes), for a sitemap that robots.txt or a sitemap
 index points at such an address, and for the redirects the internal link check
 follows. The `security/http-to-https` rule checks the address of each redirect
-it follows the same way. Redirects of the start URL itself, resolved before the
-crawl begins, are not covered yet.
+it follows the same way. On the CLI, the redirects of the start URL itself,
+resolved before the crawl begins, are checked too (see the next paragraph).
 
-**The site's own hostnames are not checked.** The audited host, its `www`
-twin, and the domains in `[project] domains` with all their subdomains are
-requested by name through the system resolver, as a browser would, and a redirect to one of them is followed
-without an address check. A site that controls its own DNS can therefore point
-one of those names at a link-local or metadata address, and the CLI would send
-the request and store the answer as a page. Audit untrusted sites from a
-machine that cannot reach a cloud metadata service, or one whose metadata
-service requires a token or header that squirrel never sends (on AWS, IMDSv2
-only). Cloud audits are not affected: every request to the audited site and
-the links it leads to goes through an egress proxy that resolves the name once,
-refuses private, link-local and metadata answers, and connects to the address
-it checked.
+**The site's own hostnames are checked too.** The CLI resolves the audited
+host, its `www` twin, and the domains in `[project] domains` with all their
+subdomains once per audit, and connects every request to them (pages, redirect
+hops, root files and the start URL's own redirects) to the address it checked.
+A name that resolves to a link-local or cloud metadata address is never
+requested: the page is recorded as failed with "Not requested". Private
+networks, `localhost` and mDNS `.local` names keep working; a `.local` name that
+answers only a scoped link-local IPv6 address cannot be connected to by address
+and is refused.
+
+Two cases send the site's own hostnames by name instead, without that check:
+an HTTP proxy set in the environment (`HTTP_PROXY` or `HTTPS_PROXY`), which
+resolves the name itself and would get the wrong site if handed an address, and
+`SQUIRREL_NO_HOST_PINNING` set to anything other than empty, `0` or `false`,
+for a network where connecting by address breaks routing. Cloud audits are not
+affected either way: every request to the audited site and the links it leads
+to goes through an egress proxy that resolves the name once, refuses private,
+link-local and metadata answers, and connects to the address it checked.
 
 **Example:**
 
