@@ -156,12 +156,17 @@ describe("the memo holds no page alive (#2343)", () => {
     // A stale stack slot can keep a finished parse's memo reachable (JSC scans
     // the stack conservatively); it must not keep the page with it.
     const memos = [createSiteChromeTest(), createLinkPositionTest()];
-    const page = walkAndDrop(memos);
-    for (let i = 0; i < 10 && page.deref(); i++) {
+    // Three pages through the same memos. Only the earlier two are asserted: a
+    // stale slot from the latest call can pin its page for a while in any test
+    // (the same scan this guards against), while a memo holding its keys
+    // strongly keeps every page it has seen.
+    const pages = [walkAndDrop(memos), walkAndDrop(memos), walkAndDrop(memos)];
+    for (let i = 0; i < 10 && (pages[0]!.deref() || pages[1]!.deref()); i++) {
       Bun.gc(true);
       await Bun.sleep(0);
     }
-    expect(page.deref()).toBeUndefined();
+    expect(pages[0]!.deref()).toBeUndefined();
+    expect(pages[1]!.deref()).toBeUndefined();
     // The memos are still alive here.
     expect(memos).toHaveLength(2);
   });
