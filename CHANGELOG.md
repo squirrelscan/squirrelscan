@@ -17,6 +17,14 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.137 (2026-10-28)
+
+`squirrel audit --offline` now sends nothing to another site (redirects, sitemaps, assets and probes stay on the audited site), a failed audit whose start URL redirects elsewhere prints the command for the destination, broken-link rules move to the Reliability category, and the MCP SDK moves to 2.4.0 for its bundled fast-uri fix.
+
+### Added
+
+- **A failed audit whose start URL redirects to another site says what to run next.** The terminal prints `Audit the destination instead: squirrel audit <origin>` under the failure, and the `llm` format offers the same command for the user to confirm instead of retrying the URL that redirects. When the destination is a sign-in host (Cloudflare Access, Okta, `accounts.shopify.com` and the rest of the documented list), it says the site needs authentication and links the guide, with no command. Only the destination's origin is offered, never the redirect's path or query. See [redirected to another site](https://docs.squirrelscan.com/guides/failed-audits#offsite-redirect).
+
 ### Changed
 
 - Broken links are reported as a reliability problem, not an SEO one. `links/broken-links`, `links/broken-external-links` and `links/broken-anchors` move from the Links category to Reliability, so they no longer count toward the SEO score. Reliability rolls up into the Performance score, which now carries them. Their badge on the HTML report reads **Reliability**, as do the badges of `reliability/broken-resources` and `reliability/broken-forms`, which used to read Performance. The rule ids keep their `links/` prefix, so configs, `links/*` patterns, `rule_options` and docs links keep working. `reliability/*` does not select the three rules, so list them by id to disable them with it. `squirrel report --category reliability` now includes them, and a report stored before this release keeps them under `links`. See [Reliability](https://docs.squirrelscan.com/rules/reliability).
@@ -24,17 +32,13 @@ How it works:
 ### Security
 
 - **The MCP SDK moves to 2.4.0, which bundles `fast-uri` 3.1.8.** The SDK ships its own copy of `fast-uri`, so the root override could not reach it and `bun audit` could not see it: 2.3.1 carried 3.1.0, which has the host-confusion advisory (a backslash as the authority delimiter). It is reachable only through JSON Schema `$ref` parsing in the SDK, whose schemas are squirrel's own, and now matches the override. The bundled `ajv` stays at 8.18.0, which has no advisory. The notices list the embedded `fast-uri` version (#656).
-
-### Security
-
 - **`squirrel audit --offline` now sends nothing to another site.** The site's own hosts are the audited host, its `www` or apex twin, `[project] domains` and the subdomains of all of them. A page redirect to another host ends there (the page is recorded as the redirect it answered with), a sitemap that robots.txt names on another host is not requested (`crawl/sitemap-exists` and `crawl/sitemap-valid` say it was skipped, not missing), a stylesheet, script, image or font on the site that redirects off it is not followed (`reliability/broken-resources` reports it as not requested), and the soft-404 confirmation, the cloaking probe and the AI agent access probe stay on the site. Assets on the `www` or apex twin or on a `[project] domains` host are checked like the site's own. Before, an offline audit still followed those hops to whatever host the site named. See [Fully offline audit](https://docs.squirrelscan.com/cli/audit#fully-offline-audit) (#819).
-
-- **A failed audit whose start URL redirects to another site says what to run next.** The terminal prints `Audit the destination instead: squirrel audit <origin>` under the failure, and the `llm` format offers the same command for the user to confirm instead of retrying the URL that redirects. When the destination is a sign-in host (Cloudflare Access, Okta, `accounts.shopify.com` and the rest of the documented list), it says the site needs authentication and links the guide, with no command. Only the destination's origin is offered, never the redirect's path or query. See [redirected to another site](https://docs.squirrelscan.com/guides/failed-audits#offsite-redirect).
 
 ### Docs
 
 - **The docs say what the smart-audit coverage counts mean.** "Audited", "known" and "carried" are defined on the [configuration page](https://docs.squirrelscan.com/configuration#smart-audits): known pages are the ones with an active page record, carried findings are keyed by URL and do not expire until the page is re-crawled or removed, so a report can carry findings from a page whose record is missing from the store while known equals audited (#1031).
-
+- **Broken link alerts are documented.** What triggers the email (scheduled audits only, internal 404 and 410 and confirmed external links), what never counts, the switches, plans, the MCP `list_notifications` category and the notification webhook. See [emails](https://docs.squirrelscan.com/dashboard/emails#new-broken-links).
+- **Schedules that pause after repeated failures, the `api_deadline` failure code and browser notifications are documented.** See [scheduled audits](https://docs.squirrelscan.com/cloud/scheduled-audits), [failed audits](https://docs.squirrelscan.com/guides/failed-audits) and [notifications](https://docs.squirrelscan.com/dashboard/notifications).
 
 ## v0.0.136 (2026-10-27)
 
