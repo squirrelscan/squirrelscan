@@ -268,7 +268,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Contributi
 
 ## Telemetry
 
-Telemetry is enabled by default and is deliberately minimal: event name, CLI version, a random install ID, and bounded error categories. It does not send API keys, URLs, report contents, or raw error messages. After `squirrel auth login`, telemetry requests carry your login session (the short-lived token from login, never an API key) so events tie to your account; signed out, they are anonymous. Nothing is sent when telemetry is off.
+Telemetry is enabled by default and is deliberately minimal: event name, CLI version, a random install ID, and bounded error categories. It does not send API keys, URLs, report contents, or raw error messages. After `squirrel auth login`, telemetry requests carry your login session (the 90-day sign-in token from login, never an API key) so events tie to your account; signed out, they are anonymous. Nothing is sent when telemetry is off.
 
 Disable it permanently with:
 
