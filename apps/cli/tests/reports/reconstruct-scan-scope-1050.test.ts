@@ -179,7 +179,9 @@ describe("database report JavaScript shipped (repo#3397)", () => {
 
     const report = await rebuilt(store, crawlId);
     expect(report.javascript).toEqual(javascript);
-    expect(consoleOutput(report)).toContain("JavaScript shipped: 4.0 KB across 2 scripts");
+    expect(consoleOutput(report)).toContain(
+      "JavaScript shipped: 4.0 KB across 2 scripts"
+    );
     expect(JSON.parse(renderJson(report)).javascript).toEqual(javascript);
     await run(store.close());
   });

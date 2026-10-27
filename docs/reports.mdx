@@ -104,6 +104,22 @@ the work to do first:
 Categories are not top-level sections: a category with both an error and a
 warning appears under both severities.
 
+### JavaScript shipped
+
+Every format has one line on how much JavaScript the audit measured, for example:
+
+```text
+JavaScript shipped: 1.2 MB across 34 scripts (Next.js runtime 640.0 KB, 52%; third-party 210.0 KB)
+Heaviest pages by script: https://example.com/blog/post (980.0 KB, 12 scripts)
+```
+
+- **The total** is the sum over the distinct scripts the pages load with `<script src>`. A script on your own site counts its uncompressed size. A third-party script counts the `Content-Length` its status check returned; those checks run with `reliability/broken-resources`, and an offline audit sends none. Inline scripts are not counted.
+- **The framework runtime** is named when its own chunk path is among your scripts: `/_next/static/` (Next.js), `/_nuxt/` (Nuxt), `/_astro/` (Astro) or `/_app/immutable/` (SvelteKit). Its share is of the whole total.
+- **Not measured** counts scripts that failed, returned no size, or were left out by the script fetch limit.
+- **The heaviest pages** are the three pages that load the most script bytes.
+
+The line is left out when no script was measured. It is information only and never affects the score. The console shows the first line under the score; the text and Markdown reports show both lines in the summary; the HTML report shows them in the Site section. The JSON report has a `javascript` object, and the LLM and XML reports a `<javascript>` element with one `<page>` per heaviest page.
+
 ### console (default)
 
 Human-readable terminal output with colors and formatting.

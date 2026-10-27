@@ -1982,7 +1982,9 @@ export async function runAudit(
       await Effect.runPromise(
         storage.updateCrawl(crawlId, {
           status: "analyzed",
-          ...(ruleResults.javascript ? { javascript: ruleResults.javascript } : {}),
+          ...(ruleResults.javascript
+            ? { javascript: ruleResults.javascript }
+            : {}),
         })
       );
       // From here to the end of report reconstruction this crawl reads as a

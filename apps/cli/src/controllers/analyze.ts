@@ -351,7 +351,9 @@ export async function runAnalyze(
     await Effect.runPromise(
       storage.updateCrawl(crawlId, {
         status: "analyzed",
-        ...(ruleResults.javascript ? { javascript: ruleResults.javascript } : {}),
+        ...(ruleResults.javascript
+          ? { javascript: ruleResults.javascript }
+          : {}),
       })
     );
 

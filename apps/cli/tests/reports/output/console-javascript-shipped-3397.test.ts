@@ -33,11 +33,15 @@ describe("console report: JavaScript shipped", () => {
         thirdPartyBytes: 0,
         unmeasured: 0,
         framework: { id: "astro", name: "Astro", bytes: 102_400 },
-        heaviestPages: [{ url: "https://example.com/", bytes: 307_200, scripts: 3 }],
+        heaviestPages: [
+          { url: "https://example.com/", bytes: 307_200, scripts: 3 },
+        ],
       },
     };
     const out = capture(report);
-    expect(out).toContain("JavaScript shipped: 300.0 KB across 3 scripts (Astro runtime 100.0 KB, 33%)");
+    expect(out).toContain(
+      "JavaScript shipped: 300.0 KB across 3 scripts (Astro runtime 100.0 KB, 33%)"
+    );
     expect(out.match(/JavaScript shipped/g)).toHaveLength(1);
   });
 
