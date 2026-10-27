@@ -461,6 +461,19 @@ Each `location` line is one hop. The last one shows where the audited address en
 - **A sign-in page.** See [sign-in page or access gateway](#access-gateway).
 - **Anything else.** Fix the redirect so it stays on the same site, or audit the address the site actually serves.
 
+**In the dashboard.** When a cloud audit fails this way, the failed run's page and the website's page offer **Audit `<destination>` instead**, and a failure email that links to the run has a button that opens the same offer. It is never offered for a sign-in host. It starts a cloud audit of the destination through the usual spend confirmation. The destination is audited as its own website, added to the organization if it is not there yet, and the website that redirects keeps its settings and history.
+
+When the destination looks like the same site's own new domain (the **site moved** wording above), the offer also has **Also move this website to `<destination>`**. It is off until you tick it. Moving:
+
+- adds the destination as its own website, or reuses it when the organization already has it;
+- copies the settings that say how to audit: the level, page and depth limits, rendering, external link checks, disabled rules, the per-audit credit cap, alert settings, and the crawl's scope, include and exclude patterns and query parameter handling;
+- moves the recurring-audit schedule to the new website;
+- archives the old website with its reports, so it leaves your websites list.
+
+Some things stay behind, because they are trust in the old host rather than a way to audit: the ownership confirmation, custom request headers and what they unlock, extra hosts the crawl may follow, a choice to ignore `robots.txt`, and the [badge](/guides/badges). Set them again on the new website where it needs them; for a gated site, see [sign-in page or access gateway](#access-gateway).
+
+A move spends nothing by itself: the audit it starts is priced and confirmed as usual. It needs a role that can change websites (owner, admin or editor, see [roles](/cloud/team#roles)), and it works at your plan's website limit, because the new website takes the old one's place. A new destination must answer and be on a public address, or nothing moves. If the move lands but the audit does not start, run it from the new website's page.
+
 ### Sign-in page or access gateway \{#access-gateway\}
 
 **What it means.** An access gateway is a service in front of the site that sends every request without valid credentials to a sign-in page: a zero-trust proxy such as Cloudflare Access, a hosting platform's deployment protection, single sign-on in the application, or HTTP basic auth. A cloud audit cannot sign in. The gateway shows up as one of two causes:
