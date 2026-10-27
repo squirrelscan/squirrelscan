@@ -160,11 +160,14 @@ export function entityCell(value: string | null | undefined): string {
 }
 
 /**
- * A value as a code span inside a table cell: fenced past any backtick run, and
- * each `|` escaped, because a GFM table splits on a pipe even inside a span.
+ * A value as a code span inside a table cell, fenced past any backtick run. A
+ * GFM table splits on a pipe even inside a span, and a backslash before it does
+ * not help: the code span shows backslashes as typed, and a value that already
+ * holds `\|` would still split. So each `|` is shown as `¦` (U+00A6), which
+ * keeps the cell whole whatever the value holds.
  */
 export function entityCodeCell(value: string | null | undefined): string {
-  return markdownCodeSpan(clipCell(value)).replace(/\|/g, "\\|");
+  return markdownCodeSpan(clipCell(value).replace(/\|/g, "\u00a6"));
 }
 
 /** A value flattened to one line and clipped to {@link MAX_CELL}, not yet escaped. */

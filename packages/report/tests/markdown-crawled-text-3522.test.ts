@@ -356,7 +356,11 @@ describe("line breaks inside raw HTML (#3522 review round 2)", () => {
       gainedId: [],
       lostId: [],
       occurrenceDeltas: [],
-      newConflicts: [{ key: "k", name: PAYLOAD, property: `url\` | ${PAYLOAD}` }],
+      newConflicts: [
+        { key: "k", name: PAYLOAD, property: `url\` | ${PAYLOAD}` },
+        // A value that already holds `\|` must not split its cell either.
+        { key: "k2", name: "second", property: "a\\|b" },
+      ],
       resolvedConflicts: [],
       newDangling: [],
       resolvedDangling: [],
@@ -366,13 +370,13 @@ describe("line breaks inside raw HTML (#3522 review round 2)", () => {
     });
     expect(hostileTargets(md)).toEqual([]);
     // The pipe stayed inside the property's cell: the row still has two cells.
-    const row =
-      Bun.markdown
-        .html(md)
-        .split("</tr>")
-        .find((r) => r.includes("<code>url`")) ?? "";
+    const rows = Bun.markdown.html(md).split("</tr>");
+    const row = rows.find((r) => r.includes("<code>url`")) ?? "";
     expect(row.match(/<td>/g)).toHaveLength(2);
-    expect(row).toContain("<code>url` | x](https://evil.example/y)");
+    expect(row).toContain("<code>url` \u00a6 x](https://evil.example/y)");
+    const backslashed = rows.find((r) => r.includes("<code>a")) ?? "";
+    expect(backslashed.match(/<td>/g)).toHaveLength(2);
+    expect(backslashed).toContain("<code>a\\\u00a6b</code>");
   });
 });
 
