@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Docs
+
+- **The Performance rules page counts 5 Reliability rules.** The card said 2 after the broken-link rules moved into the category.
+
 ## v0.0.137 (2026-10-28)
 
 `squirrel audit --offline` now sends nothing to another site (redirects, sitemaps, assets and probes stay on the audited site), a failed audit whose start URL redirects elsewhere prints the command for the destination, broken-link rules move to the Reliability category, and the MCP SDK moves to 2.4.0 for its bundled fast-uri fix.
