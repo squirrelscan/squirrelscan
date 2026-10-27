@@ -1,3 +1,5 @@
+import type { AuditFailureReasonCode } from "@squirrelscan/core-contracts/failure-reason";
+
 import { TELEMETRY_TIMEOUT_MS } from "@/constants";
 import { cliApi } from "@/lib/api-client";
 import { DEFAULT_API_URL, getApiUrl } from "@/self/api";
@@ -117,7 +119,9 @@ export function trackFirstRunEvent(
 let firstAuditReported = false;
 
 export function trackFirstAudit(
-  outcome: { ok: true } | { ok: false; failureClass: string },
+  outcome:
+    | { ok: true }
+    | { ok: false; failureClass: AuditFailureReasonCode | "exception" },
   settings?: UserSettings
 ): void {
   // The settings snapshot can predate this run's own report, so a process
@@ -128,7 +132,8 @@ export function trackFirstAudit(
   const onDisk = loadUserSettings();
   if (onDisk.ok && onDisk.data.first_audit_reported_at) return;
   firstAuditReported = true;
-  // Marker first, send second: "once" beats "at least once". A send that
+  // The marker means "first audit seen", not "first audit sent": it is set even
+  // with telemetry off. Marker first, send second: "once" beats "at least once". A send that
   // fails (offline, process exit) loses this event rather than repeating it.
   const updated = updateSettings({
     first_audit_reported_at: new Date().toISOString(),

@@ -84,7 +84,7 @@ const SYSCTL_TIMEOUT_MS = 250;
 
 function sysctlFlag(name: string): boolean | null {
   try {
-    const r = spawnSync("sysctl", ["-n", name], {
+    const r = spawnSync("/usr/sbin/sysctl", ["-n", name], {
       encoding: "utf8",
       timeout: SYSCTL_TIMEOUT_MS,
       stdio: ["ignore", "pipe", "ignore"],

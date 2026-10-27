@@ -134,6 +134,7 @@ describe("first-run telemetry", () => {
   });
 
   test("an org API key from the env is never sent", async () => {
+    // pragma: allowlist secret
     process.env.SQUIRRELSCAN_API_KEY = "sq_live_secret";
     trackFirstRunEvent("setup_started");
     await settle();
