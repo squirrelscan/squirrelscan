@@ -33,6 +33,7 @@
     "./bytes": "./src/bytes.ts",
     "./rate-limit": "./src/rate-limit.ts",
     "./date-period": "./src/date-period.ts",
+    "./tls-certificate": "./src/tls-certificate.ts",
     "./agent-skills": "./src/agent-skills/index.ts"
   },
   "dependencies": {

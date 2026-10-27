@@ -20,6 +20,7 @@ import { referrerPolicyRule } from "./referrer-policy";
 import { sriRule } from "./sri";
 import { securityTxtRule } from "./security-txt";
 import { thirdPartyCookiesRule } from "./third-party-cookies";
+import { tlsCertificateRule } from "./tls-certificate";
 import { tokenStorageRule } from "./token-storage";
 import { versionDisclosureRule } from "./version-disclosure";
 import { xContentTypeRule } from "./x-content-type";
@@ -29,6 +30,7 @@ export const rules: Rule[] = [
   httpsRule,
   httpToHttpsRule,
   hstsRule,
+  tlsCertificateRule,
   cspRule,
   cspBlocksOwnResourcesRule,
   xFrameOptionsRule,
@@ -69,6 +71,7 @@ export {
   securityTxtRule,
   sriRule,
   thirdPartyCookiesRule,
+  tlsCertificateRule,
   tokenStorageRule,
   versionDisclosureRule,
   xContentTypeRule,
