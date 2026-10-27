@@ -1168,6 +1168,11 @@ usable_home_path_dir() {
     .nvm|.nvm/*|.fnm|.fnm/*|.volta|.volta/*|.asdf|.asdf/*) return 1 ;;
     .local/share/mise|.local/share/mise/*|.pyenv|.pyenv/*|.rbenv|.rbenv/*) return 1 ;;
     .cargo|.cargo/*|.bun|.bun/*|.deno|.deno/*|go|go/*) return 1 ;;
+    .npm|.npm/*|.npm-global|.npm-global/*|.yarn|.yarn/*|.pnpm|.pnpm/*) return 1 ;;
+    .local/share/pnpm|.local/share/pnpm/*|Library/pnpm|Library/pnpm/*) return 1 ;;
+    .rustup|.rustup/*|.nix-profile|.nix-profile/*|.linuxbrew|.linuxbrew/*) return 1 ;;
+    .conda|.conda/*|miniconda3|miniconda3/*|anaconda3|anaconda3/*) return 1 ;;
+    .rye|.rye/*|.poetry|.poetry/*|.gem|.gem/*|Library/Python|Library/Python/*) return 1 ;;
   esac
   case "/$rel/" in
     */node_modules/*|*/shims/*) return 1 ;;
@@ -1177,11 +1182,11 @@ usable_home_path_dir() {
 
 # True when $1 is an entry of the current PATH.
 dir_in_path() {
-  local target="$1" entry
+  local target="${1%/}" entry
   local entries
   IFS=':' read -ra entries <<< "$PATH"
   for entry in "${entries[@]}"; do
-    [ "$entry" = "$target" ] && return 0
+    [ "${entry%/}" = "$target" ] && return 0
   done
   return 1
 }
@@ -1608,7 +1613,8 @@ setup_path() {
   if [ -f "$rc_file" ] && { grep -qF "$marker" "$rc_file" 2>/dev/null \
       || grep -v '^[[:space:]]*#' "$rc_file" 2>/dev/null \
         | grep -E 'PATH|fish_add_path' | grep -qF '.local/bin'; }; then
-    PATH_SETUP="added"
+    # Nothing written: it is on PATH for new shells already, so not "added".
+    PATH_SETUP="on_path"
     info "$(tildify "$bin_dir") is already on PATH in $(tildify "$rc_file")."
     return 0
   fi
@@ -1641,7 +1647,7 @@ print_epilogue() {
     # give one that works right now.
     local full
     full="$(tildify "$bin_dir")/squirrel"
-    if [ "$PATH_SETUP" = "added" ] && [ -n "$PATH_SETUP_RC" ]; then
+    if [ -n "$PATH_SETUP_RC" ] && { [ "$PATH_SETUP" = "added" ] || [ "$PATH_SETUP" = "on_path" ]; }; then
       echo "Open a new terminal, or run:  source $(tildify "$PATH_SETUP_RC")"
       echo "Then:  squirrel audit https://your-site.com"
       echo "(or right now:  $full audit https://your-site.com)"

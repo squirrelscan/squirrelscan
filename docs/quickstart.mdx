@@ -62,9 +62,9 @@ Set any of these before running the installer.
 
 ### How the installer sets up your PATH
 
-The installer first looks for a directory that is already on your PATH and that it can write to: `~/.local/bin`, `~/bin`, `/usr/local/bin` or `/opt/homebrew/bin`, then any other writable directory on your PATH under your home directory. It skips directories that a version or package manager owns (`.nvm`, `.fnm`, `.volta`, `.asdf`, `mise`, `.pyenv`, `.rbenv`, `.cargo`, `.bun`, `.deno`, `go`, `node_modules` and any `shims`), because their tool can wipe or shadow them. `SQUIRREL_BIN_DIR` overrides all of this.
+The installer first looks for a directory that is already on your PATH and that it can write to: `~/.local/bin`, `~/bin`, `/usr/local/bin` or `/opt/homebrew/bin`, then any other writable directory on your PATH under your home directory. It skips directories that a version or package manager owns (`.nvm`, `.fnm`, `.volta`, `.asdf`, `mise`, `.pyenv`, `.rbenv`, `.cargo`, `.bun`, `.deno`, `go`, `node_modules` and any `shims`, plus npm, pnpm, Python, conda, Nix and Rust toolchain directories), because their tool can wipe or shadow them. `SQUIRREL_BIN_DIR` overrides all of this.
 
-If none qualifies, it uses `~/.local/bin` and appends one marked line to the file your shell reads at startup, then tells you which file it changed. It never rewrites existing content, creates the file if it is missing, and adds nothing when the file already puts `~/.local/bin` on your PATH or carries the `# squirrel` marker, so running the installer again is safe.
+If none qualifies, it uses `~/.local/bin` and appends one marked line to the file your shell reads at startup, then tells you which file it changed. It never rewrites existing content, creates the file if it is missing, and adds nothing when the file already puts `~/.local/bin` on your PATH (a `PATH` or `fish_add_path` line) or carries the `# squirrel` marker, so running the installer again is safe.
 
 | Shell | File | Line |
 | --- | --- | --- |

@@ -91,7 +91,7 @@ describe("find_bin_dir picks a directory already on PATH", () => {
   test("manager-owned dirs are skipped and the installer falls back to ~/.local/bin", async () => {
     const r = await run(
       [
-        'for d in .nvm/versions/node/v22/bin .cargo/bin .bun/bin .deno/bin go/bin .volta/bin .asdf/shims .pyenv/shims .rbenv/shims .local/share/mise/shims proj/node_modules/.bin; do mkdir -p "$HOME/$d"; PATH="$HOME/$d:$PATH"; done',
+        'for d in .nvm/versions/node/v22/bin .cargo/bin .bun/bin .deno/bin go/bin .volta/bin .asdf/shims .pyenv/shims .rbenv/shims .local/share/mise/shims proj/node_modules/.bin .npm-global/bin .local/share/pnpm Library/Python/3.12/bin .rustup/toolchains/x/bin .nix-profile/bin miniconda3/bin; do mkdir -p "$HOME/$d"; PATH="$HOME/$d:$PATH"; done',
         'd=$(find_bin_dir) || true; echo "DIR=$d"',
       ].join("; "),
     );
@@ -103,6 +103,13 @@ describe("find_bin_dir picks a directory already on PATH", () => {
       'mkdir -p "$HOME/.cargo/bin" "$HOME/tools/bin"; PATH="$HOME/.cargo/bin:$HOME/tools/bin:$PATH"; echo "DIR=$(find_bin_dir)"',
     );
     expect(r.stdout).toContain(`DIR=${r.home}/tools/bin\n`);
+  });
+
+  test("a PATH entry with a trailing slash still counts as on PATH", async () => {
+    const r = await run(
+      'mkdir -p "$HOME/.mybin"; PATH="$HOME/.mybin/:$PATH"; setup_path "$HOME/.mybin"; echo "SETUP=$PATH_SETUP"',
+    );
+    expect(r.stdout).toContain("SETUP=on_path");
   });
 
   test("a PATH dir outside $HOME is never taken by the extra scan", async () => {
@@ -157,6 +164,8 @@ describe("setup_path writes the shell's startup file", () => {
       setup: (home) => writeFileSync(join(home, ".zshrc"), existing),
     });
     expect(read(join(r.home, ".zshrc"))).toBe(existing);
+    // Nothing was written, so it is not reported as added.
+    expect(r.stdout).toContain("SETUP=on_path");
   });
 
   test("a comment that merely mentions .local/bin does not count as configured", async () => {
