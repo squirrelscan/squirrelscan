@@ -18,6 +18,7 @@ import { entitySameAsMissingRule } from "./entity-sameas-missing";
 import { entitySplitIdentityRule } from "./entity-split-identity";
 import { entityTypeDriftRule } from "./entity-type-drift";
 import { entityWebsiteMissingRule } from "./entity-website-missing";
+import { expectedTypeSchemaRule } from "./expected-type";
 import { faqSchemaRule } from "./faq";
 import { jsonLdValidRule } from "./json-ld-valid";
 import { localBusinessSchemaRule } from "./local-business";
@@ -35,6 +36,7 @@ export const rules: Rule[] = [
   localBusinessSchemaRule,
   faqSchemaRule,
   breadcrumbSchemaRule,
+  expectedTypeSchemaRule,
   websiteSearchSchemaRule,
   organizationSchemaRule,
   videoSchemaRule,
@@ -75,6 +77,7 @@ export {
   entitySplitIdentityRule,
   entityTypeDriftRule,
   entityWebsiteMissingRule,
+  expectedTypeSchemaRule,
   faqSchemaRule,
   jsonLdValidRule,
   localBusinessSchemaRule,

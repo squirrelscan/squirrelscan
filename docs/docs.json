@@ -304,6 +304,7 @@
                   "rules/schema/review",
                   "rules/schema/rating-scope",
                   "rules/schema/coverage-outlier",
+                  "rules/schema/expected-type",
                   "rules/schema/entity-identity",
                   "rules/schema/entity-split-identity",
                   "rules/schema/entity-dangling",

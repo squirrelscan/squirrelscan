@@ -17,6 +17,16 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- `schema/expected-type` flags a page that the bundled page classifier is sure about and that declares none of the structured data its type should carry: `Product` on a product page, `Article` or `BlogPosting` on an article or blog post, `CollectionPage` or `ItemList` on a listing, `ContactPage` or an organization type on a contact page, `AboutPage`, `Person` or an organization type on an about page, and `TechArticle`, `HowTo` or `FAQPage` on documentation. It trusts only the model's answer, at 0.9 confidence or above (`min_confidence` sets it), never a type read from the page's own markup. A page that declares a listing type is not asked for article or product markup. With `--no-classifier` it reports nothing. See [schema/expected-type](https://docs.squirrelscan.com/rules/schema/expected-type).
+
+### Changed
+
+- Noindex pages no longer affect `content/thin-vs-site-norm` on an indexed site: they are left out of each page type's median and cannot be reported as thin outliers. The check details count the pages left out. A staging or preview site whose homepage is noindex still checks every page. See [Thin against your own site](https://docs.squirrelscan.com/rules/content/thin-vs-site-norm) (#1029).
+- Where the markup says nothing, a small page classifier bundled with squirrel (about 9 MB, no network call), names the part of the page: the header, footer, navigation, sidebar or page content, and sections such as the pagination, breadcrumbs, a related-content block, the business details, the social sharing links, the account and login links, the author byline and the newsletter signup. The header, the footer and comment threads in the markup always win, comment threads stay markup-only, and a section the classifier names refines a navigation or sidebar landmark. Each page also stores the classifier's page type, and only a page at the root path is ever labelled `homepage`. `squirrel self doctor` shows the artifact and its load time. It can be wrong: on a single article the previous and next post links can read as pagination, a "follow us" row of profile icons can read as social sharing links, and the comments label comes from markup only. Switch it off with `--no-classifier` or `[classifier] enabled = false` and link sections come from markup alone. The weights are `treetop-pagetype-v1`, MIT licensed like the rest of the repository.
+- `schema/breadcrumb` fails a page that shows a breadcrumb trail and declares no `BreadcrumbList`: at least one link the page classifier places in the breadcrumbs section, and no schema. A page without that signal gets the same info check as before. The rule's severity is now warning, so its `warn` checks (a `BreadcrumbList` with no items, or positions out of order) count toward the warning totals instead of being advisory. See [schema/breadcrumb](https://docs.squirrelscan.com/rules/schema/breadcrumb).
+
 ### Fixed
 
 - **Installer failure reports name the host when curl cannot connect.** A curl failure under `set -e` (exit 6, 7, 28, 35, 52 or 56) reported only its code, so 82 identical reports could not be told apart. The anonymous report now carries `curl exit N reaching <host>`: the host only, never a path, query or credentials.
@@ -26,6 +36,7 @@ How it works:
 
 - **The Performance rules page counts 5 Reliability rules.** The card said 2 after the broken-link rules moved into the category.
 - **Rule-option examples use the table the CLI reads.** Fourteen rule-reference pages now put per-rule settings under `[rule_options."<id>"]`, not the ignored `[rules."<id>"]`. The docs check rejects the ignored table so copied examples keep changing audit behavior. (#1176)
+
 ### Security
 
 - **A crawled page can no longer add links or images to the Markdown report.** `squirrel report --format markdown` and `squirrel audit -f markdown` now escape the text the audited site controls: the pages in a check's page list (the path shown and the link), item labels and the pages an item was found on, check messages and names (which can quote the page, such as an ad URL or a misspelled word), the Entities section's names, ids and values from the site's JSON-LD, the site profile, a partial audit's reason, the audited URL line, and a detected technology's name and version. Before, a page whose path held `](`, `)` or `![` closed the page link early and added a link or a remote image of the site's choosing to the report a reader opens, and a label could open a heading or a list of its own. A stored report's generator version now prints on the scan line only when it looks like a version (squirrelscan/repo#3522).
@@ -40,10 +51,7 @@ How it works:
 
 ### Changed
 
-- Noindex pages no longer affect `content/thin-vs-site-norm` on an indexed site: they are left out of each page type's median and cannot be reported as thin outliers. The check details count the pages left out. A staging or preview site whose homepage is noindex still checks every page. See [Thin against your own site](https://docs.squirrelscan.com/rules/content/thin-vs-site-norm) (#1029).
-
 - Broken links are reported as a reliability problem, not an SEO one. `links/broken-links`, `links/broken-external-links` and `links/broken-anchors` move from the Links category to Reliability, so they no longer count toward the SEO score. Reliability rolls up into the Performance score, which now carries them. Their badge on the HTML report reads **Reliability**, as do the badges of `reliability/broken-resources` and `reliability/broken-forms`, which used to read Performance. The rule ids keep their `links/` prefix, so configs, `links/*` patterns, `rule_options` and docs links keep working. `reliability/*` does not select the three rules, so list them by id to disable them with it. `squirrel report --category reliability` now includes them, and a report stored before this release keeps them under `links`. See [Reliability](https://docs.squirrelscan.com/rules/reliability).
-- Where the markup says nothing, a small page classifier bundled with squirrel (about 9 MB, no network call), names the part of the page: the header, footer, navigation, sidebar or page content, and sections such as the pagination, breadcrumbs, a related-content block, the business details, the social sharing links, the account and login links, the author byline and the newsletter signup. The header, the footer and comment threads in the markup always win, comment threads stay markup-only, and a section the classifier names refines a navigation or sidebar landmark. Each page also stores the classifier's page type, and only a page at the root path is ever labelled `homepage`. `squirrel self doctor` shows the artifact and its load time. It can be wrong: on a single article the previous and next post links can read as pagination, a "follow us" row of profile icons can read as social sharing links, and the comments label comes from markup only. Switch it off with `--no-classifier` or `[classifier] enabled = false` and link sections come from markup alone. The weights are `treetop-pagetype-v1`, MIT licensed like the rest of the repository.
 
 ### Security
 
