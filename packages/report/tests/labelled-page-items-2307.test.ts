@@ -125,9 +125,9 @@ describe("a label that embeds a site-controlled URL cannot inject markdown", () 
     );
     const itemLine = md.split("\n").find((line) => line.includes("linked only from the footer"))!;
 
-    // The label's brackets are literal text; the destination is one percent-encoded URL.
+    // The label's punctuation is backslash-escaped (3522); the destination is one percent-encoded URL.
     expect(itemLine).toBe(
-      "- [https://example.com/blog?q=!\\[t\\](https://evil.example/p.png), linked only from the footer](https://example.com/blog?q=![t]%28https://evil.example/p.png%29)",
+      "- [https://example.com/blog?q=\\!\\[t\\]\\(https://evil.example/p.png\\), linked only from the footer](https://example.com/blog?q=!%5Bt%5D%28https://evil.example/p.png%29)",
     );
   });
 

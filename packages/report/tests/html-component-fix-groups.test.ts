@@ -139,10 +139,10 @@ function cardSentences(html: string): string[] {
   );
 }
 
-/** The same sentences as markdown prints them, bold markers removed. */
+/** The same sentences as markdown prints them, bold markers removed and its escapes undone (3522). */
 function markdownSentences(markdown: string): string[] {
   return [...markdown.matchAll(/^\*\*((?:Fix once|Likely one shared block).*?)\*\*$/gm)].map(
-    (match) => match[1]!,
+    (match) => match[1]!.replace(/\\([\\`*_[\]()<>|~&!#+=-])/g, "$1"),
   );
 }
 

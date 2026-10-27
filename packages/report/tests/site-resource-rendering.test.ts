@@ -19,6 +19,9 @@ import { renderText } from "../src/output/text";
 import { renderHtml } from "../src/output/html";
 import { renderJson } from "../src/output/json";
 
+/** Markdown output with its backslash escapes undone, to compare wording with the other formats (3522). */
+const plain = (markdown: string): string => markdown.replace(/\\([\\`*_[\]()<>|~&!#+=-])/g, "$1");
+
 const ORIGIN = "https://example.test";
 const SHARED = [`${ORIGIN}/assets/app.js.map`, `${ORIGIN}/assets/vendor.js.map`];
 const PAGES = [`${ORIGIN}/`, `${ORIGIN}/about`, `${ORIGIN}/pricing`];
@@ -91,7 +94,7 @@ describe("a shared bundle on every page", () => {
 
   test("text, markdown and html say it in the same words", () => {
     expect(renderText(full)).toContain(`    ${SENTENCE}`);
-    expect(renderMarkdown(full)).toContain(`**${SENTENCE}**`);
+    expect(plain(renderMarkdown(full))).toContain(`**${SENTENCE}**`);
     expect(renderHtml(full)).toContain(SENTENCE);
   });
 

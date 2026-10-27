@@ -14,6 +14,9 @@ import { renderMarkdown } from "../src/output/markdown";
 import { renderText } from "../src/output/text";
 import { renderXml } from "../src/output/xml";
 
+/** Markdown output with its backslash escapes undone, to compare wording with the other formats (3522). */
+const plain = (markdown: string): string => markdown.replace(/\\([\\`*_[\]()<>|~&!#+=-])/g, "$1");
+
 const SITE = "https://example.com";
 const GONE = `${SITE}/gone`;
 const MIXED = `${SITE}/mixed`;
@@ -118,7 +121,7 @@ describe("broken link sources: markdown", () => {
   });
 
   test("the summary separates links from pages", () => {
-    expect(md).toContain("| 2 broken internal link(s) (4xx/5xx), found on 4 pages |");
+    expect(plain(md)).toContain("| 2 broken internal link(s) (4xx/5xx), found on 4 pages |");
   });
 
   test("a long list says how many pages it leaves out, with no pointer elsewhere", () => {

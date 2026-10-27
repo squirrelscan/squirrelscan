@@ -10,6 +10,9 @@ import { renderMarkdown } from "../src/output/markdown";
 import { renderText } from "../src/output/text";
 import { SITE_WIDE_MIN_PAGES, siteWideItem } from "../src/site-wide-items";
 
+/** Markdown output with its backslash escapes undone, to compare wording with the other formats (3522). */
+const plain = (markdown: string): string => markdown.replace(/\\([\\`*_[\]()<>|~&!#+=-])/g, "$1");
+
 const SITE = "https://example.test";
 const pageUrl = (i: number) => `${SITE}/p${i}`;
 
@@ -78,7 +81,7 @@ describe("rendering", () => {
   const collapsible = report([item("#aaa on #bbb", 41)], 45);
 
   test("llm, text and markdown each state the ratio and drop the page list", () => {
-    for (const out of [renderLlm(collapsible), renderText(collapsible), renderMarkdown(collapsible)]) {
+    for (const out of [renderLlm(collapsible), renderText(collapsible), plain(renderMarkdown(collapsible))]) {
       expect(out).toContain("Site-wide (41 of 45 pages): #aaa on #bbb");
       // The collapsed list is the whole point: no per-page "from:" lines.
       expect(out).not.toContain("from: /p7");

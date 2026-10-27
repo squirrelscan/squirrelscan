@@ -10,6 +10,9 @@ import { renderText } from "../src/output/text";
 import { groupIssuesByCategory } from "../src/grouping";
 import { fixGroupLine, ruleFixCoverage, uncoveredItems } from "../src/component-presentation";
 
+/** Markdown output with its backslash escapes undone, to compare wording with the other formats (3522). */
+const plain = (markdown: string): string => markdown.replace(/\\([\\`*_[\]()<>|~&!#+=-])/g, "$1");
+
 function occurrence(pageUrl: string, overrides: Partial<ComponentOccurrence> = {}): ComponentOccurrence {
   return {
     version: 1,
@@ -76,7 +79,7 @@ describe("full coverage: the group replaces the legacy lines", () => {
     expect(renderText(full)).toContain(
       'Fix once in the site header (nav:1 > a:1): link text "website" is generic, 3 pages: /, /api, /guides',
     );
-    expect(renderMarkdown(full)).toContain(
+    expect(plain(renderMarkdown(full))).toContain(
       '**Fix once in the site header (nav:1 > a:1): link text "website" is generic, 3 pages: /, /api, /guides**',
     );
   });
