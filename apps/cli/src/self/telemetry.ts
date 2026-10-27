@@ -113,6 +113,8 @@ export function trackFirstAudit(
   // guard keeps a late throw after a reported result from sending twice.
   if (firstAuditReported || settings?.first_audit_reported_at) return;
   firstAuditReported = true;
+  // Marker first, send second: "once" beats "at least once". A send that
+  // fails (offline, process exit) loses this event rather than repeating it.
   const updated = updateSettings({
     first_audit_reported_at: new Date().toISOString(),
   });
