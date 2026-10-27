@@ -57,6 +57,11 @@ export interface TlsProbeOptions {
   ca?: string;
   /** Default handshake deadline, when the target sets none. */
   timeoutMs?: number;
+  /**
+   * Contact the audited site's own host only (`--offline`): any other name,
+   * the www/apex counterpart included, is `unavailable` and nothing is sent.
+   */
+  siteHostOnly?: boolean;
 }
 
 /** Connect errors after which the next vetted address may be tried: nothing reached a server. */
@@ -93,6 +98,13 @@ export function createTlsProbe(options: TlsProbeOptions = {}): TlsProbeFn {
   };
 
   return async (target) => {
+    const hostname = target.hostname.replace(/^\[|\]$/g, "").replace(/\.$/, "");
+    if (options.siteHostOnly && hostname.toLowerCase() !== site?.hostname) {
+      return {
+        kind: "unavailable",
+        reason: `--offline contacts only the audited host, not ${hostname}`,
+      };
+    }
     if (proxiedByEnvironment()) {
       return {
         kind: "unavailable",
@@ -100,10 +112,11 @@ export function createTlsProbe(options: TlsProbeOptions = {}): TlsProbeFn {
           "an HTTP proxy is set in the environment, and a direct TLS connection would go around it",
       };
     }
-    const hostname = target.hostname.replace(/^\[|\]$/g, "").replace(/\.$/, "");
     const port = target.port ?? 443;
     const timeoutMs =
       target.timeoutMs ?? options.timeoutMs ?? TLS_PROBE_TIMEOUT_MS;
+    // One budget for the lookup and the handshakes: the lookup aborts at the
+    // same deadline, and each handshake gets whatever the lookup left.
     const deadline = Date.now() + timeoutMs;
 
     const lookupDeadline = AbortSignal.timeout(timeoutMs);

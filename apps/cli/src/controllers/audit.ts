@@ -1911,7 +1911,11 @@ export async function runAudit(
           probe: probeBudget,
           // #712: security/tls-certificate's handshake, vetted and pinned; the
           // www/apex variant must resolve public unless the site is private.
-          tlsProbe: createTlsProbe({ siteUrl: crawlMeta?.baseUrl ?? baseUrl }),
+          // --offline: the audited host only, not its www/apex counterpart.
+          tlsProbe: createTlsProbe({
+            siteUrl: crawlMeta?.baseUrl ?? baseUrl,
+            siteHostOnly: options.offline === true,
+          }),
         },
         {
           batchSize: streamBatchSize,

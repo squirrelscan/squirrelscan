@@ -571,7 +571,9 @@ export function analyzeStoredCrawl(
       assets,
       {
         ...(entityMap ? { entityMap } : {}),
-        // #712: security/tls-certificate's handshake, vetted and pinned.
+        // #712: security/tls-certificate's handshake, vetted and pinned. It
+        // reads the certificate the site serves now, not at the crawl: the
+        // one check here that does not come from the stored crawl.
         tlsProbe: createTlsProbe({ siteUrl: crawl.baseUrl }),
       }
     );

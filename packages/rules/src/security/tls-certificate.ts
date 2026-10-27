@@ -21,19 +21,20 @@ import { z } from "zod";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
-export const optionsSchema = z.object({
-  warn_days: z
-    .number()
-    .int()
-    .min(1)
-    .default(30)
-    .describe("Warn when the certificate expires within this many days"),
-  error_days: z
-    .number()
-    .int()
-    .min(0)
-    .default(7)
-    .describe("Error when the certificate expires within this many days"),
+export const optionsSchema = z
+  .object({
+    warn_days: z
+      .number()
+      .int()
+      .min(1)
+      .default(30)
+      .describe("Warn when the certificate expires within this many days"),
+    error_days: z
+      .number()
+      .int()
+      .min(0)
+      .default(7)
+      .describe("Error when the certificate expires within this many days"),
   })
   // Otherwise the warning band is empty and every near expiry reads as an error.
   .refine((options) => options.error_days <= options.warn_days, {
@@ -140,6 +141,9 @@ export async function checkTlsCertificate(
     });
   }
 
+  // A counterpart that does not resolve, does not answer, or was not contacted
+  // (refused by the egress check, or --offline) reports nothing on purpose:
+  // plenty of sites have no www name, and that is not a certificate problem.
   if (variant && other) {
     if (other.kind === "certificate") {
       const [problem] = certificateProblems(other, variant, deps.now);

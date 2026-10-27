@@ -349,6 +349,28 @@ describe("the egress guard runs before every handshake", () => {
     expect(dns.asked).toEqual([]);
   });
 
+  test("--offline contacts the audited host only: the counterpart is not checked and not resolved", async () => {
+    const port = await serve(fixtures.valid);
+    const dns = resolver({
+      "example.com": ["127.0.0.1"],
+      "www.example.com": ["127.0.0.1"],
+    });
+    const probe = createTlsProbe({
+      siteUrl: `https://example.com:${port}/`,
+      siteHostOnly: true,
+      resolve: dns.resolve,
+      ca: fixtures.root,
+    });
+    expect(await probe({ hostname: "www.example.com", port })).toMatchObject({
+      kind: "unavailable",
+      reason: "--offline contacts only the audited host, not www.example.com",
+    });
+    expect((await probe({ hostname: "example.com", port })).kind).toBe(
+      "certificate"
+    );
+    expect(dns.asked).toEqual(["example.com"]);
+  });
+
   test("a name that does not resolve is unreachable with the resolver's code", async () => {
     const { probe } = publicSiteProbe({});
     expect(
