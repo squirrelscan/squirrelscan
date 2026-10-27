@@ -369,6 +369,17 @@ describe("the egress guard runs before every handshake", () => {
       "certificate"
     );
     expect(dns.asked).toEqual(["example.com"]);
+
+    // A site URL spelled with the root dot is the same host.
+    const dotted = createTlsProbe({
+      siteUrl: `https://example.com.:${port}/`,
+      siteHostOnly: true,
+      resolve: dns.resolve,
+      ca: fixtures.root,
+    });
+    expect((await dotted({ hostname: "example.com", port })).kind).toBe(
+      "certificate"
+    );
   });
 
   test("a name that does not resolve is unreachable with the resolver's code", async () => {

@@ -306,7 +306,11 @@ function siteOrigin(
   try {
     const url = new URL(siteUrl);
     return {
-      hostname: url.hostname.replace(/^\[|\]$/g, "").toLowerCase(),
+      // No brackets and no root dot, as the probe's own targets are spelled.
+      hostname: url.hostname
+        .replace(/^\[|\]$/g, "")
+        .replace(/\.$/, "")
+        .toLowerCase(),
       port: portOf(url),
     };
   } catch {

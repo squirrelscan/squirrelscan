@@ -146,6 +146,8 @@ export async function checkTlsCertificate(
   // plenty of sites have no www name, and that is not a certificate problem.
   if (variant && other) {
     if (other.kind === "certificate") {
+      // The first problem is enough for a warning about the counterpart; the
+      // audited host's own checks carry the detail.
       const [problem] = certificateProblems(other, variant, deps.now);
       if (problem) {
         checks.push({
