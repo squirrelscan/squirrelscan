@@ -33,7 +33,7 @@ function Write-Err {
 
 # --- Failure reporting -------------------------------------------------
 # On failure, fire a tiny anonymous report to the installer worker (→ Sentry)
-# so we can see when installs break in the field. Opt-out: NO_TELEMETRY (any
+# so we can see when installs break in the field. Opt-out: DO_NOT_TRACK=1 or NO_TELEMETRY (any
 # non-empty value, mirroring install.sh and apps/cli/src/self/telemetry.ts).
 # Fire-and-forget: never blocks or fails the install; carries only coarse
 # context (os/arch/step/exit code), never paths/env/hostname/secrets. #1013
@@ -120,6 +120,8 @@ function Send-ErrorReport {
     param([string]$Step, [int]$ExitCode = 1, [string]$Line = "", [string]$Output = "")
     # Presence disables reporting, including an explicitly empty value.
     if (Test-Path Env:NO_TELEMETRY) { return }
+    # DO_NOT_TRACK=1 or true also opts out (mirrors the CLI).
+    if ($env:DO_NOT_TRACK -in @("1", "true", "True", "TRUE")) { return }
     try {
         $scrubbed = Get-ScrubbedText -Text $Line -MaxLength $ErrorLineMax
         # The tail of the failing command's own stdout/stderr. Without it a

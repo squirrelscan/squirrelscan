@@ -28,9 +28,9 @@ To turn it off:
 squirrel self settings set telemetry false
 ```
 
-For CI or one-off commands, set `NO_TELEMETRY` (any defined value disables it). `squirrel audit --offline` sends no telemetry ([`audit` options](/cli/audit)).
+For CI or one-off commands, set `NO_TELEMETRY` (any defined value disables it) or `DO_NOT_TRACK=1`. `squirrel audit --offline` sends no telemetry ([`audit` options](/cli/audit)).
 
-The install script is separate. The host that serves it counts each fetch: script type, a coarse client class and an optional `?source=` tag, with no IP address kept. The script itself sends an anonymous report only when the install fails, and `NO_TELEMETRY` turns that off too ([Quickstart](/quickstart#installation)). The report is a fixed set of fields: the failing step, OS, architecture, release version, exit code and the tail of the failing command's output.
+The install script is separate. The host that serves it counts each fetch: script type, a coarse client class and an optional `?source=` tag, with no IP address kept. The script itself sends an anonymous report only when the install fails, and `NO_TELEMETRY` or `DO_NOT_TRACK=1` turns that off too ([Quickstart](/quickstart#installation)). The report is a fixed set of fields: the failing step, OS, architecture, release version, exit code and the tail of the failing command's output.
 
 ## Does it obey robots.txt?
 

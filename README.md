@@ -268,7 +268,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Contributi
 
 ## Telemetry
 
-Telemetry is enabled by default and is deliberately minimal: event name, CLI version, a random install ID, and bounded error categories. It does not send credentials, URLs, report contents, or raw error messages, and telemetry requests are never authenticated.
+Telemetry is enabled by default and is deliberately minimal: event name, CLI version, a random install ID, and bounded error categories. It does not send API keys, URLs, report contents, or raw error messages. After `squirrel auth login`, telemetry requests carry your login session (the short-lived token from login, never an API key) so events tie to your account; signed out, they are anonymous. Nothing is sent when telemetry is off.
 
 Disable it permanently with:
 
@@ -276,7 +276,7 @@ Disable it permanently with:
 squirrel self settings set telemetry false
 ```
 
-Or disable all telemetry and install registration for any invocation by defining `NO_TELEMETRY`. Any defined value works, including an empty value, `0`, or `false`:
+Or disable all telemetry and install registration for any invocation by defining `NO_TELEMETRY` (any defined value works, including an empty value, `0`, or `false`) or `DO_NOT_TRACK=1` (or `true`). A project can opt out with `"telemetry": false` in `.squirrel/settings.json`:
 
 ```bash
 NO_TELEMETRY=1 squirrel audit https://example.com

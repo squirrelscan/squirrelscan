@@ -12,7 +12,7 @@ import {
   mock,
   test,
 } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import * as realOs from "node:os";
 import { join } from "node:path";
 
@@ -36,6 +36,7 @@ const {
   trackFirstRunEvent,
 } = await import("@/self/telemetry");
 
+const FAKE_ORG_KEY = "sq_live_fake"; // pragma: allowlist secret
 const originalEnv = { ...process.env };
 const originalFetch = globalThis.fetch;
 
@@ -51,9 +52,14 @@ function futureIso(): string {
   return new Date(Date.now() + 86_400_000).toISOString();
 }
 
-function signIn(token: string, expiresAt = futureIso()): void {
+function signIn(
+  token: string,
+  expiresAt = futureIso(),
+  noticeVersion = 2
+): void {
   updateSettings({
     auth: { token, userId: "u1", email: "a@b.co", name: null, expiresAt },
+    telemetry_notice_version: noticeVersion,
   });
 }
 
@@ -135,7 +141,7 @@ describe("first-run telemetry", () => {
 
   test("an org API key from the env is never sent", async () => {
     // pragma: allowlist secret
-    process.env.SQUIRRELSCAN_API_KEY = "sq_live_secret";
+    process.env.SQUIRRELSCAN_API_KEY = FAKE_ORG_KEY;
     trackFirstRunEvent("setup_started");
     await settle();
     expect(sent[0]?.headers.has("authorization")).toBe(false);
@@ -157,7 +163,7 @@ describe("first-run telemetry", () => {
       const first = loadUserSettings();
       if (!first.ok) throw new Error("unreadable");
       showTelemetryNotice(first.data);
-      expect(errors.join("")).toContain("user ID");
+      expect(errors.join("")).toContain("login session");
       const again = loadUserSettings();
       if (!again.ok) throw new Error("unreadable");
       errors.length = 0;
@@ -169,7 +175,7 @@ describe("first-run telemetry", () => {
   });
 
   test("a non-session token in settings is never sent", async () => {
-    signIn("sq_live_not_a_session");
+    signIn(FAKE_ORG_KEY);
     trackFirstRunEvent("setup_started");
     await settle();
     expect(sent[0]?.headers.has("authorization")).toBe(false);
@@ -215,10 +221,76 @@ describe("first-run telemetry", () => {
     expect(sent[0]?.body.error_type).toBe("dns");
   });
 
-  test("the marker is written even with telemetry off", () => {
-    process.env.NO_TELEMETRY = "1";
-    trackFirstAudit({ ok: true });
-    const loaded = loadUserSettings();
-    expect(loaded.ok && loaded.data.first_audit_reported_at).toBeTruthy();
+  test("opting out does not consume the first-audit marker", () => {
+    for (const env of [
+      { NO_TELEMETRY: "1" },
+      { DO_NOT_TRACK: "1" },
+      { DO_NOT_TRACK: "true" },
+    ]) {
+      process.env = { ...originalEnv, HOME: home, ...env };
+      trackFirstAudit({ ok: true });
+      const loaded = loadUserSettings();
+      expect(loaded.ok && loaded.data.first_audit_reported_at).toBeFalsy();
+      resetFirstAuditReportedForTests();
+    }
+  });
+
+  test("DO_NOT_TRACK=1 or true sends nothing; 0 and false do not disable", async () => {
+    signIn("sqcli_session_token");
+    for (const v of ["1", "true", "TRUE"]) {
+      process.env.DO_NOT_TRACK = v;
+      trackFirstRunEvent("setup_started");
+    }
+    await settle();
+    expect(sent).toHaveLength(0);
+    for (const v of ["0", "false", ""]) {
+      process.env.DO_NOT_TRACK = v;
+      trackFirstRunEvent("setup_started");
+    }
+    await settle();
+    expect(sent).toHaveLength(3);
+  });
+
+  test("a project-scope telemetry:false opts out", async () => {
+    const proj = mkdtempSync(join(realOs.tmpdir(), "squirrel-proj-"));
+    const cwd = process.cwd();
+    try {
+      mkdirSync(join(proj, ".squirrel"));
+      writeFileSync(
+        join(proj, ".squirrel", "settings.json"),
+        JSON.stringify({ telemetry: false })
+      );
+      process.chdir(proj);
+      trackFirstRunEvent("setup_started");
+      trackFirstAudit({ ok: true });
+      await settle();
+      expect(sent).toHaveLength(0);
+    } finally {
+      process.chdir(cwd);
+      rmSync(proj, { recursive: true, force: true });
+    }
+  });
+
+  test("an unreadable project settings file fails closed", async () => {
+    const proj = mkdtempSync(join(realOs.tmpdir(), "squirrel-proj-"));
+    const cwd = process.cwd();
+    try {
+      mkdirSync(join(proj, ".squirrel"));
+      writeFileSync(join(proj, ".squirrel", "settings.json"), "{not json");
+      process.chdir(proj);
+      trackFirstRunEvent("setup_started");
+      await settle();
+      expect(sent).toHaveLength(0);
+    } finally {
+      process.chdir(cwd);
+      rmSync(proj, { recursive: true, force: true });
+    }
+  });
+
+  test("no session token until the v2 notice has been seen", async () => {
+    signIn("sqcli_session_token", futureIso(), 1);
+    trackFirstRunEvent("login_completed");
+    await settle();
+    expect(sent[0]?.headers.has("authorization")).toBe(false);
   });
 });

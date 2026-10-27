@@ -8,7 +8,11 @@ import type { UserSettings } from "./types";
 
 import { version } from "../../package.json";
 import { getOrCreateInstallId } from "./install-id";
-import { loadUserSettings, updateSettings } from "./settings";
+import {
+  loadSettingsFromScope,
+  loadUserSettings,
+  updateSettings,
+} from "./settings";
 
 export type TelemetryEvent =
   | "audit"
@@ -41,10 +45,32 @@ interface TelemetryPayload {
   error_type?: string;
 }
 
+/** DO_NOT_TRACK (consoledonottrack.com): "1" or "true" turns telemetry off. */
+function doNotTrackSet(): boolean {
+  const v = process.env.DO_NOT_TRACK?.trim().toLowerCase();
+  return v === "1" || v === "true";
+}
+
+/**
+ * A project's `.squirrel/settings.json` can opt out too. An unreadable project
+ * file fails closed (telemetry off): an opt-out we cannot read still counts.
+ */
+function projectOptOut(): boolean {
+  const local = loadSettingsFromScope("local");
+  return !local.ok || local.data.telemetry === false;
+}
+
+/**
+ * The one gate for everything telemetry sends or records: NO_TELEMETRY (any
+ * defined value), DO_NOT_TRACK=1/true, `telemetry=false` in the settings the
+ * caller holds, and `telemetry=false` in the project scope.
+ */
 export function isTelemetryDisabled(settings?: UserSettings): boolean {
   return (
     typeof process.env.NO_TELEMETRY !== "undefined" ||
-    settings?.telemetry === false
+    doNotTrackSet() ||
+    settings?.telemetry === false ||
+    projectOptOut()
   );
 }
 
@@ -68,9 +94,11 @@ export function showTelemetryNotice(settings: UserSettings): void {
   console.error(
     [
       "squirrelscan collects minimal telemetry: event name, CLI version, a random",
-      "install ID, your user ID once you sign in, and bounded error categories.",
-      "It never sends URLs, credentials, report contents, or raw error messages.",
-      "Disable it with `squirrel self settings set telemetry false` or `NO_TELEMETRY=1`.",
+      "install ID, and bounded error categories. Once you sign in, it also sends",
+      "your login session so events are tied to your account (never an API key).",
+      "It never sends URLs, report contents, or raw error messages.",
+      "Disable it with `squirrel self settings set telemetry false`, `NO_TELEMETRY=1`",
+      "or `DO_NOT_TRACK=1`.",
       "",
     ].join("\n")
   );
@@ -126,14 +154,15 @@ export function trackFirstAudit(
 ): void {
   // The settings snapshot can predate this run's own report, so a process
   // guard keeps a late throw after a reported result from sending twice.
+  // Gate first: opting out must not consume the marker.
+  if (isTelemetryDisabled(settings)) return;
   if (firstAuditReported || settings?.first_audit_reported_at) return;
   // The snapshot can be missing or stale (another process may have reported):
   // the marker on disk decides.
   const onDisk = loadUserSettings();
   if (onDisk.ok && onDisk.data.first_audit_reported_at) return;
   firstAuditReported = true;
-  // The marker means "first audit seen", not "first audit sent": it is set even
-  // with telemetry off. Marker first, send second: "once" beats "at least once". A send that
+  // Marker first, send second: "once" beats "at least once". A send that
   // fails (offline, process exit) loses this event rather than repeating it.
   const updated = updateSettings({
     first_audit_reported_at: new Date().toISOString(),
@@ -159,6 +188,10 @@ function loginSessionToken(): string | null {
   if (getApiUrl() !== DEFAULT_API_URL) return null;
   const loaded = loadUserSettings();
   if (!loaded.ok || loaded.data.telemetry === false) return null;
+  // Only once the user has seen the notice that says the session is sent.
+  if ((loaded.data.telemetry_notice_version ?? 0) < TELEMETRY_NOTICE_VERSION) {
+    return null;
+  }
   const auth = loaded.data.auth;
   if (!auth?.token || !auth.token.startsWith("sqcli_")) return null;
   // Fail closed: an unparseable expiry reads as expired.
@@ -193,7 +226,7 @@ async function sendTelemetryEvent(payload: TelemetryPayload): Promise<void> {
   if (isTelemetryDisabled()) return;
 
   // The caller may not have had settings (unreadable at start): honour the
-  // opt-out from disk too before touching anything.
+  // user-scope opt-out from disk too before touching anything.
   const loaded = loadUserSettings();
   if (loaded.ok && loaded.data.telemetry === false) return;
 

@@ -138,13 +138,19 @@ export const UserSettingsSchema = z.object({
   registered: z.boolean().optional(),
   // Install channel stamped by `self install` from SQUIRREL_INSTALL_SOURCE
   // (validated slug), so the registration on the next run reports it.
-  install_source: z.string().nullable().optional(),
+  install_source: z
+    .string()
+    .regex(/^[a-z0-9-]{1,32}$/)
+    .nullable()
+    .optional()
+    // A hand-edited bad value reads as unset; it must not invalidate the file.
+    .catch(null),
   // Set once the install's first audit has been reported to telemetry.
   first_audit_reported_at: z.string().nullable().optional(),
   telemetry_notice_shown: z.boolean().nullable().optional(),
   // Which wording of the notice was shown. Bumped when what is collected
   // changes (v2: the user ID once signed in), so existing installs see it again.
-  telemetry_notice_version: z.number().nullable().optional(),
+  telemetry_notice_version: z.number().int().nullable().optional(),
   user_feedback_email: z.string().email().nullable().optional(),
 
   // Authentication state
