@@ -99,9 +99,9 @@ export function clampedPageLimit(
  * printing only the effective limit reads as the number the user chose, and
  * printing only the requested one describes a crawl that did not happen.
  */
-/** `0.0.137`, `1.2.3-beta.1+build`: digits, letters, dots, `+` and `-`, nothing else. */
+/** `0.0.137`, `1.2.3-beta.1+build`: letters, digits, `.`, `_`, `+` and `-`, nothing else. */
 function isVersionLike(value: unknown): value is string {
-  return typeof value === "string" && /^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$/.test(value);
+  return typeof value === "string" && /^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$/.test(value);
 }
 
 export function scanScopeLine(report: AuditReport): string | null {

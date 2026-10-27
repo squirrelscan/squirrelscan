@@ -20,26 +20,52 @@ const TEXT_SPECIALS = new Set(["\\", "[", "]", "(", ")", "!", "`", "<", ">", "&"
  */
 const DESTINATION_SPECIALS = new Set(["\\", "(", ")", "<", ">", "`", "[", "]"]);
 
+function escapeSpecials(value: string): string {
+  let out = "";
+  for (const char of value) out += TEXT_SPECIALS.has(char) ? `\\${char}` : char;
+  return out;
+}
+
 /**
  * A site-controlled value as inline Markdown text, as link text or on its own.
  * Every escaped character is ASCII punctuation, a valid CommonMark escape that
- * renders as itself. Line breaks collapse to one space, so a value cannot
- * start a block of its own or end a list item early. `*`, `_` and `~` are left
- * alone: they can only emphasise, and URL paths full of underscores are read
- * raw by agents.
+ * renders as itself. Line breaks collapse to one space, so a value cannot end a
+ * list item early, and a leading block marker (`#`, `-`, `+`, `*`, `_`, `~`,
+ * `=`, `1.`) is escaped, so a value after a `- ` cannot open a heading, a rule,
+ * a fence or a nested list. Elsewhere `*`, `_` and `~` are left alone: they can
+ * only emphasise, and URL paths full of underscores are read raw by agents.
  */
 export function escapeMarkdownText(value: string): string {
-  let out = "";
-  for (const char of value.replace(/\s+/g, " ")) {
-    out += TEXT_SPECIALS.has(char) ? `\\${char}` : char;
-  }
-  return out;
+  return escapeSpecials(value.replace(/\s+/g, " "))
+    .replace(/^( ?)([#+\-*_~=])/, "$1\\$2")
+    .replace(/^( ?)(\d+)([.)])/, "$1$2\\$3");
+}
+
+/**
+ * A site-controlled value as a Markdown table cell: escaped like
+ * {@link escapeMarkdownText}, with each line break as a `<br>` so a multi-line
+ * value stays in its cell.
+ */
+export function escapeMarkdownCell(value: string): string {
+  return value.split(/\r\n|\r|\n/).map(escapeSpecials).join("<br>");
+}
+
+/** A site-controlled value inside raw HTML (`<summary>`, an `alt` attribute). */
+export function escapeHtmlText(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 /**
  * A URL as a Markdown link destination. `!` is left alone: it is inert in a
  * destination, and RFC 3986 does not treat `%21` as the same URL. Control
- * characters and spaces are encoded with the specials.
+ * characters and spaces are encoded with the specials. An `&` that would read
+ * as an entity (`&amp;`, `&#41;`) is backslash-escaped so the href keeps it as
+ * typed; a query's plain `&` separators are left readable.
  */
 export function escapeMarkdownDestination(value: string): string {
   let out = "";
@@ -50,7 +76,8 @@ export function escapeMarkdownDestination(value: string): string {
         ? `%${code.toString(16).toUpperCase().padStart(2, "0")}`
         : char;
   }
-  return out;
+  // After the loop, so this backslash is not itself percent-encoded.
+  return out.replace(/&(?=#?[0-9A-Za-z]+;)/g, "\\&");
 }
 
 /** An http(s) URL, or a root-relative path (not a protocol-relative `//host`). */

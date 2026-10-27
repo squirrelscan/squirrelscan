@@ -6,7 +6,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import type { AuditReport, ReportRuleResult } from "../src/types";
+import type { AuditReport, EntityMap, ReportRuleResult } from "../src/types";
 import { renderMarkdown } from "../src/output/markdown";
 import {
   escapeMarkdownDestination,
@@ -18,7 +18,8 @@ import {
 /** `new URL()` keeps `] ( ) ! [` unencoded in a path: the issue's repro. */
 const HOSTILE =
   "https://example.com/a](https://evil.example/x)![i](https://evil.example/p.png)";
-const PAYLOAD = "x](https://evil.example/y) ![i](https://evil.example/p.png) <img src=https://evil.example/q>";
+const PAYLOAD =
+  "x](https://evil.example/y) [t](https://evil.example/z) ![i](https://evil.example/p.png) <img src=https://evil.example/q>";
 
 function baseReport(extra: Partial<AuditReport> = {}): AuditReport {
   return {
@@ -157,6 +158,143 @@ describe("crawled text in the Markdown report is inert (#3522)", () => {
   });
 });
 
+describe("sinks the first pass missed (#3522 review)", () => {
+  test("a check's message and name, in the table and the page-list summary", () => {
+    const md = renderMarkdown(
+      baseReport({
+        ruleResults: rule([
+          {
+            name: `misspelled ${PAYLOAD}`,
+            status: "warn",
+            message: `Blocked by ad blockers: ${PAYLOAD}`,
+            pages: ["https://example.com/a"],
+          },
+        ]),
+      }),
+    );
+    expect(hostileTargets(md)).toEqual([]);
+    expect(Bun.markdown.html(md)).not.toContain("<img src=https://evil.example");
+  });
+
+  test("a plain item label cannot open a heading, a rule or a nested list", () => {
+    const md = renderMarkdown(
+      baseReport({
+        ruleResults: rule([
+          {
+            name: "broken",
+            status: "warn",
+            message: "m",
+            items: [
+              { id: "k1", label: "# Fake heading" },
+              { id: "k2", label: "---" },
+              { id: "k3", label: "1. nested" },
+            ],
+          },
+        ]),
+      }),
+    );
+    const html = Bun.markdown.html(md);
+    // Each label is its own list item's plain text, not a block inside it.
+    expect(html).toContain("<li># Fake heading</li>");
+    expect(html).toContain("<li>---</li>");
+    expect(html).toContain("<li>1. nested</li>");
+    expect(html).not.toContain("<ol>");
+  });
+
+  test("a technology's name and its logo's alt text", () => {
+    const md = renderMarkdown(
+      baseReport({
+        technologies: {
+          items: [
+            {
+              id: "wordpress",
+              name: `WP" onerror="x ${PAYLOAD}`,
+              category: "cms",
+              version: null,
+              confidence: "high",
+              detectedBy: "meta:generator",
+              icon: "wordpress",
+            },
+          ],
+          added: [],
+          removed: [],
+          firstScan: true,
+        },
+      }),
+    );
+    expect(hostileTargets(md)).toEqual([]);
+    // The quote cannot close the alt attribute and add one of its own.
+    expect(md).toContain('alt="WP&quot; onerror=&quot;x ');
+    expect(Bun.markdown.html(md)).not.toMatch(/<img[^>]*\sonerror="/);
+  });
+
+  test("the site profile's title", () => {
+    const md = renderMarkdown(
+      baseReport({
+        siteMetadata: {
+          siteType: "blog",
+          title: PAYLOAD,
+          isYMYL: false,
+          isLocalBusiness: false,
+          hasOwnershipVerified: false,
+          confidence: "high",
+        },
+      }),
+    );
+    expect(hostileTargets(md)).toEqual([]);
+  });
+
+  test("the entity section: names, ids, conflicting values and the property code span", () => {
+    const map: EntityMap = {
+      format: "squirrelscan/entity-map",
+      version: 1,
+      site: "https://example.com/",
+      generatedAt: "2026-10-27T00:00:00.000Z",
+      summary: {
+        nodeCount: 1,
+        edgeCount: 0,
+        danglingCount: 0,
+        pagesTotal: 1,
+        pagesWithoutEntities: 0,
+        nodesWithStableId: 1,
+        stableIdShare: 1,
+        pageLocalCount: 0,
+        nodesWithoutIdCount: 0,
+        conflictCount: 1,
+        countsByType: { Organization: 1 },
+      },
+      nodes: [
+        {
+          key: "id:x",
+          id: `https://example.com/#${PAYLOAD}`,
+          types: [`Organization ${PAYLOAD}`],
+          name: PAYLOAD,
+          properties: { name: PAYLOAD },
+          occurrences: 2,
+          pages: ["https://example.com/a"],
+          morePages: 0,
+          conflicts: [
+            {
+              property: `url\` ${PAYLOAD} \``,
+              values: [
+                { value: PAYLOAD, pages: ["https://example.com/a"], morePages: 0 },
+                { value: "b", pages: ["https://example.com/b"], morePages: 0 },
+              ],
+            },
+          ],
+          danglingRefs: 0,
+          pageLocal: false,
+        },
+      ],
+      edges: [],
+      pages: [],
+    };
+    const md = renderMarkdown(baseReport({ entityMap: map }));
+    expect(md).toContain("## Entities");
+    expect(hostileTargets(md)).toEqual([]);
+  });
+});
+
 describe("markdown-escape helpers (#3522)", () => {
   test("escapeMarkdownText escapes link, image, code and HTML syntax and flattens lines", () => {
     expect(escapeMarkdownText("a](b) ![c] `d` <e> &f |g\\h\nnext")).toBe(
@@ -164,11 +302,18 @@ describe("markdown-escape helpers (#3522)", () => {
     );
     // Underscores and asterisks stay readable: they can only emphasise.
     expect(escapeMarkdownText("/my_page*")).toBe("/my_page*");
+    // A leading block marker is escaped.
+    expect(escapeMarkdownText("# h")).toBe("\\# h");
+    expect(escapeMarkdownText("12. x")).toBe("12\\. x");
   });
 
   test("escapeMarkdownDestination encodes what ends or restructures a destination, not !", () => {
     expect(escapeMarkdownDestination("https://e.com/a b(c)<d>`e`[f]\\g!\n")).toBe(
       "https://e.com/a%20b%28c%29%3Cd%3E%60e%60%5Bf%5D%5Cg!%0A",
+    );
+    // An entity-shaped `&` is kept as typed; a query separator stays readable.
+    expect(escapeMarkdownDestination("https://e.com/?a=1&b=2&amp;c")).toBe(
+      "https://e.com/?a=1&b=2\\&amp;c",
     );
   });
 
