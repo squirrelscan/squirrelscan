@@ -10,7 +10,7 @@
 // site having deleted its structured data.
 
 import type { EntityMapDiff } from "./types";
-import { entityCell } from "./entities";
+import { entityCell, entityCodeCell } from "./entities";
 
 /** Rows listed per section before the renderer says "and N more". */
 export const ENTITY_DIFF_ROW_LIMIT = 25;
@@ -195,7 +195,7 @@ export function renderEntityDiffMarkdown(diff: EntityMapDiff): string {
     }
     lines.push(blurb, "", "| Entity | Property |", "| --- | --- |");
     for (const row of rows.slice(0, ENTITY_DIFF_ROW_LIMIT)) {
-      lines.push(`| ${entityCell(row.name ?? row.key)} | \`${entityCell(row.property)}\` |`);
+      lines.push(`| ${entityCell(row.name ?? row.key)} | ${entityCodeCell(row.property)} |`);
     }
     lines.push(...tail(Math.min(rows.length, ENTITY_DIFF_ROW_LIMIT), rows.length, "conflicts"), "");
   }

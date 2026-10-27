@@ -159,6 +159,14 @@ export function entityCell(value: string | null | undefined): string {
   return escapeMarkdownText(clipCell(value));
 }
 
+/**
+ * A value as a code span inside a table cell: fenced past any backtick run, and
+ * each `|` escaped, because a GFM table splits on a pipe even inside a span.
+ */
+export function entityCodeCell(value: string | null | undefined): string {
+  return markdownCodeSpan(clipCell(value)).replace(/\|/g, "\\|");
+}
+
 /** A value flattened to one line and clipped to {@link MAX_CELL}, not yet escaped. */
 function clipCell(value: string | null | undefined): string {
   if (!value) return "";

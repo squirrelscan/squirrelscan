@@ -8,7 +8,9 @@ import { describe, expect, test } from "bun:test";
 
 import type { AuditReport, EntityMap, ReportRuleResult } from "../src/types";
 import { renderMarkdown } from "../src/output/markdown";
+import { renderEntityDiffMarkdown } from "../src/entities-diff";
 import {
+  escapeHtmlText,
   escapeMarkdownDestination,
   escapeMarkdownText,
   markdownCodeSpan,
@@ -295,6 +297,85 @@ describe("sinks the first pass missed (#3522 review)", () => {
   });
 });
 
+/** Blank lines end a raw HTML block, so whatever follows parses as Markdown again. */
+const BLOCK_BREAK = "x\n\n![i](https://evil.example/p.png)\n\n[t](https://evil.example/x)";
+
+describe("line breaks inside raw HTML (#3522 review round 2)", () => {
+  test("a check name with blank lines cannot end the <summary> HTML block", () => {
+    const md = renderMarkdown(
+      baseReport({
+        ruleResults: rule([
+          {
+            name: BLOCK_BREAK,
+            status: "warn",
+            message: "m",
+            pages: ["https://example.com/a"],
+            items: [{ id: "k", label: "l" }],
+          },
+        ]),
+      }),
+    );
+    expect(hostileTargets(md)).toEqual([]);
+  });
+
+  test("a technology name with blank lines cannot end the logo's HTML", () => {
+    const md = renderMarkdown(
+      baseReport({
+        technologies: {
+          items: [
+            {
+              id: "wordpress",
+              name: BLOCK_BREAK,
+              category: "cms",
+              version: null,
+              confidence: "high",
+              detectedBy: "meta:generator",
+              icon: "wordpress",
+            },
+          ],
+          added: [],
+          removed: [],
+          firstScan: true,
+        },
+      }),
+    );
+    expect(hostileTargets(md)).toEqual([]);
+  });
+
+  test("the entity diff's property code span keeps its cell and its text", () => {
+    const side = { site: "https://example.com/", generatedAt: "2026-10-27T00:00:00.000Z", nodeCount: 1, pagesTotal: 1 };
+    const md = renderEntityDiffMarkdown({
+      format: "squirrelscan/entity-map-diff",
+      version: 1,
+      generatedAt: "2026-10-27T00:00:00.000Z",
+      older: side,
+      newer: side,
+      added: [],
+      removed: [],
+      notCrawled: [],
+      gainedId: [],
+      lostId: [],
+      occurrenceDeltas: [],
+      newConflicts: [{ key: "k", name: PAYLOAD, property: `url\` | ${PAYLOAD}` }],
+      resolvedConflicts: [],
+      newDangling: [],
+      resolvedDangling: [],
+      summaryDelta: {},
+      pagesOnlyInOlder: [],
+      pagesOnlyInNewer: [],
+    });
+    expect(hostileTargets(md)).toEqual([]);
+    // The pipe stayed inside the property's cell: the row still has two cells.
+    const row =
+      Bun.markdown
+        .html(md)
+        .split("</tr>")
+        .find((r) => r.includes("<code>url`")) ?? "";
+    expect(row.match(/<td>/g)).toHaveLength(2);
+    expect(row).toContain("<code>url` | x](https://evil.example/y)");
+  });
+});
+
 describe("markdown-escape helpers (#3522)", () => {
   test("escapeMarkdownText escapes link, image, code and HTML syntax and flattens lines", () => {
     expect(escapeMarkdownText("a](b) ![c] `d` <e> &f |g\\h\nnext")).toBe(
@@ -322,6 +403,10 @@ describe("markdown-escape helpers (#3522)", () => {
     expect(markdownLink("/a", "/a")).toBe("[/a](/a)");
     expect(markdownLink("x", "javascript:alert(1)")).toBe("x");
     expect(markdownLink("x", "//evil.example/x")).toBe("x");
+  });
+
+  test("escapeHtmlText escapes markup and flattens line breaks", () => {
+    expect(escapeHtmlText(`a"b'<c>&\n\nd`)).toBe("a&quot;b&#39;&lt;c&gt;&amp; d");
   });
 
   test("markdownCodeSpan fences past the longest backtick run", () => {

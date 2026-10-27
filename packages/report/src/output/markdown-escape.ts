@@ -50,9 +50,14 @@ export function escapeMarkdownCell(value: string): string {
   return value.split(/\r\n|\r|\n/).map(escapeSpecials).join("<br>");
 }
 
-/** A site-controlled value inside raw HTML (`<summary>`, an `alt` attribute). */
+/**
+ * A site-controlled value inside raw HTML (`<summary>`, an `alt` attribute).
+ * Line breaks collapse to one space: a blank line would end the HTML block,
+ * and whatever followed would parse as Markdown again.
+ */
 export function escapeHtmlText(value: string): string {
   return value
+    .replace(/\s+/g, " ")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
