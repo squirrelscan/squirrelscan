@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+// A stamped install source: lowercase letters, digits and hyphens. One pattern
+// for the env reader (install-meta.ts) and the persisted setting below.
+export const INSTALL_SOURCE_PATTERN = /^[a-z0-9-]{1,32}$/;
+
 // Auth schema for CLI authentication state
 export const AuthSchema = z
   .object({
@@ -140,7 +144,7 @@ export const UserSettingsSchema = z.object({
   // (validated slug), so the registration on the next run reports it.
   install_source: z
     .string()
-    .regex(/^[a-z0-9-]{1,32}$/)
+    .regex(INSTALL_SOURCE_PATTERN)
     .nullable()
     .optional()
     // A hand-edited bad value reads as unset; it must not invalidate the file.

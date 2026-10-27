@@ -3,9 +3,7 @@ import { hostname } from "node:os";
 import { sep } from "node:path";
 
 import { isManagedInstall } from "./paths";
-
-// A stamped source is a short slug: lowercase letters, digits and hyphens.
-const SOURCE_PATTERN = /^[a-z0-9-]{1,32}$/;
+import { INSTALL_SOURCE_PATTERN } from "./types";
 
 /**
  * The `SQUIRREL_INSTALL_SOURCE` env value when it is a valid slug, else null
@@ -20,7 +18,7 @@ export function normalizeInstallSource(
   value: string | null | undefined
 ): string | null {
   const slug = value?.trim().toLowerCase();
-  return slug && SOURCE_PATTERN.test(slug) ? slug : null;
+  return slug && INSTALL_SOURCE_PATTERN.test(slug) ? slug : null;
 }
 
 /**
