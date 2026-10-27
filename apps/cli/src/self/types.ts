@@ -142,6 +142,9 @@ export const UserSettingsSchema = z.object({
   // Set once the install's first audit has been reported to telemetry.
   first_audit_reported_at: z.string().nullable().optional(),
   telemetry_notice_shown: z.boolean().nullable().optional(),
+  // Which wording of the notice was shown. Bumped when what is collected
+  // changes (v2: the user ID once signed in), so existing installs see it again.
+  telemetry_notice_version: z.number().nullable().optional(),
   user_feedback_email: z.string().email().nullable().optional(),
 
   // Authentication state

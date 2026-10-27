@@ -29,8 +29,12 @@ afterAll(() => {
 });
 
 const { loadUserSettings, updateSettings } = await import("@/self/settings");
-const { resetFirstAuditReportedForTests, trackFirstAudit, trackFirstRunEvent } =
-  await import("@/self/telemetry");
+const {
+  resetFirstAuditReportedForTests,
+  showTelemetryNotice,
+  trackFirstAudit,
+  trackFirstRunEvent,
+} = await import("@/self/telemetry");
 
 const originalEnv = { ...process.env };
 const originalFetch = globalThis.fetch;
@@ -134,6 +138,33 @@ describe("first-run telemetry", () => {
     trackFirstRunEvent("setup_started");
     await settle();
     expect(sent[0]?.headers.has("authorization")).toBe(false);
+  });
+
+  test("an unparseable session expiry fails closed", async () => {
+    signIn("sqcli_session_token", "not-a-date");
+    trackFirstRunEvent("login_completed");
+    await settle();
+    expect(sent[0]?.headers.has("authorization")).toBe(false);
+  });
+
+  test("an existing install sees the v2 notice once more", () => {
+    const errors: string[] = [];
+    const orig = console.error;
+    console.error = (m: string) => errors.push(m);
+    try {
+      updateSettings({ telemetry_notice_shown: true });
+      const first = loadUserSettings();
+      if (!first.ok) throw new Error("unreadable");
+      showTelemetryNotice(first.data);
+      expect(errors.join("")).toContain("user ID");
+      const again = loadUserSettings();
+      if (!again.ok) throw new Error("unreadable");
+      errors.length = 0;
+      showTelemetryNotice(again.data);
+      expect(errors).toHaveLength(0);
+    } finally {
+      console.error = orig;
+    }
   });
 
   test("a non-session token in settings is never sent", async () => {

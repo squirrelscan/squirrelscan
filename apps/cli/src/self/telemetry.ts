@@ -46,10 +46,21 @@ export function isTelemetryDisabled(settings?: UserSettings): boolean {
   );
 }
 
-export function showTelemetryNotice(settings: UserSettings): void {
-  if (isTelemetryDisabled(settings) || settings.telemetry_notice_shown) return;
+// v2: telemetry carries the user ID once signed in.
+const TELEMETRY_NOTICE_VERSION = 2;
 
-  const updated = updateSettings({ telemetry_notice_shown: true });
+export function showTelemetryNotice(settings: UserSettings): void {
+  if (isTelemetryDisabled(settings)) return;
+  if (
+    settings.telemetry_notice_shown &&
+    (settings.telemetry_notice_version ?? 1) >= TELEMETRY_NOTICE_VERSION
+  )
+    return;
+
+  const updated = updateSettings({
+    telemetry_notice_shown: true,
+    telemetry_notice_version: TELEMETRY_NOTICE_VERSION,
+  });
   if (!updated.ok) return;
 
   console.error(
@@ -112,6 +123,10 @@ export function trackFirstAudit(
   // The settings snapshot can predate this run's own report, so a process
   // guard keeps a late throw after a reported result from sending twice.
   if (firstAuditReported || settings?.first_audit_reported_at) return;
+  // The snapshot can be missing or stale (another process may have reported):
+  // the marker on disk decides.
+  const onDisk = loadUserSettings();
+  if (onDisk.ok && onDisk.data.first_audit_reported_at) return;
   firstAuditReported = true;
   // Marker first, send second: "once" beats "at least once". A send that
   // fails (offline, process exit) loses this event rather than repeating it.
@@ -141,8 +156,10 @@ function loginSessionToken(): string | null {
   if (!loaded.ok || loaded.data.telemetry === false) return null;
   const auth = loaded.data.auth;
   if (!auth?.token || !auth.token.startsWith("sqcli_")) return null;
-  if (auth.expiresAt && new Date(auth.expiresAt).getTime() < Date.now()) {
-    return null;
+  // Fail closed: an unparseable expiry reads as expired.
+  if (auth.expiresAt) {
+    const expires = Date.parse(auth.expiresAt);
+    if (Number.isNaN(expires) || expires <= Date.now()) return null;
   }
   return auth.token;
 }
