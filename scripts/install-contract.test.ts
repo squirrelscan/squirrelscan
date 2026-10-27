@@ -720,7 +720,7 @@ describe("install.sh report_error payload", () => {
     };
     for (const code of [6, 7, 28]) {
       const report = await run(
-        `( note_fetch_host "https://user:secret@install.squirrelscan.com:443/releases/stable?token=abc"; (exit ${code}) || report_on_exit ); sleep 1`,
+        `CRED=secret; ( note_fetch_host "https://user:\${CRED}@install.squirrelscan.com:443/releases/stable?token=abc"; (exit ${code}) || report_on_exit ); sleep 1`,
       );
       expect(report.exit_code).toBe(code);
       expect(report.error_line).toBe(`curl exit ${code} reaching install.squirrelscan.com`);
