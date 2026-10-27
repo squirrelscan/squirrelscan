@@ -20,11 +20,11 @@ squirrel audit https://example.com --rule-include links
 
 These carry the highest severity and weight in the category.
 
-- [Broken internal links: 404s inside your own site](/rules/links/broken-links): An internal link to a page that returns 404 or 500 is a dead end you control. squirrel cross-references every internal link against the crawl.
-- [Broken external links: link rot on pages you cannot fix](/rules/links/broken-external-links): External links die without warning when the other site changes. squirrel checks each one and separates dead links from unverifiable ones.
 - [Links from an HTTPS page to an http:// destination](/rules/links/https-downgrade): A link that drops the visitor to plain HTTP hands their next request to the network. squirrel flags every explicit http:// link on an HTTPS page.
 - [Orphan pages: pages with too few inbound internal links](/rules/links/orphan-pages): A page nothing links to is hard to discover and reads as unimportant. squirrel counts dofollow inbound internal links for every crawled page.
 - [rel=nofollow on an internal link: usually a mistake](/rules/links/nofollow-internal): Nofollow on your own links tells search engines to ignore your site's internal structure. squirrel flags every internal link carrying it.
+- [Empty and generic anchor text: click here and icons](/rules/links/anchor-text): A link with no text has no name, and click here describes nothing. squirrel groups links by destination and checks each group for a descriptive name.
+- [Internal link count per page: too few and too many](/rules/links/internal-links): A page with no internal links leads nowhere and a page with hundreds dilutes each one. squirrel counts internal links against a configurable range.
 
 {/* hub:start-here:end */}
 
@@ -34,9 +34,6 @@ These carry the highest severity and weight in the category.
 
 | Rule | What it flags | Severity | Scope |
 |---|---|---|---|
-| [Broken anchor links: #fragments that point at nothing](/rules/links/broken-anchors) | A link to #pricing whose target id is gone still loads, and the reader lands at the top of the page. squirrel checks every in-page anchor against the element it names. | warning | Site-wide |
-| [Broken external links: link rot on pages you cannot fix](/rules/links/broken-external-links) | External links die without warning when the other site changes. squirrel checks each one and separates dead links from unverifiable ones. | warning | Site-wide |
-| [Broken internal links: 404s inside your own site](/rules/links/broken-links) | An internal link to a page that returns 404 or 500 is a dead end you control. squirrel cross-references every internal link against the crawl. | error | Site-wide |
 | [Cloud dead-link checking: the shared external link cache](/rules/links/dead-links) | Checking every external link from your machine is slow and rude to the sites you link to. The cloud service checks against a shared cache instead. | info | Site-wide |
 | [Dead-end page: no outgoing internal links to continue with](/rules/links/dead-end-pages) | A page with no onward links leaves the reader and the crawler with nowhere to go. squirrel counts outgoing internal links, excluding self-links. | warning | Per-page |
 | [Empty and generic anchor text: click here and icons](/rules/links/anchor-text) | A link with no text has no name, and click here describes nothing. squirrel groups links by destination and checks each group for a descriptive name. | warning | Per-page |
@@ -74,8 +71,6 @@ External link checks run at every level, Quick included. Skip them with `--no-ex
 - [Anchor text](/glossary/anchor-text): The visible, clickable text of a link, which tells readers and search engines what the target is about.
 - [Broken link](/glossary/broken-link): A link whose target answers with an error, does not resolve, or is malformed.
 - [Crawl budget](/glossary/crawl-budget): The number of URLs a search engine is willing and able to crawl on a site in a given time, set by crawl capacity and crawl demand.
-- [Fragment link](/glossary#anchor-link): A link to an id within a page (#section); it is broken when no element on the target page carries that id.
-- [HTTP status code](/glossary/http-status-code): The three-digit code a server returns with every response; 2xx success, 3xx redirect, 4xx client error, 5xx server error.
 - [HTTPS](/glossary/https): HTTP over TLS, which encrypts traffic and proves the server's identity; every page and form should use it.
 - [Internal linking](/glossary/internal-linking): Links between pages of the same site, which carry crawlers and readers through it and signal which pages matter.
 - [Orphan page](/glossary/orphan-page): A page that no other crawled page links to, so crawlers and readers only reach it through a sitemap or a direct URL.

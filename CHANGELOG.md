@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- Broken links are reported as a reliability problem, not an SEO one. `links/broken-links`, `links/broken-external-links` and `links/broken-anchors` move from the Links category to Reliability, so they no longer count toward the SEO score. Reliability rolls up into the Performance score, which now carries them. Their badge on the HTML report reads **Reliability**, as do the badges of `reliability/broken-resources` and `reliability/broken-forms`, which used to read Performance. The rule ids keep their `links/` prefix, so configs, `links/*` patterns, `rule_options` and docs links keep working. `reliability/*` does not select the three rules, so list them by id to disable them with it. `squirrel report --category reliability` now includes them, and a report stored before this release keeps them under `links`. See [Reliability](https://docs.squirrelscan.com/rules/reliability).
+
 ## v0.0.136 (2026-10-27)
 
 The CLI now checks the audited site's own hostnames before it connects, so a name that resolves to a cloud metadata or link-local address is never requested. Set SQUIRREL_NO_HOST_PINNING to turn the check off on a network where connecting by address breaks routing.
@@ -83,6 +87,7 @@ Robots.txt is read the way crawlers read it, a redirect can no longer steer a cr
 ### Fixed
 
 - **A viewer or billing member who runs a signed-in audit is told why it was not tracked.** The organization's role refused it (`forbidden_role`). The run used to be missing from the dashboard with no word, and a publish failed with an error that had no message. The local audit and its results are unchanged. See [Publishing to the dashboard](https://docs.squirrelscan.com/cli/audit#publishing-to-the-dashboard).
+- **`a11y/identical-links-same-purpose` respects labelled menu sections.** Identical link text in separately labelled sections is no longer grouped together when the context comes from `aria-label`, `aria-labelledby` or a parent list item's leading link. Repeated text in the same context still warns.
 - **robots.txt groups are parsed as RFC 9309 describes.** Consecutive `User-agent` lines share the rules that follow them, a named group with an empty `Disallow:` explicitly allows every path and no longer falls through to `*`, and inline comments are ignored. AI crawler and indexability checks now match how crawlers read those files.
 - **A `Crawl-delay` that is negative or too large to be a number is ignored**, such as `-1` or `1e999`, like one that is not a number. A published report no longer carries it as a negative value or as `null`.
 - **A crawl that stops at its page cap no longer makes link rules look clean.** `links/orphan-pages`, `links/weak-internal-links` and `links/no-contextual-inbound` skip, because an uncrawled page may hold the inbound links that would clear them. They show as **Not checked** with a hint to raise `--max-pages`, and a finding one of them reported on an earlier audit is not closed by a capped crawl. See [output](https://docs.squirrelscan.com/configuration/output).
@@ -102,7 +107,6 @@ Robots.txt is read the way crawlers read it, a redirect can no longer steer a cr
 - **The crawler names managed challenge pages served with HTTP 403.** Cloudflare, Akamai and other detected providers report `Blocked by <provider> challenge (403)`. A plain or stalled 403 stays `Request blocked by server`. Only the first 64 KB of the body is sampled.
 - **Glossary JSON-LD no longer leaks into `llms-full.txt` or per-page agent Markdown** as raw script text, and it stays in rendered pages.
 - **HTML report issue cards show each detected technology once**, in the order each first appears.
-
 ### Security
 
 - **A redirect found while crawling the audited site can no longer send the CLI to a cloud metadata or link-local address.** The page crawl, the root files (robots.txt, sitemaps, llms.txt, the well-known and markdown probes) and the internal link check refuse a redirect hop that leaves the site's hosts for an address such as `169.254.169.254`, `fe80::/10` or `metadata.google.internal`, before sending it, as the asset checks already did. A sitemap that robots.txt or a sitemap index names at such an address is not requested either, and `security/http-to-https` checks each redirect it follows the same way. Private networks stay allowed, so `localhost`, LAN and staging audits still crawl their own pages and root files. A redirect of the start URL itself, resolved before the crawl begins, is not covered yet. See [follow_redirects](https://docs.squirrelscan.com/configuration/crawler#follow_redirects).

@@ -16,7 +16,9 @@ export const brokenLinksRule: Rule = {
     description: "Detects links returning 404 or 5xx errors",
     solution:
       "Broken links hurt user experience and waste crawl budget. Regularly audit links using tools or crawlers. Fix or remove broken links. Set up 301 redirects for moved content. For external links, consider using nofollow and regularly verifying they still work. Implement custom 404 pages that help users find content.",
-    category: "links",
+    // pub#836/#843: a dead link is a reliability problem, scored under
+    // Performance; the id keeps its `links/` prefix so configs keep working.
+    category: "reliability",
     scope: "site",
     severity: "error",
     weight: 7,

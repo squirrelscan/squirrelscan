@@ -13,13 +13,15 @@ The opposite case is fine and expected: the same text pointing at the same page,
 
 One check, `identical-links-same-purpose`, at severity warning. It reads every `a[href]`, taking the link's trimmed and lowercased text along with its `href`, and skips links with no text, text shorter than two characters, or an `href` beginning with `#`.
 
+Links are compared within their nearest programmatic section context. squirrel reads that context from an ancestor's `aria-label` or `aria-labelledby`, or from the leading link of a parent list item. A mega-menu can therefore reuse a label such as "Sale" under separately labelled "Women" and "Men" sections without warning. Repeated text with no context, or with the same context, still has to point to one destination.
+
 Destinations are normalized before comparison: the `href` is lowercased, trailing slashes are stripped and the query string is dropped. So `/pricing`, `/pricing/` and `/pricing?ref=nav` all count as one destination.
 
-- Warn when one text maps to more than one destination. Report message: `N link text(s) lead to different destinations`. Items read `"learn more" → 3 different URLs`, up to ten with a count of the rest, carrying the suggestion `Make link text unique to differentiate destinations`.
+- Warn when one text in one context maps to more than one destination. Report message: `N link text(s) lead to different destinations`. Items read `"learn more" → 3 different URLs`, or `"learn more" in "products" → 3 different URLs` when a context is present, up to ten with a count of the rest, carrying the suggestion `Make link text unique to differentiate destinations`.
 - Pass with `Identical link texts go to same destinations`.
 - Info with `No links found`.
 
-URLs are compared as written, so a link to `/pricing` and one to `https://example.com/pricing` are treated as different destinations even though they resolve to the same page. That is the most common false positive here.
+URLs are compared as written, so a link to `/pricing` and one to `https://example.com/pricing` are treated as different destinations even though they resolve to the same page. That is the most common false positive here. If repeated labels serve different parts of a menu, give each section an `aria-label` or `aria-labelledby` so users and squirrel can identify the context.
 
 ## How to fix it
 

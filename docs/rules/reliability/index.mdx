@@ -1,10 +1,10 @@
 ---
 title: "Reliability audit rules: broken scripts, fonts and forms"
 sidebarTitle: "Reliability"
-description: "Audit rules for what fails to load: scripts, stylesheets and fonts that return errors, and forms whose fields or actions lose submissions."
+description: "Audit rules for what fails to load: scripts, stylesheets and fonts that return errors, broken links, and forms whose fields or actions lose submissions."
 ---
 
-Reliability rules check that what a page asks the browser to load actually loads, and that a form's submission reaches a handler. They read the scripts, stylesheets and fonts the crawl already fetched, so a bundle that returns 404 after a deploy shows up even when the HTML that references it is a 200. The category sits in the Performance score group, since a page whose main script never loads is slow to become usable, and the rules need no browser render.
+Reliability rules check that what a page asks the browser to load actually loads, that a form's submission reaches a handler, and that the links on a page lead somewhere. They read the scripts, stylesheets and fonts the crawl already fetched, so a bundle that returns 404 after a deploy shows up even when the HTML that references it is a 200. The category sits in the Performance score group, since a page whose main script never loads is slow to become usable, and the rules need no browser render.
 
 ## Run only these rules
 
@@ -20,8 +20,11 @@ Reliability and [Performance](/rules/perf) make up the Performance score group. 
 
 These carry the highest severity and weight in the category.
 
+- [Broken internal links: 404s inside your own site](/rules/links/broken-links): An internal link to a page that returns 404 or 500 is a dead end you control. squirrel cross-references every internal link against the crawl.
 - [Broken scripts, stylesheets and fonts: files that do not load](/rules/reliability/broken-resources): A page whose script or stylesheet returns 404 or 500 looks fine to a crawler but renders unstyled or never runs its interactive parts. squirrel checks every script, stylesheet and font the crawl fetched.
 - [Forms that lose submissions: unnamed fields and dead actions](/rules/reliability/broken-forms): A form can look perfect and still drop every submission. squirrel checks that each field has a name the browser sends, and that each form action answers.
+- [Broken external links: link rot on pages you cannot fix](/rules/links/broken-external-links): External links die without warning when the other site changes. squirrel checks each one and separates dead links from unverifiable ones.
+- [Broken anchor links: #fragments that point at nothing](/rules/links/broken-anchors): A link to #pricing whose target id is gone still loads, and the reader lands at the top of the page. squirrel checks every in-page anchor against the element it names.
 
 {/* hub:start-here:end */}
 
@@ -31,6 +34,9 @@ These carry the highest severity and weight in the category.
 
 | Rule | What it flags | Severity | Scope |
 |---|---|---|---|
+| [Broken anchor links: #fragments that point at nothing](/rules/links/broken-anchors) | A link to #pricing whose target id is gone still loads, and the reader lands at the top of the page. squirrel checks every in-page anchor against the element it names. | warning | Site-wide |
+| [Broken external links: link rot on pages you cannot fix](/rules/links/broken-external-links) | External links die without warning when the other site changes. squirrel checks each one and separates dead links from unverifiable ones. | warning | Site-wide |
+| [Broken internal links: 404s inside your own site](/rules/links/broken-links) | An internal link to a page that returns 404 or 500 is a dead end you control. squirrel cross-references every internal link against the crawl. | error | Site-wide |
 | [Broken scripts, stylesheets and fonts: files that do not load](/rules/reliability/broken-resources) | A page whose script or stylesheet returns 404 or 500 looks fine to a crawler but renders unstyled or never runs its interactive parts. squirrel checks every script, stylesheet and font the crawl fetched. | error | Site-wide |
 | [Forms that lose submissions: unnamed fields and dead actions](/rules/reliability/broken-forms) | A form can look perfect and still drop every submission. squirrel checks that each field has a name the browser sends, and that each form action answers. | error | Site-wide |
 
@@ -40,6 +46,8 @@ These carry the highest severity and weight in the category.
 
 ## Key terms
 
+- [Broken link](/glossary/broken-link): A link whose target answers with an error, does not resolve, or is malformed.
+- [Fragment link](/glossary#anchor-link): A link to an id within a page (#section); it is broken when no element on the target page carries that id.
 - [HTTP status code](/glossary/http-status-code): The three-digit code a server returns with every response; 2xx success, 3xx redirect, 4xx client error, 5xx server error.
 
 {/* hub:terms:end */}

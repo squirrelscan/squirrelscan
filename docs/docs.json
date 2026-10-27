@@ -244,9 +244,6 @@
                   "rules/links/internal-links",
                   "rules/links/external-links",
                   "rules/links/invalid-links",
-                  "rules/links/broken-links",
-                  "rules/links/broken-anchors",
-                  "rules/links/broken-external-links",
                   "rules/links/dead-links",
                   "rules/links/redirect-chains",
                   "rules/links/nofollow-internal",
@@ -558,7 +555,10 @@
                 "pages": [
                   "rules/reliability/index",
                   "rules/reliability/broken-resources",
-                  "rules/reliability/broken-forms"
+                  "rules/reliability/broken-forms",
+                  "rules/links/broken-links",
+                  "rules/links/broken-external-links",
+                  "rules/links/broken-anchors"
                 ]
               }
             ]

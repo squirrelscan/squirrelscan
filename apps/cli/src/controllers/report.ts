@@ -35,7 +35,11 @@ import { warnEvictedPages } from "@/crawler/storage/eviction-notice";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
 import { reconstructReport } from "@/reports/reconstruct";
 import { retiredAuditReason } from "@/reports/retired";
-import { isValidCategory, normalizeCategoryCode } from "@/rules/categories";
+import {
+  CATEGORIES,
+  isValidCategory,
+  normalizeCategoryCode,
+} from "@/rules/categories";
 import { getProjectsPath } from "@/self/paths";
 import {
   isEquivalentAuditTarget,
@@ -168,6 +172,8 @@ interface SlimJsonReport {
     description: string;
     solution?: string;
     domain: string;
+    /** The category's display name ("Reliability"); absent in hand-built slim JSON. */
+    category?: string;
     subcategory?: string;
     severity: "error" | "warning" | "info";
     checks: Array<{
@@ -198,15 +204,25 @@ function wholeCount(value: unknown): number | undefined {
     : undefined;
 }
 
+/** Category code by display name, lowercased ("Reliability" → "reliability"). */
+const CATEGORY_BY_NAME = new Map(
+  Object.values(CATEGORIES).map((c) => [c.name.toLowerCase(), c.code as string])
+);
+
 function convertSlimReport(report: SlimJsonReport): AuditReport {
   const ruleResults: Record<string, ReportRuleResult> = {};
 
   for (const issue of report.issues) {
-    // Normalize legacy code prefixes (e.g. stable rule IDs keep the `adblock/`
-    // prefix while the category was renamed to `blocking`).
-    const categoryCandidate = normalizeCategoryCode(
-      issue.ruleId.split("/")[0] ?? "other"
-    );
+    // The issue's category NAME is what the export was rendered with, so it
+    // wins (pub#836: `links/broken-links` is a Reliability rule). An export
+    // whose name is unknown falls back to the id prefix, normalizing legacy
+    // codes (stable `adblock/` ids under the renamed `blocking`).
+    const byName =
+      typeof issue.category === "string"
+        ? CATEGORY_BY_NAME.get(issue.category.toLowerCase())
+        : undefined;
+    const categoryCandidate =
+      byName ?? normalizeCategoryCode(issue.ruleId.split("/")[0] ?? "other");
     const category = isValidCategory(categoryCandidate)
       ? categoryCandidate
       : "other";
