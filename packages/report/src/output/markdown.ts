@@ -43,6 +43,12 @@ import { getPathname } from "../url";
 import { lockedRulesMessage } from "../locked-rules";
 import { privateTargetLine } from "../private-target";
 import { notCheckedLines } from "../not-checked";
+import {
+  escapeMarkdownDestination,
+  escapeMarkdownText,
+  markdownCodeSpan,
+  markdownLink,
+} from "./markdown-escape";
 
 /** repo#2661: ", N more not listed" when the report left items out of a check. */
 function notListedSuffix(check: Parameters<typeof itemsNotListed>[0]): string {
@@ -69,17 +75,6 @@ function escapeMarkdownTableCell(value: string, escapeBrackets = false): string 
       if (char === "\r" && value[i + 1] === "\n") i++;
       output.push("<br>");
     } else output.push(char);
-  }
-  return output.join("");
-}
-
-function escapeMarkdownDestination(value: string): string {
-  const output: string[] = [];
-  for (const char of value) {
-    if (char === "\\") output.push("%5C");
-    else if (char === "(") output.push("%28");
-    else if (char === ")") output.push("%29");
-    else output.push(char);
   }
   return output.join("");
 }
@@ -175,7 +170,8 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
       : "# squirrelscan Audit Report",
   );
   lines.push("");
-  lines.push(`**URL:** ${report.baseUrl}  `);
+  // #3522: escaped, like every value below that a site or a stored report chose.
+  lines.push(`**URL:** ${escapeMarkdownText(report.baseUrl)}  `);
   lines.push(`**Date:** ${formatReportDate(report.timestamp)}  `);
   lines.push(`**Pages:** ${report.totalPages}  `);
   // #1829: the caveat on the page count above — coverage lost to throttling.
@@ -318,7 +314,8 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   } else if (report.healthScore) {
     // #1829: a partial run keeps its grade; flag the coverage gap above it.
     if (report.status === "partial" && report.statusReason) {
-      lines.push(`> **Partial audit:** ${report.statusReason}`);
+      // Escaped like the Failed branch's reason above, for the same reason (#3522).
+      lines.push(`> **Partial audit:** ${escapeMarkdownText(report.statusReason)}`);
       lines.push("");
     }
     lines.push("## Health Score");
@@ -374,7 +371,8 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
       const cells = group.items.map((t) => {
         const url = techIconUrl(t.icon);
         const logo = url ? `<img src="${url}" alt="${t.name}" width="14" height="14" /> ` : "";
-        const ver = t.version ? ` \`${t.version}\`` : "";
+        // The version is read off the audited site (#3522): fenced so it cannot close the span.
+        const ver = t.version ? ` ${markdownCodeSpan(t.version)}` : "";
         return `${logo}${t.name}${ver}`;
       });
       lines.push(`**${group.emoji} ${group.label}**  `);
@@ -524,7 +522,8 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
               : undefined;
           for (const page of materialized) {
             const carried = carriedPageSet?.has(page) ? " (carried)" : "";
-            lines.push(`- [${getPathname(page) || "/"}](${page})${carried}`);
+            // #3522: a page URL's path is the site's; label and destination are escaped.
+            lines.push(`- ${markdownLink(getPathname(page) || "/", page)}${carried}`);
           }
           lines.push("");
           lines.push("</details>");
@@ -547,11 +546,11 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
               item.id.startsWith("http://") ||
               item.id.startsWith("https://") ||
               item.id.startsWith("/");
-            const display = isUrl ? `[${label}](${item.id})` : label;
+            const display = isUrl ? markdownLink(label, item.id) : escapeMarkdownText(label);
             lines.push(`- ${display}`);
             if (item.sourcePages && item.sourcePages.length > 0) {
               for (const src of item.sourcePages.slice(0, REPORT_SOURCE_PAGES_PREVIEW)) {
-                lines.push(`  - from: [${getPathname(src) || "/"}](${src})`);
+                lines.push(`  - from: ${markdownLink(getPathname(src) || "/", src)}`);
               }
               if (item.sourcePages.length > REPORT_SOURCE_PAGES_PREVIEW) {
                 // The capped preview here is just for per-item context —

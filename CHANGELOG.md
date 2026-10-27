@@ -25,6 +25,9 @@ How it works:
 
 - **The Performance rules page counts 5 Reliability rules.** The card said 2 after the broken-link rules moved into the category.
 - **Rule-option examples use the table the CLI reads.** Fourteen rule-reference pages now put per-rule settings under `[rule_options."<id>"]`, not the ignored `[rules."<id>"]`. The docs check rejects the ignored table so copied examples keep changing audit behavior. (#1176)
+### Security
+
+- **A crawled page can no longer add links or images to the Markdown report.** `squirrel report --format markdown` and `squirrel audit -f markdown` now escape the text the audited site controls: the pages in a check's page list (the path shown and the link), item labels, the pages an item was found on, a partial audit's reason, the audited URL line and a detected technology's version. Before, a page whose path held `](`, `)` or `![` closed the page link early and added a link or a remote image of the site's choosing to the report a reader opens. A stored report's generator version now prints on the scan line only when it looks like a version (squirrelscan/repo#3522).
 
 ## v0.0.137 (2026-10-28)
 

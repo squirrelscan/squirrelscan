@@ -99,6 +99,11 @@ export function clampedPageLimit(
  * printing only the effective limit reads as the number the user chose, and
  * printing only the requested one describes a crawl that did not happen.
  */
+/** `0.0.137`, `1.2.3-beta.1+build`: digits, letters, dots, `+` and `-`, nothing else. */
+function isVersionLike(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$/.test(value);
+}
+
 export function scanScopeLine(report: AuditReport): string | null {
   const raw = report.scanScope;
   if (!raw) return null;
@@ -108,7 +113,9 @@ export function scanScopeLine(report: AuditReport): string | null {
     typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.floor(v) : undefined;
   const s = { ...raw, pagesCrawled: whole(raw.pagesCrawled) ?? 0, maxPages: whole(raw.maxPages) };
   const origin = s.origin === "cloud" ? "squirrelscan cloud" : s.origin === "ci" ? "CI" : "the CLI";
-  const version = report.generatorVersion ? ` v${report.generatorVersion}` : "";
+  // A stored report's version is whatever its publisher wrote (#3522): only a
+  // version-shaped value prints, on every surface that shows this line.
+  const version = isVersionLike(report.generatorVersion) ? ` v${report.generatorVersion}` : "";
   // The UNCLAMPED wording is byte-for-byte what it has always been — a comma
   // only appears where the sentence now has two clauses to separate.
   const clamped = clampedPageLimit(s);
