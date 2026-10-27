@@ -3,6 +3,7 @@
 // audit. Safe to re-run: every step says when it is already done.
 
 import { defineCommand } from "citty";
+import { isIP } from "node:net";
 import { dirname } from "node:path";
 import { createInterface } from "node:readline";
 
@@ -70,7 +71,7 @@ export async function installAgentSkills(
   }
 }
 
-interface Asker {
+export interface Asker {
   interactive: boolean;
   confirm: (question: string, defaultYes?: boolean) => Promise<boolean>;
   /** One line of free text; "" when the user just presses enter. */
@@ -79,18 +80,23 @@ interface Asker {
 
 /**
  * The site the user typed, as an http(s) URL, or null when it isn't one.
- * A bare host ("example.com") is taken as https. Only the audit sees it.
+ * A bare host ("example.com") is taken as https; a bare localhost or IP is
+ * taken as http, since local dev servers rarely speak TLS. Only the audit
+ * sees it.
  */
 export function parseAuditTarget(input: string): string | null {
   const text = input.trim();
   if (!text || /\s/.test(text)) return null;
+  const hasScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(text);
   try {
-    const url = new URL(
-      /^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `https://${text}`
-    );
+    const url = new URL(hasScheme ? text : `https://${text}`);
     if (url.protocol !== "http:" && url.protocol !== "https:") return null;
     const host = url.hostname;
-    return host.includes(".") || host === "localhost" ? url.toString() : null;
+    const local =
+      host === "localhost" || isIP(host.replace(/^\[|\]$/g, "")) !== 0;
+    if (!local && !host.includes(".")) return null;
+    if (!hasScheme && local) url.protocol = "http:";
+    return url.toString();
   } catch {
     return null;
   }
@@ -314,7 +320,7 @@ export async function runSetup(opts: {
 }
 
 /** Ask for a site and return its URL when the user wants the audit now. */
-async function offerFirstAudit(
+export async function offerFirstAudit(
   t: Theme,
   ask: Asker,
   dryRun: boolean,
@@ -334,7 +340,9 @@ async function offerFirstAudit(
       track("setup_audit_accepted");
       return target;
     }
-    say(`${t.warn(t.sym.warn)} That doesn't look like a site URL.`);
+    say(
+      `${t.warn(t.sym.warn)} That doesn't look like a site URL. Try https://example.com`
+    );
   }
   track("setup_audit_declined");
   return null;

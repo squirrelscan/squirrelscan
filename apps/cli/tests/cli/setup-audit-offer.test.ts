@@ -28,7 +28,9 @@ afterAll(() => {
   mock.module("node:os", () => osModule(realHomedir));
 });
 
-const { parseAuditTarget, runSetup } = await import("@/cli/commands/setup");
+const { offerFirstAudit, parseAuditTarget, runSetup } =
+  await import("@/cli/commands/setup");
+const { createTheme } = await import("@/cli/theme");
 
 describe("parseAuditTarget", () => {
   test("accepts a URL or a bare host", () => {
@@ -39,7 +41,12 @@ describe("parseAuditTarget", () => {
     expect(parseAuditTarget("http://example.com/a?b=1")).toBe(
       "http://example.com/a?b=1"
     );
-    expect(parseAuditTarget("localhost:3000")).toBe("https://localhost:3000/");
+    // Local dev servers: bare localhost and IPs default to http.
+    expect(parseAuditTarget("localhost:3000")).toBe("http://localhost:3000/");
+    expect(parseAuditTarget("127.0.0.1:8080")).toBe("http://127.0.0.1:8080/");
+    expect(parseAuditTarget("https://localhost:3000")).toBe(
+      "https://localhost:3000/"
+    );
   });
 
   test("rejects blanks, words, other schemes and spaces", () => {
@@ -90,5 +97,69 @@ describe("setup first-audit offer", () => {
   test("--dry-run prints the audit command and returns without asking", async () => {
     await runSetup({ yes: false, dryRun: true });
     expect(lines.join("\n")).toContain("squirrel audit https://your-site.com");
+  });
+});
+
+describe("offerFirstAudit", () => {
+  const originalLog = console.log;
+  const t = createTheme(process.stdout);
+  let events: string[] = [];
+  const track = (event: string) => void events.push(event);
+
+  beforeEach(() => {
+    events = [];
+    console.log = () => {};
+  });
+  afterEach(() => {
+    console.log = originalLog;
+  });
+
+  function asker(answers: string[], interactive = true) {
+    const queue = [...answers];
+    return {
+      interactive,
+      confirm: async () => true,
+      line: async () => queue.shift() ?? "",
+    };
+  }
+
+  test("a typed site is accepted and returned", async () => {
+    const target = await offerFirstAudit(
+      t,
+      asker(["example.com"]),
+      false,
+      track
+    );
+    expect(target).toBe("https://example.com/");
+    expect(events).toEqual(["setup_audit_accepted"]);
+  });
+
+  test("enter skips and reports declined", async () => {
+    expect(await offerFirstAudit(t, asker([""]), false, track)).toBeNull();
+    expect(events).toEqual(["setup_audit_declined"]);
+  });
+
+  test("a malformed answer gets one retry, then skips", async () => {
+    expect(
+      await offerFirstAudit(t, asker(["nope", "still nope"]), false, track)
+    ).toBeNull();
+    expect(events).toEqual(["setup_audit_declined"]);
+  });
+
+  test("a malformed answer then a good one is accepted", async () => {
+    expect(
+      await offerFirstAudit(t, asker(["nope", "example.com"]), false, track)
+    ).toBe("https://example.com/");
+    expect(events).toEqual(["setup_audit_accepted"]);
+  });
+
+  test("non-interactive and dry-run never ask and emit nothing", async () => {
+    expect(
+      await offerFirstAudit(t, asker(["example.com"], false), false, track)
+    ).toBeNull();
+    expect(
+      await offerFirstAudit(t, asker(["example.com"]), true, track)
+    ).toBeNull();
+    expect(events).toEqual([]);
   });
 });
