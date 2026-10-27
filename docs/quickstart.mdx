@@ -55,7 +55,7 @@ Set any of these before running the installer.
 
 ### What the installer host records
 
-`install.squirrelscan.com` counts each fetch of the install script: which script (shell or PowerShell), a coarse class of the client (curl, wget, PowerShell, browser, coding-agent sandbox, other) taken from its User-Agent, and an optional `?source=` tag such as `?source=agent`. It stores no IP address and no location, and nothing that identifies you. A tag is lowercase letters, digits and `-` (up to 32 characters) or it is ignored. The server records the fetch before your shell sees anything, so `NO_TELEMETRY` cannot turn it off.
+`install.squirrelscan.com` counts each fetch of the install script: which script (shell or PowerShell), a coarse class of the client (curl, wget, PowerShell, browser, coding-agent sandbox, other) taken from its User-Agent, and an optional `?source=` tag such as `?source=agent`. The count carries no IP address and no location, and nothing that identifies you. (Cloudflare serves the host and handles requests the way any CDN does; that is outside this count.) A tag is lowercase letters, digits and `-` (up to 32 characters) or it is ignored. The server records the fetch before your shell sees anything, so `NO_TELEMETRY` cannot turn it off.
 
 ### If GitHub is blocked on your network
 
