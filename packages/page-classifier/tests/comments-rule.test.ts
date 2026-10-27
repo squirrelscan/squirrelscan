@@ -357,3 +357,27 @@ describe("hostile markup stays cheap", () => {
     expect(ms).toBeLessThan(BUDGET_MS);
   });
 });
+
+describe("many comment-class containers that each hold an <h1> (hostile page)", () => {
+  test("costs the nodes it touches, not containers x headings", () => {
+    const hostile = parseHTML(
+      `<html><body>${'<div class="comments"><h1>x</h1></div>'.repeat(40_000)}</body></html>`,
+    ).document;
+    const start = performance.now();
+    // Each container wraps a page-title heading, so none is a thread: zero sections.
+    expect(findCommentSections(hostile)).toHaveLength(0);
+    // 8 s with an h1 scan per container; well under a second now.
+    expect(performance.now() - start).toBeLessThan(1500);
+  });
+
+  test("a heading still disqualifies only the containers above it", () => {
+    const document = page(
+      `<div class="comments" id="a"><h1>Title</h1></div>` +
+        `<div class="comments" id="b"><p>reply</p></div>` +
+        `<h1 class="comments-title" id="c">Comments</h1>`,
+    );
+    const ids = findCommentSections(document).map((el) => (el as Element).id);
+    expect(ids).toContain("b");
+    expect(ids).not.toContain("a");
+  });
+});

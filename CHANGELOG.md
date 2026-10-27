@@ -29,6 +29,7 @@ How it works:
 
 ### Fixed
 
+- **A page of thousands of comment-class containers can no longer stall the classifier.** Each container with a heading under it was checked against every `<h1>` on the page, so 40,000 of them cost 8 seconds of CPU. The check now marks the ancestors of each heading once and costs the nodes it touches.
 - **Installer failure reports name the host when curl cannot connect.** A curl failure under `set -e` (exit 6, 7, 28, 35, 52 or 56) reported only its code, so 82 identical reports could not be told apart. The anonymous report now carries `curl exit N reaching <host>`: the host only, never a path, query or credentials.
 - **The editor summary digest of a capped published report counts every issue.** A rule with more than 25 issue classes lost the rest from its occurrence count, so a summary built from the stored report could under-count and re-rank issues against the one built from the full report. The digest now takes the true counts from the report's check tallies.
 
