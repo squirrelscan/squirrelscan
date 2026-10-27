@@ -721,6 +721,25 @@ binary_unrunnable_guidance() {
   printf '%s' "$out"
 }
 
+# The host of the request in flight, for a report that would otherwise say only
+# "curl exit 7" (INSTALLER-WORKER-7: 82 events that could not be told apart). Host
+# only: no path, query or credentials, which a report must never carry.
+LAST_FETCH_HOST=""
+note_fetch_host() {
+  local rest="${1#*://}"
+  rest="${rest%%/*}"
+  rest="${rest%%\?*}"
+  rest="${rest##*@}"
+  LAST_FETCH_HOST="${rest%%:*}"
+}
+
+# curl's own exit codes for "could not reach the server": 6 host not resolved,
+# 7 could not connect, 28 timed out, 35 TLS handshake, 52 empty reply, 56 receive
+# failure. Under `set -e` the script dies with the code and no message.
+is_curl_network_code() {
+  case "$1" in 6 | 7 | 28 | 35 | 52 | 56) return 0 ;; *) return 1 ;; esac
+}
+
 # Single EXIT trap: cleans the temp dir and reports genuine failures. Replaces
 # the per-call tmpdir trap (a second `trap ... EXIT` would clobber this one).
 report_on_exit() {
@@ -737,6 +756,11 @@ report_on_exit() {
   # error() always exits 1; prefer the failing sub-command's own code when the
   # call site recorded one (self install, which runs under tee).
   [ -n "$LAST_ERROR_CODE" ] && code="$LAST_ERROR_CODE"
+  # A bare curl failure under `set -e` leaves no message: name the host it was
+  # talking to (a hostname only) so the report says where, not just which code.
+  if [ -z "$msg" ] && is_curl_network_code "$code"; then
+    msg="curl exit $code reaching ${LAST_FETCH_HOST:-an unknown host (before the first request)}"
+  fi
   report_error "$CURRENT_STEP" "$code" "$msg" "$LAST_ERROR_OUTPUT"
 }
 trap report_on_exit EXIT
@@ -841,6 +865,7 @@ fetch_with_retry() {
   local timeout_connect=10
   local timeout_max=120
 
+  note_fetch_host "$url"
   for i in $(seq 1 $attempts); do
     if curl "${CURL_TLS_ARGS[@]}" -fsSL --connect-timeout "$timeout_connect" --max-time "$timeout_max" "$url" -o "$output" 2>/dev/null; then
       return 0
@@ -1200,6 +1225,7 @@ get_latest_version() {
 
   info "Fetching releases (channel: $channel)..."
 
+  note_fetch_host "${RELEASES_ENDPOINT}/${channel}"
   if response=$(curl "${CURL_TLS_ARGS[@]}" -fsSL -H "User-Agent: squirrelscan-installer" \
       --connect-timeout 5 --max-time 15 \
       "${RELEASES_ENDPOINT}/${channel}" 2>/dev/null); then
@@ -1222,6 +1248,7 @@ get_latest_version() {
     curl_args+=(-H "Authorization: token $GITHUB_TOKEN")
   fi
 
+  note_fetch_host "$api_url"
   if ! response=$(curl "${curl_args[@]}" "$api_url" 2>&1); then
     error "Failed to fetch releases\n  URL: $api_url\n  Response: $response"
   fi

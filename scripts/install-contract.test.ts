@@ -706,6 +706,53 @@ describe("install.sh report_error payload", () => {
     if (home) expect(errorOutput).not.toContain(home);
   }, 15_000);
 
+  // INSTALLER-WORKER-7: 82 events with step init, exit code 7 and no line. A bare
+  // curl failure under set -e left nothing to say where it was going.
+  test("a curl connection failure names the host, never the path or credentials", async () => {
+    const run = async (script: string) => {
+      const { calls } = await runWithCurlShim(script, {
+        cut: "preamble",
+        env: { NO_TELEMETRY: undefined },
+        settleMs: 5000,
+      });
+      expect(calls).toHaveLength(1);
+      return JSON.parse(curlDataArg(calls[0])) as Record<string, unknown>;
+    };
+    for (const code of [6, 7, 28]) {
+      const report = await run(
+        `( note_fetch_host "https://user:secret@install.squirrelscan.com:443/releases/stable?token=abc"; (exit ${code}) || report_on_exit ); sleep 1`,
+      );
+      expect(report.exit_code).toBe(code);
+      expect(report.error_line).toBe(`curl exit ${code} reaching install.squirrelscan.com`);
+      expect(JSON.stringify(report)).not.toMatch(/secret|token=abc|\/releases/);
+    }
+    // Before any request there is no host to name, and the report says so.
+    const early = await run("( (exit 7) || report_on_exit ); sleep 1");
+    expect(early.error_line).toBe("curl exit 7 reaching an unknown host (before the first request)");
+  }, 30_000);
+
+  test("a failure with its own message, or a non-network code, keeps its report as before", async () => {
+    const { calls } = await runWithCurlShim(
+      '( note_fetch_host "https://api.github.com/x"; LAST_ERROR_MSG="Self install failed"; (exit 7) || report_on_exit ); sleep 1',
+      { cut: "preamble", env: { NO_TELEMETRY: undefined }, settleMs: 5000 },
+    );
+    expect(calls).toHaveLength(1);
+    const report = JSON.parse(curlDataArg(calls[0])) as Record<string, unknown>;
+    expect(report.error_line).toBe("Self install failed");
+    const plain = await runWithCurlShim('( (exit 1) || report_on_exit ); sleep 1', {
+      cut: "preamble",
+      env: { NO_TELEMETRY: undefined },
+      settleMs: 5000,
+    });
+    expect((JSON.parse(curlDataArg(plain.calls[0])) as Record<string, unknown>).error_line).toBe("");
+  }, 30_000);
+
+  test("every install.sh request site records its host", () => {
+    expect(shellInstaller).toContain('note_fetch_host "$url"');
+    expect(shellInstaller).toContain('note_fetch_host "${RELEASES_ENDPOINT}/${channel}"');
+    expect(shellInstaller).toContain('note_fetch_host "$api_url"');
+  });
+
   test("carries the release version bare, and libc on Linux", async () => {
     const { calls } = await runWithCurlShim(
       'INSTALLER_RELEASE_VERSION="v1.2.3"; report_error download_binary 1 "x" ""; sleep 1',
