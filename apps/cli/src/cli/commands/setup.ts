@@ -73,32 +73,61 @@ export async function installAgentSkills(
 interface Asker {
   interactive: boolean;
   confirm: (question: string, defaultYes?: boolean) => Promise<boolean>;
+  /** One line of free text; "" when the user just presses enter. */
+  line: (question: string) => Promise<string>;
+}
+
+/**
+ * The site the user typed, as an http(s) URL, or null when it isn't one.
+ * A bare host ("example.com") is taken as https. Only the audit sees it.
+ */
+export function parseAuditTarget(input: string): string | null {
+  const text = input.trim();
+  if (!text || /\s/.test(text)) return null;
+  try {
+    const url = new URL(
+      /^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `https://${text}`
+    );
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    const host = url.hostname;
+    return host.includes(".") || host === "localhost" ? url.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 function createAsker(t: Theme, assumeYes: boolean): Asker {
   const interactive =
     !assumeYes && Boolean(process.stdin.isTTY && process.stdout.isTTY);
+  async function ask(prompt: string): Promise<string> {
+    const rl = createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+    // Ctrl+C at a prompt stops setup, the way it stops any other command.
+    rl.on("SIGINT", () => {
+      rl.close();
+      process.stdout.write("\n");
+      process.exit(130);
+    });
+    const answer = await new Promise<string>((resolve) =>
+      rl.question(prompt, resolve)
+    );
+    rl.close();
+    return answer;
+  }
   return {
     interactive,
     async confirm(question, defaultYes = true) {
       if (!interactive) return defaultYes;
       const hint = t.dim(defaultYes ? "[Y/n]" : "[y/N]");
-      const rl = createInterface({
-        input: process.stdin,
-        output: process.stdout,
-      });
-      // Ctrl+C at a prompt stops setup, the way it stops any other command.
-      rl.on("SIGINT", () => {
-        rl.close();
-        process.stdout.write("\n");
-        process.exit(130);
-      });
-      const answer = await new Promise<string>((resolve) =>
-        rl.question(`     ${t.accent("?")} ${question} ${hint} `, resolve)
-      );
-      rl.close();
+      const answer = await ask(`     ${t.accent("?")} ${question} ${hint} `);
       const a = answer.trim().toLowerCase();
       return a === "" ? defaultYes : a === "y" || a === "yes";
+    },
+    async line(question) {
+      if (!interactive) return "";
+      return ask(`     ${t.accent("?")} ${question} `);
     },
   };
 }
@@ -263,13 +292,52 @@ export async function runSetup(opts: {
     track("setup_completed");
   }
 
-  console.log(
-    `\n  ${t.ok(t.sym.ok)} ${t.bold("You're ready.")} Run your first audit:\n`
-  );
+  console.log(`\n  ${t.ok(t.sym.ok)} ${t.bold("You're ready.")}`);
+
+  // Last step: the first audit. Interactive runs are offered it right here;
+  // everything else (no TTY, CI, an agent, --yes, --dry-run) never blocks and
+  // just gets the command to run.
+  const target = await offerFirstAudit(t, ask, opts.dryRun, track);
+  if (target) {
+    console.log("");
+    const { runCommand } = await import("citty");
+    const { audit } = await import("./audit");
+    await runCommand(audit, { rawArgs: [target] });
+    return;
+  }
+
+  console.log(`\n  Run your first audit:\n`);
   console.log(`     ${t.command("squirrel audit https://your-site.com")}\n`);
   console.log(
     `  ${t.dim(`Or ask your agent: "audit my site with squirrelscan and fix what you find"`)}\n`
   );
+}
+
+/** Ask for a site and return its URL when the user wants the audit now. */
+async function offerFirstAudit(
+  t: Theme,
+  ask: Asker,
+  dryRun: boolean,
+  track: (event: TelemetryEvent, detail?: string) => void
+): Promise<string | null> {
+  if (!ask.interactive || dryRun) return null;
+  say(
+    t.dim(
+      "Last step: audit a site now. Local audits are free and take a minute."
+    )
+  );
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const answer = await ask.line("Site to audit (a URL, or enter to skip):");
+    if (!answer.trim()) break;
+    const target = parseAuditTarget(answer);
+    if (target) {
+      track("setup_audit_accepted");
+      return target;
+    }
+    say(`${t.warn(t.sym.warn)} That doesn't look like a site URL.`);
+  }
+  track("setup_audit_declined");
+  return null;
 }
 
 export const setup = defineCommand({
@@ -281,7 +349,8 @@ export const setup = defineCommand({
     yes: {
       type: "boolean",
       alias: "y",
-      description: "Accept every default without asking (sign-in is skipped)",
+      description:
+        "Accept every default without asking (sign-in is skipped and the audit is not offered)",
     },
     "dry-run": {
       type: "boolean",

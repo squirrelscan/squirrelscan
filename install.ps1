@@ -588,18 +588,18 @@ function Install-Squirrel {
 }
 
 function Show-Epilogue {
-    # Get-started epilogue: one next step. `squirrel setup` walks sign-in, the
-    # agent skills and defaults, then points at the first audit (#2367).
+    # Get-started epilogue: lead with the first audit, then `squirrel setup`
+    # (sign-in, agent skills, defaults), which also ends by offering an audit.
     param([string]$Version)
 
     Write-Host ""
     Write-Host "squirrel $Version installed" -ForegroundColor Green
     Write-Host ""
-    Write-Host "Next, set it up (sign in, agent skills, defaults):"
+    Write-Host "Run your first audit (crawls the site, scores it, lists exact fixes):"
     Write-Host ""
-    Write-Host "  squirrel setup"
+    Write-Host "  squirrel audit https://your-site.com"
     Write-Host ""
-    Write-Host "Or jump straight to an audit:  squirrel audit https://your-site.com"
+    Write-Host "Then set up sign-in, agent skills and defaults:  squirrel setup"
     Write-Host "Docs: https://docs.squirrelscan.com"
     Write-Host ""
 }

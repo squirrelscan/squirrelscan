@@ -1477,9 +1477,8 @@ detect_shell_config() {
   fi
 }
 
-# Get-started epilogue: one next step. `squirrel setup` walks sign-in, the
-# agent skills and defaults, then points at the first audit, so the installer
-# no longer lists those separately (#2367).
+# Get-started epilogue: lead with the first audit, then `squirrel setup`
+# (sign-in, agent skills, defaults), which also ends by offering an audit.
 print_epilogue() {
   local version="$1"
   # Same UTF-8 gate as the banner -- CI logs / dumb terminals shouldn't get
@@ -1491,11 +1490,11 @@ print_epilogue() {
   echo ""
   echo -e "${GREEN}${check}${NC} squirrel ${version} installed"
   echo ""
-  echo "Next, set it up (sign in, agent skills, defaults):"
+  echo "Run your first audit (crawls the site, scores it, lists exact fixes):"
   echo ""
-  echo "  squirrel setup"
+  echo "  squirrel audit https://your-site.com"
   echo ""
-  echo "Or jump straight to an audit:  squirrel audit https://your-site.com"
+  echo "Then set up sign-in, agent skills and defaults:  squirrel setup"
   echo "Docs: https://docs.squirrelscan.com"
   echo ""
 }
