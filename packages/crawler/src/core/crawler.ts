@@ -685,7 +685,7 @@ export function createCrawler(
 
     // The discovery probes' slots come from a scheduler of their own, sized by
     // `discoveryProbePerHost` when the caller set one: a cloud-rendered crawl
-    // clamps the page limit to the plan's render concurrency (1 on free), and
+    // clamps the page limit to the plan's render concurrency (2 on free), and
     // plain-HTTP probes queued behind that would run in series (#409).
     const probeSlots = createHostScheduler(
       (host) => config.discoveryProbePerHost?.concurrency ?? hostConcurrencyLimit(host),

@@ -94,7 +94,7 @@ export interface CrawlerConfig {
   /**
    * Per-host limits for the discovery probes when they differ from the page
    * fetches' (#409). A cloud-rendered crawl clamps per-host concurrency to the
-   * plan's render concurrency (1 on free) with no delay, but the probes are
+   * plan's render concurrency (2 on free) with no delay, but the probes are
    * plain HTTP and keep the configured per_host_concurrency and
    * per_host_delay_ms. Unset: the probes use perHostConcurrency and
    * perHostDelayMs.
