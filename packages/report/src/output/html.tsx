@@ -164,6 +164,28 @@ export interface HtmlRenderOptions {
   offline?: boolean;
   /** List the rules that passed after the issues (`--include-passed`). */
   includePassed?: boolean;
+  /**
+   * The published report's own URL (squirrelscan/repo#3182): `og:url`,
+   * `og:image`, the agent `.md`/`.json` links, the report link in fix prompts,
+   * and a `<link rel="canonical">`. Without it a report with a `reportId`
+   * links to `https://reports.squirrelscan.com/<reportId>` and has no canonical
+   * link, as before.
+   */
+  reportUrl?: string;
+  /**
+   * Where the technology logos are served from (squirrelscan/repo#3182), so a
+   * report page loads nothing from another host. Default
+   * `https://squirrelscan.com/tech-icons`. Only used when `offline` is false.
+   */
+  techIconBaseUrl?: string;
+}
+
+/** Render-wide asset hosts, read by deep components without prop drilling. */
+const RenderAssets = React.createContext<{ techIconBaseUrl?: string }>({});
+
+/** The default link for a published report id, before #3182's per-org hosts. */
+function defaultReportUrl(reportId: string): string {
+  return `https://reports.squirrelscan.com/${reportId}`;
 }
 
 /**
@@ -1371,8 +1393,9 @@ function PassedRules({ rules }: { rules: PassedRule[] }) {
  * fails to load. Never in an offline (local) report: that would be a remote request.
  */
 function TechIcon({ icon, offline }: { icon?: string | null; offline: boolean }) {
+  const { techIconBaseUrl } = React.useContext(RenderAssets);
   if (offline) return null;
-  const url = techIconUrl(icon);
+  const url = techIconUrl(icon, techIconBaseUrl);
   if (!url || sanitizeUrl(url) === "#") return null;
   return (
     <img
@@ -1697,6 +1720,7 @@ function WhiteLabelFooter({ branding }: { branding: ReportBranding }) {
 function ReportPage({
   report,
   reportId,
+  reportUrl,
   branding,
   faviconUrl,
   offline,
@@ -1704,6 +1728,7 @@ function ReportPage({
 }: {
   report: AuditReport;
   reportId?: string;
+  reportUrl?: string;
   branding?: ReportBranding;
   faviconUrl?: string;
   offline: boolean;
@@ -1766,7 +1791,7 @@ function ReportPage({
     report.coverage.auditedPages < report.coverage.knownPages &&
     found.total <= count(report.coverage.knownPages) &&
     (report.rateLimited?.unfetched ?? 0) <= 0;
-  const reportBase = reportId ? `https://reports.squirrelscan.com/${reportId}` : null;
+  const reportBase = reportUrl ?? (reportId ? defaultReportUrl(reportId) : null);
   const ctx: PromptContext = {
     url: report.baseUrl,
     reportMd: reportBase ? `${reportBase}.md` : null,
@@ -1814,7 +1839,7 @@ function ReportPage({
   ].slice(0, 4);
   const shotSrc = report.screenshotUrl ? sanitizeUrl(report.screenshotUrl) : "#";
   const shot = shotSrc === "#" ? null : shotSrc;
-  const base = reportId ? `https://reports.squirrelscan.com/${reportId}` : null;
+  const base = reportBase;
   const groupsPart = groups.length
     ? ` · ${groups.map((g) => `${getGroupName(g.group)} ${g.score}`).join(" · ")}`
     : "";
@@ -1830,7 +1855,8 @@ function ReportPage({
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>{`Audit Report - ${host}`}</title>
         <meta name="description" content={metaDescription} />
-        {reportId && (
+        {reportUrl && <link rel="canonical" href={reportUrl} />}
+        {base && (
           <>
             <meta property="og:type" content="website" />
             <meta property="og:title" content={`Audit Report - ${host}`} />
@@ -2341,6 +2367,21 @@ function ReportPage({
 }
 
 /**
+ * The body of every executable inline `<script>` the HTML report can render,
+ * exactly as rendered (squirrelscan/repo#3182). A host serving these reports
+ * hashes them into a `script-src` CSP, so a script that is not one of ours
+ * never runs, even if an escaping bug let one into the page. The
+ * `type="application/json"` data blocks are not executable and not listed.
+ */
+export function reportInlineScripts(): readonly string[] {
+  return [
+    COPY_SCRIPT + FINDING_COPY_SCRIPT + PAGES_SCRIPT + LOCAL_TIME_SCRIPT,
+    NOTICE_SCRIPT,
+    entityViewerScript(),
+  ];
+}
+
+/**
  * Render an audit report as one self-contained HTML page: the CLI's HTML
  * output and the published cloud report. Pure function, no I/O; the CSS is
  * compiled ahead of time (scripts/build-css.ts).
@@ -2350,14 +2391,17 @@ export function renderHtml(report: AuditReport, options?: HtmlRenderOptions): st
   return (
     "<!DOCTYPE html>" +
     renderToStaticMarkup(
-      <ReportPage
-        report={report}
-        reportId={options?.reportId}
-        branding={options?.branding}
-        faviconUrl={options?.faviconUrl}
-        offline={options?.offline ?? true}
-        includePassed={options?.includePassed ?? false}
-      />,
+      <RenderAssets.Provider value={{ techIconBaseUrl: options?.techIconBaseUrl }}>
+        <ReportPage
+          report={report}
+          reportId={options?.reportId}
+          reportUrl={options?.reportUrl}
+          branding={options?.branding}
+          faviconUrl={options?.faviconUrl}
+          offline={options?.offline ?? true}
+          includePassed={options?.includePassed ?? false}
+        />
+      </RenderAssets.Provider>,
     )
   );
 }

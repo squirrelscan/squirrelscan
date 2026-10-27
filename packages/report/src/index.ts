@@ -157,7 +157,7 @@ export { ruleCatalogLookup, withCatalogRuleText } from "./rule-catalog";
 export type { RuleCatalogLookup, RuleCatalogText } from "./rule-catalog";
 
 // Output formatters
-export { renderHtml, type HtmlRenderOptions } from "./output/html";
+export { renderHtml, reportInlineScripts, type HtmlRenderOptions } from "./output/html";
 export { renderMarkdown } from "./output/markdown";
 export { renderText } from "./output/text";
 export { renderXml } from "./output/xml";
