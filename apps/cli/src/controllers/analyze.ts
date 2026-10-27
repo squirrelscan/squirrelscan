@@ -346,9 +346,15 @@ export async function runAnalyze(
       });
     }
 
-    // Update crawl status to "analyzed"
+    // Update crawl status to "analyzed", with this run's JavaScript shipped
+    // block so the rebuilt report shows it (repo#3397).
     await Effect.runPromise(
-      storage.updateCrawl(crawlId, { status: "analyzed" })
+      storage.updateCrawl(crawlId, {
+        status: "analyzed",
+        ...(ruleResults.javascript
+          ? { javascript: ruleResults.javascript }
+          : {}),
+      })
     );
 
     await retainAfterAnalyze({

@@ -1977,9 +1977,15 @@ export async function runAudit(
         storage.saveSitemapUrlStatuses(crawlId, ruleResults.sitemapUrlStatuses)
       );
 
-      // Update status to "analyzed"
+      // Update status to "analyzed". The JavaScript shipped block rides along,
+      // so a later `squirrel report` rebuilds the same line (repo#3397).
       await Effect.runPromise(
-        storage.updateCrawl(crawlId, { status: "analyzed" })
+        storage.updateCrawl(crawlId, {
+          status: "analyzed",
+          ...(ruleResults.javascript
+            ? { javascript: ruleResults.javascript }
+            : {}),
+        })
       );
       // From here to the end of report reconstruction this crawl reads as a
       // finished audit while its own process is still using it. `building` is

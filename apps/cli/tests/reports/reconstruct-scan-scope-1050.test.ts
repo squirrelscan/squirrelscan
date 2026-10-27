@@ -162,3 +162,35 @@ describe("database report scan scope (#1050)", () => {
     await run(store.close());
   });
 });
+
+// repo#3397: the JavaScript shipped block rides on the crawl the same way, so a
+// `squirrel report` rebuild shows the same line the audit printed.
+describe("database report JavaScript shipped (repo#3397)", () => {
+  test("restores the stamped block in every format's line", async () => {
+    const { store, crawlId } = await storedAudit();
+    const javascript = {
+      scripts: 2,
+      bytes: 4096,
+      thirdPartyBytes: 0,
+      unmeasured: 0,
+      heaviestPages: [{ url: `${SITE}/page-1`, bytes: 4096, scripts: 2 }],
+    };
+    await run(store.updateCrawl(crawlId, { javascript }));
+
+    const report = await rebuilt(store, crawlId);
+    expect(report.javascript).toEqual(javascript);
+    expect(consoleOutput(report)).toContain(
+      "JavaScript shipped: 4.0 KB across 2 scripts"
+    );
+    expect(JSON.parse(renderJson(report)).javascript).toEqual(javascript);
+    await run(store.close());
+  });
+
+  test("an older crawl has no block and no line", async () => {
+    const { store, crawlId } = await storedAudit();
+    const report = await rebuilt(store, crawlId);
+    expect(report.javascript).toBeUndefined();
+    expect(consoleOutput(report)).not.toContain("JavaScript shipped");
+    await run(store.close());
+  });
+});

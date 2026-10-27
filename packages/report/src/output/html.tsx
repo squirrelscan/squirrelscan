@@ -27,6 +27,7 @@ import {
   ruleCarriedPageCount,
 } from "../affected-pages";
 import { cacheHitRatePercent, cacheReasonsLabel } from "../cache-stats";
+import { javascriptPageSize, javascriptShipped, javascriptShippedSummary } from "../javascript-shipped";
 import {
   getBadgeName,
   getBadgeTitle,
@@ -1178,11 +1179,12 @@ function SiteContext({ report, offline }: { report: AuditReport; offline: boolea
   const profileRows = meta ? siteProfileRows(meta) : [];
   const flags = meta ? siteProfileFlags(meta) : null;
   const cs = report.cacheStats;
+  const js = javascriptShipped(report);
   const hasTech = !!tech && tech.items.length > 0;
   const techSummary = tech ? techChangeSummary(tech) : null;
   return (
     <>
-      {(profileRows.length > 0 || hasTech || cs) && (
+      {(profileRows.length > 0 || hasTech || cs || js) && (
         <section id="site">
           <SectionHead
             title="Site"
@@ -1252,6 +1254,22 @@ function SiteContext({ report, offline }: { report: AuditReport; offline: boolea
                     </div>
                   ))}
                 </div>
+              </Panel>
+            )}
+            {js && (
+              <Panel>
+                <PanelTitle>JavaScript shipped</PanelTitle>
+                <p className="text-sm">{javascriptShippedSummary(js)}</p>
+                {js.heaviestPages.length > 0 && (
+                  <ul className="mt-2 space-y-1 text-sm">
+                    {js.heaviestPages.map((page) => (
+                      <li key={page.url} className="break-words">
+                        {page.url}{" "}
+                        <span className="text-muted-foreground">({javascriptPageSize(page)})</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </Panel>
             )}
           </div>

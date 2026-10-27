@@ -19,6 +19,7 @@ How it works:
 
 ### Added
 
+- **A JavaScript shipped line in every report format.** It gives the script bytes the audit measured, the framework runtime's share when one is recognised by its chunk path (Next.js, Nuxt, Astro or SvelteKit), the third-party share, the scripts not measured, and the three pages that load the most script. The JSON report has a `javascript` object, and the LLM and XML reports a `<javascript>` element. The line is left out when no script was measured, never affects the score, and survives a later `squirrel report` (schema 39 stores it on the crawl). See [JavaScript shipped](https://docs.squirrelscan.com/reports#javascript-shipped) (squirrelscan/repo#3397).
 - `schema/expected-type` flags a page that the bundled page classifier is sure about and that declares none of the structured data its type should carry: `Product` on a product page, `Article` or `BlogPosting` on an article or blog post, `CollectionPage` or `ItemList` on a listing, `ContactPage` or an organization type on a contact page, `AboutPage`, `Person` or an organization type on an about page, and `TechArticle`, `HowTo` or `FAQPage` on documentation. It trusts only the model's answer, at 0.9 confidence or above (`min_confidence` sets it), never a type read from the page's own markup. A page that declares a listing type is not asked for article or product markup. With `--no-classifier` it reports nothing. See [schema/expected-type](https://docs.squirrelscan.com/rules/schema/expected-type).
 
 ### Changed

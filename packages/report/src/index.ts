@@ -215,6 +215,19 @@ export {
   cacheStatsSummaryLine,
 } from "./cache-stats";
 export { formatBytes } from "./utils";
+
+// "JavaScript shipped" (squirrelscan/repo#3397) — report-only, one line in every format.
+export {
+  javascriptFrameworkPercent,
+  javascriptHeaviestPagesLine,
+  javascriptPageLabel,
+  javascriptPageSize,
+  javascriptShipped,
+  javascriptShippedDetails,
+  javascriptShippedLine,
+  javascriptShippedSummary,
+  javascriptXml,
+} from "./javascript-shipped";
 export type { CacheStats, CacheHitReason } from "./types";
 
 // Entity map (#2091) — report-only / non-scoring, shared by all six formats and

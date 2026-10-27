@@ -885,6 +885,8 @@ export function reconstructReport(
       // the crawl (#1050). A later database report restores that exact scope;
       // old crawl rows have no stamp and deliberately gain no inferred one.
       ...(crawl.scanScope ? { scanScope: crawl.scanScope } : {}),
+      // Stamped on the crawl by the rules phase (repo#3397); absent before it.
+      ...(crawl.javascript ? { javascript: crawl.javascript } : {}),
       ...(cacheStats ? { cacheStats } : {}),
       ...(renderBlockRecovered > 0
         ? { fetchFallbacks: { recovered: renderBlockRecovered } }

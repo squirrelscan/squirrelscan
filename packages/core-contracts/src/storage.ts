@@ -5,6 +5,7 @@ import type { Effect } from "effect";
 
 import type { AuditFailureDetail } from "./failure-reason";
 import type { ClassifiedPageType, LinkSection, LinkSectionCounts, ScanScope } from "./index";
+import type { JavascriptShipped } from "./javascript-shipped";
 import type { RefusedFetch } from "./refused-fetch";
 import type { UnverifiedReason } from "./services";
 
@@ -345,6 +346,12 @@ export interface CrawlMetadata {
    * the original audit printed. Absent on crawls written before it was stored.
    */
   scanScope?: ScanScope;
+  /**
+   * The report's JavaScript shipped block (squirrelscan/repo#3397), stamped
+   * after the rules phase so a later `squirrel report` shows the same line.
+   * Absent on crawls written before it was stored.
+   */
+  javascript?: JavascriptShipped;
   /**
    * When `squirrel self disk --prune` reclaimed this audit's derived data
    * (#1912). Absent for every audit that has not been reclaimed.

@@ -3,6 +3,7 @@
 import type { ReportBranding } from "@squirrelscan/core-contracts";
 import type { AuditReport } from "../types";
 import { getScoreGrade } from "../scoring";
+import { javascriptXml } from "../javascript-shipped";
 import { getGroupName } from "../categories";
 import { groupIssuesByCategory, flattenIssuesBySeverity, reportPassedRules } from "../grouping";
 import { affectedPages, itemsNotListed } from "../affected-pages";
@@ -64,6 +65,8 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
       `${indent(2)}<scan-scope origin="${escapeXml(s.origin)}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}/>`,
     );
   }
+  // repo#3397: the script weight the audit measured. Report-only, not scored.
+  lines.push(...javascriptXml(report, 2));
   lines.push(`${indent(1)}</site>`);
 
   // Refused off-site seed redirect (#1418): the seed left its own registrable

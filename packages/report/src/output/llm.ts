@@ -2,6 +2,7 @@
 
 import type { AuditReport, CheckItem } from "../types";
 import { getScoreGrade } from "../scoring";
+import { javascriptXml } from "../javascript-shipped";
 import { getGroupName } from "../categories";
 import { groupIssuesByCategory, flattenIssuesBySeverity, reportPassedRules } from "../grouping";
 import { ruleAffectedPages, ruleAffectedRollup, ruleCarriedPageCount } from "../affected-pages";
@@ -307,6 +308,10 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
       `<rules-cache pages-replayed="${rc.pagesReplayed}" pages-evaluated="${rc.pagesEvaluated}"${why}/>`,
     );
   }
+
+  // repo#3397: the script weight the audit measured, for an agent deciding
+  // whether JavaScript is the page-weight problem. Report-only, not scored.
+  lines.push(...javascriptXml(report, 0));
 
   // Editor's summary — report-only exec narrative for the agent (does not affect the score).
   const es = editorSummaryView(report.editorSummary, report);
