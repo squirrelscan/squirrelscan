@@ -27,7 +27,7 @@ description: "Install squirrelscan and run your first audit"
   </Tab>
 </Tabs>
 
-This downloads the binary to `~/.local/bin/squirrel` and adds it to your PATH. With Homebrew, that happens on the first run, when the launcher runs the regular installer.
+This downloads the binary and links it into a directory on your PATH. With Homebrew, that happens on the first run, when the launcher runs the regular installer. See [How the installer sets up your PATH](#how-the-installer-sets-up-your-path) below.
 
 Run your first audit right away: it crawls the site, scores it and lists exact fixes.
 
@@ -56,8 +56,31 @@ Set any of these before running the installer.
 | `SQUIRREL_VERSION` | Install a specific release instead of the newest one, for example `v0.0.94`. |
 | `SQUIRREL_CHANNEL` | `stable` (default) or `beta`. |
 | `SQUIRREL_BIN_DIR` | Where to put the `squirrel` symlink. Defaults to the first writable directory on your PATH, falling back to `~/.local/bin`. |
+| `SQUIRREL_NO_MODIFY_PATH` | Any value but empty, `0` or `false` stops the installer editing your shell profile or user PATH. It prints the line to add instead. See below. |
 | `SQUIRREL_FORCE_MIRROR` | Download from squirrelscan's mirror instead of GitHub. See below. |
 | `NO_TELEMETRY` | Any defined value, including an empty value, `0`, or `false`, turns off the anonymous failure report the installer sends when it fails. `DO_NOT_TRACK=1` (or `true`) does too. |
+
+### How the installer sets up your PATH
+
+The installer first looks for a directory that is already on your PATH and that it can write to: `~/.local/bin`, `~/bin`, `/usr/local/bin` or `/opt/homebrew/bin`, then any other writable directory on your PATH under your home directory. It skips directories that a version or package manager owns (`.nvm`, `.fnm`, `.volta`, `.asdf`, `mise`, `.pyenv`, `.rbenv`, `.cargo`, `.bun`, `.deno`, `go`, `node_modules` and any `shims`), because their tool can wipe or shadow them. `SQUIRREL_BIN_DIR` overrides all of this.
+
+If none qualifies, it uses `~/.local/bin` and appends one marked line to the file your shell reads at startup, then tells you which file it changed. It never rewrites existing content, creates the file if it is missing, and adds nothing when the file already puts `~/.local/bin` on your PATH or carries the `# squirrel` marker, so running the installer again is safe.
+
+| Shell | File | Line |
+| --- | --- | --- |
+| zsh | `$ZDOTDIR/.zshrc`, or `~/.zshrc` | `export PATH="$HOME/.local/bin:$PATH"` |
+| bash on macOS | `~/.bash_profile` | same |
+| bash on Linux | `~/.bashrc` | same |
+| fish | `~/.config/fish/conf.d/squirrel.fish` | `fish_add_path $HOME/.local/bin` |
+| sh or anything else | `~/.profile` | same as zsh |
+
+An open terminal does not see the change. The closing message then tells you to open a new terminal or run `source ~/.zshrc` (your file), and gives a command that works right now, such as `~/.local/bin/squirrel audit https://your-site.com`.
+
+Set `SQUIRREL_NO_MODIFY_PATH=1` to keep the installer away from your profile: it prints the line to add instead. In CI (`CI` set) it never edits a profile; when `GITHUB_PATH` is set, it appends the directory to that file so later steps find `squirrel`.
+
+On Windows, the installer adds `%LOCALAPPDATA%\squirrel\bin` to your user `Path` (never the machine `Path`) and to the current session, once, and a new terminal picks it up. `SQUIRREL_NO_MODIFY_PATH` and CI behave the same way.
+
+The one-time install registration reports what happened as `path_setup` (`on_path`, `added`, `opted_out`, `ci` or `failed`). It carries no path and nothing about you, and it is not sent when telemetry is off.
 
 ### What the installer host records
 

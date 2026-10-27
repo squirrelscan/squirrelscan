@@ -223,6 +223,35 @@ $manifestGuidance = (Show-DownloadFailureGuidance -Asset "manifest.json" -Kind "
 Check "a manifest gets no by-hand recipe" (-not ($manifestGuidance -like "*Move-Item manifest.json*"))
 Check "a manifest names the allowlist route" ($manifestGuidance -like "*Allowlist github.com*")
 
+Write-Host "PATH setup decides before it writes (never the registry here)"
+# Every branch exercised below returns before Set-UserPath's one write, so this
+# script never edits the real User Path.
+foreach ($case in @(
+    @("", $false), @("0", $false), @("false", $false), @("1", $true), @("yes", $true)
+)) {
+    $env:SQUIRREL_NO_MODIFY_PATH = $case[0]
+    Check "SQUIRREL_NO_MODIFY_PATH '$($case[0])' -> $($case[1])" ((Test-NoModifyPath) -eq $case[1])
+}
+Remove-Item Env:SQUIRREL_NO_MODIFY_PATH -ErrorAction SilentlyContinue
+Check "a path entry matches case-insensitively, trailing slash ignored" (Test-PathHasDir "C:\a;C:\Tools\Bin\;C:\b" "c:\tools\bin")
+Check "a prefix is not a match" (-not (Test-PathHasDir "C:\a\bin2" "C:\a\bin"))
+$probeDir = "C:\squirrel-contract-probe\bin"
+$savedPath = $env:Path
+$env:Path = "$savedPath;$probeDir"
+Check "a dir already on the session Path is on_path" ((Set-UserPath -BinDir $probeDir) -eq "on_path")
+$env:Path = $savedPath
+$env:SQUIRREL_NO_MODIFY_PATH = "1"
+Check "opt-out writes nothing" ((Set-UserPath -BinDir $probeDir) -eq "opted_out")
+Remove-Item Env:SQUIRREL_NO_MODIFY_PATH -ErrorAction SilentlyContinue
+$savedCi = $env:CI
+$savedGithubPath = $env:GITHUB_PATH
+$env:CI = "true"
+Remove-Item Env:GITHUB_PATH -ErrorAction SilentlyContinue
+Check "CI does not edit the Path" ((Set-UserPath -BinDir $probeDir) -eq "ci")
+if ($null -ne $savedCi) { $env:CI = $savedCi } else { Remove-Item Env:CI -ErrorAction SilentlyContinue }
+if ($null -ne $savedGithubPath) { $env:GITHUB_PATH = $savedGithubPath }
+Check "the Path is untouched after the checks" ($env:Path -eq $savedPath)
+
 if ($script:Failures -gt 0) {
     Write-Host ""
     Write-Host "$($script:Failures) check(s) failed"

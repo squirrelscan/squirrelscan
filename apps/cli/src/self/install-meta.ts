@@ -3,7 +3,11 @@ import { hostname } from "node:os";
 import { sep } from "node:path";
 
 import { isManagedInstall } from "./paths";
-import { INSTALL_SOURCE_PATTERN } from "./types";
+import {
+  INSTALL_SOURCE_PATTERN,
+  PATH_SETUP_VALUES,
+  type PathSetup,
+} from "./types";
 
 /**
  * The `SQUIRREL_INSTALL_SOURCE` env value when it is a valid slug, else null
@@ -11,6 +15,12 @@ import { INSTALL_SOURCE_PATTERN } from "./types";
  */
 export function readInstallSourceEnv(): string | null {
   return normalizeInstallSource(process.env.SQUIRREL_INSTALL_SOURCE);
+}
+
+/** The `SQUIRREL_PATH_SETUP` env value when it is a known outcome, else null. */
+export function readPathSetupEnv(): PathSetup | null {
+  const value = process.env.SQUIRREL_PATH_SETUP?.trim().toLowerCase();
+  return PATH_SETUP_VALUES.find((v) => v === value) ?? null;
 }
 
 /** A trimmed, lowercased slug, or null when `value` is not a valid one. */

@@ -692,7 +692,7 @@ Besides audit and update events, the CLI reports the first run so we can see whe
 | `login_completed` | `squirrel auth login` succeeds | none |
 | `first_audit_ok`, `first_audit_failed` | Your first audit on this install ends, once | A failure class such as `dns` or `timeout` |
 
-The install registration (sent once) also reports where the install came from: a short `source` label such as `binary` or `npm`. Installers set it with `SQUIRREL_INSTALL_SOURCE` (lowercase letters, digits and hyphens, up to 32 characters; anything else is ignored). On macOS it also reports two booleans, `cpu_translated` (running under Rosetta) and `hw_arm64` (Apple Silicon hardware), read with `sysctl`.
+The install registration (sent once) also reports where the install came from: a short `source` label such as `binary` or `npm`. Installers set it with `SQUIRREL_INSTALL_SOURCE` (lowercase letters, digits and hyphens, up to 32 characters; anything else is ignored). On macOS it also reports two booleans, `cpu_translated` (running under Rosetta) and `hw_arm64` (Apple Silicon hardware), read with `sysctl`. The installers also set `SQUIRREL_PATH_SETUP`, which the registration reports as `path_setup`: `on_path`, `added`, `opted_out`, `ci` or `failed` (what the installer did about your PATH; see the [quickstart](/quickstart#how-the-installer-sets-up-your-path)).
 
 The CLI shows this disclosure once before its first telemetry-enabled command, and once more on installs that saw an earlier wording, because the user ID after login is new. Disable telemetry in user settings with:
 

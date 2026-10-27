@@ -4,7 +4,7 @@ import { dirname } from "node:path";
 import type { InstallResult } from "@/self/types";
 
 import { type Result, ok, err, commandError } from "@/controllers/types";
-import { readInstallSourceEnv } from "@/self/install-meta";
+import { readInstallSourceEnv, readPathSetupEnv } from "@/self/install-meta";
 import { linkBinary, unlinkIfPresent } from "@/self/link-binary";
 import {
   getSquirrelPaths,
@@ -70,6 +70,10 @@ export async function runSelfInstall(
       install_source:
         readInstallSourceEnv() ??
         (existing.ok ? existing.data.install_source : undefined) ??
+        null,
+      path_setup:
+        readPathSetupEnv() ??
+        (existing.ok ? existing.data.path_setup : undefined) ??
         null,
     });
 

@@ -28,6 +28,8 @@ interface RegisterInstallPayload {
   // macOS only (null elsewhere): Rosetta vs real Intel; see detectCpuInfo.
   cpu_translated: boolean | null;
   hw_arm64: boolean | null;
+  // What the installer did about PATH (null: not stamped); see PATH_SETUP_VALUES.
+  path_setup: string | null;
 }
 
 export function registerInstall(settings?: UserSettings): void {
@@ -57,6 +59,7 @@ async function doRegisterInstall(): Promise<void> {
     ci: detectCi(),
     auto_update: settings.auto_update,
     ...detectCpuInfo(),
+    path_setup: settings.path_setup ?? null,
   };
 
   // Unauthenticated endpoint (auth:"none"); only mark registered on a real 2xx.

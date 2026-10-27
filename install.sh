@@ -33,6 +33,9 @@ set -euo pipefail
 #   SQUIRREL_VERSION   - Pin to specific version (e.g., v0.0.15)
 #   SQUIRREL_CHANNEL   - Release channel: stable or beta (default: stable)
 #   SQUIRREL_BIN_DIR   - Override bin directory for symlink
+#   SQUIRREL_NO_MODIFY_PATH - Never edit a shell profile (or GITHUB_PATH);
+#                        print the PATH instructions instead. Any value but
+#                        empty, 0 or false enables it.
 #   SQUIRREL_FORCE_MIRROR - Skip github.com and download from
 #                        install.squirrelscan.com (for networks that block
 #                        GitHub). Any value but empty, 0 or false enables it.
@@ -1149,6 +1152,38 @@ ensure_musl_runtime() {
   error "Missing libstdc++ (required by the musl build)"
 }
 
+# True for an existing, writable PATH entry under $HOME that no version or
+# package manager owns (nvm, cargo, bun, shims, ...).
+usable_home_path_dir() {
+  local dir="$1" rel
+  case "$dir" in
+    "$HOME"/*) ;;
+    *) return 1 ;;
+  esac
+  [ -d "$dir" ] && [ -w "$dir" ] || return 1
+  rel="${dir#"$HOME"/}"
+  case "$rel" in
+    .nvm|.nvm/*|.fnm|.fnm/*|.volta|.volta/*|.asdf|.asdf/*) return 1 ;;
+    .local/share/mise|.local/share/mise/*|.pyenv|.pyenv/*|.rbenv|.rbenv/*) return 1 ;;
+    .cargo|.cargo/*|.bun|.bun/*|.deno|.deno/*|go|go/*) return 1 ;;
+  esac
+  case "/$rel/" in
+    */node_modules/*|*/shims/*) return 1 ;;
+  esac
+  return 0
+}
+
+# True when $1 is an entry of the current PATH.
+dir_in_path() {
+  local target="$1" entry
+  local entries
+  IFS=':' read -ra entries <<< "$PATH"
+  for entry in "${entries[@]}"; do
+    [ "$entry" = "$target" ] && return 0
+  done
+  return 1
+}
+
 # Find a writable bin directory that's in PATH
 find_bin_dir() {
   # If user explicitly set bin dir, use it
@@ -1191,6 +1226,17 @@ find_bin_dir() {
         fi
       fi
     done
+  done
+
+  # Second: any other writable directory under $HOME that is already in PATH.
+  # Version and package managers own theirs and can wipe or shadow it, so those
+  # are skipped.
+  local path_dir
+  for path_dir in "${path_dirs[@]}"; do
+    if usable_home_path_dir "$path_dir"; then
+      echo "$path_dir"
+      return 0
+    fi
   done
 
   # Fallback: create ~/.local/bin (will need PATH modification)
@@ -1364,6 +1410,7 @@ download_and_install() {
   # managed-dir binary self-reports as the ambiguous "binary"). A caller's own
   # value wins so wrappers (CI, package managers) can name themselves.
   SQUIRREL_INSTALL_SOURCE="${SQUIRREL_INSTALL_SOURCE:-install-sh}" \
+    SQUIRREL_PATH_SETUP="$PATH_SETUP" \
     "$tmpdir/squirrel" self install --bin-dir "$bin_dir" 2>&1 | tee "$self_install_log"
   local rc=${PIPESTATUS[0]}
   set -e
@@ -1440,47 +1487,138 @@ install_by_hand_and_verify() {
   echo "    sudo fallocate -l 1G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile" >&2
 }
 
-# Detect user's shell and config file
+# Detect the shell and the file it reads at startup (shell:file). Terminal.app
+# opens bash as a login shell, which reads ~/.bash_profile and not ~/.bashrc;
+# on Linux an interactive bash reads ~/.bashrc. fish gets its own conf.d file,
+# which fish sources on startup and which is never anyone else's.
 detect_shell_config() {
-  local shell="${SHELL:-}"
+  local shell="${SHELL:-}" bash_rc
+  if [ "$(uname -s 2>/dev/null)" = "Darwin" ]; then
+    bash_rc="$HOME/.bash_profile"
+  else
+    bash_rc="$HOME/.bashrc"
+  fi
 
-  # Try to detect from SHELL env var
   if [ -n "$shell" ]; then
     case "$shell" in
-      */zsh)  echo "zsh:$HOME/.zshrc" ;;
-      */bash)
-        # Prefer .bashrc, but use .bash_profile on macOS if .bashrc doesn't exist
-        if [ -f "$HOME/.bashrc" ]; then
-          echo "bash:$HOME/.bashrc"
-        elif [ -f "$HOME/.bash_profile" ]; then
-          echo "bash:$HOME/.bash_profile"
-        else
-          echo "bash:$HOME/.bashrc"
-        fi
-        ;;
-      */fish) echo "fish:$HOME/.config/fish/config.fish" ;;
+      */zsh)  echo "zsh:${ZDOTDIR:-$HOME}/.zshrc" ;;
+      */bash) echo "bash:$bash_rc" ;;
+      */fish) echo "fish:${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/squirrel.fish" ;;
       */sh)   echo "sh:$HOME/.profile" ;;
       *)      echo "unknown:$HOME/.profile" ;;
     esac
     return
   fi
 
-  # Fallback: check which shell configs exist
-  if [ -f "$HOME/.zshrc" ]; then
-    echo "zsh:$HOME/.zshrc"
-  elif [ -f "$HOME/.bashrc" ]; then
-    echo "bash:$HOME/.bashrc"
-  elif [ -f "$HOME/.bash_profile" ]; then
-    echo "bash:$HOME/.bash_profile"
+  # No $SHELL: guess from which startup files exist.
+  if [ -f "${ZDOTDIR:-$HOME}/.zshrc" ]; then
+    echo "zsh:${ZDOTDIR:-$HOME}/.zshrc"
+  elif [ -f "$bash_rc" ]; then
+    echo "bash:$bash_rc"
   else
     echo "unknown:$HOME/.profile"
+  fi
+}
+
+# Same flag semantics as force_mirror_enabled: empty, 0 and false are off.
+no_modify_path_enabled() {
+  local value
+  value=$(printf '%s' "${SQUIRREL_NO_MODIFY_PATH:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+  case "$value" in
+    "" | 0 | false) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# Same convention as the CLI's detectCi for CI itself: set and not false/0.
+ci_enabled() {
+  case "${CI:-}" in
+    "" | false | 0) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# $HOME-relative display form ("~/.zshrc"), so output never names the user.
+tildify() {
+  case "$1" in
+    "$HOME"/*) printf '~%s' "${1#"$HOME"}" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
+# Set by setup_path, read by main / print_epilogue / the self install stamp:
+#   on_path | added | opted_out | ci | failed
+PATH_SETUP=""
+PATH_SETUP_RC=""
+
+# Make sure $1 will be on PATH. Appends one marked line to the shell's startup
+# file, never rewrites existing content, and does nothing when the directory is
+# already on PATH, when the user opted out, or in CI (where GITHUB_PATH, if
+# set, is the way to extend PATH for later steps).
+setup_path() {
+  local bin_dir="$1" shell_info shell_name rc_file line marker="# squirrel"
+
+  if dir_in_path "$bin_dir"; then
+    PATH_SETUP="on_path"
+    return 0
+  fi
+  if no_modify_path_enabled; then
+    PATH_SETUP="opted_out"
+    return 0
+  fi
+  if ci_enabled; then
+    PATH_SETUP="ci"
+    if [ -n "${GITHUB_PATH:-}" ]; then
+      if printf '%s\n' "$bin_dir" >> "$GITHUB_PATH" 2>/dev/null; then
+        info "Added $bin_dir to GITHUB_PATH"
+      else
+        PATH_SETUP="failed"
+      fi
+    fi
+    return 0
+  fi
+  # Only the directory the installer itself falls back to is written: it is
+  # spelled with $HOME so the profile line survives a moved home.
+  if [ "$bin_dir" != "$HOME/.local/bin" ]; then
+    PATH_SETUP="opted_out"
+    return 0
+  fi
+
+  shell_info=$(detect_shell_config)
+  shell_name="${shell_info%%:*}"
+  rc_file="${shell_info#*:}"
+  PATH_SETUP_RC="$rc_file"
+
+  # The profile line keeps a literal $HOME on purpose.
+  # shellcheck disable=SC2016
+  case "$shell_name" in
+    fish) line='fish_add_path $HOME/.local/bin' ;;
+    *)    line='export PATH="$HOME/.local/bin:$PATH"' ;;
+  esac
+
+  # A profile that already puts the directory on PATH (any non-comment line
+  # naming it, or our own marker) needs no second line.
+  if [ -f "$rc_file" ] && { grep -qF "$marker" "$rc_file" 2>/dev/null \
+      || grep -v '^[[:space:]]*#' "$rc_file" 2>/dev/null | grep -qF '.local/bin'; }; then
+    PATH_SETUP="added"
+    info "$(tildify "$bin_dir") is already on PATH in $(tildify "$rc_file")."
+    return 0
+  fi
+
+  if mkdir -p "$(dirname "$rc_file")" 2>/dev/null \
+      && printf '\n%s\n%s\n' "$marker" "$line" >> "$rc_file" 2>/dev/null; then
+    PATH_SETUP="added"
+    info "Added $(tildify "$bin_dir") to PATH in $(tildify "$rc_file")."
+  else
+    PATH_SETUP="failed"
+    warn "Could not write $(tildify "$rc_file")"
   fi
 }
 
 # Get-started epilogue: lead with the first audit, then `squirrel setup`
 # (sign-in, agent skills, defaults), which also ends by offering an audit.
 print_epilogue() {
-  local version="$1"
+  local version="$1" bin_dir="${2:-}"
   # Same UTF-8 gate as the banner -- CI logs / dumb terminals shouldn't get
   # mojibake from the checkmark glyph either (codex review, #1029).
   local check="✓"
@@ -1490,9 +1628,25 @@ print_epilogue() {
   echo ""
   echo -e "${GREEN}${check}${NC} squirrel ${version} installed"
   echo ""
-  echo "Run your first audit (crawls the site, scores it, lists exact fixes):"
-  echo ""
-  echo "  squirrel audit https://your-site.com"
+  if [ -n "$bin_dir" ] && ! dir_in_path "$bin_dir"; then
+    # This shell cannot find squirrel yet: say so before the first command, and
+    # give one that works right now.
+    local full
+    full="$(tildify "$bin_dir")/squirrel"
+    if [ "$PATH_SETUP" = "added" ] && [ -n "$PATH_SETUP_RC" ]; then
+      echo "Open a new terminal, or run:  source $(tildify "$PATH_SETUP_RC")"
+      echo "Then:  squirrel audit https://your-site.com"
+      echo "(or right now:  $full audit https://your-site.com)"
+    else
+      echo "squirrel is not on your PATH yet. Run your first audit right now:"
+      echo ""
+      echo "  $full audit https://your-site.com"
+    fi
+  else
+    echo "Run your first audit (crawls the site, scores it, lists exact fixes):"
+    echo ""
+    echo "  squirrel audit https://your-site.com"
+  fi
   echo ""
   echo "Then set up sign-in, agent skills and defaults:  squirrel setup"
   echo "Docs: https://docs.squirrelscan.com"
@@ -1513,6 +1667,8 @@ print_path_instructions() {
 
   case "$shell_name" in
     fish)
+      # The conf.d file setup_path writes may not exist; config.fish does.
+      rc_file="${XDG_CONFIG_HOME:-$HOME/.config}/fish/config.fish"
       echo "Add to $rc_file:"
       echo ""
       echo "  fish_add_path $bin_dir"
@@ -1546,7 +1702,7 @@ main() {
   CURRENT_STEP="check_deps"
   check_deps
 
-  local platform version bin_dir needs_path_update=false
+  local platform version bin_dir
   CURRENT_STEP="detect_platform"
   platform=$(detect_platform)
   log "Detected platform: $platform"
@@ -1558,10 +1714,13 @@ main() {
 
   # Find writable bin directory in PATH
   CURRENT_STEP="find_bin_dir"
-  if ! bin_dir=$(find_bin_dir); then
-    needs_path_update=true
-  fi
+  bin_dir=$(find_bin_dir || true)
   info "Bin directory: $bin_dir"
+
+  # Put it on PATH before self install, which hands the outcome to the CLI's
+  # one-time install registration (path_setup).
+  CURRENT_STEP="setup_path"
+  setup_path "$bin_dir"
 
   # Version: pinned or latest
   if [ -n "${SQUIRREL_VERSION:-}" ]; then
@@ -1584,13 +1743,15 @@ main() {
 
   download_and_install "$version" "$platform" "$bin_dir"
 
-  print_epilogue "$version"
+  print_epilogue "$version" "$bin_dir"
 
-  # Print PATH instructions if needed
-  if [ "$needs_path_update" = true ]; then
-    echo ""
-    print_path_instructions "$bin_dir"
-  fi
+  # Manual instructions when we did not (or could not) edit a profile
+  case "$PATH_SETUP" in
+    opted_out|ci|failed)
+      echo ""
+      print_path_instructions "$bin_dir"
+      ;;
+  esac
 
   echo ""
 }

@@ -4,6 +4,16 @@ import { z } from "zod";
 // for the env reader (install-meta.ts) and the persisted setting below.
 export const INSTALL_SOURCE_PATTERN = /^[a-z0-9-]{1,32}$/;
 
+// What the installer did about PATH, stamped via SQUIRREL_PATH_SETUP.
+export const PATH_SETUP_VALUES = [
+  "on_path",
+  "added",
+  "opted_out",
+  "ci",
+  "failed",
+] as const;
+export type PathSetup = (typeof PATH_SETUP_VALUES)[number];
+
 // Auth schema for CLI authentication state
 export const AuthSchema = z
   .object({
@@ -149,6 +159,9 @@ export const UserSettingsSchema = z.object({
     .optional()
     // A hand-edited bad value reads as unset; it must not invalidate the file.
     .catch(null),
+  // PATH outcome stamped by the installers via SQUIRREL_PATH_SETUP, reported
+  // with the install registration. Same hand-edit tolerance as install_source.
+  path_setup: z.enum(PATH_SETUP_VALUES).nullable().optional().catch(null),
   // Set once the install's first audit has been reported to telemetry.
   first_audit_reported_at: z.string().nullable().optional(),
   telemetry_notice_shown: z.boolean().nullable().optional(),
