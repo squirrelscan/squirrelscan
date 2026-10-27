@@ -32,6 +32,8 @@ export type TelemetryEvent =
   | "setup_started"
   | "setup_step"
   | "setup_completed"
+  | "setup_audit_accepted"
+  | "setup_audit_declined"
   | "login_completed"
   | "first_audit_ok"
   | "first_audit_failed";
