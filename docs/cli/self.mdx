@@ -648,7 +648,7 @@ squirrel self settings set <key> <value> [options]
 | `skills_auto_update` | boolean | Update the installed agent skills along with the CLI (needs `auto_update`) | `true`, `false` |
 | `update_check_interval_hours` | number | How often the background update check may run (hours) | `>= 0.05` (default `1`) |
 | `notifications` | boolean | Show update notifications | `true`, `false` |
-| `telemetry` | boolean | Send minimal pseudonymous CLI telemetry | `true`, `false` |
+| `telemetry` | boolean | Send minimal CLI telemetry (see [Telemetry](#telemetry)) | `true`, `false` |
 | `tips` | boolean | Show a random tip under the audit preamble | `true`, `false` |
 
 #### Examples
@@ -681,15 +681,26 @@ This creates `.squirrel/settings.json` in the current directory and sets the val
 
 ### Telemetry
 
-Telemetry is enabled by default. The CLI sends only the event name, CLI version, a random install ID, and a bounded error category. It does not send credentials, URLs, report contents, or raw error messages, and telemetry requests are never authenticated.
+Telemetry is enabled by default. The CLI sends only the event name, CLI version, a random install ID, and a bounded error category or step outcome. It does not send URLs, hosts, paths, email addresses, report contents, or raw error messages. Telemetry requests never carry an API key. After `squirrel auth login`, they carry your login session token (the 90-day sign-in token from login), which the API turns into your user ID, so events can be tied to your account. Signed out, they are anonymous. Nothing is sent when telemetry is off.
 
-The CLI shows this disclosure once before its first telemetry-enabled command. Disable telemetry in user settings with:
+Besides audit and update events, the CLI reports the first run so we can see where new installs stall:
+
+| Event | Sent when | Detail |
+| --- | --- | --- |
+| `setup_started`, `setup_completed` | `squirrel setup` starts and finishes. Not sent on `--dry-run`. | none |
+| `setup_step` | A setup step ends | `step:outcome`, for example `skills:done` or `signin:skipped` |
+| `login_completed` | `squirrel auth login` succeeds | none |
+| `first_audit_ok`, `first_audit_failed` | Your first audit on this install ends, once | A failure class such as `dns` or `timeout` |
+
+The install registration (sent once) also reports where the install came from: a short `source` label such as `binary` or `npm`. Installers set it with `SQUIRREL_INSTALL_SOURCE` (lowercase letters, digits and hyphens, up to 32 characters; anything else is ignored). On macOS it also reports two booleans, `cpu_translated` (running under Rosetta) and `hw_arm64` (Apple Silicon hardware), read with `sysctl`.
+
+The CLI shows this disclosure once before its first telemetry-enabled command, and once more on installs that saw an earlier wording, because the user ID after login is new. Disable telemetry in user settings with:
 
 ```bash
 squirrel self settings set telemetry false
 ```
 
-For CI, containers, or one-off commands, define `NO_TELEMETRY`. Its presence is the kill switch: any defined value, including an empty value, `0`, or `false`, disables telemetry, install registration, and install-ID creation.
+For CI, containers, or one-off commands, define `NO_TELEMETRY`. Its presence is the kill switch: any defined value, including an empty value, `0`, or `false`, disables telemetry, install registration, and install-ID creation. `DO_NOT_TRACK=1` (or `true`) does the same. A project can also opt out with `"telemetry": false` in its `.squirrel/settings.json`.
 
 ```bash
 NO_TELEMETRY=1 squirrel audit https://example.com

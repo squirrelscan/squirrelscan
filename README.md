@@ -55,7 +55,7 @@ Ordered by how much a failure usually costs you, not by how many rules each one 
 | Performance | 30 | Core Web Vitals and delivery: LCP, CLS and INP hints, TTFB, compression, caching, render-blocking resources, DOM size, font delivery, legacy and unminified JS/CSS |
 | Reliability | 5 | Scripts, stylesheets and fonts that fail to load (a first-party bundle that answers 404 or 500 after a deploy, third-party and font failures), and forms that lose submissions |
 | Images | 16 | Alt text, modern formats, responsive `srcset`, intrinsic dimensions and aspect-ratio mismatches, lazy loading above versus below the fold, file weight |
-| Structured Data | 25 | JSON-LD validity and rich-result eligibility for Article, Product, FAQ, Review, Breadcrumb, Organization, LocalBusiness, Video and site search, plus thirteen site-wide checks on the entity map: whether the site declares one identity for itself or a new one on every page, and rating markup that is not about the page it sits on |
+| Structured Data | 26 | JSON-LD validity and rich-result eligibility for Article, Product, FAQ, Review, Breadcrumb, Organization, LocalBusiness, Video and site search, the markup a page's classified type should carry, plus thirteen site-wide checks on the entity map: whether the site declares one identity for itself or a new one on every page, and rating markup that is not about the page it sits on |
 | Accessibility | 61 | WCAG coverage: ARIA roles and names, form labels and autocomplete tokens, colour contrast, heading order, landmarks, tables and lists, focus visibility, touch targets, captions |
 | Mobile | 8 | Viewport configuration, tap-target size, legible font sizes, horizontal scroll, blocked zoom, form fields small enough to zoom the page on focus, intrusive interstitials, the web app manifest and its icons |
 | Social Media | 5 | Open Graph and Twitter Card completeness, image dimensions, canonical URL match, social profile links, site-chrome assets that disagree across pages |
@@ -268,7 +268,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Contributi
 
 ## Telemetry
 
-Telemetry is enabled by default and is deliberately minimal: event name, CLI version, a random install ID, and bounded error categories. It does not send credentials, URLs, report contents, or raw error messages, and telemetry requests are never authenticated.
+Telemetry is enabled by default and is deliberately minimal: event name, CLI version, a random install ID, and bounded error categories. It does not send API keys, URLs, report contents, or raw error messages. After `squirrel auth login`, telemetry requests carry your login session (the 90-day sign-in token from login, never an API key) so events tie to your account; signed out, they are anonymous. Nothing is sent when telemetry is off.
 
 Disable it permanently with:
 
@@ -276,7 +276,7 @@ Disable it permanently with:
 squirrel self settings set telemetry false
 ```
 
-Or disable all telemetry and install registration for any invocation by defining `NO_TELEMETRY`. Any defined value works, including an empty value, `0`, or `false`:
+Or disable all telemetry and install registration for any invocation by defining `NO_TELEMETRY` (any defined value works, including an empty value, `0`, or `false`) or `DO_NOT_TRACK=1` (or `true`). A project can opt out with `"telemetry": false` in `.squirrel/settings.json`:
 
 ```bash
 NO_TELEMETRY=1 squirrel audit https://example.com

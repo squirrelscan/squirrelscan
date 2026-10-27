@@ -4,6 +4,17 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { flattenJsonLdNodes, indexJsonLdIds, resolveJsonLdRef } from "@squirrelscan/utils";
 
+import { UNREADABLE_MESSAGE, jsonLdTypes, microdataAndRdfaTypes, typeNames } from "./markup-types";
+
+/**
+ * Anchors the classifier must place in the breadcrumbs section before a missing
+ * schema is a finding. One, not two: the current page is plain text in a trail, so
+ * a short trail is a single link (`Docs / Security`). Measured on a small SaaS
+ * site, every one of its 14 docs pages with a trail has exactly one such link, and
+ * none has two.
+ */
+const MIN_TRAIL_LINKS = 1;
+
 export const breadcrumbSchemaRule: Rule = {
   meta: {
     id: "schema/breadcrumb",
@@ -14,7 +25,7 @@ export const breadcrumbSchemaRule: Rule = {
     category: "schema",
     scope: "page",
     verdictScope: "page",
-    severity: "info",
+    severity: "warning",
     weight: 3,
   },
 
@@ -40,6 +51,9 @@ export const breadcrumbSchemaRule: Rule = {
     let breadcrumbSchema: Record<string, unknown> | null = null;
     const pageNodes: Record<string, unknown>[] = [];
 
+    // Every flattened node of every script, for the nested BreadcrumbList lookup below.
+    const allNodes: Record<string, unknown>[] = [];
+
     for (const script of schemaScripts) {
       // Flattened per script, so a Yoast / Rank Math `@graph` wrapper is
       // descended into rather than read as one typeless node (#317). Per
@@ -50,11 +64,10 @@ export const breadcrumbSchemaRule: Rule = {
       pageNodes.push(...schemas);
 
       for (const schema of schemas) {
-        const type = schema["@type"];
-        if (
-          type === "BreadcrumbList" ||
-          (Array.isArray(type) && type.includes("BreadcrumbList"))
-        ) {
+        allNodes.push(schema);
+        // Bare names: `https://schema.org/BreadcrumbList` is the same type, as a
+        // string or inside an array.
+        if (typeNames(schema["@type"]).some((name) => name.toLowerCase() === "breadcrumblist")) {
           breadcrumbSchema = schema;
           break;
         }
@@ -62,6 +75,40 @@ export const breadcrumbSchemaRule: Rule = {
     }
 
     if (!breadcrumbSchema) {
+      // The classifier's section head labels an anchor "breadcrumbs" only when it
+      // sits in a trail (a high-precision class, and never a markup-rules answer),
+      // so the page shows a trail that no structured data describes (#2307). With
+      // the classifier off no link carries a section and this stays the info check.
+      const trailLinks = (ctx.parsed.links ?? []).filter((link) => link.section === "breadcrumbs").length;
+      if (trailLinks >= MIN_TRAIL_LINKS) {
+        // A trail declared nested in another node (`WebPage.breadcrumb`), or marked
+        // up as microdata or RDFa (older themes), is described, just not as a
+        // top-level JSON-LD node, so it is not this finding. Scanned only here: a
+        // page with no trail link never pays for the walk.
+        const isBreadcrumb = (name: string): boolean => name.toLowerCase() === "breadcrumblist";
+        const nested = jsonLdTypes(allNodes);
+        const markup = microdataAndRdfaTypes(doc);
+        if (!nested.types.some(isBreadcrumb) && !markup.types.some(isBreadcrumb)) {
+          // A scan that hit a bound proves nothing about what is absent.
+          if (!nested.complete || !markup.complete) {
+            checks.push({
+              name: "breadcrumb-schema",
+              status: "info",
+              message: UNREADABLE_MESSAGE,
+              details: { trailLinks },
+            });
+            return { checks };
+          }
+          checks.push({
+            name: "breadcrumb-schema",
+            status: "fail",
+            message: "A breadcrumb trail on the page has no BreadcrumbList schema",
+            value: "Add BreadcrumbList JSON-LD that mirrors the trail",
+            details: { trailLinks },
+          });
+          return { checks };
+        }
+      }
       checks.push({
         name: "breadcrumb-schema",
         status: "info",

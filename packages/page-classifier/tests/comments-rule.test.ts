@@ -357,3 +357,67 @@ describe("hostile markup stays cheap", () => {
     expect(ms).toBeLessThan(BUDGET_MS);
   });
 });
+
+describe("comment-class containers around headings (hostile page)", () => {
+  // The old code took 8 s on each shape; the bound leaves a loaded runner a 4x margin.
+  const BOUND_MS = 2000;
+  const timedSections = (html: string) => {
+    const { document } = parseHTML(`<html><body>${html}</body></html>`);
+    const start = performance.now();
+    const found = findCommentSections(document);
+    return { found, ms: performance.now() - start };
+  };
+
+  test("40,000 sibling containers that each hold an <h1> cost the nodes touched, not containers x headings", () => {
+    const { found, ms } = timedSections('<div class="comments"><h1>x</h1></div>'.repeat(40_000));
+    // Each container wraps a page-title heading, so none is a thread.
+    expect(found).toHaveLength(0);
+    expect(ms).toBeLessThan(BOUND_MS);
+  });
+
+  test("40,000 nested containers with an <h1> at the bottom walk the chain once", () => {
+    const n = 40_000;
+    const { found, ms } = timedSections(
+      `${'<div class="comments">'.repeat(n)}<h1>x</h1>${"</div>".repeat(n)}`,
+    );
+    expect(found).toHaveLength(0);
+    expect(ms).toBeLessThan(BOUND_MS);
+  });
+
+  test("many <h1>s under one container, and a deep chain above them", () => {
+    const { found, ms } = timedSections(
+      `<div class="comments">${"<h1>x</h1>".repeat(40_000)}</div>`,
+    );
+    expect(found).toHaveLength(0);
+    expect(ms).toBeLessThan(BOUND_MS);
+  });
+
+  test("a heading disqualifies exactly the containers above it", () => {
+    const document = parseHTML(
+      `<html><body>` +
+        // two levels above an h1
+        `<div class="comments" id="outer"><div class="comments-wrap" id="inner"><h1>Title</h1></div></div>` +
+        // a sibling container that shares no ancestor with an h1 stays a thread
+        `<div class="comments" id="sibling"><p>reply</p></div>` +
+        // two h1s in different branches sharing an ancestor (not a comment container)
+        `<section><div class="comments" id="left"><h1>a</h1></div><div class="comments" id="right"><p>b</p></div><h1>c</h1></section>` +
+        // an h1 that is itself the thread's heading
+        `<h1 class="comments-title" id="heading">Comments</h1>` +
+        // an h1 inside an h1 (invalid, but parsers keep it)
+        `<div class="comments" id="wraps-nested"><h1 id="o"><span>x</span></h1></div>` +
+        `</body></html>`,
+    ).document;
+    const ids = findCommentSections(document).map((el) => (el as Element).id);
+    expect(ids).toContain("sibling");
+    expect(ids).toContain("right");
+    expect(ids).not.toContain("outer");
+    expect(ids).not.toContain("inner");
+    expect(ids).not.toContain("left");
+    expect(ids).not.toContain("wraps-nested");
+    // The old and new code agree on a heading that is itself comment-class: it is not "above" itself.
+    const withSelf = findCommentSections(
+      parseHTML(`<html><body><h1 class="comments-title" id="h">Comments</h1></body></html>`).document,
+    ).map((el) => (el as Element).id);
+    expect(withSelf).toEqual(["h"]);
+  });
+});

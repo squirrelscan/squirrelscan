@@ -1,15 +1,32 @@
+import { spawnSync } from "node:child_process";
 import { hostname } from "node:os";
 import { sep } from "node:path";
 
 import { isManagedInstall } from "./paths";
+import { INSTALL_SOURCE_PATTERN } from "./types";
 
-// Max length for a stamped source string (keeps the analytics column bounded).
-const MAX_SOURCE_LEN = 64;
+/**
+ * The `SQUIRREL_INSTALL_SOURCE` env value when it is a valid slug, else null
+ * (an invalid value is dropped, never truncated or guessed at).
+ */
+export function readInstallSourceEnv(): string | null {
+  return normalizeInstallSource(process.env.SQUIRREL_INSTALL_SOURCE);
+}
+
+/** A trimmed, lowercased slug, or null when `value` is not a valid one. */
+export function normalizeInstallSource(
+  value: string | null | undefined
+): string | null {
+  const slug = value?.trim().toLowerCase();
+  return slug && INSTALL_SOURCE_PATTERN.test(slug) ? slug : null;
+}
 
 /**
  * Best-effort install channel for analytics. Precedence:
  *   1. `SQUIRREL_INSTALL_SOURCE` env — lets installers / CI stamp a precise
- *      value (e.g. "install.sh", "homebrew", "ci").
+ *      value (e.g. "homebrew", "ci"; a slug, see `readInstallSourceEnv`).
+ *      `self install` also persists it, because registration runs on a later
+ *      command whose environment no longer carries it.
  *   2. inference from the running binary's path.
  *
  * Inference: a binary under `node_modules` is the npm-fallback build ("npm");
@@ -21,8 +38,8 @@ const MAX_SOURCE_LEN = 64;
  * question "can this install silently self-update".
  */
 export function detectInstallSource(): string {
-  const override = process.env.SQUIRREL_INSTALL_SOURCE?.trim();
-  if (override) return override.slice(0, MAX_SOURCE_LEN);
+  const override = readInstallSourceEnv();
+  if (override) return override;
 
   const exe = process.execPath;
   if (exe.includes(`${sep}node_modules${sep}`)) return "npm";
@@ -52,6 +69,45 @@ export function detectCi(): boolean {
     env.TEAMCITY_VERSION !== undefined ||
     env.TF_BUILD !== undefined // Azure Pipelines
   );
+}
+
+export interface CpuInfo {
+  /** true under Rosetta (an x64 process on Apple Silicon); null = unknown. */
+  cpu_translated: boolean | null;
+  /** true on Apple Silicon hardware, translated or not; null = unknown. */
+  hw_arm64: boolean | null;
+}
+
+const SYSCTL_TIMEOUT_MS = 250;
+
+function sysctlFlag(name: string): boolean | null {
+  try {
+    const r = spawnSync("/usr/sbin/sysctl", ["-n", name], {
+      encoding: "utf8",
+      timeout: SYSCTL_TIMEOUT_MS,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    if (r.status !== 0) return null;
+    const out = String(r.stdout).trim();
+    return out === "1" ? true : out === "0" ? false : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Tells a real Intel Mac from a Rosetta shell on Apple Silicon, for install
+ * analytics. macOS only; everything else is null. Never throws and is capped
+ * at a few ms per probe so it cannot block or fail an install.
+ */
+export function detectCpuInfo(): CpuInfo {
+  if (process.platform !== "darwin") {
+    return { cpu_translated: null, hw_arm64: null };
+  }
+  return {
+    cpu_translated: sysctlFlag("sysctl.proc_translated"),
+    hw_arm64: sysctlFlag("hw.optional.arm64"),
+  };
 }
 
 /** Where an audit run was executed — surfaced in the dashboard + end-of-run. */

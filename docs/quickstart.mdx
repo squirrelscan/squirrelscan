@@ -29,7 +29,13 @@ description: "Install squirrelscan and run your first audit"
 
 This downloads the binary to `~/.local/bin/squirrel` and adds it to your PATH. With Homebrew, that happens on the first run, when the launcher runs the regular installer.
 
-Then run setup once. It signs you in (optional), installs the agent skills for Claude Code, Codex, Cursor and more, and turns on auto-update:
+Run your first audit right away: it crawls the site, scores it and lists exact fixes.
+
+```bash
+squirrel audit https://your-site.com
+```
+
+Then run setup once. It signs you in (optional), installs the agent skills for Claude Code, Codex, Cursor and more, turns on auto-update, and ends by offering to audit a site:
 
 ```bash
 squirrel setup
@@ -51,7 +57,7 @@ Set any of these before running the installer.
 | `SQUIRREL_CHANNEL` | `stable` (default) or `beta`. |
 | `SQUIRREL_BIN_DIR` | Where to put the `squirrel` symlink. Defaults to the first writable directory on your PATH, falling back to `~/.local/bin`. |
 | `SQUIRREL_FORCE_MIRROR` | Download from squirrelscan's mirror instead of GitHub. See below. |
-| `NO_TELEMETRY` | Any defined value, including an empty value, `0`, or `false`, turns off the anonymous failure report the installer sends when it fails. |
+| `NO_TELEMETRY` | Any defined value, including an empty value, `0`, or `false`, turns off the anonymous failure report the installer sends when it fails. `DO_NOT_TRACK=1` (or `true`) does too. |
 
 ### What the installer host records
 

@@ -191,7 +191,13 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // or code-editor markup and no mojibake for it to change; the new
       // placeholder-title check adds a row only for a broken title, and every
       // synthetic title is real copy.
-      expect(v1.findings.length).toBe(102744);
+      // 102743 -> 103244: schema/expected-type is page-scoped and adds one check on each
+      // of 500 pages. The harness pages carry no classification (the page classifier
+      // is not wired into the synthetic site), so the check is the info "not
+      // classified with enough confidence". Info does not score, so
+      // healthScore.overall is unmoved at 51.
+      // 103243 -> 103244: security/tls-certificate adds one skipped check (no probe injected).
+      expect(v1.findings.length).toBe(103244);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -219,9 +225,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 307 -> 308 content/common-misspellings,
       // 308 -> 309 mobile/input-zoom,
       // 309 -> 310 images/hotlinked, 310 -> 311 content/h1-title-alignment,
-      // 311 -> 312 security/tls-certificate;
+      // 311 -> 312 schema/expected-type, 312 -> 313 security/tls-certificate;
       // anything else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(312);
+      expect(v1.perRuleTally.length).toBe(313);
       expect(v1.perRuleTally.find((t) => t.ruleId === "security/tls-certificate")).toEqual({
         ruleId: "security/tls-certificate",
         pass: 0,

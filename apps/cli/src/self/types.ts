@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+// A stamped install source: lowercase letters, digits and hyphens. One pattern
+// for the env reader (install-meta.ts) and the persisted setting below.
+export const INSTALL_SOURCE_PATTERN = /^[a-z0-9-]{1,32}$/;
+
 // Auth schema for CLI authentication state
 export const AuthSchema = z
   .object({
@@ -136,7 +140,21 @@ export const UserSettingsSchema = z.object({
   // Install tracking
   id: z.string().nullable().optional(),
   registered: z.boolean().optional(),
+  // Install channel stamped by `self install` from SQUIRREL_INSTALL_SOURCE
+  // (validated slug), so the registration on the next run reports it.
+  install_source: z
+    .string()
+    .regex(INSTALL_SOURCE_PATTERN)
+    .nullable()
+    .optional()
+    // A hand-edited bad value reads as unset; it must not invalidate the file.
+    .catch(null),
+  // Set once the install's first audit has been reported to telemetry.
+  first_audit_reported_at: z.string().nullable().optional(),
   telemetry_notice_shown: z.boolean().nullable().optional(),
+  // Which wording of the notice was shown. Bumped when what is collected
+  // changes (v2: the user ID once signed in), so existing installs see it again.
+  telemetry_notice_version: z.number().int().nullable().optional(),
   user_feedback_email: z.string().email().nullable().optional(),
 
   // Authentication state

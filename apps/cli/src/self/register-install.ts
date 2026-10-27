@@ -4,7 +4,12 @@ import type { UserSettings } from "./types";
 
 import { version } from "../../package.json";
 import { getOrCreateInstallId } from "./install-id";
-import { detectCi, detectInstallSource } from "./install-meta";
+import {
+  detectCi,
+  detectCpuInfo,
+  detectInstallSource,
+  normalizeInstallSource,
+} from "./install-meta";
 import { detectPlatformArch, isManagedInstall } from "./paths";
 import { loadUserSettings, updateSettings } from "./settings";
 import { isTelemetryDisabled } from "./telemetry";
@@ -20,6 +25,9 @@ interface RegisterInstallPayload {
   managed: boolean;
   ci: boolean;
   auto_update: boolean;
+  // macOS only (null elsewhere): Rosetta vs real Intel; see detectCpuInfo.
+  cpu_translated: boolean | null;
+  hw_arm64: boolean | null;
 }
 
 export function registerInstall(settings?: UserSettings): void {
@@ -42,10 +50,13 @@ async function doRegisterInstall(): Promise<void> {
     id,
     platform: detectPlatformArch(),
     version,
-    source: detectInstallSource(),
+    // A hand-edited value is re-validated, never trusted.
+    source:
+      normalizeInstallSource(settings.install_source) ?? detectInstallSource(),
     managed: isManagedInstall(),
     ci: detectCi(),
     auto_update: settings.auto_update,
+    ...detectCpuInfo(),
   };
 
   // Unauthenticated endpoint (auth:"none"); only mark registered on a real 2xx.

@@ -20,7 +20,7 @@ Signed out, a local audit runs the deterministic rules on your machine and needs
 
 ## What does telemetry send?
 
-Telemetry is on by default. The CLI sends the event name, the CLI version, a random install ID and a bounded error category. It does not send credentials, URLs, report contents or raw error messages, and telemetry requests are never authenticated. The CLI shows this once before its first telemetry-enabled command ([`self` settings](/cli/self#telemetry)).
+Telemetry is on by default. The CLI sends the event name, the CLI version, a random install ID and a bounded error category. After `squirrel auth login` it also attaches your user ID, so events tie to your account. It does not send API keys, URLs, hosts, paths, email addresses, report contents or raw error messages, and it sends nothing when telemetry is off. The CLI shows this once before its first telemetry-enabled command ([`self` settings](/cli/self#telemetry)).
 
 To turn it off:
 
@@ -28,9 +28,9 @@ To turn it off:
 squirrel self settings set telemetry false
 ```
 
-For CI or one-off commands, set `NO_TELEMETRY` (any defined value disables it). `squirrel audit --offline` sends no telemetry ([`audit` options](/cli/audit)).
+For CI or one-off commands, set `NO_TELEMETRY` (any defined value disables it) or `DO_NOT_TRACK=1`. `squirrel audit --offline` sends no telemetry ([`audit` options](/cli/audit)).
 
-The install script is separate. The host that serves it counts each fetch: script type, a coarse client class and an optional `?source=` tag, with no IP address kept. The script itself sends an anonymous report only when the install fails, and `NO_TELEMETRY` turns that off too ([Quickstart](/quickstart#installation)). The report is a fixed set of fields: the failing step, OS, architecture, release version, exit code and the tail of the failing command's output.
+The install script is separate. The host that serves it counts each fetch: script type, a coarse client class and an optional `?source=` tag, with no IP address kept. The script itself sends an anonymous report only when the install fails, and `NO_TELEMETRY` or `DO_NOT_TRACK=1` turns that off too ([Quickstart](/quickstart#installation)). The report is a fixed set of fields: the failing step, OS, architecture, release version, exit code and the tail of the failing command's output.
 
 ## Does it obey robots.txt?
 

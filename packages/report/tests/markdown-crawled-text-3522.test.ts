@@ -11,6 +11,7 @@ import { renderMarkdown } from "../src/output/markdown";
 import { renderEntityDiffMarkdown } from "../src/entities-diff";
 import {
   escapeHtmlText,
+  escapeMarkdownCell,
   escapeMarkdownDestination,
   escapeMarkdownText,
   markdownCodeSpan,
@@ -381,9 +382,20 @@ describe("line breaks inside raw HTML (#3522 review round 2)", () => {
 });
 
 describe("markdown-escape helpers (#3522)", () => {
+  test("ordinary message text stays readable: parentheses, bangs, > and a bare & are not escaped", () => {
+    const message = "Title is 72 characters (recommended: 30-60) on 3 pages! nav > a, R&D, 5 > 3";
+    expect(escapeMarkdownText(message)).toBe(message);
+    expect(escapeMarkdownCell(message)).toBe(message);
+  });
+
+  test("an entity-shaped & and a leading > are still escaped", () => {
+    expect(escapeMarkdownText("&#x5D;")).toBe("\\&#x5D;");
+    expect(escapeMarkdownText("> quote")).toBe("\\> quote");
+  });
+
   test("escapeMarkdownText escapes link, image, code and HTML syntax and flattens lines", () => {
     expect(escapeMarkdownText("a](b) ![c] `d` <e> &f |g\\h\nnext")).toBe(
-      "a\\]\\(b\\) \\!\\[c\\] \\`d\\` \\<e\\> \\&f \\|g\\\\h next",
+      "a\\](b) !\\[c\\] \\`d\\` \\<e> &f \\|g\\\\h next",
     );
     // Underscores and asterisks stay readable: they can only emphasise.
     expect(escapeMarkdownText("/my_page*")).toBe("/my_page*");

@@ -191,7 +191,27 @@ function makeRule(indexH1s: boolean): CommentRule {
   // The h1s are gathered per root, so a detached subtree finds its own. A
   // one-off lookup skips the page-wide gather and queries the subtree.
   const holdsH1 = new Map<object, boolean>();
-  const h1sOfRoot = new Map<object, Element[]>();
+  const holdersOfRoot = new Map<object, Set<object>>();
+  // The root of each element already walked up from, so a chain of nested containers walks the
+  // chain once, not once per container.
+  const rootOf = new Map<object, El>();
+  const rootFor = (el: El): El => {
+    const path: El[] = [];
+    let at: El = el;
+    let root = rootOf.get(at);
+    while (root === undefined) {
+      path.push(at);
+      const parent: El | null = at.parentElement;
+      if (!parent) {
+        root = at;
+        break;
+      }
+      at = parent;
+      root = rootOf.get(at);
+    }
+    for (const seen of path) rootOf.set(seen, root);
+    return root;
+  };
   const containsH1 = (el: El): boolean => {
     let known = holdsH1.get(el);
     if (known === undefined && !indexH1s) {
@@ -199,16 +219,23 @@ function makeRule(indexH1s: boolean): CommentRule {
       holdsH1.set(el, known);
     }
     if (known === undefined) {
-      let root: El = el;
-      while (root.parentElement) root = root.parentElement;
-      let h1s = h1sOfRoot.get(root);
-      if (!h1s) {
-        h1s = Array.from(root.querySelectorAll("h1"));
-        h1sOfRoot.set(root, h1s);
+      const root = rootFor(el);
+      let holders = holdersOfRoot.get(root);
+      if (!holders) {
+        // One walk up from each <h1>, stopping at an element already marked: every element
+        // above some <h1> is marked once, so the pass costs the nodes it touches, not
+        // (candidates x h1s) as `h1s.some(contains)` did.
+        holders = new Set<object>();
+        for (const h1 of root.querySelectorAll("h1")) {
+          for (let up: El | null = h1.parentElement; up && !holders.has(up); up = up.parentElement) {
+            holders.add(up);
+          }
+        }
+        holdersOfRoot.set(root, holders);
       }
       // Descendants only, as querySelector: an <h1 class="comments-title"> is
       // the thread's own heading, not a page title it wraps.
-      known = h1s.some((h1) => h1 !== el && el.contains(h1));
+      known = holders.has(el);
       holdsH1.set(el, known);
     }
     return known;

@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 import type { InstallResult } from "@/self/types";
 
 import { type Result, ok, err, commandError } from "@/controllers/types";
+import { readInstallSourceEnv } from "@/self/install-meta";
 import { linkBinary, unlinkIfPresent } from "@/self/link-binary";
 import {
   getSquirrelPaths,
@@ -64,6 +65,12 @@ export async function runSelfInstall(
       last_update_check: new Date().toISOString(),
       // Remember a custom bin dir so future updates flip the right symlink
       install_bin_dir: options.binDir ?? null,
+      // Registration runs on the next command, where the env var is gone.
+      // Persist a valid stamp; keep any earlier one when this run has none.
+      install_source:
+        readInstallSourceEnv() ??
+        (existing.ok ? existing.data.install_source : undefined) ??
+        null,
     });
 
     if (!settingsResult.ok) {
