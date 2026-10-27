@@ -5,6 +5,7 @@ import type { PageFeatureRow } from "@squirrelscan/core-contracts";
 
 import { detachFromPage } from "@squirrelscan/audit-engine";
 import { buildCacheStats } from "@squirrelscan/core-contracts";
+import { createStructureBuilder } from "@squirrelscan/report/structure";
 import { loadAllRules, type RuleRunResult } from "@squirrelscan/rules";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 import { Effect } from "effect";
@@ -423,6 +424,11 @@ export function reconstructReport(
     const featureBuf = new Map<string, PageFeatureRow>();
     let featureCursor: string | undefined;
     let featuresExhausted = false;
+    // #2307: the page structure block, folded one page at a time from the stored scalars.
+    const structureBuilder = createStructureBuilder();
+    // A failed features read leaves pages with no scalars to fold in. The block would then count
+    // only the pages read before the failure, so it is left out rather than printed short.
+    const featureRead = { failed: false };
 
     for (let offset = 0; ; offset += batchSize) {
       // Fails rather than degrading: the whole-crawl read this replaced
@@ -452,7 +458,12 @@ export function reconstructReport(
               limit: batchSize,
             })
             .pipe(
-              Effect.catchAll(() => Effect.succeed([] as PageFeatureRow[]))
+              Effect.catchAll(() =>
+                Effect.sync(() => {
+                  featureRead.failed = true;
+                  return [] as PageFeatureRow[];
+                })
+              )
             );
           if (rows.length === 0) {
             featuresExhausted = true;
@@ -466,6 +477,11 @@ export function reconstructReport(
         // Consume it: every features row's URL is a stored page's URL, so the
         // buffer drains in step with the page walk instead of accumulating.
         if (features) featureBuf.delete(page.normalizedUrl);
+        // Pages that answered with a document. A 404 page carries the site's chrome too, and
+        // counting it would say the site has more header links than it has pages.
+        if (page.status >= 200 && page.status < 300) {
+          structureBuilder.add(features?.reportScalars?.structure);
+        }
 
         coverageInputs.push({
           url: page.normalizedUrl,
@@ -612,6 +628,8 @@ export function reconstructReport(
 
       if (batch.length < batchSize) break;
     }
+
+    const structure = featureRead.failed ? undefined : structureBuilder.build();
 
     if (sitemaps) {
       const coverage = computeSitemapCoverage(
@@ -885,6 +903,7 @@ export function reconstructReport(
       // the crawl (#1050). A later database report restores that exact scope;
       // old crawl rows have no stamp and deliberately gain no inferred one.
       ...(crawl.scanScope ? { scanScope: crawl.scanScope } : {}),
+      ...(structure ? { structure } : {}),
       ...(cacheStats ? { cacheStats } : {}),
       ...(renderBlockRecovered > 0
         ? { fetchFallbacks: { recovered: renderBlockRecovered } }

@@ -20,6 +20,8 @@ The rule is site-wide and reads the same dofollow inbound counts as `links/orpha
 
 The count of one is fixed and not configurable. With `links/orphan-pages` at its default threshold of 2, a page with one inbound link is reported by both rules.
 
+When the page's links carry a link section (see [Page Classifier](/configuration/classifier)), each item says where its one link sits and carries the counts in `meta.sections`, for example `https://example.com/lone, linked in the navigation`. A crawl whose links carry no section keeps the plain item, which is just the URL.
+
 ## How to fix it
 
 Add contextual links from the pages that share the topic, and from the hub or category page the content belongs to. Two or three links from related content are worth more than another entry in the footer.

@@ -1,12 +1,21 @@
 // Plain text report output
 
 import type { ReportBranding } from "@squirrelscan/core-contracts";
-import type { AuditReport } from "../types";
+import type { AuditReport, CheckResult } from "../types";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
 import { cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
 import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
 import { getScoreGrade } from "../scoring";
-import { REPORT_TEXT_WRAP_WIDTH } from "../constants";
+import { REPORT_SOURCE_PAGES_PREVIEW, REPORT_TEXT_WRAP_WIDTH } from "../constants";
+import { fixRollupLine, fixUnits, ruleFixCoverage } from "../component-presentation";
+import {
+  ruleSiteResourceCoverage,
+  siteResourceFixLine,
+  withSiteResourceCoverage,
+} from "../site-resource-presentation";
+
+import { uncoveredItems } from "../component-presentation";
+import { formatSiteWideItem, siteWideContext, siteWideItem } from "../site-wide-items";
 import {
   groupIssuesByCategory,
   flattenIssuesBySeverity,
@@ -15,6 +24,18 @@ import {
 } from "../grouping";
 import { affectedPages, itemsNotListed, itemsNotListedLine } from "../affected-pages";
 import {
+  affectedPagesSuffix,
+  itemSourceView,
+  moreSourcePages,
+  sourceRowText,
+} from "../item-sources";
+import {
+  checkPagesScopedAway,
+  checkScopeLine,
+  itemLabel,
+  regionScopeLine,
+} from "../region-scope";
+import {
   ENTITY_CONSOLE_LIMIT,
   ENTITY_EMPTY_MESSAGE,
   entityLabel,
@@ -22,6 +43,14 @@ import {
   entitySummaryLine,
   primaryEntities,
 } from "../entities";
+import {
+  structureChromeLine,
+  structureDegradedLine,
+  structureNumber,
+  structurePageTypesLine,
+  structureRows,
+  structureTotalsLine,
+} from "../structure";
 import { groupTechnologies, techChangeSummary } from "../technologies";
 import { SITE_PROFILE_NOTE, siteProfileFlags, siteProfileRows } from "../site-metadata";
 import { EDITOR_SUMMARY_NOTE, editorSummaryView, priorityEffortLabel } from "../editor-summary";
@@ -40,10 +69,14 @@ import { wrapText } from "../utils";
 import { unfetchedNote } from "../coverage";
 import { lockedRulesMessage } from "../locked-rules";
 import { privateTargetLine } from "../private-target";
-import { notCheckedLines } from "../not-checked";
+import { notCheckedDetailLines } from "../not-checked";
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 
 export interface TextRenderOptions {
+  /** Roll up groups that are one repair (default true). */
+  componentRollup?: boolean;
+  /** Collapse site-wide items into one line (default true). */
+  siteWideCollapse?: boolean;
   version?: string;
   /** White-label branding (#810) — Team orgs drop the squirrelscan header/footer. */
   branding?: ReportBranding;
@@ -111,8 +144,103 @@ function formatRateLimitedHosts(hosts: string[]): string {
   return `${hosts.slice(0, 2).join(", ")} and ${hosts.length - 2} other host(s)`;
 }
 
+/** Plain-language cause for an `omitted` component-evidence marker. */
+function componentEvidenceReason(
+  reason: NonNullable<CheckResult["componentEvidence"]>["reason"],
+): string {
+  if (reason === "payload-limit") return "they exceeded the stored finding payload limit.";
+  if (reason === "page-sample-limit") {
+    return "their pages fall outside this rule's recorded page sample.";
+  }
+  return "the stored row that carried them was not available.";
+}
+
+/** The scope and coverage notes that qualify the score, one line each. */
+function scanDetailLines(report: AuditReport): string[] {
+  const out: string[] = [];
+  // #1829: coverage the crawl lost to throttling.
+  if (report.rateLimited && report.rateLimited.pages > 0) {
+    out.push(
+      `Rate limited: ${report.rateLimited.pages} page(s) not verified (${formatRateLimitedHosts(report.rateLimited.hosts)})${unfetchedNote(report.rateLimited.unfetched)}`,
+    );
+  }
+  // #1418: the seed redirected off its own site and was not followed, so the URL at the top is not
+  // where the redirect pointed. stripControlChars because the redirect target is a string the
+  // audited site chose and this output reaches a terminal.
+  const seedRedirect = seedRedirectLine(report);
+  if (seedRedirect) out.push(stripControlChars(seedRedirect));
+  const scope = scanScopeLine(report);
+  if (scope) out.push(scope);
+  // repo#2661: a capped published report lists samples; say so, and where the rest is.
+  const capped = publishedReportNote(report);
+  if (capped) out.push(capped);
+  const level = auditLevelLine(report);
+  if (level) out.push(level);
+  const cov = coverageLine(report);
+  if (cov) out.push(cov);
+  // pub#629: the score's other basis line, the rules a private host skipped.
+  const privateTarget = privateTargetLine(report);
+  if (privateTarget) out.push(privateTarget);
+  const hint = fullScanHint(report);
+  if (hint) out.push(hint);
+  const fallbacks = fetchFallbacksLine(report);
+  if (fallbacks) out.push(fallbacks);
+  return out;
+}
+
+/**
+ * REPORT DETAIL: what this audit did not check (so a skipped check never reads as clean), the page
+ * structure, then the scope and coverage notes. Writes nothing when there is none of it.
+ */
+function writeReportDetail(report: AuditReport, write: (line?: string) => void): void {
+  const notChecked = notCheckedDetailLines(report);
+  const scan = scanDetailLines(report);
+  const structure = report.structure;
+  if (notChecked.length === 0 && scan.length === 0 && !structure) return;
+
+  write("REPORT DETAIL");
+  write("-".repeat(40));
+  if (notChecked.length > 0) {
+    write("Not checked");
+    for (const line of notChecked) write(`  - ${line}`);
+    write("");
+  }
+  if (structure) {
+    write("Page structure");
+    const typesLine = structurePageTypesLine(structure);
+    if (typesLine) {
+      write(typesLine);
+      write("");
+    }
+    const rows = structureRows(structure);
+    if (rows.length > 0) {
+      const width = Math.max("Section".length, ...rows.map((r) => r.section.length));
+      write(`${"Section".padEnd(width)}  ${"Pages".padStart(7)}  ${"Links".padStart(8)}`);
+      for (const row of rows) {
+        write(
+          `${row.section.padEnd(width)}  ${structureNumber(row.pages).padStart(7)}  ${structureNumber(row.links).padStart(8)}`,
+        );
+      }
+      write("");
+    }
+    const totals = structureTotalsLine(structure);
+    if (totals) write(totals);
+    const chromeLine = structureChromeLine(structure);
+    if (chromeLine) write(chromeLine);
+    const degradedLine = structureDegradedLine(structure);
+    if (degradedLine) write(degradedLine);
+    write("");
+  }
+  if (scan.length > 0) {
+    write("Scan details");
+    for (const line of scan) write(`  - ${line}`);
+    write("");
+  }
+}
+
 export function renderText(report: AuditReport, options?: TextRenderOptions): string {
   const lines: string[] = [];
+  const siteWide = siteWideContext(report, options?.siteWideCollapse !== false);
   const version = options?.version ?? "";
   const whiteLabel = options?.branding?.whiteLabel ?? false;
   const write = (line = "") => {
@@ -126,39 +254,6 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
   write("=".repeat(60));
   write(`Auditing: ${report.baseUrl}`);
   write(`Crawled ${report.totalPages} pages`);
-  // #1829: coverage the crawl lost to throttling. Printed next to the page
-  // count because it is the caveat on that number — a multi-site operator has
-  // to be able to see at a glance whether the total is the whole site.
-  if (report.rateLimited && report.rateLimited.pages > 0) {
-    write(
-      `Rate limited: ${report.rateLimited.pages} page(s) not verified (${formatRateLimitedHosts(report.rateLimited.hosts)})${unfetchedNote(report.rateLimited.unfetched)}`,
-    );
-  }
-  // #1418: the seed redirected off its own site and was not followed, so the
-  // line above is not where the redirect pointed. stripControlChars because the
-  // redirect target is a string the audited site chose and this output reaches
-  // a terminal (seedRedirectLine already drops whitespace/C0 from the URL; this
-  // is the same belt-and-braces every other page-derived line here gets).
-  const seedRedirect = seedRedirectLine(report);
-  if (seedRedirect) write(stripControlChars(seedRedirect));
-  const scope = scanScopeLine(report);
-  if (scope) write(scope);
-  // repo#2661: a capped published report lists samples; say so, and where the rest is.
-  const capped = publishedReportNote(report);
-  if (capped) write(capped);
-  const level = auditLevelLine(report);
-  if (level) write(level);
-  const cov = coverageLine(report);
-  if (cov) write(cov);
-  // pub#629: the score's other basis line, the rules a private host skipped.
-  const privateTarget = privateTargetLine(report);
-  if (privateTarget) write(privateTarget);
-  // repo#2729: checks this audit did not run, so a skipped check never reads as clean.
-  for (const line of notCheckedLines(report)) write(line);
-  const hint = fullScanHint(report);
-  if (hint) write(hint);
-  const fallbacks = fetchFallbacksLine(report);
-  if (fallbacks) write(fallbacks);
   write("");
 
   // Editor's summary — report-only (Pro exec-email narrative; not part of the score).
@@ -342,32 +437,84 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
         write(`  Solution: ${wrapped[0]}`);
         for (const line of wrapped.slice(1)) write(`            ${line}`);
       }
+      // #2341: resource units first, then component units, over one coverage.
+      const siteResources = ruleSiteResourceCoverage(rule);
+      const coverage = withSiteResourceCoverage(ruleFixCoverage(rule), siteResources, rule);
+      for (const group of siteResources.groups) {
+        write(`    ${siteResourceFixLine(group, 5, pathOnly)}`);
+      }
+      for (const rollup of fixUnits(coverage.groups, options?.componentRollup !== false)) {
+        // One actionable line per REPAIR, not per faulty element in a block.
+        write(`    ${fixRollupLine(rollup, 5, pathOnly)}`);
+      }
       write("");
 
       for (const check of rule.checks) {
         // #1023 R-F: authoritative page count (true pre-sample total) + the
         // union sample (pages + item page-refs), labeled examples when clipped.
         const { sample, count, hasMore } = affectedPages(check);
-        const countStr = count > 1 ? ` (${count} pages)` : "";
+        const countStr = affectedPagesSuffix(check, count);
         const icon = check.status === "fail" ? "X" : "!";
         write(`    [${icon}] ${check.name}: ${check.message}${countStr}${carriedTag(check)}`);
+        if (check.componentEvidence?.state === "omitted") {
+          write(
+            `        Component fix evidence unavailable for ${check.componentEvidence.occurrenceCount} occurrence(s): ${componentEvidenceReason(check.componentEvidence.reason)}`,
+          );
+        }
 
-        if (sample.length > 0) {
-          for (const page of sample) write(`        -> ${pathOnly(page)}`);
-          if (hasMore) write(`        ... and ${count - sample.length} more`);
+        // Fully covered: the fix-once lines above already list every page.
+        const uncovered =
+          coverage.mode === "full"
+            ? []
+            : coverage.mode === "partial"
+              ? sample.filter((page) => coverage.uncoveredPages.includes(page))
+              : sample;
+
+        // pub#846: a check that sits in one shared region names it instead of listing its pages,
+        // and so does a check whose findings are scoped to regions: they carry their own pages.
+        // pub#857: and so does a check on every page of one page type.
+        const checkScope = checkScopeLine(check, count, report.structure);
+        if (checkScope) {
+          write(`        ${checkScope}`);
+        } else if (uncovered.length > 0 && !checkPagesScopedAway(check, count, report.structure)) {
+          if (coverage.mode === "partial") {
+            write(`        Not attributed to a shared component (${uncovered.length}):`);
+          }
+          for (const page of uncovered) write(`        -> ${pathOnly(page)}`);
+          if (coverage.mode === "none" && hasMore) {
+            write(`        ... and ${count - sample.length} more`);
+          }
         }
 
         // repo#2661: a capped report keeps a sample of items, or none for a
-        // counts-only class; say how many it left out.
-        const left = itemsNotListed(check);
-        if (check.items && check.items.length > 0) {
-          for (const item of check.items) {
-            const label = item.label ?? item.id;
+        // counts-only class; say how many it left out. A fully covered rule's groups already
+        // account for every item, so it leaves none out.
+        const left = coverage.mode === "full" ? 0 : itemsNotListed(check);
+        const listedItems = uncoveredItems(check.items, coverage);
+        if (listedItems.length > 0) {
+          for (const item of listedItems) {
+            // pub#837: each page once, with its links and where they sit; a long list says how
+            // many pages it leaves out. pub#846: an item scoped to a region names it, lists only
+            // the pages it is on outside it, and its label drops the section phrase.
+            const view = itemSourceView(item, report.structure);
+            const label = itemLabel(item, view.scope) ?? item.id;
+            // One line, no page list: the list IS the noise for an item that is
+            // the same resource on effectively every page.
+            const info = siteWideItem(item, siteWide.total, siteWide.pageUrls);
+            if (info) {
+              write(`        -> ${formatSiteWideItem(label, info, pathOnly)}`);
+              if (item.snippet) write(`           ${item.snippet}`);
+              continue;
+            }
             write(`        -> ${label}`);
             if (item.snippet) write(`           ${item.snippet}`);
-            if (item.sourcePages && item.sourcePages.length > 0) {
-              for (const src of item.sourcePages) write(`            from: ${pathOnly(src)}`);
+            if (view.scope) write(`            ${regionScopeLine(view.scope)}`);
+            const shown = view.rows.slice(0, REPORT_SOURCE_PAGES_PREVIEW);
+            for (const row of shown) {
+              write(`            from: ${sourceRowText(pathOnly(row.page), row.detail)}`);
             }
+            const hidden = Math.max(0, view.total - shown.length);
+            if (hidden > 0) write(`            ${moreSourcePages(hidden)}`);
           }
           if (left > 0) write(`        ... and ${left.toLocaleString("en-US")} more items not listed`);
         } else if (left > 0) {
@@ -443,6 +590,9 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
       write("");
     }
   }
+
+  // Report detail: the last section, after every finding (see the markdown renderer).
+  writeReportDetail(report, write);
 
   write("=".repeat(60));
   write(`${report.passed} passed, ${report.warnings} warnings, ${report.failed} failed`);

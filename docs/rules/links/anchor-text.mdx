@@ -23,6 +23,8 @@ An accessible name comes from the link's text content, an `alt` on an image insi
 
 Severity warning, weight 4.
 
+When the page's links carry a link section (see [Page Classifier](/configuration/classifier)), each item says where its links sit and carries the counts in `meta.sections`: an empty anchor reads `https://example.com/pricing, linked in the footer`, and a generic anchor text reads `"Read more", linked in the page content and the navigation`, counting every link that uses it. A crawl whose links carry no section keeps the item as it was. Each item also carries `regions`, one page per section its links sit in, so an anchor repeated in the site header, footer, navigation or a sidebar on most pages is reported once for that region. See [findings in a shared page region](/reports#findings-in-a-shared-page-region).
+
 ## How to fix it
 
 ```html

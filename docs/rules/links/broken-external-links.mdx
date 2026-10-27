@@ -35,6 +35,8 @@ A link to another of the site's own domains, such as `example.co.uk` linking to 
 
 A cloud audit also gives the link check a time budget, and waits only so long on any one request. Links still without an answer when either runs out are reported in a `broken-external-links` check skipped with reason `external-links-out-of-time`. Message: `N of M external link(s) were not checked: the link check ran out of time before reaching them`, where M is the number of links the check selected. They are neither broken nor working, and an open broken external link finding stays open until an audit checks them. The CLI sets no time budget.
 
+When the page's links carry a link section (see [Page Classifier](/configuration/classifier)), each item, including the unverifiable, rate-limited, not requested and refused ones, says where its links sit and carries the counts in `meta.sections`, for example `https://gone.example/ (404), linked in the footer and the page content`. A crawl whose links carry no section keeps the item as it was. For each audited page that links it, the item's `sources` says how many of that page's links point at it and where they sit, and the report prints one row per page; see [source pages](/configuration/output#source-pages). Each item also counts the audited pages that link it per section (`regions`), so a dead link in the site footer of most pages is reported once for the footer; see [findings in a shared page region](/reports#findings-in-a-shared-page-region).
+
 ## How to fix it
 
 Replace the link with a working equivalent, point it at an archived copy, or remove it. For a reference that matters to the argument, host your own copy of the material rather than depending on someone else's uptime.
@@ -48,6 +50,12 @@ Check the unverifiable and rate-limited lists by hand before touching them. Thos
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 5/10 |
+
+## Category and score
+
+A broken link is a failed request a visitor hits, not a signal a search engine reads, so this rule is in the [Reliability](/rules/reliability) category even though its id keeps the `links/` prefix. The report badges it Reliability. Reliability rolls up into the Performance score group, so its findings count against the Performance group score and no longer against the SEO group. The overall health score weights every rule the same wherever it sits.
+
+Because the id is unchanged, nothing you configured breaks. `links/*` in `enable` or `disable` still selects this rule, `links/broken-external-links` still names it in `rule_options`, and the docs URL is the same. `reliability/*` does not select it, because a pattern matches on the id, but `--rule-include reliability` and `--rule-exclude reliability` do name it. A JSON or published report written before this change still shows the rule under Links. An audit stored on your machine is rendered with the current categories when you run `squirrel report`, so it now shows the rule under Reliability.
 
 ## Enable / disable
 

@@ -18,6 +18,8 @@ The rule runs on every crawled page over every `a[href][rel]`. A link counts whe
 
 The hostname comparison is exact, so a link to a subdomain of the same site is treated as external and is not flagged. Note that `links/orphan-pages` and the other inbound-count rules ignore nofollow links entirely, so a nofollowed internal link does not count toward a target page's inbound total.
 
+When the page's links carry a link section (see [Page Classifier](/configuration/classifier)), each item says where its nofollowed link sits and carries the counts in `meta.sections`, for example `/legal, linked in the navigation`. Only nofollowed links are counted, so a followed link to the same URL elsewhere on the page does not change it. A crawl whose links carry no section keeps the plain item. A placed item also carries `regions`, one page per section, so a nofollowed link in the site navigation of most pages is reported once for the navigation. See [findings in a shared page region](/reports#findings-in-a-shared-page-region).
+
 ## How to fix it
 
 ```html

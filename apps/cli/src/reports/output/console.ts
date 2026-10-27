@@ -6,6 +6,24 @@ import { stripControlCharsPreservingSgr } from "@squirrelscan/core-contracts/con
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
 import { reportFailureReasonCode } from "@squirrelscan/report";
 import {
+  affectedPages,
+  affectedPagesSuffix,
+  hasItemSources,
+  checkPagesScopedAway,
+  checkScopeLine,
+  itemLabel,
+  itemSourceView,
+  moreSourcePages,
+  regionScopeLine,
+  REPORT_SOURCE_PAGES_PREVIEW,
+  sourceRowText,
+  componentFixRollups,
+  fixRollupLine,
+  ruleFixCoverage,
+  ruleSiteResourceCoverage,
+  siteResourceFixLine,
+  uncoveredItems,
+  withSiteResourceCoverage,
   carriedTag,
   coverageLine,
   scanScopeLine,
@@ -19,13 +37,19 @@ import {
   passedRuleScope,
   reportPassedRules,
   techChangeSummary,
+  structureChromeLine,
+  structureDegradedLine,
+  structureRowDetail,
+  structurePageTypesLine,
+  structureRows,
+  structureTotalsLine,
   ENTITY_CONSOLE_LIMIT,
   ENTITY_EMPTY_MESSAGE,
   entityLabel,
   entityPageTotal,
   primaryEntities,
   privateTargetLine,
-  notCheckedLines,
+  notCheckedDetailLines,
   stableIdPercent,
   DOMAIN_STATS_NOTE,
   domainStatRows,
@@ -44,6 +68,7 @@ import type {
   EntityMap,
   GroupScore,
   HealthScore,
+  ReportStructure,
   ReportTechnologies,
   SiteMetadata,
 } from "@/types";
@@ -157,38 +182,6 @@ export function generateConsoleReport(
   log(
     `${fmt.dim(report.baseUrl)} • ${report.totalPages} page${report.totalPages === 1 ? "" : "s"} • ${colorFn(`${score}/100`)} ${fmt.dim(`(${grade})`)}`
   );
-  // #1829: the caveat on the page count above. Yellow, like the seed-redirect
-  // disclosure below it, because it changes how much of the report to trust.
-  if (report.rateLimited && report.rateLimited.pages > 0) {
-    const hosts =
-      report.rateLimited.hosts.length > 0
-        ? report.rateLimited.hosts.join(", ")
-        : "the host";
-    log(
-      fmt.yellow(
-        `Rate limited by ${hosts}: ${report.rateLimited.pages} page${report.rateLimited.pages === 1 ? "" : "s"} not verified. Set [crawler] per_host_concurrency = 1 and per_host_delay_ms = 500 to crawl it politely.`
-      )
-    );
-  }
-  // Refused off-site seed redirect (#1418): the URL on the line above is what
-  // was graded, NOT where the seed pointed. Yellow rather than dim like the
-  // lines below it — it changes what the whole report is about.
-  const seedRedirect = seedRedirectLine(report);
-  if (seedRedirect) log(fmt.yellow(seedRedirect));
-  // Scan scope (#1180) + smart-audits coverage (#110): the score reads with
-  // its basis. The capped-crawl hint stays with pageLimitHint (commands layer).
-  const scope = scanScopeLine(report);
-  if (scope) log(fmt.dim(scope));
-  const cov = coverageLine(report);
-  if (cov) log(fmt.dim(cov));
-  // pub#629: once, here, rather than a skipped line per rule and page.
-  const privateTarget = privateTargetLine(report);
-  if (privateTarget) log(fmt.dim(privateTarget));
-  // repo#2729: checks this audit did not run (link checks off, links not
-  // followed). Yellow, not dim: a missing check must not read as a clean one.
-  for (const line of notCheckedLines(report)) log(fmt.yellow(line));
-  const partial = partialAuditLine(opts.ruleFilter, report.healthScore);
-  if (partial) log(fmt.dim(partial));
   log(divider());
 
   // Editor's summary — report-only Pro exec narrative, surfaced at the top.
@@ -291,57 +284,122 @@ export function generateConsoleReport(
           )
         );
 
+        // #2341: resource units first, then component units, over one coverage.
+        const siteResources = ruleSiteResourceCoverage(rule);
+        const coverage = withSiteResourceCoverage(
+          ruleFixCoverage(rule),
+          siteResources,
+          rule
+        );
+        for (const group of siteResources.groups) {
+          log(
+            box.line(`   ${fmt.bold(siteResourceFixLine(group, 5, pathOnly))}`)
+          );
+        }
+        for (const rollup of componentFixRollups(coverage.groups)) {
+          // One actionable line per REPAIR, not per faulty element in a block.
+          log(box.line(`   ${fmt.bold(fixRollupLine(rollup, 5, pathOnly))}`));
+        }
+
         for (const check of rule.checks) {
           const statusIcon = icon(check.status as "fail" | "warn");
           const pageCount = check.pages.length;
-          const countStr = pageCount > 1 ? ` (${pageCount} pages)` : "";
+          // pub#837: a check whose items are links counts the pages that carry them.
+          const countStr = hasItemSources(check)
+            ? affectedPagesSuffix(check, affectedPages(check).count)
+            : pageCount > 1
+              ? ` (${pageCount} pages)`
+              : "";
           const carried = fmt.dim(carriedTag(check));
           log(
             box.line(
               `   ${statusIcon} ${check.name}: ${check.message}${countStr}${carried}`
             )
           );
-          // Show affected pages (for page-scope rules)
-          if (pageCount > 0) {
+          // A fully covered rule already listed its pages once per repair target above.
+          const uncovered =
+            coverage.mode === "full"
+              ? []
+              : coverage.mode === "partial"
+                ? check.pages.filter((page) =>
+                    coverage.uncoveredPages.includes(page)
+                  )
+                : check.pages;
+          // pub#846: a check that only reads one shared region names it, and a
+          // check whose findings name their regions leaves its page list out.
+          const affected = affectedPages(check).count;
+          // pub#857: and so does a check on every page of one page type.
+          const checkScope = checkScopeLine(check, affected, report.structure);
+          if (checkScope) {
+            log(box.line(`     ${fmt.dim(checkScope)}`));
+          } else if (
+            uncovered.length > 0 &&
+            !checkPagesScopedAway(check, affected, report.structure)
+          ) {
+            // Show affected pages (for page-scope rules)
             const maxPages = 5;
-            const pagesToShow = check.pages.slice(0, maxPages);
+            if (coverage.mode === "partial") {
+              log(
+                box.line(
+                  `     ${fmt.dim(`not attributed to a shared component (${uncovered.length}):`)}`
+                )
+              );
+            }
+            const pagesToShow = uncovered.slice(0, maxPages);
             for (const page of pagesToShow) {
               log(box.line(`     ${fmt.dim(`→ ${pathOnly(page)}`)}`));
             }
-            if (pageCount > maxPages) {
+            if (uncovered.length > maxPages) {
               log(
-                box.line(`     ${fmt.dim(`... +${pageCount - maxPages} more`)}`)
+                box.line(
+                  `     ${fmt.dim(`... +${uncovered.length - maxPages} more`)}`
+                )
               );
             }
           }
-          // Show structured items (preferred). pub#866: the "more" count adds
-          // the items the audit left out of the list to those past the preview.
-          const notListed = itemsNotListed(check);
-          if (check.items && check.items.length > 0) {
+          // Show structured items (preferred), narrowed to what the printed
+          // groups did not already account for. pub#866: the "more" count adds
+          // the items the audit left out of the list to those past the preview;
+          // a fully covered rule's groups account for every item.
+          const listedItems = uncoveredItems(check.items, coverage);
+          const notListed =
+            coverage.mode === "full" ? 0 : itemsNotListed(check);
+          if (listedItems.length > 0) {
             const maxItems = 5;
-            const itemsToShow = check.items.slice(0, maxItems);
+            const itemsToShow = listedItems.slice(0, maxItems);
             for (const item of itemsToShow) {
-              const label = item.label ?? item.id;
+              // Source pages (site-scope items): each page once, with its
+              // links and where they sit (pub#837). An item scoped to a
+              // region names it, then its pages outside it, and its label
+              // drops the section phrase the region says (pub#846).
+              const view = itemSourceView(item, report.structure);
+              const label = itemLabel(item, view.scope) ?? item.id;
               log(box.line(`     ${fmt.dim(`→ ${label}`)}`));
               // Show HTML snippet if present
               if (item.snippet) {
                 log(box.line(`       ${fmt.dim(item.snippet)}`));
               }
-              // Show source pages if present (for site-scope items)
-              if (item.sourcePages && item.sourcePages.length > 0) {
-                for (const src of item.sourcePages.slice(0, 2)) {
-                  log(box.line(`       ${fmt.dim(`from ${pathOnly(src)}`)}`));
-                }
-                if (item.sourcePages.length > 2) {
-                  log(
-                    box.line(
-                      `       ${fmt.dim(`... +${item.sourcePages.length - 2} more pages`)}`
-                    )
-                  );
-                }
+              if (view.scope) {
+                log(box.line(`       ${fmt.dim(regionScopeLine(view.scope))}`));
+              }
+              const shown = view.rows.slice(0, REPORT_SOURCE_PAGES_PREVIEW);
+              for (const row of shown) {
+                log(
+                  box.line(
+                    `       ${fmt.dim(`from ${sourceRowText(pathOnly(row.page), row.detail)}`)}`
+                  )
+                );
+              }
+              const hidden = Math.max(0, view.total - shown.length);
+              if (hidden > 0) {
+                log(
+                  box.line(
+                    `       ${fmt.dim(`... ${moreSourcePages(hidden)}`)}`
+                  )
+                );
               }
             }
-            const more = Math.max(0, check.items.length - maxItems) + notListed;
+            const more = Math.max(0, listedItems.length - maxItems) + notListed;
             if (more > 0) {
               log(
                 box.line(
@@ -386,6 +444,9 @@ export function generateConsoleReport(
       );
     }
   }
+
+  // Report detail: the last section, after every finding and the passed rules.
+  printReportDetail(report, opts);
 
   // Footer
   log("");
@@ -510,6 +571,97 @@ function printTechnologies(tech: ReportTechnologies): void {
       .join(fmt.dim(" · "));
     log(`${group.emoji} ${fmt.bold(group.label.padEnd(22))} ${names}`);
   }
+}
+
+/**
+ * REPORT DETAIL: the last section of the report, after every finding. What this audit did not
+ * check (yellow, so a skipped check never reads as a clean one), the page structure, then the
+ * scope and coverage notes that qualify the score. Nothing is printed when there is none of it.
+ */
+function printReportDetail(
+  report: AuditReport,
+  opts: ConsoleReportOptions
+): void {
+  const notChecked = notCheckedDetailLines(report);
+  const scan: string[] = [];
+  // #1829: coverage lost to throttling. Yellow, because it changes how much of the report to trust.
+  const rateLimited =
+    report.rateLimited && report.rateLimited.pages > 0
+      ? report.rateLimited
+      : null;
+  if (rateLimited) {
+    const hosts =
+      rateLimited.hosts.length > 0 ? rateLimited.hosts.join(", ") : "the host";
+    scan.push(
+      fmt.yellow(
+        `Rate limited by ${hosts}: ${rateLimited.pages} page${rateLimited.pages === 1 ? "" : "s"} not verified. Set [crawler] per_host_concurrency = 1 and per_host_delay_ms = 500 to crawl it politely.`
+      )
+    );
+  }
+  // Refused off-site seed redirect (#1418): the URL at the top is what was graded, NOT where the
+  // seed pointed.
+  const seedRedirect = seedRedirectLine(report);
+  if (seedRedirect) scan.push(fmt.yellow(seedRedirect));
+  // Scan scope (#1180) + smart-audits coverage (#110): the score reads with its basis. The
+  // capped-crawl hint stays with pageLimitHint (commands layer).
+  const scope = scanScopeLine(report);
+  if (scope) scan.push(fmt.dim(scope));
+  const cov = coverageLine(report);
+  if (cov) scan.push(fmt.dim(cov));
+  // pub#629: once, here, rather than a skipped line per rule and page.
+  const privateTarget = privateTargetLine(report);
+  if (privateTarget) scan.push(fmt.dim(privateTarget));
+  const partial = partialAuditLine(opts.ruleFilter, report.healthScore);
+  if (partial) scan.push(fmt.dim(partial));
+  if (notChecked.length === 0 && !report.structure && scan.length === 0) return;
+
+  log("");
+  log(fmt.bold("REPORT DETAIL"));
+  if (notChecked.length > 0) {
+    log("");
+    log(fmt.bold("Not checked"));
+    for (const line of notChecked) log(fmt.yellow(`  - ${line}`));
+  }
+  if (report.structure) {
+    log("");
+    printStructure(report.structure);
+  }
+  if (scan.length > 0) {
+    log("");
+    log(fmt.bold("Scan details"));
+    for (const line of scan) log(`  ${line}`);
+  }
+}
+
+/**
+ * The Page structure block (#2307): which part of the page the links sit in, and the page types.
+ * Report-only and non-scoring, like Technologies. Printed inside Report detail.
+ */
+function printStructure(structure: ReportStructure): void {
+  log(fmt.bold("Page structure"));
+  log(fmt.dim("Where the links on your pages sit. Not part of the score."));
+  const typesLine = structurePageTypesLine(structure);
+  if (typesLine) {
+    log("");
+    log(typesLine);
+  }
+  const rows = structureRows(structure);
+  if (rows.length > 0) {
+    log("");
+    const width = Math.max(...rows.map((r) => r.section.length));
+    for (const row of rows) {
+      log(`${row.section.padEnd(width)}  ${fmt.dim(structureRowDetail(row))}`);
+    }
+  }
+  const totals = structureTotalsLine(structure);
+  if (totals) log(fmt.dim(totals));
+  const chromeLine = structureChromeLine(structure);
+  if (chromeLine) {
+    log("");
+    log(chromeLine);
+  }
+  const degradedLine = structureDegradedLine(structure);
+  if (degradedLine) log(fmt.dim(degradedLine));
 }
 
 /**

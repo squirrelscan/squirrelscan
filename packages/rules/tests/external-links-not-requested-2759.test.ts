@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { EXTERNAL_LINKS_OVER_CAP_SKIP_REASON } from "@squirrelscan/core-contracts";
+import { maskLinkTokens } from "@squirrelscan/utils/link-actions";
 
 import { brokenExternalLinksRule } from "../src/links/broken-external-links";
 import { deadLinksRule } from "../src/links/dead-links";
@@ -228,5 +229,77 @@ describe("links/broken-external-links: links never requested (repo#2759)", () =>
       ctx([ok("https://partner.example/")], { found: 1, checked: 1, cap: 200 }),
     );
     expect(checks.map((c) => c.name)).toEqual(["broken-external-links"]);
+  });
+});
+
+// #2307: the not-requested and refused links say where on the audited pages they sit.
+describe("links/broken-external-links: where never-requested links sit (#2307)", () => {
+  test("not-requested items name the sections of the links that carry them", () => {
+    const c = ctx([ok("https://partner.example/")], {
+      found: 2,
+      checked: 1,
+      cap: 200,
+      notRequested: 1,
+      notRequestedLinks: [sample[0]!],
+    } as SiteData["externalLinkCheck"]);
+    c.site!.pages = [
+      {
+        url: `${BASE}/`,
+        parsed: {
+          links: [{ url: UNSUBSCRIBE, text: "unsubscribe", isInternal: false, section: "footer" }],
+        },
+      },
+    ] as never;
+    const { checks } = brokenExternalLinksRule.run(c);
+    const item = checks.find((x) => x.name === "not-requested-external-links")!.items![0]!;
+
+    expect(item.id).toBe(UNSUBSCRIBE);
+    expect(item.label).toBe(`${UNSUBSCRIBE}, linked in the footer`);
+    expect(item.meta).toEqual({ sections: { footer: 1 } });
+  });
+
+  test("without section data the item is as it was", () => {
+    const { checks } = brokenExternalLinksRule.run(
+      ctx([ok("https://partner.example/")], {
+        found: 2,
+        checked: 1,
+        cap: 200,
+        notRequested: 1,
+        notRequestedLinks: [sample[0]!],
+      } as SiteData["externalLinkCheck"]),
+    );
+    const item = checks.find((x) => x.name === "not-requested-external-links")!.items![0]!;
+
+    expect(item).toEqual({ id: UNSUBSCRIBE, sourcePages: [`${BASE}/`, `${BASE}/about`] });
+  });
+});
+
+describe("links/broken-external-links: masked hrefs still find their section (#2307)", () => {
+  test("the sample is reported masked and matched to the link by its own masked form", () => {
+    const masked = maskLinkTokens(UNSUBSCRIBE);
+    expect(masked).not.toBe(UNSUBSCRIBE);
+    const c = ctx([ok("https://partner.example/")], {
+      found: 2,
+      checked: 1,
+      cap: 200,
+      notRequested: 1,
+      notRequestedLinks: [{ href: masked, sourcePages: [`${BASE}/`] }],
+    } as SiteData["externalLinkCheck"]);
+    c.site!.pages = [
+      {
+        url: `${BASE}/`,
+        parsed: {
+          links: [{ url: UNSUBSCRIBE, text: "unsubscribe", isInternal: false, section: "footer" }],
+        },
+      },
+    ] as never;
+    const item = brokenExternalLinksRule
+      .run(c)
+      .checks.find((x) => x.name === "not-requested-external-links")!.items![0]!;
+
+    expect(item.id).toBe(masked);
+    expect(item.label).toBe(`${masked}, linked in the footer`);
+    // The credential is in neither the label nor the meta.
+    expect(JSON.stringify(item)).not.toContain("0123456789abcdef0123456789abcdef"); // pragma: allowlist secret
   });
 });

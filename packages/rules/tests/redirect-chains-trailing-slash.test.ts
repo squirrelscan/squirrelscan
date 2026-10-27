@@ -370,3 +370,58 @@ describe("links/redirect-chains — a chain can never claim a 200 first hop", ()
     }
   });
 });
+
+// #2307: where the links to a redirecting page sit.
+describe("links/redirect-chains — link sections", () => {
+  function sectionedCtx(section: "footer" | undefined): RuleContext {
+    const c = ctx([
+      {
+        url: "https://example.com/old",
+        finalUrl: "https://example.com/new",
+        redirectChain: chain("https://example.com/old", "https://example.com/new", [
+          hop("https://example.com/old", 301),
+          hop("https://example.com/new", 200),
+        ]),
+      },
+      { url: "https://example.com/a", finalUrl: "https://example.com/a" },
+      { url: "https://example.com/b", finalUrl: "https://example.com/b" },
+    ]);
+    for (const [i, path] of ["/a", "/b"].entries()) {
+      const page = c.site!.pages.find((p) => p.url === `https://example.com${path}`)!;
+      page.parsed = {
+        links: [
+          { url: "https://example.com/old", isInternal: true, ...(section ? { section } : {}) },
+          ...(i === 0
+            ? [{ url: "https://example.com/old", isInternal: true, section: "content" as const }]
+            : []),
+        ],
+      } as never;
+    }
+    return c;
+  }
+
+  test("links-to-redirect items say where the links sit and carry meta.sections", () => {
+    const item = redirectChainsRule
+      .run(sectionedCtx("footer"))
+      .checks.find((c) => c.name === "links-to-redirect")!.items![0]!;
+
+    expect(item.label).toBe(
+      "https://example.com/old (301) → https://example.com/new (200), linked in the footer and the page content"
+    );
+    expect((item.meta as { sections?: unknown }).sections).toEqual({ footer: 2, content: 1 });
+    expect(item.sourcePages).toEqual(["https://example.com/a", "https://example.com/b"]);
+  });
+
+  test("without section data the item is as it was", () => {
+    const c = sectionedCtx(undefined);
+    for (const page of c.site!.pages) {
+      for (const link of page.parsed?.links ?? []) delete (link as { section?: string }).section;
+    }
+    const item = redirectChainsRule
+      .run(c)
+      .checks.find((x) => x.name === "links-to-redirect")!.items![0]!;
+
+    expect(item.label).toBe("https://example.com/old (301) → https://example.com/new (200)");
+    expect("sections" in (item.meta as object)).toBe(false);
+  });
+});

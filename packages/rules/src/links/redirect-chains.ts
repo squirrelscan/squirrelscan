@@ -4,6 +4,14 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import { formatRedirectHop, type RedirectChain } from "@squirrelscan/core-contracts";
 
 import { didRedirect, targetKey } from "../shared/redirect-evidence";
+import {
+  regionsField,
+  sectionMeta,
+  tallyFields,
+  tallySource,
+  withSection,
+  type SourceTally,
+} from "./link-section-label";
 
 export const redirectChainsRule: Rule = {
   meta: {
@@ -78,7 +86,9 @@ export const redirectChainsRule: Rule = {
       });
     }
 
-    const linksToRedirect = new Map<string, Set<string>>();
+    // The pages linking each redirecting target: each page once, with its links there and where
+    // on the page they sit (#2307, pub#837).
+    const linksToRedirect = new Map<string, SourceTally>();
 
     if (redirectTargets.size > 0) {
       for (const page of pages) {
@@ -91,9 +101,9 @@ export const redirectChainsRule: Rule = {
             // one of them is the mistake being reported.
             const target = targetKey(new URL(link.url, page.url).href);
             if (redirectTargets.has(target)) {
-              const sources = linksToRedirect.get(target) ?? new Set();
-              sources.add(page.url);
-              linksToRedirect.set(target, sources);
+              let tally = linksToRedirect.get(target);
+              if (!tally) linksToRedirect.set(target, (tally = new Map()));
+              tallySource(tally, page.url, link.section);
             }
           } catch {
             continue;
@@ -107,16 +117,20 @@ export const redirectChainsRule: Rule = {
         name: "links-to-redirect",
         status: "warn",
         message: `${linksToRedirect.size} link target(s) point to redirecting URLs`,
-        items: [...linksToRedirect.entries()].map(([target, sources]) => {
+        items: [...linksToRedirect.entries()].map(([target, tally]) => {
           const redirect = redirectTargets.get(target);
           const label = redirect ? redirect.chainLabel : target;
+          const { sourcePages, sources, sections, regions } = tallyFields(tally);
           return {
             id: redirect?.originalUrl ?? target,
-            label,
-            sourcePages: [...sources],
+            label: withSection(label, sections),
+            sourcePages,
+            sources,
+            ...regionsField(regions),
             meta: {
               targetUrl: redirect?.finalUrl ?? target,
               chain: redirect?.chain,
+              ...sectionMeta(sections),
             },
           };
         }),

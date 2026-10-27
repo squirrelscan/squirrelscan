@@ -62,9 +62,11 @@ These carry the highest severity and weight in the category.
 - [Website audit tool](https://squirrelscan.com/tools/website-audit)
 - [Sample report](https://squirrelscan.com/reports/squirrelscan-sample), with the Reliability section on a real site
 
+The three broken link rules keep their `links/` ids, so their pages live under [Links](/rules/links) and `links/*` selects them. They are Reliability rules in every report. A pattern matches on the id, not the category: to turn off everything Reliability scores, list them next to `reliability/*`.
+
 ## Disable all Reliability rules
 
 ```toml squirrel.toml
 [rules]
-disable = ["reliability/*"]
+disable = ["reliability/*", "links/broken-links", "links/broken-external-links", "links/broken-anchors"]
 ```

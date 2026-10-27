@@ -1,8 +1,15 @@
 // Category-grouped issues derived from rule results
 
-import type { CheckTallies } from "@squirrelscan/core-contracts";
+import type { CheckTallies, LinkSection } from "@squirrelscan/core-contracts";
+import { addRegions, pageRegions } from "@squirrelscan/core-contracts/item-sources";
 import { PUBLISH_LIMITS } from "@squirrelscan/core-contracts/limits";
-import type { ReportRuleResult, CheckItem, CheckResult } from "./types";
+import type {
+  ReportRuleResult,
+  CheckItem,
+  CheckResult,
+  ComponentOccurrence,
+  SiteResourceOccurrence,
+} from "./types";
 import { KEY_SEPARATOR } from "./constants";
 import { checkOccurrences } from "./occurrences";
 import {
@@ -11,6 +18,11 @@ import {
   type MessageShape,
 } from "./message-merge";
 import { checkAffectedPages } from "./affected-pages";
+import {
+  componentFixGroups,
+  componentOccurrenceKey,
+  type ComponentFixGroup,
+} from "./component-fix-groups";
 import { ruleMixedProvenanceNote, type MixedProvenanceCheck } from "./coverage";
 import {
   isValidCategory,
@@ -35,6 +47,12 @@ export interface GroupedCheck {
   // Structured data (preferred)
   items?: CheckItem[];
   details?: Record<string, unknown>;
+  /** Complete raw occurrence evidence, including uncertain/page-scoped observations. */
+  componentOccurrences?: ComponentOccurrence[];
+  /** Complete raw shared-resource evidence, merged across this check's pages. */
+  siteResourceOccurrences?: SiteResourceOccurrence[];
+  siteResourceEvidence?: CheckResult["siteResourceEvidence"];
+  componentEvidence?: CheckResult["componentEvidence"];
 
   // Legacy field (deprecated)
   value?: string;
@@ -77,6 +95,8 @@ export interface GroupedRule {
   // still shows red only from pages carried forward (not re-crawled) — e.g.
   // "Fixed on all 75 pages checked this run; 28 pages pending re-check."
   mixedProvenanceNote?: string;
+  /** Additive actionable groups derived only from component occurrence evidence. */
+  componentFixGroups?: ComponentFixGroup[];
 }
 
 export interface GroupedCategory {
@@ -129,6 +149,105 @@ function attributeItemToPage(item: CheckItem, pageUrl: string | undefined): Chec
   return { ...item, sourcePages: [...sources, pageUrl] };
 }
 
+/** Every page an item was met on, and the "page\0section" pairs counted into its `regions`. */
+interface ItemSightings {
+  pages: Set<string>;
+  placed: Set<string>;
+}
+
+/**
+ * One more sighting of an item on a per-page check (`pageUrl`), merged into what is known of it
+ * (`prev`, absent the first time). The page joins `sourcePages` up to the cap; past it the page is
+ * counted in `pageCount`, so a report can say how many it leaves out (pub#846). Where the item sits
+ * on that page (the per-page item's `regions`) adds to its pages per section and to its row in
+ * `sources`, once per page and section however often the id repeats. `seen` holds every page and
+ * pair met so far, uncapped. Site-scope items (no `pageUrl`) keep their first sighting.
+ */
+function mergeItemOccurrence(
+  prev: CheckItem | undefined,
+  item: CheckItem,
+  pageUrl: string | undefined,
+  seenById: Map<string, ItemSightings>,
+): CheckItem {
+  if (!pageUrl) return prev ?? item;
+  let seen = seenById.get(item.id);
+  if (!seen) seenById.set(item.id, (seen = { pages: new Set(), placed: new Set() }));
+  let base: CheckItem;
+  if (prev) base = prev;
+  else {
+    base = { ...item };
+    delete base.regions;
+    for (const page of item.sourcePages ?? []) seen.pages.add(page);
+  }
+  seen.pages.add(pageUrl);
+  let next = attributeItemToPage(base, pageUrl);
+  const listed = next.sourcePages?.length ?? 0;
+  if (seen.pages.size > listed && seen.pages.size !== next.pageCount) {
+    next = { ...next, pageCount: Math.max(seen.pages.size, next.pageCount ?? 0) };
+  }
+  if (!item.regions) return next;
+  const fresh = pageRegions(
+    (Object.keys(item.regions) as LinkSection[]).filter(
+      (section) => !seen.placed.has(`${pageUrl}\u0000${section}`),
+    ),
+  );
+  if (!fresh) return next;
+  for (const section of Object.keys(fresh)) seen.placed.add(`${pageUrl}\u0000${section}`);
+  const out: CheckItem = { ...next, regions: addRegions(next.regions, fresh) };
+  // A row only for a page the item lists; past the cap the counts above still hold.
+  if (out.sourcePages?.includes(pageUrl)) {
+    const prior = out.sources?.find((source) => source.page === pageUrl);
+    const row = { page: pageUrl, sections: { ...prior?.sections, ...fresh } };
+    out.sources = prior
+      ? (out.sources ?? []).map((source) => (source.page === pageUrl ? { ...source, ...row } : source))
+      : [...(out.sources ?? []), row];
+  }
+  return out;
+}
+
+/**
+ * Drop repeated observations while preserving order and the first reference of
+ * each. Identity is the full observation key (page + component + provenance),
+ * so this only ever collapses the SAME observation seen twice.
+ */
+/** The whole observation, as one string: page, kind, key and reference. */
+function siteResourceKey(occurrence: SiteResourceOccurrence): string {
+  return [
+    occurrence.siteOrigin,
+    occurrence.kind,
+    occurrence.pageUrl,
+    occurrence.key,
+    occurrence.source,
+  ].join("\u0000");
+}
+
+/** Drop repeated observations, preserving the first reference of each. */
+function dedupeSiteResources(
+  occurrences: readonly SiteResourceOccurrence[],
+): SiteResourceOccurrence[] {
+  const seen = new Set<string>();
+  const out: SiteResourceOccurrence[] = [];
+  for (const occurrence of occurrences) {
+    const key = siteResourceKey(occurrence);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(occurrence);
+  }
+  return out;
+}
+
+function dedupeOccurrences(occurrences: ComponentOccurrence[]): ComponentOccurrence[] {
+  const seen = new Set<string>();
+  const out: ComponentOccurrence[] = [];
+  for (const occurrence of occurrences) {
+    const key = componentOccurrenceKey(occurrence);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(occurrence);
+  }
+  return out;
+}
+
 /**
  * Group rule results by category for display
  * Only includes rules with issues (fail or warn)
@@ -174,6 +293,8 @@ export function groupIssuesByCategory(
       GroupedCheck & {
         pageSet: Set<string>;
         itemById: Map<string, CheckItem>;
+        /** pub#846: every page and section each item was met on, uncapped. */
+        itemSeen: Map<string, ItemSightings>;
         carriedPageSet: Set<string>;
         /** The message's literal parts and the counts merged so far. */
         messageShape: MessageShape;
@@ -228,6 +349,13 @@ export function groupIssuesByCategory(
       const existing = checkMap.get(key);
 
       const details = (check as { details?: Record<string, unknown> }).details;
+      const componentOccurrences = (check as { componentOccurrences?: ComponentOccurrence[] })
+        .componentOccurrences;
+      const siteResourceOccurrences = (
+        check as { siteResourceOccurrences?: SiteResourceOccurrence[] }
+      ).siteResourceOccurrences;
+      const componentEvidence = (check as CheckResult).componentEvidence;
+      const siteResourceEvidence = (check as CheckResult).siteResourceEvidence;
       // A folded aggregate check (#910) stands in for `details.occurrences`
       // per-page checks — count them all so "×N" badges stay truthful.
       const occurrences = checkOccurrences({ details });
@@ -290,7 +418,10 @@ export function groupIssuesByCategory(
         if (items) {
           for (const item of items) {
             const prev = existing.itemById.get(item.id);
-            existing.itemById.set(item.id, attributeItemToPage(prev ?? item, pageUrl));
+            existing.itemById.set(
+              item.id,
+              mergeItemOccurrence(prev, item, pageUrl, existing.itemSeen),
+            );
           }
         }
         // Merge auto-generated item from per-page message
@@ -300,10 +431,36 @@ export function groupIssuesByCategory(
         if (details) {
           existing.details = { ...existing.details, ...details };
         }
+        if (componentOccurrences?.length) {
+          // Two checks under one key can be the SAME observation arriving twice
+          // (a carried finding re-merged with its fresh re-observation), which
+          // would double every occurrence count. Dedupe on the full observation
+          // key — page + component identity + provenance — so a genuinely
+          // distinct element, which differs in its locator or structural
+          // signature, is still kept alongside its lookalike.
+          existing.componentOccurrences = dedupeOccurrences([
+            ...(existing.componentOccurrences ?? []),
+            ...componentOccurrences,
+          ]);
+        }
+        if (siteResourceOccurrences?.length) {
+          // Same hazard as the occurrence dedupe above: a carried finding
+          // re-merged with its fresh re-observation would land twice and
+          // double-count the pages a resource is claimed to reach. Identity is
+          // the whole observation, so two genuinely different references to the
+          // same map from one page are still both kept.
+          existing.siteResourceOccurrences = dedupeSiteResources([
+            ...(existing.siteResourceOccurrences ?? []),
+            ...siteResourceOccurrences,
+          ]);
+        }
+        if (componentEvidence) existing.componentEvidence = componentEvidence;
+        if (siteResourceEvidence) existing.siteResourceEvidence = siteResourceEvidence;
       } else {
         const itemById = new Map<string, CheckItem>();
+        const itemSeen = new Map<string, ItemSightings>();
         for (const item of items ?? []) {
-          if (!itemById.has(item.id)) itemById.set(item.id, attributeItemToPage(item, pageUrl));
+          itemById.set(item.id, mergeItemOccurrence(itemById.get(item.id), item, pageUrl, itemSeen));
         }
         // Add auto-generated item if not already covered by explicit items
         if (autoItem && !itemById.has(autoItem.id)) itemById.set(autoItem.id, autoItem);
@@ -328,9 +485,16 @@ export function groupIssuesByCategory(
           // Materialized from itemById once the rule's checks are all merged.
           items: undefined,
           itemById,
+          itemSeen,
           carriedPages: initialCarriedPages.length > 0 ? initialCarriedPages : undefined,
           carriedPageSet: initialCarriedPageSet,
           details: details ? { ...details } : undefined,
+          componentOccurrences: componentOccurrences ? [...componentOccurrences] : undefined,
+          siteResourceOccurrences: siteResourceOccurrences
+            ? dedupeSiteResources(siteResourceOccurrences)
+            : undefined,
+          siteResourceEvidence,
+          componentEvidence,
           value: typeof (check as { value?: unknown }).value === "string"
             ? (check as { value: string }).value
             : undefined,
@@ -349,6 +513,7 @@ export function groupIssuesByCategory(
       ({
         pageSet: _,
         itemById,
+        itemSeen: _____,
         carriedPageSet: ___,
         messageShape: ____,
         ...check
@@ -363,6 +528,28 @@ export function groupIssuesByCategory(
           check.carriedPages = [...check.carriedPages].sort((a, b) =>
             a < b ? -1 : a > b ? 1 : 0
           );
+        }
+        if (check.componentOccurrences) {
+          // Codepoint order over the canonical observation key. `localeCompare`
+          // over `JSON.stringify` would order by ICU collation AND by key
+          // insertion order, so the same report could serialize differently on
+          // two machines or after a payload round-trip.
+          // Decorate-sort-undecorate: the key is a canonical serialization of
+          // the whole observation, too expensive to rebuild inside a comparator.
+          check.componentOccurrences = check.componentOccurrences
+            .map((occurrence) => ({ occurrence, key: componentOccurrenceKey(occurrence) }))
+            .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+            .map((entry) => entry.occurrence);
+        }
+        if (check.siteResourceOccurrences) {
+          // Codepoint order over the canonical observation key, for the same
+          // reason as the occurrences above: `localeCompare` over a stringified
+          // object orders by ICU collation and by key insertion order, so one
+          // report could serialize two ways on two machines.
+          check.siteResourceOccurrences = check.siteResourceOccurrences
+            .map((occurrence) => ({ occurrence, key: siteResourceKey(occurrence) }))
+            .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+            .map((entry) => entry.occurrence);
         }
         return check;
       }
@@ -395,6 +582,7 @@ export function groupIssuesByCategory(
     const severity: "error" | "warning" | "info" =
       failCount > 0 ? metaSeverity : metaSeverity === "error" ? "warning" : metaSeverity;
 
+    const actionableComponentFixGroups = componentFixGroups(ruleId, result.checks);
     const rule: GroupedRule = {
       id: ruleId,
       name: meta.name,
@@ -411,6 +599,9 @@ export function groupIssuesByCategory(
       failCount,
       warnCount,
       mixedProvenanceNote,
+      ...(actionableComponentFixGroups.length > 0
+        ? { componentFixGroups: actionableComponentFixGroups }
+        : {}),
     };
 
     const rules = categoryMap.get(categoryKey) || [];

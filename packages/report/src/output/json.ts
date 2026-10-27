@@ -6,12 +6,44 @@ import type {
   RefusedFetch,
 } from "@squirrelscan/core-contracts";
 import type { ResolvedAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
-import type { AuditReport, AuditStatus, CheckItem, EntityMap } from "../types";
+import type {
+  AuditReport,
+  AuditStatus,
+  CheckItem,
+  CheckResult,
+  ComponentOccurrence,
+  EntityMap,
+  ReportStructure,
+} from "../types";
+import type { ComponentFixGroup } from "../component-fix-groups";
+import type {
+  ComponentShape,
+  PackedComponentOccurrence,
+  PackedSubtreeLadder,
+} from "@squirrelscan/core-contracts/component-evidence";
+import { packComponentOccurrences } from "@squirrelscan/core-contracts/component-evidence";
+import { packSiteResourceOccurrences } from "@squirrelscan/core-contracts/site-resource-evidence";
+import { componentOccurrenceKey } from "../component-fix-groups";
+import type { GroupedCheck } from "../grouping";
+
+import { REPORT_PAGES_HARD_CAP } from "../constants";
+import { siteWideContext, siteWideItem } from "../site-wide-items";
+import { fixUnits, ruleFixCoverage } from "../component-presentation";
+import { siteResourceFixGroups } from "../site-resource-fix-groups";
+import { isRenderableSiteResourceGroup } from "../site-resource-presentation";
 import { reportFailureReasonCode } from "../failure-notice";
 import { getScoreGrade } from "../scoring";
 import { getGroupName } from "../categories";
 import { groupIssuesByCategory, flattenIssuesBySeverity, reportPassedRules } from "../grouping";
 import { affectedPages } from "../affected-pages";
+import {
+  checkRegionScope,
+  itemLabel,
+  itemRegionScope,
+  regionScopeData,
+  type RegionScope,
+} from "../region-scope";
+import { checkPageTypeScope, pageTypeScopeData, type PageTypeScope } from "../page-type-scope";
 import { techIconUrl } from "../technologies";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
@@ -19,6 +51,65 @@ import { scanScopeUnfetched, seedRedirect } from "../coverage";
 import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
 import { collectSkippedChecks, type SkippedCheck } from "../skipped";
+
+/**
+ * A fix group as it is SERIALIZED: identical to {@link ComponentFixGroup} except
+ * that its occurrence objects are replaced by references into the check that
+ * already carries them. An occurrence is ~800 bytes of hashes, so repeating a
+ * group's members next to `checks[].componentOccurrences` doubled the evidence
+ * in every report and added no information.
+ */
+type SlimComponentFixGroup = Omit<ComponentFixGroup, "occurrences"> & {
+  /** #1023 R-F: `affectedPages` is a labeled sample; the count is authoritative. */
+  affectedPagesHasMore: boolean;
+  occurrenceCount: number;
+  /**
+   * Where this group's evidence lives: `checkIndex` indexes the sibling
+   * `checks[]` array and `occurrenceIndex` indexes that check's
+   * `componentOccurrences[]`.
+   */
+  occurrenceRefs: Array<{ checkIndex: number; occurrenceIndex: number }>;
+};
+
+/**
+ * Replace a group's inline occurrences with positions in the already-serialized
+ * check evidence.
+ *
+ * Resolution is by IDENTITY KEY, not object identity. `groupIssuesByCategory`
+ * dedupes merged occurrence arrays, so the object a group holds is not
+ * necessarily the same allocation the check ends up serializing — and a
+ * reference-based lookup silently dropped those, leaving `occurrenceCount`
+ * larger than `occurrenceRefs.length` with no indication which were missing.
+ * Equal keys mean equal serialized content, so any match is a correct target.
+ */
+function slimComponentFixGroups(
+  groups: ComponentFixGroup[],
+  checks: GroupedCheck[],
+  pageSampleLimit: number,
+): SlimComponentFixGroup[] {
+  const positions = new Map<string, { checkIndex: number; occurrenceIndex: number }>();
+  checks.forEach((check, checkIndex) => {
+    check.componentOccurrences?.forEach((occurrence, occurrenceIndex) => {
+      const key = componentOccurrenceKey(occurrence);
+      if (!positions.has(key)) positions.set(key, { checkIndex, occurrenceIndex });
+    });
+  });
+  return groups.map(({ occurrences, affectedPages: pages, ...group }) => {
+    const occurrenceRefs = occurrences
+      .map((occurrence) => positions.get(componentOccurrenceKey(occurrence)))
+      .filter((position): position is NonNullable<typeof position> => position !== undefined);
+    return {
+      ...group,
+      affectedPages: pages.slice(0, pageSampleLimit),
+      affectedPagesHasMore: pages.length > pageSampleLimit,
+      // Every occurrence a group counts must be reachable. A shortfall means
+      // the serialized evidence and the group disagree, which is a bug rather
+      // than a degradation, so the count follows the refs that actually resolve.
+      occurrenceCount: occurrenceRefs.length,
+      occurrenceRefs,
+    };
+  });
+}
 
 export interface JsonRenderOptions {
   version?: string;
@@ -148,6 +239,26 @@ interface SlimJsonReport {
     group: string;
     subcategory?: string;
     severity: "error" | "warning" | "info";
+    /** Additive, evidence-backed actionable targets; raw occurrences are complete. */
+    componentFixGroups?: SlimComponentFixGroup[];
+    /**
+     * Groups that are ONE repair, referenced by id. Individual groups above are
+     * kept in full: this is an additive view, so a consumer that does not know
+     * about rollups reads exactly what it read before.
+     */
+    componentFixRollups?: Array<{
+      /** Which rollup level produced it; additive, `root` is today's meaning. */
+      level: "root" | "family";
+      /** Structural variants merged; 1 at the root level. */
+      variantCount: number;
+      groupIds: string[];
+      affectedPageCount: number;
+      elementCount: number;
+      attribution: string;
+      defectKind: string;
+      distinctValues: string[];
+      additionalValues: number;
+    }>;
     checks: Array<{
       name: string;
       status: "fail" | "warn";
@@ -155,8 +266,44 @@ interface SlimJsonReport {
       affectedPages: string[];
       affectedPagesCount: number;
       affectedPagesHasMore: boolean;
-      items?: CheckItem[];
+      /**
+       * What stands in for the check's page list: the shared region a check that only reads one is
+       * shown in (pub#846, `{ region, pages, regionPages, otherPages }`), or the page type every
+       * one of its pages is (pub#857, `{ pageType, pages, typePages }`).
+       */
+      scope?: RegionScope | PageTypeScope;
+      /**
+       * Every item and every sourcePage, unchanged. An item may carry the region it is shown in,
+       * `scope` (pub#846). Items the human renderers collapse carry a `siteWide` flag so an agent
+       * gets the same collapse without re-deriving the threshold.
+       */
+      items?: Array<
+        CheckItem & { scope?: RegionScope; siteWide?: { pages: number; of: number } }
+      >;
       details?: Record<string, unknown>;
+      /**
+       * Complete raw evidence, and the ONLY copy in this document: fix groups
+       * above reference these entries by index instead of repeating them.
+       * Present even when no cross-page group is safe.
+       *
+       * Serialized in the HOISTED form: the shared region/family/variant triples
+       * live in `componentShapes` and each row carries a `shape` index. Indices
+       * into this array are stable, so `occurrenceRefs` still address it.
+       */
+      componentOccurrences?: PackedComponentOccurrence[];
+      /**
+       * Lookup tables for `componentOccurrences`; `v` is the layout version.
+       * `ladders` is present only when some occurrence carries a subtree
+       * ladder, and every `ladder` index on a row resolves into it. Emitting
+       * the rows' indices without this table left consumers holding `ladder`
+       * and `ladderLocators` values that pointed at nothing.
+       */
+      componentShapes?: {
+        v: number;
+        shapes: ComponentShape[];
+        ladders?: PackedSubtreeLadder[];
+      };
+      componentEvidence?: CheckResult["componentEvidence"];
       legacyValue?: string;
     }>;
   }>;
@@ -217,6 +364,10 @@ interface SlimJsonReport {
   // Report-only — never part of the score. The entity-map document (#2091),
   // emitted verbatim so it still validates against the core-contracts schema.
   entities?: EntityMap;
+  // Report-only — never part of the score (#2307). Where the audited pages' links sit and the
+  // page types the classifier gave them. Absent when no audited page carries either, which is
+  // every crawl stored before the page classifier existed.
+  structure?: ReportStructure;
   // Report-only — never part of the score. Present when cloud tech-detect ran.
   technologies?: {
     firstScan: boolean;
@@ -265,6 +416,7 @@ function buildSlimReport(
   version: string,
   includePassed: boolean
 ): SlimJsonReport {
+  const siteWide = siteWideContext(report);
   const categoryIssues = groupIssuesByCategory(report.ruleResults, report.checkTallies);
   const passedRules = reportPassedRules(report, includePassed);
   const es = editorSummaryView(report.editorSummary, report);
@@ -375,32 +527,134 @@ function buildSlimReport(
       group: rule.group,
       ...(rule.subcategory ? { subcategory: rule.subcategory } : {}),
       severity: rule.severity,
-        checks: rule.checks.map((check) => {
-          // #1023 R-F: affectedPages is a labeled sample; count is authoritative.
-          const ap = affectedPages(check);
-          return {
-            name: check.name,
-            status: check.status as "fail" | "warn",
-            message: check.message,
-            affectedPages: ap.sample,
-            affectedPagesCount: ap.count,
-            affectedPagesHasMore: ap.hasMore,
-            items: check.items,
-            details: check.details,
-            ...(check.value ? { legacyValue: check.value } : {}),
-            // Smart audits (#110): provenance for findings carried across audits.
-            // (#1652) "unrendered" is tested FIRST and emits no `lastSeenAt` —
-            // no audit has rendered the page, so there is nothing it was last
-            // seen at, and calling it "carried" would invent a prior audit.
-            ...(check.unrenderedCount && check.unrenderedCount >= check.count
-              ? { provenance: "unrendered" as const }
-              : check.carriedCount && check.carriedCount >= check.count
-                ? {
-                    provenance: "carried" as const,
-                    ...(check.lastSeenAt ? { lastSeenAt: check.lastSeenAt } : {}),
-                  }
-                : {}),
-          };
+      ...(rule.componentFixGroups
+        ? {
+            componentFixGroups: slimComponentFixGroups(
+              rule.componentFixGroups,
+              rule.checks,
+              REPORT_PAGES_HARD_CAP,
+            ),
+          }
+        : {}),
+      ...(() => {
+        // #2341. JSON is the machine format, so it keeps EVERY unit, including
+        // the single-page ones the human surfaces decline to print: a consumer
+        // reconstructing the grouping needs the units that were rejected as
+        // much as the ones that were shown.
+        const resources = siteResourceFixGroups(rule);
+        return resources.length > 0
+          ? {
+              siteResourceFixGroups: resources.map((group) => ({
+                id: group.id,
+                checkName: group.checkName,
+                checkStatus: group.checkStatus,
+                kind: group.kind,
+                siteOrigin: group.siteOrigin,
+                resourceKeys: group.resourceKeys,
+                affectedPages: group.affectedPages.slice(0, REPORT_PAGES_HARD_CAP),
+                affectedPageCount: group.affectedPageCount,
+                rendered: isRenderableSiteResourceGroup(group),
+              })),
+            }
+          : {};
+      })(),
+      ...(() => {
+        // Both levels, so a consumer sees the same units the renderers print.
+        const rollups = fixUnits(ruleFixCoverage(rule).groups).filter(
+          (rollup) => rollup.groups.length > 1 || rollup.variantCount > 1,
+        );
+        return rollups.length > 0
+          ? {
+              componentFixRollups: rollups.map((rollup) => ({
+                level: rollup.level,
+                variantCount: rollup.variantCount,
+                groupIds: rollup.groupIds,
+                affectedPageCount: rollup.affectedPageCount,
+                elementCount: rollup.elementCount,
+                attribution: rollup.representative.attribution,
+                defectKind: rollup.representative.defect.kind,
+                distinctValues: rollup.distinctValues,
+                additionalValues: rollup.additionalValues,
+              })),
+            }
+          : {};
+      })(),
+      checks: rule.checks.map((check) => {
+        // #1023 R-F: affectedPages is a labeled sample; count is authoritative.
+        const ap = affectedPages(check);
+        // pub#846: the region a check or item is shown in, beside the bounded page lists.
+        const regionScope = checkRegionScope(check, ap.count, report.structure);
+        const typeScope = regionScope
+          ? undefined
+          : checkPageTypeScope(check, ap.count, report.structure);
+        return {
+          name: check.name,
+          status: check.status as "fail" | "warn",
+          message: check.message,
+          affectedPages: ap.sample,
+          affectedPagesCount: ap.count,
+          affectedPagesHasMore: ap.hasMore,
+          ...(regionScope
+            ? { scope: regionScopeData(regionScope) }
+            : typeScope
+              ? { scope: pageTypeScopeData(typeScope) }
+              : {}),
+          items: check.items?.map((item) => {
+            const scope = itemRegionScope(item, report.structure);
+            let shown: CheckItem & { scope?: RegionScope } = item;
+            if (scope) {
+              // The label drops the section phrase `scope` now carries; `meta.sections` keeps it.
+              const label = itemLabel(item, scope);
+              shown = { ...item, scope: regionScopeData(scope) };
+              if (label === undefined) delete shown.label;
+              else shown.label = label;
+            }
+            const info = siteWideItem(item, siteWide.total, siteWide.pageUrls);
+            return info ? { ...shown, siteWide: { pages: info.pages, of: info.of } } : shown;
+          }),
+          details: check.details,
+          ...(check.componentOccurrences?.length
+            ? (() => {
+                const packed = packComponentOccurrences(check.componentOccurrences);
+                return {
+                  componentOccurrences: packed.occurrences,
+                  componentShapes: {
+                    v: packed.v,
+                    shapes: packed.shapes,
+                    ...(packed.ladders?.length ? { ladders: packed.ladders } : {}),
+                  },
+                };
+              })()
+            : {}),
+          ...(check.componentEvidence ? { componentEvidence: check.componentEvidence } : {}),
+          // #2341: the raw evidence, packed. The derived `siteResourceFixGroups`
+          // above are NOT what a re-import reads back — they are derived, and
+          // `report -i` re-derives them from this, so there is one source of
+          // truth rather than two that can disagree.
+          ...(check.siteResourceOccurrences?.length
+            ? {
+                siteResourceOccurrences: packSiteResourceOccurrences(
+                  check.siteResourceOccurrences,
+                ),
+              }
+            : {}),
+          ...(check.siteResourceEvidence
+            ? { siteResourceEvidence: check.siteResourceEvidence }
+            : {}),
+          ...(check.value ? { legacyValue: check.value } : {}),
+          // Smart audits (#110): provenance for findings carried across audits.
+          // (#1652) "unrendered" is tested FIRST and emits no `lastSeenAt` —
+          // no audit has rendered the page, so there is nothing it was last
+          // seen at, and calling it "carried" would invent a prior audit.
+          ...(check.unrenderedCount && check.unrenderedCount >= check.count
+            ? { provenance: "unrendered" as const }
+            : check.carriedCount && check.carriedCount >= check.count
+              ? {
+                  provenance: "carried" as const,
+                  ...(check.lastSeenAt ? { lastSeenAt: check.lastSeenAt } : {}),
+                }
+              : {}),
+        };
       }),
     })),
     ...(skippedChecks.length > 0 ? { skippedChecks } : {}),
@@ -453,6 +707,8 @@ function buildSlimReport(
           },
         }
       : {}),
+    // Page structure (#2307): the report-level block as data. Report-only, never scored.
+    ...(report.structure ? { structure: report.structure } : {}),
     // Entities (#2091): the whole entity-map document, verbatim. Report-only
     // and never part of the score. Emitted as-is rather than reshaped so a
     // consumer can validate it against the core-contracts zod schema.

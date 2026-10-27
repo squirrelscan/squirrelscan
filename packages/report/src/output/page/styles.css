@@ -267,6 +267,36 @@ section {
   .gtag {
     @apply inline-flex items-center border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider;
   }
+  /* Shared-component and shared-resource fix cards (#2307, #2341): one defect, one repair, N
+     pages. The weaker attribution differs in words and in weight, never in colour alone. */
+  .fix-groups {
+    @apply m-0 grid list-none gap-2 p-0;
+  }
+  .fix-group {
+    @apply border border-l-[3px] border-border border-l-primary bg-card px-3 py-2.5;
+  }
+  .fix-group-weak {
+    @apply border-l-border;
+  }
+  .fix-group-head {
+    @apply flex flex-wrap items-baseline gap-x-2 gap-y-1;
+  }
+  .fix-group-line {
+    @apply m-0 min-w-0 flex-[1_1_14rem] break-words text-sm;
+  }
+  .fix-group-name {
+    @apply font-semibold text-foreground;
+  }
+  .fix-badge {
+    @apply inline-block whitespace-nowrap border border-primary px-1.5 py-px align-middle text-[10px] font-bold uppercase tracking-wider text-primary;
+  }
+  .fix-badge-weak {
+    @apply border-border font-semibold text-muted-foreground;
+  }
+  /* A finding in a shared region names the region instead of listing its pages (pub#846). */
+  .region-scope {
+    @apply my-1 text-[13px] font-semibold;
+  }
 }
 
 /* Copy prompt: the check icon replaces the copy icon for a moment after a copy. */

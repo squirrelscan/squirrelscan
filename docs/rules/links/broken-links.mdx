@@ -24,11 +24,26 @@ The rule is site-wide and compares link targets against pages the crawl actually
   - With more than one cause, `its internal link checks left them out (<counts>)`. `<counts>` lists, separated by `; `, one count for each cause that applies: `<count> past the limit of <limit> targets` (or `<count> because internal_links.max_targets is 0`), `<count> skipped as outside the crawl scope, disallowed by robots.txt, or action or token links` (`an action or token link` for one), `<count> not trusted, because the site answers HEAD requests with errors on pages it serves`, and `<count> with no answer`.
 
   `details.notFetched` carries the same counts (`off`, `overLimit`, `skipped`, `untrusted`, `noAnswer`, each present only when not zero), and they add up to `N`. It replaces the pass, and sits next to the failure when a target the crawl did fetch is broken. The report shows it as **Not checked**, and the score does not count it. Its advice suggests turning internal link checks back on only when they were off, and raising `internal_links.max_targets` only when the limit left targets out. When every unfetched target was skipped, it says that a Surface or Full audit, which follows links, can reach the ones inside the crawl scope and allowed by robots.txt.
-- `broken-links` fails when a target returned 400 or above. Message: `7 broken internal link(s) (4xx/5xx)`. Each item reads `https://example.com/old-page (404)` and lists every page that links to it. Severity error, weight 7.
+- `broken-links` fails when a target returned 400 or above. Message: `7 broken internal link(s) (4xx/5xx)`. Each item reads `https://example.com/old-page (404), linked in the footer` and lists every page that links to it, each page once, with how many of its links point at the target and where on that page they sit. Severity error, weight 7.
 - `broken-links` passes otherwise. Message: `No broken internal links detected`.
 - Cloudflare email-protection links are skipped. With Cloudflare's Email Address Obfuscation on, every `mailto:` link and every email address in a page's text becomes a link to `/cdn-cgi/l/email-protection`, and a script in the browser puts the address back. Requested directly, that path answers an error, but it is an email address, not a page. So it is never a link target: the crawl and the internal link check never request it, and the rule never reports it as broken. squirrel reads it as the `mailto:` link it stands for instead, so rules that look for contact links still see it. Other `/cdn-cgi/` links, such as Cloudflare image resizing URLs, are checked as usual.
 - `rate-limited-links` reports info for targets that returned a rate-limit status, to the crawl or to the internal link check. Message: `N internal link(s) rate-limited - status unverifiable`.
 - `refused-links` reports info for targets whose status cannot be verified: the internal link check got a 401 or 403, or the crawl got a bot-wall challenge. Message: `N internal link(s) <reason> - status unverifiable`, where the reason is `refused the link check (401/403)`, `answered the crawl with a bot-wall challenge`, or both joined with `or`. An item from a challenge carries `wafChallenge: true`.
+
+A broken link reads like this in the text report:
+
+```text
+[X] broken-links: 1 broken internal link(s) (4xx/5xx), found on 3 pages
+    -> /about
+    -> /contact
+    -> /pricing
+    -> https://example.com/old-page (404), linked in the page content and the footer
+        from: /about (2 links, in the page content)
+        from: /contact (in the footer)
+        from: /pricing
+```
+
+The summary counts links and pages apart, and the pages are listed once for the check, then once per broken link. A page that links the target twice is one row with `2 links`. A row says where that page's links sit when the section is known, and nothing when it is not. The other formats print the same rows: HTML shows the first three and expands the rest inside the item, Markdown, text and console show the first three and the LLM report the first five, then `+N more pages`. In the JSON and XML reports, the item's `sourcePages` lists each page once, and `sources` holds one entry per page with `links` and, when known, `sections`. `meta.linkedFrom` counts pages. See [source pages](/configuration/output#source-pages). Each item also counts the pages it sits on per section (`regions`), so a broken link in the site footer of most pages reads `In the site footer, on 49 of 53 pages` once, with no page list; see [findings in a shared page region](/reports#findings-in-a-shared-page-region).
 
 Every `broken-links` row, whether it fails, passes or is not checked, carries the same `details` about what the audit covered:
 
@@ -39,6 +54,29 @@ Every `broken-links` row, whether it fails, passes or is not checked, carries th
 - `notFetched`: why those targets were left out, as counts that add up to `unfetchedTargets`. `off` means internal link checks were off. `overLimit` means past `internal_links.max_targets`. `skipped` means never requested by design: outside the crawl scope, disallowed by robots.txt, or an action or token link. `untrusted` means the site answers HEAD requests with errors on pages it serves. `noAnswer` means no status came back, or none the rule could read. Each count is present only when it is not zero, so a row with nothing unfetched has an empty `notFetched`.
 
 Read these before comparing two audits' broken links. A link missing from this audit's failure was fixed only if this audit got a status for it. A target that was broken last time and unfetched this time is unknown, not fixed, and so is one listed in `rate-limited-links` or `refused-links`. Targets counted as `skipped` are left out the same way on every audit with the same settings, the same robots.txt and the same links. These counts are kept on every `broken-links` row a published report carries. A published report over its size limit can leave a row out, and then the coverage is unknown.
+
+The part of the page a link sat in comes from landmark tags and ARIA roles (`header`, `nav`, `aside`, `footer`, `main`, `article`, and the `banner`, `navigation`, `complementary` and `contentinfo` roles), plus comment threads (an `id` or `class` such as `comments`, `comment-list` or `disqus_thread`). The outermost site-wide landmark wins, so a `nav` inside a footer reads as the footer, and a `header` or `footer` inside an article is the article's own. The item's `meta.sections` counts the links by section, for example `{ "footer": 12, "content": 1 }`. A link with no landmark around it gets no phrase from markup alone, and neither does a crawl stored before this was recorded. Fix a footer or navigation link once in the template; a link in the comments is usually user-submitted and better removed or marked `nofollow`.
+
+Where the markup says nothing, the page classifier fills the gap. It is a small model bundled with squirrel, so there is no network call and no credit cost. It can place a link in the header, footer, navigation, sidebar or page content, and name a section inside the page. The header, the footer and comment threads in the markup always win, and comment threads are only ever read from markup. A section the model names refines a navigation or sidebar landmark, so a `nav` that is the pagination reads "linked in the pagination", and it beats the markup's plain "page content", because blocks like pagination often sit inside `main`. A region answer never replaces a landmark. The model answers only when its confidence clears a per-class bar chosen for precision, so an unsure link still gets no phrase.
+
+| Section in `meta.sections` | Item reads |
+| --- | --- |
+| `header` | linked in the header |
+| `footer` | linked in the footer |
+| `navigation` | linked in the navigation |
+| `sidebar` | linked in the sidebar |
+| `comments` | linked in the comments |
+| `content` | linked in the page content |
+| `pagination` | linked in the pagination |
+| `breadcrumbs` | linked in the breadcrumbs |
+| `related_content` | linked in a related-content block |
+| `business_info` | linked in the business details |
+| `social_share` | linked in the social sharing links |
+| `account_login` | linked in the account and login links |
+| `author_byline` | linked in the author byline |
+| `newsletter_signup` | linked in the newsletter signup |
+
+A link's stored record says when the model answered it, with the confidence. Switch the classifier off with `--no-classifier` or `[classifier] enabled = false` and the audit uses markup alone.
 
 Normalisation strips the query, the fragment and the trailing slash and lowercases the scheme and host, but not the path, so a case difference in the path is treated as a different URL. A throttled response means the host limited the crawl, not that the page is missing, so those are separated out before the 400 test.
 
@@ -61,6 +99,12 @@ Fix the source, not just the page. The report lists which pages carry each broke
 | **Scope** | Site-wide |
 | **Severity** | error |
 | **Weight** | 7/10 |
+
+## Category and score
+
+A broken link is a failed request a visitor hits, not a signal a search engine reads, so this rule is in the [Reliability](/rules/reliability) category even though its id keeps the `links/` prefix. The report badges it Reliability. Reliability rolls up into the Performance score group, so its findings count against the Performance group score and no longer against the SEO group. The overall health score weights every rule the same wherever it sits.
+
+Because the id is unchanged, nothing you configured breaks. `links/*` in `enable` or `disable` still selects this rule, `links/broken-links` still names it in `rule_options`, and the docs URL is the same. `reliability/*` does not select it, because a pattern matches on the id, but `--rule-include reliability` and `--rule-exclude reliability` do name it. A JSON or published report written before this change still shows the rule under Links. An audit stored on your machine is rendered with the current categories when you run `squirrel report`, so it now shows the rule under Reliability.
 
 ## Enable / disable
 

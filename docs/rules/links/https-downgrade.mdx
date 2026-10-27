@@ -19,6 +19,8 @@ The rule runs on every crawled page. Cloudflare's email address obfuscation link
 
 The test is on the raw attribute text, so protocol-relative hrefs such as `//example.org/page` are not flagged, and neither is a relative link. The check does not distinguish internal from external destinations.
 
+When the page's links carry a link section (see [Page Classifier](/configuration/classifier)), each item says where its link sits and carries the counts in `meta.sections`, for example `http://other.example/x, linked in the footer`. A link the page markup and the classifier could not place, and a crawl whose links carry no section, keep the plain item. A placed item also carries `regions`, one page per section, so a downgrading link in the site footer of most pages is reported once for the footer. See [findings in a shared page region](/reports#findings-in-a-shared-page-region).
+
 ## How to fix it
 
 ```html

@@ -6,6 +6,8 @@ description: "Audit rules for links: broken internal and external links, fragmen
 
 Links rules read the link graph the crawl built. Half of them are health checks: internal and external targets that return an error, hrefs that do not parse, links that drop to plain HTTP, links that resolve only through a redirect. The other half describe structure: how many links point at a page, whether any of them sit in body copy rather than the footer, and whether the anchor text says what the destination is.
 
+Three of the health checks, [broken internal links](/rules/links/broken-links), [broken external links](/rules/links/broken-external-links) and [broken anchor links](/rules/links/broken-anchors), are in the [Reliability](/rules/reliability) category: a dead link is a failed request a visitor hits, not a search-engine signal. Their ids keep the `links/` prefix, so `links/*` still selects them.
+
 ## Run only these rules
 
 ```bash

@@ -53,7 +53,7 @@ Penalties are multiplicative. For example, an 80% score with missing robots.txt 
 
 A rule that does not apply to the audited site is skipped: its checks have status `skipped`, and they count toward neither the passed, warning and failed totals nor the score. A rule whose checks are all skipped carries no weight, so it cannot lift or lower the grade.
 
-The most visible case is a local or private-network host such as `localhost` or `192.168.1.10`. The transport and delivery rules (HTTPS, HSTS, HTTP to HTTPS redirects, HTTP/2, compression and caching) judge the production edge a dev server is not, so they are skipped there and the report says so once, under the score. See [Transport and delivery rules do not apply](/guides/local-audits-cli#transport-and-delivery-rules-do-not-apply) for the list and how a host is classified.
+The most visible case is a local or private-network host such as `localhost` or `192.168.1.10`. The transport and delivery rules (HTTPS, HSTS, HTTP to HTTPS redirects, HTTP/2, compression and caching) judge the production edge a dev server is not, so they are skipped there and the report says so once, under Scan details in Report detail at the end. See [Transport and delivery rules do not apply](/guides/local-audits-cli#transport-and-delivery-rules-do-not-apply) for the list and how a host is classified.
 
 ### Grade scale
 
@@ -103,6 +103,107 @@ the work to do first:
 
 Categories are not top-level sections: a category with both an error and a
 warning appears under both severities.
+
+### Findings in a shared page region
+
+A finding that sits in a part of the page every page repeats is one thing to
+fix in one template, so the report names the region instead of listing every
+page:
+
+```text
+-> shop
+    In the site header, on 120 of 120 pages
+```
+
+These are the regions, and how the line names them:
+
+| Region | The line reads |
+| --- | --- |
+| `header` | In the site header |
+| `footer` | In the site footer |
+| `navigation` | In the site navigation |
+| `sidebar` | In the sidebar |
+| `breadcrumbs` | In the breadcrumbs |
+| `pagination` | In the pagination |
+| `newsletter_signup` | In the newsletter signup |
+| `social_share` | In the social share links |
+| `business_info` | In the business details |
+| `account_login` | In the account links |
+
+The page content, comments, related content and the author byline differ from
+page to page and are never regions.
+
+A finding is shown this way when it sits in the region on at least 80% of the
+pages that have that region, and on at least 2 pages. The share is counted
+against the pages that have the region, not every audited page, so a footer
+missing from a few pages does not hide a finding that is on every footer. A
+sidebar on 6 pages is judged against those 6. When the finding is also
+elsewhere, the line says so (`, and on 3 other pages`) and those other pages
+are listed under it. The item's label then leaves out its own section phrase
+(`https://example.com/old (404)`, not `..., linked in the footer`), since the
+region line says where it is; an item that is not shown for a region keeps it.
+
+The Markdown, text, LLM and console reports print the region line and no
+per-page list, and leave out the check's page list when its findings name their
+regions. The HTML report keeps every page, behind a collapsed list. The JSON
+and XML reports keep the bounded page list and add the region as data (see
+[source pages](/configuration/output#source-pages)).
+
+A finding in the page content, a finding in a region on only a few of the pages
+that have it, and any report without page structure data (a crawl stored
+before link sections were recorded, or the page classifier and landmarks found
+nothing) keep their page lists. Which part of the page a link sits in comes
+from the page's landmarks and the page classifier; see
+[link sections](/rules/links/broken-links#what-squirrel-checks). Nothing about
+how a finding is detected, its severity or the score changes.
+
+These rules record where their finding sits: `a11y/link-text`,
+`links/broken-links`, `links/broken-external-links`, `links/broken-anchors`,
+`links/redirect-chains`, `links/anchor-text`, `links/tel-mailto`,
+`links/https-downgrade`, `links/invalid-links`, `links/nofollow-internal` and
+`content/stale-copyright` (always the footer).
+
+### Findings on every page of one page type
+
+A finding that sits on all, or nearly all, of the pages of one kind has the same
+template behind every page, so the report names the page type instead of
+listing the pages. The expected-schema check on a site with a documentation
+section reads:
+
+```text
+[X] expected-type: Reads as a documentation page but declares no Article, TechArticle, HowTo or FAQPage structured data (9 pages)
+    On 9 of 11 documentation pages
+```
+
+and `On all 9 documentation pages` when it is every one. The page types are the
+ones the [page classifier](/configuration/classifier) names, in the plural words
+of the [page structure](/configuration/output#page-structure) block: documentation pages, product
+pages, product listings, articles, blog posts, about pages, contact pages and
+listing pages.
+
+A finding is shown this way when all of its pages are the same page type, it
+is on at least 2 pages, and those pages are at least 80% of the audited pages
+of that type. The share is counted against the audited pages of the type in the
+page structure block, not every audited page, so a documentation section is
+judged against its own pages. Those pages include any the classifier called
+documentation pages but the rule did not judge (it only acts on a page type the
+model is 0.9 sure of by default), which is why a finding on every page it judged
+can still read `9 of 11`. The report never says `all` for a finding on more pages
+than it counted of the type.
+
+The Markdown, text, LLM and console reports print that line and no page list.
+The HTML report keeps every page, behind a collapsed list. The JSON and XML
+reports keep the bounded page list and add `scope` with the page type, the pages
+the finding is on and the audited pages of that type (see
+[source pages](/configuration/output#source-pages)).
+
+A finding on pages of mixed types, on a single page, on fewer than 80% of the
+pages of its type, a finding carried over from an earlier audit (its pages are
+not in this audit's counts), and any report without page structure data (a crawl stored
+before page types were recorded, or the page classifier off) keep their page
+lists. Nothing about how a finding is detected, its severity or the score
+changes. Only `schema/expected-type` is scoped this way today: it is the one
+rule that records a page type from the classifier on its findings.
 
 ### console (default)
 

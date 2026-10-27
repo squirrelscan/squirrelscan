@@ -74,6 +74,8 @@ disable = [
 ]
 ```
 
+`links/*` also matches `links/broken-links`, `links/broken-external-links` and `links/broken-anchors`. Those three are Reliability rules and count toward the Performance score group, but their ids keep the `links/` prefix, so a prefix pattern selects them.
+
 See the [full rules reference](/rules) for the other score groups.
 
 Every audit reports SEO findings next to the performance, security and agent experience rules. See [Fix SEO issues with AI](https://squirrelscan.com/learn/fix-seo-issues-with-ai) for how an agent works through a report.

@@ -9,6 +9,7 @@ import { PUBLISH_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { querySelectorAllOutsideNoscript, resolveUrl } from "@squirrelscan/utils";
 
 import { sharedRegex } from "../shared-regex";
+import { siteResourceOccurrences } from "../shared/site-resource-occurrence";
 const NOTE =
   "Source maps may expose original source code. Verify these URLs are not publicly accessible.";
 
@@ -369,6 +370,20 @@ export const sourceMapsRule: Rule = {
           note: NOTE,
           ...(pageMaps.length > 10 ? { additional: pageMaps.length - 10 } : {}),
         },
+        // Additive evidence only: name, status, message, items and details above
+        // are exactly what this rule emitted before, so the status and the score
+        // cannot move. `items` stays the bounded 10-entry sample it has always
+        // been; this carries the WHOLE set this check lists, because the report
+        // stage groups on "which pages reference which maps" and a sampled set
+        // would make that membership a guess. Maps shared across pages belong
+        // to the shared-bundle checks below (repo#2341), not to this check, so
+        // they are not in this set.
+        siteResourceOccurrences: siteResourceOccurrences({
+          kind: "source-map",
+          pageUrl: ctx.page.url,
+          observedUrl: ctx.page.finalUrl,
+          resources: pageMaps.map((s) => ({ key: s.url, source: s.source })),
+        }),
       });
     }
     // Named against the site's base URL, not this page's: pages of one group

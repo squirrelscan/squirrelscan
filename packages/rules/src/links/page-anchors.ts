@@ -49,6 +49,12 @@ export interface PageAnchorSignal {
    */
   selfFragments: string[];
   /**
+   * How many same-page links point at each of {@link selfFragments}, by index (pub#837). Present
+   * only when the page links some fragment more than once; absent, as on a record cached before
+   * the field existed, every fragment reads as one link.
+   */
+  selfFragmentLinks?: number[];
+  /**
    * The page was fetched without rendering and looks like an empty client-side
    * shell, so a missing id may be added by JavaScript. Reported as unconfirmed.
    */
@@ -130,15 +136,26 @@ export function buildPageAnchorSignal(input: {
   // Same-page links. The parser drops every `#`-prefixed href from parsed.links,
   // so they are read here, from the same DOM the ids come from.
   const selfFragments: string[] = [];
-  const selfSeen = new Set<string>();
+  // Index into selfFragments; a fragment linked again counts its links, so a finding can say
+  // "3 links".
+  const selfIndex = new Map<string, number>();
+  const selfFragmentLinks: number[] = [];
+  let repeated = false;
   for (const el of doc.querySelectorAll("a[href]")) {
     const href = el.getAttribute("href")?.trim() ?? "";
     if (!href.startsWith("#")) continue;
     const fragment = decodeFragment(href.slice(1));
-    if (!isJudgeableFragment(fragment) || selfSeen.has(fragment)) continue;
-    if (selfFragments.length >= SELF_FRAGMENTS_CAP) break;
-    selfSeen.add(fragment);
+    if (!isJudgeableFragment(fragment)) continue;
+    const index = selfIndex.get(fragment);
+    if (index !== undefined) {
+      selfFragmentLinks[index]!++;
+      repeated = true;
+      continue;
+    }
+    if (selfFragments.length >= SELF_FRAGMENTS_CAP) continue;
+    selfIndex.set(fragment, selfFragments.length);
     selfFragments.push(fragment);
+    selfFragmentLinks.push(1);
   }
 
   let clientShell = false;
@@ -159,5 +176,6 @@ export function buildPageAnchorSignal(input: {
     clientShell,
   };
   if (idsTruncated) signal.idsTruncated = true;
+  if (repeated) signal.selfFragmentLinks = selfFragmentLinks;
   return signal;
 }

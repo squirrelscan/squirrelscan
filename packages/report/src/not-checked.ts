@@ -202,13 +202,28 @@ function sentence(text: string): string {
 }
 
 /**
+ * A not-checked rule as one list item under a "Not checked" heading, e.g.
+ *   "Broken External Links. External link checking was off for this audit, so 12 external link(s)
+ *   on the audited pages were not checked. Turn external link checks on to check them: ..."
+ * The same sentence as {@link notCheckedLine} without its "Not checked: " lead-in.
+ */
+export function notCheckedDetailLine(rule: NotCheckedRule): string {
+  return `${rule.name}. ${sentence(rule.message)} ${rule.hint}`;
+}
+
+/** {@link notCheckedDetailLine} for every not-checked rule; empty when none. */
+export function notCheckedDetailLines(report: NotCheckedReportShape): string[] {
+  return notCheckedRules(report).map(notCheckedDetailLine);
+}
+
+/**
  * One line per not-checked rule, e.g.
  *   "Not checked: Broken External Links. External link checking was off for
  *   this audit, so 12 external link(s) on the audited pages were not checked.
  *   Run a Surface or Full audit with external link checks on to check them."
  */
 export function notCheckedLine(rule: NotCheckedRule): string {
-  return `Not checked: ${rule.name}. ${sentence(rule.message)} ${rule.hint}`;
+  return `Not checked: ${notCheckedDetailLine(rule)}`;
 }
 
 /** {@link notCheckedLine} for every not-checked rule; empty when none. */

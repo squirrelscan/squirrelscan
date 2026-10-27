@@ -13,15 +13,17 @@ When a finding names a link, squirrel can say where on the page that link sits: 
 - It runs on your machine. There is no network call and no credit cost.
 - The markup wins for the header, the footer and comment threads, which are never overridden, and comment threads are only ever read from markup. A section the classifier names (the pagination, the breadcrumbs) refines a navigation or sidebar landmark.
 - It answers only when it is confident, using a per-class bar chosen for precision. An unsure link keeps no section.
-- It also names a page type for each page (article, product page, docs page, legal page and so on).
+- It also names a page type for each page (article, product page, docs page, legal page and so on). The report counts them in its [Page structure](/configuration/output#page-structure) block.
 - The model is about 9 MB, loaded the first time a page is classified. Commands that never audit never read it.
 
-Two rules use the page type and the breadcrumb section today:
+Four rules use it today:
 
+- `links/broken-links`: an item reads `https://example.com/old (404), linked in the pagination`. See [links/broken-links](/rules/links/broken-links) for the sections and phrases.
+- `links/no-contextual-inbound`: an item names the sections a chrome-only page is linked from, for example `linked only from the footer and the navigation`. See [links/no-contextual-inbound](/rules/links/no-contextual-inbound).
 - `schema/expected-type`: a page the classifier is sure is a product, article, contact, about, docs or listing page, and that declares none of the structured data that type should carry. See [schema/expected-type](/rules/schema/expected-type).
 - `schema/breadcrumb`: a page with a breadcrumb trail and no `BreadcrumbList` markup. See [schema/breadcrumb](/rules/schema/breadcrumb).
 
-With the classifier off, `schema/expected-type` has no page type to read and reports nothing, and `schema/breadcrumb` keeps its info check.
+With the classifier off, `schema/expected-type` has no page type to read and reports nothing, `schema/breadcrumb` keeps its info check, and the link findings carry only the sections the page markup names.
 
 ## Configuration
 

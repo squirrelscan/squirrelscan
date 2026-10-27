@@ -37,7 +37,7 @@ describe("rate-limited unfetched count", () => {
 
   test("markdown names the failed and the unfetched counts", () => {
     expect(renderMarkdown(throttled)).toContain(
-      "**Rate limited:** 437 page(s) not verified (shop.example.com); 918 more discovered but not fetched",
+      "- Rate limited: 437 page(s) not verified (shop.example.com); 918 more discovered but not fetched",
     );
   });
 
@@ -52,7 +52,7 @@ describe("rate-limited unfetched count", () => {
       "Rate limited: 437 page(s) not verified (shop.example.com)\n",
     );
     expect(renderMarkdown(legacy)).toContain(
-      "**Rate limited:** 437 page(s) not verified (shop.example.com)  \n",
+      "- Rate limited: 437 page(s) not verified (shop.example.com)\n",
     );
     const xml = renderLlm(legacy);
     expect(xml).toContain('<rate-limited pages="437" hosts="shop.example.com">');
