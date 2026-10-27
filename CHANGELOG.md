@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Docs
+
+- **The SEO rules page counts 26 structured data rules.** The card still said 25 after `schema/expected-type` was added.
+
 ## v0.0.138 (2026-10-28)
 
 The bundled page classifier and the findings built on it: link findings say where on the page a link sits, a defect in a shared component reads as one fix-once line, reports carry a Page structure block, and `schema/expected-type` and a sharper `schema/breadcrumb` use the page type. First-run telemetry and an audit offer at the end of `squirrel setup`, with `DO_NOT_TRACK` honoured. The Markdown report no longer lets crawled text add links or images, and keeps ordinary text readable. A page of thousands of comment-class containers can no longer stall the classifier.
