@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   detectCi,
+  detectCpuInfo,
   detectInstallSource,
   isUpdateDisabledByEnv,
   readInstallSourceEnv,
@@ -190,5 +191,17 @@ describe("updateSuppressedReason", () => {
     process.env.CI = "true";
     process.env.SQUIRREL_NO_UPDATE = "0";
     expect(updateSuppressedReason()).toBe("running in CI");
+  });
+});
+
+describe("detectCpuInfo", () => {
+  test("returns booleans or null, never throws", () => {
+    const info = detectCpuInfo();
+    for (const v of [info.cpu_translated, info.hw_arm64]) {
+      expect(v === null || typeof v === "boolean").toBe(true);
+    }
+    if (process.platform !== "darwin") {
+      expect(info).toEqual({ cpu_translated: null, hw_arm64: null });
+    }
   });
 });

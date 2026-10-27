@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { hostname } from "node:os";
 import { sep } from "node:path";
 
@@ -70,6 +71,45 @@ export function detectCi(): boolean {
     env.TEAMCITY_VERSION !== undefined ||
     env.TF_BUILD !== undefined // Azure Pipelines
   );
+}
+
+export interface CpuInfo {
+  /** true under Rosetta (an x64 process on Apple Silicon); null = unknown. */
+  cpu_translated: boolean | null;
+  /** true on Apple Silicon hardware, translated or not; null = unknown. */
+  hw_arm64: boolean | null;
+}
+
+const SYSCTL_TIMEOUT_MS = 250;
+
+function sysctlFlag(name: string): boolean | null {
+  try {
+    const r = spawnSync("sysctl", ["-n", name], {
+      encoding: "utf8",
+      timeout: SYSCTL_TIMEOUT_MS,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    if (r.status !== 0) return null;
+    const out = String(r.stdout).trim();
+    return out === "1" ? true : out === "0" ? false : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Tells a real Intel Mac from a Rosetta shell on Apple Silicon, for install
+ * analytics. macOS only; everything else is null. Never throws and is capped
+ * at a few ms per probe so it cannot block or fail an install.
+ */
+export function detectCpuInfo(): CpuInfo {
+  if (process.platform !== "darwin") {
+    return { cpu_translated: null, hw_arm64: null };
+  }
+  return {
+    cpu_translated: sysctlFlag("sysctl.proc_translated"),
+    hw_arm64: sysctlFlag("hw.optional.arm64"),
+  };
 }
 
 /** Where an audit run was executed — surfaced in the dashboard + end-of-run. */
