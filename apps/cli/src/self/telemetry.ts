@@ -47,7 +47,7 @@ interface TelemetryPayload {
 
 /** DO_NOT_TRACK (consoledonottrack.com): "1" or "true" turns telemetry off. */
 function doNotTrackSet(): boolean {
-  const v = process.env.DO_NOT_TRACK?.trim().toLowerCase();
+  const v = process.env.DO_NOT_TRACK?.toLowerCase();
   return v === "1" || v === "true";
 }
 
@@ -160,6 +160,7 @@ export function trackFirstAudit(
   // The snapshot can be missing or stale (another process may have reported):
   // the marker on disk decides.
   const onDisk = loadUserSettings();
+  if (onDisk.ok && onDisk.data.telemetry === false) return;
   if (onDisk.ok && onDisk.data.first_audit_reported_at) return;
   firstAuditReported = true;
   // Marker first, send second: "once" beats "at least once". A send that
@@ -228,7 +229,8 @@ async function sendTelemetryEvent(payload: TelemetryPayload): Promise<void> {
   // The caller may not have had settings (unreadable at start): honour the
   // user-scope opt-out from disk too before touching anything.
   const loaded = loadUserSettings();
-  if (loaded.ok && loaded.data.telemetry === false) return;
+  // An unreadable file may hold the opt-out: fail closed, like the project scope.
+  if (!loaded.ok || loaded.data.telemetry === false) return;
 
   const installId = getOrCreateInstallId();
   if (installId) payload.install_id = installId;
