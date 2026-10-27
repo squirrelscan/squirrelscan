@@ -382,7 +382,18 @@ describe("page structure in the output formats", () => {
     const r = report({ structure: odd });
 
     // The HTML page's own script says `undefined` (a date format locale); only its markup is read.
-    const markup = (html: string) => html.replace(/<(script|style)[\s\S]*?<\/\1>/g, "");
+    // indexOf scans, not a regex: removes each <script>...</script> and <style>...</style> block.
+    const markup = (html: string) => {
+      let out = html;
+      for (const tag of ["script", "style"]) {
+        for (let at = out.indexOf(`<${tag}`); at !== -1; at = out.indexOf(`<${tag}`)) {
+          const close = out.indexOf(`</${tag}>`, at);
+          if (close === -1) break;
+          out = out.slice(0, at) + out.slice(close + tag.length + 3);
+        }
+      }
+      return out;
+    };
     for (const out of [renderMarkdown(r), renderText(r), renderLlm(r), renderXml(r), markup(renderHtml(r))]) {
       expect(out).not.toContain("undefined");
       expect(out).not.toContain("null page");

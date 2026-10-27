@@ -132,10 +132,22 @@ function decodeEntities(value: string): string {
     .replace(/&amp;/g, "&");
 }
 
+/** Drops everything between a `<` and the next `>`, by scanning rather than a regex. */
+function stripTags(html: string): string {
+  let out = "";
+  let inTag = false;
+  for (const char of html) {
+    if (char === "<") inTag = true;
+    else if (char === ">" && inTag) inTag = false;
+    else if (!inTag) out += char;
+  }
+  return out;
+}
+
 /** What each card's sentence says, as text: markup stripped, entities decoded. */
 function cardSentences(html: string): string[] {
   return [...html.matchAll(/<p class="fix-group-line">(.*?)<\/p>/g)].map((match) =>
-    decodeEntities(match[1]!.replace(/<[^>]+>/g, "")),
+    decodeEntities(stripTags(match[1]!)),
   );
 }
 
