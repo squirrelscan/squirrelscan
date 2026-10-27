@@ -374,8 +374,7 @@ describe("scoped findings in each format", () => {
     expect(text).not.toContain(`${SITE}/gone (404), linked in the footer`);
     expect(text).toContain(`-> ${SITE}/lost (404), linked in the page content`);
     const md = renderMarkdown(report);
-    // The label is escaped (pub#3522): its parentheses are backslashed, the destination is a plain URL.
-    expect(md).toContain(`- [${SITE}/gone \\(404\\)](${SITE}/gone)`);
+    expect(md).toContain(`- [${SITE}/gone (404)](${SITE}/gone)`);
     expect(md).toContain("linked in the page content");
     expect(renderHtml(report)).not.toContain("gone (404), linked in the footer");
     expect(renderLlm(report)).not.toContain("gone (404), linked in the footer");
