@@ -340,6 +340,14 @@ describe("signed in, audit_website is a billed cloud audit", () => {
     expect(pageRendered()).toBe(false);
   });
 
+  // squirrelscan/repo#3492: the balance read is the wall's, so it says so, and
+  // the server counts the view of the upgrade offer the refusal links.
+  test("the billed audit's balance read names itself as the MCP wall's", async () => {
+    balanceTotal = 10;
+    await call("audit_website", { ...AUDIT, level: "quick", confirm: true });
+    expect(requested.some((r) => r.endsWith("/v1/credits?cta=mcp"))).toBe(true);
+  });
+
   test("a per-audit cap below one page is refused", async () => {
     const out = await call(
       "audit_website",

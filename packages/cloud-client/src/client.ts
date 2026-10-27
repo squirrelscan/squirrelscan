@@ -157,8 +157,18 @@ export interface CreditsResponse {
 }
 
 export interface CloudServicesClient {
-  /** Current credit balance + plan + pricing table (CLI preflight). */
-  getBalance(opts?: Pick<CallOpts, "signal">): Promise<CreditsResponse>;
+  /**
+   * Current credit balance + plan + pricing table (CLI preflight).
+   *
+   * `cta` (squirrelscan/repo#3492): set ONLY by a read whose answer the caller
+   * shows as a credit wall when the balance cannot start an audit (the
+   * `squirrel audit` preflight, `cli`; the local MCP server's billed audit,
+   * `mcp`). That wall never reaches a refusal, so the server counts its view
+   * of the upgrade offer from this read.
+   */
+  getBalance(
+    opts?: Pick<CallOpts, "signal"> & { cta?: "cli" | "mcp" }
+  ): Promise<CreditsResponse>;
   /** Classify a batch of pages (page type + parsability). */
   aiParse(req: AiParseRequest, opts?: CallOpts): Promise<AiParseResponse>;
   /** Authority signals for a batch of pages. */
@@ -433,7 +443,11 @@ export function createCloudClient(config: CloudClientConfig): CloudServicesClien
   }
 
   return {
-    getBalance: (opts) => getJson<CreditsResponse>("/v1/credits", opts?.signal),
+    getBalance: (opts) =>
+      getJson<CreditsResponse>(
+        opts?.cta ? `/v1/credits?cta=${opts.cta}` : "/v1/credits",
+        opts?.signal
+      ),
     aiParse: (req, opts) => postJson<AiParseResponse>("/v1/services/ai-parse", req, opts),
     authoritySignals: (req, opts) =>
       postJson<AuthorityResponse>("/v1/services/authority-signals", req, opts),

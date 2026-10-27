@@ -1535,7 +1535,9 @@ export const audit = defineCommand({
       } else if (statusClient && accountLabel) {
         try {
           const { balance, plan, branding, upgrade } =
-            await statusClient.getBalance();
+            // squirrelscan/repo#3492: this read is the wall below, so the
+            // server counts the upgrade offer's view when it answers with one.
+            await statusClient.getBalance({ cta: "cli" });
           startingBalance = balance.total;
           unlimitedCredits = isUnlimitedBalance(balance);
           accountPlan = plan.id === "free" ? "free" : "paid";

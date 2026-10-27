@@ -187,6 +187,21 @@ describe("a signed-in quick audit is a billed cloud audit", () => {
     expect(registered()).toBe(true);
   });
 
+  // squirrelscan/repo#3492: the preflight read is the one that decides the
+  // credit wall, so it alone says so; every other balance read stays plain.
+  test("the preflight balance read names itself as the CLI wall's, once", async () => {
+    await runAudit(["--level", "quick", "-m", "1"]);
+    const reads = requested.filter(
+      (r) => r.startsWith("GET ") && r.includes("/v1/credits")
+    );
+    expect(reads.filter((r) => r.endsWith("/v1/credits?cta=cli"))).toHaveLength(
+      1
+    );
+    expect(
+      reads.filter((r) => r.includes("cta=") && !r.endsWith("?cta=cli"))
+    ).toEqual([]);
+  });
+
   test("it uses the cloud browser by default and quotes 50 + 2 per page", async () => {
     await runAudit(["--level", "quick"]);
     // The notice prints only when the run resolved to the cloud browser.

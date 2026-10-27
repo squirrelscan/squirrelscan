@@ -229,7 +229,9 @@ export async function planMcpAudit(input: {
 
   let balance: Awaited<ReturnType<typeof resolved.client.getBalance>>;
   try {
-    balance = await resolved.client.getBalance();
+    // squirrelscan/repo#3492: the refusal below is a credit wall the agent is
+    // shown, so the server counts the upgrade offer's view from this read.
+    balance = await resolved.client.getBalance({ cta: "mcp" });
   } catch (error) {
     const rejected =
       error instanceof CloudClientError && error.code === "not_authenticated";
