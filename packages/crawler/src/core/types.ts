@@ -13,6 +13,7 @@ import type { AuditLevel } from "@squirrelscan/core-contracts/audit-levels";
 
 import type { CrawlStorage, StorageError } from "../storage/types";
 import type { TlsEvent } from "../fetcher";
+import type { TlsProbeFn } from "@squirrelscan/utils/tls-certificate";
 
 // ============================================
 // CRAWLER CONFIG
@@ -194,6 +195,14 @@ export interface CrawlerConfig {
   ownSiteOnly?: boolean;
   /** The resolver behind the crawl's egress checks; the system's when unset (a test seam). */
   resolveHost?: (hostname: string) => Promise<string[]>;
+  /**
+   * One TLS handshake to a host (#712), used once per origin to name the cause
+   * of a TLS fetch failure that would become the crawl's root failure (expired,
+   * wrong name, missing intermediate, self-signed). Injected only by a runtime
+   * with TLS sockets that vets and pins the address first (the CLI). Unset: the
+   * fetch's own failure text stands.
+   */
+  tlsProbe?: TlsProbeFn;
   /**
    * Optional hook for structured TLS/status-0 failure + standard-fetch fallback
    * events. Lets consumers (CLI/cloud) surface these with TLS context instead

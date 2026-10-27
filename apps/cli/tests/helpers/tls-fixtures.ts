@@ -9,8 +9,8 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import * as tls from "node:tls";
 import { join } from "node:path";
+import * as tls from "node:tls";
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
@@ -55,7 +55,8 @@ interface Authority {
 
 // tls-fixture.test is a public-looking name the pipeline tests route to these
 // certificates; localhost and the loopback IP keep the direct socket tests.
-const LOCAL_SAN = "subjectAltName=DNS:localhost,DNS:tls-fixture.test,IP:127.0.0.1";
+const LOCAL_SAN =
+  "subjectAltName=DNS:localhost,DNS:tls-fixture.test,IP:127.0.0.1";
 
 export function createTlsFixtures(): TlsFixtures {
   const dir = mkdtempSync(join(tmpdir(), "squirrel-tls-"));
@@ -76,10 +77,22 @@ export function createTlsFixtures(): TlsFixtures {
 
   const leaf = (
     name: string,
-    span: { subject: string; san: string; notBefore: number; notAfter: number; rsaBits?: number; ec?: boolean },
+    span: {
+      subject: string;
+      san: string;
+      notBefore: number;
+      notAfter: number;
+      rsaBits?: number;
+      ec?: boolean;
+    }
   ) => createLeaf(dir, name, intermediate, span);
 
-  const valid = leaf("valid", { subject: "/CN=localhost", san: LOCAL_SAN, notBefore: now - DAY_MS, notAfter: at(365) });
+  const valid = leaf("valid", {
+    subject: "/CN=localhost",
+    san: LOCAL_SAN,
+    notBefore: now - DAY_MS,
+    notAfter: at(365),
+  });
   const expiresIn45 = leaf("in45", {
     subject: "/CN=localhost",
     san: LOCAL_SAN,
@@ -159,11 +172,16 @@ export interface LocalTlsServer {
 }
 
 /** Serve one certificate on 127.0.0.1 on an ephemeral port. */
-export function serveCertificate(served: ServedCertificate): Promise<LocalTlsServer> {
+export function serveCertificate(
+  served: ServedCertificate
+): Promise<LocalTlsServer> {
   return new Promise((resolve, reject) => {
-    const server = tls.createServer({ key: served.key, cert: served.cert }, (socket) => {
-      socket.end();
-    });
+    const server = tls.createServer(
+      { key: served.key, cert: served.cert },
+      (socket) => {
+        socket.end();
+      }
+    );
     server.on("tlsClientError", () => {});
     server.once("error", reject);
     server.listen(0, "127.0.0.1", () => {
@@ -187,7 +205,7 @@ function createAuthority(
   dir: string,
   name: string,
   signer: Authority | undefined,
-  span: AuthoritySpan,
+  span: AuthoritySpan
 ): Authority {
   const caDir = join(dir, `ca-${name}`);
   prepareCaDatabase(caDir);
@@ -195,14 +213,39 @@ function createAuthority(
   const certPath = join(dir, `${name}.pem`);
   if (span.selfSigned) {
     openssl([
-      "req", "-x509", "-newkey", "rsa:2048", "-nodes",
-      "-keyout", keyPath, "-out", certPath, "-days", "3650", "-subj", span.subject,
-      "-addext", "basicConstraints=critical,CA:TRUE",
-      "-addext", "keyUsage=critical,keyCertSign,cRLSign",
+      "req",
+      "-x509",
+      "-newkey",
+      "rsa:2048",
+      "-nodes",
+      "-keyout",
+      keyPath,
+      "-out",
+      certPath,
+      "-days",
+      "3650",
+      "-subj",
+      span.subject,
+      "-addext",
+      "basicConstraints=critical,CA:TRUE",
+      "-addext",
+      "keyUsage=critical,keyCertSign,cRLSign",
     ]);
   } else {
     const csr = join(dir, `${name}.csr`);
-    openssl(["req", "-new", "-newkey", "rsa:2048", "-nodes", "-keyout", keyPath, "-out", csr, "-subj", span.subject]);
+    openssl([
+      "req",
+      "-new",
+      "-newkey",
+      "rsa:2048",
+      "-nodes",
+      "-keyout",
+      keyPath,
+      "-out",
+      csr,
+      "-subj",
+      span.subject,
+    ]);
     const ext = writeExtensions(dir, name, [
       "basicConstraints=critical,CA:TRUE,pathlen:0",
       "keyUsage=critical,keyCertSign,cRLSign",
@@ -216,18 +259,51 @@ function createLeaf(
   dir: string,
   name: string,
   signer: Authority,
-  span: { subject: string; san: string; notBefore: number; notAfter: number; rsaBits?: number; ec?: boolean },
+  span: {
+    subject: string;
+    san: string;
+    notBefore: number;
+    notAfter: number;
+    rsaBits?: number;
+    ec?: boolean;
+  }
 ): { key: string; cert: string } {
   const keyPath = join(dir, `${name}.key`);
   const csr = join(dir, `${name}.csr`);
   const certPath = join(dir, `${name}.pem`);
   if (span.ec) {
-    openssl(["ecparam", "-name", "prime256v1", "-genkey", "-noout", "-out", keyPath]);
-    openssl(["req", "-new", "-key", keyPath, "-out", csr, "-subj", span.subject]);
+    openssl([
+      "ecparam",
+      "-name",
+      "prime256v1",
+      "-genkey",
+      "-noout",
+      "-out",
+      keyPath,
+    ]);
+    openssl([
+      "req",
+      "-new",
+      "-key",
+      keyPath,
+      "-out",
+      csr,
+      "-subj",
+      span.subject,
+    ]);
   } else {
     openssl([
-      "req", "-new", "-newkey", `rsa:${span.rsaBits ?? 2048}`, "-nodes",
-      "-keyout", keyPath, "-out", csr, "-subj", span.subject,
+      "req",
+      "-new",
+      "-newkey",
+      `rsa:${span.rsaBits ?? 2048}`,
+      "-nodes",
+      "-keyout",
+      keyPath,
+      "-out",
+      csr,
+      "-subj",
+      span.subject,
     ]);
   }
   const ext = writeExtensions(dir, name, [
@@ -244,10 +320,21 @@ function createSelfSigned(dir: string): ServedCertificate {
   const keyPath = join(dir, "self.key");
   const certPath = join(dir, "self.pem");
   openssl([
-    "req", "-x509", "-newkey", "rsa:2048", "-nodes",
-    "-keyout", keyPath, "-out", certPath, "-days", "30",
-    "-subj", "/CN=localhost",
-    "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1",
+    "req",
+    "-x509",
+    "-newkey",
+    "rsa:2048",
+    "-nodes",
+    "-keyout",
+    keyPath,
+    "-out",
+    certPath,
+    "-days",
+    "30",
+    "-subj",
+    "/CN=localhost",
+    "-addext",
+    "subjectAltName=DNS:localhost,IP:127.0.0.1",
   ]);
   return { key: read(keyPath), cert: read(certPath) };
 }
@@ -258,7 +345,7 @@ function signCsr(
   csr: string,
   out: string,
   extensions: string,
-  span: { notBefore: number; notAfter: number },
+  span: { notBefore: number; notAfter: number }
 ): void {
   const config = join(signer.caDir, "ca.cnf");
   writeFileSync(
@@ -277,15 +364,29 @@ function signCsr(
       "[ policy ]",
       "commonName = supplied",
       "",
-    ].join("\n"),
+    ].join("\n")
   );
   openssl([
-    "ca", "-batch", "-config", config,
-    "-cert", signer.certPath, "-keyfile", signer.keyPath,
-    "-in", csr, "-out", out,
-    "-extfile", extensions, "-extensions", "ext",
-    "-startdate", openSslTime(span.notBefore),
-    "-enddate", openSslTime(span.notAfter),
+    "ca",
+    "-batch",
+    "-config",
+    config,
+    "-cert",
+    signer.certPath,
+    "-keyfile",
+    signer.keyPath,
+    "-in",
+    csr,
+    "-out",
+    out,
+    "-extfile",
+    extensions,
+    "-extensions",
+    "ext",
+    "-startdate",
+    openSslTime(span.notBefore),
+    "-enddate",
+    openSslTime(span.notAfter),
     "-notext",
   ]);
 }
@@ -304,7 +405,10 @@ function writeExtensions(dir: string, name: string, lines: string[]): string {
 
 function openSslTime(ms: number): string {
   // openssl wants YYYYMMDDHHMMSSZ.
-  return new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z").replace(/[-:T]/g, "");
+  return new Date(ms)
+    .toISOString()
+    .replace(/\.\d{3}Z$/, "Z")
+    .replace(/[-:T]/g, "");
 }
 
 function read(path: string): string {
@@ -315,7 +419,8 @@ function openssl(args: string[]): void {
   try {
     execFileSync("openssl", args, { stdio: "pipe" });
   } catch (error) {
-    const stderr = (error as { stderr?: Buffer }).stderr?.toString() ?? String(error);
-    throw new Error(`openssl ${args[0]} failed: ${stderr}`);
+    const stderr =
+      (error as { stderr?: Buffer }).stderr?.toString() ?? String(error);
+    throw new Error(`openssl ${args[0]} failed: ${stderr}`, { cause: error });
   }
 }

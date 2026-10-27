@@ -1,22 +1,18 @@
 // TLS certificate facts for one host, read from one handshake (#712).
 //
-// This is the engine's only raw socket code. Every other request goes through
-// `fetch`, which exposes no peer certificate. It lives in this one module so the
-// `security/tls-certificate` rule and the crawl's TLS failure message share one
-// definition of what a handshake saw.
+// The facts and what they mean live here, so the `security/tls-certificate`
+// rule and the crawl's TLS failure message share one definition. The handshake
+// itself does NOT: this package has no socket code. A runtime that can open a
+// TLS socket injects a `TlsProbeFn` (the CLI does, in apps/cli/src/audit/
+// tls-probe.ts, behind the egress guard); everywhere else there is no probe and
+// the rule says "not checked".
 //
-// Runtime limits, checked against Bun 1.4 (the CLI is a Bun standalone binary):
+// Runtime limits of the CLI's probe, checked against Bun 1.4:
 // - `getPeerCertificate()` returns the leaf only, so the chain cannot be walked.
 //   A missing intermediate shows up as the first authorization error,
-//   UNABLE_TO_VERIFY_LEAF_SIGNATURE, and that is what we read it from.
+//   UNABLE_TO_VERIFY_LEAF_SIGNATURE, and that is what it is read from.
 // - `minVersion` / `maxVersion` are ignored, so protocol-version checks are out
 //   of scope here (phase 2 of #712).
-// - Where `node:tls` is missing, or `connect` throws, the probe reports
-//   `unavailable`. Callers must say "not checked" for that, never pass or fail.
-
-import { isIP } from "node:net";
-
-export const TLS_PROBE_TIMEOUT_MS = 8_000;
 
 const DAY_MS = 86_400_000;
 
@@ -25,13 +21,7 @@ export interface TlsTarget {
   hostname: string;
   /** Defaults to 443. */
   port?: number;
-}
-
-export interface TlsProbeOptions {
-  /** Connect to this address instead of resolving `hostname`. Tests use it; the audit does not. */
-  address?: string;
-  /** Extra trust anchors (PEM). Tests use it to trust a fixture root; the audit uses the system store. */
-  ca?: string;
+  /** Most the handshake may take, in ms. The probe's own default applies when unset. */
   timeoutMs?: number;
 }
 
@@ -46,9 +36,9 @@ export interface TlsCertificate {
 }
 
 export type TlsProbe =
-  /** This runtime has no TLS socket API, so nothing was checked. */
+  /** No handshake was attempted: no probe in this runtime, or the egress policy cannot vet the host here. */
   | { kind: "unavailable"; reason: string }
-  /** No certificate was seen: DNS, refused, reset, timeout or a failed handshake. */
+  /** No certificate was seen: DNS, refused, reset, timeout, a failed handshake, or an address the egress guard refused. */
   | { kind: "unreachable"; code: string; message: string }
   /** A certificate was served. `trusted` is the runtime's verdict against the trust store. */
   | {
@@ -59,6 +49,13 @@ export type TlsProbe =
       trustError?: string;
     };
 
+/**
+ * Opens one TLS handshake to a host and reports what it saw. Never throws:
+ * every failure is a `TlsProbe` result. Injected by a runtime that has TLS
+ * sockets and an egress guard for them (the CLI); absent elsewhere.
+ */
+export type TlsProbeFn = (target: TlsTarget) => Promise<TlsProbe>;
+
 /** A problem with a served certificate, in the order the rule and the crawl report them. */
 export type TlsProblem =
   | { kind: "expired"; validTo: Date }
@@ -68,7 +65,8 @@ export type TlsProblem =
   | { kind: "incomplete-chain" }
   | { kind: "untrusted-root"; code: string };
 
-interface RawCertificate {
+/** The fields of a Node/Bun `getPeerCertificate()` result that are read. */
+export interface RawPeerCertificate {
   subjectaltname?: string;
   issuer?: { O?: string; CN?: string };
   valid_from?: string;
@@ -77,147 +75,19 @@ interface RawCertificate {
   bits?: number;
 }
 
-/**
- * Test-only route: send a handshake for `hostname` to a local fixture server
- * instead of resolving it. `null` makes the name not resolve. Lets an audit run
- * against a public-looking name with no DNS and no live host. Never set in
- * production code; `routeTlsHostForTests` returns the function that removes it.
- */
-export interface TlsTestRoute {
-  address: string;
-  port: number;
-  ca?: string;
+/** SAN entries kept from one certificate; a shared certificate can carry hundreds, never thousands. */
+const MAX_NAMES = 1000;
+/** The longest DNS name (RFC 1035). */
+const MAX_NAME_LENGTH = 253;
+const MAX_ISSUER_LENGTH = 200;
+
+function certificateText(value: string, maxLength: number): string {
+  // oxlint-disable-next-line no-control-regex -- stripping them is the point
+  return value.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").trim().slice(0, maxLength);
 }
 
-const testRoutes = new Map<string, TlsTestRoute | null>();
-
-export function routeTlsHostForTests(hostname: string, route: TlsTestRoute | null): () => void {
-  const key = hostname.toLowerCase();
-  testRoutes.set(key, route);
-  return () => {
-    testRoutes.delete(key);
-  };
-}
-
-/**
- * Open one TLS connection to `target`, read the leaf certificate and close it.
- * Never throws: every failure is a `TlsProbe` result.
- */
-export async function probeTlsCertificate(
-  target: TlsTarget,
-  options: TlsProbeOptions = {},
-): Promise<TlsProbe> {
-  const { hostname } = target;
-  const routed = testRoutes.get(hostname.toLowerCase());
-  if (routed === null) {
-    return { kind: "unreachable", code: "ENOTFOUND", message: `${hostname} does not resolve` };
-  }
-
-  let tls: typeof import("node:tls");
-  try {
-    tls = await import("node:tls");
-  } catch (error) {
-    return { kind: "unavailable", reason: errorText(error) };
-  }
-  if (typeof tls.connect !== "function") {
-    return { kind: "unavailable", reason: "node:tls has no connect()" };
-  }
-
-  const timeoutMs = options.timeoutMs ?? TLS_PROBE_TIMEOUT_MS;
-  const port = routed?.port ?? target.port ?? 443;
-  const address = routed?.address ?? options.address ?? hostname;
-  const ca = routed?.ca ?? options.ca;
-
-  return new Promise<TlsProbe>((resolve) => {
-    let socket: import("node:tls").TLSSocket | undefined;
-    let settled = false;
-    const finish = (result: TlsProbe) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      socket?.destroy();
-      resolve(result);
-    };
-    const timer = setTimeout(
-      () =>
-        finish({
-          kind: "unreachable",
-          code: "ETIMEDOUT",
-          message: `no TLS handshake with ${hostname} within ${timeoutMs}ms`,
-        }),
-      timeoutMs,
-    );
-
-    let connection: import("node:tls").TLSSocket;
-    try {
-      connection = tls.connect({
-        host: address,
-        port,
-        // SNI and verification both use the name; an IP literal has no SNI name.
-        ...(isIP(hostname) === 0 ? { servername: hostname } : {}),
-        // Verification is done here, on the facts, so every served certificate can be read.
-        rejectUnauthorized: false,
-        ...(ca !== undefined ? { ca } : {}),
-        timeout: timeoutMs,
-      });
-    } catch (error) {
-      finish({ kind: "unavailable", reason: errorText(error) });
-      return;
-    }
-    const open = connection;
-    socket = open;
-
-    open.once("secureConnect", () => {
-      const certificate = readCertificate(open.getPeerCertificate() as unknown as RawCertificate);
-      if (!certificate) {
-        finish({
-          kind: "unreachable",
-          code: "NO_CERTIFICATE",
-          message: `${hostname} sent no certificate`,
-        });
-        return;
-      }
-      const trustError = authorizationErrorCode(open.authorizationError);
-      finish({
-        kind: "certificate",
-        certificate,
-        trusted: open.authorized === true,
-        ...(trustError !== undefined ? { trustError } : {}),
-      });
-    });
-    open.once("error", (error: NodeJS.ErrnoException) => {
-      finish({
-        kind: "unreachable",
-        code: error.code ?? "error",
-        message: error.message,
-      });
-    });
-  });
-}
-
-function readCertificate(raw: RawCertificate | undefined): TlsCertificate | undefined {
-  if (!raw || typeof raw !== "object") return undefined;
-  const validFrom = new Date(raw.valid_from ?? "");
-  const validTo = new Date(raw.valid_to ?? "");
-  if (Number.isNaN(validFrom.getTime()) || Number.isNaN(validTo.getTime())) return undefined;
-
-  const names = (raw.subjectaltname ?? "")
-    .split(",")
-    .flatMap((entry) => {
-      const match = /^\s*(?:DNS|IP Address):(.+?)\s*$/.exec(entry);
-      return match ? [match[1]!.toLowerCase()] : [];
-    });
-
-  return {
-    names,
-    issuer: raw.issuer?.O ?? raw.issuer?.CN ?? "unknown issuer",
-    validFrom,
-    validTo,
-    ...(raw.modulus !== undefined && typeof raw.bits === "number" ? { rsaBits: raw.bits } : {}),
-  };
-}
-
-function authorizationErrorCode(value: unknown): string | undefined {
+/** A TLS `authorizationError` (an Error, a code string, or nothing) as a code. */
+export function authorizationErrorCode(value: unknown): string | undefined {
   if (!value) return undefined;
   if (typeof value === "string") return value;
   const error = value as { code?: unknown; message?: unknown };
@@ -225,20 +95,64 @@ function authorizationErrorCode(value: unknown): string | undefined {
   return typeof error.message === "string" ? error.message : "UNKNOWN";
 }
 
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+/** A `getPeerCertificate()` result as a `TlsCertificate`, or undefined when it holds no usable dates. */
+export function readPeerCertificate(
+  raw: RawPeerCertificate | undefined,
+): TlsCertificate | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const validFrom = new Date(raw.valid_from ?? "");
+  const validTo = new Date(raw.valid_to ?? "");
+  if (Number.isNaN(validFrom.getTime()) || Number.isNaN(validTo.getTime())) return undefined;
+
+  // The server chooses every string here, and they reach messages and reports:
+  // control characters go, and lengths and the name count are bounded.
+  const names = (raw.subjectaltname ?? "")
+    .split(",")
+    .flatMap((entry) => {
+      const match = /^\s*(?:DNS|IP Address):(.+?)\s*$/.exec(entry);
+      return match ? [certificateText(match[1]!, MAX_NAME_LENGTH).toLowerCase()] : [];
+    })
+    .filter((name) => name !== "")
+    .slice(0, MAX_NAMES);
+
+  return {
+    names,
+    issuer: certificateText(raw.issuer?.O ?? raw.issuer?.CN ?? "", MAX_ISSUER_LENGTH) || "unknown issuer",
+    validFrom,
+    validTo,
+    ...(raw.modulus !== undefined && typeof raw.bits === "number" ? { rsaBits: raw.bits } : {}),
+  };
 }
 
-/** Whether `names` (lowercased SAN entries) cover `hostname`. A wildcard covers one label. */
+/**
+ * Whether `names` (lowercased SAN entries) cover `hostname`. A wildcard covers
+ * one label. An IPv6 address matches in any spelling: the runtime prints an IP
+ * SAN expanded (`2001:DB8:0:0:0:0:0:1`) and a URL holds it compressed.
+ */
 export function certificateCovers(names: readonly string[], hostname: string): boolean {
-  const host = hostname.toLowerCase().replace(/\.$/, "");
-  return names.some((name) => {
+  const host = canonicalName(hostname);
+  return names.some((entry) => {
+    const name = canonicalName(entry);
     if (name === host) return true;
     if (!name.startsWith("*.")) return false;
     const suffix = name.slice(1);
     if (host.length <= suffix.length || !host.endsWith(suffix)) return false;
     return !host.slice(0, -suffix.length).includes(".");
   });
+}
+
+/**
+ * A name or address in one spelling: lowercased, no root dot, no brackets, and
+ * an IPv6 address in the WHATWG URL parser's compressed form.
+ */
+function canonicalName(value: string): string {
+  const name = value.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  if (!name.includes(":")) return name;
+  try {
+    return new URL(`http://[${name}]/`).hostname.replace(/^\[|\]$/g, "");
+  } catch {
+    return name;
+  }
 }
 
 /**

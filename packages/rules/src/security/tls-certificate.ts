@@ -1,20 +1,22 @@
 // security/tls-certificate - TLS certificate expiry, hostname, chain and key checks (#712)
 //
 // One TLS handshake per audited host, plus one for its www/apex variant when
-// that name answers on the same port. The handshake itself lives in
-// @squirrelscan/utils/tls-certificate; this file decides what the facts mean.
+// that name answers on the same port. The rule opens no socket itself: the
+// handshake is `ctx.tlsProbe`, injected by a runtime that has TLS sockets and
+// vets every address before it connects (the CLI). Without one the rule says
+// "not checked". The facts and their meaning are @squirrelscan/utils/tls-certificate.
 
 import {
   certificateProblems,
   daysUntil,
   isoDate,
-  probeTlsCertificate,
   untrustedRootText,
   type TlsCertificate,
+  type TlsProbeFn,
   type TlsProblem,
   type TlsProbe,
-  type TlsTarget,
 } from "@squirrelscan/utils/tls-certificate";
+import { getDomain } from "tldts";
 import { z } from "zod";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
@@ -32,12 +34,16 @@ export const optionsSchema = z.object({
     .min(0)
     .default(7)
     .describe("Error when the certificate expires within this many days"),
-});
+  })
+  // Otherwise the warning band is empty and every near expiry reads as an error.
+  .refine((options) => options.error_days <= options.warn_days, {
+    message: "error_days must not be more than warn_days",
+    path: ["error_days"],
+  });
 
 export type TlsCertificateOptions = z.infer<typeof optionsSchema>;
 
-/** Opens one handshake to a host. Injected by tests; the audit uses the real socket. */
-export type TlsProbeFn = (target: TlsTarget) => Promise<TlsProbe>;
+export type { TlsProbeFn };
 
 export interface TlsCertificateDeps {
   probe: TlsProbeFn;
@@ -65,8 +71,14 @@ export const tlsCertificateRule: Rule = {
 
   async run(ctx: RuleContext): Promise<RuleResult> {
     const options = optionsSchema.parse(ctx.options);
+    const probe: TlsProbeFn =
+      ctx.tlsProbe ??
+      (async () => ({
+        kind: "unavailable",
+        reason: "this environment does not open TLS connections for the audit",
+      }));
     return checkTlsCertificate(ctx.site?.baseUrl ?? ctx.page.url, options, {
-      probe: (target) => probeTlsCertificate(target),
+      probe,
       now: new Date(),
     });
   },
@@ -102,7 +114,12 @@ export async function checkTlsCertificate(
 
   const hostname = url.hostname.replace(/^\[(.*)\]$/, "$1");
   const port = url.port ? Number(url.port) : 443;
-  const probe = await deps.probe({ hostname, port });
+  const variant = wwwVariant(hostname);
+  // Both handshakes at once, so the worst case is one probe deadline, not two.
+  const [probe, other] = await Promise.all([
+    deps.probe({ hostname, port }),
+    variant ? deps.probe({ hostname: variant, port }) : undefined,
+  ]);
 
   if (probe.kind !== "certificate") {
     return { checks: [notChecked(hostname, probe)] };
@@ -123,9 +140,7 @@ export async function checkTlsCertificate(
     });
   }
 
-  const variant = wwwVariant(hostname);
-  if (variant) {
-    const other = await deps.probe({ hostname: variant, port });
+  if (variant && other) {
     if (other.kind === "certificate") {
       const [problem] = certificateProblems(other, variant, deps.now);
       if (problem) {
@@ -161,7 +176,9 @@ function expiryCheck(
     return {
       name,
       status: "fail",
-      message: `Certificate expired on ${expires} (${dayText(-days)} ago)`,
+      // Whole days since expiry, rounded down like the days remaining: two hours
+      // ago is "less than a day ago", not "1 day ago".
+      message: `Certificate expired on ${expires} (${dayText(daysUntil(now, certificate.validTo))} ago)`,
       value: expires,
       expected: `valid for more than ${options.error_days} days`,
       details,
@@ -219,7 +236,7 @@ function problemCheck(
       message,
       value: hostname,
       expected: `a certificate that covers ${hostname}`,
-      details: { covers: certificate.names },
+      details: { covers: certificate.names.slice(0, DETAIL_NAMES) },
     };
   }
   return {
@@ -242,10 +259,8 @@ function describeProblem(
       return `certificate expired on ${isoDate(problem.validTo)}`;
     case "not-yet-valid":
       return `certificate is not valid until ${isoDate(problem.validFrom)}`;
-    case "hostname": {
-      const covers = certificate.names.length > 0 ? certificate.names.join(", ") : "no names";
-      return `the certificate does not cover ${hostname}; it covers ${covers}`;
-    }
+    case "hostname":
+      return `the certificate does not cover ${hostname}; it covers ${coveredNames(certificate.names)}`;
     case "self-signed":
       return "the certificate is self-signed";
     case "incomplete-chain":
@@ -260,23 +275,54 @@ function notChecked(hostname: string, probe: Exclude<TlsProbe, { kind: "certific
     return {
       name: "tls-certificate",
       status: "info",
-      message: `TLS certificate not checked: this environment has no TLS socket API (${probe.reason})`,
+      message: `TLS certificate not checked: ${probe.reason}`,
+      value: "not-checked",
+    };
+  }
+  if (probe.code === "EGRESS_REFUSED") {
+    return {
+      name: "tls-certificate",
+      status: "info",
+      message: `TLS certificate not checked: ${probe.message}`,
       value: "not-checked",
     };
   }
   return {
     name: "tls-certificate",
     status: "info",
-    message: `TLS certificate not checked: no TLS handshake with ${hostname} (${probe.code})`,
+    // `(${code})` would read as a count to the message merge (#2244).
+    message: `TLS certificate not checked: no TLS handshake with ${hostname}, error ${probe.code}`,
     value: "not-checked",
   };
 }
 
-/** The www/apex counterpart of a DNS hostname, or undefined for an IP, localhost or a bare label. */
-function wwwVariant(hostname: string): string | undefined {
-  if (!hostname.includes(".") || /^[\d.:]+$/.test(hostname)) return undefined;
-  if (hostname.endsWith(".localhost") || hostname.endsWith(".local")) return undefined;
-  return hostname.startsWith("www.") ? hostname.slice(4) : `www.${hostname}`;
+/**
+ * The www/apex counterpart of a hostname, from its registrable domain only:
+ * `www.example.com` for `example.com` and the reverse. Undefined for any other
+ * subdomain (`blog.example.com` has no counterpart here, and `www.blog.example.com`
+ * is not derived), for an IP, and for a name with no registrable domain
+ * (`localhost`, a bare public suffix). Private suffixes count as registrable
+ * (`acme.pages.dev`), so another tenant's name is never derived.
+ */
+export function wwwVariant(hostname: string): string | undefined {
+  const host = hostname.toLowerCase().replace(/\.$/, "");
+  if (/^[\d.]+$/.test(host) || host.includes(":")) return undefined;
+  const registrable = getDomain(host, { allowPrivateDomains: true });
+  if (!registrable) return undefined;
+  if (host === registrable) return `www.${registrable}`;
+  if (host === `www.${registrable}`) return registrable;
+  return undefined;
+}
+
+/** SAN names listed in a message; the rest are counted. A shared certificate can carry hundreds. */
+const MESSAGE_NAMES = 10;
+/** SAN names kept in a check's details. */
+const DETAIL_NAMES = 50;
+
+function coveredNames(names: readonly string[]): string {
+  if (names.length === 0) return "no names";
+  const shown = names.slice(0, MESSAGE_NAMES).join(", ");
+  return names.length > MESSAGE_NAMES ? `${shown} and ${names.length - MESSAGE_NAMES} more` : shown;
 }
 
 function dayText(days: number): string {

@@ -11,6 +11,7 @@ import type { RuleCategory } from "./categories";
 import type { CollectedSiteSignals } from "./collected-signals";
 import type { EndpointSurface } from "./endpoint-surface";
 import type { ProbeBudget } from "./probe-budget";
+import type { TlsProbeFn } from "@squirrelscan/utils/tls-certificate";
 import type { CloudResultStore, RuleCloudSpec } from "./cloud";
 import type {
   BusinessCategory,
@@ -665,6 +666,12 @@ export interface RuleContext {
   // `ctx.probe.allows("quiet" | "loud")` before each request. Undefined must be
   // read as passive: no probe sends a request.
   probe?: ProbeBudget;
+
+  // One TLS handshake to a host (`security/tls-certificate`). Injected only by a
+  // runtime with TLS sockets that vets every address before connecting (the
+  // CLI). Shared packages never open a socket themselves; undefined (cloud, an
+  // embedder, tests) means the rule reports "not checked". Site rules only.
+  tlsProbe?: TlsProbeFn;
 
   // Resolved Stage-0 site profile (cloud). Undefined offline / free / no-credits
   // / no-consent — rules must treat undefined as "run as today" (no gating).

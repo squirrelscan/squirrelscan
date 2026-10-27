@@ -14,7 +14,9 @@ A TLS certificate binds a hostname to a public key, and a browser or API client 
 
 ## What squirrel checks
 
-The rule makes one TLS handshake with the audited host and reads the certificate the server presents. It does not send an HTTP request. If the audited host is a `www.` name, or has one, it also handshakes with the other name (`www.example.com` for `example.com`, and the reverse) when that name answers on the same port.
+The rule makes one TLS handshake with the audited host and reads the certificate the server presents. It does not send an HTTP request. When the audited host is a registrable domain or its `www.` name, the rule also handshakes with the other one (`www.example.com` for `example.com`, and the reverse) on the same port. Any other subdomain, such as `blog.example.com`, has no counterpart, and on a shared platform domain the counterpart stays inside the site's own name (`acme.pages.dev` and `www.acme.pages.dev`).
+
+Before each handshake, squirrel resolves the name once and checks the address, as it does for the crawl's own hosts. It never connects to a link-local or cloud metadata address. The `www` or apex counterpart of a public site must also resolve to a public address. The connection goes to the address that was checked, with the hostname sent for SNI and verification.
 
 It emits these checks:
 
@@ -26,11 +28,13 @@ It emits these checks:
 
 The check for expiry always runs when the handshake succeeds, so a valid site gets a pass that shows its issuer and expiry date.
 
-When the handshake cannot be made, or the runtime has no TLS socket API, the rule reports `not checked` as an info check. It never reports a pass or a failure for a certificate it did not read.
+The runtime reports only the first verification error it meets, and expiry and the hostname come before the chain. An expired certificate that is also self-signed, or missing its intermediate, reports as expired only, so fixing one problem can reveal the next. Run the audit again after each fix.
+
+When the handshake cannot be made, the rule reports `not checked` as an info check, with the reason. It never reports a pass or a failure for a certificate it did not read. The handshake runs in the `squirrel` CLI. It is also `not checked` where no handshake is made: behind an HTTP proxy set in the environment (`HTTPS_PROXY` and similar), because a direct connection would go around it, and when the audited host's address is refused by the check above.
 
 On a local or private-network host, such as `localhost` or `192.168.1.10`, the rule is skipped and left out of the score, because a dev server does not hold the production certificate. See [Transport and delivery rules do not apply](/guides/local-audits-cli#transport-and-delivery-rules-do-not-apply).
 
-When a page fetch fails on a TLS error, the failure message names the cause the same handshake found, for example `certificate has expired on 2026-09-01` or `the server did not send its intermediate certificate`, instead of listing every possibility.
+When a page fetch fails on a TLS error, the CLI makes one handshake per host, waiting at most 3 seconds, and the failure message names the cause it found, for example `certificate has expired on {date}` or `the server did not send its intermediate certificate`, instead of listing every possibility.
 
 ## How to fix it
 
@@ -71,7 +75,7 @@ Raise `warn_days` if your renewal job runs less often than monthly and you want 
 ### Configuration example
 
 ```toml squirrel.toml
-[rules."security/tls-certificate"]
+[rule_options."security/tls-certificate"]
 warn_days = 60
 error_days = 14
 ```

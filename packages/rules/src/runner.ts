@@ -29,6 +29,7 @@ import type { CloudResultStore } from "./cloud";
 import type { CollectedSiteSignals } from "./collected-signals";
 import type { EndpointSurface } from "./endpoint-surface";
 import type { ProbeBudget } from "./probe-budget";
+import type { TlsProbeFn } from "@squirrelscan/utils/tls-certificate";
 import { ruleApplies } from "./applicability";
 import { filterRules } from "./filter";
 import { loadAllRules, type RuleNamespace } from "./loader";
@@ -100,6 +101,12 @@ export interface RunnerScope {
    * passive: probing rules send nothing.
    */
   probe?: ProbeBudget;
+  /**
+   * The TLS handshake for THIS run, threaded into `ctx.tlsProbe` on site rules.
+   * Only the CLI injects one (it vets and pins every address). Undefined =
+   * `security/tls-certificate` reports "not checked".
+   */
+  tlsProbe?: TlsProbeFn;
 }
 
 export interface RunnerOptions extends RunnerScope {
@@ -294,6 +301,7 @@ export class RuleRunner {
   private readonly intel: IntelContext | undefined;
   private readonly entityMap: EntityMap | undefined;
   private readonly probe: ProbeBudget | undefined;
+  private readonly tlsProbe: TlsProbeFn | undefined;
   // The audited url last classified by `isPrivateTarget`, and the verdict. One
   // audit has one base url, so this is a single classification per run; keyed on
   // the url so a runner reused for another site cannot carry a stale verdict.
@@ -306,6 +314,7 @@ export class RuleRunner {
     this.intel = options.intel;
     this.entityMap = options.entityMap;
     this.probe = options.probe;
+    this.tlsProbe = options.tlsProbe;
     this.ruleConcurrency = Math.max(
       1,
       options.ruleConcurrency ?? DEFAULT_RULE_CONCURRENCY
@@ -725,6 +734,7 @@ export class RuleRunner {
         const intel = this.intel;
         const entityMap = this.entityMap;
         const probe = this.probe;
+        const tlsProbe = this.tlsProbe;
 
         // For site-scope rules, we need to provide page context: use the first
         // page or a dummy if no pages. Built once and shared (read-only).
@@ -771,6 +781,7 @@ export class RuleRunner {
               intel,
               entityMap,
               probe,
+              tlsProbe,
               options: getRuleOptions(rule, this.config),
             };
             return Promise.resolve(

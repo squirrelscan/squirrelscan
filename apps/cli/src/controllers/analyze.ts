@@ -27,6 +27,7 @@ import {
   RetentionReclaimError,
   type RetentionOutcome,
 } from "@/audit/retention";
+import { createTlsProbe } from "@/audit/tls-probe";
 import { loadConfig, type Config } from "@/config";
 import {
   type Result,
@@ -568,7 +569,11 @@ export function analyzeStoredCrawl(
       siteContext,
       crawlConfig,
       assets,
-      entityMap ? { entityMap } : undefined
+      {
+        ...(entityMap ? { entityMap } : {}),
+        // #712: security/tls-certificate's handshake, vetted and pinned.
+        tlsProbe: createTlsProbe({ siteUrl: crawl.baseUrl }),
+      }
     );
     return { assets, ruleResults };
   });

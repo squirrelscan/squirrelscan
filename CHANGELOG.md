@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- New rule `security/tls-certificate` reads the TLS certificate of the audited site's host and its www or apex counterpart, one handshake each, and reports its expiry (a warning inside 30 days, an error inside 7, set by `warn_days` and `error_days` under `[rule_options."security/tls-certificate"]`), whether it covers the hostname, whether it has a complete chain to a trusted root, whether it is self-signed, and whether an RSA key is under 2048 bits. The counterpart exists only for a registrable domain and its `www.` name, on the same port; other subdomains have none. Every handshake is checked like the crawl's own hosts: the name is resolved once, a link-local or cloud metadata answer is never contacted, the counterpart of a public site must resolve to a public address, and the connection goes to the address that was checked. A host the rule cannot read is reported as not checked with the reason, never as a pass, including behind an HTTP proxy from the environment, and local or private-network hosts are skipped. When a page fetch fails on a TLS error, the failure now names the cause one handshake found, such as an expiry date or a missing intermediate, waiting at most 3 seconds per host. See [TLS certificate](https://docs.squirrelscan.com/rules/security/tls-certificate). squirrelscan/squirrelscan#712
+
 ### Fixed
 
 - **Installer failure reports name the host when curl cannot connect.** A curl failure under `set -e` (exit 6, 7, 28, 35, 52 or 56) reported only its code, so 82 identical reports could not be told apart. The anonymous report now carries `curl exit N reaching <host>`: the host only, never a path, query or credentials.
