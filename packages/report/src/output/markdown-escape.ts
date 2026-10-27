@@ -6,12 +6,19 @@
  */
 
 /**
- * Backslash-escaped in text: what could open or close a link or image
- * (`[ ] ( ) !`), a code span (backtick), raw HTML or an autolink (`< >`), an
- * entity (`&`, so `&#x5D;` renders as typed) or a table cell (`|`), and the
- * backslash itself, so a value cannot undo an escape.
+ * Backslash-escaped in text: what could open or close a link or image (`[ ]`: every link, image
+ * and reference definition starts with one, so `( ) !` are inert without them and stay readable),
+ * a code span (backtick), raw HTML or an autolink (`<`), or a table cell (`|`), and the backslash
+ * itself, so a value cannot undo an escape. `>` only matters at the start of a line (see
+ * {@link escapeMarkdownText}), and `&` only where it would read as an entity (see
+ * {@link escapeEntities}).
  */
-const TEXT_SPECIALS = new Set(["\\", "[", "]", "(", ")", "!", "`", "<", ">", "&", "|"]);
+const TEXT_SPECIALS = new Set(["\\", "[", "]", "`", "<", "|"]);
+
+/** `&` that would decode as an entity (`&amp;`, `&#x5D;`) is escaped so it renders as typed. */
+function escapeEntities(value: string): string {
+  return value.replace(/&(?=#?[0-9A-Za-z]+;)/g, "\\&");
+}
 
 /**
  * Percent-encoded in a link destination: `( )` and whitespace end it, `< >`
@@ -23,7 +30,7 @@ const DESTINATION_SPECIALS = new Set(["\\", "(", ")", "<", ">", "`", "[", "]"]);
 function escapeSpecials(value: string): string {
   let out = "";
   for (const char of value) out += TEXT_SPECIALS.has(char) ? `\\${char}` : char;
-  return out;
+  return escapeEntities(out);
 }
 
 /**
@@ -31,13 +38,13 @@ function escapeSpecials(value: string): string {
  * Every escaped character is ASCII punctuation, a valid CommonMark escape that
  * renders as itself. Line breaks collapse to one space, so a value cannot end a
  * list item early, and a leading block marker (`#`, `-`, `+`, `*`, `_`, `~`,
- * `=`, `1.`) is escaped, so a value after a `- ` cannot open a heading, a rule,
+ * `=`, `>`, `1.`) is escaped, so a value after a `- ` cannot open a heading, a rule,
  * a fence or a nested list. Elsewhere `*`, `_` and `~` are left alone: they can
  * only emphasise, and URL paths full of underscores are read raw by agents.
  */
 export function escapeMarkdownText(value: string): string {
   return escapeSpecials(value.replace(/\s+/g, " "))
-    .replace(/^( ?)([#+\-*_~=])/, "$1\\$2")
+    .replace(/^( ?)([#+\-*_~=>])/, "$1\\$2")
     .replace(/^( ?)(\d+)([.)])/, "$1$2\\$3");
 }
 
