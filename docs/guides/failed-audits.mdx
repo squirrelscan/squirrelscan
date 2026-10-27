@@ -474,6 +474,8 @@ Some things stay behind, because they are trust in the old host rather than a wa
 
 A move spends nothing by itself: the audit it starts is priced and confirmed as usual. It needs a role that can change websites (owner, admin or editor, see [roles](/cloud/team#roles)), and it works at your plan's website limit, because the new website takes the old one's place. A new destination must answer and be on a public address, or nothing moves. If the move lands but the audit does not start, run it from the new website's page.
 
+**Undoing a move.** The message that confirms the move offers **Undo move** for 20 seconds. It brings the old website back with its reports and settings, the same way a website comes back from the trash, and it needs the same role as the move. When the move used your plan's last website slot, delete the new website first; the message names it and offers **Try again**. An undo also fails when the old address was added again as another website. The new website stays, with the recurring audits and the audit the move started. To move the recurring audits back, turn them on for the old website and delete the new one. Once the message has closed, the dashboard has no undo.
+
 ### Sign-in page or access gateway \{#access-gateway\}
 
 **What it means.** An access gateway is a service in front of the site that sends every request without valid credentials to a sign-in page: a zero-trust proxy such as Cloudflare Access, a hosting platform's deployment protection, single sign-on in the application, or HTTP basic auth. A cloud audit cannot sign in. The gateway shows up as one of two causes:
