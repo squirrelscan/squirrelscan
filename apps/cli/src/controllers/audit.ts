@@ -784,7 +784,7 @@ export function resolveCrawlConcurrency(
     perHostDelayMs: 0,
     // The discovery probes are plain HTTP to the site, not render jobs, so
     // they keep the configured per-host limits. Clamped with the pages they ran
-    // two at a time on the free plan (render concurrency 2), and on a slow host
+    // one at a time on the free plan (render concurrency was 1 then), and on a slow host
     // the later ones fell past the preamble budget (#409).
     discoveryProbePerHost: {
       concurrency: base.perHostConcurrency,
