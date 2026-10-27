@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **The editor summary digest of a capped published report counts every issue.** A rule with more than 25 issue classes lost the rest from its occurrence count, so a summary built from the stored report could under-count and re-rank issues against the one built from the full report. The digest now takes the true counts from the report's check tallies.
+
 ### Docs
 
 - **The Performance rules page counts 5 Reliability rules.** The card said 2 after the broken-link rules moved into the category.

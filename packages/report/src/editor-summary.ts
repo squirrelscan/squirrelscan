@@ -73,6 +73,24 @@ function buildTopIssues(report: AuditReport, max: number): EditorSummaryIssueInp
         occurrences += checkOccurrences(check);
       }
     }
+    // A capped published report (repo#2656) keeps at most `classesPerRule` issue
+    // classes per rule, and counts only the rest: their checks are gone from
+    // `ruleResults`, but the true counts survive in `checkTallies`. The digest
+    // counts from them too, so it matches the one built from the full report. A
+    // tally leaves out the warnings of an info-severity rule, so it can only raise
+    // the count the kept classes give, never lower it.
+    const tally = report.detail?.capped === true ? report.checkTallies?.[ruleId] : undefined;
+    if (tally) {
+      let tallied = 0;
+      for (const t of Object.values(tally)) {
+        const failed = t.failed ?? 0;
+        const warned = t.warnings ?? 0;
+        if (failed > 0) hasFail = true;
+        if (warned > 0) hasWarn = true;
+        tallied += failed + warned;
+      }
+      occurrences = Math.max(occurrences, tallied);
+    }
     if (!hasFail && !hasWarn) continue;
     issues.push({
       ruleId,
