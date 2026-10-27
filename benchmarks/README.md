@@ -12,6 +12,7 @@ announcements draw their numbers from these files, never from memory.
 | [2026-10 Nested tables and text blocks](./2026-10-a11y-nested-tables.md) | rules (a11y tables, link-in-text-block) | 200 nested tables: `th-has-data-cells` 1,430 → 1 ms; 5,000: `td-headers-attr` 3,624 → 9 ms, `table-headers` 1,003 → 6 ms; 5,000 nested blockquotes: `link-in-text-block` 827 → 3 ms |
 | [2026-10 Parse time on deeply nested pages](./2026-10-parse-depth.md) | parser | 20,000 nested links: `parsePage` 12.5 s → 250 ms, the crawler's `extractLinks` 64 s → 44 ms |
 | [2026-10 Nested a11y containers](./2026-10-a11y-nesting.md) | rules (`a11y/aria-text`, `a11y/aria-hidden-focus`) | 5,000 nested `role="text"` elements: 35 s → 23 ms; 1,000 nested `aria-hidden` containers: 56 s → 22 ms |
+| [2026-10 Page classifier](./2026-10-page-classifier.md) | CLI, crawler, parser | bundled model: +2.8 ms p50 / +6.8 ms p95 per page on a 58 KB page (+14.2 / +55.9 ms on 106 KB real pages), binary +8.9 MB, `--version` unchanged |
 
 ## Reproducing
 

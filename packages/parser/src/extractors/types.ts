@@ -8,11 +8,15 @@ import type {
   HeadingHierarchy,
   ImageData,
   LinkData,
+  LinkSection,
+  ClassifierSource,
   MetaData,
   OpenGraphData,
   SchemaData,
   TwitterData,
 } from "@squirrelscan/core-contracts";
+
+export type { ClassifierSource, LinkSection };
 
 export type LinkPosition =
   | "header"
@@ -48,6 +52,12 @@ export interface ExtractedLink {
    * which also matches on class/id substrings.
    */
   isChrome: boolean;
+  /** Part of the page the anchor sits in; see ./link-section.ts. */
+  section: LinkSection;
+  /** "model" when the page classifier answered `section`; absent means the markup rules did. */
+  sectionSource?: ClassifierSource;
+  /** The classifier's confidence in `section`; present only with a `model` source. */
+  sectionConfidence?: number;
 }
 
 // Extended image data

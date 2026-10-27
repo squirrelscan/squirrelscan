@@ -9,6 +9,7 @@
     "./plans": "./src/plans.ts",
     "./limits": "./src/limits.ts",
     "./clamp": "./src/clamp.ts",
+    "./item-sources": "./src/item-sources.ts",
     "./control-chars": "./src/control-chars.ts",
     "./failure-reason": "./src/failure-reason.ts",
     "./offsite-redirect": "./src/offsite-redirect.ts",
@@ -24,7 +25,9 @@
     "./entity-map-findings": "./src/entity-map-findings.ts",
     "./entity-mcp": "./src/entity-mcp.ts",
     "./entity-page-match": "./src/entity-page-match.ts",
-    "./audit-levels": "./src/audit-levels.ts"
+    "./audit-levels": "./src/audit-levels.ts",
+    "./component-evidence": "./src/component-evidence.ts",
+    "./site-resource-evidence": "./src/site-resource-evidence.ts"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.49",

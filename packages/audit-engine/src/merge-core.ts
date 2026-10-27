@@ -15,6 +15,8 @@ import type {
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
+import { packComponentOccurrences } from "@squirrelscan/core-contracts/component-evidence";
+import { packSiteResourceOccurrences } from "@squirrelscan/core-contracts/site-resource-evidence";
 import {
   CHECK_NOT_APPLICABLE_SKIP_REASON,
   NOT_APPLICABLE_SKIP_REASON,
@@ -580,29 +582,257 @@ export function itemFindingMessage(check: CheckResult, item: CheckItem): string 
  * around a transport limit would destroy data that the local path would have
  * kept. Shrinking an already-over-cap payload for transport belongs at the
  * transport boundary (`clampFindingPayload` in the API's chunk ingest), not here.
+ *
+ * Component evidence obeys the SAME budget. It is additive display evidence, so
+ * it can never be the reason a payload tips over the cap and gets dropped whole
+ * — that would trade a complete legacy finding for an incomplete new one. When
+ * it does not fit, the row keeps an `omitted` marker instead, which costs a
+ * fixed ~80 bytes and makes the loss legible to every reader.
  */
+/**
+ * The two spellings of a check's resource evidence: the packed set, and the
+ * marker that stands in for it.
+ *
+ * Built once per row rather than inline at each rung, so every rung of both
+ * ladders folds in the SAME pair and a rung cannot silently omit the field.
+ * `owns` mirrors the element-evidence rule: exactly one row of a check carries
+ * the set, every other row carries a `sibling-row` marker, so the store holds
+ * one copy and a rebuild that finds only markers can tell "the owning row was
+ * lost" apart from "this check never had evidence".
+ */
+function siteResourceFields(
+  check: CheckResult,
+  owns: boolean,
+): {
+  count: number;
+  evidence: Record<string, unknown>;
+  marker: Record<string, unknown>;
+} {
+  const occurrences = check.siteResourceOccurrences;
+  const count = occurrences?.length ?? 0;
+  if (count === 0) {
+    // Nothing to place. An upstream marker (unfold's `page-sample-limit`) is
+    // still the only record that evidence existed, so it is carried forward.
+    const carried = check.siteResourceEvidence
+      ? { siteResourceEvidence: check.siteResourceEvidence }
+      : {};
+    return { count: 0, evidence: carried, marker: carried };
+  }
+  const marker = {
+    siteResourceEvidence: {
+      state: "omitted" as const,
+      reason: (owns ? "payload-limit" : "sibling-row") as "payload-limit" | "sibling-row",
+      occurrenceCount: count,
+    },
+  };
+  return {
+    count,
+    evidence: owns
+      ? { siteResourceOccurrences: packSiteResourceOccurrences(occurrences!) }
+      : marker,
+    marker,
+  };
+}
+
 function itemFindingPayload(
   check: CheckResult,
   item: CheckItem,
   i: number,
   value: string | null,
-  expected: string | null
+  expected: string | null,
+  ownsComponentEvidence: boolean,
 ): string {
-  const base = { items: [item], details: check.details, pages: check.pages, i };
-  const withAggregate = JSON.stringify({
+  const base = {
+    items: [item],
+    details: check.details,
+    pages: check.pages,
+    i,
+  };
+  // Short keys: this rides on EVERY item row. `v`/`e` are omitted when the
+  // check carried none, and `m` is the marker a reader keys the whole restore
+  // on — a pre-#1881 row has no `m`, and a whole-check row never writes one.
+  const stash = {
     ...base,
-    // Short keys: this rides on EVERY item row. `v`/`e` are omitted when the
-    // check carried none, and `m` is the marker a reader keys the whole restore
-    // on — a pre-#1881 row has no `m`, and a whole-check row never writes one.
     m: check.message,
     ...(value !== null ? { v: value } : {}),
     ...(expected !== null ? { e: expected } : {}),
-  });
-  if (withAggregate.length <= REPORT_LIMITS.maxFindingPayload) return withAggregate;
+  };
+  const occurrenceCount = check.componentOccurrences?.length ?? 0;
+  const fits = (payload: string): boolean =>
+    payload.length <= REPORT_LIMITS.maxFindingPayload;
+
+  // (#2341) Resource evidence rides the SAME ladder, one rung behind element
+  // evidence: it is folded into every candidate payload below and is the first
+  // thing dropped when one does not fit. Built once here so each rung is a
+  // spread rather than another branch of the ladder.
+  const resource = siteResourceFields(check, ownsComponentEvidence);
+
+  // A marker the check ALREADY carries (unfold's `page-sample-limit`) is the
+  // only record that evidence existed upstream. Carry it through unchanged when
+  // this check has nothing left to serialize, or the omission is erased.
+  if (occurrenceCount === 0 && check.componentEvidence) {
+    const carried = JSON.stringify({
+      ...stash,
+      ...resource.evidence,
+      componentEvidence: check.componentEvidence,
+    });
+    if (fits(carried)) return carried;
+    const carriedMarked = JSON.stringify({
+      ...stash,
+      ...resource.marker,
+      componentEvidence: check.componentEvidence,
+    });
+    if (fits(carriedMarked)) return carriedMarked;
+  }
+
+  if (occurrenceCount === 0 && resource.count > 0) {
+    // No element evidence, but resource evidence to place: its own ladder.
+    const withResource = JSON.stringify({ ...stash, ...resource.evidence });
+    if (fits(withResource)) return withResource;
+    const withResourceMarker = JSON.stringify({ ...stash, ...resource.marker });
+    if (fits(withResourceMarker)) return withResourceMarker;
+    const aggregateOnly = JSON.stringify(stash);
+    if (fits(aggregateOnly)) return aggregateOnly;
+    const baseMarked = JSON.stringify({ ...base, ...resource.marker });
+    if (fits(baseMarked)) return baseMarked;
+    return JSON.stringify({ i, ...resource.marker });
+  }
+
+  if (occurrenceCount > 0) {
+    // Exactly ONE row per check owns the evidence, so the store holds a single
+    // copy rather than one per item. Every other row of the same check records
+    // that an owner exists, so a rebuild that finds only markers can tell "the
+    // owning row was lost" apart from "this check never had evidence".
+    const evidence = {
+      state: "omitted" as const,
+      reason: (ownsComponentEvidence ? "payload-limit" : "sibling-row") as
+        | "payload-limit"
+        | "sibling-row",
+      occurrenceCount,
+    };
+    if (ownsComponentEvidence) {
+      const withEvidence = JSON.stringify({
+        ...stash,
+        ...resource.evidence,
+        componentOccurrences: packComponentOccurrences(check.componentOccurrences!),
+      });
+      if (fits(withEvidence)) return withEvidence;
+      // Element evidence is the bulkier of the two by an order of magnitude, so
+      // dropping it first can leave room for the resource set rather than
+      // losing both to one over-cap payload.
+      const resourceOnly = JSON.stringify({
+        ...stash,
+        ...resource.evidence,
+        componentEvidence: evidence,
+      });
+      if (fits(resourceOnly)) return resourceOnly;
+    }
+    const withMarker = JSON.stringify({
+      ...stash,
+      ...resource.marker,
+      componentEvidence: evidence,
+    });
+    if (fits(withMarker)) return withMarker;
+    // The marker does NOT outrank legacy data that would otherwise fit:
+    // `details` feeds scoring (`details.additional` drives the density
+    // penalty), so trading it for an ~80-byte note would move the health score
+    // — the #1179 class. The marker is only preferred once the legacy payload
+    // is itself over cap and therefore doomed either way; that case falls
+    // through to the ladder below, which keeps the row under the cap.
+    const withAggregateOnly = JSON.stringify(stash);
+    if (fits(withAggregateOnly)) return withAggregateOnly;
+    const baseWithMarker = JSON.stringify({
+      ...base,
+      ...resource.marker,
+      componentEvidence: evidence,
+    });
+    if (fits(baseWithMarker)) return baseWithMarker;
+    return JSON.stringify({ i, ...resource.marker, componentEvidence: evidence });
+  }
+
+  const withAggregate = JSON.stringify(stash);
+  if (fits(withAggregate)) return withAggregate;
   // Byte-identical to the pre-#1881 payload, so an over-cap finding is no worse
   // off than it was — the ingest drops it exactly as before, and the local store
   // keeps every field exactly as before.
   return JSON.stringify(base);
+}
+
+/**
+ * Serialize an itemless check's payload. `details`/`pages` are load-bearing and
+ * deliberately uncapped here (see {@link itemFindingPayload}); the additive
+ * component evidence is the only part that yields to the ingest cap, and it
+ * leaves a marker behind when it does.
+ */
+function wholeCheckPayload(check: CheckResult): string | null {
+  const base = { details: check.details, pages: check.pages };
+  const fits = (payload: string): boolean =>
+    payload.length <= REPORT_LIMITS.maxFindingPayload;
+  const occurrenceCount = check.componentOccurrences?.length ?? 0;
+  // A whole-check row is the only row of its check, so it always owns whatever
+  // resource evidence there is — there is no sibling to defer to.
+  const resource = siteResourceFields(check, true);
+
+  if (occurrenceCount === 0) {
+    // Preserve a marker the check already carried (see `itemFindingPayload`).
+    if (check.componentEvidence) {
+      const carried = JSON.stringify({
+        ...base,
+        ...resource.evidence,
+        componentEvidence: check.componentEvidence,
+      });
+      if (fits(carried)) return carried;
+      const carriedMarked = JSON.stringify({
+        ...base,
+        ...resource.marker,
+        componentEvidence: check.componentEvidence,
+      });
+      if (fits(carriedMarked)) return carriedMarked;
+    }
+    if (resource.count > 0) {
+      const withResource = JSON.stringify({ ...base, ...resource.evidence });
+      if (fits(withResource)) return withResource;
+      const withResourceMarker = JSON.stringify({ ...base, ...resource.marker });
+      if (fits(withResourceMarker)) return withResourceMarker;
+    }
+    return check.details || check.pages || resource.count > 0 ? JSON.stringify(base) : null;
+  }
+
+  const withEvidence = JSON.stringify({
+    ...base,
+    ...resource.evidence,
+    componentOccurrences: packComponentOccurrences(check.componentOccurrences!),
+  });
+  if (fits(withEvidence)) return withEvidence;
+
+  const evidence = { state: "omitted" as const, reason: "payload-limit" as const, occurrenceCount };
+  // Element evidence is far the bulkier of the two, so try dropping it alone
+  // before giving up on the resource set as well.
+  const resourceOnly = JSON.stringify({
+    ...base,
+    ...resource.evidence,
+    componentEvidence: evidence,
+  });
+  if (fits(resourceOnly)) return resourceOnly;
+  const withMarker = JSON.stringify({
+    ...base,
+    ...resource.marker,
+    componentEvidence: evidence,
+  });
+  if (fits(withMarker)) return withMarker;
+  // Legacy fields first while they still fit (see `itemFindingPayload`): they
+  // feed scoring, the marker does not. Only once they are over cap on their own
+  // — where the ingest would drop the whole row anyway — does the marker win,
+  // which is strictly better than emitting an oversized payload.
+  const legacyOnly = JSON.stringify(base);
+  if (fits(legacyOnly)) return legacyOnly;
+  const trimmed = JSON.stringify({
+    pages: check.pages,
+    ...resource.marker,
+    componentEvidence: evidence,
+  });
+  if (fits(trimmed)) return trimmed;
+  return JSON.stringify({ ...resource.marker, componentEvidence: evidence });
 }
 
 /**
@@ -656,7 +886,9 @@ export function flattenChecks(
           message: itemFindingMessage(check, item),
           value: null,
           expected: null,
-          payload: itemFindingPayload(check, item, i, value, expected),
+          // Last emission survives `buildStreamFindings` latest-wins dedupe if
+          // duplicate item ids share a locator, so it is the sole evidence owner.
+          payload: itemFindingPayload(check, item, i, value, expected, i === items.length - 1),
         });
       }
     } else {
@@ -669,9 +901,7 @@ export function flattenChecks(
         message: check.message,
         value,
         expected,
-        payload: check.details || check.pages
-          ? JSON.stringify({ details: check.details, pages: check.pages })
-          : null,
+        payload: wholeCheckPayload(check),
       });
     }
   }

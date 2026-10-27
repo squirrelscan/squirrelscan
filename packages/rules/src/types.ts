@@ -35,6 +35,7 @@ import type {
   RslData,
   MetaData,
   OpenGraphData,
+  PageClassification,
   RedirectChain,
   RefusedFetch,
   RobotsTxtData,
@@ -345,6 +346,12 @@ export interface ParsedPage {
    * field existed; readers treat that as "none declared".
    */
   hreflangAlternates?: HreflangAlternate[];
+
+  /**
+   * The page classifier's answer (model page type, and why it degraded), when it ran. Absent when
+   * the classifier was off or the parse predates it; `pageType` above is the schema and URL label.
+   */
+  classification?: PageClassification;
 
   /**
    * True when this 2xx page serves 404/error content (see `detectSoft404`).

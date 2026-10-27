@@ -279,6 +279,14 @@ describe("squirrel audit --level", () => {
     expect(runs[0]?.internalLinksEnabled).toBe(false);
   });
 
+  test("--no-classifier switches the page classifier off; by default no override is sent (#2307)", async () => {
+    await runAudit(["--level", "surface", "--no-classifier"]);
+    expect(process.exitCode).toBe(0);
+    expect(runs[0]?.classifierEnabled).toBe(false);
+    await runAudit(["--level", "surface"]);
+    expect(runs[1]?.classifierEnabled).toBeUndefined();
+  });
+
   test("--external-links checks external links at quick, over a config that switched them off (repo#2729)", async () => {
     await runAudit(
       ["--level", "quick", "--external-links", "-m", "1"],

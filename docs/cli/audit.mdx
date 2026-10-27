@@ -50,6 +50,7 @@ squirrel audit <url> [options]
 | `--external-links` | | Check links to other sites this run, even where `[external_links] enabled = false` turns them off. Cannot be combined with `--offline` or `--no-external-links` | the level's: on at every level |
 | `--no-external-links` | | Do not check links to other sites this run. The report shows them as **Not checked** | the level's |
 | `--no-internal-links` | | Do not status-check internal link targets the crawl did not fetch (one `HEAD` request each, on by default at every level). See [Link checking defaults](/rules/links#link-checking-defaults) | checked |
+| `--no-classifier` | | Do not run the bundled page classifier: link sections in findings come from page markup only. Same as `[classifier] enabled = false`. See [Page Classifier](/configuration/classifier) | on |
 | `--header` | `-H` | Custom HTTP header on every crawl request, `Name: Value` (repeatable). Merges over `[crawler] headers`; values are redacted in output. See [Web Bot Auth](/guides/web-bot-auth) | none |
 | `--fail-on` | | Exit `2` when a threshold trips, for CI gating (repeatable / comma-separated) | none |
 | `--rule-include` | | Only run these rule categories or rules, e.g. `ax,perf` or `core/meta-title` (repeatable / comma-separated). Replaces `[rules] enable` for this run | none |
@@ -371,7 +372,7 @@ Excluding rules also skips the pre-crawl requests that only those rules read:
 `--rule-exclude` skips categories on top of whatever would normally run. When
 either flag is set, the report is **partial**: the health score is recomputed
 from only the included categories and the console output prints a
-`partial audit: ...` notice under the score. Only console output carries that
+`partial audit: ...` notice in its Report detail section at the end. Only console output carries that
 notice: other formats (json, text, markdown, xml, llm) print a warning to
 stderr instead, so the report body itself is unchanged. An unknown category
 errors before crawling, listing the valid category codes. `--fail-on score:<category>`

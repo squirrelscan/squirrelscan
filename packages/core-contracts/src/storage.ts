@@ -4,7 +4,7 @@
 import type { Effect } from "effect";
 
 import type { AuditFailureDetail } from "./failure-reason";
-import type { ScanScope } from "./index";
+import type { ClassifiedPageType, LinkSection, LinkSectionCounts, ScanScope } from "./index";
 import type { RefusedFetch } from "./refused-fetch";
 import type { UnverifiedReason } from "./services";
 
@@ -763,6 +763,27 @@ export interface SitePageRecord {
 // written, v1 behaviour is byte-identical.
 
 /**
+ * What one page contributes to the report's page structure block (#2307): its links counted per
+ * section and the page classifier's answer. Absent from a page's scalars when the page has
+ * neither a link section nor a classification (a parse stored before the classifier existed).
+ */
+export interface PageStructureScalars {
+  /**
+   * Links per section, every anchor counted. Links with no section at all (an old parse) are
+   * left out, so `unknown` means "the page says nothing about where this sits".
+   */
+  sections: Partial<Record<LinkSection, number>>;
+  /** Internal links in the header, footer, navigation or sidebar. */
+  chromeInternal: number;
+  /** Internal links in the page content. */
+  contentInternal: number;
+  /** The classifier's page type answer; null when the page was not classified. */
+  pageType: ClassifiedPageType | null;
+  /** The classifier fell back to the markup rules for part of this page. */
+  degraded: boolean;
+}
+
+/**
  * The per-page scalars the REPORT needs and no rule reads (#2343).
  *
  * `reconstructReport` used to recover these by re-parsing every stored page —
@@ -794,6 +815,11 @@ export interface PageReportScalars {
   /** `parsed.content.isThinContent` — stored, not re-derived from wordCount,
    *  because the parser has two code paths that set it. */
   thinContent: boolean;
+  /**
+   * Link sections and page type for the report's page structure block (#2307). Optional: absent
+   * on a row stored before it existed, and on a page with no section or classification data.
+   */
+  structure?: PageStructureScalars;
 }
 
 /** One `<link rel="alternate" hreflang>` annotation, as the parser extracts it. */
@@ -973,6 +999,13 @@ export interface SiteQuery {
    * the case `links/orphan-pages` and `links/weak-internal-links` cannot see.
    */
   contextualIncomingLinkCounts(): Map<string, number>;
+  /**
+   * Where the counted inbound links to each page sit, by link section (#2307). Same keys and the
+   * same links as {@link incomingLinkCounts}; links with no section (a crawl stored before link
+   * sections existed) are not counted, so a page can have fewer here than there. Optional: an
+   * implementation without section data omits it, and the rules then say nothing about placement.
+   */
+  inboundSectionCounts?(): Map<string, LinkSectionCounts>;
   /** Normalized URLs of pages classified as `type`. */
   pagesByType(type: string): string[];
   /** URL sets sharing one template fingerprint (count > 1). */

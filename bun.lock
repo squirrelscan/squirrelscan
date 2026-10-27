@@ -27,6 +27,7 @@
         "@squirrelscan/core-contracts": "workspace:*",
         "@squirrelscan/crawler": "workspace:*",
         "@squirrelscan/fetchers": "workspace:*",
+        "@squirrelscan/page-classifier": "workspace:*",
         "@squirrelscan/parser": "workspace:*",
         "@squirrelscan/report": "workspace:*",
         "@squirrelscan/rules": "workspace:*",
@@ -152,6 +153,17 @@
       "dependencies": {
         "@squirrelscan/core-contracts": "workspace:*",
         "@squirrelscan/utils": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.4.0",
+        "@types/node": "^24.13.1",
+      },
+    },
+    "packages/page-classifier": {
+      "name": "@squirrelscan/page-classifier",
+      "version": "0.0.1",
+      "dependencies": {
+        "@squirrelscan/parser": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "^1.4.0",
@@ -954,6 +966,8 @@
     "@squirrelscan/docs": ["@squirrelscan/docs@workspace:docs"],
 
     "@squirrelscan/fetchers": ["@squirrelscan/fetchers@workspace:packages/fetchers"],
+
+    "@squirrelscan/page-classifier": ["@squirrelscan/page-classifier@workspace:packages/page-classifier"],
 
     "@squirrelscan/parser": ["@squirrelscan/parser@workspace:packages/parser"],
 

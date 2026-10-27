@@ -792,6 +792,7 @@
               "configuration/crawler",
               "configuration/rules",
               "configuration/external-links",
+              "configuration/classifier",
               "configuration/output",
               "configuration/storage",
               "configuration/cloud",

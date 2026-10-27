@@ -8,6 +8,7 @@
     "./rule-catalog": "./src/rule-catalog.ts",
     "./editor-summary": "./src/editor-summary.ts",
     "./not-checked": "./src/not-checked.ts",
+    "./structure": "./src/structure.ts",
     "./domain-stats": "./src/domain-stats.ts",
     "./entities": "./src/entities.ts",
     "./entities-viewer": "./src/entities-viewer.ts",

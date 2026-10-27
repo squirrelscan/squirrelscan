@@ -199,6 +199,13 @@ export const InternalLinksConfigSchema = z.object({
   max_targets: z.number().int().min(0).max(10_000).optional(),
 });
 
+// Page classifier (#2307): a small model bundled with squirrel that fills in which part of the
+// page a link sits in (pagination, related content, ...) where the page's markup says nothing.
+// Runs on this machine, no network call, no credit cost. Markup always wins; off means markup only.
+export const ClassifierConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+});
+
 export const OutputConfigSchema = z.object({
   format: z.enum(["json", "html", "console"]).default("console"),
   path: z.string().optional(),
@@ -461,6 +468,8 @@ export const ConfigSchema = z.object({
   // Optional, unlike its siblings, so a Config built by hand (tests, the cloud
   // container) needs no change: absent reads as every default (on).
   internal_links: InternalLinksConfigSchema.optional(),
+  // Optional for the same reason: absent reads as the default (on).
+  classifier: ClassifierConfigSchema.optional(),
   output: OutputConfigSchema.default(defaultOutput),
   // Local disk retention (#1912) — how many audits a project keeps.
   storage: StorageConfigSchema.default(defaultStorage),
@@ -500,6 +509,7 @@ export type PluginManifestItem = z.infer<typeof PluginManifestItemSchema>;
 export type PluginsConfig = z.infer<typeof PluginsConfigSchema>;
 export type ExternalLinksConfig = z.infer<typeof ExternalLinksConfigSchema>;
 export type InternalLinksConfig = z.infer<typeof InternalLinksConfigSchema>;
+export type ClassifierConfig = z.infer<typeof ClassifierConfigSchema>;
 export type OutputConfig = z.infer<typeof OutputConfigSchema>;
 export type StorageConfig = z.infer<typeof StorageConfigSchema>;
 export type CloudConfig = z.infer<typeof CloudConfigSchema>;

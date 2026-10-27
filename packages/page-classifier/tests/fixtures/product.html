@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Blue widget</title>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        "name": "Blue widget",
+        "offers": { "@type": "Offer", "price": "24.00", "priceCurrency": "USD" }
+      }
+    </script>
+  </head>
+  <body class="product-template">
+    <header id="site-header"><nav id="primary-nav"><a href="/">Shop</a></nav></header>
+    <main id="main">
+      <div id="gallery" class="product-gallery">
+        <img src="/img/blue-1.jpg" alt="Blue widget, front" />
+        <img src="/img/blue-2.jpg" alt="Blue widget, back" />
+      </div>
+      <div id="buy-box" class="purchase-panel">
+        <h1>Blue widget</h1>
+        <p class="price">$24.00</p>
+        <form id="add-form">
+          <select name="size"><option>Small</option><option>Large</option></select>
+          <button type="submit">Add to cart</button>
+        </form>
+      </div>
+      <section id="specs">
+        <h2>Specifications</h2>
+        <table><tr><th>Weight</th><td>200 g</td></tr><tr><th>Colour</th><td>Blue</td></tr></table>
+      </section>
+    </main>
+    <footer id="site-footer"><p>&copy; 2026 Example Shop</p></footer>
+  </body>
+</html>

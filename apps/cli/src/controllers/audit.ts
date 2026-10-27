@@ -200,6 +200,8 @@ export interface RunAuditOptions extends AuditOptions {
   externalLinksEnabled?: boolean;
   /** repo#2729: false switches the internal link probe off for this run. */
   internalLinksEnabled?: boolean;
+  /** #2307: false switches the page classifier off for this run (markup-only link sections). */
+  classifierEnabled?: boolean;
   externalLinksConcurrency?: number;
   externalLinksTimeoutMs?: number;
   crawlerTimeoutMs?: number;
@@ -943,6 +945,14 @@ export async function runAudit(
     // Crawler stashes each ParsedPage here so the audit skips a re-parse (#267)
     const parsedPageCache: ParsedPageCache = new Map();
 
+    // The page classifier (#2307): on unless [classifier] enabled = false or --no-classifier. The
+    // module is imported only here, so a command that never audits never loads it, and the model
+    // itself is read on the first classified page.
+    const classify =
+      mergedConfig.classifier?.enabled === false
+        ? undefined
+        : (await import("@/classifier/hook")).createPageClassifierHook();
+
     // Fiber handle for event subscription (declared outside try for finally cleanup)
     let eventsFiber: ReturnType<typeof Effect.runFork> | undefined;
     // Crawl lease (#946), released in the finally below.
@@ -1148,6 +1158,7 @@ export async function runAudit(
           config: crawlerConfig,
           storage,
           parsedPageCache,
+          ...(classify ? { classify } : {}),
         })
       );
 
@@ -2573,6 +2584,10 @@ export function mergeOptionsToConfig(
     // --offline keeps it; --no-internal-links turns it off.
     ...(options.internalLinksEnabled === false
       ? { internal_links: { ...config.internal_links, enabled: false } }
+      : {}),
+    // #2307: --no-classifier turns the page classifier off; absent keeps the config's choice.
+    ...(options.classifierEnabled === false
+      ? { classifier: { ...config.classifier, enabled: false } }
       : {}),
     // --offline forces cloud off regardless of config/flags: no prefetch, no
     // bulk dead-link checks, no browser rendering (resolveDocumentFetcher

@@ -31,7 +31,9 @@ import type {
   TwitterData,
 } from "@squirrelscan/core-contracts";
 
+import { runClassifier, type ParsePageOptions } from "./classifier-hook";
 import { createSiteChromeTest } from "./extractors/chrome";
+import { makeLinkSectionResolver, type LinkPlacer } from "./extractors/link-section";
 import { isHiddenFromMarkup } from "./hidden-markup";
 
 import type { AuthorInfo } from "./schema";
@@ -163,11 +165,13 @@ export function extractTwitter(doc: Document): TwitterData {
   };
 }
 
-// Extract links from parsed document
-export function extractLinks(doc: Document, baseUrl: string): LinkData[] {
+// Extract links from parsed document. `placeLink` is the page classifier's placer when the caller
+// ran it: it fills in `section` where the markup says nothing (see ./extractors/link-section.ts).
+export function extractLinks(doc: Document, baseUrl: string, placeLink?: LinkPlacer): LinkData[] {
   const anchors = doc.querySelectorAll("a[href]");
   const links: LinkData[] = [];
   const baseUrlObj = new URL(baseUrl);
+  const sectionOf = makeLinkSectionResolver(placeLink);
 
   const shouldSkip = (href: string): boolean => {
     return shouldSkipUrl(href);
@@ -194,14 +198,15 @@ export function extractLinks(doc: Document, baseUrl: string): LinkData[] {
       // matters. Cheap: an ancestor tagName walk, no attribute reads.
       const isChrome = isInSiteChrome(anchor as Element);
 
-      links.push({ url, text, isInternal, isChrome });
+      links.push({ url, text, isInternal, isChrome, ...sectionOf(anchor as Element) });
     } catch {
-      // Skip invalid URLs
+      // Skip invalid URLs. Still placed: `links/invalid-links` says where the bad link sits.
       links.push({
         url: href.trim(),
         text: (anchor as Element).textContent?.trim() ?? "",
         isInternal: false,
         error: "Invalid URL format",
+        ...sectionOf(anchor as Element),
       });
     }
   }
@@ -211,7 +216,7 @@ export function extractLinks(doc: Document, baseUrl: string): LinkData[] {
 
 // Cap on carried contact anchors — a footer repeating one number does not need
 // an unbounded array on every parsed page.
-const MAX_CONTACT_LINKS = 32;
+export const MAX_CONTACT_LINKS = 32;
 
 /**
  * `tel:` / `mailto:` anchors, which `extractLinks` deliberately drops: they are
@@ -224,12 +229,19 @@ const MAX_CONTACT_LINKS = 32;
  * addresses in the text) Cloudflare's email obfuscation rewrote. Each is
  * carried as the `mailto:` it stands for, flagged `obfuscated`.
  */
-export function extractContactLinks(doc: Document): ContactLinkData[] {
+export function extractContactLinks(doc: Document, placeLink?: LinkPlacer): ContactLinkData[] {
   const contacts: ContactLinkData[] = [];
   // Obfuscated addresses get a cap of their own, so a footer of them cannot
   // push out the `tel:` links local/nap-consistency compares.
   let plain = 0;
   let obfuscated = 0;
+  const sectionOf = makeLinkSectionResolver(placeLink);
+  // Where the anchor sat (#2307), for `links/tel-mailto` findings. Left off when the answer is
+  // `unknown`: an anchor outside every landmark carries nothing worth storing.
+  const placedOf = (anchor: Element) => {
+    const placed = sectionOf(anchor);
+    return placed.section !== "unknown" ? placed : {};
+  };
 
   for (const anchor of doc.querySelectorAll(
     'a[href^="tel:" i], a[href^="mailto:" i], a[href*="/cdn-cgi/l/email-protection" i]',
@@ -242,7 +254,7 @@ export function extractContactLinks(doc: Document): ContactLinkData[] {
     if (isCloudflareEmailProtectionUrl(trimmed)) {
       if (obfuscated >= MAX_CONTACT_LINKS) continue;
       obfuscated++;
-      contacts.push(cloudflareEmailContact(anchor as Element, trimmed));
+      contacts.push({ ...cloudflareEmailContact(anchor as Element, trimmed), ...placedOf(anchor as Element) });
       continue;
     }
     if (plain >= MAX_CONTACT_LINKS) continue;
@@ -256,6 +268,7 @@ export function extractContactLinks(doc: Document): ContactLinkData[] {
       // `?subject=…` / `;phone-context=…` are routing params, not the address.
       value: trimmed.slice(colon + 1).split(/[?;]/)[0] ?? "",
       text: (anchor as Element).textContent?.trim() ?? "",
+      ...placedOf(anchor as Element),
     });
   }
 
@@ -474,9 +487,13 @@ function simpleHash(str: string): string {
 }
 
 // Parse all data from HTML - parses ONCE, reuses document for all extractors
-export function parsePage(html: string, url: string): ParsedPage {
+export function parsePage(html: string, url: string, options?: ParsePageOptions): ParsedPage {
   // Single DOM parse - this document is reused by all extractors and available to rules
   const { document: doc } = parseHTML(html);
+
+  // The page classifier, when the caller supplied one (#2307): it reads the DOM once, before
+  // anything else touches it, and its placer fills in link sections the markup leaves unknown.
+  const classified = runClassifier(options?.classify, doc, url, html);
 
   // Parse schemas (new rich collection)
   const schemas = parseSchemas(doc);
@@ -505,8 +522,8 @@ export function parsePage(html: string, url: string): ParsedPage {
     h1: extractH1(doc),
     og: extractOG(doc),
     twitter: extractTwitter(doc),
-    links: extractLinks(doc, url),
-    contactLinks: extractContactLinks(doc),
+    links: extractLinks(doc, url, classified?.placeLink),
+    contactLinks: extractContactLinks(doc, classified?.placeLink),
     images: extractImages(doc, url),
     headings: extractHeadings(doc),
     content: extractContent(doc, html),
@@ -523,6 +540,9 @@ export function parsePage(html: string, url: string): ParsedPage {
     visibleDateModified: visibleMeta.visibleDateModified,
 
     hreflangAlternates: extractHreflangAlternates(doc, url),
+
+    // Present only when the classifier ran, so a parse without one is byte-identical to before.
+    ...(classified ? { classification: classified.classification } : {}),
 
     // Legacy (deprecated)
     schema,

@@ -1124,6 +1124,12 @@ export const audit = defineCommand({
       description:
         "Do not status-check internal link targets the crawl did not fetch (same as [internal_links] enabled = false)",
     },
+    // #2307: the bundled page classifier fills in link sections the markup leaves unknown.
+    "no-classifier": {
+      type: "boolean",
+      description:
+        "Do not run the page classifier: link sections come from page markup only (same as [classifier] enabled = false)",
+    },
     visibility: {
       type: "string",
       description:
@@ -2380,6 +2386,10 @@ export const audit = defineCommand({
           // repo#2729: the internal link probe, on unless switched off.
           ...(hasNegatedFlag(rawArgs, "internal-links")
             ? { internalLinksEnabled: false }
+            : {}),
+          // #2307: the page classifier, on unless switched off.
+          ...(hasNegatedFlag(rawArgs, "classifier")
+            ? { classifierEnabled: false }
             : {}),
           // Retention (#1912) deleted some of this project's audit history, so
           // say so. stderr unconditionally: this is the one line that tells a

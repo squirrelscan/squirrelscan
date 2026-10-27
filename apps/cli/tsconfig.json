@@ -24,6 +24,10 @@
       "@squirrelscan/crawler/*": ["../../packages/crawler/src/*"],
       "@squirrelscan/fetchers": ["../../packages/fetchers/src/index.ts"],
       "@squirrelscan/fetchers/*": ["../../packages/fetchers/src/*"],
+      "@squirrelscan/page-classifier": [
+        "../../packages/page-classifier/src/index.ts"
+      ],
+      "@squirrelscan/page-classifier/*": ["../../packages/page-classifier/*"],
       "@squirrelscan/parser": ["../../packages/parser/src/index.ts"],
       "@squirrelscan/parser/*": ["../../packages/parser/src/*"],
       "@squirrelscan/report": ["../../packages/report/src/index.ts"],

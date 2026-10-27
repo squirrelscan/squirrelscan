@@ -37,6 +37,9 @@ export * from "./failure-reason";
 
 // #2061: the structured entity map — site-wide JSON-LD graph of one audit.
 export * from "./entity-map";
+
+// pub#837: per-source link detail on check items and how every surface phrases it.
+export * from "./item-sources";
 // #2095: the entity MCP tool contract. Types only here, because `./entity-mcp`
 // re-exports two entity-map schemas that `export *` above already provides and
 // a star would collide. The CONSTANTS — names, descriptions, field specs,
@@ -91,10 +94,183 @@ export interface CheckItem {
    * `PUBLISH_LIMITS.maxSourcePagesPerItem` source pages and records no total.
    */
   pageCount?: number;
+  /**
+   * How the item sits on each page in `sourcePages` (pub#837): link rules say how many of the
+   * page's links point at the item and in which sections. One entry per page. A page
+   * `sourcePages` lists without an entry has nothing more to say, and an entry for a page it no
+   * longer lists (a publish cap clipped it) is dropped by {@link alignItemSources}.
+   */
+  sources?: CheckItemSource[];
+  /**
+   * How many pages the item sits on, by the part of the page it sits in there (pub#846):
+   * `{ footer: 49, content: 2 }`. A page counts once in each section the item has on it, and
+   * pages with no known section are not counted. Unlike `sourcePages` it counts every page, so a
+   * report can say "in the site footer, on 49 of 53 pages" from a capped list. A page-scope rule
+   * sets 1 per section on its own page; the report and the fold add them up across pages.
+   */
+  regions?: LinkSectionCounts;
   meta?: Record<string, unknown>;
 }
 
+/** One source page of a {@link CheckItem}, and how the item sits on it (pub#837). */
+export interface CheckItemSource {
+  page: string;
+  /** Links on the page that point at the item; absent when the producer did not count them. */
+  links?: number;
+  /** Where on the page the item sits; absent when no part of it had a known section. */
+  sections?: LinkSectionCounts;
+}
+
 export type CheckStatus = "pass" | "warn" | "fail" | "info" | "skipped";
+
+/**
+ * THE site-identity function for component evidence. The rule that scopes a
+ * component family to a site calls this once and RECORDS the result on the
+ * occurrence (`siteOrigin`); every later consumer reads that field instead of
+ * re-deriving one. An earlier revision derived the rule's scope from the
+ * fetched URL and the report's from the source URL, which disagreed on a
+ * cross-origin redirect — recording it makes that drift unrepresentable.
+ *
+ * A URL that will not parse cannot safely be shared across pages, so it becomes
+ * its own scope rather than collapsing every unparseable page into one.
+ */
+export function componentSiteOrigin(pageUrl: string): string {
+  try {
+    return new URL(pageUrl).origin;
+  } catch {
+    return `invalid:${pageUrl}`;
+  }
+}
+
+/**
+ * Additive, DOM-observed evidence for a finding in a reusable page region.
+ *
+ * These keys identify an observed DOM shape, not a source-code component. The
+ * values are deliberately hashes where crawler content could be sensitive.
+ */
+/**
+ * One ancestor of a faulty element, described so the report stage can decide
+ * whether that subtree is a component shared across pages.
+ */
+/**
+ * A short, human-recognisable description of a component's root, so a reader
+ * sees `in the "Install squirrel" block` rather than `div:1 > a:1`.
+ *
+ * This is site content in evidence, so it is deliberately three short fields
+ * and nothing else, each sanitised and bounded. Field names match what the
+ * renderers read, in their preference order: heading, then ariaLabel, then id.
+ */
+export interface RootHint {
+  tag: string;
+  /** Omitted when it looks generated: digits-only or hash-like. */
+  id?: string;
+  ariaLabel?: string;
+  /** Nearest heading inside the root, else the closest preceding one. */
+  heading?: string;
+}
+
+export interface SubtreeCandidate {
+  /** Ancestors above the faulty element; the parent is 1. */
+  level: number;
+  /** Tags plus stable attributes, no text and no per-page attribute values. */
+  skeletonSignature: string;
+  /** The faulty element's path relative to THIS ancestor, so the same slot in
+   * the same block matches across pages regardless of where the block sits. */
+  locatorFromRoot: string;
+  /** This ancestor's share of the region's text, 0..1 to 2dp. A candidate that
+   * is most of the region is the page's own content, not a shared block. */
+  textShareOfRegion: number;
+  /** What this ancestor looks like to a person. Absent when nothing is legible. */
+  rootHint?: RootHint;
+}
+
+export interface ComponentOccurrence {
+  version: 1;
+  pageUrl: string;
+  /**
+   * The site this observation is scoped to, from {@link componentSiteOrigin} on
+   * the FETCHED url — a page that redirects off-origin belongs to where it
+   * landed, while `pageUrl` above preserves where it was reached from. Recorded
+   * rather than re-derived so no consumer can scope a component differently
+   * from the rule that produced it.
+   */
+  siteOrigin: string;
+  /** This describes the supplied DOM only; it does not claim a fresh fetch. */
+  provenance: { source: "page-dom"; rendered: boolean };
+  /** Report consumers must keep false/unknown evidence page-scoped. */
+  groupable: boolean;
+  confidence: "observed" | "uncertain";
+  /**
+   * Why an occurrence is `uncertain`, so a degraded observation is never a
+   * silent one. Absent exactly when `confidence` is "observed".
+   */
+  uncertainReason?:
+    | "no-region"
+    | "content-nested"
+    | "region-main"
+    | "structure-truncated";
+  region: {
+    role: "footer" | "header" | "navigation" | "main" | "unknown";
+    nestedIn: "article" | "main" | "none" | "unknown";
+    structuralSignature: string;
+  };
+  family: { key: string; structuralSignature: string };
+  variant: { key: string; structuralSignature: string; contentHash: string };
+  element: { locator: string; structuralSignature: string };
+  /**
+   * Ancestor ladder for cross-page promotion, emitted only when
+   * `uncertainReason` is "region-main". Rules see one page at a time and cannot
+   * know whether a subtree repeats, so they record what each ancestor LOOKS
+   * like and the report stage decides. Additive: the occurrence it rides on is
+   * still emitted uncertain and ungroupable, and a reader may ignore this.
+   */
+  subtreeCandidates?: SubtreeCandidate[];
+  defect: {
+    kind: "stale-copyright" | "link-text-empty" | "link-text-generic";
+    values: Record<string, string | number>;
+    valueHashes: Record<string, string>;
+  };
+}
+
+/**
+ * One observation of a shared SITE RESOURCE on one page.
+ *
+ * The non-DOM sibling of {@link ComponentOccurrence}. A source map is not an
+ * element: it has no region, no locator and no structural signature, so
+ * borrowing that shape would mean inventing five fields a reader could not act
+ * on and would push a URL through DOM-shaped grouping that asks the wrong
+ * question. What a shared resource has instead is an IDENTITY (`key`) and the
+ * set of pages that reference it, which is exactly what the report stage needs
+ * to say "one build ships this, on N pages".
+ *
+ * Rules see one page at a time and so cannot know a resource is shared; they
+ * record what they saw and the report stage, which sees every page, decides.
+ * Emitted UNCAPPED, unlike `items` — a cap would turn affected-page membership
+ * into an unlabelled guess, the same reason `componentOccurrences` is uncapped.
+ */
+export interface SiteResourceOccurrence {
+  /**
+   * What kind of shared resource this is. A consumer that does not know a kind
+   * renders nothing for it rather than narrating it with borrowed confidence.
+   */
+  kind: "source-map";
+  /** The resource's identity: for a source map, its absolute URL. */
+  key: string;
+  /** The page this observation was made on. */
+  pageUrl: string;
+  /**
+   * Where on the page it was referenced from — a script `src`, `HTTP header`,
+   * `inline style`. Carried so a reader can find the reference, never grouped
+   * on: the same map reached through two references is still one repair.
+   */
+  source: string;
+  /**
+   * Site identity, from {@link componentSiteOrigin}. Two origins in one crawl
+   * are two builds, and merging them would claim a fix that one of them does
+   * not have.
+   */
+  siteOrigin: string;
+}
 
 export interface CheckResult {
   name: string;
@@ -107,6 +283,55 @@ export interface CheckResult {
   value?: string | number | null;
   expected?: string | number | null;
   skipReason?: string;
+  /**
+   * Complete, additive element evidence for component-aware report grouping.
+   * It never replaces items, pages, or the original rule detection.
+   */
+  componentOccurrences?: ComponentOccurrence[];
+  /**
+   * Complete, additive evidence of the shared site RESOURCES behind a finding,
+   * for report-stage site-level grouping. Like {@link componentOccurrences} it
+   * never replaces items, pages, or the original rule detection: a rule emitting
+   * this keeps its per-page checks byte-identical.
+   */
+  siteResourceOccurrences?: SiteResourceOccurrence[];
+  /**
+   * The honest counterpart of {@link siteResourceOccurrences}, with exactly the
+   * meaning {@link componentEvidence} has for element evidence: a reader that
+   * finds neither field knows the check never produced resource evidence, and a
+   * reader that finds this one knows how much was dropped and why.
+   *
+   * It matters more here than it looks. The report stage groups resources by
+   * PAGE SET, so silently losing some occurrences does not merely shrink the
+   * evidence — it changes the answer, splitting one site-wide unit into a
+   * narrower one that names fewer pages. Without this marker that wrong answer
+   * is indistinguishable from a correct one.
+   */
+  siteResourceEvidence?: {
+    state: "omitted";
+    reason: "payload-limit" | "page-sample-limit" | "sibling-row";
+    occurrenceCount: number;
+  };
+  /**
+   * Evidence this check HAD but that a bounded surface could not carry. It is
+   * the honest counterpart of {@link componentOccurrences}: a reader that finds
+   * neither field knows the check never produced evidence, and a reader that
+   * finds this one knows exactly how much was dropped and where.
+   *
+   * - `payload-limit`  — the finding payload would have exceeded
+   *   `REPORT_LIMITS.maxFindingPayload`, so the evidence was left out of it.
+   * - `page-sample-limit` — the aggregate's bounded `pages[]` sample does not
+   *   contain these occurrences' pages, so unfolding cannot place them on a row
+   *   without inventing per-page findings that the fold never recorded.
+   * - `sibling-row` — one item row of this check owns the evidence; this row
+   *   deliberately does not repeat it. Seeing only this reason after a rebuild
+   *   means the owning row was lost in transit.
+   */
+  componentEvidence?: {
+    state: "omitted";
+    reason: "payload-limit" | "page-sample-limit" | "sibling-row";
+    occurrenceCount: number;
+  };
   /**
    * Smart audits (#110): provenance for findings carried across audits.
    * `carried` = re-injected from the per-page store for a page not re-crawled
@@ -444,6 +669,14 @@ export interface AuditReport {
    * the credited cloud tech-detect ran (logged-in users); absent otherwise.
    */
   technologies?: ReportTechnologies;
+  /**
+   * Page structure (#2307): where the audited pages' links sit (header, footer, navigation,
+   * sidebar, content, ...) and what type the page classifier says each page is. Like
+   * `technologies`, REPORT-ONLY: it NEVER contributes to `healthScore`. Absent when no audited
+   * page carries a link section or a classification, which is every crawl stored before the
+   * page classifier existed.
+   */
+  structure?: ReportStructure;
   /**
    * Resolved site-metadata "profile" (site type, business category, country,
    * audience, identity, contacts, socials, domain age). Like `technologies`,
@@ -1052,6 +1285,55 @@ export interface ReportTechnologies {
   scannedAt?: string;
 }
 
+/** One link section's footprint across the audited pages. */
+export interface ReportStructureSection {
+  section: Exclude<LinkSection, "unknown">;
+  /** Audited pages with at least one link in this section. */
+  pages: number;
+  /** Links in this section, summed over those pages (every anchor counts, repeats included). */
+  links: number;
+}
+
+/** How many audited pages the classifier gave each page type. */
+export interface ReportStructurePageType {
+  label: string;
+  pages: number;
+}
+
+/**
+ * The report-level page structure block (#2307). Computed over the audited pages that carry
+ * link-section or classification data.
+ */
+export interface ReportStructure {
+  /** Audited pages that carry section or classification data. */
+  pages: number;
+  /** Sections other than `unknown`, most links first; sections with no links are left out. */
+  sections: ReportStructureSection[];
+  /** Links whose section is `unknown`. */
+  unknownLinks: number;
+  /** Every link counted above, `unknown` included. */
+  totalLinks: number;
+  /**
+   * Internal links in the header, footer, navigation and sidebar against internal links in the
+   * page content. `share` is chrome over chrome plus content, 0 to 1, rounded to three
+   * decimals; null when the audited pages have no internal link in either.
+   */
+  chrome: { links: number; contentLinks: number; share: number | null };
+  pageTypes: {
+    /**
+     * Labels the report stands behind: a model answer, or a markup-rules answer at 0.8
+     * confidence or more. Most pages first.
+     */
+    counts: ReportStructurePageType[];
+    /** Pages with no standing label: no answer, `unknown`, or a weak rules answer. */
+    notClassified: number;
+    /** Pages whose counted label came from the model. */
+    byModel: number;
+    /** Pages where part of the classification fell back to the markup rules. */
+    degraded: number;
+  };
+}
+
 // RedirectHop and RedirectChain are now in ./storage.ts (re-exported above)
 
 /**
@@ -1619,6 +1901,57 @@ export interface SchemaData {
   raw: string | null;
 }
 
+/**
+ * Which part of a page an anchor sits in, for findings ("broken link in the footer"). Landmark tags
+ * and ARIA roles plus a markup-only comment-thread rule (parser `link-section.ts`) answer first.
+ * Where the markup says nothing, the page classifier fills in: the section purposes after
+ * `unknown` below come from its section head, and a region answer can name header, footer,
+ * navigation, sidebar or content. `comments` is never a model answer.
+ */
+export type LinkSection =
+  | "header"
+  | "footer"
+  | "navigation"
+  | "sidebar"
+  | "comments"
+  | "content"
+  | "unknown"
+  | "pagination"
+  | "breadcrumbs"
+  | "related_content"
+  | "business_info"
+  | "social_share"
+  | "account_login"
+  | "author_byline"
+  | "newsletter_signup";
+
+/** Links per section, unknown left out. Keys appear only when the count is above zero. */
+export type LinkSectionCounts = Partial<Record<Exclude<LinkSection, "unknown">, number>>;
+
+/** Where an answer came from: the page's markup (`rules`) or the page classifier's model. */
+export type ClassifierSource = "rules" | "model";
+
+/**
+ * The page classifier's page type answer. A different label space from `ParsedPage.pageType`
+ * (schema and URL based): homepage, product_detail, product_listing, article, blog_post, about,
+ * contact, docs, legal, pricing, listing_index, other, or `unknown` when nothing answered.
+ */
+export interface ClassifiedPageType {
+  label: string;
+  confidence: number;
+  source: ClassifierSource;
+}
+
+/**
+ * What the page classifier said about one page. Absent when the classifier was off or this parse
+ * was stored before it existed; readers treat absent as "not classified".
+ */
+export interface PageClassification {
+  pageType: ClassifiedPageType;
+  /** Why any part of the page fell back to the rules path, or "" when nothing did. */
+  degraded: string;
+}
+
 export interface LinkData {
   url: string;
   text: string;
@@ -1635,6 +1968,18 @@ export interface LinkData {
    * behaviour (every link contextual) instead of flagging the whole site.
    */
   isChrome?: boolean;
+  /**
+   * Part of the page the anchor sat in (#2307). Optional: crawls stored before this field existed
+   * omit it; readers treat `undefined` as unknown and say nothing about placement.
+   */
+  section?: LinkSection;
+  /**
+   * Who answered `section` when the page classifier did, "model"; absent means the markup rules
+   * did (or the section is unknown). Stored compactly: one key per link only when it matters.
+   */
+  sectionSource?: ClassifierSource;
+  /** The classifier's confidence in `section`; present only with a `model` source. */
+  sectionConfidence?: number;
 }
 
 /**
@@ -1656,6 +2001,12 @@ export interface ContactLinkData {
    * {@link LinkData}: they are not pages.
    */
   obfuscated?: "cloudflare";
+  /** Part of the page the anchor sat in (#2307); absent on a parse stored before it. */
+  section?: LinkSection;
+  /** Who answered `section` when the page classifier did; see {@link LinkData.sectionSource}. */
+  sectionSource?: ClassifierSource;
+  /** The classifier's confidence in `section`; present only with a `model` source. */
+  sectionConfidence?: number;
 }
 
 export interface ImageData {
@@ -1900,6 +2251,12 @@ export interface ParsedPage {
    * must treat absent as "not extracted", which exempts nothing.
    */
   hreflangAlternates?: HreflangAlternate[];
+  /**
+   * The page classifier's answer for this page: page type and why it degraded, when it ran. Absent
+   * when it did not (`--no-classifier`, `classifier.enabled = false`, or a parse stored before it
+   * existed). `pageType` above is the schema and URL based label; this is the model's.
+   */
+  classification?: PageClassification;
 }
 
 /** The crawler's name for an audit level: quick, surface or full (see audit-levels.ts). */

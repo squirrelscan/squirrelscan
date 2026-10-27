@@ -97,6 +97,25 @@ describe("mergeOptionsToConfig", () => {
     expect(offline.internal_links?.enabled).not.toBe(false);
   });
 
+  // #2307: the page classifier is on by default; --no-classifier switches it off for the run and
+  // the config's own choice stands when the flag is absent.
+  test("the page classifier is on by default and --no-classifier turns it off", () => {
+    const config = getDefaultConfig();
+    expect(config.classifier?.enabled).not.toBe(false);
+    const off = mergeOptionsToConfig(config, {
+      url: "https://example.com",
+      classifierEnabled: false,
+    });
+    expect(off.classifier?.enabled).toBe(false);
+    const kept = mergeOptionsToConfig(
+      { ...config, classifier: { enabled: false } },
+      { url: "https://example.com" }
+    );
+    expect(kept.classifier?.enabled).toBe(false);
+    const on = mergeOptionsToConfig(config, { url: "https://example.com" });
+    expect(on.classifier?.enabled).not.toBe(false);
+  });
+
   test("clamps external link overrides to safe minimums", () => {
     const config = getDefaultConfig();
     const merged = mergeOptionsToConfig(config, {

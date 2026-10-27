@@ -9,6 +9,10 @@ import { randomUUID } from "node:crypto";
 import { Effect } from "effect";
 
 import type { CheckResult } from "@squirrelscan/core-contracts";
+import {
+  packComponentOccurrences,
+  unpackComponentOccurrences,
+} from "@squirrelscan/core-contracts/component-evidence";
 import { isCacheHitReason, parseUnverifiedReason } from "@squirrelscan/core-contracts";
 import { urlHostKey } from "@squirrelscan/utils/url";
 
@@ -89,7 +93,7 @@ interface UnfinishedCrawlRow extends LeaseCrawlRow {
   last_activity: number;
 }
 
-export const SCHEMA_VERSION = 36;
+export const SCHEMA_VERSION = 38;
 
 // Migrations to run when upgrading from older versions
 const MIGRATIONS: Record<number, string[]> = {
@@ -531,6 +535,22 @@ const MIGRATIONS: Record<number, string[]> = {
   // so a reconstructed report omits the scope instead of inventing one from
   // config and page counts. Local sqlite only.
   36: [`ALTER TABLE crawls ADD COLUMN scan_scope TEXT`],
+  // Version 37: component-aware findings (#2307). Additive DOM evidence for a
+  // check, stored as JSON beside the other CheckResult fields. Without these the
+  // report is rebuilt from `rule_results` with the evidence silently gone, which
+  // is how the whole feature was invisible to the real `squirrel audit` path.
+  37: [
+    "ALTER TABLE rule_results ADD COLUMN component_occurrences TEXT DEFAULT NULL",
+    "ALTER TABLE rule_results ADD COLUMN component_evidence TEXT DEFAULT NULL",
+  ],
+  // Version 38: shared site-resource evidence (#2341), for exactly the reason
+  // version 37 exists: the report is rebuilt from `rule_results`, so a
+  // CheckResult field this table does not carry is invisible to the real
+  // `squirrel audit` path while every in-memory test stays green.
+  38: [
+    "ALTER TABLE rule_results ADD COLUMN site_resource_occurrences TEXT DEFAULT NULL",
+    "ALTER TABLE rule_results ADD COLUMN site_resource_evidence TEXT DEFAULT NULL",
+  ],
 };
 
 // Every `pages` column but the two that hold a page's body, for
@@ -672,6 +692,20 @@ const RESOURCE_SIZES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }
 // past 33 without it would fail the streamed rule loop's first upsert.
 const PAGE_FEATURES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   { name: "hreflang_alternates", type: "TEXT" },
+];
+
+// Same guard for `rule_results`. Migrations 37 and 38 added the component-evidence
+// and site-resource columns (#2307, #2341); a DB stamped past 37 by a build
+// numbering its own migration 37 would skip them forever. The failure splits both
+// ways this file has already seen: every saveRuleResults INSERT names the columns, so writes throw and the
+// audit stores no checks at all, while `SELECT *` reads map by key and would
+// merely yield `undefined` — a silent return to exactly the evidence-less report
+// that #2307 exists to fix. On the list at the same time as the migration.
+const RULE_RESULTS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
+  { name: "component_occurrences", type: "TEXT" },
+  { name: "component_evidence", type: "TEXT" },
+  { name: "site_resource_occurrences", type: "TEXT" },
+  { name: "site_resource_evidence", type: "TEXT" },
 ];
 
 const SCHEMA = `
@@ -959,6 +993,10 @@ CREATE TABLE IF NOT EXISTS rule_results (
   message TEXT NOT NULL,
   value TEXT,
   expected TEXT,
+  component_occurrences TEXT,
+  component_evidence TEXT,
+  site_resource_occurrences TEXT,
+  site_resource_evidence TEXT,
   created_at INTEGER NOT NULL,
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
@@ -1414,6 +1452,7 @@ export class SQLiteStorage implements CrawlStorage {
     this.reconcileColumns("entity_edges", ENTITY_EDGES_ALTER_COLUMNS);
     this.reconcileColumns("resource_sizes", RESOURCE_SIZES_ALTER_COLUMNS);
     this.reconcileColumns("page_features", PAGE_FEATURES_ALTER_COLUMNS);
+    this.reconcileColumns("rule_results", RULE_RESULTS_ALTER_COLUMNS);
     this.indexesAfterMigrations();
   }
 
@@ -1466,7 +1505,8 @@ export class SQLiteStorage implements CrawlStorage {
       | "crawls"
       | "entity_edges"
       | "resource_sizes"
-      | "page_features",
+      | "page_features"
+      | "rule_results",
     columns: ReadonlyArray<{ name: string; type: string }>
   ): void {
     const db = this.getDb();
@@ -3544,9 +3584,11 @@ export class SQLiteStorage implements CrawlStorage {
         const stmt = db.prepare(`
           INSERT INTO rule_results (
             crawl_id, page_url, rule_id, check_name, status, message,
-            value, expected, items, details, pages, skip_reason, created_at
+            value, expected, items, details, pages, skip_reason,
+            component_occurrences, component_evidence, site_resource_occurrences,
+            site_resource_evidence, created_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         const timestamp = Date.now();
@@ -3569,6 +3611,17 @@ export class SQLiteStorage implements CrawlStorage {
               check.details ? JSON.stringify(check.details) : null,
               check.pages ? JSON.stringify(check.pages) : null,
               check.skipReason || null,
+              check.componentOccurrences?.length
+                ? JSON.stringify(packComponentOccurrences(check.componentOccurrences))
+                : null,
+              check.componentEvidence ? JSON.stringify(check.componentEvidence) : null,
+              // Stored unpacked: unlike component occurrences, which repeat six
+              // 128-bit digests per row, a resource occurrence is four short
+              // strings, so a shape table would cost more than it saves.
+              check.siteResourceOccurrences?.length
+                ? JSON.stringify(check.siteResourceOccurrences)
+                : null,
+              check.siteResourceEvidence ? JSON.stringify(check.siteResourceEvidence) : null,
               timestamp
             );
           }
@@ -3987,9 +4040,11 @@ export class SQLiteStorage implements CrawlStorage {
         const stmt = db.prepare(`
           INSERT INTO rule_results (
             crawl_id, page_url, rule_id, check_name, status, message,
-            value, expected, items, details, pages, skip_reason, created_at
+            value, expected, items, details, pages, skip_reason,
+            component_occurrences, component_evidence, site_resource_occurrences,
+            site_resource_evidence, created_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         const timestamp = Date.now();
@@ -4012,6 +4067,16 @@ export class SQLiteStorage implements CrawlStorage {
                   check.details ? JSON.stringify(check.details) : null,
                   check.pages ? JSON.stringify(check.pages) : null,
                   check.skipReason || null,
+                  check.componentOccurrences?.length
+                    ? JSON.stringify(packComponentOccurrences(check.componentOccurrences))
+                    : null,
+                  check.componentEvidence ? JSON.stringify(check.componentEvidence) : null,
+                  check.siteResourceOccurrences?.length
+                    ? JSON.stringify(check.siteResourceOccurrences)
+                    : null,
+                  check.siteResourceEvidence
+                    ? JSON.stringify(check.siteResourceEvidence)
+                    : null,
                   timestamp
                 );
               }
@@ -4326,6 +4391,27 @@ export class SQLiteStorage implements CrawlStorage {
       details: row.details ? JSON.parse(row.details as string) : undefined,
       pages: row.pages ? JSON.parse(row.pages as string) : undefined,
       skipReason: row.skip_reason ? (row.skip_reason as string) : undefined,
+      // #2307: additive component evidence. Absent on rows written before the
+      // v30 migration, so both stay undefined rather than becoming empty arrays
+      // — a reader must be able to tell "no evidence recorded" from "none found".
+      // Reads BOTH the hoisted form and a plain occurrence array (see the codec).
+      componentOccurrences: row.component_occurrences
+        ? unpackComponentOccurrences(JSON.parse(row.component_occurrences as string))
+        : undefined,
+      componentEvidence: row.component_evidence
+        ? (JSON.parse(row.component_evidence as string) as CheckResult["componentEvidence"])
+        : undefined,
+      // #2341, same contract: undefined on rows written before the v31 column,
+      // never an empty array, so "nothing recorded" stays distinguishable from
+      // "recorded nothing" and a legacy audit renders as it always did.
+      siteResourceOccurrences: row.site_resource_occurrences
+        ? (JSON.parse(
+            row.site_resource_occurrences as string,
+          ) as CheckResult["siteResourceOccurrences"])
+        : undefined,
+      siteResourceEvidence: row.site_resource_evidence
+        ? (JSON.parse(row.site_resource_evidence as string) as CheckResult["siteResourceEvidence"])
+        : undefined,
     };
   }
 

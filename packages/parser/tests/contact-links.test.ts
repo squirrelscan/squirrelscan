@@ -175,3 +175,40 @@ describe("parsePage — Cloudflare email-protection links (pub#811)", () => {
     expect(parsed.contactLinks).toEqual([]);
   });
 });
+
+// #2307: `links/tel-mailto` says where a flagged contact link sits, so the anchor carries its
+// section. An anchor outside every landmark carries none.
+describe("parsePage — contactLinks sections", () => {
+  test("a contact anchor records the landmark it sits in", () => {
+    const parsed = parsePage(
+      page(
+        `<footer><a href="tel:+15551234567">call</a></footer>` +
+          `<main><a href="mailto:hi@example.com">Email us</a></main>` +
+          `<p><a href="mailto:loose@example.com">loose</a></p>`,
+      ),
+      URL,
+    );
+
+    expect(parsed.contactLinks).toEqual([
+      { scheme: "tel", value: "+15551234567", text: "call", section: "footer" },
+      { scheme: "mailto", value: "hi@example.com", text: "Email us", section: "content" },
+      { scheme: "mailto", value: "loose@example.com", text: "loose" },
+    ]);
+  });
+});
+
+describe("parsePage — invalid links keep their section", () => {
+  test("a link the parser cannot read still says where it sat", () => {
+    const parsed = parsePage(page(`<footer><a href="http://[bad">bad</a></footer>`), URL);
+
+    expect(parsed.links).toEqual([
+      {
+        url: "http://[bad",
+        text: "bad",
+        isInternal: false,
+        error: "Invalid URL format",
+        section: "footer",
+      },
+    ]);
+  });
+});

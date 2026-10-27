@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>How we test crawlers</title>
+    <meta property="og:type" content="article" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          { "@type": "WebSite", "name": "Example Journal" },
+          {
+            "@type": "NewsArticle",
+            "headline": "How we test crawlers",
+            "datePublished": "2026-03-04",
+            "author": { "@type": "Person", "name": "Ada Lovelace" }
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body class="single single-post">
+    <header id="site-header" class="site-header">
+      <nav id="primary-nav"><a href="/">Home</a> <a href="/archive">Archive</a></nav>
+    </header>
+    <main id="main">
+      <article id="post" class="post">
+        <header id="article-header" class="entry-header">
+          <h1>How we test crawlers</h1>
+          <p class="byline">By Ada Lovelace</p>
+          <time datetime="2026-03-04">4 March 2026</time>
+          <span>8 min read</span>
+        </header>
+        <p>The first thing a crawler has to get right is the queue, and the queue is
+          harder than it looks once redirects are involved.</p>
+        <p>We keep a fixture site with every shape we have seen in the wild, and we
+          re-run it on every change to the frontier.</p>
+        <p>What follows is the list, in the order we added each case to it.</p>
+        <footer id="article-footer" class="entry-footer">
+          <p>Filed under testing.</p>
+        </footer>
+      </article>
+      <section id="comments" class="comments">
+        <h2>3 comments</h2>
+        <ul><li>Good post.</li><li>Agreed.</li><li>Thanks for writing this up.</li></ul>
+      </section>
+    </main>
+    <footer id="site-footer" class="site-footer">
+      <p>&copy; 2026 Example Journal</p>
+    </footer>
+  </body>
+</html>

@@ -19,6 +19,19 @@ describe("ConfigSchema", () => {
     expect(config.plugins?.items).toEqual([]);
   });
 
+  test("[classifier] is optional, defaults to on, and enabled = false switches it off (#2307)", () => {
+    expect(ConfigSchema.parse({}).classifier).toBeUndefined();
+    expect(ConfigSchema.parse({ classifier: {} }).classifier?.enabled).toBe(
+      true
+    );
+    expect(
+      ConfigSchema.parse({ classifier: { enabled: false } }).classifier?.enabled
+    ).toBe(false);
+    expect(() =>
+      ConfigSchema.parse({ classifier: { enabled: "no" } })
+    ).toThrow();
+  });
+
   test("parses partial config with overrides", () => {
     const config = ConfigSchema.parse({
       crawler: {

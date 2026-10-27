@@ -61,6 +61,7 @@ import {
 } from "@squirrelscan/core-contracts";
 import type { CompactResolutionSignal } from "@squirrelscan/core-contracts/resolution";
 import { clampItemString } from "@squirrelscan/core-contracts/clamp";
+import { alignItemSources } from "@squirrelscan/core-contracts/item-sources";
 import { ENTITY_MAP_PUBLISH_LIMITS, type EntityMap } from "@squirrelscan/core-contracts/entity-map";
 import { projectEntityMap } from "@squirrelscan/core-contracts/entity-map-project";
 import {
@@ -805,7 +806,8 @@ function sampleItem(item: CheckItem, caps: SampleCaps): CheckItem {
     if (pages > (next.sourcePages?.length ?? 0)) next.pageCount = pages;
     else delete next.pageCount;
   }
-  return next;
+  // pub#837: per-source detail goes with the pages the sample kept.
+  return alignItemSources(next);
 }
 
 /**
@@ -1126,7 +1128,10 @@ function withoutRemovedPages<R extends { checks: CheckResult[] }>(
             ? {
                 items: member.items.map((item) =>
                   item.sourcePages?.some(removed)
-                    ? { ...item, sourcePages: item.sourcePages.filter((page) => !removed(page)) }
+                    ? alignItemSources({
+                        ...item,
+                        sourcePages: item.sourcePages.filter((page) => !removed(page)),
+                      })
                     : item,
                 ),
               }

@@ -32,10 +32,13 @@ import {
   extractTwitter,
   parseDocument,
   parseSchemas,
+  runClassifier,
   schemaCollectionFromJSON,
   extractAuthorFromSchema,
   extractVisibleMeta,
+  toLinkData,
   type ParsedPageCache,
+  type ParsePageOptions,
 } from "@squirrelscan/parser";
 import { type RunnerScope } from "@squirrelscan/rules";
 import { Effect, Stream } from "effect";
@@ -195,7 +198,10 @@ export type { StreamPreRulesResult } from "@squirrelscan/audit-engine";
 /**
  * Parse a page record to extract structured data for rules
  */
-export function parsePageRecord(page: PageRecord): ParsedPage | null {
+export function parsePageRecord(
+  page: PageRecord,
+  options?: ParsePageOptions
+): ParsedPage | null {
   if (!page.html) return null;
 
   return logger.withTrace(
@@ -204,13 +210,15 @@ export function parsePageRecord(page: PageRecord): ParsedPage | null {
       const html = page.html!;
       const doc = parseDocument(html);
       const baseUrl = page.url;
+      // The page classifier, when the caller supplied one (#2307).
+      const classified = runClassifier(options?.classify, doc, baseUrl, html);
 
       const meta = extractMeta(doc);
       const og = extractOG(doc);
       const twitter = extractTwitter(doc);
       const headings = extractHeadings(doc);
       const content = extractContent(doc, html);
-      const links = extractLinks(doc, baseUrl);
+      const links = extractLinks(doc, baseUrl, classified?.placeLink);
       const images = extractImages(doc, baseUrl);
 
       // Parse schemas (new rich collection)
@@ -235,19 +243,12 @@ export function parsePageRecord(page: PageRecord): ParsedPage | null {
         headings,
         content,
         h1: { count: headings.h1Count, texts: headings.h1Texts },
-        links: links.map((l) => ({
-          url: l.href,
-          text: l.text,
-          isInternal: l.isInternal,
-          rel: l.rel,
-          isNofollow: l.isNofollow,
-          isChrome: l.isChrome,
-        })),
+        links: links.map(toLinkData),
         // tel:/mailto: anchors, which `extractLinks` drops as non-crawlable.
         // This is the THIRD ParsedPage producer (see @squirrelscan/parser's
         // `parsePage` and audit-engine's `parseHtmlForRules`); a field set on
         // only some of them is undefined at runtime with every test still green.
-        contactLinks: extractContactLinks(doc),
+        contactLinks: extractContactLinks(doc, classified?.placeLink),
         images: images.map((i) => ({
           src: i.src,
           alt: i.alt,
@@ -262,6 +263,8 @@ export function parsePageRecord(page: PageRecord): ParsedPage | null {
         visibleAuthor: visibleMeta.visibleAuthor,
         visibleDatePublished: visibleMeta.visibleDatePublished,
         visibleDateModified: visibleMeta.visibleDateModified,
+        // Present only when the classifier ran (#2307).
+        ...(classified ? { classification: classified.classification } : {}),
         // Legacy (deprecated)
         schema,
       };

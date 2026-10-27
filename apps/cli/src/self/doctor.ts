@@ -43,7 +43,9 @@ import {
   DEFAULT_UPDATE_CHECK_INTERVAL_HOURS,
 } from "./settings";
 
-export function runDoctorChecks(): Result<DoctorReport> {
+export function runDoctorChecks(
+  options: { extraChecks?: DoctorCheck[] } = {}
+): Result<DoctorReport> {
   const checks: DoctorCheck[] = [];
 
   checks.push(checkSettingsFile());
@@ -55,6 +57,9 @@ export function runDoctorChecks(): Result<DoctorReport> {
   checks.push(checkUpdateStatus());
   checks.push(checkLogging());
   checks.push(checkContentStore());
+  // Checks that must load heavy modules (the bundled page classifier, #2307) are built by the
+  // caller after a dynamic import, so importing this file stays cheap.
+  checks.push(...(options.extraChecks ?? []));
 
   const passed = checks.filter((c) => c.status === "pass").length;
   const warnings = checks.filter((c) => c.status === "warn").length;
