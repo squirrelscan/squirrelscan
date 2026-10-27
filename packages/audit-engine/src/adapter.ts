@@ -83,6 +83,7 @@ import type {
   SiteQuery,
   UnverifiedReason,
 } from "@squirrelscan/core-contracts";
+import { buildJavascriptShipped } from "@squirrelscan/core-contracts";
 import {
   CLOUD_RESOURCE_CHECK,
   LINK_CHECK_LIMITS,
@@ -2473,6 +2474,7 @@ export function runRulesOnStorage(
       parsedPages: parsedPagesCache,
       resourceSizes,
       sitemapUrlStatuses,
+      ...javascriptShippedFrom(assets),
     };
   });
 }
@@ -3592,6 +3594,7 @@ export function runStreamingRules(
       parsedPages: parsedPagesCache,
       resourceSizes: assets.resourceSizes,
       sitemapUrlStatuses: assets.sitemapUrlStatuses,
+      ...javascriptShippedFrom(assets),
       tallies,
       peakLiveDocsPageStream: streamed.peakLiveDocs,
       ruleCache: ruleCacheDisabled
@@ -3599,6 +3602,19 @@ export function runStreamingRules(
         : streamed.ruleCache,
     };
   });
+}
+
+/** The report's JavaScript shipped block (squirrelscan/repo#3397) from the fetched assets. */
+function javascriptShippedFrom(
+  assets: Pick<PreFetchedAssets, "scripts" | "externalAssets" | "assetCapDropped">,
+): { javascript?: ReturnType<typeof buildJavascriptShipped> } {
+  const javascript = buildJavascriptShipped({
+    sameSite: assets.scripts,
+    thirdParty: assets.externalAssets?.scripts,
+    unmeasuredCapped:
+      (assets.assetCapDropped?.scripts ?? 0) + (assets.assetCapDropped?.externalScripts ?? 0),
+  });
+  return javascript ? { javascript } : {};
 }
 
 // ============================================

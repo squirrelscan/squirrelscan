@@ -5,6 +5,9 @@ export * from "./refused-fetch";
 // Cache-stats aggregation helper (#108).
 export * from "./cache-stats";
 
+// "JavaScript shipped" report block (squirrelscan/repo#3397).
+export * from "./javascript-shipped";
+
 // Plans, credits, and service limits.
 export * from "./plans";
 export * from "./credits";
@@ -79,6 +82,7 @@ import { RULE_TIMED_OUT_SKIP_REASON } from "./resolution";
 import type { AuditFailureReasonCode } from "./failure-reason";
 import type { RefusedFetch } from "./refused-fetch";
 import type { EntityMap } from "./entity-map";
+import type { JavascriptShipped } from "./javascript-shipped";
 import type { AuditLevel, ResolvedAuditSettings } from "./audit-levels";
 import type { ReportCapTier } from "./limits";
 
@@ -751,6 +755,12 @@ export interface AuditReport {
    * REPORT-ONLY — never feeds `healthScore`. Absent on pre-#1180 reports.
    */
   scanScope?: ScanScope;
+  /**
+   * JavaScript shipped (squirrelscan/repo#3397): the script bytes the audit
+   * measured, the framework runtime carrying them and the heaviest pages.
+   * REPORT-ONLY. Absent when no script was measured, and on older reports.
+   */
+  javascript?: JavascriptShipped;
   /**
    * Rule-result cache disclosure (#1990): how much of this audit's rules phase was
    * REPLAYED from a previous audit rather than evaluated now.

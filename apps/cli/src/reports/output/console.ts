@@ -8,6 +8,7 @@ import { reportFailureReasonCode } from "@squirrelscan/report";
 import {
   carriedTag,
   coverageLine,
+  javascriptShippedLine,
   scanScopeLine,
   seedRedirectFollowUp,
   seedRedirectLine,
@@ -189,6 +190,9 @@ export function generateConsoleReport(
   for (const line of notCheckedLines(report)) log(fmt.yellow(line));
   const partial = partialAuditLine(opts.ruleFilter, report.healthScore);
   if (partial) log(fmt.dim(partial));
+  // repo#3397: the script weight the audit measured. Report-only, not scored.
+  const javascript = javascriptShippedLine(report);
+  if (javascript) log(fmt.dim(javascript));
   log(divider());
 
   // Editor's summary — report-only Pro exec narrative, surfaced at the top.

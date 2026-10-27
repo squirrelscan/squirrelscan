@@ -13,6 +13,7 @@ import { getGroupName } from "../categories";
 import { groupIssuesByCategory, flattenIssuesBySeverity, reportPassedRules } from "../grouping";
 import { affectedPages } from "../affected-pages";
 import { techIconUrl } from "../technologies";
+import { javascriptShipped } from "../javascript-shipped";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import { scanScopeUnfetched, seedRedirect } from "../coverage";
@@ -217,6 +218,9 @@ interface SlimJsonReport {
   // Report-only — never part of the score. The entity-map document (#2091),
   // emitted verbatim so it still validates against the core-contracts schema.
   entities?: EntityMap;
+  // Report-only, never part of the score (repo#3397). The script weight the
+  // audit measured; absent when it measured none.
+  javascript?: NonNullable<AuditReport["javascript"]>;
   // Report-only — never part of the score. Present when cloud tech-detect ran.
   technologies?: {
     firstScan: boolean;
@@ -435,6 +439,7 @@ function buildSlimReport(
           })),
         }
       : {}),
+    ...(javascriptShipped(report) ? { javascript: javascriptShipped(report) } : {}),
     ...(report.technologies && report.technologies.items.length > 0
       ? {
           technologies: {

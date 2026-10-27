@@ -199,6 +199,7 @@ import type {
   EntityMap as _EM,
   GroupScore as _GS,
   HealthScore as _HS,
+  JavascriptShipped as _JS,
   RefusedFetch,
   ReportStructure as _RST,
   ReportTechnologies as _RT,
@@ -219,6 +220,7 @@ export type EditorSummary = _ES;
 export type EntityMap = _EM;
 export type DomainStats = _DST;
 export type CacheStats = _CST;
+export type JavascriptShipped = _JS;
 export type ComponentOccurrence = _CO;
 export type SiteResourceOccurrence = _SRO;
 
@@ -617,6 +619,8 @@ export interface AuditReport {
     /** In-scope URLs left queued, never fetched, when the crawl stopped. */
     unfetched?: number;
   };
+  /** JavaScript shipped (squirrelscan/repo#3397). Mirrors core-contracts `AuditReport`. */
+  javascript?: JavascriptShipped;
   /**
    * Rule-result cache disclosure (#1990): how many pages replayed a previous
    * audit's rule results instead of being evaluated now. The findings are
