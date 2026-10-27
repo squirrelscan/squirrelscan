@@ -113,9 +113,12 @@ describe("find_bin_dir picks a directory already on PATH", () => {
   });
 
   test("SQUIRREL_BIN_DIR still wins", async () => {
-    const r = await run('mkdir -p "$HOME/.mybin"; PATH="$HOME/.mybin:$PATH"; echo "DIR=$(find_bin_dir)"', {
-      env: { SQUIRREL_BIN_DIR: join(tmpdir(), `sq-bin-override-${process.pid}`) },
-    });
+    const r = await run(
+      'mkdir -p "$HOME/.mybin"; PATH="$HOME/.mybin:$PATH"; echo "DIR=$(find_bin_dir)"',
+      {
+        env: { SQUIRREL_BIN_DIR: join(tmpdir(), `sq-bin-override-${process.pid}`) },
+      },
+    );
     expect(r.stdout).toContain(`DIR=${join(tmpdir(), `sq-bin-override-${process.pid}`)}\n`);
     rmSync(join(tmpdir(), `sq-bin-override-${process.pid}`), { recursive: true, force: true });
   });
@@ -163,6 +166,27 @@ describe("setup_path writes the shell's startup file", () => {
       setup: (home) => writeFileSync(join(home, ".zshrc"), existing),
     });
     expect(read(join(r.home, ".zshrc"))).toBe(`${existing}\n${MARKED}`);
+  });
+
+  test("an alias or function that only mentions .local/bin does not count as configured", async () => {
+    const existing = "alias sq=~/.local/bin/squirrel\n";
+    const r = await run(add, {
+      env: { SHELL: "/bin/zsh" },
+      setup: (home) => writeFileSync(join(home, ".zshrc"), existing),
+    });
+    expect(read(join(r.home, ".zshrc"))).toBe(`${existing}\n${MARKED}`);
+  });
+
+  test("a fish_add_path line naming it counts as configured", async () => {
+    const existing = "fish_add_path $HOME/.local/bin\n";
+    const r = await run(add, {
+      env: { SHELL: "/usr/bin/fish" },
+      setup: (home) => {
+        mkdirSync(join(home, ".config/fish/conf.d"), { recursive: true });
+        writeFileSync(join(home, ".config/fish/conf.d/squirrel.fish"), existing);
+      },
+    });
+    expect(read(join(r.home, ".config/fish/conf.d/squirrel.fish"))).toBe(existing);
   });
 
   test("existing content is appended to, never rewritten", async () => {
@@ -254,7 +278,9 @@ describe("print_epilogue", () => {
     "Docs: https://docs.squirrelscan.com\n\n";
 
   test("squirrel on PATH: the epilogue is unchanged", async () => {
-    const r = await run('mkdir -p "$HOME/.mybin"; PATH="$HOME/.mybin:$PATH"; PATH_SETUP=on_path; print_epilogue 1.2.3 "$HOME/.mybin"');
+    const r = await run(
+      'mkdir -p "$HOME/.mybin"; PATH="$HOME/.mybin:$PATH"; PATH_SETUP=on_path; print_epilogue 1.2.3 "$HOME/.mybin"',
+    );
     expect(r.stdout).toBe(`\nv squirrel 1.2.3 installed\n${OLD_TAIL}`);
     // ...and with no bin dir argument at all, as before.
     const r2 = await run("print_epilogue 1.2.3");
@@ -292,9 +318,14 @@ describe("main wiring", () => {
   test("setup_path runs before self install and its outcome reaches the CLI", () => {
     expect(shellInstaller).toContain('setup_path "$bin_dir"');
     expect(shellInstaller.indexOf('setup_path "$bin_dir"')).toBeLessThan(
-      shellInstaller.indexOf("download_and_install \"$version\""),
+      shellInstaller.indexOf('download_and_install "$version"'),
     );
     expect(shellInstaller).toContain('SQUIRREL_PATH_SETUP="$PATH_SETUP"');
+  });
+
+  test("a successful GITHUB_PATH append suppresses the profile instructions", () => {
+    expect(shellInstaller).toContain("PATH_SETUP_GITHUB=1");
+    expect(shellInstaller).toContain('if [ "$PATH_SETUP_GITHUB" != 1 ]; then');
   });
 
   test("manual instructions print after the epilogue, only when no profile was written", () => {
@@ -308,7 +339,9 @@ describe("main wiring", () => {
 
 describe("install.ps1 PATH setup", () => {
   test("adds the dir to the User Path only, once, and to the session", () => {
-    expect(powershellInstaller).toContain('[Environment]::SetEnvironmentVariable("Path", $newPath, "User")');
+    expect(powershellInstaller).toContain(
+      '[Environment]::SetEnvironmentVariable("Path", $newPath, "User")',
+    );
     expect(powershellInstaller).not.toMatch(/SetEnvironmentVariable\([^)]*"Machine"\)/);
     expect(powershellInstaller).toContain("$env:Path = ");
     expect(powershellInstaller).toContain("SQUIRREL_NO_MODIFY_PATH");

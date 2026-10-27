@@ -1154,6 +1154,8 @@ ensure_musl_runtime() {
 
 # True for an existing, writable PATH entry under $HOME that no version or
 # package manager owns (nvm, cargo, bun, shims, ...).
+# To skip another manager's directory, add its $HOME-relative name to the first
+# `case` below.
 usable_home_path_dir() {
   local dir="$1" rel
   case "$dir" in
@@ -1550,6 +1552,9 @@ tildify() {
 #   on_path | added | opted_out | ci | failed
 PATH_SETUP=""
 PATH_SETUP_RC=""
+# 1 once the directory was appended to GITHUB_PATH: later CI steps find it, so
+# profile instructions would be noise in the log.
+PATH_SETUP_GITHUB=0
 
 # Make sure $1 will be on PATH. Appends one marked line to the shell's startup
 # file, never rewrites existing content, and does nothing when the directory is
@@ -1571,6 +1576,7 @@ setup_path() {
     if [ -n "${GITHUB_PATH:-}" ]; then
       if printf '%s\n' "$bin_dir" >> "$GITHUB_PATH" 2>/dev/null; then
         info "Added $bin_dir to GITHUB_PATH"
+        PATH_SETUP_GITHUB=1
       else
         PATH_SETUP="failed"
       fi
@@ -1596,10 +1602,12 @@ setup_path() {
     *)    line='export PATH="$HOME/.local/bin:$PATH"' ;;
   esac
 
-  # A profile that already puts the directory on PATH (any non-comment line
-  # naming it, or our own marker) needs no second line.
+  # A profile that already puts the directory on PATH (a non-comment PATH or
+  # fish_add_path line naming it, or our own marker) needs no second line. An
+  # alias or a function that merely mentions the directory does not count.
   if [ -f "$rc_file" ] && { grep -qF "$marker" "$rc_file" 2>/dev/null \
-      || grep -v '^[[:space:]]*#' "$rc_file" 2>/dev/null | grep -qF '.local/bin'; }; then
+      || grep -v '^[[:space:]]*#' "$rc_file" 2>/dev/null \
+        | grep -E 'PATH|fish_add_path' | grep -qF '.local/bin'; }; then
     PATH_SETUP="added"
     info "$(tildify "$bin_dir") is already on PATH in $(tildify "$rc_file")."
     return 0
@@ -1748,8 +1756,10 @@ main() {
   # Manual instructions when we did not (or could not) edit a profile
   case "$PATH_SETUP" in
     opted_out|ci|failed)
-      echo ""
-      print_path_instructions "$bin_dir"
+      if [ "$PATH_SETUP_GITHUB" != 1 ]; then
+        echo ""
+        print_path_instructions "$bin_dir"
+      fi
       ;;
   esac
 
