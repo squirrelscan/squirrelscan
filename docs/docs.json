@@ -829,6 +829,7 @@
               "dashboard/audit-settings",
               "dashboard/crawl-settings",
               "dashboard/emails",
+              "dashboard/notifications",
               "dashboard/support"
             ]
           }

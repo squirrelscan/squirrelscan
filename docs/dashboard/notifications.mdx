@@ -1,0 +1,50 @@
+---
+title: "Browser notifications"
+description: "Get a notification in your browser when an audit finishes, fails or a score drops, while a squirrelscan tab is open"
+icon: "bell"
+---
+
+The dashboard's bell lists everything that happened on your websites. Browser notifications bring the events you pick to your screen, so you hear about a failed scheduled audit or a score drop without watching the bell.
+
+They come from an open squirrelscan tab. There is no background service: with every dashboard tab closed, nothing is shown, and the bell and the [emails](/dashboard/emails) still have everything.
+
+## Switch them on
+
+1. Open **Settings** (your account, top right) and find **Notifications**.
+2. Switch on **Browser notifications**. Your browser asks whether squirrelscan may show notifications: allow it.
+3. Pick the events you want. Every event is on until you switch it off.
+
+A website's **Settings → Schedule** page has a shorter switch, **Notify me in this browser when a scheduled audit finishes or fails**. Switched on there first, it turns on those two events only.
+
+The browser only asks when you switch notifications on yourself. Your choices are saved with your account, so they follow you to every browser you sign in on. Each browser still has to allow them once: a browser that has not shows **Allow in this browser** under the switch.
+
+## The events
+
+| Event | When it is shown |
+|---|---|
+| A scheduled audit finished | A scheduled audit completed. It names the site, the cadence, the score and the error and warning counts |
+| A scheduled audit failed | A scheduled audit could not finish, with the reason |
+| A site's score dropped | A scheduled audit scored lower than the one before, and says by how much |
+| Credits are running low | Your organization's balance fell below its low-credit threshold |
+| An audit you started finished | An audit you ran from the dashboard, the CLI or an agent completed |
+| An audit you started failed | One of those audits could not finish |
+| New issues were found | An audit opened new issues on a site |
+| Broken links were found | An audit found broken links |
+| Recurring audits were paused | A site's schedule [paused itself](/cloud/scheduled-audits#when-a-schedule-pauses-itself) |
+| Someone commented on an issue | A comment was added to one of your organization's issues |
+| Support replied to a ticket | Support answered one of your tickets |
+| A fix finished | An agent fix run completed |
+
+Clicking a notification brings the dashboard tab to the front and opens what it is about: the audit run, the report, the issue, the schedule or billing.
+
+With two dashboard tabs open, each event is shown once. Opening the dashboard does not replay events that happened while it was closed; those are in the bell.
+
+## If notifications are blocked
+
+If your browser was told not to allow notifications for squirrelscan, the switch says so and cannot be turned on. To fix it, open the browser's site settings for the dashboard (the icon at the left of the address bar), set **Notifications** to **Allow**, and switch notifications on again.
+
+Some browsers do not support notifications at all, and the switch says that too.
+
+## Install the dashboard as an app
+
+Chromium browsers (Chrome, Edge, Brave, Arc) can install the dashboard as an app with its own window: use **Install squirrelscan** in the address bar or the browser menu. It is the same dashboard, so notifications still need the app window open.
