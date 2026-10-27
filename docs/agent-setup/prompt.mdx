@@ -12,20 +12,22 @@ are an agent, the rest of this page is your task.
 ## Task
 
 Set up squirrelscan for this project so you can audit the website and fix what
-you find. Work through the steps in order. Report what you did at the end.
+you find. Work through the steps in order. The install is not done until the
+first audit has run: do not stop at "installed". Report what you did at the end,
+including the first audit's score and top issues.
 
 ## 1. Install the CLI
 
 squirrelscan ships as a single binary with no runtime dependency.
 
 ```bash
-curl -fsSL --connect-timeout 10 --max-time 120 https://install.squirrelscan.com | bash
+curl -fsSL --connect-timeout 10 --max-time 120 "https://install.squirrelscan.com/install.sh?source=agent" | bash
 ```
 
 On Windows, use PowerShell:
 
 ```powershell
-iwr -useb https://install.squirrelscan.com/install.ps1 | iex
+iwr -useb "https://install.squirrelscan.com/install.ps1?source=agent" | iex
 ```
 
 Verify the install:
@@ -41,7 +43,7 @@ expects it there.
 On Alpine or another musl Linux, the binary needs `libstdc++`. The installer
 adds it when run as root; otherwise `apk add libstdc++` first.
 
-## 2. Run a local audit
+## 2. Run the first audit
 
 Signed out, local audits need no account and cost no credits. Run one now against
 the project's site so there is something concrete to work from:
@@ -56,6 +58,10 @@ user which URL to audit, or point it at the local dev server.
 
 `--format json` gives you structured output. Each issue carries a rule id, a
 severity, the affected URL, and a description of the fix.
+
+Show the user the result now: the score and the top issues. Do this before
+connecting MCP. If a later step fails, the user still has seen what squirrelscan
+found.
 
 ## 3. Connect over MCP
 
