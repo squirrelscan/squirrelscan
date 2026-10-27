@@ -62,6 +62,8 @@ The roles apply wherever you are signed in: the dashboard, the CLI (`squirrel au
 
 [API keys](/developers/authentication#scopes) are the org's, not a member's: what a key can do is set by its scopes, whoever created it. Only owners and admins create and revoke them. A key keeps working when the member who created it is demoted or leaves the organization, so when you demote or remove someone who had a key's token, revoke that key and create a new one (`squirrel keys revoke`, or **Settings → API keys**). An MCP client you sign in to through OAuth gets only the scopes your role holds, and when your role changes to one with less access, your MCP sign-ins end and the client asks you to sign in again.
 
+Recurring audit [schedules](/cloud/scheduled-audits#who-a-schedule-belongs-to) are the org's too. A schedule keeps running, and spending the org's credits, when the member who set it up is demoted or leaves the organization. To stop one, an owner, admin or editor turns it off on the website's **Settings → Schedule** page, or selects websites on the list and picks **Schedule → Off**.
+
 Admins and owners invite members from **Settings → Team**.
 
 ## Invites
