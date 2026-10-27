@@ -1,11 +1,12 @@
 import { TELEMETRY_TIMEOUT_MS } from "@/constants";
 import { cliApi } from "@/lib/api-client";
+import { DEFAULT_API_URL, getApiUrl } from "@/self/api";
 
 import type { UserSettings } from "./types";
 
 import { version } from "../../package.json";
 import { getOrCreateInstallId } from "./install-id";
-import { updateSettings } from "./settings";
+import { loadUserSettings, updateSettings } from "./settings";
 
 export type TelemetryEvent =
   | "audit"
@@ -20,7 +21,16 @@ export type TelemetryEvent =
   | "update_check_error"
   | "update_notified"
   | "update_prompt_accepted"
-  | "update_prompt_declined";
+  | "update_prompt_declined"
+  // First-run funnel: which step ran, whether login and the first audit worked.
+  | "setup_started"
+  | "setup_step"
+  | "setup_completed"
+  | "setup_audit_accepted"
+  | "setup_audit_declined"
+  | "login_completed"
+  | "first_audit_ok"
+  | "first_audit_failed";
 
 interface TelemetryPayload {
   event: TelemetryEvent;
@@ -44,9 +54,9 @@ export function showTelemetryNotice(settings: UserSettings): void {
 
   console.error(
     [
-      "squirrelscan collects minimal pseudonymous telemetry: event name, CLI version,",
-      "a random install ID, and bounded error categories. It never sends URLs,",
-      "credentials, report contents, or raw error messages.",
+      "squirrelscan collects minimal telemetry: event name, CLI version, a random",
+      "install ID, your user ID once you sign in, and bounded error categories.",
+      "It never sends URLs, credentials, report contents, or raw error messages.",
       "Disable it with `squirrel self settings set telemetry false` or `NO_TELEMETRY=1`.",
       "",
     ].join("\n")
@@ -65,6 +75,74 @@ export function trackTelemetryEvent(
     version,
     ...(detail?.error_type && { error_type: detail.error_type.slice(0, 128) }),
   });
+}
+
+// Bounded detail for first-run events: a lowercase slug, never free text, so a
+// URL, host, path or email cannot ride along even by mistake.
+const DETAIL_PATTERN = /^[a-z0-9_:-]{1,64}$/;
+
+/**
+ * Track a first-run funnel event. `detail` is a fixed slug (step:outcome or a
+ * failure class); anything that is not one is dropped, not truncated.
+ */
+export function trackFirstRunEvent(
+  event: TelemetryEvent,
+  settings?: UserSettings,
+  detail?: string
+): void {
+  trackTelemetryEvent(
+    event,
+    settings,
+    detail && DETAIL_PATTERN.test(detail) ? { error_type: detail } : undefined
+  );
+}
+
+/**
+ * Report the outcome of the install's first audit, once. The marker is written
+ * whether or not telemetry is on, so turning it on later never mislabels a
+ * later audit as the first. Offline runs are not first audits (they send no
+ * telemetry at all), so callers skip them.
+ */
+let firstAuditReported = false;
+
+export function trackFirstAudit(
+  outcome: { ok: true } | { ok: false; failureClass: string },
+  settings?: UserSettings
+): void {
+  // The settings snapshot can predate this run's own report, so a process
+  // guard keeps a late throw after a reported result from sending twice.
+  if (firstAuditReported || settings?.first_audit_reported_at) return;
+  firstAuditReported = true;
+  const updated = updateSettings({
+    first_audit_reported_at: new Date().toISOString(),
+  });
+  if (!updated.ok) return;
+  if (outcome.ok) trackFirstRunEvent("first_audit_ok", settings);
+  else trackFirstRunEvent("first_audit_failed", settings, outcome.failureClass);
+}
+
+/** Test hook: forget that this process already reported a first audit. */
+export function resetFirstAuditReportedForTests(): void {
+  firstAuditReported = false;
+}
+
+/**
+ * The login session's token (`sqcli_...`), when signed in and unexpired. The
+ * API turns it into a user ID server-side. An org API key (env or otherwise)
+ * is never sent to telemetry.
+ */
+function loginSessionToken(): string | null {
+  // Only the production API ever receives the session on this always-on path:
+  // a SQUIRREL_API_SERVER override (dev, a stray env var) gets anonymous events.
+  if (getApiUrl() !== DEFAULT_API_URL) return null;
+  const loaded = loadUserSettings();
+  if (!loaded.ok || loaded.data.telemetry === false) return null;
+  const auth = loaded.data.auth;
+  if (!auth?.token || !auth.token.startsWith("sqcli_")) return null;
+  if (auth.expiresAt && new Date(auth.expiresAt).getTime() < Date.now()) {
+    return null;
+  }
+  return auth.token;
 }
 
 export function trackError(
@@ -90,13 +168,19 @@ async function sendTelemetryEvent(payload: TelemetryPayload): Promise<void> {
   // still prevents install-ID reads or creation.
   if (isTelemetryDisabled()) return;
 
+  // The caller may not have had settings (unreadable at start): honour the
+  // opt-out from disk too before touching anything.
+  const loaded = loadUserSettings();
+  if (loaded.ok && loaded.data.telemetry === false) return;
+
   const installId = getOrCreateInstallId();
   if (installId) payload.install_id = installId;
 
-  // Telemetry is deliberately never associated with an API credential.
+  // Signed in, the login session token attributes the event to the user (the
+  // API resolves it to a user ID). Org API keys are never sent here.
   await cliApi.send("/v1/traces", {
     method: "POST",
-    auth: "none",
+    token: loginSessionToken(),
     timeoutMs: TELEMETRY_TIMEOUT_MS,
     body: payload,
   });

@@ -4,6 +4,7 @@ import {
   detectCi,
   detectInstallSource,
   isUpdateDisabledByEnv,
+  readInstallSourceEnv,
   updateSuppressedReason,
 } from "../../src/self/install-meta";
 
@@ -84,11 +85,28 @@ describe("detectInstallSource", () => {
     expect(detectInstallSource()).toBe("homebrew");
   });
 
-  test("trims and truncates override to 64 chars", () => {
-    process.env.SQUIRREL_INSTALL_SOURCE = `  ${"x".repeat(100)}  `;
-    const s = detectInstallSource();
-    expect(s.length).toBe(64);
-    expect(s).toBe("x".repeat(64));
+  test("trims and lowercases a valid override", () => {
+    process.env.SQUIRREL_INSTALL_SOURCE = "  Agent-Prompt  ";
+    expect(detectInstallSource()).toBe("agent-prompt");
+  });
+
+  test("drops an invalid override (too long, dots, spaces, URLs) and infers", () => {
+    for (const bad of [
+      "x".repeat(33),
+      "install.sh",
+      "a b",
+      "https://example.com",
+      "under_score",
+    ]) {
+      process.env.SQUIRREL_INSTALL_SOURCE = bad;
+      expect(readInstallSourceEnv()).toBeNull();
+      expect(KNOWN_SOURCES).toContain(detectInstallSource());
+    }
+  });
+
+  test("accepts a 32-char slug", () => {
+    process.env.SQUIRREL_INSTALL_SOURCE = "x".repeat(32);
+    expect(readInstallSourceEnv()).toBe("x".repeat(32));
   });
 
   test("ignores blank override and falls back to inference", () => {

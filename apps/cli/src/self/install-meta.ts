@@ -3,13 +3,31 @@ import { sep } from "node:path";
 
 import { isManagedInstall } from "./paths";
 
-// Max length for a stamped source string (keeps the analytics column bounded).
-const MAX_SOURCE_LEN = 64;
+// A stamped source is a short slug: lowercase letters, digits and hyphens.
+const SOURCE_PATTERN = /^[a-z0-9-]{1,32}$/;
+
+/**
+ * The `SQUIRREL_INSTALL_SOURCE` env value when it is a valid slug, else null
+ * (an invalid value is dropped, never truncated or guessed at).
+ */
+export function readInstallSourceEnv(): string | null {
+  return normalizeInstallSource(process.env.SQUIRREL_INSTALL_SOURCE);
+}
+
+/** A trimmed, lowercased slug, or null when `value` is not a valid one. */
+export function normalizeInstallSource(
+  value: string | null | undefined
+): string | null {
+  const slug = value?.trim().toLowerCase();
+  return slug && SOURCE_PATTERN.test(slug) ? slug : null;
+}
 
 /**
  * Best-effort install channel for analytics. Precedence:
  *   1. `SQUIRREL_INSTALL_SOURCE` env — lets installers / CI stamp a precise
- *      value (e.g. "install.sh", "homebrew", "ci").
+ *      value (e.g. "homebrew", "ci"; a slug, see `readInstallSourceEnv`).
+ *      `self install` also persists it, because registration runs on a later
+ *      command whose environment no longer carries it.
  *   2. inference from the running binary's path.
  *
  * Inference: a binary under `node_modules` is the npm-fallback build ("npm");
@@ -21,8 +39,8 @@ const MAX_SOURCE_LEN = 64;
  * question "can this install silently self-update".
  */
 export function detectInstallSource(): string {
-  const override = process.env.SQUIRREL_INSTALL_SOURCE?.trim();
-  if (override) return override.slice(0, MAX_SOURCE_LEN);
+  const override = readInstallSourceEnv();
+  if (override) return override;
 
   const exe = process.execPath;
   if (exe.includes(`${sep}node_modules${sep}`)) return "npm";

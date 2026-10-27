@@ -4,7 +4,11 @@ import type { UserSettings } from "./types";
 
 import { version } from "../../package.json";
 import { getOrCreateInstallId } from "./install-id";
-import { detectCi, detectInstallSource } from "./install-meta";
+import {
+  detectCi,
+  detectInstallSource,
+  normalizeInstallSource,
+} from "./install-meta";
 import { detectPlatformArch, isManagedInstall } from "./paths";
 import { loadUserSettings, updateSettings } from "./settings";
 import { isTelemetryDisabled } from "./telemetry";
@@ -42,7 +46,9 @@ async function doRegisterInstall(): Promise<void> {
     id,
     platform: detectPlatformArch(),
     version,
-    source: detectInstallSource(),
+    // A hand-edited value is re-validated, never trusted.
+    source:
+      normalizeInstallSource(settings.install_source) ?? detectInstallSource(),
     managed: isManagedInstall(),
     ci: detectCi(),
     auto_update: settings.auto_update,

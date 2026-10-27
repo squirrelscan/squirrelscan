@@ -1361,7 +1361,7 @@ download_and_install() {
   # (self/install-meta.ts honors SQUIRREL_INSTALL_SOURCE; without it the
   # managed-dir binary self-reports as the ambiguous "binary"). A caller's own
   # value wins so wrappers (CI, package managers) can name themselves.
-  SQUIRREL_INSTALL_SOURCE="${SQUIRREL_INSTALL_SOURCE:-install.sh}" \
+  SQUIRREL_INSTALL_SOURCE="${SQUIRREL_INSTALL_SOURCE:-install-sh}" \
     "$tmpdir/squirrel" self install --bin-dir "$bin_dir" 2>&1 | tee "$self_install_log"
   local rc=${PIPESTATUS[0]}
   set -e

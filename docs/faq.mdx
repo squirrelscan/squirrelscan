@@ -20,7 +20,7 @@ Signed out, a local audit runs the deterministic rules on your machine and needs
 
 ## What does telemetry send?
 
-Telemetry is on by default. The CLI sends the event name, the CLI version, a random install ID and a bounded error category. It does not send credentials, URLs, report contents or raw error messages, and telemetry requests are never authenticated. The CLI shows this once before its first telemetry-enabled command ([`self` settings](/cli/self#telemetry)).
+Telemetry is on by default. The CLI sends the event name, the CLI version, a random install ID and a bounded error category. After `squirrel auth login` it also attaches your user ID, so events tie to your account. It does not send API keys, URLs, hosts, paths, email addresses, report contents or raw error messages, and it sends nothing when telemetry is off. The CLI shows this once before its first telemetry-enabled command ([`self` settings](/cli/self#telemetry)).
 
 To turn it off:
 

@@ -23,6 +23,7 @@ import {
   minimumAuditCredits,
 } from "@squirrelscan/core-contracts";
 import { AUDIT_LEVEL_PRESETS } from "@squirrelscan/core-contracts/audit-levels";
+import { isAuditFailureReasonCode } from "@squirrelscan/core-contracts/failure-reason";
 import { fullScanHint } from "@squirrelscan/report";
 import { isValidHeaderHost } from "@squirrelscan/utils/headers";
 import { defineCommand } from "citty";
@@ -137,7 +138,11 @@ import {
   loadSettings,
   updateSettings,
 } from "@/self/settings";
-import { trackTelemetryEvent, trackError } from "@/self/telemetry";
+import {
+  trackTelemetryEvent,
+  trackError,
+  trackFirstAudit,
+} from "@/self/telemetry";
 import { safeExit } from "@/self/updater";
 import { CWD_UNAVAILABLE, cwdOr } from "@/utils/cwd";
 import { configureLogger, logger, setLogInterceptor } from "@/utils/logger";
@@ -3115,6 +3120,24 @@ export const audit = defineCommand({
         process.exitCode = 1;
       }
 
+      // First-run funnel: the install's first audit reports once, as success
+      // or a bounded failure class (never a URL, host or message).
+      if (!args.offline) {
+        const failed =
+          report.status === "failed" || report.status === "blocked";
+        trackFirstAudit(
+          failed
+            ? {
+                ok: false,
+                failureClass: isAuditFailureReasonCode(report.statusReasonCode)
+                  ? report.statusReasonCode
+                  : "unknown",
+              }
+            : { ok: true },
+          effectiveSettings
+        );
+      }
+
       // CI/agent gating: evaluate --fail-on against the finished report and
       // set a non-zero exit code (2 = gate tripped) so CI can fail the build.
       // Report + footer already printed above so the gate never hides output.
@@ -3139,6 +3162,10 @@ export const audit = defineCommand({
       }).catch(() => {});
       if (!args.offline) {
         trackError(e as Error, "audit", effectiveSettings);
+        trackFirstAudit(
+          { ok: false, failureClass: "exception" },
+          effectiveSettings
+        );
       }
       throw e;
     } finally {

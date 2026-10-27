@@ -14,6 +14,7 @@ import { cliApi } from "@/lib/api-client";
 import { openBrowser } from "@/lib/browser";
 import { DEFAULT_API_URL, getApiUrl } from "@/self/api";
 import { loadUserSettings, updateSettings } from "@/self/settings";
+import { trackFirstRunEvent } from "@/self/telemetry";
 
 /**
  * When sign-in targets a local/dev API (which may simply not be running),
@@ -535,6 +536,10 @@ export async function runAuthLogin(
           );
           return;
         }
+
+        // The session is saved, so this event carries the user (and sends
+        // nothing at all when telemetry is off).
+        trackFirstRunEvent("login_completed", saveResult.data);
 
         resolve(
           ok({

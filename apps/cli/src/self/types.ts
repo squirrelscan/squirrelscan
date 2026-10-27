@@ -136,6 +136,11 @@ export const UserSettingsSchema = z.object({
   // Install tracking
   id: z.string().nullable().optional(),
   registered: z.boolean().optional(),
+  // Install channel stamped by `self install` from SQUIRREL_INSTALL_SOURCE
+  // (validated slug), so the registration on the next run reports it.
+  install_source: z.string().nullable().optional(),
+  // Set once the install's first audit has been reported to telemetry.
+  first_audit_reported_at: z.string().nullable().optional(),
   telemetry_notice_shown: z.boolean().nullable().optional(),
   user_feedback_email: z.string().email().nullable().optional(),
 

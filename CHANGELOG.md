@@ -30,6 +30,11 @@ How it works:
 ### Fixed
 
 - **A page of thousands of comment-class containers can no longer stall the classifier.** Each container with a heading under it was checked against every `<h1>` on the page, so 40,000 of them cost 8 seconds of CPU. The check now marks the ancestors of each heading once and costs the nodes it touches.
+- **First-run telemetry.** `squirrel setup` reports each step's outcome (`step:outcome`, no free text), `squirrel auth login` reports completion, and the first audit on an install reports success or a failure class once. After login, telemetry carries your login session so the API can attribute events to your user ID; nothing is sent when telemetry is off, and no URL, host, path or email is ever included. Listed on the [telemetry](docs/cli/self.mdx) docs.
+
+### Fixed
+
+- **The install channel now reaches install registration.** `squirrel self install` skips startup extras, so `SQUIRREL_INSTALL_SOURCE` was gone by the first command that registers the install and every install reported `binary`. `self install` now persists the validated value (`^[a-z0-9-]{1,32}$`, anything else is dropped) and registration sends it. install.sh stamps `install-sh` when no source is set.
 - **Installer failure reports name the host when curl cannot connect.** A curl failure under `set -e` (exit 6, 7, 28, 35, 52 or 56) reported only its code, so 82 identical reports could not be told apart. The anonymous report now carries `curl exit N reaching <host>`: the host only, never a path, query or credentials.
 - **The editor summary digest of a capped published report counts every issue.** A rule with more than 25 issue classes lost the rest from its occurrence count, so a summary built from the stored report could under-count and re-rank issues against the one built from the full report. The digest now takes the true counts from the report's check tallies.
 

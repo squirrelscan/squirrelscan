@@ -18,6 +18,7 @@ import {
 import { resolveCredential } from "@/self/credentials";
 import { getUnmanagedUpdateHint, isManagedInstall } from "@/self/paths";
 import { loadUserSettings, updateSettings } from "@/self/settings";
+import { type TelemetryEvent, trackFirstRunEvent } from "@/self/telemetry";
 
 import { version } from "../../../package.json";
 import { type Theme, createTheme } from "../theme";
@@ -125,6 +126,18 @@ export async function runSetup(opts: {
     `\n${t.header({ version: `v${version}`, subtitle: "Let's get you set up. It takes about a minute." })}`
   );
 
+  // First-run telemetry: which steps ran, never what was typed. Skipped on a
+  // dry run and when the settings can't be read (they may hold the opt-out);
+  // trackFirstRunEvent itself sends nothing when telemetry is off.
+  const settings = loadUserSettings();
+  const track = (event: TelemetryEvent, detail?: string) => {
+    if (!opts.dryRun && settings.ok)
+      trackFirstRunEvent(event, settings.data, detail);
+  };
+  const trackStep = (name: string, outcome: string) =>
+    track("setup_step", `${name}:${outcome}`);
+  track("setup_started");
+
   // 1. Sign in. Optional: local audits never need an account.
   step(t, 1, "Sign in", "optional");
   say(
@@ -132,14 +145,18 @@ export async function runSetup(opts: {
       "Unlocks cloud audits, publishing and sharing. Signed out, local audits need no account and cost nothing."
     )
   );
-  const settings = loadUserSettings();
+  const skipSignIn = () => {
+    skip(`Skipped. Sign in any time with ${t.command("squirrel auth login")}.`);
+    trackStep("signin", "skipped");
+  };
   const signedInAs = resolveCredential()
     ? ((settings.ok ? settings.data.auth?.email : undefined) ?? "your API key")
     : undefined;
   if (signedInAs) {
     done(`Signed in as ${t.bold(signedInAs)}`);
+    trackStep("signin", "already");
   } else if (!ask.interactive) {
-    skip(`Skipped. Sign in any time with ${t.command("squirrel auth login")}.`);
+    skipSignIn();
   } else if (await ask.confirm("Sign in now?")) {
     if (opts.dryRun) {
       would("open your browser to sign in");
@@ -151,9 +168,10 @@ export async function runSetup(opts: {
         say(
           `${t.warn(t.sym.warn)} Sign-in didn't finish: ${result.error.message}. Try again with ${t.command("squirrel auth login")}.`
         );
+      trackStep("signin", result.ok ? "done" : "failed");
     }
   } else {
-    skip(`Skipped. Sign in any time with ${t.command("squirrel auth login")}.`);
+    skipSignIn();
   }
 
   // 2. Agent skills. Default yes: this is what makes squirrel useful to an agent.
@@ -166,6 +184,7 @@ export async function runSetup(opts: {
   const already = installedSkillRoots();
   if (already.length > 0) {
     done(`Installed in ${already.map((d) => tildify(d)).join(" and ")}`);
+    trackStep("skills", "already");
   } else if (await ask.confirm("Install the squirrelscan skills?")) {
     if (opts.dryRun) {
       would(
@@ -182,7 +201,9 @@ export async function runSetup(opts: {
             ? ` in ${result.targets.map((d) => tildify(d)).join(" and ")}`
             : "";
         done(`Installed ${SKILL_NAMES.join(" and ")}${where}`);
+        trackStep("skills", "done");
       } else {
+        trackStep("skills", "failed");
         say(
           `${t.warn(t.sym.warn)} Couldn't install the skills (${result.error}). Try ${t.command("squirrel skills install")}.`
         );
@@ -192,16 +213,19 @@ export async function runSetup(opts: {
     skip(
       `Skipped. Add them later with ${t.command("squirrel skills install")}.`
     );
+    trackStep("skills", "skipped");
   }
 
   // 3. Updates. Only a managed install (the installer's) can update itself.
   step(t, 3, "Updates");
   const autoUpdate = settings.ok ? settings.data.auto_update : undefined;
   if (!isManagedInstall()) {
+    trackStep("updates", "unmanaged");
     skip(
       `This copy of squirrel was not installed by the squirrelscan installer, so it can't update itself. To update: ${getUnmanagedUpdateHint()}.`
     );
   } else if (autoUpdate === true) {
+    trackStep("updates", "already");
     if (settings.ok && settings.data.skills_auto_update === false) {
       done("squirrel updates itself automatically");
       skip(
@@ -213,6 +237,7 @@ export async function runSetup(opts: {
       `${t.warn(t.sym.warn)} Couldn't read your settings. Check them with ${t.command("squirrel self doctor")}.`
     );
   } else if (!ask.interactive) {
+    trackStep("updates", "skipped");
     // auto_update defaults to true, so false is always the user's choice:
     // never flip it back without an explicit yes at a prompt.
     skip(
@@ -222,16 +247,21 @@ export async function runSetup(opts: {
     await ask.confirm("Keep squirrel and its skills up to date automatically?")
   ) {
     if (opts.dryRun) would("turn on auto-update");
-    else if (updateSettings({ auto_update: true }).ok)
+    else if (updateSettings({ auto_update: true }).ok) {
       done("Auto-update is on");
+      trackStep("updates", "enabled");
+    }
   } else {
+    trackStep("updates", "skipped");
     skip(
       `Auto-update stays off. Update with ${t.command("squirrel self update")}.`
     );
   }
 
-  if (!opts.dryRun)
+  if (!opts.dryRun) {
     updateSettings({ setup_completed_at: new Date().toISOString() });
+    track("setup_completed");
+  }
 
   console.log(
     `\n  ${t.ok(t.sym.ok)} ${t.bold("You're ready.")} Run your first audit:\n`
