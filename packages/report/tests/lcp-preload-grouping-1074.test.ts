@@ -23,7 +23,7 @@ describe("perf/lcp-hints grouped evidence (#1074)", () => {
         {
           name: "lcp-preload",
           status: "warn",
-          message: "1 likely-LCP image loaded without preload",
+          message: "Likely-LCP image loaded without preload",
           pageUrl: "https://example.com/a",
           details: {
             page: "https://example.com/a",
@@ -35,7 +35,7 @@ describe("perf/lcp-hints grouped evidence (#1074)", () => {
         {
           name: "lcp-preload",
           status: "warn",
-          message: "1 likely-LCP image loaded without preload",
+          message: "Likely-LCP image loaded without preload",
           pageUrl: "https://example.com/b",
           details: {
             page: "https://example.com/b",

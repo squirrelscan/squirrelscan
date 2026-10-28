@@ -45,7 +45,7 @@ export const lcpHintsRule: Rule = {
         name: "lcp-preload",
         status: "warn",
         message: "Likely-LCP image loaded without preload",
-        value: n,
+        value: n, // always 1: one page, one LCP image
         details: {
           page: ctx.page.url,
           candidates: hints.largeImagesWithoutPreload.map((src) => ({

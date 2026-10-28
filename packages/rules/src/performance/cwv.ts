@@ -332,7 +332,8 @@ function analyzeCWVHints(
   const preloadKeys = collectImagePreloadKeys(doc, pageUrl);
   const candidates = findLcpCandidates(doc, MAX_LCP_CANDIDATES);
   const first = candidates[0];
-  if (first && !candidates.some((img) => isImagePreloaded(img, preloadKeys, pageUrl))) {
+  const anyPreloaded = candidates.some((img) => isImagePreloaded(img, preloadKeys, pageUrl));
+  if (first && !anyPreloaded) {
     // Candidates always have a src (findLcpCandidates skips images without one).
     hints.largeImagesWithoutPreload.push(first.getAttribute("src") as string);
   }
