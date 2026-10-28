@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- Technology detection recognises Lovable, Base44, Replit and v0 apps, and the Supabase, Clerk and Firebase client SDKs. Each reads only what a stored page holds: generator and author meta tags, platform script URLs, app hosts such as `*.base44.app` or `*.replit.app`, inline client config, and storage image URLs. A page that only mentions a product, or shows its code in a sample, does not match. The existing Firebase Hosting signature is unchanged. See [Technology detection](https://docs.squirrelscan.com/cloud/technologies). (#ISSUE)
+
 ### Fixed
 
 - `squirrel audit --offline` now treats a non-localhost start URL that redirects off-site as reachable, so the crawl can record the redirect instead of stopping at the preflight probe with `refused: host outside the allowed set`. This also covers link-shortener and sibling-host redirects. (#1224)
