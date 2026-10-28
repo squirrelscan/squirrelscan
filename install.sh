@@ -1571,10 +1571,12 @@ setup_path() {
   # A profile that already puts the directory on PATH (a non-comment `PATH=` or
   # fish_add_path line naming it, or our own marker) needs no second line. An
   # alias or a function that merely mentions the directory does not count.
+  # Only the one profile this shell reads is checked: a line in another login
+  # file leaves a harmless second line here.
   if [ -f "$rc_file" ] && { grep -qF "$marker" "$rc_file" 2>/dev/null \
       || grep -v '^[[:space:]]*#' "$rc_file" 2>/dev/null \
         | grep -E '^[[:space:]]*((export|typeset)[[:space:]]+)?PATH=|^[[:space:]]*fish_add_path' \
-        | grep -qF '.local/bin'; }; then
+        | grep -qE '\.local/bin([^A-Za-z0-9_./-]|$)'; }; then
     # Nothing written: it is on PATH for new shells already, so not "added".
     PATH_SETUP="on_path"
     info "$(tildify "$bin_dir") is already on PATH in $(tildify "$rc_file")."

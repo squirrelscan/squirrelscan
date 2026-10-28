@@ -158,6 +158,15 @@ describe("setup_path writes the shell's startup file", () => {
     expect(read(join(r.home, ".zshrc"))).toBe(`${existing}\n${MARKED}`);
   });
 
+  test("PATH=$PATH:~/.local/bin/other is not the directory itself", async () => {
+    const existing = "PATH=$PATH:~/.local/bin/other\n";
+    const r = await run(add, {
+      env: { SHELL: "/bin/zsh" },
+      setup: (home) => writeFileSync(join(home, ".zshrc"), existing),
+    });
+    expect(read(join(r.home, ".zshrc"))).toBe(`${existing}\n${MARKED}`);
+  });
+
   test("a fish_add_path line naming it counts as configured", async () => {
     const existing = "fish_add_path $HOME/.local/bin\n";
     const r = await run(add, {

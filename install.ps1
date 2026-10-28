@@ -663,6 +663,7 @@ function Set-UserPath {
             # %VARS% entries expanding. Write REG_EXPAND_SZ, then set and clear a
             # throwaway variable so Windows broadcasts WM_SETTINGCHANGE and new
             # terminals see the Path.
+            # A null $key throws below and the catch reports "failed".
             $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment", $true)
             try {
                 $key.SetValue("Path", $newPath, [Microsoft.Win32.RegistryValueKind]::ExpandString)
