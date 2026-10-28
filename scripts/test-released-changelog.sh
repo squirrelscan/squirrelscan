@@ -86,6 +86,19 @@ fi
 
 restore_fixture
 awk '
+  $0 == "## v1.0.0 (2026-01-02)" { drop = 1; next }
+  $0 == "## v0.9.0 (2026-01-01)" { drop = 0 }
+  !drop { print }
+' "$repo/CHANGELOG.md" > "$repo/CHANGELOG.next"
+mv "$repo/CHANGELOG.next" "$repo/CHANGELOG.md"
+expect_fail "deleting a released section fails"
+if ! grep -qF "released CHANGELOG section v1.0.0" <<<"$output"; then
+  echo "FAIL: deleted-section failure names the release"
+  fails=1
+fi
+
+restore_fixture
+awk '
   $0 == "## [Unreleased]" { print "## v1.1.0 (2026-01-03)"; next }
   { print }
 ' "$repo/CHANGELOG.md" > "$repo/CHANGELOG.next"

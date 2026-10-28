@@ -79,6 +79,8 @@ jobs:
           shape=$'^code=(true|false)\nengine=(true|false)\ninstaller=(true|false)\nrelease=(true|false)\nbuild=(true|false)$'
           [[ "$result" =~ $shape ]] || run_everything "unexpected classifier output"
           echo "$result" | tee -a "$GITHUB_OUTPUT"
+      # Keep the released-changelog guard in this always-running job so a
+      # changelog-only pull request cannot skip it through path classification.
       - name: Fetch release tags
         if: ${{ github.event_name == 'pull_request' }}
         run: git fetch --force --quiet --depth=1 origin 'refs/tags/v*:refs/tags/v*'
