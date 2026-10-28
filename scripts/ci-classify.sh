@@ -56,7 +56,8 @@ while IFS= read -r path || [ -n "$path" ]; do
     # through to "everything": only release.ts and release.yml read it, at
     # release time, and test-changelog-extraction.sh uses its own fixture.
     CHANGELOG.md | scripts/release.ts | scripts/release-version.test.ts | \
-      scripts/extract-changelog.awk | scripts/test-changelog-extraction.sh)
+      scripts/extract-changelog.awk | scripts/test-changelog-extraction.sh | \
+      scripts/check-released-changelog.sh | scripts/test-released-changelog.sh)
       code=true release=true ;;
     # The golden suite lives here, fixtures included: any change runs it.
     packages/audit-engine/*)

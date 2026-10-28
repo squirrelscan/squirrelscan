@@ -79,6 +79,14 @@ jobs:
           shape=$'^code=(true|false)\nengine=(true|false)\ninstaller=(true|false)\nrelease=(true|false)\nbuild=(true|false)$'
           [[ "$result" =~ $shape ]] || run_everything "unexpected classifier output"
           echo "$result" | tee -a "$GITHUB_OUTPUT"
+      - name: Fetch release tags
+        if: ${{ github.event_name == 'pull_request' }}
+        run: git fetch --force --quiet --depth=1 origin 'refs/tags/v*:refs/tags/v*'
+      - name: Check released changelog sections
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: bash scripts/check-released-changelog.sh "$BASE"
 
   quality:
     name: Format, lint, and typecheck

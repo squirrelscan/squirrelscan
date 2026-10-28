@@ -12,7 +12,7 @@
     "typecheck": "bun run --sequential --filter '*' --if-present typecheck",
     "test": "cd apps/cli && bun test",
     "test:engine": "cd packages/audit-engine && bun run test:golden",
-    "test:release": "bash scripts/test-changelog-extraction.sh && bun test scripts/release-version.test.ts",
+    "test:release": "bash scripts/test-changelog-extraction.sh && bash scripts/test-released-changelog.sh && bun test scripts/release-version.test.ts",
     "docs:check": "cd docs && bun run check",
     "docs:build": "cd docs && bun run build",
     "audit:dependencies": "bun audit --ignore=GHSA-gcqx-w48m-w2h4 --ignore=GHSA-wx4j-mvgx-mqwp --ignore=GHSA-9wv6-86v2-598j --ignore=GHSA-mh99-v99m-4gvg --ignore=GHSA-mwp4-54f8-5fhr --ignore=GHSA-4xrf-jv44-h6hh --ignore=GHSA-22jq-vg5j-6vgg --ignore=GHSA-rgw5-rvv9-x895 --ignore=GHSA-fxqj-rqcc-2cmp --ignore=GHSA-2v37-7h3g-55p8 --ignore=GHSA-ch52-4w7c-c8xp --ignore=GHSA-hp3w-g68c-fv3c --ignore=GHSA-238p-pmpm-9mq7 --ignore=GHSA-98hj-9722-w3j8 --ignore=GHSA-mpr7-6m5w-76rw",
