@@ -34,7 +34,7 @@ What the rules do is flag the markup that causes bad values. [perf/lcp-hints](/r
 
 | Rule | What it flags | Severity |
 |---|---|---|
-| [LCP image not preloaded: what squirrel counts as a hero](/rules/perf/lcp-hints) | Likely Largest Contentful Paint images loaded with no preload. squirrel checks the first three eligible candidate images on every page. | warning |
+| [LCP image not preloaded: what squirrel counts as a hero](/rules/perf/lcp-hints) | Likely Largest Contentful Paint images loaded with no preload. squirrel looks at the first three eligible candidate images on every page, and one preloaded candidate satisfies the check. | warning |
 | [Third-party scripts and INP: what squirrel counts per page](/rules/perf/inp-hints) | More than five known third-party scripts, or more than three that block the parser. squirrel counts both on every page. | info |
 | [Images without width and height: the CLS risk squirrel finds](/rules/perf/cls-hints) | Images and iframes with no dimensions, so the browser cannot reserve space before they load. squirrel lists every one by page. | warning |
 | [Audits that need a browser: what a static crawl cannot see](/rules/perf/browser-required) | The runtime metrics no HTML analysis can produce. squirrel lists them so the gap in a static audit is explicit. | info |

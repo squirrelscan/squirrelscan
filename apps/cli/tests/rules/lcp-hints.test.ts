@@ -31,8 +31,9 @@ describe("perf/lcp-hints output", () => {
     const c = checks.find((x) => x.name === "lcp-preload");
 
     expect(c.status).toBe("warn");
-    expect(c.value).toBe(2);
-    expect(c.message).toContain("2 likely-LCP images");
+    // One page has one LCP element: the message names one image, not the count.
+    expect(c.value).toBe(1);
+    expect(c.message).toBe("Likely-LCP image loaded without preload");
     // No explicit items / image dump — the report auto-generates one per-page
     // item from the message, so the count survives grouping per page.
     expect(c.items).toBeUndefined();
@@ -41,11 +42,8 @@ describe("perf/lcp-hints output", () => {
       candidates: [
         {
           src: "https://example.com/hero.jpg",
-          reason: "eager likely-LCP candidate with no matching image preload",
-        },
-        {
-          src: "https://example.com/banner.png",
-          reason: "eager likely-LCP candidate with no matching image preload",
+          reason:
+            "first eager likely-LCP candidate, no matching image preload on the page",
         },
       ],
       preloads: [],
@@ -58,7 +56,7 @@ describe("perf/lcp-hints output", () => {
     const { checks } = lcpHintsRule.run(pageCtx(html)) as { checks: any[] };
     const c = checks.find((x) => x.name === "lcp-preload");
     expect(c.value).toBe(1);
-    expect(c.message).toContain("1 likely-LCP image ");
+    expect(c.message).toBe("Likely-LCP image loaded without preload");
   });
 
   test("passes when no large unpreloaded images", () => {
@@ -114,18 +112,22 @@ describe("perf/lcp-hints candidates and preload matching", () => {
     expect(c.details.candidates).toEqual([
       {
         src: "https://example.com/hero.png",
-        reason: "eager likely-LCP candidate with no matching image preload",
+        reason:
+          "first eager likely-LCP candidate, no matching image preload on the page",
       },
     ]);
     expect(c.details.preloads).toEqual([]);
   });
 
-  test("undimensioned two-image case still warns with value 2", () => {
+  test("undimensioned two-image case warns for the first image only", () => {
     const c = preloadCheck(
       `<!doctype html><html><body><img src="/hero.jpg"><img src="/banner.png"></body></html>`
     );
     expect(c.status).toBe("warn");
-    expect(c.value).toBe(2);
+    expect(c.value).toBe(1);
+    expect(c.details.candidates.map((x: { src: string }) => x.src)).toEqual([
+      "https://example.com/hero.jpg",
+    ]);
   });
 
   test("an absolute-URL preload for a relative src passes", () => {
@@ -181,7 +183,8 @@ describe("perf/lcp-hints candidates and preload matching", () => {
       candidates: [
         {
           src: "https://example.com/hero.png",
-          reason: "eager likely-LCP candidate with no matching image preload",
+          reason:
+            "first eager likely-LCP candidate, no matching image preload on the page",
         },
       ],
       preloads: [
@@ -203,14 +206,10 @@ describe("perf/lcp-hints candidates and preload matching", () => {
       <img src="/one.png"><img src="/two.png"><img src="/three.png"><img src="/four.png">
       </body></html>`);
 
-    expect(c.value).toBe(3);
+    expect(c.value).toBe(1);
     expect(
       c.details.candidates.map((candidate: { src: string }) => candidate.src)
-    ).toEqual([
-      "https://example.com/one.png",
-      "https://example.com/two.png",
-      "https://example.com/three.png",
-    ]);
+    ).toEqual(["https://example.com/one.png"]);
     expect(c.details.preloads).toHaveLength(10);
     expect(c.details.additionalPreloads).toBe(2);
   });
@@ -234,6 +233,77 @@ describe("perf/lcp-hints candidates and preload matching", () => {
       new TextEncoder().encode(JSON.stringify(c.details)).byteLength
     ).toBeLessThanOrEqual(CHECK_DETAILS_LIMITS.maxBytes);
     expect(c.details.additionalPreloads).toBe(0);
+  });
+});
+
+// One preloaded likely-LCP image satisfies the check (#1221).
+describe("perf/lcp-hints with a preloaded hero", () => {
+  const preloadCheck = (html: string) => {
+    const { checks } = lcpHintsRule.run(pageCtx(html)) as { checks: any[] };
+    return checks.find((x) => x.name === "lcp-preload");
+  };
+  const CARDS = [1, 2, 3, 4]
+    .map(
+      (n) =>
+        `<li><a href="/p${n}"><img src="/c${n}.jpg" width="300" height="300" alt="Product ${n}" loading="eager"></a></li>`
+    )
+    .join("");
+  const HERO_PRELOAD = `<link rel="preload" as="image" fetchpriority="high" href="/hero-960.jpg" imagesrcset="/hero-480.jpg 480w, /hero-960.jpg 960w, /hero-1440.jpg 1440w" imagesizes="100vw" media="(min-width: 750px)">`;
+  const HERO_IMG = `<img src="/hero-960.jpg" srcset="/hero-480.jpg 480w, /hero-960.jpg 960w, /hero-1440.jpg 1440w" sizes="100vw" width="1440" height="600" alt="Hero" fetchpriority="high" loading="eager">`;
+  const page = (head: string, body: string) =>
+    `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Collection page with preloaded hero</title>${head}</head><body><main>${body}</main></body></html>`;
+
+  test("reporter fixture: preloaded hero then eager product cards passes with no candidates", () => {
+    const c = preloadCheck(
+      page(HERO_PRELOAD, `${HERO_IMG}<h1>Collection</h1><ul>${CARDS}</ul>`)
+    );
+    expect(c.status).toBe("pass");
+    expect(c.details).toBeUndefined();
+  });
+
+  test("a later candidate that is the preloaded one also passes", () => {
+    const c = preloadCheck(
+      page(
+        `<link rel="preload" as="image" href="/c2.jpg">`,
+        `<ul>${CARDS}</ul>`
+      )
+    );
+    expect(c.status).toBe("pass");
+  });
+
+  test("eager candidates with no preload warn once, naming the first", () => {
+    const c = preloadCheck(page("", `${HERO_IMG}<ul>${CARDS}</ul>`));
+    expect(c.status).toBe("warn");
+    expect(c.value).toBe(1);
+    expect(c.message).toBe("Likely-LCP image loaded without preload");
+    expect(c.details.candidates).toHaveLength(1);
+    expect(c.details.candidates[0].src).toBe(
+      "https://example.com/hero-960.jpg"
+    );
+  });
+
+  test("a preload matched by imagesrcset URL or with a media attribute still counts", () => {
+    const c = preloadCheck(
+      page(
+        `<link rel="preload" as="image" media="(min-width: 750px)" imagesrcset="/hero-480.jpg 480w, /hero-960.jpg 960w">`,
+        `${HERO_IMG}<ul>${CARDS}</ul>`
+      )
+    );
+    expect(c.status).toBe("pass");
+  });
+
+  test("control: lazy cards with a preloaded hero passes", () => {
+    const lazy = CARDS.replaceAll('loading="eager"', 'loading="lazy"');
+    const c = preloadCheck(page(HERO_PRELOAD, `${HERO_IMG}<ul>${lazy}</ul>`));
+    expect(c.status).toBe("pass");
+  });
+
+  test("perf/lcp-fetchpriority still reads the same candidates", () => {
+    const ctx = pageCtx(page("", `<ul>${CARDS}</ul>`));
+    const fp = (perf.lcpFetchpriorityRule.run(ctx) as { checks: any[] })
+      .checks[0];
+    expect(fp.status).toBe("warn");
+    expect(fp.items[0].id).toBe("/c1.jpg");
   });
 });
 

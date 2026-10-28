@@ -37,19 +37,20 @@ export const lcpHintsRule: Rule = {
 
     // Check for LCP images without preload
     if (hints.largeImagesWithoutPreload.length > 0) {
+      // At most one: the page's first likely-LCP image (#1221).
       const n = hints.largeImagesWithoutPreload.length;
       const preloadUrls = hints.imagePreloadUrls;
       // No items → per-page count, not a cross-page image dump (squirrelscan/squirrelscan#16).
       checks.push({
         name: "lcp-preload",
         status: "warn",
-        message: `${n} likely-LCP image${n === 1 ? "" : "s"} loaded without preload`,
+        message: "Likely-LCP image loaded without preload",
         value: n,
         details: {
           page: ctx.page.url,
           candidates: hints.largeImagesWithoutPreload.map((src) => ({
             src: reportedUrl(resolveImageUrl(src, ctx.page.url) ?? src),
-            reason: "eager likely-LCP candidate with no matching image preload",
+            reason: "first eager likely-LCP candidate, no matching image preload on the page",
           })),
           preloads: preloadUrls.slice(0, MAX_REPORTED_PRELOAD_URLS).map(reportedUrl),
           additionalPreloads: Math.max(0, preloadUrls.length - MAX_REPORTED_PRELOAD_URLS),

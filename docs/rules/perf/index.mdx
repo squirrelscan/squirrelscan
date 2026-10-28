@@ -24,7 +24,7 @@ These carry the highest severity and weight in the category.
 
 - [JavaScript bundle too large: the 250 KB and 1 MB limits](/rules/perf/js-file-size): Scripts over 250 KB warn and over 1 MB fail. squirrel measures every JavaScript file the crawl found and names the pages that load it.
 - [CSS file too large: the 150 KB and 500 KB thresholds](/rules/perf/css-file-size): Stylesheets over 150 KB warn and over 500 KB fail. squirrel measures every CSS file the crawl found and names the pages that load it.
-- [LCP image not preloaded: what squirrel counts as a hero](/rules/perf/lcp-hints): Likely Largest Contentful Paint images loaded with no preload. squirrel checks the first three eligible candidate images on every page.
+- [LCP image not preloaded: what squirrel counts as a hero](/rules/perf/lcp-hints): Likely Largest Contentful Paint images loaded with no preload. squirrel looks at the first three eligible candidate images on every page, and one preloaded candidate satisfies the check.
 - [Time to First Byte: the 600ms and 1000ms thresholds](/rules/perf/ttfb): A server that takes over 600ms to send the first byte, or over 1000ms. squirrel measures TTFB on every fresh fetch.
 - [Images without width and height: the CLS risk squirrel finds](/rules/perf/cls-hints): Images and iframes with no dimensions, so the browser cannot reserve space before they load. squirrel lists every one by page.
 
@@ -51,7 +51,7 @@ These carry the highest severity and weight in the category.
 | [Images without width and height: the CLS risk squirrel finds](/rules/perf/cls-hints) | Images and iframes with no dimensions, so the browser cannot reserve space before they load. squirrel lists every one by page. | warning | Per-page |
 | [JavaScript bundle too large: the 250 KB and 1 MB limits](/rules/perf/js-file-size) | Scripts over 250 KB warn and over 1 MB fail. squirrel measures every JavaScript file the crawl found and names the pages that load it. | error | Site-wide |
 | [Large DOM: node count, depth and children per element](/rules/perf/dom-size) | A page at 1,500 DOM nodes or more, deeper than 32 levels, or with an element holding more than 60 children. squirrel counts all three. | warning | Per-page |
-| [LCP image not preloaded: what squirrel counts as a hero](/rules/perf/lcp-hints) | Likely Largest Contentful Paint images loaded with no preload. squirrel checks the first three eligible candidate images on every page. | warning | Per-page |
+| [LCP image not preloaded: what squirrel counts as a hero](/rules/perf/lcp-hints) | Likely Largest Contentful Paint images loaded with no preload. squirrel looks at the first three eligible candidate images on every page, and one preloaded candidate satisfies the check. | warning | Per-page |
 | [loading=lazy on a hero image: the LCP delay squirrel finds](/rules/perf/lazy-above-fold) | An above-fold image marked loading=lazy, which delays the paint that matters. squirrel checks the first three eligible images. | warning | Per-page |
 | [No compression detected: gzip and Brotli on the response](/rules/perf/compression) | A text response served with no Content-Encoding, or with compression explicitly disabled. squirrel reads the headers on every page. | warning | Per-page |
 | [Outdated jQuery and friends: the libraries squirrel detects](/rules/perf/js-libraries) | Twenty-two known JavaScript libraries detected by URL, bundled code or markup, with a version check against known CVEs. | warning | Per-page |

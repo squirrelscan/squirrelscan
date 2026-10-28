@@ -30,7 +30,7 @@ The hero is a guess from markup. When the real LCP element is text or a CSS back
 
 | Rule | What it flags | Severity |
 |---|---|---|
-| [LCP image not preloaded: what squirrel counts as a hero](/rules/perf/lcp-hints) | Likely Largest Contentful Paint images loaded with no preload. squirrel checks the first three eligible candidate images on every page. | warning |
+| [LCP image not preloaded: what squirrel counts as a hero](/rules/perf/lcp-hints) | Likely Largest Contentful Paint images loaded with no preload. squirrel looks at the first three eligible candidate images on every page, and one preloaded candidate satisfies the check. | warning |
 | [fetchpriority='high': the LCP image hint squirrel checks](/rules/perf/lcp-fetchpriority) | A hero image loaded eagerly with neither fetchpriority='high' nor a matching preload. squirrel picks the likely LCP candidate per page. | warning |
 | [loading=lazy on a hero image: the LCP delay squirrel finds](/rules/perf/lazy-above-fold) | An above-fold image marked loading=lazy, which delays the paint that matters. squirrel checks the first three eligible images. | warning |
 | [Render-blocking resources: the ones squirrel counts in head](/rules/perf/render-blocking) | Stylesheets and scripts in head that hold up first paint. squirrel counts them per page and lists each URL. | warning |

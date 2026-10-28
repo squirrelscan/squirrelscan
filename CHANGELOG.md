@@ -39,6 +39,7 @@ A TLS certificate rule, one-page site detection, in-page About and Contact recog
 
 - `eeat/about-page` and `eeat/contact-page` recognise an in-page About or Contact section on a single-page site: an element whose id matches the page slugs (`#about`, `#contact`, localised ones) and a same-page link to it. No more "No About page found" on a one-page site that has both. An About section needs 200 words to pass; a Contact section needs a `mailto:` or `tel:` link or a form. A real `/about` or `/contact` page still takes precedence. See [eeat/about-page](https://docs.squirrelscan.com/rules/eeat/about-page) (#1208).
 - `core/charset` no longer warns about a charset meta past the first 1,024 bytes when the `Content-Type` header already names the same UTF-8 charset. The header decides the decoding, so the position is a conformance note: it is now info and does not affect the score, and its message says so. A page with no header charset still warns, a header that conflicts with the meta still gives the conflict warning, and a non-UTF-8 page still gets the non-UTF-8 warning. See [core/charset](https://docs.squirrelscan.com/rules/core/charset) (#1220).
+- `perf/lcp-hints` no longer flags the eager images below a preloaded hero. A page has one LCP element, so one preloaded likely-LCP image satisfies the check; with no image preload it warns once, `Likely-LCP image loaded without preload`, naming the first candidate instead of counting each eager image. See [perf/lcp-hints](https://docs.squirrelscan.com/rules/perf/lcp-hints) (#1221).
 
 ### Docs
 

@@ -324,14 +324,17 @@ function analyzeCWVHints(
     }
   }
 
-  // Likely-LCP images without a matching preload. Candidates come from the shared
-  // finder perf/lcp-fetchpriority uses; the first few eligible images count.
+  // The likely-LCP image without a matching preload. Candidates come from the shared
+  // finder perf/lcp-fetchpriority uses. A page has one LCP element, so any preloaded
+  // candidate is the page's chosen LCP image and the eager images around it are not
+  // flagged (#1221). With no preload at all the advice is to preload one image, so
+  // only the first candidate is reported.
   const preloadKeys = collectImagePreloadKeys(doc, pageUrl);
-  for (const img of findLcpCandidates(doc, MAX_LCP_CANDIDATES)) {
-    if (!isImagePreloaded(img, preloadKeys, pageUrl)) {
-      // Candidates always have a src (findLcpCandidates skips images without one).
-      hints.largeImagesWithoutPreload.push(img.getAttribute("src") as string);
-    }
+  const candidates = findLcpCandidates(doc, MAX_LCP_CANDIDATES);
+  const first = candidates[0];
+  if (first && !candidates.some((img) => isImagePreloaded(img, preloadKeys, pageUrl))) {
+    // Candidates always have a src (findLcpCandidates skips images without one).
+    hints.largeImagesWithoutPreload.push(first.getAttribute("src") as string);
   }
 
   return hints;
