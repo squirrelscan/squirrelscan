@@ -613,6 +613,13 @@ export interface SiteData {
   // callers that haven't threaded it through (treat as not-capped).
   crawlLimits?: { pagesCrawled: number; maxPages: number };
   /**
+   * In-scope URLs the crawl queued but never fetched (the frontier left when it
+   * stopped). Zero or absent means the crawl ran to the end of what it knew of.
+   * crawl/single-page-site reads it: a stopped crawl may just not have reached
+   * the rest of the site.
+   */
+  unfetchedPages?: number;
+  /**
    * Whether the audited site is itself being indexed (pub#457, see
    * `shared/noindex.ts` `isSiteIndexable`): its homepage, or the audit's entry
    * page when the homepage was not fetched, is indexable. Only `true` lets the

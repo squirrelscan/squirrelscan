@@ -225,9 +225,10 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 307 -> 308 content/common-misspellings,
       // 308 -> 309 mobile/input-zoom,
       // 309 -> 310 images/hotlinked, 310 -> 311 content/h1-title-alignment,
-      // 311 -> 312 schema/expected-type, 312 -> 313 security/tls-certificate;
+      // 311 -> 312 schema/expected-type, 312 -> 313 security/tls-certificate,
+      // 313 -> 314 crawl/single-page-site;
       // anything else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(313);
+      expect(v1.perRuleTally.length).toBe(314);
       expect(v1.perRuleTally.find((t) => t.ruleId === "security/tls-certificate")).toEqual({
         ruleId: "security/tls-certificate",
         pass: 0,

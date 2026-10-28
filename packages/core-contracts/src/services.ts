@@ -408,6 +408,14 @@ export interface EditorSummaryCoverageInput {
    * `scanScope.unfetched`), when reported.
    */
   unfetchedPages?: number;
+  /**
+   * The whole site is one page with in-page sections (`crawl/single-page-site`
+   * fired on a complete crawl), so the summary can say so instead of treating
+   * one page as a thin audit. Absent otherwise. Older servers ignore it.
+   */
+  singlePageSite?: true;
+  /** How many in-page sections were found. Present with `singlePageSite`. */
+  sectionCount?: number;
 }
 
 /** One detected technology fed to the summary. */

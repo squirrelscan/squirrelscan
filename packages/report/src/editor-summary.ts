@@ -184,14 +184,30 @@ function buildCoverage(report: AuditReport): EditorSummaryCoverageInput | undefi
   // A rate-limited run's count already includes the URLs still queued; any
   // other run that stopped short has only those (`scanScope.unfetched`).
   const unfetchedPages = count(report.rateLimited?.unfetched) ?? count(scope.unfetched);
+  const capped = scope.capped === true;
+  const timeStopped = scope.stopReason === "time";
+  const sections = singlePageSiteSections(report);
   return {
     scannedPages,
     ...(maxPages !== undefined ? { maxPages } : {}),
-    capped: scope.capped === true,
-    timeStopped: scope.stopReason === "time",
+    capped,
+    timeStopped,
     ...(knownPages !== undefined ? { knownPages } : {}),
     ...(unfetchedPages !== undefined ? { unfetchedPages } : {}),
+    // Only when crawl/single-page-site fired AND the crawl stopped for no other
+    // reason: a capped, time-stopped or unfetched crawl may just be short.
+    ...(sections !== undefined && !capped && !timeStopped && !unfetchedPages
+      ? { singlePageSite: true, sectionCount: sections }
+      : {}),
   };
+}
+
+/** The section count crawl/single-page-site found, or undefined when it did not fire. */
+function singlePageSiteSections(report: AuditReport): number | undefined {
+  const check = report.ruleResults["crawl/single-page-site"]?.checks.find(
+    (c) => c.name === "single-page-site" && c.status === "info",
+  );
+  return count(check?.details?.sections);
 }
 
 export interface BuildEditorSummaryRequestOptions {

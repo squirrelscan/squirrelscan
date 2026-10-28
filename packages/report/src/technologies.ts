@@ -15,10 +15,20 @@ export const TECH_ICON_BASE_URL = "https://squirrelscan.com/tech-icons";
  * The slug is sanitized to `[a-z0-9._-]` (lowercased) so a DB-stored/returned
  * icon value can never inject a path-traversal segment into the asset URL.
  */
-export function techIconUrl(icon?: string | null): string | null {
+export function techIconUrl(
+  icon?: string | null,
+  baseUrl: string = TECH_ICON_BASE_URL,
+): string | null {
   if (!icon) return null;
   const slug = icon.toLowerCase().replace(/[^a-z0-9._-]/g, "");
-  return slug ? `${TECH_ICON_BASE_URL}/${slug}.png` : null;
+  return slug ? `${withoutTrailingSlashes(baseUrl)}/${slug}.png` : null;
+}
+
+/** `url` without its trailing slashes; a scan, not a regex, so it stays linear. */
+function withoutTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url[end - 1] === "/") end -= 1;
+  return url.slice(0, end);
 }
 
 /** Display order for category groups (most identifying first). */
