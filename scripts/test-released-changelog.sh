@@ -67,7 +67,14 @@ insert_after() {
   mv "$next" "$source"
 }
 
+empty_tree=$(git -C "$repo" hash-object -t tree /dev/null)
+missing_changelog_commit=$(printf '%s\n' "tag without changelog" | git -C "$repo" commit-tree "$empty_tree")
+
 expect_pass "unchanged released sections pass"
+
+git -C "$repo" tag -f v1.0.0 "$missing_changelog_commit" >/dev/null
+expect_pass "an unchanged section does not read its tag snapshot"
+git -C "$repo" tag -f v1.0.0 "$base" >/dev/null
 
 insert_after "## [Unreleased]" "- another planned change"
 expect_pass "an Unreleased bullet passes"
@@ -83,6 +90,14 @@ if ! grep -qF "Move new changelog bullets under ## [Unreleased]" <<<"$output"; t
   echo "FAIL: failure tells the author where the bullet belongs"
   fails=1
 fi
+
+git -C "$repo" tag -f v1.0.0 "$missing_changelog_commit" >/dev/null
+expect_fail "a changed section whose tag snapshot is unavailable fails closed"
+if ! grep -qF "cannot read CHANGELOG.md from tag v1.0.0" <<<"$output"; then
+  echo "FAIL: unavailable-snapshot failure names the tag"
+  fails=1
+fi
+git -C "$repo" tag -f v1.0.0 "$base" >/dev/null
 
 restore_fixture
 awk '

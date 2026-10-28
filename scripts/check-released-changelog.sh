@@ -58,29 +58,14 @@ extract_section() {
   ' "$file"
 }
 
-tagged=0
 changed=0
+compared=0
 failed=0
 while IFS= read -r version; do
   [ -n "$version" ] || continue
 
-  # A release bump introduces a heading before its tag exists. It is not a
-  # released section yet and must not fail this check.
-  if ! git -C "$root" rev-parse --verify --quiet "refs/tags/$version^{commit}" >/dev/null; then
-    continue
-  fi
-
-  tagged_changelog="$tmp/tagged-changelog"
   current_section="$tmp/current-section"
   base_section="$tmp/base-section"
-  tagged_section="$tmp/tagged-section"
-
-  # Early releases predate CHANGELOG.md, so there is no tagged section that
-  # can serve as their immutable snapshot.
-  if ! git -C "$root" show "refs/tags/$version:CHANGELOG.md" > "$tagged_changelog" 2>/dev/null; then
-    continue
-  fi
-  tagged=$((tagged + 1))
 
   extract_section "$version" "$changelog" > "$current_section"
   extract_section "$version" "$base_changelog" > "$base_section"
@@ -92,6 +77,28 @@ while IFS= read -r version; do
   fi
 
   changed=$((changed + 1))
+
+  # A release bump introduces a heading before its tag exists. It is not a
+  # released section yet and must not fail this check.
+  if ! git -C "$root" rev-parse --verify --quiet "refs/tags/$version^{commit}" >/dev/null; then
+    continue
+  fi
+
+  tagged_changelog="$tmp/tagged-changelog"
+  tagged_section="$tmp/tagged-section"
+
+  # Read a tag snapshot only after proving this PR changed the section. With a
+  # blobless tag fetch, an ordinary PR therefore performs no lazy blob fetches.
+  # A tagged release must be verifiable: an unavailable snapshot is an error,
+  # not a section that can silently escape the guard.
+  if ! git -C "$root" show "refs/tags/$version:CHANGELOG.md" > "$tagged_changelog"; then
+    echo "ERROR: cannot read CHANGELOG.md from tag $version." >&2
+    echo "The released section changed, so its tag snapshot must be available for comparison." >&2
+    failed=1
+    continue
+  fi
+  compared=$((compared + 1))
+
   extract_section "$version" "$tagged_changelog" > "$tagged_section"
 
   if ! cmp -s "$current_section" "$tagged_section"; then
@@ -101,14 +108,8 @@ while IFS= read -r version; do
   fi
 done < "$versions"
 
-if [ "$tagged" -eq 0 ]; then
-  echo "ERROR: no tagged release sections were available for comparison." >&2
-  echo "Fetch the repository's v* tags before running this check." >&2
-  exit 1
-fi
-
 if [ "$failed" -ne 0 ]; then
   exit 1
 fi
 
-echo "released changelog sections OK ($changed changed, $tagged tagged)"
+echo "released changelog sections OK ($changed changed, $compared compared)"
