@@ -18,6 +18,17 @@ import {
 const NOW = new Date();
 
 describe("readPeerCertificate", () => {
+  test("a SAN entry with a long run of whitespace is read in linear time (CodeQL polynomial-redos)", () => {
+    const start = performance.now();
+    const certificate = readPeerCertificate({
+      subjectaltname: `DNS:a${"\t".repeat(200_000)}x, DNS:b${" ".repeat(200_000)}`,
+      valid_from: "Jan  1 00:00:00 2025 GMT",
+      valid_to: "Jan  1 00:00:00 2099 GMT",
+    });
+    expect(certificate?.names[1]).toBe("b");
+    expect(performance.now() - start).toBeLessThan(500);
+  });
+
   test("reads SAN entries, issuer, dates and the RSA size", () => {
     const certificate = readPeerCertificate({
       subjectaltname: "DNS:Example.com, DNS:*.example.com, IP Address:127.0.0.1",

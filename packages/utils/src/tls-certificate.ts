@@ -109,7 +109,8 @@ export function readPeerCertificate(
   const names = (raw.subjectaltname ?? "")
     .split(",")
     .flatMap((entry) => {
-      const match = /^\s*(?:DNS|IP Address):(.+?)\s*$/.exec(entry);
+      // trim() and a plain prefix match: no backtracking on a long run of whitespace.
+      const match = /^(?:DNS|IP Address):(.+)$/.exec(entry.trim());
       return match ? [certificateText(match[1]!, MAX_NAME_LENGTH).toLowerCase()] : [];
     })
     .filter((name) => name !== "")
