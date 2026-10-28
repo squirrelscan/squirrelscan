@@ -29,7 +29,8 @@ afterAll(() => {
 
 const { runSelfInstall } = await import("@/controllers/self/install");
 const { registerInstall } = await import("@/self/register-install");
-const { readPathSetupEnv, shouldPrintPathInstructions } = await import("@/self/install-meta");
+const { readPathSetupEnv, shouldPrintPathInstructions } =
+  await import("@/self/install-meta");
 const { loadUserSettings } = await import("@/self/settings");
 
 const originalEnv = { ...process.env };
