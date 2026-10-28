@@ -5,6 +5,7 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
 import { getPathname } from "@squirrelscan/utils";
 
+import { describeSectionPage, findInPageSection } from "../shared/inpage-section";
 import { findLinkedUncrawledPage, linkedUncrawledCheck } from "../shared/linked-uncrawled-page";
 
 const isAboutPath = (url: string): boolean =>
@@ -16,7 +17,7 @@ export const aboutPageRule: Rule = {
     name: "About Page",
     description: "Checks for an about/company page with content",
     solution:
-      "An About page establishes credibility and trust. Include company history, mission, team overview, and credentials. Link from main navigation or footer. For E-E-A-T, explain your expertise and why visitors should trust you. Include contact information and physical location if applicable. An About page your pages link to but the crawl did not fetch (an excluded path, or past the page limit) is reported as linked but not crawled rather than missing.",
+      "An About page establishes credibility and trust. Include company history, mission, team overview, and credentials. Link from main navigation or footer. For E-E-A-T, explain your expertise and why visitors should trust you. Include contact information and physical location if applicable. An About page your pages link to but the crawl did not fetch (an excluded path, or past the page limit) is reported as linked but not crawled rather than missing. On a single-page site, an About section (an element whose id is about, about-us or a localised slug, linked from the page as #about) counts as the About page; add enough content to it (200 words or more).",
     category: "eeat",
     scope: "site",
     severity: "warning",
@@ -41,6 +42,7 @@ export const aboutPageRule: Rule = {
     // (e.g. an unknown localized path). See issue #121.
     let aboutPage: string | null = null;
     let aboutPageWordCount = 0;
+    let section: ReturnType<typeof findInPageSection> = null;
 
     for (const page of pages) {
       const matchesUrl = isAboutPath(page.url);
@@ -68,6 +70,24 @@ export const aboutPageRule: Rule = {
           value: `${aboutPageWordCount} words - consider expanding`,
         });
       }
+    } else if ((section = findInPageSection(pages, EEAT_PAGE_PATTERNS.about))) {
+      // #1208: a one-page site's About is a section of the homepage.
+      const where = `${describeSectionPage(section.url)} (#${section.id})`;
+      checks.push(
+        section.wordCount >= 200
+          ? {
+              name: "about-page",
+              status: "pass",
+              message: `About section found on ${where}`,
+              value: `${section.url}#${section.id}`,
+            }
+          : {
+              name: "about-page",
+              status: "info",
+              message: `About section exists on ${where} but has limited content`,
+              value: `${section.wordCount} words - consider expanding`,
+            },
+      );
     } else {
       // pub#740: an About page the pages link to but the crawl never fetched
       // (an excluded path, or past the page budget) is unverified, not missing.

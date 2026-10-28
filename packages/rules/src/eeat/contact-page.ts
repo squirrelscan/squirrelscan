@@ -5,6 +5,7 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
 import { getPathname } from "@squirrelscan/utils";
 
+import { describeSectionPage, findInPageSection } from "../shared/inpage-section";
 import { findLinkedUncrawledPage, linkedUncrawledCheck } from "../shared/linked-uncrawled-page";
 
 const isContactPath = (url: string): boolean =>
@@ -16,7 +17,7 @@ export const contactPageRule: Rule = {
     name: "Contact Page",
     description: "Checks for contact page with multiple contact methods",
     solution:
-      "A contact page with multiple contact methods builds trust. Include: email address or contact form, phone number (if applicable), physical address, and social media links. Make contact information easy to find from any page. For local businesses, include business hours. Response time expectations are also helpful. A Contact page your pages link to but the crawl did not fetch (an excluded path, or past the page limit) is reported as linked but not crawled rather than missing, and its contact methods are not checked.",
+      "A contact page with multiple contact methods builds trust. Include: email address or contact form, phone number (if applicable), physical address, and social media links. Make contact information easy to find from any page. For local businesses, include business hours. Response time expectations are also helpful. A Contact page your pages link to but the crawl did not fetch (an excluded path, or past the page limit) is reported as linked but not crawled rather than missing, and its contact methods are not checked. On a single-page site, a Contact section (an element whose id is contact, contact-us or a localised slug, linked from the page as #contact) counts as the Contact page when it has an email or phone link or a form.",
     category: "eeat",
     scope: "site",
     severity: "warning",
@@ -59,6 +60,27 @@ export const contactPageRule: Rule = {
     }
 
     if (!contactPage) {
+      // #1208: a one-page site's Contact is a section of the homepage.
+      const section = findInPageSection(pages, EEAT_PAGE_PATTERNS.contact);
+      if (section) {
+        const where = `${describeSectionPage(section.url)} (#${section.id})`;
+        checks.push(
+          section.hasContactMethod
+            ? {
+                name: "contact-page",
+                status: "pass",
+                message: `Contact section found on ${where}`,
+                value: `${section.url}#${section.id}`,
+              }
+            : {
+                name: "contact-page",
+                status: "info",
+                message: `Contact section exists on ${where} but has no email, phone or form`,
+                value: "Add a mailto: or tel: link, or a contact form",
+              },
+        );
+        return { checks };
+      }
       // pub#740: a Contact page the pages link to but the crawl never fetched
       // is unverified, not missing. Its contact methods cannot be read.
       const linked = ctx.site ? findLinkedUncrawledPage(ctx.site, { href: isContactPath }) : null;

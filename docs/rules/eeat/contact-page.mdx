@@ -15,6 +15,7 @@ The rule is site-wide. It finds the contact page by a URL path matching one of t
 
 - Skipped when no pages were crawled. Message: `No pages available for analysis`.
 - `contact-page` passes when a crawled page is the contact page. Message: `Contact page exists`, with the URL as the value.
+- `contact-page` passes when no page matches but a crawled page has a Contact section: an element whose `id` matches a contact slug (`contact`, `contact-us`, a localised one) and a same-page link to it (`href="#contact"`). Message: `Contact section found on the homepage (#contact)`. The section, or the page holding it, needs a `mailto:` or `tel:` link or a form; without one the check is info (`Contact section exists on the homepage (#contact) but has no email, phone or form`). A real contact page always takes precedence, and the `contact-methods` check runs only for a contact page.
 - `contact-page` reports info when no crawled page is the contact page but a crawled page links to one the crawl did not fetch. Message: `Contact page linked but not crawled`, with the link target as the value and the linking page in the details. No further checks run, because the page was never read.
 - `contact-page` warns instead when the internal link probe requested that uncrawled target and got a 4xx or 5xx. Message: `Contact page link returns N`, where `N` is the status. A 401, a 403 or a rate limit is not read as broken and stays info.
 - `contact-page` warns when there is neither a crawled contact page nor a link to one. Message: `No Contact page found`, with `Create /contact page` as the value. No further checks run. Severity warning, weight 5.
@@ -23,9 +24,11 @@ The rule is site-wide. It finds the contact page by a URL path matching one of t
 
 A crawl that excludes the contact page's path, or reaches its page limit first, never fetches it. A link to the same host whose href matches one of the contact patterns is evidence the page exists, not proof that it works, so the rule says it is linked but not crawled instead of advising you to create one. Anchor text alone does not count, and no extra requests are made: the only status the rule can report is one the internal link probe already recorded. To have the page and its contact methods checked, let the crawl fetch it.
 
-Only `mailto:` and `tel:` links count as methods. A contact form is not detected, so a page with a form and no direct address emits no methods check at all. The `ContactPoint` schema type is deliberately not used as a fallback, because it is usually an Organization property present on every page rather than a marker of this page.
+Only `mailto:` and `tel:` links count as methods. A contact form is not detected on a contact page, so a page with a form and no direct address emits no methods check at all. In an in-page Contact section a form does count, together with a `mailto:` or `tel:` link anywhere on the page holding the section. The `ContactPoint` schema type is deliberately not used as a fallback, because it is usually an Organization property present on every page rather than a marker of this page.
 
 ## How to fix it
+
+On a one-page site you do not need a separate page. Give the section an id (`<section id="contact">`), link it from the navigation (`<a href="#contact">`), and include an email link, a phone link or a form in it.
 
 ```html
 <a href="mailto:hello@example.com">hello@example.com</a>

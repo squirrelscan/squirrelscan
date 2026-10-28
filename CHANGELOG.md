@@ -21,6 +21,10 @@ How it works:
 
 - **`crawl/single-page-site`.** When the whole site is one page with sections, the audit now says what that means for search: one URL to rank or cite, one title and one description, and `#sections` that cannot be indexed on their own. It fires only on a complete crawl that fetched exactly one HTML page, has at most one in-scope sitemap URL, no link to another path on the site, and three or more links to ids on the page, and lists up to ten section ids. It is informational and never changes the health score or a category score. When it fires, the editor's summary request carries `coverage.singlePageSite` and `coverage.sectionCount`. See [crawl/single-page-site](https://docs.squirrelscan.com/rules/crawl/single-page-site).
 
+### Fixed
+
+- `eeat/about-page` and `eeat/contact-page` recognise an in-page About or Contact section on a single-page site: an element whose id matches the page slugs (`#about`, `#contact`, localised ones) and a same-page link to it. No more "No About page found" on a one-page site that has both. An About section needs 200 words to pass; a Contact section needs a `mailto:` or `tel:` link or a form. A real `/about` or `/contact` page still takes precedence. See [eeat/about-page](https://docs.squirrelscan.com/rules/eeat/about-page) (#1208).
+
 ### Docs
 
 - **The SEO rules page counts 26 structured data rules.** The card still said 25 after `schema/expected-type` was added.
