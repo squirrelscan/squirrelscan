@@ -29,7 +29,7 @@ afterAll(() => {
 
 const { runSelfInstall } = await import("@/controllers/self/install");
 const { registerInstall } = await import("@/self/register-install");
-const { readPathSetupEnv } = await import("@/self/install-meta");
+const { readPathSetupEnv, shouldPrintPathInstructions } = await import("@/self/install-meta");
 const { loadUserSettings } = await import("@/self/settings");
 
 const originalEnv = { ...process.env };
@@ -66,6 +66,16 @@ describe("path_setup stamp", () => {
     expect(readPathSetupEnv()).toBeNull();
     delete process.env.SQUIRREL_PATH_SETUP;
     expect(readPathSetupEnv()).toBeNull();
+  });
+
+  test("self install prints its own PATH block only when no installer stamped an outcome", () => {
+    delete process.env.SQUIRREL_PATH_SETUP;
+    expect(shouldPrintPathInstructions(false)).toBe(true);
+    expect(shouldPrintPathInstructions(true)).toBe(false);
+    for (const v of ["on_path", "added", "opted_out", "ci", "failed"]) {
+      process.env.SQUIRREL_PATH_SETUP = v;
+      expect(shouldPrintPathInstructions(false)).toBe(false);
+    }
   });
 
   test("a stamp is persisted by self install and sent on registration", async () => {

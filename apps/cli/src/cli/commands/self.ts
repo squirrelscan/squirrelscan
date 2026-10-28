@@ -3,6 +3,7 @@ import { defineCommand } from "citty";
 import type { UserSettings } from "@/self/types";
 
 import { warnIfSessionUnreadable } from "@/self/credentials";
+import { shouldPrintPathInstructions } from "@/self/install-meta";
 import { redactValue } from "@/utils/redact";
 
 import { version as pkgVersion } from "../../../package.json";
@@ -134,7 +135,10 @@ const selfInstall = defineCommand({
       "\nTip: Run 'squirrel skills install' to add Claude Code integration"
     );
 
-    if (!result.data.bin_in_path) {
+    // The installers stamp SQUIRREL_PATH_SETUP after handling PATH themselves (a profile line
+    // added, the user's opt-out, CI) and print their own instructions, so this process's
+    // pre-edit PATH must not produce a second, contradicting "not in your PATH" block.
+    if (shouldPrintPathInstructions(result.data.bin_in_path)) {
       const binDir = result.data.symlink_path.replace(
         /\/squirrel(\.exe)?$/,
         ""

@@ -17,6 +17,15 @@ export function readInstallSourceEnv(): string | null {
   return normalizeInstallSource(process.env.SQUIRREL_INSTALL_SOURCE);
 }
 
+/**
+ * Whether `self install` prints its own "not in your PATH" block: only when the directory is off
+ * this process's PATH and no installer stamped an outcome. An installer that stamped one handled
+ * PATH (profile line added, opt-out, CI) and printed its own instructions.
+ */
+export function shouldPrintPathInstructions(binInPath: boolean): boolean {
+  return !binInPath && readPathSetupEnv() === null;
+}
+
 /** The `SQUIRREL_PATH_SETUP` env value when it is a known outcome, else null. */
 export function readPathSetupEnv(): PathSetup | null {
   const value = process.env.SQUIRREL_PATH_SETUP?.trim().toLowerCase();

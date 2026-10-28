@@ -53,6 +53,11 @@ jobs:
             rc_name=.bashrc
           fi
 
+          # Terminal.app opens bash as a login shell, which reads ~/.bash_profile
+          # and not ~/.bashrc; every other case is an interactive shell.
+          shell_flags=-ic
+          if [ "$(uname -s)" = Darwin ] && [ "$SHELL_NAME" = bash ]; then shell_flags=-lic; fi
+
           # A clean environment: no CI, no GITHUB_PATH, and a PATH without any
           # directory the installer would pick, so it falls back to ~/.local/bin.
           run_install() {
@@ -73,7 +78,7 @@ jobs:
           test "$(count "$rc" '# squirrel')" = 1
           test "$(count "$rc" "$path_line")" = 1
           env -i HOME="$home" PATH=/usr/bin:/bin SHELL="$shell_path" TERM=dumb \
-            "$shell_path" -ic 'command -v squirrel' | grep -q "$home/.local/bin/squirrel"
+            "$shell_path" "$shell_flags" 'command -v squirrel' | grep -q "$home/.local/bin/squirrel"
 
           # 2. Second run: idempotent, nothing appended.
           before=$(cat "$rc")
