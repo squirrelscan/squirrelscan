@@ -1,0 +1,131 @@
+---
+title: "TLS certificate: expiry, hostname, chain and key checks"
+description: "A certificate that expires, does not cover the hostname, or is missing its intermediate breaks the page for some visitors. squirrel reads the certificate once per host and names each problem."
+---
+
+## What the certificate protects
+
+A TLS certificate binds a hostname to a public key, and a browser or API client refuses to talk to the server unless that binding checks out. Four things go wrong in production, and each one shows up to visitors as a warning page while the site looks fine from the server:
+
+- **Expiry.** Automatic renewal breaks quietly, after a DNS change, a moved load balancer or a renewal hook that stopped running. The first sign is a full-page browser warning.
+- **Hostname coverage.** The certificate covers `example.com` but not `www.example.com`, so everyone who types `www.` sees a warning before any redirect can happen.
+- **Chain.** The server sends the leaf certificate without the intermediate that links it to a trusted root. Desktop Chrome often fetches the missing intermediate itself, so the page loads for you. curl, many API clients, crawlers and some mobile browsers refuse it.
+- **Staging certificates.** A self-signed or staging certificate reaches production.
+
+## What squirrel checks
+
+The rule makes one TLS handshake with the audited host and reads the certificate the server presents. It does not send an HTTP request. When the audited host is a registrable domain or its `www.` name, the rule also handshakes with the other one (`www.example.com` for `example.com`, and the reverse) on the same port. Any other subdomain, such as `blog.example.com`, has no counterpart, and on a shared platform domain the counterpart stays inside the site's own name (`acme.pages.dev` and `www.acme.pages.dev`).
+
+Before each handshake, squirrel resolves the name once and checks the address, as it does for the crawl's own hosts. It never connects to a link-local or cloud metadata address. The `www` or apex counterpart of a public site must also resolve to a public address. The connection goes to the address that was checked, with the hostname sent for SNI and verification.
+
+It emits these checks:
+
+- `tls-certificate-expiry` judges the date. It fails when the certificate has expired, when it is not yet valid, or when it expires within `error_days`. It warns when it expires within `warn_days`. Otherwise it passes, and the message shows the issuer, the expiry date and the days remaining.
+- `tls-certificate-hostname` fails when the certificate does not cover the audited hostname. The message names the hostname and the names the certificate does cover. A wildcard such as `*.example.com` covers one label.
+- `tls-certificate-chain` fails in three cases. A self-signed certificate says so. A server that omits its intermediate reports an incomplete chain when the runtime reports a missing leaf signature, which is how squirrel's runtime reports it. A chain that does not verify under the verification error `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` gets a different message: an intermediate may be missing, or the root is not trusted. The check cannot tell those two apart, because the runtime does not expose the served chain. To see which one it is, run `openssl s_client -connect HOST:443 -servername HOST -showcerts` and look at how many certificates the server sends.
+- `tls-certificate-key` warns when the key is RSA with fewer than 2048 bits. ECDSA keys are not judged for size.
+- `tls-certificate-www` warns when the www or apex counterpart resolves and answers on the same port, but its certificate is not valid for that name. A counterpart that does not resolve, or does not answer, reports nothing.
+
+The check for expiry always runs when the handshake succeeds, so a valid site gets a pass that shows its issuer and expiry date.
+
+The runtime reports only the first verification error it meets, and expiry and the hostname come before the chain. An expired certificate that is also self-signed, or missing its intermediate, reports as expired only, so fixing one problem can reveal the next. Run the audit again after each fix.
+
+When the handshake cannot be made, the rule reports `not checked` as an info check, with the reason. It never reports a pass or a failure for a certificate it did not read. The handshake runs in the `squirrel` CLI. With `--offline`, only the audited host is contacted, so the counterpart is not checked. `squirrel analyze` reads the certificate the site serves when it runs, not the one at the time of the crawl. It is also `not checked` where no handshake is made: behind an HTTP proxy set in the environment (`HTTPS_PROXY` and similar), because a direct connection would go around it, and when the audited host's address is refused by the check above.
+
+On a local or private-network host, such as `localhost` or `192.168.1.10`, the rule is skipped and left out of the score, because a dev server does not hold the production certificate. See [Transport and delivery rules do not apply](/guides/local-audits-cli#transport-and-delivery-rules-do-not-apply).
+
+When a page fetch fails on a TLS error, the CLI makes one handshake per host, waiting at most 3 seconds, and the failure message names the cause it found, for example `certificate has expired on {date}` or `the server did not send its intermediate certificate`, instead of listing every possibility.
+
+## How to fix it
+
+Renew before the certificate expires. Let's Encrypt clients such as certbot renew at 30 days remaining by default, so a certificate inside the 7-day error threshold has missed several renewal attempts. Check the renewal job's last run before anything else.
+
+Issue the certificate for every hostname the site answers on, including `www`:
+
+```bash
+certbot certonly --nginx -d example.com -d www.example.com
+```
+
+Serve the full chain, meaning the leaf certificate followed by its intermediates. Most servers take this as one file:
+
+```nginx
+ssl_certificate     /etc/letsencrypt/live/example.com/fullchain.pem;
+ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
+```
+
+Use the `fullchain.pem` file, not `cert.pem`, which holds the leaf alone. Test the result from outside your network with `openssl s_client -connect example.com:443 -servername example.com -showcerts`, and check that `Verify return code` reads `0 (ok)`.
+
+| | |
+|---|---|
+| **Rule ID** | `security/tls-certificate` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Per-site |
+| **Severity** | error |
+| **Weight** | 6/10 |
+
+## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `warn_days` | integer | `30` | Warn when the certificate expires within this many days. |
+| `error_days` | integer | `7` | Error when the certificate expires within this many days. |
+
+Raise `warn_days` if your renewal job runs less often than monthly and you want a longer warning window.
+
+### Configuration example
+
+```toml squirrel.toml
+[rule_options."security/tls-certificate"]
+warn_days = 60
+error_days = 14
+```
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/tls-certificate"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/tls-certificate"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [security/https](/rules/security/https): whether the page is served over HTTPS at all. This rule only judges the certificate once HTTPS is in use.
+- [security/hsts](/rules/security/hsts): the header that keeps browsers on HTTPS once a certificate is trusted.
+- [security/http-to-https](/rules/security/http-to-https): whether the HTTP versions of your URLs redirect to HTTPS.
+
+## References
+
+- [Transport Layer Security, MDN implementation guide](https://developer.mozilla.org/en-US/docs/Web/Security/Practical_implementation_guides/TLS)
+- [Let's Encrypt, getting started](https://letsencrypt.org/getting-started/)
+- [RFC 6125, representation and verification of domain names in TLS certificates](https://www.rfc-editor.org/rfc/rfc6125)
+
+## Check your site
+
+Run `squirrel audit https://example.com` and open the Security section of the report. The `tls-certificate-expiry` check shows the issuer, the expiry date and the days remaining even when nothing is wrong. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Security section looks like on a real site.
+  </Card>
+</CardGroup>

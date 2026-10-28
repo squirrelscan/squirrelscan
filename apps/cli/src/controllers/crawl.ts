@@ -13,6 +13,7 @@ import {
   formatResumeClaimWarning,
   startLeaseForStorage,
 } from "@/audit/crawl-lease";
+import { createTlsProbe } from "@/audit/tls-probe";
 import { loadConfig } from "@/config";
 import { MAX_PAGES_CAP } from "@/constants";
 import {
@@ -288,6 +289,8 @@ export async function runCrawl(
             // repo#3430: the site's own hosts are resolved once and connected
             // to by address; a metadata or link-local answer is never requested.
             pinOwnHosts: pinOwnHosts(),
+            // #712: names the certificate problem behind a TLS root failure.
+            tlsProbe: createTlsProbe({ allowPrivateNetwork: true }),
             // A crawl does not know which rules will read it later, so every
             // probe goes out unless [crawler] disable_discovery_probes = true
             // (#409).

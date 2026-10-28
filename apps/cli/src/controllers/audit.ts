@@ -87,6 +87,7 @@ import {
   resolveStreamBatchBytes,
   resolveStreamBatchPagesOverride,
 } from "@/audit/stream-batch";
+import { createTlsProbe } from "@/audit/tls-probe";
 import {
   loadConfig,
   DEFAULT_CRAWLER_CONCURRENCY,
@@ -1100,6 +1101,9 @@ export async function runAudit(
         pinOwnHosts: pinOwnHosts(),
         // --offline: a redirect or a sitemap on another host is not requested (#819).
         ...(options.offline ? { ownSiteOnly: true } : {}),
+        // #712: names the certificate problem behind a TLS root failure. The
+        // crawl's own hosts, vetted and pinned as the crawl's requests are.
+        tlsProbe: createTlsProbe({ allowPrivateNetwork: true }),
         discoveryProbePerHost: crawlConcurrency.discoveryProbePerHost,
         // Only the probes an enabled rule reads, and none when the user turned
         // them off: a firewall can ban the audit for asking for /swagger.json
@@ -1905,6 +1909,13 @@ export async function runAudit(
           siteMetadata: cloudResult?.siteMetadata ?? undefined,
           ...(entityMap ? { entityMap } : {}),
           probe: probeBudget,
+          // #712: security/tls-certificate's handshake, vetted and pinned; the
+          // www/apex variant must resolve public unless the site is private.
+          // --offline: the audited host only, not its www/apex counterpart.
+          tlsProbe: createTlsProbe({
+            siteUrl: crawlMeta?.baseUrl ?? baseUrl,
+            siteHostOnly: options.offline === true,
+          }),
         },
         {
           batchSize: streamBatchSize,

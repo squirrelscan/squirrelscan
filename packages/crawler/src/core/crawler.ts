@@ -51,6 +51,7 @@ import { getHostname, urlHostKey } from "@squirrelscan/utils/url";
 import { budgetRemainingMs, createPhaseBudget, withRequestDeadline } from "../deadline";
 import type { PhaseBudget, ProbeGate } from "../deadline";
 import { RefusalLog } from "../refusals";
+import { memoizeTlsProbe, withTlsCause } from "../tls-cause";
 import {
   computeSitemapUrlCap,
   discoverSitemaps,
@@ -533,6 +534,8 @@ export function createCrawler(
     // a rebinding answer later cannot move the connection either.
     const resolveOnce = memoizeResolveHost(config.resolveHost ?? resolveHostAddresses);
     const pinOwnHosts = ownHostsPinned(config);
+    // #712: one cause handshake per origin, however many of its pages fail.
+    const tlsProbe = config.tlsProbe ? memoizeTlsProbe(config.tlsProbe) : undefined;
     const egressFor = (base: string): EgressPolicy | undefined => {
       const baseHost = getHostname(base).toLowerCase();
       const policy: EgressPolicy = {
@@ -1541,7 +1544,20 @@ export function createCrawler(
               // #1822: the fetcher knows WHY (DNS, TLS, socket, timeout, 5xx).
               // Without this the reason is discarded here and a zero-page audit
               // can only say "No pages were crawled".
-              rootFailure: crawlErrorToFailureDetail(error, failureSourceFor(entry.source)),
+              // #712: a TLS failure names its cause (expired, hostname, chain,
+              // self-signed) when the injected handshake can see one. Only a
+              // failure that can still become the root failure is worth one,
+              // and it waits at most 3 s, inside what the URL's watchdog has left.
+              rootFailure: yield* Effect.promise(() => {
+                const detail = crawlErrorToFailureDetail(error, failureSourceFor(entry.source));
+                if (preferRootFailure(rootFailure, detail) !== detail) return Promise.resolve(detail);
+                return withTlsCause(
+                  detail,
+                  entry.normalizedUrl,
+                  tlsProbe,
+                  urlWatchdogMs(config.timeoutMs) - (Date.now() - startedAt),
+                );
+              }),
             });
             markPrefixFailed(entry.normalizedUrl, entry.depth);
             return;

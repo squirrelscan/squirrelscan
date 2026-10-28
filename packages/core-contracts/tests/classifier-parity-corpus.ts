@@ -35,6 +35,17 @@ export const CLASSIFIER_PARITY_CORPUS: ReadonlyArray<readonly [string, string]> 
   ["Redirect from example.com could not be followed: redirected off-site to other.com", "redirect"],
   ["robots.txt disallows crawling example.com", "robots"],
   ["No pages were crawled from example.com: something novel", "unknown"],
+  // The TLS causes the crawl names from the same handshake (#712).
+  ["TLS handshake with example.com failed: certificate has expired on 2020-01-15", "tls"],
+  [
+    "TLS handshake with example.com failed: hostname/IP does not match: the certificate does not cover example.com",
+    "tls",
+  ],
+  [
+    "TLS handshake with example.com failed: unable to verify the first certificate: the server did not send its intermediate certificate",
+    "tls",
+  ],
+  ["TLS handshake with example.com failed: self-signed certificate", "tls"],
 
   // The #792 blocked copy and the #1829 rate-limit copy.
   ["Site blocked the crawler (bot protection / auth / rate limit)", "http_4xx"],
