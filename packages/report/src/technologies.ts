@@ -21,7 +21,14 @@ export function techIconUrl(
 ): string | null {
   if (!icon) return null;
   const slug = icon.toLowerCase().replace(/[^a-z0-9._-]/g, "");
-  return slug ? `${baseUrl.replace(/\/+$/, "")}/${slug}.png` : null;
+  return slug ? `${withoutTrailingSlashes(baseUrl)}/${slug}.png` : null;
+}
+
+/** `url` without its trailing slashes; a scan, not a regex, so it stays linear. */
+function withoutTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url[end - 1] === "/") end -= 1;
+  return url.slice(0, end);
 }
 
 /** Display order for category groups (most identifying first). */

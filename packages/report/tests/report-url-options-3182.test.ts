@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { AuditReport, EntityMap } from "../src/types";
 import { renderHtml, reportInlineScripts } from "../src/output/html";
+import { techIconUrl } from "../src/technologies";
 
 function report(overrides: Partial<AuditReport> = {}): AuditReport {
   return {
@@ -104,6 +105,17 @@ describe("techIconBaseUrl", () => {
     expect(html).not.toContain("squirrelscan.com/tech-icons");
   });
 
+  test("trailing slashes on the base are dropped, in linear time", () => {
+    expect(techIconUrl("nextjs", "https://assets.example.test/tech-icons///")).toBe(
+      "https://assets.example.test/tech-icons/nextjs.png",
+    );
+    // Many slashes then a non-slash: the shape a backtracking regex is slow on.
+    const base = `https://a.test/${"/".repeat(50_000)}x`;
+    const started = performance.now();
+    expect(techIconUrl("nextjs", base)).toBe(`${base}/nextjs.png`);
+    expect(performance.now() - started).toBeLessThan(250);
+  });
+
   test("the default is unchanged", () => {
     const html = renderHtml(report({ technologies: TECH }), { offline: false });
     expect(html).toContain('src="https://squirrelscan.com/tech-icons/nextjs.png"');
@@ -111,14 +123,28 @@ describe("techIconBaseUrl", () => {
 });
 
 describe("reportInlineScripts", () => {
-  /** Every executable inline script body: no src, not a JSON data block. */
+  /**
+   * Every executable inline script body: no src, not a JSON data block. Read
+   * with an HTML parser (Bun's HTMLRewriter), not a tag regex.
+   */
   function executableScripts(html: string): string[] {
     const bodies: string[] = [];
-    const tag = /<script([^>]*)>([\s\S]*?)<\/script>/g;
-    for (const [, attrs, body] of html.matchAll(tag)) {
-      if (/\bsrc=/.test(attrs ?? "") || /type="application\/json"/.test(attrs ?? "")) continue;
-      bodies.push(body ?? "");
-    }
+    let body: string | null = null;
+    new HTMLRewriter()
+      .on("script", {
+        element(el) {
+          if (el.hasAttribute("src") || el.getAttribute("type") === "application/json") return;
+          body = "";
+          el.onEndTag(() => {
+            bodies.push(body ?? "");
+            body = null;
+          });
+        },
+        text(chunk) {
+          if (body !== null) body += chunk.text;
+        },
+      })
+      .transform(html);
     return bodies;
   }
 
