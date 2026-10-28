@@ -108,6 +108,7 @@ import { logger } from "./adapter-logger";
 import {
   buildV1Report,
   buildRobotsData,
+  unfetchedFrontierCount as countUnfetchedFrontier,
   type BuildV1ReportOptions,
   type FullAuditReport,
   type RuleExecutionResult,
@@ -2175,6 +2176,9 @@ export function runRulesOnStorage(
       logger.trace("soft-404 confirmation pass", soft404ConfirmSummary);
     }
 
+    // crawl/single-page-site: a crawl that stopped with URLs queued is not whole.
+    const unfetchedPages = yield* countUnfetchedFrontier(storage, crawlId);
+
     // Step 2: Build site data object for page rules to access
     // This allows page-scope rules to access scripts, resourceSizes, etc.
     const siteDataForPageRules: SiteData = {
@@ -2222,6 +2226,7 @@ export function runRulesOnStorage(
         pagesCrawled: siteContext.length,
         maxPages: config.crawler?.max_pages ?? 100,
       },
+      unfetchedPages,
     };
 
     // Step 3: Run page rules WITH site data. The page-rules phase is the
@@ -2988,6 +2993,8 @@ function buildStreamingSiteData(
       ).catch((): undefined => undefined),
     );
 
+    const unfetchedPages = yield* countUnfetchedFrontier(storage, crawlId);
+
     const siteDataForPageRules: SiteData = {
       baseUrl: crawl?.baseUrl ?? "",
       pages: parsedPages,
@@ -3028,6 +3035,7 @@ function buildStreamingSiteData(
         pagesCrawled: totalPageCount,
         maxPages: config.crawler?.max_pages ?? 100,
       },
+      unfetchedPages,
     };
 
     // Carry the confirm-pass verdicts by value: Pass 2 re-parses each page, so the

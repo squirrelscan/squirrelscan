@@ -51,7 +51,7 @@ const stripHash = (url: string): string => {
  * The anchor record for each page, by normalized URL. From the streaming
  * collector when present; otherwise built from the page's DOM on demand.
  */
-function anchorLookup(
+export function anchorLookup(
   ctx: RuleContext,
   pages: SitePage[],
 ): (key: string) => PageAnchorSignal | null {

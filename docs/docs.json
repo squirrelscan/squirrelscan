@@ -214,7 +214,8 @@
                   "rules/crawl/sitemap-lastmod-drift",
                   "rules/crawl/html-size",
                   "rules/crawl/pdf-size",
-                  "rules/crawl/soft-404"
+                  "rules/crawl/soft-404",
+                  "rules/crawl/single-page-site"
                 ]
               },
               {

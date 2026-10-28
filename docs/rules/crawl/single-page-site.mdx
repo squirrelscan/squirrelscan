@@ -1,0 +1,86 @@
+---
+title: "Single-page site: why search engines see one URL"
+description: "A site that is one page with sections has one title, one description and one URL to rank or cite. squirrel notes it without touching your score."
+---
+
+## What this note is for
+
+Many owners of a one-page site mean its sections when they say "pages": `#about`, `#services`, `#contact`. The audit reads one page, and says so, but nothing in the report explained why that matters. This rule does.
+
+Search engines index URLs, not fragments. A `#services` section cannot rank, show up in results or be linked to from a search result on its own. The whole site has one `<title>`, one meta description and one topic signal. AI agents and answer engines cite URLs too, so the site gives them one thing to cite.
+
+None of that is a defect. Landing pages, portfolios, event pages and small projects are often one page on purpose. So this note is informational: it never changes the health score or any category score.
+
+## What squirrel checks
+
+The rule is site-wide and fires only when all of these hold:
+
+- The crawl ran to the end: it was not stopped at the page limit or by the time budget, it followed links, and it left no queued URL unfetched.
+- Exactly one HTML page was fetched, and it answered with a 2xx status.
+- The sitemap, if there is one, lists at most one URL on your site.
+- The page has no link to another path on your site. External, `mailto:` and `tel:` links, links back to the page itself and in-page `#` links are fine. A link to a path that returns 404 still counts as another path.
+- The page has three or more links to a `#fragment` whose element id exists on the page. A one-section page does not trigger it.
+
+When it fires, the check is `single-page-site` with status info. Its message names the number of sections, and it lists up to ten section ids (`#about`, `#services`, `#contact`), with the count of any more. When it does not fire, the rule reports nothing.
+
+## How to fix it
+
+If the single page is deliberate, nothing needs to change.
+
+If a section is something you want found in search or cited by agents, give it its own page with its own title and description, and link to it from the main page. Add those pages to your sitemap.
+
+| | |
+|---|---|
+| **Rule ID** | `crawl/single-page-site` |
+| **Category** | [Crawlability](/rules/crawl) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 1/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/single-page-site"]
+```
+
+### Disable all Crawlability rules
+
+```toml squirrel.toml
+[rules]
+disable = ["crawl/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["crawl/single-page-site"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Related rules
+
+- [crawl/sitemap-exists](/rules/crawl/sitemap-exists): whether the site has a sitemap at all.
+- [crawl/sitemap-coverage](/rules/crawl/sitemap-coverage): indexable pages missing from the sitemap.
+- [links/broken-anchors](/rules/links/broken-anchors): `#fragment` links whose target id is gone.
+
+## References
+
+- [Fragment identifiers, Google Search Central](https://developers.google.com/search/docs/crawling-indexing/url-structure)
+
+## Check your site
+
+Run `squirrel audit https://example.com`. When your site is one page with sections, the Crawlability section lists them. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Crawlability section looks like on a real site.
+  </Card>
+</CardGroup>

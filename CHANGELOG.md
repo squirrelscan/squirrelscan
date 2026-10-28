@@ -20,6 +20,9 @@ How it works:
 ### Docs
 
 - **The SEO rules page counts 26 structured data rules.** The card still said 25 after `schema/expected-type` was added.
+### Added
+
+- **`crawl/single-page-site`.** When the whole site is one page with sections, the audit now says what that means for search: one URL to rank or cite, one title and one description, and `#sections` that cannot be indexed on their own. It fires only on a complete crawl that fetched exactly one HTML page, has at most one in-scope sitemap URL, no link to another path on the site, and three or more links to ids on the page, and lists up to ten section ids. It is informational and never changes the health score or a category score. When it fires, the editor's summary request carries `coverage.singlePageSite` and `coverage.sectionCount`. See [crawl/single-page-site](https://docs.squirrelscan.com/rules/crawl/single-page-site).
 
 ## v0.0.138 (2026-10-28)
 

@@ -22,6 +22,7 @@ import { sitemapExistsRule } from "./sitemap-exists";
 import { sitemapLastmodChurnRule } from "./sitemap-lastmod-churn";
 import { sitemapLastmodDriftRule } from "./sitemap-lastmod-drift";
 import { sitemapValidRule } from "./sitemap-valid";
+import { singlePageSiteRule } from "./single-page-site";
 import { soft404Rule } from "./soft-404";
 
 export const rules: Rule[] = [
@@ -45,6 +46,7 @@ export const rules: Rule[] = [
   htmlSizeRule,
   pdfSizeRule,
   soft404Rule,
+  singlePageSiteRule,
 ];
 
 export {
@@ -67,5 +69,6 @@ export {
   sitemapLastmodChurnRule,
   sitemapLastmodDriftRule,
   sitemapValidRule,
+  singlePageSiteRule,
   soft404Rule,
 };
