@@ -79,9 +79,13 @@ const MARKED = '# squirrel\nexport PATH="$HOME/.local/bin:$PATH"\n';
 describe("find_bin_dir keeps its directory choice", () => {
   test("a writable non-standard $HOME dir on PATH is NOT picked; falls back to ~/.local/bin", async () => {
     const r = await run(
-      'mkdir -p "$HOME/.mybin" "$HOME/.cargo/bin"; PATH="$HOME/.mybin:$HOME/.cargo/bin:$PATH"; d=$(find_bin_dir) || true; echo "DIR=$d"',
+      'mkdir -p "$HOME/.mybin" "$HOME/.cargo/bin"; PATH="$HOME/.mybin:$HOME/.cargo/bin:$PATH"; d=$(find_bin_dir) || true; echo "DIR=$d"; setup_path "$d"; echo "SETUP=$PATH_SETUP"',
+      { env: { SHELL: "/bin/zsh" } },
     );
     expect(r.stdout).toContain(`DIR=${r.home}/.local/bin\n`);
+    // ...and that directory is what gets added to PATH.
+    expect(r.stdout).toContain("SETUP=added");
+    expect(read(join(r.home, ".zshrc"))).toBe(`\n${MARKED}`);
   });
 
   test("a common dir already on PATH and writable still wins", async () => {
