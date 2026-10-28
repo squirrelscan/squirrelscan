@@ -1,0 +1,187 @@
+name: Installer PATH setup
+
+# The installers add squirrel to the user's PATH (a marked line in the shell
+# profile on macOS and Linux, the User Path in the registry on Windows). The
+# release workflow's "Verify installers" run with CI=true, where the installer
+# deliberately never edits a profile or the registry, so none of that code runs
+# there. This runs the real installers with CI unset, in a throwaway HOME or
+# against a seeded copy of the user Path that is restored afterwards, and
+# asserts what they wrote. It only runs when the installers (or this file)
+# change, and on demand.
+
+on:
+  pull_request:
+    paths:
+      - install.sh
+      - install.ps1
+      - .github/workflows/test-installer-path.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installer-path-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unix:
+    name: PATH setup (${{ matrix.os }}, ${{ matrix.shell }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        shell: [zsh, bash]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install zsh
+        if: runner.os == 'Linux' && matrix.shell == 'zsh'
+        run: sudo apt-get install -y zsh
+      - name: Run the installer with CI unset and assert the profile
+        env:
+          SHELL_NAME: ${{ matrix.shell }}
+        run: |
+          set -euo pipefail
+          shell_path=$(command -v "$SHELL_NAME")
+          if [ "$SHELL_NAME" = zsh ]; then
+            rc_name=.zshrc
+          elif [ "$(uname -s)" = Darwin ]; then
+            rc_name=.bash_profile
+          else
+            rc_name=.bashrc
+          fi
+
+          # A clean environment: no CI, no GITHUB_PATH, and a PATH without any
+          # directory the installer would pick, so it falls back to ~/.local/bin.
+          run_install() {
+            local home="$1"; shift
+            env -i HOME="$home" PATH=/usr/bin:/bin SHELL="$shell_path" TERM=dumb \
+              NO_TELEMETRY=1 SQUIRREL_NO_UPDATE=1 "$@" bash "$GITHUB_WORKSPACE/install.sh"
+          }
+          # The profile line is literal text with a $HOME the shell expands later.
+          # shellcheck disable=SC2016
+          path_line='export PATH="$HOME/.local/bin:$PATH"'
+          count() { grep -cF -- "$2" "$1" || true; }
+
+          # 1. First run: exactly one marked line, and a new shell finds squirrel.
+          home=$(mktemp -d)
+          run_install "$home"
+          rc="$home/$rc_name"
+          test -f "$rc"
+          test "$(count "$rc" '# squirrel')" = 1
+          test "$(count "$rc" "$path_line")" = 1
+          env -i HOME="$home" PATH=/usr/bin:/bin SHELL="$shell_path" TERM=dumb \
+            "$shell_path" -ic 'command -v squirrel' | grep -q "$home/.local/bin/squirrel"
+
+          # 2. Second run: idempotent, nothing appended.
+          before=$(cat "$rc")
+          run_install "$home"
+          test "$(cat "$rc")" = "$before"
+          test "$(count "$rc" '# squirrel')" = 1
+
+          # 3. Existing profile content is kept and the line is appended once.
+          home=$(mktemp -d)
+          printf 'export KEEP_ME=1\n' > "$home/$rc_name"
+          run_install "$home"
+          grep -qF 'export KEEP_ME=1' "$home/$rc_name"
+          test "$(count "$home/$rc_name" '# squirrel')" = 1
+
+          # 4. Opt-out: no profile is created or changed.
+          home=$(mktemp -d)
+          run_install "$home" SQUIRREL_NO_MODIFY_PATH=1
+          test ! -e "$home/$rc_name"
+          test -x "$home/.local/bin/squirrel"
+
+          # 5. CI set: no profile edit either (the installer's CI branch).
+          home=$(mktemp -d)
+          run_install "$home" CI=true
+          test ! -e "$home/$rc_name"
+          echo "all PATH assertions passed"
+
+  windows:
+    name: PATH setup (windows)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run install.ps1 with CI unset and assert the user Path
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $key = 'HKCU:\Environment'
+          $script = Join-Path $env:GITHUB_WORKSPACE 'install.ps1'
+
+          function Get-RawPath {
+            (Get-Item $key).GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+          }
+          function Get-PathKind {
+            (Get-Item $key).GetValueKind('Path').ToString()
+          }
+          function Set-SeedPath([string]$value) {
+            Set-ItemProperty -Path $key -Name Path -Value $value -Type ExpandString
+          }
+          # The installer runs in a fresh process with CI and GITHUB_PATH removed
+          # and a throwaway LOCALAPPDATA, so the install dir is known and the
+          # runner's own state is not touched.
+          function Invoke-Installer([string]$localAppData, [string]$noModify) {
+            $env:SQ_TEST_LOCALAPPDATA = $localAppData
+            $env:SQ_TEST_NO_MODIFY = $noModify
+            $env:SQ_TEST_SCRIPT = $script
+            pwsh -NoProfile -Command {
+              Remove-Item Env:CI -ErrorAction SilentlyContinue
+              Remove-Item Env:GITHUB_PATH -ErrorAction SilentlyContinue
+              $env:NO_TELEMETRY = '1'
+              $env:SQUIRREL_NO_UPDATE = '1'
+              $env:LOCALAPPDATA = $env:SQ_TEST_LOCALAPPDATA
+              if ($env:SQ_TEST_NO_MODIFY) { $env:SQUIRREL_NO_MODIFY_PATH = $env:SQ_TEST_NO_MODIFY } else { Remove-Item Env:SQUIRREL_NO_MODIFY_PATH -ErrorAction SilentlyContinue }
+              & $env:SQ_TEST_SCRIPT
+              if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
+            if ($LASTEXITCODE -ne 0) { throw "install.ps1 exited with $LASTEXITCODE" }
+          }
+          function Assert([bool]$condition, [string]$message) {
+            if (-not $condition) { throw "ASSERTION FAILED: $message" }
+            Write-Host "ok: $message"
+          }
+          function Count-Entry([string]$raw, [string]$entry) {
+            @($raw -split ';' | Where-Object { $_.TrimEnd('\') -ieq $entry.TrimEnd('\') }).Count
+          }
+
+          $origExists = $null -ne (Get-Item $key).GetValue('Path', $null)
+          $origRaw = Get-RawPath
+          $origKind = if ($origExists) { Get-PathKind } else { 'ExpandString' }
+          $seed = ($origRaw.TrimEnd(';') + ';%USERPROFILE%\squirrel-path-test').TrimStart(';')
+          try {
+            # 1. First run: the dir is added to the User Path, once; the
+            # %USERPROFILE% entry stays unexpanded and the value stays REG_EXPAND_SZ.
+            Set-SeedPath $seed
+            $local1 = Join-Path $env:RUNNER_TEMP 'sq-local-1'
+            New-Item -ItemType Directory -Force -Path $local1 | Out-Null
+            $binDir = Join-Path $local1 'squirrel\bin'
+            Invoke-Installer $local1 ''
+            $raw = Get-RawPath
+            Assert ((Count-Entry $raw $binDir) -eq 1) 'the install dir is on the User Path exactly once'
+            Assert ($raw.Contains('%USERPROFILE%\squirrel-path-test')) 'the %USERPROFILE% entry was not expanded'
+            Assert ((Get-PathKind) -eq 'ExpandString') 'the User Path is still REG_EXPAND_SZ'
+            Assert ($raw.StartsWith($origRaw.TrimEnd(';'))) 'the existing entries come first and are unchanged'
+            $userExpanded = [Environment]::GetEnvironmentVariable('Path', 'User')
+            Assert ($userExpanded.Contains($binDir)) 'GetEnvironmentVariable(Path, User) sees the dir'
+
+            # 2. Second run: nothing changes.
+            $before = Get-RawPath
+            Invoke-Installer $local1 ''
+            Assert ((Get-RawPath) -eq $before) 'a second run leaves the User Path byte-for-byte unchanged'
+
+            # 3. Opt-out on a clean state: nothing changes.
+            Set-SeedPath $seed
+            $local2 = Join-Path $env:RUNNER_TEMP 'sq-local-2'
+            New-Item -ItemType Directory -Force -Path $local2 | Out-Null
+            Invoke-Installer $local2 '1'
+            Assert ((Get-RawPath) -eq $seed) 'SQUIRREL_NO_MODIFY_PATH=1 leaves the User Path untouched'
+            Assert ((Get-PathKind) -eq 'ExpandString') 'and its type'
+          } finally {
+            if ($origExists) { Set-ItemProperty -Path $key -Name Path -Value $origRaw -Type $origKind }
+            else { Remove-ItemProperty -Path $key -Name Path -ErrorAction SilentlyContinue }
+          }
