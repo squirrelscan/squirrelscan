@@ -79,13 +79,21 @@ jobs:
           shape=$'^code=(true|false)\nengine=(true|false)\ninstaller=(true|false)\nrelease=(true|false)\nbuild=(true|false)$'
           [[ "$result" =~ $shape ]] || run_everything "unexpected classifier output"
           echo "$result" | tee -a "$GITHUB_OUTPUT"
-      # Keep the released-changelog guard in this always-running job so a
-      # changelog-only pull request cannot skip it through path classification.
-      - name: Fetch release tags
-        if: ${{ github.event_name == 'pull_request' }}
-        run: git fetch --force --quiet --depth=1 origin 'refs/tags/v*:refs/tags/v*'
+
+  changelog-guard:
+    name: Changelog guard
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Fetch pull request base
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: git fetch --no-tags --depth=1 origin "$BASE"
+      - name: Fetch release tags without blobs
+        run: git fetch --force --quiet --depth=1 --filter=blob:none origin 'refs/tags/v*:refs/tags/v*'
       - name: Check released changelog sections
-        if: ${{ github.event_name == 'pull_request' }}
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: bash scripts/check-released-changelog.sh "$BASE"

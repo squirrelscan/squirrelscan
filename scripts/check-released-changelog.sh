@@ -77,7 +77,7 @@ while IFS= read -r version; do
 
   # Early releases predate CHANGELOG.md, so there is no tagged section that
   # can serve as their immutable snapshot.
-  if ! git -C "$root" show "$version:CHANGELOG.md" > "$tagged_changelog" 2>/dev/null; then
+  if ! git -C "$root" show "refs/tags/$version:CHANGELOG.md" > "$tagged_changelog" 2>/dev/null; then
     continue
   fi
   tagged=$((tagged + 1))
