@@ -1,7 +1,22 @@
 import type { DetectedTechnology, Detector, TechDetectInput, TechFingerprint } from "./types";
 import { ALL_FINGERPRINTS } from "./fingerprints";
 
-function matchDetector(detector: Detector, input: TechDetectInput): boolean {
+/** Remove `<!-- ... -->` comments in one pass; an unterminated one is kept as is. */
+function stripHtmlComments(html: string): string {
+  let out = "";
+  let pos = 0;
+  for (;;) {
+    const open = html.indexOf("<!--", pos);
+    if (open === -1) break;
+    const close = html.indexOf("-->", open + 4);
+    if (close === -1) break;
+    out += html.slice(pos, open);
+    pos = close + 3;
+  }
+  return out + html.slice(pos);
+}
+
+function matchDetector(detector: Detector, input: TechDetectInput, html: string): boolean {
   switch (detector.type) {
     case "header": {
       const value = input.headers[detector.name] ?? input.headers[detector.name.toLowerCase()];
@@ -16,7 +31,7 @@ function matchDetector(detector: Detector, input: TechDetectInput): boolean {
         return input.scripts.some((s) => s.url && detector.pattern.test(s.url));
       }
       // Fallback: scan HTML for script src attributes
-      return detector.pattern.test(input.html);
+      return detector.pattern.test(html);
     case "script-content":
       if (input.scripts?.some((s) => s.content && detector.pattern.test(s.content))) {
         return true;
@@ -25,9 +40,10 @@ function matchDetector(detector: Detector, input: TechDetectInput): boolean {
       // it too so inline init snippets (window._taboola=…, obApi(…)) match.
       // Patterns are JS-specific (global assignments / vendor calls), so the
       // false-positive risk from scanning full HTML is negligible.
-      return detector.pattern.test(input.html);
+      return detector.pattern.test(html);
     case "html":
-      return detector.pattern.test(input.html);
+      if (detector.requires && !html.includes(detector.requires)) return false;
+      return detector.pattern.test(html);
     case "dom":
       // DOM selectors need a document — skip in headerless detection
       return false;
@@ -38,7 +54,7 @@ function matchDetector(detector: Detector, input: TechDetectInput): boolean {
       // rely on finding in asset/link URLs embedded in the markup — the page URL
       // itself rarely carries them. Patterns are deliberately narrow segments,
       // not bare words, to keep the HTML scan low-false-positive.
-      return detector.pattern.test(input.url) || detector.pattern.test(input.html);
+      return detector.pattern.test(input.url) || detector.pattern.test(html);
   }
 }
 
@@ -152,11 +168,19 @@ export function detectTechnologies(
       ? rawInput
       : { ...rawInput, meta: extractMetaFromHtml(rawInput.html) };
 
+  // Linear scan; computed once and only for fingerprints that ask for it.
+  let markupHtml: string | null = null;
+
   for (const fp of fingerprints) {
     let matchedDetector: Detector | null = null;
+    let html = input.html;
+    if (fp.ignoreComments) {
+      markupHtml ??= stripHtmlComments(input.html);
+      html = markupHtml;
+    }
 
     for (const detector of fp.detectors) {
-      if (matchDetector(detector, input)) {
+      if (matchDetector(detector, input, html)) {
         matchedDetector = detector;
         break; // ANY match = detected
       }
@@ -176,5 +200,13 @@ export function detectTechnologies(
     }
   }
 
-  return results;
+  // A fingerprint that another detection explains (a shared backend an AI app
+  // builder loads for every app) is dropped, not reported as a second stack.
+  const found = new Set(results.map((r) => r.id));
+  const suppressed = new Set(
+    fingerprints
+      .filter((fp) => fp.unlessAny?.some((id) => found.has(id)))
+      .map((fp) => fp.id),
+  );
+  return suppressed.size ? results.filter((r) => !suppressed.has(r.id)) : results;
 }

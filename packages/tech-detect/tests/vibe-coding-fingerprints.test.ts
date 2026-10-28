@@ -206,3 +206,98 @@ describe("vibe-coding builder and BaaS fingerprints", () => {
     });
   });
 });
+
+// Review round: raw (unescaped) code samples and prose, shared backends, comments.
+describe("vibe-coding fingerprints: raw code samples, shared backends, comments", () => {
+  const found = (html: string): string[] => ids(input({ html })).filter((id) => IDS.includes(id));
+
+  test("raw-quoted code samples in <pre>, <code> and <p> match nothing", () => {
+    const html = `<!doctype html><html><body>
+<pre>const firebaseConfig = { authDomain: "your-project.firebaseapp.com" };
+const sb = createClient("https://abcdefghijklmnopqrst.supabase.co", key);
+const sb2 = createClient("https://yourprojectrefhere00.supabase.co", key);
+fetch(\`/api/app-logs/\${appId}/log-user-in-app/\${page}\`)</pre>
+<p>Base44 stores the session under "base44_access_token" in localStorage.</p>
+<code>/api/app-logs/0123456789abcdef01234567/log-user-in-app</code>
+<p>Add <script src="https://www.gstatic.com/firebasejs/9.13.0/firebase-app-compat.js"></script> raw?</p>
+<style>.note::after { content: "#lovable-badge and /__replco/static/ are mentioned here" }</style>
+<p>Set the font to url("/__replco/static/fonts/x.woff2") or id="lovable-badge" in a note.</p>
+</body></html>`;
+    // The raw <script src> in the <p> is real markup to a parser, so only that one counts.
+    expect(found(html)).toEqual(["firebase"]);
+    expect(found(html.replace(/<p>Add <script[^]*?<\/p>/, ""))).toEqual([]);
+  });
+
+  test("a link to a Supabase or Lovable asset is not a usage signal", () => {
+    const html = `<a href="https://abcdefghijklmnopqrst.supabase.co/storage/v1/object/public/b/x.pdf">report</a>
+<a href="https://storage.googleapis.com/gpt-engineer-file-uploads/u/doc.pdf">doc</a>`;
+    expect(found(html)).toEqual([]);
+  });
+
+  test("data-src is not a script src, and commented-out tags are ignored", () => {
+    const lazy = `<script data-src="https://www.gstatic.com/firebasejs/9.13.0/firebase-app.js"></script>`;
+    expect(found(lazy)).toEqual([]);
+    const commented = `<!-- <script src="https://www.gstatic.com/firebasejs/9.13.0/firebase-app.js"></script>
+<script src="https://clerk.example.com/npm/@clerk/clerk-js@6/dist/clerk.browser.js"></script> -->`;
+    expect(found(commented)).toEqual([]);
+    expect(found(`<!-- note --><meta name="generator" content="x">${lazy.replace("data-src", "src")}`)).toEqual([
+      "firebase",
+    ]);
+  });
+
+  test("an unterminated comment is kept, not dropped", () => {
+    const html = `<script src="https://www.gstatic.com/firebasejs/9.13.0/firebase-app.js"></script><!-- never closed`;
+    expect(found(html)).toEqual(["firebase"]);
+  });
+
+  test("Base44 custom-domain app: template-literal beacon in an inline script", () => {
+    const html = `<html><head><script type="module">
+  const appId = "0123456789abcdef01234567";
+  fetch(\`/api/app-logs/\${appId}/log-user-in-app/\${pageName}\`, { method: "POST" });
+</script></head></html>`;
+    expect(ids(input({ url: "https://tools.example.org/", html }))).toContain("base44");
+  });
+
+  test("Base44 app that loads shared Supabase storage images is not also Supabase", () => {
+    const html = `<html><head><script>var TOKEN_KEY = 'base44_access_token';</script></head>
+<body><img src="https://abcdefghijklmnopqrst.supabase.co/storage/v1/object/public/base44-prod/public/x/logo.png"></body></html>`;
+    const got = ids(input({ url: "https://tools.example.org/", html }));
+    expect(got).toContain("base44");
+    expect(got).not.toContain("supabase");
+    // The same image on a non-Base44 page is still a Supabase signal.
+    const plain = `<img src="https://abcdefghijklmnopqrst.supabase.co/storage/v1/object/public/b/x.png">`;
+    expect(ids(input({ html: plain }))).toContain("supabase");
+  });
+
+  test("Lovable badge style block and Replit font URL in real markup", () => {
+    const badge = `<style>\n\t#lovable-badge {\n\t\t--badge-bg: #1b1b1b;\n\t}\n</style>`;
+    expect(found(badge)).toEqual(["lovable"]);
+    const font = `<style>@font-face{font-family:"Replit Diatype";src:url("/__replco/static/fonts/ReplitDiatypeVariable.a827899a.woff2") format("woff2")}</style>`;
+    expect(found(font)).toEqual(["replit"]);
+  });
+
+  test("Lovable social image via og:image meta and img src; Supabase preconnect link", () => {
+    const meta = `<meta property="og:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/uid/social-images/s.webp">`;
+    expect(found(meta)).toEqual(["lovable"]);
+    const pre = `<link rel="preconnect" href="https://abcdefghijklmnopqrst.supabase.co/rest/v1/">`;
+    expect(found(pre)).toEqual(["supabase"]);
+  });
+});
+
+describe("vibe-coding fingerprints: bounded on adversarial markup", () => {
+  test("repeated unterminated script, style, comment and tag openers stay fast", () => {
+    const inputs = [
+      "<script>".repeat(20_000),
+      `<script ${"a ".repeat(100)}>`.repeat(3000) + "x".repeat(100_000),
+      "<style>".repeat(20_000),
+      "<!--".repeat(50_000),
+      `<img ${"src=".repeat(50)} `.repeat(5000),
+      `<script>${"createClient(".repeat(20_000)}`,
+    ];
+    for (const html of inputs) {
+      const start = performance.now();
+      detectTechnologies({ url: "https://example.com/", headers: {}, html });
+      expect(performance.now() - start).toBeLessThan(2000);
+    }
+  });
+});

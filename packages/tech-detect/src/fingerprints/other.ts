@@ -1,17 +1,52 @@
 import type { Detector, TechFingerprint } from "../types";
 
+const BOUNDED_SCRIPT_BODY = String.raw`(?:(?!<\/script)[\s\S]){0,4000}?`;
+const BOUNDED_STYLE_BODY = String.raw`(?:(?!<\/style)[\s\S]){0,2000}?`;
+
 /**
  * A script URL matched two ways: anchored at the start of a `script-url` entry,
  * and as the `src` of a real `<script>` tag in the HTML. The engine scans the raw
  * HTML for `script-url` when no script list is passed, so an unanchored pattern
  * would also fire on a code sample or a link in prose; both forms here need a
- * script tag or a whole script URL.
+ * script tag or a whole script URL. `\s` before `src` rules out `data-src`.
  */
 function scriptSrc(urlSource: string): Detector[] {
   return [
     { type: "script-url", pattern: new RegExp(`^${urlSource}`, "i") },
-    { type: "html", pattern: new RegExp(`<script\\b[^>]{0,300}\\bsrc\\s*=\\s*["']${urlSource}`, "i") },
+    {
+      type: "html",
+      pattern: new RegExp(`<script\\s(?:[^>]{0,300}\\s)?src\\s*=\\s*["']${urlSource}`, "i"),
+    },
   ];
+}
+
+/** `bodySource` inside the body of a `<script>` element, not in prose or `<pre>`. `requires` is a literal the body must contain. */
+function inScript(bodySource: string, requires: string): Detector {
+  return {
+    type: "html",
+    requires,
+    pattern: new RegExp(`<script\\b[^>]{0,300}>${BOUNDED_SCRIPT_BODY}${bodySource}`, "i"),
+  };
+}
+
+/** `bodySource` inside the body of a `<style>` element. */
+function inStyle(bodySource: string, requires: string): Detector {
+  return {
+    type: "html",
+    requires,
+    pattern: new RegExp(`<style\\b[^>]{0,300}>${BOUNDED_STYLE_BODY}${bodySource}`, "i"),
+  };
+}
+
+/** `urlSource` as the value of a resource attribute on one of `tags`, never an `<a href>`. */
+function resourceAttr(tags: string, attrs: string, urlSource: string): Detector {
+  return {
+    type: "html",
+    pattern: new RegExp(
+      `<(?:${tags})\\s(?:[^>]{0,400}\\s)?(?:${attrs})\\s*=\\s*["'](?:[^"']{0,200}[\\s,])?${urlSource}`,
+      "i",
+    ),
+  };
 }
 
 export const OTHER_FINGERPRINTS: TechFingerprint[] = [
@@ -131,8 +166,9 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
 
   // Vibe-coding builders and backend-as-a-service SDKs. Every signal is visible
   // in stored HTML, headers, script URLs or inline config (external JS bodies are
-  // not stored). Host patterns are anchored to the start of the URL so a page that
-  // only mentions a host in its body never matches through the url-path HTML scan.
+  // not stored). Each needs real markup context (a script tag, an inline script, a
+  // style block, a resource attribute or the page host), so a tutorial or a blog
+  // post that quotes the same strings in prose or code samples does not match.
   {
     id: "lovable",
     name: "Lovable",
@@ -144,9 +180,14 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       { type: "meta", name: "twitter:site", pattern: /^@lovable(?:_dev)?$/i },
       ...scriptSrc(String.raw`(?:https:)?\/\/cdn\.gpteng\.co\/(?:gptengineer|lovable)\.js`),
       ...scriptSrc(String.raw`\/__l5e\/events\.[0-9a-f]{8,64}\.js`),
-      { type: "html", pattern: /#lovable-badge\b/ },
-      { type: "html", pattern: /storage\.googleapis\.com\/gpt-engineer-file-uploads\//i },
+      inStyle(String.raw`#lovable-badge(?:-[a-z]{1,12})?\s*[{,:]`, "#lovable-badge"),
+      resourceAttr(
+        "img|source|meta",
+        "src|srcset|data-src|content",
+        String.raw`https:\/\/storage\.googleapis\.com\/gpt-engineer-file-uploads\/`,
+      ),
     ],
+    ignoreComments: true,
     confidence: "high",
   },
   {
@@ -157,9 +198,13 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     icon: "base44",
     detectors: [
       { type: "url-path", pattern: /^https?:\/\/(?:[a-z0-9-]{1,63}\.){1,3}base44\.app(?:[:/?#]|$)/i },
-      { type: "script-content", pattern: /base44_access_token/ },
-      { type: "script-content", pattern: /\/api\/app-logs\/[0-9a-f]{24}\/log-user-in-app/ },
+      inScript(String.raw`base44_access_token`, "base44_access_token"),
+      inScript(
+        String.raw`\/api\/app-logs\/(?:[0-9a-f]{24}|\$\{\w{1,30}\})\/log-user-in-app`,
+        "/api/app-logs/",
+      ),
     ],
+    ignoreComments: true,
     confidence: "high",
   },
   {
@@ -174,8 +219,10 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
         pattern: /^https?:\/\/(?:[a-z0-9-]{1,63}\.){1,6}(?:replit\.app|repl\.co|replit\.dev)(?:[:/?#]|$)/i,
       },
       ...scriptSrc(String.raw`https:\/\/replit\.com\/public\/js\/replit-dev-banner\.js`),
-      { type: "html", pattern: /["'(]\/__replco\/static\//i },
+      resourceAttr("link|script|img|source", "href|src", String.raw`\/__replco\/static\/`),
+      inStyle(String.raw`url\(\s*["']?\/__replco\/static\/`, "/__replco/static/"),
     ],
+    ignoreComments: true,
     confidence: "high",
   },
   {
@@ -194,24 +241,32 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     website: "https://supabase.com",
     icon: "supabase",
     detectors: [
-      // Project refs are 20 lowercase alphanumerics: <ref>.supabase.co. The path
-      // must be one of the platform APIs and the URL must sit in an attribute value
-      // (img/link/script) or a next/image proxy parameter, not in prose.
+      // Project refs are 20 lowercase alphanumerics: <ref>.supabase.co. A usage
+      // signal is a resource tag (never an <a href>), a next/image proxy URL, an
+      // inline client config or the CDN client script; `your...` placeholders are
+      // not refs.
+      resourceAttr(
+        "img|source|video|script|link|iframe",
+        "src|srcset|data-src|poster|href",
+        String.raw`https:\/\/(?!your)[a-z0-9]{20}\.supabase\.co\/(?:storage|rest|auth|realtime|functions|graphql)\/v1`,
+      ),
       {
         type: "html",
         pattern:
-          /=\s*["']https:\/\/[a-z0-9]{20}\.supabase\.co\/(?:storage|rest|auth|realtime|functions|graphql)\/v1/i,
+          /\/_next\/image\?url=https%3A%2F%2F(?!your)[a-z0-9]{20}\.supabase\.co%2F(?:storage|rest|auth|realtime|functions|graphql)%2Fv1/i,
       },
-      {
-        type: "html",
-        pattern:
-          /https%3A%2F%2F[a-z0-9]{20}\.supabase\.co%2F(?:storage|rest|auth|realtime|functions|graphql)%2Fv1/i,
-      },
-      { type: "script-content", pattern: /createClient\(\s*["']https:\/\/[a-z0-9]{20}\.supabase\.co["']/ },
+      inScript(
+        String.raw`createClient\(\s*["']https:\/\/(?!your)[a-z0-9]{20}\.supabase\.co["']`,
+        ".supabase.co",
+      ),
       ...scriptSrc(
         String.raw`https:\/\/(?:cdn\.jsdelivr\.net\/npm|unpkg\.com|esm\.sh)\/@supabase\/supabase-js`,
       ),
     ],
+    ignoreComments: true,
+    // Base44 apps load images from Base44's own shared Supabase storage; that is
+    // the platform's backend, not a Supabase choice of the app's author.
+    unlessAny: ["base44"],
     confidence: "high",
   },
   {
@@ -223,10 +278,11 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       ...scriptSrc(String.raw`https:\/\/[a-z0-9.-]{1,120}\/npm\/@clerk\/clerk-js@`),
       ...scriptSrc(String.raw`https:\/\/[a-z0-9-]{1,63}\.clerk\.accounts\.dev\/`),
-      { type: "html", pattern: /<script\b[^>]{0,400}\bdata-clerk-js-script\b/i },
-      { type: "html", pattern: /\bdata-clerk-publishable-key\s*=\s*["']pk_(?:test|live)_/i },
+      { type: "html", pattern: /<script\s(?:[^>]{0,400}\s)?data-clerk-js-script\b/i },
+      { type: "html", pattern: /<script\s(?:[^>]{0,400}\s)?data-clerk-publishable-key\s*=\s*["']pk_(?:test|live)_/i },
     ],
     versionPattern: /@clerk\/clerk-js@(\d+(?:\.\d+){0,2})/i,
+    ignoreComments: true,
     confidence: "high",
   },
   {
@@ -240,9 +296,13 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       ...scriptSrc(
         String.raw`\/__\/firebase\/(?:\d+(?:\.\d+){0,2}\/)?(?:init\.js|firebase-app(?:-compat)?\.js)`,
       ),
-      { type: "script-content", pattern: /authDomain\s*:\s*["'][a-z0-9-]{1,63}\.firebaseapp\.com["']/i },
+      inScript(
+        String.raw`authDomain["']?\s*:\s*["'](?!your|my-project|project)[a-z0-9-]{1,63}\.firebaseapp\.com["']`,
+        ".firebaseapp.com",
+      ),
     ],
     versionPattern: /gstatic\.com\/firebasejs\/(\d+\.\d+\.\d+)/i,
+    ignoreComments: true,
     confidence: "high",
   },
 ];
