@@ -644,6 +644,7 @@ function Set-UserPath {
         }
         return "on_path"
     }
+    # On this session's Path only: nothing to persist, and none of our business.
     if (Test-PathHasDir $env:Path $BinDir) { return "on_path" }
     if (Test-NoModifyPath) { return "opted_out" }
     if (Test-CiEnvironment) {
@@ -660,7 +661,8 @@ function Set-UserPath {
         if ($newPath -like "*%*") {
             # SetEnvironmentVariable would rewrite the value as REG_SZ and stop
             # %VARS% entries expanding. Write REG_EXPAND_SZ, then set and clear a
-            # throwaway variable so Windows broadcasts the environment change.
+            # throwaway variable so Windows broadcasts WM_SETTINGCHANGE and new
+            # terminals see the Path.
             $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment", $true)
             try {
                 $key.SetValue("Path", $newPath, [Microsoft.Win32.RegistryValueKind]::ExpandString)
