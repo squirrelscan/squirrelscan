@@ -29,6 +29,9 @@ const countWords = (text: string): number => text.split(/\s+/).filter(Boolean).l
 /** Most `#fragment` anchors read per page: bounds the work on a page of thousands of links. */
 const MAX_FRAGMENT_LINKS = 500;
 
+/** Most `[id]` elements read per page, so a page of tens of thousands of ids stays bounded. */
+const MAX_ID_ELEMENTS = 5000;
+
 const fragmentId = (href: string): string | null => {
   if (!href.startsWith("#") || href.length < 2) return null;
   try {
@@ -72,7 +75,9 @@ export function buildInPageSectionSignal(doc: Document): InPageSectionSignal {
   if (linked.size === 0) return out;
 
   let hasContactMethod: boolean | null = null;
-  for (const el of Array.from(doc.querySelectorAll("[id]"))) {
+  const withIds = doc.querySelectorAll("[id]");
+  for (let i = 0; i < Math.min(withIds.length, MAX_ID_ELEMENTS); i++) {
+    const el = withIds[i]!;
     if (out.about && out.contact) break;
     const id = el.getAttribute("id") ?? "";
     if (!linked.has(id)) continue;
@@ -88,6 +93,19 @@ export function buildInPageSectionSignal(doc: Document): InPageSectionSignal {
   }
   return out;
 }
+
+/**
+ * A streaming snapshot cached before the field existed has no record on any page, which
+ * would read as "no section" and warn on a one-page site. Mirrors links/broken-anchors:
+ * the rules skip and ask for a re-run instead (#1236).
+ */
+export function inPageSectionsUnmeasured(ctx: Pick<RuleContext, "collectedSignals">): boolean {
+  const pages = ctx.collectedSignals?.pages;
+  return !!pages && pages.length > 0 && pages.every((rec) => rec.inPageSections === undefined);
+}
+
+export const INPAGE_SECTIONS_UNMEASURED_MESSAGE =
+  "In-page sections were not checked: this crawl's page records predate the check. Re-run the audit with --refresh to check them";
 
 /**
  * First section of `kind` in crawl order. A streaming audit has no DOM in the site

@@ -229,6 +229,8 @@ export function buildCollectedPageSignal(input: {
       scanPageForMisspellings(doc)
     ),
   };
+  // The one record serves both rules: a timeout is reported against both.
+  if (timedOutRuleIds.includes("eeat/about-page")) timedOutRuleIds.push("eeat/contact-page");
   if (timedOutRuleIds.length > 0) {
     signal.timedOut = { budgetMs, ruleIds: timedOutRuleIds };
     if (Object.keys(timedOutElapsedMs).length > 0) signal.timedOut.elapsedMs = timedOutElapsedMs;

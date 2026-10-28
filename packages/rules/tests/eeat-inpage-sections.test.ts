@@ -219,4 +219,51 @@ describe("eeat/contact-page: in-page section", () => {
     );
     expect(c?.status).toBe("pass");
   });
+
+  test("a page with no # links is not judged a section", () => {
+    const c = run(
+      aboutPageRule,
+      ctxFor(`<section id="about"><p>${words(220)}</p></section>`),
+      "about-page",
+    );
+    expect(c?.status).toBe("warn");
+  });
+});
+
+// A streaming snapshot cached before inPageSections existed (#1236).
+describe("legacy collected records", () => {
+  const legacy = (rule: Rule, name: string, pageCount = 1) => {
+    const ctx = ctxFor(`<p>${words(220)}</p>`);
+    const pages = ctx.site!.pages;
+    if (pageCount > 1) {
+      pages.push({ ...pages[0]!, url: "https://example.com/other" });
+    }
+    ctx.collectedSignals = {
+      pages: pages.map((p) => ({
+        url: p.url,
+        secrets: [],
+        inlineCssLen: 0,
+        inlineJsLen: 0,
+        externalCssCount: 0,
+        externalJsCount: 0,
+        imageCount: 0,
+        fingerprint: null,
+        signals: [],
+        scriptSrcs: [],
+        subprocessorMatch: null,
+        commercialOffer: false,
+      })),
+    };
+    return run(rule, ctx, name);
+  };
+
+  test("a one-page site is skipped, not warned, with a re-run hint", () => {
+    expect(legacy(aboutPageRule, "about-page")?.status).toBe("skipped");
+    expect(legacy(contactPageRule, "contact-page")?.status).toBe("skipped");
+    expect(legacy(aboutPageRule, "about-page")?.message).toContain("--refresh");
+  });
+
+  test("a multi-page site keeps the plain missing-page warning", () => {
+    expect(legacy(aboutPageRule, "about-page", 2)?.status).toBe("warn");
+  });
 });

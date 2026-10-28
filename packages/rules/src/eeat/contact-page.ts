@@ -5,7 +5,12 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
 import { getPathname } from "@squirrelscan/utils";
 
-import { describeSectionPage, findInPageSection } from "../shared/inpage-section";
+import {
+  INPAGE_SECTIONS_UNMEASURED_MESSAGE,
+  describeSectionPage,
+  findInPageSection,
+  inPageSectionsUnmeasured,
+} from "../shared/inpage-section";
 import { findLinkedUncrawledPage, linkedUncrawledCheck } from "../shared/linked-uncrawled-page";
 
 const isContactPath = (url: string): boolean =>
@@ -79,6 +84,15 @@ export const contactPageRule: Rule = {
                 value: "Add a mailto: or tel: link, or a contact form",
               },
         );
+        return { checks };
+      }
+      if (pages.length === 1 && inPageSectionsUnmeasured(ctx)) {
+        // A one-page site's Contact may be a section, and this cached snapshot never recorded them.
+        checks.push({
+          name: "contact-page",
+          status: "skipped",
+          message: INPAGE_SECTIONS_UNMEASURED_MESSAGE,
+        });
         return { checks };
       }
       // pub#740: a Contact page the pages link to but the crawl never fetched

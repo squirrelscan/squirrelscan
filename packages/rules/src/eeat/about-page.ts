@@ -5,7 +5,12 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
 import { getPathname } from "@squirrelscan/utils";
 
-import { describeSectionPage, findInPageSection } from "../shared/inpage-section";
+import {
+  INPAGE_SECTIONS_UNMEASURED_MESSAGE,
+  describeSectionPage,
+  findInPageSection,
+  inPageSectionsUnmeasured,
+} from "../shared/inpage-section";
 import { findLinkedUncrawledPage, linkedUncrawledCheck } from "../shared/linked-uncrawled-page";
 
 const isAboutPath = (url: string): boolean =>
@@ -88,6 +93,13 @@ export const aboutPageRule: Rule = {
               value: `${section.wordCount} words - consider expanding`,
             },
       );
+    } else if (pages.length === 1 && inPageSectionsUnmeasured(ctx)) {
+      // A one-page site's About may be a section, and this cached snapshot never recorded them.
+      checks.push({
+        name: "about-page",
+        status: "skipped",
+        message: INPAGE_SECTIONS_UNMEASURED_MESSAGE,
+      });
     } else {
       // pub#740: an About page the pages link to but the crawl never fetched
       // (an excluded path, or past the page budget) is unverified, not missing.
