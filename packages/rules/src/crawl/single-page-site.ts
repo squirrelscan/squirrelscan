@@ -106,13 +106,12 @@ export const singlePageSiteRule: Rule = {
     const record = anchorLookup(ctx, pages)(normalizeUrl(page.url));
     if (!record || record.idsTruncated) return NOT_APPLICABLE;
     const ids = new Set(record.ids);
-    const sections: string[] = [];
+    const found = new Set<string>();
     for (const raw of record.selfFragments) {
       const fragment = decodeFragment(raw);
-      if (isJudgeableFragment(fragment) && ids.has(fragment) && !sections.includes(fragment)) {
-        sections.push(fragment);
-      }
+      if (isJudgeableFragment(fragment) && ids.has(fragment)) found.add(fragment);
     }
+    const sections = [...found];
     if (sections.length < MIN_SECTION_LINKS) return NOT_APPLICABLE;
 
     const listed = sections.slice(0, MAX_LISTED_SECTIONS);

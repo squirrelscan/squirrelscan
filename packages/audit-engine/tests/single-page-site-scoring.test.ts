@@ -6,9 +6,9 @@ import { describe, expect, test } from "bun:test";
 import type { CheckResult } from "@squirrelscan/core-contracts";
 import { crawl, type RuleRunResult } from "@squirrelscan/rules";
 
-const singlePageSiteRule = crawl.singlePageSiteRule;
-
 import { calculateHealthScore } from "../src/scoring";
+
+const singlePageSiteRule = crawl.singlePageSiteRule;
 
 const check = (status: CheckResult["status"], name: string): CheckResult => ({
   name,
@@ -18,18 +18,42 @@ const check = (status: CheckResult["status"], name: string): CheckResult => ({
 
 const anchors: Array<RuleRunResult> = [
   {
-    meta: { id: "crawl/robots-txt", name: "robots", description: "d", category: "crawl", scope: "site", severity: "error", weight: 5 },
+    meta: {
+      id: "crawl/robots-txt",
+      name: "robots",
+      description: "d",
+      category: "crawl",
+      scope: "site",
+      severity: "error",
+      weight: 5,
+    },
     checks: [check("pass", "a"), check("warn", "b")],
   },
   {
-    meta: { id: "core/title", name: "title", description: "d", category: "core", scope: "page", severity: "warning", weight: 4 },
+    meta: {
+      id: "core/title",
+      name: "title",
+      description: "d",
+      category: "core",
+      scope: "page",
+      severity: "warning",
+      weight: 4,
+    },
     checks: [check("pass", "t"), check("fail", "t2")],
   },
 ] as RuleRunResult[];
 
 const finding: RuleRunResult = {
   meta: singlePageSiteRule.meta,
-  checks: [{ name: "single-page-site", status: "info", message: "one page", value: 4, details: { sections: 4 } }],
+  checks: [
+    {
+      name: "single-page-site",
+      status: "info",
+      message: "one page",
+      value: 4,
+      details: { sections: 4 },
+    },
+  ],
 } as RuleRunResult;
 
 const score = (extra: RuleRunResult[]) =>
