@@ -234,6 +234,9 @@ foreach ($case in @(
 }
 Remove-Item Env:SQUIRREL_NO_MODIFY_PATH -ErrorAction SilentlyContinue
 Check "a path entry matches case-insensitively, trailing slash ignored" (Test-PathHasDir "C:\a;C:\Tools\Bin\;C:\b" "c:\tools\bin")
+$env:SQUIRREL_CONTRACT_PROBE = "C:\probe"
+Check "a %VAR% entry is compared expanded" (Test-PathHasDir "C:\a;%SQUIRREL_CONTRACT_PROBE%\bin" "C:\probe\bin")
+Remove-Item Env:SQUIRREL_CONTRACT_PROBE -ErrorAction SilentlyContinue
 Check "a prefix is not a match" (-not (Test-PathHasDir "C:\a\bin2" "C:\a\bin"))
 $probeDir = "C:\squirrel-contract-probe\bin"
 $savedPath = $env:Path

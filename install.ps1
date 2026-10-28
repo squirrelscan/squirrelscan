@@ -605,9 +605,27 @@ function Test-CiEnvironment {
 function Test-PathHasDir {
     param([string]$PathValue, [string]$Dir)
     foreach ($entry in ("$PathValue" -split ";")) {
-        if ($entry.TrimEnd("\") -ieq $Dir.TrimEnd("\")) { return $true }
+        # A User Path entry can hold %VARS% (REG_EXPAND_SZ); compare it expanded.
+        $expanded = [Environment]::ExpandEnvironmentVariables($entry)
+        if ($expanded.TrimEnd("\") -ieq $Dir.TrimEnd("\")) { return $true }
     }
     return $false
+}
+
+# The User Path exactly as stored, %VARS% unexpanded ("" when unset).
+function Get-RawUserPath {
+    try {
+        $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment")
+        if (-not $key) { return "" }
+        try {
+            return [string]$key.GetValue("Path", "", [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        } finally {
+            $key.Close()
+        }
+    } catch {
+        # No registry (non-Windows PowerShell): the expanded value is the best there is.
+        return [string][Environment]::GetEnvironmentVariable("Path", "User")
+    }
 }
 
 # Put $BinDir on the User-scope Path (never Machine) and on this session's
@@ -616,7 +634,9 @@ function Test-PathHasDir {
 function Set-UserPath {
     param([string]$BinDir)
 
-    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    # The raw, unexpanded value: expanding it and writing it back would
+    # flatten any %VARS% entries the user keeps in their Path.
+    $userPath = Get-RawUserPath
     if (Test-PathHasDir $userPath $BinDir) {
         # Already persisted; make sure this session sees it too.
         if (-not (Test-PathHasDir $env:Path $BinDir)) {
@@ -637,7 +657,21 @@ function Set-UserPath {
 
     try {
         $newPath = if ($userPath) { $userPath.TrimEnd(";") + ";" + $BinDir } else { $BinDir }
-        [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+        if ($newPath -like "*%*") {
+            # SetEnvironmentVariable would rewrite the value as REG_SZ and stop
+            # %VARS% entries expanding. Write REG_EXPAND_SZ, then set and clear a
+            # throwaway variable so Windows broadcasts the environment change.
+            $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment", $true)
+            try {
+                $key.SetValue("Path", $newPath, [Microsoft.Win32.RegistryValueKind]::ExpandString)
+            } finally {
+                $key.Close()
+            }
+            [Environment]::SetEnvironmentVariable("SQUIRREL_PATH_NOTIFY", "1", "User")
+            [Environment]::SetEnvironmentVariable("SQUIRREL_PATH_NOTIFY", $null, "User")
+        } else {
+            [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+        }
         $env:Path = ("$env:Path".TrimEnd(";") + ";" + $BinDir)
         return "added"
     } catch {
@@ -657,7 +691,7 @@ function Show-Epilogue {
         # This session cannot find squirrel: name a command that works now.
         Write-Host "squirrel is not on your PATH yet. Run your first audit right now:"
         Write-Host ""
-        Write-Host "  & '$BinDir\squirrel.exe' audit https://your-site.com"
+        Write-Host "  & '$($BinDir.Replace("'", "''"))\squirrel.exe' audit https://your-site.com"
     } else {
         Write-Host "Run your first audit (crawls the site, scores it, lists exact fixes):"
         Write-Host ""

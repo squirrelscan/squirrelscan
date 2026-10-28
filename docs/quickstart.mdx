@@ -74,7 +74,7 @@ If none qualifies, it uses `~/.local/bin` and appends one marked line to the fil
 | fish | `~/.config/fish/conf.d/squirrel.fish` | `fish_add_path $HOME/.local/bin` |
 | sh or anything else | `~/.profile` | same as zsh |
 
-An open terminal does not see the change. The closing message then tells you to open a new terminal or run `source ~/.zshrc` (your file), and gives a command that works right now, such as `~/.local/bin/squirrel audit https://your-site.com`.
+On Linux a login shell (an SSH session, some terminals) may read `~/.profile` or `~/.bash_profile` and never `~/.bashrc`; if `squirrel` is not found there, add the same line to the file your login shell reads. An open terminal does not see the change. The closing message then tells you to open a new terminal or run `source ~/.zshrc` (your file), and gives a command that works right now, such as `~/.local/bin/squirrel audit https://your-site.com`.
 
 Set `SQUIRREL_NO_MODIFY_PATH=1` to keep the installer away from your profile: it prints the line to add instead. In CI (`CI` set) it never edits a profile; when `GITHUB_PATH` is set, it appends the directory to that file so later steps find `squirrel`.
 
