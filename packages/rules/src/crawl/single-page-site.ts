@@ -47,6 +47,8 @@ function inScopeSitemapUrls(ctx: RuleContext, baseUrl: string): number {
       if (hostKey(entry.loc) !== baseHost) continue;
       try {
         seen.add(normalizeUrl(stripHash(entry.loc)));
+        // The rule only asks "more than one": stop reading a huge sitemap there.
+        if (seen.size > 1) return seen.size;
       } catch {
         // A malformed entry is not a page.
       }
