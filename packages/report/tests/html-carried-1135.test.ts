@@ -195,10 +195,11 @@ describe("renderHtml carried-forward provenance (#1135/#1136)", () => {
     expect(html).toContain("12 pages affected");
     // ...as clickable links (not just the old 3-item dead-end preview)...
     for (const p of sourcePages) expect(html).toContain(`href="${p}"`);
-    // ...with expand/copy affordance, and the redundant preview note now
-    // points at the real list instead of dead-ending.
+    // ...with expand/copy affordance. The item's own source list expands in
+    // place (pub#837) instead of pointing at the check's page list.
     expect(html).toContain("Copy as text");
-    expect(html).toContain("+9 more pages");
+    expect(html).toContain("+9 more pages</summary>");
+    expect(html).not.toContain("see full list above");
   });
 
   test("an item that IS a page (no sourcePages) isn't listed twice (PagesList + items block)", () => {

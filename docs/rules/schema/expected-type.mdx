@@ -22,6 +22,8 @@ Only a page type the **model** answered is trusted, and only at or above the `mi
 - Info with the message `Page markup too large to judge structured data`, when the page declares nothing from the family but a read hit one of those bounds. It is not a finding, because a missing schema is not proven.
 - Fail with the message `Reads as <a|an> <page noun> but declares no <expected types> structured data`, when neither of the above holds. The message does not carry the confidence, so a report groups the failing pages of one page type into one finding. The check carries `details` with the page type (`pageType`, with `pageTypeSource` set to `model`), the confidence to two decimals, the expected types and the types the page does declare.
 
+In a report, a finding on every page of one page type is one line, not a list of pages: `On all 9 documentation pages`, or `On 9 of 11 documentation pages` when it is most of them. The count is against the audited pages of that type, so it can include pages the rule did not judge because the model was less than `min_confidence` sure of them. A finding on a few pages of a type keeps its page list. See [findings on every page of one page type](/reports#findings-on-every-page-of-one-page-type).
+
 | Page type | Noun | Schema types that satisfy it |
 |---|---|---|
 | `article` | article | `Article` and every type ending in `Article`, plus `Report`, `BlogPosting`, `LiveBlogPosting`, `SocialMediaPosting`, `DiscussionForumPosting` |

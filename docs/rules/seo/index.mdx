@@ -24,7 +24,7 @@ It is the broadest group, spanning 16 categories. Most of its rules run locally 
     Text quality, readability, and content structure (25 rules)
   </Card>
   <Card title="Structured Data" icon="folder" href="/rules/schema">
-    Structured data and rich snippet eligibility (25 rules)
+    Structured data and rich snippet eligibility (26 rules)
   </Card>
   <Card title="Images" icon="folder" href="/rules/images">
     Image optimization and accessibility (16 rules)
@@ -73,6 +73,8 @@ disable = [
   "i18n/*", "eeat/*", "local/*", "video/*", "analytics/*", "gaps/*",
 ]
 ```
+
+`links/*` also matches `links/broken-links`, `links/broken-external-links` and `links/broken-anchors`. Those three are Reliability rules and count toward the Performance score group, but their ids keep the `links/` prefix, so a prefix pattern selects them.
 
 See the [full rules reference](/rules) for the other score groups.
 

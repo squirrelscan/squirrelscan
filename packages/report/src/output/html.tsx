@@ -11,8 +11,10 @@ import {
 } from "react-icons/pi";
 
 import type {
+  CheckItem,
   EditorSummaryPriority,
   ReportBranding,
+  ReportStructure,
   SitemapDiscovery,
 } from "@squirrelscan/core-contracts";
 
@@ -27,6 +29,14 @@ import {
   ruleCarriedPageCount,
 } from "../affected-pages";
 import { cacheHitRatePercent, cacheReasonsLabel } from "../cache-stats";
+import {
+  describeRoot,
+  fixRollupLine,
+  fixUnits,
+  isRenderableFixGroup,
+  ruleFixCoverage,
+  type FixCoverage,
+} from "../component-presentation";
 import {
   getBadgeName,
   getBadgeTitle,
@@ -74,11 +84,39 @@ import {
   type GroupedCheck,
   type PassedRule,
 } from "../grouping";
+import {
+  affectedPagesSuffix,
+  hasItemSources,
+  itemSourceView,
+  moreSourcePages,
+  type ItemSourceRow,
+} from "../item-sources";
 import { lockedRulesMessage } from "../locked-rules";
 import { notCheckedLines } from "../not-checked";
 import { privateTargetLine } from "../private-target";
+import {
+  checkPagesScopedAway,
+  checkScopeLine,
+  itemLabel,
+  itemRegionScope,
+  regionScopeLine,
+} from "../region-scope";
 import { GROUP_COLORS, getGroupColor, getScoreGrade } from "../scoring";
 import { siteProfileFlags, siteProfileRows } from "../site-metadata";
+import {
+  ruleSiteResourceCoverage,
+  siteResourceFixLine,
+  withSiteResourceCoverage,
+  type SiteResourceCoverage,
+} from "../site-resource-presentation";
+import {
+  structureChromeLine,
+  structureDegradedLine,
+  structurePageTypesLine,
+  structureRowDetail,
+  structureRows,
+  structureTotalsLine,
+} from "../structure";
 import { groupTechnologies, techChangeSummary, techIconUrl } from "../technologies";
 import type { AuditReport } from "../types";
 import { getPathname } from "../url";
@@ -734,10 +772,19 @@ function PageLinks({
   pages,
   count,
   carried,
+  summary,
+  collapsed,
 }: {
   pages: string[];
   count: number;
   carried?: string[];
+  /**
+   * Replaces the default "N pages affected" label where the list is NOT the check's whole
+   * affected set (#2307): a fix group's own pages, or the remainder no group accounted for.
+   */
+  summary?: (total: number) => string;
+  /** Start closed whatever the count: the check's findings name their region (pub#846). */
+  collapsed?: boolean;
 }) {
   if (pages.length === 0) return null;
   const total = Math.max(count, pages.length);
@@ -756,8 +803,10 @@ function PageLinks({
     </a>
   );
   return (
-    <details className="mt-1" open={total <= REPORT_COLLAPSE_THRESHOLD}>
-      <summary className="more">{plural(total, "page")} affected</summary>
+    <details className="mt-1" open={!collapsed && total <= REPORT_COLLAPSE_THRESHOLD}>
+      <summary className="more">
+        {summary ? summary(total) : `${plural(total, "page")} affected`}
+      </summary>
       <div className="plist">
         {total > shown.length && (
           <p className="text-muted-foreground">
@@ -791,7 +840,198 @@ function PageLinks({
   );
 }
 
-function CheckBlock({ check }: { check: GroupedCheck }) {
+/**
+ * The shared sentence, with the block's own name lifted out for emphasis.
+ *
+ * The STRING comes from `fixRollupLine`, the one the markdown, text, llm and
+ * console surfaces print, called with the same page limit and the same path
+ * formatter markdown uses, so the five cannot drift and this file decides
+ * nothing about wording. The only thing done here is presentational: the label
+ * `describeRoot` produced is located in that finished sentence and wrapped, so
+ * the most useful token in the card ("Downloads") reads as a name. Splitting a
+ * string into two text nodes cannot change its text, so the card still says
+ * exactly what markdown says, and a label the sentence does not contain (or no
+ * label at all) renders the sentence untouched.
+ */
+function FixSentence({ unit }: { unit: ReturnType<typeof fixUnits>[number] }) {
+  const sentence = fixRollupLine(unit, REPORT_SOURCE_PAGES_PREVIEW, (page) => getPathname(page) || "/");
+  const label = describeRoot(unit);
+  const at = label ? sentence.indexOf(label) : -1;
+  if (!label || at < 0) return <>{sentence}</>;
+  return (
+    <>
+      {sentence.slice(0, at)}
+      <span className="fix-group-name">{label}</span>
+      {sentence.slice(at + label.length)}
+    </>
+  );
+}
+
+/**
+ * Shared-component fix cards (#2307): the finding the legacy per-page list was
+ * approximating, one defect, one repair, N pages.
+ *
+ * Cards are derived per RULE, not per check: coverage arithmetic is per-rule,
+ * and checks merge by message, so keying a card to a check row would print the
+ * same repair once per merged row. They sit directly above the check list they
+ * replace.
+ *
+ * Every string here is site-controlled (defect values are crawled text, block
+ * names and pages are crawled too) and reaches the page as a React text child
+ * or through `sanitizeUrl` inside PageLinks. No hashes, signatures or
+ * family/variant keys: the element slot the sentence carries is the humane tail
+ * of the locator. Exported so a test can hand it a rolled-up component
+ * directly, rather than reconstructing a seven-slot block through the whole
+ * grouping stage to reach the one branch that differs.
+ */
+export function FixGroupCards({ coverage }: { coverage: FixCoverage }) {
+  // `ruleFixCoverage` has already applied this filter; re-applying it means the
+  // card renderer cannot be made to phrase an attribution it does not know,
+  // whatever hands it a coverage.
+  const groups = coverage.groups.filter(isRenderableFixGroup);
+  if (groups.length === 0) return null;
+  return (
+    <ul className="fix-groups">
+      {/* Rolled up the same way and in the same order as every other surface,
+          including the family level: one block with two structural variants is
+          one card that says so, never two cards this file merged itself. */}
+      {fixUnits(groups).map((unit) => {
+        const group = unit.representative;
+        const repeated = group.attribution === "repeated-subtree";
+        return (
+          <li className={`fix-group${repeated ? " fix-group-weak" : ""}`} key={group.id}>
+            <div className="fix-group-head">
+              <span className={`fix-badge${repeated ? " fix-badge-weak" : ""}`}>
+                {repeated ? "Likely shared block" : "Fix once"}
+              </span>
+              {/* The paragraph holds the shared sentence and NOTHING else, so
+                  its text can be compared with markdown's, character for
+                  character, by a test. */}
+              <p className="fix-group-line">
+                <FixSentence unit={unit} />
+              </p>
+            </div>
+            <PageLinks
+              pages={unit.affectedPages}
+              count={unit.affectedPageCount}
+              summary={(total) => `Affected pages (${total})`}
+            />
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/**
+ * Shared-resource fix cards (#2341).
+ *
+ * Deliberately the same markup as {@link FixGroupCards}, down to the class
+ * names, because it is the same claim about a different kind of evidence: one
+ * defect, one repair, N pages. The SENTENCE comes from `siteResourceFixLine`,
+ * the one markdown, text, llm and console print, called with the same page
+ * limit and the same path formatter markdown uses, so this file decides no
+ * wording of its own and the five surfaces cannot drift.
+ */
+export function SiteResourceFixCards({ coverage }: { coverage: SiteResourceCoverage }) {
+  if (coverage.groups.length === 0) return null;
+  return (
+    <ul className="fix-groups">
+      {coverage.groups.map((group) => (
+        <li className="fix-group" key={group.id}>
+          <div className="fix-group-head">
+            <span className="fix-badge">Fix once</span>
+            {/* The paragraph holds the shared sentence and NOTHING else, so its
+                text can be compared with markdown's, character for character. */}
+            <p className="fix-group-line">
+              {siteResourceFixLine(
+                group,
+                REPORT_SOURCE_PAGES_PREVIEW,
+                (page) => getPathname(page) || "/",
+              )}
+            </p>
+          </div>
+          <PageLinks
+            pages={group.affectedPages}
+            count={group.affectedPageCount}
+            summary={(total) => `Affected pages (${total})`}
+          />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * The pages an item was found on, one row each (pub#837): "from: /about (2 links, in the
+ * footer)". The first few show; the rest expand in place, so the full list sits inside the item
+ * rather than in the check's page list, which lists the check's pages, not this item's. Rows past
+ * the hard cap, and pages a published report does not list, are counted, never dropped silently.
+ */
+function ItemSources({
+  item,
+  structure,
+}: {
+  item: CheckItem;
+  structure: ReportStructure | undefined;
+}) {
+  const view = itemSourceView(item, structure);
+  const renderRow = (row: ItemSourceRow, j: number) => (
+    <p key={j} className="ind">
+      from{" "}
+      <a href={sanitizeUrl(row.page)} target="_blank" rel="noreferrer" className="lnk">
+        {getPathname(row.page) || "/"}
+      </a>
+      {row.detail ? ` (${row.detail})` : ""}
+    </p>
+  );
+  if (view.scope) {
+    // pub#846: one line for the region; every listed page stays in the item, collapsed.
+    const all = view.all.slice(0, REPORT_PAGES_HARD_CAP);
+    const total = Math.max(view.scope.pages + view.scope.otherPages, view.all.length);
+    return (
+      <div>
+        <p className="ind region-scope">{regionScopeLine(view.scope)}</p>
+        {all.length > 0 && (
+          <details className="ind">
+            <summary className="more">
+              {all.length < total ? `${all.length} of ${total} pages` : `All ${all.length} pages`}
+            </summary>
+            {all.map(renderRow)}
+          </details>
+        )}
+      </div>
+    );
+  }
+  const { rows } = view;
+  if (rows.length === 0 && view.total === 0) return null;
+  const materialized = rows.slice(0, REPORT_PAGES_HARD_CAP);
+  const shown = materialized.slice(0, REPORT_SOURCE_PAGES_PREVIEW);
+  const rest = materialized.slice(REPORT_SOURCE_PAGES_PREVIEW);
+  const notShown = Math.max(0, view.total - materialized.length);
+  return (
+    <div>
+      {shown.map(renderRow)}
+      {rest.length > 0 && (
+        <details className="ind">
+          <summary className="more">{moreSourcePages(rest.length)}</summary>
+          {rest.map((row, j) => renderRow(row, REPORT_SOURCE_PAGES_PREVIEW + j))}
+        </details>
+      )}
+      {notShown > 0 && <p className="ind">{moreSourcePages(notShown)} not listed here</p>}
+    </div>
+  );
+}
+
+function CheckBlock({
+  check,
+  coverage,
+  structure,
+}: {
+  check: GroupedCheck;
+  coverage: FixCoverage;
+  structure: ReportStructure | undefined;
+}) {
   const ap = affectedPages(check);
   const items = check.items?.filter((i) => !isRedundantPageItem(i));
   // Items a capped report dropped (#2661): counted, so a short list never reads as the whole set.
@@ -801,6 +1041,18 @@ function CheckBlock({ check }: { check: GroupedCheck }) {
     !carriedLabel && (check.carriedCount ?? 0) > 0
       ? `${check.carriedCount} of ${check.count} carried from previous crawls.`
       : null;
+  // pub#846/#857: a check that only reads one shared region, or sits on every page of one page
+  // type, names it.
+  const checkScope = checkScopeLine(check, ap.count, structure);
+  // #2307: a fully covered rule has already named every affected page, once per repair, and
+  // repeating them per check is the noise the cards replace. Partial coverage keeps the
+  // remainder, labelled, so "not grouped" never reads as "not affected".
+  const legacyPages =
+    coverage.mode === "full"
+      ? []
+      : coverage.mode === "partial"
+        ? ap.sample.filter((page) => coverage.uncoveredPages.includes(page))
+        : ap.sample;
   return (
     <div className="flex gap-2 text-sm">
       <span className={check.status === "fail" ? "cb-mark cb-fail" : "cb-mark cb-warn"} aria-hidden>
@@ -809,14 +1061,30 @@ function CheckBlock({ check }: { check: GroupedCheck }) {
       <div className="min-w-0">
         <p>
           {check.message}
-          {ap.count > 1 && (
-            <span className="text-muted-foreground"> · {plural(ap.count, "page")}</span>
-          )}
+          {/* pub#837: a check whose items are links says how many pages carry them. */}
+          {hasItemSources(check)
+            ? affectedPagesSuffix(check, ap.count)
+            : ap.count > 1 && (
+                <span className="text-muted-foreground"> · {plural(ap.count, "page")}</span>
+              )}
         </p>
         {(carriedLabel || partial) && (
           <p className="text-xs text-muted-foreground">{carriedLabel ?? partial}</p>
         )}
-        <PageLinks pages={ap.sample} count={ap.count} carried={check.carriedPages} />
+        {checkScope && <p className="region-scope">{checkScope}</p>}
+        <PageLinks
+          pages={legacyPages}
+          // Partial coverage: the authoritative total for THIS list is the remainder, not the
+          // check's whole affected set.
+          count={coverage.mode === "partial" ? legacyPages.length : ap.count}
+          carried={check.carriedPages}
+          collapsed={checkPagesScopedAway(check, ap.count, structure)}
+          {...(coverage.mode === "partial"
+            ? {
+                summary: (total: number) => `Pages not attributed to a shared component (${total})`,
+              }
+            : {})}
+        />
         {items && items.length > 0 && (
           <details className="mt-1" open={items.length <= REPORT_ITEMS_COLLAPSE_THRESHOLD}>
             <summary className="more">
@@ -824,36 +1092,28 @@ function CheckBlock({ check }: { check: GroupedCheck }) {
               {notListed > 0 ? `, ${notListed.toLocaleString("en-US")} more not listed` : ""}
             </summary>
             <div className="mt-2 grid gap-2 font-mono text-xs">
-              {items.map((item, i) => (
-                <div key={i}>
-                  {isPageUrl(item.id) ? (
-                    <a
-                      href={sanitizeUrl(item.id)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="lnk-b"
-                    >
-                      {getPathname(item.id) || "/"}
-                      {item.label ? ` · ${item.label}` : ""}
-                    </a>
-                  ) : (
-                    <span className="break-all">{item.label ?? item.id}</span>
-                  )}
-                  {item.sourcePages?.slice(0, REPORT_SOURCE_PAGES_PREVIEW).map((src, j) => (
-                    <p key={j} className="ind">
-                      on{" "}
-                      <a href={sanitizeUrl(src)} target="_blank" rel="noreferrer" className="lnk">
-                        {getPathname(src) || "/"}
+              {items.map((item, i) => {
+                // pub#846: a scoped item's label drops the section phrase its region line says.
+                const ownLabel = itemLabel(item, itemRegionScope(item, structure));
+                return (
+                  <div key={i}>
+                    {isPageUrl(item.id) ? (
+                      <a
+                        href={sanitizeUrl(item.id)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="lnk-b"
+                      >
+                        {getPathname(item.id) || "/"}
+                        {ownLabel ? ` · ${ownLabel}` : ""}
                       </a>
-                    </p>
-                  ))}
-                  {(item.sourcePages?.length ?? 0) > REPORT_SOURCE_PAGES_PREVIEW && (
-                    <p className="ind">
-                      +{(item.sourcePages?.length ?? 0) - REPORT_SOURCE_PAGES_PREVIEW} more pages
-                    </p>
-                  )}
-                </div>
-              ))}
+                    ) : (
+                      <span className="break-all">{ownLabel ?? item.id}</span>
+                    )}
+                    <ItemSources item={item} structure={structure} />
+                  </div>
+                );
+              })}
             </div>
           </details>
         )}
@@ -882,9 +1142,24 @@ function reach(rule: FlatIssue, totalPages: number) {
   };
 }
 
-function IssueRow({ rule, totalPages }: { rule: FlatIssue; totalPages: number }) {
+function IssueRow({
+  rule,
+  totalPages,
+  structure,
+}: {
+  rule: FlatIssue;
+  totalPages: number;
+  structure: ReportStructure | undefined;
+}) {
   const r = reach(rule, totalPages);
   const live = rule.checks.filter((c) => c.status === "fail" || c.status === "warn");
+  // #2307: which pages, if any, a shared-component fix already accounts for. `none` (no
+  // evidence, one-page groups, an attribution this build cannot phrase) leaves everything
+  // below exactly as it was before the feature existed. #2341: shared-resource units
+  // narrow that coverage, so a page a resource card names is not also listed below as
+  // unattributed.
+  const siteResources = ruleSiteResourceCoverage(rule);
+  const coverage = withSiteResourceCoverage(ruleFixCoverage(rule), siteResources, rule);
   return (
     <details
       className="issue ir group"
@@ -943,9 +1218,11 @@ function IssueRow({ rule, totalPages }: { rule: FlatIssue; totalPages: number })
         {rule.mixedProvenanceNote && (
           <p className="text-xs text-primary">{rule.mixedProvenanceNote}</p>
         )}
+        <SiteResourceFixCards coverage={siteResources} />
+        <FixGroupCards coverage={coverage} />
         <div className="grid gap-3">
           {rule.checks.map((c, i) => (
-            <CheckBlock check={c} key={i} />
+            <CheckBlock check={c} coverage={coverage} structure={structure} key={i} />
           ))}
         </div>
         <div className="ir-foot">
@@ -963,10 +1240,12 @@ function Issues({
   issues,
   totalPages,
   ctx,
+  structure,
 }: {
   issues: FlatIssue[];
   totalPages: number;
   ctx: PromptContext;
+  structure: ReportStructure | undefined;
 }) {
   const counts: Record<string, number> = {};
   for (const i of issues) counts[i.group] = (counts[i.group] ?? 0) + 1;
@@ -1020,7 +1299,7 @@ function Issues({
               </div>
               <Card flat>
                 {rows.map((r) => (
-                  <IssueRow rule={r} totalPages={totalPages} key={r.id} />
+                  <IssueRow rule={r} totalPages={totalPages} structure={structure} key={r.id} />
                 ))}
               </Card>
             </div>
@@ -1309,6 +1588,46 @@ function SiteContext({ report, offline }: { report: AuditReport; offline: boolea
         </section>
       )}
     </>
+  );
+}
+
+/**
+ * Page structure (#2307): where the links on the audited pages sit, from the page classifier and
+ * the markup. Informational, never scored; absent for a report built from an older crawl.
+ */
+function PageStructure({ structure }: { structure: ReportStructure | undefined }) {
+  if (!structure) return null;
+  const rows = structureRows(structure);
+  const lines = [
+    structurePageTypesLine(structure),
+    structureChromeLine(structure),
+    structureTotalsLine(structure),
+    structureDegradedLine(structure),
+  ].filter((line): line is string => line !== null);
+  return (
+    <section id="structure">
+      <SectionHead
+        title="Page structure"
+        sub="Where the links on your pages sit. None of it affects the score."
+      />
+      <Panel>
+        {rows.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {rows.map((row) => (
+              <Badge variant="outline" size="md" className="bg-card" key={row.section}>
+                {row.section}
+                <span className="text-muted-foreground">{structureRowDetail(row)}</span>
+              </Badge>
+            ))}
+          </div>
+        )}
+        {lines.map((line) => (
+          <p key={line} className="mt-3 text-sm">
+            {line}
+          </p>
+        ))}
+      </Panel>
+    </section>
   );
 }
 
@@ -1939,7 +2258,12 @@ function ReportPage({
 
           {issues.length > 0 ? (
             <>
-              <Issues issues={issues} totalPages={totalPages} ctx={ctx} />
+              <Issues
+                issues={issues}
+                totalPages={totalPages}
+                ctx={ctx}
+                structure={report.structure}
+              />
               <PagesLens />
             </>
           ) : failedRun ? null : (
@@ -1949,6 +2273,8 @@ function ReportPage({
           {passedRules.length > 0 && <PassedRules rules={passedRules} />}
 
           <SiteContext report={report} offline={offline} />
+
+          <PageStructure structure={report.structure} />
 
           {locked && !localRun && (
             <details id="locked-rules" className="mt-12 border border-dashed border-border p-4">

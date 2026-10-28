@@ -5,10 +5,23 @@ import {
   EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
   EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON,
   EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
+  type CheckItemSource,
+  type LinkSection,
 } from "@squirrelscan/core-contracts";
+import { maskLinkTokens } from "@squirrelscan/utils/link-actions";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 
 import type { Rule, RuleContext, RuleResult, CheckResult, SiteData } from "../types";
+
+import {
+  regionsField,
+  sectionMeta,
+  tallyFields,
+  tallySource,
+  withSection,
+  type SectionCounts,
+  type SourceTally,
+} from "./link-section-label";
 
 /**
  * A link the origin refused to answer because it was throttling us (#1829).
@@ -38,6 +51,92 @@ function countExternalLinks(pages: SiteData["pages"] | undefined): number {
   return hrefs.size;
 }
 
+/** Where a reported external link sits on the audited pages (#2307, pub#837). */
+interface ExternalPlacement {
+  /** Sections of every link to it, or undefined when none had a known section. */
+  sections(href: string): SectionCounts | undefined;
+  /** Per page of `sourcePages` the audited pages show: its links to `href` and their sections. */
+  sources(href: string, sourcePages: readonly string[]): CheckItemSource[] | undefined;
+  /** Audited pages linking it, per section (pub#846), or undefined when none placed it. */
+  regions(href: string): SectionCounts | undefined;
+}
+
+/**
+ * Where on the audited pages each of `wanted` is linked from, by the link's resolved URL. One
+ * pass over the pages' parsed links, and only the wanted URLs are kept. `wantedMasked` are the
+ * hrefs the engine reports with token-like values masked (links never requested): a parsed link
+ * is matched to them by its own masked form, so the credential itself is never kept or printed.
+ * A crawl whose links carry no section yields no sections, and the labels stay as they were.
+ */
+function externalPlacement(
+  pages: SiteData["pages"] | undefined,
+  wanted: ReadonlySet<string>,
+  wantedMasked: ReadonlySet<string>
+): ExternalPlacement {
+  const byHref = new Map<string, SourceTally>();
+  const count = (key: string, page: string, section: LinkSection | undefined): void => {
+    let tally = byHref.get(key);
+    if (!tally) byHref.set(key, (tally = new Map()));
+    tallySource(tally, page, section);
+  };
+  if (wanted.size > 0 || wantedMasked.size > 0) {
+    // Distinct URLs are far fewer than links, and masking parses the URL.
+    const masked = new Map<string, string>();
+    for (const page of pages ?? []) {
+      for (const link of page.parsed?.links ?? []) {
+        if (link.isInternal || !link.url) continue;
+        if (wanted.has(link.url)) count(link.url, page.url, link.section);
+        if (wantedMasked.size === 0) continue;
+        let key = masked.get(link.url);
+        if (key === undefined) masked.set(link.url, (key = maskLinkTokens(link.url)));
+        // A link written without a token masks to itself and was counted above.
+        if (key !== link.url && wantedMasked.has(key)) count(key, page.url, link.section);
+      }
+    }
+  }
+  const fieldsOf = (href: string) => {
+    const tally = byHref.get(href);
+    return tally ? tallyFields(tally) : undefined;
+  };
+  return {
+    sections(href) {
+      const sections = fieldsOf(href)?.sections;
+      return sections && Object.keys(sections).length > 0 ? sections : undefined;
+    },
+    sources(href, sourcePages) {
+      const all = fieldsOf(href)?.sources;
+      if (!all) return undefined;
+      const listed = new Set(sourcePages);
+      const kept = all.filter((source) => listed.has(source.page));
+      return kept.length > 0 ? kept : undefined;
+    },
+    regions(href) {
+      const regions = fieldsOf(href)?.regions;
+      return regions && Object.keys(regions).length > 0 ? regions : undefined;
+    },
+  };
+}
+
+/** An item's `label`, `meta.sections` and `sources`, or nothing the links do not say. */
+function placementItemFields(
+  href: string,
+  sourcePages: readonly string[],
+  placement: ExternalPlacement
+): {
+  label?: string;
+  meta?: { sections: SectionCounts };
+  sources?: CheckItemSource[];
+  regions?: SectionCounts;
+} {
+  const sections = placement.sections(href);
+  const sources = placement.sources(href, sourcePages);
+  return {
+    ...(sections ? { label: withSection(href, sections), meta: { sections } } : {}),
+    ...(sources ? { sources } : {}),
+    ...regionsField(placement.regions(href)),
+  };
+}
+
 function notChecked(message: string, found: number): CheckResult {
   return {
     name: "broken-external-links",
@@ -60,6 +159,7 @@ function notChecked(message: string, found: number): CheckResult {
  */
 function notRequestedCheck(
   linkCheck: NonNullable<SiteData["externalLinkCheck"]>,
+  placement: ExternalPlacement,
 ): CheckResult | null {
   const count = linkCheck.notRequested ?? 0;
   if (count === 0) return null;
@@ -76,6 +176,7 @@ function notRequestedCheck(
       ...(l.pageCount !== undefined && l.pageCount > l.sourcePages.length
         ? { pageCount: l.pageCount }
         : {}),
+      ...placementItemFields(l.href, l.sourcePages, placement),
     })),
     details: {
       notRequested: count,
@@ -90,7 +191,10 @@ function notRequestedCheck(
  * on a public site's page. Their status is unknown, so they are neither broken
  * nor working; listed (masked) so the reader can see what the page points at.
  */
-function refusedCheck(linkCheck: NonNullable<SiteData["externalLinkCheck"]>): CheckResult | null {
+function refusedCheck(
+  linkCheck: NonNullable<SiteData["externalLinkCheck"]>,
+  placement: ExternalPlacement,
+): CheckResult | null {
   const count = linkCheck.refused ?? 0;
   if (count === 0) return null;
   const sample = linkCheck.refusedLinks ?? [];
@@ -105,6 +209,7 @@ function refusedCheck(linkCheck: NonNullable<SiteData["externalLinkCheck"]>): Ch
       ...(l.pageCount !== undefined && l.pageCount > l.sourcePages.length
         ? { pageCount: l.pageCount }
         : {}),
+      ...placementItemFields(l.href, l.sourcePages, placement),
     })),
     details: {
       refused: count,
@@ -189,8 +294,21 @@ export const brokenExternalLinksRule: Rule = {
     }
 
     const linkCheck = ctx.site?.externalLinkCheck;
-    const notRequested = linkCheck ? notRequestedCheck(linkCheck) : null;
-    const refused = linkCheck ? refusedCheck(linkCheck) : null;
+    // #2307, pub#837: where each reported link sits. The URLs are collected first so the pages are walked
+    // once, and only for links that end up in an item.
+    const wanted = new Set<string>();
+    const wantedMasked = new Set<string>();
+    // Reported masked when a token-like value was found, as written when not: both forms.
+    for (const l of [...(linkCheck?.notRequestedLinks ?? []), ...(linkCheck?.refusedLinks ?? [])]) {
+      wanted.add(l.href);
+      wantedMasked.add(l.href);
+    }
+    for (const l of externalLinks) {
+      if (l.error || l.wafBlocked || isRateLimitedLink(l) || (l.status ?? 0) >= 400) wanted.add(l.href);
+    }
+    const placement = externalPlacement(ctx.site?.pages, wanted, wantedMasked);
+    const notRequested = linkCheck ? notRequestedCheck(linkCheck, placement) : null;
+    const refused = linkCheck ? refusedCheck(linkCheck, placement) : null;
 
     if (externalLinks.length === 0) {
       // Every external link was one the checker never requests, as an action
@@ -305,14 +423,21 @@ export const brokenExternalLinksRule: Rule = {
         name: "broken-external-links",
         status: "warn",
         message: `${brokenLinks.length} broken external link(s): ${summaryParts.join(", ")}`,
-        items: brokenLinks.map((l) => ({
-          id: l.href,
-          label: l.error
-            ? `${l.href} (Error: ${l.error})`
-            : `${l.href} (${l.status})`,
-          sourcePages: l.sourcePages,
-          meta: { status: l.status, error: l.error },
-        })),
+        items: brokenLinks.map((l) => {
+          const sections = placement.sections(l.href);
+          const sources = placement.sources(l.href, l.sourcePages);
+          return {
+            id: l.href,
+            label: withSection(
+              l.error ? `${l.href} (Error: ${l.error})` : `${l.href} (${l.status})`,
+              sections,
+            ),
+            sourcePages: l.sourcePages,
+            ...(sources ? { sources } : {}),
+            ...regionsField(placement.regions(l.href)),
+            meta: { status: l.status, error: l.error, ...sectionMeta(sections) },
+          };
+        }),
         details: {
           totalBroken: brokenLinks.length,
           totalChecked: checkedCount,
@@ -341,19 +466,27 @@ export const brokenExternalLinksRule: Rule = {
         name: "waf-blocked-external-links",
         status: "info",
         message: `${wafBlockedLinks.length} external link(s) could not be verified - status unverifiable`,
-        items: wafBlockedLinks.map((l) => ({
-          id: l.href,
-          label:
-            l.unverifiedReason === "awaiting-confirmation"
-              ? `${l.href} (unverified: awaiting confirmation)`
-              : l.wafProvider && l.wafProvider !== "unknown"
-                ? `${l.href} (unverified: ${l.wafProvider})`
-                : `${l.href} (unverified)`,
-          sourcePages: l.sourcePages,
-          meta: l.unverifiedReason
-            ? { wafProvider: l.wafProvider, unverifiedReason: l.unverifiedReason }
-            : { wafProvider: l.wafProvider },
-        })),
+        items: wafBlockedLinks.map((l) => {
+          const sections = placement.sections(l.href);
+          const sources = placement.sources(l.href, l.sourcePages);
+          return {
+            id: l.href,
+            label: withSection(
+              l.unverifiedReason === "awaiting-confirmation"
+                ? `${l.href} (unverified: awaiting confirmation)`
+                : l.wafProvider && l.wafProvider !== "unknown"
+                  ? `${l.href} (unverified: ${l.wafProvider})`
+                  : `${l.href} (unverified)`,
+              sections,
+            ),
+            sourcePages: l.sourcePages,
+            ...(sources ? { sources } : {}),
+            ...regionsField(placement.regions(l.href)),
+            meta: l.unverifiedReason
+              ? { wafProvider: l.wafProvider, unverifiedReason: l.unverifiedReason, ...sectionMeta(sections) }
+              : { wafProvider: l.wafProvider, ...sectionMeta(sections) },
+          };
+        }),
       });
     }
 
@@ -364,12 +497,18 @@ export const brokenExternalLinksRule: Rule = {
         name: "rate-limited-external-links",
         status: "info",
         message: `${rateLimitedLinks.length} external link(s) rate-limited - status unverifiable`,
-        items: rateLimitedLinks.map((l) => ({
-          id: l.href,
-          label: `${l.href} (${l.status ?? "rate limited"})`,
-          sourcePages: l.sourcePages,
-          meta: { status: l.status, rateLimited: true },
-        })),
+        items: rateLimitedLinks.map((l) => {
+          const sections = placement.sections(l.href);
+          const sources = placement.sources(l.href, l.sourcePages);
+          return {
+            id: l.href,
+            label: withSection(`${l.href} (${l.status ?? "rate limited"})`, sections),
+            sourcePages: l.sourcePages,
+            ...(sources ? { sources } : {}),
+            ...regionsField(placement.regions(l.href)),
+            meta: { status: l.status, rateLimited: true, ...sectionMeta(sections) },
+          };
+        }),
       });
     }
 

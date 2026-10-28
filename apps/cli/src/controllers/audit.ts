@@ -736,7 +736,7 @@ export function shouldUseLoopbackFastPath(
  * DO hit the target host) and drop the CLI-side per-host delay.
  *
  * `planRenderConcurrency` (from the user's plan via GET /v1/credits) further
- * clamps the configured value — Free runs 1 render at a time, Pro runs 5,
+ * clamps the configured value — Free runs 2 renders at a time, Pro runs 5,
  * Team runs 10.
  *
  * On the plain-HTTP path, a loopback target with no explicit user override gets
@@ -785,7 +785,7 @@ export function resolveCrawlConcurrency(
     perHostDelayMs: 0,
     // The discovery probes are plain HTTP to the site, not render jobs, so
     // they keep the configured per-host limits. Clamped with the pages they ran
-    // one at a time on the free plan (render concurrency 1), and on a slow host
+    // one at a time on the free plan (render concurrency was 1 then), and on a slow host
     // the later ones fell past the preamble budget (#409).
     discoveryProbePerHost: {
       concurrency: base.perHostConcurrency,
@@ -1023,7 +1023,7 @@ export async function runAudit(
         },
         isQuickMode
       );
-      // Plan-gated render concurrency: Free=1, Pro=5, Team=10 (cloud renders only).
+      // Plan-gated render concurrency: Free=2, Pro=5, Team=10 (cloud renders only).
       // cloudAvailable check is belt-and-suspenders — resolveDocumentFetcher
       // already returns non-render when cloud is unavailable — but keeps the
       // gate explicit so this getBalance never fires at a dead session.

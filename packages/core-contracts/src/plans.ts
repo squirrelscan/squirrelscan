@@ -39,8 +39,10 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     // Most pages one audit renders at once. The hosted runner holds a cloud
     // audit to it (squirrelscan/repo#2480) and the CLI clamps to it. Before
     // #2480 the cloud ignored it: rendered crawls ran at the crawler's default
-    // width (5, or 8 under the authorised profile) on every plan.
-    renderConcurrency: 1,
+    // width (5, or 8 under the authorised profile) on every plan. Free held 1 from
+    // #2480 and took the crawl stage of a scheduled free audit from about 46 s to
+    // 176 s (a page at a time, about 13 s a page); it is 2 now (squirrelscan/repo#3576).
+    renderConcurrency: 2,
     // #1704: scheduling is no longer the paid line. A weekly audit of one site
     // burns roughly 250-300 of the 500 monthly credits above, so the free grant
     // finally binds while the tier delivers recurring value; Pro's

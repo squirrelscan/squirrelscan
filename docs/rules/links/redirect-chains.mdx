@@ -20,6 +20,8 @@ The rule is site-wide and works in two passes. First it finds crawled pages that
 
 Link matching is slash-sensitive. A page that links `/about/` is not blamed for `/about`'s redirect, because those are different hrefs and only one of them is the mistake.
 
+When the page's links carry a link section (see [Page Classifier](/configuration/classifier)), each `links-to-redirect` item says where the links to the redirecting URL sit and carries the counts in `meta.sections`, for example `https://example.com/old (301) → https://example.com/new (200), linked in the footer and the page content`. The `redirect-pages` items describe a page, not a link, and are unchanged. A crawl whose links carry no section keeps the item as it was. Each `links-to-redirect` item lists every page that links the redirecting URL once, with `sources` saying how many of that page's links point at it and where they sit; see [source pages](/configuration/output#source-pages). Each item also counts the pages per section (`regions`), so a link to a redirecting URL in the site header of most pages is reported once for the header; see [findings in a shared page region](/reports#findings-in-a-shared-page-region).
+
 ## How to fix it
 
 Rewrite the links to point at the final URL. The report lists which pages carry each one, so a link repeated in a template is a single change.

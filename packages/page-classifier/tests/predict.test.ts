@@ -88,9 +88,17 @@ describe("the rules path, with no model at all", () => {
     const out = classifyPage(home, "https://example.com/");
     expect(out.pageType.label).toBe("homepage");
     expect(out.pageType.source).toBe("rules");
+  });
+
+  test("root paths use platform URL parsing (#903)", () => {
     expect(isRootPath("https://example.com")).toBe(true);
+    expect(isRootPath("https://example.com/")).toBe(true);
     expect(isRootPath("https://example.com/?a=1")).toBe(true);
+    expect(isRootPath("https://example.com/#top")).toBe(true);
     expect(isRootPath("https://example.com/a")).toBe(false);
+    expect(isRootPath("https://example.com\\about")).toBe(false);
+    expect(isRootPath("https://user@example.com/a")).toBe(false);
+    expect(isRootPath("not a URL")).toBe(false);
   });
 
   test("a page with no structured data and no landmarks is unknown, not a guess", () => {

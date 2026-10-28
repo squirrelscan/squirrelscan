@@ -1,0 +1,133 @@
+name: Dependency advisory
+
+# The release gate runs `bun run audit:dependencies` (bun audit with the
+# reasoned ignores in package.json). Its answer moves with the advisory
+# database, not only with bun.lock, so a new advisory can turn the gate red on
+# main with nobody having changed anything, and the first anyone learns of it
+# is a release or a merge that fails. This runs the same audit on main every
+# day and files the result as one issue anyone can see, so the fix (an upgrade,
+# or an ignore with a reason) is made before it blocks a release.
+
+on:
+  schedule:
+    # 04:23 UTC daily. Off the hour on purpose: scheduled runs bunch up at :00
+    # and get queued.
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-advisory
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Audit main
+    # A fork inherits the schedule, and a fork's run would file issues against
+    # its own copy for an advisory it has no part in.
+    if: github.repository == 'squirrelscan/squirrelscan'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      # A scheduled run is always on the default branch; a manual one is pinned
+      # to it so the answer is always about main.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - uses: ./.github/actions/setup-bun
+
+      # The audit's own output, nothing else: advisory ids, severities and the
+      # workspace paths that reach them. A failing audit must not fail this
+      # step, because the next one reports it.
+      - name: Run the release-gate audit
+        id: audit
+        run: |
+          set +e
+          bun run audit:dependencies > audit-output.txt 2>&1
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      # One open issue, reused, as the installer canary does: a daily check that
+      # opened a fresh issue per failing run would bury the repo in duplicates.
+      - name: File, update or clear the advisory issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          EXIT_CODE: ${{ steps.audit.outputs.exit_code }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TITLE: "Dependency advisory fails the release gate"
+          LABEL: dependency-advisory
+        run: |
+          set -euo pipefail
+
+          # The label is the identity, and it is created here so the first run
+          # works. Title matching alone is not identity: this is a public repo,
+          # anyone can open an issue with any title.
+          gh label create "$LABEL" \
+            --description "Opened by the daily dependency advisory check" \
+            --color B60205 2> /dev/null || true
+
+          existing=$(gh issue list \
+            --state open \
+            --label "$LABEL" \
+            --limit 100 \
+            --json number,title,author \
+            --jq '[.[]
+                   | select(.title == env.TITLE)
+                   | select(.author.login == "github-actions" or .author.login == "github-actions[bot]")]
+                  | first | .number // empty')
+
+          if [ "$EXIT_CODE" = "0" ]; then
+            if [ -n "$existing" ]; then
+              gh issue comment "$existing" --body "The audit passes on main again: $RUN_URL"
+              gh issue close "$existing" --reason completed
+              echo "closed #$existing"
+            else
+              echo "audit passes, nothing open"
+            fi
+            exit 0
+          fi
+
+          # The audit's output is advisory text from a database we do not
+          # control: strip ANSI colour, keep it to the issue body limit, and
+          # fence it with a run of tildes it cannot contain, so it can never
+          # close the fence and add markup of its own.
+          sed -e 's/\x1b\[[0-9;]*[A-Za-z]//g' -e 's/~/-/g' audit-output.txt | head -c 40000 > audit-clean.txt
+
+          {
+            echo "The release gate (\`bun run audit:dependencies\`) fails on main, so a merge or a release would be blocked by it."
+            echo
+            echo "Run: $RUN_URL (exit code $EXIT_CODE)"
+            echo
+            echo "Advisory ids, paths and affected workspaces, as the audit printed them:"
+            echo
+            echo "~~~~text"
+            cat audit-clean.txt
+            echo "~~~~"
+            echo
+            echo "## Acceptance Criteria"
+            echo
+            echo "- [ ] Each advisory above is resolved by an upgrade, or ignored in the \`audit:dependencies\` script in package.json with the reason in the pull request that adds the ignore (dev tooling only, not reachable, no patched version yet)."
+            echo "- [ ] \`bun run audit:dependencies\` passes on main."
+            echo
+            echo "This issue closes itself when the daily check sees the audit pass."
+          } > issue-body.md
+
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --body-file issue-body.md
+            echo "updated #$existing"
+          else
+            gh issue create --title "$TITLE" --label "$LABEL" --body-file issue-body.md
+          fi
+
+      # The issue is the signal; the red run is the same fact where the
+      # Actions tab shows it.
+      - name: Fail the run when the audit failed
+        if: steps.audit.outputs.exit_code != '0'
+        run: |
+          echo "::error::bun run audit:dependencies failed on main (see the issue and the audit step)"
+          exit 1

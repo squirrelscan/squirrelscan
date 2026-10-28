@@ -4,6 +4,7 @@
 export type {
   CheckItem,
   CheckResult,
+  ComponentOccurrence,
   ContactPoint,
   RuleMeta,
   ReportRuleResult,
@@ -59,6 +60,64 @@ export type {
   FlatIssue,
   PassedRule,
 } from "./grouping";
+export {
+  componentFixGroupDigest,
+  componentFixGroups,
+  componentOccurrenceIdentity,
+  componentOccurrenceKey,
+} from "./component-fix-groups";
+export type { ComponentFixGroup, ComponentFixAttribution } from "./component-fix-groups";
+// Human-facing presentation of those groups. Renderers share these so llm,
+// markdown, text and console cannot drift in wording or in what they suppress.
+export {
+  ROOT_LABEL_MAX,
+  describeDefect,
+  describeRoot,
+  describeRegion,
+  describeSlot,
+  fixGroupLine,
+  fixGroupPages,
+  fixRollupLine,
+  fixUnits,
+  formatPageSample,
+  ruleFixCoverage,
+  uncoveredItems,
+} from "./component-presentation";
+export type { FixCoverage, FixCoverageMode, PageSample } from "./component-presentation";
+// One block, one line: roll up groups that are demonstrably the same repair.
+export {
+  ROLLUP_MAX_DISTINCT_VALUES,
+  componentFamilyRollups,
+  componentFixRollups,
+  describeRollupDefect,
+} from "./component-fix-rollup";
+export type { ComponentFixRollup, ComponentFixRollupLevel } from "./component-fix-rollup";
+// One build, one line: shared SITE RESOURCES (source maps today) grouped by the
+// page set that references them, so a template site's shared bundle is one
+// finding rather than one per page (#2341).
+export { siteResourceFixGroups } from "./site-resource-fix-groups";
+export type { SiteResourceFixGroup } from "./site-resource-fix-groups";
+export {
+  SITE_RESOURCE_MAX_KEYS,
+  describeSiteResourceDefect,
+  isRenderableSiteResourceGroup,
+  resourceName,
+  ruleSiteResourceCoverage,
+  siteResourceFixLine,
+  withSiteResourceCoverage,
+} from "./site-resource-presentation";
+export type { SiteResourceCoverage } from "./site-resource-presentation";
+// Site-wide item collapse: one shared resource on nearly every page.
+export {
+  SITE_WIDE_MAX_EXCEPTIONS,
+  SITE_WIDE_MIN_PAGES,
+  SITE_WIDE_MIN_PAGE_RATIO,
+  auditedPageTotal,
+  formatSiteWideItem,
+  siteWideContext,
+  siteWideItem,
+} from "./site-wide-items";
+export type { SiteWideItem } from "./site-wide-items";
 
 // Scoring
 export { getScoreGrade, getScoreColor, getGroupColor, GROUP_COLORS } from "./scoring";
@@ -114,6 +173,26 @@ export {
   type TechGroup,
 } from "./technologies";
 
+// Page structure block helpers (#2307; report-only / non-scoring, shared across formats + CLI console)
+export {
+  CHROME_SECTIONS,
+  MIN_RULES_CONFIDENCE,
+  createStructureBuilder,
+  extractPageStructure,
+  pageTypePhrase,
+  structureAttr,
+  structureChromeLine,
+  structureDegradedLine,
+  structureNumber,
+  structurePageTypesLine,
+  structureRowDetail,
+  structureRows,
+  structureSectionName,
+  structureTotalsLine,
+  type StructureBuilder,
+  type StructureSource,
+} from "./structure";
+
 // Site profile section helpers (report-only / non-scoring; shared across formats + CLI console)
 export {
   SITE_PROFILE_NOTE,
@@ -143,6 +222,8 @@ export {
 
 // Checks that did not run for this audit: link checks off, links not followed (repo#2729)
 export {
+  notCheckedDetailLine,
+  notCheckedDetailLines,
   notCheckedLine,
   notCheckedLines,
   notCheckedRules,
@@ -285,6 +366,44 @@ export {
   itemsNotListedLine,
 } from "./affected-pages";
 export type { AffectedPages, RuleAffectedRollup } from "./affected-pages";
+
+// pub#837: an item's source pages as rows, each page once with its links and sections, and the
+// summary suffix that keeps links and pages apart. Shared by every renderer and the CLI console.
+export {
+  affectedPagesSuffix,
+  hasItemSources,
+  itemSourceList,
+  itemSourceView,
+  moreSourcePages,
+  sourceRowText,
+} from "./item-sources";
+export type { ItemSourceList, ItemSourceRow, ItemSourceView } from "./item-sources";
+
+// pub#846: a finding in a shared page region names the region instead of listing its pages.
+export {
+  REGION_SCOPE_MIN_PAGES,
+  REGION_SCOPE_MIN_SHARE,
+  TEMPLATE_REGIONS,
+  checkPagesScopedAway,
+  checkRegionScope,
+  checkScopeLine,
+  itemLabel,
+  itemRegionScope,
+  regionScopeData,
+  regionScopeLine,
+} from "./region-scope";
+export type { RegionScope, TemplateRegion } from "./region-scope";
+
+// pub#857: a finding on every page of one page type names the type instead of listing its pages.
+export {
+  PAGE_TYPE_SCOPE_MIN_PAGES,
+  PAGE_TYPE_SCOPE_MIN_SHARE,
+  PAGE_TYPE_SCOPE_SOURCE,
+  checkPageTypeScope,
+  pageTypeScopeData,
+  pageTypeScopeLine,
+} from "./page-type-scope";
+export type { PageTypeScope, PageTypeScopeCheck } from "./page-type-scope";
 
 // Failed/blocked audit notice copy (#792, #935) — single source of truth for
 // the static HTML report's FailureNotice and the dashboard's report-detail notice.

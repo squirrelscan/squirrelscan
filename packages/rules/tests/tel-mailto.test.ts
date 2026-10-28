@@ -223,3 +223,58 @@ describe("links/tel-mailto — optional trunk prefix (0) in the display (pub#663
     expect(withoutOptionalTrunkZero("(0)6061 630 980 0")).toBeNull();
   });
 });
+
+// #2307: where the flagged tel: and mailto: links sit.
+describe("links/tel-mailto — link sections", () => {
+  const html = page(
+    `<footer><a href="tel:+61414007351">0400 111 222</a></footer>` +
+      `<main><a href="mailto:sales@example.com">support@example.com</a></main>`
+  );
+
+  test("mismatch items say where the link sits and carry meta.sections", () => {
+    const { checks } = telMailtoRule.run(ctx(html));
+
+    expect(checks.find((c) => c.name === "tel-mismatch")?.items?.[0]).toMatchObject({
+      label: 'href "+61414007351" ≠ text "0400 111 222", linked in the footer',
+      meta: { sections: { footer: 1 } },
+    });
+    expect(checks.find((c) => c.name === "mailto-mismatch")?.items?.[0]).toMatchObject({
+      label: 'href "sales@example.com" ≠ text "support@example.com", linked in the page content',
+      meta: { sections: { content: 1 } },
+    });
+  });
+
+  test("the trunk prefix advice says it too", () => {
+    const { checks } = telMailtoRule.run(
+      ctx(page(`<header><a href="tel:+496061630980">+49 (0)6061 630 980</a></header>`))
+    );
+
+    expect(checks.find((c) => c.name === "tel-trunk-prefix")?.items?.[0]?.label).toBe(
+      'text "+49 (0)6061 630 980": use "+49 6061 630 980", linked in the header'
+    );
+  });
+
+  test("a mismatch past the parse's contact cap still says where it sits (markup only)", () => {
+    const phones = Array.from({ length: 32 }, (_, i) => `<p><a href="tel:+1555000${1000 + i}">call</a></p>`);
+    const { checks } = telMailtoRule.run(
+      ctx(page(`${phones.join("")}<footer><a href="mailto:a@example.com">b@example.com</a></footer>`))
+    );
+
+    expect(checks.find((c) => c.name === "mailto-mismatch")?.items?.[0]).toMatchObject({
+      label: 'href "a@example.com" ≠ text "b@example.com", linked in the footer',
+      meta: { sections: { footer: 1 } },
+    });
+  });
+
+  test("without section data the items are as they were", () => {
+    const c = ctx(html);
+    for (const contact of c.parsed.contactLinks ?? []) delete contact.section;
+    const { checks } = telMailtoRule.run(c);
+
+    expect(checks.find((x) => x.name === "tel-mismatch")?.items?.[0]).toEqual({
+      id: "tel:+61414007351",
+      label: 'href "+61414007351" ≠ text "0400 111 222"',
+      snippet: '<a href="tel:+61414007351">0400 111 222</a>',
+    });
+  });
+});

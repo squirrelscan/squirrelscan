@@ -201,8 +201,9 @@ describe("notCheckedRules / notCheckedLines", () => {
       ]),
     };
     expect(notCheckedLines(cut)[0]).toContain("Leaked Secrets timed out on 20 pages");
-    // The console and the other formats print it, not only the info row.
-    expect(renderText(report)).toContain("Not checked: Leaked Secrets.");
+    // The console and the other formats print it, not only the info row. The human formats
+    // list it under the Report detail "Not checked" heading, without the lead-in.
+    expect(renderText(report)).toContain(notCheckedLines(report)[0]!.replace("Not checked: ", ""));
     expect(renderMarkdown(report)).toContain("Leaked Secrets");
   });
 
@@ -213,11 +214,17 @@ describe("notCheckedRules / notCheckedLines", () => {
 
 describe("every format shows it, never as an issue", () => {
   const count = (haystack: string, needle: string) => haystack.split(needle).length - 1;
+  // The human formats list each notice under a "Not checked" heading in Report detail, so the
+  // line there has no "Not checked: " lead-in.
+  const EXTERNAL_ITEM = EXTERNAL_LINE.replace("Not checked: ", "");
+  const INTERNAL_ITEM = INTERNAL_LINE.replace("Not checked: ", "");
 
   test("text", () => {
     const out = renderText(quickReport());
-    expect(count(out, EXTERNAL_LINE)).toBe(1);
-    expect(count(out, INTERNAL_LINE)).toBe(1);
+    expect(count(out, EXTERNAL_ITEM)).toBe(1);
+    expect(count(out, INTERNAL_ITEM)).toBe(1);
+    expect(out).toContain("REPORT DETAIL");
+    expect(out).not.toContain("Not checked:");
   });
 
   test("markdown, escaped like any message a published report carries", () => {
@@ -226,12 +233,16 @@ describe("every format shows it, never as an issue", () => {
     // underscore in a config key.
     const escaped = (line: string) =>
       line.replaceAll("(", "\\(").replaceAll(")", "\\)").replaceAll("_", "\\_");
-    expect(count(out, `**${escaped(EXTERNAL_LINE)}**`)).toBe(1);
-    expect(count(out, `**${escaped(INTERNAL_LINE)}**`)).toBe(1);
+    // Plain list items under "### Not checked", never a bold paragraph.
+    expect(count(out, `- ${escaped(EXTERNAL_ITEM)}\n`)).toBe(1);
+    expect(count(out, `- ${escaped(INTERNAL_ITEM)}\n`)).toBe(1);
+    expect(out).not.toContain("**Not checked");
+    expect(out).toContain("### Not checked");
     expect(out).toContain("link\\(s\\)");
   });
 
   test("html", () => {
+    // The page keeps its own dismissible notice lines at the top, with the lead-in.
     const out = renderHtml(quickReport());
     expect(count(out, EXTERNAL_LINE)).toBe(1);
     expect(count(out, INTERNAL_LINE)).toBe(1);

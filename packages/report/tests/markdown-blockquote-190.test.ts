@@ -121,6 +121,10 @@ describe("full-scan hint block boundary (#190)", () => {
     expect(out).toContain(FALLBACK_NOTE);
     expect(out).toContain("**Version:** 1.2.3");
 
+    // It is a plain list item in Report detail, at the end of the report.
+    expect(out).toContain(`- ${HINT_PREFIX}`);
+    expect(out.indexOf("## Report detail")).toBeLessThan(out.indexOf(HINT_PREFIX));
+
     // ...and none of the metadata below it is inside a quote.
     expect(quoted).not.toContain(FALLBACK_NOTE);
     expect(quoted).not.toContain("**Version:**");
@@ -136,6 +140,12 @@ describe("full-scan hint block boundary (#190)", () => {
     );
     expect(block.length).toBeGreaterThan(3);
     expect(block.filter(opensQuote)).toEqual([]);
+
+    // The scan notes moved to Report detail; the same holds for them.
+    const out = renderMarkdown(partialScanReport(), { version: "1.2.3" });
+    const detail = out.slice(out.indexOf("## Report detail")).split("\n");
+    expect(detail.length).toBeGreaterThan(5);
+    expect(detail.filter(opensQuote)).toEqual([]);
   });
 
   test("a complete scan renders the metadata run unchanged", () => {

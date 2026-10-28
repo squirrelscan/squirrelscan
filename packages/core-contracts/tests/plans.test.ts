@@ -65,6 +65,19 @@ describe("plan definitions", () => {
   });
 });
 
+describe("render width per plan (squirrelscan/repo#2480, #3576)", () => {
+  // The cloud runner, the CLI clamp, the pricing page and the dashboard note all
+  // read this one number per plan. Free is 2 (it was 1, which made a scheduled
+  // free audit's crawl a page-at-a-time render); the paid widths are unchanged.
+  test("free 2, Pro 5, Team 10, Enterprise 10, never narrower going up", () => {
+    expect(PLANS.free.renderConcurrency).toBe(2);
+    expect(PLANS.starter.renderConcurrency).toBe(5);
+    expect(PLANS.team.renderConcurrency).toBe(10);
+    expect(PLANS.enterprise.renderConcurrency).toBe(10);
+    expect(PLANS.starter.renderConcurrency).toBeGreaterThan(PLANS.free.renderConcurrency);
+  });
+});
+
 describe("SELF_SERVE_PLAN_IDS", () => {
   test("lists exactly the plans a customer can buy themselves", () => {
     expect([...SELF_SERVE_PLAN_IDS]).toEqual(["free", "starter", "team"]);

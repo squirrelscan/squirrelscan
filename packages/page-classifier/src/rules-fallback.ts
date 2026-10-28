@@ -223,11 +223,13 @@ export function rulePageType(document: SchemaDocument, url: string): PageTypeLab
 /** True for "/" and for an empty path. Exported because predict.ts applies the
  *  homepage rule ahead of the model, not only as a fallback. */
 export function isRootPath(url: string): boolean {
-  const withoutScheme = url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
-  const slash = withoutScheme.indexOf("/");
-  if (slash === -1) return true;
-  const path = withoutScheme.slice(slash).split(/[?#]/)[0] ?? "/";
-  return path === "/" || path === "";
+  try {
+    // The platform parser normalizes backslashes for special schemes before
+    // exposing the path, matching how browsers interpret those URLs.
+    return new URL(url).pathname === "/";
+  } catch {
+    return false;
+  }
 }
 
 const NESTED_KEYS = ["@graph", "mainentity", "mainentityofpage", "about", "itemlistelement"];

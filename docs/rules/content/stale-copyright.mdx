@@ -18,6 +18,8 @@ The rule runs on every crawled page over site-chrome regions only: `footer`, `[r
 - Warn when the year is behind the current one. Message: `Footer copyright year is 2024, behind the current year 2026`, with both as the value and expected value. Severity warning, weight 2.
 - Pass otherwise. Message: `Footer copyright year is 2026`.
 
+The warning carries `details.region` set to `footer`, so when the same stale year is on most pages that have a site footer the report says `In the site footer, on 148 of 150 pages` once instead of listing every page. See [findings in a shared page region](/reports#findings-in-a-shared-page-region).
+
 A notice is recognised from `©`, `(c)`, the `&copy;` entity or the word `copyright`, followed within thirty non-digit characters by a year, optionally a range. A range is judged on its end year, so `2019-2026` is current in 2026. A footer with several notices is judged on the newest. Years outside 1990 to 2999 are ignored as version numbers or identifiers. A year ahead of the current one passes, since sites legitimately roll over early.
 
 ## How to fix it

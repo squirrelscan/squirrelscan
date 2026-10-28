@@ -656,12 +656,13 @@ Top-level keys. Keys marked optional are omitted when they do not apply.
   ],
   "editorSummary": {},
   "technologies": {},
+  "structure": {},
   "entities": {},
   "siteProfile": {}
 }
 ```
 
-**Always present:** `meta`, `status`, `score`, `summary`, `issues`. The rest are optional. `statusReason` and `statusReasonCode` appear when `status` is `failed` or `blocked`. `meta.maxPages`, `meta.requestedMaxPages`, `meta.stopReason`, `meta.unfetched`, `meta.seedRedirect`, `meta.coverage`, `meta.auditLevel` and `meta.rulesCache` appear when they apply. `meta.unfetched` counts the in-scope URLs the crawl had queued but never fetched when it stopped. Added to the pages this run crawled (`meta.coverage.auditedPages` on a smart audit, `meta.totalPages` otherwise) it is a lower bound on the pages the crawl found. On a rate-limited run, `rateLimited.unfetched` already includes it. `meta.auditLevel` is the [audit level](/guides/audit-levels) the audit ran at: `level` (a level's name, or `custom`), `basedOn`, `changes` (the settings changed from the level) and `settings` (every setting's value). `rateLimited`, `refusedFetches`, `editorSummary`, `technologies`, `entities` and `siteProfile` appear when the audit produced that data. `editorSummary.priorities` is the [editor's summary](/cloud/editor-summary) ranked to-do list: each entry has `title`, `why`, `action`, `effort` (`quick-win`, `moderate` or `significant`), `ruleIds` and `technologies`.
+**Always present:** `meta`, `status`, `score`, `summary`, `issues`. The rest are optional. `statusReason` and `statusReasonCode` appear when `status` is `failed` or `blocked`. `meta.maxPages`, `meta.requestedMaxPages`, `meta.stopReason`, `meta.unfetched`, `meta.seedRedirect`, `meta.coverage`, `meta.auditLevel` and `meta.rulesCache` appear when they apply. `meta.unfetched` counts the in-scope URLs the crawl had queued but never fetched when it stopped. Added to the pages this run crawled (`meta.coverage.auditedPages` on a smart audit, `meta.totalPages` otherwise) it is a lower bound on the pages the crawl found. On a rate-limited run, `rateLimited.unfetched` already includes it. `meta.auditLevel` is the [audit level](/guides/audit-levels) the audit ran at: `level` (a level's name, or `custom`), `basedOn`, `changes` (the settings changed from the level) and `settings` (every setting's value). `rateLimited`, `refusedFetches`, `editorSummary`, `technologies`, `structure`, `entities` and `siteProfile` appear when the audit produced that data. `editorSummary.priorities` is the [editor's summary](/cloud/editor-summary) ranked to-do list: each entry has `title`, `why`, `action`, `effort` (`quick-win`, `moderate` or `significant`), `ruleIds` and `technologies`.
 
 **Issues:** `issues` holds findings only. Every check in it has status `fail` or `warn`. `affectedPages` is a sample, and `affectedPagesCount` is the true total, so compare the two (or read `affectedPagesHasMore`) before treating the list as complete.
 
@@ -691,7 +692,7 @@ A consumer that closes a finding when a rule stops reporting it should leave the
 | `reason` | `external-links-not-checked`: external link checking was off (`--offline`, `--no-external-links`, `[external_links] enabled = false`, or switched off for the website or run). `external-links-over-cap`: more external links than the audit's limit (`[external_links] max_links`, by default the page budget or 200, whichever is more); the most-linked were checked. `external-links-out-of-time`: a cloud audit's link check ran out of time, or waited too long on one request, before these links were answered. `link-targets-not-fetched`: the crawl did not follow links (Quick level, Sitemap crawl strategy) and some internal link targets were fetched neither by the crawl nor by the internal link check (one `HEAD` per target, on by default; `[internal_links] enabled = false` or `--no-internal-links` turns it off). `Crawl capped before the frontier was exhausted`: the crawl stopped at its page cap with pages still queued, so `links/orphan-pages`, `links/weak-internal-links` and `links/no-contextual-inbound` could not count every inbound link (`--max-pages` or `[crawler] max_pages` raises the cap) |
 | `message` | The line every report format shows, e.g. `Not checked: Broken External Links. External link checking was off for this audit, so 12 external link(s) on the audited pages were not checked. Turn external link checks on to check them: in the CLI pass --external-links (or drop --no-external-links, --offline, or external_links.enabled = false); in the cloud they are a website setting.` |
 
-The text, Markdown and HTML reports print the same `Not checked:` line under the score, and the LLM and XML reports have a `<not-checked>` element with one `<rule>` per entry. A consumer that closes a finding when a rule stops reporting it should leave findings for these rules open.
+The console, text and Markdown reports list each notice, without the `Not checked:` lead-in, under a Not checked heading in [Report detail](#report-detail) at the end of the report. The HTML report shows each one, with the `Not checked:` lead-in, among the dismissible notices at the top of the page. The LLM report has a `<not-checked>` element with one `<rule>` per entry inside its `<report-detail>` element, and the XML report has the same element at the top level of the document. A consumer that closes a finding when a rule stops reporting it should leave findings for these rules open.
 
 **Passed rules:** `passedRules` appears only with [`--include-passed`](/cli/report#list-what-passed), and only when at least one rule passed. Each entry is a rule with at least one passing check and no warning or error. `scope` is the rule's own (`page` or `site`). `pages` counts the distinct pages with a passing check. It is usually 0 for a site rule, and 0 for a page rule whose passing checks carry no page, which the other formats show as `pages not recorded`. A failed or blocked audit lists none.
 
@@ -700,6 +701,112 @@ The text, Markdown and HTML reports print the same `Not checked:` line under the
 - Data warehousing
 - Custom reporting
 - Integration testing
+
+---
+
+### Source pages
+
+An item that is a resource found on pages, such as a broken link, lists those pages in `sourcePages`, each page once. `pageCount` is how many pages it was found on when `sourcePages` lists fewer, as in a published report. The link rules (`links/broken-links`, `links/broken-external-links`, `links/broken-anchors` and the `links-to-redirect` check of `links/redirect-chains`) add `sources`, one entry per page:
+
+```json
+{
+  "id": "https://example.com/old-page",
+  "label": "https://example.com/old-page (404), linked in the page content and the footer",
+  "sourcePages": ["https://example.com/about", "https://example.com/contact"],
+  "sources": [
+    { "page": "https://example.com/about", "links": 2, "sections": { "content": 2 } },
+    { "page": "https://example.com/contact", "links": 1, "sections": { "footer": 1 } }
+  ]
+}
+```
+
+`links` is how many of the page's links point at the item, and `sections` counts them by where they sit, using the section names in [link sections](/rules/links/broken-links#what-squirrel-checks); it is absent when no link on that page had a known section. The XML report writes each source page as `<page url="..." links="2">` with a `<section name="content" links="2"/>` per section. The HTML, Markdown, text, LLM and console reports print one row per page, `from: /about (2 links, in the page content)`, and the check's summary counts links and pages apart: `1 broken internal link(s) (4xx/5xx), found on 2 pages`. HTML shows the first three rows and expands the rest inside the item. Markdown, text and console show the first three and the LLM report the first five, then `+N more pages`.
+
+Items that can say where they sit also carry `regions`: how many pages the item sits on, by section, counting every page, not only the ones listed (`{ "header": 49, "content": 3 }`). A page counts once in each section the item has on it. Rules that look at one page at a time set it on each page's item (`a11y/link-text`, `links/anchor-text`, `links/tel-mailto`, `links/https-downgrade`, `links/invalid-links`, `links/nofollow-internal`), and the report adds them up across pages, building a `sources` row for each listed page; a row from these rules has `sections` and no `links`. `content/stale-copyright` names its region on the check instead, as `details.region` (`"footer"`).
+
+When an item sits in a template region (the site header, footer or navigation, a sidebar, the breadcrumbs, the pagination, or the newsletter signup, social share, business details or account links) on at least 80% of the pages that have that region (and on at least 2 pages), the report shows it once for the region; see [findings in a shared page region](/reports#findings-in-a-shared-page-region). The JSON report adds `scope` to that item, and to a check scoped by `details.region`, beside the bounded page list:
+
+```json
+"scope": { "region": "header", "pages": 49, "regionPages": 53, "otherPages": 3 }
+```
+
+`region` is `header`, `footer`, `navigation`, `sidebar`, `breadcrumbs`, `pagination`, `newsletter_signup`, `social_share`, `business_info` or `account_login`; `pages` is the pages the item sits on in the region; `regionPages` is the audited pages that have the region (from the [page structure](#page-structure) block); `otherPages` is the pages the item is on outside it. The XML report writes the same as `<scope region="header" pages="49" region-pages="53" other-pages="3"/>` inside the item or check. An item with a `scope` has the section phrase taken off its `label` (`https://example.com/old (404)`, not `https://example.com/old (404), linked in the footer`), in every format, as the region says where it is; `meta.sections` still carries the counts. An item with no `scope` keeps its page rows and its label.
+
+A check that names a classifier page type in `details.pageType` (with `details.pageTypeSource` set to `"model"`), and is on every page or nearly every page of that type, gets a `scope` of its own, beside its bounded page list; see [findings on every page of one page type](/reports#findings-on-every-page-of-one-page-type):
+
+```json
+"scope": { "pageType": "docs", "pages": 9, "typePages": 11 }
+```
+
+`pageType` is the classifier's label, `pages` is the pages the check is on, and `typePages` is the audited pages of that type, from the [page structure](#page-structure) block. The XML report writes `<scope page-type="docs" pages="9" type-pages="11"/>` in the check. A `scope` with `region` is a region and one with `pageType` is a page type; a check has at most one.
+
+---
+
+### Report detail
+
+The console, text, Markdown and LLM reports end with a Report detail section (the HTML report keeps its notices at the top of the page and shows the page structure as its own section after the site details). It holds the notes about the audit itself, so the top of the report stays the title, URL, date, page count and version, then the score, the summary and the issues. It leaves out whatever it has nothing to say about, and is absent when it has nothing at all. In order, it has:
+
+- **Not checked**: one list item per check this audit did not run, so a skipped check never reads as clean. See `notChecked` in the JSON schema above.
+- **Page structure**: where the links on the audited pages sit, below.
+- **Scan details**: the notes that qualify the score. Pages the host rate limited, a refused off-site seed redirect, the scan scope, the audit level, smart-audit coverage, the local or private host note, the partial scan hint, and pages recovered by a direct fetch.
+
+```text
+## Report detail
+
+### Not checked
+
+- Broken External Links. External link checking was off for this audit, so 12 external link(s) on the audited pages were not checked. Turn external link checks on to check them: in the CLI pass --external-links (or drop --no-external-links, --offline, or external_links.enabled = false); in the cloud they are a website setting.
+
+### Page structure
+
+Page types: 20 product pages, 6 blog posts, 2 contact pages; 30 not classified.
+
+| Section | Pages | Links |
+|---------|------:|------:|
+| Footer | 58 | 986 |
+| Navigation | 58 | 742 |
+| Content | 52 | 311 |
+| Header | 58 | 174 |
+| Sidebar | 14 | 63 |
+
+2,311 links counted; 35 could not be placed in a section.
+
+88% of internal links sit in the header, footer, navigation and sidebar; 12% in the page content.
+
+### Scan details
+
+- Scan: 100 pages crawled from the CLI v0.0.76 (page limit 100 reached)
+```
+
+The JSON and XML reports keep every one of these as data fields where they were: `notChecked`, `structure`, `meta` and the rest. The LLM report ends with a `<report-detail>` element that holds `<not-checked>` and `<page-structure>`. Its scan notes stay where they were, as the `<rate-limited>`, `<seed-redirect>`, `<scan-scope>`, `<coverage>` and `<audit-level>` elements, because an agent needs them before it reads the issues.
+
+#### Page structure
+
+Every report can carry a Page structure block: where the links on your pages sit (the header, footer, navigation, sidebar, page content and so on) and what type of page each one is. It is informational and never part of the score.
+
+It is computed over the pages that answered with a 2xx status, from link sections that page markup and the bundled [page classifier](/configuration/classifier) give each link. It needs a crawl made with a version of squirrel that records link sections: a report built from an older crawl has no Page structure block. With the classifier off (`[classifier] enabled = false`) the block still appears from markup alone, and shows no page types.
+
+
+What each number means in the Page structure example above:
+
+- **Pages** is the audited pages with at least one link in that section. **Links** is every link in that section, summed over those pages. Each anchor counts, repeats included, so a footer link on 58 pages is 58 links.
+- **Could not be placed** is links that neither the markup nor the classifier could assign to a section. They are counted in the total but not listed as a section.
+- **Chrome share** is internal links in the header, footer, navigation and sidebar, divided by those plus internal links in the page content. Links in other sections, such as the pagination or the comments, are left out of both sides. A share near 1 means almost every internal link on the site is repeated site furniture, which is common and not a problem by itself. It is the context for findings such as [links/no-contextual-inbound](/rules/links/no-contextual-inbound).
+- **Page types** are counted only where squirrel stands behind the label: an answer from the classifier's model, or an answer from the page markup at 0.8 confidence or more. A page with no answer, the label `unknown` or a weaker markup answer counts as not classified. The labels are `homepage`, `product_detail`, `product_listing`, `article`, `blog_post`, `about`, `contact`, `docs`, `legal`, `pricing`, `listing_index` and `other`. Only a page at the root path (`/`) can be a `homepage`: a page at any other path never gets that label, however much it looks like a home page.
+
+The block sits in Report detail (in the HTML report, a Page structure section after the site details), and is left out when there is nothing to show. The LLM and XML reports use a `<page-structure>` element with one `<section>` per row. In the JSON report it is the `structure` key:
+
+| Field | Meaning |
+|-------|---------|
+| `pages` | Audited pages the numbers cover: those with a link section or a page type |
+| `sections` | `{ section, pages, links }` rows, most links first. `unknown` is not a row; sections with no links are left out |
+| `unknownLinks` | Links that could not be placed in a section |
+| `totalLinks` | Every link counted, `unknownLinks` included |
+| `chrome` | `{ links, contentLinks, share }`: internal links in the header, footer, navigation and sidebar, internal links in the page content, and the first over the sum of both, 0 to 1 with three decimals. `share` is `null` when there are no internal links in either |
+| `pageTypes.counts` | `{ label, pages }` rows for the labels squirrel stands behind, most pages first |
+| `pageTypes.notClassified` | Pages with no label squirrel stands behind |
+| `pageTypes.byModel` | Of the counted pages, those whose label came from the classifier's model |
+| `pageTypes.degraded` | Pages where part of the classification fell back to the page markup |
 
 ---
 
