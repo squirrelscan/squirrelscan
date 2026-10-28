@@ -301,3 +301,41 @@ describe("vibe-coding fingerprints: bounded on adversarial markup", () => {
     }
   });
 });
+
+describe("vibe-coding fingerprints: late config and meta URL position", () => {
+  const found = (html: string): string[] => ids(input({ html })).filter((id) => IDS.includes(id));
+  const filler = "var a=1;".repeat(700);
+
+  test("config far into a large inline script still matches", () => {
+    expect(found(`<script>${filler}var k='base44_access_token'</script>`)).toEqual(["base44"]);
+    expect(
+      found(`<script>${filler}var c={authDomain:"my-app-1234.firebaseapp.com"}</script>`),
+    ).toEqual(["firebase"]);
+  });
+
+  test("the same strings far into a <pre> or <p> still match nothing", () => {
+    expect(found(`<pre>${filler}var k='base44_access_token'</pre>`)).toEqual([]);
+    expect(found(`<p>${filler}{authDomain:"my-app-1234.firebaseapp.com"}</p>`)).toEqual([]);
+  });
+
+  test("a script match does not run past its closing tag", () => {
+    expect(found(`<script>var a=1;</script><p>base44_access_token</p>`)).toEqual([]);
+  });
+
+  test("Lovable social image meta: URL must start the value, either attribute order", () => {
+    const url = "https://storage.googleapis.com/gpt-engineer-file-uploads/u/social.webp";
+    expect(found(`<meta property="og:image" content="${url}">`)).toEqual(["lovable"]);
+    expect(found(`<meta content="${url}" name="twitter:image">`)).toEqual(["lovable"]);
+    expect(found(`<meta name="description" content="see ${url}">`)).toEqual([]);
+    expect(found(`<meta name="description" content="${url}">`)).toEqual([]);
+  });
+
+  test("hostile flood with every trigger literal present stays fast", () => {
+    const html =
+      "<script>".repeat(20_000) + "<style>".repeat(20_000) +
+      " .supabase.co .firebaseapp.com base44_access_token /api/app-logs/ #lovable-badge /__replco/static/";
+    const start = performance.now();
+    detectTechnologies({ url: "https://example.com/", headers: {}, html });
+    expect(performance.now() - start).toBeLessThan(1000);
+  });
+});

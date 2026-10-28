@@ -1,7 +1,9 @@
 import type { Detector, TechFingerprint } from "../types";
 
-const BOUNDED_SCRIPT_BODY = String.raw`(?:(?!<\/script)[\s\S]){0,4000}?`;
-const BOUNDED_STYLE_BODY = String.raw`(?:(?!<\/style)[\s\S]){0,2000}?`;
+// Lazy, up to the next script tag open or close: each body is scanned once, so a
+// flood of unclosed tags stays linear, and a config far into a big blob still matches.
+const SCRIPT_BODY = String.raw`(?:(?!<\/?script)[\s\S])*?`;
+const STYLE_BODY = String.raw`(?:(?!<\/?style)[\s\S])*?`;
 
 /**
  * A script URL matched two ways: anchored at the start of a `script-url` entry,
@@ -25,7 +27,7 @@ function inScript(bodySource: string, requires: string): Detector {
   return {
     type: "html",
     requires,
-    pattern: new RegExp(`<script\\b[^>]{0,300}>${BOUNDED_SCRIPT_BODY}${bodySource}`, "i"),
+    pattern: new RegExp(`<script\\b[^>]{0,300}>${SCRIPT_BODY}${bodySource}`, "i"),
   };
 }
 
@@ -34,7 +36,7 @@ function inStyle(bodySource: string, requires: string): Detector {
   return {
     type: "html",
     requires,
-    pattern: new RegExp(`<style\\b[^>]{0,300}>${BOUNDED_STYLE_BODY}${bodySource}`, "i"),
+    pattern: new RegExp(`<style\\b[^>]{0,300}>${STYLE_BODY}${bodySource}`, "i"),
   };
 }
 
@@ -182,10 +184,22 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       ...scriptSrc(String.raw`\/__l5e\/events\.[0-9a-f]{8,64}\.js`),
       inStyle(String.raw`#lovable-badge(?:-[a-z]{1,12})?\s*[{,:]`, "#lovable-badge"),
       resourceAttr(
-        "img|source|meta",
-        "src|srcset|data-src|content",
+        "img|source",
+        "src|srcset|data-src",
         String.raw`https:\/\/storage\.googleapis\.com\/gpt-engineer-file-uploads\/`,
       ),
+      // Social image meta: the URL must be the whole start of the value, in either
+      // attribute order, so prose in a description that links the bucket is not a hit.
+      {
+        type: "html",
+        pattern:
+          /<meta\s(?:[^>]{0,400}\s)?(?:property|name)\s*=\s*["'](?:og|twitter):image["'](?:[^>]{0,400}\s)?content\s*=\s*["']https:\/\/storage\.googleapis\.com\/gpt-engineer-file-uploads\//i,
+      },
+      {
+        type: "html",
+        pattern:
+          /<meta\s(?:[^>]{0,400}\s)?content\s*=\s*["']https:\/\/storage\.googleapis\.com\/gpt-engineer-file-uploads\/[^"']{0,400}["'](?:[^>]{0,400}\s)?(?:property|name)\s*=\s*["'](?:og|twitter):image["']/i,
+      },
     ],
     ignoreComments: true,
     confidence: "high",
