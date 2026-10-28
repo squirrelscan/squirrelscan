@@ -51,6 +51,26 @@ const body = (html: string) => `<!doctype html><html><body>${html}</body></html>
 const PASSWORD = "K8#m" + "Z2!qX7vP"; // pragma: allowlist secret
 
 describe("generic assignments: labels and expressions are not values", () => {
+  test("key-name constants and identifiers are not credentials", () => {
+    const negatives = [
+      `{DROPBOX_ACCESS_TOKEN:"dropbox-access-token"}`,
+      `{GOOGLE_DRIVE_TOKEN:"google-drive-token"}`,
+      `{apiKey:"LoadCustomers",message:e.message}`, // pragma: allowlist secret
+      `{Password:t}`,
+      `{"tools-secrets":"mcp-tools"}`, // pragma: allowlist secret
+    ];
+    for (const js of negatives) expect(reported(script(js))).toEqual([]);
+  });
+
+  test("random values under credential keys still report", () => {
+    const apiKey = mixedRun(seededRng(5100), 32);
+    const token = runOf(seededRng(5101), HEX, 40);
+    expect(reported(script(`{apiKey:"${apiKey}",accessToken:"${token}"}`))).toEqual([
+      ["leaked-secrets-medium", "Generic API Key Assignment"],
+      ["leaked-secrets-medium", "Generic Token Assignment"],
+    ]);
+  });
+
   test("a JSX label ending in the credential word does not span into the code after it", () => {
     const negatives = [
       `(0,r.jsx)("label",{htmlFor:"pw",children:"Password:"}),(0,r.jsx)("input",{id:"pw",type:"password"})`,

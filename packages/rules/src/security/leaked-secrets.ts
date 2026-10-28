@@ -2349,6 +2349,38 @@ function keyOf(match: string): string {
   return /^[A-Za-z_-]+/.exec(match)?.[0] ?? "";
 }
 
+/**
+ * The complete key a key-anchored generic match started inside.
+ *
+ * The patterns begin at their credential suffix, so `DROPBOX_ACCESS_TOKEN`
+ * arrives as `ACCESS_TOKEN:"..."`. Recover the bounded identifier prefix so
+ * a value that is merely the same storage key in kebab case can be compared
+ * against the whole key. If the walk exhausts its budget, keep only the
+ * matched suffix: a truncated prefix must not suppress a possible secret.
+ */
+function completeKeyOf(text: string, index: number, match: string): string {
+  const suffix = keyOf(match);
+  const floor = Math.max(0, index - SECRET_KEY_LOOKBEHIND_SIZE * 2);
+
+  let runStart = index;
+  while (runStart > floor && KEY_SEGMENT_CHAR_RE.test(text[runStart - 1] ?? "")) {
+    runStart--;
+  }
+  const hyphenJoins =
+    QUOTE_CHAR_RE.test(text[runStart - 1] ?? "") ||
+    isAttributeNamePosition(text, runStart);
+  const keyChar = hyphenJoins ? KEY_SEGMENT_CHAR_RE : IDENT_CHAR_RE;
+
+  let start = index;
+  while (start > floor && keyChar.test(text[start - 1] ?? "")) {
+    start--;
+  }
+  if (start === floor && start > 0 && keyChar.test(text[start - 1] ?? "")) {
+    return suffix;
+  }
+  return text.slice(start, index) + suffix;
+}
+
 /** Lowercase alphanumerics: what is left of a word once case and separators go.
  *  Digits stay, so `secretkey1` is not `secret_key`. */
 function alnum(s: string): string {
@@ -2663,7 +2695,7 @@ export function scanContent(
         // `password:"Password"`, `passwd:"passwd"`: an i18n label whose value // pragma: allowlist secret
         // is its own key. And a URL-encoded sentence (`…ed%`, `%20`) is a
         // label too, however the encoding scattered its letters. // pragma: allowlist secret
-        if (alnum(body) === alnum(keyOf(value))) continue;
+        if (alnum(body) === alnum(completeKeyOf(content, match.index, value))) continue;
         if (isPercentEncodedLabel(body)) continue;
         // A label in a script that does not space its words, a route path or
         // a catalogue key cannot be a credential whatever the key says.

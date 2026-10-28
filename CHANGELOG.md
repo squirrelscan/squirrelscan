@@ -19,6 +19,7 @@ How it works:
 
 ### Fixed
 
+- **Leaked-secret checks no longer flag credential key-name constants as values.** A bundle constant such as `DROPBOX_ACCESS_TOKEN: "dropbox-access-token"` is recognised as a storage or configuration identifier, while random credential-shaped assignments still report. (#1228)
 - **Keyword-stuffing checks use the measured copy's script instead of trusting `lang`.** English, German, Spanish, French, Portuguese, Italian and Dutch copy is checked with its function-word list. Copy written mainly in another script is not judged against English words, while an unsupported `lang` alone cannot turn the check off. English price-note terms (`incl`, `VAT`) are ignored only on English pages, so they remain detectable elsewhere. (#1232)
 
 ### Added
