@@ -76,58 +76,26 @@ afterAll(() => {
 
 const MARKED = '# squirrel\nexport PATH="$HOME/.local/bin:$PATH"\n';
 
-describe("find_bin_dir picks a directory already on PATH", () => {
-  test("a writable $HOME dir on PATH wins and no rc file is written", async () => {
+describe("find_bin_dir keeps its directory choice", () => {
+  test("a writable non-standard $HOME dir on PATH is NOT picked; falls back to ~/.local/bin", async () => {
     const r = await run(
-      'mkdir -p "$HOME/.mybin"; PATH="$HOME/.mybin:$PATH"; d=$(find_bin_dir); echo "DIR=$d"; setup_path "$d"; echo "SETUP=$PATH_SETUP"',
-    );
-    expect(r.stdout).toContain(`DIR=${r.home}/.mybin\n`);
-    expect(r.stdout).toContain("SETUP=on_path");
-    for (const f of [".zshrc", ".bashrc", ".bash_profile", ".profile"]) {
-      expect(existsSync(join(r.home, f))).toBe(false);
-    }
-  });
-
-  test("manager-owned dirs are skipped and the installer falls back to ~/.local/bin", async () => {
-    const r = await run(
-      [
-        'for d in .nvm/versions/node/v22/bin .cargo/bin .bun/bin .deno/bin go/bin .volta/bin .asdf/shims .pyenv/shims .rbenv/shims .local/share/mise/shims proj/node_modules/.bin .npm-global/bin .local/share/pnpm Library/Python/3.12/bin .rustup/toolchains/x/bin .nix-profile/bin miniconda3/bin; do mkdir -p "$HOME/$d"; PATH="$HOME/$d:$PATH"; done',
-        'd=$(find_bin_dir) || true; echo "DIR=$d"',
-      ].join("; "),
+      'mkdir -p "$HOME/.mybin" "$HOME/.cargo/bin"; PATH="$HOME/.mybin:$HOME/.cargo/bin:$PATH"; d=$(find_bin_dir) || true; echo "DIR=$d"',
     );
     expect(r.stdout).toContain(`DIR=${r.home}/.local/bin\n`);
   });
 
-  test("a manager dir is skipped but a later plain dir is taken", async () => {
-    const r = await run(
-      'mkdir -p "$HOME/.cargo/bin" "$HOME/tools/bin"; PATH="$HOME/.cargo/bin:$HOME/tools/bin:$PATH"; echo "DIR=$(find_bin_dir)"',
-    );
-    expect(r.stdout).toContain(`DIR=${r.home}/tools/bin\n`);
-  });
-
-  test("a PATH entry with a trailing slash still counts as on PATH", async () => {
-    const r = await run(
-      'mkdir -p "$HOME/.mybin"; PATH="$HOME/.mybin/:$PATH"; setup_path "$HOME/.mybin"; echo "SETUP=$PATH_SETUP"',
-    );
-    expect(r.stdout).toContain("SETUP=on_path");
-  });
-
-  test("a PATH dir outside $HOME is never taken by the extra scan", async () => {
-    const r = await run(
-      'mkdir -p /tmp/sq-not-home-$$; PATH="/tmp/sq-not-home-$$:$PATH"; d=$(find_bin_dir) || true; rmdir /tmp/sq-not-home-$$; echo "DIR=$d"',
-    );
-    expect(r.stdout).toContain(`DIR=${r.home}/.local/bin\n`);
+  test("a common dir already on PATH and writable still wins", async () => {
+    const r = await run('mkdir -p "$HOME/bin"; PATH="$HOME/bin:$PATH"; echo "DIR=$(find_bin_dir)"');
+    expect(r.stdout).toContain(`DIR=${r.home}/bin\n`);
   });
 
   test("SQUIRREL_BIN_DIR still wins", async () => {
-    const r = await run(
-      'mkdir -p "$HOME/.mybin"; PATH="$HOME/.mybin:$PATH"; echo "DIR=$(find_bin_dir)"',
-      {
-        env: { SQUIRREL_BIN_DIR: join(tmpdir(), `sq-bin-override-${process.pid}`) },
-      },
-    );
-    expect(r.stdout).toContain(`DIR=${join(tmpdir(), `sq-bin-override-${process.pid}`)}\n`);
-    rmSync(join(tmpdir(), `sq-bin-override-${process.pid}`), { recursive: true, force: true });
+    const dir = join(tmpdir(), `sq-bin-override-${process.pid}`);
+    const r = await run('mkdir -p "$HOME/bin"; PATH="$HOME/bin:$PATH"; echo "DIR=$(find_bin_dir)"', {
+      env: { SQUIRREL_BIN_DIR: dir },
+    });
+    expect(r.stdout).toContain(`DIR=${dir}\n`);
+    rmSync(dir, { recursive: true, force: true });
   });
 });
 

@@ -1152,34 +1152,6 @@ ensure_musl_runtime() {
   error "Missing libstdc++ (required by the musl build)"
 }
 
-# True for an existing, writable PATH entry under $HOME that no version or
-# package manager owns (nvm, cargo, bun, shims, ...).
-# To skip another manager's directory, add its $HOME-relative name to the first
-# `case` below.
-usable_home_path_dir() {
-  local dir="$1" rel
-  case "$dir" in
-    "$HOME"/*) ;;
-    *) return 1 ;;
-  esac
-  [ -d "$dir" ] && [ -w "$dir" ] || return 1
-  rel="${dir#"$HOME"/}"
-  case "$rel" in
-    .nvm|.nvm/*|.fnm|.fnm/*|.volta|.volta/*|.asdf|.asdf/*) return 1 ;;
-    .local/share/mise|.local/share/mise/*|.pyenv|.pyenv/*|.rbenv|.rbenv/*) return 1 ;;
-    .cargo|.cargo/*|.bun|.bun/*|.deno|.deno/*|go|go/*) return 1 ;;
-    .npm|.npm/*|.npm-global|.npm-global/*|.yarn|.yarn/*|.pnpm|.pnpm/*) return 1 ;;
-    .local/share/pnpm|.local/share/pnpm/*|Library/pnpm|Library/pnpm/*) return 1 ;;
-    .rustup|.rustup/*|.nix-profile|.nix-profile/*|.linuxbrew|.linuxbrew/*) return 1 ;;
-    .conda|.conda/*|miniconda3|miniconda3/*|anaconda3|anaconda3/*) return 1 ;;
-    .rye|.rye/*|.poetry|.poetry/*|.gem|.gem/*|Library/Python|Library/Python/*) return 1 ;;
-  esac
-  case "/$rel/" in
-    */node_modules/*|*/shims/*) return 1 ;;
-  esac
-  return 0
-}
-
 # True when $1 is an entry of the current PATH.
 dir_in_path() {
   local target="${1%/}" entry
@@ -1233,17 +1205,6 @@ find_bin_dir() {
         fi
       fi
     done
-  done
-
-  # Second: any other writable directory under $HOME that is already in PATH.
-  # Version and package managers own theirs and can wipe or shadow it, so those
-  # are skipped.
-  local path_dir
-  for path_dir in "${path_dirs[@]}"; do
-    if usable_home_path_dir "$path_dir"; then
-      echo "$path_dir"
-      return 0
-    fi
   done
 
   # Fallback: create ~/.local/bin (will need PATH modification)
