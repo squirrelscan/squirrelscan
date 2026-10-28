@@ -70,7 +70,7 @@ export const aboutPageRule: Rule = {
           value: `${aboutPageWordCount} words - consider expanding`,
         });
       }
-    } else if ((section = findInPageSection(pages, EEAT_PAGE_PATTERNS.about))) {
+    } else if ((section = findInPageSection(ctx, "about"))) {
       // #1208: a one-page site's About is a section of the homepage.
       const where = `${describeSectionPage(section.url)} (#${section.id})`;
       checks.push(

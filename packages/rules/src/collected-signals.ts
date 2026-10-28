@@ -28,6 +28,8 @@ import { hasCommercialOfferLink, matchSubprocessorLink } from "./legal/subproces
 import { pageScriptSrcs } from "./adblock/blocked-links";
 import type { PageAnchorSignal } from "./links/page-anchors";
 import { buildPageAnchorSignal } from "./links/page-anchors";
+import { buildInPageSectionSignal } from "./shared/inpage-section";
+import type { InPageSectionSignal } from "./shared/inpage-section";
 import { scanPageForMisspellings } from "./content/common-misspellings";
 import { RULE_TIME_BUDGET_MS, RuleTimeoutError, runWithinBudget } from "./rule-budget";
 import { scanPageForSecrets } from "./security/leaked-secrets";
@@ -74,6 +76,12 @@ export interface CollectedPageSignal {
    * Absent on a record cached before the field existed, which reads as unjudged.
    */
   anchors?: PageAnchorSignal | null;
+  /**
+   * eeat/about-page + eeat/contact-page: the page's in-page About and Contact sections
+   * (an id matching the page slugs plus a same-page link to it). Null when the page has
+   * no document. Absent on a record cached before the field existed, which reads as none (#1236).
+   */
+  inPageSections?: InPageSectionSignal | null;
   /**
    * Rules whose page-time extractor ran past its time budget on this page and was
    * abandoned (its field holds the empty value). The site pass records each as a
@@ -132,6 +140,7 @@ export function buildCollectedPageSignal(input: {
       subprocessorMatch: null,
       commercialOffer: false,
       anchors: null,
+      inPageSections: null,
       misspellings: { english: false, occurrences: [] },
     };
   }
@@ -215,6 +224,7 @@ export function buildCollectedPageSignal(input: {
     anchors: timed("links/broken-anchors", null, () =>
       buildPageAnchorSignal({ parsed, rendered: input.rendered === true })
     ),
+    inPageSections: timed("eeat/about-page", null, () => buildInPageSectionSignal(doc)),
     misspellings: timed("content/common-misspellings", { english: false, occurrences: [] }, () =>
       scanPageForMisspellings(doc)
     ),

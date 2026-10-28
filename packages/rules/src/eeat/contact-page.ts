@@ -61,7 +61,7 @@ export const contactPageRule: Rule = {
 
     if (!contactPage) {
       // #1208: a one-page site's Contact is a section of the homepage.
-      const section = findInPageSection(pages, EEAT_PAGE_PATTERNS.contact);
+      const section = findInPageSection(ctx, "contact");
       if (section) {
         const where = `${describeSectionPage(section.url)} (#${section.id})`;
         checks.push(

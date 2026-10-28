@@ -8,9 +8,10 @@
 // same-page fragment link points at it, so a stray id is not evidence.
 
 import { getPathname } from "@squirrelscan/utils";
+import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
 
 import { getRenderedProseText } from "../content/text-content";
-import type { SiteData } from "../types";
+import type { RuleContext } from "../types";
 
 export interface InPageSection {
   /** URL of the page holding the section. */
@@ -37,37 +38,79 @@ const fragmentId = (href: string): string | null => {
   }
 };
 
-/** First section (in crawl order) whose id matches `patterns` and is linked by a `#fragment` anchor. */
+/** Which page the section stands in for. */
+export type InPageSectionKind = "about" | "contact";
+
+/** A section found on one page: the page-time record collected while the DOM is live. */
+export interface InPageSectionHit {
+  /** The element's id, without the `#`. */
+  id: string;
+  /** Words of visible text inside the section. */
+  wordCount: number;
+  /** The section, or the page holding it (a footer link counts), links `mailto:`/`tel:` or has a form. */
+  hasContactMethod: boolean;
+}
+
+/**
+ * The per-page record (collected-signals.ts): the first About and the first Contact
+ * section on the page. A few numbers, never the DOM, so a streaming audit keeps it
+ * for every page (#1236).
+ */
+export interface InPageSectionSignal {
+  about: InPageSectionHit | null;
+  contact: InPageSectionHit | null;
+}
+
+/** First section on this page for each kind. Both the streaming collector and the v1 path call it. */
+export function buildInPageSectionSignal(doc: Document): InPageSectionSignal {
+  const out: InPageSectionSignal = { about: null, contact: null };
+  const linked = new Set<string>();
+  for (const a of Array.from(doc.querySelectorAll("a[href^='#']")).slice(0, MAX_FRAGMENT_LINKS)) {
+    const id = fragmentId((a.getAttribute("href") ?? "").trim());
+    if (id) linked.add(id);
+  }
+  if (linked.size === 0) return out;
+
+  let hasContactMethod: boolean | null = null;
+  for (const el of Array.from(doc.querySelectorAll("[id]"))) {
+    if (out.about && out.contact) break;
+    const id = el.getAttribute("id") ?? "";
+    if (!linked.has(id)) continue;
+    // Matched as if the id were the path `/<id>`. Encoded so an id holding `/`, `?` or `#`
+    // stays one path segment instead of reading as a deeper path or a query.
+    const asPath = `/${encodeURIComponent(id)}`;
+    for (const kind of ["about", "contact"] as const) {
+      if (out[kind] || !EEAT_PAGE_PATTERNS[kind].some((p) => p.test(asPath))) continue;
+      hasContactMethod ??=
+        doc.querySelector("a[href^='mailto:' i], a[href^='tel:' i], form") !== null;
+      out[kind] = { id, wordCount: countWords(getRenderedProseText(el)), hasContactMethod };
+    }
+  }
+  return out;
+}
+
+/**
+ * First section of `kind` in crawl order. A streaming audit has no DOM in the site
+ * pass, so it reads the records collected page-time; the v1 path, which does have
+ * the documents, builds the same record from them (#1236).
+ */
 export function findInPageSection(
-  pages: SiteData["pages"],
-  patterns: readonly RegExp[],
+  ctx: Pick<RuleContext, "site" | "collectedSignals">,
+  kind: InPageSectionKind,
 ): InPageSection | null {
-  for (const page of pages) {
+  const collected = ctx.collectedSignals;
+  if (collected) {
+    for (const rec of collected.pages) {
+      const hit = rec.inPageSections?.[kind];
+      if (hit) return { url: rec.url, ...hit };
+    }
+    return null;
+  }
+  for (const page of ctx.site?.pages ?? []) {
     const doc = page.parsed?.document;
     if (!doc) continue;
-
-    const linked = new Set<string>();
-    for (const a of Array.from(doc.querySelectorAll("a[href^='#']")).slice(0, MAX_FRAGMENT_LINKS)) {
-      const id = fragmentId((a.getAttribute("href") ?? "").trim());
-      if (id) linked.add(id);
-    }
-    if (linked.size === 0) continue;
-
-    for (const el of Array.from(doc.querySelectorAll("[id]"))) {
-      const id = el.getAttribute("id") ?? "";
-      if (!linked.has(id)) continue;
-      // Matched as if the id were the path `/<id>`. Encoded so an id holding `/`, `?` or `#`
-      // stays one path segment instead of reading as a deeper path or a query.
-      const asPath = `/${encodeURIComponent(id)}`;
-      if (!patterns.some((p) => p.test(asPath))) continue;
-      return {
-        url: page.url,
-        id,
-        wordCount: countWords(getRenderedProseText(el)),
-        hasContactMethod:
-          doc.querySelector("a[href^='mailto:' i], a[href^='tel:' i], form") !== null,
-      };
-    }
+    const hit = buildInPageSectionSignal(doc)[kind];
+    if (hit) return { url: page.url, ...hit };
   }
   return null;
 }
