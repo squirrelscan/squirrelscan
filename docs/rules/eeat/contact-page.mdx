@@ -24,7 +24,7 @@ The rule is site-wide. It finds the contact page by a URL path matching one of t
 
 A crawl that excludes the contact page's path, or reaches its page limit first, never fetches it. A link to the same host whose href matches one of the contact patterns is evidence the page exists, not proof that it works, so the rule says it is linked but not crawled instead of advising you to create one. Anchor text alone does not count, and no extra requests are made: the only status the rule can report is one the internal link probe already recorded. To have the page and its contact methods checked, let the crawl fetch it.
 
-Only `mailto:` and `tel:` links count as methods. A contact form is not detected, so a page with a form and no direct address emits no methods check at all. The `ContactPoint` schema type is deliberately not used as a fallback, because it is usually an Organization property present on every page rather than a marker of this page.
+Only `mailto:` and `tel:` links count as methods. A contact form is not detected on a contact page, so a page with a form and no direct address emits no methods check at all. In an in-page Contact section a form does count, together with a `mailto:` or `tel:` link anywhere on the page holding the section. The `ContactPoint` schema type is deliberately not used as a fallback, because it is usually an Organization property present on every page rather than a marker of this page.
 
 ## How to fix it
 

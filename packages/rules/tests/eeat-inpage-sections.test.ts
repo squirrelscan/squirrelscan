@@ -94,7 +94,77 @@ describe("eeat/about-page: in-page section", () => {
   });
 });
 
+describe("in-page section edge cases", () => {
+  test("script content inside a thin About section does not reach the word bar", () => {
+    const c = run(
+      aboutPageRule,
+      ctxFor(
+        `<a href="#about">About</a><section id="about"><p>${words(40)}</p><script>${words(300)}</script></section>`,
+      ),
+      "about-page",
+    );
+    expect(c?.status).toBe("info");
+  });
+
+  test("a section on a non-root page is named by its path", () => {
+    const c = run(
+      aboutPageRule,
+      ctxFor(
+        `<a href="#about">About</a><section id="about"><p>${words(220)}</p></section>`,
+        "https://example.com/en/",
+      ),
+      "about-page",
+    );
+    expect(c?.message).toBe("About section found on /en/ (#about)");
+  });
+
+  test("an id holding a slash or query is not read as a deeper path", () => {
+    for (const id of ["about/x", "about?x=1"]) {
+      const c = run(
+        aboutPageRule,
+        ctxFor(
+          `<a href="#${encodeURIComponent(id)}">x</a><section id="${id}"><p>${words(220)}</p></section>`,
+        ),
+        "about-page",
+      );
+      expect(c?.status).toBe("warn");
+    }
+  });
+
+  test("an id differing only in case from the link is not the section", () => {
+    const c = run(
+      aboutPageRule,
+      ctxFor(`<a href="#About">About</a><section id="about"><p>${words(220)}</p></section>`),
+      "about-page",
+    );
+    expect(c?.status).toBe("warn");
+  });
+});
+
 describe("eeat/contact-page: in-page section", () => {
+  test("a real /contact page takes precedence over a section", () => {
+    const c = run(
+      contactPageRule,
+      ctxFor(
+        `<a href="#contact">c</a><section id="contact"><p>hi</p></section>`,
+        "https://example.com/contact",
+      ),
+      "contact-page",
+    );
+    expect(c?.message).toBe("Contact page exists");
+  });
+
+  test("a page-level mailto link counts for an empty section", () => {
+    const c = run(
+      contactPageRule,
+      ctxFor(
+        `<a href="#contact">c</a><section id="contact"></section><footer><a href="mailto:a@b.co">m</a></footer>`,
+      ),
+      "contact-page",
+    );
+    expect(c?.status).toBe("pass");
+  });
+
   test("passes with a linked #contact section and a mailto link", () => {
     const c = run(
       contactPageRule,

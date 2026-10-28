@@ -42,6 +42,7 @@ export const aboutPageRule: Rule = {
     // (e.g. an unknown localized path). See issue #121.
     let aboutPage: string | null = null;
     let aboutPageWordCount = 0;
+    let section: ReturnType<typeof findInPageSection> = null;
 
     for (const page of pages) {
       const matchesUrl = isAboutPath(page.url);
@@ -52,8 +53,6 @@ export const aboutPageRule: Rule = {
         break;
       }
     }
-
-    const section = aboutPage ? null : findInPageSection(pages, EEAT_PAGE_PATTERNS.about);
 
     if (aboutPage) {
       if (aboutPageWordCount >= 200) {
@@ -71,7 +70,7 @@ export const aboutPageRule: Rule = {
           value: `${aboutPageWordCount} words - consider expanding`,
         });
       }
-    } else if (section) {
+    } else if ((section = findInPageSection(pages, EEAT_PAGE_PATTERNS.about))) {
       // #1208: a one-page site's About is a section of the homepage.
       const where = `${describeSectionPage(section.url)} (#${section.id})`;
       checks.push(
