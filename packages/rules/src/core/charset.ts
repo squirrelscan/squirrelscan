@@ -159,15 +159,29 @@ export const charsetRule: Rule = {
           ctx.page.html &&
           !declaredWithinPrescan(ctx.page.html)
         ) {
-          // An HTML-conformance issue even when the header decides the
-          // decoding; without a header the browser has already guessed.
-          checks.push({
-            name: "charset",
-            status: "warn",
-            message: "Charset meta is not within the first 1024 bytes",
-            value: declaredCharset,
-            expected: "charset meta serialized completely within the first 1024 bytes",
-          });
+          if (headerCharset) {
+            // The header decides the decoding before any prescan, and it agrees
+            // with the meta (a conflict was handled above), so the position of
+            // the meta is a conformance note only (pub#1220). Info is
+            // score-neutral, like the placement advice below.
+            checks.push({
+              name: "charset",
+              status: "info",
+              message:
+                "The Content-Type header already sets UTF-8; moving the charset meta into the first 1024 bytes is a conformance fix only",
+              value: declaredCharset,
+              expected: "charset meta serialized completely within the first 1024 bytes",
+            });
+          } else {
+            // Without a header the browser has already guessed.
+            checks.push({
+              name: "charset",
+              status: "warn",
+              message: "Charset meta is not within the first 1024 bytes",
+              value: declaredCharset,
+              expected: "charset meta serialized completely within the first 1024 bytes",
+            });
+          }
         } else if (charsetMeta) {
           const head = doc.querySelector("head");
           const firstChild = head?.firstElementChild;

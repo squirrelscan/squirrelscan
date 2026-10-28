@@ -81,9 +81,9 @@ describe("core/charset placement is advice (pub#659)", () => {
 });
 
 describe("core/charset declaration beyond the first 1024 bytes (pub#659)", () => {
-  test("first in head but after a 2,000-byte comment: still a conformance warning", () => {
+  test("first in head but after a 2,000-byte comment, no header: a conformance warning", () => {
     const html = doc(CHARSET, `<!-- ${"x".repeat(2000)} -->`);
-    const check = run(html, UTF8_HEADER);
+    const check = run(html);
     expect(check.status).toBe("warn");
     expect(check.message).toBe("Charset meta is not within the first 1024 bytes");
   });
@@ -97,7 +97,7 @@ describe("core/charset declaration beyond the first 1024 bytes (pub#659)", () =>
   test("bytes, not characters: 1,200 bytes of 2-byte text before an in-window-by-length meta", () => {
     const html = doc(CHARSET, `<!-- ${"ü".repeat(600)} -->`);
     expect(html.indexOf(CHARSET) + CHARSET.length).toBeLessThan(1024);
-    expect(run(html, UTF8_HEADER).message).toBe("Charset meta is not within the first 1024 bytes");
+    expect(run(html).message).toBe("Charset meta is not within the first 1024 bytes");
   });
 
   test("a meta that starts inside the window but ends past byte 1024 is not serialized within it", () => {
@@ -106,12 +106,12 @@ describe("core/charset declaration beyond the first 1024 bytes (pub#659)", () =>
     const start = new TextEncoder().encode(html.slice(0, html.indexOf(CHARSET))).length;
     expect(start).toBeLessThan(1024);
     expect(start + CHARSET.length).toBeGreaterThan(1024);
-    expect(run(html, UTF8_HEADER).status).toBe("warn");
+    expect(run(html).status).toBe("warn");
   });
 
   test("a charset meta inside a comment is not the declaration", () => {
     const html = doc(CHARSET, `<!-- ${CHARSET} ${"x".repeat(2000)} -->`);
-    expect(run(html, UTF8_HEADER).status).toBe("warn");
+    expect(run(html).status).toBe("warn");
   });
 
   test("a quoted > inside the charset meta does not end the tag early", () => {
@@ -119,7 +119,7 @@ describe("core/charset declaration beyond the first 1024 bytes (pub#659)", () =>
     expect(run(early, UTF8_HEADER).status).toBe("pass");
     // The tag's real `>` is past byte 1024; a quoted `>` near its start is not it.
     const long = doc(`<meta charset="utf-8" data-note=">${"x".repeat(1100)}">`);
-    expect(run(long, UTF8_HEADER).message).toBe("Charset meta is not within the first 1024 bytes");
+    expect(run(long).message).toBe("Charset meta is not within the first 1024 bytes");
   });
 
   test("lookalikes before a late declaration do not count: <meta-data>, a quoted <meta in another tag", () => {
@@ -131,7 +131,7 @@ describe("core/charset declaration beyond the first 1024 bytes (pub#659)", () =>
       `<link rel="alternate" title='<meta charset="utf-8">${"x".repeat(1100)}' href="/x">`,
     ]) {
       const html = doc(`${lookalike}\n${late}`);
-      expect([lookalike, run(html, UTF8_HEADER).status]).toEqual([lookalike, "warn"]);
+      expect([lookalike, run(html).status]).toEqual([lookalike, "warn"]);
     }
   });
 
@@ -195,5 +195,62 @@ describe("core/charset unchanged cases", () => {
   test("http-equiv UTF-8 with no charset meta passes via http-equiv", () => {
     const equiv = `<meta http-equiv="Content-Type" content="text/html; charset=utf-8">`;
     expect(run(doc(equiv)).message).toBe("UTF-8 charset declared via http-equiv");
+  });
+});
+
+// pub#1220: the header decides the decoding before any prescan, so a late meta
+// that agrees with it is advice, not a warning.
+describe("core/charset late meta with an agreeing Content-Type header (pub#1220)", () => {
+  // The reporter's fixture: a ~7.8 kB inline script right after <head>.
+  const FIXTURE = `<!doctype html>\n<html lang="en"><head><script data-source-attribution="shopify.exit_interstitial">/*${"x".repeat(7800)}*/</script><meta charset="utf-8"><title>Charset position test page</title><meta name="description" content="A page whose charset meta follows a large inline script."></head><body><h1>Test</h1><p>Hello</p></body></html>`;
+  const MESSAGE =
+    "The Content-Type header already sets UTF-8; moving the charset meta into the first 1024 bytes is a conformance fix only";
+
+  test("the reporter's fixture with a UTF-8 header is info and says so", () => {
+    expect(FIXTURE.indexOf(CHARSET)).toBeGreaterThan(1024);
+    const check = run(FIXTURE, UTF8_HEADER);
+    expect(check.status).toBe("info");
+    expect(check.message).toBe(MESSAGE);
+  });
+
+  test("header labels the decoder treats alike agree: utf8, UTF-8, quoted", () => {
+    for (const header of ["text/html; charset=utf8", "text/html; charset=UTF-8", 'text/html; charset="utf-8"']) {
+      expect([header, run(FIXTURE, header).status]).toEqual([header, "info"]);
+    }
+  });
+
+  test("a late http-equiv declaration with an agreeing header is info too", () => {
+    const equiv = `<meta http-equiv="Content-Type" content="text/html; charset=utf-8">`;
+    const html = doc(equiv, `<!-- ${"x".repeat(2000)} -->`);
+    expect(run(html, UTF8_HEADER).status).toBe("info");
+  });
+
+  test("the same page with no charset in the header still warns", () => {
+    for (const header of ["text/html", undefined]) {
+      const check = run(FIXTURE, header);
+      expect(check.status).toBe("warn");
+      expect(check.message).toBe("Charset meta is not within the first 1024 bytes");
+    }
+  });
+
+  test("a conflicting header still gives the conflict warning, wherever the meta sits", () => {
+    const check = run(FIXTURE, "text/html; charset=iso-8859-1");
+    expect(check.status).toBe("warn");
+    expect(check.message).toBe("Conflicting charset declarations: header iso-8859-1, page utf-8");
+  });
+
+  test("a non-UTF-8 page keeps the non-UTF-8 warning", () => {
+    const late = FIXTURE.replace(CHARSET, `<meta charset="windows-1252">`);
+    const check = run(late, "text/html; charset=windows-1252");
+    expect(check.status).toBe("warn");
+    expect(check.message).toBe("Non-UTF-8 charset declared: windows-1252");
+  });
+
+  test("an early meta with the header is unchanged", () => {
+    expect(run(doc(CHARSET), UTF8_HEADER).status).toBe("pass");
+  });
+
+  test("the verdict stays per page", () => {
+    expect(charsetRule.meta.verdictScope).toBe("page");
   });
 });
