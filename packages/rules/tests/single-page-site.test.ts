@@ -110,6 +110,10 @@ describe.each(ENGINES)("crawl/single-page-site (%s)", (_name, streaming) => {
     expect(run({ html })).toEqual([]);
   });
 
+  test("a link to a same-host file counts as another path", () => {
+    expect(run({ html: page(`${SECTIONS}<a href="/cv.pdf">CV</a>`) })).toEqual([]);
+  });
+
   test("external, mailto, tel and own-path links do not stop it", () => {
     const html = page(
       `${SECTIONS}<a href="https://other.test/">x</a><a href="mailto:a@b.test">m</a><a href="tel:+1555">t</a><a href="/">home</a><a href="/#about">again</a>`,

@@ -78,6 +78,8 @@ export const singlePageSiteRule: Rule = {
     // The crawl has to be complete: a capped run (or one that did not follow
     // links, or left queued URLs unfetched) may just not have reached the rest.
     const limits = site.crawlLimits;
+    // A site with exactly maxPages pages reads as capped too: the safe side. It
+    // only bites at max_pages 1, where a one-page audit proves nothing.
     if (limits && limits.pagesCrawled >= limits.maxPages) return NOT_APPLICABLE;
     if (site.linkDiscoveryOff === true) return NOT_APPLICABLE;
     if ((site.unfetchedPages ?? 0) > 0) return NOT_APPLICABLE;
