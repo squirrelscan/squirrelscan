@@ -389,7 +389,7 @@ export async function planMcpAudit(input: {
   }
   // #3649: an older server ignores `ephemeral` and registers the run the
   // ordinary way, so say so rather than let the caller assume nothing was saved.
-  if (ephemeral && !run.ephemeral) {
+  if (ephemeral && !run.ephemeral && !run.websiteSkippedReason) {
     notices.push(
       "The server did not confirm this run as ephemeral (it may predate the option), so the site may have been added to the dashboard and scheduled."
     );

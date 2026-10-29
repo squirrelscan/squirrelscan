@@ -82,10 +82,10 @@ Opt out of a run with `--no-publish`, or turn it off for the project with `[clou
 | Cloud features (rendering, link checks, technologies, editor's summary) | Yes | Yes |
 | Website added to your dashboard (or reused) | Yes | No |
 | Recurring audits turned on after the first successful audit | Yes, for a new site | No |
-| Report published | Yes, `unlisted` by default | No |
+| Report published | Yes, `unlisted` by default | No, unless you add `--publish`: then an unlisted report attached to no site |
 | Credits charged | 50 + 2 per page + link checks | The same |
 
-`--no-publish` skips only the publish. `--ephemeral` skips the dashboard site, the schedule and the publish, and still uses the cloud for that one run. See [Ephemeral runs](/cli/audit#ephemeral-runs).
+`--no-publish` skips only the publish. `--ephemeral` skips the dashboard site, the schedule and the automatic publish, and still uses the cloud for that one run. See [Ephemeral runs](/cli/audit#ephemeral-runs).
 
 ![The Summary and Issues sections of a squirrelscan report. The summary reads as two columns of prose with a bold one-line verdict. Below it, the ranked Issues list starts with issue 1, Fix broken site resources, tagged Moderate and Performance, with a Copy fix prompt button and a Copy fix plan button above the list.](/images/report/example-report-summary.webp)
 

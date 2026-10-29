@@ -99,7 +99,7 @@ Auto-publish the audit report to your [dashboard](/dashboard) when you're **logg
 
 **Default:** `false`
 
-Use cloud features for each run only. When `true`, a logged-in audit does not add the site to your [dashboard](/dashboard), does not schedule it and does not publish the report. Credits are charged as for any signed-in audit. `--ephemeral` and `--no-ephemeral` override it per run, and `--publish` cannot be combined with it (pass `--no-ephemeral` to publish one run). See [Ephemeral runs](/cli/audit#ephemeral-runs).
+Use cloud features for each run only. When `true`, a logged-in audit does not add the site to your [dashboard](/dashboard), does not schedule it and does not publish the report. Credits are charged as for any signed-in audit. `--ephemeral` and `--no-ephemeral` override it per run, and an explicit `--publish` still publishes that run, as an unlisted report attached to no dashboard site. See [Ephemeral runs](/cli/audit#ephemeral-runs).
 
 ### `visibility`
 

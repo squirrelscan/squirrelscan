@@ -487,10 +487,8 @@ describe("consentEstimateLine (#191 up-front cost)", () => {
 });
 
 describe("validateAuditFlags: ephemeral (#3649)", () => {
-  test("refuses --ephemeral with --publish", () => {
-    expect(validateAuditFlags({ ephemeral: true, publish: true })).toContain(
-      "--ephemeral cannot be combined with --publish"
-    );
+  test("accepts --ephemeral with --publish (an explicit publish wins)", () => {
+    expect(validateAuditFlags({ ephemeral: true, publish: true })).toBeNull();
   });
 
   test("refuses --ephemeral with --no-ephemeral", () => {

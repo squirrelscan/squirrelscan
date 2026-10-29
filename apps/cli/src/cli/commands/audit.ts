@@ -806,12 +806,10 @@ export function resolvePublishDecision(opts: {
   // #1841: the audited host is loopback / RFC1918 / link-local, so no hosted
   // service can ever reach it.
   nonPublicHost?: boolean;
-  // #3649: an ephemeral run leaves nothing in the org, and a published report
-  // is attached to a dashboard website. `--ephemeral --publish` is refused up
-  // front (validateAuditFlags), so reaching here with both is a config default.
+  // #3649: an ephemeral run publishes nothing on its own; only an explicit
+  // --publish does, and then the report is unlisted and attached to no website.
   ephemeral?: boolean;
 }): boolean {
-  if (opts.ephemeral) return false;
   // BEFORE explicitPublish, unlike every other opt-out here. The rest of this
   // function resolves a PREFERENCE, and an explicit --publish rightly wins
   // those. This one is a CAPABILITY: a hosted report for http://localhost:3000
@@ -820,6 +818,7 @@ export function resolvePublishDecision(opts: {
   // #1841 is about. The audit still runs and still prints its report.
   if (opts.nonPublicHost) return false;
   if (opts.offline) return false;
+  if (opts.ephemeral && !opts.explicitPublish) return false;
   if (opts.explicitPublish) return true; // explicit --publish overrides opt-outs (still needs login; publishReport errors otherwise)
   if (opts.ruleFilterActive) return false;
   if (opts.noPublish || !opts.configPublish) return false;
@@ -946,12 +945,6 @@ export function validateAuditFlags(args: {
   // --no-publish (skip publishing) contradicts --publish (force publishing).
   if (args.noPublish && args.publish) {
     return "--no-publish cannot be combined with --publish";
-  }
-  // #3649: a published report hangs off a dashboard website, which is exactly
-  // what an ephemeral run does not create. Refused, not downgraded, so nobody
-  // believes a report was published.
-  if (args.ephemeral && args.publish) {
-    return "--ephemeral cannot be combined with --publish (an ephemeral run adds nothing to your dashboard, so there is nowhere to publish)";
   }
   if (args.ephemeral && args.noEphemeral) {
     return "--ephemeral cannot be combined with --no-ephemeral";
@@ -1463,15 +1456,6 @@ export const audit = defineCommand({
         : hasFlag(rawArgs, "ephemeral") && args.ephemeral !== false
           ? true
           : config.cloud.ephemeral;
-      // The config default plus an explicit --publish: the flag-pair refusal
-      // above only sees argv, so say the same thing for the config case.
-      if (ephemeral && args.publish) {
-        console.error(
-          "--publish cannot be combined with [cloud] ephemeral = true (an ephemeral run adds nothing to your dashboard); pass --no-ephemeral for this run"
-        );
-        process.exitCode = 1;
-        return;
-      }
 
       // --fail-on score:<category> against a category the --rule-include/
       // --rule-exclude filter excludes can never trip (no data that run) —
@@ -1676,10 +1660,10 @@ export const audit = defineCommand({
         );
         kv("Dashboard", fmt.cyan(DASHBOARD_URL));
       }
-      if (ephemeral && !args.offline) {
+      if (ephemeral && signedIn && !args.offline) {
         kv(
           "Mode",
-          "ephemeral: cloud features for this run only (no dashboard site, no schedule, no publish)"
+          "ephemeral: cloud features for this run only (no dashboard site, no schedule)"
         );
       }
 
@@ -2604,10 +2588,17 @@ export const audit = defineCommand({
       // #3649: an older server ignores `ephemeral` and registers the run the
       // ordinary way (website found or created, schedule intent written). Never
       // stay quiet about that: the run was supposed to leave nothing behind.
-      if (ephemeral && registeredRun && !registeredRun.ephemeral) {
+      // Not when the server skipped the website itself (#1841): then there is
+      // nothing to have been added, whatever it echoed.
+      const serverIgnoredEphemeral =
+        ephemeral &&
+        !!registeredRun &&
+        !registeredRun.ephemeral &&
+        !registeredRun.websiteSkippedReason;
+      if (serverIgnoredEphemeral) {
         log(
           fmt.yellow(
-            "⚠ The server did not confirm this run as ephemeral (it may predate --ephemeral). The site may have been added to your dashboard and scheduled; check it at " +
+            "⚠ This server did not honour --ephemeral (it may predate it): the site may have been added to your dashboard and scheduled, and nothing is published. Check " +
               DASHBOARD_URL
           )
         );
@@ -2889,16 +2880,18 @@ export const audit = defineCommand({
       // …), forwarded to finalizeTracked so the API can classify a publish failure —
       // refund the whole audit for size/server-class failures, never for auth/user ones.
       let autoPublishErrorCode: string | null = null;
-      const shouldPublish = resolvePublishDecision({
-        signedIn,
-        offline: !!args.offline,
-        explicitPublish: !!args.publish,
-        noPublish,
-        configPublish: config.cloud.publish,
-        ruleFilterActive,
-        nonPublicHost: !!nonPublicHost,
-        ephemeral,
-      });
+      const shouldPublish =
+        !serverIgnoredEphemeral &&
+        resolvePublishDecision({
+          signedIn,
+          offline: !!args.offline,
+          explicitPublish: !!args.publish,
+          noPublish,
+          configPublish: config.cloud.publish,
+          ruleFilterActive,
+          nonPublicHost: !!nonPublicHost,
+          ephemeral,
+        });
       // #1841: one line, and only when the host is the deciding factor — a
       // signed-out or --no-publish run was never going to publish, and saying
       // "kept local" there would read as a new restriction. Covers the skipped
@@ -2967,9 +2960,11 @@ export const audit = defineCommand({
           "unlisted",
           "private",
         ];
+        // #3649: an ephemeral report is unlisted unless --visibility says
+        // otherwise (the server downgrades public to unlisted for it).
         const visibility =
           (args.visibility as ReportVisibility) ??
-          config.cloud.visibility ??
+          (ephemeral ? undefined : config.cloud.visibility) ??
           "unlisted";
 
         // Auto-publish runs as a side effect of a successful audit, so a publish
@@ -2992,7 +2987,10 @@ export const audit = defineCommand({
             visibility,
             auditId: registeredRun?.auditId,
             runId: registeredRun?.runId,
-            websiteId: registeredRun?.websiteId ?? undefined,
+            // #3649: never attached to a dashboard website when ephemeral.
+            websiteId: ephemeral
+              ? undefined
+              : (registeredRun?.websiteId ?? undefined),
             // #1167: surface the degrade-pass clip notice on stderr-safe `log`.
             onWarn: (msg) => log(fmt.yellow(`⚠ ${msg}`)),
           });
@@ -3040,6 +3038,9 @@ export const audit = defineCommand({
             }
             log("");
             log(publishResult.data.url);
+            if (ephemeral) {
+              log(fmt.dim("This report is not attached to a dashboard site."));
+            }
 
             // #2184: recurring audits switch themselves on after a site's first
             // completed cloud audit, so this is where the CLI tells its user a
@@ -3050,7 +3051,7 @@ export const audit = defineCommand({
             const scheduleLine = scheduleSummaryLine(
               publishResult.data.schedule
             );
-            if (scheduleLine) log(scheduleLine);
+            if (scheduleLine && !ephemeral) log(scheduleLine);
 
             if (report.crawlId && storeProject) {
               await savePublishedReportInfo(
@@ -3114,9 +3115,9 @@ export const audit = defineCommand({
       // coverage or 0 credits, used to show nothing beyond "Credits used: 0"),
       // then issue link and feedback command
       const footerLines: string[] = [];
-      if (ephemeral && !args.offline) {
+      if (ephemeral && signedIn && registeredRun && !args.offline) {
         footerLines.push(
-          `${fmt.dim("Ephemeral run:")} cloud features used for this run only. Not added to your dashboard, not scheduled, not published.`
+          `${fmt.dim("Ephemeral run:")} cloud features used for this run only. Not added to your dashboard, not scheduled${publishedReportId ? "" : ", not published"}.`
         );
       }
       if (!args.offline) {
