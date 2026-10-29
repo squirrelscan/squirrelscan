@@ -221,6 +221,16 @@ Content store: 812 of 4,000 pages stored for this audit are no longer in the loc
 [`squirrel self doctor`](/cli/self#doctor) shows the store's size, the cap and
 the last eviction.
 
+## Running several audits at once
+
+Any number of `squirrel` processes can run on one machine at once, for example a batch that audits ten sites in parallel. They share the [content store](#content_store_max_bytes) and the external link cache in `~/.squirrel`, and each project has its own database.
+
+- Every connection sets a 15 second lock timeout before it does anything else, and write transactions take the write lock when they begin, so a process that needs a lock waits for it instead of failing.
+- A new database file is switched to write-ahead logging with a short retry loop, because SQLite does not wait for that lock on its own.
+- If a lock is still held after 15 seconds, the audit fails with `SQLite database is busy (locked)` and the message names the database file and how long it waited.
+
+Two audits of the *same* site at once still contend for one project database. They stay safe, and the second waits its turn, but run them one after the other if you can.
+
 ## What retiring an audit does and does not take
 
 A retired audit **stays listed**. `squirrel report --list` still shows it, marked

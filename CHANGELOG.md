@@ -60,6 +60,10 @@ How it works:
 
 - **The page `squirrel auth login` opens in your browser is squirrelscan branded.** It had been a plain white card with a green heading. It now has the squirrel mark and wordmark, the brand palette and type, a signed-in state with your email, the agent setup prompt and copy button restyled to match, and light and dark themes that work at phone width. The expired, already-used and waiting pages use the same layout. The page is self-contained (inline mark and styles, nothing fetched, a Content-Security-Policy that allows only its own copy script), and only the escaped email is interpolated. (#1286)
 
+### Fixed
+
+- **Parallel `squirrel audit` runs no longer fail with `SQLite database is busy (locked)`.** Ten audits at once on one machine lost a few to a lock error and wrote no report. The lock timeout is now set before any other statement on every connection to the content store, the link cache and project databases, switching a new database to WAL waits for its lock, and write transactions take the write lock up front instead of failing when they upgrade. A lock that is still held after the timeout names the database file and the wait. See [Running several audits at once](https://docs.squirrelscan.com/configuration/storage#running-several-audits-at-once). (#1226)
+
 ## v0.0.141 (2026-10-29)
 
 `squirrel audit --ephemeral` uses cloud features for one run and leaves nothing behind: the site is not added to the dashboard, scheduled or published unless you pass `--publish`. `--store-scripts` keeps the first-party scripts an audit fetched in the content store. Keyword-stuffing checks use the measured copy's own script, leaked-secret checks no longer flag credential key-name constants, and CI now rejects edits to tagged CHANGELOG sections.

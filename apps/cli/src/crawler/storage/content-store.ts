@@ -6,8 +6,10 @@
 // It also held URL-keyed scripts for `squirrel analyze` until #768; those rows
 // age out under the size cap like any other.
 
+import type { Database } from "bun:sqlite";
+
 import { parseByteSize } from "@squirrelscan/config";
-import { Database } from "bun:sqlite";
+import { enableWal, openSqlite } from "@squirrelscan/crawler/sqlite-open";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
@@ -101,8 +103,6 @@ CREATE TABLE IF NOT EXISTS store_meta (
   value TEXT NOT NULL
 );
 `;
-
-const SQLITE_BUSY_TIMEOUT_MS = 15000;
 
 /**
  * Compute SHA-256 hash of content
@@ -366,12 +366,12 @@ export class ContentStore {
         mkdirSync(dir, { recursive: true });
       }
 
-      this.db = new Database(this.dbPath);
-      this.db.run("PRAGMA journal_mode = WAL");
+      // busy_timeout first, and IMMEDIATE write transactions (#1226).
+      this.db = openSqlite(this.dbPath);
+      enableWal(this.db);
       this.db.run("PRAGMA wal_autocheckpoint = 1000");
       this.db.run("PRAGMA synchronous = NORMAL");
       this.db.run("PRAGMA cache_size = -32000"); // 32MB cache
-      this.db.run(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS}`);
       this.db.run(SCHEMA);
     }
     return this.db;
