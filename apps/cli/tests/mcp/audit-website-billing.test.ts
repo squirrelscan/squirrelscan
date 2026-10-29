@@ -73,6 +73,8 @@ let siteStatus = 200;
 /** When set, the register answer and the home page wait for it. */
 let registerGate: Promise<void> | null = null;
 let siteGate: Promise<void> | null = null;
+/** Home page requests so far: the first is the start URL's redirect resolution (#1281), the audit's follow. */
+let homeRequests = 0;
 
 beforeEach(() => {
   requested = [];
@@ -82,6 +84,7 @@ beforeEach(() => {
   siteStatus = 200;
   registerGate = null;
   siteGate = null;
+  homeRequests = 0;
   balanceGate = null;
   resetBilledRunsForTests();
   process.env.SQUIRREL_API_SERVER = "http://127.0.0.1:9";
@@ -154,7 +157,8 @@ beforeEach(() => {
     }
     if (url.includes("/v1/")) return Response.json({});
     if (new URL(url).pathname === "/") {
-      if (siteGate) await siteGate;
+      // The gate holds the audit's own request, not the redirect resolution before it.
+      if (siteGate && ++homeRequests > 1) await siteGate;
       return new Response(siteStatus === 200 ? CSR_SHELL : "forbidden", {
         status: siteStatus,
         headers: { "Content-Type": "text/html" },
@@ -433,8 +437,9 @@ describe("a billed run is always closed out", () => {
       level: "quick",
       confirm: true,
     });
-    await waitFor(() =>
-      requested.some((r) => r.endsWith(" https://example.com/"))
+    await waitFor(
+      () =>
+        requested.filter((r) => r.endsWith(" https://example.com/")).length >= 2
     );
     await cancelActiveMcpRuns();
     site.open();
