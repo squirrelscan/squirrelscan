@@ -206,6 +206,14 @@ export const ClassifierConfigSchema = z.object({
   enabled: z.boolean().default(true),
 });
 
+// Technology detection reads the first bytes of each first-party script bundle
+// the crawl already fetched (#1254), so a stack that lives only in a bundle
+// (a Vite or Next.js app with an empty HTML shell) is still found. Unset =
+// SERVICE_LIMITS.techDetectBundleBytes (64 KB); 0 turns bundle matching off.
+export const TechDetectConfigSchema = z.object({
+  bundle_bytes: z.number().int().min(0).max(262_144).optional(),
+}).strict();
+
 export const OutputConfigSchema = z.object({
   format: z.enum(["json", "html", "console"]).default("console"),
   path: z.string().optional(),
@@ -470,6 +478,8 @@ export const ConfigSchema = z.object({
   internal_links: InternalLinksConfigSchema.optional(),
   // Optional for the same reason: absent reads as the default (on).
   classifier: ClassifierConfigSchema.optional(),
+  // Optional for the same reason: absent reads as the default bundle cap.
+  tech_detect: TechDetectConfigSchema.optional(),
   output: OutputConfigSchema.default(defaultOutput),
   // Local disk retention (#1912) — how many audits a project keeps.
   storage: StorageConfigSchema.default(defaultStorage),
@@ -510,6 +520,7 @@ export type PluginsConfig = z.infer<typeof PluginsConfigSchema>;
 export type ExternalLinksConfig = z.infer<typeof ExternalLinksConfigSchema>;
 export type InternalLinksConfig = z.infer<typeof InternalLinksConfigSchema>;
 export type ClassifierConfig = z.infer<typeof ClassifierConfigSchema>;
+export type TechDetectConfig = z.infer<typeof TechDetectConfigSchema>;
 export type OutputConfig = z.infer<typeof OutputConfigSchema>;
 export type StorageConfig = z.infer<typeof StorageConfigSchema>;
 export type CloudConfig = z.infer<typeof CloudConfigSchema>;

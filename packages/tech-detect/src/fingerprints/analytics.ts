@@ -72,7 +72,7 @@ export const ANALYTICS_FINGERPRINTS: TechFingerprint[] = [
     icon: "plausible",
     detectors: [
       { type: "script-url", pattern: /plausible\.io\/js\//i },
-      { type: "html", pattern: /data-domain=.*plausible/i },
+      { type: "html", pattern: /data-domain=.{0,600}plausible/i },
     ],
   },
   {
@@ -117,7 +117,7 @@ export const ANALYTICS_FINGERPRINTS: TechFingerprint[] = [
     icon: "fathom",
     detectors: [
       { type: "script-url", pattern: /cdn\.usefathom\.com/i },
-      { type: "html", pattern: /data-site=.*usefathom/i },
+      { type: "html", pattern: /data-site=.{0,600}usefathom/i },
     ],
   },
   {

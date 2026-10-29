@@ -803,6 +803,12 @@ export const SERVICE_LIMITS = {
   techDetectMaxHtmlBytes: 512 * 1024,
   /** Max scripts considered per page for tech-detect detectors. */
   techDetectMaxScriptsPerPage: 60,
+  /** First-party script bodies tech-detect reads (#1254): bytes kept per bundle (default; `[tech_detect] bundle_bytes`). */
+  techDetectBundleBytes: 64 * 1024,
+  /** ...per page, over every bundle attached to it. */
+  techDetectPageScriptBytes: 512 * 1024,
+  /** ...per audit; sized so the cloud payload stays inside maxBodyBytes after JSON escaping. */
+  techDetectAuditScriptBytes: 1024 * 1024,
   /** Max sampled pages per site-metadata call (home + a few representative pages). */
   metadataMaxPages: 6,
   /** Defensive cap (bytes) on the total JSON-LD payload per site-metadata call. */

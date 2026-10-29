@@ -22,6 +22,10 @@ import type { Document } from "linkedom";
 import {
   detachFromPage,
   detectReportTechnologiesMulti,
+  buildTechInputs,
+  DEFAULT_TECH_BUNDLE_LIMITS,
+  type LocalTechInput,
+  type TechBundleLimits,
   ensureSiteContextDocuments,
   prefetchCloudData,
   releaseSiteContextDocuments,
@@ -79,8 +83,6 @@ const MAX_EXCERPT_BYTES = 6_000;
 const MAX_TITLE_CHARS = 300;
 const MAX_DESCRIPTION_CHARS = 500;
 const MAX_HEADING_CHARS = 200;
-/** Per inline-script byte cap for tech-detect (signatures match in the first KB). */
-const MAX_TECH_SCRIPT_BYTES = 16 * 1024;
 /** Tech-detect body budget as a fraction of maxBodyBytes; slack absorbs JSON escaping + envelope. */
 const TECH_DETECT_BODY_BUDGET_RATIO = 0.9;
 
@@ -151,8 +153,17 @@ export function fitTechDetectPages(
   const budget = Math.floor(
     SERVICE_LIMITS.maxBodyBytes * TECH_DETECT_BODY_BUDGET_RATIO
   );
-  const fittedHome =
+  let fittedHome =
     jsonByteLength([home]) > budget ? shrinkHomeHtmlToFit(home, budget) : home;
+  // Bundle bodies are capped by bytes, but a body full of quotes or control
+  // characters grows several-fold once JSON-escaped: when the home page is still
+  // over with no html, send its script URLs without bodies rather than 413.
+  if (jsonByteLength([fittedHome]) > budget && fittedHome.scripts) {
+    fittedHome = {
+      ...fittedHome,
+      scripts: fittedHome.scripts.map(({ url }) => ({ url })),
+    };
+  }
   const pages: TechDetectPagePayload[] = [fittedHome];
   for (const page of rest) {
     // `continue`, not `break`: sample order isn't size order, so a later smaller
@@ -922,17 +933,6 @@ export async function resolveDeadLinksBulkChecker(opts: {
 
 // ── Cloud technology detection (credited, report-only) ─────────────
 
-/** Extract `<script src>` values from raw HTML (substring patterns match either). */
-function extractScriptSrcs(html: string): string[] {
-  const out: string[] = [];
-  const re = /<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) !== null) {
-    if (m[1]) out.push(m[1]);
-  }
-  return out;
-}
-
 /**
  * Extract `<meta name=… content=…>` tags from HTML into a name→content map.
  * The crawler's curated MetaData drops `generator` (the key CMS signal), so we
@@ -1003,6 +1003,65 @@ function buildHeaderMap(page: SiteContextPage["page"]): Record<string, string> {
 export interface FetchedScript {
   url: string;
   content?: string | null;
+  /** Pages that reference it (the crawl's own record); drives which page's input carries the body. */
+  sourcePages?: readonly string[];
+}
+
+/** The bundle byte caps for this run: `[tech_detect] bundle_bytes` over the defaults (#1254). */
+export function techBundleLimits(config: Config): TechBundleLimits {
+  const bundleBytes =
+    config.tech_detect?.bundle_bytes ?? DEFAULT_TECH_BUNDLE_LIMITS.bundleBytes;
+  return { ...DEFAULT_TECH_BUNDLE_LIMITS, bundleBytes };
+}
+
+/**
+ * The ordered tech-detect page inputs for one audit, shared by the cloud call and
+ * the local scan so both detect from the same bytes (#1254): HTML 2xx pages, the
+ * base-URL page first, at most `techDetectMaxPages`, each page's HTML capped, the
+ * first-party bundles the crawl already fetched attached once, never refetched.
+ */
+export function buildTechPageInputs(
+  siteContext: SiteContextPage[],
+  baseUrl: string,
+  scripts: readonly FetchedScript[],
+  limits: TechBundleLimits = DEFAULT_TECH_BUNDLE_LIMITS
+): LocalTechInput[] {
+  const htmlPages = siteContext.filter(
+    (p) => p.page.html && p.page.status >= 200 && p.page.status < 300
+  );
+  const homeIdx = htmlPages.findIndex(
+    (p) => p.page.finalUrl === baseUrl || p.page.url === baseUrl
+  );
+  const home = homeIdx >= 0 ? htmlPages[homeIdx] : htmlPages[0];
+  if (!home) return [];
+  const ordered = [
+    home,
+    ...htmlPages
+      .filter((p) => p !== home)
+      .slice(0, SERVICE_LIMITS.techDetectMaxPages - 1),
+  ];
+  const cap = SERVICE_LIMITS.techDetectMaxHtmlBytes;
+  const sources = ordered.map(({ page }) => {
+    const html = truncateUtf8Bytes(page.html ?? "", cap);
+    return {
+      url: page.finalUrl || page.url,
+      requestedUrl: page.url,
+      headers: buildHeaderMap(page),
+      html,
+      meta: extractMetaTags(html),
+    };
+  });
+  return buildTechInputs(sources, scripts, limits);
+}
+
+function toTechPayload(input: LocalTechInput): TechDetectPagePayload {
+  return {
+    url: input.url,
+    headers: input.headers,
+    html: input.html,
+    ...(input.meta ? { meta: input.meta } : {}),
+    ...(input.scripts ? { scripts: input.scripts } : {}),
+  };
 }
 
 export interface RunCloudTechDetectOptions {
@@ -1049,63 +1108,18 @@ export async function runCloudTechDetect(
   // Everything below is wrapped so the never-fail-the-audit invariant holds even
   // if payload construction, the confirm callback, or the network call throws.
   try {
-    // HTML pages with a 2xx body, home page first.
-    const htmlPages = siteContext.filter(
-      (p) => p.page.html && p.page.status >= 200 && p.page.status < 300
+    const inputs = buildTechPageInputs(
+      siteContext,
+      baseUrl,
+      opts.scripts,
+      techBundleLimits(config)
     );
-    if (htmlPages.length === 0) return null;
+    const [homeInput, ...restInputs] = inputs;
+    if (!homeInput) return null;
 
-    const homeIdx = htmlPages.findIndex(
-      (p) => p.page.finalUrl === baseUrl || p.page.url === baseUrl
-    );
-    const home = homeIdx >= 0 ? htmlPages[homeIdx] : htmlPages[0];
-    const rest = htmlPages
-      .filter((p) => p !== home)
-      .slice(0, SERVICE_LIMITS.techDetectMaxPages - 1);
-
-    const cap = SERVICE_LIMITS.techDetectMaxHtmlBytes;
-
-    // Home page carries a COMPLETE scripts array: every <script src> in the HTML
-    // (so script-url detectors see all origins) merged with fetched inline
-    // content (so script-content detectors work). detect.ts only scans the array
-    // when present, so a partial array would regress url detection — hence the union.
-    const contentByUrl = new Map<string, string>();
-    for (const s of opts.scripts)
-      if (s.content) contentByUrl.set(s.url, s.content);
-    const homeHtml = home.page.html ?? "";
-    const homeScriptUrls = new Set<string>(extractScriptSrcs(homeHtml));
-    for (const s of opts.scripts) homeScriptUrls.add(s.url);
-    const homeScripts = [...homeScriptUrls]
-      .slice(0, SERVICE_LIMITS.techDetectMaxScriptsPerPage)
-      .map((url) => {
-        const content = contentByUrl.get(url);
-        return {
-          url,
-          content:
-            content === undefined
-              ? undefined
-              : truncateUtf8Bytes(content, MAX_TECH_SCRIPT_BYTES),
-        };
-      });
-
-    const homePayload: TechDetectPagePayload = {
-      url: home.page.finalUrl || home.page.url,
-      headers: buildHeaderMap(home.page),
-      html: truncateUtf8Bytes(homeHtml, cap),
-      meta: extractMetaTags(homeHtml),
-      scripts: homeScripts,
-    };
-    // Other sampled pages: no scripts array → script-url detectors fall back to
-    // scanning the page HTML (which still contains the <script src> tags).
-    const restPayloads: TechDetectPagePayload[] = rest.map((p) => {
-      const html = truncateUtf8Bytes(p.page.html ?? "", cap);
-      return {
-        url: p.page.finalUrl || p.page.url,
-        headers: buildHeaderMap(p.page),
-        html,
-        meta: extractMetaTags(html),
-      };
-    });
+    // The local scan detects from these same inputs, so the two agree (#1254).
+    const homePayload: TechDetectPagePayload = toTechPayload(homeInput);
+    const restPayloads: TechDetectPagePayload[] = restInputs.map(toTechPayload);
 
     // Bound the AGGREGATE body so a rendered multi-page sample never 413s (#192).
     const pages = fitTechDetectPages(homePayload, restPayloads);
@@ -1157,6 +1171,8 @@ export interface LocalTechDetectOptions {
   siteContext: SiteContextPage[];
   /** Fetched scripts from the resource-assets phase (carries inline content). */
   scripts: FetchedScript[];
+  /** Bundle byte caps; default {@link DEFAULT_TECH_BUNDLE_LIMITS}. */
+  limits?: TechBundleLimits;
 }
 
 /**
@@ -1169,30 +1185,14 @@ export function detectLocalTechnologies(
   opts: LocalTechDetectOptions
 ): ReportTechnologies | null {
   try {
-    const htmlPages = opts.siteContext.filter(
-      (p) => p.page.html && p.page.status >= 200 && p.page.status < 300
+    const inputs = buildTechPageInputs(
+      opts.siteContext,
+      opts.baseUrl,
+      opts.scripts,
+      opts.limits
     );
-    if (htmlPages.length === 0) return null;
-    const home =
-      htmlPages.find(
-        (p) => p.page.finalUrl === opts.baseUrl || p.page.url === opts.baseUrl
-      ) ?? htmlPages[0];
-    const ordered = [home, ...htmlPages.filter((p) => p !== home)].slice(
-      0,
-      SERVICE_LIMITS.techDetectMaxPages
-    );
-    const homeScripts = opts.scripts.map((s) => ({
-      url: s.url,
-      content: s.content ?? undefined,
-    }));
-    const section = detectReportTechnologiesMulti(
-      ordered.map((p) => ({
-        url: p.page.finalUrl || p.page.url,
-        headers: buildHeaderMap(p.page),
-        html: p.page.html ?? "",
-        scripts: p === home ? homeScripts : [],
-      }))
-    );
+    if (inputs.length === 0) return null;
+    const section = detectReportTechnologiesMulti(inputs);
     return section.items.length > 0 ? section : null;
   } catch (error) {
     logger.debug(

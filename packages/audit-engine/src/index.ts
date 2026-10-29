@@ -77,9 +77,18 @@ export {
   buildReportTechnologies,
   detectReportTechnologies,
   detectReportTechnologiesMulti,
+  buildTechInputs,
+  extractScriptSrcs,
+  DEFAULT_TECH_BUNDLE_LIMITS,
   withWafTech,
 } from "./technologies";
-export type { LocalTechInput, TechScanDiff } from "./technologies";
+export type {
+  LocalTechInput,
+  TechBundleLimits,
+  TechFetchedScript,
+  TechPageSource,
+  TechScanDiff,
+} from "./technologies";
 
 // Smart audits — finding merge / supplant (#110/#195)
 export {

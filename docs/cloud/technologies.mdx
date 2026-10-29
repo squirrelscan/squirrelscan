@@ -12,6 +12,26 @@ It's informational: technology detection **never affects your health score**. It
 
 Detection runs against response headers, HTML, inline and external scripts, cookies, and meta tags, and reports versions where they can be determined. The crawler keeps every response header a signature reads, such as `X-CDN`, `X-Sucuri-ID` or `Via` (each value cut to 512 characters), so a header-only signature matches in a local audit too. A header a signature only checks for presence, such as a request id or a bot protection token, is kept as a marker, not its value. In an audit the CLI runs, a cookie is matched by its name: only the names of the cookies a page sets are passed to detection, never their values. A page squirrel stored before it kept these headers, and that the crawl cache reuses, is read without them until it is fetched again.
 
+## Script bundles
+
+A single page app (Vite, Lovable, Bolt, Next.js) ships an almost empty HTML shell, and its libraries live in the script bundles. Detection reads up to 64 KB of each first-party bundle, so a backend or auth service that only a bundle calls is still found: Supabase (a project URL passed with a key), Firebase (the `authDomain` or `storageBucket` of the app config) and Clerk (the `publishableKey` handed to the provider).
+
+A bundled app's own code sits after the framework it ships with, so a bundle bigger than its cap is not read from the top alone. Each bundle gets its first 16 KB, then the text around the vendor markers (a `.supabase.co` URL, a `.firebaseapp.com` domain, a `pk_` key) and the end of the file, then more of its start while the cap lasts.
+
+- It uses the bytes the crawl already fetched for the secret rules. No extra request is made, on the cloud or the local path.
+- A bundle counts only where it is real code. A product named in a comment, in a string, or as a placeholder (`your-project`) does not match.
+- The caps are 64 KB per bundle, 512 KB per page and 1 MB per audit. Every script gets its first 16 KB before any gets more; a script past a cap keeps its URL but no body. Change the per-bundle cap in `squirrel.toml`, or set it to `0` to match the page HTML and script URLs only:
+
+```toml
+[tech_detect]
+bundle_bytes = 65536   # 0 to 262144
+```
+
+- Only first-party scripts the crawl already fetched are read: those on the audited host or its subdomains (a CDN on another domain is not), within the crawl's script fetch limits, and only JavaScript bodies under 5 MB.
+- On a signed-in audit the bundle text sent to the cloud detection service is at most 1 MB per audit. Bundles can contain keys, so set `bundle_bytes = 0` to send none.
+- A key kept in a variable and passed by name (`publishableKey: key`) is not matched; a Clerk key is recognised only where it is written out next to `publishableKey`.
+- A scan that runs long on one page stops at a 5 second budget and reports what it found so far.
+
 Results are grouped by category:
 
 | Category | Examples |

@@ -44,7 +44,12 @@ export const AD_FINGERPRINTS: TechFingerprint[] = [
     website: "https://facebook.com/business",
     icon: "meta",
     detectors: [
-      { type: "script-url", pattern: /connect\.facebook\.net.*fbevents/i },
+      { type: "script-url", pattern: /^(?:https?:)?\/\/connect\.facebook\.net\/.{0,200}fbevents/i },
+      {
+        type: "html",
+        pattern:
+          /<script\s(?:[^>]{0,300}\s)?src\s*=\s*["'](?:https?:)?\/\/connect\.facebook\.net\/[^"']{0,200}fbevents/i,
+      },
       { type: "html", pattern: /fbq\(['"]init['"]/i },
       { type: "script-content", pattern: /fbq\(['"]init['"]/ },
     ],

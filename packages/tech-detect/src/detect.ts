@@ -1,5 +1,55 @@
 import type { DetectedTechnology, Detector, TechDetectInput, TechFingerprint } from "./types";
 import { ALL_FINGERPRINTS } from "./fingerprints";
+import { inString, scanJs, type ScannedJs } from "./js-scan";
+
+/**
+ * Longest slice of one script body detection reads (chars): the largest
+ * `[tech_detect] bundle_bytes` the config allows. What a caller sends is cut
+ * smaller by its own cap (64 KB by default), so this only bounds a caller that
+ * sends more, and a hostile megabyte cannot stall a page.
+ */
+export const TECH_SCRIPT_CONTENT_LIMIT = 256 * 1024;
+
+/** Default wall-clock budget for one detectTechnologies call (one page). */
+export const TECH_DETECT_PAGE_BUDGET_MS = 5_000;
+
+/** Candidate matches an `inCode` detector inspects before giving up. */
+const MAX_IN_CODE_CANDIDATES = 8;
+
+export interface DetectOptions {
+  /** Stop evaluating fingerprints once this much time has passed. */
+  budgetMs?: number;
+  /** Called once when the budget cut the scan short. */
+  onBudgetExceeded?: () => void;
+}
+
+interface ScriptView {
+  head: string;
+  scanned?: ScannedJs;
+}
+
+function scriptView(views: Map<string, ScriptView>, content: string): ScriptView {
+  let view = views.get(content);
+  if (!view) {
+    view = { head: content.slice(0, TECH_SCRIPT_CONTENT_LIMIT) };
+    views.set(content, view);
+  }
+  return view;
+}
+
+function matchesInCode(pattern: RegExp, view: ScriptView): boolean {
+  view.scanned ??= scanJs(view.head);
+  const { code, strings } = view.scanned;
+  const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
+  const re = new RegExp(pattern.source, flags);
+  for (let seen = 0; seen < MAX_IN_CODE_CANDIDATES; seen++) {
+    const m = re.exec(code);
+    if (!m) return false;
+    if (!inString(strings, m.index)) return true;
+    if (m[0].length === 0) re.lastIndex++;
+  }
+  return false;
+}
 
 /** Remove `<!-- ... -->` comments in one pass; an unterminated one is kept as is. */
 function stripHtmlComments(html: string): string {
@@ -16,7 +66,12 @@ function stripHtmlComments(html: string): string {
   return out + html.slice(pos);
 }
 
-function matchDetector(detector: Detector, input: TechDetectInput, html: string): boolean {
+function matchDetector(
+  detector: Detector,
+  input: TechDetectInput,
+  html: string,
+  views: Map<string, ScriptView>,
+): boolean {
   switch (detector.type) {
     case "header": {
       const value = input.headers[detector.name] ?? input.headers[detector.name.toLowerCase()];
@@ -33,7 +88,18 @@ function matchDetector(detector: Detector, input: TechDetectInput, html: string)
       // Fallback: scan HTML for script src attributes
       return detector.pattern.test(html);
     case "script-content":
-      if (input.scripts?.some((s) => s.content && detector.pattern.test(s.content))) {
+      if (detector.inCode) {
+        return (
+          input.scripts?.some(
+            (s) => s.content && matchesInCode(detector.pattern, scriptView(views, s.content)),
+          ) ?? false
+        );
+      }
+      if (
+        input.scripts?.some(
+          (s) => s.content && detector.pattern.test(scriptView(views, s.content).head),
+        )
+      ) {
         return true;
       }
       // Inline scripts live in the HTML, not the fetched `scripts` array — scan
@@ -158,8 +224,11 @@ function extractMetaFromHtml(html: string): Record<string, string> {
 export function detectTechnologies(
   rawInput: TechDetectInput,
   fingerprints: TechFingerprint[] = ALL_FINGERPRINTS,
+  options: DetectOptions = {},
 ): DetectedTechnology[] {
   const results: DetectedTechnology[] = [];
+  const views = new Map<string, ScriptView>();
+  const deadline = performance.now() + (options.budgetMs ?? TECH_DETECT_PAGE_BUDGET_MS);
 
   // Resolve the meta map: trust a non-empty caller-supplied one, otherwise parse
   // it from the HTML so meta-type detectors fire without a separate parse step.
@@ -172,6 +241,10 @@ export function detectTechnologies(
   let markupHtml: string | null = null;
 
   for (const fp of fingerprints) {
+    if (performance.now() > deadline) {
+      options.onBudgetExceeded?.();
+      break;
+    }
     let matchedDetector: Detector | null = null;
     let html = input.html;
     if (fp.ignoreComments) {
@@ -180,7 +253,7 @@ export function detectTechnologies(
     }
 
     for (const detector of fp.detectors) {
-      if (matchDetector(detector, input, html)) {
+      if (matchDetector(detector, input, html, views)) {
         matchedDetector = detector;
         break; // ANY match = detected
       }
