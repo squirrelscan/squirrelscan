@@ -1,6 +1,7 @@
 // auth login — actionable error hints (#1 of the auth/cloud guardrails).
 
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -135,19 +136,121 @@ describe("auth/login — agent setup on the callback success page (#180)", () =>
       code: 410,
     });
     expect(renderCallbackPage({ status: "expired" }).html).toContain(
-      "Session Expired"
+      "Session expired"
     );
     expect(renderCallbackPage({ status: "consumed" })).toMatchObject({
       code: 410,
     });
     expect(renderCallbackPage({ status: "consumed" }).html).toContain(
-      "Login Session Already Used"
+      "This login session was already used"
     );
     const pending = renderCallbackPage({ status: "pending" });
     expect(pending.code).toBe(202);
     expect(pending.html).toContain("Waiting for authentication...");
     // The pending page reloads itself; that is what makes polling work.
     expect(pending.html).toContain('http-equiv="refresh"');
+  });
+});
+
+describe("auth/login - the branded callback pages (#1286)", () => {
+  const completed = (email: string) =>
+    renderCallbackPage({
+      status: "completed",
+      token: "tok",
+      user: { id: "u1", email, name: null },
+    }).html;
+  const pages: Record<string, string> = {
+    success: completed("dev@example.com"),
+    expired: renderCallbackPage({ status: "expired" }).html,
+    consumed: renderCallbackPage({ status: "consumed" }).html,
+    pending: renderCallbackPage({ status: "pending" }).html,
+  };
+
+  for (const [name, html] of Object.entries(pages)) {
+    describe(name, () => {
+      test("wears the shell: mark, wordmark, viewport, both colour schemes", () => {
+        expect(html).toContain("<svg");
+        expect(html).toContain("<span>squirrelscan</span>");
+        expect(html).toContain('name="viewport"');
+        expect(html).toContain("prefers-color-scheme: dark");
+        expect(html).toContain('<html lang="en">');
+      });
+
+      test("loads nothing: no links, scripts by src, imports, images or remote urls", () => {
+        expect(html).not.toMatch(/<link\b/i);
+        expect(html).not.toMatch(/<script[^>]*\ssrc=/i);
+        expect(html).not.toMatch(/<img\b/i);
+        expect(html).not.toMatch(/@import/i);
+        expect(html).not.toMatch(/url\(/i);
+        // The only absolute URLs are the setup link, the prompt text and the SVG namespace (never fetched).
+        const urls = html.match(/https?:\/\/[^\s"'<>)]+/g) ?? [];
+        for (const url of urls) {
+          expect([
+            AGENT_SETUP_URL,
+            `${AGENT_SETUP_URL}/prompt.md`,
+            "http://www.w3.org/2000/svg",
+          ]).toContain(url);
+        }
+      });
+
+      test("pins the same with a CSP, and only the page's own script is allowed", () => {
+        const csp =
+          /http-equiv="Content-Security-Policy" content="([^"]+)"/.exec(
+            html
+          )?.[1];
+        expect(csp).toBeDefined();
+        expect(csp).toContain("default-src 'none'");
+        expect(csp).toContain("base-uri 'none'");
+        if (name === "success") {
+          const hash = createHash("sha256")
+            .update(AUTH_SUCCESS_PAGE_SCRIPT)
+            .digest("base64");
+          expect(csp).toContain(`script-src 'sha256-${hash}'`);
+        } else {
+          expect(csp).toContain("script-src 'none'");
+          expect(html).not.toContain("<script>");
+        }
+      });
+
+      test("copy: no em-dashes, lowercase product name, sentence case headings", () => {
+        expect(html).not.toContain("\u2014");
+        expect(html).not.toMatch(/Squirrelscan|SquirrelScan/);
+        for (const heading of html.match(/<h[12]>([^<]+)<\/h[12]>/g) ?? []) {
+          const text = heading.replace(/<[^>]+>/g, "");
+          // Sentence case: no word after the first starts with a capital, bar names.
+          expect(
+            text
+              .split(" ")
+              .slice(1)
+              .filter((w) => /^[A-Z]/.test(w) && w !== "AI")
+          ).toEqual([]);
+        }
+      });
+    });
+  }
+
+  test("a hostile email cannot inject markup, attributes or script", () => {
+    const hostile = completed(
+      `</strong><script>alert(1)</script><img src=x onerror=alert(2)>"'@example.com`
+    );
+    expect(hostile).not.toContain("<img");
+    expect(hostile.match(/<script>/g)).toHaveLength(1);
+    expect(hostile).not.toContain("alert(1)</script>");
+    expect(hostile).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+    expect(hostile).toContain("&quot;&#39;@example.com");
+  });
+
+  test("the email is the only interpolated value: the rest of the page is the same for any email", () => {
+    const strip = (html: string, email: string) => html.replace(email, "EMAIL");
+    expect(strip(completed("a@example.com"), "a@example.com")).toBe(
+      strip(completed("bb@example.org"), "bb@example.org")
+    );
+  });
+
+  test("the waiting page still reloads itself, the others do not", () => {
+    expect(pages.pending).toContain('<meta http-equiv="refresh" content="1">');
+    expect(pages.expired).not.toContain('http-equiv="refresh"');
+    expect(pages.success).not.toContain('http-equiv="refresh"');
   });
 });
 

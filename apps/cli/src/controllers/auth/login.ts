@@ -9,6 +9,10 @@ import {
 import { hostname } from "node:os";
 
 import { AGENT_SETUP_PROMPT, AGENT_SETUP_URL } from "@/constants";
+import {
+  escapeHtml,
+  renderCallbackShell,
+} from "@/controllers/auth/callback-page";
 import { type Result, ok, err, commandError } from "@/controllers/types";
 import { cliApi } from "@/lib/api-client";
 import { openBrowser } from "@/lib/browser";
@@ -34,19 +38,6 @@ function generatePKCE(): { codeVerifier: string; codeChallenge: string } {
   const codeVerifier = randomBytes(32).toString("hex"); // 64 hex chars
   const codeChallenge = createHash("sha256").update(codeVerifier).digest("hex");
   return { codeVerifier, codeChallenge };
-}
-
-/**
- * Escape a string for interpolation into the callback page HTML. The email
- * comes from the API response — almost certainly benign, but never trust
- * interpolated input even on a 127.0.0.1-only page.
- */
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 /**
@@ -103,101 +94,24 @@ export const AUTH_SUCCESS_PAGE_SCRIPT = `
  * selectable text, so it is copyable by hand when the clipboard API is not.
  */
 export function renderAuthSuccessPage(email: string): string {
-  return `
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <title>Authentication Successful</title>
-              <style>
-                body {
-                  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                  display: flex;
-                  justify-content: center;
-                  align-items: center;
-                  min-height: 100vh;
-                  margin: 0;
-                  padding: 24px;
-                  box-sizing: border-box;
-                  background: #f5f5f4;
-                }
-                .container {
-                  text-align: center;
-                  padding: 40px;
-                  background: white;
-                  border-radius: 8px;
-                  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                  box-sizing: border-box;
-                  width: 100%;
-                  max-width: 560px;
-                }
-                h1 { color: #22c55e; margin-bottom: 10px; }
-                p { color: #666; }
-                .agent {
-                  margin: 28px 0 0;
-                  padding-top: 24px;
-                  border-top: 1px solid #e7e5e4;
-                  text-align: left;
-                }
-                .agent h2 {
-                  font-size: 16px;
-                  color: #1c1917;
-                  margin: 0 0 6px;
-                }
-                .agent p { margin: 0 0 12px; font-size: 14px; }
-                .agent code {
-                  display: block;
-                  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-                  font-size: 13px;
-                  line-height: 1.5;
-                  color: #292524;
-                  background: #fafaf9;
-                  border: 1px solid #e7e5e4;
-                  border-radius: 6px;
-                  padding: 12px;
-                  overflow-wrap: anywhere;
-                  user-select: all;
-                }
-                .actions {
-                  display: flex;
-                  flex-wrap: wrap;
-                  align-items: center;
-                  gap: 12px;
-                  margin-top: 12px;
-                }
-                .actions button {
-                  font: inherit;
-                  font-size: 14px;
-                  color: white;
-                  background: #22c55e;
-                  border: 0;
-                  border-radius: 6px;
-                  padding: 8px 14px;
-                  cursor: pointer;
-                }
-                .actions a { color: #16a34a; font-size: 14px; }
-                .status { font-size: 13px; color: #78716c; }
-              </style>
-            </head>
-            <body>
-              <div class="container">
-                <h1>Authentication Successful!</h1>
-                <p>Signed in as ${escapeHtml(email)}</p>
-                <p>You can close this window and return to the terminal.</p>
-                <div class="agent">
-                  <h2>Use squirrelscan with your AI agent</h2>
-                  <p>Paste this into your coding agent. It reads the setup docs, wires up the CLI and MCP, and audits this project.</p>
-                  <code id="agent-prompt">${escapeHtml(AGENT_SETUP_PROMPT)}</code>
-                  <div class="actions">
-                    <button id="copy-prompt" type="button">Copy prompt</button>
-                    <a href="${escapeHtml(AGENT_SETUP_URL)}">view the agent setup</a>
-                    <span class="status" id="copy-status" role="status" aria-live="polite"></span>
-                  </div>
-                </div>
-              </div>
-              <script>${AUTH_SUCCESS_PAGE_SCRIPT}</script>
-            </body>
-            </html>
-          `;
+  return renderCallbackShell({
+    title: "Signed in to squirrelscan",
+    script: AUTH_SUCCESS_PAGE_SCRIPT,
+    body: `    <p class="pill">Signed in</p>
+    <h1>You're in</h1>
+    <p>Signed in as <strong>${escapeHtml(email)}</strong>.</p>
+    <p>You can close this window and return to your terminal.</p>
+    <div class="agent">
+      <h2>Use squirrelscan with your AI agent</h2>
+      <p>Paste this into your coding agent. It reads the setup docs, wires up the CLI and MCP, and audits this project.</p>
+      <code id="agent-prompt">${escapeHtml(AGENT_SETUP_PROMPT)}</code>
+      <div class="actions">
+        <button id="copy-prompt" type="button">Copy prompt</button>
+        <a href="${escapeHtml(AGENT_SETUP_URL)}">view the agent setup</a>
+        <span class="status" id="copy-status" role="status" aria-live="polite"></span>
+      </div>
+    </div>`,
+  });
 }
 
 interface LoginOptions {
@@ -303,53 +217,39 @@ export function renderCallbackPage(status: SessionStatusResponse): {
   if (status.status === "expired") {
     return {
       code: 410,
-      html: `
-            <!DOCTYPE html>
-            <html>
-            <head><title>Session Expired</title></head>
-            <body style="font-family: sans-serif; text-align: center; padding: 40px;">
-              <h1>Session Expired</h1>
-              <p>Please run 'squirrel auth login' again.</p>
-            </body>
-            </html>
-          `,
+      html: renderCallbackShell({
+        title: "Session expired",
+        body: `    <p class="pill problem">Session expired</p>
+    <h1>That sign-in timed out</h1>
+    <p>Run <code class="inline">squirrel auth login</code> again to start a fresh one.</p>`,
+      }),
     };
   }
 
   if (status.status === "consumed") {
-    // Token was already retrieved once (one-time read) — a bare retry would
+    // Token was already retrieved once (one-time read) - a bare retry would
     // poll forever. Terminal: tell the user to re-login.
     return {
       code: 410,
-      html: `
-            <!DOCTYPE html>
-            <html>
-            <head><title>Session Already Used</title></head>
-            <body style="font-family: sans-serif; text-align: center; padding: 40px;">
-              <h1>Login Session Already Used</h1>
-              <p>Please run 'squirrel auth login' again.</p>
-            </body>
-            </html>
-          `,
+      html: renderCallbackShell({
+        title: "Login session already used",
+        body: `    <p class="pill problem">Already used</p>
+    <h1>This login session was already used</h1>
+    <p>Each sign-in link works once. Run <code class="inline">squirrel auth login</code> again to get a new one.</p>`,
+      }),
     };
   }
 
   // Still pending - try again
   return {
     code: 202,
-    html: `
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <title>Waiting...</title>
-              <meta http-equiv="refresh" content="1">
-            </head>
-            <body style="font-family: sans-serif; text-align: center; padding: 40px;">
-              <h1>Waiting for authentication...</h1>
-              <p>Please complete sign-in in your browser.</p>
-            </body>
-            </html>
-          `,
+    html: renderCallbackShell({
+      title: "Waiting for sign-in",
+      refresh: true,
+      body: `    <p class="pill">Waiting</p>
+    <h1>Waiting for authentication...</h1>
+    <p>Finish signing in in your browser. This page checks again every second.</p>`,
+    }),
   };
 }
 

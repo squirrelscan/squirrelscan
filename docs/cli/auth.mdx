@@ -149,6 +149,8 @@ Opens browser for authentication. After completing login:
   Expires: Feb 2, 2027
 ```
 
+The browser lands on a squirrelscan page served by the CLI on `127.0.0.1`. It confirms the email you signed in as, offers the one-line prompt that sets up your coding agent, and follows your light or dark setting. Nothing on it is loaded from the network, so it works offline. A sign-in that timed out or was already used gets the same page with the next step.
+
 ### Troubleshooting
 
 **`Couldn't reach the auth server …`**: the API was unreachable (it's down, or
