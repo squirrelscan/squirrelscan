@@ -1,7 +1,10 @@
 // eeat/privacy-policy - Privacy policy page presence
 
+import { z } from "zod";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { eeatPathsSchema, matchesConfiguredPaths } from "../shared/eeat-paths";
 import { findLinkedUncrawledPage, linkedUncrawledCheck } from "../shared/linked-uncrawled-page";
 import {
   findPrivacyPage,
@@ -9,6 +12,8 @@ import {
   isPrivacyPath,
   pageLinksToPrivacyHref,
 } from "../shared/privacy-page";
+
+export const optionsSchema = z.object({ paths: eeatPathsSchema });
 
 export const privacyPolicyRule: Rule = {
   meta: {
@@ -21,9 +26,11 @@ export const privacyPolicyRule: Rule = {
     scope: "site",
     severity: "warning",
     weight: 5,
+    optionsSchema,
   },
 
   run(ctx: RuleContext): RuleResult {
+    const { paths } = optionsSchema.parse(ctx.options);
     const checks: CheckResult[] = [];
     const pages = ctx.site?.pages;
 
@@ -41,7 +48,7 @@ export const privacyPolicyRule: Rule = {
     // catches redirects/unusual slugs (#1098). Unlike about/contact, there is no
     // standard Schema.org @type for privacy pages, so no schema fallback (#121).
     let linkedFromPages = 0;
-    const privacyPage = findPrivacyPage(pages);
+    const privacyPage = findPrivacyPage(pages, paths);
 
     if (privacyPage) {
       checks.push({
@@ -55,7 +62,10 @@ export const privacyPolicyRule: Rule = {
       // excluded `/policies/**`, or past the page budget) is unverified, not
       // missing. Same link acceptance as legal/privacy-policy: slug, then text.
       const linked = ctx.site
-        ? findLinkedUncrawledPage(ctx.site, { href: isPrivacyPath, text: isPrivacyLinkText })
+        ? findLinkedUncrawledPage(ctx.site, {
+            href: (url) => matchesConfiguredPaths(url, paths) || isPrivacyPath(url),
+            text: isPrivacyLinkText,
+          })
         : null;
       if (!linked) {
         checks.push({
@@ -75,7 +85,7 @@ export const privacyPolicyRule: Rule = {
     // Check how many pages link to it (href-slug only — the original metric, not
     // widened by anchor-text matching which belongs to the legal rule).
     for (const page of pages) {
-      if (pageLinksToPrivacyHref(page)) linkedFromPages++;
+      if (pageLinksToPrivacyHref(page, paths)) linkedFromPages++;
     }
 
     const linkPercentage = Math.round((linkedFromPages / pages.length) * 100);

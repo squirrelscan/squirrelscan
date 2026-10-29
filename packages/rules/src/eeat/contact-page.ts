@@ -1,5 +1,7 @@
 // eeat/contact-page - Contact page with multiple methods
 
+import { z } from "zod";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
@@ -11,9 +13,14 @@ import {
   findInPageSection,
   inPageSectionsUnmeasured,
 } from "../shared/inpage-section";
+import { eeatPathsSchema, matchesConfiguredPaths } from "../shared/eeat-paths";
 import { findLinkedUncrawledPage, linkedUncrawledCheck } from "../shared/linked-uncrawled-page";
 
-const isContactPath = (url: string): boolean =>
+export const optionsSchema = z.object({ paths: eeatPathsSchema });
+
+// A configured path wins first (#1261), then the built-in slugs.
+const isContactPath = (url: string, paths: readonly string[] = []): boolean =>
+  matchesConfiguredPaths(url, paths) ||
   EEAT_PAGE_PATTERNS.contact.some((p) => p.test(getPathname(url)));
 
 export const contactPageRule: Rule = {
@@ -27,9 +34,11 @@ export const contactPageRule: Rule = {
     scope: "site",
     severity: "warning",
     weight: 5,
+    optionsSchema,
   },
 
   run(ctx: RuleContext): RuleResult {
+    const { paths } = optionsSchema.parse(ctx.options);
     const checks: CheckResult[] = [];
     const pages = ctx.site?.pages;
 
@@ -56,7 +65,7 @@ export const contactPageRule: Rule = {
     } | null = null;
 
     for (const page of pages) {
-      const matchesUrl = isContactPath(page.url);
+      const matchesUrl = isContactPath(page.url, paths);
       const matchesSchema = page.parsed.schemas.hasType("ContactPage");
       if (matchesUrl || matchesSchema) {
         contactPage = { url: page.url, links: page.parsed.links };
@@ -97,7 +106,7 @@ export const contactPageRule: Rule = {
       }
       // pub#740: a Contact page the pages link to but the crawl never fetched
       // is unverified, not missing. Its contact methods cannot be read.
-      const linked = ctx.site ? findLinkedUncrawledPage(ctx.site, { href: isContactPath }) : null;
+      const linked = ctx.site ? findLinkedUncrawledPage(ctx.site, { href: (url) => isContactPath(url, paths) }) : null;
       checks.push(
         linked
           ? linkedUncrawledCheck("contact-page", "Contact page", linked)

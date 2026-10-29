@@ -9,6 +9,8 @@ import { getPathname, resolveUrl } from "@squirrelscan/utils";
 
 import type { ParsedPage } from "../types";
 
+import { matchesConfiguredPaths } from "./eeat-paths";
+
 // Known privacy-page slugs (bare /privacy, /privacy-policy, /legal/privacy plus
 // localized variants). Single source of truth for both rules.
 export const PRIVACY_PATH_PATTERNS = EEAT_PAGE_PATTERNS.privacy;
@@ -65,9 +67,13 @@ export function isPrivacyPath(pathOrUrl: string): boolean {
 }
 
 // A crawled page counts as the privacy policy when its slug matches OR its
-// <title>/<h1> reads "privacy policy" — the slug-independent fallback.
-export function isPrivacyPage(page: PrivacyCandidatePage): boolean {
-  if (isPrivacyPath(page.url)) return true;
+// <title>/<h1> reads "privacy policy" — the slug-independent fallback. `paths`
+// are the site's own configured paths for it (eeat/privacy-policy, #1261).
+export function isPrivacyPage(
+  page: PrivacyCandidatePage,
+  paths: readonly string[] = []
+): boolean {
+  if (matchesConfiguredPaths(page.url, paths) || isPrivacyPath(page.url)) return true;
   const title = page.parsed?.meta?.title ?? "";
   if (isPrivacyHeading(title)) return true;
   const h1s = page.parsed?.h1?.texts ?? [];
@@ -75,9 +81,12 @@ export function isPrivacyPage(page: PrivacyCandidatePage): boolean {
 }
 
 // URL of the first crawled page that is the privacy policy, or null.
-export function findPrivacyPage(pages: PrivacyCandidatePage[]): string | null {
+export function findPrivacyPage(
+  pages: PrivacyCandidatePage[],
+  paths: readonly string[] = []
+): string | null {
   for (const page of pages) {
-    if (isPrivacyPage(page)) return page.url;
+    if (isPrivacyPage(page, paths)) return page.url;
   }
   return null;
 }
@@ -85,11 +94,14 @@ export function findPrivacyPage(pages: PrivacyCandidatePage[]): string | null {
 // Does any link on this page resolve to a privacy slug? This is the strict
 // href-only signal (no anchor text) — matches eeat's original link-percentage
 // metric so adopting the shared helper doesn't widen what eeat counts.
-export function pageLinksToPrivacyHref(page: PrivacyCandidatePage): boolean {
+export function pageLinksToPrivacyHref(
+  page: PrivacyCandidatePage,
+  paths: readonly string[] = []
+): boolean {
   const links = page.parsed?.links ?? [];
   return links.some((l) => {
     const resolved = resolveUrl(l.url, page.url);
-    return resolved ? isPrivacyPath(resolved) : false;
+    return resolved ? matchesConfiguredPaths(resolved, paths) || isPrivacyPath(resolved) : false;
   });
 }
 

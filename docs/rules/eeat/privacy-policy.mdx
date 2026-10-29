@@ -11,7 +11,7 @@ Being reachable is part of the requirement. The convention is a footer link on e
 
 ## What squirrel checks
 
-The rule is site-wide. It finds the privacy page by a known multilingual slug, or by a crawled page whose title or `h1` reads as a privacy policy, which catches unusual slugs and redirects. There is no standard schema type for a privacy page, so there is no schema fallback. It emits up to two checks:
+The rule is site-wide. It finds the privacy page by a URL path at one of the configured `paths` (see Options), a known multilingual slug, or by a crawled page whose title or `h1` reads as a privacy policy, which catches unusual slugs and redirects. There is no standard schema type for a privacy page, so there is no schema fallback. It emits up to two checks:
 
 - Skipped when no pages were crawled. Message: `No pages available for analysis`.
 - `privacy-policy` passes when a crawled page is the policy. Message: `Privacy Policy page exists`, with the URL as the value.
@@ -22,7 +22,7 @@ The rule is site-wide. It finds the privacy page by a known multilingual slug, o
 - `privacy-linked` reports info from 50. Message: `Privacy policy linked from N% of pages`, with `Consider adding to all page footers` as the value.
 - `privacy-linked` warns below 50%. Message: `Privacy policy only linked from N% of pages`, with `Add privacy link to footer on all pages` as the value.
 
-Coverage is measured by matching the link href against the known privacy slugs, not by anchor text. `legal/privacy-policy` is the rule that also reads anchor text.
+Coverage is measured by matching the link href against the known privacy slugs and any configured `paths`, not by anchor text. `legal/privacy-policy` is the rule that also reads anchor text.
 
 ### Excluded and uncrawled policies
 
@@ -47,6 +47,21 @@ Update it when the practices change, and check what periodic requirement applies
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 5/10 |
+
+## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `paths` | string[] | `[]` | Site-specific paths of the page, checked in addition to the built-in slugs. Patterns are matched like [`excludePatterns`](/configuration/rule-options#url-patterns): a substring of the path, `/exact-segment/`, or `regex:`. |
+
+### Configuration example
+
+```toml squirrel.toml
+[rule_options."eeat/privacy-policy"]
+paths = ["/pages/manufaktur"]
+```
+
+A crawled page at a configured path counts as the page, with no structured data needed, and a configured path that pages link to but the crawl did not fetch is reported as linked but not crawled, as for a built-in slug. A `paths` value that is not an array of strings is reported by `squirrel config validate`.
 
 ## Enable / disable
 
