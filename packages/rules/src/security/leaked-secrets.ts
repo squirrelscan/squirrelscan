@@ -1448,6 +1448,18 @@ export interface LeakedSecret {
   sourceUrl?: string; // URL of the script file or page
   /** What the value's own structure decoded to (#361): account id, role… */
   extra?: FindingExtra;
+  /** Characters in `value` (the match, which for a generic assignment includes its key). */
+  length: number;
+  /**
+   * Zero-based character offset of the match in the text that was scanned: the
+   * body of an external script, the text of an inline script, or the
+   * serialized page for `html`. Absent when the value only exists in decoded
+   * form (an escaped value, a base64 blob) so no honest offset into the text
+   * exists (#1230).
+   */
+  offset?: number;
+  /** Which inline script of the page the match is in, counting `<script>` elements without a `src` from 0. */
+  scriptIndex?: number;
 }
 
 /**
@@ -2446,7 +2458,18 @@ export function scanContent(
 
   // Entities in HTML, `\u`/`\x` escapes in script text (#360): every pattern
   // below reads the decoded form, once. See secrets/decode.ts.
+  const original = content;
   content = decodeForLocation(content, location);
+  // An offset is into the text as it was served. Decoding (entities, escapes,
+  // percent runs, a base64 blob) can change the length, so after it the
+  // match's index means nothing in the original: the value is looked up there
+  // verbatim instead, and dropped when it only exists decoded (#1230).
+  const offsetInOriginal = (at: number, value: string): number | undefined => {
+    if (location.endsWith(" (base64)")) return undefined;
+    if (content === original) return at;
+    const found = original.indexOf(value);
+    return found === -1 ? undefined : found;
+  };
 
   // What the value's own structure says (#361): a checksum that fails drops
   // the finding, a decoded claim moves it between tiers, and whatever else
@@ -2458,14 +2481,18 @@ export function scanContent(
     publicByDesign: boolean,
     before: () => string,
     after: () => string,
+    at: number,
     known?: FindingExtra
   ): LeakedSecret | null => {
     const refined = refineFinding(name, value, Date.now(), { before, after });
     if (refined?.drop) return null;
     const extra = known || refined?.extra ? { ...known, ...refined?.extra } : undefined;
+    const offset = offsetInOriginal(at, value);
     return {
       type: refined?.type ?? name,
       value,
+      length: value.length,
+      ...(offset !== undefined ? { offset } : {}),
       confidence: refined?.confidence ?? confidence,
       publicByDesign: refined?.publicByDesign ?? publicByDesign,
       location,
@@ -2797,6 +2824,7 @@ export function scanContent(
         reportPublic,
         () => readKeyLookBack(content, match!.index).before,
         () => content.slice(match!.index + value.length, match!.index + value.length + FORWARD_REACH),
+        match.index,
         known
       );
       if (finding) found.push(finding);
@@ -2910,7 +2938,8 @@ export function scanContent(
           confidence,
           publicByDesign ?? false,
           () => back.before,
-          () => content.slice(at + value.length, at + value.length + FORWARD_REACH)
+          () => content.slice(at + value.length, at + value.length + FORWARD_REACH),
+          at
         );
         if (finding) found.push(finding);
       }
@@ -2952,7 +2981,9 @@ export function scanPageForSecrets(
   if (html) {
     found.push(...scanContent(html, "html", pageUrl));
   }
+  let scriptIndex = -1;
   for (const script of doc.querySelectorAll("script:not([src])")) {
+    scriptIndex++;
     const scriptContent = script.textContent || "";
     if (scriptContent.trim()) {
       // The script's own open tag goes in front of its text, so the inline
@@ -2961,7 +2992,19 @@ export function scanPageForSecrets(
       // the look-behind, and the value is public rather than a generic leak
       // that the rule's dedup then has to reconcile. Attributes carry no
       // findings of their own that the document pass has not already made.
-      found.push(...scanContent(`${openTagOf(script)}${scriptContent}`, "inline-script", pageUrl));
+      const prefix = openTagOf(script);
+      for (const finding of scanContent(`${prefix}${scriptContent}`, "inline-script", pageUrl)) {
+        // The offset was measured with the synthetic open tag in front; the
+        // script's own text starts after it. A match inside the tag is the
+        // tag's attribute, which has no offset in the script's text.
+        const inScript = finding.offset !== undefined && finding.offset >= prefix.length;
+        const { offset: _tagRelative, ...rest } = finding;
+        found.push({
+          ...rest,
+          ...(inScript ? { offset: finding.offset! - prefix.length } : {}),
+          scriptIndex,
+        });
+      }
     }
   }
   return found;
@@ -3070,7 +3113,15 @@ export const leakedSecretsRule: Rule = {
     const item = (s: LeakedSecret): CheckItem => ({
       id: `${s.type}: ${maskSecret(s.value)}`,
       label: `Found in ${s.location}${s.sourceUrl ? ` (${s.sourceUrl})` : ""}`,
-      ...(s.extra ? { meta: s.extra } : {}),
+      // What the value's structure decoded to, then where it is: the length
+      // of the matched value, its offset in the scanned text and, for an
+      // inline script, which one. The value itself stays masked (#1230).
+      meta: {
+        ...s.extra,
+        length: s.length,
+        ...(s.offset !== undefined ? { offset: s.offset } : {}),
+        ...(s.scriptIndex !== undefined ? { scriptIndex: s.scriptIndex } : {}),
+      },
     });
 
     if (critical.length > 0) {

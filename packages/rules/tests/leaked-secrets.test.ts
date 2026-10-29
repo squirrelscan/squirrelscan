@@ -443,11 +443,12 @@ describe("security/leaked-secrets: the content prefilter never loses a finding",
     for (const fixture of fixtures) {
       const bare = scanContent(fixture, "inline-script");
       expect(bare.length).toBeGreaterThan(0); // a vacuous fixture proves nothing
-      const padded = scanContent(`${PAD}\n;\n${fixture}\n;\n${PAD}`, "inline-script").map((f) =>
-        JSON.stringify(f)
-      );
+      // The padding moves every match, so the offset is the one field that
+      // legitimately differs (#1230).
+      const sans = (f: object) => JSON.stringify({ ...f, offset: undefined });
+      const padded = scanContent(`${PAD}\n;\n${fixture}\n;\n${PAD}`, "inline-script").map(sans);
       for (const finding of bare) {
-        if (!padded.includes(JSON.stringify(finding))) {
+        if (!padded.includes(sans(finding))) {
           const near = padded.find((p) => p.includes(finding.value));
           lost.push(
             `${fixture.slice(0, 40)} → ${JSON.stringify(finding)} became ${near ?? "nothing"}`
