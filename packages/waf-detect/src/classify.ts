@@ -41,6 +41,7 @@ const DATADOME_HOST = new RegExp(
 // DataDome's inline config: `var dd={'rt':'c','cid':'...','hsh':'...','host':'geo.captcha-delivery.com'}`.
 const DATADOME_CONFIG = /\bvar\s+dd\s*=\s*\{[^}]{0,512}?['"]cid['"]\s*:/;
 const PERIMETERX_MARKER = /\b_pxAppId\b|\b_pxUuid\b|\bpxCaptchaSrc\b|px-captcha/;
+const PERIMETERX_CAPTCHA_ELEMENT = /\bid\s*=\s*["']?px-captcha\b|\b_pxOnCaptchaSuccess\b/;
 const KASADA_MARKER =
   /\bwindow\.KPSDK\s*=|\bKPSDK\.(?:now|start|configure)\b|\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/ips\.js\b/i;
 const AWS_WAF_SCRIPT = new RegExp(
@@ -143,6 +144,15 @@ const RULES: readonly Rule[] = [
       isStatus(p, WAF_BLOCK_STATUS_CODES) &&
       /access to this page has been denied/i.test(p.text()) &&
       PERIMETERX_MARKER.test(p.markup()),
+  },
+  {
+    provider: "perimeterx",
+    signal: "HUMAN captcha element on a challenge page",
+    // A branded challenge page (a site can restyle HUMAN's) keeps the captcha
+    // mount point and its success callback; a page that merely loads the
+    // sensor snippet has neither.
+    applies: (p) =>
+      isStatus(p, WAF_BLOCK_STATUS_CODES) && PERIMETERX_CAPTCHA_ELEMENT.test(p.markup()),
   },
   {
     provider: "kasada",

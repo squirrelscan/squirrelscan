@@ -157,6 +157,13 @@ const PX_QUOTED = page(
     ARTICLE,
 );
 
+// A site's own restyled HUMAN challenge, served through Cloudflare at 403: the
+// title is the site's, the captcha mount point and callback are HUMAN's.
+const PX_BRANDED =
+  '<!DOCTYPE html><html lang="en-US"><head><meta charset="utf-8"><title>Verify to continue</title><meta name="pxAppId" content="PXtest0000"></head><body><main><h1>It needs a human touch</h1>' +
+  '<p>Complete the task and we will get you right back in.</p><div id="px-captcha"></div></main>' +
+  "<script>window._pxAppId='PXtest0000';window._pxJsClientSrc='/test0000/init.js';window._pxOnCaptchaSuccess=function(){location.reload()};</script></body></html>";
+
 // ------------------------------------------------------------------ Imperva
 
 const IMPERVA_BLOCK =
@@ -428,6 +435,24 @@ export const BLOCKED: BlockedSample[] = [
     html: null,
   },
   {
+    name: "HUMAN branded challenge through Cloudflare (403)",
+    how: "live",
+    provider: "perimeterx",
+    signal: "captcha element",
+    status: 403,
+    headers: { server: "cloudflare", "cf-ray": "0-SYD" },
+    html: PX_BRANDED,
+  },
+  {
+    name: "Cloudflare challenge (429, cf-mitigated)",
+    how: "live",
+    provider: "cloudflare",
+    signal: "cf-mitigated",
+    status: 429,
+    headers: { "cf-mitigated": "challenge", server: "cloudflare" },
+    html: CF_MANAGED_CHALLENGE,
+  },
+  {
     name: "HUMAN block page served as 200",
     how: "reports",
     provider: "perimeterx",
@@ -537,7 +562,7 @@ export const BLOCKED: BlockedSample[] = [
   },
   {
     name: "Vercel challenge (403, header)",
-    how: "reports",
+    how: "live",
     provider: "vercel",
     signal: "x-vercel-mitigated",
     status: 403,
@@ -546,7 +571,7 @@ export const BLOCKED: BlockedSample[] = [
   },
   {
     name: "Vercel Security Checkpoint (429)",
-    how: "reports",
+    how: "live",
     provider: "vercel",
     signal: "Checkpoint",
     status: 429,
@@ -763,6 +788,50 @@ export const NEAR_MISSES: NearMiss[] = [
     status: 403,
     headers: NO_HEADERS,
     html: RADWARE_LOOKALIKE,
+  },
+  {
+    name: "Content page behind Akamai (200)",
+    how: "constructed",
+    provider: "akamai",
+    status: 200,
+    headers: { "x-akamai-request-id": "0.1" },
+    html: page("<title>Home</title>", ARTICLE),
+  },
+  {
+    name: "Content page behind DataDome (200, header)",
+    how: "constructed",
+    provider: "datadome",
+    status: 200,
+    headers: { "x-datadome": "protected", "x-dd-b": "1" },
+    html: page("<title>Home</title>", ARTICLE),
+  },
+  {
+    name: "Vercel BotID page that bundles the Kasada client (200)",
+    how: "constructed",
+    provider: "kasada",
+    status: 200,
+    headers: { server: "Vercel", "x-vercel-id": "sfo1::TEST" },
+    html: page(
+      "<title>Projects</title>",
+      ARTICLE +
+        "<script>if(!window.KPSDK)throw Error('KPSDK is not loaded');KPSDK.configure([])</script>",
+    ),
+  },
+  {
+    name: "Content page behind Sucuri (200)",
+    how: "constructed",
+    provider: "sucuri",
+    status: 200,
+    headers: { server: "Sucuri/Cloudproxy", "x-sucuri-id": "12345", "x-sucuri-cache": "MISS" },
+    html: page("<title>Home</title>", ARTICLE),
+  },
+  {
+    name: "Empty 200 behind Vercel",
+    how: "constructed",
+    provider: "none",
+    status: 200,
+    headers: { server: "Vercel", "x-vercel-id": "sfo1::TEST" },
+    html: "",
   },
   {
     name: "Plain content page",

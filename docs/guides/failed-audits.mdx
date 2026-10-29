@@ -296,7 +296,7 @@ A healthy page shows a first byte well under 30 seconds. `curl` exit code `28` (
 
 **How it is classified.** Only when the response itself proved it, and a vendor's name or script alone is never proof. The crawler reads provider-specific headers (`cf-mitigated: challenge`, `x-amzn-waf-action`, `x-vercel-mitigated`, `x-px-blocked`) and provider-specific markers in the body's first 32 KB, together with the status and the size of the page. A `Server: cloudflare` header or a detected CDN is not proof, and a plain `403` without a marker is classified as [access denied](#access-denied). The run page names the protection when the response did.
 
-Challenge and block pages arrive with more than one status, so the status alone decides nothing: AWS WAF answers a challenge with `202` and a CAPTCHA with `405`, Kasada answers with `429`, and Akamai, F5, DataDome and Imperva serve theirs as `200`. A `429` that carries a provider's challenge is a block, not [rate limiting](#rate-limited). A page that only mentions a provider, loads its script on a normal page, or shows a CAPTCHA widget on a form is audited as usual, and so is a refusal with no provider marker; the audit warns that the site uses protection and carries on.
+Challenge and block pages arrive with more than one status, so the status alone decides nothing: AWS WAF answers a challenge with `202` and a CAPTCHA with `405`, Kasada answers with `429`, and Akamai, F5, DataDome and Imperva serve theirs as `200`. A `429` that carries a provider's challenge is a block, not [rate limiting](#rate-limited). A page that only mentions a provider, loads its script on a normal page (Cloudflare JavaScript Detections, the HUMAN or Kasada client, Vercel BotID, the DataDome tag), or shows a CAPTCHA widget on a form is audited as usual, and the provider still shows in the technologies list, and so is a refusal with no provider marker; the audit warns that the site uses protection and carries on.
 
 Script and markup markers count only inside a tag or an inline script, and wording only outside `<code>`, so a page that quotes one, such as a tutorial printing a provider's script tag or a support page showing an incident line in a code block, is neither a challenge nor attributed to the provider. The JavaScript Detections script that Cloudflare adds to ordinary pages loads from `/cdn-cgi/challenge-platform/` too, and it never makes a page a challenge. The same test decides which crawled pages are set aside as challenge pages, so an ordinary `200` page on a protected site is scored.
 
@@ -340,10 +340,10 @@ https://example.com • Site blocked the crawler (bot protection / auth / rate l
 | Cloudflare | `cf-mitigated: challenge`; challenge script and options; the "Attention Required!" block page | 403, 429, 503 | Live responses |
 | Akamai | "Access Denied" page with its reference number | 200, 403, 503 | Live responses |
 | DataDome | The `var dd=` challenge config or the `captcha-delivery.com` script on a near-empty page | 200, 202, 403, 405, 429 | Live responses |
-| HUMAN (PerimeterX) | `x-px-blocked` header; "Access to this page has been denied" with its captcha markup | 200, 403 | Live responses |
+| HUMAN (PerimeterX) | `x-px-blocked` header; "Access to this page has been denied" with its captcha markup; a restyled challenge page that keeps the `px-captcha` mount point | 200, 403 | Live responses |
 | Kasada | The `KPSDK` challenge script on a near-empty page | 403, 429 | Live responses |
 | AWS WAF | `x-amzn-waf-action: challenge` or `captcha`; the challenge script on a near-empty page | 202, 405, 403 | Vendor documentation |
-| Vercel | `x-vercel-mitigated`; the "Vercel Security Checkpoint" page | 403, 429 | Public reports |
+| Vercel | `x-vercel-mitigated`; the "Vercel Security Checkpoint" page | 403, 429 | Live responses |
 | Imperva (Incapsula) | The incident id line; "Pardon Our Interruption"; a script-only challenge page | 200, 403 | Public reports |
 | Sucuri | "Sucuri WebSite Firewall - Access Denied" | 403 | Public reports |
 | F5 | "The requested URL was rejected" with a support ID | 200, 403 | Public reports |
