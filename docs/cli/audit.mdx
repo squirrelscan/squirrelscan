@@ -40,7 +40,7 @@ squirrel audit <url> [options]
 | `--debug` | | Enable debug logging | `false` |
 | `--trace` | | Enable performance tracing | `false` |
 | `--project-name` | `-n` | Project name (overrides config and prompts) | auto |
-| `--publish` | `-p` | Force publish to reports.squirrelscan.com (now the default when logged in) | auto |
+| `--publish` | `-p` | Force publish (now the default when logged in) | auto |
 | `--no-publish` | | Skip auto-publishing this run (stay online, just don't publish) | `false` |
 | `--ephemeral` | | Use cloud features for this run only: don't add the site to your dashboard, don't schedule it, and don't publish the report. Charged like any signed-in audit. Overrides `[cloud] ephemeral`. Add `--publish` to publish an unlisted report that is attached to no dashboard site. See [Ephemeral runs](#ephemeral-runs) | `false` |
 | `--no-ephemeral` | | Turn `[cloud] ephemeral = true` off for this run | `false` |
@@ -227,7 +227,7 @@ squirrel audit https://example.com --visibility public
 Once a website has been audited successfully, squirrelscan re-audits it on a weekly [schedule](/cloud/scheduled-audits) by itself. From then on every publish prints one more line saying so, with the link that turns it off:
 
 ```text
-https://reports.squirrelscan.com/XVv4NO7aPr
+https://acme.squirrel.report/XVv4NO7aPr
 Scheduled audits: every week, and each run costs credits. Turn it off: https://app.squirrelscan.com/acme/website/web_1/settings/schedule
 ```
 
