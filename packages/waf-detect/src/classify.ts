@@ -109,6 +109,15 @@ interface Rule {
 const isStatus = (p: Probe, codes: ReadonlySet<number>): boolean => codes.has(p.status);
 
 /**
+ * The refusal statuses: WAF_BLOCK_STATUS_CODES without 200. A marker that is a
+ * script or a mount point (a sensor snippet, a captcha widget, a script-only
+ * page) is only a block when the status refuses too: at 200 a real page, an app
+ * shell or a form can carry the same markup. A 200 is a block only on wording
+ * no ordinary page prints (an Akamai deny reference, an incident id).
+ */
+const REFUSAL_STATUS_CODES: ReadonlySet<number> = new Set([...WAF_BLOCK_STATUS_CODES].filter((code) => code !== 200));
+
+/**
  * The block and challenge shapes a perimeter provider serves, most specific
  * provider first (a bot manager behind Cloudflare is the bot manager). Each rule
  * is a provider-specific marker, read where it acts, plus whichever of a status
@@ -152,7 +161,9 @@ const RULES: readonly Rule[] = [
     // mount point and its success callback; a page that merely loads the
     // sensor snippet has neither.
     applies: (p) =>
-      isStatus(p, WAF_BLOCK_STATUS_CODES) && PERIMETERX_CAPTCHA_ELEMENT.test(p.markup()),
+      (p.status === 403 || p.status === 429) &&
+      p.smallerThan(DENY_PAGE_TEXT * 2) &&
+      PERIMETERX_CAPTCHA_ELEMENT.test(p.markup()),
   },
   {
     provider: "kasada",
@@ -193,7 +204,7 @@ const RULES: readonly Rule[] = [
     provider: "imperva",
     signal: "Imperva JavaScript challenge page with no content",
     applies: (p) =>
-      isStatus(p, WAF_BLOCK_STATUS_CODES) &&
+      isStatus(p, REFUSAL_STATUS_CODES) &&
       p.smallerThan(EMPTY_PAGE_TEXT) &&
       IMPERVA_SCRIPT.test(p.markup()),
   },
@@ -210,7 +221,7 @@ const RULES: readonly Rule[] = [
     provider: "radware",
     signal: "Radware Bot Manager captcha host on a near-empty page",
     applies: (p) =>
-      isStatus(p, WAF_BLOCK_STATUS_CODES) &&
+      isStatus(p, REFUSAL_STATUS_CODES) &&
       p.smallerThan(INTERSTITIAL_TEXT) &&
       RADWARE_HOST.test(p.markup()),
   },

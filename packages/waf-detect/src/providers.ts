@@ -279,7 +279,12 @@ export const CONTENT_PATTERNS: {
  * Markup only a challenge or block page carries. With a challenge status or a
  * WAF's own headers or markup it marks the page as a challenge, even at 200.
  */
-export const CHALLENGE_MARKUP_SIGNATURES: { view: "markup" | "text"; pattern: RegExp }[] = [
+export const CHALLENGE_MARKUP_SIGNATURES: {
+  view: "markup" | "text";
+  pattern: RegExp;
+  /** Counts only on a refusal status: the marker is a widget a real 200 page can embed. */
+  refusalOnly?: true;
+}[] = [
   { view: "markup", pattern: /cf-browser-verification/i },
   { view: "markup", pattern: /__cf_chl_/i },
   { view: "markup", pattern: /_cf_chl_opt/ },
@@ -293,8 +298,8 @@ export const CHALLENGE_MARKUP_SIGNATURES: { view: "markup" | "text"; pattern: Re
   // "access denied" in the 10 KB sample costs at most a 2 KB scan.
   { view: "text", pattern: /reference&#32;&#35;\s*\d/i },
   { view: "text", pattern: new RegExp(`access denied[\\s\\S]{0,2000}?${AKAMAI_REFERENCE_ID.source}`, "i") },
-  { view: "markup", pattern: /_pxCaptcha/i },
-  { view: "markup", pattern: /px-captcha/i },
+  { view: "markup", pattern: /_pxCaptcha/i, refusalOnly: true },
+  { view: "markup", pattern: /px-captcha/i, refusalOnly: true },
 ];
 
 /** The challenge markup patterns alone; each is read in its view (#693). */

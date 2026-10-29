@@ -52,4 +52,20 @@ export const SECURITY_FINGERPRINTS: TechFingerprint[] = [
     ],
     confidence: "high",
   },
+  // #1253: F5 BIG-IP, from its documented load-balancer persistence cookie
+  // (`BIGipServer<pool>`) and its `Server: BigIP` header. Both are on every
+  // response a BIG-IP serves, so this says the site is behind one, never that a
+  // page was blocked (that is waf-detect's F5 rejection page).
+  {
+    id: "f5-big-ip",
+    name: "F5 BIG-IP",
+    category: "security",
+    website: "https://www.f5.com/products/big-ip-services",
+    icon: "f5",
+    detectors: [
+      { type: "header", name: "set-cookie", pattern: /(?:^|[;\s])BIGipServer[\w.-]{1,128}=/ },
+      { type: "header", name: "server", pattern: /^BigIP$/i },
+    ],
+    confidence: "high",
+  },
 ];
