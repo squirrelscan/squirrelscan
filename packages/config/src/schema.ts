@@ -212,7 +212,7 @@ export const ClassifierConfigSchema = z.object({
 // SERVICE_LIMITS.techDetectBundleBytes (64 KB); 0 turns bundle matching off.
 export const TechDetectConfigSchema = z.object({
   bundle_bytes: z.number().int().min(0).max(262_144).optional(),
-});
+}).strict();
 
 export const OutputConfigSchema = z.object({
   format: z.enum(["json", "html", "console"]).default("console"),

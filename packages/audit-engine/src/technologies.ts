@@ -5,6 +5,7 @@ import {
 } from "@squirrelscan/core-contracts";
 import {
   detectTechnologies,
+  SEGMENT_SEPARATOR,
   sampleBundleExtras,
   type DetectedTechnology,
 } from "@squirrelscan/tech-detect";
@@ -103,7 +104,7 @@ export function detectReportTechnologies(
 /** Every bundle gets at least this much head before any gets more (#1254). */
 const TECH_BUNDLE_FLOOR_BYTES = 16 * 1024;
 /** Most bytes of vendor-literal windows and tail added to a bundle that does not fit whole. */
-const TECH_BUNDLE_EXTRAS_BYTES = 16 * 1024;
+const TECH_BUNDLE_EXTRAS_BYTES = 24 * 1024;
 
 /** Bytes of first-party script bodies detection may read (#1254). */
 export interface TechBundleLimits {
@@ -216,13 +217,13 @@ export function buildTechInputs(
       if (!item.head || item.head.length >= item.content.length) continue;
       const r = Math.min(
         TECH_BUNDLE_EXTRAS_BYTES,
-        limits.bundleBytes - item.headBytes - 1,
-        room() - 1,
+        limits.bundleBytes - item.headBytes - SEGMENT_SEPARATOR.length,
+        room() - SEGMENT_SEPARATOR.length,
       );
       if (r <= 0) continue;
       item.extras = truncateToBytes(sampleBundleExtras(item.content, item.head.length, r), r);
       if (!item.extras) continue;
-      item.extrasBytes = byteLength(item.extras) + 1; // the joining newline
+      item.extrasBytes = byteLength(item.extras) + SEGMENT_SEPARATOR.length;
       charge(item.extrasBytes);
     }
     for (const item of plan) {
@@ -241,7 +242,7 @@ export function buildTechInputs(
       attached.add(item.url);
       withBody.push({
         url: item.url,
-        content: item.extras ? `${item.head}\n${item.extras}` : item.head,
+        content: item.extras ? `${item.head}${SEGMENT_SEPARATOR}${item.extras}` : item.head,
       });
     }
 

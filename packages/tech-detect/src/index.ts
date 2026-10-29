@@ -16,3 +16,4 @@ export { ALL_FINGERPRINTS } from "./fingerprints";
 export { checkVersionAdvisories } from "./versions";
 export type { SoftwareAdvisory } from "./versions";
 export { bundleHints, sampleBundleExtras } from "./bundle-sample";
+export { SEGMENT_SEPARATOR } from "./js-scan";

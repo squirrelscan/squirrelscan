@@ -7,6 +7,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   detectTechnologies,
+  sampleBundleExtras,
   TECH_DETECT_PAGE_BUDGET_MS,
   TECH_SCRIPT_CONTENT_LIMIT,
 } from "../src";
@@ -87,6 +88,9 @@ describe("near misses do not match", () => {
     "a sentence holding the URL": `x="see https://${REF}.supabase.co, then ${KEY}"`,
     "a placeholder ref with a key": `f("https://your${REF.slice(0, 16)}.supabase.co","${KEY}")`,
     "a repeated-character placeholder ref": `f("https://${"x".repeat(20)}.supabase.co","${KEY}")`,
+    "a firebase pair held in a string": `var s='authDomain:"demo-app.firebaseapp.com"';`,
+    "a storage bucket pair held in a string": `var s='storageBucket:"demo-app.appspot.com"';`,
+    "a clerk pair held in a string": `var s='publishableKey:"pk_test_${"a".repeat(30)}"';`, // pragma: allowlist secret
     "a look-alike host with a key": `f("https://${REF}.supabase.co.example.invalid","${KEY}")`,
     "a commented-out call": `// const sb = createClient("https://${REF}.supabase.co", key)\nvar a=1;`,
     "a block comment": `/* createClient("https://${REF}.supabase.co", key) */var a=1;`,
@@ -161,5 +165,21 @@ describe("bounds", () => {
     );
     expect(exceeded).toBe(1);
     expect(found).toEqual([]);
+  });
+});
+
+describe("sampling a big body", () => {
+  test("a 5 MB hostile body is sampled in well under 100 ms and stays inside the cap", () => {
+    const hostile = [
+      `.supabase.co`.repeat(100_000),
+      `pk_test_`.repeat(100_000),
+      `.firebaseapp.com"'\`/*`.repeat(100_000),
+      `"https://x.supabase.co"`.repeat(60_000),
+    ].join("\n");
+    expect(hostile.length).toBeGreaterThan(4_000_000);
+    const started = performance.now();
+    const extras = sampleBundleExtras(hostile, 16 * 1024, 24 * 1024);
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(extras.length).toBeLessThanOrEqual(24 * 1024);
   });
 });

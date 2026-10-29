@@ -13,9 +13,19 @@
 export interface ScannedJs {
   /** The source with comment bodies replaced by spaces (indices line up with the input). */
   code: string;
-  /** Flat `[start, end, start, end, ...]` of string literals, ascending. */
+  /** Flat `[start, end, start, end, ...]` of string and regex literals, ascending. */
   strings: number[];
+  /**
+   * Flat `[start, end, ...]` of every string, regex literal and comment,
+   * ascending: a cut point `p` is inside one when `start < p <= end`. A window
+   * cut at a position outside them starts (and ends) in code state, so a scan of
+   * the window alone reads the same as a scan of the whole file.
+   */
+  skips: number[];
 }
+
+/** Separates independently scanned segments: a NUL ends any string or comment still open. */
+export const SEGMENT_SEPARATOR = "\n\0\n";
 
 const REGEX_PRECEDING_WORDS = new Set([
   "return",
@@ -63,6 +73,7 @@ function slashOpensRegex(src: string, end: number): boolean {
 export function scanJs(src: string): ScannedJs {
   const n = src.length;
   const strings: number[] = [];
+  const skips: number[] = [];
   const parts: string[] = [];
   let copied = 0;
   let i = 0;
@@ -90,10 +101,12 @@ export function scanJs(src: string): ScannedJs {
           continue;
         }
         if (d === c) break;
+        if (d === 0) break;
         if (d === 10 && c !== 96) break;
         i++;
       }
       strings.push(start, Math.min(i, n));
+      skips.push(start, Math.min(i, n));
       i++;
       lastCode = Math.min(i, n);
       continue;
@@ -103,19 +116,24 @@ export function scanJs(src: string): ScannedJs {
       if (d === 47) {
         let end = src.indexOf("\n", i);
         if (end === -1) end = n;
+        skips.push(i, Math.max(i, end - 1));
         blank(i, end);
         i = end;
         continue;
       }
       if (d === 42) {
         const close = src.indexOf("*/", i + 2);
-        const end = close === -1 ? n : close + 2;
+        let end = close === -1 ? n : close + 2;
+        const nul = src.indexOf("\0", i + 2);
+        if (nul !== -1 && nul < end) end = nul;
+        skips.push(i, end - 1);
         blank(i, end);
         i = end;
         continue;
       }
       if (slashOpensRegex(src, lastCode)) {
         // Skip the regex literal: to the next unescaped `/` outside a class.
+        const regexStart = i;
         i++;
         let inClass = false;
         while (i < n) {
@@ -124,12 +142,14 @@ export function scanJs(src: string): ScannedJs {
             i += 2;
             continue;
           }
-          if (e === 10) break;
+          if (e === 10 || e === 0) break;
           if (e === 91) inClass = true;
           else if (e === 93) inClass = false;
           else if (e === 47 && !inClass) break;
           i++;
         }
+        strings.push(regexStart, Math.min(i, n));
+        skips.push(regexStart, Math.min(i, n));
         i++;
         lastCode = Math.min(i, n);
         continue;
@@ -139,7 +159,7 @@ export function scanJs(src: string): ScannedJs {
     i++;
   }
   parts.push(src.slice(copied));
-  return { code: parts.length === 1 ? parts[0]! : parts.join(""), strings };
+  return { code: parts.length === 1 ? parts[0]! : parts.join(""), strings, skips };
 }
 
 /** Whether `index` falls inside one of the recorded string literals (binary search). */
@@ -155,4 +175,19 @@ export function inString(strings: number[], index: number): boolean {
     else return index > start; // the opening quote itself is code
   }
   return false;
+}
+
+/** The end of the range in `skips` that has `index` inside it (`start < index <= end`), or -1. */
+export function skipEnd(skips: number[], index: number): number {
+  let lo = 0;
+  let hi = skips.length / 2 - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const start = skips[mid * 2]!;
+    const end = skips[mid * 2 + 1]!;
+    if (index <= start) hi = mid - 1;
+    else if (index > end) lo = mid + 1;
+    else return end;
+  }
+  return -1;
 }

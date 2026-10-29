@@ -324,8 +324,12 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       // inlines in place of `process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` in a
       // `props.publishableKey || <env>` fallback.
       inBundle(
-        String.raw`(?:["']|\b)(?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY)["']?\s*(?:[:=]\s*(?:[\w$.]{1,60}\s*(?:\|\||\?\?)\s*)?|(?:\|\||\?\?)\s*)["'\x60]pk_(?:test|live)_[A-Za-z0-9+/=_-]{20,200}["'\x60]`,
-        "pk_",
+        String.raw`(?:["'](?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY)["']|\b(?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY))\s*(?:[:=]\s*(?:[\w$.]{1,60}\s*(?:\|\||\?\?)\s*)?|(?:\|\||\?\?)\s*)["'\x60]pk_test_[A-Za-z0-9+/=_-]{20,200}["'\x60]`,
+        "pk_test_",
+      ),
+      inBundle(
+        String.raw`(?:["'](?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY)["']|\b(?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY))\s*(?:[:=]\s*(?:[\w$.]{1,60}\s*(?:\|\||\?\?)\s*)?|(?:\|\||\?\?)\s*)["'\x60]pk_live_[A-Za-z0-9+/=_-]{20,200}["'\x60]`,
+        "pk_live_",
       ),
     ],
     versionPattern: /@clerk\/clerk-js@(\d+(?:\.\d+){0,2})/i,
@@ -349,15 +353,15 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       ),
       // A bundle: the web app config passed to initializeApp (a key may be quoted).
       inBundle(
-        String.raw`(?:["']|\b)authDomain["']?\s*:\s*["'\x60](?!your|my-project|project)[a-z0-9-]{1,63}\.firebaseapp\.com["'\x60]`,
+        String.raw`(?:["']authDomain["']|\bauthDomain)\s*:\s*["'\x60](?!your|my-project|project)[a-z0-9-]{1,63}\.firebaseapp\.com["'\x60]`,
         ".firebaseapp.com",
       ),
       inBundle(
-        String.raw`(?:["']|\b)storageBucket["']?\s*:\s*["'\x60](?!your|my-project|project)[a-z0-9-]{1,63}\.appspot\.com["'\x60]`,
+        String.raw`(?:["']storageBucket["']|\bstorageBucket)\s*:\s*["'\x60](?!your|my-project|project)[a-z0-9-]{1,63}\.appspot\.com["'\x60]`,
         ".appspot.com",
       ),
       inBundle(
-        String.raw`(?:["']|\b)storageBucket["']?\s*:\s*["'\x60](?!your|my-project|project)[a-z0-9-]{1,63}\.firebasestorage\.app["'\x60]`,
+        String.raw`(?:["']storageBucket["']|\bstorageBucket)\s*:\s*["'\x60](?!your|my-project|project)[a-z0-9-]{1,63}\.firebasestorage\.app["'\x60]`,
         ".firebasestorage.app",
       ),
     ],
