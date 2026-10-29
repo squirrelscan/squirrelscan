@@ -86,6 +86,7 @@ describe("near misses do not match", () => {
     "the URL and key pair in a comment": `// f("https://${REF}.supabase.co","${KEY}")`,
     "a sentence holding the URL": `x="see https://${REF}.supabase.co, then ${KEY}"`,
     "a placeholder ref with a key": `f("https://your${REF.slice(0, 16)}.supabase.co","${KEY}")`,
+    "a repeated-character placeholder ref": `f("https://${"x".repeat(20)}.supabase.co","${KEY}")`,
     "a look-alike host with a key": `f("https://${REF}.supabase.co.example.invalid","${KEY}")`,
     "a commented-out call": `// const sb = createClient("https://${REF}.supabase.co", key)\nvar a=1;`,
     "a block comment": `/* createClient("https://${REF}.supabase.co", key) */var a=1;`,

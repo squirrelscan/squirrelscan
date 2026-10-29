@@ -290,15 +290,15 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       // whole (no path, an optional slash), so a link, a docs sentence or a
       // fetch to a path never matches, and the match must start in code.
       inBundle(
-        String.raw`["'\x60]https:\/\/(?!your)[a-z0-9]{20}\.supabase\.co\/?["'\x60]\s*,\s*(?:[\w$]{1,20}\s*[:=]\s*)?["'\x60](?:eyJ[A-Za-z0-9_-]{10,}|sb_publishable_[A-Za-z0-9_-]{10,})`,
+        String.raw`["'\x60]https:\/\/(?!your)(?!([a-z0-9])\1{19}\.)[a-z0-9]{20}\.supabase\.co\/?["'\x60]\s*,\s*(?:[\w$]{1,20}\s*[:=]\s*)?["'\x60](?:eyJ[A-Za-z0-9_-]{10,}|sb_publishable_[A-Za-z0-9_-]{10,})`,
         ".supabase.co",
       ),
       inBundle(
-        String.raw`\b(?:supabaseUrl|SUPABASE_URL)["']?\s*[:=]\s*["'\x60]https:\/\/(?!your)[a-z0-9]{20}\.supabase\.co\/?["'\x60]`,
+        String.raw`\b(?:supabaseUrl|SUPABASE_URL)["']?\s*[:=]\s*["'\x60]https:\/\/(?!your)(?!([a-z0-9])\1{19}\.)[a-z0-9]{20}\.supabase\.co\/?["'\x60]`,
         ".supabase.co",
       ),
       inBundle(
-        String.raw`\bcreateClient\)?\(\s*["'\x60]https:\/\/(?!your)[a-z0-9]{20}\.supabase\.co\/?["'\x60]\s*,`,
+        String.raw`\bcreateClient\)?\(\s*["'\x60]https:\/\/(?!your)(?!([a-z0-9])\1{19}\.)[a-z0-9]{20}\.supabase\.co\/?["'\x60]\s*,`,
         ".supabase.co",
       ),
     ],

@@ -27,6 +27,9 @@ A bundled app's own code sits after the framework it ships with, so a bundle big
 bundle_bytes = 65536   # 0 to 262144
 ```
 
+- Only first-party scripts the crawl already fetched are read: those on the audited host or its subdomains (a CDN on another domain is not), within the crawl's script fetch limits, and only JavaScript bodies under 5 MB.
+- On a signed-in audit the bundle text sent to the cloud detection service is at most 1 MB per audit. Bundles can contain keys, so set `bundle_bytes = 0` to send none.
+- A key kept in a variable and passed by name (`publishableKey: key`) is not matched; a Clerk key is recognised only where it is written out next to `publishableKey`.
 - A scan that runs long on one page stops at a 5 second budget and reports what it found so far.
 
 Results are grouped by category:
