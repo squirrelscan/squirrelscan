@@ -22,15 +22,14 @@ export const SQLITE_BUSY_TIMEOUT_MS = 15000;
 
 const BUSY = /database is locked|database table is locked|sqlite_busy|sqlite_locked/i;
 
-/** The suffix a busy error carries: which file, and how long the wait was. */
-export const BUSY_DETAIL = /\(database file: (.+), waited (\d+) ms\)/;
+const BUSY_DETAIL_MARKER = "(database file: ";
 
 function describeBusy(error: unknown, path: string, startedAt: number): unknown {
-  if (!(error instanceof Error) || !BUSY.test(error.message) || BUSY_DETAIL.test(error.message)) {
+  if (!(error instanceof Error) || !BUSY.test(error.message) || error.message.includes(BUSY_DETAIL_MARKER)) {
     return error;
   }
   const waited = Math.round(performance.now() - startedAt);
-  const described = new Error(`${error.message} (database file: ${path}, waited ${waited} ms)`, {
+  const described = new Error(`${error.message} ${BUSY_DETAIL_MARKER}${path}, waited ${waited} ms)`, {
     cause: error,
   });
   described.name = error.name;

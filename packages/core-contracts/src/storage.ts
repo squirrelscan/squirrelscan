@@ -75,6 +75,26 @@ export interface SecurityHeaders {
 // ERROR TYPES
 // ============================================
 
+const BUSY_MARKER = "(database file: ";
+const WAITED_MARKER = ", waited ";
+
+/**
+ * " The database file <path> stayed locked for <n> ms." read off the suffix the
+ * storage layer appends to a busy error, or "" when it is not there. Plain
+ * string searches, not a pattern: the text comes from an error message.
+ */
+function busyDetail(causeText: string): string {
+  const start = causeText.lastIndexOf(BUSY_MARKER);
+  if (start < 0) return "";
+  const rest = causeText.slice(start + BUSY_MARKER.length);
+  const waited = rest.lastIndexOf(WAITED_MARKER);
+  const end = rest.indexOf(" ms)", waited);
+  if (waited < 0 || end < 0) return "";
+  const ms = rest.slice(waited + WAITED_MARKER.length, end);
+  if (ms.length === 0 || ms.length > 9 || !/^\d+$/.test(ms)) return "";
+  return ` The database file ${rest.slice(0, waited)} stayed locked for ${ms} ms.`;
+}
+
 export class StorageError extends Error {
   readonly _tag = "StorageError";
   readonly operation: string;
@@ -90,8 +110,7 @@ export class StorageError extends Error {
 
     // The storage layer appends "(database file: <path>, waited <ms> ms)" to a
     // busy error, so the message names what was busy and for how long (#1226).
-    const busy = /\(database file: (.+), waited (\d+) ms\)/.exec(causeText);
-    const which = busy ? ` The database file ${busy[1]} stayed locked for ${busy[2]} ms.` : "";
+    const which = busyDetail(causeText);
 
     const message = isDbLocked
       ? `Storage error during ${operation}: SQLite database is busy (locked).${which} Another squirrelscan crawl/report/analyze command may be running in parallel. Wait for it to finish and retry.`

@@ -15,3 +15,28 @@ describe("StorageError", () => {
     expect(err.message).toContain("permission denied");
   });
 });
+
+describe("a busy error names the file and the wait (#1226)", () => {
+  test("the suffix the storage layer appends is read back", () => {
+    const err = StorageError.write(
+      new Error(
+        "database is locked (database file: /home/a b/.squirrel/content-store.db, waited 15012 ms)"
+      )
+    );
+    expect(err.message).toContain(
+      "The database file /home/a b/.squirrel/content-store.db stayed locked for 15012 ms."
+    );
+  });
+
+  test("a malformed or repeated marker is ignored, and cannot be made slow", () => {
+    expect(
+      StorageError.write(
+        new Error("database is locked (database file: x, waited ")
+      ).message
+    ).not.toContain("stayed locked");
+    const hostile = `database is locked ${"(database file: a".repeat(50_000)}`;
+    const started = performance.now();
+    StorageError.write(new Error(hostile));
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+});
