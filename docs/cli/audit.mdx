@@ -564,6 +564,7 @@ Change the window, or turn it off, with
 | `0` | Success |
 | `1` | Error (invalid URL, crawl failed, down/blocked site, etc.) |
 | `2` | A [`--fail-on`](#gate-ci-on-audit-results) threshold tripped (CI gate) |
+| `3` | A WAF or bot manager answered the audited page with a challenge or block page, so nothing was audited (see [blocked by a WAF or bot manager](/guides/failed-audits#blocked-by-waf)) |
 
 ## Configuration
 

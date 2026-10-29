@@ -1052,6 +1052,10 @@ audits. A CLI audit comes from your own machine, so for one of those:
   and every page carry it. The checks that resolve your start URL before the
   crawl begins do not.
 
+### Challenge and block pages
+
+A WAF or bot manager can answer the crawler with its own challenge or block page instead of the site. squirrelscan recognises these for Cloudflare, Akamai, DataDome, Kasada, HUMAN, Imperva, Sucuri, AWS WAF, F5, Vercel, Wordfence and Radware, on any status a provider uses (`200`, `202`, `403`, `405`, `429`, `503`). A challenge on the audited page fails the audit with exit code `3`; a challenge on any other page leaves that page out of the audit and lists it as blocked. A site that serves real content behind a WAF still audits normally, with a warning that it uses protection. See [blocked by a WAF or bot manager](/guides/failed-audits#blocked-by-waf) for what is recognised and the fixes.
+
 ### Probes follow your rules
 
 A probe is only sent when a rule that reads it is going to run. Skip the rules
