@@ -5,7 +5,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { resolveAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
+import { offlineAuditSettings, resolveAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
 
 import type { AuditReport } from "../src/types";
 import { auditLevelLine } from "../src/coverage";
@@ -102,5 +102,35 @@ describe("renderers", () => {
     expect(renderMarkdown(report)).toContain(line);
     expect(renderText(report)).toContain(line);
     expect(renderMarkdown(baseReport())).not.toContain("Audit level:");
+  });
+});
+
+// #1275: an offline run says so on every surface that renders the level.
+describe("an offline audit level", () => {
+  const OFFLINE = offlineAuditSettings(resolveAuditSettings("surface", { pages: 30, probe: "passive" }));
+  const report = baseReport({ auditLevel: OFFLINE });
+
+  test("json carries the settings that ran", () => {
+    const meta = (JSON.parse(renderJson(report)) as { meta: { auditLevel: typeof OFFLINE } }).meta;
+    expect(meta.auditLevel.settings).toMatchObject({
+      cloudChecks: false,
+      render: "off",
+      externalLinks: false,
+    });
+    expect(meta.auditLevel.offline).toBe(true);
+  });
+
+  test("llm, markdown and text say the cloud and link checks did not run", () => {
+    expect(renderLlm(report)).toContain(
+      'pages="30" offline="true" cloud-checks="false" render="off" external-links="false"/>',
+    );
+    expect(auditLevelLine(report)).toContain("Offline: cloud checks, rendering and external link checks did not run.");
+    expect(renderMarkdown(report)).toContain("did not run.");
+    expect(renderText(report)).toContain("did not run.");
+  });
+
+  test("a cloud run carries none of it", () => {
+    expect(auditLevelLine(baseReport({ auditLevel: SURFACE }))).toBe("Audit level: Surface.");
+    expect(renderLlm(baseReport({ auditLevel: SURFACE }))).not.toContain("offline");
   });
 });

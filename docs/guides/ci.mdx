@@ -25,8 +25,9 @@ apart from a *broken run*:
 |------|---------|
 | `0` | Audit ran and every `--fail-on` threshold passed |
 | `2` | Audit ran but a `--fail-on` threshold tripped |
-| `1` | Operational error (bad flags, network failure, a down site, etc.) |
-| `3` | The site's WAF or bot manager blocked the audited page, so nothing was audited. See [blocked by a WAF or bot manager](/guides/failed-audits#blocked-by-waf) |
+| `1` | Operational error (bad flags, a crash, a site that answered with an error, etc.) |
+| `3` | The audited page was blocked (a WAF or bot manager, or a bare 403 or 429), so nothing was audited. See [blocked by a WAF or bot manager](/guides/failed-audits#blocked-by-waf) |
+| `5` | The start URL could not be reached (DNS, timeout, connection or TLS failure), so nothing was audited. See [unreachable start URLs](/cli/audit#unreachable-start-urls) |
 
 Gate your build with [`--fail-on`](/cli/audit); quote each expression, since
 shells treat bare `<`/`>` as redirection:

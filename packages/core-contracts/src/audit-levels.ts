@@ -159,6 +159,25 @@ export interface ResolvedAuditSettings {
   settings: AuditSettings;
   /** Keys that differ from the level `basedOn`, in form order. Empty unless `level` is `custom`. */
   changes: AuditSettingKey[];
+  /**
+   * Set on a `--offline` run (#1275): `settings` are then what actually ran, with
+   * cloud checks, rendering and external link checks off, while `level` and
+   * `basedOn` still name the level the audit was asked for.
+   */
+  offline?: true;
+}
+
+/**
+ * The snapshot of a run that could not use the cloud or other sites: the
+ * settings that ran, not the level's defaults. Offline is a limit on the run, so
+ * `level`, `basedOn` and `changes` keep describing what was asked for.
+ */
+export function offlineAuditSettings(resolved: ResolvedAuditSettings): ResolvedAuditSettings {
+  return {
+    ...resolved,
+    settings: { ...resolved.settings, cloudChecks: false, render: "off", externalLinks: false },
+    offline: true,
+  };
 }
 
 /** Settings of a level with overrides applied. Pages are clamped to 1..AUDIT_MAX_PAGES. */
@@ -264,7 +283,13 @@ export function parseResolvedAuditSettings(value: unknown): ResolvedAuditSetting
   const changes = Array.isArray(v.changes)
     ? AUDIT_SETTING_KEYS.filter((key) => (v.changes as unknown[]).includes(key))
     : resolved.changes;
-  return { level, basedOn, settings: resolved.settings, changes };
+  return {
+    level,
+    basedOn,
+    settings: resolved.settings,
+    changes,
+    ...(v.offline === true ? { offline: true as const } : {}),
+  };
 }
 
 /**

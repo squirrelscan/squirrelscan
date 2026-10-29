@@ -329,7 +329,7 @@ AUDIT BLOCKED
 https://example.com • Site blocked the crawler (bot protection / auth / rate limit): blocked_by_datadome: DataDome served a challenge or block page (DataDome challenge on a near-empty page), HTTP 200, for example.com
 ```
 
-`squirrel audit` exits with code `3` for this, so a script can tell a refused front door from a down site (`1`) and a tripped [`--fail-on`](/cli/audit#gate-ci-on-audit-results) gate (`2`). The JSON report carries `status: "blocked"`, `statusReasonCode: "http_4xx"` and a `wafBlocked.seed` object with `code` (`blocked_by_<provider>`, or `blocked_by_waf` when no provider was named), `provider`, `signal`, `status` and `url`.
+`squirrel audit` exits with code `3` for this, so a script can tell a refused front door from an unreachable site (`5`) and a tripped [`--fail-on`](/cli/audit#gate-ci-on-audit-results) gate (`2`). The JSON report carries `status: "blocked"`, `statusReasonCode: "http_4xx"` and a `wafBlocked.seed` object with `code` (`blocked_by_<provider>`, or `blocked_by_waf` when no provider was named), `provider`, `signal`, `status` and `url`.
 
 **Other pages.** A blocked page that is not the audited one is never audited as the site: it is left out of every rule and of the score, counted, and listed with its provider. The report says `N of M pages blocked by <provider>`, and the JSON report lists them under `wafBlocked.pages` (up to 50, with `wafBlocked.total` counting all of them).
 

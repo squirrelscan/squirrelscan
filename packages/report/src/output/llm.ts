@@ -381,7 +381,7 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     // Escaped like every other attribute here: the snapshot can come from a
     // stored or fetched report, and this output is read by an agent.
     lines.push(
-      `<audit-level level="${escapeXml(String(a.level))}" based-on="${escapeXml(String(a.basedOn))}" changes="${escapeXml(a.changes.map(String).join(","))}" pages="${Number(a.settings.pages)}"/>`,
+      `<audit-level level="${escapeXml(String(a.level))}" based-on="${escapeXml(String(a.basedOn))}" changes="${escapeXml(a.changes.map(String).join(","))}" pages="${Number(a.settings.pages)}"${a.offline === true ? ` offline="true" cloud-checks="false" render="off" external-links="false"` : ""}/>`,
     );
   }
 
