@@ -839,7 +839,11 @@ export const NEAR_MISSES: NearMiss[] = [
     provider: "perimeterx",
     status: 200,
     headers: {},
-    html: page("<title>Contact</title>", ARTICLE + '<form action="/send"><input name="email"><div id="px-captcha"></div><button>Send</button></form><script>window._pxAppId="PXtest0000";window._pxOnCaptchaSuccess=function(){}</script>'),
+    html: page(
+      "<title>Contact</title>",
+      ARTICLE +
+        '<form action="/send"><input name="email"><div id="px-captcha"></div><button>Send</button></form><script>window._pxAppId="PXtest0000";window._pxOnCaptchaSuccess=function(){}</script>',
+    ),
   },
   {
     name: "Imperva-fronted app shell with the Imperva script (200)",
@@ -864,6 +868,41 @@ export const NEAR_MISSES: NearMiss[] = [
     status: 200,
     headers: {},
     html: RADWARE_CAPTCHA,
+  },
+  {
+    name: "Origin 403 with only a captcha mount point",
+    how: "constructed",
+    provider: "perimeterx",
+    status: 403,
+    headers: {},
+    html: '<html><body><h1>Forbidden</h1><div id="px-captcha"></div></body></html>',
+  },
+  {
+    name: "Article showing the HUMAN mount point as a code sample",
+    how: "constructed",
+    provider: "perimeterx",
+    status: 403,
+    headers: {},
+    html: page(
+      "<title>Docs</title>",
+      '<p>Add the mount point:</p><pre><code>&lt;div id="px-captcha"&gt;&lt;/div&gt; _pxAppId _pxOnCaptchaSuccess</code></pre>',
+    ),
+  },
+  {
+    name: "x-px-blocked on a 200 page",
+    how: "constructed",
+    provider: "perimeterx",
+    status: 200,
+    headers: { "x-px-blocked": "1" },
+    html: page("<title>Home</title>", ARTICLE),
+  },
+  {
+    name: "Small 200 page titled Vercel Security Checkpoint",
+    how: "constructed",
+    provider: "vercel",
+    status: 200,
+    headers: {},
+    html: VERCEL_CHECKPOINT,
   },
   {
     name: "Plain content page",

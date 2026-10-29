@@ -282,8 +282,6 @@ export const CONTENT_PATTERNS: {
 export const CHALLENGE_MARKUP_SIGNATURES: {
   view: "markup" | "text";
   pattern: RegExp;
-  /** Counts only on a refusal status: the marker is a widget a real 200 page can embed. */
-  refusalOnly?: true;
 }[] = [
   { view: "markup", pattern: /cf-browser-verification/i },
   { view: "markup", pattern: /__cf_chl_/i },
@@ -298,8 +296,8 @@ export const CHALLENGE_MARKUP_SIGNATURES: {
   // "access denied" in the 10 KB sample costs at most a 2 KB scan.
   { view: "text", pattern: /reference&#32;&#35;\s*\d/i },
   { view: "text", pattern: new RegExp(`access denied[\\s\\S]{0,2000}?${AKAMAI_REFERENCE_ID.source}`, "i") },
-  { view: "markup", pattern: /_pxCaptcha/i, refusalOnly: true },
-  { view: "markup", pattern: /px-captcha/i, refusalOnly: true },
+  // HUMAN's captcha mount point is classify.ts's rule, which also needs a refusal
+  // status and its app id: a bare `px-captcha` is a widget a real page can embed.
 ];
 
 /** The challenge markup patterns alone; each is read in its view (#693). */
@@ -344,7 +342,10 @@ export const CHALLENGE_200_SIGNATURES: {
     provider: "datadome",
     // captcha-delivery.com is DataDome's captcha host — injected only on the block/challenge interstitial
     // Not followed by more host: `captcha-delivery.com.attacker.example` is not DataDome.
-    strongMarkers: [/captcha-delivery\.com(?![\w-]|\.[\w-])/i],
+    // Matched where a tag loads it, and not followed by more host.
+    strongMarkers: [
+      /(?:src|href|action)\s*=\s*["']?(?:https?:)?\/\/(?:[a-z0-9-]{1,63}\.){0,3}captcha-delivery\.com(?![\w-]|\.[\w-])/i,
+    ],
     weakMarkers: [],
   },
   {

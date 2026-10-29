@@ -41,6 +41,7 @@ const DATADOME_HOST = new RegExp(
 // DataDome's inline config: `var dd={'rt':'c','cid':'...','hsh':'...','host':'geo.captcha-delivery.com'}`.
 const DATADOME_CONFIG = /\bvar\s+dd\s*=\s*\{[^}]{0,512}?['"]cid['"]\s*:/;
 const PERIMETERX_MARKER = /\b_pxAppId\b|\b_pxUuid\b|\bpxCaptchaSrc\b|px-captcha/;
+const PERIMETERX_APP_ID = /\b_pxAppId\b|<meta\s[^>]{0,200}name\s*=\s*["']?pxAppId/i;
 const PERIMETERX_CAPTCHA_ELEMENT = /\bid\s*=\s*["']?px-captcha\b|\b_pxOnCaptchaSuccess\b/;
 const KASADA_MARKER =
   /\bwindow\.KPSDK\s*=|\bKPSDK\.(?:now|start|configure)\b|\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/ips\.js\b/i;
@@ -144,7 +145,7 @@ const RULES: readonly Rule[] = [
   {
     provider: "perimeterx",
     signal: "x-px-blocked header",
-    applies: (p) => p.header("x-px-blocked") !== null,
+    applies: (p) => p.status >= 400 && p.header("x-px-blocked") !== null,
   },
   {
     provider: "perimeterx",
@@ -158,12 +159,14 @@ const RULES: readonly Rule[] = [
     provider: "perimeterx",
     signal: "HUMAN captcha element on a challenge page",
     // A branded challenge page (a site can restyle HUMAN's) keeps the captcha
-    // mount point and its success callback; a page that merely loads the
-    // sensor snippet has neither.
+    // mount point and its success callback, on a refusal, with HUMAN's app id.
+    // A login form with the widget, or a page that only loads the sensor
+    // snippet, is none of those.
     applies: (p) =>
       (p.status === 403 || p.status === 429) &&
       p.smallerThan(DENY_PAGE_TEXT * 2) &&
-      PERIMETERX_CAPTCHA_ELEMENT.test(p.markup()),
+      PERIMETERX_CAPTCHA_ELEMENT.test(p.markup()) &&
+      PERIMETERX_APP_ID.test(p.markup()),
   },
   {
     provider: "kasada",
@@ -257,7 +260,7 @@ const RULES: readonly Rule[] = [
     provider: "vercel",
     signal: "Vercel Security Checkpoint page",
     applies: (p) =>
-      [200, 403, 429, 503].includes(p.status) &&
+      [403, 429, 503].includes(p.status) &&
       p.smallerThan(INTERSTITIAL_TEXT) &&
       VERCEL_CHECKPOINT.test(p.text()),
   },

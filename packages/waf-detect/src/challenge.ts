@@ -18,13 +18,9 @@ import { visibleTextLength } from "./visible-text";
  * Each marker is read where it acts, so a page quoting one is not a challenge
  * (#693).
  */
-function challengeMarkers(html: string, refusal: boolean): "markup" | "text" | null {
+function challengeMarkers(html: string): "markup" | "text" | null {
   const views = signatureViews(html.slice(0, 10240));
-  if (
-    CHALLENGE_MARKUP_SIGNATURES.some(
-      ({ view, pattern, refusalOnly }) => (refusal || !refusalOnly) && pattern.test(views[view]),
-    )
-  ) {
+  if (CHALLENGE_MARKUP_SIGNATURES.some(({ view, pattern }) => pattern.test(views[view]))) {
     return "markup";
   }
   if (CHALLENGE_TEXT_PATTERNS.some((pattern) => pattern.test(views.text))) return "text";
@@ -89,7 +85,7 @@ export function inspectWafChallengePage(page: WafResponse): WafChallengeDetail {
     return NOT_DETECTED;
   }
 
-  const markers = challengeMarkers(page.html, WAF_CHALLENGE_STATUS_CODES.has(page.status));
+  const markers = challengeMarkers(page.html);
   if (markers) {
     const statusSuggestsChallenge = WAF_CHALLENGE_STATUS_CODES.has(page.status);
     const wafResult = detectWaf(buildWafHeaders(page), page.html.slice(0, 10240));

@@ -43,10 +43,12 @@ export interface WafBlockedSummary {
 
 /** `blocked_by_cloudflare`, `blocked_by_aws_waf`; `blocked_by_waf` when no provider was named. */
 export function wafBlockCode(providerId: string | null | undefined): string {
+  // split/filter/join, not a trailing-underscore regex: no backtracking at all.
   const slug = (providerId ?? "")
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
+    .split(/[^a-z0-9]/)
+    .filter(Boolean)
+    .join("_");
   return slug && slug !== "unknown" ? `blocked_by_${slug}` : "blocked_by_waf";
 }
 
