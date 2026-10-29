@@ -17,16 +17,20 @@ How it works:
 
 ## [Unreleased]
 
-### Fixed
+## v0.0.141 (2026-10-29)
 
-- CI now rejects edits to tagged CHANGELOG sections and directs new bullets to Unreleased (#1234).
-- **Leaked-secret checks no longer flag credential key-name constants as values.** A bundle constant such as `DROPBOX_ACCESS_TOKEN: "dropbox-access-token"` is recognised as a storage or configuration identifier, while random credential-shaped assignments still report. (#1228)
-- **Keyword-stuffing checks use the measured copy's script instead of trusting `lang`.** English, German, Spanish, French, Portuguese, Italian and Dutch copy is checked with its function-word list. Copy written mainly in another script is not judged against English words, while an unsupported `lang` alone cannot turn the check off. English price-note terms (`incl`, `VAT`) are ignored only on English pages, so they remain detectable elsewhere. (#1232)
+`squirrel audit --ephemeral` uses cloud features for one run and leaves nothing behind: the site is not added to the dashboard, scheduled or published unless you pass `--publish`. `--store-scripts` keeps the first-party scripts an audit fetched in the content store. Keyword-stuffing checks use the measured copy's own script, leaked-secret checks no longer flag credential key-name constants, and CI now rejects edits to tagged CHANGELOG sections.
 
 ### Added
 
 - **`squirrel audit --ephemeral` uses the cloud for one run and leaves nothing behind.** The site is not added to your dashboard, no recurring audits are turned on for it and the report is not published unless you add `--publish`, which publishes an unlisted report attached to no dashboard site. Credits are charged exactly as for the same audit without it, and the run shows in your credit history as an ephemeral CLI run with its domain. `[cloud] ephemeral = true` makes it the default for a project and `--no-ephemeral` overrides that for one run. `--ephemeral --offline` is accepted with a note that offline already saves nothing, the summary says the run was ephemeral, and the MCP `audit_website` tool takes an `ephemeral` argument. If the server does not confirm the run as ephemeral (an older server), the CLI warns that the site may have been added and scheduled and publishes nothing. The default is unchanged: a normal signed-in audit still adds the site and schedules it. See [Ephemeral runs](https://docs.squirrelscan.com/cli/audit#ephemeral-runs). (squirrelscan/repo#3649)
 - **`[storage] store_scripts = true` (or `squirrel audit --store-scripts`) keeps the first-party scripts an audit fetched in the content store.** For corpus and research runs that analyse a crawl again later (new secret rules, new technology fingerprints, labelling) without fetching the site again. Each audit indexes its scripts by URL, with the content hash, size, final URL and the pages that load them; identical bundles are stored once; a script over `store_scripts_max_bytes` (default 2 MB) is recorded as skipped with its size, and an audit stores at most `store_scripts_total_bytes` of distinct bytes (default a quarter of `content_store_max_bytes`). The audit's own checks fetch only 10 to 50 of a site's scripts, so with this on it fetches up to `store_scripts_max_scripts` (default 200, at most 500, extra requests only while it is on, bounded to 256 MB of script text and 120 seconds) and warns with how many it left. Off by default: nothing changes unless you set it. Bodies are evicted by the content store's size cap like stored HTML, so raise `content_store_max_bytes` for a corpus. See [Storage configuration](https://docs.squirrelscan.com/configuration/storage#store_scripts). (#1255)
+
+### Fixed
+
+- CI now rejects edits to tagged CHANGELOG sections and directs new bullets to Unreleased (#1234).
+- **Leaked-secret checks no longer flag credential key-name constants as values.** A bundle constant such as `DROPBOX_ACCESS_TOKEN: "dropbox-access-token"` is recognised as a storage or configuration identifier, while random credential-shaped assignments still report. (#1228)
+- **Keyword-stuffing checks use the measured copy's script instead of trusting `lang`.** English, German, Spanish, French, Portuguese, Italian and Dutch copy is checked with its function-word list. Copy written mainly in another script is not judged against English words, while an unsupported `lang` alone cannot turn the check off. English price-note terms (`incl`, `VAT`) are ignored only on English pages, so they remain detectable elsewhere. (#1232)
 
 ## v0.0.140 (2026-10-29)
 
