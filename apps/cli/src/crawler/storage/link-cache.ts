@@ -2,7 +2,9 @@
 // Stores external link check results across all site audits
 // Location: ~/.squirrel/link-cache.db
 
-import { Database } from "bun:sqlite";
+import type { Database } from "bun:sqlite";
+
+import { enableWal, openSqlite } from "@squirrelscan/crawler/sqlite-open";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
@@ -50,8 +52,6 @@ const COLUMN_MIGRATIONS = [
   "ALTER TABLE link_cache ADD COLUMN public_only INTEGER",
 ];
 
-const SQLITE_BUSY_TIMEOUT_MS = 15000;
-
 export class LinkCacheStorage {
   private db: Database | null = null;
   private dbPath: string;
@@ -68,10 +68,10 @@ export class LinkCacheStorage {
         mkdirSync(dir, { recursive: true });
       }
 
-      this.db = new Database(this.dbPath);
-      this.db.run("PRAGMA journal_mode = WAL");
+      // busy_timeout first, and IMMEDIATE write transactions (#1226).
+      this.db = openSqlite(this.dbPath);
+      enableWal(this.db);
       this.db.run("PRAGMA synchronous = NORMAL");
-      this.db.run(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS}`);
       this.db.run(SCHEMA);
 
       // Run migrations for existing databases (ignore duplicate column errors)

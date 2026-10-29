@@ -88,8 +88,13 @@ export class StorageError extends Error {
       lower.includes("database table is locked") ||
       lower.includes("sqlite_busy");
 
+    // The storage layer appends "(database file: <path>, waited <ms> ms)" to a
+    // busy error, so the message names what was busy and for how long (#1226).
+    const busy = /\(database file: (.+), waited (\d+) ms\)/.exec(causeText);
+    const which = busy ? ` The database file ${busy[1]} stayed locked for ${busy[2]} ms.` : "";
+
     const message = isDbLocked
-      ? `Storage error during ${operation}: SQLite database is busy (locked). Another squirrelscan crawl/report/analyze command may be running in parallel. Wait for it to finish and retry.`
+      ? `Storage error during ${operation}: SQLite database is busy (locked).${which} Another squirrelscan crawl/report/analyze command may be running in parallel. Wait for it to finish and retry.`
       : `Storage error during ${operation}: ${cause}`;
 
     super(message);

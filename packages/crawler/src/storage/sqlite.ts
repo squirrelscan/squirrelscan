@@ -4,7 +4,8 @@
 // Best for medium to large sites (1000+ pages)
 // Uses bun:sqlite for native SQLite bindings
 
-import { Database } from "bun:sqlite";
+import type { Database } from "bun:sqlite";
+import { enableWal, openSqlite } from "./sqlite-open";
 import { createHash, randomUUID } from "node:crypto";
 import { Effect } from "effect";
 
@@ -1331,7 +1332,6 @@ function gzipped(payload: string): Uint8Array<ArrayBuffer> {
   return new Uint8Array(out.buffer as ArrayBuffer, out.byteOffset, out.byteLength);
 }
 
-const SQLITE_BUSY_TIMEOUT_MS = 15000;
 
 // Conservative hardcoded compaction bounds (#197). No squirrel.toml surface in
 // v1 — these are the only defaults `compactFindings` uses unless a test overrides.
@@ -1438,13 +1438,13 @@ export class SQLiteStorage implements CrawlStorage {
   init(): Effect.Effect<void, StorageError, never> {
     return Effect.try({
       try: () => {
-        this.db = new Database(this.path);
-        this.db.exec("PRAGMA journal_mode = WAL");
+        // busy_timeout first, and IMMEDIATE write transactions (#1226).
+        this.db = openSqlite(this.path);
+        enableWal(this.db);
         this.db.exec("PRAGMA wal_autocheckpoint = 1000"); // Checkpoint every 1000 pages to limit WAL growth
         this.db.exec("PRAGMA synchronous = NORMAL");
         this.db.exec("PRAGMA cache_size = -64000"); // 64MB cache
         this.db.exec("PRAGMA temp_store = MEMORY");
-        this.db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS}`);
         this.db.exec(SCHEMA);
         this.runMigrations();
       },
@@ -1490,7 +1490,7 @@ export class SQLiteStorage implements CrawlStorage {
     // Run migrations + version update in a transaction
     // If process crashes mid-migration, transaction rolls back and we retry next time
     if (currentVersion < SCHEMA_VERSION) {
-      db.exec("BEGIN TRANSACTION");
+      db.exec("BEGIN IMMEDIATE");
       try {
         for (let v = currentVersion + 1; v <= SCHEMA_VERSION; v++) {
           const statements = MIGRATIONS[v];
@@ -2290,7 +2290,7 @@ export class SQLiteStorage implements CrawlStorage {
         );
         const seen = new Map<string, number>(); // hash -> bytes, this crawl
         let distinctBytes = 0;
-        db.exec("BEGIN");
+        db.exec("BEGIN IMMEDIATE");
         try {
           for (const script of scripts) {
             if (script.fetchSkipReason) {

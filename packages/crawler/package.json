@@ -12,7 +12,8 @@
     "./seed-redirect": "./src/seed-redirect.ts",
     "./sitemaps": "./src/sitemaps.ts",
     "./well-known": "./src/well-known.ts",
-    "./storage": "./src/storage/index.ts"
+    "./storage": "./src/storage/index.ts",
+    "./sqlite-open": "./src/storage/sqlite-open.ts"
   },
   "dependencies": {
     "@squirrelscan/core-contracts": "workspace:*",
