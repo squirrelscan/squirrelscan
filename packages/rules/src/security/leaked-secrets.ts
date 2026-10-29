@@ -2471,6 +2471,11 @@ export function scanContent(
   ): LeakedSecret | null => {
     const refined = refineFinding(name, value, Date.now(), { before, after });
     if (refined?.drop) return null;
+    const adjustedOffset = offset + (source.offsetBase ?? 0);
+    // The inline pass prepends a synthetic opening tag to preserve provider
+    // context. Findings inside that tag belong to the HTML pass, not to the
+    // script text whose offset this record describes.
+    if (adjustedOffset < 0) return null;
     const extra = known || refined?.extra ? { ...known, ...refined?.extra } : undefined;
     return {
       type: refined?.type ?? name,
@@ -2479,7 +2484,7 @@ export function scanContent(
       publicByDesign: refined?.publicByDesign ?? publicByDesign,
       location,
       length,
-      offset: Math.max(0, offset + (source.offsetBase ?? 0)),
+      offset: adjustedOffset,
       ...(source.scriptIndex !== undefined ? { scriptIndex: source.scriptIndex } : {}),
       sourceUrl,
       ...(extra ? { extra } : {}),
@@ -2937,9 +2942,11 @@ export function scanContent(
   // to the client as one string — scanned as content of their own, two
   // levels deep, reported with a ` (base64)` location suffix.
   for (const finding of scanBase64Blobs(content, location, sourceUrl, depth, scanContent)) {
+    const adjustedOffset = finding.offset + (source.offsetBase ?? 0);
+    if (adjustedOffset < 0) continue;
     found.push({
       ...finding,
-      offset: Math.max(0, finding.offset + (source.offsetBase ?? 0)),
+      offset: adjustedOffset,
       ...(source.scriptIndex !== undefined ? { scriptIndex: source.scriptIndex } : {}),
     });
   }

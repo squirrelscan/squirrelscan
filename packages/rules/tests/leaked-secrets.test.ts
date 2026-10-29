@@ -440,17 +440,22 @@ describe("security/leaked-secrets: the content prefilter never loses a finding",
   // while the value stayed the same.
   test("every finding made unpadded is still made, unchanged, inside 70 KB of bundle", () => {
     const lost: string[] = [];
+    const paddedPrefix = `${PAD}\n;\n`;
+    const withoutOffset = ({ offset: _offset, ...finding }: LeakedSecret) => finding;
     for (const fixture of fixtures) {
       const bare = scanContent(fixture, "inline-script");
       expect(bare.length).toBeGreaterThan(0); // a vacuous fixture proves nothing
-      const padded = scanContent(`${PAD}\n;\n${fixture}\n;\n${PAD}`, "inline-script").map((f) =>
-        JSON.stringify(f)
-      );
+      const padded = scanContent(`${paddedPrefix}${fixture}\n;\n${PAD}`, "inline-script");
       for (const finding of bare) {
-        if (!padded.includes(JSON.stringify(finding))) {
-          const near = padded.find((p) => p.includes(finding.value));
+        const same = padded.find(
+          (candidate) => JSON.stringify(withoutOffset(candidate)) === JSON.stringify(withoutOffset(finding))
+        );
+        if (same) {
+          expect(same.offset).toBe(finding.offset + paddedPrefix.length);
+        } else {
+          const near = padded.find((candidate) => candidate.value.includes(finding.value));
           lost.push(
-            `${fixture.slice(0, 40)} → ${JSON.stringify(finding)} became ${near ?? "nothing"}`
+            `${fixture.slice(0, 40)} → ${JSON.stringify(finding)} became ${JSON.stringify(near)}`
           );
         }
       }
