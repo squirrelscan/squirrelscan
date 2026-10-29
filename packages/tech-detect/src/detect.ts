@@ -3,12 +3,12 @@ import { ALL_FINGERPRINTS } from "./fingerprints";
 import { inString, scanJs, type ScannedJs } from "./js-scan";
 
 /**
- * Longest slice of one script body detection reads (chars). Bundles are matched
- * on their first 64 KB only, so a hostile megabyte cannot stall a page, and a
- * caller that sends more (the cloud service, an old client) gets the same
- * result as one that pre-cut.
+ * Longest slice of one script body detection reads (chars): the largest
+ * `[tech_detect] bundle_bytes` the config allows. What a caller sends is cut
+ * smaller by its own cap (64 KB by default), so this only bounds a caller that
+ * sends more, and a hostile megabyte cannot stall a page.
  */
-export const TECH_SCRIPT_CONTENT_LIMIT = 64 * 1024;
+export const TECH_SCRIPT_CONTENT_LIMIT = 256 * 1024;
 
 /** Default wall-clock budget for one detectTechnologies call (one page). */
 export const TECH_DETECT_PAGE_BUDGET_MS = 5_000;

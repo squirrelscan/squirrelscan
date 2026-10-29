@@ -3,7 +3,11 @@ import {
   type ReportTechnologies,
   type ReportTechnology,
 } from "@squirrelscan/core-contracts";
-import { detectTechnologies, type DetectedTechnology } from "@squirrelscan/tech-detect";
+import {
+  detectTechnologies,
+  sampleBundleExtras,
+  type DetectedTechnology,
+} from "@squirrelscan/tech-detect";
 import { recordToHeaders } from "@squirrelscan/utils/headers";
 import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
 import { detectWaf, getWafProviderName } from "@squirrelscan/waf-detect";
@@ -96,6 +100,11 @@ export function detectReportTechnologies(
   return detectReportTechnologiesMulti([input], diff);
 }
 
+/** Every bundle gets at least this much head before any gets more (#1254). */
+const TECH_BUNDLE_FLOOR_BYTES = 16 * 1024;
+/** Most bytes of vendor-literal windows and tail added to a bundle that does not fit whole. */
+const TECH_BUNDLE_EXTRAS_BYTES = 16 * 1024;
+
 /** Bytes of first-party script bodies detection may read (#1254). */
 export interface TechBundleLimits {
   /** Per bundle: only its first bytes are matched. 0 hands detection no bodies. */
@@ -171,23 +180,69 @@ export function buildTechInputs(
         : index === 0,
     );
 
+    // Three passes over the page's bundles, so a page with many scripts gives every
+    // one a body before any one gets a big one:
+    //   1. a floor (the head of each script, as before #1254),
+    //   2. the parts of a bundle past its head that detection needs: windows around
+    //      the vendor literals and the tail, where a bundled app's own code sits
+    //      after the framework it ships with,
+    //   3. the rest of the per-bundle cap, as more head.
     let pageBytes = 0;
-    const withBody: { url: string; content: string }[] = [];
-    for (const script of owned) {
-      if (!script.content || attached.has(script.url) || limits.bundleBytes <= 0) continue;
-      const room = Math.min(
-        limits.bundleBytes,
-        limits.pageBytes - pageBytes,
-        limits.auditBytes - auditBytes,
+    const room = (): number =>
+      Math.min(limits.pageBytes - pageBytes, limits.auditBytes - auditBytes);
+    const charge = (n: number): void => {
+      pageBytes += n;
+      auditBytes += n;
+    };
+    const plan = (limits.bundleBytes > 0 ? owned : [])
+      .filter((script) => script.content && !attached.has(script.url))
+      .map((script) => ({
+        url: script.url,
+        content: script.content as string,
+        head: "",
+        headBytes: 0,
+        extras: "",
+        extrasBytes: 0,
+      }));
+    const floor = Math.min(TECH_BUNDLE_FLOOR_BYTES, limits.bundleBytes);
+    for (const item of plan) {
+      const r = Math.min(floor, room());
+      if (r <= 0) break;
+      item.head = truncateToBytes(item.content, r);
+      item.headBytes = byteLength(item.head);
+      charge(item.headBytes);
+    }
+    for (const item of plan) {
+      if (!item.head || item.head.length >= item.content.length) continue;
+      const r = Math.min(
+        TECH_BUNDLE_EXTRAS_BYTES,
+        limits.bundleBytes - item.headBytes - 1,
+        room() - 1,
       );
-      if (room <= 0) break;
-      const content = truncateToBytes(script.content, room);
-      if (!content) continue;
-      const size = byteLength(content);
-      pageBytes += size;
-      auditBytes += size;
-      attached.add(script.url);
-      withBody.push({ url: script.url, content });
+      if (r <= 0) continue;
+      item.extras = truncateToBytes(sampleBundleExtras(item.content, item.head.length, r), r);
+      if (!item.extras) continue;
+      item.extrasBytes = byteLength(item.extras) + 1; // the joining newline
+      charge(item.extrasBytes);
+    }
+    for (const item of plan) {
+      if (!item.head || item.head.length >= item.content.length) continue;
+      const r = Math.min(limits.bundleBytes - item.headBytes - item.extrasBytes, room());
+      if (r <= 0) continue;
+      const head = truncateToBytes(item.content, item.headBytes + r);
+      const bytes = byteLength(head);
+      charge(bytes - item.headBytes);
+      item.head = head;
+      item.headBytes = bytes;
+    }
+    const withBody: { url: string; content: string }[] = [];
+    for (const item of plan) {
+      if (!item.head) continue;
+      attached.add(item.url);
+      withBody.push({
+        url: item.url,
+        content: item.extras ? `${item.head}\n${item.extras}` : item.head,
+      });
     }
 
     const srcs = extractScriptSrcs(page.html);

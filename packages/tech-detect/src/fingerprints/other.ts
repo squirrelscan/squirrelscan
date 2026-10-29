@@ -35,8 +35,8 @@ function inScript(bodySource: string, requires: string): Detector {
  * `source` in a fetched first-party bundle, as code: not inside a comment or a
  * string literal, so a docs snippet or a commented-out call does not match.
  */
-function inBundle(source: string): Detector {
-  return { type: "script-content", pattern: new RegExp(source), inCode: true };
+function inBundle(source: string, hint: string): Detector {
+  return { type: "script-content", pattern: new RegExp(source), inCode: true, hint };
 }
 
 /** `bodySource` inside the body of a `<style>` element. */
@@ -284,10 +284,22 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       ...scriptSrc(
         String.raw`https:\/\/(?:cdn\.jsdelivr\.net\/npm|unpkg\.com|esm\.sh)\/@supabase\/supabase-js`,
       ),
-      // A bundle: the client call with a real project ref (also quoted as a
-      // plain string by a doc line, which is why it must start in code).
+      // A bundle. Production minifiers mangle `createClient`, so the anchor is the
+      // quoted project URL itself, as a call argument or an object value that
+      // pairs with a key literal or a url-named property. The URL is quoted
+      // whole (no path, an optional slash), so a link, a docs sentence or a
+      // fetch to a path never matches, and the match must start in code.
       inBundle(
-        String.raw`\bcreateClient\)?\(\s*["']https:\/\/(?!your)[a-z0-9]{20}\.supabase\.co["']\s*,`,
+        String.raw`["'\x60]https:\/\/(?!your)[a-z0-9]{20}\.supabase\.co\/?["'\x60]\s*,\s*(?:[\w$]{1,20}\s*[:=]\s*)?["'\x60](?:eyJ[A-Za-z0-9_-]{10,}|sb_publishable_[A-Za-z0-9_-]{10,})`,
+        ".supabase.co",
+      ),
+      inBundle(
+        String.raw`\b(?:supabaseUrl|SUPABASE_URL)["']?\s*[:=]\s*["'\x60]https:\/\/(?!your)[a-z0-9]{20}\.supabase\.co\/?["'\x60]`,
+        ".supabase.co",
+      ),
+      inBundle(
+        String.raw`\bcreateClient\)?\(\s*["'\x60]https:\/\/(?!your)[a-z0-9]{20}\.supabase\.co\/?["'\x60]\s*,`,
+        ".supabase.co",
       ),
     ],
     ignoreComments: true,
@@ -307,8 +319,14 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       ...scriptSrc(String.raw`https:\/\/[a-z0-9-]{1,63}\.clerk\.accounts\.dev\/`),
       { type: "html", pattern: /<script\s(?:[^>]{0,400}\s)?data-clerk-js-script\b/i },
       { type: "html", pattern: /<script\s(?:[^>]{0,400}\s)?data-clerk-publishable-key\s*=\s*["']pk_(?:test|live)_/i },
-      // A bundle: the publishable key handed to the Clerk provider or client.
-      inBundle(String.raw`\bpublishableKey\s*[:=]\s*["']pk_(?:test|live)_[A-Za-z0-9+/=_-]{20,200}["']`),
+      // A bundle: the publishable key handed to the provider or client, as an
+      // object property (quoted or not), an assignment, or the literal Next.js
+      // inlines in place of `process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` in a
+      // `props.publishableKey || <env>` fallback.
+      inBundle(
+        String.raw`(?:["']|\b)(?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY)["']?\s*(?:[:=]\s*(?:[\w$.]{1,60}\s*(?:\|\||\?\?)\s*)?|(?:\|\||\?\?)\s*)["'\x60]pk_(?:test|live)_[A-Za-z0-9+/=_-]{20,200}["'\x60]`,
+        "pk_",
+      ),
     ],
     versionPattern: /@clerk\/clerk-js@(\d+(?:\.\d+){0,2})/i,
     ignoreComments: true,
@@ -329,12 +347,18 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
         String.raw`authDomain["']?\s*:\s*["'](?!your|my-project|project)[a-z0-9-]{1,63}\.firebaseapp\.com["']`,
         ".firebaseapp.com",
       ),
-      // A bundle: the web app config passed to initializeApp.
+      // A bundle: the web app config passed to initializeApp (a key may be quoted).
       inBundle(
-        String.raw`\bauthDomain["']?\s*:\s*["'](?!your|my-project|project)[a-z0-9-]{1,63}\.firebaseapp\.com["']`,
+        String.raw`(?:["']|\b)authDomain["']?\s*:\s*["'\x60](?!your|my-project|project)[a-z0-9-]{1,63}\.firebaseapp\.com["'\x60]`,
+        ".firebaseapp.com",
       ),
       inBundle(
-        String.raw`\bstorageBucket["']?\s*:\s*["'](?!your|my-project|project)[a-z0-9-]{1,63}\.(?:appspot\.com|firebasestorage\.app)["']`,
+        String.raw`(?:["']|\b)storageBucket["']?\s*:\s*["'\x60](?!your|my-project|project)[a-z0-9-]{1,63}\.appspot\.com["'\x60]`,
+        ".appspot.com",
+      ),
+      inBundle(
+        String.raw`(?:["']|\b)storageBucket["']?\s*:\s*["'\x60](?!your|my-project|project)[a-z0-9-]{1,63}\.firebasestorage\.app["'\x60]`,
+        ".firebasestorage.app",
       ),
     ],
     versionPattern: /\/firebasejs\/(\d+\.\d+\.\d+)\/firebase-/i,

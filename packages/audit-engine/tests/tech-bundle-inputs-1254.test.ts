@@ -97,6 +97,50 @@ describe("buildTechInputs", () => {
   });
 });
 
+describe("floors, extras and top-up", () => {
+  const big = { bundleBytes: 64 * 1024, pageBytes: 512 * 1024, auditBytes: 1024 * 1024 };
+
+  test("30 scripts of 100 KB each all keep a body", () => {
+    const scripts = Array.from({ length: 30 }, (_, i) => ({
+      url: `https://example.com/s${i}.js`,
+      content: body(100 * 1024, "abcdefghij"[i % 10]!),
+      sourcePages: ["https://example.com/"],
+    }));
+    const [home] = buildTechInputs([page("https://example.com/")], scripts, big);
+    const withBody = (home?.scripts ?? []).filter((s) => s.content);
+    expect(withBody).toHaveLength(30);
+    // the page cap (512 KB) bounds the total; every script got its 16 KB floor first
+    const total = withBody.reduce((n, s) => n + (s.content?.length ?? 0), 0);
+    expect(total).toBeLessThanOrEqual(512 * 1024);
+    expect(withBody.every((s) => (s.content?.length ?? 0) >= 16 * 1024)).toBe(true);
+  });
+
+  test("a vendor literal in the middle and the tail of a big bundle is sent", () => {
+    const mid = `f("https://abcdefghijklmnopqrst.supabase.co","k")`;
+    const tail = `{authDomain:"demo-app.firebaseapp.com"}`;
+    const content = body(150_000) + mid + body(150_000) + tail;
+    const [home] = buildTechInputs(
+      [page("https://example.com/")],
+      [{ url: "https://example.com/a.js", content, sourcePages: ["https://example.com/"] }],
+      big,
+    );
+    const sent = home?.scripts?.find((s) => s.content)?.content ?? "";
+    expect(sent.length).toBeLessThanOrEqual(64 * 1024);
+    expect(sent).toContain(mid);
+    expect(sent).toContain(tail);
+  });
+
+  test("a bundle cap above 64 KB is honoured", () => {
+    const content = body(100_000, "a") + "MARK" + body(1000, "b");
+    const [home] = buildTechInputs(
+      [page("https://example.com/")],
+      [{ url: "https://example.com/a.js", content, sourcePages: ["https://example.com/"] }],
+      { bundleBytes: 262_144, pageBytes: 512 * 1024, auditBytes: 1024 * 1024 },
+    );
+    expect(home?.scripts?.find((s) => s.content)?.content).toContain("MARK");
+  });
+});
+
 describe("end to end through the shared builder", () => {
   test("a Supabase client only in a bundle is reported", () => {
     const ref = "abcdefghijklmnopqrst";

@@ -53,8 +53,40 @@ describe("bundle bodies reach script-content detection", () => {
   });
 });
 
+const KEY = ["eyJ", "x".repeat(40)].join("");
+
+describe("mangled and indirect shapes", () => {
+  const cases: Record<string, string> = {
+    "a mangled call with a key literal": `uT=tg("https://${REF}.supabase.co","${KEY}")`,
+    "a trailing slash": `a=f("https://${REF}.supabase.co/","${KEY}")`,
+    "a template literal URL": "a=f(`https://" + REF + ".supabase.co`,`" + KEY + "`)",
+    "a publishable key": `a=f("https://${REF}.supabase.co","sb_publishable_${"y".repeat(20)}")`,
+    "a URL and key held in one declaration": `const u="https://${REF}.supabase.co",k="${KEY}";`,
+    "a supabaseUrl property": `{supabaseUrl:"https://${REF}.supabase.co",x:1}`,
+    "a quoted firebase key": `{"authDomain":"demo-app.firebaseapp.com"}`,
+    "a quoted clerk key": `{"publishableKey":"pk_test_${"a".repeat(30)}"}`, // pragma: allowlist secret
+    "a clerk env fallback": `publishableKey:e.publishableKey||"pk_live_${"a".repeat(30)}"`, // pragma: allowlist secret
+  };
+  const vendor = (name: string) =>
+    name.includes("firebase") ? "firebase" : name.includes("clerk") ? "clerk" : "supabase";
+  for (const [name, bundle] of Object.entries(cases)) {
+    test(name, () => {
+      expect(detect([{ url: "https://example.com/a.js", content: bundle }])).toContain(
+        vendor(name),
+      );
+    });
+  }
+});
+
 describe("near misses do not match", () => {
   const cases: Record<string, string> = {
+    "a URL with a path next to a key": `f("https://${REF}.supabase.co/rest/v1/","${KEY}")`,
+    "a URL not followed by a key literal": `f("https://${REF}.supabase.co",someVar)`,
+    "the URL and key pair inside a docs string": `log('call f("https://${REF}.supabase.co","${KEY}")')`,
+    "the URL and key pair in a comment": `// f("https://${REF}.supabase.co","${KEY}")`,
+    "a sentence holding the URL": `x="see https://${REF}.supabase.co, then ${KEY}"`,
+    "a placeholder ref with a key": `f("https://your${REF.slice(0, 16)}.supabase.co","${KEY}")`,
+    "a look-alike host with a key": `f("https://${REF}.supabase.co.example.invalid","${KEY}")`,
     "a commented-out call": `// const sb = createClient("https://${REF}.supabase.co", key)\nvar a=1;`,
     "a block comment": `/* createClient("https://${REF}.supabase.co", key) */var a=1;`,
     "a docs string holding the call": `console.log('Usage: createClient("https://${REF}.supabase.co", key)')`,
@@ -109,6 +141,9 @@ describe("bounds", () => {
       `/*`.repeat(200_000),
       `authDomain:"`.repeat(40_000),
       `(`.repeat(300_000),
+      `"https://${REF}.supabase.co" , `.repeat(20_000),
+      `publishableKey:a||`.repeat(30_000),
+      `"authDomain":"a`.repeat(30_000),
     ].join("\n");
     expect(hostile.length).toBeGreaterThan(1_000_000);
     const started = performance.now();
