@@ -1,4 +1,14 @@
-export type { WafProvider, WafDetectionResult, WafChallengeResult } from "./types";
+export type {
+  HeaderBag,
+  WafBlockProvider,
+  WafBlockResult,
+  WafChallengeDetail,
+  WafChallengeResult,
+  WafDetectionResult,
+  WafProvider,
+  WafResponse,
+  WafVerdict,
+} from "./types";
 export {
   cookieNamesFromHeaders,
   detectWaf,
@@ -7,10 +17,12 @@ export {
   detectWafFromHeaders,
   isLikelyWafBlock,
 } from "./detect";
-export { detectWafChallengePage } from "./challenge";
+export { detectWafChallengePage, inspectWafChallengePage } from "./challenge";
+export { classifyWafResponse } from "./classify";
 export {
   getWafProviderName,
   getWafProviderIcon,
+  WAF_BLOCK_STATUS_CODES,
   WAF_CHALLENGE_STATUS_CODES,
   CHALLENGE_MARKUP_PATTERNS,
   CHALLENGE_TEXT_PATTERNS,

@@ -513,6 +513,7 @@ export type FeedbackSource = (typeof FEEDBACK_SOURCES)[number];
 export const TECH_DETECT_HEADER_NAMES = [
   "cdn-pullzone",
   "cf-cache-status",
+  "cf-mitigated",
   "cf-ray",
   "fly-request-id",
   "server",
@@ -545,6 +546,7 @@ export const TECH_DETECT_HEADER_NAMES = [
   "x-nf-request-id",
   "x-powered-by",
   "x-provided-by",
+  "x-px-blocked",
   "x-px-gt",
   "x-px-pp",
   "x-render-origin-server",
@@ -556,6 +558,7 @@ export const TECH_DETECT_HEADER_NAMES = [
   "x-varnish",
   "x-vercel-cache",
   "x-vercel-id",
+  "x-vercel-mitigated",
 ] as const;
 /** Longest value kept per header in TECH_DETECT_HEADER_NAMES. */
 export const TECH_DETECT_HEADER_MAX_CHARS = 512;
@@ -578,7 +581,6 @@ export const TECH_DETECT_PRESENCE_HEADERS: ReadonlySet<string> = new Set([
   "x-amz-cf-id",
   "x-amz-cf-pop",
   "x-amz-request-id",
-  "x-amzn-waf-action",
   "x-datadome",
   "x-dd-b",
   "x-ec-debug",
@@ -590,6 +592,7 @@ export const TECH_DETECT_PRESENCE_HEADERS: ReadonlySet<string> = new Set([
   "x-kpsdk-ct",
   "x-kpsdk-r",
   "x-nf-request-id",
+  "x-px-blocked",
   "x-px-gt",
   "x-px-pp",
   "x-render-origin-server",
