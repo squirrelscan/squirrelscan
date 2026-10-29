@@ -1253,6 +1253,9 @@ export type TechnologyCategory =
   | "font"
   | "video"
   | "widget"
+  | "cache"
+  | "seo"
+  | "images"
   | "other";
 
 /** A single detected technology, serializable for the report + cloud transport. */

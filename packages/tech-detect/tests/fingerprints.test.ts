@@ -18,6 +18,9 @@ const VALID_CATEGORIES = new Set([
   "font",
   "video",
   "widget",
+  "cache",
+  "seo",
+  "images",
   "other",
 ]);
 
