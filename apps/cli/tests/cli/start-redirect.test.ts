@@ -151,4 +151,40 @@ describe("resolveAuditStart", () => {
       "bit.ly/x redirects to https://example.com/pricing. Audit example.com instead? [Y/n] "
     );
   });
+
+  test("the re-run command uses the URL the user typed, and nothing printed carries a secret", async () => {
+    const typed = "https://bit.ly/x?campaign=mine";
+    const resolution: SeedRedirectResolution = {
+      kind: "cross-domain",
+      originalUrl: typed,
+      finalUrl: "https://app.example.com/login",
+      chain: [
+        { url: "https://bit.ly/x", status: 301 },
+        { url: "https://app.example.com/login", status: 200 },
+      ],
+    };
+    const result = await resolveAuditStart({
+      url: typed,
+      follow: false,
+      interactive: false,
+      resolve: async () => resolution,
+    });
+    expect(result.stop?.rerunCommand).toBe(
+      "squirrel audit 'https://bit.ly/x?campaign=mine' --follow-redirect"
+    );
+    expect(result.stop?.originalUrl).toBe("https://bit.ly/x");
+    const followed = await resolveAuditStart({
+      url: typed,
+      follow: true,
+      interactive: false,
+      resolve: async () => resolution,
+    });
+    expect(followed.record?.originalUrl).toBe("https://bit.ly/x");
+    expect(
+      startRedirectPrompt({
+        ...resolution,
+        originalUrl: "https://u:pw@bit.ly/x?t=SECRET",
+      })
+    ).not.toMatch(/SECRET|pw/);
+  });
 });

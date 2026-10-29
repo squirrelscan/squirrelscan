@@ -328,7 +328,7 @@ follow_redirect = true
 }
 ```
 
-The same facts come out in every [output format](#output-formats). `reason` is `cross-domain`, `loop`, `too-many` or `refused`. `rerunCommand` is `null` for a loop or a refused hop, where there is nothing to run again.
+Only the scheme, host, port and path of each URL are printed or recorded: userinfo, query and fragment are dropped, because a redirect's query often carries a token. `rerunCommand` uses the start URL exactly as you typed it. The same facts come out in every [output format](#output-formats). `reason` is `cross-domain`, `loop`, `too-many` or `refused`. `rerunCommand` is `null` for a loop or a refused hop, where there is nothing to run again.
 
 When a cross-domain redirect is followed, the report records where the audit began. The JSON report has `meta.originalUrl` and `meta.redirectChain` (every URL requested, each with the status it answered; the last is the destination), the text, markdown, LLM, XML and HTML reports say so in their scan notes, and the project, the cloud credit estimate and the crawl scope are the destination's. A same-site redirect leaves no record.
 

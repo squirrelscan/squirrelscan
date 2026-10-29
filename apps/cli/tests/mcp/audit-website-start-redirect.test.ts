@@ -45,11 +45,15 @@ const destination = Bun.serve({
 const shortener = Bun.serve({
   port: 0,
   hostname: "127.0.0.1",
-  fetch: () =>
-    new Response(null, {
+  fetch(req) {
+    const { pathname } = new URL(req.url);
+    // A Location that carries a token in its query.
+    const query = pathname === "/t" ? "?token=SECRET#frag" : "";
+    return new Response(null, {
       status: 301,
-      headers: { location: `${destination.url.origin}/` },
-    }),
+      headers: { location: `${destination.url.origin}/${query}` },
+    });
+  },
 });
 
 beforeAll(() => {
@@ -148,5 +152,26 @@ describe("audit_website start URL redirects", () => {
       maxPages: 2,
     });
     expect(text).toContain("<start-redirect");
+  }, 90_000);
+
+  test("a token in the redirect's query reaches neither the confirmation nor the report", async () => {
+    const url = `http://localhost:${shortener.port}/t`;
+    const text = await call({
+      url,
+      offline: true,
+      level: "quick",
+      maxPages: 2,
+    });
+    expect(text).not.toContain("SECRET");
+    expect(JSON.parse(text).finalUrl).toBe(`${destination.url.origin}/`);
+    const report = await call({
+      url,
+      offline: true,
+      level: "quick",
+      maxPages: 2,
+      followRedirect: true,
+    });
+    expect(report).toContain("<start-redirect");
+    expect(report).not.toContain("SECRET");
   }, 90_000);
 });

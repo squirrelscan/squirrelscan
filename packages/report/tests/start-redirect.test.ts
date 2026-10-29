@@ -150,3 +150,55 @@ describe("renderRedirectedOutcome", () => {
     }
   });
 });
+
+describe("secrets and markup in site-chosen URLs", () => {
+  const hostile = report({
+    originalUrl: "https://u:pw@bit.ly/x?token=SECRET#frag",
+    redirectChain: [
+      { url: "https://u:pw@bit.ly/x?token=SECRET#frag", status: 301 },
+      { url: "https://app.example.com/a`b[x](https://evil.test/)<i>?q=`[y](https://evil.test/)", status: 200 },
+    ],
+  });
+
+  for (const { name, render } of RENDERERS) {
+    test(`${name} carries no userinfo, query or fragment`, () => {
+      const out = render(hostile);
+      expect(out).not.toContain("SECRET");
+      expect(out).not.toContain("pw@");
+      expect(out).not.toContain("#frag");
+      expect(out).not.toContain("q=");
+    });
+  }
+
+  test("a backtick or link syntax in the path cannot break out of markdown or the llm output", () => {
+    const md = renderMarkdown(hostile);
+    expect(md).not.toContain("[x](https://evil.test/)");
+    expect(md).not.toContain("a`b");
+    const llm = renderLlm(hostile);
+    expect(llm).not.toContain("<i>");
+    expect(XMLValidator.validate(llm)).toBe(true);
+  });
+
+  const outcome: SeedRedirectedOutcome = {
+    status: "redirected",
+    reason: "cross-domain",
+    originalUrl: "https://u:pw@bit.ly/x?token=SECRET",
+    finalUrl: "https://app.example.com/a`b[x](https://evil.test/)?token=SECRET",
+    redirectChain: [{ url: "https://app.example.com/a`b[x](https://evil.test/)?token=SECRET", status: 200 }],
+    rerunCommand: "squirrel audit https://bit.ly/x --follow-redirect",
+    message: "https://u:pw@bit.ly/x?token=SECRET redirects to https://app.example.com/a`b, a different site.",
+  };
+
+  for (const format of ["console", "text", "markdown", "llm", "xml", "json", "html"] as const) {
+    test(`the outcome in ${format} is redacted and inert`, () => {
+      const out = renderRedirectedOutcome(outcome, format);
+      expect(out).not.toContain("SECRET");
+      expect(out).not.toContain("pw@");
+      expect(out).not.toContain("[x](https://evil.test/)");
+      if (format === "html") {
+        expect(out).not.toContain("<script");
+        expect(out.startsWith("<!doctype html>")).toBe(true);
+      }
+    });
+  }
+});

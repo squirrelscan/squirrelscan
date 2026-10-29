@@ -11,6 +11,7 @@
 // routinely, and an off-site redirect may land on somebody else's site.
 
 import {
+  redactUrl,
   redirectedOutcome,
   type SeedRedirectRecord,
   type SeedRedirectResolution,
@@ -55,7 +56,7 @@ export function decideStartRedirect(
         action: "audit",
         url: resolution.finalUrl,
         record: {
-          originalUrl: resolution.originalUrl,
+          originalUrl: redactUrl(resolution.originalUrl),
           redirectChain: resolution.chain,
         },
       };
@@ -73,7 +74,7 @@ export function decideStartRedirect(
 export function startRedirectPrompt(
   resolution: SeedRedirectResolution
 ): string {
-  const shown = resolution.originalUrl.replace(/^https?:\/\//i, "");
+  const shown = redactUrl(resolution.originalUrl).replace(/^https?:\/\//i, "");
   let host = resolution.finalUrl;
   try {
     host = new URL(resolution.finalUrl).host;
@@ -134,7 +135,7 @@ export async function resolveAuditStart(
     return {
       url: resolution.finalUrl,
       record: {
-        originalUrl: resolution.originalUrl,
+        originalUrl: redactUrl(resolution.originalUrl),
         redirectChain: resolution.chain,
       },
       resolution,

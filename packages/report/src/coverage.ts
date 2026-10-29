@@ -12,7 +12,7 @@ import {
   type OffSiteRedirectFollowUp,
 } from "@squirrelscan/core-contracts/offsite-redirect";
 
-import type { SeedRedirectHop } from "@squirrelscan/core-contracts/seed-redirect";
+import { redactUrl, type SeedRedirectHop } from "@squirrelscan/core-contracts/seed-redirect";
 
 import type { AuditReport, CheckItem } from "./types";
 import type { GroupedCheck } from "./grouping";
@@ -381,8 +381,17 @@ export interface FollowedStartRedirect {
   note: string;
 }
 
+/**
+ * A site-chosen URL for display: no userinfo, query or fragment (a token or a
+ * credential must not reach a published report), and the characters markdown
+ * and HTML read as syntax percent-encoded, so the URL is plain text wherever it
+ * lands.
+ */
 export function printableReportUrl(value: unknown): string {
-  return (typeof value === "string" ? canonicalizeReportUrl(value) : null) ?? UNPRINTABLE;
+  const canonical = typeof value === "string" ? canonicalizeReportUrl(value) : null;
+  if (canonical === null) return UNPRINTABLE;
+  const redacted = redactUrl(canonical);
+  return redacted.replace(/[`[\]()<>"'\\{}|^]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
 export function safeChain(chain: unknown): SeedRedirectHop[] {

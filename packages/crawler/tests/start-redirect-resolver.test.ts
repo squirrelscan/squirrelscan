@@ -56,10 +56,11 @@ describe("resolveStartRedirect", () => {
     const result = await resolveStartRedirect("https://bit.ly/abc", { ...OPTIONS, transport });
     expect(result.kind).toBe("cross-domain");
     expect(result.originalUrl).toBe("https://bit.ly/abc");
-    expect(result.finalUrl).toBe("https://example.org/pricing?ref=x");
+    // The query is the site's, and is not part of what is reported.
+    expect(result.finalUrl).toBe("https://example.org/pricing");
     expect(result.chain).toEqual([
       { url: "https://bit.ly/abc", status: 301 },
-      { url: "https://example.org/pricing?ref=x", status: 200 },
+      { url: "https://example.org/pricing", status: 200 },
     ]);
   });
 
@@ -161,5 +162,41 @@ describe("resolveStartRedirect", () => {
     expect(result.kind).toBe("cross-domain");
     expect(result.finalUrl).toBe("https://gone-host.com/");
     expect(result.chain).toEqual([{ url: "https://shortener.com/x", status: 301 }]);
+  });
+
+  test("a detour through another domain and back is cross-domain, not same-site", async () => {
+    const { transport } = table({
+      "https://example.com/": { status: 302, location: "https://evil.org/hop" },
+      "https://evil.org/hop": { status: 302, location: "https://www.example.com/" },
+      "https://www.example.com/": { status: 200 },
+    });
+    const result = await resolveStartRedirect("https://example.com/", { ...OPTIONS, transport });
+    expect(result.kind).toBe("cross-domain");
+    expect(result.finalUrl).toBe("https://www.example.com/");
+    expect(result.chain.map((hop) => hop.url)).toContain("https://evil.org/hop");
+  });
+
+  test("userinfo, query and fragment never reach the result, but the requests carry them", async () => {
+    const { transport, asked } = table({
+      "https://bit.ly/x": { status: 301, location: "https://u:pw@app.example.com/login?token=SECRET#frag" },
+      "https://u:pw@app.example.com/login?token=SECRET#frag": { status: 200 },
+    });
+    const result = await resolveStartRedirect("https://bit.ly/x", { ...OPTIONS, transport });
+    expect(asked[1]).toContain("token=SECRET");
+    const text = JSON.stringify(result);
+    expect(text).not.toContain("SECRET");
+    expect(text).not.toContain("pw");
+    expect(text).not.toContain("frag");
+    expect(result.finalUrl).toBe("https://app.example.com/login");
+  });
+
+  test("a redirect to a non-http scheme is refused and named by scheme only", async () => {
+    const { transport } = table({
+      "https://shortener.com/x": { status: 302, location: "javascript:alert(document.cookie)" },
+    });
+    const result = await resolveStartRedirect("https://shortener.com/x", { ...OPTIONS, transport });
+    expect(result.kind).toBe("refused");
+    expect(result.refusal).toBe("refused scheme javascript:");
+    expect(JSON.stringify(result)).not.toContain("alert");
   });
 });

@@ -105,21 +105,27 @@ export interface SeedRedirectedOutcome {
  * when the run can go on (`none` and `same-site`, and a `cross-domain` the
  * caller has consent for: it decides that, not this).
  *
- * `rerunCommand` is the CLI command that audits the same start URL with the
- * follow consent given (`cross-domain`), or the destination directly where the
- * chain could not be followed to its end (`too-many`); null for a loop or a
- * refused hop, where there is nothing to re-run.
+ * `rerunCommand` is the CLI command that audits the start URL as the user
+ * typed it with the follow consent given (`cross-domain`), or the redacted
+ * destination where the chain could not be followed to its end (`too-many`);
+ * null for a loop or a refused hop, where there is nothing to re-run.
  */
 export function redirectedOutcome(
   resolution: SeedRedirectResolution,
 ): SeedRedirectedOutcome | null {
   if (resolution.kind === "none" || resolution.kind === "same-site") return null;
-  const { originalUrl, finalUrl, chain, kind } = resolution;
+  const { kind } = resolution;
+  // Every URL that is printed or recorded is redacted: a Location header can
+  // carry a token in its query or credentials in its userinfo.
+  const originalUrl = redactUrl(resolution.originalUrl);
+  const finalUrl = redactUrl(resolution.finalUrl);
+  const chain = resolution.chain.map((hop) => ({ url: redactUrl(hop.url), status: hop.status }));
   let rerunCommand: string | null = null;
   let message: string;
   switch (kind) {
     case "cross-domain":
-      rerunCommand = `squirrel audit ${shellWord(originalUrl)} --follow-redirect`;
+      // The URL the user typed, not the destination: nothing of theirs is lost.
+      rerunCommand = `squirrel audit ${shellWord(resolution.originalUrl)} --follow-redirect`;
       message = `${originalUrl} redirects to ${finalUrl}, a different site, so nothing was audited.`;
       break;
     case "loop":
@@ -129,8 +135,12 @@ export function redirectedOutcome(
       rerunCommand = `squirrel audit ${shellWord(finalUrl)}`;
       message = `${originalUrl} redirects more than ${MAX_SEED_REDIRECT_HOPS} times, so nothing was audited. The chain was heading to ${finalUrl}.`;
       break;
-    default:
-      message = `${originalUrl} redirects to ${finalUrl}, which was not requested (${resolution.refusal ?? "refused"}), so nothing was audited.`;
+    default: {
+      const scheme = /^refused scheme ([a-z][a-z0-9+.-]*:)$/i.exec(resolution.refusal ?? "")?.[1];
+      message = scheme
+        ? `${originalUrl} redirects to a ${scheme} URL, which was refused and never requested, so nothing was audited. The last URL requested was ${finalUrl}.`
+        : `${originalUrl} redirects to ${finalUrl}, which was not requested (${resolution.refusal ?? "refused"}), so nothing was audited.`;
+    }
   }
   return {
     status: "redirected",
@@ -141,4 +151,27 @@ export function redirectedOutcome(
     rerunCommand,
     message,
   };
+}
+
+/**
+ * `value` without userinfo, query and fragment: scheme, host, port and path.
+ * A redirect's query often carries a token or a return address, and userinfo is
+ * a credential; neither belongs in a report that may be published, a prompt, a
+ * log or an agent's context. Anything that is not an http(s) URL becomes a
+ * fixed placeholder.
+ */
+export function redactUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      url.username = "";
+      url.password = "";
+      url.search = "";
+      url.hash = "";
+      return url.href;
+    }
+  } catch {
+    // Falls through to the placeholder.
+  }
+  return "(unprintable URL)";
 }

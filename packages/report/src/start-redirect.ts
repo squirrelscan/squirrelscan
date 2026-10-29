@@ -93,8 +93,23 @@ export function renderRedirectedOutcome(
       ];
       return lines.join("\n");
     }
-    case "markdown":
     case "html": {
+      const e = escapeXml;
+      return [
+        "<!doctype html>",
+        '<html lang="en"><head><meta charset="utf-8"><title>Not audited: the start URL redirects</title></head><body>',
+        "<h1>Not audited: the start URL redirects</h1>",
+        `<p>${e(outcome.message)}</p>`,
+        "<ul>",
+        `<li>Original URL: <code>${e(outcome.originalUrl)}</code></li>`,
+        `<li>Final URL: <code>${e(outcome.finalUrl)}</code></li>`,
+        ...chain.map((hop) => `<li>${hop.status || "?"} <code>${e(hop.url)}</code></li>`),
+        "</ul>",
+        ...(outcome.rerunCommand ? [`<p>Re-run: <code>${e(outcome.rerunCommand)}</code></p>`] : []),
+        "</body></html>",
+      ].join("\n");
+    }
+    case "markdown": {
       const lines = [
         "# Not audited: the start URL redirects",
         "",
@@ -105,7 +120,8 @@ export function renderRedirectedOutcome(
         ...(chain.length > 0
           ? ["- Chain:", ...chain.map((hop) => `  - ${hop.status || "?"} \`${hop.url}\``)]
           : []),
-        ...(outcome.rerunCommand ? ["", `Re-run: \`${outcome.rerunCommand}\``] : []),
+        // The command carries the URL the user typed, which may hold a backtick.
+        ...(outcome.rerunCommand ? ["", `Re-run: ${escapeMarkdown(outcome.rerunCommand)}`] : []),
       ];
       return lines.join("\n");
     }

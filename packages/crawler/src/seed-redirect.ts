@@ -9,6 +9,7 @@ import {
   type SeedRedirectHop,
   type SeedRedirectResolution,
   MAX_SEED_REDIRECT_HOPS,
+  redactUrl,
 } from "@squirrelscan/core-contracts/seed-redirect";
 import { isNonPublicUrl } from "@squirrelscan/utils/non-public-host";
 import {
@@ -108,6 +109,9 @@ export async function resolveStartRedirect(
   const chain: SeedRedirectHop[] = [];
   // Redirecting responses so far: the chain also holds the destination's answer.
   let redirects = 0;
+  // Any hop, not only the last, left the start URL's site (a detour through
+  // another domain and back is still another site's redirect).
+  let crossed = false;
   const visited = new Set<string>([visitKey(start)]);
   let current = start;
 
@@ -124,14 +128,14 @@ export async function resolveStartRedirect(
       (kind === "refused" && redirects === 0 ? "none" : kind) ??
       (redirects === 0
         ? "none"
-        : finalParsed && isSameSite(start, finalParsed)
+        : !crossed && finalParsed && isSameSite(start, finalParsed)
           ? "same-site"
           : "cross-domain");
     return {
       kind: resolved,
       originalUrl: url,
-      finalUrl,
-      chain,
+      finalUrl: redactUrl(finalUrl),
+      chain: chain.map((hop) => ({ url: redactUrl(hop.url), status: hop.status })),
       ...(refusal ? { refusal } : {}),
     };
   };
@@ -175,6 +179,7 @@ export async function resolveStartRedirect(
     if (next.protocol !== "http:" && next.protocol !== "https:") {
       return done(current, "refused", `refused scheme ${next.protocol}`);
     }
+    if (!isSameSite(start, next)) crossed = true;
     if (visited.has(visitKey(next))) return done(next, "loop");
     if (redirects > maxHops) return done(next, "too-many");
     visited.add(visitKey(next));
