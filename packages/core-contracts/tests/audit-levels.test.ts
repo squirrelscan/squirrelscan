@@ -16,6 +16,7 @@ import {
   effectiveAuditSettings,
   legacyCloudDepthSettings,
   levelOfSettings,
+  offlineAuditSettings,
   LEGACY_CLOUD_DEPTH_PROFILES,
   parseAuditLevel,
   parseLegacyCloudDepth,
@@ -315,5 +316,39 @@ describe("EXTERNAL_LINKS_DEFAULT_ON", () => {
     }
     expect(AUDIT_LEVEL_PRESETS.surface.externalLinks).toBe(true);
     expect(AUDIT_LEVEL_PRESETS.full.externalLinks).toBe(true);
+  });
+});
+
+// #1275: an --offline run records the settings that ran, not the level's cloud defaults.
+describe("offlineAuditSettings", () => {
+  test("turns off cloud checks, rendering and external links, and says offline", () => {
+    const resolved = offlineAuditSettings(resolveAuditSettings("surface", { pages: 30, probe: "passive" }));
+    expect(resolved.settings).toEqual({
+      pages: 30,
+      crawlStrategy: "sampled",
+      cloudChecks: false,
+      render: "off",
+      externalLinks: false,
+      probe: "passive",
+    });
+    expect(resolved.offline).toBe(true);
+    // The level asked for is still named.
+    expect(resolved.basedOn).toBe("surface");
+    expect(resolved.level).toBe("custom");
+    expect(resolved.changes).toEqual(["pages", "probe"]);
+  });
+
+  test("a cloud run keeps the level's settings and has no offline mark", () => {
+    const resolved = resolveAuditSettings("surface", { pages: 30 });
+    expect(resolved.settings.cloudChecks).toBe(true);
+    expect(resolved.settings.render).toBe("all");
+    expect(resolved.settings.externalLinks).toBe(true);
+    expect("offline" in resolved).toBe(false);
+  });
+
+  test("the mark survives a stored snapshot read back, and a forged one is not trusted", () => {
+    const offline = offlineAuditSettings(resolveAuditSettings("quick"));
+    expect(parseResolvedAuditSettings(JSON.parse(JSON.stringify(offline)))?.offline).toBe(true);
+    expect(parseResolvedAuditSettings({ ...offline, offline: "yes" })?.offline).toBeUndefined();
   });
 });

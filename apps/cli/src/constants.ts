@@ -67,6 +67,13 @@ export const TELEMETRY_TIMEOUT_MS = _TEL.timeoutMs;
  */
 export const EXIT_CODE_WAF_BLOCKED = 3;
 
+/**
+ * The start URL could not be reached at all (DNS failure, connect timeout,
+ * connection reset or refused, TLS error), so nothing was audited (#1269).
+ * Distinct from 1, which is a crash or any other operational error.
+ */
+export const EXIT_CODE_UNREACHABLE = 5;
+
 export { EXIT_CODE_REDIRECTED } from "@squirrelscan/core-contracts/seed-redirect";
 
 export const DASHBOARD_URL = "https://app.squirrelscan.com";

@@ -69,10 +69,12 @@ import {
 import { preflightRuleOptions } from "@/audit/rule-options-preflight";
 import { stopInterruptedCrawls } from "@/audit/stop-interrupted-crawl";
 import { emitRedirectedOutcome, resolveAuditStart } from "@/cli/start-redirect";
+import { emitUnreachableOutcome, unreachableOutcome } from "@/cli/unreachable";
 import { findConfigFile, getGlobalConfigPath, loadConfig } from "@/config";
 import {
   DASHBOARD_URL,
   EXIT_CODE_REDIRECTED,
+  EXIT_CODE_UNREACHABLE,
   EXIT_CODE_WAF_BLOCKED,
   MAX_PAGES_CAP,
   MAX_CRAWL_CONCURRENCY,
@@ -2701,6 +2703,23 @@ export const audit = defineCommand({
           phaseTimingsMs: phaseTimingsFromError(result.error.details),
         });
         process.exitCode = 1;
+        // #1269: an unreachable start URL is a report, not a bare failure: the
+        // format asked for says so, and the exit code is its own.
+        if (result.error.code === ErrorCodes.UNREACHABLE) {
+          const detail = result.error.details as
+            | { url?: unknown; reason?: unknown }
+            | undefined;
+          emitUnreachableOutcome(
+            unreachableOutcome(
+              typeof detail?.url === "string" ? detail.url : options.url,
+              typeof detail?.reason === "string"
+                ? detail.reason
+                : result.error.message
+            ),
+            { format: args.format, output: args.output }
+          );
+          process.exitCode = EXIT_CODE_UNREACHABLE;
+        }
         return;
       }
 
@@ -3278,8 +3297,10 @@ export const audit = defineCommand({
         process.exitCode = 1;
         // #1253: the audited page was a WAF or bot-manager challenge or block
         // page. A distinct code, so a batch or CI job can tell "the site's
-        // perimeter refused us" from a down site.
-        if (report.status === "blocked" && report.wafBlocked?.seed) {
+        // perimeter refused us" from a down site. #1269: every blocked report
+        // gets it, whether or not a vendor was identified (a bare 403 or 429
+        // "Request blocked by server" has no wafBlocked record).
+        if (report.status === "blocked") {
           process.exitCode = EXIT_CODE_WAF_BLOCKED;
         }
       }

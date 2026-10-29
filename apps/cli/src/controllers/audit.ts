@@ -27,6 +27,7 @@ import {
   unfetchedFrontierCount,
 } from "@squirrelscan/audit-engine";
 import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
+import { offlineAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
 import { computeCost } from "@squirrelscan/core-contracts/credits";
 import { PLANS } from "@squirrelscan/core-contracts/plans";
 import {
@@ -928,7 +929,8 @@ export async function runAudit(
       return err(
         commandError(
           ErrorCodes.UNREACHABLE,
-          `Cannot reach ${url}: ${reachability.error}`
+          `Cannot reach ${url}: ${reachability.error}`,
+          { url, reason: reachability.error ?? "unknown error" }
         )
       );
     }
@@ -2146,7 +2148,12 @@ export async function runAudit(
       // rather than a silence an agent has to interpret.
       // The level this run used and what it resolved to, so the report says
       // what ran even after a level's definition changes. REPORT-ONLY.
-      if (options.auditLevel) report.auditLevel = options.auditLevel;
+      // An --offline run records what ran, not the level's cloud defaults (#1275).
+      if (options.auditLevel) {
+        report.auditLevel = options.offline
+          ? offlineAuditSettings(options.auditLevel)
+          : options.auditLevel;
+      }
 
       report.rulesCache = {
         pagesReplayed: ruleResults.ruleCache.replayedPages,

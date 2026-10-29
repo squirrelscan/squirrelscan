@@ -640,10 +640,27 @@ Change the window, or turn it off, with
 | Code | Meaning |
 |------|---------|
 | `0` | Success |
-| `1` | Error (invalid URL, crawl failed, down/blocked site, etc.) |
+| `1` | Error (invalid URL, crawl failed, a site that answered with an error, etc.) |
 | `2` | A [`--fail-on`](#gate-ci-on-audit-results) threshold tripped (CI gate) |
-| `3` | A WAF or bot manager answered the audited page with a challenge or block page, so nothing was audited (see [blocked by a WAF or bot manager](/guides/failed-audits#blocked-by-waf)) |
+| `3` | The audited page was blocked, so nothing was audited: a WAF or bot manager challenge or block page, or a bare 403 or 429 from the server (see [blocked by a WAF or bot manager](/guides/failed-audits#blocked-by-waf)). Every report with `status: "blocked"` exits `3` |
 | `4` | The start URL redirected to another site and the run was not told to follow it (or the chain looped, passed 5 hops, or reached a refused hop), so nothing was audited. See [Start URLs that redirect](#start-urls-that-redirect) |
+| `5` | The start URL could not be reached (DNS failure, connect timeout, connection reset or refused, a TLS error), so nothing was audited. With `-f json`, `-f xml` or `-f llm` the run still writes a report with `status: "unreachable"` (see [Unreachable start URLs](#unreachable-start-urls)) |
+
+### Unreachable start URLs
+
+When the start URL cannot be reached, the audit stops before it crawls and exits `5`. The format you asked for still gets a report, to `--output` or stdout, so a batch job can tell a site that is down from a crash without reading stderr:
+
+```json
+{
+  "status": "unreachable",
+  "url": "https://example.com/",
+  "statusReasonCode": "dns",
+  "statusReason": "DNS lookup failed - domain may not exist",
+  "message": "Cannot reach https://example.com/: DNS lookup failed - domain may not exist. No audit ran and there is no score."
+}
+```
+
+`statusReasonCode` is one of `dns`, `tls`, `connection` (refused or reset), `timeout` or `unknown`, the same codes a [failed audit](/guides/failed-audits) uses. `statusReason` is the probe's own error text. The URL is printed without its query, fragment and credentials. `console` and `text` formats print the same facts as text, and a `✗ Cannot reach ...` line goes to stderr in every format.
 
 ## Configuration
 

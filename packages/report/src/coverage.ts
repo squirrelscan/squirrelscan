@@ -19,6 +19,8 @@ import type { GroupedCheck } from "./grouping";
 import { checkAffectedPages } from "./affected-pages";
 import { reportFailureReasonCode } from "./failure-notice";
 
+const OFFLINE_NOTE = " Offline: cloud checks, rendering and external link checks did not run.";
+
 /**
  * One-line audit level summary, e.g.
  *   "Audit level: Surface."
@@ -32,14 +34,15 @@ export function auditLevelLine(report: AuditReport): string | null {
   // snapshot with an unknown level is left out rather than throwing or echoing it.
   const level = Object.hasOwn(AUDIT_LEVEL_COPY, a.level) ? AUDIT_LEVEL_COPY[a.level] : null;
   if (!level) return null;
-  if (a.level !== "custom") return `Audit level: ${level.label}.`;
+  const offline = a.offline === true ? OFFLINE_NOTE : "";
+  if (a.level !== "custom") return `Audit level: ${level.label}.${offline}`;
   if (!Object.hasOwn(AUDIT_LEVEL_COPY, a.basedOn)) return null;
   const changed = a.changes
     .filter((key) => Object.hasOwn(AUDIT_SETTING_COPY, key))
     .map((key) => AUDIT_SETTING_COPY[key].label)
     .join(", ");
   const basedOn = AUDIT_LEVEL_COPY[a.basedOn].label;
-  return `Audit level: ${AUDIT_LEVEL_COPY.custom.label}, based on ${basedOn}${changed ? ` (changed: ${changed})` : ""}.`;
+  return `Audit level: ${AUDIT_LEVEL_COPY.custom.label}, based on ${basedOn}${changed ? ` (changed: ${changed})` : ""}.${offline}`;
 }
 
 /**
