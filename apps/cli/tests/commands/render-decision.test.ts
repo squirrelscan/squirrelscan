@@ -486,6 +486,25 @@ describe("consentEstimateLine (#191 up-front cost)", () => {
   });
 });
 
+describe("validateAuditFlags: ephemeral (#3649)", () => {
+  test("refuses --ephemeral with --publish", () => {
+    expect(validateAuditFlags({ ephemeral: true, publish: true })).toContain(
+      "--ephemeral cannot be combined with --publish"
+    );
+  });
+
+  test("refuses --ephemeral with --no-ephemeral", () => {
+    expect(
+      validateAuditFlags({ ephemeral: true, noEphemeral: true })
+    ).toContain("--no-ephemeral");
+  });
+
+  test("accepts --ephemeral with --offline and --no-publish", () => {
+    expect(validateAuditFlags({ ephemeral: true, offline: true })).toBeNull();
+    expect(validateAuditFlags({ ephemeral: true, noPublish: true })).toBeNull();
+  });
+});
+
 describe("validateAuditFlags", () => {
   test("--render + --http is rejected", () => {
     expect(validateAuditFlags({ render: true, http: true })).toBe(

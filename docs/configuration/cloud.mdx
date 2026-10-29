@@ -20,6 +20,7 @@ editor_summary = true         # auto-generate an editor's summary (included in t
 # rendering                   # omit = auto (render when logged in); set "http" or "browser" to force
 render_concurrency = 6        # concurrent browser-render jobs (1-10)
 publish = true                # auto-publish to your dashboard when logged in
+ephemeral = false             # true = cloud features per run, nothing added to your dashboard
 visibility = "unlisted"       # default visibility for published reports
 ```
 
@@ -93,6 +94,12 @@ Your plan also caps this value: **Free renders 2 pages at once, Pro 5, Team 10, 
 **Default:** `true`
 
 Auto-publish the audit report to your [dashboard](/dashboard) when you're **logged in and online** - independent of cloud rendering or enrichment. **Publishing is included in the audit base charge**, whatever the visibility. Logged-out and `--offline` runs never publish. Set to `false` to never auto-publish for this project; you can still publish a single run with `--publish` (it overrides this). Skip publishing one run with `--no-publish`.
+
+### `ephemeral`
+
+**Default:** `false`
+
+Use cloud features for each run only. When `true`, a logged-in audit does not add the site to your [dashboard](/dashboard), does not schedule it and does not publish the report. Credits are charged as for any signed-in audit. `--ephemeral` and `--no-ephemeral` override it per run, and `--publish` cannot be combined with it (pass `--no-ephemeral` to publish one run). See [Ephemeral runs](/cli/audit#ephemeral-runs).
 
 ### `visibility`
 

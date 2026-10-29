@@ -83,6 +83,7 @@ const mockConfig: Config = {
     rendering: "http" as const,
     render_concurrency: 4,
     publish: true,
+    ephemeral: false,
     visibility: "unlisted" as const,
   },
   intel: { enabled: false, feed_ttl_hours: 24, providers: {} },

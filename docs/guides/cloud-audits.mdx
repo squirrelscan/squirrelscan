@@ -87,6 +87,10 @@ Opt out of a single run with `--no-publish`, or turn it off for the project with
 
 See the [Dashboard](/dashboard) guide for a tour.
 
+## One-off audits that leave nothing behind
+
+A signed-in `squirrel audit` adds the site to your dashboard, schedules it after its first successful audit and publishes the report. To use the cloud for a single run without any of that (a prospect's site, a CI preview), pass `--ephemeral`. It costs the same credits. See [Ephemeral runs](/cli/audit#ephemeral-runs).
+
 ## Keep audits running on a schedule
 
 Instead of remembering to re-audit, have the cloud do it. Scheduled audits re-run a site daily, weekly, or monthly and update its tracker automatically, so regressions surface without you lifting a finger. A scheduled run that would exceed the website's spend cap is skipped with a notification, never a surprise bill. See [Scheduled audits](/cloud/scheduled-audits).

@@ -201,10 +201,13 @@ export async function planMcpAudit(input: {
   url: string;
   offline?: boolean;
   confirm?: boolean;
+  /** #3649: one-off cloud run; the tool argument, else `[cloud] ephemeral`. */
+  ephemeral?: boolean;
   config: Config;
   level: McpLevelOptions;
 }): Promise<McpAuditPlan> {
   const { url, config, level } = input;
+  const ephemeral = input.ephemeral ?? config.cloud.ephemeral;
   if (input.offline) return { kind: "local" };
 
   const resolved = createCloudClientWithSource({
@@ -349,6 +352,7 @@ export async function planMcpAudit(input: {
     {
       url,
       mode: "audit",
+      ephemeral,
       config: {
         maxPages: preflight.maxPages,
         coverageMode: level.coverageMode,
@@ -382,6 +386,13 @@ export async function planMcpAudit(input: {
       kind: "stop",
       result: errorResult(registerRefusal(registerFailure)),
     };
+  }
+  // #3649: an older server ignores `ephemeral` and registers the run the
+  // ordinary way, so say so rather than let the caller assume nothing was saved.
+  if (ephemeral && !run.ephemeral) {
+    notices.push(
+      "The server did not confirm this run as ephemeral (it may predate the option), so the site may have been added to the dashboard and scheduled."
+    );
   }
   const life = trackRun(run);
   await life.running;

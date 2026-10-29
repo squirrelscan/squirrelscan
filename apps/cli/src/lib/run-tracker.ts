@@ -81,11 +81,24 @@ export interface RegisteredRun {
    * user to wonder why the site never appeared.
    */
   websiteSkippedReason: string | null;
+  /**
+   * #3649: the server confirmed it registered this run as ephemeral (no website,
+   * no schedule, no screenshot). False for every ordinary run AND for an
+   * ephemeral request an older server ignored, which is why the CLI checks it
+   * rather than trusting that the field it sent was honoured.
+   */
+  ephemeral?: boolean;
 }
 
 export interface RegisterRunInput {
   url: string;
   mode?: "audit" | "audit-fix" | "fix" | "recommend";
+  /**
+   * #3649: ask the server to register this run without finding or creating a
+   * website, writing a schedule or taking a screenshot. Credits are charged as
+   * for any signed-in run. Sent only when true, so the default body is unchanged.
+   */
+  ephemeral?: boolean;
   /** Crawl config snapshot (maxPages, coverageMode, …) — stored on the run. */
   config?: Record<string, unknown>;
 }
@@ -211,6 +224,12 @@ type RegisterResponseBody = Partial<Omit<RegisteredRun, "websiteId">> & {
    * its absence must read as "a website was resolved", never as a skip.
    */
   websiteRegistration?: { skipped?: boolean; reason?: string } | null;
+  /**
+   * #3649: echoed `true` when the server honoured `ephemeral: true`. An older
+   * server ignores the request field and omits this, so absence on an ephemeral
+   * request means the run was registered the ordinary way.
+   */
+  ephemeral?: boolean;
 };
 
 /**
@@ -358,6 +377,7 @@ export async function registerRun(
     url: parsed?.ok ? parsed.url : input.url,
     mode: input.mode ?? "audit",
     idempotencyKey,
+    ...(input.ephemeral ? { ephemeral: true } : {}),
     ...(input.config ? { config: JSON.stringify(input.config) } : {}),
   };
 
@@ -437,7 +457,10 @@ export async function registerRun(
       ? (data.websiteRegistration.reason ?? "unknown")
       : null;
   if (!data.runId || !data.auditId) return null;
-  if (!data.websiteId && !websiteSkippedReason) return null;
+  // #3649: an ephemeral run has no website by design, but only when the server
+  // SAYS it honoured the request; the same marker rule as #1841 above.
+  const ephemeral = input.ephemeral === true && data.ephemeral === true;
+  if (!data.websiteId && !websiteSkippedReason && !ephemeral) return null;
   return {
     runId: data.runId,
     websiteId: data.websiteId ?? null,
@@ -448,6 +471,7 @@ export async function registerRun(
     balanceAfterBase:
       typeof data.balance?.total === "number" ? data.balance.total : null,
     websiteSkippedReason,
+    ...(ephemeral ? { ephemeral: true } : {}),
   };
 }
 
