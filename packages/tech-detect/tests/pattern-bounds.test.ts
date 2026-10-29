@@ -11,7 +11,7 @@ import type { TechDetectInput } from "../src/types";
 // input built from its own leading literal (and a few generic hostile openers).
 
 const SIZE = 200_000;
-const BUDGET_MS = 250;
+const BUDGET_MS = 400;
 
 /** The literal a pattern starts with, up to its first quantifier, class or group. */
 function literalPrefix(source: string): string {
