@@ -2,6 +2,10 @@
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+/** Labelable elements, as HTML defines them (a label's first one is its control). */
+const LABELABLE =
+  'input:not([type="hidden"]), button, meter, output, progress, select, textarea';
+
 export const formFieldMultipleLabelsRule: Rule = {
   meta: {
     id: "a11y/form-field-multiple-labels",
@@ -27,22 +31,34 @@ export const formFieldMultipleLabelsRule: Rule = {
 
     const multipleLabels: string[] = [];
 
+    // `label[for]` elements by the id they point at, built once. Compared as
+    // strings, never spliced into a selector: an id can hold any character.
+    const labelsByFor = new Map<string, Element[]>();
+    for (const label of doc.querySelectorAll("label[for]")) {
+      const target = label.getAttribute("for");
+      if (!target) continue;
+      const list = labelsByFor.get(target);
+      if (list) list.push(label);
+      else labelsByFor.set(target, [label]);
+    }
+
     for (const input of inputs) {
       const id = input.getAttribute("id");
-      let labelCount = 0;
 
-      // Check for label via for attribute
-      if (id) {
-        const labelsById = doc.querySelectorAll(`label[for="${id}"]`);
-        labelCount += labelsById.length;
+      // The label ELEMENTS this control has, as `HTMLInputElement.labels` gives
+      // them (#1249): a label that wraps the control and also points at it with
+      // `for=` is one element, so it goes in a set once.
+      const labels = new Set<Element>(id ? (labelsByFor.get(id) ?? []) : []);
+
+      // A wrapping label labels the control only when it has no `for` of its own
+      // (a `for` naming another id sends the label there) and the control is its
+      // first labelable descendant (HTML's labeled control rule).
+      const wrapper = input.closest("label");
+      if (wrapper && !wrapper.hasAttribute("for") && wrapper.querySelector(LABELABLE) === input) {
+        labels.add(wrapper);
       }
 
-      // Check for wrapping label
-      const parentLabel = input.closest("label");
-      if (parentLabel) {
-        labelCount++;
-      }
-
+      const labelCount = labels.size;
       if (labelCount > 1) {
         const name =
           input.getAttribute("name") || id || input.tagName.toLowerCase();
