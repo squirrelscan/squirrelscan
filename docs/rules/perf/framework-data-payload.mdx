@@ -1,0 +1,80 @@
+---
+title: "Framework data payload: state shipped twice on a static page"
+description: "A page that is mostly text but carries 100 KB or more of inline framework state: __NEXT_DATA__, Next.js flight data, __NUXT__, Remix, Qwik, SvelteKit or Astro island props."
+---
+
+## What the payload costs
+
+A framework that hydrates in the browser has to give the browser the data its components were rendered from. It does that by writing the data into the page: Next.js writes `__NEXT_DATA__` (pages router) or streams `self.__next_f.push(...)` chunks (app router), Nuxt writes `window.__NUXT__` or `__NUXT_DATA__`, Remix writes `window.__remixContext`, Qwik writes a `qwik/json` script, SvelteKit writes a `__sveltekit_` data script, and Astro writes each island's props into an `astro-island` attribute.
+
+On an interactive app that data is the price of the interactivity. On a page that is only text, an article, a docs page or a marketing page, it is the page's content a second time: once as the markup the visitor reads, once as JSON the browser downloads, parses and then never needs. It adds to the HTML bytes every visitor downloads, and the browser has to parse it before the framework can hydrate.
+
+## What squirrel checks
+
+The rule runs on every crawled page and measures the framework payloads in the HTML the crawl fetched. It reports an info-level finding when all four of these hold:
+
+- the payloads add up to **100 KB or more** (`min_bytes`, measured in characters of the script or attribute text);
+- the payload is **at least 20 times** the page's visible text (`min_text_ratio`), so a page that really is mostly data is left alone;
+- the page has **at most 5** form controls and embedded media together (`max_interactive`): text inputs, selects, textareas, editable regions, `canvas`, `video`, `audio`, `iframe`, `embed`, `object` and `dialog`. Hidden inputs and submit or button inputs do not count;
+- the page has **at most 50** `button` elements (`max_buttons`), since a navigation menu alone can add dozens.
+
+JSON-LD, import maps and ordinary scripts are not framework state and are not counted. A page with no payload, a small one, or an interactive page gets a pass, with the message saying which.
+
+The finding lists each payload by name and size, and gives the characters of payload, the characters of text, their ratio, and the form controls, embedded media and buttons it counted.
+
+### Where the thresholds come from
+
+The thresholds were set from a run over 40 public pages built with Next.js, Nuxt, Remix, Astro, Qwik, SvelteKit and others. Next.js app router pages carried 50 to 460 KB of flight data against 1 to 8 KB of text. The pages router and Nuxt payloads were smaller (21 to 250 KB). Interactive pages sat well apart: a flexbox tutorial with 45 form controls and 4 embeds carried 155 KB against 33 KB of text, and a component library's home page had 19 form controls. Those pages stay under the finding. Pages with a large payload and almost no interactive parts, such as docs pages and landing pages, are the ones it reports.
+
+## How to fix it
+
+Do not hydrate what has nothing to hydrate:
+
+- **Next.js (app router):** keep the page a server component and pass client components only the props they read. A large object handed to a `"use client"` component is serialised into the flight data.
+- **Next.js (pages router):** return less from `getStaticProps` and `getServerSideProps`; everything returned lands in `__NEXT_DATA__`.
+- **Astro:** leave out the `client:` directive on components that need no script, so there is no island and no props attribute.
+- **Nuxt:** prerender the route and use server-only components where the page needs no client behaviour.
+- **SvelteKit:** set `export const csr = false` on routes that need no client code.
+
+## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `min_bytes` | number | `102400` | Combined size in characters of the page's framework data payloads that is worth reporting |
+| `min_text_ratio` | number | `20` | The payload must be at least this many times the page's visible text |
+| `max_interactive` | number | `5` | Form controls plus embedded media a page may have and still count as static |
+| `max_buttons` | number | `50` | Buttons a page may have and still count as static |
+
+### Configuration example
+
+```toml squirrel.toml
+[rule_options."perf/framework-data-payload"]
+min_bytes = 102400
+min_text_ratio = 20
+max_interactive = 5
+max_buttons = 50
+```
+
+| | |
+|---|---|
+| **Rule ID** | `perf/framework-data-payload` |
+| **Category** | [Performance](/rules/perf) |
+| **Scope** | Per-page |
+| **Severity** | info |
+| **Weight** | 2/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/framework-data-payload"]
+```
+
+### Disable all Performance rules
+
+```toml squirrel.toml
+[rules]
+disable = ["perf/*"]
+```
