@@ -42,6 +42,8 @@ export interface ScriptFetchResult {
   rateLimited?: boolean;
   /** A WAF or bot challenge answered in place of the script (#703). */
   wafBlocked?: boolean;
+  /** Never requested: the `maxTotalBytes` or `totalTimeoutMs` bound was reached (#1255). */
+  fetchSkipReason?: "memory-cap" | "time-budget";
 }
 
 export interface ScriptFetcherOptions {
@@ -67,6 +69,21 @@ export interface ScriptFetcherOptions {
    * Default false, so every script caller keeps its gate.
    */
   anyContentType?: boolean;
+  /**
+   * Fetch up to `maxScripts` scripts, not the share of the page count the audit
+   * normally allows (at least 10, 10% of the pages, at most 50). Set when
+   * `[storage] store_scripts` asks for every bundle (#1255).
+   */
+  fetchAll?: boolean;
+  /**
+   * Stop requesting once the bodies fetched so far total this many decoded
+   * bytes (#1255): they are all held for the rules phase, so storing hundreds of
+   * bundles must not grow memory with their count. A skipped script reads as
+   * unrequested, with `fetchSkipReason` "memory-cap". Absent: no bound.
+   */
+  maxTotalBytes?: number;
+  /** Stop requesting this long after the first request (`fetchSkipReason` "time-budget"). Absent: no bound. */
+  totalTimeoutMs?: number;
   /**
    * Every hop is vetted against this policy before it is sent (see
    * `@squirrelscan/utils/public-egress`); a refused one is never requested and
@@ -353,16 +370,48 @@ export function fetchScriptContents(
 
     const uniqueUrls = [...new Set(urls)];
 
-    const dynamicLimit = calculateScriptLimit(
-      opts.pageCount,
-      opts.maxScripts ?? SCRIPT_FETCH_LIMITS.MAX_SCRIPTS_TO_FETCH
-    );
+    const configuredLimit =
+      opts.maxScripts ?? SCRIPT_FETCH_LIMITS.MAX_SCRIPTS_TO_FETCH;
+    const dynamicLimit = opts.fetchAll
+      ? configuredLimit
+      : calculateScriptLimit(opts.pageCount, configuredLimit);
     const limitedUrls =
       uniqueUrls.length > dynamicLimit
         ? uniqueUrls.slice(0, dynamicLimit)
         : uniqueUrls;
 
-    const fetches = limitedUrls.map((url) => fetchSingleScript(url, opts));
+    const startedAt = Date.now();
+    let heldBytes = 0;
+    const fetches = limitedUrls.map((url) =>
+      Effect.suspend(() => {
+        // Checked as each fetch is about to start, so what is already in flight
+        // (at most `concurrency` bodies) is the whole overshoot.
+        if (opts.maxTotalBytes != null && heldBytes >= opts.maxTotalBytes) {
+          return Effect.succeed<ScriptFetchResult>({
+            ...emptyScriptResult(url),
+            error: ASSET_FETCH_SKIPPED_ERROR,
+            fetchSkipReason: "memory-cap",
+          });
+        }
+        if (
+          opts.totalTimeoutMs != null &&
+          Date.now() - startedAt >= opts.totalTimeoutMs
+        ) {
+          return Effect.succeed<ScriptFetchResult>({
+            ...emptyScriptResult(url),
+            error: ASSET_FETCH_SKIPPED_ERROR,
+            fetchSkipReason: "time-budget",
+          });
+        }
+        return fetchSingleScript(url, opts).pipe(
+          Effect.tap((result) =>
+            Effect.sync(() => {
+              heldBytes += result.content?.length ?? 0;
+            })
+          )
+        );
+      })
+    );
 
     return yield* Effect.all(fetches, { concurrency: opts.concurrency });
   });

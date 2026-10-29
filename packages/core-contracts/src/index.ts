@@ -2133,6 +2133,11 @@ export interface ScriptContentData {
   wafBlocked?: boolean;
   /** Custom headers were withheld from this host: a 401 or 403 is unverified (#732). */
   headersWithheld?: boolean;
+  /**
+   * Why a script that is referenced was never requested, when a `store_scripts`
+   * run bounded its fetch (#1255): the memory or time budget ran out.
+   */
+  fetchSkipReason?: "memory-cap" | "time-budget";
 }
 
 export interface SitemapUrl {

@@ -144,6 +144,7 @@ import {
   CHROME_USER_AGENT,
   RESOURCE_SIZE_LIMITS,
   SQUIRRELSCAN_USER_AGENT,
+  STORED_SCRIPT_LIMITS,
 } from "@squirrelscan/utils/constants";
 import { maskLinkTokens } from "@squirrelscan/utils/link-actions";
 import { isCloudflareEmailProtectionUrl } from "@squirrelscan/utils/cloudflare-email";
@@ -1164,9 +1165,24 @@ export function fetchAssetsFromOccurrences(
       egress: ownSiteEgress,
     };
 
+    // #1255: a run that stores scripts asks for every bundle, not the share of
+    // the page count the audit fetches for its own checks.
+    const storeScripts = config.storage?.store_scripts === true;
     const scriptFetchOptions: Parameters<typeof fetchScriptContents>[1] = {
       pageCount: occurrences.pageCount,
-      ...(maxResources != null ? { maxScripts: maxResources } : {}),
+      ...(storeScripts
+        ? {
+            fetchAll: true,
+            maxScripts: Math.min(
+              STORED_SCRIPT_LIMITS.maxScriptsCeiling,
+              Math.max(1, config.storage?.store_scripts_max_scripts ?? STORED_SCRIPT_LIMITS.maxScripts),
+            ),
+            maxTotalBytes: STORED_SCRIPT_LIMITS.heldBytes,
+            totalTimeoutMs: STORED_SCRIPT_LIMITS.fetchTimeBudgetMs,
+          }
+        : maxResources != null
+          ? { maxScripts: maxResources }
+          : {}),
       ...(overrides?.resourceCheckTimeoutMs != null
         ? { timeoutMs: overrides.resourceCheckTimeoutMs }
         : {}),
@@ -1592,6 +1608,7 @@ export function fetchAssetsFromOccurrences(
         sizeBytes: fetch.sizeBytes,
         content: fetch.content,
         sourcePages: Array.from(resourceOccurrences.scripts.get(fetch.url) ?? []),
+        ...(fetch.fetchSkipReason ? { fetchSkipReason: fetch.fetchSkipReason } : {}),
         rateLimited: fetch.rateLimited,
         wafBlocked: fetch.wafBlocked,
         ...(withheld(fetch.url, fetch.status, fetch.finalUrl) ? { headersWithheld: true } : {}),

@@ -20,7 +20,15 @@ export {
   type LeaseCrawlRow,
   type LeaseEnv,
 } from "./crawl-liveness";
-export { SQLiteStorage, type ContentStoreAdapter } from "./sqlite";
+export {
+  SQLiteStorage,
+  type ContentStoreAdapter,
+  type StoredScriptInput,
+  type StoredScriptRecord,
+  type StoredScriptsFetchSummary,
+  type StoredScriptSkipReason,
+  type StoredScriptsSummary,
+} from "./sqlite";
 
 export function createTestStorage(): Effect.Effect<
   CrawlStorage,

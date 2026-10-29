@@ -602,3 +602,21 @@ export const TECH_DETECT_PRESENCE_HEADERS: ReadonlySet<string> = new Set([
   "x-vercel-cache",
   "x-vercel-id",
 ]);
+
+/**
+ * Scripts kept in the content store when `[storage] store_scripts` is on (#1255).
+ * `maxBytes` is the per-file cap; the per-audit total defaults to
+ * `totalFraction` of the content store cap.
+ */
+export const STORED_SCRIPT_LIMITS = {
+  maxBytes: 2 * 1024 * 1024,
+  totalFraction: 0.25,
+  /** Scripts fetched per audit when storing them (`store_scripts_max_scripts`); the audit's own checks fetch fewer. */
+  maxScripts: 200,
+  /** Ceiling for `store_scripts_max_scripts`: the fetched bodies are held for the rules phase, so memory scales with it. */
+  maxScriptsCeiling: 500,
+  /** Decoded script bytes an audit holds while storing scripts; later scripts are not fetched (`memory-cap`). */
+  heldBytes: 256 * 1024 * 1024,
+  /** Wall-clock budget for the whole script fetch while storing scripts; later scripts are not fetched (`time-budget`). */
+  fetchTimeBudgetMs: 120_000,
+} as const;

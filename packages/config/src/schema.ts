@@ -228,6 +228,21 @@ export const OutputConfigSchema = z.object({
 // fallback when the most recent audit is the anomalous one.
 export const DEFAULT_KEEP_AUDITS = 3;
 
+/** A positive byte count written as a number or a size string such as "2MB". */
+function byteSizeField(name: string) {
+  return z.union([z.number(), z.string()]).transform((value, ctx) => {
+    const bytes = parseByteSize(value);
+    if (bytes === null) {
+      ctx.addIssue({
+        code: "custom",
+        message: `${name} must be a positive size, such as 2097152 or "2MB"`,
+      });
+      return z.NEVER;
+    }
+    return bytes;
+  });
+}
+
 export const StorageConfigSchema = z.object({
   /**
    * Audits kept fully renderable per project; older ones are retired after a
@@ -276,6 +291,32 @@ export const StorageConfigSchema = z.object({
       return bytes;
     })
     .optional(),
+  /**
+   * Keep every first-party script the crawl fetched in the content store, for
+   * corpus and research runs that re-analyse a crawl later (#1255). Off unless
+   * set: bundles are large. Deduplicated by content hash, linked from the audit
+   * (script URL to hash) and kept under the same size cap and retention as the
+   * stored HTML. `--store-scripts` turns it on for one run.
+   */
+  store_scripts: z.boolean().optional(),
+  /**
+   * Largest single script stored, in bytes or as a size string such as `"2MB"`.
+   * A bigger one is recorded as skipped, with its size. Unset = 2 MB.
+   */
+  store_scripts_max_bytes: byteSizeField("store_scripts_max_bytes").optional(),
+  /**
+   * Most distinct script bytes one audit stores (a bundle shared by many pages
+   * counts once). Past it scripts are recorded as skipped. Unset = a quarter of
+   * the content store cap (`content_store_max_bytes`).
+   */
+  store_scripts_total_bytes: byteSizeField("store_scripts_total_bytes").optional(),
+  /**
+   * Most first-party scripts one audit fetches when `store_scripts` is on, 1 to
+   * 500. The audit's own checks fetch at least 10, a tenth of the pages, at
+   * most 50; storing bundles raises that to this. Unset = 200. The extra
+   * requests are made only while `store_scripts` is on.
+   */
+  store_scripts_max_scripts: z.number().int().min(1).max(500).optional(),
 });
 
 export const CloudConfigSchema = z.object({

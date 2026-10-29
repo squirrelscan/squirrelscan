@@ -708,6 +708,7 @@ export interface AuditOptions {
     | "llm";
   outputPath?: string;
   refresh?: boolean; // ignore cache, fetch all pages fresh
+  storeScripts?: boolean; // #1255: keep fetched first-party scripts in the content store for this run
   freshUa?: boolean; // re-roll the project's sticky random user-agent (#875)
   incremental?: boolean; // force conditional-GET re-scan on/off (overrides [crawler] incremental); --refresh wins
   resume?: boolean; // resume interrupted crawl for this domain

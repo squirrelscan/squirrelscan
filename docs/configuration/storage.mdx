@@ -13,6 +13,7 @@ keeps locally, and how large the content store that holds crawled pages can grow
 [storage]
 keep_audits = 3
 content_store_max_bytes = "4GB"
+store_scripts = false
 ```
 
 ## Options
@@ -83,6 +84,88 @@ Retired 1 older audit and freed 95.2 MB inside project.db for the next audit
 ```
 
 The notice never goes to stdout, so it cannot get into `-f json` output.
+
+### `store_scripts`
+
+**Type:** `boolean`
+**Default:** `false` (off, so nothing changes in what an audit stores or requests)
+**Flag:** `squirrel audit --store-scripts` turns it on for one run
+
+Keeps the first-party scripts an audit fetched in the content store, for corpus
+and research runs that analyse a crawl again later (new secret rules, new
+technology fingerprints, labelling) without fetching the site again.
+
+- **Retrievable by URL.** Each audit gets an index of its scripts: the script URL
+  (and the final URL when it redirected), the content hash, its size, and the
+  pages that load it, so a page and its bundles can be rebuilt offline. The index
+  lives in the project database (`crawl_scripts`).
+- **Deduplicated.** The body is stored once per distinct content hash, so a vendor
+  chunk shared by many pages, audits or sites is one row in the store.
+- **Capped.** A script over `store_scripts_max_bytes` is not stored; it is recorded
+  as skipped with its size and the reason (`too-large`), and the audit says how
+  many were skipped. The distinct bytes one audit stores stop at
+  `store_scripts_total_bytes` (`total-cap`). A `200` that is an HTML page behind a
+  script URL, such as a single page app's fallback, is skipped as `not-javascript`.
+- **Stored like the HTML.** Bodies live in the same gzipped store and count against
+  `content_store_max_bytes`.
+
+```toml
+[storage]
+store_scripts = true
+store_scripts_max_bytes = "2MB"        # default: a larger script is recorded as skipped
+store_scripts_total_bytes = "256MB"    # default: a quarter of content_store_max_bytes
+store_scripts_max_scripts = 200        # default: scripts fetched per audit, 1 to 500
+```
+
+**What it fetches.** The audit's own checks fetch only a share of the scripts the
+pages reference: at least 10, a tenth of the pages, at most 50, in page order.
+With `store_scripts` on, the audit fetches up to `store_scripts_max_scripts` (200
+by default) instead. Those extra requests to the audited site are made only while
+`store_scripts` is on; with it off, an audit makes no request it did not make
+before. Scripts the pages reference past that limit are not requested: the audit
+warns with how many, and the count is kept in the project database
+(`crawl_scripts_summary`). Raise `store_scripts_max_scripts` to fetch more.
+Scripts on another domain are never fetched, and a script over 5 MB is not
+downloaded: it is recorded as skipped, with at least that size. Chunks a page
+only preloads are fetched only for pages that send a Content-Security-Policy.
+
+**Memory, time and findings.** The audit keeps every fetched script in memory for
+its rules, so peak memory rises with the number of scripts fetched, by up to the
+total size of the bodies (a script over 5 MB is never downloaded). To bound that,
+a `store_scripts` run stops requesting scripts once it holds 256 MB of script
+text, and stops after 120 seconds of script fetching. Scripts it did not request
+for either reason are recorded as skipped (`memory-cap`, `time-budget`) with no
+size. Because the rules that read script bodies (secrets, file size,
+minification) now see up to `store_scripts_max_scripts` scripts instead of 10 to
+50, an audit with `store_scripts` on can report more findings than the same audit
+without it. Parallel corpus runs each hold their own bodies, so size the number of
+runs to your memory.
+
+**Bodies are the decoded text.** A script is stored as the UTF-8 text the audit
+read after the transfer encoding (gzip, brotli) was removed, so the content hash
+is the hash of that text, not of the bytes on the wire. A redirected script is
+indexed under the URL the page asked for, with the final URL beside it, and
+either finds it.
+
+**Retention and the size cap.** Bodies are evicted least recently used first,
+like stored HTML, under the shared `content_store_max_bytes` (1 GB by default).
+Nothing keeps them past that cap once the audit that stored them has finished:
+`keep_audits` and [`self disk --prune`](/cli/self#disk) retire an older audit's
+index (`crawl_scripts`), not the bodies, which stay in the store until the cap
+evicts them. An index row whose body was evicted is marked `evicted`. For a
+corpus you intend to keep, raise `content_store_max_bytes` well above the size of
+the crawl: bundles compress less than HTML, and the default is shared with every
+project on the machine. Each site has its own project database, so
+`keep_audits` only matters when you audit the same site again.
+
+**Both caps count the script text, not the compressed bytes.** `store_scripts_max_bytes` and `store_scripts_total_bytes` are measured on the decoded size of each script, while `content_store_max_bytes` counts compressed bytes in the store. The default total, a quarter of `content_store_max_bytes`, is therefore a quarter of the cap in uncompressed script text, which takes less than a quarter of the store once gzipped.
+
+**Disk cost.** A script bundle is large, so a corpus run over thousands of sites
+needs gigabytes. Check `squirrel self doctor` for the store's size and cap.
+
+**Privacy.** Stored scripts stay on your machine in `~/.squirrel/content-store.db`.
+Nothing is sent to the cloud for them. Bundles can contain keys that the site
+ships to every visitor, so treat the content store as you would the crawl.
 
 ### `content_store_max_bytes`
 
