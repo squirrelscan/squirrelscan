@@ -6,9 +6,9 @@
 // It also held URL-keyed scripts for `squirrel analyze` until #768; those rows
 // age out under the size cap like any other.
 
-import type { Database } from "bun:sqlite";
-
 import { parseByteSize } from "@squirrelscan/config";
+import type { Database } from "bun:sqlite";
+import { restrictToOwner } from "@squirrelscan/crawler/file-mode";
 import { enableWal, openSqlite } from "@squirrelscan/crawler/sqlite-open";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
@@ -373,6 +373,8 @@ export class ContentStore {
       this.db.run("PRAGMA synchronous = NORMAL");
       this.db.run("PRAGMA cache_size = -32000"); // 32MB cache
       this.db.run(SCHEMA);
+      // Crawled HTML and stored scripts: owner only (#1268).
+      restrictToOwner(this.dbPath);
     }
     return this.db;
   }

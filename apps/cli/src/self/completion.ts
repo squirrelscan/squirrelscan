@@ -220,7 +220,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --rule-include --rule-exclude --disable-discovery-probes --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --no-store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --rule-include --rule-exclude --disable-discovery-probes --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help" -- "\${cur}") )
       return 0
       ;;
     entities)
@@ -530,6 +530,7 @@ _squirrel() {
             '(-r --refresh)'{-r,--refresh}'[Ignore cache, fetch all pages fresh]' \\
             '--fresh-ua[Re-roll the pinned random user-agent]' \\
             '--store-scripts[Keep fetched first-party scripts in the content store]' \\
+            '--no-store-scripts[Turn [storage] store_scripts off for this run]' \\
             '--incremental[Re-scan only changed pages via conditional GET (default on)]' \\
             '--no-incremental[Fetch every page in full, disabling conditional GET]' \\
             '--resume[Resume interrupted crawl]' \\
@@ -793,6 +794,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -s o -l output -d "O
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -s r -l refresh -d "Ignore cache, fetch all pages fresh"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l fresh-ua -d "Re-roll the pinned random user-agent"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l store-scripts -d "Keep fetched first-party scripts in the content store"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-store-scripts -d "Turn [storage] store_scripts off for this run"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l incremental -d "Re-scan only changed pages via conditional GET (default on)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-incremental -d "Fetch every page in full, disabling conditional GET"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l resume -d "Resume interrupted crawl"

@@ -64,6 +64,10 @@ How it works:
 
 - **Parallel `squirrel audit` runs no longer fail with `SQLite database is busy (locked)`.** Ten audits at once on one machine lost a few to a lock error and wrote no report. The lock timeout is now set before any other statement on every connection to the content store, the link cache and project databases, switching a new database to WAL waits for its lock, and write transactions take the write lock up front instead of failing when they upgrade. A lock that is still held after the timeout names the database file and the wait. See [Running several audits at once](https://docs.squirrelscan.com/configuration/storage#running-several-audits-at-once). (#1226)
 
+### Fixed
+
+- **`store_scripts` follow-ups.** The warning for scripts that were not stored now lists each reason with its count and the setting that applies (too large, total cap, memory cap, time budget) instead of blaming the size settings for all of them. `squirrel audit --no-store-scripts` turns `[storage] store_scripts = true` off for one run. `content-store.db` and project databases are created owner-only (`0600`), and existing ones are tightened when opened. The storage docs now state that the time and memory bounds are soft (about 20 seconds, up to 10 bodies in flight, roughly 3x memory for non-Latin1 bundles), that the preload pass has its own counters, and that the empty script tables exist when the option is off. (#1268)
+
 ## v0.0.141 (2026-10-29)
 
 `squirrel audit --ephemeral` uses cloud features for one run and leaves nothing behind: the site is not added to the dashboard, scheduled or published unless you pass `--publish`. `--store-scripts` keeps the first-party scripts an audit fetched in the content store. Keyword-stuffing checks use the measured copy's own script, leaked-secret checks no longer flag credential key-name constants, and CI now rejects edits to tagged CHANGELOG sections.

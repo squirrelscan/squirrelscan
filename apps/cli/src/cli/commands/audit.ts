@@ -1062,6 +1062,11 @@ export const audit = defineCommand({
       description:
         "Keep every fetched first-party script in the content store for this run, for corpus and research runs (same as [storage] store_scripts = true; large, see store_scripts_max_bytes)",
     },
+    // Declared for help and completions only; read from `store-scripts: false`.
+    "no-store-scripts": {
+      type: "boolean",
+      description: "Turn [storage] store_scripts off for this run",
+    },
     "fresh-ua": {
       type: "boolean",
       description:
@@ -1947,7 +1952,9 @@ export const audit = defineCommand({
         outputPath: args.output,
         refresh: args.refresh,
         freshUa: args["fresh-ua"],
-        storeScripts: args["store-scripts"] ? true : undefined,
+        storeScripts: lastFlagValue(
+          args["store-scripts"] as boolean | boolean[] | undefined
+        ),
         incremental: args.incremental,
         resume: args.resume,
         verbose: args.verbose,

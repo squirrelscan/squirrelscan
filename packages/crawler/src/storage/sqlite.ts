@@ -5,6 +5,7 @@
 // Uses bun:sqlite for native SQLite bindings
 
 import type { Database } from "bun:sqlite";
+import { restrictToOwner } from "./file-mode";
 import { enableWal, openSqlite } from "./sqlite-open";
 import { createHash, randomUUID } from "node:crypto";
 import { Effect } from "effect";
@@ -120,6 +121,8 @@ export interface StoredScriptsSummary {
   /** Scripts indexed with a body (identical bodies count once each). */
   stored: number;
   skipped: number;
+  /** `skipped`, split by why (#1268). */
+  skippedByReason: Partial<Record<StoredScriptSkipReason, number>>;
   /** Distinct bodies written, and their total bytes. */
   distinct: number;
   distinctBytes: number;
@@ -1447,6 +1450,8 @@ export class SQLiteStorage implements CrawlStorage {
         this.db.exec("PRAGMA temp_store = MEMORY");
         this.db.exec(SCHEMA);
         this.runMigrations();
+        // Crawled HTML and stored scripts: owner only (#1268).
+        if (this.path !== ":memory:") restrictToOwner(this.path);
       },
       catch: (e) => StorageError.init(e),
     });
@@ -2277,6 +2282,7 @@ export class SQLiteStorage implements CrawlStorage {
         const summary: StoredScriptsSummary = {
           stored: 0,
           skipped: 0,
+          skippedByReason: {},
           distinct: 0,
           distinctBytes: 0,
         };
@@ -2298,6 +2304,8 @@ export class SQLiteStorage implements CrawlStorage {
               // bound): no size, no body, and the reason is the whole record.
               insert.run(crawlId, script.url, null, null, "skipped", script.fetchSkipReason, JSON.stringify(script.sourcePages), null);
               summary.skipped++;
+              summary.skippedByReason[script.fetchSkipReason] =
+                (summary.skippedByReason[script.fetchSkipReason] ?? 0) + 1;
               continue;
             }
             if (script.status === null || script.status < 200 || script.status >= 300) continue;
@@ -2310,6 +2318,7 @@ export class SQLiteStorage implements CrawlStorage {
             const skip = (reason: StoredScriptSkipReason): void => {
               insert.run(crawlId, script.url, null, size, "skipped", reason, pages, script.finalUrl ?? null);
               summary.skipped++;
+              summary.skippedByReason[reason] = (summary.skippedByReason[reason] ?? 0) + 1;
             };
             if (size > limits.maxBytes) {
               skip("too-large");

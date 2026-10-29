@@ -7,6 +7,8 @@ import type { PreFetchedAssets } from "@squirrelscan/audit-engine";
 import type {
   SQLiteStorage,
   StoredScriptInput,
+  StoredScriptSkipReason,
+  StoredScriptsSummary,
 } from "@squirrelscan/crawler/storage";
 
 import { STORED_SCRIPT_LIMITS } from "@squirrelscan/utils/constants";
@@ -67,6 +69,43 @@ export function scriptsToStore(
   return [...byUrl.values()];
 }
 
+/**
+ * The warning for scripts that were referenced but not stored, one clause per
+ * reason with its count and the setting or bound that applies (#1268).
+ * Null when nothing was skipped.
+ */
+export function skippedScriptsWarning(
+  byReason: StoredScriptsSummary["skippedByReason"],
+  limits: { maxBytes: number; totalBytes: number }
+): string | null {
+  const clauses: string[] = [];
+  const add = (reason: StoredScriptSkipReason, text: string): void => {
+    const count = byReason[reason] ?? 0;
+    if (count > 0) clauses.push(`${count} ${text}`);
+  };
+  add(
+    "too-large",
+    `over ${limits.maxBytes} bytes each (raise [storage] store_scripts_max_bytes)`
+  );
+  add(
+    "total-cap",
+    `past the ${limits.totalBytes} byte total (raise [storage] store_scripts_total_bytes)`
+  );
+  add(
+    "memory-cap",
+    `not fetched because ${STORED_SCRIPT_LIMITS.heldBytes} bytes of script text were already held (a fixed memory bound)`
+  );
+  add(
+    "time-budget",
+    `not fetched after ${STORED_SCRIPT_LIMITS.fetchTimeBudgetMs / 1000} seconds of script fetching (a fixed time bound)`
+  );
+  add("not-javascript", "a page served at a script URL");
+  add("store-error", "that the content store could not write");
+  if (clauses.length === 0) return null;
+  const total = Object.values(byReason).reduce((sum, n) => sum + (n ?? 0), 0);
+  return `${total} script(s) were not stored: ${clauses.join("; ")}`;
+}
+
 export async function storeFetchedScripts(opts: {
   storage: SQLiteStorage;
   crawlId: string;
@@ -101,11 +140,11 @@ export async function storeFetchedScripts(opts: {
         `${dropped} script(s) the pages reference were not fetched (limit ${storedScriptFetchLimit(opts.config)} per audit); raise [storage] store_scripts_max_scripts to fetch and store more`
       );
     }
-    if (summary.skipped > 0) {
-      logger.warn(
-        `${summary.skipped} script(s) were not stored (over ${limits.maxBytes} bytes each, or past the ${limits.totalBytes} byte total); raise [storage] store_scripts_max_bytes or store_scripts_total_bytes`
-      );
-    }
+    const skippedWarning = skippedScriptsWarning(
+      summary.skippedByReason,
+      limits
+    );
+    if (skippedWarning) logger.warn(skippedWarning);
   } catch (error) {
     // A finished audit is never lost to an opt-in side store.
     logger.warn(

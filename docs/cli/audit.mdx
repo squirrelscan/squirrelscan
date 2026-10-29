@@ -32,6 +32,7 @@ squirrel audit <url> [options]
 | `--output` | `-o` | Output file path | auto |
 | `--refresh` | `-r` | Ignore cache, fetch all pages fresh (full re-scan) | `false` |
 | `--store-scripts` | | Keep every fetched first-party script in the content store for this run, for corpus and research runs (see [`store_scripts`](/configuration/storage#store_scripts)) | `false` |
+| `--no-store-scripts` | | Turn [`[storage] store_scripts`](/configuration/storage#store_scripts) off for this run | config |
 | `--fresh-ua` | | Re-roll the project's pinned random user-agent (the new one is pinned for later runs) | `false` |
 | `--incremental` | | Re-scan only changed pages via conditional GET (the default; overrides `[crawler] incremental = false`) | `true` |
 | `--no-incremental` | | Fetch every page in full, disabling conditional GET | `false` |

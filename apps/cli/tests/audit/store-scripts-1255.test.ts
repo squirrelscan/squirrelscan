@@ -7,10 +7,12 @@
 import { Database } from "bun:sqlite";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,6 +20,7 @@ import { join, resolve } from "node:path";
 import { gunzipSync } from "node:zlib";
 
 import {
+  skippedScriptsWarning,
   storedScriptLimits,
   scriptsToStore,
 } from "../../src/audit/store-scripts";
@@ -231,6 +234,31 @@ describe("#1255 stored scripts", () => {
     expect(scripts.some((s) => s.status === "stored")).toBe(true);
   }, 120_000);
 
+  test("--no-store-scripts turns the config opt-in off for one run (#1268)", async () => {
+    const { scripts, jsRows } = await audit(
+      "no-flag",
+      ["--no-store-scripts"],
+      "[storage]\nstore_scripts = true\n"
+    );
+    expect(scripts).toEqual([]);
+    expect(jsRows).toEqual([]);
+  }, 120_000);
+
+  test("the content store and the project database are owner-only files (#1268)", async () => {
+    await audit("modes", ["--store-scripts"]);
+    const dbs = findDbs(join(out, "modes-home")).filter(
+      (p) => !p.endsWith("link-cache.db")
+    );
+    expect(dbs.length).toBeGreaterThanOrEqual(2);
+    for (const db of dbs) {
+      for (const suffix of ["", "-wal", "-shm"]) {
+        const file = db + suffix;
+        if (!existsSync(file)) continue;
+        expect(statSync(file).mode & 0o077).toBe(0);
+      }
+    }
+  }, 120_000);
+
   test("off by default: no index rows and no script in the content store", async () => {
     const { scripts, jsRows } = await audit("off", []);
     expect(scripts).toEqual([]);
@@ -365,5 +393,37 @@ describe("limits", () => {
         preloadedScripts: [entry("b"), entry("c")],
       }).map((s) => s.url)
     ).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("#1268 the skipped scripts warning names each reason", () => {
+  const limits = { maxBytes: 2097152, totalBytes: 268435456 };
+
+  test("nothing skipped: no warning", () => {
+    expect(skippedScriptsWarning({}, limits)).toBeNull();
+  });
+
+  test("each reason has its count and the setting or bound that applies", () => {
+    const warning = skippedScriptsWarning(
+      { "too-large": 3, "total-cap": 2, "memory-cap": 5, "time-budget": 7 },
+      limits
+    )!;
+    expect(warning).toContain("17 script(s) were not stored");
+    expect(warning).toContain(
+      "3 over 2097152 bytes each (raise [storage] store_scripts_max_bytes)"
+    );
+    expect(warning).toContain(
+      "2 past the 268435456 byte total (raise [storage] store_scripts_total_bytes)"
+    );
+    expect(warning).toContain("5 not fetched because");
+    expect(warning).toContain("a fixed memory bound");
+    expect(warning).toContain("7 not fetched after 120 seconds");
+    expect(warning).toContain("a fixed time bound");
+  });
+
+  test("a memory or time skip never tells you to raise a size setting", () => {
+    const warning = skippedScriptsWarning({ "memory-cap": 1 }, limits)!;
+    expect(warning).not.toContain("store_scripts_max_bytes");
+    expect(warning).not.toContain("store_scripts_total_bytes");
   });
 });

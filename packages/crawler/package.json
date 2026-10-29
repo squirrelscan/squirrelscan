@@ -13,7 +13,8 @@
     "./sitemaps": "./src/sitemaps.ts",
     "./well-known": "./src/well-known.ts",
     "./storage": "./src/storage/index.ts",
-    "./sqlite-open": "./src/storage/sqlite-open.ts"
+    "./sqlite-open": "./src/storage/sqlite-open.ts",
+    "./file-mode": "./src/storage/file-mode.ts"
   },
   "dependencies": {
     "@squirrelscan/core-contracts": "workspace:*",

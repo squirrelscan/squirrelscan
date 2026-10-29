@@ -89,7 +89,7 @@ The notice never goes to stdout, so it cannot get into `-f json` output.
 
 **Type:** `boolean`
 **Default:** `false` (off, so nothing changes in what an audit stores or requests)
-**Flag:** `squirrel audit --store-scripts` turns it on for one run
+**Flags:** `squirrel audit --store-scripts` turns it on for one run, and `--no-store-scripts` turns it off for one run when the config has it on
 
 Keeps the first-party scripts an audit fetched in the content store, for corpus
 and research runs that analyse a crawl again later (new secret rules, new
@@ -106,6 +106,9 @@ technology fingerprints, labelling) without fetching the site again.
   many were skipped. The distinct bytes one audit stores stop at
   `store_scripts_total_bytes` (`total-cap`). A `200` that is an HTML page behind a
   script URL, such as a single page app's fallback, is skipped as `not-javascript`.
+  When scripts are skipped, the warning lists each reason with its count and the
+  setting that applies: too large and total cap point at their `store_scripts_*`
+  setting, while memory cap and time budget are fixed bounds, described below.
 - **Stored like the HTML.** Bodies live in the same gzipped store and count against
   `content_store_max_bytes`.
 
@@ -135,7 +138,18 @@ total size of the bodies (a script over 5 MB is never downloaded). To bound that
 a `store_scripts` run stops requesting scripts once it holds 256 MB of script
 text, and stops after 120 seconds of script fetching. Scripts it did not request
 for either reason are recorded as skipped (`memory-cap`, `time-budget`) with no
-size. Because the rules that read script bodies (secrets, file size,
+size.
+
+The two bounds are checked when a request is about to start, not while it runs,
+so they are soft. The time bound can overshoot by up to about 20 seconds: a request
+already in flight runs to its 15 second timeout, and the body is then decoded. The memory bound can overshoot
+by the bodies of up to 10 requests in flight at that moment. Script text is held
+as a JavaScript string, which takes about 2 bytes per character for a bundle
+with non-Latin1 text (CJK, Cyrillic, emoji), so peak memory can reach roughly 3
+times the 256 MB bound on such sites. The scripts a page only preloads are
+fetched by a separate pass with its own counters: it does not share the 256 MB
+or 120 second bounds, only the per-script size limit and the CSP condition above.
+ Because the rules that read script bodies (secrets, file size,
 minification) now see up to `store_scripts_max_scripts` scripts instead of 10 to
 50, an audit with `store_scripts` on can report more findings than the same audit
 without it. Parallel corpus runs each hold their own bodies, so size the number of
@@ -166,6 +180,14 @@ needs gigabytes. Check `squirrel self doctor` for the store's size and cap.
 **Privacy.** Stored scripts stay on your machine in `~/.squirrel/content-store.db`.
 Nothing is sent to the cloud for them. Bundles can contain keys that the site
 ships to every visitor, so treat the content store as you would the crawl.
+`content-store.db` and each project database (and their `-wal` and `-shm` files)
+are created readable and writable by you only (mode `0600`), and an existing file
+is tightened the next time it is opened. On a file system without modes, such as
+FAT, that does nothing.
+
+**When it is off.** The project database still has the empty `crawl_scripts` and
+`crawl_scripts_summary` tables, created with the rest of its schema. They hold no
+rows and take no space until a run stores scripts.
 
 ### `content_store_max_bytes`
 

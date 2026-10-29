@@ -27,7 +27,7 @@ describe("[storage] store_scripts (#1255)", () => {
     expect(JSON.stringify(result.error?.issues)).toContain("store_scripts_max_bytes");
   });
 
-  test("store_scripts_max_scripts is a whole number from 1 to 1000", () => {
+  test("store_scripts_max_scripts is a whole number from 1 to 500", () => {
     expect(StorageConfigSchema.parse({ store_scripts_max_scripts: 200 }).store_scripts_max_scripts).toBe(200);
     expect(StorageConfigSchema.safeParse({ store_scripts_max_scripts: 0 }).success).toBe(false);
     expect(StorageConfigSchema.safeParse({ store_scripts_max_scripts: 501 }).success).toBe(false);

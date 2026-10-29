@@ -2570,9 +2570,15 @@ export function mergeOptionsToConfig(
 
   return {
     ...config,
-    // --store-scripts (#1255) turns the opt-in on for one run; it never turns it off.
-    ...(options.storeScripts
-      ? { storage: { ...config.storage, store_scripts: true } }
+    // --store-scripts (#1255) turns the opt-in on for one run, and
+    // --no-store-scripts (#1268) turns it off for one run when the config has it on.
+    ...(options.storeScripts !== undefined
+      ? {
+          storage: {
+            ...config.storage,
+            store_scripts: options.storeScripts,
+          },
+        }
       : {}),
     // Smart audits (#684): the command resolves signed-in → on / anon → off and
     // passes an explicit boolean; when unset, keep whatever config declared.
