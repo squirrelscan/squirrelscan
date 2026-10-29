@@ -1,5 +1,7 @@
 // eeat/about-page - About/company page presence
 
+import { z } from "zod";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
@@ -11,9 +13,14 @@ import {
   findInPageSection,
   inPageSectionsUnmeasured,
 } from "../shared/inpage-section";
+import { eeatPathsSchema, matchesConfiguredPaths } from "../shared/eeat-paths";
 import { findLinkedUncrawledPage, linkedUncrawledCheck } from "../shared/linked-uncrawled-page";
 
-const isAboutPath = (url: string): boolean =>
+export const optionsSchema = z.object({ paths: eeatPathsSchema });
+
+// A configured path wins first (#1261), then the built-in slugs.
+const isAboutPath = (url: string, paths: readonly string[] = []): boolean =>
+  matchesConfiguredPaths(url, paths) ||
   EEAT_PAGE_PATTERNS.about.some((p) => p.test(getPathname(url)));
 
 export const aboutPageRule: Rule = {
@@ -27,9 +34,11 @@ export const aboutPageRule: Rule = {
     scope: "site",
     severity: "warning",
     weight: 5,
+    optionsSchema,
   },
 
   run(ctx: RuleContext): RuleResult {
+    const { paths } = optionsSchema.parse(ctx.options);
     const checks: CheckResult[] = [];
     const pages = ctx.site?.pages;
 
@@ -50,7 +59,7 @@ export const aboutPageRule: Rule = {
     let section: ReturnType<typeof findInPageSection> = null;
 
     for (const page of pages) {
-      const matchesUrl = isAboutPath(page.url);
+      const matchesUrl = isAboutPath(page.url, paths);
       const matchesSchema = page.parsed.schemas.hasType("AboutPage");
       if (matchesUrl || matchesSchema) {
         aboutPage = page.url;
@@ -103,7 +112,7 @@ export const aboutPageRule: Rule = {
     } else {
       // pub#740: an About page the pages link to but the crawl never fetched
       // (an excluded path, or past the page budget) is unverified, not missing.
-      const linked = ctx.site ? findLinkedUncrawledPage(ctx.site, { href: isAboutPath }) : null;
+      const linked = ctx.site ? findLinkedUncrawledPage(ctx.site, { href: (url) => isAboutPath(url, paths) }) : null;
       checks.push(
         linked
           ? linkedUncrawledCheck("about-page", "About page", linked)

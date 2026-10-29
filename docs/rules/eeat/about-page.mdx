@@ -11,7 +11,7 @@ A page that exists and says three sentences does not do that job. What makes it 
 
 ## What squirrel checks
 
-The rule is site-wide. It looks for an About page in two ways: a URL path matching one of the multilingual about patterns, or a page whose structured data declares the `AboutPage` type. The first match wins. It emits a single check named `about-page`:
+The rule is site-wide. It looks for an About page in three ways: a URL path at one of the configured `paths` (see Options), a URL path matching one of the built-in multilingual about patterns (slugs such as `/about`, `/about-us`, `/ueber-uns`, `/wer-wir-sind` and `/unsere-geschichte`, also under `/pages/`), or a page whose structured data declares the `AboutPage` type. `/team`, `/the-team`, `/das-team`, `/agentur` and `/agency` are deliberately not built-in slugs: a team or agency page is often not an About page, so a site that uses one names it in `paths`. The first match wins. It emits a single check named `about-page`:
 
 - Skipped when no pages were crawled. Message: `No pages available for analysis`.
 - Pass when the page is found and has 200 words or more. Message: `About page exists with substantial content`, with the URL as the value. Severity warning, weight 5.
@@ -40,6 +40,21 @@ The word threshold is a proxy for that. Padding the page to 200 words does not m
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 5/10 |
+
+## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `paths` | string[] | `[]` | Site-specific paths of the page, checked in addition to the built-in slugs. Patterns are matched like [`excludePatterns`](/configuration/rule-options#url-patterns): a substring of the path, `/exact-segment/`, or `regex:`. |
+
+### Configuration example
+
+```toml squirrel.toml
+[rule_options."eeat/about-page"]
+paths = ["/pages/manufaktur"]
+```
+
+A crawled page at a configured path counts as the page, with no structured data needed, and a configured path that pages link to but the crawl did not fetch is reported as linked but not crawled, as for a built-in slug. A `paths` value that is not an array of strings is reported by `squirrel config validate`.
 
 ## Enable / disable
 

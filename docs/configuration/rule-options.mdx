@@ -612,6 +612,36 @@ errorOnPatterns = ["/products/", "/blog/"]
 
 ---
 
+### E-E-A-T rules
+
+#### `eeat/about-page`, `eeat/contact-page` and `eeat/privacy-policy`
+
+Name a page the built-in slugs do not cover. Each rule finds its page by a multilingual list of slugs, then by structured data or page title; a site whose page lives at a path no convention covers lists it in `paths`.
+
+**Options:**
+
+```toml
+[rule_options."eeat/about-page"]
+paths = ["/pages/manufaktur"]   # A crawled page at this path is the About page
+```
+
+**Defaults:**
+- `paths: []`
+
+**Examples:**
+
+```toml
+[rule_options."eeat/contact-page"]
+paths = ["/pages/kundendienst"]
+
+[rule_options."eeat/privacy-policy"]
+paths = ["regex:^/pages/rechtliches"]
+```
+
+**Behavior:** patterns use the [URL pattern](#url-patterns) forms and are checked before the built-in slugs. A configured path that pages link to but the crawl did not fetch is reported as linked but not crawled. A `paths` value that is not an array of strings is reported by `config validate` and stops the rule's audit run.
+
+---
+
 ### Blocking rules
 
 #### `adblock/element-hiding`

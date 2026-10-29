@@ -11,7 +11,7 @@ More than one method matters because they fail differently. A form is easy to bu
 
 ## What squirrel checks
 
-The rule is site-wide. It finds the contact page by a URL path matching one of the multilingual contact patterns, or by a page whose structured data declares the `ContactPage` type. It emits up to two checks:
+The rule is site-wide. It finds the contact page by a URL path at one of the configured `paths` (see Options), a URL path matching one of the multilingual contact patterns, or by a page whose structured data declares the `ContactPage` type. It emits up to two checks:
 
 - Skipped when no pages were crawled. Message: `No pages available for analysis`.
 - `contact-page` passes when a crawled page is the contact page. Message: `Contact page exists`, with the URL as the value.
@@ -46,6 +46,21 @@ A form is fine as an addition. It is weak on its own, because there is no way fo
 | **Scope** | Site-wide |
 | **Severity** | warning |
 | **Weight** | 5/10 |
+
+## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `paths` | string[] | `[]` | Site-specific paths of the page, checked in addition to the built-in slugs. Patterns are matched like [`excludePatterns`](/configuration/rule-options#url-patterns): a substring of the path, `/exact-segment/`, or `regex:`. |
+
+### Configuration example
+
+```toml squirrel.toml
+[rule_options."eeat/contact-page"]
+paths = ["/pages/manufaktur"]
+```
+
+A crawled page at a configured path counts as the page, with no structured data needed, and a configured path that pages link to but the crawl did not fetch is reported as linked but not crawled, as for a built-in slug. A `paths` value that is not an array of strings is reported by `squirrel config validate`.
 
 ## Enable / disable
 

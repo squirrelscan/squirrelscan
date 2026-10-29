@@ -299,6 +299,8 @@ export const EEAT_PAGE_PATTERNS = {
     /\/uber-mich(?:\/|\.html?)?$/i,
     /\/unternehmen(?:\/|\.html?)?$/i,
     /\/wir-ueber-uns(?:\/|\.html?)?$/i,
+    /\/wer-wir-sind(?:\/|\.html?)?$/i,
+    /\/unsere-geschichte(?:\/|\.html?)?$/i,
     /\/sobre(?:\/|\.html?)?$/i,
     /\/sobre-nos(?:\/|\.html?)?$/i,
     /\/quem-somos(?:\/|\.html?)?$/i,
