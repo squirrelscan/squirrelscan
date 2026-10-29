@@ -55,6 +55,15 @@ const redundantPatterns = [
   /^divider$/i,
 ];
 
+/** A filename stem with its percent-escapes decoded and lowercased; the raw stem when it will not decode. */
+function decodedStem(stem: string): string {
+  try {
+    return decodeURIComponent(stem).toLowerCase();
+  } catch {
+    return stem.toLowerCase();
+  }
+}
+
 export const imageRedundantAltRule: Rule = {
   meta: {
     id: "a11y/image-redundant-alt",
@@ -94,7 +103,11 @@ export const imageRedundantAltRule: Rule = {
         }
       }
 
-      // Check if alt duplicates filename
+      // Check if alt is the filename itself (#1273). Equality after dropping
+      // separators is not enough: "Google Partner Logo" for google-partner-logo.svg
+      // is a readable description. It is redundant only when the alt is a raw
+      // filename or slug: one token with no whitespace, or the decoded stem
+      // spelled exactly.
       const src = img.getAttribute("src") || "";
       const filename =
         src
@@ -104,11 +117,13 @@ export const imageRedundantAltRule: Rule = {
           ?.replace(/\.[^.]+$/, "") || "";
       if (filename && filename.length > 3) {
         const normalizedAlt = alt.toLowerCase().replace(/[-_\s]+/g, "");
-        const normalizedFilename = filename
-          .toLowerCase()
-          .replace(/[-_\s]+/g, "");
+        const stem = decodedStem(filename);
+        const normalizedFilename = stem.replace(/[-_\s]+/g, "");
 
-        if (normalizedAlt === normalizedFilename) {
+        if (
+          normalizedAlt === normalizedFilename &&
+          (!/\s/.test(alt) || alt.toLowerCase() === stem)
+        ) {
           redundantAlts.push(`alt="${alt}" matches filename`);
         }
       }

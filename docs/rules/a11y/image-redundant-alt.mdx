@@ -14,7 +14,7 @@ The other kind of redundancy is duplication. Alt text that repeats the caption u
 One check, `image-redundant-alt`, at severity warning. It reads every `img[alt]` with a non-empty `alt` and runs four tests. An empty `alt`, which marks a decorative image, is skipped.
 
 - The alt matches one of 42 patterns. Those cover the prefixes `image of`, `photo of`, `photograph of`, `picture of`, `graphic of`, `icon of`, `illustration of`, `diagram of`, `screenshot of`, `chart of`, `graph of`, `figure of` and `infographic of`, the bare nouns on their own, `logo`, `banner`, `img`, `thumbnail`, `hero image`, `cover image`, `featured image`, `placeholder`, `untitled`, `spacer`, `divider`, and bare file extensions such as `.jpg` and `.png`.
-- The alt matches the `src` filename. Both are lowercased and stripped of hyphens, underscores and spaces, and the filename must be longer than three characters. Item: `alt="hero-banner" matches filename`.
+- The alt is the `src` filename. Both are lowercased and stripped of hyphens, underscores and spaces, the filename (percent-escapes decoded, extension removed) must be longer than three characters, and the alt must look like a raw filename: a single token with no whitespace, or the decoded filename spelled exactly. A readable alt that merely spells the same words, such as `Google Partner Logo` for `google-partner-logo.svg`, is not flagged. Item: `alt="hero-banner" matches filename`.
 - The alt is repeated in the parent element's text. This needs the parent's text to be strictly longer than the alt and shorter than three times it, and the alt itself longer than ten characters, so a caption-sized repeat is caught while an exact-match parent and a long article are both left alone. Item: `"Annual revenue chart..." duplicates surrounding text`.
 - The alt is repeated in a `<figcaption>`. The image has to be inside a `<figure>`, the alt longer than five characters, and the caption has to equal or contain it. Item: `"Annual revenue chart..." duplicates figcaption`.
 
@@ -34,7 +34,7 @@ Elements inside `<noscript>` are skipped: a browser with scripting enabled reads
 
 Write what the image shows, not what kind of file it is. Where a caption already describes the image, the alt should add what the caption leaves out, or be empty if it adds nothing.
 
-A logo whose correct alt is the company name, sitting in a file named after the company, trips the filename test. `<img src="northwind.svg" alt="Northwind">` is right, and reported.
+A logo whose correct alt is the company name as one word, sitting in a file named after the company, still trips the filename test. `<img src="northwind.svg" alt="Northwind">` is right, and reported. A multi-word alt such as `Northwind Traders logo` in `northwind-traders-logo.svg` is not.
 
 | | |
 |---|---|

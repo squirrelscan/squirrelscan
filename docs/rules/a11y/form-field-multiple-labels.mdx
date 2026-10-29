@@ -13,7 +13,7 @@ Extra text about a field is a description, not a second name. That is what `aria
 
 One check, `form-field-multiple-labels`, at severity warning. It covers every `<input>` except types `hidden`, `submit`, `button` and `reset`, plus every `<textarea>` and `<select>`.
 
-For each control it counts every `<label for="...">` whose value matches the control's `id`, and adds one when the control has an ancestor `<label>`.
+For each control it counts the label elements that label it, the way a browser's `input.labels` does. That is every `<label for="...">` whose value matches the control's `id`, plus the ancestor `<label>` when that label has no `for` of its own and the control is its first labelable descendant. Each label element counts once: a `<label for="a">` that wraps the control with `id="a"` is one label, not two. A wrapping label whose `for` names another control does not label this one.
 
 - Warn when the count is more than one. Report message: `N input(s) with multiple labels`. Items read `email (2 labels)`, naming the control by its `name`, falling back to its `id` and then its tag. Every offender is listed, and the finding carries the suggestion `Use aria-describedby for additional descriptions`.
 - Pass with `No inputs have multiple labels`.
@@ -29,7 +29,7 @@ For each control it counts every `<label for="...">` whose value matches the con
 
 Keep one label and move the rest into `aria-describedby`. The description can point at several ids, so a hint and an error message can coexist.
 
-A control wrapped in a `<label>` that also has a separate `<label for>` pointing at it is the usual shape, and it usually arrives when a wrapper is added for click-target reasons. Removing the wrapper `<label>` and keeping the explicit association fixes both.
+A control wrapped in a `<label>` that also has a separate, second `<label for>` pointing at it is the usual shape, and it usually arrives when a wrapper is added for click-target reasons. Removing the wrapper `<label>` and keeping the explicit association fixes both.
 
 | | |
 |---|---|
