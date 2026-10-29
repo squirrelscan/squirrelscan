@@ -216,7 +216,7 @@ describe("auth/login - the branded callback pages (#1286)", () => {
         expect(html).not.toContain("\u2014");
         expect(html).not.toMatch(/Squirrelscan|SquirrelScan/);
         for (const heading of html.match(/<h[12]>([^<]+)<\/h[12]>/g) ?? []) {
-          const text = heading.replace(/<[^>]+>/g, "");
+          const text = heading.slice(4, -5); // between <hN> and </hN>
           // Sentence case: no word after the first starts with a capital, bar names.
           expect(
             text
@@ -234,7 +234,7 @@ describe("auth/login - the branded callback pages (#1286)", () => {
       `</strong><script>alert(1)</script><img src=x onerror=alert(2)>"'@example.com`
     );
     expect(hostile).not.toContain("<img");
-    expect(hostile.match(/<script>/g)).toHaveLength(1);
+    expect(hostile.match(/<script\b/gi)).toHaveLength(1);
     expect(hostile).not.toContain("alert(1)</script>");
     expect(hostile).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
     expect(hostile).toContain("&quot;&#39;@example.com");
