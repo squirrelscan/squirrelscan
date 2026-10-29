@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+## v0.0.140 (2026-10-29)
+
+Technology detection now works offline and reads the first-party script bundles of single page apps, so Lovable, Base44, Replit, v0, Supabase, Clerk and Firebase apps are recognised, and its fingerprint patterns are bounded. `squirrel audit` fails with exit code 3 when a WAF or bot manager serves a challenge or block page, and lists the blocked pages. The installers put `squirrel` on your PATH, and the in-page About and Contact check, the offline seed redirect and the keyword-stuffing check are fixed.
+
 ### Added
 
 - Technology detection reports Vercel BotID (Kasada's client served from a Vercel site) as its own technology instead of Kasada, reports F5 BIG-IP from its `BIGipServer` cookie or `Server: BigIP` header, and lists a WAF provider once instead of as both a fingerprint and a `waf-` twin. BotID and the other providers are technologies only: a normal 200 page behind them is never treated as blocked. (#1253)
