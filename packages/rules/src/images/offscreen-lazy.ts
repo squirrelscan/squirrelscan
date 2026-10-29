@@ -5,12 +5,15 @@ import { z } from "zod";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+import { initialViewportFlags } from "@squirrelscan/utils/image-loading";
 
 export const optionsSchema = z.object({
   above_fold_count: z
     .number()
     .default(3)
-    .describe("Number of images considered above the fold"),
+    .describe(
+      "Number of content images considered above the fold (icons and logos declared with width and height do not count)"
+    ),
 });
 
 export const offscreenLazyRule: Rule = {
@@ -47,7 +50,18 @@ export const offscreenLazyRule: Rule = {
     }
 
     const imagesArray = Array.from(images);
-    const belowFoldImages = imagesArray.slice(opts.above_fold_count);
+    // Below the fold is the images after the first `above_fold_count` CONTENT
+    // images, not after the first N elements: with no layout to measure, an
+    // image declared at icon or logo size (both width and height) neither fills
+    // the budget nor, before it is full, counts as below the fold (#1250).
+    const inViewport = initialViewportFlags(
+      imagesArray.map((img) => ({
+        width: img.getAttribute("width"),
+        height: img.getAttribute("height"),
+      })),
+      opts.above_fold_count
+    );
+    const belowFoldImages = imagesArray.filter((_, index) => !inViewport[index]);
 
     if (belowFoldImages.length === 0) {
       checks.push({

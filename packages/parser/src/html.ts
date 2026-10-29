@@ -321,6 +321,10 @@ export function extractImages(doc: Document, baseUrl: string): ImageData[] {
 
     try {
       const absoluteSrc = new URL(src, baseUrl).toString();
+      const el = img as Element;
+      const srcset = el.getAttribute("srcset") || el.getAttribute("data-srcset");
+      const sizes = el.getAttribute("sizes") || el.getAttribute("data-sizes");
+      const loading = el.getAttribute("loading");
       images.push({
         src: absoluteSrc,
         // Case-insensitive: HTML attribute names are, but linkedom keeps the
@@ -329,6 +333,10 @@ export function extractImages(doc: Document, baseUrl: string): ImageData[] {
         alt: getAttrCI(img as Element, "alt"),
         width: (img as Element).getAttribute("width"),
         height: (img as Element).getAttribute("height"),
+        ...(srcset ? { srcset } : {}),
+        ...(sizes ? { sizes } : {}),
+        ...(loading ? { loading } : {}),
+        ...(el.parentElement?.tagName.toLowerCase() === "picture" ? { inPicture: true } : {}),
       });
     } catch {
       // Skip invalid URLs

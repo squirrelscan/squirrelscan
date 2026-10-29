@@ -44,7 +44,10 @@ export const imageFileSizeRule: Rule = {
   run(ctx: RuleContext): RuleResult {
     const opts = optionsSchema.parse(ctx.options);
     const checks: CheckResult[] = [];
-    const resources = ctx.site?.resourceSizes?.images ?? [];
+    // The file a browser downloads, not every file the markup names (#1251): an
+    // <img src> that only sits behind a srcset whose selected candidate is
+    // another file is measured for other rules but is not what visitors load.
+    const resources = (ctx.site?.resourceSizes?.images ?? []).filter((r) => !r.fallbackOnly);
 
     if (resources.length === 0) {
       checks.push({
