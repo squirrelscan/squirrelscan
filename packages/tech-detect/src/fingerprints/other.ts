@@ -31,6 +31,14 @@ function inScript(bodySource: string, requires: string): Detector {
   };
 }
 
+/**
+ * `source` in a fetched first-party bundle, as code: not inside a comment or a
+ * string literal, so a docs snippet or a commented-out call does not match.
+ */
+function inBundle(source: string): Detector {
+  return { type: "script-content", pattern: new RegExp(source), inCode: true };
+}
+
 /** `bodySource` inside the body of a `<style>` element. */
 function inStyle(bodySource: string, requires: string): Detector {
   return {
@@ -276,6 +284,11 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       ...scriptSrc(
         String.raw`https:\/\/(?:cdn\.jsdelivr\.net\/npm|unpkg\.com|esm\.sh)\/@supabase\/supabase-js`,
       ),
+      // A bundle: the client call with a real project ref (also quoted as a
+      // plain string by a doc line, which is why it must start in code).
+      inBundle(
+        String.raw`\bcreateClient\)?\(\s*["']https:\/\/(?!your)[a-z0-9]{20}\.supabase\.co["']\s*,`,
+      ),
     ],
     ignoreComments: true,
     // Base44 apps load images from Base44's own shared Supabase storage; that is
@@ -294,6 +307,8 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       ...scriptSrc(String.raw`https:\/\/[a-z0-9-]{1,63}\.clerk\.accounts\.dev\/`),
       { type: "html", pattern: /<script\s(?:[^>]{0,400}\s)?data-clerk-js-script\b/i },
       { type: "html", pattern: /<script\s(?:[^>]{0,400}\s)?data-clerk-publishable-key\s*=\s*["']pk_(?:test|live)_/i },
+      // A bundle: the publishable key handed to the Clerk provider or client.
+      inBundle(String.raw`\bpublishableKey\s*[:=]\s*["']pk_(?:test|live)_[A-Za-z0-9+/=_-]{20,200}["']`),
     ],
     versionPattern: /@clerk\/clerk-js@(\d+(?:\.\d+){0,2})/i,
     ignoreComments: true,
@@ -313,6 +328,13 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       inScript(
         String.raw`authDomain["']?\s*:\s*["'](?!your|my-project|project)[a-z0-9-]{1,63}\.firebaseapp\.com["']`,
         ".firebaseapp.com",
+      ),
+      // A bundle: the web app config passed to initializeApp.
+      inBundle(
+        String.raw`\bauthDomain["']?\s*:\s*["'](?!your|my-project|project)[a-z0-9-]{1,63}\.firebaseapp\.com["']`,
+      ),
+      inBundle(
+        String.raw`\bstorageBucket["']?\s*:\s*["'](?!your|my-project|project)[a-z0-9-]{1,63}\.(?:appspot\.com|firebasestorage\.app)["']`,
       ),
     ],
     versionPattern: /\/firebasejs\/(\d+\.\d+\.\d+)\/firebase-/i,

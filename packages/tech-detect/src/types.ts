@@ -19,7 +19,11 @@ export type Detector =
   | { type: "header"; name: string; pattern: RegExp }
   | { type: "meta"; name: string; pattern: RegExp }
   | { type: "script-url"; pattern: RegExp }
-  | { type: "script-content"; pattern: RegExp }
+  // `inCode`: the match must start in code, not inside a comment or a string
+  // literal of the script, so a docs snippet or a commented-out call is no
+  // evidence. For config-style patterns that need a real call to mean anything.
+  // An `inCode` detector reads fetched script bodies only, never the page HTML.
+  | { type: "script-content"; pattern: RegExp; inCode?: boolean }
   // `requires`: literal that must appear in the html (case-sensitive) before the
   // pattern runs, a cheap gate for patterns that scan a bounded window per tag.
   | { type: "html"; pattern: RegExp; requires?: string }
