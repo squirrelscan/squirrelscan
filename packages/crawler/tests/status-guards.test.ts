@@ -6,7 +6,7 @@
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import { applyStatusGuards, CrawlError } from "../src/fetcher";
+import { applyStatusGuards, applyWafGuard, CrawlError } from "../src/fetcher";
 
 const URL = "https://example.com/";
 
@@ -114,5 +114,57 @@ describe("applyStatusGuards (#792/#802)", () => {
   test("challenge markers at a non-503 5xx status stay a network error (guard is 503-scoped)", async () => {
     const error = await guard(502, { body: CLOUDFLARE_CHALLENGE });
     expect(error?.type).toBe("network");
+  });
+});
+
+// #1253: a provider's challenge is a block at any status, and carries who and why.
+const KASADA_CHALLENGE =
+  "<!DOCTYPE html><html><head></head><body><script>window.KPSDK={};KPSDK.start=Date.now();</script>" +
+  '<script src="/00000000-0000-4000-8000-000000000001/00000000-0000-4000-8000-000000000002/ips.js"></script></body></html>';
+
+const DATADOME_CHALLENGE =
+  `<html><head><title>example.com</title></head><body><p>Please enable JS</p><script>var dd={'rt':'c','cid':'TESTCID','host':'geo.captcha-delivery.com'}</script>` +
+  '<script src="https://ct.captcha-delivery.com/c.js"></script></body></html>';
+
+async function wafGuard(
+  status: number,
+  opts: { body?: string; headers?: Record<string, string> } = {},
+): Promise<CrawlError | null> {
+  const result = await Effect.runPromise(
+    Effect.either(applyWafGuard(URL, status, new Headers(opts.headers), opts.body)),
+  );
+  return result._tag === "Left" ? result.left : null;
+}
+
+describe("a provider's challenge at any status (#1253)", () => {
+  test("a Kasada challenge at 429 is blocked, not rate limited", async () => {
+    const error = await guard(429, { body: KASADA_CHALLENGE });
+    expect(error?.type).toBe("blocked");
+    expect(error?.status).toBe(429);
+    expect(error?.wafBlock).toMatchObject({ provider: "Kasada", providerId: "kasada" });
+  });
+
+  test("a plain 429 stays rate limiting, with or without a body", async () => {
+    expect((await guard(429, { body: "slow down" }))?.type).toBe("rate_limit");
+    expect((await guard(429))?.type).toBe("rate_limit");
+  });
+
+  test("a challenge served as 200 passes the status guards but not the WAF guard", async () => {
+    expect(await guard(200, { body: DATADOME_CHALLENGE })).not.toBeNull();
+    const error = await wafGuard(200, { body: DATADOME_CHALLENGE });
+    expect(error?.type).toBe("blocked");
+    expect(error?.message).toBe("Blocked by DataDome challenge (200)");
+    expect(error?.wafBlock?.signal).toContain("DataDome");
+  });
+
+  test("an AWS WAF challenge (202, header only) and CAPTCHA (405) are blocked", async () => {
+    expect((await wafGuard(202, { headers: { "x-amzn-waf-action": "challenge" } }))?.wafBlock?.providerId).toBe("aws-waf");
+    expect((await wafGuard(405, { headers: { "x-amzn-waf-action": "captcha" } }))?.status).toBe(405);
+  });
+
+  test("ordinary 200, 202, 405 and 429 responses pass the WAF guard", async () => {
+    const page = "<html><head><title>Hi</title></head><body><p>hello</p></body></html>";
+    for (const status of [200, 202, 405]) expect(await wafGuard(status, { body: page })).toBeNull();
+    expect(await wafGuard(202, { headers: { "x-amzn-requestid": "TEST" } })).toBeNull();
   });
 });

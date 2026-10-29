@@ -414,6 +414,15 @@ export {
   type AuditFailureNotice,
 } from "./failure-notice";
 
+// Pages a WAF or bot manager blocked (#1253): the copy every renderer shares.
+export {
+  safeBlockedPage,
+  safeWafBlocked,
+  wafBlockedPagesLines,
+  wafBlockedSeedCopy,
+  type WafBlockedSeedCopy,
+} from "./waf-blocked";
+
 // Locked cloud-rules audience messaging (#368, #747, #792, #780) — single
 // source of truth reused by every renderer (html/llm/markdown/text) and the
 // CLI footer.

@@ -41,7 +41,7 @@ import {
   parseRetryAfterMs,
   rateLimitBackoffMs,
 } from "@squirrelscan/utils/rate-limit";
-import { detectWafChallengePage } from "@squirrelscan/utils/waf";
+import { inspectWafChallengePage, type WafChallengeDetail } from "@squirrelscan/utils/waf";
 
 export type CrawlErrorType =
   | "timeout"
@@ -57,6 +57,13 @@ const TIMEOUT_MESSAGE = "Crawl request timed out";
 
 /** Bound refusal-body reads while leaving enough context to reject real pages. */
 const WAF_CHALLENGE_BODY_BYTES = 64 * 1024;
+
+/** The detector's reading of a challenge or block page: who served it and why it was called one. */
+export interface WafBlockInfo {
+  provider: string | null;
+  providerId: string | null;
+  signal: string;
+}
 
 export class CrawlError extends Error {
   constructor(
@@ -85,6 +92,12 @@ export class CrawlError extends Error {
      * the same failure `ENOTFOUND` (squirrelscan/repo#1840).
      */
     readonly errorCode?: string,
+    /**
+     * Which perimeter provider served a challenge or block page, and the
+     * marker that said so (#1253). Only set on a `blocked` error the WAF
+     * detector claimed; a bare 403 carries none.
+     */
+    readonly wafBlock?: WafBlockInfo,
   ) {
     super(message);
     this.name = "CrawlError";
@@ -127,8 +140,13 @@ export class CrawlError extends Error {
     );
   }
 
-  static blocked(url: string, message = "Request blocked by server", status = 403): CrawlError {
-    return new CrawlError(url, "blocked", message, undefined, status);
+  static blocked(
+    url: string,
+    message = "Request blocked by server",
+    status = 403,
+    wafBlock?: WafBlockInfo,
+  ): CrawlError {
+    return new CrawlError(url, "blocked", message, undefined, status, undefined, wafBlock);
   }
 
   static rateLimit(url: string, retryAfterMs?: number, status?: number): CrawlError {
@@ -817,6 +835,54 @@ function parseContentLength(headers: Headers, body: string): number {
 }
 
 /**
+ * A perimeter provider's challenge or block page, as a failed fetch (#1253).
+ * Any status: AWS WAF answers a challenge with 202 and a CAPTCHA with 405, and
+ * Akamai, F5 and DataDome serve theirs as 200, so the page would otherwise be
+ * stored and audited as the site. Needs the body only for the providers that
+ * have no header of their own; a header-only block passes `undefined`.
+ */
+export function applyWafGuard(
+  url: string,
+  status: number,
+  headers: Headers,
+  body?: string,
+): Effect.Effect<void, CrawlError, never> {
+  const challenge = inspectWafBlock(status, headers, body);
+  if (!challenge) return Effect.void;
+  return Effect.fail(wafBlockedError(url, status, challenge));
+}
+
+function inspectWafBlock(status: number, headers: Headers, body?: string): WafChallengeDetail | null {
+  // A 5xx other than 503 is the origin failing, not a perimeter provider
+  // answering (a Cloudflare 502 page carries its ray id like a block page does).
+  if (status >= 500 && status !== 503) return null;
+  const result = inspectWafChallengePage({
+    status,
+    headers: {
+      server: headers.get("server"),
+      cfCacheStatus: headers.get("cf-cache-status"),
+      xCache: headers.get("x-cache"),
+      raw: headers,
+    },
+    html: body ?? null,
+  });
+  return result.detected ? result : null;
+}
+
+function wafBlockedError(url: string, status: number, challenge: WafChallengeDetail): CrawlError {
+  return CrawlError.blocked(
+    url,
+    `Blocked by ${challenge.provider ?? "bot protection"} challenge (${status})`,
+    status,
+    {
+      provider: challenge.provider,
+      providerId: challenge.providerId,
+      signal: challenge.signal ?? "challenge page",
+    },
+  );
+}
+
+/**
  * Classify an HTTP status into a fetch failure (or let it through). Exported so
  * tests can drive the real classification through the injectable fetch seam.
  */
@@ -826,6 +892,14 @@ export function applyStatusGuards(
   headers: Headers,
   body?: string,
 ): Effect.Effect<void, CrawlError, never> {
+  // A provider's challenge beats every status reading below, 429 included: a
+  // Kasada challenge is a 429 and is not throttling, so it must not be retried
+  // as one (#1253). A refusal carries proof in the response itself: Server:
+  // cloudflare alone is not enough, because ordinary auth/geo blocks carry it
+  // too (#446).
+  const challenge = inspectWafBlock(status, headers, body);
+  if (challenge) return Effect.fail(wafBlockedError(url, status, challenge));
+
   // 429 and Shopify's 430 are unconditional throttling (#1829). A 503 is
   // ambiguous — checked further down, AFTER the bot-challenge detection, since
   // a challenge interstitial is a refusal we must not keep retrying.
@@ -835,38 +909,8 @@ export function applyStatusGuards(
     );
   }
 
-  // A managed challenge can answer 403 or 503. Only proof carried by the
-  // refused response itself names the mechanism: Server: cloudflare alone is
-  // not enough, because ordinary auth/geo blocks carry it too (#446).
-  if (status === 403 || status === 503) {
-    if (headers.get("cf-mitigated") === "challenge") {
-      return Effect.fail(
-        CrawlError.blocked(url, `Blocked by Cloudflare challenge (${status})`, status),
-      );
-    }
-    if (body) {
-      const challenge = detectWafChallengePage({
-        status,
-        headers: {
-          server: headers.get("server"),
-          cfCacheStatus: headers.get("cf-cache-status"),
-          xCache: headers.get("x-cache"),
-        },
-        html: body,
-      });
-      if (challenge.detected) {
-        return Effect.fail(
-          CrawlError.blocked(
-            url,
-            `Blocked by ${challenge.provider ?? "bot protection"} challenge (${status})`,
-            status,
-          ),
-        );
-      }
-    }
-    if (status === 403) {
-      return Effect.fail(CrawlError.blocked(url, undefined, 403));
-    }
+  if (status === 403) {
+    return Effect.fail(CrawlError.blocked(url, undefined, 403));
   }
 
   if (status >= 500) {
@@ -1219,19 +1263,25 @@ function fetchPageStandardOnce(
       },
     });
 
-    // A 403/503 needs a bounded body prefix to tell a bot-challenge
-    // interstitial from an ordinary refusal/outage (#446/#802). Both statuses
-    // always fail the guard below, so consuming the stream here is safe. The
-    // explicit Cloudflare header is already enough and avoids the read.
-    const statusMayBeChallenge = finalResponse.status === 403 || finalResponse.status === 503;
+    // A 403/503/429 needs a bounded body prefix to tell a bot-challenge
+    // interstitial from an ordinary refusal/outage/throttle (#446/#802/#1253).
+    // These statuses always fail the guard below, so consuming the stream here
+    // is safe. A provider header (`cf-mitigated`) is already enough and avoids
+    // the read. A 200, 202 or 405 challenge is judged on the full body after
+    // it is read, below.
+    const statusMayBeChallenge =
+      finalResponse.status === 403 || finalResponse.status === 503 || finalResponse.status === 429;
     const challengeBody =
       statusMayBeChallenge && finalResponse.headers.get("cf-mitigated") !== "challenge"
         ? yield* readBody(WAF_CHALLENGE_BODY_BYTES).pipe(
             Effect.catchAll((error) => {
-              // A 403 already proves the request was refused. The body is only
-              // sampled to name the challenge provider, so an unreadable or
-              // stalled sample degrades to the generic blocked result.
-              if (finalResponse.status === 403) return Effect.succeed(undefined);
+              // A 403 or 429 already proves the request was refused. The body is
+              // only sampled to name the challenge provider, so an unreadable
+              // or stalled sample degrades to the generic blocked or throttled
+              // result.
+              if (finalResponse.status === 403 || finalResponse.status === 429) {
+                return Effect.succeed(undefined);
+              }
 
               // #1729: for a 503, a deadline firing on a stalled body is a
               // TIMEOUT. Swallowing it here would blame the origin with the
@@ -1247,6 +1297,9 @@ function fetchPageStandardOnce(
     yield* applyStatusGuards(url, finalResponse.status, finalResponse.headers, challengeBody);
 
     const body = yield* readBody();
+    // A challenge served as 200, 202 or 405 passes the status guards, so it is
+    // judged here, on the body, before it is stored as the site (#1253).
+    yield* applyWafGuard(url, finalResponse.status, finalResponse.headers, body);
 
     const loadTime = Date.now() - finalTiming.fetchStart;
     const downloadTime = loadTime - ttfb;

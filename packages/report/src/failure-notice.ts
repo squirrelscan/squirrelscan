@@ -7,10 +7,13 @@
 
 import {
   summarizeRefusedFetches,
+  wafBlockHeadline,
   type AuditFailureReasonCode,
   type AuditStatus,
   type RefusedFetch,
+  type WafBlockedPage,
 } from "@squirrelscan/core-contracts";
+import { wafBlockedSteps } from "./waf-blocked";
 import {
   AUDIT_FAILURE_CAUSE,
   AUDIT_FAILURE_NEXT_STEP,
@@ -55,10 +58,33 @@ export function getAuditFailureNotice(
    */
   rateLimited?: { pages: number; hosts: string[] },
   reasonCode?: AuditFailureReasonCode,
+  /**
+   * Set (already sanitised, see `safeWafBlocked`) when the audited page itself
+   * was a WAF or bot-manager challenge or block page (#1253). The remedy is to
+   * open the crawl to us, which neither the rate-limit nor the generic block
+   * copy says.
+   */
+  wafSeed?: WafBlockedPage,
 ): AuditFailureNotice | null {
   if (status !== "blocked" && status !== "failed") return null;
 
   const cliCommand = `squirrel audit ${target}`;
+
+  if (status === "blocked" && wafSeed) {
+    return {
+      tone: "blocked",
+      heading: wafSeed.provider
+        ? `${wafSeed.provider} blocked the audit`
+        : "Your site's bot protection blocked the audit",
+      body: [
+        `${wafBlockHeadline(wafSeed)} Saw: ${wafSeed.signal}, HTTP ${wafSeed.status}. This is a block on your side, not a squirrelscan outage.`,
+      ],
+      stepsIntro: "To get a full audit, try one of these:",
+      steps: wafBlockedSteps(),
+      cliIntro: "Or run the audit from a network the site trusts:",
+      cliCommand,
+    };
+  }
 
   if (status === "blocked" && rateLimited && rateLimited.pages > 0) {
     const hosts = rateLimited.hosts.length > 0 ? rateLimited.hosts.join(", ") : "the host";

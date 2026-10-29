@@ -60,6 +60,13 @@ import { TELEMETRY as _TEL } from "@squirrelscan/core-contracts/limits";
 export const TELEMETRY_TIMEOUT_MS = _TEL.timeoutMs;
 
 // Web dashboard — linked from account/credit lines
+/**
+ * `squirrel audit` exit code when the audited page was a WAF or bot-manager
+ * challenge or block page (#1253). 1 stays the operational failure and 2 the
+ * `--fail-on` gate.
+ */
+export const EXIT_CODE_WAF_BLOCKED = 3;
+
 export const DASHBOARD_URL = "https://app.squirrelscan.com";
 
 /** Where published reports are served; a report lives at `${REPORTS_BASE_URL}/<id>`. */

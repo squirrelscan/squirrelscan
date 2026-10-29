@@ -10,8 +10,9 @@ import type {
   FrontierSource,
   LinkData,
   SitemapData,
+  WafBlockedSummary,
 } from "@squirrelscan/core-contracts";
-import { isCacheHitReason } from "@squirrelscan/core-contracts";
+import { addWafBlockedPage, isCacheHitReason, wafBlockedPage } from "@squirrelscan/core-contracts";
 import { WELL_KNOWN_PATHS, isPermanentStorageError } from "@squirrelscan/core-contracts/storage";
 import { auditFailureDetail } from "@squirrelscan/core-contracts/failure-reason";
 import { COVERAGE_PAGE_LIMITS, REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
@@ -594,6 +595,19 @@ export function createCrawler(
      */
     let rootFailure: AuditFailureDetail | undefined;
     /**
+     * Pages a WAF or bot manager answered with a challenge or block page
+     * (#1253). Held here for the same reason as `rootFailure`: `updateStats` is
+     * a concurrent read-modify-write, and a list rebuilt from a stale read
+     * would drop a blocked page another worker had just recorded.
+     */
+    let wafBlocked: WafBlockedSummary | undefined;
+    /**
+     * The seed's normalized URL. A sitemap that lists the homepage enqueues it
+     * first, so the frontier entry for the seed keeps `source: "sitemap"` and
+     * the source alone cannot say a blocked page was the audited one (#1253).
+     */
+    let seedNormalizedUrl: string | undefined;
+    /**
      * The first page this run lost to something other than its fetch: the
      * local store refusing it, or processing throwing (#403). Written as the
      * root failure only when the crawl stored nothing and saw no fetch failure,
@@ -877,6 +891,7 @@ export function createCrawler(
         const { normalized, decision } = normalizeAndCheckScope(rawUrl);
 
         if (!normalized) return;
+        if (source === "seed") seedNormalizedUrl = normalized;
 
         // Cloudflare's email-protection link is an email address, never a page (pub#811,
         // pub#838), whichever source names it: a sitemap, a carried finding, or a link from a
@@ -1519,6 +1534,20 @@ export function createCrawler(
             // (subset of pagesFailed) so status derivation can say `blocked`
             // instead of a generic empty crawl (#792).
             const blockedFetch = error.type === "blocked";
+            // A challenge or block page a provider served (#1253): name who and
+            // why, and tell a blocked seed from any other page. Folded here,
+            // before the stats write below carries it.
+            if (blockedFetch && error.wafBlock) {
+              wafBlocked = addWafBlockedPage(
+                wafBlocked,
+                wafBlockedPage({
+                  url: entry.normalizedUrl,
+                  status: error.status ?? 403,
+                  ...error.wafBlock,
+                }),
+                entry.source === "seed" || entry.normalizedUrl === seedNormalizedUrl,
+              );
+            }
             // A body the runtime could not decode is a page the audit never
             // saw. Counted (subset of pagesFailed) so the report can say its
             // coverage was short instead of scoring the rest as complete.
@@ -2054,6 +2083,7 @@ export function createCrawler(
           // declaration); `current` only contributes on the first update after a
           // resume, and `updates` can only displace a weaker source.
           rootFailure,
+          ...(wafBlocked ? { wafBlocked } : {}),
         };
 
         // Update average load time
@@ -2108,6 +2138,7 @@ export function createCrawler(
         // Resume-safe for the same reason (#1822): a crawl continuing from
         // persisted stats keeps whatever root failure the earlier pass recorded.
         rootFailure = priorStats?.rootFailure;
+        wafBlocked = priorStats?.wafBlocked;
         processFailure = undefined;
         // Throttle verdicts do not survive a run. Exhaustion is terminal WITHIN
         // a run (an exhausted host is skipped before any request, so it can never

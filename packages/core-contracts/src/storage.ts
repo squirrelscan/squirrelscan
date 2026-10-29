@@ -6,6 +6,7 @@ import type { Effect } from "effect";
 import type { AuditFailureDetail } from "./failure-reason";
 import type { ClassifiedPageType, LinkSection, LinkSectionCounts, ScanScope } from "./index";
 import type { RefusedFetch } from "./refused-fetch";
+import type { WafBlockedSummary } from "./waf-block";
 import type { UnverifiedReason } from "./services";
 
 // ============================================
@@ -188,6 +189,15 @@ export interface CrawlStats {
    * backward compatibility with older persisted stats blobs.
    */
   pagesBlocked?: number;
+  /**
+   * The pages a WAF or bot manager answered with a challenge or block page
+   * (#1253), with the provider, the matched signal and the status. A subset of
+   * the fetches counted in `pagesBlocked` (a bare 403 is counted there but has
+   * no provider marker). `seed` is set when the audited page itself was one: the
+   * audit then fails whatever else was crawled. Optional for backward
+   * compatibility with older persisted stats blobs.
+   */
+  wafBlocked?: WafBlockedSummary;
   /**
    * Fetches abandoned because the host was rate limiting (429/430, or a 503
    * carrying `Retry-After`) — a subset of `pagesFailed`, disjoint from

@@ -12,6 +12,7 @@
     "./item-sources": "./src/item-sources.ts",
     "./control-chars": "./src/control-chars.ts",
     "./failure-reason": "./src/failure-reason.ts",
+    "./waf-block": "./src/waf-block.ts",
     "./offsite-redirect": "./src/offsite-redirect.ts",
     "./untrusted-keys": "./src/untrusted-keys.ts",
     "./credits": "./src/credits.ts",

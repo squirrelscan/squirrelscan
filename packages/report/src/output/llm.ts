@@ -74,6 +74,7 @@ import { formatSiteWideItem, siteWideContext, siteWideItem } from "../site-wide-
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 import { AUDIT_FAILURE_NEXT_STEP_THIRD } from "@squirrelscan/core-contracts/failure-reason";
 import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
+import { safeWafBlocked, wafBlockedSeedCopy } from "../waf-blocked";
 
 export interface LlmRenderOptions {
   /** Roll up groups that are one repair (default true). */
@@ -216,7 +217,13 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     const reasonAttr = report.statusReason ? ` reason="${escapeXml(report.statusReason)}"` : "";
     const throttled = !!report.rateLimited && report.rateLimited.pages > 0;
     lines.push(`<status state="${report.status}"${reasonAttr}>`);
-    if (report.status === "blocked" && throttled) {
+    const wafSeed = wafBlockedSeedCopy(report);
+    if (wafSeed) {
+      // #1253: a perimeter provider served a challenge or block page instead of the site.
+      lines.push(`${indent(1)}${escapeXml(wafSeed.headline)} ${escapeXml(wafSeed.saw)} This is a block on the site side, NOT a squirrelscan outage, and the page that was served is not the site: do not report findings about it.`);
+      lines.push(`${indent(1)}To get a full audit, relay one of these to the user:`);
+      for (const remedy of wafSeed.remedies) lines.push(`${indent(2)}<remedy>${escapeXml(remedy)}</remedy>`);
+    } else if (report.status === "blocked" && throttled) {
       lines.push(
         `${indent(1)}The host rate limited the crawler (429/430) before any pages could be read, so nothing was audited. This is throttling, NOT bot protection: allowlisting a crawler will not help.`,
       );
@@ -255,6 +262,25 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
       }
     }
     lines.push("</status>");
+  }
+
+  // #1253: pages a WAF or bot manager blocked. State plainly that what they
+  // served is not the site, so an agent never "fixes" a challenge page.
+  const wafBlocked = safeWafBlocked(report);
+  if (wafBlocked) {
+    const providers = escapeXml(wafBlocked.providers.join(", "));
+    const code = escapeXml(wafBlocked.seed?.code ?? wafBlocked.pages[0]?.code ?? "blocked_by_waf");
+    lines.push(`<waf-blocked pages="${wafBlocked.total}" providers="${providers}" code="${code}">`);
+    lines.push(
+      `${indent(1)}${wafBlocked.total} page(s) were answered with a challenge or block page by a WAF or bot manager. They were excluded from rule evaluation and scoring, so they carry no findings. Do not report them as broken pages.`,
+    );
+    for (const page of wafBlocked.seed ? [wafBlocked.seed, ...wafBlocked.pages] : wafBlocked.pages) {
+      const by = page.provider ? ` provider="${escapeXml(page.provider)}"` : "";
+      lines.push(
+        `${indent(1)}<page url="${escapeXml(page.url)}" status="${page.status}"${by} signal="${escapeXml(page.signal)}"/>`,
+      );
+    }
+    lines.push("</waf-blocked>");
   }
 
   // Root fetches the site refused. Their absence is UNKNOWN, so an agent

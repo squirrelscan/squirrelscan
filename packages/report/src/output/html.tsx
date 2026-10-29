@@ -93,6 +93,7 @@ import {
 } from "../item-sources";
 import { lockedRulesMessage } from "../locked-rules";
 import { notCheckedLines } from "../not-checked";
+import { safeWafBlocked, wafBlockedPagesLines } from "../waf-blocked";
 import { privateTargetLine } from "../private-target";
 import {
   checkPagesScopedAway,
@@ -1807,6 +1808,7 @@ function ReportPage({
     report.baseUrl,
     report.rateLimited,
     reportFailureReasonCode(report),
+    report.status === "blocked" ? (safeWafBlocked(report)?.seed ?? undefined) : undefined,
   );
   const issueGroups = new Set(issues.map((i) => i.group));
   const signedIn = report.cloudPlan === "free" || report.cloudPlan === "paid";
@@ -1829,7 +1831,14 @@ function ReportPage({
   const capped = publishedReportNote(report);
   // The header already says how many pages were scanned and at what level, and
   // the coverage notice says when that is partial, so no scope line here.
-  const notes = [cov, priv, ...notChecked, seed, hint].filter((t): t is string => !!t);
+  // #1253: pages a WAF or bot manager blocked were not audited: say so, and which.
+  const [blockedSummary, ...blockedListed] = wafBlockedPagesLines(report);
+  const blockedNote = blockedSummary
+    ? `${blockedSummary}${blockedListed.length > 0 ? ` ${blockedListed.slice(0, 3).join("; ")}` : ""}`
+    : null;
+  const notes = [cov, priv, ...notChecked, seed, blockedNote, hint].filter(
+    (t): t is string => !!t,
+  );
   const reportKey = coverageNoticeKey(report, reportId);
   const byReach = (a: FlatIssue, b: FlatIssue) =>
     reach(b, totalPages).count - reach(a, totalPages).count;

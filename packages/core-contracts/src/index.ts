@@ -1,6 +1,7 @@
 // Re-export all storage types (CrawlStorage, PageRecord, etc.)
 export * from "./storage";
 export * from "./refused-fetch";
+export * from "./waf-block";
 
 // Cache-stats aggregation helper (#108).
 export * from "./cache-stats";
@@ -78,6 +79,7 @@ import type { CompactResolutionSignal, ResolutionSignal } from "./resolution";
 import { RULE_TIMED_OUT_SKIP_REASON } from "./resolution";
 import type { AuditFailureReasonCode } from "./failure-reason";
 import type { RefusedFetch } from "./refused-fetch";
+import type { WafBlockedSummary } from "./waf-block";
 import type { EntityMap } from "./entity-map";
 import type { AuditLevel, ResolvedAuditSettings } from "./audit-levels";
 import type { ReportCapTier } from "./limits";
@@ -660,6 +662,13 @@ export interface AuditReport {
    * not checked and the renderers list them. Absent when nothing was refused.
    */
   refusedFetches?: RefusedFetch[];
+  /**
+   * Pages a WAF or bot manager answered with a challenge or block page
+   * (#1253). A blocked `seed` is why a `blocked` run failed
+   * (`statusReason` names it); `pages` are the others, left out of rule
+   * evaluation and never scored. Absent when no page was blocked.
+   */
+  wafBlocked?: WafBlockedSummary;
   healthScore?: HealthScore;
   ruleResults: Record<string, ReportRuleResult>;
   /**

@@ -78,7 +78,9 @@ export function deriveCrawlRunStatus(
     // failure has to be threaded here too or `squirrel audit` keeps printing
     // the generic reason the cloud no longer prints.
     crawl.stats?.rootFailure,
-    crawl.stats?.pagesUndecodable ?? 0
+    crawl.stats?.pagesUndecodable ?? 0,
+    // #1253: a blocked seed fails the audit whatever else was crawled.
+    crawl.stats?.wafBlocked?.seed
   );
 }
 
@@ -835,7 +837,9 @@ export function reconstructReport(
       smartMerge &&
       smartMerge.coverage.knownPages > smartMerge.coverage.auditedPages &&
       rateLimitedCount === 0 &&
-      (crawl.stats?.pagesUndecodable ?? 0) === 0
+      (crawl.stats?.pagesUndecodable ?? 0) === 0 &&
+      // A blocked seed is never a carried-page case: nothing was re-checked.
+      !crawl.stats?.wafBlocked?.seed
         ? {
             status: "completed" as const,
             reason: undefined,
@@ -892,6 +896,11 @@ export function reconstructReport(
               hosts: rateLimitedHosts(crawl.baseUrl, rateLimitedCount),
             },
           }
+        : {}),
+      // Pages a WAF or bot manager answered with a challenge or block page
+      // (#1253): never scored, and the report says how many and who.
+      ...(crawl.stats?.wafBlocked && crawl.stats.wafBlocked.total > 0
+        ? { wafBlocked: crawl.stats.wafBlocked }
         : {}),
       // Root fetches the site refused, surfaced so a blocked report says
       // "refused" instead of leaving the reader to infer it.

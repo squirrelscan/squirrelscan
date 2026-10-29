@@ -4,6 +4,7 @@ import type {
   AuditFailureReasonCode,
   EditorSummaryPriority,
   RefusedFetch,
+  WafBlockedSummary,
 } from "@squirrelscan/core-contracts";
 import type { ResolvedAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
 import type {
@@ -32,6 +33,7 @@ import { fixUnits, ruleFixCoverage } from "../component-presentation";
 import { siteResourceFixGroups } from "../site-resource-fix-groups";
 import { isRenderableSiteResourceGroup } from "../site-resource-presentation";
 import { reportFailureReasonCode } from "../failure-notice";
+import { safeWafBlocked } from "../waf-blocked";
 import { getScoreGrade } from "../scoring";
 import { getGroupName } from "../categories";
 import { groupIssuesByCategory, flattenIssuesBySeverity, reportPassedRules } from "../grouping";
@@ -195,6 +197,13 @@ interface SlimJsonReport {
    * something was refused.
    */
   refusedFetches?: RefusedFetch[];
+  /**
+   * Pages a WAF or bot manager answered with a challenge or block page (#1253).
+   * Never audited or scored. `seed` is set when the audited page itself was
+   * blocked, which makes `status` `blocked`; its `code` (`blocked_by_<provider>`)
+   * is the machine-readable reason. Present only when a page was blocked.
+   */
+  wafBlocked?: WafBlockedSummary;
   score: {
     overall: number | null; // null ⇒ N/A (failed/0-page audit, #586)
     grade: string;
@@ -475,6 +484,7 @@ function buildSlimReport(
       ? { rateLimited: report.rateLimited }
       : {}),
     ...(report.refusedFetches?.length ? { refusedFetches: report.refusedFetches } : {}),
+    ...(safeWafBlocked(report) ? { wafBlocked: safeWafBlocked(report)! } : {}),
     score: {
       // null ⇒ N/A (failed/0-page audit); preserved through save/reload (#586).
       overall: report.healthScore?.overall ?? null,

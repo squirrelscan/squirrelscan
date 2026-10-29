@@ -5,6 +5,7 @@ import type { AuditReport } from "../types";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
 import { cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
 import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
+import { wafBlockedPagesLines, wafBlockedSeedCopy } from "../waf-blocked";
 import { getScoreGrade } from "../scoring";
 import { REPORT_SOURCE_PAGES_PREVIEW, REPORT_PAGES_HARD_CAP } from "../constants";
 import { fixRollupLine, fixUnits, ruleFixCoverage } from "../component-presentation";
@@ -359,7 +360,18 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
     const throttled = !!report.rateLimited && report.rateLimited.pages > 0;
     lines.push(`## ${blocked ? "Audit blocked" : "Audit failed"}`);
     lines.push("");
-    if (blocked && throttled) {
+    const wafSeed = wafBlockedSeedCopy(report);
+    if (wafSeed) {
+      // #1253: a WAF or bot manager served a challenge or block page instead of
+      // the site. Fields are sanitised in wafBlockedSeedCopy and escaped here.
+      lines.push(escapeMarkdownInline(wafSeed.headline));
+      lines.push("");
+      lines.push(`${escapeMarkdownInline(wafSeed.saw)} Code: \`${wafSeed.code}\`.`);
+      lines.push("");
+      lines.push("To get a full audit:");
+      lines.push("");
+      for (const remedy of wafSeed.remedies) lines.push(`- ${remedy}`);
+    } else if (blocked && throttled) {
       // #1829: throttling and a bot wall both land here with nothing audited,
       // but the fixes are opposite — say which one this was.
       lines.push(
@@ -411,6 +423,15 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
       // Escaped like the Failed branch's reason above, for the same reason (#3522).
       lines.push(`> **Partial audit:** ${escapeMarkdownText(report.statusReason)}`);
       lines.push("");
+    }
+    // #1253: pages a WAF or bot manager blocked. Never audited, never scored.
+    const blockedPageLines = wafBlockedPagesLines(report);
+    if (blockedPageLines.length > 0) {
+      const [summary, ...listed] = blockedPageLines;
+      lines.push(`> **Blocked pages:** ${escapeMarkdownText(summary!)}`);
+      lines.push("");
+      for (const line of listed) lines.push(`- ${escapeMarkdownInline(line)}`);
+      if (listed.length > 0) lines.push("");
     }
     lines.push("## Health Score");
     lines.push("");

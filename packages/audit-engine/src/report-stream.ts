@@ -691,6 +691,11 @@ export function buildV1Report(
     if (crawl?.stats?.refusedFetches?.length) {
       result.refusedFetches = crawl.stats.refusedFetches;
     }
+    // Pages a WAF or bot manager answered with a challenge or block page
+    // (#1253): never scored, and the report says how many and who.
+    if (crawl?.stats?.wafBlocked && crawl.stats.wafBlocked.total > 0) {
+      result.wafBlocked = crawl.stats.wafBlocked;
+    }
     const runStatus = deriveAuditStatusFromPages(
       pageStatuses,
       crawl?.stats?.pagesBlocked ?? 0,
@@ -704,6 +709,8 @@ export function buildV1Report(
       // instead of "No pages were crawled".
       crawl?.stats?.rootFailure,
       crawl?.stats?.pagesUndecodable ?? 0,
+      // #1253: a blocked seed fails the audit whatever else was crawled.
+      crawl?.stats?.wafBlocked?.seed,
     );
     if (runStatus.status !== "completed") {
       result.status = runStatus.status;
@@ -984,6 +991,11 @@ export function buildV2Report(
     if (crawl?.stats?.refusedFetches?.length) {
       result.refusedFetches = crawl.stats.refusedFetches;
     }
+    // Pages a WAF or bot manager answered with a challenge or block page
+    // (#1253): never scored, and the report says how many and who.
+    if (crawl?.stats?.wafBlocked && crawl.stats.wafBlocked.total > 0) {
+      result.wafBlocked = crawl.stats.wafBlocked;
+    }
     const runStatus = deriveAuditStatus({
       pagesCrawled,
       contentPages,
@@ -997,6 +1009,7 @@ export function buildV2Report(
       // fall back on, so the crawl stats are its only source for the class.
       rootFailure: crawl?.stats?.rootFailure,
       undecodablePages: crawl?.stats?.pagesUndecodable ?? 0,
+      seedBlock: crawl?.stats?.wafBlocked?.seed,
     });
     if (runStatus.status !== "completed") {
       result.status = runStatus.status;

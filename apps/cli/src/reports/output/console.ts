@@ -4,7 +4,11 @@ import type { EditorSummaryView } from "@squirrelscan/report";
 
 import { stripControlCharsPreservingSgr } from "@squirrelscan/core-contracts/control-chars";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
-import { reportFailureReasonCode } from "@squirrelscan/report";
+import {
+  reportFailureReasonCode,
+  wafBlockedPagesLines,
+  wafBlockedSeedCopy,
+} from "@squirrelscan/report";
 import {
   affectedPages,
   affectedPagesSuffix,
@@ -152,6 +156,14 @@ export function generateConsoleReport(
     if (report.status === "failed") {
       log(fmt.dim(AUDIT_FAILURE_NEXT_STEP[reportFailureReasonCode(report)]));
     }
+    // #1253: a WAF or bot manager served a challenge or block page instead of
+    // the site. Say who, what matched, the code, and what to do about it.
+    const wafSeed = wafBlockedSeedCopy(report);
+    if (wafSeed) {
+      log(fmt.dim(`Code: ${wafSeed.code}`));
+      log(fmt.bold("To get a full audit:"));
+      for (const remedy of wafSeed.remedies) log(`  - ${remedy}`);
+    }
     // A seed that redirects off-site and is refused is a common way to end up
     // here with nothing to audit, so this branch needs the disclosure too.
     const redirect = seedRedirectLine(report);
@@ -183,6 +195,15 @@ export function generateConsoleReport(
     `${fmt.dim(report.baseUrl)} • ${report.totalPages} page${report.totalPages === 1 ? "" : "s"} • ${colorFn(`${score}/100`)} ${fmt.dim(`(${grade})`)}`
   );
   log(divider());
+
+  // #1253: pages a WAF or bot manager blocked. Never audited, never scored.
+  const blockedPageLines = wafBlockedPagesLines(report);
+  if (blockedPageLines.length > 0) {
+    const [summary, ...listed] = blockedPageLines;
+    log("");
+    log(fmt.yellow(summary!));
+    for (const line of listed) log(`  ${fmt.dim(line)}`);
+  }
 
   // Editor's summary — report-only Pro exec narrative, surfaced at the top.
   const editorSummary = editorSummaryView(report.editorSummary, report);

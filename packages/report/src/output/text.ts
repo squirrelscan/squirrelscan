@@ -5,6 +5,7 @@ import type { AuditReport, CheckResult } from "../types";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
 import { cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
 import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
+import { wafBlockedPagesLines, wafBlockedSeedCopy } from "../waf-blocked";
 import { getScoreGrade } from "../scoring";
 import { REPORT_SOURCE_PAGES_PREVIEW, REPORT_TEXT_WRAP_WIDTH } from "../constants";
 import { fixRollupLine, fixUnits, ruleFixCoverage } from "../component-presentation";
@@ -299,7 +300,15 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
     const blocked = report.status === "blocked";
     const throttled = !!report.rateLimited && report.rateLimited.pages > 0;
     write(blocked ? "AUDIT BLOCKED" : "AUDIT FAILED");
-    if (blocked && throttled) {
+    const wafSeed = wafBlockedSeedCopy(report);
+    if (wafSeed) {
+      // #1253: a WAF or bot manager served a challenge or block page instead of
+      // the site. Name the class, who, what matched and what to do.
+      write(wafSeed.headline);
+      write(`${wafSeed.saw} Code: ${wafSeed.code}.`);
+      write("To get a full audit:");
+      for (const remedy of wafSeed.remedies) write(`  - ${remedy}`);
+    } else if (blocked && throttled) {
       // #1829: rate limiting and a bot wall both end up here with nothing
       // audited, but they point at OPPOSITE fixes — allowlisting a crawler does
       // nothing for a throttle, and slowing down does nothing for a WAF. The
@@ -342,6 +351,17 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
       write("");
     }
     write(formatHealthScoreText(report.healthScore));
+    write("");
+  }
+
+  // #1253: pages a WAF or bot manager blocked. Never audited, never scored.
+  const blockedPageLines = wafBlockedPagesLines(report);
+  if (blockedPageLines.length > 0) {
+    write("BLOCKED PAGES");
+    write("-".repeat(40));
+    const [summary, ...listed] = blockedPageLines;
+    write(summary!);
+    for (const line of listed) write(`  ${line}`);
     write("");
   }
 

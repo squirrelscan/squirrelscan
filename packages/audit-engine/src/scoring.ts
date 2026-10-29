@@ -22,6 +22,7 @@ import {
   auditFailureReasonText,
 } from "@squirrelscan/core-contracts/failure-reason";
 import { getScoreGrade, getScoreColor } from "@squirrelscan/core-contracts/scoring";
+import { wafBlockReason, type WafBlockedPage } from "@squirrelscan/core-contracts/waf-block";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 
 import {
@@ -754,6 +755,14 @@ export interface AuditStatusSignals {
    * written before it has.
    */
   rootFailure?: AuditFailureDetail;
+  /**
+   * The audited page itself was a WAF or bot-manager challenge or block page
+   * (crawl stats `wafBlocked.seed`, #1253). Makes the run `blocked` whatever
+   * else the crawl reached: pages fetched past a refused front door describe
+   * the provider's rules, not the site, so no score is published. Absent when
+   * the seed was served.
+   */
+  seedBlock?: WafBlockedPage;
 }
 
 /**
@@ -820,6 +829,16 @@ export function deriveAuditStatus(s: AuditStatusSignals): {
     };
   };
 
+  // #1253: a blocked seed fails the audit even when the sitemap's pages were
+  // fetched. The reason names the class, the provider, the signal and the status.
+  if (s.seedBlock) {
+    return {
+      status: "blocked",
+      reason: wafBlockReason(s.seedBlock),
+      reasonCode: "http_4xx",
+    };
+  }
+
   if (s.pagesCrawled === 0) {
     if (rateLimited > 0 && blocked === 0) return rateLimitedResult();
     return blocked > 0 ? blockedResult() : failedResult("No pages were crawled");
@@ -881,7 +900,8 @@ export function deriveAuditStatusFromPages(
     unfetched?: number;
   } = {},
   rootFailure?: AuditFailureDetail,
-  undecodablePages = 0
+  undecodablePages = 0,
+  seedBlock?: WafBlockedPage
 ): {
   status: AuditStatus;
   reason?: string;
@@ -900,6 +920,7 @@ export function deriveAuditStatusFromPages(
     rateLimitedHosts: rateLimit.hosts,
     rateLimitedUnfetched: rateLimit.unfetched,
     undecodablePages,
+    seedBlock,
     // #1822: the crawl stats are the source of truth. When they carry nothing —
     // a report reconstructed from pages alone, or a pre-#1822 crawl — fall back
     // to the stored statuses, which still name the class for an all-4xx site.
