@@ -74,13 +74,14 @@ export const ariaRequiredChildrenRule: Rule = {
 
     const missingChildren: string[] = [];
 
+    // <noscript> content is inert text to a browser with scripting on, so
+    // it neither needs nor supplies children (#434).
+    const withRole = querySelectorAllOutsideNoscript(doc, "[role]");
     for (const [parentRole, childRoles] of Object.entries(
       requiredChildrenByRole
     )) {
       const required = new Set(childRoles);
-      // <noscript> content is inert text to a browser with scripting on, so
-      // it neither needs nor supplies children (#434).
-      const elements = querySelectorAllOutsideNoscript(doc, `[role="${parentRole}"]`);
+      const elements = withRole.filter((el) => el.getAttribute("role") === parentRole);
 
       for (const el of elements) {
         // The role is the explicit one or, failing that, the implicit role of

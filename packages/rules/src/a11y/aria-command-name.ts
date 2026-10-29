@@ -4,6 +4,7 @@ import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 import { commandRoles } from "./aria-data";
+import { elementsWithAttribute } from "../shared/attribute-lookup";
 
 function hasAccessibleName(el: Element): boolean {
   // Check aria-label
@@ -61,7 +62,7 @@ export const ariaCommandNameRule: Rule = {
 
     // Check elements with command roles
     for (const role of commandRoles) {
-      const elements = doc.querySelectorAll(`[role="${role}"]`);
+      const elements = elementsWithAttribute(doc, "role", role);
       for (const el of elements) {
         if (!hasAccessibleName(el)) {
           const tagName = el.tagName.toLowerCase();

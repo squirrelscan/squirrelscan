@@ -46,7 +46,26 @@
 
 import { Element as ElementFacade } from "linkedom";
 
-export { parseHTML } from "linkedom";
+import { parseHTML as linkedomParseHTML } from "linkedom";
+
+/**
+ * `parseHTML` that never hands back a document with no root (#1270).
+ *
+ * Markup with no element in it (an empty or whitespace body, a comment, plain
+ * text, JSON served as text/html, a bare doctype) leaves linkedom with
+ * `documentElement === null`, and its `document.head` / `document.body`
+ * getters then throw. Every DOM rule touching either one reported a bogus
+ * "Rule error". A browser builds `<html><head></head><body></body></html>` for
+ * the same input, with any text in the body, so parse it that way.
+ */
+export function parseHTML(
+  ...args: Parameters<typeof linkedomParseHTML>
+): ReturnType<typeof linkedomParseHTML> {
+  const parsed = linkedomParseHTML(...args);
+  if (parsed.document.documentElement) return parsed;
+  const [html, ...rest] = args;
+  return linkedomParseHTML(`<html><head></head><body>${String(html)}</body></html>`, ...rest);
+}
 
 const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
 

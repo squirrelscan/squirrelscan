@@ -2,6 +2,7 @@
 
 import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+import { elementsWithAttribute, labelsFor } from "../shared/attribute-lookup";
 
 function hasAccessibleName(el: Element, doc: Document): boolean {
   // Check aria-label
@@ -25,7 +26,7 @@ function hasAccessibleName(el: Element, doc: Document): boolean {
   // Check for associated label
   const id = el.getAttribute("id");
   if (id) {
-    const label = doc.querySelector(`label[for="${id}"]`);
+    const label = labelsFor(doc, id)[0] ?? null;
     if (label?.textContent?.trim()) return true;
   }
 
@@ -63,7 +64,7 @@ export const ariaToggleFieldNameRule: Rule = {
     // Check elements with toggle roles
     const toggleRoles = ["checkbox", "radio", "switch"];
     for (const role of toggleRoles) {
-      const elements = doc.querySelectorAll(`[role="${role}"]`);
+      const elements = elementsWithAttribute(doc, "role", role);
       for (const el of elements) {
         if (!hasAccessibleName(el, doc)) {
           const tagName = el.tagName.toLowerCase();

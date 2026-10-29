@@ -1,6 +1,7 @@
 // security/form-captcha - Detect public forms without CAPTCHA protection
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+import { elementsWithAttribute } from "../shared/attribute-lookup";
 
 // CAPTCHA provider detection patterns
 const CAPTCHA_PATTERNS = {
@@ -395,7 +396,7 @@ function formHasExplicitCaptchaContainer(form: Element): boolean {
 function formHasCaptchaResponseField(form: Element): boolean {
   for (const provider of Object.values(CAPTCHA_PATTERNS)) {
     for (const fieldName of provider.responseFields) {
-      if (form.querySelector(`[name="${fieldName}"]`) || form.querySelector(`#${fieldName}`)) {
+      if (elementsWithAttribute(form, "name", fieldName).length > 0 || form.querySelector(`#${fieldName}`)) {
         return true;
       }
     }

@@ -3,6 +3,7 @@
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
+import { labelsFor } from "../shared/attribute-lookup";
 
 export const formLabelsRule: Rule = {
   meta: {
@@ -42,7 +43,7 @@ export const formLabelsRule: Rule = {
       // Check for associated label via for attribute
       let hasAssociatedLabel = false;
       if (id) {
-        const label = doc.querySelector(`label[for="${id}"]`);
+        const label = labelsFor(doc, id)[0] ?? null;
         hasAssociatedLabel = label !== null;
       }
 

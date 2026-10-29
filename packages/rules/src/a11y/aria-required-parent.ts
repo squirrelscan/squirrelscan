@@ -4,6 +4,7 @@
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { requiredParentByRole } from "./aria-data";
+import { elementsWithAttribute } from "../shared/attribute-lookup";
 
 /**
  * Get implicit ARIA role from HTML element
@@ -158,7 +159,7 @@ export const ariaRequiredParentRule: Rule = {
     for (const [childRole, parentRoles] of Object.entries(
       requiredParentByRole
     )) {
-      const elements = doc.querySelectorAll(`[role="${childRole}"]`);
+      const elements = elementsWithAttribute(doc, "role", childRole);
 
       for (const el of elements) {
         if (!hasRequiredParent(el, parentRoles)) {
