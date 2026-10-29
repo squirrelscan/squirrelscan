@@ -44,6 +44,7 @@ export function isAuditablePage(page: PageRecord): boolean {
       server: page.headers.server,
       cfCacheStatus: page.headers.cfCacheStatus,
       xCache: page.headers.xCache,
+      raw: page.headers.techHeaders,
     },
     html: page.html,
   });

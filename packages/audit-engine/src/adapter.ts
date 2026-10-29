@@ -800,6 +800,7 @@ export function createSiteAssetCollector(
             server: page.headers.server,
             cfCacheStatus: page.headers.cfCacheStatus,
             xCache: page.headers.xCache,
+            raw: page.headers.techHeaders,
           },
           html: page.html,
         });
@@ -1867,6 +1868,7 @@ export function runRulesOnStorage(
           server: page.headers.server,
           cfCacheStatus: page.headers.cfCacheStatus,
           xCache: page.headers.xCache,
+          raw: page.headers.techHeaders,
         },
         html: page.html,
       });
@@ -2631,6 +2633,7 @@ function createParsedUniverseAccumulator(): {
             server: page.headers.server,
             cfCacheStatus: page.headers.cfCacheStatus,
             xCache: page.headers.xCache,
+            raw: page.headers.techHeaders,
           },
           html: page.html,
         });
