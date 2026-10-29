@@ -17,6 +17,7 @@ export * from "./cwv";
 import { domSizeRule } from "./dom-size";
 import { duplicateJsRule } from "./duplicate-js";
 import { fontDeliveryRule } from "./font-delivery";
+import { frameworkDataPayloadRule } from "./framework-data-payload";
 import { fontLoadingRule } from "./font-loading";
 import { http2Rule } from "./http2";
 import { inpHintsRule } from "./inp-hints";
@@ -49,6 +50,7 @@ export const rules: Rule[] = [
   jsFileSizeRule,
   assetCompressionRule,
   domSizeRule,
+  frameworkDataPayloadRule,
   ttfbRule,
   jsRedirectsRule,
   jsLibrariesRule,

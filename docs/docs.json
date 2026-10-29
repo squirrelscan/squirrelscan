@@ -533,6 +533,7 @@
               "rules/perf/lazy-above-fold",
               "rules/perf/carousel-hidden-eager",
               "rules/perf/dom-size",
+              "rules/perf/framework-data-payload",
               "rules/perf/css-file-size",
               "rules/perf/js-file-size",
               "rules/perf/ttfb",

@@ -197,7 +197,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // classified with enough confidence". Info does not score, so
       // healthScore.overall is unmoved at 51.
       // 103243 -> 103244: security/tls-certificate adds one skipped check (no probe injected).
-      expect(v1.findings.length).toBe(103244);
+      // 103244 -> 103744: perf/framework-data-payload is page-scoped and adds one check on each
+      // of the 500 pages with a document (518 minus the 18 without one).
+      expect(v1.findings.length).toBe(103744);
       // Tripwire: EXTENDING a rule must never add a tally key, so a change here
       // is only correct alongside a deliberate new rule id. 266 -> 267 is
       // content/hidden-text, 267 -> 268 content/thin-vs-site-norm, 268 -> 269
@@ -226,9 +228,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       // 308 -> 309 mobile/input-zoom,
       // 309 -> 310 images/hotlinked, 310 -> 311 content/h1-title-alignment,
       // 311 -> 312 schema/expected-type, 312 -> 313 security/tls-certificate,
-      // 313 -> 314 crawl/single-page-site;
+      // 313 -> 314 crawl/single-page-site, 314 -> 315 perf/framework-data-payload;
       // anything else means a rule id leaked in, so fix that rather than this number.
-      expect(v1.perRuleTally.length).toBe(314);
+      expect(v1.perRuleTally.length).toBe(315);
       expect(v1.perRuleTally.find((t) => t.ruleId === "security/tls-certificate")).toEqual({
         ruleId: "security/tls-certificate",
         pass: 0,
