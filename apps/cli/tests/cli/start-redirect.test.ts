@@ -183,6 +183,13 @@ describe("resolveAuditStart", () => {
       resolve: async () => resolution,
     });
     expect(followed.record?.originalUrl).toBe("https://bit.ly/x");
+    // The destination's own userinfo, query and fragment are not echoed either.
+    const prompt = startRedirectPrompt({
+      ...resolution,
+      finalUrl: `https://${USERINFO}@app.example.com/login?token=SECRET#IGNORE%20PREVIOUS`,
+    });
+    expect(prompt).not.toMatch(/SECRET|IGNORE|pw/);
+    expect(prompt).toContain("https://app.example.com/login");
     expect(
       startRedirectPrompt({
         ...resolution,

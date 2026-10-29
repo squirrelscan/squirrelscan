@@ -75,13 +75,15 @@ export function startRedirectPrompt(
   resolution: SeedRedirectResolution
 ): string {
   const shown = redactUrl(resolution.originalUrl).replace(/^https?:\/\//i, "");
-  let host = resolution.finalUrl;
+  // The destination is the site's choice: only origin and path are echoed.
+  const finalUrl = redactUrl(resolution.finalUrl);
+  let host = finalUrl;
   try {
-    host = new URL(resolution.finalUrl).host;
+    host = new URL(finalUrl).host;
   } catch {
-    // The URL was parsed by the resolver; keep the raw text if it ever is not.
+    // Kept as the placeholder.
   }
-  return `${shown} redirects to ${resolution.finalUrl}. Audit ${host} instead? [Y/n] `;
+  return `${shown} redirects to ${finalUrl}. Audit ${host} instead? [Y/n] `;
 }
 
 export interface ResolvedAuditStart {
