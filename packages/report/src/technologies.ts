@@ -47,6 +47,9 @@ const CATEGORY_ORDER: TechnologyCategory[] = [
   "font",
   "video",
   "widget",
+  "cache",
+  "seo",
+  "images",
   "other",
 ];
 
@@ -65,6 +68,9 @@ const CATEGORY_LABEL: Record<TechnologyCategory, string> = {
   font: "Fonts",
   video: "Video & Media",
   widget: "Widgets & UI",
+  cache: "Caching & Performance",
+  seo: "SEO Plugins",
+  images: "Image Optimization",
   other: "Other",
 };
 
@@ -84,6 +90,9 @@ const CATEGORY_EMOJI: Record<TechnologyCategory, string> = {
   font: "🔤",
   video: "🎬",
   widget: "🪟",
+  cache: "⚡",
+  seo: "🔎",
+  images: "🖼️",
   other: "📦",
 };
 

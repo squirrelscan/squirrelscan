@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **Technology detection knows Bolt and the WordPress plugin and managed host landscape.** `bolt-new` (Bolt, by StackBlitz) matches apps served from `*.bolt.host` and, on custom domains, the "Made in Bolt" badge link; it never matches Bolt's checkout product. Twenty-one WordPress fingerprints add caching plugins (WP Rocket, LiteSpeed Cache, W3 Total Cache, WP Super Cache, WP Fastest Cache, Autoptimize, Perfmatters), SEO plugins (Yoast SEO, Rank Math, All in One SEO, SEOPress), image plugins (ShortPixel, Imagify, EWWW Image Optimizer, Smush) and managed hosts (WP Engine, Kinsta, Pressable, WordPress VIP, SiteGround, Cloudways). A plugin is detected from its asset URL, its own HTML comment or its schema block, never from its name in text, and a host from its response header. Three new technology categories group them: Caching & Performance, SEO Plugins and Image Optimization. (#1278, #1033)
+
 ### Fixed
 
 - **`perf/total-byte-weight` leaves lazy images below the initial viewport out of the page weight.** Every `loading="lazy"` image was added to the page total, so a page that loads 1.3 MB was reported at 5.4 MB. Lazy images past the first three content images are now reported separately as `lazyImages` in the details; eager images and lazy images in the initial viewport still count. (#1252)

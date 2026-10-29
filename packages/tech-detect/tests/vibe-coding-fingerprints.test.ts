@@ -10,7 +10,7 @@ function ids(i: TechDetectInput): string[] {
   return detectTechnologies(i).map((t) => t.id);
 }
 
-const IDS = ["lovable", "base44", "replit", "v0", "supabase", "clerk", "firebase"];
+const IDS = ["lovable", "base44", "bolt-new", "replit", "v0", "supabase", "clerk", "firebase"];
 
 // A blog post that talks about every product, with code samples shown escaped in
 // <pre>, and hosts written as prose. None of it is the product running.

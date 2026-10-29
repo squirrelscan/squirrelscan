@@ -4,7 +4,7 @@ description: "Identify the tech stack behind any site - CMS, frameworks, CDN, an
 icon: "layers"
 ---
 
-Every audit, local or cloud, fingerprints the technologies a site is built with - **392 signatures** across CMS and AI app builders, frameworks, CDN & hosting, analytics, tag managers, payment processors, chat widgets, fonts, security/consent tools, and backend and auth services - and surfaces them as a dedicated **Technologies** section in the report.
+Every audit, local or cloud, fingerprints the technologies a site is built with - **415 signatures** across CMS and AI app builders, WordPress plugins and managed WordPress hosts, frameworks, CDN & hosting, analytics, tag managers, payment processors, chat widgets, fonts, security/consent tools, and backend and auth services - and surfaces them as a dedicated **Technologies** section in the report.
 
 It's informational: technology detection **never affects your health score**. It's there to give you - and your agent - context about what you're auditing.
 
@@ -32,14 +32,18 @@ bundle_bytes = 65536   # 0 to 262144
 - A key kept in a variable and passed by name (`publishableKey: key`) is not matched; a Clerk key is recognised only where it is written out next to `publishableKey`.
 - A scan that runs long on one page stops at a 5 second budget and reports what it found so far.
 
+### WordPress plugins and hosts
+
+A WordPress plugin is recognised by something it writes into the page: an asset URL under `wp-content/plugins/<slug>/` (or the cache directory it fills) on a script, stylesheet or image tag, the HTML comment it adds (`This website is like a Rocket` for WP Rocket, `Performance optimized by W3 Total Cache`, the Yoast SEO and Rank Math comments), or its own JSON-LD block (`yoast-schema-graph`, `rank-math-schema`, `aioseo-schema`). Its name in page text, in a code sample or in a link does not count. A managed host is recognised by the response header it sets (`x-kinsta-cache`, `x-powered-by: WP Engine`, `x-sg-cache`), reported as `header:<name>`. Pressable, WordPress VIP, SiteGround and Cloudways report at medium or low confidence because their headers are the least documented.
+
 Results are grouped by category:
 
 | Category | Examples |
 |----------|----------|
-| CMS & Ecommerce | WordPress, Shopify, Webflow, Ghost, AI app builders (Lovable, Base44, v0) |
+| CMS & Ecommerce | WordPress, Shopify, Webflow, Ghost, AI app builders (Lovable, Base44, Bolt, v0) |
 | Frameworks & Libraries | Next.js, Astro, React, Vue, Svelte |
 | Web Servers | nginx, Apache, Caddy |
-| Hosting | Vercel, Netlify, AWS, GitHub Pages, Replit |
+| Hosting | Vercel, Netlify, AWS, GitHub Pages, Replit, managed WordPress hosts (WP Engine, Kinsta, Pressable, WordPress VIP, SiteGround, Cloudways) |
 | CDN & Edge | Cloudflare, Fastly, Akamai |
 | Analytics | Google Analytics, Plausible, Cloudflare Web Analytics |
 | Tag Managers | Google Tag Manager |
@@ -48,6 +52,9 @@ Results are grouped by category:
 | Support & Chat | Intercom, Crisp, Zendesk |
 | Security & Consent | OneTrust, reCAPTCHA, hCaptcha |
 | Fonts, Video & Media, Widgets & UI | Google Fonts, YouTube, OneTrust |
+| Caching & Performance | WordPress caching and optimization plugins (WP Rocket, LiteSpeed Cache, W3 Total Cache, WP Super Cache, WP Fastest Cache, Autoptimize, Perfmatters) |
+| SEO Plugins | Yoast SEO, Rank Math, All in One SEO, SEOPress |
+| Image Optimization | ShortPixel, Imagify, EWWW Image Optimizer, Smush |
 | Other | jQuery, Sentry, backend and auth services (Supabase, Clerk, Firebase) |
 
 A typical result:

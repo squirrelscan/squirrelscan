@@ -13,6 +13,10 @@ export type TechCategory =
   | "font"
   | "video"
   | "widget"
+  // WordPress plugins and their kind (#1033)
+  | "cache"
+  | "seo"
+  | "images"
   | "other";
 
 export type Detector =
