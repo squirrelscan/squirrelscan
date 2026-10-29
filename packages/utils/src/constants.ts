@@ -613,4 +613,10 @@ export const STORED_SCRIPT_LIMITS = {
   totalFraction: 0.25,
   /** Scripts fetched per audit when storing them (`store_scripts_max_scripts`); the audit's own checks fetch fewer. */
   maxScripts: 200,
+  /** Ceiling for `store_scripts_max_scripts`: the fetched bodies are held for the rules phase, so memory scales with it. */
+  maxScriptsCeiling: 500,
+  /** Decoded script bytes an audit holds while storing scripts; later scripts are not fetched (`memory-cap`). */
+  heldBytes: 256 * 1024 * 1024,
+  /** Wall-clock budget for the whole script fetch while storing scripts; later scripts are not fetched (`time-budget`). */
+  fetchTimeBudgetMs: 120_000,
 } as const;

@@ -83,13 +83,17 @@ export interface StoredScriptInput {
   sourcePages: string[];
   /** Where a redirected script ended up; the index is keyed by the requested URL. */
   finalUrl?: string;
+  /** Never requested because the fetch's memory or time bound was reached. */
+  fetchSkipReason?: "memory-cap" | "time-budget";
 }
 
 export type StoredScriptSkipReason =
   | "too-large"
   | "total-cap"
   | "store-error"
-  | "not-javascript";
+  | "not-javascript"
+  | "memory-cap"
+  | "time-budget";
 
 export interface StoredScriptRecord {
   url: string;
@@ -2289,6 +2293,13 @@ export class SQLiteStorage implements CrawlStorage {
         db.exec("BEGIN");
         try {
           for (const script of scripts) {
+            if (script.fetchSkipReason) {
+              // Referenced but never requested (the fetch hit its memory or time
+              // bound): no size, no body, and the reason is the whole record.
+              insert.run(crawlId, script.url, null, null, "skipped", script.fetchSkipReason, JSON.stringify(script.sourcePages), null);
+              summary.skipped++;
+              continue;
+            }
             if (script.status === null || script.status < 200 || script.status >= 300) continue;
             const size =
               script.content !== null

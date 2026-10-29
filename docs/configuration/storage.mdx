@@ -114,7 +114,7 @@ technology fingerprints, labelling) without fetching the site again.
 store_scripts = true
 store_scripts_max_bytes = "2MB"        # default: a larger script is recorded as skipped
 store_scripts_total_bytes = "256MB"    # default: a quarter of content_store_max_bytes
-store_scripts_max_scripts = 200        # default: scripts fetched per audit, 1 to 1000
+store_scripts_max_scripts = 200        # default: scripts fetched per audit, 1 to 500
 ```
 
 **What it fetches.** The audit's own checks fetch only a share of the scripts the
@@ -128,6 +128,18 @@ warns with how many, and the count is kept in the project database
 Scripts on another domain are never fetched, and a script over 5 MB is not
 downloaded: it is recorded as skipped, with at least that size. Chunks a page
 only preloads are fetched only for pages that send a Content-Security-Policy.
+
+**Memory, time and findings.** The audit keeps every fetched script in memory for
+its rules, so peak memory rises with the number of scripts fetched, by up to the
+total size of the bodies (a script over 5 MB is never downloaded). To bound that,
+a `store_scripts` run stops requesting scripts once it holds 256 MB of script
+text, and stops after 120 seconds of script fetching. Scripts it did not request
+for either reason are recorded as skipped (`memory-cap`, `time-budget`) with no
+size. Because the rules that read script bodies (secrets, file size,
+minification) now see up to `store_scripts_max_scripts` scripts instead of 10 to
+50, an audit with `store_scripts` on can report more findings than the same audit
+without it. Parallel corpus runs each hold their own bodies, so size the number of
+runs to your memory.
 
 **Bodies are the decoded text.** A script is stored as the UTF-8 text the audit
 read after the transfer encoding (gzip, brotli) was removed, so the content hash

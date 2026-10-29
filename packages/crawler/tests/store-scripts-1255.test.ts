@@ -331,4 +331,24 @@ describe("storeCrawlScripts", () => {
     );
     expect(await run(storage.getCrawlScriptsSummary(CRAWL))).toEqual({ fetchLimit: 12, droppedByLimit: 13 });
   });
+
+  test("scripts the fetch never requested are recorded with the reason and no size", async () => {
+    const { adapter, puts } = fakeStore();
+    const storage = await freshStorage(adapter);
+    await run(
+      storage.storeCrawlScripts(
+        CRAWL,
+        [
+          script("https://example.com/a.js", null, ["https://example.com/"], { status: null, fetchSkipReason: "memory-cap" }),
+          script("https://example.com/b.js", null, ["https://example.com/"], { status: null, fetchSkipReason: "time-budget" }),
+        ],
+        LIMITS
+      )
+    );
+    expect(puts).toHaveLength(0);
+    expect((await run(storage.getCrawlScripts(CRAWL))).map((r) => [r.url, r.status, r.skipReason, r.sizeBytes])).toEqual([
+      ["https://example.com/a.js", "skipped", "memory-cap", null],
+      ["https://example.com/b.js", "skipped", "time-budget", null],
+    ]);
+  });
 });

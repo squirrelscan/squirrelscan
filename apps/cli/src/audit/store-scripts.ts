@@ -17,10 +17,10 @@ import type { Config } from "@/config";
 import { getGlobalContentStore } from "@/crawler/storage/content-store";
 import { logger } from "@/utils/logger";
 
-/** The script fetch limit for a run that stores scripts: `store_scripts_max_scripts`, clamped to 1..1000. */
+/** The script fetch limit for a run that stores scripts: `store_scripts_max_scripts`, clamped to 1..500. */
 export function storedScriptFetchLimit(config: Config): number {
   return Math.min(
-    1000,
+    STORED_SCRIPT_LIMITS.maxScriptsCeiling,
     Math.max(
       1,
       config.storage.store_scripts_max_scripts ??
@@ -59,6 +59,9 @@ export function scriptsToStore(
       sizeBytes: script.sizeBytes,
       sourcePages: script.sourcePages,
       ...(script.finalUrl ? { finalUrl: script.finalUrl } : {}),
+      ...(script.fetchSkipReason
+        ? { fetchSkipReason: script.fetchSkipReason }
+        : {}),
     });
   }
   return [...byUrl.values()];

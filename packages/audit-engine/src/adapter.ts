@@ -1174,9 +1174,11 @@ export function fetchAssetsFromOccurrences(
         ? {
             fetchAll: true,
             maxScripts: Math.min(
-              1000,
+              STORED_SCRIPT_LIMITS.maxScriptsCeiling,
               Math.max(1, config.storage?.store_scripts_max_scripts ?? STORED_SCRIPT_LIMITS.maxScripts),
             ),
+            maxTotalBytes: STORED_SCRIPT_LIMITS.heldBytes,
+            totalTimeoutMs: STORED_SCRIPT_LIMITS.fetchTimeBudgetMs,
           }
         : maxResources != null
           ? { maxScripts: maxResources }
@@ -1606,6 +1608,7 @@ export function fetchAssetsFromOccurrences(
         sizeBytes: fetch.sizeBytes,
         content: fetch.content,
         sourcePages: Array.from(resourceOccurrences.scripts.get(fetch.url) ?? []),
+        ...(fetch.fetchSkipReason ? { fetchSkipReason: fetch.fetchSkipReason } : {}),
         rateLimited: fetch.rateLimited,
         wafBlocked: fetch.wafBlocked,
         ...(withheld(fetch.url, fetch.status, fetch.finalUrl) ? { headersWithheld: true } : {}),
