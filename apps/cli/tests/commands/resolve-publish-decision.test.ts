@@ -19,6 +19,19 @@ function opts(
   };
 }
 
+describe("resolvePublishDecision: ephemeral (#3649)", () => {
+  test("an ephemeral run never publishes", () => {
+    expect(resolvePublishDecision(opts({ ephemeral: true }))).toBe(false);
+    expect(
+      resolvePublishDecision(opts({ ephemeral: true, explicitPublish: true }))
+    ).toBe(false);
+  });
+
+  test("ephemeral false or absent changes nothing", () => {
+    expect(resolvePublishDecision(opts({ ephemeral: false }))).toBe(true);
+  });
+});
+
 describe("resolvePublishDecision", () => {
   test("signed-in + online auto-publishes by default", () => {
     expect(resolvePublishDecision(opts())).toBe(true);

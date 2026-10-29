@@ -1181,3 +1181,47 @@ describe("run heartbeat (#1583)", () => {
     expect(bodies.length).toBe(afterStop);
   });
 });
+
+describe("registerRun: ephemeral (#3649)", () => {
+  let sent: Record<string, unknown> = {};
+  const respond = (body: Record<string, unknown>) => {
+    globalThis.fetch = (async (_i: unknown, init?: RequestInit) => {
+      sent = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      return new Response(JSON.stringify(body), { status: 201 });
+    }) as unknown as typeof fetch;
+  };
+
+  test("sends ephemeral: true only when asked", async () => {
+    respond({ runId: "r", websiteId: "w", auditId: "a" });
+    await registerRun({ url: "https://example.com" });
+    expect("ephemeral" in sent).toBe(false);
+    await registerRun({ url: "https://example.com", ephemeral: true });
+    expect(sent.ephemeral).toBe(true);
+  });
+
+  test("accepts a websiteId-less run when the server echoes ephemeral", async () => {
+    respond({ runId: "r", auditId: "a", websiteId: null, ephemeral: true });
+    const run = await registerRun({
+      url: "https://example.com",
+      ephemeral: true,
+    });
+    expect(run?.runId).toBe("r");
+    expect(run?.websiteId).toBeNull();
+    expect(run?.ephemeral).toBe(true);
+  });
+
+  test("an older server that ignores it is reported as not ephemeral", async () => {
+    respond({ runId: "r", websiteId: "w", auditId: "a" });
+    const run = await registerRun({
+      url: "https://example.com",
+      ephemeral: true,
+    });
+    expect(run?.websiteId).toBe("w");
+    expect(run?.ephemeral).toBeUndefined();
+  });
+
+  test("an echoed ephemeral nobody asked for does not skip the website check", async () => {
+    respond({ runId: "r", auditId: "a", ephemeral: true });
+    expect(await registerRun({ url: "https://example.com" })).toBeNull();
+  });
+});

@@ -393,6 +393,12 @@ export const CloudConfigSchema = z.object({
    * online; set false to never auto-publish. Independent of cloud rendering.
    */
   publish: z.boolean().default(true),
+  /**
+   * Use cloud features for each run only: don't add the site to the dashboard,
+   * don't schedule it and don't publish the report (#3649). Credits are charged
+   * as usual. `--ephemeral` / `--no-ephemeral` override it per run.
+   */
+  ephemeral: z.boolean().default(false),
   /** Default visibility for published reports. */
   visibility: z.enum(["public", "unlisted", "private"]).default("unlisted"),
 });

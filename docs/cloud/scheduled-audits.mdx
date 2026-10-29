@@ -69,6 +69,8 @@ Two things still apply at that moment:
 - Your plan needs a free scheduled-website slot. On the free plan that means your first website; the next one lands in the [capped](#schedule-states) state until you free the slot or upgrade.
 - The first scheduled run is at least one full cadence period after that audit. A weekly schedule that turns on today next runs in a week, never the same night.
 
+This applies to websites a CLI audit creates too: a signed-in `squirrel audit` of a new site adds it to your dashboard and, after its first successful audit, turns recurring audits on. To use the cloud for one audit without that, run it with `--ephemeral` (or set `[cloud] ephemeral = true`): the site is not added, no schedule is created now or later. See [Ephemeral runs](/cli/audit#ephemeral-runs).
+
 You can also switch recurring audits on yourself at any time from the **Scheduled Audits** card, without waiting for an audit to complete. Turning them off is permanent until you turn them back on: a later audit will not switch them on again.
 
 ## Where you are told

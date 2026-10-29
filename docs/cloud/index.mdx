@@ -75,6 +75,18 @@ squirrel audit https://example.com
 
 Opt out of a run with `--no-publish`, or turn it off for the project with `[cloud] publish = false`. See [Reports](/reports) for publishing details.
 
+### What a signed-in audit saves
+
+| | Normal signed-in audit | With `--ephemeral` |
+|---|---|---|
+| Cloud features (rendering, link checks, technologies, editor's summary) | Yes | Yes |
+| Website added to your dashboard (or reused) | Yes | No |
+| Recurring audits turned on after the first successful audit | Yes, for a new site | No |
+| Report published | Yes, `unlisted` by default | No |
+| Credits charged | 50 + 2 per page + link checks | The same |
+
+`--no-publish` skips only the publish. `--ephemeral` skips the dashboard site, the schedule and the publish, and still uses the cloud for that one run. See [Ephemeral runs](/cli/audit#ephemeral-runs).
+
 ![The Summary and Issues sections of a squirrelscan report. The summary reads as two columns of prose with a bold one-line verdict. Below it, the ranked Issues list starts with issue 1, Fix broken site resources, tagged Moderate and Performance, with a Copy fix prompt button and a Copy fix plan button above the list.](/images/report/example-report-summary.webp)
 
 This is a published report for squirrelscan.com. [Open the live report](<https://reports.squirrelscan.com/01M5NJH51Q6FNRAA3QGW8GYWB6>), or see [how to read your report](/guides/read-your-report).

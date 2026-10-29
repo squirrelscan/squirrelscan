@@ -42,6 +42,8 @@ squirrel audit <url> [options]
 | `--project-name` | `-n` | Project name (overrides config and prompts) | auto |
 | `--publish` | `-p` | Force publish to reports.squirrelscan.com (now the default when logged in) | auto |
 | `--no-publish` | | Skip auto-publishing this run (stay online, just don't publish) | `false` |
+| `--ephemeral` | | Use cloud features for this run only: don't add the site to your dashboard, don't schedule it, and don't publish the report. Charged like any signed-in audit. Overrides `[cloud] ephemeral`. Cannot be combined with `--publish`. See [Ephemeral runs](#ephemeral-runs) | `false` |
+| `--no-ephemeral` | | Turn `[cloud] ephemeral = true` off for this run | `false` |
 | `--visibility` | | Visibility: `public`, `unlisted`, `private` | `unlisted` |
 | `--yes` | `-y` | Skip confirmation prompts (e.g. cloud credit spend) | `false` |
 | `--render` | | Force cloud browser rendering for this run: alias of `--render-mode all` ([uses credits](/guides/browser-rendering); requires login) | auto |
@@ -310,6 +312,28 @@ squirrel audit https://example.com --offline
 
 `--offline` cannot be combined with `--publish` or `--render` (both require
 cloud access and login).
+
+### Ephemeral runs
+
+A signed-in `squirrel audit` does more than use the cloud. It adds the site to your dashboard (or reuses it), turns on [recurring audits](/cloud/scheduled-audits#when-a-schedule-turns-itself-on) after the site's first successful audit, and publishes the report. `--ephemeral` keeps the cloud features and drops all of that:
+
+```bash
+squirrel audit https://example.com --ephemeral
+```
+
+An ephemeral run:
+
+- does not add the site to your dashboard, so it never counts toward your plan's website limit and never fails with `WEBSITE_LIMIT`
+- does not schedule the site, and never turns a schedule on later
+- does not publish a report, which is why `--ephemeral` cannot be combined with `--publish`: a published report hangs off a dashboard website, and the CLI refuses the pair rather than pretend it published
+- is charged exactly like the same audit without it: 50 credits plus 2 per audited page, plus any external link checks. Your credit history and usage list it as "Ephemeral CLI run" with the domain, so nothing is invisible to you or your organization owner
+- prints a line at the end of the summary saying the run was ephemeral
+
+Use it for sites you do not own or manage (prospects, clients, competitors), one-off checks, and CI jobs against preview URLs. Set `[cloud] ephemeral = true` in `squirrel.toml` to make it the default for a project, and pass `--no-ephemeral` to run one audit the normal way.
+
+`--ephemeral --offline` is accepted. An offline run saves nothing anyway, so the CLI prints one line saying the flag has no effect.
+
+The server has to support the option. If it does not confirm the run as ephemeral (an older server that ignores the field), the CLI prints a warning that the site may have been added and scheduled, so you can remove it from the dashboard.
 
 ### Gate CI on audit results
 

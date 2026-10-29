@@ -164,6 +164,7 @@ async function runWebsiteAudit(input: {
   maxPages?: number;
   offline?: boolean;
   confirm?: boolean;
+  ephemeral?: boolean;
   headers?: Record<string, string>;
   externalLinks?: boolean;
   internalLinks?: boolean;
@@ -186,6 +187,7 @@ async function runWebsiteAudit(input: {
     url: input.url,
     offline: input.offline,
     confirm: input.confirm,
+    ephemeral: input.ephemeral,
     config,
     level: {
       coverageMode: levelOptions.coverageMode,
@@ -291,6 +293,12 @@ export function registerAuditTools(server: McpServer): void {
           .describe(
             "false skips the status check of internal link targets the crawl did not fetch. It is on at every level unless [internal_links] enabled = false in squirrel.toml, which true does not override"
           ),
+        ephemeral: z
+          .boolean()
+          .optional()
+          .describe(
+            "Use cloud features for this run only: don't add the site to the dashboard or schedule it. Credits are charged as for any signed-in audit. Default: [cloud] ephemeral in squirrel.toml (false)"
+          ),
         confirm: z
           .boolean()
           .optional()
@@ -324,6 +332,7 @@ export function registerAuditTools(server: McpServer): void {
       maxPages,
       offline,
       confirm,
+      ephemeral,
       headers,
       externalLinks,
       internalLinks,
@@ -348,6 +357,7 @@ export function registerAuditTools(server: McpServer): void {
         maxPages,
         offline,
         confirm,
+        ephemeral,
         headers,
         externalLinks,
         internalLinks,
