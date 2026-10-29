@@ -1445,6 +1445,12 @@ export interface LeakedSecret {
   publicByDesign: boolean;
   /** Where it was read, with ` (base64)` when it sat inside a decoded blob. */
   location: ReportedLocation;
+  /** Character length of the secret value, excluding an assignment key or quotes. */
+  length: number;
+  /** Zero-based character offset of the secret in the scanned source body. */
+  offset: number;
+  /** Zero-based position of an inline script in the page's complete script list. */
+  scriptIndex?: number;
   sourceUrl?: string; // URL of the script file or page
   /** What the value's own structure decoded to (#361): account id, role… */
   extra?: FindingExtra;
@@ -2440,7 +2446,8 @@ export function scanContent(
   content: string,
   location: ReportedLocation,
   sourceUrl?: string,
-  depth = 0
+  depth = 0,
+  source: { offsetBase?: number; scriptIndex?: number } = {}
 ): LeakedSecret[] {
   const found: LeakedSecret[] = [];
 
@@ -2456,6 +2463,8 @@ export function scanContent(
     value: string,
     confidence: Confidence,
     publicByDesign: boolean,
+    offset: number,
+    length: number,
     before: () => string,
     after: () => string,
     known?: FindingExtra
@@ -2469,6 +2478,9 @@ export function scanContent(
       confidence: refined?.confidence ?? confidence,
       publicByDesign: refined?.publicByDesign ?? publicByDesign,
       location,
+      length,
+      offset: Math.max(0, offset + (source.offsetBase ?? 0)),
+      ...(source.scriptIndex !== undefined ? { scriptIndex: source.scriptIndex } : {}),
       sourceUrl,
       ...(extra ? { extra } : {}),
     };
@@ -2795,6 +2807,8 @@ export function scanContent(
         value,
         reportConfidence,
         reportPublic,
+        match.index + (generic ? value.lastIndexOf(body) : 0),
+        body.length,
         () => readKeyLookBack(content, match!.index).before,
         () => content.slice(match!.index + value.length, match!.index + value.length + FORWARD_REACH),
         known
@@ -2909,6 +2923,8 @@ export function scanContent(
           value,
           confidence,
           publicByDesign ?? false,
+          at,
+          value.length,
           () => back.before,
           () => content.slice(at + value.length, at + value.length + FORWARD_REACH)
         );
@@ -2921,7 +2937,11 @@ export function scanContent(
   // to the client as one string — scanned as content of their own, two
   // levels deep, reported with a ` (base64)` location suffix.
   for (const finding of scanBase64Blobs(content, location, sourceUrl, depth, scanContent)) {
-    found.push(finding);
+    found.push({
+      ...finding,
+      offset: Math.max(0, finding.offset + (source.offsetBase ?? 0)),
+      ...(source.scriptIndex !== undefined ? { scriptIndex: source.scriptIndex } : {}),
+    });
   }
 
   return found;
@@ -2952,7 +2972,8 @@ export function scanPageForSecrets(
   if (html) {
     found.push(...scanContent(html, "html", pageUrl));
   }
-  for (const script of doc.querySelectorAll("script:not([src])")) {
+  for (const [scriptIndex, script] of Array.from(doc.querySelectorAll("script")).entries()) {
+    if (script.hasAttribute("src")) continue;
     const scriptContent = script.textContent || "";
     if (scriptContent.trim()) {
       // The script's own open tag goes in front of its text, so the inline
@@ -2961,7 +2982,13 @@ export function scanPageForSecrets(
       // the look-behind, and the value is public rather than a generic leak
       // that the rule's dedup then has to reconcile. Attributes carry no
       // findings of their own that the document pass has not already made.
-      found.push(...scanContent(`${openTagOf(script)}${scriptContent}`, "inline-script", pageUrl));
+      const openTag = openTagOf(script);
+      found.push(
+        ...scanContent(`${openTag}${scriptContent}`, "inline-script", pageUrl, 0, {
+          offsetBase: -openTag.length,
+          scriptIndex,
+        })
+      );
     }
   }
   return found;
@@ -3070,7 +3097,12 @@ export const leakedSecretsRule: Rule = {
     const item = (s: LeakedSecret): CheckItem => ({
       id: `${s.type}: ${maskSecret(s.value)}`,
       label: `Found in ${s.location}${s.sourceUrl ? ` (${s.sourceUrl})` : ""}`,
-      ...(s.extra ? { meta: s.extra } : {}),
+      meta: {
+        ...(s.extra ?? {}),
+        length: s.length,
+        offset: s.offset,
+        ...(s.scriptIndex !== undefined ? { scriptIndex: s.scriptIndex } : {}),
+      },
     });
 
     if (critical.length > 0) {

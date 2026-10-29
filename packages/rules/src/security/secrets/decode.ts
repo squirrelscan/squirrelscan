@@ -484,7 +484,10 @@ export function scanBase64Blobs(
     // Appended one at a time: a decoded blob can carry thousands of findings,
     // and spreading that many arguments is an engine-dependent RangeError.
     for (const finding of scan(decoded, decodedLocation, sourceUrl, depth + 1)) {
-      found.push(finding);
+      // The decoded value has no one-to-one character mapping back to the
+      // encoded source. Point at the first character of the source blob; an
+      // outer decoded blob overwrites this again with its own source start.
+      found.push({ ...finding, offset: run.start });
     }
   }
   return found;
