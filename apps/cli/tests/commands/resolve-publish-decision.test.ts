@@ -20,11 +20,24 @@ function opts(
 }
 
 describe("resolvePublishDecision: ephemeral (#3649)", () => {
-  test("an ephemeral run never publishes", () => {
+  test("an ephemeral run publishes nothing on its own", () => {
     expect(resolvePublishDecision(opts({ ephemeral: true }))).toBe(false);
+  });
+
+  test("an explicit --publish still publishes an ephemeral run", () => {
     expect(
       resolvePublishDecision(opts({ ephemeral: true, explicitPublish: true }))
-    ).toBe(false);
+    ).toBe(true);
+  });
+
+  test("offline and a non-public host still win over --publish", () => {
+    const over = { ephemeral: true, explicitPublish: true };
+    expect(resolvePublishDecision(opts({ ...over, nonPublicHost: true }))).toBe(
+      false
+    );
+    expect(resolvePublishDecision(opts({ ...over, offline: true }))).toBe(
+      false
+    );
   });
 
   test("ephemeral false or absent changes nothing", () => {
