@@ -4,6 +4,7 @@ import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 import { inputRoles } from "./aria-data";
+import { elementsWithAttribute, labelsFor } from "../shared/attribute-lookup";
 
 function getAccessibleName(el: Element, doc: Document): string | null {
   // Check aria-label
@@ -23,7 +24,7 @@ function getAccessibleName(el: Element, doc: Document): string | null {
   // Check for associated label (for native inputs)
   const id = el.getAttribute("id");
   if (id) {
-    const label = doc.querySelector(`label[for="${id}"]`);
+    const label = labelsFor(doc, id)[0] ?? null;
     if (label?.textContent?.trim()) return label.textContent.trim();
   }
 
@@ -72,7 +73,7 @@ export const ariaInputFieldNameRule: Rule = {
 
     // Check elements with input roles
     for (const role of inputRoles) {
-      const elements = doc.querySelectorAll(`[role="${role}"]`);
+      const elements = elementsWithAttribute(doc, "role", role);
       for (const el of elements) {
         if (!getAccessibleName(el, doc)) {
           const tagName = el.tagName.toLowerCase();

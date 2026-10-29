@@ -132,7 +132,7 @@ export function buildSiteContext(
           const stored = JSON.parse(page.parsedData);
 
           // Handle corrupted state: parsedData exists but html is null
-          if (!page.html) {
+          if (page.html == null) {
             logger.error(
               `Cannot recreate document for ${page.url}: HTML is null but parsedData exists (corrupted state)`
             );
@@ -159,7 +159,7 @@ export function buildSiteContext(
       // Fallback: parse from HTML if no stored data (old crawls)
       if (!parsed) {
         // Skip pages without HTML and no stored data
-        if (!page.html) {
+        if (page.html == null) {
           contextPages.push({ page, parsed: null });
           continue;
         }

@@ -1,6 +1,7 @@
 // a11y/form-field-multiple-labels - Inputs don't have multiple labels
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+import { labelsFor } from "../shared/attribute-lookup";
 
 export const formFieldMultipleLabelsRule: Rule = {
   meta: {
@@ -33,7 +34,7 @@ export const formFieldMultipleLabelsRule: Rule = {
 
       // Check for label via for attribute
       if (id) {
-        const labelsById = doc.querySelectorAll(`label[for="${id}"]`);
+        const labelsById = labelsFor(doc, id);
         labelCount += labelsById.length;
       }
 

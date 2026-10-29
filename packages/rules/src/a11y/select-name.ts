@@ -2,6 +2,7 @@
 
 import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+import { labelsFor } from "../shared/attribute-lookup";
 
 function hasAccessibleName(el: Element, doc: Document): boolean {
   // Check aria-label
@@ -19,7 +20,7 @@ function hasAccessibleName(el: Element, doc: Document): boolean {
   // Check for associated label
   const id = el.getAttribute("id");
   if (id) {
-    const label = doc.querySelector(`label[for="${id}"]`);
+    const label = labelsFor(doc, id)[0] ?? null;
     if (label?.textContent?.trim()) return true;
   }
 
