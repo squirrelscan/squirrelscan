@@ -310,6 +310,13 @@ export const StorageConfigSchema = z.object({
    * the content store cap (`content_store_max_bytes`).
    */
   store_scripts_total_bytes: byteSizeField("store_scripts_total_bytes").optional(),
+  /**
+   * Most first-party scripts one audit fetches when `store_scripts` is on, 1 to
+   * 1000. The audit's own checks fetch at least 10, a tenth of the pages, at
+   * most 50; storing bundles raises that to this. Unset = 200. The extra
+   * requests are made only while `store_scripts` is on.
+   */
+  store_scripts_max_scripts: z.number().int().min(1).max(1000).optional(),
 });
 
 export const CloudConfigSchema = z.object({

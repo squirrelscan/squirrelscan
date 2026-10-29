@@ -25,6 +25,7 @@ export {
   type ContentStoreAdapter,
   type StoredScriptInput,
   type StoredScriptRecord,
+  type StoredScriptsFetchSummary,
   type StoredScriptSkipReason,
   type StoredScriptsSummary,
 } from "./sqlite";

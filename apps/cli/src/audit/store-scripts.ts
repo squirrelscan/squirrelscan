@@ -17,6 +17,18 @@ import type { Config } from "@/config";
 import { getGlobalContentStore } from "@/crawler/storage/content-store";
 import { logger } from "@/utils/logger";
 
+/** The script fetch limit for a run that stores scripts: `store_scripts_max_scripts`, clamped to 1..1000. */
+export function storedScriptFetchLimit(config: Config): number {
+  return Math.min(
+    1000,
+    Math.max(
+      1,
+      config.storage.store_scripts_max_scripts ??
+        STORED_SCRIPT_LIMITS.maxScripts
+    )
+  );
+}
+
 /** The per-file and per-audit caps in force: `[storage]` over the defaults. */
 export function storedScriptLimits(
   config: Config,
@@ -46,6 +58,7 @@ export function scriptsToStore(
       content: script.content,
       sizeBytes: script.sizeBytes,
       sourcePages: script.sourcePages,
+      ...(script.finalUrl ? { finalUrl: script.finalUrl } : {}),
     });
   }
   return [...byUrl.values()];
@@ -54,7 +67,10 @@ export function scriptsToStore(
 export async function storeFetchedScripts(opts: {
   storage: SQLiteStorage;
   crawlId: string;
-  assets: Pick<PreFetchedAssets, "scripts" | "preloadedScripts">;
+  assets: Pick<
+    PreFetchedAssets,
+    "scripts" | "preloadedScripts" | "assetCapDropped"
+  >;
   config: Config;
 }): Promise<void> {
   try {
@@ -66,12 +82,22 @@ export async function storeFetchedScripts(opts: {
       opts.storage.storeCrawlScripts(
         opts.crawlId,
         scriptsToStore(opts.assets),
-        limits
+        limits,
+        {
+          fetchLimit: storedScriptFetchLimit(opts.config),
+          droppedByLimit: opts.assets.assetCapDropped?.scripts ?? 0,
+        }
       )
     );
     logger.debug(
       `stored scripts: ${summary.stored} indexed, ${summary.distinct} distinct (${summary.distinctBytes} bytes), ${summary.skipped} skipped`
     );
+    const dropped = opts.assets.assetCapDropped?.scripts ?? 0;
+    if (dropped > 0) {
+      logger.warn(
+        `${dropped} script(s) the pages reference were not fetched (limit ${storedScriptFetchLimit(opts.config)} per audit); raise [storage] store_scripts_max_scripts to fetch and store more`
+      );
+    }
     if (summary.skipped > 0) {
       logger.warn(
         `${summary.skipped} script(s) were not stored (over ${limits.maxBytes} bytes each, or past the ${limits.totalBytes} byte total); raise [storage] store_scripts_max_bytes or store_scripts_total_bytes`

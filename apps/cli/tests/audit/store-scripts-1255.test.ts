@@ -132,7 +132,7 @@ async function audit(name: string, flags: string[], toml?: string) {
   const project = new Database(projectDb!, { readonly: true });
   const scripts = project
     .query(
-      "SELECT url, content_hash, size_bytes, status, skip_reason, source_pages FROM crawl_scripts ORDER BY url"
+      "SELECT url, content_hash, size_bytes, status, skip_reason, source_pages, final_url FROM crawl_scripts ORDER BY url"
     )
     .all() as Array<{
     url: string;
@@ -141,7 +141,11 @@ async function audit(name: string, flags: string[], toml?: string) {
     status: string;
     skip_reason: string | null;
     source_pages: string;
+    final_url: string | null;
   }>;
+  const summary = project
+    .query("SELECT fetch_limit, dropped_by_limit FROM crawl_scripts_summary")
+    .get() as { fetch_limit: number | null; dropped_by_limit: number } | null;
   project.close();
   let jsRows: Array<{ hash: string; content: Buffer }> = [];
   if (contentDb) {
@@ -153,7 +157,7 @@ async function audit(name: string, flags: string[], toml?: string) {
       .all() as typeof jsRows;
     store.close();
   }
-  return { scripts, jsRows };
+  return { scripts, jsRows, summary };
 }
 
 describe("#1255 stored scripts", () => {
@@ -231,6 +235,98 @@ describe("#1255 stored scripts", () => {
     const { scripts, jsRows } = await audit("off", []);
     expect(scripts).toEqual([]);
     expect(jsRows).toEqual([]);
+  }, 120_000);
+});
+
+describe("#1255 every referenced script, not the audit's own share", () => {
+  let manyServer: ReturnType<typeof Bun.serve>;
+  let manyBase: string;
+  const COUNT = 25;
+  const SPA = "<!doctype html><html><body>app</body></html>";
+
+  beforeAll(() => {
+    const scripts = Array.from(
+      { length: COUNT },
+      (_, i) => `/assets/s${String(i).padStart(2, "0")}.js`
+    );
+    manyServer = Bun.serve({
+      port: 0,
+      fetch(request) {
+        const { pathname } = new URL(request.url);
+        if (pathname === "/robots.txt")
+          return new Response("User-agent: *\nAllow: /\n", {
+            headers: { "content-type": "text/plain" },
+          });
+        if (pathname === "/") {
+          return new Response(
+            page("Many", [...scripts, "/assets/spa.js", "/assets/moved.js"]),
+            { headers: { "content-type": "text/html; charset=utf-8" } }
+          );
+        }
+        if (pathname === "/assets/spa.js")
+          return new Response(SPA, {
+            headers: { "content-type": "application/javascript" },
+          });
+        if (pathname === "/assets/moved.js")
+          return new Response(null, {
+            status: 302,
+            headers: { location: "/assets/final.js" },
+          });
+        if (pathname === "/assets/final.js" || scripts.includes(pathname)) {
+          return new Response(`var n="${pathname}";${"/* pad */".repeat(30)}`, {
+            headers: { "content-type": "application/javascript" },
+          });
+        }
+        return new Response("Not found", { status: 404 });
+      },
+    });
+    manyBase = `http://127.0.0.1:${manyServer.port}`;
+  });
+  afterAll(() => manyServer?.stop(true));
+
+  async function auditMany(name: string, flags: string[], toml?: string) {
+    const prev = base;
+    base = manyBase;
+    try {
+      return await audit(name, flags, toml);
+    } finally {
+      base = prev;
+    }
+  }
+
+  test("a one-page audit stores all 25 scripts, skips the SPA fallback, keeps the redirect's final URL", async () => {
+    const { scripts, summary } = await auditMany("many", ["--store-scripts"]);
+    const stored = scripts.filter((s) => s.status === "stored");
+    // the audit's own checks would fetch 10 of these
+    expect(stored.filter((s) => /\/s\d\d\.js$/.test(s.url))).toHaveLength(
+      COUNT
+    );
+    expect(scripts.find((s) => s.url.endsWith("/spa.js"))).toMatchObject({
+      status: "skipped",
+      skip_reason: "not-javascript",
+    });
+    expect(scripts.find((s) => s.url.endsWith("/moved.js"))?.final_url).toBe(
+      `${manyBase}/assets/final.js`
+    );
+    expect(summary).toMatchObject({ dropped_by_limit: 0 });
+  }, 120_000);
+
+  test("store_scripts_max_scripts bounds the fetch and the rest is counted, not lost silently", async () => {
+    const { scripts, summary } = await auditMany(
+      "many-cap",
+      ["--store-scripts"],
+      "[storage]\nstore_scripts_max_scripts = 12\n"
+    );
+    expect(scripts.filter((s) => s.status === "stored")).toHaveLength(12);
+    expect(summary).toMatchObject({
+      fetch_limit: 12,
+      dropped_by_limit: COUNT + 2 - 12,
+    });
+  }, 120_000);
+
+  test("without store_scripts the audit fetches only its own share", async () => {
+    const { scripts } = await auditMany("many-off", []);
+    expect(scripts).toEqual([]);
   }, 120_000);
 });
 

@@ -268,4 +268,67 @@ describe("storeCrawlScripts", () => {
     // nothing is retained by the storage call itself
     expect(process.memoryUsage().heapUsed - heapBefore).toBeLessThan(64 * 1024 * 1024);
   });
+
+  test("a 200 that is an HTML page behind a script URL is skipped as not-javascript", async () => {
+    const { adapter, puts } = fakeStore();
+    const storage = await freshStorage(adapter);
+    await run(
+      storage.storeCrawlScripts(
+        CRAWL,
+        [
+          script("https://example.com/spa.js", "<!DOCTYPE html><html><body>app</body></html>", ["https://example.com/"]),
+          script("https://example.com/ok.js", "var ok=1;", ["https://example.com/"]),
+        ],
+        LIMITS
+      )
+    );
+    expect(puts).toHaveLength(1);
+    const rows = await run(storage.getCrawlScripts(CRAWL));
+    expect(rows.find((r) => r.url.endsWith("spa.js"))).toMatchObject({ status: "skipped", skipReason: "not-javascript" });
+  });
+
+  test("a redirected script keeps its final URL and resolves by either", async () => {
+    const { adapter } = fakeStore();
+    const storage = await freshStorage(adapter);
+    await run(
+      storage.storeCrawlScripts(
+        CRAWL,
+        [script("https://example.com/old.js", "var moved=1;", ["https://example.com/"], { finalUrl: "https://cdn.example.com/new.js" })],
+        LIMITS
+      )
+    );
+    expect((await run(storage.getCrawlScripts(CRAWL)))[0]?.finalUrl).toBe("https://cdn.example.com/new.js");
+    expect(await run(storage.getCrawlScriptBody(CRAWL, "https://example.com/old.js"))).toBe("var moved=1;");
+    expect(await run(storage.getCrawlScriptBody(CRAWL, "https://cdn.example.com/new.js"))).toBe("var moved=1;");
+  });
+
+  test("a stored script whose body the content store dropped reads as evicted", async () => {
+    const { adapter, rows } = fakeStore();
+    const storage = await freshStorage(adapter);
+    await run(
+      storage.storeCrawlScripts(
+        CRAWL,
+        [script("https://example.com/a.js", "var a=1;", ["https://example.com/"]), script("https://example.com/b.js", "var b=2;", ["https://example.com/"])],
+        LIMITS
+      )
+    );
+    expect((await run(storage.getCrawlScripts(CRAWL))).map((r) => r.evicted)).toEqual([false, false]);
+    rows.delete([...rows.keys()][0]!);
+    const after = await run(storage.getCrawlScripts(CRAWL));
+    expect(after.filter((r) => r.evicted)).toHaveLength(1);
+    expect(after.every((r) => r.status === "stored")).toBe(true);
+  });
+
+  test("the fetch summary records what the script fetch limit left out", async () => {
+    const { adapter } = fakeStore();
+    const storage = await freshStorage(adapter);
+    expect(await run(storage.getCrawlScriptsSummary(CRAWL))).toBeNull();
+    await run(
+      storage.storeCrawlScripts(CRAWL, [script("https://example.com/a.js", "a", [])], LIMITS, {
+        fetchLimit: 12,
+        droppedByLimit: 13,
+      })
+    );
+    expect(await run(storage.getCrawlScriptsSummary(CRAWL))).toEqual({ fetchLimit: 12, droppedByLimit: 13 });
+  });
 });

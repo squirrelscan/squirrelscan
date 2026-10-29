@@ -68,6 +68,12 @@ export interface ScriptFetcherOptions {
    */
   anyContentType?: boolean;
   /**
+   * Fetch up to `maxScripts` scripts, not the share of the page count the audit
+   * normally allows (at least 10, 10% of the pages, at most 50). Set when
+   * `[storage] store_scripts` asks for every bundle (#1255).
+   */
+  fetchAll?: boolean;
+  /**
    * Every hop is vetted against this policy before it is sent (see
    * `@squirrelscan/utils/public-egress`); a refused one is never requested and
    * reads as ASSET_FETCH_REFUSED_ERROR. Absent: hosts are unrestricted.
@@ -353,10 +359,11 @@ export function fetchScriptContents(
 
     const uniqueUrls = [...new Set(urls)];
 
-    const dynamicLimit = calculateScriptLimit(
-      opts.pageCount,
-      opts.maxScripts ?? SCRIPT_FETCH_LIMITS.MAX_SCRIPTS_TO_FETCH
-    );
+    const configuredLimit =
+      opts.maxScripts ?? SCRIPT_FETCH_LIMITS.MAX_SCRIPTS_TO_FETCH;
+    const dynamicLimit = opts.fetchAll
+      ? configuredLimit
+      : calculateScriptLimit(opts.pageCount, configuredLimit);
     const limitedUrls =
       uniqueUrls.length > dynamicLimit
         ? uniqueUrls.slice(0, dynamicLimit)

@@ -66,6 +66,12 @@ import {
   StorageError,
 } from "./types";
 
+/** A body that is an HTML document, not a script. */
+function looksLikeHtml(body: string): boolean {
+  const head = body.slice(0, 256).trimStart().toLowerCase();
+  return head.startsWith("<!doctype html") || head.startsWith("<html") || head.startsWith("<head") || head.startsWith("<body");
+}
+
 /** One fetched script handed to {@link SQLiteStorage.storeCrawlScripts}. */
 export interface StoredScriptInput {
   url: string;
@@ -75,9 +81,15 @@ export interface StoredScriptInput {
   /** Its size when known without the body. */
   sizeBytes: number | null;
   sourcePages: string[];
+  /** Where a redirected script ended up; the index is keyed by the requested URL. */
+  finalUrl?: string;
 }
 
-export type StoredScriptSkipReason = "too-large" | "total-cap" | "store-error";
+export type StoredScriptSkipReason =
+  | "too-large"
+  | "total-cap"
+  | "store-error"
+  | "not-javascript";
 
 export interface StoredScriptRecord {
   url: string;
@@ -87,6 +99,16 @@ export interface StoredScriptRecord {
   status: "stored" | "skipped";
   skipReason: StoredScriptSkipReason | null;
   sourcePages: string[];
+  finalUrl: string | null;
+  /** Stored, but the content store has since dropped the body (its size cap). */
+  evicted: boolean;
+}
+
+/** What the script fetch left out of an audit's index. */
+export interface StoredScriptsFetchSummary {
+  fetchLimit: number | null;
+  /** Scripts the pages reference that the fetch limit left unrequested. */
+  droppedByLimit: number;
 }
 
 export interface StoredScriptsSummary {
@@ -1081,12 +1103,19 @@ CREATE TABLE IF NOT EXISTS crawl_scripts (
   status TEXT NOT NULL,
   skip_reason TEXT,
   source_pages TEXT NOT NULL,
+  final_url TEXT,
   PRIMARY KEY (crawl_id, url),
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_crawl_scripts_hash
-  ON crawl_scripts(content_hash) WHERE content_hash IS NOT NULL;
+-- What the script fetch left out: scripts the pages reference past the fetch
+-- limit were never requested, so they have no row above (#1255).
+CREATE TABLE IF NOT EXISTS crawl_scripts_summary (
+  crawl_id TEXT PRIMARY KEY,
+  fetch_limit INTEGER,
+  dropped_by_limit INTEGER NOT NULL,
+  FOREIGN KEY (crawl_id) REFERENCES crawls(id)
+);
 
 -- Sitemap URL status cache
 CREATE TABLE IF NOT EXISTS sitemap_url_statuses (
@@ -2236,7 +2265,8 @@ export class SQLiteStorage implements CrawlStorage {
   storeCrawlScripts(
     crawlId: string,
     scripts: ReadonlyArray<StoredScriptInput>,
-    limits: { maxBytes: number; totalBytes: number }
+    limits: { maxBytes: number; totalBytes: number },
+    fetch?: StoredScriptsFetchSummary
   ): Effect.Effect<StoredScriptsSummary, StorageError, never> {
     return Effect.try({
       try: () => {
@@ -2251,8 +2281,8 @@ export class SQLiteStorage implements CrawlStorage {
         const db = this.getDb();
         const insert = db.prepare(
           `INSERT OR REPLACE INTO crawl_scripts
-             (crawl_id, url, content_hash, size_bytes, status, skip_reason, source_pages)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`
+             (crawl_id, url, content_hash, size_bytes, status, skip_reason, source_pages, final_url)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
         );
         const seen = new Map<string, number>(); // hash -> bytes, this crawl
         let distinctBytes = 0;
@@ -2267,7 +2297,7 @@ export class SQLiteStorage implements CrawlStorage {
             if (size === null) continue;
             const pages = JSON.stringify(script.sourcePages);
             const skip = (reason: StoredScriptSkipReason): void => {
-              insert.run(crawlId, script.url, null, size, "skipped", reason, pages);
+              insert.run(crawlId, script.url, null, size, "skipped", reason, pages, script.finalUrl ?? null);
               summary.skipped++;
             };
             if (size > limits.maxBytes) {
@@ -2277,6 +2307,12 @@ export class SQLiteStorage implements CrawlStorage {
             // Under the per-file cap but with no body in hand (the fetcher keeps
             // JavaScript only): nothing to store and nothing to say.
             if (script.content === null) continue;
+            // A 200 that is a page, not a script (a SPA fallback behind a
+            // JavaScript content type): not a bundle.
+            if (looksLikeHtml(script.content)) {
+              skip("not-javascript");
+              continue;
+            }
             const hash = createHash("sha256").update(script.content).digest("hex");
             if (!seen.has(hash)) {
               if (distinctBytes + size > limits.totalBytes) {
@@ -2294,12 +2330,18 @@ export class SQLiteStorage implements CrawlStorage {
               distinctBytes += size;
               summary.distinct++;
               summary.distinctBytes = distinctBytes;
-              insert.run(crawlId, script.url, stored, size, "stored", null, pages);
+              insert.run(crawlId, script.url, stored, size, "stored", null, pages, script.finalUrl ?? null);
               summary.stored++;
               continue;
             }
-            insert.run(crawlId, script.url, hash, size, "stored", null, pages);
+            insert.run(crawlId, script.url, hash, size, "stored", null, pages, script.finalUrl ?? null);
             summary.stored++;
+          }
+          if (fetch) {
+            db.prepare(
+              `INSERT OR REPLACE INTO crawl_scripts_summary (crawl_id, fetch_limit, dropped_by_limit)
+               VALUES (?, ?, ?)`
+            ).run(crawlId, fetch.fetchLimit, fetch.droppedByLimit);
           }
           db.exec("COMMIT");
         } catch (error) {
@@ -2321,7 +2363,7 @@ export class SQLiteStorage implements CrawlStorage {
       try: () => {
         const rows = this.getDb()
           .prepare(
-            `SELECT url, content_hash, size_bytes, status, skip_reason, source_pages
+            `SELECT url, content_hash, size_bytes, status, skip_reason, source_pages, final_url
              FROM crawl_scripts WHERE crawl_id = ? ORDER BY url`
           )
           .all(crawlId) as Array<{
@@ -2331,7 +2373,9 @@ export class SQLiteStorage implements CrawlStorage {
           status: string;
           skip_reason: string | null;
           source_pages: string;
+          final_url: string | null;
         }>;
+        const store = this.contentStore;
         const records = rows.map(
           (row): StoredScriptRecord => ({
             url: row.url,
@@ -2340,6 +2384,14 @@ export class SQLiteStorage implements CrawlStorage {
             status: row.status === "stored" ? "stored" : "skipped",
             skipReason: (row.skip_reason as StoredScriptSkipReason | null) ?? null,
             sourcePages: JSON.parse(row.source_pages) as string[],
+            finalUrl: row.final_url,
+            evicted:
+              row.status === "stored" &&
+              row.content_hash !== null &&
+              store !== null &&
+              !(store.has
+                ? store.has(row.content_hash)
+                : store.getString(row.content_hash) !== null),
           })
         );
         const { pageUrl } = opts;
@@ -2351,7 +2403,26 @@ export class SQLiteStorage implements CrawlStorage {
     });
   }
 
-  /** A stored script's body by URL for this crawl; null when skipped or evicted. */
+  /** What the script fetch left out of this crawl's index, when it was recorded. */
+  getCrawlScriptsSummary(
+    crawlId: string
+  ): Effect.Effect<StoredScriptsFetchSummary | null, StorageError, never> {
+    return Effect.try({
+      try: () => {
+        const row = this.getDb()
+          .prepare(
+            "SELECT fetch_limit, dropped_by_limit FROM crawl_scripts_summary WHERE crawl_id = ?"
+          )
+          .get(crawlId) as { fetch_limit: number | null; dropped_by_limit: number } | undefined;
+        return row
+          ? { fetchLimit: row.fetch_limit, droppedByLimit: row.dropped_by_limit }
+          : null;
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
+  /** A stored script's body by URL (requested or final) for this crawl; null when skipped or evicted. */
   getCrawlScriptBody(
     crawlId: string,
     url: string
@@ -2360,9 +2431,9 @@ export class SQLiteStorage implements CrawlStorage {
       try: () => {
         const row = this.getDb()
           .prepare(
-            "SELECT content_hash FROM crawl_scripts WHERE crawl_id = ? AND url = ? AND content_hash IS NOT NULL"
+            "SELECT content_hash FROM crawl_scripts WHERE crawl_id = ? AND (url = ? OR final_url = ?) AND content_hash IS NOT NULL"
           )
-          .get(crawlId, url) as { content_hash: string } | undefined;
+          .get(crawlId, url, url) as { content_hash: string } | undefined;
         if (!row || !this.contentStore) return null;
         return this.contentStore.getString(row.content_hash);
       },
@@ -4676,6 +4747,7 @@ export class SQLiteStorage implements CrawlStorage {
     // The script bodies stay in the content store under its own size cap, like
     // the HTML; only this crawl's index of them goes (#1255).
     "crawl_scripts",
+    "crawl_scripts_summary",
   ] as const;
 
   /**
