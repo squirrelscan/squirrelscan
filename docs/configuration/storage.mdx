@@ -146,6 +146,8 @@ the crawl: bundles compress less than HTML, and the default is shared with every
 project on the machine. Each site has its own project database, so
 `keep_audits` only matters when you audit the same site again.
 
+**Both caps count the script text, not the compressed bytes.** `store_scripts_max_bytes` and `store_scripts_total_bytes` are measured on the decoded size of each script, while `content_store_max_bytes` counts compressed bytes in the store. The default total, a quarter of `content_store_max_bytes`, is therefore a quarter of the cap in uncompressed script text, which takes less than a quarter of the store once gzipped.
+
 **Disk cost.** A script bundle is large, so a corpus run over thousands of sites
 needs gigabytes. Check `squirrel self doctor` for the store's size and cap.
 
