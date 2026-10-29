@@ -84,6 +84,8 @@ describe("vibe-coding builder and BaaS fingerprints", () => {
     });
 
     test("near-miss: a look-alike host and a page that links to one", () => {
+    expect(ids(input({ url: "https://evilbase44.app.attacker.example/" }))).not.toContain("base44");
+    expect(ids(input({ url: "https://base44.app.attacker.example/" }))).not.toContain("base44");
       expect(ids(input({ url: "https://base44.app.example.com/" }))).not.toContain("base44");
       const html = `<a href="https://my-tool.base44.app/">demo</a>`;
       expect(ids(input({ html }))).not.toContain("base44");
@@ -109,6 +111,8 @@ describe("vibe-coding builder and BaaS fingerprints", () => {
     test("near-miss: a look-alike host, and replit.com itself without the markers", () => {
       expect(ids(input({ url: "https://replit.app.evil.example/" }))).not.toContain("replit");
       expect(ids(input({ url: "https://notreplit.app/" }))).not.toContain("replit");
+      expect(ids(input({ url: "https://my-app.replit.app.attacker.example/" }))).not.toContain("replit");
+      expect(ids(input({ url: "https://evilrepl.co.attacker.example/" }))).not.toContain("replit");
     });
   });
 
@@ -144,6 +148,13 @@ describe("vibe-coding builder and BaaS fingerprints", () => {
       expect(ids(input({ html: inline }))).toContain("supabase");
       const cdn = `<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>`;
       expect(ids(input({ html: cdn }))).toContain("supabase");
+    });
+
+    test("near-miss: look-alike hosts around supabase.co", () => {
+      const evil = `<img src="https://${ref}.supabase.co.attacker.example/storage/v1/object/public/x.png">
+<img src="https://evilsupabase.co.attacker.example/storage/v1/object/public/x.png">
+<img src="https://supabase.co.evil.example/storage/v1/object/public/x.png">`;
+      expect(ids(input({ html: evil }))).not.toContain("supabase");
     });
 
     test("near-miss: placeholder project in prose and a non-ref subdomain", () => {
@@ -251,8 +262,9 @@ fetch(\`/api/app-logs/\${appId}/log-user-in-app/\${page}\`)</pre>
   });
 
   test("Base44 custom-domain app: template-literal beacon in an inline script", () => {
+    const appId = "0123456789abcdef01234567"; // pragma: allowlist secret
     const html = `<html><head><script type="module">
-  const appId = "0123456789abcdef01234567";
+  const appId = "${appId}";
   fetch(\`/api/app-logs/\${appId}/log-user-in-app/\${pageName}\`, { method: "POST" });
 </script></head></html>`;
     expect(ids(input({ url: "https://tools.example.org/", html }))).toContain("base44");

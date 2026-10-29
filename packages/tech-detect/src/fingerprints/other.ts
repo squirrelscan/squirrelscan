@@ -315,7 +315,7 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
         ".firebaseapp.com",
       ),
     ],
-    versionPattern: /gstatic\.com\/firebasejs\/(\d+\.\d+\.\d+)/i,
+    versionPattern: /\/firebasejs\/(\d+\.\d+\.\d+)\/firebase-/i,
     ignoreComments: true,
     confidence: "high",
   },
