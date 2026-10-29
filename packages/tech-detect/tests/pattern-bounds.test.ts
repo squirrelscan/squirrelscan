@@ -10,7 +10,7 @@ import type { TechDetectInput } from "../src/types";
 // (the meta tags are passed in so the shared meta pre-parse is not counted)
 // input built from its own leading literal (and a few generic hostile openers).
 
-const SIZE = 100_000;
+const SIZE = 200_000;
 const BUDGET_MS = 250;
 
 /** The literal a pattern starts with, up to its first quantifier, class or group. */
@@ -92,6 +92,8 @@ describe("bounded patterns still match real markup", () => {
     expect(ids(`<link href="css/materialize.css" rel="stylesheet">`)).toContain("materialize-css");
     expect(ids(`<link rel="stylesheet" href="https://cdnjs.cloudflare.com/x/animate.min.css">`)).toContain("animate-css");
     expect(ids(`<script data-main="js/main" src="js/require.js"></script>`)).toContain("requirejs");
+    // html-minifier removeTagWhitespace output: no space between attributes.
+    expect(ids(`<link rel="stylesheet"href="/css/bulma.min.css">`)).toContain("bulma");
   });
 
   test("analytics, privacy and widget patterns", () => {

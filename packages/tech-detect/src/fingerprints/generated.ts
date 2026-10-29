@@ -623,7 +623,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://www.dynatrace.com",
     icon: "dynatrace",
     detectors: [
-      { type: "script-url", pattern: new RegExp("ruxitagentjs[_a-z0-9]{0,40}\\.js", "i") },
+      { type: "script-url", pattern: new RegExp("ruxitagentjs[_a-z0-9]{0,80}\\.js", "i") },
       { type: "html", pattern: new RegExp("ruxitagentjs", "i") },
       { type: "script-url", pattern: new RegExp("js-cdn\\.dynatrace\\.com", "i") },
       { type: "script-content", pattern: new RegExp("\\bdtrum\\b", "i") },
@@ -2016,7 +2016,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://bulma.io",
     icon: "bulma",
     detectors: [
-      { type: "html", pattern: new RegExp("<link\\b[^>]{0,400}?\\shref=\"[^\"]{0,300}?/bulma(?:\\.min)?\\.css", "i") },
+      { type: "html", pattern: new RegExp("<link\\b[^>]{0,400}?(?:\\s|[\"'])href=\"[^\"]{0,300}?/bulma(?:\\.min)?\\.css", "i") },
     ],
     confidence: "high",
     versionPattern: new RegExp("bulma@([0-9]+\\.[0-9]+\\.[0-9]+)", "i"),
@@ -2029,7 +2029,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "foundation",
     detectors: [
       { type: "script-url", pattern: new RegExp("foundation-sites[@/][\\d.]+", "i") },
-      { type: "html", pattern: new RegExp("<link\\b[^>]{0,400}?\\shref=\"[^\"]{0,300}?/foundation(?:\\.min)?\\.css", "i") },
+      { type: "html", pattern: new RegExp("<link\\b[^>]{0,400}?(?:\\s|[\"'])href=\"[^\"]{0,300}?/foundation(?:\\.min)?\\.css", "i") },
     ],
     confidence: "medium",
     versionPattern: new RegExp("foundation-sites@([0-9]+\\.[0-9]+\\.[0-9]+)", "i"),
@@ -2042,7 +2042,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "semantic-ui",
     detectors: [
       { type: "script-url", pattern: new RegExp("(?:semantic-ui|fomantic-ui)[@/][\\d.]", "i") },
-      { type: "html", pattern: new RegExp("<link\\b[^>]{0,400}?\\shref=\"[^\"]{0,300}?/(?:semantic|fomantic)(?:\\.min)?\\.css", "i") },
+      { type: "html", pattern: new RegExp("<link\\b[^>]{0,400}?(?:\\s|[\"'])href=\"[^\"]{0,300}?/(?:semantic|fomantic)(?:\\.min)?\\.css", "i") },
     ],
     confidence: "medium",
     versionPattern: new RegExp("(?:semantic-ui|fomantic-ui)@([0-9]+\\.[0-9]+\\.[0-9]+)", "i"),
@@ -2054,7 +2054,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     website: "https://materializecss.com",
     icon: "materialize-css",
     detectors: [
-      { type: "html", pattern: new RegExp("<link\\b[^>]{0,400}?\\shref=\"[^\"]{0,300}?/materialize(?:\\.min)?\\.css", "i") },
+      { type: "html", pattern: new RegExp("<link\\b[^>]{0,400}?(?:\\s|[\"'])href=\"[^\"]{0,300}?/materialize(?:\\.min)?\\.css", "i") },
       { type: "script-url", pattern: new RegExp("/materialize(?:\\.min)?\\.js", "i") },
     ],
     confidence: "high",
@@ -3187,7 +3187,7 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "animate-css",
     detectors: [
       { type: "html", pattern: new RegExp("class=\"[^\"]*\\banimate__animated\\b", "i") },
-      { type: "html", pattern: new RegExp("<link\\b[^>]{0,400}?\\shref=\"[^\"]{0,300}?/animate(?:\\.min)?\\.css", "i") },
+      { type: "html", pattern: new RegExp("<link\\b[^>]{0,400}?(?:\\s|[\"'])href=\"[^\"]{0,300}?/animate(?:\\.min)?\\.css", "i") },
     ],
     confidence: "high",
   },
