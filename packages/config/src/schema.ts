@@ -120,6 +120,12 @@ export const CrawlerConfigSchema = z.object({
   // probes on: a config without the key (every cloud run) behaves exactly as
   // before, and code that builds a Config by hand does not have to learn it.
   disable_discovery_probes: z.boolean().optional(),
+  // Follow a start URL that redirects to another registrable domain (a link
+  // shortener, a launch domain forwarding to the product) and audit the
+  // destination (#1281). Unset or false: a TTY asks, anything else exits with
+  // status `redirected`. Same-site redirects (http to https, apex to www) are
+  // always followed. Optional like disable_discovery_probes.
+  follow_redirect: z.boolean().optional(),
   // Incremental re-scan: send conditional GETs (ETag/Last-Modified) so unchanged pages return 304; --refresh forces a full fetch. (#125)
   incremental: z.boolean().default(true),
   breadth_first: z.boolean().default(true),

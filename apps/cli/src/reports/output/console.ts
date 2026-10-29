@@ -33,6 +33,7 @@ import {
   scanScopeLine,
   seedRedirectFollowUp,
   seedRedirectLine,
+  startRedirectLine,
   getGroupName,
   getSubcategoryName,
   groupTechnologies,
@@ -623,6 +624,9 @@ function printReportDetail(
   // seed pointed.
   const seedRedirect = seedRedirectLine(report);
   if (seedRedirect) scan.push(fmt.yellow(seedRedirect));
+  // #1281: the start URL redirected and the redirect was followed.
+  const startRedirect = startRedirectLine(report);
+  if (startRedirect) scan.push(fmt.dim(startRedirect));
   // Scan scope (#1180) + smart-audits coverage (#110): the score reads with its basis. The
   // capped-crawl hint stays with pageLimitHint (commands layer).
   const scope = scanScopeLine(report);

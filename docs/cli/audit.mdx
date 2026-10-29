@@ -45,7 +45,8 @@ squirrel audit <url> [options]
 | `--ephemeral` | | Use cloud features for this run only: don't add the site to your dashboard, don't schedule it, and don't publish the report. Charged like any signed-in audit. Overrides `[cloud] ephemeral`. Add `--publish` to publish an unlisted report that is attached to no dashboard site. See [Ephemeral runs](#ephemeral-runs) | `false` |
 | `--no-ephemeral` | | Turn `[cloud] ephemeral = true` off for this run | `false` |
 | `--visibility` | | Visibility: `public`, `unlisted`, `private` | `unlisted` |
-| `--yes` | `-y` | Skip confirmation prompts (e.g. cloud credit spend) | `false` |
+| `--follow-redirect` | | Audit where the start URL redirects when that is another site (a link shortener, a launch domain forwarding to the product). Without it a terminal asks, and anything else exits `4`. Overrides `[crawler] follow_redirect`; `--no-follow-redirect` turns the config off for one run. `-y` does not imply it. See [Start URLs that redirect](#start-urls-that-redirect) | `false` |
+| `--yes` | `-y` | Skip confirmation prompts (e.g. cloud credit spend). Does not follow a redirect to another site: use `--follow-redirect` | `false` |
 | `--render` | | Force cloud browser rendering for this run: alias of `--render-mode all` ([uses credits](/guides/browser-rendering); requires login) | auto |
 | `--render-mode` | | Render strategy: `off` (HTTP only) · `auto` (render only client-rendered pages) · `all` (render every page). Overrides `[cloud].render` | the level's: `auto` for quick, `all` for surface and full |
 | `--http` | | Force plain HTTP for this run: alias of `--render-mode off` (never render in the cloud; pages cost the same either way) | auto |
@@ -280,6 +281,58 @@ squirrel audit https://example.com --render
 ```
 
 For finer control, `--render-mode auto` renders **only** pages that need it (client-side-rendered shells) and uses fast plain HTTP for the rest. To set the behavior permanently, use `render` in `[cloud]` - see the [browser rendering guide](/guides/browser-rendering).
+
+### Start URLs that redirect
+
+A start URL is resolved before anything else: its redirect chain is followed, one request per hop, and the end of the chain is what gets audited. A link shortener is the usual case. `squirrel audit https://bit.ly/abc` audits the site it points to, not bit.ly.
+
+| The chain | What happens |
+|---|---|
+| Stays on one site: `http` to `https`, apex to `www`, a path change | Followed silently. The report's base URL is where it ended. |
+| Ends on another registrable domain or port | Needs your consent, because it changes which site is crawled. |
+| Loops, passes 5 hops, or reaches a hop that is refused | Never followed. The run exits `4` with the chain so far. |
+
+On a terminal, a cross-domain redirect asks first:
+
+```text
+bit.ly/abc redirects to https://example.com/pricing. Audit example.com instead? [Y/n]
+```
+
+Accepting audits the destination. Declining exits `4` and prints the destination. Anywhere else (an agent, CI, a piped report) there is nobody to ask, so give the consent up front:
+
+```bash
+squirrel audit https://bit.ly/abc --follow-redirect
+```
+
+or set it for a project:
+
+```toml
+[crawler]
+follow_redirect = true
+```
+
+`-y` is not that consent. It approves credit spend, agents pass it routinely, and the redirect may land on a site that is not yours. Without `--follow-redirect` a non-interactive run does not crawl the redirector and does not score it. It exits `4` and prints a `redirected` report that names the destination and the command to run again:
+
+```json
+{
+  "status": "redirected",
+  "reason": "cross-domain",
+  "originalUrl": "https://bit.ly/abc",
+  "finalUrl": "https://example.com/pricing",
+  "redirectChain": [
+    { "url": "https://bit.ly/abc", "status": 301 },
+    { "url": "https://example.com/pricing", "status": 200 }
+  ],
+  "rerunCommand": "squirrel audit https://bit.ly/abc --follow-redirect",
+  "message": "https://bit.ly/abc redirects to https://example.com/pricing, a different site, so nothing was audited."
+}
+```
+
+The same facts come out in every [output format](#output-formats). `reason` is `cross-domain`, `loop`, `too-many` or `refused`. `rerunCommand` is `null` for a loop or a refused hop, where there is nothing to run again.
+
+When a cross-domain redirect is followed, the report records where the audit began. The JSON report has `meta.originalUrl` and `meta.redirectChain` (every URL requested, each with the status it answered; the last is the destination), the text, markdown, LLM, XML and HTML reports say so in their scan notes, and the project, the cloud credit estimate and the crawl scope are the destination's. A same-site redirect leaves no record.
+
+Every hop goes through the same egress guard as the crawl. A redirect into a private network, a link-local address or a cloud metadata address is refused and never requested, unless the start URL itself is on that private network. The hops are resolved even under [`--offline`](#fully-offline-audit): that is the one request per hop that reaches another site, and what it finds is audited offline. Redirects that a page, rather than the start URL, answers with (a meta refresh or a script) are not part of this chain.
 
 ### Fully offline audit
 
@@ -590,6 +643,7 @@ Change the window, or turn it off, with
 | `1` | Error (invalid URL, crawl failed, down/blocked site, etc.) |
 | `2` | A [`--fail-on`](#gate-ci-on-audit-results) threshold tripped (CI gate) |
 | `3` | A WAF or bot manager answered the audited page with a challenge or block page, so nothing was audited (see [blocked by a WAF or bot manager](/guides/failed-audits#blocked-by-waf)) |
+| `4` | The start URL redirected to another site and the run was not told to follow it (or the chain looped, passed 5 hops, or reached a refused hop), so nothing was audited. See [Start URLs that redirect](#start-urls-that-redirect) |
 
 ## Configuration
 

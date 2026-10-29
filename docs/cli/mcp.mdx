@@ -22,7 +22,7 @@ The server runs in the foreground and speaks JSON-RPC on stdin/stdout. You rarel
 
 | Tool | Auth | Description |
 |------|------|-------------|
-| `audit_website` | None | Deterministic audit of a URL at an [audit level](/guides/audit-levels) (`level`: `quick`, `surface` or `full`, default `surface`; `coverage` is the older name). Logged out, or with `offline: true`, it runs on your machine with no cloud call. Logged in, it is a billed cloud audit like [`squirrel audit`](/cli/audit): 50 credits plus 2 per audited page at every level, plus 1 per external link the cloud verifies (at most 1 per page) where external links are checked, with pages that need JavaScript rendered in the cloud browser and the cloud checks at surface and full. Every level checks internal and external links; at quick the external ones are checked on your machine, free. `externalLinks: false` or `internalLinks: false` skips them. `ephemeral: true` (or `[cloud] ephemeral = true`) uses the cloud for this run only: the site is not added to your dashboard or scheduled, and the audit is charged the same (see [Ephemeral runs](/cli/audit#ephemeral-runs)). See [Billing a signed-in audit](#billing-a-signed-in-audit) and [Link checking defaults](/rules/links#link-checking-defaults). |
+| `audit_website` | None | Deterministic audit of a URL at an [audit level](/guides/audit-levels) (`level`: `quick`, `surface` or `full`, default `surface`; `coverage` is the older name). Logged out, or with `offline: true`, it runs on your machine with no cloud call. Logged in, it is a billed cloud audit like [`squirrel audit`](/cli/audit): 50 credits plus 2 per audited page at every level, plus 1 per external link the cloud verifies (at most 1 per page) where external links are checked, with pages that need JavaScript rendered in the cloud browser and the cloud checks at surface and full. Every level checks internal and external links; at quick the external ones are checked on your machine, free. `externalLinks: false` or `internalLinks: false` skips them. `followRedirect: true` (or `[crawler] follow_redirect = true`) audits where the URL redirects when that is another site; without it the call returns `confirmation_required` with the destination (see [Start URLs that redirect](#start-urls-that-redirect)). `ephemeral: true` (or `[cloud] ephemeral = true`) uses the cloud for this run only: the site is not added to your dashboard or scheduled, and the audit is charged the same (see [Ephemeral runs](/cli/audit#ephemeral-runs)). See [Billing a signed-in audit](#billing-a-signed-in-audit) and [Link checking defaults](/rules/links#link-checking-defaults). |
 | `quick_check` | None | Fast, local-only audit at the quick level: the URL and its sitemaps, up to 25 pages, no link following, no cloud checks. Internal link targets are status-checked, external links are not. Works offline. |
 | `list_rules` | None | List all built-in audit rules. |
 | `get_rule` | None | Full definition of one rule by id. |
@@ -63,6 +63,26 @@ The agent shows you the estimate and calls again with `confirm: true`. The repor
 - When they cannot cover even one page, or the server refuses to register the audit, the tool returns an error with the cost and the balance. Nothing is registered or charged.
 - An audit that does not complete (the site is down or blocks the crawl) closes as failed: no page charge, and the audit base is refunded. Stopping the server mid-audit closes the run as cancelled.
 - `offline: true` runs the audit on your machine with no cloud call: not billed, and without the cloud checks or cloud rendering. A `localhost` or private-network URL always runs locally and is never billed.
+
+## Start URLs that redirect
+
+`audit_website` resolves the URL's redirect chain before it plans or charges anything. A redirect within one site (`http` to `https`, apex to `www`) is followed silently. A redirect to another site, such as a link shortener, is not audited until the call says so:
+
+```json
+{
+  "status": "confirmation_required",
+  "reason": "redirect",
+  "originalUrl": "https://bit.ly/abc",
+  "finalUrl": "https://example.com/pricing",
+  "redirectChain": [
+    { "url": "https://bit.ly/abc", "status": 301 },
+    { "url": "https://example.com/pricing", "status": 200 }
+  ],
+  "next": "https://bit.ly/abc redirects to https://example.com/pricing, a different site. Show the user the destination, then call audit_website again with followRedirect: true to audit it. The credit estimate is made for the destination on that call."
+}
+```
+
+The agent shows you the destination and calls again with `followRedirect: true`. `confirm: true` does not do it: that approves credit spend, and the redirect may land on a site that is not yours. The next call plans, estimates and audits the destination, and the report names the URL you gave and the chain. A chain that loops, passes 5 hops or reaches a refused hop comes back as `{ "status": "redirected", ... }` with the reason, and nothing is audited. This is the same behaviour as [`squirrel audit`](/cli/audit#start-urls-that-redirect).
 
 ## Supported protocol versions
 

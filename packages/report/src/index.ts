@@ -257,6 +257,11 @@ export {
   type MixedProvenanceCheck,
 } from "./coverage";
 
+// Start URL redirects (#1281): the followed-redirect disclosure and the
+// no-audit outcome a redirect that was not followed prints.
+export { followedStartRedirect, startRedirectLine, type FollowedStartRedirect } from "./coverage";
+export { renderRedirectedOutcome, type RedirectedOutcomeFormat } from "./start-redirect";
+
 // Editor's summary helpers (report-only / non-scoring; shared across formats + CLI console)
 export {
   EDITOR_SUMMARY_NOTE,

@@ -1,0 +1,144 @@
+/**
+ * Start URL redirects (squirrelscan/squirrelscan#1281).
+ *
+ * `squirrel audit bit.ly/x` used to grade the shortener. The start URL's
+ * redirect chain is now resolved before the crawl, and the destination is the
+ * audit target: silently when the chain stays on one site, with the user's
+ * consent when it changes site. These are the shapes every surface shares: the
+ * CLI, the local MCP tool, the renderers, and the hosted API and MCP server
+ * (which carry `follow_redirect` on a run request and answer `redirected`).
+ *
+ * Leaf module (one import, within this package), so the API Worker and the
+ * renderers can pull it without the crawler.
+ */
+import { shellWord } from "./offsite-redirect";
+
+/** Hops a start URL's chain may take before it is reported instead of followed. */
+export const MAX_SEED_REDIRECT_HOPS = 5;
+
+/**
+ * `squirrel audit` exit code when the start URL redirected to another site and
+ * the run was not told to follow it. 1 stays the operational failure, 2 the
+ * `--fail-on` gate and 3 a WAF block.
+ */
+export const EXIT_CODE_REDIRECTED = 4;
+
+/** One response in a start URL's chain: the URL asked, and the status it answered. */
+export interface SeedRedirectHop {
+  url: string;
+  /** HTTP status of the answer: 3xx for a hop that redirected, the destination's own status for the last. */
+  status: number;
+}
+
+/**
+ * How resolving the chain ended.
+ *  - `none`: the start URL did not redirect.
+ *  - `same-site`: it redirected within one registrable domain (http to https,
+ *    apex to www, a path change). Followed without asking.
+ *  - `cross-domain`: it ended on another registrable domain or port. Needs consent.
+ *  - `loop`: the chain revisited a URL.
+ *  - `too-many`: the chain passed {@link MAX_SEED_REDIRECT_HOPS}.
+ *  - `refused`: a hop was refused by the egress guard (a private, link-local or
+ *    metadata address) and was never requested.
+ */
+export type SeedRedirectKind =
+  | "none"
+  | "same-site"
+  | "cross-domain"
+  | "loop"
+  | "too-many"
+  | "refused";
+
+export interface SeedRedirectResolution {
+  kind: SeedRedirectKind;
+  /** The URL as the user gave it. */
+  originalUrl: string;
+  /**
+   * Where the chain ended: the audit target. For `loop`, `too-many` and
+   * `refused` it is the URL the chain was headed to, which was not requested
+   * (or, for a loop, was requested already).
+   */
+  finalUrl: string;
+  /**
+   * Every URL requested, in order, with the status each answered. The last
+   * entry is the destination's own answer when it gave one, so a start URL that
+   * does not redirect has one entry and a followed redirect has two or more.
+   * Empty when the first request got no answer at all.
+   */
+  chain: SeedRedirectHop[];
+  /** Why a `refused` chain stopped: the guard's wording. Absent otherwise. */
+  refusal?: string;
+}
+
+/**
+ * The record of a followed start redirect, carried by the report
+ * (`originalUrl`, `redirectChain`) and by a cloud run, whose website belongs to
+ * the final domain with `originalUrl` kept as an alias. `redirectChain` has the
+ * shape of {@link SeedRedirectResolution.chain}: the last entry is the
+ * destination.
+ */
+export interface SeedRedirectRecord {
+  originalUrl: string;
+  redirectChain: SeedRedirectHop[];
+}
+
+/**
+ * The answer for a run that did not audit because the start URL redirected
+ * (CLI exit status {@link EXIT_CODE_REDIRECTED}, hosted MCP
+ * `confirmation_required`/`redirected`). It names the destination and the exact
+ * command to run again; there is no score.
+ */
+export interface SeedRedirectedOutcome {
+  status: "redirected";
+  reason: SeedRedirectKind;
+  originalUrl: string;
+  finalUrl: string;
+  redirectChain: SeedRedirectHop[];
+  /** What to run to audit the destination, or null when the chain did not end on a usable URL. */
+  rerunCommand: string | null;
+  /** What happened, ready to print. The command to run is `rerunCommand`, kept out of it. */
+  message: string;
+}
+
+/**
+ * The outcome for a resolution that must not be audited as it stands, or null
+ * when the run can go on (`none` and `same-site`, and a `cross-domain` the
+ * caller has consent for: it decides that, not this).
+ *
+ * `rerunCommand` is the CLI command that audits the same start URL with the
+ * follow consent given (`cross-domain`), or the destination directly where the
+ * chain could not be followed to its end (`too-many`); null for a loop or a
+ * refused hop, where there is nothing to re-run.
+ */
+export function redirectedOutcome(
+  resolution: SeedRedirectResolution,
+): SeedRedirectedOutcome | null {
+  if (resolution.kind === "none" || resolution.kind === "same-site") return null;
+  const { originalUrl, finalUrl, chain, kind } = resolution;
+  let rerunCommand: string | null = null;
+  let message: string;
+  switch (kind) {
+    case "cross-domain":
+      rerunCommand = `squirrel audit ${shellWord(originalUrl)} --follow-redirect`;
+      message = `${originalUrl} redirects to ${finalUrl}, a different site, so nothing was audited.`;
+      break;
+    case "loop":
+      message = `${originalUrl} redirects in a loop (back to ${finalUrl}), so nothing was audited.`;
+      break;
+    case "too-many":
+      rerunCommand = `squirrel audit ${shellWord(finalUrl)}`;
+      message = `${originalUrl} redirects more than ${MAX_SEED_REDIRECT_HOPS} times, so nothing was audited. The chain was heading to ${finalUrl}.`;
+      break;
+    default:
+      message = `${originalUrl} redirects to ${finalUrl}, which was not requested (${resolution.refusal ?? "refused"}), so nothing was audited.`;
+  }
+  return {
+    status: "redirected",
+    reason: kind,
+    originalUrl,
+    finalUrl,
+    redirectChain: chain,
+    rerunCommand,
+    message,
+  };
+}

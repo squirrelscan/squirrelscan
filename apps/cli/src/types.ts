@@ -5,6 +5,10 @@ import type {
   AuditLevel,
   ResolvedAuditSettings,
 } from "@squirrelscan/core-contracts/audit-levels";
+import type {
+  SeedRedirectHop,
+  SeedRedirectRecord,
+} from "@squirrelscan/core-contracts/seed-redirect";
 
 export interface AuditResult {
   url: string;
@@ -455,6 +459,10 @@ export interface AuditReport {
    * Absent when the seed did not redirect off-site.
    */
   finalUrl?: string;
+  /** The start URL as given, when its redirect was followed (#1281). Mirrors core-contracts `AuditReport`. */
+  originalUrl?: string;
+  /** Redirecting responses between `originalUrl` and the audited URL (#1281). */
+  redirectChain?: SeedRedirectHop[];
   timestamp: string;
   totalPages: number;
   passed: number;
@@ -623,6 +631,8 @@ export interface AuditReport {
     stopReason?: "time";
     /** In-scope URLs left queued, never fetched, when the crawl stopped. */
     unfetched?: number;
+    /** The start URL's followed redirect (#1281), so a rebuilt report still carries it. */
+    startRedirect?: SeedRedirectRecord;
   };
   /**
    * Rule-result cache disclosure (#1990): how many pages replayed a previous
@@ -751,6 +761,13 @@ export interface AuditOptions {
   // level and the wall-clock cap for ALL probing rules together. The controller
   // turns it into the shared `ctx.probe` budget. Undefined → passive.
   probe?: { level: ProbeLevel; budgetMs: number };
+  /**
+   * The start URL's followed redirect (#1281). `url` is already the
+   * destination; this records the URL the user gave and the chain, for the
+   * report. Set by the command (or the MCP tool) after it resolved and
+   * consented.
+   */
+  startRedirect?: SeedRedirectRecord;
 }
 
 // ============================================

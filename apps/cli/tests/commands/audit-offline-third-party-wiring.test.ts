@@ -144,7 +144,7 @@ describe("squirrel audit --offline and third-party assets (pub#807)", () => {
     ).toEqual([]);
   });
 
-  test("a start URL that redirects to another site is not followed there (#819)", async () => {
+  test("a start URL that redirects to another site is resolved, not crawled, without consent (#819, #1281)", async () => {
     writeFileSync(configPath, "");
     try {
       await runCommand(audit, {
@@ -153,18 +153,28 @@ describe("squirrel audit --offline and third-party assets (pub#807)", () => {
     } catch (err) {
       if (!(err instanceof ExitSignal)) throw err;
     }
-    // The start URL was requested, and nothing went on to the site it names.
+    // `-y` is not the consent: the run stops with the `redirected` status.
+    expect(process.exitCode).toBe(4);
+    // The start URL was requested, and the site it names only once, to resolve
+    // the chain: no crawl of it (no robots.txt, sitemap or page requests).
     expect(hosts).toContain("example.com");
     expect(
       hosts.filter((h) => h === "example.org" || h.endsWith(".example.org"))
-    ).toEqual([]);
+    ).toEqual(["www.example.org"]);
   });
 
-  test("control: online, the same redirect is followed (#819)", async () => {
+  test("control: online, with --follow-redirect the redirect is followed (#819, #1281)", async () => {
     writeFileSync(configPath, "");
     try {
       await runCommand(audit, {
-        rawArgs: ["https://example.com/away", "-m", "1", "-y", "--no-publish"],
+        rawArgs: [
+          "https://example.com/away",
+          "-m",
+          "1",
+          "-y",
+          "--no-publish",
+          "--follow-redirect",
+        ],
       });
     } catch (err) {
       if (!(err instanceof ExitSignal)) throw err;

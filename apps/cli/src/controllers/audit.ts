@@ -2113,8 +2113,16 @@ export async function runAudit(
           pagesCrawled: report.pages.length,
           capped: report.pages.length >= scopeMaxPages,
           ...(unfetched > 0 ? { unfetched } : {}),
+          ...(options.startRedirect
+            ? { startRedirect: options.startRedirect }
+            : {}),
         };
         report.scanScope = scanScope;
+        // #1281: the URL the user gave and the chain to the audited one.
+        if (options.startRedirect) {
+          report.originalUrl = options.startRedirect.originalUrl;
+          report.redirectChain = options.startRedirect.redirectChain;
+        }
         // `squirrel report` rebuilds from this crawl after the audit process is
         // gone. Persist the exact disclosure rather than making that later path
         // guess the runner, the requested limit or how much frontier remained.

@@ -9,7 +9,7 @@ import { affectedPages, itemsNotListed } from "../affected-pages";
 import { domainAgeYears } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
 import { entityPageTotal, stableIdPercent } from "../entities";
-import { scanScopeUnfetched, seedRedirect } from "../coverage";
+import { followedStartRedirect, scanScopeUnfetched, seedRedirect } from "../coverage";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
 import { pageTypePhrase, structureAttr, structureSectionName } from "../structure";
 import { checkRegionScope, itemLabel, itemRegionScope, type RegionScope } from "../region-scope";
@@ -93,6 +93,20 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
     }
     lines.push(`${indent(2)}<note>${escapeXml(refusedSeedRedirect.note)}</note>`);
     lines.push(`${indent(1)}</seed-redirect>`);
+  }
+
+  // Followed start redirect (#1281): the URL the user gave, and the chain to
+  // the audited site above.
+  const startRedirect = followedStartRedirect(report);
+  if (startRedirect) {
+    lines.push(`${indent(1)}<start-redirect followed="true">`);
+    lines.push(`${indent(2)}<original-url>${escapeXml(startRedirect.originalUrl)}</original-url>`);
+    lines.push(`${indent(2)}<final-url>${escapeXml(startRedirect.finalUrl)}</final-url>`);
+    for (const hop of startRedirect.chain) {
+      lines.push(`${indent(2)}<hop status="${hop.status}">${escapeXml(hop.url)}</hop>`);
+    }
+    lines.push(`${indent(2)}<note>${escapeXml(startRedirect.note)}</note>`);
+    lines.push(`${indent(1)}</start-redirect>`);
   }
 
   // null ⇒ N/A (failed/0-page audit) — never coerce to 0/"F" (#586).

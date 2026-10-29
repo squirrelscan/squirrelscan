@@ -264,7 +264,7 @@ function registrableDomain(host: string): string {
  * `http://localhost:8751` collapses to the same (fallback) registrable domain
  * yet is exactly the loopback pivot this guard exists to stop.
  */
-function isSameSite(seed: URL, final: URL): boolean {
+export function isSameSite(seed: URL, final: URL): boolean {
   if (seed.port !== final.port) return false;
   return registrableDomain(seed.hostname) === registrableDomain(final.hostname);
 }

@@ -62,6 +62,7 @@ import {
   ruleCarriedRollupLine,
   scanScopeUnfetched,
   seedRedirectLine,
+  startRedirectLine,
   clampedPageLimit,
 } from "../coverage";
 import { getDocsUrl } from "../docs";
@@ -1824,6 +1825,7 @@ function ReportPage({
   // The coverage notice replaces the generic partial-scan hint.
   const hint = gap ? null : fullScanHint(report);
   const seed = seedRedirectLine(report);
+  const startRedirect = startRedirectLine(report);
   const priv = privateTargetLine(report);
   // repo#2729: checks this audit did not run, so a skipped check never reads as a clean one.
   const notChecked = notCheckedLines(report);
@@ -1836,7 +1838,7 @@ function ReportPage({
   const blockedNote = blockedSummary
     ? `${blockedSummary}${blockedListed.length > 0 ? ` ${blockedListed.slice(0, 3).join("; ")}` : ""}`
     : null;
-  const notes = [cov, priv, ...notChecked, seed, blockedNote, hint].filter(
+  const notes = [cov, priv, ...notChecked, seed, startRedirect, blockedNote, hint].filter(
     (t): t is string => !!t,
   );
   const reportKey = coverageNoticeKey(report, reportId);

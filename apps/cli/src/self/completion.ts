@@ -220,7 +220,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --rule-include --rule-exclude --disable-discovery-probes --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--max-pages -m --max-depth --concurrency --per-host --level --coverage -C --format -f --output -o --refresh -r --fresh-ua --store-scripts --incremental --no-incremental --resume --verbose -v --debug --trace --project-name -n --publish -p --no-publish --ephemeral --no-ephemeral --visibility --follow-redirect --no-follow-redirect --yes -y --render --render-mode --http --offline --external-links --no-external-links --no-internal-links --no-classifier --fail-on --header -H --header-host --rule-include --rule-exclude --disable-discovery-probes --probe -P --passive --aggressive --probe-budget --pentest --summary --include-passed --help" -- "\${cur}") )
       return 0
       ;;
     entities)
@@ -542,6 +542,8 @@ _squirrel() {
             '--ephemeral[Use cloud features for this run only: no dashboard site, no schedule, no publish]' \\
             '--no-ephemeral[Override [cloud] ephemeral = true for this run]' \\
             '--visibility[Visibility for published reports]:visibility:(public unlisted private)' \\
+            '--follow-redirect[Audit where the start URL redirects when that is another site]' \\
+            '--no-follow-redirect[Turn [crawler] follow_redirect off for this run]' \\
             '(-y --yes)'{-y,--yes}'[Skip confirmation prompts]' \\
             '--render[Force cloud browser rendering for this run]' \\
             '--render-mode[Render strategy]:mode:(off auto all)' \\
@@ -803,6 +805,8 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-publish -d "Sk
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l ephemeral -d "Use cloud features for this run only: no dashboard site, no schedule, no publish"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-ephemeral -d "Override [cloud] ephemeral = true for this run"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l visibility -a "public unlisted private" -d "Visibility for published reports"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l follow-redirect -d "Audit where the start URL redirects when that is another site"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-follow-redirect -d "Turn [crawler] follow_redirect off for this run"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -s y -l yes -d "Skip confirmation prompts (cloud credit spend)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l render -d "Force cloud browser rendering for this run"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l render-mode -a "off auto all" -d "Render strategy"

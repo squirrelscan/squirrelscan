@@ -9,6 +9,7 @@
     "./fetcher": "./src/fetcher.ts",
     "./frontier": "./src/frontier.ts",
     "./robots": "./src/robots.ts",
+    "./seed-redirect": "./src/seed-redirect.ts",
     "./sitemaps": "./src/sitemaps.ts",
     "./well-known": "./src/well-known.ts",
     "./storage": "./src/storage/index.ts"

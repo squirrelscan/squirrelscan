@@ -49,7 +49,7 @@ import { checkPageTypeScope, pageTypeScopeData, type PageTypeScope } from "../pa
 import { techIconUrl } from "../technologies";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
 import { editorSummaryView } from "../editor-summary";
-import { scanScopeUnfetched, seedRedirect } from "../coverage";
+import { followedStartRedirect, scanScopeUnfetched, seedRedirect } from "../coverage";
 import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
 import { collectSkippedChecks, type SkippedCheck } from "../skipped";
@@ -136,6 +136,13 @@ interface SlimJsonReport {
       followed: false;
       note: string;
     };
+    /**
+     * The start URL as the user gave it, and every URL requested from it to the
+     * audited one (#1281). Present only when the start URL redirected to another
+     * site and the redirect was followed: `baseUrl` is the destination.
+     */
+    originalUrl?: string;
+    redirectChain?: Array<{ url: string; status: number }>;
     timestamp: string;
     totalPages: number;
     /**
@@ -430,6 +437,7 @@ function buildSlimReport(
   const passedRules = reportPassedRules(report, includePassed);
   const es = editorSummaryView(report.editorSummary, report);
   const refusedSeedRedirect = seedRedirect(report);
+  const startRedirect = followedStartRedirect(report);
   const skippedChecks = collectSkippedChecks(report.ruleResults);
   const privateTarget = privateTargetLine(report);
   const notChecked = notCheckedRules(report);
@@ -448,6 +456,9 @@ function buildSlimReport(
               note: refusedSeedRedirect.note,
             },
           }
+        : {}),
+      ...(startRedirect
+        ? { originalUrl: startRedirect.originalUrl, redirectChain: startRedirect.chain }
         : {}),
       timestamp: report.timestamp,
       totalPages: report.totalPages,

@@ -58,6 +58,7 @@ import {
   publishedReportNote,
   auditLevelLine,
   seedRedirectLine,
+  startRedirectLine,
   ruleCarriedRollupLine,
   unfetchedNote,
 } from "../coverage";
@@ -206,6 +207,9 @@ function scanDetailLines(report: AuditReport): string[] {
   // site chose.
   const seedRedirect = seedRedirectLine(report);
   if (seedRedirect) out.push(escapeMarkdownInline(seedRedirect));
+  // #1281: the start URL redirected and the redirect was followed.
+  const startRedirect = startRedirectLine(report);
+  if (startRedirect) out.push(escapeMarkdownInline(startRedirect));
   const scope = scanScopeLine(report);
   if (scope) out.push(scope);
   // repo#2661: a capped published report lists samples; say so, and where the rest is. Not

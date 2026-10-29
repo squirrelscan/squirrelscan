@@ -90,6 +90,6 @@ export function offSiteRedirectFollowUp(targetUrl: string): OffSiteRedirectFollo
  * treats specially, single-quoted otherwise (an IPv6 origin's brackets are a
  * glob in zsh).
  */
-function shellWord(value: string): string {
+export function shellWord(value: string): string {
   return /^[A-Za-z0-9.:/_-]+$/.test(value) ? value : `'${value.replace(/'/g, "'\\''")}'`;
 }

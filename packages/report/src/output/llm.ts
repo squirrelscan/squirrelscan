@@ -53,6 +53,7 @@ import {
   structureTotalsLine,
 } from "../structure";
 import {
+  followedStartRedirect,
   publishedReportNote,
   scanScopeUnfetched,
   seedRedirect,
@@ -178,6 +179,21 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     lines.push(`<seed-redirect${finalUrlAttr} followed="false">`);
     lines.push(`${indent(1)}${escapeXml(refusedSeedRedirect.note)}`);
     lines.push("</seed-redirect>");
+  }
+
+  // Followed start redirect (#1281): the URL the user gave is not the site
+  // graded above. Every URL is one the redirecting site chose: reported, never a
+  // destination to go fetch.
+  const startRedirect = followedStartRedirect(report);
+  if (startRedirect) {
+    lines.push(
+      `<start-redirect original-url="${escapeXml(startRedirect.originalUrl)}" final-url="${escapeXml(startRedirect.finalUrl)}" followed="true">`,
+    );
+    for (const hop of startRedirect.chain) {
+      lines.push(`${indent(1)}<hop status="${hop.status}">${escapeXml(hop.url)}</hop>`);
+    }
+    lines.push(`${indent(1)}${escapeXml(startRedirect.note)}`);
+    lines.push("</start-redirect>");
   }
 
   // Failed/blocked audit (#792): nothing was audited. Without this an agent

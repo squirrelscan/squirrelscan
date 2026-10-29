@@ -16,6 +16,7 @@ import {
   isValidHeaderName,
   isValidHeaderValue,
 } from "@squirrelscan/utils/headers";
+import { ownHostsPinned } from "@squirrelscan/utils/public-egress";
 import { z } from "zod";
 
 import type { Config } from "@/config";
@@ -31,8 +32,10 @@ import {
   resolveLocalAuditLevel,
 } from "@/cli/audit-level";
 import { resolveExplicitRenderMode } from "@/cli/commands/audit";
+import { resolveAuditStart } from "@/cli/start-redirect";
 import { findConfigFile, getGlobalConfigPath, loadConfig } from "@/config";
 import { runAudit, type RunAuditOptions } from "@/controllers/audit";
+import { pinOwnHosts } from "@/crawl/pin-own-hosts";
 
 import { version } from "../../../package.json";
 import {
@@ -41,7 +44,7 @@ import {
   planMcpAudit,
   startMcpRunHeartbeat,
 } from "../billed-audit";
-import { errorResult, textResult } from "../result";
+import { errorResult, jsonResult, textResult } from "../result";
 
 // Map a runAudit Result to a tool result: ok → LLM report text, err → clean error.
 export function renderAuditResult(result: Result<AuditReport>): CallToolResult {
@@ -168,8 +171,34 @@ async function runWebsiteAudit(input: {
   headers?: Record<string, string>;
   externalLinks?: boolean;
   internalLinks?: boolean;
+  followRedirect?: boolean;
 }): Promise<CallToolResult> {
   const config = await loadConfig(localConfigPath(), { silent: true });
+  // #1281: resolve the start URL's redirects first. A same-site one is
+  // followed silently; another site is audited only with explicit consent
+  // (followRedirect, or [crawler] follow_redirect), the way the CLI's prompt is
+  // answered. Nothing is registered or charged before this.
+  const start = await resolveAuditStart({
+    url: input.url,
+    follow: input.followRedirect ?? config.crawler.follow_redirect === true,
+    interactive: false,
+    pin: ownHostsPinned({ pinOwnHosts: pinOwnHosts() }),
+  });
+  if (start.stop) {
+    return jsonResult(
+      start.resolution.kind === "cross-domain"
+        ? {
+            status: "confirmation_required",
+            reason: "redirect",
+            originalUrl: start.stop.originalUrl,
+            finalUrl: start.stop.finalUrl,
+            redirectChain: start.stop.redirectChain,
+            next: `${start.stop.originalUrl} redirects to ${start.stop.finalUrl}, a different site. Show the user the destination, then call audit_website again with followRedirect: true to audit it. The credit estimate is made for the destination on that call.`,
+          }
+        : start.stop
+    );
+  }
+  input = { ...input, url: start.url };
   const levelOptions = await levelRunOptions(
     input.level,
     input.maxPages,
@@ -179,6 +208,7 @@ async function runWebsiteAudit(input: {
   const extra = {
     url: input.url,
     offline: input.offline,
+    ...(start.record ? { startRedirect: start.record } : {}),
     ...(input.headers && Object.keys(input.headers).length > 0
       ? { headers: input.headers }
       : {}),
@@ -299,6 +329,12 @@ export function registerAuditTools(server: McpServer): void {
           .describe(
             "Use cloud features for this run only: don't add the site to the dashboard or schedule it. Credits are charged as for any signed-in audit. Default: [cloud] ephemeral in squirrel.toml (false)"
           ),
+        followRedirect: z
+          .boolean()
+          .optional()
+          .describe(
+            "Audit where the URL redirects when that is another site (a link shortener, a launch domain forwarding to the product). Without it a cross-domain redirect comes back as confirmation_required naming the destination, and nothing is audited or charged. Redirects within one site (http to https, apex to www) are always followed. Default: [crawler] follow_redirect in squirrel.toml (false)"
+          ),
         confirm: z
           .boolean()
           .optional()
@@ -332,6 +368,7 @@ export function registerAuditTools(server: McpServer): void {
       maxPages,
       offline,
       confirm,
+      followRedirect,
       ephemeral,
       headers,
       externalLinks,
@@ -357,6 +394,7 @@ export function registerAuditTools(server: McpServer): void {
         maxPages,
         offline,
         confirm,
+        followRedirect,
         ephemeral,
         headers,
         externalLinks,

@@ -67,6 +67,8 @@ export const TELEMETRY_TIMEOUT_MS = _TEL.timeoutMs;
  */
 export const EXIT_CODE_WAF_BLOCKED = 3;
 
+export { EXIT_CODE_REDIRECTED } from "@squirrelscan/core-contracts/seed-redirect";
+
 export const DASHBOARD_URL = "https://app.squirrelscan.com";
 
 /** Where published reports are served; a report lives at `${REPORTS_BASE_URL}/<id>`. */

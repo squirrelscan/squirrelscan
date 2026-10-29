@@ -312,6 +312,58 @@ describe("loadReport - slim JSON reconstruction", () => {
     expect(roundTrip(report).auditLevel).toEqual(resolveAuditSettings("quick"));
   });
 
+  test("carries a followed start redirect through reconstruction (#1281)", () => {
+    const chain = [
+      { url: "https://bit.ly/x", status: 301 },
+      { url: "https://example.com/pricing", status: 200 },
+    ];
+    const reloaded = roundTrip(
+      createMockReport({
+        originalUrl: "https://bit.ly/x",
+        redirectChain: chain,
+      })
+    );
+    expect(reloaded.originalUrl).toBe("https://bit.ly/x");
+    expect(reloaded.redirectChain).toEqual(chain);
+    // It is not the refused-redirect disclosure: finalUrl stays unset.
+    expect(reloaded.finalUrl).toBeUndefined();
+    expect(roundTrip(createMockReport({})).originalUrl).toBeUndefined();
+  });
+
+  test("a forged redirect chain keeps only bounded {url, status} entries (#1281)", () => {
+    const slim = {
+      meta: {
+        version: "0.0.89",
+        baseUrl: "https://example.com",
+        originalUrl: "https://bit.ly/x",
+        redirectChain: [
+          ...Array.from({ length: 40 }, (_, i) => ({
+            url: `https://h${i}.example/`,
+            status: 301,
+          })),
+          "junk",
+          { url: 42, status: "x" },
+        ],
+        timestamp: new Date().toISOString(),
+        totalPages: 1,
+      },
+      score: { overall: 90, grade: "A", categories: [] },
+      summary: { passed: 1, warnings: 0, failed: 0 },
+      issues: [],
+    };
+    const dir = mkdtempSync(join(tmpdir(), "squirrel-slim-"));
+    try {
+      const path = join(dir, "forged.json");
+      writeFileSync(path, JSON.stringify(slim));
+      const result = loadReport(path);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.data.redirectChain).toHaveLength(10);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("a report without a redirect gains no finalUrl from reconstruction", () => {
     expect(roundTrip(createMockReport({})).finalUrl).toBeUndefined();
   });

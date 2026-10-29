@@ -14,6 +14,7 @@
     "./failure-reason": "./src/failure-reason.ts",
     "./waf-block": "./src/waf-block.ts",
     "./offsite-redirect": "./src/offsite-redirect.ts",
+    "./seed-redirect": "./src/seed-redirect.ts",
     "./untrusted-keys": "./src/untrusted-keys.ts",
     "./credits": "./src/credits.ts",
     "./schedule": "./src/schedule.ts",

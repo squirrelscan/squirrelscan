@@ -2,6 +2,8 @@
 export * from "./storage";
 export * from "./refused-fetch";
 export * from "./waf-block";
+// Start URL redirects (#1281): chain, outcome and exit-code contract.
+export * from "./seed-redirect";
 
 // Cache-stats aggregation helper (#108).
 export * from "./cache-stats";
@@ -63,6 +65,7 @@ export type {
 } from "./entity-mcp";
 
 // Import storage types needed locally by interfaces in this file
+import type { SeedRedirectHop, SeedRedirectRecord } from "./seed-redirect";
 import type {
   AgentAccessProbe,
   CacheHitReason,
@@ -610,6 +613,15 @@ export interface AuditReport {
    * Absent when the seed did not redirect off-site.
    */
   finalUrl?: string;
+  /**
+   * The start URL as the user gave it, when it redirected and the redirect was
+   * followed (#1281): `baseUrl` is then the destination's origin. Absent when
+   * the start URL did not redirect, or only within the one site. Pairs with
+   * `redirectChain`.
+   */
+  originalUrl?: string;
+  /** Every redirecting response between `originalUrl` and the audited URL, in order. */
+  redirectChain?: SeedRedirectHop[];
   timestamp: string;
   totalPages: number;
   passed: number;
@@ -1089,6 +1101,12 @@ export interface ScanScope {
    * when nothing was left over, and on reports from before it. REPORT-ONLY.
    */
   unfetched?: number;
+  /**
+   * The start URL's followed redirect (#1281), kept here so a report rebuilt
+   * from the crawl later still names the URL the user gave. The report's
+   * `originalUrl` and `redirectChain` are read from it.
+   */
+  startRedirect?: SeedRedirectRecord;
 }
 
 /** Locked-rules audience for a report — anonymous/local vs signed-in tier (#368). */

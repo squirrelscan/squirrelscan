@@ -29,6 +29,7 @@ max_prefix_budget = 0.25
 user_agent = ""
 robots_user_agent = "SquirrelScan"
 follow_redirects = true
+follow_redirect = false
 ```
 
 ## Crawl limits
@@ -939,6 +940,24 @@ follow_redirects = false
 ```
 
 **Recommendation:** Keep `true` (default) for normal audits.
+
+---
+
+### `follow_redirect`
+
+**Type:** `boolean`
+**Default:** unset (`false`)
+
+Audit where the **start URL** redirects when that is another registrable domain: a link shortener, a launch domain that forwards to the product, a moved domain. Without it a terminal asks first, and a non-interactive run exits `4` with a `redirected` report that names the destination.
+
+Not the same setting as `follow_redirects` above, which is about redirects the crawl meets on the pages of the site. Redirects within one site (`http` to `https`, apex to `www`) are always followed and never need this.
+
+```toml
+[crawler]
+follow_redirect = true
+```
+
+**CLI override:** `--follow-redirect`, or `--no-follow-redirect` to turn the config off for one run. `-y` does not imply it. See [Start URLs that redirect](/cli/audit#start-urls-that-redirect).
 
 ---
 

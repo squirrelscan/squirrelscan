@@ -912,6 +912,13 @@ export function reconstructReport(
       // the crawl (#1050). A later database report restores that exact scope;
       // old crawl rows have no stamp and deliberately gain no inferred one.
       ...(crawl.scanScope ? { scanScope: crawl.scanScope } : {}),
+      // The start URL's followed redirect (#1281), persisted with the scan scope.
+      ...(crawl.scanScope?.startRedirect
+        ? {
+            originalUrl: crawl.scanScope.startRedirect.originalUrl,
+            redirectChain: crawl.scanScope.startRedirect.redirectChain,
+          }
+        : {}),
       ...(structure ? { structure } : {}),
       ...(cacheStats ? { cacheStats } : {}),
       ...(renderBlockRecovered > 0

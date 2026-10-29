@@ -135,6 +135,9 @@ interface SlimJsonReport {
       followed: false;
       note: string;
     };
+    /** The start URL as given and the chain to the audited one (#1281). Untrusted. */
+    originalUrl?: unknown;
+    redirectChain?: unknown;
     timestamp: string;
     totalPages: number;
     /** Page cap in force (#1909); absent in slim JSON written before it. */
@@ -396,6 +399,15 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
             typeof report.meta.seedRedirect.finalUrl === "string"
               ? report.meta.seedRedirect.finalUrl
               : WITHHELD_SEED_REDIRECT_TARGET,
+        }
+      : {}),
+    // #1281: a followed start redirect, carried back through the round trip.
+    // The file is user-supplied, so only strings and a bounded array of
+    // {url, status} survive; the renderers re-canonicalize what is left.
+    ...(typeof report.meta.originalUrl === "string"
+      ? {
+          originalUrl: report.meta.originalUrl,
+          redirectChain: slimRedirectChain(report.meta.redirectChain),
         }
       : {}),
     timestamp: report.meta.timestamp,
@@ -915,4 +927,27 @@ export function validateFormat(format: string): Result<OutputFormat> {
   }
 
   return ok(format as OutputFormat);
+}
+
+/** The chain from untrusted slim JSON: at most ten {url, status} entries, anything else dropped. */
+function slimRedirectChain(
+  value: unknown
+): Array<{ url: string; status: number }> {
+  if (!Array.isArray(value)) return [];
+  const chain: Array<{ url: string; status: number }> = [];
+  for (const hop of value.slice(0, 10)) {
+    if (
+      hop &&
+      typeof hop === "object" &&
+      typeof (hop as { url?: unknown }).url === "string"
+    ) {
+      const status = (hop as { status?: unknown }).status;
+      chain.push({
+        url: (hop as { url: string }).url,
+        status:
+          typeof status === "number" && Number.isInteger(status) ? status : 0,
+      });
+    }
+  }
+  return chain;
 }

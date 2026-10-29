@@ -1,6 +1,7 @@
 // squirrelscan audit <url> - CLI wrapper
 
 import type { ReportBranding } from "@squirrelscan/core-contracts";
+import type { SeedRedirectRecord } from "@squirrelscan/core-contracts/seed-redirect";
 
 import {
   CloudClientError,
@@ -26,6 +27,7 @@ import { AUDIT_LEVEL_PRESETS } from "@squirrelscan/core-contracts/audit-levels";
 import { isAuditFailureReasonCode } from "@squirrelscan/core-contracts/failure-reason";
 import { fullScanHint } from "@squirrelscan/report";
 import { isValidHeaderHost } from "@squirrelscan/utils/headers";
+import { ownHostsPinned } from "@squirrelscan/utils/public-egress";
 import { defineCommand } from "citty";
 import { existsSync } from "node:fs";
 import { platform } from "node:os";
@@ -66,9 +68,11 @@ import {
 } from "@/audit/rule-filter";
 import { preflightRuleOptions } from "@/audit/rule-options-preflight";
 import { stopInterruptedCrawls } from "@/audit/stop-interrupted-crawl";
+import { emitRedirectedOutcome, resolveAuditStart } from "@/cli/start-redirect";
 import { findConfigFile, getGlobalConfigPath, loadConfig } from "@/config";
 import {
   DASHBOARD_URL,
+  EXIT_CODE_REDIRECTED,
   EXIT_CODE_WAF_BLOCKED,
   MAX_PAGES_CAP,
   MAX_CRAWL_CONCURRENCY,
@@ -86,6 +90,7 @@ import {
   type ReportVisibility,
 } from "@/controllers/report/publish";
 import { ErrorCodes } from "@/controllers/types";
+import { pinOwnHosts } from "@/crawl/pin-own-hosts";
 import { domainToProjectName, resolveProjectDbPath } from "@/crawler/storage";
 import {
   checkAuditStores,
@@ -1109,6 +1114,17 @@ export const audit = defineCommand({
       type: "boolean",
       description: "Override [cloud] ephemeral = true for this run",
     },
+    // Declared for help and completions; `--no-follow-redirect` arrives as false.
+    "follow-redirect": {
+      type: "boolean",
+      description:
+        "Audit where the start URL redirects when it leaves the site (a link shortener, a launch domain forwarding to the product). Without it a terminal asks and anything else exits with status 4 (redirected). Overrides [crawler] follow_redirect. -y does not imply it",
+    },
+    // Declared for help and completions only; read from `follow-redirect: false`.
+    "no-follow-redirect": {
+      type: "boolean",
+      description: "Turn [crawler] follow_redirect off for this run",
+    },
     yes: {
       type: "boolean",
       alias: "y",
@@ -1822,6 +1838,53 @@ export const audit = defineCommand({
         return;
       }
 
+      // #1281: resolve the start URL's redirect chain before anything is named,
+      // estimated or crawled, so `squirrel audit bit.ly/x` audits where it goes
+      // (with consent when that is another site) and never grades the shortener.
+      let startRedirect: SeedRedirectRecord | undefined;
+      const startParsed = parseUserUrl(args.url);
+      if (startParsed.ok) {
+        // #403: a local store this process cannot write stops the run before
+        // anything is requested, the start URL's resolution included. The
+        // destination's own project is checked again below, once it is known.
+        const earlyStoreProblems = checkAuditStores(
+          args["project-name"] ?? domainToProjectName(startParsed.url),
+          { linkCache: !args.offline && config.external_links.enabled }
+        );
+        if (earlyStoreProblems.length > 0) {
+          commandResult = "error";
+          log(`✗ ${formatStoreProblems(earlyStoreProblems)}`);
+          process.exitCode = 1;
+          return;
+        }
+        const reportGoesToStdoutEarly =
+          !isConsoleFormat && args.format !== "html" && !args.output;
+        const resolved = await resolveAuditStart({
+          url: startParsed.url,
+          follow:
+            lastFlagValue(
+              args["follow-redirect"] as boolean | boolean[] | undefined
+            ) ?? config.crawler.follow_redirect === true,
+          interactive:
+            !!process.stdin.isTTY &&
+            !!process.stdout.isTTY &&
+            !reportGoesToStdoutEarly,
+          userAgent: config.crawler.user_agent || undefined,
+          pin: ownHostsPinned({ pinOwnHosts: pinOwnHosts() }),
+        });
+        if (resolved.stop) {
+          commandResult = "error";
+          emitRedirectedOutcome(resolved.stop, {
+            format: args.format,
+            output: args.output,
+          });
+          process.exitCode = EXIT_CODE_REDIRECTED;
+          return;
+        }
+        if (resolved.url !== startParsed.url) args.url = resolved.url;
+        startRedirect = resolved.record;
+      }
+
       // Determine project name (priority: CLI flag > config > prompt > auto-derive)
       let projectName: string | undefined;
       if (args["project-name"]) {
@@ -1890,11 +1953,20 @@ export const audit = defineCommand({
           ? { disableDiscoveryProbes }
           : {}),
         probe: { level: probing.level, budgetMs: probing.budgetMs },
+        ...(startRedirect ? { startRedirect } : {}),
       };
 
       // Preamble — aligned key/value block (Account, and Dashboard when online,
       // already printed above during status resolution; kv defined there).
       kv("Auditing", fmt.bold(options.url));
+      if (startRedirect) {
+        kv(
+          "Redirect",
+          `${startRedirect.originalUrl} ${fmt.dim(
+            `(${Math.max(startRedirect.redirectChain.length - 1, 1)} hop${startRedirect.redirectChain.length > 2 ? "s" : ""}, followed)`
+          )}`
+        );
+      }
       const levelBanner = levelBannerParts(auditLevel);
       kv(
         "Level",
