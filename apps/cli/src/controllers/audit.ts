@@ -84,6 +84,7 @@ import {
   REMOVED_STATUSES as SMART_REMOVED_STATUSES,
 } from "@/audit/smart-audits";
 import { registerOwnedCrawl } from "@/audit/stop-interrupted-crawl";
+import { storeFetchedScripts } from "@/audit/store-scripts";
 import {
   resolveStreamBatchBytes,
   resolveStreamBatchPagesOverride,
@@ -1668,6 +1669,15 @@ export async function runAudit(
       // The walk is over whatever the batch counts added up to.
       onProgress({ phase: "walk", current: pageCount, total: pageCount });
       const assets = preRules.assets;
+      // #1255: opt-in, for corpus and research runs. Never fails the audit.
+      if (mergedConfig.storage.store_scripts) {
+        await storeFetchedScripts({
+          storage: sqliteStorage,
+          crawlId,
+          assets,
+          config: mergedConfig,
+        });
+      }
       const techSample = techSampleCollector.build();
       // v1 opened the external-links phase and then the rules phase separately,
       // the second just before the asset fetch. The asset fetch is inside the
@@ -2523,6 +2533,10 @@ export function mergeOptionsToConfig(
 
   return {
     ...config,
+    // --store-scripts (#1255) turns the opt-in on for one run; it never turns it off.
+    ...(options.storeScripts
+      ? { storage: { ...config.storage, store_scripts: true } }
+      : {}),
     // Smart audits (#684): the command resolves signed-in → on / anon → off and
     // passes an explicit boolean; when unset, keep whatever config declared.
     smart_audits: options.smartAudits ?? config.smart_audits,

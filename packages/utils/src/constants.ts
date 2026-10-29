@@ -602,3 +602,13 @@ export const TECH_DETECT_PRESENCE_HEADERS: ReadonlySet<string> = new Set([
   "x-vercel-cache",
   "x-vercel-id",
 ]);
+
+/**
+ * Scripts kept in the content store when `[storage] store_scripts` is on (#1255).
+ * `maxBytes` is the per-file cap; the per-audit total defaults to
+ * `totalFraction` of the content store cap.
+ */
+export const STORED_SCRIPT_LIMITS = {
+  maxBytes: 2 * 1024 * 1024,
+  totalFraction: 0.25,
+} as const;

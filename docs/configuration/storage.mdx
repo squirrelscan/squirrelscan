@@ -13,6 +13,7 @@ keeps locally, and how large the content store that holds crawled pages can grow
 [storage]
 keep_audits = 3
 content_store_max_bytes = "4GB"
+store_scripts = false
 ```
 
 ## Options
@@ -83,6 +84,54 @@ Retired 1 older audit and freed 95.2 MB inside project.db for the next audit
 ```
 
 The notice never goes to stdout, so it cannot get into `-f json` output.
+
+### `store_scripts`
+
+**Type:** `boolean`
+**Default:** `false` (off, so nothing changes in what an audit stores)
+**Flag:** `squirrel audit --store-scripts` turns it on for one run
+
+Keeps every first-party script the audit fetched in the content store, for corpus
+and research runs that analyse a crawl again later (new secret rules, new
+technology fingerprints, labelling) without fetching the site again.
+
+- **Retrievable by URL.** Each audit gets an index of its scripts: the script URL,
+  the content hash, its size, and the pages that load it, so a page and its
+  bundles can be rebuilt offline. The index lives in the project database
+  (`crawl_scripts`) and is retired with the audit like the other per-audit rows.
+- **Deduplicated.** The body is stored once per distinct content hash, so a vendor
+  chunk shared by many pages, audits or sites is one row in the store.
+- **Capped.** A script over `store_scripts_max_bytes` is not stored; it is recorded
+  as skipped with its size and the reason, and the audit says how many were
+  skipped. The distinct bytes one audit stores stop at `store_scripts_total_bytes`.
+- **Stored like the HTML.** Bodies live in the same gzipped store, count against
+  `content_store_max_bytes`, and are evicted least recently used first. Retention
+  keeps the bodies of the audits it keeps, and [`self disk --prune`](/cli/self#disk)
+  treats them like stored HTML.
+
+```toml
+[storage]
+store_scripts = true
+store_scripts_max_bytes = "2MB"        # default: a larger script is recorded as skipped
+store_scripts_total_bytes = "256MB"    # default: a quarter of content_store_max_bytes
+```
+
+What it stores is what the audit already fetched: the same-site scripts the
+resource phase downloads for the security and technology checks (and the chunks a
+page preloads), each under that fetch's own limits. It adds no request. Scripts
+on another domain are not fetched and not stored.
+
+**Disk cost.** A script bundle is large and compresses less than HTML. A corpus
+run over thousands of sites can need many gigabytes, so raise
+`content_store_max_bytes` with it: the default 1 GB cap is shared with the HTML,
+and the audit-local default for scripts is a quarter of it. Under the default
+`keep_audits = 3`, older audits are retired and their stored bodies become
+evictable; for a corpus you want to keep, set `keep_audits = 0` as well as a large
+store cap.
+
+**Privacy.** Stored scripts stay on your machine in `~/.squirrel/content-store.db`.
+Nothing is sent to the cloud for them. Bundles can contain keys that the site
+ships to every visitor, so treat the content store as you would the crawl.
 
 ### `content_store_max_bytes`
 
