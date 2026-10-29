@@ -20,6 +20,8 @@ The rule is site-wide and reads the image sizes the crawl fetched. It emits up t
 
 Only images the crawl actually fetched are measured, so an image loaded by script after render does not appear.
 
+The rule measures the file a browser downloads, not every file the markup names. For an `<img>` with `srcset` the file is the candidate a browser would select at a reference 1280 px viewport and 2x pixel density: with width descriptors the smallest candidate that covers the `sizes` width at 2x (100vw when there is no `sizes`), or the largest candidate when none does; with density descriptors the smallest at 2x or above, else the largest. The `src` behind such a `srcset` is a fallback modern browsers do not download, so it is not reported unless another image selects it. An `<img>` without `srcset` is measured by its `src`. When the `sizes` width cannot be read (`calc()` and `em` lengths) the largest candidate is used, and an `<img>` inside a `<picture>` keeps its `src`, because a `<source>` may choose the file.
+
 ## How to fix it
 
 ```bash

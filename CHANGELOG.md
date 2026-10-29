@@ -17,6 +17,12 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`perf/total-byte-weight` leaves lazy images below the initial viewport out of the page weight.** Every `loading="lazy"` image was added to the page total, so a page that loads 1.3 MB was reported at 5.4 MB. Lazy images past the first three content images are now reported separately as `lazyImages` in the details; eager images and lazy images in the initial viewport still count. (#1252)
+- **`images/image-file-size` and `perf/total-byte-weight` measure the srcset candidate a browser downloads.** An `<img>` with `srcset` and `sizes` was measured by its `src` fallback, so a 960w fallback was reported although visitors get the 400w file. The audit now selects the candidate at a reference 1280 px viewport and 2x density (largest when none covers it) and measures it; the fallback is still fetched for `images/responsive-size` but is no longer reported or counted as page weight. (#1251)
+- **`images/offscreen-lazy` counts the above-the-fold budget in content images.** A header of small icons used up the three-image budget and pushed the first real content image into the below-the-fold set, so top-of-page images were told to add `loading="lazy"`. Images declared with both `width` and `height` at icon or logo size (under 20,000 square pixels) no longer fill the budget or count as below the fold until it is full; undeclared images count as content as before. (#1250)
+
 ## v0.0.142 (2026-10-30)
 
 `squirrel audit` follows a start URL that redirects, with your consent, and an unreachable start URL now writes a report and exits 5. Pages with no markup no longer fail every DOM rule, a relative sitemap loc no longer breaks the URL rules, labelled menu sections and label elements are counted correctly, and leaked-secret findings carry the matched value's length and offset.

@@ -11,7 +11,7 @@ It is the wrong attribute for anything visible on arrival. Lazy-loading the larg
 
 ## What squirrel checks
 
-The rule runs on every crawled page. It takes every `img[src]` in document order, treats the first `above_fold_count` of them as above the fold, and examines the rest. Images with a `data:` source are skipped.
+The rule runs on every crawled page. It takes every `img[src]` in document order and treats the first `above_fold_count` content images as above the fold. An image declared with both `width` and `height` at icon or logo size (under 20,000 square pixels, for example 24 by 24 or 150 by 40) neither uses up that budget nor counts as below the fold until the budget is full, so a header of small icons does not push the first content image below the fold. Images with no declared size count as content. Every image after the budget is full is examined. Images with a `data:` source are skipped.
 
 - Info when the page has no images. Message: `No images found`.
 - Pass when there are no images past the fold count. Message: `Few images on page - lazy loading not critical`.
@@ -20,7 +20,7 @@ The rule runs on every crawled page. It takes every `img[src]` in document order
 - `eager-below-fold` reports info for below-fold images explicitly set to `eager`. Message: `2 below-fold image(s) explicitly set to eager`, noted as possibly intentional.
 - `offscreen-lazy` reports info when nothing was flagged and nothing was lazy, which happens when every examined image is `eager` or every one was skipped as a data URI. Message: `No lazy loading configured - consider adding loading='lazy'`.
 
-Document order is a proxy for position, not a measurement. An image that appears late in the markup but is positioned at the top of the viewport by CSS is treated as below the fold.
+Document order and declared size are a proxy for position, not a measurement. A large image that appears late in the markup but is positioned at the top of the viewport by CSS is treated as below the fold, and an icon with no declared width and height uses up the budget like a content image.
 
 Elements inside `<noscript>` are skipped: a browser with scripting enabled reads `<noscript>` content as plain text, so nothing in it loads or renders. See [content inside noscript](/rules#content-inside-noscript).
 
@@ -47,7 +47,7 @@ Raise `above_fold_count` for a page whose first screen genuinely shows more imag
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `above_fold_count` | number | `3` | Number of images considered above the fold |
+| `above_fold_count` | number | `3` | Number of content images considered above the fold (icons and logos declared with width and height do not count) |
 
 ### Configuration example
 

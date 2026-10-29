@@ -166,6 +166,7 @@ import {
 } from "./web-app-manifest";
 import { fetchScriptContents, type ScriptFetchResult } from "./script-fetcher";
 import { overlayTechHeaders } from "@squirrelscan/utils/headers";
+import { initialViewportFlags, selectImageCandidate } from "@squirrelscan/utils/image-loading";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 import { isNonPublicHostname } from "@squirrelscan/utils/non-public-host";
 import {
@@ -697,6 +698,18 @@ export interface PreFetchedAssets {
 export interface SiteAssetOccurrences {
   css: Map<string, Set<string>>;
   images: Map<string, Set<string>>;
+  /**
+   * Of `images`, the pages on which a URL is the file a browser would download
+   * (the `src` of an image without `srcset`, or the `srcset` candidate selected at
+   * the reference viewport and density, #1251). A URL absent here is only ever an
+   * `<img src>` fallback behind a `srcset`.
+   */
+  imagesSelected?: Map<string, Set<string>>;
+  /**
+   * Of `imagesSelected`, the pages with at least one load that happens at page load:
+   * anything but a `loading="lazy"` image below the initial viewport (#1252).
+   */
+  imagesEager?: Map<string, Set<string>>;
   scripts: Map<string, Set<string>>;
   /** Preloaded script chunks, kept out of `scripts` (see {@link PreFetchedAssets.preloadedScripts}). */
   preloads: Map<string, Set<string>>;
@@ -735,6 +748,8 @@ export function emptySiteAssetOccurrences(): SiteAssetOccurrences {
   return {
     css: new Map(),
     images: new Map(),
+    imagesSelected: new Map(),
+    imagesEager: new Map(),
     scripts: new Map(),
     preloads: new Map(),
     pdfs: new Map(),
@@ -893,6 +908,25 @@ export function createSiteAssetCollector(
       }
     },
   };
+}
+
+/**
+ * What the occurrence maps say about how visitors load an image file (#1251,
+ * #1252): `fallbackOnly` when it is only an `<img src>` behind a `srcset` whose
+ * selected candidate is another file, `deferredPages` for the pages on which
+ * every load of it is a lazy image below the initial viewport. Empty for a file
+ * with neither, so the record is unchanged for the common case.
+ */
+export function imageLoadFlags(
+  occurrences: Pick<SiteAssetOccurrences, "imagesSelected" | "imagesEager">,
+  url: string,
+): { fallbackOnly?: true; deferredPages?: string[] } {
+  const selected = occurrences.imagesSelected?.get(url);
+  if (!occurrences.imagesSelected) return {};
+  if (!selected || selected.size === 0) return { fallbackOnly: true };
+  const eager = occurrences.imagesEager?.get(url);
+  const deferred = [...selected].filter((page) => !eager?.has(page));
+  return deferred.length > 0 ? { deferredPages: deferred } : {};
 }
 
 /** A status-only third-party record (#703): no body, cache or compression fields. */
@@ -1540,6 +1574,7 @@ export function fetchAssetsFromOccurrences(
           contentType: check.contentType,
           sizeBytes: check.sizeBytes,
           sourcePages: Array.from(resourceOccurrences.images.get(check.url) ?? []),
+          ...imageLoadFlags(resourceOccurrences, check.url),
           rateLimited: check.rateLimited,
           wafBlocked: check.wafBlocked,
           contentEncoding: check.contentEncoding,
@@ -4221,6 +4256,10 @@ export function checkCollectedExternalLinks(
 interface ResourceOccurrenceMap {
   css: Map<string, Set<string>>;
   images: Map<string, Set<string>>;
+  /** See {@link SiteAssetOccurrences.imagesSelected}. */
+  imagesSelected?: Map<string, Set<string>>;
+  /** See {@link SiteAssetOccurrences.imagesEager}. */
+  imagesEager?: Map<string, Set<string>>;
   scripts: Map<string, Set<string>>;
   preloads: Map<string, Set<string>>;
   fonts: Map<string, Set<string>>;
@@ -4256,6 +4295,8 @@ function collectResourceOccurrences(
   const target: ResourceOccurrenceMap = {
     css: new Map<string, Set<string>>(),
     images: new Map<string, Set<string>>(),
+    imagesSelected: new Map<string, Set<string>>(),
+    imagesEager: new Map<string, Set<string>>(),
     scripts: new Map<string, Set<string>>(),
     preloads: new Map<string, Set<string>>(),
     fonts: new Map<string, Set<string>>(),
@@ -4309,19 +4350,42 @@ export function absorbResourceOccurrences(
       sheets.set(sheet.href, sources);
     }
 
-    for (const image of page.parsed.images) {
-      if (!image.src || image.src.startsWith("data:")) continue;
-      let resolved = image.src;
+    // Which file each image loads, and whether it loads at page load (#1251, #1252).
+    // Every referenced file is still measured (responsive-size pairs an <img> with
+    // its `src`), but the two maps below say which of them visitors download.
+    const imagesSelected = (target.imagesSelected ??= new Map<string, Set<string>>());
+    const imagesEager = (target.imagesEager ??= new Map<string, Set<string>>());
+    const inViewport = initialViewportFlags(page.parsed.images);
+    const note = (map: Map<string, Set<string>>, url: string): void => {
+      const sources = map.get(url) ?? new Set<string>();
+      sources.add(page.url);
+      map.set(url, sources);
+    };
+    const resolveOwn = (raw: string): string | null => {
+      if (!raw || raw.startsWith("data:")) return null;
+      let resolved = raw;
       try {
-        resolved = new URL(image.src, pageUrl).toString();
+        resolved = new URL(raw, pageUrl).toString();
       } catch {
         // Ignore invalid URLs
       }
-      if (!ownResource(resolved)) continue;
-      const sources = images.get(resolved) ?? new Set<string>();
-      sources.add(page.url);
-      images.set(resolved, sources);
-    }
+      return ownResource(resolved) ? resolved : null;
+    };
+    page.parsed.images.forEach((image, index) => {
+      const src = resolveOwn(image.src);
+      if (src) note(images, src);
+      // A <picture> may pick its file from a <source> this model cannot read, so
+      // its <img> keeps its src as the loaded file, as before.
+      const chosen =
+        image.srcset && !image.inPicture
+          ? selectImageCandidate({ src: image.src, srcset: image.srcset, sizes: image.sizes })
+          : image.src;
+      const selected = chosen ? resolveOwn(chosen) : null;
+      if (!selected) return;
+      note(images, selected);
+      note(imagesSelected, selected);
+      if (!(image.loading === "lazy" && !inViewport[index])) note(imagesEager, selected);
+    });
 
     for (const fontUrl of extractFontUrls(doc, pageUrl)) {
       const fontMap = ownResource(fontUrl) ? fonts : externalFonts;

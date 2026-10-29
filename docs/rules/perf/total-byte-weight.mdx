@@ -13,7 +13,7 @@ Images are usually the largest share and the easiest to cut, through a modern fo
 
 The rule scores each crawled page on its own weight and reports the heaviest one. A page's weight is its HTML document, which already holds its inline CSS and JavaScript, plus the external CSS, script, image and font files it loads. The 1,600 KB and 5,000 KB thresholds describe one page load, so the score sums nothing across the site and the result does not depend on how many pages were crawled. The site figures below are information only.
 
-A resource shared by several pages counts toward every page that loads it, and counts once within a page, by URL. The rule emits one check named `total-byte-weight`, scored on the heaviest page:
+A resource shared by several pages counts toward every page that loads it, and counts once within a page, by URL. Two kinds of image are not part of a page's weight because a browser does not fetch them at page load. A `loading="lazy"` image below the initial viewport is left out and reported separately as `lazyImages` in the details: the first three content images are treated as the initial viewport (images declared with width and height at icon or logo size do not use up that budget, as in [images/offscreen-lazy](/rules/images/offscreen-lazy)), so a lazy image among them, and every eager image, still counts. An `<img src>` that sits behind a `srcset` whose selected candidate is another file is not counted either; the selected candidate is, as described in [images/image-file-size](/rules/images/image-file-size). The rule emits one check named `total-byte-weight`, scored on the heaviest page:
 
 - Passing when every page is under 1,600 KB.
 - Warning when the heaviest page is from 1,600 KB up to but not including 5,000 KB, with `(heavy page)` after the message.
@@ -23,7 +23,7 @@ The message names the heaviest page and its weight, and how many pages are over 
 
 When the crawl produced no resource-size record and no script record at all, the rule estimates the first page instead, at 30 KB per stylesheet, 50 KB per script and 100 KB per image. An empty record still counts as present, so a crawl that collected the containers but measured nothing reports each page by its HTML only. In that case the message opens `Estimated heaviest page:` and the details record that it is an estimate.
 
-The details carry the heaviest page's URL and weight, the number of pages analyzed, the number over each threshold, and that page's breakdown: the HTML total, inline code included, and the external CSS, JavaScript, image and font totals. A bucket with nothing in it is left out.
+The details carry the heaviest page's URL and weight, the number of pages analyzed, the number over each threshold, and that page's breakdown: the HTML total, inline code included, and the external CSS, JavaScript, image and font totals. A bucket with nothing in it is left out. When lazy images were left out, `lazyImages` gives their total for that page.
 
 ### Site total and average page weight
 

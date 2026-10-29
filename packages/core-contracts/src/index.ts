@@ -2041,6 +2041,14 @@ export interface ImageData {
   alt: string | null;
   width: string | null;
   height: string | null;
+  /** `srcset` (or `data-srcset`) as written; absent when the image has none. (#1251) */
+  srcset?: string;
+  /** `sizes` (or `data-sizes`) as written; absent when the image has none. (#1251) */
+  sizes?: string;
+  /** The `loading` attribute as written; absent when the image has none. (#1252) */
+  loading?: string;
+  /** The image sits in a `<picture>`, where `<source>` elements may choose the file. (#1251) */
+  inPicture?: boolean;
 }
 
 export interface HeadingData {
@@ -2108,6 +2116,19 @@ export interface ResourceSizeData {
   naturalHeight?: number | null;
   /** APNG, animated GIF/WebP or AVIF sequence; null when not settled. (#470) */
   animated?: boolean | null;
+  /**
+   * Images only (#1251): the file is referenced as an `<img src>` fallback that a
+   * browser would not download, because every `<img>` naming it also has a `srcset`
+   * whose selected candidate is a different file. Measured for responsive-size,
+   * but not a file visitors load, so size and weight rules skip it. Absent when false.
+   */
+  fallbackOnly?: boolean;
+  /**
+   * Images only (#1252): pages on which every load of this file is a
+   * `loading="lazy"` image below the initial viewport, so it is not fetched at
+   * page load. Subset of `sourcePages`. Absent when empty.
+   */
+  deferredPages?: string[];
   /**
    * The origin throttled us (429/430, or 503 with `Retry-After`), so `status`
    * describes our request rate, not the file (#703). Absent or false otherwise.

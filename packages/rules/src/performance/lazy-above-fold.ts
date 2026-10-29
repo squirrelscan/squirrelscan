@@ -3,6 +3,7 @@
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+import { ABOVE_FOLD_IMAGE_BUDGET } from "@squirrelscan/utils/image-loading";
 
 // Ancestor is hidden from all users/AT — never an LCP candidate (#699).
 const HIDDEN_ANCESTOR_SELECTOR = '[aria-hidden="true"], [hidden], [inert]';
@@ -101,8 +102,8 @@ export const lazyAboveFoldRule: Rule = {
 
     let imageIndex = 0;
     for (const img of allImages) {
-      // Consider first 3 images as likely above-fold
-      if (imageIndex >= 3) break;
+      // Consider the first few images as likely above-fold
+      if (imageIndex >= ABOVE_FOLD_IMAGE_BUDGET) break;
 
       // Not a real above-fold candidate — skip without consuming the
       // above-fold window so genuinely visible images later in the DOM still

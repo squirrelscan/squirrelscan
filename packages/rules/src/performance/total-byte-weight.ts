@@ -136,14 +136,27 @@ export const totalByteWeightRule: Rule = {
             url: string;
             sizeBytes: number | null;
             sourcePages: string[];
+            fallbackOnly?: boolean;
+            deferredPages?: string[];
           }>
         | undefined,
     ): void => {
       for (const res of list ?? []) {
+        // An <img src> behind a srcset that picks another file is not downloaded (#1251).
+        if (res.fallbackOnly) continue;
         const size = res.sizeBytes;
+        const deferred = new Set(res.deferredPages);
         for (const pageUrl of new Set(res.sourcePages)) {
           const rec = byUrl.get(pageUrl);
           if (!rec) continue;
+          // A lazy image below the initial viewport is not fetched at page load:
+          // kept apart from the page's weight and reported as `lazyImages` (#1252).
+          if (kind === "images" && deferred.has(pageUrl)) {
+            if (size !== null && size !== undefined) {
+              (rec.deferredImages ??= new Map()).set(res.url, size);
+            }
+            continue;
+          }
           const bucket = (rec.external ??= {
             css: new Map(),
             js: new Map(),
@@ -183,6 +196,7 @@ export const totalByteWeightRule: Rule = {
         images: number;
         fonts: number;
       };
+      lazyImages: number;
     }
     const scored: Scored[] = records.map((rec, index) => {
       // The recorded HTML size already holds the inline <style> and <script>
@@ -208,7 +222,7 @@ export const totalByteWeightRule: Rule = {
             rec.imageCount * 100) *
             1024;
       }
-      return { rec, kb: bytes / 1024, parts };
+      return { rec, kb: bytes / 1024, parts, lazyImages: sumBucket(rec.deferredImages) };
     });
 
     const isEstimate = !hasExternalResourceData && scored.length > 0;
@@ -238,6 +252,7 @@ export const totalByteWeightRule: Rule = {
       if (heaviest.parts.js > 0) details.js = kb(heaviest.parts.js);
       if (heaviest.parts.images > 0) details.images = kb(heaviest.parts.images);
       if (heaviest.parts.fonts > 0) details.fonts = kb(heaviest.parts.fonts);
+      if (heaviest.lazyImages > 0) details.lazyImages = kb(heaviest.lazyImages);
     }
     if (isEstimate) details.estimated = true;
     if (unsized.size > 0) details.unsizedResources = unsized.size;
@@ -314,6 +329,8 @@ interface PageWeight {
   externalCssCount: number;
   externalJsCount: number;
   imageCount: number;
+  /** Lazy images below the initial viewport, kept out of `external.images` (#1252). */
+  deferredImages?: Map<string, number>;
   /** Resource URL to byte size, one map per kind, so a URL counts once per page. */
   external?: {
     css: Map<string, number>;
