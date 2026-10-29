@@ -258,6 +258,40 @@ function hasInternalSubset(text: string): boolean {
   return false;
 }
 
+const ABSOLUTE_URL = /^[a-z][a-z0-9+.-]*:/i;
+const RELATIVE_LOC_EXAMPLES = 3;
+
+/**
+ * Collects the `<loc>` values that are not absolute URLs (#1274). The sitemap
+ * protocol requires a full URL, but real sites ship `<loc>/pricing</loc>`. Such a
+ * value is resolved against the sitemap's own URL, so it reaches the crawl and
+ * the coverage rules as the page it names rather than as a path, and the
+ * sitemap is told it broke the protocol. A value that cannot be resolved is
+ * dropped, and counted too.
+ */
+function createLocResolver(element: "url" | "sitemap", sitemapUrl: string) {
+  const relative: string[] = [];
+  return {
+    resolve(loc: string): string | null {
+      if (ABSOLUTE_URL.test(loc)) return loc;
+      relative.push(loc);
+      try {
+        return new URL(loc, sitemapUrl).toString();
+      } catch {
+        return null;
+      }
+    },
+    errors(): string[] {
+      if (relative.length === 0) return [];
+      const shown = relative.slice(0, RELATIVE_LOC_EXAMPLES).join(", ");
+      const more = relative.length > RELATIVE_LOC_EXAMPLES ? ", ..." : "";
+      return [
+        `${relative.length} <${element}> <loc> ${relative.length === 1 ? "value is" : "values are"} not an absolute URL (the sitemap protocol requires one): ${shown}${more}`,
+      ];
+    },
+  };
+}
+
 export function parseSitemap(content: string, url: string): SitemapData {
   const errors: string[] = [];
   const parser = new XMLParser({
@@ -282,14 +316,16 @@ export function parseSitemap(content: string, url: string): SitemapData {
       const sitemapIndex = parsed.sitemapindex as { sitemap?: unknown };
       const childSitemaps: string[] = [];
       const fields = createFieldReader("sitemap");
+      const locs = createLocResolver("sitemap", url);
       for (const entry of sitemapEntries(sitemapIndex.sitemap)) {
         const loc = fields.read(entry, "loc");
-        if (loc) childSitemaps.push(decodeXmlEscapes(loc));
+        const resolved = loc ? locs.resolve(decodeXmlEscapes(loc)) : null;
+        if (resolved) childSitemaps.push(resolved);
         // Not stored, but read so a raw `<` in it, which can swallow the
         // children after it, is reported rather than passed as valid.
         fields.read(entry, "lastmod");
       }
-      errors.push(...fields.errors());
+      errors.push(...fields.errors(), ...locs.errors());
 
       return {
         url,
@@ -305,11 +341,13 @@ export function parseSitemap(content: string, url: string): SitemapData {
       const urlset = parsed.urlset as { "@_xmlns:news"?: string; url?: unknown };
       const urls: SitemapUrl[] = [];
       const fields = createFieldReader("url");
+      const locs = createLocResolver("url", url);
 
       for (const entry of sitemapEntries(urlset.url)) {
         const rawLoc = fields.read(entry, "loc");
         if (!rawLoc) continue;
-        const loc = decodeXmlEscapes(rawLoc);
+        const loc = locs.resolve(decodeXmlEscapes(rawLoc));
+        if (!loc) continue;
 
         const priorityText = fields.read(entry, "priority");
         const priority = priorityText ? Number.parseFloat(priorityText) : undefined;
@@ -321,7 +359,7 @@ export function parseSitemap(content: string, url: string): SitemapData {
           priority: Number.isNaN(priority ?? Number.NaN) ? undefined : priority,
         });
       }
-      errors.push(...fields.errors());
+      errors.push(...fields.errors(), ...locs.errors());
 
       return {
         url,

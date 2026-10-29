@@ -880,7 +880,7 @@ export function createCrawler(
 
     const enqueueUrl = (
       crawlId: string,
-      rawUrl: string,
+      discoveredUrl: string,
       depth: number,
       parentUrl: string | undefined,
       source: "seed" | "sitemap" | "discovered" | "carried",
@@ -888,9 +888,13 @@ export function createCrawler(
       linkCountCache?: Map<string, number>,
     ): Effect.Effect<void, StorageError, never> =>
       Effect.gen(function* () {
-        const { normalized, decision } = normalizeAndCheckScope(rawUrl);
+        const { normalized, decision } = normalizeAndCheckScope(discoveredUrl);
 
         if (!normalized) return;
+        // The URL a page is stored and audited under is absolute (#1274): a
+        // relative or scheme-less one is resolved against the crawl's base, as
+        // `normalizeUrl` just did, so the rules never see a path as a page URL.
+        const rawUrl = new URL(discoveredUrl, baseUrl).toString();
         if (source === "seed") seedNormalizedUrl = normalized;
 
         // Cloudflare's email-protection link is an email address, never a page (pub#811,
