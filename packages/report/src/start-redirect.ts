@@ -42,7 +42,10 @@ function safeOutcome(outcome: SeedRedirectedOutcome): SeedRedirectedOutcome {
     rerunCommand,
     // Whatever else the message quotes is dropped to its printable characters.
     message: stripControlChars(
-      outcome.message.replace(outcome.originalUrl, originalUrl).replace(outcome.finalUrl, finalUrl),
+      // Replacer functions: a `$&` or `$'` in a URL is text, not a replacement pattern.
+      outcome.message
+        .replace(outcome.originalUrl, () => originalUrl)
+        .replace(outcome.finalUrl, () => finalUrl),
     ),
   };
 }

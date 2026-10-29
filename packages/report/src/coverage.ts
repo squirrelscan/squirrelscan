@@ -391,7 +391,7 @@ export function printableReportUrl(value: unknown): string {
   const canonical = typeof value === "string" ? canonicalizeReportUrl(value) : null;
   if (canonical === null) return UNPRINTABLE;
   const redacted = redactUrl(canonical);
-  return redacted.replace(/[`[\]()<>"'\\{}|^]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return redacted.replace(/[`[\]()<>"'\\{}|^$]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
 export function safeChain(chain: unknown): SeedRedirectHop[] {

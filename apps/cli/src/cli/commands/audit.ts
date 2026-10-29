@@ -1118,7 +1118,7 @@ export const audit = defineCommand({
     "follow-redirect": {
       type: "boolean",
       description:
-        "Audit where the start URL redirects when it leaves the site (a link shortener, a launch domain forwarding to the product). Without it a terminal asks and anything else exits with status 4 (redirected). Overrides [crawler] follow_redirect. -y does not imply it",
+        "Audit where the start URL redirects when it leaves the site (a link shortener, a launch domain forwarding to the product). Without it a terminal asks and anything else exits with status 4 (redirected). Overrides [crawler] follow_redirect. -y does not imply it. Only the destination's origin and path are audited: its query, fragment and credentials are dropped",
     },
     // Declared for help and completions only; read from `follow-redirect: false`.
     "no-follow-redirect": {

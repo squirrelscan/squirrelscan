@@ -232,4 +232,27 @@ describe("secrets and markup in site-chosen URLs", () => {
       expect(out).not.toContain("IGNORE");
     }
   });
+
+  test("replacement patterns in a URL are text: $&, $', $1 and $$ do not splice raw text back in", () => {
+    const evil = "https://x.example/p$&$'$1$$/![a](b)`)](https://evil.example)";
+    const outcome: SeedRedirectedOutcome = {
+      status: "redirected",
+      reason: "cross-domain",
+      originalUrl: "https://bit.ly/x",
+      finalUrl: evil,
+      redirectChain: [{ url: evil, status: 200 }],
+      rerunCommand: null,
+      message: `https://bit.ly/x redirects to ${evil}, a different site.`,
+    };
+    for (const format of ["json", "console", "text", "markdown", "llm"] as const) {
+      const out = renderRedirectedOutcome(outcome, format);
+      expect(out).not.toContain("](https://evil.example)");
+      expect(out).not.toContain("![a](b)");
+      if (format !== "markdown") expect(out).not.toContain("`");
+    }
+    const message = (JSON.parse(renderRedirectedOutcome(outcome, "json")) as SeedRedirectedOutcome).message;
+    expect(message).toContain(
+      "https://x.example/p%24&%24%27%241%24%24/!%5Ba%5D%28b%29%60%29%5D%28https://evil.example%29",
+    );
+  });
 });
