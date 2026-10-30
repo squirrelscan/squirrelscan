@@ -59,11 +59,15 @@ export interface FetchDeps {
  * Test hook, not a mirror setting: `SQUIRREL_SKILLS_TEST_SOURCE=http://127.0.0.1:<port>`
  * serves `manifest.json` and `skills/<skill>/<file>` from a local fixture server so the
  * install tests can run offline. Threat model: the value is read from the process
- * environment only (never project config, a URL or a manifest), and it is honoured only
+ * environment only (never project config, a URL or a manifest; note the compiled binary also
+ * fills its environment from a `.env` in the working directory, so honouring it is announced on
+ * stderr every time), and it is honoured only
  * when the host is a literal loopback address (127.0.0.0/8 or ::1, no name to resolve, no
  * credentials), so it can never send a fetch to another machine; redirects are refused so a
  * loopback server cannot bounce one out either. Anything else is ignored with a warning and
- * the pinned GitHub hosts are used. Files stay verified against the manifest's sha256.
+ * the pinned GitHub hosts are used. Files stay verified against the manifest's sha256, which
+ * from the same loopback server is integrity only, not authenticity. Bun honours HTTP_PROXY for
+ * these requests; set NO_PROXY for 127.0.0.1 when a proxy is configured.
  */
 export const SKILLS_TEST_SOURCE_ENV = "SQUIRREL_SKILLS_TEST_SOURCE";
 
@@ -96,12 +100,20 @@ interface SkillsSource {
 
 // One warning per ignored value, however many requests an install makes.
 const warnedValues = new Set<string>();
+// One notice per honoured source, so an install that makes many requests prints it once.
+const noticed = new Set<string>();
 
 function skillsSource(deps: FetchDeps): SkillsSource {
   const raw = (deps.env ?? process.env)[SKILLS_TEST_SOURCE_ENV];
   if (raw) {
     const base = parseLoopbackSource(raw);
     if (base) {
+      if (!noticed.has(base)) {
+        noticed.add(base);
+        (deps.warn ?? ((m) => console.error(m)))(
+          `note: reading agent skills from ${base} (${SKILLS_TEST_SOURCE_ENV}), not from ${SKILLS_REPOSITORY} on GitHub`
+        );
+      }
       return {
         refsUrl: null,
         manifestUrl: () => `${base}/manifest.json`,

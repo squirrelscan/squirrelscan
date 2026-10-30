@@ -152,24 +152,47 @@ describe("a loopback value serves a real install", () => {
     expect(hits).toContain("/manifest.json");
   });
 
-  test("a redirect off the loopback server is refused", async () => {
+  test("a redirect off the loopback server is refused and never followed", async () => {
     await server.stop(true);
+    let followed = 0;
+    const other = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch() {
+        followed++;
+        return Response.json(manifest);
+      },
+    });
     server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
       fetch: () =>
         new Response(null, {
           status: 302,
-          headers: {
-            location: "https://raw.githubusercontent.com/x/y/z/manifest.json",
-          },
+          headers: { location: `http://127.0.0.1:${other.port}/manifest.json` },
         }),
     });
-    await expect(
-      fetchSkillsManifest({
-        env: { [SKILLS_TEST_SOURCE_ENV]: `http://127.0.0.1:${server.port}` },
-      })
-    ).rejects.toThrow();
+    try {
+      await expect(
+        fetchSkillsManifest({
+          env: { [SKILLS_TEST_SOURCE_ENV]: `http://127.0.0.1:${server.port}` },
+          warn: () => {},
+        })
+      ).rejects.toThrow();
+      expect(followed).toBe(0);
+    } finally {
+      await other.stop(true);
+    }
+  });
+
+  test("honouring the override is announced on stderr", async () => {
+    const notes: string[] = [];
+    await fetchSkillsManifest({
+      env: { [SKILLS_TEST_SOURCE_ENV]: `http://127.0.0.1:${server.port}` },
+      warn: (m) => notes.push(m),
+    });
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toContain(`http://127.0.0.1:${server.port}`);
   });
 
   test("a tampered file is still rejected by its manifest sha256", async () => {
