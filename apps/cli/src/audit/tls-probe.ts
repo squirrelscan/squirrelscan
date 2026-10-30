@@ -15,10 +15,16 @@
 // Behind an HTTP proxy from the environment the crawl goes out through the
 // proxy, and a direct socket would go around it (#1259). So the handshake goes
 // through a CONNECT tunnel: the proxy only relays bytes, the client still does
-// TLS with the name as SNI and verifies the certificate itself. No address is
-// resolved or opened here for the target (the proxy resolves it, and applies
-// its own network policy), no direct socket is opened while a proxy applies,
-// and `NO_PROXY` is honoured. A proxy that refuses or fails the CONNECT, a
+// TLS with the name as SNI and verifies the certificate itself. The target goes
+// through the same egress guard as a direct handshake first: the name is
+// resolved once here, a link-local, metadata or (for any host but the audited
+// one) private answer is refused before any byte is sent, and the CONNECT names
+// the vetted ADDRESS, never the name, so the proxy's own DNS cannot send the
+// tunnel elsewhere and a rebinding answer cannot move it. The proxy's reply is
+// only a status: it never supplies a target. No direct socket is opened to the
+// host while a proxy applies, and `NO_PROXY` is honoured (those hosts take the
+// direct, equally vetted path). A name that cannot be resolved locally is "not
+// checked", even where a proxy could resolve it: the guard needs the answer. A proxy that refuses or fails the CONNECT, a
 // proxy this probe cannot speak to (an `https:` or `socks` proxy URL) and a
 // proxy that never answers make the rule say "not checked" with that reason,
 // never a pass and never a crash.
@@ -121,15 +127,6 @@ export function createTlsProbe(options: TlsProbeOptions = {}): TlsProbeFn {
         reason: `${proxy.reason}, and a direct TLS connection would go around the proxy`,
       };
     }
-    if (proxy.kind === "proxy") {
-      return tunnelHandshake({
-        hostname,
-        port,
-        proxy: proxy.url,
-        timeoutMs,
-        ca: options.ca,
-      });
-    }
     // One budget for the lookup and the handshakes: the lookup aborts at the
     // same deadline, and each handshake gets whatever the lookup left.
     const deadline = Date.now() + timeoutMs;
@@ -159,6 +156,30 @@ export function createTlsProbe(options: TlsProbeOptions = {}): TlsProbeFn {
         code: typeof code === "string" ? code : "ENOTFOUND",
         message: `${hostname} does not resolve`,
       };
+    }
+
+    // Behind a proxy the SAME vetted address is what the proxy is asked to
+    // reach (#1259): the egress guard has already refused link-local, metadata
+    // and (for any host but the audited one) private answers, and the CONNECT
+    // names that address, not the name, so neither the proxy's own DNS nor a
+    // rebinding answer can move it. The name stays the SNI and verification name.
+    if (proxy.kind === "proxy") {
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0 || addresses[0] === undefined) {
+        return {
+          kind: "unreachable",
+          code: "ETIMEDOUT",
+          message: `no TLS handshake with ${hostname} within ${timeoutMs}ms`,
+        };
+      }
+      return tunnelHandshake({
+        hostname,
+        address: addresses[0],
+        port,
+        proxy: proxy.url,
+        timeoutMs: remainingMs,
+        ca: options.ca,
+      });
     }
 
     let result: TlsProbe | undefined;
@@ -437,12 +458,14 @@ const MAX_CONNECT_REPLY_BYTES = 8_192;
  */
 function tunnelHandshake(args: {
   hostname: string;
+  /** The vetted address CONNECT names; `hostname` is only SNI and the wording of results. */
+  address: string;
   port: number;
   proxy: URL;
   timeoutMs: number;
   ca?: string;
 }): Promise<TlsProbe> {
-  const { hostname, port, proxy, timeoutMs, ca } = args;
+  const { hostname, address, port, proxy, timeoutMs, ca } = args;
   const proxyName = `${proxy.hostname}:${proxy.port || "80"}`;
   return new Promise<TlsProbe>((resolve) => {
     let raw: Socket | undefined;
@@ -468,7 +491,7 @@ function tunnelHandshake(args: {
     );
 
     const authority =
-      isIP(hostname) === 6 ? `[${hostname}]:${port}` : `${hostname}:${port}`;
+      isIP(address) === 6 ? `[${address}]:${port}` : `${address}:${port}`;
     const credentials =
       proxy.username !== ""
         ? `Proxy-Authorization: Basic ${Buffer.from(`${decodeURIComponent(proxy.username)}:${decodeURIComponent(proxy.password)}`).toString("base64")}\r\n`
