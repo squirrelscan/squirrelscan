@@ -12,14 +12,7 @@ How it works:
   A stable `## vX.Y.Z` matches any `## vX.Y.Z-<suffix>` heading (e.g. `-beta.N`,
   `-rc.1`), so a stable cut can reuse a pre-release section when no plain one exists.
 - Use `###` (or deeper) for sub-sections within an entry — a `## ` heading marks a new version.
-- A `## [Unreleased]` section collects merged changes that have not been cut into
-  a release yet; rename it to the version when the release goes out.
-
-## [Unreleased]
-
-### Fixed
-
-- **`perf/content-in-js-bundle` no longer passes an audit where every page was browser-rendered.** A rendered page's copy is in the script that rendered it, so the rule had nothing to search for and reported "No page content found", which read as clean although nothing was judged. It is now skipped with a message saying every page was rendered and that `--http` checks it. Audits with some rendered and some plain pages still search the plain ones. See [Page content in a JavaScript bundle](https://docs.squirrelscan.com/rules/perf/content-in-js-bundle). (#1329)
+- A `## [Unreleased]
 
 ### Added
 
@@ -27,6 +20,7 @@ How it works:
 
 ### Fixed
 
+- **`perf/content-in-js-bundle` no longer passes an audit where every page was browser-rendered.** A rendered page's copy is in the script that rendered it, so the rule had nothing to search for and reported "No page content found", which read as clean although nothing was judged. It is now skipped with a message saying every page was rendered and that `--http` checks it. Audits with some rendered and some plain pages still search the plain ones. See [Page content in a JavaScript bundle](https://docs.squirrelscan.com/rules/perf/content-in-js-bundle). (#1329)
 - **Smart audits resolve old findings when a re-crawled page's rule now answers `info`.** A rule that used to fail a page (50 unlabeled form fields) and now reports `No form inputs found`, or reports only a different check of the same rule, left the old rows open as carried findings run after run, with the coverage line showing nothing carried. A plain `info` result now counts as the rule's verdict for the page (an `info` that says the rule could not judge, such as content too short or an unreadable page, is marked inconclusive and still carries), and a re-crawled page the rule evaluated is clean for the rule's other checks too, so their earlier findings resolve. A check explicitly skipped on the page still carries. Coverage gains `pagesWithStaleCarry` (re-crawled pages that still carry earlier findings), shown on the coverage line when above zero. See [Output](https://docs.squirrelscan.com/configuration/output). (#1031)
 
 ## v0.0.144 (2026-10-30)
