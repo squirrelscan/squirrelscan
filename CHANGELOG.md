@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`[crawler] tls_proxy_resolves_names` lets a proxy that owns DNS resolve the TLS check's hosts.** Behind `HTTPS_PROXY`, `security/tls-certificate` resolves the name itself and asks the proxy for a tunnel to the vetted address, which a proxy that only allows connections by name refuses. With `tls_proxy_resolves_names = true` the audited host and its `www` or apex counterpart are requested by name with no local lookup, the hostname stays the SNI and verification name, and a refusing, hanging or garbled proxy still gives `not checked`. Off by default, because where those two names resolve becomes the proxy's decision; every other host is still resolved, vetted and pinned by squirrel, and an IP literal, a metadata name or a name the guard refuses on sight never take this path. See [Behind an HTTP proxy](https://docs.squirrelscan.com/rules/security/tls-certificate#behind-an-http-proxy). (#1317)
+
 ### Fixed
 
 - **Smart audits resolve old findings when a re-crawled page's rule now answers `info`.** A rule that used to fail a page (50 unlabeled form fields) and now reports `No form inputs found`, or reports only a different check of the same rule, left the old rows open as carried findings run after run, with the coverage line showing nothing carried. A plain `info` result now counts as the rule's verdict for the page (an `info` that says the rule could not judge, such as content too short or an unreadable page, is marked inconclusive and still carries), and a re-crawled page the rule evaluated is clean for the rule's other checks too, so their earlier findings resolve. A check explicitly skipped on the page still carries. Coverage gains `pagesWithStaleCarry` (re-crawled pages that still carry earlier findings), shown on the coverage line when above zero. See [Output](https://docs.squirrelscan.com/configuration/output). (#1031)

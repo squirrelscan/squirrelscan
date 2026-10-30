@@ -24,6 +24,7 @@ allow_query_params = []
 drop_query_prefixes = ["utm_", "gclid", "fbclid"]
 respect_robots = false
 disable_discovery_probes = false
+tls_proxy_resolves_names = false
 incremental = true
 breadth_first = true
 max_prefix_budget = 0.25
@@ -1039,6 +1040,20 @@ whether AI crawlers get the same homepage a browser does.
 
 That is 28 requests on most sites. `robots.txt`, sitemap discovery and the page
 you asked to audit are not probes: the crawl needs them, so they always run.
+
+### `tls_proxy_resolves_names`
+
+**Type:** `boolean`
+**Default:** `false`
+
+Only matters when `HTTPS_PROXY` or `HTTP_PROXY` is set. By default the `security/tls-certificate` handshake resolves the host itself, vets the address and asks the proxy for a tunnel to that address. Set this to `true` when your proxy owns DNS and allows connections by name: the proxy then resolves the audited host and its `www` or apex counterpart (the tunnel is requested by name), and squirrel does no lookup for them.
+
+```toml
+[crawler]
+tls_proxy_resolves_names = true
+```
+
+The trade-off is plain: with it on, where those two names go is the proxy's decision, not squirrel's, so the check that a name does not resolve to a link-local, metadata or private address is the proxy's job. Every other host (a name found in page content, any other subdomain) is still resolved, vetted and pinned by squirrel, and an IP address, a cloud metadata name or a name the guard refuses on sight never take this path, whatever the setting. See [Behind an HTTP proxy](/rules/security/tls-certificate#behind-an-http-proxy).
 
 ### `disable_discovery_probes`
 

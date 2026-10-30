@@ -574,7 +574,11 @@ export function analyzeStoredCrawl(
         // #712: security/tls-certificate's handshake, vetted and pinned. It
         // reads the certificate the site serves now, not at the crawl: the
         // one check here that does not come from the stored crawl.
-        tlsProbe: createTlsProbe({ siteUrl: crawl.baseUrl }),
+        tlsProbe: createTlsProbe({
+          siteUrl: crawl.baseUrl,
+          proxyResolvesNames:
+            crawlConfig.crawler?.tls_proxy_resolves_names === true,
+        }),
       }
     );
     return { assets, ruleResults };

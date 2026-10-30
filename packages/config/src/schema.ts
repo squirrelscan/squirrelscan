@@ -120,6 +120,11 @@ export const CrawlerConfigSchema = z.object({
   // probes on: a config without the key (every cloud run) behaves exactly as
   // before, and code that builds a Config by hand does not have to learn it.
   disable_discovery_probes: z.boolean().optional(),
+  // security/tls-certificate behind an HTTP(S)_PROXY (#1317): true lets the proxy resolve the audited
+  // host and its www/apex counterpart (the CONNECT names the host), for a proxy that owns DNS and allows
+  // by name. Default off: squirrel resolves, vets and pins the address itself. The trade-off is that
+  // where those names go is then the proxy's decision. Optional so a Config built by hand need not know it.
+  tls_proxy_resolves_names: z.boolean().optional(),
   // Follow a start URL that redirects to another registrable domain (a link
   // shortener, a launch domain forwarding to the product) and audit the
   // destination (#1281). Unset or false: a TTY asks, anything else exits with
