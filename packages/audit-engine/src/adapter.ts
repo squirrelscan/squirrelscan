@@ -1216,9 +1216,15 @@ export function fetchAssetsFromOccurrences(
       ...(storeScripts
         ? {
             fetchAll: true,
-            maxScripts: Math.min(
-              STORED_SCRIPT_LIMITS.maxScriptsCeiling,
-              Math.max(1, config.storage?.store_scripts_max_scripts ?? STORED_SCRIPT_LIMITS.maxScripts),
+            // Never fewer than the audit's own share (#1280): the rules read the
+            // first of these, so a `store_scripts_max_scripts` below it must not
+            // shrink what they see.
+            maxScripts: Math.max(
+              scriptRuleLimit(occurrences.pageCount, maxResources),
+              Math.min(
+                STORED_SCRIPT_LIMITS.maxScriptsCeiling,
+                Math.max(1, config.storage?.store_scripts_max_scripts ?? STORED_SCRIPT_LIMITS.maxScripts),
+              ),
             ),
             maxTotalBytes: STORED_SCRIPT_LIMITS.heldBytes,
             totalTimeoutMs: STORED_SCRIPT_LIMITS.fetchTimeBudgetMs,
@@ -1234,6 +1240,21 @@ export function fetchAssetsFromOccurrences(
         : {}),
       ...(fetchBudget ? { budget: fetchBudget } : {}),
       egress: ownSiteEgress,
+    };
+
+    // Preloaded chunks are read by a rule too (security/csp-blocks-own-resources),
+    // so they are fetched the way an audit that does not store scripts fetches them
+    // (#1280): no fetch-all, no store bounds, the audit's own limit.
+    const {
+      fetchAll: _fetchAll,
+      maxTotalBytes: _maxTotalBytes,
+      totalTimeoutMs: _totalTimeoutMs,
+      maxScripts: _storeMaxScripts,
+      ...nonStoreScriptOptions
+    } = scriptFetchOptions;
+    const preloadFetchOptions: NonNullable<Parameters<typeof fetchScriptContents>[1]> = {
+      ...nonStoreScriptOptions,
+      ...(maxResources != null ? { maxScripts: maxResources } : {}),
     };
 
     const sitemapStatusLimit = Math.min(
@@ -1415,8 +1436,8 @@ export function fetchAssetsFromOccurrences(
             (url) => !resourceOccurrences.scripts.has(url),
           ),
           {
-            ...scriptFetchOptions,
-            maxScripts: Math.min(scriptFetchOptions.maxScripts ?? PRELOAD_CHUNK_FETCH_LIMIT, PRELOAD_CHUNK_FETCH_LIMIT),
+            ...preloadFetchOptions,
+            maxScripts: Math.min(preloadFetchOptions.maxScripts ?? PRELOAD_CHUNK_FETCH_LIMIT, PRELOAD_CHUNK_FETCH_LIMIT),
           },
         ),
         pdfs: checkResourceSizes(

@@ -156,10 +156,18 @@ technology detection) evaluate the same scripts they evaluate with the option of
 the first 10 to 50 the audit always fetched, in page order. The extra scripts, up
 to `store_scripts_max_scripts`, are fetched and stored for later analysis and are
 never shown to a rule, so findings and scores are the same with it on or off, and
-a corpus run with storage on compares with one without. The JSON report says how
-many first-party scripts the script rules evaluated in `meta.scriptsEvaluated`
-(and the LLM output in `<scripts-evaluated>`), so two runs can be checked. To
-analyse the stored scripts, read them from the content store.
+a corpus run with storage on compares with one without. Chunks a page only
+preloads are fetched the same way as without the option. A `store_scripts_max_scripts`
+below the audit's own share (10 to 50) is raised to it, so the rules always see
+the same set. The JSON report says how many first-party scripts the script rules
+were given in `meta.scriptsEvaluated` (and the LLM output in
+`<scripts-evaluated>`), counting any that failed to fetch, so two runs can be
+checked. To analyse the stored scripts, read them from the content store.
+
+One known gap: the 256 MB and 120 second fetch bounds above also apply to the
+scripts the rules read. On a site where script fetching hits a bound before the
+first 10 to 50 scripts are done, the option-off audit would have fetched some
+that a `store_scripts` run skips, and the rules see fewer scripts.
 
 **Bodies are the decoded text.** A script is stored as the UTF-8 text the audit
 read after the transfer encoding (gzip, brotli) was removed, so the content hash

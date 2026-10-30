@@ -298,6 +298,7 @@ function report(pages: number, shape: Shape = {}): Report {
     sitemapUrlStatuses: Array.from({ length: 150 }, (_, i) => ({ url: url(i), status: 200, error: null })),
     entityMap: entityMap(2_000),
     rulesCache: { pagesReplayed: 0, pagesEvaluated: pages },
+    scriptsEvaluated: 10,
     ruleResults,
   };
 }
@@ -765,6 +766,8 @@ describe("capReportForPublish: the sample and its counts", () => {
     const loose = capped as unknown as Record<string, any>;
     expect(loose.pages).toEqual([]);
     expect(loose.rulesCache).toBeUndefined();
+    // #1280: how many scripts the rules read describes this machine's run, not the site.
+    expect(loose.scriptsEvaluated).toBeUndefined();
     expect(loose.summary.missingDescriptions).toHaveLength(10);
     expect(loose.summary.urlIssues[0].issues).toHaveLength(10);
     expect(loose.sitemaps.discovered).toHaveLength(REPORT_CAPS.sitemapEntries);
