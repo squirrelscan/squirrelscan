@@ -8,25 +8,15 @@
 // confidence bar counts. The rules fallback labels a page from its own JSON-LD or og:type, so a
 // rules-sourced label is circular or a low-confidence default and never changes a verdict.
 
-import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+import {
+  CHECK_NOT_APPLICABLE_SKIP_REASON,
+  PAGE_TYPE_SKIP_REASON,
+} from "@squirrelscan/core-contracts/resolution";
 
 import type { CheckResult, ParsedPage } from "../types";
 
 /** Minimum classifier confidence before a page type changes a verdict. */
 export const PAGE_TYPE_TRUST_CONFIDENCE = 0.9;
-
-/** The page types a rule may be told to skip: the labels the classifier model emits. */
-export type SkippablePageType =
-  | "article"
-  | "listing_index"
-  | "docs"
-  | "product_detail"
-  | "about"
-  | "contact"
-  | "legal"
-  | "pricing"
-  | "product_listing"
-  | "other";
 
 /**
  * The page's type, only when the model gave it with enough confidence. `null` for no
@@ -53,10 +43,27 @@ export function isTrustedPageTypeIn(
 }
 
 /**
- * The visible `skipped` check for a page left out because of its type. It is a "does not apply"
- * skip (`not-applicable`), so the resolution signal reads the page as evaluated and clean and a
+ * The runner's skip for a rule left out of a page because of its type (`skipOnPageType`). It is
+ * a rule-wide "does not apply" verdict like the noindex gate (`page-type`, keyed by the RULE in the
+ * resolution signal), so the page reads as evaluated and clean for every check of the rule and a
  * finding from an earlier audit on it resolves. `skippedByType` counts the page so a report can say
  * why it was not judged; `pageType` names the label.
+ */
+export function pageTypeRuleSkip(ruleId: string, label: string, ruleName: string): CheckResult {
+  return {
+    name: ruleId,
+    status: "skipped",
+    message: `Skipped: ${ruleName} is not judged on a ${label.replace(/_/g, " ")} page`,
+    skipReason: PAGE_TYPE_SKIP_REASON,
+    details: { foldKey: PAGE_TYPE_SKIP_REASON, pageType: label, skippedByType: 1 },
+  };
+}
+
+/**
+ * The skip for ONE check a rule decided not to make on a page because of its type (a short title on
+ * a contact page). `name` must be the check's real name, because the resolution signal keys a
+ * per-check "does not apply" on `ruleId|checkName`; the page then reads as evaluated and clean for
+ * that check only and its earlier finding resolves.
  */
 export function pageTypeSkip(name: string, label: string, what: string): CheckResult {
   return {

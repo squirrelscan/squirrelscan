@@ -14,6 +14,10 @@ import { parsePage } from "@squirrelscan/parser";
 
 import { loadAllRules } from "../src/loader";
 import { RuleRunner, type RulesConfig } from "../src/runner";
+import { resolutionCheckKey, resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
+import { normalizeUrl } from "@squirrelscan/utils/url";
+
+import { buildResolutionSignal } from "../src/resolution";
 import { PAGE_TYPE_TRUST_CONFIDENCE, trustedPageType } from "../src/shared/page-type";
 import type { PageData, ParsedPage } from "../src/types";
 
@@ -74,10 +78,14 @@ describe("before: no trusted label keeps today's findings", () => {
 });
 
 describe("after: a trusted contact or legal label skips them, and counts the skip", () => {
-  test("contact (model 0.9): word-count, title floor and description floor are skipped by type", async () => {
+  test("contact (model 0.9): word-count is skipped rule-wide, the title and description floors per check", async () => {
     const get = await run(page({ ...CONTACT, classification: cls("contact", 0.9) }));
+    const wc = get("content/word-count")[0]!;
+    expect(wc.status).toBe("skipped");
+    expect(wc.skipReason).toBe("page-type");
+    expect(wc.details).toMatchObject({ pageType: "contact", skippedByType: 1, foldKey: "page-type" });
+    // The in-rule skips carry the check's REAL name: the resolution signal keys on ruleId|checkName.
     for (const [id, name] of [
-      ["content/word-count", "content/word-count"],
       ["core/meta-title", "meta-title"],
       ["core/meta-description", "meta-description"],
     ] as const) {
@@ -141,5 +149,69 @@ describe("the skip list is explicit", () => {
     expect(trustedPageType(page({ ...CONTACT, classification: cls("contact", 0.9) }).parsed)).toBe("contact");
     expect(trustedPageType(page({ ...CONTACT, classification: cls("contact", 0.9, "rules") }).parsed)).toBeNull();
     expect(trustedPageType(undefined)).toBeNull();
+  });
+});
+
+// The resolution signal over REAL runner output: an earlier audit's finding on a page that is now
+// skipped by type must RESOLVE, not be carried (a carried finding would keep the contact page
+// "thin" forever). Pages: a thin contact page, a thin marketing page, a fine page.
+describe("resolution signal: a page-type skip resolves the earlier finding, it does not carry it", () => {
+  const CONTACT_URL = "https://example.com/contact";
+  const MARKETING_URL = "https://example.com/features";
+  const FINE_URL = "https://example.com/guide";
+  const LEGAL_URL = "https://example.com/privacy";
+  const h = (url: string) => resolutionUrlHash(normalizeUrl(url));
+
+  async function collect() {
+    const make = (url: string, o: Parameters<typeof page>[0]): PageData => ({ ...page(o), url });
+    const pages: Array<[string, PageData]> = [
+      [CONTACT_URL, make(CONTACT_URL, { ...CONTACT, classification: cls("contact", 0.99) })],
+      [MARKETING_URL, make(MARKETING_URL, { ...CONTACT, title: "Features", classification: cls("other", 0.99) })],
+      [FINE_URL, make(FINE_URL, { title: "A long and useful guide to the thing you wanted to read about", description: "x".repeat(130), body: words(500), classification: cls("article", 0.99) })],
+    ];
+    pages.push([
+      LEGAL_URL,
+      make(LEGAL_URL, {
+        title: "Privacy",
+        description: "Privacy.",
+        body: Array.from({ length: 80 }, () => "data information service").join(" "),
+        classification: cls("legal", 0.99),
+      }),
+    ]);
+    const results: Record<string, { checks: CheckResult[] }> = {};
+    for (const [url, data] of pages) {
+      const config: RulesConfig = { rule_options: {}, rules: { enable: RULES } };
+      const { ruleResults } = await new RuleRunner({ config }).runPageRules(data, {
+        baseUrl: "https://example.com",
+        pages: [],
+        robotsTxt: null,
+        sitemaps: null,
+      });
+      for (const [ruleId, rr] of ruleResults) {
+        for (const check of rr.checks) if (!check.pageUrl) check.pageUrl = url;
+        (results[ruleId] ??= { checks: [] }).checks.push(...rr.checks);
+      }
+    }
+    return buildResolutionSignal(results, [CONTACT_URL, MARKETING_URL, FINE_URL, LEGAL_URL])!;
+  }
+
+  test("word-count: the marketing page keeps failing, the contact page is neither failing nor not-evaluated", async () => {
+    const signal = await collect();
+    const key = resolutionCheckKey("content/word-count", "word-count");
+    expect(signal.failing[key]).toEqual([h(MARKETING_URL)]);
+    expect(signal.notEvaluated?.[key] ?? []).not.toContain(h(CONTACT_URL));
+  });
+
+  test("the title and description floors resolve on the contact page, keyword-stuffing on the legal page", async () => {
+    const signal = await collect();
+    for (const check of ["meta-title", "meta-description"]) {
+      const key = resolutionCheckKey(`core/${check}`, check);
+      expect(signal.notEvaluated?.[key] ?? []).not.toContain(h(CONTACT_URL));
+    }
+    const stuffing = resolutionCheckKey("content/keyword-stuffing", "keyword-stuffing");
+    expect(signal.notEvaluated?.[stuffing] ?? []).not.toContain(h(LEGAL_URL));
+    expect(signal.failing[stuffing] ?? []).not.toContain(h(LEGAL_URL));
+    // The marketing page's short title is still a finding.
+    expect(signal.failing[resolutionCheckKey("core/meta-title", "meta-title")]).toContain(h(MARKETING_URL));
   });
 });

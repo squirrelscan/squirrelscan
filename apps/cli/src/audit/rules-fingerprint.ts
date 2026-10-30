@@ -17,7 +17,8 @@ import { join } from "node:path";
 /**
  * What the hash covers, relative to the repo root: the rules, everything they
  * import from the workspace (parser, utils, core-contracts), the engine code that
- * produces the rest of a cached entry (page features and collected signals), and
+ * produces the rest of a cached entry (page features and collected signals), the page
+ * classifier whose label some rules read, and
  * the lockfile, because a `linkedom` upgrade changes what a rule sees without
  * changing a line of ours. Widening this is safe; a miss costs one cold run.
  */
@@ -27,6 +28,11 @@ export const RULES_FINGERPRINT_SOURCES = [
   "packages/utils/src",
   "packages/core-contracts/src",
   "packages/audit-engine/src",
+  // Rules read the page classifier's label (pub#841), so a classifier change must miss the
+  // cache too. The manifest carries the model artifact's sha256 (hashing the 8.8 MB artifact
+  // itself would cost every dev start).
+  "packages/page-classifier/src",
+  "packages/page-classifier/assets/classifier-v2.manifest.json",
   "bun.lock",
 ] as const;
 

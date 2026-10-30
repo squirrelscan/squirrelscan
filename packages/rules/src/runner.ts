@@ -43,7 +43,7 @@ import {
   siteRuleBudgetMs,
 } from "./rule-budget";
 import { noindexSource, skipsNoindexPages } from "./shared/noindex";
-import { pageTypeSkip, trustedPageType } from "./shared/page-type";
+import { pageTypeRuleSkip, trustedPageType } from "./shared/page-type";
 
 // Minimal config interface — CLI's full Config satisfies this
 export interface RulesConfig {
@@ -491,7 +491,7 @@ export class RuleRunner {
       if (label !== null && rule.meta.skipOnPageType.includes(label)) {
         return {
           meta: rule.meta,
-          checks: [pageTypeSkip(rule.meta.id, label, rule.meta.name)],
+          checks: [pageTypeRuleSkip(rule.meta.id, label, rule.meta.name)],
         };
       }
     }

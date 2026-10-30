@@ -227,3 +227,15 @@ describe("a template-scoped rule is never also noindex gated", () => {
     },
   );
 });
+
+describe("a template-scoped rule is never also page-type gated", () => {
+  test.each(fannable.map((r) => [r.meta.id, r.meta] as const))(
+    "%s does not declare skipOnPageType",
+    (_id, meta) => {
+      // Same contradiction (pub#841): a page's classified type is per page, so a contact-page
+      // representative would otherwise cache its skip for marketing pages of the cluster.
+      // createTemplateFanout drops such a rule at runtime.
+      expect(meta.skipOnPageType).toBeUndefined();
+    },
+  );
+});
