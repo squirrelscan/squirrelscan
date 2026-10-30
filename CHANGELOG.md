@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`security/leaked-secrets` no longer reports documentation samples, placeholders and binary payloads as credentials.** jwt.io's default sample token (when its signature verifies under a published sample secret), a `-----BEGIN ... PRIVATE KEY-----` header with no key body after it, a connection string with a documentation password on `localhost` or one whose password is a template placeholder (`${user}`, `{{ pass }}`, `%s`), Stripe's published sample key, a hashed asset name such as `neon_<hash>.png`, a Dominican Republic IBAN and a run of `A` inside a base64 image, font or wasm payload are not reported. A real-shaped key in the same place still is: a PEM block with a body, a random password on a local host, any other `sk_test_` key. `example-password` and similar are placeholders. Paystack's `sk_live_` keys (40 hex) are labelled Paystack instead of Stripe, and an `sk_live_` key with a hex tail that is not Stripe's, such as a chat widget's `data-deployment-key`, reports as an unknown-provider key with a widget hint. `changeme` stays reportable on purpose. See [leaked-secrets](https://docs.squirrelscan.com/rules/security/leaked-secrets). (#1283, #1227)
+
 ## v0.0.144 (2026-10-30)
 
 `squirrel audit --max-duration` stops at a wall-clock budget and writes a partial report instead of running on, `--include-pages` adds every crawled page with its status and rule count to the JSON report, and info checks now appear in the JSON and LLM reports (`--include-info`). The local technology scan reads stylesheet URLs and knows 24 more stacks, query-string copies of a page are counted with their canonical page, rules see controls inside declarative shadow roots, and a successful but empty page is audited and scored. A rule that throws is reported once as not evaluated, a rule that runs past its time budget is listed as skipped, and the docs now keep `--offline` and `--passive` apart. Thanks to William for the empty-page fix (#1314, #1330).
