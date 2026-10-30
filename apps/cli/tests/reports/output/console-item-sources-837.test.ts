@@ -150,4 +150,32 @@ describe("console broken link sources (pub#837)", () => {
     expect(out).toContain(`→ ${SITE}/gone (404)`);
     expect(out).not.toContain("linked in the footer");
   });
+
+  test("a finding that carries pages from an earlier audit keeps its page rows (pub#860)", () => {
+    const sources = Array.from({ length: 12 }, (_, k) => ({
+      page: `${SITE}/p${k}`,
+      links: 1,
+      sections: { footer: 1 },
+    }));
+    const report = brokenLinks(sources);
+    const check = report.ruleResults["links/broken-links"]!.checks[0]!;
+    const item = check.items![0]!;
+    item.regions = { footer: 12 };
+    report.structure = {
+      pages: 13,
+      sections: [{ section: "footer", pages: 13, links: 40 }],
+      unknownLinks: 0,
+      totalLinks: 40,
+      chrome: { links: 40, contentLinks: 0, share: 1 },
+      pageTypes: { counts: [], notClassified: 13, byModel: 0, degraded: 0 },
+    } as unknown as NonNullable<AuditReport["structure"]>;
+    // Fresh control: the region line.
+    expect(capture(report)).toContain("In the site footer, on 12 of 13 pages");
+    // Three of the pages are carried from an earlier audit: no share of this audit's region.
+    check.provenance = "carried";
+    check.lastSeenAt = 1;
+    const out = capture(report);
+    expect(out).not.toContain("In the site footer, on");
+    expect(out).toContain("from /p0");
+  });
 });
