@@ -6,7 +6,7 @@
 // update or telemetry, and no stdin.
 
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -222,17 +222,65 @@ describe("squirrel audit --max-duration", () => {
     expect(report.meta.totalPages ?? 0).toBeGreaterThan(1);
   }, 90_000);
 
-  test("a seed that never answers fails at the limit, not after the 30 s reachability probe", async () => {
+  test("a seed that never answers fails at the limit with an unreachable report, exit 5", async () => {
     const r = await auditUrl(
       `http://127.0.0.1:${blackhole.port}/`,
       "--max-duration",
       "6"
     );
-    expect(r.code).toBe(1);
+    expect(r.code).toBe(5);
     expect(r.elapsedMs).toBeLessThan((6 + 15) * 1000);
-    expect(r.err).toContain(
-      "time limit (--max-duration) was reached before the site answered"
+    const outcome = JSON.parse(r.out) as {
+      status: string;
+      statusReason: string;
+      message: string;
+    };
+    expect(outcome.status).toBe("unreachable");
+    // The reason says what happened once; the message adds "Cannot reach" itself.
+    expect(outcome.statusReason).toBe(
+      "the 6s time limit (--max-duration) was reached before the site answered"
     );
+    expect(outcome.message.match(/Cannot reach/g)).toHaveLength(1);
+  }, 60_000);
+
+  test("a squirrel.toml max_duration past 7 days is refused with the config error", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "squirrel-max-duration-cfg-"));
+    try {
+      writeFileSync(
+        join(dir, "squirrel.toml"),
+        "[crawler]\nmax_duration = 604801\n"
+      );
+      const proc = Bun.spawn(
+        [
+          process.execPath,
+          "run",
+          entry,
+          "audit",
+          "http://127.0.0.1:1/",
+          "--offline",
+          "--http",
+          "-f",
+          "json",
+        ],
+        {
+          cwd: dir,
+          env: cleanEnv(),
+          stdin: "ignore",
+          stdout: "pipe",
+          stderr: "pipe",
+        }
+      );
+      const [out, err] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ]);
+      expect(`${out}${err}`).toContain(
+        "crawler.max_duration: Too big: expected number to be <=604800"
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }, 60_000);
 
   test("a budget past 7 days is refused, not turned into a timer overflow", async () => {
