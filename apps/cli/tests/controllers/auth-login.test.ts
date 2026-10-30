@@ -152,6 +152,15 @@ describe("auth/login — agent setup on the callback success page (#180)", () =>
   });
 });
 
+/** The body of the page's one inline script, found without a tag-matching pattern. */
+function emittedScript(html: string): string | undefined {
+  const open = html.indexOf("<script>");
+  if (open < 0) return undefined;
+  const start = open + "<script>".length;
+  const end = html.indexOf("</script>", start);
+  return end < 0 ? undefined : html.slice(start, end);
+}
+
 describe("auth/login - the branded callback pages (#1286)", () => {
   const completed = (email: string) =>
     renderCallbackPage({
@@ -203,7 +212,7 @@ describe("auth/login - the branded callback pages (#1286)", () => {
         expect(csp).toContain("base-uri 'none'");
         if (name === "success") {
           // The hash of the bytes the page emits, not of the constant it was built from.
-          const emitted = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1];
+          const emitted = emittedScript(html);
           expect(emitted).toBeDefined();
           const hash = createHash("sha256").update(emitted!).digest("base64");
           expect(csp).toContain(`script-src 'sha256-${hash}'`);
@@ -343,7 +352,7 @@ describe("auth/login - callback response headers (#1286)", () => {
       expectHardened(ok, "text/html; charset=utf-8");
       // The script the CSP header allows is the one the page emits.
       const html = await ok.text();
-      const emitted = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1] ?? "";
+      const emitted = emittedScript(html) ?? "";
       expect(ok.headers.get("content-security-policy")).toContain(
         `'sha256-${createHash("sha256").update(emitted).digest("base64")}'`
       );
