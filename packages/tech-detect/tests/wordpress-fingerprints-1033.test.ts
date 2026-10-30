@@ -160,7 +160,6 @@ describe("WordPress plugin and host fingerprints (#1033)", () => {
       ["wordpress-vip", { "x-powered-by": "WordPress.com VIP" }, "header:x-powered-by"],
       ["siteground", { "x-sg-cache": "HIT" }, "header:x-sg-cache"],
       ["cloudways", { server: "Cloudways" }, "header:server"],
-      ["litespeed-cache", { "x-litespeed-cache": "hit" }, "header:x-litespeed-cache"],
       ["w3-total-cache", { "x-powered-by": "W3 Total Cache/2.7.5" }, "header:x-powered-by"],
     ])("%s from %j records %s", (id, headers, detectedBy) => {
       const hit = found(input({ headers, html: PLAIN_WP })).find((t) => t.id === id);
@@ -172,6 +171,21 @@ describe("WordPress plugin and host fingerprints (#1033)", () => {
       expect(ids(input({ headers, html: PLAIN_WP })).filter((id) => ALL_IDS.includes(id))).toEqual(
         [],
       );
+    });
+
+    test("an app that merely sits behind LiteSpeed caching is not WordPress's LiteSpeed Cache plugin", () => {
+      const magento = `<!doctype html><html><head><title>Shop</title></head><body>shop</body></html>`;
+      expect(
+        ids(input({ headers: { "x-litespeed-cache": "hit", server: "LiteSpeed" }, html: magento })),
+      ).not.toContain("litespeed-cache");
+    });
+
+    test("a SiteGround plugin path alone is not the host (it survives a migration)", () => {
+      const html = PLAIN_WP.replace(
+        "</head>",
+        `<link rel="stylesheet" href="https://example.com/wp-content/plugins/sg-cachepress/x.css"></head>`,
+      );
+      expect(ids(input({ html }))).not.toContain("siteground");
     });
 
     test("look-alike header values do not match", () => {
@@ -199,6 +213,19 @@ describe("bolt-new (#1278)", () => {
   test("the Made in Bolt badge on a custom domain", () => {
     const html = `<footer><a href="https://bolt.new/?rid=abc123" target="_blank"><img src="/badge.svg" alt="Made in Bolt"></a></footer>`;
     expect(ids(input({ url: "https://studio.example.com/", html }))).toContain("bolt-new");
+  });
+
+  test("a plain Bolt referral link in a post is not the badge", () => {
+    const html = `<article><p>I tried <a href="https://bolt.new/?rid=abc123">Bolt</a> for a week.</p>
+<p>Sign up with <a href="https://bolt.new/?rid=abc123" rel="sponsored">my link</a>.</p></article>`;
+    expect(ids(input({ url: "https://blog.example.com/post", html }))).not.toContain("bolt-new");
+  });
+
+  test("the badge as an svg or as the words Made in Bolt", () => {
+    const svg = `<a href="https://bolt.new/?rid=x1" target="_blank"><svg viewBox="0 0 10 10"></svg></a>`;
+    const words = `<a class="badge" href="https://bolt.new/?rid=x1">Made in Bolt</a>`;
+    for (const html of [svg, words])
+      expect(ids(input({ url: "https://studio.example.com/", html }))).toContain("bolt-new");
   });
 
   test("look-alike hosts, links to a bolt.host app and prose do not match", () => {

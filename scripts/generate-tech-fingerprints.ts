@@ -40,7 +40,8 @@ const OUTPUT = join(ROOT, "packages/tech-detect/src/fingerprints/generated.ts");
 
 const VALID_CATEGORIES = new Set([
   "cms", "framework", "analytics", "cdn", "ad-network", "payment", "web-server",
-  "hosting", "security", "tag-manager", "chat", "font", "video", "widget", "other",
+  "hosting", "security", "tag-manager", "chat", "font", "video", "widget", "cache", "seo", "images",
+  "other",
 ]);
 const DETECTOR_TYPES = new Set([
   "header", "meta", "script-url", "script-content", "html", "url-path",
