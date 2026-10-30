@@ -181,13 +181,16 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       // Bolt's app hosting. The page host only: anchored at the URL start, so a
       // look-alike host or a page that links to a .bolt.host app does not match.
       { type: "url-path", pattern: /^https?:\/\/(?:[a-z0-9-]{1,63}\.){1,3}bolt\.host(?:[:/?#]|$)/i },
-      // The "Made in Bolt" badge an app can carry: an anchor whose href is the
-      // Bolt referral URL. Bolt's checkout product (bolt.com) is a different
-      // company and never matches this host.
+      // The "Made in Bolt" badge an app can carry: an anchor whose href is the Bolt
+      // referral URL AND whose content is the badge (an image or svg, or the words
+      // "Made in Bolt"). A plain referral link in a post (`<a href="...?rid=x">try
+      // Bolt</a>`) is not the badge. Bolt's checkout product (bolt.com) is a
+      // different company and never matches this host.
       {
         type: "html",
         requires: "bolt.new/?rid=",
-        pattern: /<a\s(?:[^>]{0,400}\s)?href\s*=\s*["']https:\/\/bolt\.new\/\?rid=[A-Za-z0-9_-]{1,64}["']/i,
+        pattern:
+          /<a\s(?:[^>]{0,400}\s)?href\s*=\s*["']https:\/\/bolt\.new\/\?rid=[A-Za-z0-9_-]{1,64}["'][^>]{0,400}>\s{0,40}(?:<(?:img|svg)\b|Made (?:in|with) Bolt\b)/i,
       },
     ],
     ignoreComments: true,

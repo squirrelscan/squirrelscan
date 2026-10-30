@@ -32,10 +32,6 @@ bundle_bytes = 65536   # 0 to 262144
 - A key kept in a variable and passed by name (`publishableKey: key`) is not matched; a Clerk key is recognised only where it is written out next to `publishableKey`.
 - A scan that runs long on one page stops at a 5 second budget and reports what it found so far.
 
-### WordPress plugins and hosts
-
-A WordPress plugin is recognised by something it writes into the page: an asset URL under `wp-content/plugins/<slug>/` (or the cache directory it fills) on a script, stylesheet or image tag, the HTML comment it adds (`This website is like a Rocket` for WP Rocket, `Performance optimized by W3 Total Cache`, the Yoast SEO and Rank Math comments), or its own JSON-LD block (`yoast-schema-graph`, `rank-math-schema`, `aioseo-schema`). Its name in page text, in a code sample or in a link does not count. A managed host is recognised by the response header it sets (`x-kinsta-cache`, `x-powered-by: WP Engine`, `x-sg-cache`), reported as `header:<name>`. Pressable, WordPress VIP, SiteGround and Cloudways report at medium or low confidence because their headers are the least documented.
-
 Results are grouped by category:
 
 | Category | Examples |
@@ -56,6 +52,10 @@ Results are grouped by category:
 | SEO Plugins | Yoast SEO, Rank Math, All in One SEO, SEOPress |
 | Image Optimization | ShortPixel, Imagify, EWWW Image Optimizer, Smush |
 | Other | jQuery, Sentry, backend and auth services (Supabase, Clerk, Firebase) |
+
+### WordPress plugins and hosts
+
+A WordPress plugin is recognised by something it writes into the page: an asset URL under `wp-content/plugins/<slug>/` (or the cache directory it fills) on a script, stylesheet or image tag, the HTML comment it adds (`This website is like a Rocket` for WP Rocket, `Performance optimized by W3 Total Cache`, the Yoast SEO and Rank Math comments), or its own JSON-LD block (`yoast-schema-graph`, `rank-math-schema`, `aioseo-schema`). Its name in page text, in a code sample or in a link does not count. A managed host is recognised by the response header it sets (`x-kinsta-cache`, `x-powered-by: WP Engine`, `x-sg-cache`), reported as `header:<name>`. LiteSpeed Cache is recognised from its page comment or plugin assets, not from the `x-litespeed-cache` header, which any LiteSpeed-cached site sends. Pressable, WordPress VIP, SiteGround and Cloudways report at medium or low confidence because their headers are the least documented.
 
 A typical result:
 
