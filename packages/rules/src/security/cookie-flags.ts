@@ -117,13 +117,16 @@ export const cookieFlagsRule: Rule = {
       }
     }
 
-    // A cookie on a fixed list of exact names that a hosting platform's sites
-    // commonly carry (not set by the site owner, no session in it) is info
-    // naming the platform, not a warning. Any other cookie, however it is
-    // named, still warns. The platform may not document the cookie.
+    // A cookie on a fixed list of exact names is exempt from the HttpOnly
+    // warning and reported as info with the reason: a cookie a hosting platform's
+    // sites commonly carry (the site owner doesn't set it, no session in it), or a
+    // CSRF double-submit token a script is meant to read. Any other cookie, however
+    // it is named, still warns. Secure and SameSite are checked as for any cookie.
     const noHttpOnly = cookies.filter((c) => !c.httpOnly);
-    const platformOwned = noHttpOnly.filter((c) => platformCookie(c.name));
+    const exempt = noHttpOnly.filter((c) => platformCookie(c.name));
     const missingHttpOnly = noHttpOnly.filter((c) => !platformCookie(c.name));
+    const platformOwned = exempt.filter((c) => platformCookie(c.name)!.kind === "platform");
+    const csrfOwned = exempt.filter((c) => platformCookie(c.name)!.kind === "csrf");
     if (platformOwned.length > 0) {
       const entries = platformOwned.map((c) => platformCookie(c.name)!);
       const platforms = [...new Set(entries.map((e) => e.platform))];
@@ -133,6 +136,15 @@ export const cookieFlagsRule: Rule = {
         status: "info",
         message: `${platformOwned.length} cookie(s) without HttpOnly that ${platforms.join(" and ")}-hosted sites commonly carry (${[...new Set(platformOwned.map((c) => c.name))].join(", ")}); ${undocumented ? "the platform does not document it, so " : ""}it is reported as info, not a warning`,
         items: platformOwned.map((c) => ({ id: c.name })),
+      });
+    }
+    if (csrfOwned.length > 0) {
+      const entries = [...new Set(csrfOwned.map((c) => platformCookie(c.name)!))];
+      checks.push({
+        name: "cookie-httponly-csrf",
+        status: "info",
+        message: `${csrfOwned.length} CSRF token cookie(s) without HttpOnly (${entries.map((e) => `${e.name}: ${e.platform}`).join("; ")}): the page's own script is meant to read it and send it back in a header, so HttpOnly would break it. Reported as info, not a warning (${entries.flatMap((e) => e.docs).join(" ")})`,
+        items: csrfOwned.map((c) => ({ id: c.name })),
       });
     }
     if (missingHttpOnly.length > 0) {

@@ -19,6 +19,8 @@ How it works:
 
 ### Fixed
 
+- **`security/cookie-flags` no longer warns about CSRF token cookies.** `XSRF-TOKEN` (Angular, Laravel, Spring Security) and `csrftoken` (Django) are read by the page's own script and sent back in a header, so `HttpOnly` would break them; each framework's docs say so. They are now an info check, `cookie-httponly-csrf`, with the reason and docs links. The match is by exact name, a session cookie beside them still warns, and Secure and SameSite are still checked. (#1378)
+
 - **A deep start URL is now explicit and guaranteed to be audited.** `squirrel audit https://example.com/blog/post` says that it will audit the whole origin, records the page as `meta.requestedUrl` beside `meta.baseUrl`, and seeds its resolved destination before sitemap URLs so a small page limit cannot omit it. Origin-only audits are unchanged. (#1369)
 
 ## v0.0.146 (2026-10-31)
