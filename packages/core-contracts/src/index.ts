@@ -426,11 +426,22 @@ export const EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON = "external-links-out-of-tim
 export const CRAWL_CAPPED_SKIP_REASON = "Crawl capped before the frontier was exhausted";
 
 /**
+ * `skipReason` of `security/tls-certificate` when no TLS handshake was made or
+ * none completed (#1259): a proxy is set in the environment (a direct socket
+ * would go around it), `--offline` held the audit to the audited host, the
+ * address was refused, the host did not resolve or answer. An evaluation gap,
+ * not a pass: no certificate was read, so "no certificate problem" would be a
+ * claim nothing tested.
+ */
+export const TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON = "tls-certificate-not-checked";
+
+/**
  * Skip reasons that mean "this check did not run for the audit", which every
  * report renders as a visible "Not checked" line instead of leaving the rule
  * looking clean (repo#2729), and which never resolve an open finding.
  */
 export const NOT_CHECKED_SKIP_REASONS: ReadonlySet<string> = new Set([
+  TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON,
   EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
   LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
   EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,

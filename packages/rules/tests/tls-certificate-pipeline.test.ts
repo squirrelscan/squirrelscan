@@ -26,7 +26,12 @@ function served(names: string[], validTo: Date): TlsProbe {
     certificate: {
       names,
       issuer: "squirrel test intermediate",
-      validFrom: new Date(Date.now() - DAY_MS),
+      // A 90-day certificate, so the lifetime-relative warning window applies (#1279);
+      // a long-lived one (365 days out) started a day ago.
+      validFrom:
+        validTo.getTime() - Date.now() > 100 * DAY_MS
+          ? new Date(Date.now() - DAY_MS)
+          : new Date(validTo.getTime() - 90 * DAY_MS),
       validTo,
       rsaBits: 2048,
     },
@@ -95,10 +100,12 @@ function expiry(checks: CheckResult[]): CheckResult | undefined {
 describe("certificate expiry through the audit's rule stage", () => {
   const only = (certificate: TlsProbe) => probeFor({ [AUDITED]: certificate, [WWW]: null }).probe;
 
-  test("a certificate expiring in 20 days warns with the date and days left", async () => {
-    const check = expiry(await auditStage(`https://${AUDITED}/`, only(served(AUDITED_NAMES, inDays(20)))));
+  test("a 90-day certificate with 28 days left does not warn, one with 10 days left does (#1279)", async () => {
+    const ok = expiry(await auditStage(`https://${AUDITED}/`, only(served(AUDITED_NAMES, inDays(28)))));
+    expect(ok?.status).toBe("pass");
+    const check = expiry(await auditStage(`https://${AUDITED}/`, only(served(AUDITED_NAMES, inDays(10)))));
     expect(check?.status).toBe("warn");
-    expect(check?.message).toMatch(/expires in 20 days \(\d{4}-\d{2}-\d{2}\)/);
+    expect(check?.message).toMatch(/expires in 10 days \(\d{4}-\d{2}-\d{2}\)/);
   });
 
   test("a certificate expiring in 5 days is an error", async () => {
@@ -114,10 +121,12 @@ describe("certificate expiry through the audit's rule stage", () => {
   });
 
   test("rule options from the config move the thresholds", async () => {
-    // A 20-day certificate passes with error_days 14; error_days 25 turns it into an error.
+    // A 20-day certificate is outside the lifetime window by default; warn_days = 30 makes it a
+    // warning, error_days 14 keeps it one, and error_days 25 (with warn_days 30) turns it into an error.
     const probe = only(served(AUDITED_NAMES, inDays(20)));
-    expect(expiry(await auditStage(`https://${AUDITED}/`, probe, { error_days: 14 }))?.status).toBe("warn");
-    expect(expiry(await auditStage(`https://${AUDITED}/`, probe, { error_days: 25 }))?.status).toBe("fail");
+    expect(expiry(await auditStage(`https://${AUDITED}/`, probe))?.status).toBe("pass");
+    expect(expiry(await auditStage(`https://${AUDITED}/`, probe, { warn_days: 30, error_days: 14 }))?.status).toBe("warn");
+    expect(expiry(await auditStage(`https://${AUDITED}/`, probe, { warn_days: 30, error_days: 25 }))?.status).toBe("fail");
   });
 
   test("a valid certificate passes with issuer and expiry in the same stage", async () => {
@@ -131,7 +140,11 @@ describe("certificate expiry through the audit's rule stage", () => {
   test("a runner with no tlsProbe in its scope reports not checked", async () => {
     const checks = await auditStage(`https://${AUDITED}/`, undefined);
     expect(checks).toHaveLength(1);
-    expect(checks[0]).toMatchObject({ status: "info", value: "not-checked" });
+    expect(checks[0]).toMatchObject({
+      status: "skipped",
+      value: "not-checked",
+      skipReason: "tls-certificate-not-checked",
+    });
   });
 });
 

@@ -13,14 +13,20 @@
 // addresses unless the audited site is itself on a private network.
 //
 // Behind an HTTP proxy from the environment the crawl goes out through the
-// proxy, and a direct socket would go around it, so no handshake is made and
-// the rule says "not checked".
+// proxy, and a direct socket would go around it (#1259). So the handshake goes
+// through a CONNECT tunnel: the proxy only relays bytes, the client still does
+// TLS with the name as SNI and verifies the certificate itself. No address is
+// resolved or opened here for the target (the proxy resolves it, and applies
+// its own network policy), no direct socket is opened while a proxy applies,
+// and `NO_PROXY` is honoured. A proxy that refuses or fails the CONNECT, a
+// proxy this probe cannot speak to (an `https:` or `socks` proxy URL) and a
+// proxy that never answers make the rule say "not checked" with that reason,
+// never a pass and never a crash.
 
 import { isNonPublicHostname } from "@squirrelscan/utils/non-public-host";
 import {
   EgressRefusedError,
   memoizeResolveHost,
-  proxiedByEnvironment,
   resolveHostAddresses,
   vetEgressTarget,
   type EgressPolicy,
@@ -33,7 +39,7 @@ import {
   type TlsProbe,
   type TlsProbeFn,
 } from "@squirrelscan/utils/tls-certificate";
-import { isIP } from "node:net";
+import { connect as connectTcp, isIP, type Socket } from "node:net";
 import { connect, type TLSSocket } from "node:tls";
 
 export const TLS_PROBE_TIMEOUT_MS = 8_000;
@@ -105,16 +111,25 @@ export function createTlsProbe(options: TlsProbeOptions = {}): TlsProbeFn {
         reason: `--offline contacts only the audited host, not ${hostname}`,
       };
     }
-    if (proxiedByEnvironment()) {
-      return {
-        kind: "unavailable",
-        reason:
-          "an HTTP proxy is set in the environment, and a direct TLS connection would go around it",
-      };
-    }
     const port = target.port ?? 443;
     const timeoutMs =
       target.timeoutMs ?? options.timeoutMs ?? TLS_PROBE_TIMEOUT_MS;
+    const proxy = proxyForTarget(hostname, port);
+    if (proxy.kind === "unsupported") {
+      return {
+        kind: "unavailable",
+        reason: `${proxy.reason}, and a direct TLS connection would go around the proxy`,
+      };
+    }
+    if (proxy.kind === "proxy") {
+      return tunnelHandshake({
+        hostname,
+        port,
+        proxy: proxy.url,
+        timeoutMs,
+        ca: options.ca,
+      });
+    }
     // One budget for the lookup and the handshakes: the lookup aborts at the
     // same deadline, and each handshake gets whatever the lookup left.
     const deadline = Date.now() + timeoutMs;
@@ -258,44 +273,257 @@ function handshake(args: {
       return;
     }
     socket = open;
-    open.once("secureConnect", () => {
-      let certificate: ReturnType<typeof readPeerCertificate>;
-      try {
-        certificate = readPeerCertificate(
-          open.getPeerCertificate() as unknown as RawPeerCertificate
-        );
-      } catch (error) {
-        finish({
-          kind: "unreachable",
-          code: "BAD_CERTIFICATE",
-          message: errorText(error),
-        });
-        return;
-      }
-      if (!certificate) {
-        finish({
-          kind: "unreachable",
-          code: "NO_CERTIFICATE",
-          message: `${hostname} sent no certificate`,
-        });
-        return;
-      }
-      const trustError = authorizationErrorCode(open.authorizationError);
-      finish({
-        kind: "certificate",
-        certificate,
-        trusted: open.authorized === true,
-        ...(trustError !== undefined ? { trustError } : {}),
-      });
-    });
-    // `on`, not `once`: a second error, or one after destroy, must not go unhandled.
-    open.on("error", (error: NodeJS.ErrnoException) => {
+    readServedCertificate(open, hostname, finish);
+  });
+}
+
+/**
+ * Wait for the handshake on `open` and finish with the certificate the server
+ * sent, trusted or not: verification is done on the facts, so every served
+ * certificate is read. Shared by the direct and the tunnelled handshake.
+ */
+function readServedCertificate(
+  open: TLSSocket,
+  hostname: string,
+  finish: (result: TlsProbe) => void
+): void {
+  open.once("secureConnect", () => {
+    let certificate: ReturnType<typeof readPeerCertificate>;
+    try {
+      certificate = readPeerCertificate(
+        open.getPeerCertificate() as unknown as RawPeerCertificate
+      );
+    } catch (error) {
       finish({
         kind: "unreachable",
-        code: error.code ?? "error",
-        message: error.message,
+        code: "BAD_CERTIFICATE",
+        message: errorText(error),
       });
+      return;
+    }
+    if (!certificate) {
+      finish({
+        kind: "unreachable",
+        code: "NO_CERTIFICATE",
+        message: `${hostname} sent no certificate`,
+      });
+      return;
+    }
+    const trustError = authorizationErrorCode(open.authorizationError);
+    finish({
+      kind: "certificate",
+      certificate,
+      trusted: open.authorized === true,
+      ...(trustError !== undefined ? { trustError } : {}),
     });
+  });
+  // `on`, not `once`: a second error, or one after destroy, must not go unhandled.
+  open.on("error", (error: NodeJS.ErrnoException) => {
+    finish({
+      kind: "unreachable",
+      code: error.code ?? "error",
+      message: error.message,
+    });
+  });
+}
+
+// ── Behind an HTTP proxy (#1259) ─────────────────────────────────────────────
+
+type ProxyDecision =
+  | { kind: "direct" }
+  | { kind: "proxy"; url: URL }
+  | { kind: "unsupported"; reason: string };
+
+/** The proxy variables a TLS target consults, in the order the runtime's fetch reads them. */
+const PROXY_ENV_NAMES = [
+  "HTTPS_PROXY",
+  "https_proxy",
+  "HTTP_PROXY",
+  "http_proxy",
+] as const;
+
+/**
+ * Whether the handshake to `hostname:port` goes through an environment proxy,
+ * straight out (no proxy set, or `NO_PROXY` names the host), or cannot be made
+ * because the proxy is not one this probe speaks to. A tunnel needs an
+ * `http:` proxy URL; `https:` and `socks` proxies are reported, not guessed at.
+ */
+export function proxyForTarget(hostname: string, port: number): ProxyDecision {
+  const raw = PROXY_ENV_NAMES.map((name) =>
+    (process.env[name] ?? "").trim()
+  ).find((value) => value !== "");
+  if (raw === undefined) return { kind: "direct" };
+  if (noProxyMatches(hostname, port)) return { kind: "direct" };
+  let url: URL;
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `http://${raw}`);
+  } catch {
+    return {
+      kind: "unsupported",
+      reason:
+        "an HTTP proxy is set in the environment but its URL is not valid",
+    };
+  }
+  if (url.protocol !== "http:") {
+    return {
+      kind: "unsupported",
+      reason: `a ${url.protocol.replace(/:$/, "")} proxy is set in the environment and this check only tunnels through an http proxy`,
+    };
+  }
+  return { kind: "proxy", url };
+}
+
+/**
+ * `NO_PROXY` / `no_proxy`: a comma list of `*`, a host, a `.suffix` or `*.suffix`
+ * (all subdomains), each with an optional `:port`. A host entry also covers its
+ * subdomains, as curl and the runtime read it.
+ */
+function noProxyMatches(hostname: string, port: number): boolean {
+  const list = (process.env.NO_PROXY ?? process.env.no_proxy ?? "").trim();
+  if (list === "") return false;
+  const host = hostname.toLowerCase().replace(/\.$/, "");
+  for (const rawEntry of list.split(",")) {
+    let entry = rawEntry.trim().toLowerCase();
+    if (entry === "") continue;
+    if (entry === "*") return true;
+    let entryPort: number | undefined;
+    const portMatch = /^(.*):(\d{1,5})$/.exec(entry);
+    if (
+      portMatch?.[1] !== undefined &&
+      portMatch[2] !== undefined &&
+      isIP(entry) === 0
+    ) {
+      entry = portMatch[1];
+      entryPort = Number(portMatch[2]);
+    }
+    if (entryPort !== undefined && entryPort !== port) continue;
+    entry = entry.replace(/^\*?\./, "").replace(/^\[|\]$/g, "");
+    if (entry === "") continue;
+    if (host === entry || host.endsWith(`.${entry}`)) return true;
+  }
+  return false;
+}
+
+/** Longest CONNECT reply head read before the proxy is called broken. */
+const MAX_CONNECT_REPLY_BYTES = 8_192;
+
+/**
+ * TLS handshake with `hostname:port` through a CONNECT tunnel on `proxy`. The
+ * one deadline covers the proxy connection, the CONNECT and the handshake. Never
+ * throws: every failure is an `unreachable` result with a `PROXY_*` code naming
+ * the step, so the rule reports "not checked" with that reason.
+ */
+function tunnelHandshake(args: {
+  hostname: string;
+  port: number;
+  proxy: URL;
+  timeoutMs: number;
+  ca?: string;
+}): Promise<TlsProbe> {
+  const { hostname, port, proxy, timeoutMs, ca } = args;
+  const proxyName = `${proxy.hostname}:${proxy.port || "80"}`;
+  return new Promise<TlsProbe>((resolve) => {
+    let raw: Socket | undefined;
+    let secure: TLSSocket | undefined;
+    let settled = false;
+    const finish = (result: TlsProbe) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      secure?.destroy();
+      raw?.destroy();
+      resolve(result);
+    };
+    const fail = (code: string, message: string) =>
+      finish({ kind: "unreachable", code, message });
+    const timer = setTimeout(
+      () =>
+        fail(
+          "PROXY_TIMEOUT",
+          `no TLS handshake with ${hostname} through the proxy ${proxyName} within ${timeoutMs}ms`
+        ),
+      timeoutMs
+    );
+
+    const authority =
+      isIP(hostname) === 6 ? `[${hostname}]:${port}` : `${hostname}:${port}`;
+    const credentials =
+      proxy.username !== ""
+        ? `Proxy-Authorization: Basic ${Buffer.from(`${decodeURIComponent(proxy.username)}:${decodeURIComponent(proxy.password)}`).toString("base64")}\r\n`
+        : "";
+    const socket = connectTcp({
+      host: proxy.hostname.replace(/^\[|\]$/g, ""),
+      port: Number(proxy.port || 80),
+    });
+    raw = socket;
+    socket.on("error", (error: NodeJS.ErrnoException) => {
+      if (secure) return; // the TLS layer reports its own errors
+      fail(
+        "PROXY_UNREACHABLE",
+        `the proxy ${proxyName} could not be reached: ${error.code ?? error.message}`
+      );
+    });
+    socket.once("connect", () => {
+      socket.write(
+        `CONNECT ${authority} HTTP/1.1\r\nHost: ${authority}\r\n${credentials}Proxy-Connection: keep-alive\r\n\r\n`
+      );
+    });
+
+    let head = "";
+    const onData = (chunk: Buffer) => {
+      head += chunk.toString("latin1");
+      const end = head.indexOf("\r\n\r\n");
+      if (end === -1) {
+        if (head.length > MAX_CONNECT_REPLY_BYTES) {
+          fail(
+            "PROXY_BAD_REPLY",
+            `the proxy ${proxyName} sent an unreadable answer to CONNECT`
+          );
+        }
+        return;
+      }
+      socket.off("data", onData);
+      const status = /^HTTP\/1\.[01] (\d{3})/.exec(head);
+      if (!status) {
+        fail(
+          "PROXY_BAD_REPLY",
+          `the proxy ${proxyName} sent an unreadable answer to CONNECT`
+        );
+        return;
+      }
+      const code = Number(status[1]);
+      if (code < 200 || code > 299) {
+        fail(
+          `PROXY_CONNECT_${code}`,
+          `the proxy ${proxyName} refused CONNECT to ${authority} with status ${code}`
+        );
+        return;
+      }
+      // Bytes after the reply head would belong to the tunnel; a proxy sends none before TLS.
+      if (head.length > end + 4) {
+        fail(
+          "PROXY_BAD_REPLY",
+          `the proxy ${proxyName} sent data before the TLS handshake`
+        );
+        return;
+      }
+      let opened: TLSSocket;
+      try {
+        opened = connect({
+          socket,
+          // SNI and verification both use the name; an IP literal has no SNI name.
+          ...(isIP(hostname) === 0 ? { servername: hostname } : {}),
+          rejectUnauthorized: false,
+          ...(ca !== undefined ? { ca } : {}),
+        });
+      } catch (error) {
+        fail("PROXY_TLS_ERROR", errorText(error));
+        return;
+      }
+      secure = opened;
+      readServedCertificate(opened, hostname, finish);
+    };
+    socket.on("data", onData);
   });
 }
 
