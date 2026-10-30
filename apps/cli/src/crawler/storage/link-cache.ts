@@ -2,6 +2,10 @@
 // Stores external link check results across all site audits
 // Location: ~/.squirrel/link-cache.db
 
+import {
+  OWNER_ONLY_DIR_MODE,
+  restrictToOwner,
+} from "@squirrelscan/crawler/file-mode";
 import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
@@ -65,9 +69,10 @@ export class LinkCacheStorage {
       // Ensure directory exists
       const dir = dirname(this.dbPath);
       if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
+        mkdirSync(dir, { recursive: true, mode: OWNER_ONLY_DIR_MODE });
       }
 
+      restrictToOwner(this.dbPath);
       this.db = new Database(this.dbPath);
       this.db.run("PRAGMA journal_mode = WAL");
       this.db.run("PRAGMA synchronous = NORMAL");

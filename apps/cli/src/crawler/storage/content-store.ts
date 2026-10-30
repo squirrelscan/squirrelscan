@@ -7,7 +7,10 @@
 // age out under the size cap like any other.
 
 import { parseByteSize } from "@squirrelscan/config";
-import { restrictToOwner } from "@squirrelscan/crawler/file-mode";
+import {
+  OWNER_ONLY_DIR_MODE,
+  restrictToOwner,
+} from "@squirrelscan/crawler/file-mode";
 import { Database } from "bun:sqlite";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
@@ -364,9 +367,11 @@ export class ContentStore {
     if (!this.db) {
       const dir = dirname(this.dbPath);
       if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
+        mkdirSync(dir, { recursive: true, mode: OWNER_ONLY_DIR_MODE });
       }
 
+      // Owner-only before the first open, so the file never exists wider (#1268).
+      restrictToOwner(this.dbPath);
       this.db = new Database(this.dbPath);
       this.db.run("PRAGMA journal_mode = WAL");
       this.db.run("PRAGMA wal_autocheckpoint = 1000");
@@ -374,8 +379,6 @@ export class ContentStore {
       this.db.run("PRAGMA cache_size = -32000"); // 32MB cache
       this.db.run(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS}`);
       this.db.run(SCHEMA);
-      // Crawled HTML and stored scripts: owner only (#1268).
-      restrictToOwner(this.dbPath);
     }
     return this.db;
   }
