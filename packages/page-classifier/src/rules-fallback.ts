@@ -179,8 +179,8 @@ interface SchemaDocument {
  * Page type from the page's own structured data, or from the URL for the one
  * case that is genuinely a URL rule.
  *
- * `homepage` comes from the URL here: the path being "/" is a rule that can
- * simply be stated. The artifact's page-type head also has a `homepage` class,
+ * `homepage` comes from the URL here: the path being "/" (or the root
+ * `/index.html` document, see {@link isRootPath}) is a rule that can simply be stated. The artifact's page-type head also has a `homepage` class,
  * but predict.ts never returns it for a non-root URL (selectPageType picks the
  * best other class, or falls back to this function), so no non-root page is
  * ever labelled `homepage`, from the model or from the rules.
@@ -220,13 +220,25 @@ export function rulePageType(document: SchemaDocument, url: string): PageTypeLab
   return "unknown";
 }
 
-/** True for "/" and for an empty path. Exported because predict.ts applies the
- *  homepage rule ahead of the model, not only as a fallback. */
+/**
+ * The one root document name that is the site's home page (pub#902). Measured on 628 live sites
+ * (`/` against `/index.html`, hosts that answer any path with the home page excluded, soft-404
+ * answers set aside): the page served at a single-segment `/index.html` was the same page as `/`
+ * on 94.6% of them (lower 95% bound 92.4%). `index.htm`, `index.php`, `default.*` and `home.*`
+ * did not clear 0.90 (index.php 0.79, index.htm 0.52, the rest 0.0 to 0.5), so they stay
+ * `unknown`. The match is exact and case-sensitive, like the sample.
+ */
+const ROOT_DOCUMENT_PATH = "/index.html";
+
+/** True for "/", an empty path and the root `/index.html` document. Exported because
+ *  predict.ts applies the homepage rule ahead of the model, not only as a fallback. */
 export function isRootPath(url: string): boolean {
   try {
     // The platform parser normalizes backslashes for special schemes before
-    // exposing the path, matching how browsers interpret those URLs.
-    return new URL(url).pathname === "/";
+    // exposing the path, matching how browsers interpret those URLs. The query and
+    // the fragment are not part of the path.
+    const path = new URL(url).pathname;
+    return path === "/" || path === ROOT_DOCUMENT_PATH;
   } catch {
     return false;
   }
