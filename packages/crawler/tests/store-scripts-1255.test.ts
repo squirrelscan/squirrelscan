@@ -10,6 +10,23 @@ import type { ContentStoreAdapter, StoredScriptInput } from "../src/storage";
 
 import { SQLiteStorage } from "../src/storage/sqlite";
 
+/**
+ * Heap still held after `fn` and a forced full collection, against a baseline taken
+ * after the same collection. `heapUsed` read without a collection counts garbage the
+ * runtime has not swept yet, so it moved with GC timing (#1384); after one it is what
+ * is retained. Two passes: a collection can free the finalisation-queued objects of the
+ * first.
+ */
+async function retainedHeapBytes(fn: () => Promise<unknown>): Promise<number> {
+  Bun.gc(true);
+  Bun.gc(true);
+  const before = process.memoryUsage().heapUsed;
+  await fn();
+  Bun.gc(true);
+  Bun.gc(true);
+  return process.memoryUsage().heapUsed - before;
+}
+
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
   return Effect.runPromise(eff as Effect.Effect<A, never, never>);
 }
@@ -255,18 +272,44 @@ describe("storeCrawlScripts", () => {
       bundles.push(script(`https://example.com/d${i}.js`, String.fromCharCode(97 + (i % 26)).repeat(mb5 - i), ["https://example.com/"]));
     }
     for (let i = 0; i < 20; i++) bundles.push(script(`https://example.com/c${i}.js`, bundles[0]!.content, ["https://example.com/"]));
-    const heapBefore = process.memoryUsage().heapUsed;
     const started = performance.now();
-    const summary = await run(
-      storage.storeCrawlScripts(CRAWL, bundles, { maxBytes: mb5, totalBytes: 16 * 1024 * 1024 })
-    );
+    let summary!: Awaited<ReturnType<typeof storeAll>>;
+    const storeAll = () => run(storage.storeCrawlScripts(CRAWL, bundles, { maxBytes: mb5, totalBytes: 16 * 1024 * 1024 }));
+    const retained = await retainedHeapBytes(async () => {
+      summary = await storeAll();
+    });
     const elapsed = performance.now() - started;
     expect(summary.distinct).toBe(3); // 15 MB of distinct bodies under the 16 MB cap
     expect(puts).toHaveLength(3);
     expect(summary.stored).toBe(3 + 20); // the 20 copies share the first body
     expect(elapsed).toBeLessThan(15_000);
-    // nothing is retained by the storage call itself
-    expect(process.memoryUsage().heapUsed - heapBefore).toBeLessThan(64 * 1024 * 1024);
+    // After a collection only what the (fake) store itself keeps is left: the 3 distinct
+    // bodies, 15 MB. The storage call retains none of the 200 MB it was handed.
+    expect(retained).toBeLessThan(32 * 1024 * 1024);
+  });
+
+  test("the retained-heap measure catches a store that keeps copies of the bodies (#1384)", async () => {
+    const { adapter } = fakeStore();
+    const hoard: Buffer[] = [];
+    const retaining: ContentStoreAdapter = {
+      ...adapter,
+      put(content, ...rest) {
+        // a deliberately leaky store: 8 private copies of every body it is given
+        for (let i = 0; i < 8; i++) hoard.push(Buffer.from(content));
+        return adapter.put(content, ...rest);
+      },
+    };
+    const storage = await freshStorage(retaining);
+    const mb5 = 5 * 1024 * 1024;
+    const bundles: StoredScriptInput[] = [];
+    for (let i = 0; i < 5; i++) {
+      bundles.push(script(`https://example.com/d${i}.js`, String.fromCharCode(97 + i).repeat(mb5 - i), ["https://example.com/"]));
+    }
+    const retained = await retainedHeapBytes(async () => {
+      await run(storage.storeCrawlScripts(CRAWL, bundles, { maxBytes: mb5, totalBytes: 16 * 1024 * 1024 }));
+    });
+    expect(hoard.length).toBeGreaterThan(0);
+    expect(retained).toBeGreaterThan(32 * 1024 * 1024);
   });
 
   test("a 200 that is an HTML page behind a script URL is skipped as not-javascript", async () => {
