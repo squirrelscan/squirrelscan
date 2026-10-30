@@ -232,67 +232,98 @@ const STYLES = `
     }
   `;
 
-/** Small pixel glyphs (5x5 grid, one colour) that tell the pages apart at a glance. */
+/** Small pixel glyphs (one colour) that tell the pages apart at a glance. */
 const GLYPHS = {
-  check: [
-    [0, 3],
-    [1, 4],
-    [2, 3],
-    [3, 2],
-    [4, 1],
-  ],
-  hourglass: [
-    [0, 0],
-    [1, 0],
-    [2, 0],
-    [3, 0],
-    [4, 0],
-    [1, 1],
-    [3, 1],
-    [2, 2],
-    [1, 3],
-    [3, 3],
-    [0, 4],
-    [1, 4],
-    [2, 4],
-    [3, 4],
-    [4, 4],
-  ],
-  lock: [
-    [1, 0],
-    [2, 0],
-    [3, 0],
-    [1, 1],
-    [3, 1],
-    [0, 2],
-    [1, 2],
-    [2, 2],
-    [3, 2],
-    [4, 2],
-    [0, 3],
-    [2, 3],
-    [4, 3],
-    [0, 4],
-    [1, 4],
-    [2, 4],
-    [3, 4],
-    [4, 4],
-  ],
-  dots: [
-    [0, 2],
-    [2, 2],
-    [4, 2],
-  ],
+  // A tick: short stroke down, long stroke up.
+  check: {
+    size: 7,
+    cells: [
+      [0, 3],
+      [1, 4],
+      [2, 5],
+      [3, 4],
+      [4, 3],
+      [5, 2],
+      [6, 1],
+      [0, 4],
+      [1, 5],
+      [2, 6],
+      [3, 5],
+      [4, 4],
+      [5, 3],
+      [6, 2],
+    ],
+  },
+  hourglass: {
+    size: 5,
+    cells: [
+      [0, 0],
+      [1, 0],
+      [2, 0],
+      [3, 0],
+      [4, 0],
+      [1, 1],
+      [3, 1],
+      [2, 2],
+      [1, 3],
+      [3, 3],
+      [0, 4],
+      [1, 4],
+      [2, 4],
+      [3, 4],
+      [4, 4],
+    ],
+  },
+  // A padlock: a tall narrow shackle over a solid body with a keyhole.
+  lock: {
+    size: 7,
+    cells: [
+      [2, 0],
+      [3, 0],
+      [4, 0],
+      [2, 1],
+      [4, 1],
+      [2, 2],
+      [4, 2],
+      [1, 3],
+      [2, 3],
+      [3, 3],
+      [4, 3],
+      [5, 3],
+      [1, 4],
+      [2, 4],
+      [4, 4],
+      [5, 4],
+      [1, 5],
+      [2, 5],
+      [4, 5],
+      [5, 5],
+      [1, 6],
+      [2, 6],
+      [3, 6],
+      [4, 6],
+      [5, 6],
+    ],
+  },
+  dots: {
+    size: 5,
+    cells: [
+      [0, 2],
+      [2, 2],
+      [4, 2],
+    ],
+  },
 } as const;
 
 export type CallbackGlyph = keyof typeof GLYPHS;
 
 function glyphSvg(name: CallbackGlyph): string {
-  // [column, row] cells of a 5x5 grid.
-  const rects = GLYPHS[name]
+  // [column, row] cells of a square grid, `size` cells a side.
+  const { size, cells } = GLYPHS[name];
+  const rects = cells
     .map(([x, y]) => `<rect x="${x}" y="${y}" width="1" height="1" />`)
     .join("");
-  return `<svg class="glyph" viewBox="0 0 5 5" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true" focusable="false">${rects}</svg>`;
+  return `<svg class="glyph" viewBox="0 0 ${size} ${size}" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true" focusable="false">${rects}</svg>`;
 }
 
 export interface CallbackPage {

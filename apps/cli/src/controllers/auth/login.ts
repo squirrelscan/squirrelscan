@@ -251,7 +251,7 @@ function renderCallbackPageHtml(status: SessionStatusResponse): {
     return {
       code: 410,
       html: renderCallbackShell({
-        title: "Login session already used",
+        title: "Sign-in link already used",
         glyph: "lock",
         pill: "Already used",
         problem: true,
