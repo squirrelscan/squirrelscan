@@ -17,7 +17,7 @@ The rule runs on every crawled page and counts element nodes in `<body>` only, f
 - `dom-depth`: passes with the message `DOM depth OK (N levels)` at 32 levels or fewer, and warns with `DOM depth excessive (N levels)` above that. `<body>` counts as level 1.
 - `dom-max-children`: passes with the message `Max children per element OK (N)` when no element has more than 60 direct children, and warns with `Element with N children found` above that, naming the largest count on the page. `<body>` itself counts as an element here, so a body with 61 direct children warns.
 
-Instead of all three, a single `dom-total-nodes` check is emitted as skipped with the message `No document root found` when the parse produced no root element (empty, text-only or comment-only HTML), or `No body element found` when the document has no `<body>`. A page with no parsed document emits nothing at all.
+A page with no markup (empty, text-only or comment-only HTML) is measured as an empty body: 0 nodes, so all three checks pass. Instead of all three, a single `dom-total-nodes` check is emitted as skipped with the message `No body element found` when the document has no `<body>`. A page with no parsed document emits nothing at all.
 
 The counts are taken from the HTML the crawl fetched. On a [browser-rendered](/guides/browser-rendering) audit that is the hydrated DOM, and on a raw crawl it is the markup the server sent, which can be far smaller on a client-rendered page.
 

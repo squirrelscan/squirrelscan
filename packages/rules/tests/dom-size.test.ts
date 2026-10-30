@@ -68,18 +68,15 @@ describe("perf/dom-size dom-max-children", () => {
   });
 });
 
-describe("perf/dom-size on a document with no root", () => {
-  test.each(["", "just text", "<!-- only a comment -->"])("%j is skipped, not a rule error", (html) => {
+// #1270: a page with no markup parses to an empty shell, so it measures as an
+// empty body instead of being skipped or throwing.
+describe("perf/dom-size on a document with no markup", () => {
+  test.each(["", "just text", "<!-- only a comment -->"])("%j measures an empty body", (html) => {
     const result = domSizeRule.run(makeCtx(html));
     if (result instanceof Promise) throw new Error("unexpected async rule");
-    expect(result.checks).toEqual([
-      {
-        name: "dom-total-nodes",
-        status: "skipped",
-        message: "No document root found",
-        skipReason: "Invalid document structure",
-      },
-    ]);
+    const total = result.checks.find((c) => c.name === "dom-total-nodes");
+    expect(total).toMatchObject({ status: "pass", value: 0 });
+    expect(result.checks.some((c) => c.message?.startsWith("Rule error"))).toBe(false);
   });
 });
 

@@ -628,12 +628,13 @@ describe("degenerate documents", () => {
     });
   }
 
-  test("a document with no documentElement yields an empty result, not an exception", () => {
-    // linkedom's `body` getter throws here rather than returning null, which is
-    // what crashed the G3 run over stored crawls.
+  test("a page with no markup yields no candidates, not an exception", () => {
+    // linkedom's `body` getter threw on a document with no root, which is what
+    // crashed the G3 run over stored crawls. parseHTML now returns an empty
+    // `<html><head></head><body>` shell for it (#1270): the root is the only element.
     const out = featurizePage("", URL);
     expect(out.nodes).toEqual([]);
-    expect(out.page.elementCount).toBe(0);
+    expect(out.page.elementCount).toBe(1);
     expect(out.page.divSoup).toBe(true);
   });
 });

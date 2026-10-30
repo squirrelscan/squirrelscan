@@ -113,9 +113,41 @@ describe("#1276: hostile ids and roles do not break the selector rules", () => {
   });
 });
 
-// Guard: a selector string with a template substitution inside an attribute
-// value (`[name="${x}"]`, `[for='${x}']`) is how #1276 happened. Use
+// Guard: a selector built with a template substitution is how #1276 happened.
+// Every selector call (querySelector, querySelectorAll, closest, matches and the
+// noscript-aware helper) is read across lines, and a call that passes a variable
+// is traced to the template the variable was assigned. Any `${...}` in it fails
+// unless it is one of the known constant interpolations below: values from a
+// fixed table in the rule itself, never from the page. Page values go through
 // src/shared/attribute-lookup.ts instead.
+const CONSTANT_SELECTORS: Array<{ file: string; snippet: string }> = [
+  { file: "security/form-captcha.ts", snippet: "`.${className}`" },
+  { file: "security/form-captcha.ts", snippet: "`#${fieldName}`" },
+  { file: "a11y/duplicate-id-aria.ts", snippet: "`[${attr}]`" },
+  // The attribute NAME, a literal at every call site; the value is compared as a string.
+  { file: "shared/attribute-lookup.ts", snippet: "`[${attr}]`" },
+  { file: "security/mixed-content.ts", snippet: "`${selector}[${attribute}]`" },
+];
+
+const SELECTOR_CALL = /\b(querySelectorAll|querySelector|closest|matches|querySelectorAllOutsideNoscript)\(/g;
+
+/** The text of the call's first argument, from just after `(` to the top-level `,` or the closing `)`. */
+function firstArgument(source: string, open: number): string {
+  let depth = 0;
+  let template = false;
+  for (let i = open; i < source.length; i++) {
+    const c = source[i];
+    if (c === "`") template = !template;
+    if (template) continue;
+    if (c === "(" || c === "[" || c === "{") depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      if (depth === 0) return source.slice(open, i);
+      depth--;
+    } else if (c === "," && depth === 0) return source.slice(open, i);
+  }
+  return source.slice(open);
+}
+
 describe("#1276 guard", () => {
   const SRC = join(import.meta.dir, "..", "src");
   const files: string[] = [];
@@ -128,13 +160,40 @@ describe("#1276 guard", () => {
   };
   walk(SRC);
 
-  test("no selector interpolates a value into an attribute match", () => {
-    const pattern = /\[[\w:-]+[~|^$*]?=["']?\$\{/;
-    const offenders = files.filter((f) =>
-      readFileSync(f, "utf8")
-        .split("\n")
-        .some((line) => /(querySelector(All)?|closest|matches|OutsideNoscript)\(/.test(line) && pattern.test(line))
-    );
-    expect(offenders.map((f) => f.slice(SRC.length + 1))).toEqual([]);
+  /** Every selector argument in `source`, with a bare variable replaced by what it was assigned. */
+  function selectorArguments(source: string): string[] {
+    const found: string[] = [];
+    for (const match of source.matchAll(SELECTOR_CALL)) {
+      let arg = firstArgument(source, match.index! + match[0].length).trim();
+      if (/^[A-Za-z_$][\w$]*$/.test(arg)) {
+        const assigned = new RegExp("\\b" + arg.replace(/\$/g, "\\$") + "\\s*=\\s*(`[^`]*`)", "g");
+        for (const a of source.matchAll(assigned)) found.push(a[1]!);
+        arg = "";
+      }
+      found.push(arg);
+    }
+    return found;
+  }
+
+  test("no selector interpolates a value, except the known constants", () => {
+    const offenders: string[] = [];
+    for (const file of files) {
+      const rel = file.slice(SRC.length + 1);
+      for (const arg of selectorArguments(readFileSync(file, "utf8"))) {
+        if (!arg.includes("${")) continue;
+        if (CONSTANT_SELECTORS.some((c) => c.file === rel && arg.includes(c.snippet))) continue;
+        offenders.push(`${rel}: ${arg.replace(/\s+/g, " ").slice(0, 80)}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test("the guard sees multi-line calls, variables and #/. selectors", () => {
+    expect(
+      selectorArguments("doc.querySelector(\n  `label[for='${id}']`\n)").some((a) => a.includes("${"))
+    ).toBe(true);
+    expect(selectorArguments("const sel = `#${id}`;\ndoc.querySelector(sel);").some((a) => a.includes("${"))).toBe(true);
+    expect(selectorArguments("el.closest(`.${cls}`)").some((a) => a.includes("${"))).toBe(true);
+    expect(selectorArguments('doc.querySelectorAll("a[href]")').some((a) => a.includes("${"))).toBe(false);
   });
 });
