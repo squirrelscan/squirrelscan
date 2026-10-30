@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **The docs and `--offline` help now keep offline and passive apart.** `--offline` is the network scope (no cloud, no other site) and `--passive` turns the probe rules off; they are independent, so `-C surface --offline` still sends the GraphQL and form-action probe requests to the audited site. A new "Offline and passive are separate" section in the audit docs has the four combinations and says exactly what a passive offline run still sends (the 28 discovery probes unless `--disable-discovery-probes`, internal link checks, sitemap path guesses). The passive banner now reads `passive · no probe rules`. Behaviour is unchanged. (#1225)
+
 ## v0.0.143 (2026-10-30)
 
 Two new performance rules, `perf/content-in-js-bundle` and `perf/framework-data-payload`, find page content shipped inside JavaScript. Page weight now measures the srcset candidate a browser downloads and leaves lazy images out, `squirrel auth login` opens a branded page, parallel audits no longer fail with a locked database, and `store_scripts` no longer changes what an audit finds. A start URL the audit cannot run on is refused before any request, `security/tls-certificate` shows as not checked when it cannot run, and the about, contact and privacy rules take a `paths` option.

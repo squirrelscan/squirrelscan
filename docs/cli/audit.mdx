@@ -51,7 +51,7 @@ squirrel audit <url> [options]
 | `--render` | | Force cloud browser rendering for this run: alias of `--render-mode all` ([uses credits](/guides/browser-rendering); requires login) | auto |
 | `--render-mode` | | Render strategy: `off` (HTTP only) · `auto` (render only client-rendered pages) · `all` (render every page). Overrides `[cloud].render` | the level's: `auto` for quick, `all` for surface and full |
 | `--http` | | Force plain HTTP for this run: alias of `--render-mode off` (never render in the cloud; pages cost the same either way) | auto |
-| `--offline` | | Run fully offline: skip cloud features, publishing, and telemetry. No request goes to a host outside the audited site (its host, its `www` or apex twin, `[project] domains` and their subdomains): external links, third-party scripts, stylesheets and fonts, sitemaps on another site, and redirects to another site are not requested. Internal link targets still are checked. See [Fully offline audit](#fully-offline-audit) | `false` |
+| `--offline` | | Run offline: skip cloud features, publishing, and telemetry. No request goes to a host outside the audited site (its host, its `www` or apex twin, `[project] domains` and their subdomains): external links, third-party scripts, stylesheets and fonts, sitemaps on another site, and redirects to another site are not requested. Internal link targets still are checked. It does not change probing: `-C surface --offline` still sends the site probes unless you add `--passive`. See [Offline and passive are separate](#offline-and-passive-are-separate) | `false` |
 | `--external-links` | | Check links to other sites this run, even where `[external_links] enabled = false` turns them off. Cannot be combined with `--offline` or `--no-external-links` | the level's: on at every level |
 | `--no-external-links` | | Do not check links to other sites this run. The report shows them as **Not checked** | the level's |
 | `--no-internal-links` | | Do not status-check internal link targets the crawl did not fetch (one `HEAD` request each, on by default at every level). See [Link checking defaults](/rules/links#link-checking-defaults) | checked |
@@ -101,6 +101,56 @@ and lets you top up.
 See [Audit levels](/guides/audit-levels) for every setting of every level, custom
 levels, and the plan and credit limits.
 
+### Offline and passive are separate
+
+Two settings control what an audit sends, and they are independent:
+
+- **Offline or online** is the network scope: does the audit use the cloud and
+  other sites? `--offline` says no. It means no cloud analysis, rendering or
+  publishing, no telemetry, and no check of links, scripts or sitemaps on other
+  sites. The one request that can leave the audited site is a start URL redirect
+  hop, which is how the audit finds where it starts (see
+  [Start URLs that redirect](#start-urls-that-redirect)).
+- **Passive or active** is how hard the audited site is poked: the
+  [probing intensity](#probing-intensity). `--passive` (or `--probe passive`)
+  turns the probe rules off. The probe level comes from `--probe` or its
+  shortcuts (`--passive`, `--aggressive`), then `[security] probe` in the config,
+  then the audit level, and `--offline` does not change it. The run banner's
+  `Probing` line shows the level in effect.
+
+| | Passive | Active (the default at `surface` and `full`) |
+|---|---|---|
+| **Offline** (`--offline`) | The crawl of the audited site, no cloud, no other host. No probe rules, but the 28 [discovery probes](/configuration/crawler#discovery-probes) still run unless disabled | The same, plus the probe rules: GraphQL `GET` requests and, for form actions, `HEAD` then `GET`, all to the audited site |
+| **Online** (signed in or out) | The crawl, plus other sites (external link checks) and, signed in, the cloud: rendering, cloud checks and publishing. No probe rules, discovery probes still run unless disabled | Everything above, plus the probe rules |
+
+So `squirrel audit <url> -C surface --offline` is offline and **active**: it keeps
+off the cloud and off other sites, and it still sends the probe rules (for example
+`GET /graphql?query={__schema{types{name}}}`) to the audited site. Add `--passive`
+to stop them.
+
+The [discovery probes](/configuration/crawler#discovery-probes) (`llms.txt`,
+`/.well-known/*` and so on, 28 requests) are a third dial, and it only goes one
+way. A `passive` run still sends them unless you also pass
+`--disable-discovery-probes`; but `--disable-discovery-probes` does force probing
+to `passive`, so `-C surface --offline --disable-discovery-probes` runs passive.
+To keep the traffic to the crawl itself, with no probes and no cloud:
+
+```bash
+squirrel audit https://example.com --offline --passive --disable-discovery-probes
+```
+
+That still sends the crawl's own requests: the pages and their scripts,
+`robots.txt`, the sitemap path guesses, a `HEAD` for each internal link target
+the crawl did not fetch, the soft-404 re-check and the AI agent access check
+where they apply, and start URL redirect hops. On a small test site it was 17
+requests, all of them pages, `robots.txt`, sitemap paths and scripts.
+
+The banner's `Probing` line (for example `Probing   active · budget 30s`) shows
+what the run will do before it starts.
+
+`robots.txt`, sitemaps, the pages themselves and the checks of internal link
+targets are the crawl, and still run.
+
 ### Probing intensity
 
 Probing intensity says how hard each page is poked beyond what the crawl
@@ -109,7 +159,7 @@ the page budget and rendering.
 
 | Level | What it sends |
 |-------|---------------|
-| `passive` | No request beyond the crawl |
+| `passive` | No probe rules, and nothing beyond the crawl itself except the 28 [discovery probes](/configuration/crawler#discovery-probes), which `--disable-discovery-probes` turns off |
 | `active` | Quiet probes: a handful of requests that look like normal traffic |
 | `aggressive` | Loud probes: many requests and many 404s, which can trip a WAF |
 
@@ -370,6 +420,9 @@ squirrel audit https://example.com --offline
 
 `--offline` cannot be combined with `--publish` or `--render` (both require
 cloud access and login).
+
+`--offline` does not imply `--passive`: see
+[Offline and passive are separate](#offline-and-passive-are-separate).
 
 ### Ephemeral runs
 

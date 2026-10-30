@@ -925,7 +925,7 @@ export function probeBannerLines(probe: {
   budgetMs: number;
 }): { value: string; note?: string } {
   if (probe.level === "passive") {
-    return { value: "passive · no requests beyond the crawl" };
+    return { value: "passive · no probe rules" };
   }
   const value = `${probe.level} · budget ${formatProbeBudget(probe.budgetMs)}`;
   if (probe.level !== "aggressive") return { value };
@@ -1162,7 +1162,7 @@ export const audit = defineCommand({
     offline: {
       type: "boolean",
       description:
-        "Run fully offline: skip cloud features, publishing, telemetry, and any request to another site",
+        "Run offline: skip cloud features, publishing, telemetry, and any request to another site. Separate from probing: it does not imply --passive, so add --passive for no probe requests to the audited site",
     },
     // repo#2729: internal and external link checks are on at every level
     // (pub#823). --external-links turns external ones back on over
@@ -1229,7 +1229,7 @@ export const audit = defineCommand({
       type: "string",
       alias: "P",
       description:
-        "Probing intensity: passive (no requests beyond the crawl) | active (quiet probes that look like normal traffic) | aggressive (loud probes, can trip a WAF). Default: active if signed in, passive if not. Overrides [security] probe",
+        "Probing intensity: passive (no probe rules; the discovery probes still run unless disabled) | active (quiet probes that look like normal traffic) | aggressive (loud probes, can trip a WAF). Default: the audit level's (passive for quick, active for surface and full). Overrides [security] probe",
     },
     passive: {
       type: "boolean",
