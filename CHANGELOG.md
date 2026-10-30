@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- **Rules read the page type: contact and legal pages are no longer reported as thin or too short.** A contact page or a privacy policy is short on purpose, and nobody searches for it by its title. When the page classifier's model labels a page `contact` or `legal` with a confidence of at least 0.9 (the bar `schema/expected-type` already uses), `content/word-count` skips it, `core/meta-title` and `core/meta-description` skip their "too short" finding, and `content/keyword-stuffing` skips a `legal` page, whose text repeats its own terms by nature. Each skipped page gets one skipped check with `details.skippedByType` and `details.pageType`, which does not appear as an issue, does not count toward the score and resolves an earlier finding on the page. "Too long", a missing title or description, and every other rule are unchanged, and a rules-fallback label, a model label below 0.9 or a page the classifier did not run on is judged as before. On four small sites audited before and after, findings on contact and legal pages from these four rules dropped from 15 to 1 (a "too long" description) and the 133 findings on every other page did not change. `core/h1`, `content/reading-level` and the E-E-A-T rules are unchanged, with the reasons in the rules docs. See [pages short by nature](https://docs.squirrelscan.com/rules#pages-short-by-nature). (#841)
+
 ### Added
 
 - **`squirrel crawl --disable-discovery-probes`** sends no discovery probe and overrides `[crawler] disable_discovery_probes`, like `squirrel audit`. (#422)

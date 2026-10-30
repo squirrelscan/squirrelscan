@@ -157,6 +157,23 @@ A site-wide `noindex` usually means the audit is checking a site before launch, 
 
 **Everything else still runs.** Accessibility, security and performance rules, and every link rule other than orphan pages, check noindex pages as usual, and so do [core/robots-meta](/rules/core/robots-meta), [crawl/indexability](/rules/crawl/indexability) and [crawl/all-noindex-pages](/rules/crawl/all-noindex-pages), which report the noindex pages themselves.
 
+## Pages short by nature
+
+A contact page or a privacy policy is short on purpose, and nobody searches for it by its title. When the page classifier's model labels a page `contact` or `legal` with a confidence of at least 0.9, four rules leave it alone:
+
+| Rule | Skips | Page types |
+|---|---|---|
+| [content/word-count](/rules/content/word-count) | the whole check | `contact`, `legal` |
+| [core/meta-title](/rules/core/meta-title) | the "too short" finding only | `contact`, `legal` |
+| [core/meta-description](/rules/core/meta-description) | the "too short" finding only | `contact`, `legal` |
+| [content/keyword-stuffing](/rules/content/keyword-stuffing) | the whole check | `legal` |
+
+Each skipped page gets one skipped check, such as `Skipped: Word Count is not judged on a contact page`, with `details.pageType` and `details.skippedByType`. It is a "does not apply" skip: it does not appear in the issue list, is not counted as passed, warning or failed, leaves the [health score](/reports#health-score) alone, and resolves a finding an earlier audit reported on the page. A "too long" title or description, a missing title or description, and every other rule still apply to these pages.
+
+**Which labels count.** Only a model label at or above 0.9, the same bar as [schema/expected-type](/rules/schema/expected-type). A label from the rules fallback is read from the page's own structured data, so it never relaxes a verdict, and neither does a model label below 0.9 or a page the classifier did not run on (`--no-classifier`, or an audit from before the classifier). Those pages are judged as before.
+
+**Left as they are, with the reason.** [core/h1](/rules/core/h1) (a page without an H1 is a finding whatever its type), [content/reading-level](/rules/content/reading-level) (it judges the text for the reader, and a legal page is hard to read for its readers too), and the [E-E-A-T](/rules/eeat) rules (they are site-wide questions, such as whether any page has an author, not a per-page length floor).
+
 ## Rule time budget
 
 Rules read content the audited site controls, so a page can be built to make a pattern match very slowly. The first line of defence is the rules themselves: their patterns are written to avoid catastrophic backtracking. The time budget is the backstop for whatever still gets through, such as a rule repeating a slow match across thousands of elements or pages.

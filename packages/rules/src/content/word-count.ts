@@ -31,6 +31,8 @@ export const wordCountRule: Rule = {
     verdictScope: "page",
     // A page kept out of the search index is out of scope for a thin-content finding (pub#841).
     skipOnNoindex: true,
+    // A contact or legal page is short on purpose (pub#841).
+    skipOnPageType: ["contact", "legal"],
     severity: "warning",
     weight: 4,
     optionsSchema,

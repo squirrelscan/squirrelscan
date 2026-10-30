@@ -501,6 +501,8 @@ export const keywordStuffingRule: Rule = {
     category: "content",
     scope: "page",
     verdictScope: "page",
+    // Legal text repeats its own terms by nature ("data", "information", "service") (pub#841).
+    skipOnPageType: ["legal"],
     severity: "warning",
     weight: 5,
     optionsSchema,

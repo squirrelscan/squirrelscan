@@ -247,6 +247,15 @@ export interface RuleMeta {
    */
   skipOnNoindex?: boolean;
   /**
+   * Page-scope rules that judge a page the way a searcher meets it (a thin-content floor, a
+   * keyword-density verdict) list the page types they do not apply to, and the runner emits a
+   * visible `skipped` check (reason "not-applicable", counted in `details.skippedByType`) instead of
+   * running them. Only a MODEL label at or above `PAGE_TYPE_TRUST_CONFIDENCE` counts; a rules
+   * label never relaxes a verdict (pub#841). Keep the list to types where the finding is wrong
+   * by nature, such as a contact or legal page being short.
+   */
+  skipOnPageType?: readonly string[];
+  /**
    * Transport and delivery rules set this so the runner emits a visible
    * `skipped` check (reason "private-target") instead of running them when the
    * audited host is a local or private-network address: localhost, `*.local`,
