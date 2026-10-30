@@ -139,7 +139,8 @@ describe("security/cookie-flags: platform cookies (#1378)", () => {
     const info = checksByName(checks, "cookie-httponly-platform");
     expect(info?.status).toBe("info");
     expect(info?.message).toContain("Lovable");
-    expect(info?.message).toContain("https://docs.lovable.dev/");
+    expect(info?.message).toContain("__dpl");
+    expect(info?.message).toContain("does not document");
     expect(info?.items?.[0]?.id).toBe("__dpl");
     expect(checks.some((c) => c.status === "warn" || c.status === "fail")).toBe(false);
   });
@@ -174,13 +175,14 @@ describe("security/cookie-flags: platform cookies (#1378)", () => {
     expect(checks[0]?.status).toBe("pass");
   });
 
-  test("the exempt names live in one list, each with a platform and docs link", async () => {
+  test("the exempt names live in one list, each with a platform, docs link and evidence", async () => {
     const { PLATFORM_COOKIES } = await import("../src/security/platform-cookies");
     expect(PLATFORM_COOKIES.length).toBeGreaterThan(0);
     for (const c of PLATFORM_COOKIES) {
       expect(c.name.length).toBeGreaterThan(0);
       expect(c.platform.length).toBeGreaterThan(0);
       expect(c.docs).toMatch(/^https:\/\//);
+      expect(c.evidence.length).toBeGreaterThan(0);
     }
   });
 

@@ -1,18 +1,27 @@
-// Cookies a hosting platform sets on every site it serves, for routing or
-// deployment pinning. The site owner didn't set them and can't change their
-// flags, and none carries a secret, so a missing HttpOnly on one is not an XSS
-// cookie-theft risk. The one list security/cookie-flags reads (#1378).
+// Cookies a hosting platform's sites carry that the site owner didn't set and
+// can't change the flags of, with no session in them, so a missing HttpOnly on
+// one is not an XSS cookie-theft risk. The one list security/cookie-flags reads
+// (#1378). An entry is added on evidence, recorded in `evidence`; the platforms
+// do not always document their cookies.
 
 export interface PlatformCookie {
   /** Exact cookie name (case-sensitive, as cookie names are). */
   name: string;
   platform: string;
-  /** The platform's docs. */
+  /** The platform's docs (home). It need not document this cookie: see `evidence`. */
   docs: string;
+  /** Why the cookie is listed. */
+  evidence: string;
 }
 
 export const PLATFORM_COOKIES: readonly PlatformCookie[] = [
-  { name: "__dpl", platform: "Lovable", docs: "https://docs.lovable.dev/" },
+  {
+    name: "__dpl",
+    platform: "Lovable",
+    docs: "https://docs.lovable.dev/",
+    evidence:
+      "on 1,013 of 1,066 Lovable-hosted sites in a 35k-audit batch (v0.0.141), the only cookie they set; not documented by Lovable (#1378)",
+  },
 ];
 
 const BY_NAME = new Map(PLATFORM_COOKIES.map((c) => [c.name, c]));
