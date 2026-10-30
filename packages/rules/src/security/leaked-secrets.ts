@@ -189,6 +189,37 @@ export const FAST_PATTERNS: FastPattern[] = [
     keywords: ["pplx-"],
     confidence: "high",
   },
+  {
+    // `sk-or-v1-` + 64 hex. The OpenAI patterns stop at the first hyphen after
+    // `sk-or`, so none of them matches it (#1309).
+    name: "OpenRouter API Key",
+    pattern: /sk-or-v1-[a-f0-9]{64}/g,
+    keywords: ["sk-or-v1-"],
+    confidence: "high",
+  },
+  {
+    // `csk-` + 48 lowercase alphanumerics. The legacy OpenAI `sk-` pattern
+    // never saw it: its prefix sits inside the word `csk-` (#1309).
+    name: "Cerebras API Key",
+    pattern: /csk-[a-z0-9]{40,}/g,
+    keywords: ["csk-"],
+    confidence: "high",
+  },
+  {
+    name: "NVIDIA API Key",
+    pattern: /nvapi-[A-Za-z0-9_-]{60,}/g,
+    keywords: ["nvapi-"],
+    confidence: "high",
+  },
+  {
+    // `fw_` is a short prefix and also the start of identifiers
+    // (`fw_config_name`), so the tail has to look drawn at random: upper and
+    // lower case and a digit, no separator.
+    name: "Fireworks AI API Key",
+    pattern: /(?<![A-Za-z0-9_-])fw_(?=[A-Za-z0-9]{0,47}[A-Z])(?=[A-Za-z0-9]{0,47}[a-z])(?=[A-Za-z0-9]{0,47}[0-9])[A-Za-z0-9]{24,48}/g,
+    keywords: ["fw_"],
+    confidence: "medium",
+  },
 
   // Database/Backend Services
   {
@@ -208,7 +239,7 @@ export const FAST_PATTERNS: FastPattern[] = [
     confidence: "medium",
   },
   {
-    name: "Supabase Service Role Key",
+    name: "Supabase Personal Access Token",
     pattern: /sbp_[a-f0-9]{40}/g,
     keywords: ["sbp_"],
     confidence: "high",
@@ -290,6 +321,23 @@ export const FAST_PATTERNS: FastPattern[] = [
     publicByDesign: true,
   },
   {
+    // A restricted key carries the permissions its owner gave it; live ones
+    // act on a real account (#1309).
+    name: "Stripe Restricted Key",
+    pattern: /rk_live_[0-9a-zA-Z]{24,}/g,
+    keywords: ["rk_live_"],
+    confidence: "high",
+  },
+  {
+    // Admin API access token (`shpat_`), shared-secret and private-app
+    // passwords (`shpss_`, `shppa_`) and custom-app tokens (`shpca_`): 32 hex
+    // after the prefix, all of them server-side credentials (#1309).
+    name: "Shopify Admin API Token",
+    pattern: /shp(?:at|ss|ca|pa)_[a-fA-F0-9]{32}/g,
+    keywords: ["shpat_", "shpss_", "shpca_", "shppa_"],
+    confidence: "high",
+  },
+  {
     name: "Square Access Token",
     pattern: /sq0atp-[0-9A-Za-z_-]{22}/g,
     keywords: ["sq0atp-"],
@@ -303,6 +351,14 @@ export const FAST_PATTERNS: FastPattern[] = [
   },
 
   // Cloud Providers
+  {
+    // `GOCSPX-` + 28 characters: the secret half of a Google OAuth client,
+    // which the client ID beside it (public) never is (#1309).
+    name: "Google OAuth Client Secret",
+    pattern: /GOCSPX-[A-Za-z0-9_-]{28}/g,
+    keywords: ["gocspx-"],
+    confidence: "high",
+  },
   {
     name: "AWS Access Key ID",
     pattern: /(A3T[A-Z0-9]|AKIA|AGPA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}/g,
@@ -1490,7 +1546,10 @@ const SERVER_ONLY_TYPES: ReadonlySet<string> = new Set([
   "PostgreSQL Connection String",
   "MySQL Connection String",
   "Redis Connection String",
-  "Supabase Service Role Key",
+  "Supabase Personal Access Token",
+  "Shopify Admin API Token",
+  "Stripe Restricted Key",
+  "Google OAuth Client Secret",
   "Supabase Secret Key",
   "Supabase Service Role JWT",
   "Stripe Live Key",
