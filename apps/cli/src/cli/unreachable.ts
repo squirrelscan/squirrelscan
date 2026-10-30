@@ -22,6 +22,13 @@ export interface UnreachableOutcome {
   message: string;
 }
 
+/** `reason` without trailing spaces and sentence punctuation, so a message can end it with its own full stop. */
+function trimTrailingPunctuation(reason: string): string {
+  let end = reason.length;
+  while (end > 0 && " \t\r\n.?!:;,".includes(reason[end - 1]!)) end--;
+  return reason.slice(0, end);
+}
+
 /** The outcome for a start URL the reachability probe could not reach. */
 export function unreachableOutcome(
   url: string,
@@ -35,7 +42,7 @@ export function unreachableOutcome(
       `Cannot reach ${safeUrl}: ${reason}`
     ),
     statusReason: reason,
-    message: `Cannot reach ${safeUrl}: ${reason}. No audit ran and there is no score.`,
+    message: `Cannot reach ${safeUrl}: ${trimTrailingPunctuation(reason)}. No audit ran and there is no score.`,
   };
 }
 

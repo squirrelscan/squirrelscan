@@ -655,12 +655,12 @@ When the start URL cannot be reached, the audit stops before it crawls and exits
   "status": "unreachable",
   "url": "https://example.com/",
   "statusReasonCode": "dns",
-  "statusReason": "DNS lookup failed - domain may not exist",
-  "message": "Cannot reach https://example.com/: DNS lookup failed - domain may not exist. No audit ran and there is no score."
+  "statusReason": "getaddrinfo ENOTFOUND",
+  "message": "Cannot reach https://example.com/: getaddrinfo ENOTFOUND. No audit ran and there is no score."
 }
 ```
 
-`statusReasonCode` is one of `dns`, `tls`, `connection` (refused or reset), `timeout` or `unknown`, the same codes a [failed audit](/guides/failed-audits) uses. `statusReason` is the probe's own error text. The URL is printed without its query, fragment and credentials. `console` and `text` formats print the same facts as text, and a `✗ Cannot reach ...` line goes to stderr in every format.
+`statusReasonCode` is one of `dns`, `tls`, `connection` (refused, reset, or a connection that timed out), `timeout` or `unknown`, the same codes a [failed audit](/guides/failed-audits) uses. `statusReason` is the probe's own error text, so its wording follows the runtime (for example `ECONNREFUSED: Unable to connect...` or `Connection timed out`). The URL is printed without its query, fragment and credentials. `console` and `text` formats print the same facts as text, and a `✗ Cannot reach ...` line goes to stderr in every format.
 
 ## Configuration
 

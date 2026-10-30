@@ -768,6 +768,8 @@ export interface AuditOptions {
    * consented.
    */
   startRedirect?: SeedRedirectRecord;
+  /** Whether the project folder existed before the command's first store check (#1269). */
+  projectDirPreexisting?: { projectName: string; existed: boolean };
 }
 
 // ============================================

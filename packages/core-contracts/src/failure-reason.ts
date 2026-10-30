@@ -409,6 +409,13 @@ export function classifyAuditFailureReasonText(
     r.includes("tls handshake") ||
     r.includes("tls/connection error") ||
     r.includes("ssl handshake") ||
+    // Runtime wording for a certificate the client cannot verify: Bun says
+    // "unknown certificate verification error", OpenSSL "ssl routines" and
+    // "wrong version number" (TLS spoken to a plain-http port).
+    r.includes("certificate verification") ||
+    r.includes("unknown certificate") ||
+    r.includes("ssl routines") ||
+    r.includes("wrong version number") ||
     r.includes("err_cert_") ||
     r.includes("err_ssl_") ||
     r.includes("certificate has expired") ||

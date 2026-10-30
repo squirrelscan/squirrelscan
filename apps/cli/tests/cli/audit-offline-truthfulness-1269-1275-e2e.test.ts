@@ -6,7 +6,7 @@
 import type { AuditFailureReasonCode } from "@squirrelscan/core-contracts/failure-reason";
 
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -77,6 +77,8 @@ describe("unreachableOutcome classes", () => {
       "connection",
     ],
     ["SSL/TLS error - certificate issue", "tls"],
+    ["unknown certificate verification error", "tls"],
+    ["error:0A00010B:SSL routines::wrong version number", "tls"],
     ["Request timed out after 10000ms (ETIMEDOUT)", "timeout"],
   ];
   for (const [reason, code] of cases) {
@@ -168,6 +170,24 @@ describe("squirrel audit -f json on a start URL it cannot reach", () => {
       void server.stop(true);
     }
   }, 60_000);
+
+  test("a server that accepts and never answers: a timed out connection", async () => {
+    const server = createServer(() => {}).listen(0, "127.0.0.1");
+    await new Promise((resolve) => server.once("listening", resolve));
+    const port = (server.address() as { port: number }).port;
+    try {
+      const r = await audit(`http://127.0.0.1:${port}/`, "-f", "json");
+      expect(r.code).toBe(5);
+      const outcome = JSON.parse(r.out) as Outcome;
+      expect(outcome.status).toBe("unreachable");
+      // The probe's own wording is "Connection timed out", which the shared
+      // failure vocabulary files under `connection` (its parity corpus pins it).
+      expect(outcome.statusReason).toMatch(/timed out/i);
+      expect(outcome.statusReasonCode).toBe("connection");
+    } finally {
+      server.close();
+    }
+  }, 120_000);
 
   test("a name that does not exist: dns", async () => {
     const r = await audit(
