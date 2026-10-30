@@ -282,7 +282,8 @@ export function parseUserUrl(input: string): UrlParseResult {
     if (!/^[^:/?#@\s]+:\d{1,5}(?:[/?#]|$)/.test(trimmed)) {
       return {
         ok: false,
-        error: "Unsupported protocol. Use http:// or https://",
+        error:
+          "Unsupported protocol. Use http:// or https:// (a URL with credentials needs its scheme; for basic auth use --header)",
       };
     }
   }
@@ -304,6 +305,10 @@ export function parseUserUrl(input: string): UrlParseResult {
     parsed.username = "";
     parsed.password = "";
     parsed.hash = "";
+
+    if (parsed.port === "0") {
+      return { ok: false, error: "Invalid port" };
+    }
 
     // Validate domain looks reasonable
     const domainCheck = isValidDomain(parsed.hostname);
