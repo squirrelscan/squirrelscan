@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **The docs and `--offline` help now keep offline and passive apart.** `--offline` is the network scope (no cloud, no other site) and `--passive` turns the probe rules off; they are independent, so `-C surface --offline` still sends the GraphQL and form-action probe requests to the audited site. A new "Offline and passive are separate" section in the audit docs has the four combinations and says exactly what a passive offline run still sends (the 28 discovery probes unless `--disable-discovery-probes`, internal link checks, sitemap path guesses). The passive banner now reads `passive · no probe rules`. Behaviour is unchanged. (#1225)
+
 ## v0.0.142 (2026-10-30)
 
 `squirrel audit` follows a start URL that redirects, with your consent, and an unreachable start URL now writes a report and exits 5. Pages with no markup no longer fail every DOM rule, a relative sitemap loc no longer breaks the URL rules, labelled menu sections and label elements are counted correctly, and leaked-secret findings carry the matched value's length and offset.

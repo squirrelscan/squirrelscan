@@ -1030,7 +1030,7 @@ you asked to audit are not probes: the crawl needs them, so they always run.
 **Type:** `boolean`
 **Default:** `false`
 
-Set to `true` to send no discovery probes at all.
+Set to `true` to send no discovery probes at all. This is not the same as the [probing intensity](/cli/audit#probing-intensity), and it only goes one way: turning it on forces probing to `passive`, but a `--passive` run still sends the discovery probes unless this is on.
 
 ```toml
 [crawler]

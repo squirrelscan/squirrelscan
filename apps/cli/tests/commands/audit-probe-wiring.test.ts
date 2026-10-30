@@ -158,7 +158,7 @@ const ROBOTS_NOTE = "requests robots-disallowed paths on purpose";
 describe("squirrel audit probing intensity", () => {
   test("anonymous (here: --offline) defaults to passive and the rules phase gets a passive budget", async () => {
     await runAudit([]);
-    expect(line("Probing")).toBe("passive · no requests beyond the crawl");
+    expect(line("Probing")).toBe("passive · no probe rules");
     expect(probes).toHaveLength(1);
     expect(probes[0]?.level).toBe("passive");
     expect(probes[0]?.allows("quiet")).toBe(false);
@@ -216,7 +216,7 @@ describe("squirrel audit probing intensity", () => {
 
   test("--disable-discovery-probes forces passive and says why", async () => {
     await runAudit(["--disable-discovery-probes", "--aggressive"]);
-    expect(line("Probing")).toBe("passive · no requests beyond the crawl");
+    expect(line("Probing")).toBe("passive · no probe rules");
     expect(
       output.some((l) => l.includes("discovery probes are disabled"))
     ).toBe(true);

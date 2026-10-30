@@ -93,14 +93,16 @@ default.
 ## Rules that probe
 
 These rules send requests only when probing is `active` or `aggressive`. On a
-`passive` run each records one skipped check and sends nothing. All of them
-probe only the audited origin, never another host.
+`passive` run each records one skipped check and sends nothing. The GraphQL
+probes go only to the audited origin; see below for the form check. `--offline` does not turn them off: offline is about which hosts are requested, passive is about probing, and they are separate. An offline `surface` or `full` run still probes unless you pass `--passive` (see [Offline and passive are separate](/cli/audit#offline-and-passive-are-separate)).
 
 | Rule | What it sends | Level |
 |------|---------------|-------|
 | [`security/graphql-introspection`](/rules/security/graphql-introspection) | One `GET /graphql?query={__schema{types{name}}}` per GraphQL endpoint, at most five | `active` |
 | | One `POST` of the same read-only query, only when the `GET` answer is GraphQL without a schema | `aggressive` |
 | [`security/graphql-get-mutations`](/rules/security/graphql-get-mutations) | One `GET /graphql?query=mutation{__typename}` per GraphQL endpoint, at most five. The no-op mutation names no schema field and cannot write | `active` |
+
+| [`reliability/broken-forms`](/rules/reliability/broken-forms) | One `HEAD` per distinct form action URL the crawl did not fetch, then one `GET` when the `HEAD` is refused or fails. Never a `POST` | `active` |
 
 The GraphQL endpoints are the ones the audit found in your pages and scripts,
 plus `/graphql` and `/api/graphql`. A path that names a state-changing action,
