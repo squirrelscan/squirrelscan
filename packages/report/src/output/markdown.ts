@@ -5,7 +5,7 @@ import type { AuditReport } from "../types";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
 import { cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
 import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
-import { wafBlockedPagesLines, wafBlockedSeedCopy } from "../waf-blocked";
+import { wafBlockedPagesLines, wafBlockedSeedCopy, wafSuspectLines } from "../waf-blocked";
 import { getScoreGrade } from "../scoring";
 import { REPORT_SOURCE_PAGES_PREVIEW, REPORT_PAGES_HARD_CAP } from "../constants";
 import { fixRollupLine, fixUnits, ruleFixCoverage } from "../component-presentation";
@@ -433,6 +433,15 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
     if (blockedPageLines.length > 0) {
       const [summary, ...listed] = blockedPageLines;
       lines.push(`> **Blocked pages:** ${escapeMarkdownText(summary!)}`);
+      lines.push("");
+      for (const line of listed) lines.push(`- ${escapeMarkdownInline(line)}`);
+      if (listed.length > 0) lines.push("");
+    }
+    // #1258: pages that look like a provider's refusal. Audited, but flagged.
+    const suspectLines = wafSuspectLines(report);
+    if (suspectLines.length > 0) {
+      const [summary, ...listed] = suspectLines;
+      lines.push(`> **Suspect pages:** ${escapeMarkdownText(summary!)}`);
       lines.push("");
       for (const line of listed) lines.push(`- ${escapeMarkdownInline(line)}`);
       if (listed.length > 0) lines.push("");

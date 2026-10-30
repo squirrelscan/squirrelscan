@@ -41,6 +41,54 @@ export interface WafBlockedSummary {
   providers: string[];
 }
 
+/**
+ * A page that looks like a refusal from a known perimeter provider but carries none of
+ * its block markers (a bare "Access Denied" behind Cloudflare, #1258). It is stored and
+ * audited like any other page: the entry exists so the report can warn that the page may
+ * be the provider's, not the site's.
+ */
+export interface WafSuspectPage {
+  /** The page URL the crawl asked for. Canonicalize before printing it. */
+  url: string;
+  /** The HTTP status the page answered with. */
+  status: number;
+  /** The provider's display name. */
+  provider: string | null;
+  /** The provider id (`cloudflare`, `akamai`). */
+  providerId: string | null;
+  /** What made it look like a refusal, from the detector's fixed vocabulary. */
+  signal: string;
+}
+
+/** What the crawler records on `CrawlStats` and the report carries for suspect pages. */
+export interface WafSuspectSummary {
+  /** Every suspect page the crawl saw, including the ones past the list cap. */
+  total: number;
+  /** The first suspect pages, capped at {@link MAX_WAF_BLOCKED_PAGES}. */
+  pages: WafSuspectPage[];
+  /** Distinct provider names, in first-seen order. */
+  providers: string[];
+}
+
+/** Fold one suspect page into a summary, never growing the list past its cap. */
+export function addWafSuspectPage(
+  summary: WafSuspectSummary | undefined,
+  page: WafSuspectPage,
+): WafSuspectSummary {
+  const next: WafSuspectSummary = summary
+    ? { ...summary, pages: [...summary.pages], providers: [...summary.providers] }
+    : { total: 0, pages: [], providers: [] };
+  if (
+    next.pages.length < MAX_WAF_BLOCKED_PAGES &&
+    !next.pages.some((p) => p.url === page.url)
+  ) {
+    next.pages.push(page);
+  }
+  next.total += 1;
+  if (page.provider && !next.providers.includes(page.provider)) next.providers.push(page.provider);
+  return next;
+}
+
 /** `blocked_by_cloudflare`, `blocked_by_aws_waf`; `blocked_by_waf` when no provider was named. */
 export function wafBlockCode(providerId: string | null | undefined): string {
   // split/filter/join, not a trailing-underscore regex: no backtracking at all.
@@ -72,7 +120,10 @@ export function addWafBlockedPage(
     ? { ...summary, pages: [...summary.pages], providers: [...summary.providers] }
     : { total: 0, pages: [], providers: [] };
   if (isSeed) {
-    next.seed ??= page;
+    // The seed is one page however many URLs reach it (the URL the user gave, and where
+    // it redirected): a second sighting adds nothing (#1258).
+    if (next.seed) return next;
+    next.seed = page;
   } else if (
     next.pages.length < MAX_WAF_BLOCKED_PAGES &&
     !next.pages.some((p) => p.url === page.url)

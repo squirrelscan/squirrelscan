@@ -5,7 +5,7 @@ import type { AuditReport, CheckResult } from "../types";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
 import { cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
 import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
-import { wafBlockedPagesLines, wafBlockedSeedCopy } from "../waf-blocked";
+import { wafBlockedPagesLines, wafBlockedSeedCopy, wafSuspectLines } from "../waf-blocked";
 import { getScoreGrade } from "../scoring";
 import { REPORT_SOURCE_PAGES_PREVIEW, REPORT_TEXT_WRAP_WIDTH } from "../constants";
 import { fixRollupLine, fixUnits, ruleFixCoverage } from "../component-presentation";
@@ -364,6 +364,17 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
     write("BLOCKED PAGES");
     write("-".repeat(40));
     const [summary, ...listed] = blockedPageLines;
+    write(summary!);
+    for (const line of listed) write(`  ${line}`);
+    write("");
+  }
+
+  // #1258: pages that look like a provider's refusal. Audited, but flagged.
+  const suspectLines = wafSuspectLines(report);
+  if (suspectLines.length > 0) {
+    write("SUSPECT PAGES");
+    write("-".repeat(40));
+    const [summary, ...listed] = suspectLines;
     write(summary!);
     for (const line of listed) write(`  ${line}`);
     write("");

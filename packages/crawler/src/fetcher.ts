@@ -41,7 +41,11 @@ import {
   parseRetryAfterMs,
   rateLimitBackoffMs,
 } from "@squirrelscan/utils/rate-limit";
-import { inspectWafChallengePage, type WafChallengeDetail } from "@squirrelscan/utils/waf";
+import {
+  classifyWafResponse,
+  inspectWafChallengePage,
+  type WafChallengeDetail,
+} from "@squirrelscan/utils/waf";
 
 export type CrawlErrorType =
   | "timeout"
@@ -63,6 +67,12 @@ export interface WafBlockInfo {
   provider: string | null;
   providerId: string | null;
   signal: string;
+  /**
+   * Where the page was served, when the request redirected there (#1258). A seed that
+   * redirects to a challenge is blocked at the destination, and the crawler reads this
+   * to see that a second request for the same destination is the same page.
+   */
+  finalUrl?: string;
 }
 
 export class CrawlError extends Error {
@@ -98,6 +108,11 @@ export class CrawlError extends Error {
      * detector claimed; a bare 403 carries none.
      */
     readonly wafBlock?: WafBlockInfo,
+    /**
+     * A refusal-shaped page from a known provider with no block marker (#1258). Set on a
+     * bare `blocked` 403 only; it does not change how the fetch fails.
+     */
+    readonly wafSuspect?: WafBlockInfo,
   ) {
     super(message);
     this.name = "CrawlError";
@@ -145,8 +160,9 @@ export class CrawlError extends Error {
     message = "Request blocked by server",
     status = 403,
     wafBlock?: WafBlockInfo,
+    wafSuspect?: WafBlockInfo,
   ): CrawlError {
-    return new CrawlError(url, "blocked", message, undefined, status, undefined, wafBlock);
+    return new CrawlError(url, "blocked", message, undefined, status, undefined, wafBlock, wafSuspect);
   }
 
   static rateLimit(url: string, retryAfterMs?: number, status?: number): CrawlError {
@@ -846,10 +862,11 @@ export function applyWafGuard(
   status: number,
   headers: Headers,
   body?: string,
+  servedAt?: string,
 ): Effect.Effect<void, CrawlError, never> {
   const challenge = inspectWafBlock(status, headers, body);
   if (!challenge) return Effect.void;
-  return Effect.fail(wafBlockedError(url, status, challenge));
+  return Effect.fail(wafBlockedError(url, status, challenge, servedAt));
 }
 
 function inspectWafBlock(status: number, headers: Headers, body?: string): WafChallengeDetail | null {
@@ -869,7 +886,40 @@ function inspectWafBlock(status: number, headers: Headers, body?: string): WafCh
   return result.detected ? result : null;
 }
 
-function wafBlockedError(url: string, status: number, challenge: WafChallengeDetail): CrawlError {
+/**
+ * A refusal-shaped page from a known provider with no block marker (#1258): the reading
+ * `classifyWafResponse` calls `suspect`. Never fails a fetch; the caller records it so the
+ * report can warn.
+ */
+export function suspectWafBlock(
+  status: number,
+  headers: Headers,
+  body?: string,
+): WafBlockInfo | null {
+  const result = classifyWafResponse({
+    status,
+    headers: {
+      server: headers.get("server"),
+      cfCacheStatus: headers.get("cf-cache-status"),
+      xCache: headers.get("x-cache"),
+      raw: headers,
+    },
+    html: body ?? null,
+  });
+  if (result.verdict !== "suspect") return null;
+  return {
+    provider: result.provider,
+    providerId: result.providerId,
+    signal: result.signal ?? "refusal page",
+  };
+}
+
+function wafBlockedError(
+  url: string,
+  status: number,
+  challenge: WafChallengeDetail,
+  servedAt?: string,
+): CrawlError {
   return CrawlError.blocked(
     url,
     `Blocked by ${challenge.provider ?? "bot protection"} challenge (${status})`,
@@ -878,6 +928,7 @@ function wafBlockedError(url: string, status: number, challenge: WafChallengeDet
       provider: challenge.provider,
       providerId: challenge.providerId,
       signal: challenge.signal ?? "challenge page",
+      ...(servedAt && servedAt !== url ? { finalUrl: servedAt } : {}),
     },
   );
 }
@@ -891,6 +942,7 @@ export function applyStatusGuards(
   status: number,
   headers: Headers,
   body?: string,
+  servedAt?: string,
 ): Effect.Effect<void, CrawlError, never> {
   // A provider's challenge beats every status reading below, 429 included: a
   // Kasada challenge is a 429 and is not throttling, so it must not be retried
@@ -898,7 +950,7 @@ export function applyStatusGuards(
   // cloudflare alone is not enough, because ordinary auth/geo blocks carry it
   // too (#446).
   const challenge = inspectWafBlock(status, headers, body);
-  if (challenge) return Effect.fail(wafBlockedError(url, status, challenge));
+  if (challenge) return Effect.fail(wafBlockedError(url, status, challenge, servedAt));
 
   // 429 and Shopify's 430 are unconditional throttling (#1829). A 503 is
   // ambiguous — checked further down, AFTER the bot-challenge detection, since
@@ -910,7 +962,9 @@ export function applyStatusGuards(
   }
 
   if (status === 403) {
-    return Effect.fail(CrawlError.blocked(url, undefined, 403));
+    return Effect.fail(
+      CrawlError.blocked(url, undefined, 403, undefined, suspectWafBlock(status, headers, body) ?? undefined),
+    );
   }
 
   if (status >= 500) {
@@ -1294,12 +1348,14 @@ function fetchPageStandardOnce(
           )
         : undefined;
 
-    yield* applyStatusGuards(url, finalResponse.status, finalResponse.headers, challengeBody);
+    // Where the chain ended, so a challenge served after a redirect says so (#1258).
+    const servedAt = hops.length > 0 ? hops[hops.length - 1]!.url : url;
+    yield* applyStatusGuards(url, finalResponse.status, finalResponse.headers, challengeBody, servedAt);
 
     const body = yield* readBody();
     // A challenge served as 200, 202 or 405 passes the status guards, so it is
     // judged here, on the body, before it is stored as the site (#1253).
-    yield* applyWafGuard(url, finalResponse.status, finalResponse.headers, body);
+    yield* applyWafGuard(url, finalResponse.status, finalResponse.headers, body, servedAt);
 
     const loadTime = Date.now() - finalTiming.fetchStart;
     const downloadTime = loadTime - ttfb;

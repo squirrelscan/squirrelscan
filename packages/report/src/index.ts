@@ -423,7 +423,9 @@ export {
 export {
   safeBlockedPage,
   safeWafBlocked,
+  safeWafSuspect,
   wafBlockedPagesLines,
+  wafSuspectLines,
   wafBlockedSeedCopy,
   type WafBlockedSeedCopy,
 } from "./waf-blocked";

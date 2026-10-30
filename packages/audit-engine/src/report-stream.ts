@@ -696,6 +696,10 @@ export function buildV1Report(
     if (crawl?.stats?.wafBlocked && crawl.stats.wafBlocked.total > 0) {
       result.wafBlocked = crawl.stats.wafBlocked;
     }
+    // Refusal-shaped pages with no provider marker (#1258): audited, but flagged.
+    if (crawl?.stats?.wafSuspect && crawl.stats.wafSuspect.total > 0) {
+      result.wafSuspect = crawl.stats.wafSuspect;
+    }
     const runStatus = deriveAuditStatusFromPages(
       pageStatuses,
       crawl?.stats?.pagesBlocked ?? 0,
@@ -995,6 +999,10 @@ export function buildV2Report(
     // (#1253): never scored, and the report says how many and who.
     if (crawl?.stats?.wafBlocked && crawl.stats.wafBlocked.total > 0) {
       result.wafBlocked = crawl.stats.wafBlocked;
+    }
+    // Refusal-shaped pages with no provider marker (#1258): audited, but flagged.
+    if (crawl?.stats?.wafSuspect && crawl.stats.wafSuspect.total > 0) {
+      result.wafSuspect = crawl.stats.wafSuspect;
     }
     const runStatus = deriveAuditStatus({
       pagesCrawled,

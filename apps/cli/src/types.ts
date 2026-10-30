@@ -205,6 +205,7 @@ import type {
   HealthScore as _HS,
   RefusedFetch,
   WafBlockedSummary,
+  WafSuspectSummary,
   ReportStructure as _RST,
   ReportTechnologies as _RT,
   RuleCategory as _RC,
@@ -497,6 +498,8 @@ export interface AuditReport {
    * structurally different, so it has to be declared in both.
    */
   wafBlocked?: WafBlockedSummary;
+  /** Pages that look like a provider's refusal without its block marker (#1258); audited. Mirrors core-contracts `AuditReport`. */
+  wafSuspect?: WafSuspectSummary;
   siteChecks: CheckResult[];
   pages: PageAudit[];
   summary: {

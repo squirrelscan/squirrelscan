@@ -15,6 +15,8 @@ import {
   type AuditReport,
   type WafBlockedPage,
   type WafBlockedSummary,
+  type WafSuspectPage,
+  type WafSuspectSummary,
 } from "@squirrelscan/core-contracts";
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 
@@ -64,6 +66,55 @@ export function safeWafBlocked(report: Pick<AuditReport, "wafBlocked">): WafBloc
       .map((p) => clean(p, ""))
       .filter(Boolean),
   };
+}
+
+/** A suspect page with every field made safe to print (#1258). */
+function safeSuspectPage(page: WafSuspectPage): WafSuspectPage {
+  const providerId = page.providerId ? clean(page.providerId, "") : "";
+  return {
+    url: printableUrl(page.url),
+    status: Number.isInteger(page.status) ? page.status : 0,
+    provider: page.provider ? clean(page.provider, "") || null : null,
+    providerId: providerId || null,
+    signal: clean(page.signal, "refusal page"),
+  };
+}
+
+/** The sanitised suspect summary, or null when no page looked like a refusal (#1258). */
+export function safeWafSuspect(report: Pick<AuditReport, "wafSuspect">): WafSuspectSummary | null {
+  const suspect = report.wafSuspect;
+  if (!suspect || suspect.total <= 0 || Number.isNaN(suspect.total)) return null;
+  return {
+    total: Math.floor(suspect.total),
+    pages: (suspect.pages ?? []).slice(0, 50).map(safeSuspectPage),
+    providers: (suspect.providers ?? [])
+      .slice(0, 10)
+      .map((p) => clean(p, ""))
+      .filter(Boolean),
+  };
+}
+
+/**
+ * The warning lines for pages that look like a provider's refusal but were audited (#1258):
+ * a count line, then up to ten pages. Empty when none was seen, and for a failed or
+ * blocked run (whose notice says more).
+ */
+export function wafSuspectLines(
+  report: Pick<AuditReport, "wafSuspect" | "status">,
+): string[] {
+  const suspect = safeWafSuspect(report);
+  if (!suspect || report.status === "failed" || report.status === "blocked") return [];
+  const by = suspect.providers.length > 0 ? ` from ${suspect.providers.join(", ")}` : "";
+  const lines = [
+    `${suspect.total} page${suspect.total === 1 ? "" : "s"} look${suspect.total === 1 ? "s" : ""} like a refusal${by} but carry no block marker. ${suspect.total === 1 ? "It was" : "They were"} audited, so ${suspect.total === 1 ? "its findings" : "their findings"} may describe the provider's page, not the site's.`,
+  ];
+  for (const page of suspect.pages.slice(0, MAX_LISTED)) {
+    const who = page.provider ? `${page.provider}, ` : "";
+    lines.push(`${page.url}: ${who}HTTP ${page.status} (${page.signal})`);
+  }
+  const more = suspect.total - Math.min(suspect.pages.length, MAX_LISTED);
+  if (more > 0) lines.push(`and ${more} more`);
+  return lines;
 }
 
 export interface WafBlockedSeedCopy {
