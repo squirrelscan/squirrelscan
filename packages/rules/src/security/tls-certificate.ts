@@ -19,6 +19,8 @@ import {
 import { getDomain } from "tldts";
 import { z } from "zod";
 
+import { TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON } from "@squirrelscan/core-contracts";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export const optionsSchema = z
@@ -27,8 +29,10 @@ export const optionsSchema = z
       .number()
       .int()
       .min(1)
-      .default(30)
-      .describe("Warn when the certificate expires within this many days"),
+      .optional()
+      .describe(
+        "Warn when the certificate expires within this many days. Unset (the default): relative to the certificate's lifetime, see warnDaysFor",
+      ),
     error_days: z
       .number()
       .int()
@@ -37,12 +41,45 @@ export const optionsSchema = z
       .describe("Error when the certificate expires within this many days"),
   })
   // Otherwise the warning band is empty and every near expiry reads as an error.
-  .refine((options) => options.error_days <= options.warn_days, {
+  .refine((options) => options.warn_days === undefined || options.error_days <= options.warn_days, {
     message: "error_days must not be more than warn_days",
     path: ["error_days"],
   });
 
 export type TlsCertificateOptions = z.infer<typeof optionsSchema>;
+
+/**
+ * Days before a certificate's end at which an auto-renewing CA has renewed it
+ * (#1279): ACME clients renew at about a third of the lifetime left (30 days of
+ * a 90-day Let's Encrypt certificate), and the managed certificates on
+ * Cloudflare, Google and Vercel do the same. A fixed 30-day warning therefore
+ * fired on healthy certificates for a day or so before every routine renewal.
+ * The default warning waits until a renewal is this many days overdue.
+ */
+export const RENEWAL_MARGIN_DAYS = 14;
+
+/** The warning window used when a certificate's lifetime cannot be read. */
+const FALLBACK_WARN_DAYS = 30;
+
+/**
+ * The remaining days at or below which the expiry check warns. An explicit
+ * `warn_days` always wins. Otherwise it is the last third of the certificate's
+ * lifetime (`notAfter - notBefore`) less {@link RENEWAL_MARGIN_DAYS}, never
+ * below `error_days`: 16 days for a 90-day certificate, 52 for a 200-day one.
+ * As lifetimes shrink (47 days by 2029) the window shrinks with them instead of
+ * flagging every valid certificate.
+ */
+export function warnDaysFor(certificate: TlsCertificate, options: TlsCertificateOptions): number {
+  if (options.warn_days !== undefined) return options.warn_days;
+  const lifetimeDays = (certificate.validTo.getTime() - certificate.validFrom.getTime()) / DAY_MS;
+  if (!Number.isFinite(lifetimeDays) || lifetimeDays <= 0) {
+    return Math.max(options.error_days, FALLBACK_WARN_DAYS);
+  }
+  return Math.max(options.error_days, Math.floor(lifetimeDays / 3 - RENEWAL_MARGIN_DAYS));
+}
+
+const DAY_MS = 86_400_000;
+
 
 export type { TlsProbeFn };
 
@@ -210,14 +247,15 @@ function expiryCheck(
       details,
     };
   }
-  if (days <= options.warn_days) {
+  const warnDays = warnDaysFor(certificate, options);
+  if (days <= warnDays) {
     return {
       name,
       status: "warn",
-      message: `Certificate expires in ${dayText(days)} (${expires}), within the ${options.warn_days}-day warning threshold`,
+      message: `Certificate expires in ${dayText(days)} (${expires}), within the ${warnDays}-day warning threshold`,
       value: expires,
-      expected: `valid for more than ${options.warn_days} days`,
-      details,
+      expected: `valid for more than ${warnDays} days`,
+      details: { ...details, warnDays, warnDaysSource: options.warn_days === undefined ? "lifetime" : "option" },
     };
   }
   return {
@@ -277,29 +315,27 @@ function describeProblem(
 }
 
 function notChecked(hostname: string, probe: Exclude<TlsProbe, { kind: "certificate" }>): CheckResult {
-  if (probe.kind === "unavailable") {
-    return {
-      name: "tls-certificate",
-      status: "info",
-      message: `TLS certificate not checked: ${probe.reason}`,
-      value: "not-checked",
-    };
-  }
-  if (probe.code === "EGRESS_REFUSED") {
-    return {
-      name: "tls-certificate",
-      status: "info",
-      message: `TLS certificate not checked: ${probe.message}`,
-      value: "not-checked",
-    };
-  }
-  return {
+  // Skipped, not info (#1259): a skipped check carrying a not-checked reason is
+  // what every report lists under "Not checked", and the JSON `notChecked` too.
+  // The value stays `not-checked` for readers of the check itself.
+  const skipped = (message: string): CheckResult => ({
     name: "tls-certificate",
-    status: "info",
-    // `(${code})` would read as a count to the message merge (#2244).
-    message: `TLS certificate not checked: no TLS handshake with ${hostname}, error ${probe.code}`,
+    status: "skipped",
+    message,
     value: "not-checked",
-  };
+    skipReason: TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON,
+  });
+  if (probe.kind === "unavailable") {
+    return skipped(`TLS certificate not checked: ${probe.reason}`);
+  }
+  if (probe.code === "EGRESS_REFUSED" || probe.code.startsWith("PROXY_")) {
+    // The probe wrote the reason: a refused address, or a proxy that refused or failed the tunnel (#1259).
+    return skipped(`TLS certificate not checked: ${probe.message}`);
+  }
+  // `(${code})` would read as a count to the message merge (#2244).
+  return skipped(
+    `TLS certificate not checked: no TLS handshake with ${hostname}, error ${probe.code}`,
+  );
 }
 
 /**

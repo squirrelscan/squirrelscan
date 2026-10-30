@@ -11,6 +11,7 @@ import {
   checkTlsCertificate,
   optionsSchema,
   tlsCertificateRule,
+  warnDaysFor,
   wwwVariant,
   type TlsCertificateOptions,
 } from "../src/security/tls-certificate";
@@ -29,12 +30,15 @@ function cert(
   overrides: { validTo?: Date; validFrom?: Date; rsaBits?: number; trusted?: boolean; trustError?: string } = {},
 ): Served {
   const { validTo, validFrom, rsaBits, trusted = true, trustError } = overrides;
+  // A certificate with only an end date is a 90-day one (Let's Encrypt's lifetime),
+  // so the lifetime-relative expiry window is what a real certificate gets (#1279).
+  const defaultFrom = validTo ? new Date(validTo.getTime() - 90 * DAY_MS) : new Date(NOW.getTime() - DAY_MS);
   return {
     kind: "certificate",
     certificate: {
       names,
       issuer: "squirrel test intermediate",
-      validFrom: validFrom ?? new Date(NOW.getTime() - DAY_MS),
+      validFrom: validFrom ?? defaultFrom,
       validTo: validTo ?? new Date(NOW.getTime() + 365 * DAY_MS),
       ...(rsaBits !== undefined ? { rsaBits } : { rsaBits: 2048 }),
     },
@@ -50,7 +54,9 @@ const LOCAL = ["localhost", "127.0.0.1"];
 const fixtures = {
   valid: cert(LOCAL),
   expiresIn45Days: cert(LOCAL, { validTo: inDays(45) }),
+  expiresIn28Days: cert(LOCAL, { validTo: inDays(28) }),
   expiresIn20Days: cert(LOCAL, { validTo: inDays(20) }),
+  expiresIn10Days: cert(LOCAL, { validTo: inDays(10) }),
   expiresIn5Days: cert(LOCAL, { validTo: inDays(5) }),
   expired: cert(LOCAL, {
     validFrom: new Date(NOW.getTime() - 60 * DAY_MS),
@@ -105,11 +111,18 @@ describe("expiry thresholds", () => {
     expect(calls).toEqual(["localhost"]);
   });
 
-  test("a certificate expiring in 20 days warns with the date and days left", async () => {
-    const { checks } = await audit({ localhost: fixtures.expiresIn20Days });
+  test("a 90-day certificate with 28 days left, inside the renewal window, does not warn (#1279)", async () => {
+    const { checks } = await audit({ localhost: fixtures.expiresIn28Days });
+    expect(check(checks, "tls-certificate-expiry")?.status).toBe("pass");
+    expect(check(await audit({ localhost: fixtures.expiresIn20Days }).then((r) => r.checks), "tls-certificate-expiry")?.status).toBe("pass");
+  });
+
+  test("a 90-day certificate with 10 days left warns with the date and days left (#1279)", async () => {
+    const { checks } = await audit({ localhost: fixtures.expiresIn10Days });
     const expiry = check(checks, "tls-certificate-expiry");
     expect(expiry?.status).toBe("warn");
-    expect(expiry?.message).toMatch(/expires in 20 days \(\d{4}-\d{2}-\d{2}\)/);
+    expect(expiry?.message).toMatch(/expires in 10 days \(\d{4}-\d{2}-\d{2}\), within the 16-day warning threshold/);
+    expect(expiry?.details).toMatchObject({ warnDays: 16, warnDaysSource: "lifetime" });
   });
 
   test("a certificate expiring in 5 days is an error", async () => {
@@ -134,19 +147,47 @@ describe("expiry thresholds", () => {
     expect(check(withSixty.checks, "tls-certificate-expiry")?.status).toBe("warn");
   });
 
+  test("warn_days stays an explicit override whatever the lifetime", async () => {
+    const thirty = await audit({ localhost: fixtures.expiresIn28Days }, { warn_days: 30 });
+    expect(check(thirty.checks, "tls-certificate-expiry")).toMatchObject({
+      status: "warn",
+      details: { warnDays: 30, warnDaysSource: "option" },
+    });
+    const five = await audit({ localhost: fixtures.expiresIn10Days }, { warn_days: 5, error_days: 3 });
+    expect(check(five.checks, "tls-certificate-expiry")?.status).toBe("pass");
+  });
+
+  test("the warning window follows the certificate's lifetime", () => {
+    const at = (lifetimeDays: number, options: object = {}) =>
+      warnDaysFor(
+        { names: [], issuer: "x", validFrom: new Date(0), validTo: new Date(lifetimeDays * DAY_MS) },
+        optionsSchema.parse(options),
+      );
+    expect(at(90)).toBe(16);
+    expect(at(200)).toBe(52);
+    expect(at(365)).toBe(107);
+    // Shrinking lifetimes shrink the window; it never drops under the error threshold.
+    expect(at(47)).toBe(7);
+    expect(at(47, { error_days: 2 })).toBe(2);
+    expect(at(0)).toBe(30);
+  });
+
   test("error_days moves the error threshold", async () => {
     const { checks } = await audit({ localhost: fixtures.expiresIn20Days }, { error_days: 25 });
     expect(check(checks, "tls-certificate-expiry")?.status).toBe("fail");
   });
 
-  test("the options default to a 30-day warning and a 7-day error", () => {
-    expect(DEFAULTS).toEqual({ warn_days: 30, error_days: 7 });
+  test("the options default to a lifetime-relative warning and a 7-day error", () => {
+    expect(DEFAULTS).toEqual({ error_days: 7 });
+    expect(DEFAULTS.warn_days).toBeUndefined();
   });
 
   test("an error threshold above the warning threshold is refused, naming error_days", () => {
-    const refused = optionsSchema.safeParse({ error_days: 40 });
+    const refused = optionsSchema.safeParse({ warn_days: 30, error_days: 40 });
     expect(refused.success).toBe(false);
     expect(refused.error?.issues[0]?.path).toEqual(["error_days"]);
+    // With no warn_days the window is derived and never under error_days, so nothing to refuse.
+    expect(optionsSchema.safeParse({ error_days: 40 }).success).toBe(true);
     expect(optionsSchema.safeParse({ warn_days: 30, error_days: 30 }).success).toBe(true);
     // The refinement keeps the object shape the option checks and docs read.
     expect(Object.keys(optionsSchema.shape)).toEqual(["warn_days", "error_days"]);
@@ -287,7 +328,7 @@ describe("not checked", () => {
       probe: async () => ({ kind: "unavailable", reason: "an HTTP proxy is set in the environment" }),
     });
     expect(result.checks).toHaveLength(1);
-    expect(result.checks[0]).toMatchObject({ status: "info", value: "not-checked" });
+    expect(result.checks[0]).toMatchObject({ status: "skipped", value: "not-checked", skipReason: "tls-certificate-not-checked" });
     expect(result.checks[0]!.message).toBe(
       "TLS certificate not checked: an HTTP proxy is set in the environment",
     );
@@ -299,7 +340,7 @@ describe("not checked", () => {
       probe: async () => ({ kind: "unreachable", code: "ECONNREFUSED", message: "refused" }),
     });
     expect(result.checks).toHaveLength(1);
-    expect(result.checks[0]).toMatchObject({ status: "info", value: "not-checked" });
+    expect(result.checks[0]).toMatchObject({ status: "skipped", value: "not-checked", skipReason: "tls-certificate-not-checked" });
     expect(result.checks[0]!.message).toContain("ECONNREFUSED");
   });
 
@@ -331,7 +372,7 @@ describe("the injected probe", () => {
     const result = await tlsCertificateRule.run(ctxFor("https://example.com/"));
     const checks = result.checks as CheckResult[];
     expect(checks).toHaveLength(1);
-    expect(checks[0]).toMatchObject({ status: "info", value: "not-checked" });
+    expect(checks[0]).toMatchObject({ status: "skipped", value: "not-checked", skipReason: "tls-certificate-not-checked" });
     expect(checks[0]!.message).toBe(
       "TLS certificate not checked: this environment does not open TLS connections for the audit",
     );
@@ -367,7 +408,7 @@ describe("the injected probe", () => {
       }),
     });
     expect(result.checks).toHaveLength(1);
-    expect(result.checks[0]).toMatchObject({ status: "info", value: "not-checked" });
+    expect(result.checks[0]).toMatchObject({ status: "skipped", value: "not-checked", skipReason: "tls-certificate-not-checked" });
     expect(result.checks[0]!.message).toBe(
       "TLS certificate not checked: example.com was not contacted: refused: host resolves to a non-public address",
     );

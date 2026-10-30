@@ -19,10 +19,17 @@ import {
   expect,
   test,
 } from "bun:test";
-import { createServer, type Socket } from "node:net";
+import { createServer as createHttpServer } from "node:http";
+import {
+  connect as connectTcp,
+  createServer,
+  type AddressInfo,
+  type Socket,
+} from "node:net";
 
 import {
   createTlsProbe,
+  proxyForTarget,
   type TlsProbeOptions,
 } from "../../src/audit/tls-probe";
 import {
@@ -392,14 +399,253 @@ describe("the egress guard runs before every handshake", () => {
     });
   });
 
-  test("behind an HTTP proxy from the environment no handshake is made", async () => {
-    process.env.HTTPS_PROXY = "http://proxy.invalid:8080";
+  test("a proxy this check cannot tunnel through is reported, never bypassed (#1259)", async () => {
+    process.env.HTTPS_PROXY = "socks5://proxy.invalid:1080";
     const { dns, probe } = publicSiteProbe({
       "shop.example.com": ["93.184.216.34"],
     });
     const result = await probe({ hostname: "shop.example.com", port: 443 });
     expect(result.kind).toBe("unavailable");
+    expect(result).toMatchObject({
+      reason: expect.stringContaining("socks5 proxy"),
+    });
     expect(dns.asked).toEqual([]);
+  });
+});
+
+/** A CONNECT proxy on 127.0.0.1 that records every target it is asked for. */
+async function connectProxy(
+  mode: "accept" | { refuse: number } | "hang" | "garbage" = "accept"
+): Promise<{ port: number; seen: string[]; close: () => Promise<void> }> {
+  const seen: string[] = [];
+  const open = new Set<Socket>();
+  const server = createHttpServer();
+  server.on("connect", (req, client: Socket, head) => {
+    open.add(client);
+    client.on("close", () => open.delete(client));
+    client.on("error", () => {});
+    seen.push(req.url ?? "");
+    if (mode === "hang") return;
+    if (mode === "garbage") {
+      client.write("not http at all\r\n\r\n");
+      return;
+    }
+    if (typeof mode === "object") {
+      client.write(
+        `HTTP/1.1 ${mode.refuse} Refused\r\nContent-Length: 0\r\n\r\n`
+      );
+      client.end();
+      return;
+    }
+    const [host, port] = (req.url ?? "").split(":");
+    const upstream = connectTcp(Number(port), host ?? "127.0.0.1", () => {
+      client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+      upstream.write(head);
+      upstream.pipe(client);
+      client.pipe(upstream);
+    });
+    open.add(upstream);
+    upstream.on("error", () => client.destroy());
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  return {
+    port: (server.address() as AddressInfo).port,
+    seen,
+    close: async () => {
+      for (const socket of open) socket.destroy();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    },
+  };
+}
+
+describe("behind an HTTP proxy from the environment (#1259)", () => {
+  const proxies: Array<{ close: () => Promise<void> }> = [];
+  afterEach(async () => {
+    await Promise.all(proxies.splice(0).map((proxy) => proxy.close()));
+    delete process.env.NO_PROXY;
+    delete process.env.no_proxy;
+  });
+  const via = async (mode: Parameters<typeof connectProxy>[0] = "accept") => {
+    const proxy = await connectProxy(mode);
+    proxies.push(proxy);
+    process.env.HTTPS_PROXY = `http://127.0.0.1:${proxy.port}`;
+    return proxy;
+  };
+  const probeVia = (options: TlsProbeOptions = {}) => {
+    const dns = resolver({});
+    return {
+      dns,
+      probe: createTlsProbe({
+        ca: fixtures.root,
+        resolve: dns.resolve,
+        ...options,
+      }),
+    };
+  };
+
+  test("the handshake goes through a CONNECT tunnel, with SNI and verification intact", async () => {
+    const proxy = await via();
+    const port = await serve(fixtures.valid);
+    const { dns, probe } = probeVia();
+    const result = certificate(await probe({ hostname: "localhost", port }));
+    expect(proxy.seen).toEqual([`localhost:${port}`]);
+    expect(result.trusted).toBe(true);
+    expect(result.certificate.names).toContain("localhost");
+    // The proxy resolves the name; nothing is resolved or opened directly.
+    expect(dns.asked).toEqual([]);
+  });
+
+  test("an HTTP_PROXY alone is used too", async () => {
+    const proxy = await via();
+    delete process.env.HTTPS_PROXY;
+    process.env.HTTP_PROXY = `http://127.0.0.1:${proxy.port}`;
+    const port = await serve(fixtures.valid);
+    const { probe } = probeVia();
+    expect(
+      certificate(await probe({ hostname: "localhost", port })).trusted
+    ).toBe(true);
+    expect(proxy.seen).toEqual([`localhost:${port}`]);
+  });
+
+  test.each([
+    ["an expired certificate", "expired", "CERT_HAS_EXPIRED"],
+    ["a self-signed certificate", "selfSigned", "DEPTH_ZERO_SELF_SIGNED_CERT"],
+    [
+      "a leaf without its intermediate",
+      "leafOnly",
+      "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+    ],
+  ] as const)(
+    "%s is reported through the tunnel as it is without a proxy",
+    async (_name, key, trustError) => {
+      await via();
+      const port = await serve(fixtures[key]);
+      const { probe } = probeVia();
+      const result = certificate(await probe({ hostname: "localhost", port }));
+      expect(result.trusted).toBe(false);
+      expect(result.trustError).toBe(trustError);
+    }
+  );
+
+  test("a name the certificate does not cover is still a hostname problem through the tunnel", async () => {
+    await via();
+    const port = await serve(fixtures.wrongName);
+    const { probe } = probeVia();
+    const result = certificate(await probe({ hostname: "localhost", port }));
+    expect(
+      certificateProblems(result, "localhost", NOW).map(
+        (problem) => problem.kind
+      )
+    ).toContain("hostname");
+  });
+
+  test("a host named by NO_PROXY is probed directly, and the proxy is never contacted", async () => {
+    const proxy = await via();
+    process.env.NO_PROXY = "other.example, localhost";
+    const port = await serve(fixtures.valid);
+    const { probe } = probeVia({
+      allowPrivateNetwork: true,
+      resolve: resolver({ localhost: ["127.0.0.1"] }).resolve,
+    });
+    expect(
+      certificate(await probe({ hostname: "localhost", port })).trusted
+    ).toBe(true);
+    expect(proxy.seen).toEqual([]);
+  });
+
+  test.each([
+    ["*", "shop.example.com", true],
+    [".example.com", "shop.example.com", true],
+    ["*.example.com", "shop.example.com", true],
+    ["example.com", "shop.example.com", true],
+    ["example.com", "notexample.com", false],
+    ["shop.example.com:8443", "shop.example.com", false],
+    ["other.test", "shop.example.com", false],
+  ])("NO_PROXY=%s for %s direct: %s", (list, host, direct) => {
+    process.env.HTTPS_PROXY = "http://127.0.0.1:3128";
+    process.env.NO_PROXY = list;
+    try {
+      expect(proxyForTarget(host, 443).kind).toBe(direct ? "direct" : "proxy");
+    } finally {
+      delete process.env.NO_PROXY;
+    }
+  });
+
+  test.each([403, 407, 502])(
+    "a proxy that answers CONNECT with %d is not checked, never a pass",
+    async (status) => {
+      const proxy = await via({ refuse: status });
+      const { dns, probe } = probeVia();
+      const result = await probe({ hostname: "shop.example.com", port: 443 });
+      expect(result).toMatchObject({
+        kind: "unreachable",
+        code: `PROXY_CONNECT_${status}`,
+      });
+      expect(proxy.seen).toEqual(["shop.example.com:443"]);
+      expect(dns.asked).toEqual([]);
+    }
+  );
+
+  test("a proxy that never answers times out as not checked", async () => {
+    await via("hang");
+    const { probe } = probeVia();
+    const started = Date.now();
+    const result = await probe({
+      hostname: "shop.example.com",
+      port: 443,
+      timeoutMs: 300,
+    });
+    expect(result).toMatchObject({
+      kind: "unreachable",
+      code: "PROXY_TIMEOUT",
+    });
+    expect(Date.now() - started).toBeLessThan(3_000);
+  });
+
+  test("a proxy that sends garbage, and one that is down, are not checked", async () => {
+    await via("garbage");
+    const { probe } = probeVia();
+    expect(
+      await probe({ hostname: "shop.example.com", port: 443 })
+    ).toMatchObject({
+      kind: "unreachable",
+      code: "PROXY_BAD_REPLY",
+    });
+    process.env.HTTPS_PROXY = "http://127.0.0.1:1";
+    expect(
+      await probe({ hostname: "shop.example.com", port: 443, timeoutMs: 2_000 })
+    ).toMatchObject({
+      kind: "unreachable",
+      code: "PROXY_UNREACHABLE",
+    });
+  });
+
+  test("proxy credentials are sent as Proxy-Authorization, not logged in the result", async () => {
+    const proxy = await via({ refuse: 407 });
+    process.env.HTTPS_PROXY = `http://user:secret@127.0.0.1:${proxy.port}`; // pragma: allowlist secret
+    const { probe } = probeVia();
+    const result = await probe({ hostname: "shop.example.com", port: 443 });
+    expect(JSON.stringify(result)).not.toContain("secret");
+  });
+
+  test("the rule reports a refused CONNECT as a skipped, not-checked result", async () => {
+    await via({ refuse: 403 });
+    const baseUrl = "https://shop.example.com/";
+    const ctx = {
+      site: { baseUrl, pages: [] },
+      options: {},
+      page: { url: baseUrl },
+      tlsProbe: createTlsProbe({ siteUrl: baseUrl }),
+    } as unknown as RuleContext;
+    const checks = (await tlsCertificateRule.run(ctx)).checks as CheckResult[];
+    expect(checks).toHaveLength(1);
+    expect(checks[0]).toMatchObject({
+      name: "tls-certificate",
+      status: "skipped",
+      value: "not-checked",
+      skipReason: "tls-certificate-not-checked",
+    });
+    expect(checks[0]?.message).toContain("refused CONNECT");
   });
 });
 
@@ -418,9 +664,19 @@ describe("security/tls-certificate with the CLI's probe", () => {
     expect(
       checks.find((item) => item.name === "tls-certificate-chain")?.message
     ).toContain("self-signed");
-    // The fixture lasts 30 days, inside the default 30-day warning window.
+    // The fixture lasts 30 days, so its lifetime-relative warning window is
+    // short (#1279): no warning by default, a warning when warn_days says so.
     expect(
       checks.find((item) => item.name === "tls-certificate-expiry")?.status
+    ).toBe("pass");
+    const explicit = (
+      await tlsCertificateRule.run({
+        ...ctx,
+        options: { warn_days: 45 },
+      } as unknown as RuleContext)
+    ).checks as CheckResult[];
+    expect(
+      explicit.find((item) => item.name === "tls-certificate-expiry")?.status
     ).toBe("warn");
   });
 
