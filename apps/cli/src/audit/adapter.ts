@@ -508,6 +508,8 @@ export function runStreamingRules(
     pinOwnHosts?: boolean;
     /** Epoch ms after which no further page starts its rules (#1271). */
     deadlineAt?: number;
+    /** HTML larger than this is neither parsed nor evaluated; counted in `pagesNotEvaluated` (#1332). */
+    maxPageBytes?: number;
   }
 ): Effect.Effect<
   RuleExecutionResult & {
