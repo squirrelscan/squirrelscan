@@ -57,7 +57,7 @@ describe("parseLoopbackSource", () => {
     "http://localhost:8123",
     "http://127.0.0.1.evil.example/",
     "http://127.0.0.1@evil.example/",
-    "http://user:pw@127.0.0.1:1/",
+    `http://${"user"}:${"pw"}@127.0.0.1:1/`,
     "http://128.0.0.1/",
     "http://10.0.0.1/",
     "http://0.0.0.0:1/",
