@@ -122,8 +122,8 @@ describe("discovery probes (#409)", () => {
     for (const path of PROBE_ONLY_PATHS) expect(count(origin.hits, path)).toBe(1);
     // markdown negotiation + GPTBot + Claude-User; the browser-UA probe is indistinguishable
     expect(homepageProbes(origin.hits)).toHaveLength(3);
-    // The crawl's robots.txt read plus RSL's re-read.
-    expect(count(origin.hits, "/robots.txt")).toBe(2);
+    // One read: the RSL probe reuses the crawl's own (#422).
+    expect(count(origin.hits, "/robots.txt")).toBe(1);
     expect(out.wellKnown?.probes).toHaveLength(WELL_KNOWN_PATHS.length);
   });
 

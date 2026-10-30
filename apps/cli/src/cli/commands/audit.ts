@@ -840,6 +840,24 @@ export function resolvePublishDecision(opts: {
 }
 
 /**
+ * `--disable-discovery-probes false` (a space, not `=`) leaves `false` as a stray
+ * positional and turns the probes OFF, the opposite of what was typed (#422).
+ * Returns the message that refuses it, or null. Only the `=` form carries a value.
+ */
+export function spacedBooleanValueError(
+  rawArgs: readonly string[],
+  flag: string
+): string | null {
+  const at = rawArgs.indexOf(flag);
+  if (at < 0) return null;
+  const next = rawArgs[at + 1]?.toLowerCase();
+  if (next === "true" || next === "false") {
+    return `${flag} takes no value after a space: write ${flag}=${next}, or drop it for the default.`;
+  }
+  return null;
+}
+
+/**
  * A boolean flag's value as citty delivers it: undefined when absent, and an
  * array when the flag is repeated, in which case the last one wins.
  */
@@ -1455,6 +1473,15 @@ export const audit = defineCommand({
     const disableDiscoveryProbes = lastFlagValue(
       args["disable-discovery-probes"] as boolean | boolean[] | undefined
     );
+    const spacedValue = spacedBooleanValueError(
+      rawArgs,
+      "--disable-discovery-probes"
+    );
+    if (spacedValue) {
+      console.error(`${fmt.red("Error:")} ${spacedValue}`);
+      process.exitCode = 1;
+      return;
+    }
 
     // Probing flags: refuse an unknown level, a bad budget or contradicting
     // shortcuts before any network work. The level itself resolves below, once

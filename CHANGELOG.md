@@ -17,6 +17,16 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`squirrel crawl --disable-discovery-probes`** sends no discovery probe and overrides `[crawler] disable_discovery_probes`, like `squirrel audit`. (#422)
+
+### Fixed
+
+- **An audit asks for `robots.txt` once.** The RSL licensing probe fetched it a second time; it now reuses the crawl's own read, including its `Link: rel=license` header. (#422)
+- **Sitemap requests obey `per_host_concurrency` and `per_host_delay_ms`.** The guessed sitemap locations used to go out five at a time whatever the setting said; they now queue behind the same per-host limits as the pages and the discovery probes. (#422)
+- **`--disable-discovery-probes false` is refused.** With a space, `false` was read as a stray argument and the probes were turned off, the opposite of what was typed. It now exits with an error that names the `=false` form. (#422)
+
 ## v0.0.144 (2026-10-30)
 
 `squirrel audit --max-duration` stops at a wall-clock budget and writes a partial report instead of running on, `--include-pages` adds every crawled page with its status and rule count to the JSON report, and info checks now appear in the JSON and LLM reports (`--include-info`). The local technology scan reads stylesheet URLs and knows 24 more stacks, query-string copies of a page are counted with their canonical page, rules see controls inside declarative shadow roots, and a successful but empty page is audited and scored. A rule that throws is reported once as not evaluated, a rule that runs past its time budget is listed as skipped, and the docs now keep `--offline` and `--passive` apart. Thanks to William for the empty-page fix (#1314, #1330).
