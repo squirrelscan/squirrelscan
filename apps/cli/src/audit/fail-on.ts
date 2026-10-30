@@ -215,9 +215,20 @@ export function evaluateFailOn(
   const warningCount =
     (report.healthScore?.warningCount ?? report.warnings) +
     timedOutSecurity.length;
+  const erroredCount = timedOutSecurity.filter((r) => r.errored).length;
+  const timedOutCount = timedOutSecurity.length - erroredCount;
   const timedOutNote =
     timedOutSecurity.length > 0
-      ? ` (incl. ${timedOutSecurity.length} timed-out security rule${timedOutSecurity.length === 1 ? "" : "s"})`
+      ? ` (incl. ${[
+          timedOutCount > 0
+            ? `${timedOutCount} timed-out security rule${timedOutCount === 1 ? "" : "s"}`
+            : "",
+          erroredCount > 0
+            ? `${erroredCount} rule${erroredCount === 1 ? "" : "s"} that hit an internal error`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" and ")})`
       : "";
   // Findings present at a given severity rank. Info (rank 1) is never counted —
   // it isn't tracked in the report tallies — so severity gating only sees 3/2.
@@ -307,7 +318,7 @@ export function evaluateFailOn(
   ) {
     for (const rule of timedOutSecurity) {
       notes.push(
-        `${rule.ruleId} ${rule.errored ? "failed with an internal error" : "timed out"} on ${rule.pages} page${rule.pages === 1 ? "" : "s"} and did not check them: counted as 1 warning for gating, not in the score`
+        `${rule.ruleId} ${rule.errored ? "failed with an internal error" : "timed out"} ${rule.site ? "and did not check the site" : `on ${rule.pages} page${rule.pages === 1 ? "" : "s"} and did not check them`}: counted as 1 warning for gating, not in the score`
       );
     }
   }
@@ -315,10 +326,14 @@ export function evaluateFailOn(
   return { total: conditions.length, trips, notes };
 }
 
-/** Security-category rules that timed out in this audit (pub#970). */
+/**
+ * Rules that did not check what they should have: security rules that timed out in this audit
+ * (pub#970), and any rule that threw (#1291: a defect in squirrel, but a clean result would be a
+ * claim nothing tested, so a CI gate on warnings or severity must not pass silently over it).
+ */
 export function timedOutSecurityRules(report: AuditReport): TimedOutRule[] {
   return timedOutRules({ ruleResults: report.ruleResults ?? {} }).filter(
-    (rule) => rule.category === "security"
+    (rule) => rule.category === "security" || rule.errored === true
   );
 }
 

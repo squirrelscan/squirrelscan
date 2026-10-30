@@ -35,7 +35,12 @@ export interface NotCheckedRule {
   message: string;
   /** What to run to check it. */
   hint: string;
+  /** For a rule that hit an internal error (#1291): the first pages it was not evaluated on (at most {@link MAX_NOT_CHECKED_PAGES}). */
+  pages?: string[];
 }
+
+/** Pages listed on a not-checked entry. */
+export const MAX_NOT_CHECKED_PAGES = 10;
 
 /** The slice of a report this needs, so any report-shaped object works. */
 export interface NotCheckedReportShape {
@@ -122,6 +127,8 @@ export interface TimedOutRule {
   errored?: boolean;
   /** The first error message, for an errored rule. */
   error?: string;
+  /** The errored rule is a site rule: it was not evaluated for the site, not for pages. */
+  site?: boolean;
 }
 
 /**
@@ -169,6 +176,7 @@ export function timedOutRules(report: NotCheckedReportShape): TimedOutRule[] {
       ...(errored
         ? {
             errored: true,
+            ...(summary?.details?.site === true ? { site: true } : {}),
             ...(typeof skipped[0]!.details?.error === "string" ? { error: skipped[0]!.details.error } : {}),
           }
         : {}),
@@ -181,10 +189,23 @@ export function timedOutRules(report: NotCheckedReportShape): TimedOutRule[] {
 export function timedOutMessage(rule: TimedOutRule): string {
   if (rule.errored) {
     const first = rule.error ? ` (first error: ${rule.error})` : "";
+    if (rule.site) return `${rule.name} hit an internal squirrelscan error and was not evaluated for the site${first}`;
     return `${rule.name} hit an internal squirrelscan error on ${rule.pages} page${rule.pages === 1 ? "" : "s"} and was not evaluated${first}`;
   }
   const budget = rule.budgetMs !== undefined ? ` (exceeded its ${rule.budgetMs} ms time budget)` : "";
   return `${rule.name} timed out on ${rule.pages} page${rule.pages === 1 ? "" : "s"}${budget}`;
+}
+
+/** The first pages a thrown rule's skipped rows name (rows, or the pages of a folded row), deduped. */
+function erroredPages(result: ReportRuleResult): string[] {
+  const out = new Set<string>();
+  for (const c of result.checks) {
+    if (c.status !== "skipped" || c.skipReason !== RULE_TIMED_OUT_SKIP_REASON || c.details?.errored !== true) continue;
+    if (c.pageUrl) out.add(c.pageUrl);
+    for (const p of c.pages ?? []) out.add(p);
+    if (out.size >= MAX_NOT_CHECKED_PAGES) break;
+  }
+  return [...out].slice(0, MAX_NOT_CHECKED_PAGES);
 }
 
 export function notCheckedRules(report: NotCheckedReportShape): NotCheckedRule[] {
@@ -211,6 +232,7 @@ export function notCheckedRules(report: NotCheckedReportShape): NotCheckedRule[]
       // A timeout names the rule and the pages it did not check.
       message: timedOut ? timedOutMessage(timedOut) : check.message,
       hint: hintFor(check),
+      ...(timedOut?.errored && !timedOut.site ? { pages: erroredPages(result) } : {}),
     });
   }
   return out.sort((a, b) => a.name.localeCompare(b.name) || a.ruleId.localeCompare(b.ruleId));

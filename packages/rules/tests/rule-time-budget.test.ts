@@ -405,7 +405,7 @@ describe("per-rule time budget", () => {
         status: "skipped",
         message: "Rule error: boom (rule not evaluated on this page)",
         skipReason: "rule-timed-out",
-        details: { errored: true, ruleId: "test/throws", error: "boom", pages: 1 },
+        details: { errored: true, ruleId: "test/throws", error: "boom" },
       },
       { name: "test/fast", status: "pass", message: "ok" },
     ]);

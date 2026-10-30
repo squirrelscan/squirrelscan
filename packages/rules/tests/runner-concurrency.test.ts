@@ -122,7 +122,8 @@ describe("runner bounded concurrency", () => {
       "test/ok-b",
     ]);
     const boom = result.checks.find((c) => c.name === "test/boom-error");
-    expect(boom?.status).toBe("fail");
+    // A thrown rule is not evaluated, not a failed check (#1291).
+    expect(boom?.status).toBe("skipped");
     expect(boom?.message).toContain("kaboom");
   });
 

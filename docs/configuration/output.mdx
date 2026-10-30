@@ -687,7 +687,7 @@ Top-level keys. Keys marked optional are omitted when they do not apply.
 
 A consumer that closes a finding when a rule stops reporting it should leave the pages in `skippedChecks` for that rule open, because the rule did not finish looking at them.
 
-**Not checked:** `notChecked` lists rules whose check did not run for this audit, so an absence of issues for them means nothing was checked. It appears only when at least one rule was not checked. Like skipped checks, these are never part of `issues` and never scored.
+**Not checked:** `notChecked` lists rules whose check did not run for this audit, so an absence of issues for them means nothing was checked. It appears only when at least one rule was not checked. An entry has `ruleId`, `name`, `check`, `reason` and `message`, and, for a rule that hit an internal error (see [A rule that throws](/rules#a-rule-that-throws)), `pages`: the first ten pages it was not evaluated on. Like skipped checks, these are never part of `issues` and never scored.
 
 | Field | Meaning |
 |-------|---------|

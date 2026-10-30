@@ -55,6 +55,8 @@ describe("a rule that throws is not evaluated, never a fail (#1291)", () => {
     for (const c of errors) expect(c).toMatchObject({ status: "skipped", skipReason: "rule-timed-out", details: { errored: true } });
     expect(errors[0]!.message.startsWith("Rule error:")).toBe(true);
     expect((errors[0]!.details as { error: string }).error.length).toBeLessThan(260);
+    // Identical rows but for the page: the report folds them into ONE check listing the pages.
+    expect(new Set(errors.map((c) => `${c.message}|${JSON.stringify(c.details)}`)).size).toBe(1);
     expect(out.checks.some((c) => c.status === "fail")).toBe(false);
     const summary = out.checks.filter((c) => c.name === "test/probe-errors");
     expect(summary).toHaveLength(1);
@@ -78,9 +80,34 @@ describe("a rule that throws is not evaluated, never a fail (#1291)", () => {
     const runner = new RuleRunner({ config: { rule_options: {}, rules: { enable: ["test/probe"] } }, additionalNamespaces: [ns] });
     const site = { baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null };
     await runner.runPageRules(page("boom1"), site);
+    await runner.runPageRules(page("boom2"), site);
     await runner.runSiteRules(site);
-    const again = await runner.runPageRules(page("boom2"), site);
-    const first = again.checks.find((c) => c.name === "test/probe-error");
-    expect(first?.details).toMatchObject({ pages: 1, error: expect.any(String) });
+    await runner.runPageRules(page("boom3"), site);
+    const second = await runner.runSiteRules(site);
+    expect(second.checks.find((c) => c.name === "test/probe-errors")).toMatchObject({ details: { pagesNotChecked: 1 } });
+  });
+
+  test("a rule that throws on EVERY page it ran on: scores clean, but is named as not checked and gates --fail-on", async () => {
+    const out = await audit(boom);
+    expect(out.checks.some((c) => c.status === "fail")).toBe(false);
+    expect(calculateHealthScore({ results: out.results }).overall).toBe(100);
+    const summary = out.checks.find((c) => c.name === "test/probe-errors");
+    expect(summary).toMatchObject({ details: { errored: true, pagesNotChecked: boom.length } });
+  });
+
+  test("a SITE rule that throws gets the same shape: one skipped row and one summary, no page count", async () => {
+    const siteRule: Rule = {
+      meta: { id: "test/site", name: "Site rule", description: "d", category: "core", scope: "site", severity: "error", weight: 3 },
+      run: () => {
+        throw new Error("site boom");
+      },
+    };
+    const ns: RuleNamespace = { name: "test", rules: [siteRule] };
+    const runner = new RuleRunner({ config: { rule_options: {}, rules: { enable: ["test/site"] } }, additionalNamespaces: [ns] });
+    const site = await runner.runSiteRules({ baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null });
+    const rows = site.checks.filter((c) => c.name === "test/site-error");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ status: "skipped", details: { errored: true, error: "site boom" } });
+    expect(site.checks.find((c) => c.name === "test/site-errors")).toMatchObject({ status: "info", details: { errored: true, site: true } });
   });
 });

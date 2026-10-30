@@ -300,7 +300,7 @@ export class RuleRunner {
   // info row. Per-AUDIT state like `timedOutPageRules`, cleared with it.
   private readonly erroredPageRules = new Map<
     string,
-    { details: { pages: number }; meta: Rule["meta"]; name: string; category: string; error: string }
+    { pages: number; meta: Rule["meta"]; name: string; category: string; error: string; site: boolean }
   >();
   // Per-run state — captured once at construction, immutable for the
   // lifetime of this runner instance. Each audit gets its own RuleRunner, so
@@ -606,36 +606,22 @@ export class RuleRunner {
       const error = e instanceof Error ? e.message : String(e);
       const clipped = error.length > MAX_RULE_ERROR_CHARS ? `${error.slice(0, MAX_RULE_ERROR_CHARS)}...` : error;
       const name = `${rule.meta.id}-error`;
-      const earlier = scopeForLog ? undefined : this.erroredPageRules.get(rule.meta.id);
-      if (earlier) {
-        earlier.details.pages++;
-        return [
-          {
-            name,
-            status: "skipped",
-            message: "Rule error: same error as the first page (already reported for this audit; rule not evaluated here)",
-            skipReason: RULE_TIMED_OUT_SKIP_REASON,
-            details: { errored: true, ruleId: rule.meta.id, pages: earlier.details.pages },
-          },
-        ];
+      // Every row of the rule carries the FIRST error and the same details, so the per-page
+      // rows are identical but for their page and the report folds them into one check that
+      // lists the pages; the count and the error live on the one `<rule>-errors` row.
+      let entry = this.erroredPageRules.get(rule.meta.id);
+      if (!entry) {
+        entry = { pages: 0, meta: rule.meta, name: rule.meta.name, category: rule.meta.category, error: clipped, site: !!scopeForLog };
+        this.erroredPageRules.set(rule.meta.id, entry);
       }
-      const details = { errored: true, ruleId: rule.meta.id, error: clipped, pages: 1 };
-      if (!scopeForLog) {
-        this.erroredPageRules.set(rule.meta.id, {
-          details,
-          meta: rule.meta,
-          name: rule.meta.name,
-          category: rule.meta.category,
-          error: clipped,
-        });
-      }
+      entry.pages += 1;
       return [
         {
           name,
           status: "skipped",
-          message: `Rule error: ${clipped} (rule not evaluated on this page)`,
+          message: `Rule error: ${entry.error} (rule not evaluated${scopeForLog ? "" : " on this page"})`,
           skipReason: RULE_TIMED_OUT_SKIP_REASON,
-          details,
+          details: { errored: true, ruleId: rule.meta.id, error: entry.error },
         },
       ];
     };
@@ -888,7 +874,7 @@ export class RuleRunner {
           );
         }
         for (const [ruleId, t] of this.erroredPageRules) {
-          const summary = errorSummaryCheck(ruleId, t.name, t.details.pages, t.error);
+          const summary = errorSummaryCheck(ruleId, t.name, t.pages, t.error, t.site);
           allChecks.push(summary);
           const existing = ruleResults.get(ruleId);
           ruleResults.set(
@@ -922,12 +908,14 @@ const MAX_RULE_ERROR_CHARS = 200;
  * The `<rule>-errors` info check (#1291): how many pages a rule that threw did
  * not evaluate, and its first error. The one row the report shows for the rule.
  */
-function errorSummaryCheck(ruleId: string, name: string, pages: number, error: string): CheckResult {
+function errorSummaryCheck(ruleId: string, name: string, pages: number, error: string, site = false): CheckResult {
   return {
     name: `${ruleId}-errors`,
     status: "info" as const,
-    message: `${name}: threw an error on ${pages} page${pages === 1 ? "" : "s"} and was not evaluated there (first error: ${error}). This is a defect in squirrelscan, not a problem with your pages`,
-    details: { errored: true, ruleId, pagesNotChecked: pages, error },
+    message: site
+      ? `${name}: threw an error and was not evaluated for the site (first error: ${error}). This is a defect in squirrelscan, not a problem with your site`
+      : `${name}: threw an error on ${pages} page${pages === 1 ? "" : "s"} and was not evaluated there (first error: ${error}). This is a defect in squirrelscan, not a problem with your pages`,
+    details: { errored: true, ruleId, ...(site ? { site: true } : { pagesNotChecked: pages }), error },
   };
 }
 

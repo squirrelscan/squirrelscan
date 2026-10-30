@@ -365,6 +365,8 @@ interface SlimJsonReport {
     check: string;
     reason: string;
     message: string;
+    /** A rule that hit an internal error: the first pages it was not evaluated on (#1291). */
+    pages?: string[];
   }>;
   // Report-only — never part of the score. Present when the Pro cloud
   // editor-summary call ran (exec-email-shaped narrative + big-ticket items).
@@ -711,6 +713,7 @@ function buildSlimReport(
             check: r.check,
             reason: r.reason,
             message: notCheckedLine(r),
+            ...(r.pages && r.pages.length > 0 ? { pages: r.pages } : {}),
           })),
         }
       : {}),
