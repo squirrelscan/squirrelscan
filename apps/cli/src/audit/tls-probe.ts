@@ -33,6 +33,7 @@ import { isNonPublicHostname } from "@squirrelscan/utils/non-public-host";
 import {
   EgressRefusedError,
   memoizeResolveHost,
+  refusedWithoutLookup,
   resolveHostAddresses,
   vetEgressTarget,
   type EgressPolicy,
@@ -74,6 +75,14 @@ export interface TlsProbeOptions {
    * the www/apex counterpart included, is `unavailable` and nothing is sent.
    */
   siteHostOnly?: boolean;
+  /**
+   * Behind an environment proxy, let the PROXY resolve the audited host and its www/apex counterpart:
+   * the CONNECT names the host, not an address this machine vetted (#1317). For a setup where the proxy
+   * owns DNS and allows by name. Off by default, and the trade-off is explicit: where those names
+   * resolve is the proxy's decision, not squirrel's. Hosts found in page content, and every host
+   * the egress guard refuses without a lookup, never take this path.
+   */
+  proxyResolvesNames?: boolean;
 }
 
 /** Connect errors after which the next vetted address may be tried: nothing reached a server. */
@@ -130,6 +139,27 @@ export function createTlsProbe(options: TlsProbeOptions = {}): TlsProbeFn {
     // One budget for the lookup and the handshakes: the lookup aborts at the
     // same deadline, and each handshake gets whatever the lookup left.
     const deadline = Date.now() + timeoutMs;
+
+    // The opt-in mode (#1317): the audited host and its www/apex counterpart only, never a name
+    // that came from page content. What the URL itself says is vetted first (an IP literal, a
+    // metadata name, a non-public name outside the audited network never take this path), and
+    // no name is resolved here: the proxy decides where it goes.
+    if (
+      proxy.kind === "proxy" &&
+      options.proxyResolvesNames === true &&
+      isAuditedHostOrCounterpart(hostname, site?.hostname) &&
+      isIP(hostname) === 0 &&
+      !refusedWithoutLookup(`https://${hostname}:${port}/`, policy)
+    ) {
+      return tunnelHandshake({
+        hostname,
+        address: hostname,
+        port,
+        proxy: proxy.url,
+        timeoutMs: Math.max(1, deadline - Date.now()),
+        ca: options.ca,
+      });
+    }
 
     const lookupDeadline = AbortSignal.timeout(timeoutMs);
     let addresses: string[];
@@ -589,6 +619,17 @@ function tunnelHandshake(args: {
     };
     socket.on("data", onData);
   });
+}
+
+/** The audited host, or its `www.` / apex counterpart: the only names the proxy may resolve (#1317). */
+function isAuditedHostOrCounterpart(
+  hostname: string,
+  site: string | undefined
+): boolean {
+  if (site === undefined) return false;
+  const host = hostname.toLowerCase();
+  if (host === site) return true;
+  return host === `www.${site}` || `www.${host}` === site;
 }
 
 function siteOrigin(

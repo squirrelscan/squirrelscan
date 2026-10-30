@@ -909,3 +909,158 @@ describe("security/tls-certificate with the CLI's probe", () => {
     expect(dns.asked).toEqual(["example.com", "www.example.com"]);
   });
 });
+
+describe("the proxy resolves names, opt-in (#1317)", () => {
+  const proxies: Array<{ close: () => Promise<void> }> = [];
+  afterEach(async () => {
+    await Promise.all(proxies.splice(0).map((proxy) => proxy.close()));
+  });
+  const via = async (mode: Parameters<typeof connectProxy>[0] = "accept") => {
+    const proxy = await connectProxy(mode);
+    proxies.push(proxy);
+    process.env.HTTPS_PROXY = `http://127.0.0.1:${proxy.port}`;
+    return proxy;
+  };
+  const probeFor = (
+    options: TlsProbeOptions,
+    answers: Record<string, string[]> = {}
+  ) => {
+    const dns = resolver(answers);
+    return {
+      dns,
+      probe: createTlsProbe({
+        ca: fixtures.root,
+        resolve: dns.resolve,
+        ...options,
+      }),
+    };
+  };
+
+  test("off by default: the CONNECT names the vetted address and the name is resolved here", async () => {
+    const proxy = await via({ refuse: 403 });
+    const { dns, probe } = probeFor(
+      { siteUrl: "https://shop.example.com/" },
+      { "shop.example.com": ["93.184.216.34"] }
+    );
+    expect(
+      await probe({ hostname: "shop.example.com", port: 443 })
+    ).toMatchObject({ code: "PROXY_CONNECT_403" });
+    expect(proxy.seen).toEqual(["93.184.216.34:443"]);
+    expect(dns.asked).toEqual(["shop.example.com"]);
+  });
+
+  test("on: the audited host is CONNECTed by name and never resolved here", async () => {
+    const proxy = await via({ refuse: 403 });
+    const { dns, probe } = probeFor({
+      siteUrl: "https://shop.example.com/",
+      proxyResolvesNames: true,
+    });
+    expect(
+      await probe({ hostname: "shop.example.com", port: 443 })
+    ).toMatchObject({ kind: "unreachable", code: "PROXY_CONNECT_403" });
+    expect(proxy.seen).toEqual(["shop.example.com:443"]);
+    expect(dns.asked).toEqual([]);
+  });
+
+  test("on: the www and apex counterparts too, in both directions", async () => {
+    for (const [site, host] of [
+      ["https://example.com/", "www.example.com"],
+      ["https://www.example.com/", "example.com"],
+    ] as const) {
+      const proxy = await via({ refuse: 403 });
+      const { dns, probe } = probeFor({
+        siteUrl: site,
+        proxyResolvesNames: true,
+      });
+      await probe({ hostname: host, port: 443 });
+      expect(proxy.seen).toEqual([`${host}:443`]);
+      expect(dns.asked).toEqual([]);
+    }
+  });
+
+  test("on: a name that came from page content is still vetted here and CONNECTed by address", async () => {
+    const proxy = await via({ refuse: 403 });
+    const { dns, probe } = probeFor(
+      { siteUrl: "https://example.com/", proxyResolvesNames: true },
+      {
+        "cdn.othersite.com": ["93.184.216.34"],
+        "evil.example.com": ["169.254.169.254"],
+      }
+    );
+    await probe({ hostname: "cdn.othersite.com", port: 443 });
+    expect(proxy.seen).toEqual(["93.184.216.34:443"]);
+    expect(dns.asked).toEqual(["cdn.othersite.com"]);
+    // a sibling subdomain of the site is not the audited host or its counterpart: vetted, and refused on a metadata answer
+    expect(
+      await probe({ hostname: "evil.example.com", port: 443 })
+    ).toMatchObject({ code: "EGRESS_REFUSED" });
+    expect(proxy.seen).toEqual(["93.184.216.34:443"]);
+  });
+
+  test("on: an IP literal and a metadata name are refused in both modes before a byte is sent", async () => {
+    for (const proxyResolvesNames of [false, true]) {
+      const proxy = await via();
+      const { probe } = probeFor({
+        siteUrl: "https://example.com/",
+        proxyResolvesNames,
+      });
+      // not the audited host: vetted locally either way
+      expect(
+        await probe({ hostname: "169.254.169.254", port: 443 })
+      ).toMatchObject({ code: "EGRESS_REFUSED" });
+      expect(
+        await probe({ hostname: "metadata.google.internal", port: 443 })
+      ).toMatchObject({ code: "EGRESS_REFUSED" });
+      // the audited host itself being such a name or literal is refused without a lookup, too
+      for (const site of [
+        "https://169.254.169.254/",
+        "https://metadata.google.internal/",
+      ]) {
+        const host = new URL(site).hostname;
+        const { probe: p } = probeFor({
+          siteUrl: site,
+          proxyResolvesNames,
+          allowPrivateNetwork: false,
+        });
+        const result = await p({ hostname: host, port: 443 });
+        expect(result).toMatchObject({ code: "EGRESS_REFUSED" });
+      }
+      expect(
+        proxy.seen.filter(
+          (s) => s.includes("169.254") || s.includes("metadata")
+        )
+      ).toEqual([]);
+    }
+  });
+
+  test("on: a proxy that refuses, hangs or sends garbage is not checked, and credentials never reach the result", async () => {
+    for (const mode of [{ refuse: 407 }, "hang", "garbage"] as const) {
+      const proxy = await connectProxy(mode);
+      proxies.push(proxy);
+      process.env.HTTPS_PROXY = `http://user:s3cret@127.0.0.1:${proxy.port}`;
+      const { probe } = probeFor({
+        siteUrl: "https://shop.example.com/",
+        proxyResolvesNames: true,
+        timeoutMs: 600,
+      });
+      const result = await probe({ hostname: "shop.example.com", port: 443 });
+      expect(result.kind).toBe("unreachable");
+      expect(JSON.stringify(result)).not.toContain("s3cret");
+    }
+  });
+
+  test("on: a certificate through the tunnel is still verified against the name", async () => {
+    const proxy = await via();
+    const port = await serve(fixtures.valid);
+    // "localhost" is the audited host; the proxy relays to it by name and the certificate covers localhost
+    const { probe } = probeFor({
+      siteUrl: `https://localhost:${port}/`,
+      proxyResolvesNames: true,
+      allowPrivateNetwork: true,
+    });
+    const result = certificate(await probe({ hostname: "localhost", port }));
+    expect(proxy.seen).toEqual([`localhost:${port}`]);
+    expect(result.trusted).toBe(true);
+    expect(result.certificate.names).toContain("localhost");
+  });
+});

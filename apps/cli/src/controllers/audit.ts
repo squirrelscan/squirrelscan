@@ -1136,7 +1136,11 @@ export async function runAudit(
         ...(options.offline ? { ownSiteOnly: true } : {}),
         // #712: names the certificate problem behind a TLS root failure. The
         // crawl's own hosts, vetted and pinned as the crawl's requests are.
-        tlsProbe: createTlsProbe({ allowPrivateNetwork: true }),
+        tlsProbe: createTlsProbe({
+          allowPrivateNetwork: true,
+          proxyResolvesNames:
+            mergedConfig.crawler.tls_proxy_resolves_names === true,
+        }),
         discoveryProbePerHost: crawlConcurrency.discoveryProbePerHost,
         // Only the probes an enabled rule reads, and none when the user turned
         // them off: a firewall can ban the audit for asking for /swagger.json
@@ -1957,6 +1961,8 @@ export async function runAudit(
           tlsProbe: createTlsProbe({
             siteUrl: crawlMeta?.baseUrl ?? baseUrl,
             siteHostOnly: options.offline === true,
+            proxyResolvesNames:
+              mergedConfig.crawler.tls_proxy_resolves_names === true,
           }),
         },
         {

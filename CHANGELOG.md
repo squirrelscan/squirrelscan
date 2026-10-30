@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`[crawler] tls_proxy_resolves_names` lets a proxy that owns DNS resolve the TLS check's hosts.** Behind `HTTPS_PROXY`, `security/tls-certificate` resolves the name itself and asks the proxy for a tunnel to the vetted address, which a proxy that only allows connections by name refuses. With `tls_proxy_resolves_names = true` the audited host and its `www` or apex counterpart are requested by name with no local lookup, the hostname stays the SNI and verification name, and a refusing, hanging or garbled proxy still gives `not checked`. Off by default, because where those two names resolve becomes the proxy's decision; every other host is still resolved, vetted and pinned by squirrel, and an IP literal, a metadata name or a name the guard refuses on sight never take this path. See [Behind an HTTP proxy](https://docs.squirrelscan.com/rules/security/tls-certificate#behind-an-http-proxy). (#1317)
+
 ## v0.0.143 (2026-10-30)
 
 Two new performance rules, `perf/content-in-js-bundle` and `perf/framework-data-payload`, find page content shipped inside JavaScript. Page weight now measures the srcset candidate a browser downloads and leaves lazy images out, `squirrel auth login` opens a branded page, parallel audits no longer fail with a locked database, and `store_scripts` no longer changes what an audit finds. A start URL the audit cannot run on is refused before any request, `security/tls-certificate` shows as not checked when it cannot run, and the about, contact and privacy rules take a `paths` option.

@@ -294,7 +294,11 @@ export async function runCrawl(
             // to by address; a metadata or link-local answer is never requested.
             pinOwnHosts: pinOwnHosts(),
             // #712: names the certificate problem behind a TLS root failure.
-            tlsProbe: createTlsProbe({ allowPrivateNetwork: true }),
+            tlsProbe: createTlsProbe({
+              allowPrivateNetwork: true,
+              proxyResolvesNames:
+                config.crawler.tls_proxy_resolves_names === true,
+            }),
             // A crawl does not know which rules will read it later, so every
             // probe goes out unless [crawler] disable_discovery_probes = true
             // (#409).
