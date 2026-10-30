@@ -43,6 +43,7 @@ import {
   siteRuleBudgetMs,
 } from "./rule-budget";
 import { noindexSource, skipsNoindexPages } from "./shared/noindex";
+import { pageTypeSkip, trustedPageType } from "./shared/page-type";
 
 // Minimal config interface — CLI's full Config satisfies this
 export interface RulesConfig {
@@ -479,6 +480,18 @@ export class RuleRunner {
               details: { foldKey: "noindex" },
             },
           ],
+        };
+      }
+    }
+
+    // Page-type gate (pub#841): a contact or legal page is short on purpose, so the rules that
+    // judge length or density skip it. Model labels at or above the trust bar only.
+    if (rule.meta.scope === "page" && rule.meta.skipOnPageType?.length) {
+      const label = trustedPageType(ctx.parsed);
+      if (label !== null && rule.meta.skipOnPageType.includes(label)) {
+        return {
+          meta: rule.meta,
+          checks: [pageTypeSkip(rule.meta.id, label, rule.meta.name)],
         };
       }
     }

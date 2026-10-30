@@ -21,7 +21,9 @@ The 300-word floor is also a precedence boundary. `content/thin-vs-site-norm` ne
 
 ### Pages kept out of search
 
-A page marked `noindex` (a `<meta name="robots">` tag or an `X-Robots-Tag` header containing `noindex`) is never offered to a search engine, so thin content on it is not a finding: login, sign-up and dashboard pages are short by design. Such a page gets one skipped check, `Skipped: page is set to noindex via robots meta tag` (or `via X-Robots-Tag header`), instead of its usual result, and skipped checks do not count toward the score. Pages are skipped only on a site that is itself being indexed. When the homepage is noindex too (a staging site or preview deployment) nothing is skipped. See [pages kept out of search](/rules#pages-kept-out-of-search). Contact and legal pages are not skipped yet: that needs a page type from a classifier model, which squirrel does not use to relax a verdict unless the label is model-sourced and confident.
+A page marked `noindex` (a `<meta name="robots">` tag or an `X-Robots-Tag` header containing `noindex`) is never offered to a search engine, so thin content on it is not a finding: login, sign-up and dashboard pages are short by design. Such a page gets one skipped check, `Skipped: page is set to noindex via robots meta tag` (or `via X-Robots-Tag header`), instead of its usual result, and skipped checks do not count toward the score. Pages are skipped only on a site that is itself being indexed. When the homepage is noindex too (a staging site or preview deployment) nothing is skipped. See [pages kept out of search](/rules#pages-kept-out-of-search).
+
+**Contact and legal pages are skipped too.** They are short on purpose. When the page classifier's model labels a page `contact` or `legal` with a confidence of at least 0.9, the page gets one skipped check, `Skipped: Word Count is not judged on a contact page` (or `legal page`), and `details.skippedByType` counts it. A label from the rules fallback, which is read from the page's own structured data, never relaxes a verdict, and neither does a model label below 0.9; those pages keep the 300-word floor.
 
 ## How to fix it
 
