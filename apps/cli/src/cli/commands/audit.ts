@@ -108,6 +108,7 @@ import {
   createRunFinalizer,
   type FinalizeRunInput,
   markRunning,
+  registerableUrl,
   registerRun,
   reportProgress,
   type RegisteredRun,
@@ -1843,6 +1844,15 @@ export const audit = defineCommand({
       // (with consent when that is another site) and never grades the shortener.
       let startRedirect: SeedRedirectRecord | undefined;
       const startParsed = parseUserUrl(args.url);
+      if (!registerableUrl(args.url)) {
+        // Before any request: no balance read, no run registered or charged.
+        commandResult = "error";
+        console.error(
+          `${fmt.red("Error:")} ${startParsed.ok ? "Invalid URL" : startParsed.error}`
+        );
+        process.exitCode = 1;
+        return;
+      }
       if (startParsed.ok) {
         // #403: a local store this process cannot write stops the run before
         // anything is requested, the start URL's resolution included. The

@@ -36,6 +36,7 @@ import { resolveAuditStart } from "@/cli/start-redirect";
 import { findConfigFile, getGlobalConfigPath, loadConfig } from "@/config";
 import { runAudit, type RunAuditOptions } from "@/controllers/audit";
 import { pinOwnHosts } from "@/crawl/pin-own-hosts";
+import { registerableUrl } from "@/lib/run-tracker";
 
 import { version } from "../../../package.json";
 import {
@@ -173,6 +174,13 @@ async function runWebsiteAudit(input: {
   internalLinks?: boolean;
   followRedirect?: boolean;
 }): Promise<CallToolResult> {
+  // The one entry check: http(s) only. An unsupported scheme or junk is refused
+  // before any request, and the URL is not echoed back.
+  if (!registerableUrl(input.url)) {
+    return errorResult(
+      "invalid_url: only http:// and https:// URLs can be audited. Nothing was registered or charged."
+    );
+  }
   const config = await loadConfig(localConfigPath(), { silent: true });
   // #1281: resolve the start URL's redirects first. A same-site one is
   // followed silently; another site is audited only with explicit consent

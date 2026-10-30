@@ -339,6 +339,27 @@ function readUpgradeOffer(raw: unknown): UpgradeOffer | null {
 }
 
 /**
+ * The URL to register a run for, or null when the audit cannot start on it.
+ * Same parse as the audit (`parseUserUrl`: http/https only, a host, scheme
+ * added to a bare domain), then re-checked on the normalised result, with any
+ * `user:password@` removed: credentials are never sent to the register call.
+ */
+export function registerableUrl(raw: string): string | null {
+  const parsed = parseUserUrl(raw);
+  if (!parsed.ok) return null;
+  try {
+    const u = new URL(parsed.url);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    if (!u.hostname) return null;
+    u.username = "";
+    u.password = "";
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Register the run at audit START. Returns the ids the dashboard needs to track
  * it live, or null on ANY failure (no credential, network error, non-2xx, bad
  * body) — the audit then simply proceeds untracked.
@@ -362,11 +383,15 @@ export async function registerRun(
 ): Promise<RegisteredRun | null> {
   // Resolve the base ONCE here; thread it through the returned RegisteredRun.
   const base = lifecycleBase();
-  // Callers pass the user's raw input, and servers before #855 validate it
-  // with z.string().url() — a bare domain ("example.com") 400s and the run
-  // proceeds untracked. Add the scheme for scheme-less input; anything the
-  // user typed as a real URL is sent verbatim.
-  const parsed = input.url.includes("://") ? null : parseUserUrl(input.url);
+  // Callers pass the user's raw input. Only a URL the audit itself would accept
+  // is registered: anything else (an unsupported scheme, no host, junk) never
+  // creates a run, so nothing is debited for an audit that cannot start.
+  // A bare domain gets its scheme added; credentials in the URL are dropped.
+  const url = registerableUrl(input.url);
+  if (!url) {
+    logger.debug("run-tracker: register skipped, not an http(s) URL");
+    return null;
+  }
   // #1534: one key for BOTH attempts, so a retry that races a first attempt the
   // server is still committing converges on the SAME run row and the SAME
   // audit_base debit rather than creating (and charging for) a second run.
@@ -374,7 +399,7 @@ export async function registerRun(
   // as the old behavior there — which is why the timeout is generous first.
   const idempotencyKey = crypto.randomUUID();
   const body = {
-    url: parsed?.ok ? parsed.url : input.url,
+    url,
     mode: input.mode ?? "audit",
     idempotencyKey,
     ...(input.ephemeral ? { ephemeral: true } : {}),

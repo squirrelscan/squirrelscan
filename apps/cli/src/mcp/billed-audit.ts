@@ -41,6 +41,7 @@ import {
   type FinalizeRunInput,
   finalizeRun,
   markRunning,
+  registerableUrl,
   registerRun,
   reportProgress,
   type RegisteredRun,
@@ -209,6 +210,9 @@ export async function planMcpAudit(input: {
   const { url, config, level } = input;
   const ephemeral = input.ephemeral ?? config.cloud.ephemeral;
   if (input.offline) return { kind: "local" };
+  // Nothing is read from or registered with the cloud for a URL the audit
+  // cannot start on; the local run reports the invalid URL.
+  if (!registerableUrl(url)) return { kind: "local" };
 
   const resolved = createCloudClientWithSource({
     timeoutMs: STATUS_REQUEST_TIMEOUT_MS,
