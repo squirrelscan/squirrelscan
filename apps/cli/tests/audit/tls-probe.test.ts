@@ -416,7 +416,8 @@ describe("the egress guard runs before every handshake", () => {
 
 /** A CONNECT proxy on 127.0.0.1 that records every target it is asked for. */
 async function connectProxy(
-  mode: "accept" | { refuse: number } | "hang" | "garbage" = "accept"
+  mode: "accept" | { refuse: number } | "hang" | "garbage" = "accept",
+  listenHost = "127.0.0.1"
 ): Promise<{ port: number; seen: string[]; close: () => Promise<void> }> {
   const seen: string[] = [];
   const open = new Set<Socket>();
@@ -448,7 +449,7 @@ async function connectProxy(
     open.add(upstream);
     upstream.on("error", () => client.destroy());
   });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  await new Promise<void>((resolve) => server.listen(0, listenHost, resolve));
   return {
     port: (server.address() as AddressInfo).port,
     seen,
@@ -548,6 +549,57 @@ describe("behind an HTTP proxy from the environment (#1259)", () => {
         (problem) => problem.kind
       )
     ).toContain("hostname");
+  });
+
+  test("an IP-literal host's certificate is judged against that address, not the proxy's (#1259 review)", async () => {
+    // The fixture certificate covers 127.0.0.1; the proxy listens on ::1, a different address.
+    let proxy: Awaited<ReturnType<typeof connectProxy>>;
+    try {
+      proxy = await connectProxy("accept", "::1");
+    } catch {
+      return; // no IPv6 loopback on this machine
+    }
+    proxies.push(proxy);
+    process.env.HTTPS_PROXY = `http://[::1]:${proxy.port}`;
+    const port = await serve(fixtures.valid);
+    const { probe } = probeVia({}, { "127.0.0.1": ["127.0.0.1"] });
+    const tunnelled = certificate(await probe({ hostname: "127.0.0.1", port }));
+    expect(proxy.seen).toEqual([`127.0.0.1:${port}`]);
+    expect(tunnelled.trusted).toBe(true);
+    expect(tunnelled.trustError).toBeUndefined();
+    expect(certificateProblems(tunnelled, "127.0.0.1", NOW)).toEqual([]);
+    // Without the proxy the same handshake agrees.
+    delete process.env.HTTPS_PROXY;
+    const direct = certificate(await probe({ hostname: "127.0.0.1", port }));
+    expect(direct.trusted).toBe(true);
+  });
+
+  test("a proxy URL with a malformed percent escape in its credentials is not checked, never a throw", async () => {
+    const proxy = await via({ refuse: 403 });
+    process.env.HTTPS_PROXY = `http://us%zzer:pw@127.0.0.1:${proxy.port}`; // pragma: allowlist secret
+    const { probe } = probeVia();
+    expect(
+      await probe({ hostname: "shop.example.com", port: 443 })
+    ).toMatchObject({
+      kind: "unreachable",
+      code: "PROXY_BAD_URL",
+    });
+    expect(proxy.seen).toEqual([]);
+  });
+
+  test("an empty NO_PROXY does not shadow no_proxy, and CIDR entries do not match", () => {
+    process.env.HTTPS_PROXY = "http://127.0.0.1:3128";
+    process.env.NO_PROXY = "";
+    process.env.no_proxy = "shop.example.com";
+    try {
+      expect(proxyForTarget("shop.example.com", 443).kind).toBe("direct");
+      delete process.env.no_proxy;
+      process.env.NO_PROXY = "10.0.0.0/8";
+      expect(proxyForTarget("10.1.2.3", 443).kind).toBe("proxy");
+    } finally {
+      delete process.env.NO_PROXY;
+      delete process.env.no_proxy;
+    }
   });
 
   test("a host named by NO_PROXY is probed directly, and the proxy is never contacted", async () => {

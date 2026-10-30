@@ -31,22 +31,33 @@ export const optionsSchema = z
       .min(1)
       .optional()
       .describe(
-        "Warn when the certificate expires within this many days. Unset (the default): relative to the certificate's lifetime, see warnDaysFor",
+        "Warn when the certificate expires within this many days. Unset (the default): relative to the certificate's lifetime, see expiryWindowFor",
       ),
     error_days: z
       .number()
       .int()
       .min(0)
-      .default(7)
-      .describe("Error when the certificate expires within this many days"),
+      .optional()
+      .describe(
+        "Error when the certificate expires within this many days. Unset (the default): 7 days, or a tenth of the certificate's lifetime for a short-lived one",
+      ),
   })
   // Otherwise the warning band is empty and every near expiry reads as an error.
-  .refine((options) => options.warn_days === undefined || options.error_days <= options.warn_days, {
-    message: "error_days must not be more than warn_days",
-    path: ["error_days"],
-  });
+  .refine(
+    (options) =>
+      options.warn_days === undefined ||
+      options.error_days === undefined ||
+      options.error_days <= options.warn_days,
+    {
+      message: "error_days must not be more than warn_days",
+      path: ["error_days"],
+    },
+  );
 
 export type TlsCertificateOptions = z.infer<typeof optionsSchema>;
+
+/** The error threshold for a certificate with a normal lifetime (#712). */
+export const DEFAULT_ERROR_DAYS = 7;
 
 /**
  * Days before a certificate's end at which an auto-renewing CA has renewed it
@@ -54,28 +65,76 @@ export type TlsCertificateOptions = z.infer<typeof optionsSchema>;
  * a 90-day Let's Encrypt certificate), and the managed certificates on
  * Cloudflare, Google and Vercel do the same. A fixed 30-day warning therefore
  * fired on healthy certificates for a day or so before every routine renewal.
- * The default warning waits until a renewal is this many days overdue.
+ * The default warning waits until a renewal is this many days overdue, capped at
+ * {@link RENEWAL_MARGIN_FRACTION} of the lifetime so a short-lived certificate
+ * keeps a window of its own.
  */
 export const RENEWAL_MARGIN_DAYS = 14;
+export const RENEWAL_MARGIN_FRACTION = 0.15;
 
 /** The warning window used when a certificate's lifetime cannot be read. */
 const FALLBACK_WARN_DAYS = 30;
 
+/** A tenth of the lifetime, and at least this many days, bounds a default error threshold. */
+const ERROR_LIFETIME_FRACTION = 0.1;
+const MIN_ERROR_DAYS = 1;
+
+export interface ExpiryWindow {
+  warnDays: number;
+  errorDays: number;
+  /** Where each threshold came from: the option, or the certificate's lifetime. */
+  warnSource: "option" | "lifetime";
+  errorSource: "option" | "lifetime";
+}
+
 /**
- * The remaining days at or below which the expiry check warns. An explicit
- * `warn_days` always wins. Otherwise it is the last third of the certificate's
- * lifetime (`notAfter - notBefore`) less {@link RENEWAL_MARGIN_DAYS}, never
- * below `error_days`: 16 days for a 90-day certificate, 52 for a 200-day one.
- * As lifetimes shrink (47 days by 2029) the window shrinks with them instead of
+ * The remaining days at or below which the expiry check errors and warns (#1279).
+ * Explicit `warn_days` and `error_days` always win. Otherwise both follow the
+ * certificate's lifetime `L` (`notAfter - notBefore`, rounded to whole days, so a
+ * Let's Encrypt certificate that is 90 days less a second reads 90):
+ *
+ *  - warn: the last third of `L` less a renewal margin (14 days, at most 15% of
+ *    `L`), never below the error threshold: 16 days for a 90-day certificate, 52
+ *    for 200, 8 for 47;
+ *  - error: {@link DEFAULT_ERROR_DAYS}, or a tenth of `L` (at least a day) for a
+ *    certificate under 70 days, so a 6-day certificate does not fail on its third
+ *    day and a 47-day one keeps a warning step before the error (4 days).
+ *
+ * As lifetimes shrink (47 days by 2029) the windows shrink with them instead of
  * flagging every valid certificate.
  */
-export function warnDaysFor(certificate: TlsCertificate, options: TlsCertificateOptions): number {
-  if (options.warn_days !== undefined) return options.warn_days;
-  const lifetimeDays = (certificate.validTo.getTime() - certificate.validFrom.getTime()) / DAY_MS;
-  if (!Number.isFinite(lifetimeDays) || lifetimeDays <= 0) {
-    return Math.max(options.error_days, FALLBACK_WARN_DAYS);
+export function expiryWindowFor(
+  certificate: TlsCertificate,
+  options: TlsCertificateOptions,
+): ExpiryWindow {
+  const lifetimeDays = Math.round(
+    (certificate.validTo.getTime() - certificate.validFrom.getTime()) / DAY_MS,
+  );
+  const known = Number.isFinite(lifetimeDays) && lifetimeDays > 0;
+
+  const derivedError = known
+    ? Math.max(MIN_ERROR_DAYS, Math.min(DEFAULT_ERROR_DAYS, Math.floor(lifetimeDays * ERROR_LIFETIME_FRACTION)))
+    : DEFAULT_ERROR_DAYS;
+  const errorDays = options.error_days ?? derivedError;
+
+  if (options.warn_days !== undefined) {
+    return {
+      warnDays: options.warn_days,
+      errorDays: Math.min(errorDays, options.warn_days),
+      warnSource: "option",
+      errorSource: options.error_days === undefined ? "lifetime" : "option",
+    };
   }
-  return Math.max(options.error_days, Math.floor(lifetimeDays / 3 - RENEWAL_MARGIN_DAYS));
+  const margin = known
+    ? Math.min(RENEWAL_MARGIN_DAYS, lifetimeDays * RENEWAL_MARGIN_FRACTION)
+    : RENEWAL_MARGIN_DAYS;
+  const derivedWarn = known ? Math.floor(lifetimeDays / 3 - margin) : FALLBACK_WARN_DAYS;
+  return {
+    warnDays: Math.max(errorDays, derivedWarn),
+    errorDays,
+    warnSource: "lifetime",
+    errorSource: options.error_days === undefined ? "lifetime" : "option",
+  };
 }
 
 const DAY_MS = 86_400_000;
@@ -215,6 +274,7 @@ function expiryCheck(
   };
   const name = "tls-certificate-expiry";
 
+  const expiryWindow = expiryWindowFor(certificate, options);
   if (certificate.validTo.getTime() <= now.getTime()) {
     return {
       name,
@@ -223,7 +283,7 @@ function expiryCheck(
       // ago is "less than a day ago", not "1 day ago".
       message: `Certificate expired on ${expires} (${dayText(daysUntil(now, certificate.validTo))} ago)`,
       value: expires,
-      expected: `valid for more than ${options.error_days} days`,
+      expected: `valid for more than ${expiryWindow.errorDays} days`,
       details,
     };
   }
@@ -237,25 +297,31 @@ function expiryCheck(
       details,
     };
   }
-  if (days <= options.error_days) {
+  const windowDetails = {
+    ...details,
+    warnDays: expiryWindow.warnDays,
+    errorDays: expiryWindow.errorDays,
+    warnDaysSource: expiryWindow.warnSource,
+    errorDaysSource: expiryWindow.errorSource,
+  };
+  if (days <= expiryWindow.errorDays) {
     return {
       name,
       status: "fail",
-      message: `Certificate expires in ${dayText(days)} (${expires}), within the ${options.error_days}-day error threshold`,
+      message: `Certificate expires in ${dayText(days)} (${expires}), within the ${expiryWindow.errorDays}-day error threshold`,
       value: expires,
-      expected: `valid for more than ${options.error_days} days`,
-      details,
+      expected: `valid for more than ${expiryWindow.errorDays} days`,
+      details: windowDetails,
     };
   }
-  const warnDays = warnDaysFor(certificate, options);
-  if (days <= warnDays) {
+  if (days <= expiryWindow.warnDays) {
     return {
       name,
       status: "warn",
-      message: `Certificate expires in ${dayText(days)} (${expires}), within the ${warnDays}-day warning threshold`,
+      message: `Certificate expires in ${dayText(days)} (${expires}), within the ${expiryWindow.warnDays}-day warning threshold`,
       value: expires,
-      expected: `valid for more than ${warnDays} days`,
-      details: { ...details, warnDays, warnDaysSource: options.warn_days === undefined ? "lifetime" : "option" },
+      expected: `valid for more than ${expiryWindow.warnDays} days`,
+      details: windowDetails,
     };
   }
   return {

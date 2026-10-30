@@ -11,7 +11,7 @@ import {
   checkTlsCertificate,
   optionsSchema,
   tlsCertificateRule,
-  warnDaysFor,
+  expiryWindowFor,
   wwwVariant,
   type TlsCertificateOptions,
 } from "../src/security/tls-certificate";
@@ -151,25 +151,69 @@ describe("expiry thresholds", () => {
     const thirty = await audit({ localhost: fixtures.expiresIn28Days }, { warn_days: 30 });
     expect(check(thirty.checks, "tls-certificate-expiry")).toMatchObject({
       status: "warn",
-      details: { warnDays: 30, warnDaysSource: "option" },
+      details: { warnDays: 30, warnDaysSource: "option", errorDays: 7, errorDaysSource: "lifetime" },
     });
     const five = await audit({ localhost: fixtures.expiresIn10Days }, { warn_days: 5, error_days: 3 });
     expect(check(five.checks, "tls-certificate-expiry")?.status).toBe("pass");
   });
 
-  test("the warning window follows the certificate's lifetime", () => {
-    const at = (lifetimeDays: number, options: object = {}) =>
-      warnDaysFor(
+  test("the windows follow the certificate's lifetime", () => {
+    const at = (lifetimeDays: number, options: object = {}) => {
+      const window = expiryWindowFor(
         { names: [], issuer: "x", validFrom: new Date(0), validTo: new Date(lifetimeDays * DAY_MS) },
         optionsSchema.parse(options),
       );
-    expect(at(90)).toBe(16);
-    expect(at(200)).toBe(52);
-    expect(at(365)).toBe(107);
-    // Shrinking lifetimes shrink the window; it never drops under the error threshold.
-    expect(at(47)).toBe(7);
-    expect(at(47, { error_days: 2 })).toBe(2);
-    expect(at(0)).toBe(30);
+      return [window.warnDays, window.errorDays];
+    };
+    // [warn days, error days]
+    expect(at(90)).toEqual([16, 7]);
+    expect(at(200)).toEqual([52, 7]);
+    expect(at(365)).toEqual([107, 7]);
+    expect(at(47)).toEqual([8, 4]);
+    expect(at(30)).toEqual([5, 3]);
+    expect(at(10)).toEqual([1, 1]);
+    expect(at(6)).toEqual([1, 1]);
+    // Let's Encrypt's 90 days less a second still reads as 90.
+    expect(
+      expiryWindowFor(
+        { names: [], issuer: "x", validFrom: new Date(0), validTo: new Date(90 * DAY_MS - 1000) },
+        optionsSchema.parse({}),
+      ).warnDays,
+    ).toBe(16);
+    // Explicit options win; error never exceeds an explicit warn.
+    expect(at(90, { warn_days: 30 })).toEqual([30, 7]);
+    expect(at(90, { error_days: 3 })).toEqual([16, 3]);
+    expect(at(6, { error_days: 3 })).toEqual([3, 3]);
+    expect(at(90, { warn_days: 5 })).toEqual([5, 5]);
+    expect(at(0)).toEqual([30, 7]);
+  });
+
+  test.each([
+    // lifetime days, days left, expected status
+    [90, 28, "pass"],
+    [90, 16, "warn"],
+    [90, 10, "warn"],
+    [90, 5, "fail"],
+    [365, 100, "warn"],
+    [365, 108, "pass"],
+    [47, 15, "pass"],
+    [47, 8, "warn"],
+    [47, 4, "fail"],
+    [30, 6, "pass"],
+    [30, 4, "warn"],
+    [30, 3, "fail"],
+    [10, 5, "pass"],
+    [10, 1, "fail"],
+    [6, 5, "pass"],
+    [6, 3, "pass"],
+    [6, 1, "fail"],
+  ] as const)("a %d-day certificate with %d days left is %s", async (lifetime, left, status) => {
+    const certificate = cert(LOCAL, {
+      validFrom: new Date(NOW.getTime() + left * DAY_MS + HOUR_MS - lifetime * DAY_MS),
+      validTo: inDays(left),
+    });
+    const { checks } = await audit({ localhost: certificate });
+    expect(check(checks, "tls-certificate-expiry")?.status).toBe(status);
   });
 
   test("error_days moves the error threshold", async () => {
@@ -177,9 +221,10 @@ describe("expiry thresholds", () => {
     expect(check(checks, "tls-certificate-expiry")?.status).toBe("fail");
   });
 
-  test("the options default to a lifetime-relative warning and a 7-day error", () => {
-    expect(DEFAULTS).toEqual({ error_days: 7 });
+  test("the options default to lifetime-relative windows", () => {
+    expect(DEFAULTS).toEqual({});
     expect(DEFAULTS.warn_days).toBeUndefined();
+    expect(DEFAULTS.error_days).toBeUndefined();
   });
 
   test("an error threshold above the warning threshold is refused, naming error_days", () => {

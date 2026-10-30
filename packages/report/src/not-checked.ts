@@ -45,7 +45,7 @@ export interface NotCheckedReportShape {
 const HINTS: Record<string, string> = {
   // #1259: no handshake was made. The rule's message names why.
   [TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON]:
-    "Run the audit again from a network that can open a direct TLS connection to the host (the rule makes no handshake behind an HTTP proxy, and with --offline it contacts the audited host only), or check the certificate with a TLS tool.",
+    "Run the audit again from a network that can open a direct TLS connection to the host (with --offline it contacts the audited host only, and behind an HTTP proxy it needs one that allows CONNECT to the address), or check the certificate with a TLS tool.",
   [EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON]:
     "Turn external link checks on to check them: in the CLI pass --external-links (or drop --no-external-links, --offline, or external_links.enabled = false); in the cloud they are a website setting.",
   [LINK_TARGETS_NOT_FETCHED_SKIP_REASON]:
