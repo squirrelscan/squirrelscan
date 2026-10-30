@@ -85,6 +85,14 @@ type FastPattern = {
    * rather than under the provider's name. See continuedTokenEnd.
    */
   sharedPrefix?: string;
+  /**
+   * A check the match has to pass in its surroundings before it counts: the
+   * shapes that are only a credential when something specific follows or
+   * does not surround them (a PEM header needs its key material, a Twitter
+   * bearer is not the interior of a base64 payload). Gets the matched value,
+   * the scanned text and the match's index in it.
+   */
+  accept?: (value: string, content: string, index: number) => boolean;
 };
 
 // Type for context patterns (generic patterns, only run if keyword present)
@@ -181,6 +189,37 @@ export const FAST_PATTERNS: FastPattern[] = [
     keywords: ["pplx-"],
     confidence: "high",
   },
+  {
+    // `sk-or-v1-` + 64 hex. The OpenAI patterns stop at the first hyphen after
+    // `sk-or`, so none of them matches it (#1309).
+    name: "OpenRouter API Key",
+    pattern: /sk-or-v1-[a-f0-9]{64}/g,
+    keywords: ["sk-or-v1-"],
+    confidence: "high",
+  },
+  {
+    // `csk-` + 48 lowercase alphanumerics. The legacy OpenAI `sk-` pattern
+    // never saw it: its prefix sits inside the word `csk-` (#1309).
+    name: "Cerebras API Key",
+    pattern: /csk-[a-z0-9]{40,}/g,
+    keywords: ["csk-"],
+    confidence: "high",
+  },
+  {
+    name: "NVIDIA API Key",
+    pattern: /nvapi-[A-Za-z0-9_-]{60,}/g,
+    keywords: ["nvapi-"],
+    confidence: "high",
+  },
+  {
+    // `fw_` is a short prefix and also the start of identifiers
+    // (`fw_config_name`), so the tail has to look drawn at random: upper and
+    // lower case and a digit, no separator.
+    name: "Fireworks AI API Key",
+    pattern: /(?<![A-Za-z0-9_-])fw_(?=[A-Za-z0-9]{0,47}[A-Z])(?=[A-Za-z0-9]{0,47}[a-z])(?=[A-Za-z0-9]{0,47}[0-9])[A-Za-z0-9]{24,48}/g,
+    keywords: ["fw_"],
+    confidence: "medium",
+  },
 
   // Database/Backend Services
   {
@@ -200,7 +239,7 @@ export const FAST_PATTERNS: FastPattern[] = [
     confidence: "medium",
   },
   {
-    name: "Supabase Service Role Key",
+    name: "Supabase Personal Access Token",
     pattern: /sbp_[a-f0-9]{40}/g,
     keywords: ["sbp_"],
     confidence: "high",
@@ -282,6 +321,23 @@ export const FAST_PATTERNS: FastPattern[] = [
     publicByDesign: true,
   },
   {
+    // A restricted key carries the permissions its owner gave it; live ones
+    // act on a real account (#1309).
+    name: "Stripe Restricted Key",
+    pattern: /rk_live_[0-9a-zA-Z]{24,}/g,
+    keywords: ["rk_live_"],
+    confidence: "high",
+  },
+  {
+    // Admin API access token (`shpat_`), shared-secret and private-app
+    // passwords (`shpss_`, `shppa_`) and custom-app tokens (`shpca_`): 32 hex
+    // after the prefix, all of them server-side credentials (#1309).
+    name: "Shopify Admin API Token",
+    pattern: /shp(?:at|ss|ca|pa)_[a-fA-F0-9]{32}/g,
+    keywords: ["shpat_", "shpss_", "shpca_", "shppa_"],
+    confidence: "high",
+  },
+  {
     name: "Square Access Token",
     pattern: /sq0atp-[0-9A-Za-z_-]{22}/g,
     keywords: ["sq0atp-"],
@@ -295,6 +351,14 @@ export const FAST_PATTERNS: FastPattern[] = [
   },
 
   // Cloud Providers
+  {
+    // `GOCSPX-` + 28 characters: the secret half of a Google OAuth client,
+    // which the client ID beside it (public) never is (#1309).
+    name: "Google OAuth Client Secret",
+    pattern: /GOCSPX-[A-Za-z0-9_-]{28}/g,
+    keywords: ["gocspx-"],
+    confidence: "high",
+  },
   {
     name: "AWS Access Key ID",
     pattern: /(A3T[A-Z0-9]|AKIA|AGPA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}/g,
@@ -531,6 +595,7 @@ export const FAST_PATTERNS: FastPattern[] = [
     keywords: ["do"],
     confidence: "medium",
     valuePosition: true,
+    accept: (value) => !isIbanShaped(value),
   },
 
   // Auth Services
@@ -558,36 +623,57 @@ export const FAST_PATTERNS: FastPattern[] = [
     confidence: "high",
   },
 
+  {
+    // RevenueCat's public SDK keys, one per store: `appl_` (App Store), `goog_`
+    // (Play), `amzn_`, `strp_` (Stripe) and `rcb_` (Web Billing). They ship in
+    // the app by design. A digit in the tail keeps `goog_` an identifier
+    // prefix and not a key (#1294).
+    name: "RevenueCat Public SDK Key",
+    pattern: /(?:appl|goog|amzn|strp|rcb)_(?=[A-Za-z0-9]{0,39}[0-9])[A-Za-z0-9]{28,40}/g,
+    keywords: ["appl_", "goog_", "amzn_", "strp_", "rcb_"],
+    confidence: "medium",
+    publicByDesign: true,
+    accept: (value, content, index) =>
+      REVENUECAT_CONTEXT_RE.test(
+        content.slice(Math.max(0, index - REVENUECAT_CONTEXT_REACH), index + value.length + REVENUECAT_CONTEXT_REACH)
+      ),
+  },
+
   // Crypto Keys
   {
     name: "Private Key (RSA)",
     pattern: /-----BEGIN RSA PRIVATE KEY-----/g,
     keywords: ["-----begin rsa private key-----"],
     confidence: "high",
+    accept: hasPemBody,
   },
   {
     name: "Private Key (DSA)",
     pattern: /-----BEGIN DSA PRIVATE KEY-----/g,
     keywords: ["-----begin dsa private key-----"],
     confidence: "high",
+    accept: hasPemBody,
   },
   {
     name: "Private Key (EC)",
     pattern: /-----BEGIN EC PRIVATE KEY-----/g,
     keywords: ["-----begin ec private key-----"],
     confidence: "high",
+    accept: hasPemBody,
   },
   {
     name: "Private Key (OpenSSH)",
     pattern: /-----BEGIN OPENSSH PRIVATE KEY-----/g,
     keywords: ["-----begin openssh private key-----"],
     confidence: "high",
+    accept: hasPemBody,
   },
   {
     name: "Private Key (PGP)",
     pattern: /-----BEGIN PGP PRIVATE KEY BLOCK-----/g,
     keywords: ["-----begin pgp private key block-----"],
     confidence: "high",
+    accept: hasPemBody,
   },
 
   // Social/OAuth
@@ -608,6 +694,7 @@ export const FAST_PATTERNS: FastPattern[] = [
     keywords: ["aaaaaaaaaaaaaaaaaaa"],
     confidence: "high",
     valuePosition: true,
+    accept: plausibleTwitterBearer,
   },
 
   // Public client keys with their own prefix or key, ahead of the generic
@@ -903,6 +990,10 @@ const FALSE_POSITIVE_PATTERNS = [
   /example\.com/i,
   new RegExp(`^[^A-Za-z0-9]{0,2}[A-Za-z0-9]{0,12}[_.-]?(?:${PLACEHOLDER_WORDS})`, "i"),
   new RegExp(`(?:${PLACEHOLDER_WORDS})[_.-]?[A-Za-z0-9]{0,4}$`, "i"),
+  // `example-password`, `example_secret`: the whole value is the word, a
+  // credential noun and at most a short number. Anchored at both ends, so a
+  // real password that merely starts with "Example" is not a placeholder.
+  /^[^A-Za-z0-9]{0,2}example[_.-]?(?:api[_-]?key|password|passwd|secret|token|value|pass|pwd)[_.-]?[0-9]{0,4}$/i,
 ];
 
 /**
@@ -1176,7 +1267,7 @@ const DIGEST_PREFIX_RE = /(?:sha-?(?:1|256|384|512)|md5)\s*[-:]\s*[\w+/=-]*$/i;
 const INTEGRITY_ATTR_RE = /\bintegrity\s*=\s*["'][^"']*$/i;
 
 // Header-style credentials: `Authorization: Bearer <value>`, `Basic <value>`
-const AUTH_SCHEME_RE = /\b(?:bearer|basic)\s+$/i;
+const AUTH_SCHEME_RE = /\b(?:bearer|basic)(?:\s|\+|%20)+$/i;
 
 // Attributes that name the value carried by a sibling attribute of the same
 // tag, in either order: `<meta name="algolia-api-key" content="…">` and
@@ -1471,10 +1562,14 @@ const SERVER_ONLY_TYPES: ReadonlySet<string> = new Set([
   "PostgreSQL Connection String",
   "MySQL Connection String",
   "Redis Connection String",
-  "Supabase Service Role Key",
+  "Supabase Personal Access Token",
+  "Shopify Admin API Token",
+  "Stripe Restricted Key",
+  "Google OAuth Client Secret",
   "Supabase Secret Key",
   "Supabase Service Role JWT",
   "Stripe Live Key",
+  "Paystack Live Secret Key",
   "Clerk Secret Key",
   "AWS Secret Access Key",
   "Azure Storage Key",
@@ -1638,6 +1733,261 @@ function isTemplateExpression(body: string): boolean {
   return /[.[(]/.test(inner) || !/[0-9]/.test(inner);
 }
 
+
+// ── What a generic assignment's value can be (#1292) ────────────────────────
+//
+// The gate below is the second half of isNotACredentialValue: shapes that name
+// something other than a credential even though a credential word sits in the
+// key. Each one is a class counted in the corpus triage; a random token falls
+// into none of them (it mixes case or digits, has no separator-joined words,
+// is not a location, and is not rooted in an expression).
+
+/** A CSS-module class (`styles-module__secret___x9Y2z`, `Button__primary___3xK9z`). `Name_key_hash` alone is not: it reads like a drawn password. */
+const CSS_MODULE_RE = /(?:^|[-_])module__|^[A-Za-z][A-Za-z0-9]*__[A-Za-z0-9_-]+___[A-Za-z0-9_-]+$/;
+
+/**
+ * `user_password_field`, `secret:reset:token`, `app_secret_v6`: words joined by
+ * `_`, `:` or `.`: all lower case, each word at most eight characters, no more than
+ * two digits in all. A longer word, a capital or a digit run reads as drawn at
+ * random (`Prod_token_8fK2mQ9x`) and reports. Not `-`: a hyphenated
+ * passphrase (`correct-horse-battery-staple`) is a password people choose. A storage key or a
+ * catalogue key, not a value drawn at random.
+ */
+const IDENTIFIER_JOINED_RE = /^[a-z][a-z0-9]{0,7}(?:[_:.][a-z][a-z0-9]{0,7})+$/;
+
+function isJoinedIdentifier(body: string): boolean {
+  if (body.length > 48 || !IDENTIFIER_JOINED_RE.test(body)) return false;
+  let digits = 0;
+  for (let i = 0; i < body.length; i++) {
+    const code = body.charCodeAt(i);
+    if (code >= 48 && code <= 57) digits++;
+  }
+  return digits <= 2;
+}
+
+/**
+ * A URL or a rooted path. A URL that carries a credential in it is still one:
+ * a Teams or Zapier webhook has an id segment with digits in it, and userinfo
+ * is a password. So a URL counts as a location only when it has neither.
+ */
+function isUrlWithoutCredential(body: string): boolean {
+  if (!/^(?:https?:)?\/\//i.test(body) && !body.startsWith("/")) return false;
+  if (/^(?:https?:)?\/\/[^/?#]*@/i.test(body)) return false;
+  // Any query value of eight characters or more can be the credential.
+  const query = body.indexOf("?");
+  if (query !== -1 && body.slice(query + 1).split(/[&=#]/).some((part) => part.length >= 8)) return false;
+  for (const part of body.split(/[/?#&=]/)) {
+    if (part.length >= 6 && /[0-9]/.test(part)) return false;
+    // A long run of letters is as much a secret as a long run of letters and digits.
+    if (part.length >= 20) return false;
+  }
+  return true;
+}
+
+// `secret1…` (a bech32 string), a `0x` EVM address, an env-var reference,
+// an elided value and a mask are all labels, addresses or placeholders.
+const ENV_REFERENCE_RE = /^(?:(?:process|import\.meta)\.env\.[A-Za-z_]\w*|\$\{[A-Z][A-Z0-9_]{2,}\})$/;
+const MASK_RE = /^[•●·*.\s_-]*$/u;
+
+/** `abcdefgh...`: a short stub with an ellipsis, not a long token cut off. */
+function isElidedValue(body: string): boolean {
+  const stripped = body.endsWith("...") ? body.slice(0, -3) : body.endsWith("…") ? body.slice(0, -1) : undefined;
+  return stripped !== undefined && stripped.length <= 12;
+}
+
+/** The captured span reads as code, not as a quoted value. */
+function looksLikeCodeSpan(body: string): boolean {
+  // Strict comparison belongs to code and to nothing else.
+  if (/===|!==/.test(body)) return true;
+  // The rest also occurs inside a real password (`Zx9&&Kw3mQ7`, `return-of-the-king`),
+  // so it counts only with the statement separator that code has between them.
+  if (body.includes(";") && /=>|&&|\|\||\)\s*\{|\bfunction\b|\breturn\b|;(?:var|let|const|if|for)\b|;\s+[A-Za-z_$][\w$]*\s*[=(.]/.test(body)) return true;
+  let open = 0;
+  let close = 0;
+  for (let i = 0; i < body.length; i++) {
+    if (body[i] === "(") open++;
+    else if (body[i] === ")") close++;
+  }
+  // Unbalanced parentheses count as code only around a member call (`a.b(`),
+  // not around a bare `(` in a password (`Pa(ssw.rd9Qx`).
+  return open !== close && /[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*\(/.test(body);
+}
+
+// None of these shapes is longer than a short label, a class name or an identifier;
+// a longer value is not gated, which also bounds the work of every test below.
+const IMPLAUSIBLE_MAX_LENGTH = 256;
+
+function isImplausibleSecretValue(body: string): boolean {
+  if (body.length > IMPLAUSIBLE_MAX_LENGTH) return false;
+  return (
+    isUrlWithoutCredential(body) ||
+    CSS_MODULE_RE.test(body) ||
+    isJoinedIdentifier(body) ||
+    ENV_REFERENCE_RE.test(body) ||
+    isElidedValue(body) ||
+    MASK_RE.test(body) ||
+    looksLikeCodeSpan(body)
+  );
+}
+
+// ── Credentials in sample data the page renders (#1308) ─────────────────────
+//
+// A seed-user table, a breach-lookup demo, a puzzle level and a generator's
+// sample output carry realistic credentials as DATA. The value cannot tell
+// them from a leak; the structure around it can: a row of an array of three or
+// more objects with the same keys, with the email domains beside it reserved
+// (`.test`, `example.com`), or an object that carries game or sample markers.
+
+const TABLE_WALK_BACK = 1500;
+const TABLE_WALK_FORWARD = 8000;
+const TABLE_MIN_ROWS = 3;
+const SEED_OBJECT_REACH = 600;
+// Markers a puzzle or a generator carries and a configuration object does not.
+// `flag` counts only with a string value: `flags:{…}` and `flag:true` are
+// feature flags, which sit right beside real configuration.
+const SEED_MARKERS: readonly RegExp[] = [
+  /\bFLAG\{/,
+  /\bflag(?:Path|Value|Answer)?\s*["']?\s*:\s*["'`]/,
+  /\bcandidates\s*["']?\s*:\s*\[/,
+  /\bcrack[A-Z]\w*\s*["']?\s*:/,
+  /\bsample\s*["']?\s*:[\s\S]{0,400}?\boptions\b/,
+  /\boptions\s*["']?\s*:[\s\S]{0,200}?\blength\s*["']?\s*:/,
+];
+// One marker alone is not enough: a real configuration can carry a string
+// `flag` or an `options` object with a `length`. Two distinct markers in one
+// object are a puzzle or a generator; one marker counts only inside a table.
+const SEED_MARKERS_ALONE = 2;
+
+/** The `{…}` the match sits in, bounded; undefined when it is not inside one. */
+/** Characters the seed-data checks have walked, and the most one scan may spend on them. */
+export const seedWork = { examined: 0 };
+const SEED_SCAN_BUDGET = 3_000_000;
+
+function enclosingObject(content: string, at: number): string | undefined {
+  let depth = 0;
+  let start = -1;
+  for (let i = at - 1; i >= 0 && at - i <= SEED_OBJECT_REACH; i--) {
+    const ch = content[i];
+    if (ch === "}" || ch === "]") depth++;
+    else if (ch === "{" || ch === "[") {
+      if (depth > 0) depth--;
+      else if (ch === "{") {
+        start = i;
+        break;
+      } else return undefined;
+    }
+  }
+  if (start === -1) return undefined;
+  depth = 0;
+  for (let i = start; i < content.length && i - start <= SEED_OBJECT_REACH * 2; i++) {
+    const ch = content[i];
+    if (ch === "{" || ch === "[") depth++;
+    else if (ch === "}" || ch === "]") {
+      depth--;
+      if (depth === 0) return content.slice(start, i + 1);
+    }
+  }
+  return content.slice(start, start + SEED_OBJECT_REACH * 2);
+}
+const EMAIL_HOST_RE = /[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})/g;
+const RESERVED_HOST_RE = /(?:^|\.)(?:example\.(?:com|org|net)|[a-z0-9-]+\.(?:test|example|invalid|localhost)|(?:test|example|invalid|localhost))$/i;
+const KEY_IN_ROW_RE = /["']?([A-Za-z_$][\w$-]*)["']?\s*:/g;
+
+export type SeedVerdict = "skip" | "demo-login" | undefined;
+
+/** Rows of the array the match sits in, when that array is a table of same-keyed objects. */
+function tableAround(content: string, at: number, spend: (n: number) => void): { text: string; rows: string[] } | undefined {
+  spend(TABLE_WALK_BACK + TABLE_WALK_FORWARD);
+  let depth = 0;
+  let sawObject = false;
+  let arrayStart = -1;
+  for (let i = at - 1; i >= 0 && at - i <= TABLE_WALK_BACK; i--) {
+    const ch = content[i];
+    if (ch === "}" || ch === "]") depth++;
+    else if (ch === "{" || ch === "[") {
+      if (depth > 0) depth--;
+      else if (ch === "{") {
+        if (sawObject) return undefined;
+        sawObject = true;
+      } else {
+        arrayStart = i;
+        break;
+      }
+    }
+  }
+  if (arrayStart === -1 || !sawObject) return undefined;
+  // Forward to the array's end, collecting the top-level objects as rows.
+  const rows: string[] = [];
+  let d = 0;
+  let rowStart = -1;
+  let end = -1;
+  for (let i = arrayStart; i < content.length && i - arrayStart <= TABLE_WALK_FORWARD; i++) {
+    const ch = content[i];
+    if (ch === "{" || ch === "[") {
+      d++;
+      if (d === 2 && ch === "{") rowStart = i;
+    } else if (ch === "}" || ch === "]") {
+      if (d === 2 && ch === "}" && rowStart !== -1) {
+        rows.push(content.slice(rowStart, i + 1));
+        rowStart = -1;
+      }
+      d--;
+      if (d === 0) {
+        end = i + 1;
+        break;
+      }
+    }
+  }
+  if (end === -1 || rows.length < TABLE_MIN_ROWS) return undefined;
+  return { text: content.slice(arrayStart, end), rows };
+}
+
+function rowKeys(row: string): string {
+  const keys = new Set<string>();
+  KEY_IN_ROW_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = KEY_IN_ROW_RE.exec(row)) !== null) keys.add(m[1]!.toLowerCase());
+  return [...keys].sort().join(",");
+}
+
+/**
+ * What the data structure around a generic match says. `skip`: a sample (a
+ * table whose emails are all reserved, or an object with game or sample
+ * markers). `demo-login`: a table of same-keyed rows with real-domain emails,
+ * which can be working logins and stays reported, labelled as such.
+ */
+function seedDataVerdict(content: string, at: number, keyName: string, budget: { left: number }): SeedVerdict {
+  // One scan has a fixed allowance for these walks; past it nothing is exempted,
+  // so a page of ten thousand adversarial rows costs a bounded amount and every
+  // password after the allowance reports as usual.
+  const spend = (n: number) => {
+    budget.left -= n;
+    seedWork.examined += n;
+  };
+  if (budget.left <= 0) return undefined;
+  spend(SEED_OBJECT_REACH * 2);
+  const object = enclosingObject(content, at);
+  const markers = object === undefined ? 0 : SEED_MARKERS.filter((re) => re.test(object)).length;
+  if (markers >= SEED_MARKERS_ALONE) return "skip";
+  const near = content.slice(Math.max(0, at - 400), at + 400);
+  // Cheap pre-check: a table has object separators close to the match.
+  if (!/\}\s*,\s*\{/.test(near)) return undefined;
+  if (budget.left <= 0) return undefined;
+  const table = tableAround(content, at, spend);
+  if (!table) return undefined;
+  const shapes = table.rows.map(rowKeys);
+  const mine = shapes.filter((shape) => shape.includes(keyName.toLowerCase()));
+  if (mine.length < TABLE_MIN_ROWS || new Set(mine).size !== 1) return undefined;
+  // A marker plus a table of same-shaped records is sample data.
+  if (markers >= 1) return "skip";
+  const hosts: string[] = [];
+  EMAIL_HOST_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = EMAIL_HOST_RE.exec(table.text)) !== null) hosts.push(m[1]!);
+  if (hosts.length === 0) return undefined;
+  return hosts.every((host) => RESERVED_HOST_RE.test(host)) ? "skip" : "demo-login";
+}
+
 /** Could this body be a credential at all? */
 function isNotACredentialValue(body: string): boolean {
   return (
@@ -1645,7 +1995,8 @@ function isNotACredentialValue(body: string): boolean {
     isLocationValue(body) ||
     isDottedIdentifier(body) ||
     isTranslatedLabel(body) ||
-    isTemplateExpression(body)
+    isTemplateExpression(body) ||
+    isImplausibleSecretValue(body)
   );
 }
 
@@ -1745,7 +2096,14 @@ function isVendorScriptDataAttribute(
   pageUrl: string | undefined
 ): boolean {
   if (pageUrl === undefined) return false;
-  if (text.slice(Math.max(0, index - 5), index).toLowerCase() !== "data-") return false;
+  // The attribute is `data-<anything>`: the match starts at its credential
+  // word (`secret` of `data-tb-secret`), so walk back over the attribute's name.
+  let nameStart = index;
+  while (nameStart > 0 && index - nameStart < 64 && /[A-Za-z0-9-]/.test(text[nameStart - 1] ?? "")) nameStart--;
+  if (text.slice(nameStart, nameStart + 5).toLowerCase() !== "data-") return false;
+  // The WHOLE attribute name has to be free of privileged words, not just its
+  // last segment: `data-admin-api-key` ends in `api-key` and is not a widget key.
+  if (keyWords(text.slice(nameStart, index)).some((w) => PRIVILEGED_NAME_WORDS.includes(w))) return false;
   const tag = tagBoundsAround(text, index);
   if (!tag) return false;
   const open = text.slice(tag.start, tag.end);
@@ -1753,6 +2111,291 @@ function isVendorScriptDataAttribute(
   const src = SCRIPT_SRC_ATTR_RE.exec(open)?.[1];
   return src !== undefined && isCrossOriginScript(src, pageUrl);
 }
+
+// ── Shapes that need their surroundings (#1283, #1227) ──────────────────────
+
+/**
+ * A PEM header is a private key only when key material follows it. UI help
+ * text ("it starts with -----BEGIN OPENSSH PRIVATE KEY-----"), a regex in a
+ * validator and a docs snippet whose body is elided (`MIIE...`) name the
+ * header and carry no key. The key is the first run of 32 or more base64
+ * characters after the header, and what lies between the two has to be line
+ * breaks in whatever form the page writes them and nothing else: `\n`,
+ * `\u000a`, `%0A`, `&#10;`, a `<br>` or `<p>` tag, a quote, comma, `+`,
+ * bracket or `.concat(` between string literals, spaces, and armor headers
+ * (`Proc-Type:`, `Version:`). Prose, code or another `-----` marker between
+ * them means the header was prose. A run is 32 or more because a body line
+ * is 64 characters in PEM and PGP armor and 70 in OpenSSH, and the run may
+ * be a whole key on one line (#1227).
+ */
+// The body has to start within the gap limit of the header, so that is as far as
+// the search reads: a bound per header, not per page (a page of ten thousand
+// headers costs ten thousand small windows).
+const PEM_REACH = 600;
+const PEM_MAX_GAP = 400;
+const PEM_BODY_RUN_RE = /[A-Za-z0-9+/]{32,}/;
+// Line breaks in the encodings a page uses for them, kept as `\n` so armor
+// header lines stay lines; and joins between string literals, which are not.
+const PEM_BREAK_RES = [
+  /\\u000[aAdD]/g,
+  /\\x0[aAdD]/g,
+  /\\[nrt]/g,
+  /%0[aAdD]/g,
+  /&#(?:x0*[aAdD]|0*1[03]);/gi,
+  /&NewLine;/gi,
+  /<\/?[A-Za-z][A-Za-z0-9-]{0,15}\b[^>]{0,200}>/gi,
+];
+const PEM_JOIN_RE = /\.(?:concat|join)\(/g;
+// The armor header lines that sit between a header and its body.
+const PEM_ARMOR_LINE_RE = /^[ \t"'`,;+[\]()\\]*(?:Proc-Type|DEK-Info|Version|Comment|Hash|Charset|MessageID):[^\n]{0,120}$/gim;
+const PEM_FILLER_RE = /[%\s"'`,;+[\]()\\\u200b-\u200d\u2060\ufeff]/g;
+
+/** Characters of header-following text examined, for the counter-based perf test. */
+export const pemWork = { examined: 0 };
+
+function hasPemBody(value: string, content: string, index: number): boolean {
+  const start = index + value.length;
+  let tail = content.slice(start, start + PEM_REACH);
+  // Another header or the footer ends the search: nothing past it is this key's.
+  const marker = tail.indexOf("-----");
+  if (marker !== -1) tail = tail.slice(0, marker);
+  pemWork.examined += tail.length;
+  const run = PEM_BODY_RUN_RE.exec(tail);
+  if (!run) return false;
+  let gap = tail.slice(0, run.index);
+  if (gap.length > PEM_MAX_GAP) return false;
+  for (const separator of PEM_BREAK_RES) gap = gap.replace(separator, "\n");
+  gap = gap.replace(PEM_JOIN_RE, " ").replace(PEM_ARMOR_LINE_RE, "");
+  return gap.replace(PEM_FILLER_RE, "") === "";
+}
+
+/**
+ * Twitter's app-only bearer tokens open with 21 `A` and then run through
+ * URL-encoded segments (`%2B`, `%3D`) for about 110 characters in all. Runs of
+ * `A` are also what zero bytes look like in base64, so a payload's interior
+ * (a PNG, a WOFF font, a WASM module, a Dart table) opens the same way. The
+ * token is not the interior of a base64 run (`/` or `+` either side, a
+ * `base64,` lead-in), has real characters after the run of `A` and is not
+ * mostly `A` itself (#1283).
+ */
+const TWITTER_BEARER_MAX_LENGTH = 200;
+const TWITTER_BEARER_MIN_TAIL = 30;
+
+// What a token is handed over with: `Authorization: Bearer AAAA`, `Bearer+AAAA`
+// (a URL-encoded space), `token=AAAA`. After one of these the character in
+// front of the run is the delimiter, not the edge of a base64 payload.
+const BEARER_LEAD_RE = /(?:bearer|authorization|token|key)\W{0,3}$/i;
+
+function plausibleTwitterBearer(value: string, content: string, index: number): boolean {
+  if (value.length > TWITTER_BEARER_MAX_LENGTH) return false;
+  if (content.slice(Math.max(0, index - 7), index).toLowerCase().endsWith("base64,")) return false;
+  const lead = content.slice(Math.max(0, index - 16), index);
+  if (!BEARER_LEAD_RE.test(lead)) {
+    const before = content[index - 1];
+    const after = content[index + value.length];
+    if (before === "/" || before === "+" || after === "/" || after === "+") return false;
+  }
+  let run = 0;
+  while (value[run] === "A") run++;
+  if (value.length - run < TWITTER_BEARER_MIN_TAIL) return false;
+  let as = 0;
+  for (let i = 0; i < value.length; i++) if (value[i] === "A") as++;
+  return as * 2 <= value.length;
+}
+
+/**
+ * An IBAN is `DO` for the Dominican Republic plus a two-digit check, a four
+ * character bank code and twenty digits, 28 characters in all, and its check
+ * digits satisfy mod 97. `DO` plus twenty uppercase characters is also the
+ * shape of a DigitalOcean Spaces key id; a string that passes the IBAN check
+ * is a bank account number printed as a form example (#1283).
+ */
+const IBAN_DO_RE = /^DO\d{2}[A-Z0-9]{4}\d{20}$/;
+
+function isIbanShaped(value: string): boolean {
+  if (!IBAN_DO_RE.test(value)) return false;
+  const rearranged = value.slice(4) + value.slice(0, 4);
+  let remainder = 0;
+  for (const ch of rearranged) {
+    const code = ch.charCodeAt(0);
+    const digits = code >= 65 ? String(code - 55) : ch;
+    for (const d of digits) remainder = (remainder * 10 + (d.charCodeAt(0) - 48)) % 97;
+  }
+  return remainder === 1;
+}
+
+/**
+ * A prefixed token inside a file name: `neon_<hash>.png`, `sk-<hash>.svg`,
+ * `key-<hash>.webp`. The prefix is a hashed asset's own naming, and the token
+ * is followed by the file's extension, which no credential is (#1283).
+ */
+const ASSET_EXTENSION_RE = /^\.(?:png|jpe?g|gif|webp|avif|svg|ico|bmp|woff2?|ttf|otf|eot|mp[34]|webm)(?![A-Za-z0-9])/i;
+
+const ASSET_NAMED_PATTERNS: ReadonlySet<string> = new Set([
+  "Neon Database Token",
+  "OpenAI API Key (legacy)",
+  "Mailgun API Key",
+  "Resend API Key",
+]);
+
+// A file name starts after a path separator, a quote, `(` (CSS `url(`), `=` or a
+// comma (a `srcset`); a token that is merely followed by `.png` in running text
+// is not one.
+const FILE_NAME_LEAD_RE = /[/"'(=,]$/;
+
+function endsInAssetExtension(content: string, end: number, start: number): boolean {
+  return FILE_NAME_LEAD_RE.test(content.slice(Math.max(0, start - 1), start)) && ASSET_EXTENSION_RE.test(content.slice(end, end + 8));
+}
+
+/**
+ * A lowercase slug (`step-1-create-your-bucket-name-here`): two or more
+ * all-letter words of four or more characters joined by `-` or `_`, with no
+ * capital letter. An element id or a CSS class, not a token: every random
+ * key a vendor issues mixes case or runs through hex, and a UUID's segments
+ * are hex runs that are not words (#1283).
+ */
+function isLowercaseSlug(value: string): boolean {
+  if (/[A-Z]/.test(value)) return false;
+  let words = 0;
+  for (const segment of value.split(/[-_]/)) {
+    if (/^[a-z]{4,}$/.test(segment)) words++;
+  }
+  return words >= 2;
+}
+
+/**
+ * Paystack's secret keys use Stripe's prefix: `sk_live_` or `sk_test_` plus
+ * exactly 40 lowercase hex characters. Stripe's own tail is 24 random
+ * alphanumerics in the old format and about a hundred in the current one, so a
+ * tail that is nothing but hex and 32 or more characters long is not Stripe's.
+ * Other widget vendors write the same prefix in front of 48 hex (#1283).
+ */
+const PAYSTACK_TAIL_RE = /^[0-9a-f]{40}$/;
+const HEX_TAIL_RE = /^[0-9a-f]{32,}$/;
+const DATA_KEY_ATTR_RE = /\b(data-[a-z0-9-]*(?:key|token))\s*=\s*["']?$/i;
+const PRIVILEGED_ATTR_RE = /secret|private|server|admin|master/i;
+
+function isWidgetKeyAttribute(before: string): boolean {
+  const name = DATA_KEY_ATTR_RE.exec(before)?.[1];
+  return name !== undefined && !PRIVILEGED_ATTR_RE.test(name);
+}
+
+
+// ── Search-only and platform-owned keys (#1287, #1229) ──────────────────────
+
+/**
+ * A key whose own name says it is the search key: `search_api_key`,
+ * `search-only-api-key`. Hosted-search products issue a search-only key for the
+ * browser by design, but a name is only a name: an admin key stored under
+ * `ALGOLIA_SEARCH_API_KEY` reads the same, and nothing offline says which it
+ * is. So the name earns a hint on the finding, never a downgrade (#1229).
+ */
+const PRIVILEGED_KEY_WORDS = ["admin", "secret", "private", "write", "master", "management", "manage", "backend", "server", "root"];
+
+function isSearchKeyName(key: string): boolean {
+  const words = keyWords(key);
+  // `searchAdminApiKey` is the admin key of a search product, not its
+  // browser key: the name has to say search and nothing privileged.
+  return words.includes("search") && !words.some((w) => PRIVILEGED_KEY_WORDS.includes(w));
+}
+
+/**
+ * Shopify's platform bundles (`/shopifycloud/` on cdn.shopify.com,
+ * `/cdn/shopifycloud/` on a shop's own domain) are byte-identical on every
+ * store: an `apiKey` in one is the platform's, not the merchant's. Only that
+ * one assignment is skipped, never a secret, token or provider key, and only
+ * on a Shopify host (cdn.shopify.com, or `*.myshopify.com`): a path alone is
+ * something any site can serve (#1287).
+ * The Shopify App Store listing pages carry the listed app's public `api-key`.
+ */
+const SHOPIFY_CDN_BUNDLE_PATH = "/shopifycloud/";
+const SHOPIFY_STORE_BUNDLE_PATH = "/cdn/shopifycloud/";
+const SHOPIFY_APP_STORE_HOST = "apps.shopify.com";
+const APP_STORE_KEY_RE = /^(?:data-)?api[_-]?key$/i;
+
+function platformSourceOf(
+  location: ReportedLocation,
+  sourceUrl: string | undefined
+): "bundle" | "app-store" | undefined {
+  if (sourceUrl === undefined) return undefined;
+  try {
+    const url = new URL(sourceUrl);
+    if (location.startsWith("external-script")) {
+      // A Shopify host, by parsed hostname: nothing else is evidence that the
+      // bytes are Shopify's. A custom-domain shop's copy is not recognised and
+      // reports like any other script.
+      if (url.hostname === "cdn.shopify.com" && url.pathname.startsWith(SHOPIFY_CDN_BUNDLE_PATH)) return "bundle";
+      if (url.hostname.endsWith(".myshopify.com") && url.pathname.startsWith(SHOPIFY_STORE_BUNDLE_PATH)) return "bundle";
+    }
+    if (url.hostname === SHOPIFY_APP_STORE_HOST) return "app-store";
+  } catch {
+    // not a URL: nothing is claimed
+  }
+  return undefined;
+}
+// ── Keys that are public by what they are called (#1294) ────────────────────
+
+/**
+ * Bundlers expose only the variables with a public prefix to the browser
+ * (`NEXT_PUBLIC_`, `VITE_`, `PUBLIC_`), so a value under one of those is public
+ * by construction, and a key a developer called `public...` or `publishable...`
+ * or `client...Key` says the same. A value with a secret prefix is not
+ * rescued by its key: the prefix is the provider's own statement.
+ */
+const PUBLIC_ENV_PREFIX_RE = /^(?:NEXT_PUBLIC_|NUXT_PUBLIC_|VITE_|PUBLIC_)/;
+const SECRET_VALUE_PREFIX_RE = /^(?:sk_|rk_|sb_secret_)/;
+const PRIVILEGED_NAME_WORDS = ["secret", "private", "server", "admin", "password", "master", "service"];
+
+function isPublicKeyName(key: string): boolean {
+  if (PUBLIC_ENV_PREFIX_RE.test(key)) return true;
+  const words = keyWords(key);
+  if (words.some((w) => PRIVILEGED_NAME_WORDS.includes(w))) return false;
+  return words[0] === "public" || words[0] === "publishable" || (words[0] === "client" && words[words.length - 1] === "key");
+}
+
+// An AWS access key id is the public half of the pair: with no secret key
+// beside it, it grants nothing (#1294). The secret is looked for within this
+// many characters either side, as a keyed 40-character value.
+const AWS_PAIR_REACH = 300;
+// Any 40-character base64-alphabet token near the id may be its secret key, keyed or not
+// (`["AKIA...", "<40>"]`, `{id, secret}`).
+const AWS_SECRET_NEAR_RE = /(?<![A-Za-z0-9/+_-])[A-Za-z0-9/+]{40}(?![A-Za-z0-9/+=_-])/;
+
+// Browser SDKs whose init call takes a project key that is public by design
+// (Bugsnag's notifier API key, Amplitude's API key). The key counts only when
+// the SDK is the immediately enclosing call or object: `Bugsnag.start({apiKey`,
+// `amplitude.getInstance().init(..., {apiKey`, `bugsnag: {apiKey`. The brand
+// word anywhere nearby is not that, and the brands whose `apiKey` IS the
+// secret API key (Datadog, Rollbar) or whose public id has no distinctive
+// shape (Crisp, Tawk) are deliberately absent.
+const SDK_INIT_BRANDS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/(?:bugsnag)[A-Za-z0-9_$.()]*\(\s*$|bugsnag["']?\s*[:=]\s*$/i, "Bugsnag API Key"],
+  [/(?:amplitude)[A-Za-z0-9_$.()]*\([^()]{0,80}$|amplitude["']?\s*[:=]\s*$/i, "Amplitude API Key"],
+];
+const SDK_INIT_REACH = 240;
+
+function sdkInitBrandOf(content: string, keyAt: number): string | undefined {
+  let depth = 0;
+  for (let i = keyAt - 1; i >= 0 && keyAt - i <= SDK_INIT_REACH; i--) {
+    const ch = content[i];
+    if (ch === "}") depth++;
+    else if (ch === "{") {
+      if (depth > 0) {
+        depth--;
+        continue;
+      }
+      const before = content.slice(Math.max(0, i - 80), i);
+      return SDK_INIT_BRANDS.find(([re]) => re.test(before))?.[1];
+    }
+  }
+  return undefined;
+}
+
+// What a RevenueCat key has to sit beside: the SDK's own name, in front of the
+// value or after it. Without it `goog_ModuleLoaderConfigurationData1` is just an
+// identifier.
+const REVENUECAT_CONTEXT_RE = /purchases|revenuecat/i;
+const REVENUECAT_CONTEXT_REACH = 200;
 
 function maskSecret(value: string): string {
   if (value.length <= 12) {
@@ -2605,6 +3248,9 @@ export function scanContent(
     return { row: rows[0]!, named: false };
   };
 
+  const platformSource = platformSourceOf(location, sourceUrl);
+  const seedBudget = { left: SEED_SCAN_BUDGET };
+
   let shopifyPage: boolean | null = null;
   const isShopifyPage = () => (shopifyPage ??= pageLoadsFrom(content, SHOPIFY_CDN_HOST));
 
@@ -2622,6 +3268,7 @@ export function scanContent(
       valuePosition,
       minTailEntropy,
       sharedPrefix,
+      accept,
       literals,
     } = entry;
     if (!mayMatch(gramIndex, literals)) continue;
@@ -2631,6 +3278,7 @@ export function scanContent(
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(content)) !== null) {
       let value = match[0];
+      let seedVerdict: SeedVerdict;
 
       // A prefix is a prefix only at the start of a token. `re_` inside
       // `_Care_Dry…`, `[0-9]{8,10}:` on the tail of a UUID and `fooghp_…`
@@ -2645,6 +3293,10 @@ export function scanContent(
       ) {
         continue;
       }
+
+      // A shape that is only a credential next to something specific: a PEM
+      // header with its key, a bearer that is not a payload's interior.
+      if (accept && !accept(value, content, match.index)) continue;
 
       // …and a provider's format ends where the token does. A match that
       // stops short of the end of its token is not reported as that
@@ -2666,6 +3318,15 @@ export function scanContent(
           value = content.slice(match.index, tokenEnd);
           pattern.lastIndex = tokenEnd;
         }
+      }
+
+      // A prefixed token that is followed by an image or font extension is
+      // a hashed asset's file name, not a credential.
+      // Only for the low-specificity prefixes that hashed asset names collide
+      // with: a distinctive provider token (`sk-ant-`, `AIza`, `SG.`, a GitHub
+      // token) followed by `.css` is a token followed by text.
+      if (ASSET_NAMED_PATTERNS.has(name) && endsInAssetExtension(content, match.index + value.length, match.index)) {
+        continue;
       }
 
       // A generic assignment can start part-way through a longer key, so the
@@ -2702,6 +3363,16 @@ export function scanContent(
         continue;
       }
 
+      // Assignments in Shopify's platform bundles, and the App Store's own
+      // `api-key` attribute, are Shopify's public code and public keys.
+      if (
+        generic &&
+        ((platformSource === "bundle" && name === "Generic API Key Assignment") ||
+          (platformSource === "app-store" && APP_STORE_KEY_RE.test(completeKeyOf(content, match.index, value))))
+      ) {
+        continue;
+      }
+
       // A bare shape the key gave meaning to has to look like a token:
       // `password: "Password confirmation"` is a label (#357). The // pragma: allowlist secret
       // placeholder list reads the same body, since the key is part of the
@@ -2717,6 +3388,12 @@ export function scanContent(
         // A label in a script that does not space its words, a route path or
         // a catalogue key cannot be a credential whatever the key says.
         if (isNotACredentialValue(body)) continue;
+        // A password in sample data the page renders (a seed table, a puzzle
+        // level, a generator's output) is data, not configuration.
+        if (name === "Generic Secret Assignment") {
+          seedVerdict = seedDataVerdict(content, match.index, completeKeyOf(content, match.index, value), seedBudget);
+          if (seedVerdict === "skip") continue;
+        }
         // WordPress's oEmbed nonce: `data-secret` on a wp-embedded-content
         // element, or a ten-character alphanumeric under `data-secret`.
         if (
@@ -2782,7 +3459,7 @@ export function scanContent(
         reportType = unattributedKeyType(providerKey.row.prefix);
         known = { prefix: providerKey.row.prefix, provider: "unknown", ...EXPOSURE_ONLY };
       } else if (generic) {
-        const brand = BRAND_CLAIMABLE_KEY_RE.test(keyOf(value)) ? publicBrandNear(match.index) : undefined;
+        const brand = BRAND_CLAIMABLE_KEY_RE.test(keyOf(value)) ? (publicBrandNear(match.index) ?? sdkInitBrandOf(content, match.index)) : undefined;
         if (brand) {
           reportType = brand;
           reportPublic = true;
@@ -2795,7 +3472,59 @@ export function scanContent(
         ) {
           reportType = "Third-party Widget Key";
           reportPublic = true;
+        } else if (
+          name !== "Bearer Token" &&
+          name !== "Basic Auth Header" &&
+          isPublicKeyName(completeKeyOf(content, match.index, value)) &&
+          !SECRET_VALUE_PREFIX_RE.test(body)
+        ) {
+          // A name is a claim, not proof, and it comes last: a brand, Shopify's
+          // own token or a widget attribute has already said what the value is,
+          // and a name must add a hint, never take a classification away.
+          known = {
+            ...known,
+            hint: "the key name says this value is meant for the browser (NEXT_PUBLIC_, VITE_, PUBLIC_, public*, publishable*, client*Key); confirm the value is a client key and not a secret under a public name",
+          };
         }
+      }
+
+      // `sk_live_` is Stripe's prefix and Paystack's and every widget vendor
+      // that copied it. The tail's format tells them apart (#1283).
+      if (sharedPrefix !== undefined && unattributed === undefined && value.startsWith(sharedPrefix)) {
+        const tail = value.slice(sharedPrefix.length);
+        const mode = sharedPrefix === "sk_live_" ? "live" : "test";
+        if (PAYSTACK_TAIL_RE.test(tail)) {
+          reportType = `Paystack ${mode === "live" ? "Live" : "Test"} Secret Key`;
+          known = { provider: "Paystack", kind: "secret", mode };
+        } else if (HEX_TAIL_RE.test(tail)) {
+          const widget = isWidgetKeyAttribute(content.slice(Math.max(0, match.index - 64), match.index));
+          reportType = unattributedKeyType(sharedPrefix);
+          // Only a `data-*-key` attribute is a widget's client key; the same
+          // shape anywhere else is a secret of some vendor, so it stays high.
+          reportConfidence = widget ? "medium" : "high";
+          known = {
+            prefix: sharedPrefix,
+            provider: "unknown",
+            resembles: name,
+            ...(widget ? { hint: "embeddable widget key (data-*-key attribute)" } : {}),
+          };
+        }
+      }
+
+      // A key whose name says "search" may well be a search-only key, and an
+      // admin key stored under that name reads the same: reported as before,
+      // with the evidence the name gives.
+      if (generic && name === "Generic API Key Assignment" && !reportPublic && isSearchKeyName(completeKeyOf(content, match.index, value))) {
+        known = {
+          ...known,
+          hint: "the key name says search; a search-only key is meant for browsers but an admin key under this name reads the same, so check which key this is",
+        };
+      }
+
+      if (seedVerdict === "demo-login") {
+        reportType = "Possible Demo Login (seed data table)";
+        reportConfidence = "medium";
+        known = { hint: "a row of a table of same-shaped records with real-domain emails: may be a working demo login" };
       }
 
       // A token that only opens like the provider's: reviewable, at medium,
@@ -2818,6 +3547,18 @@ export function scanContent(
         () => content.slice(match!.index + value.length, match!.index + value.length + FORWARD_REACH),
         known
       );
+      if (finding && finding.type === "AWS Access Key ID" && finding.confidence !== "info" && finding.confidence !== "medium") {
+        const around = content.slice(
+          Math.max(0, match.index - AWS_PAIR_REACH),
+          match.index + value.length + AWS_PAIR_REACH
+        );
+        if (!AWS_SECRET_NEAR_RE.test(around)) {
+          // The public half of the pair is low value alone, but stays in the
+          // machine-readable output: the secret may be in another file.
+          finding.confidence = "medium";
+          finding.extra = { ...finding.extra, pair: `no 40-character secret-shaped value within ${AWS_PAIR_REACH} characters: probably the public half of the pair; the secret may sit elsewhere` }; // pragma: allowlist secret
+        }
+      }
       if (finding) found.push(finding);
     }
   }
@@ -2918,6 +3659,9 @@ export function scanContent(
         // quoted, under a credential key, and made of words.
         const literal =
           QUOTE_CHAR_RE.test(content[at - 1] ?? "") && keyContext === "credential" && /[0-9]/.test(value);
+        if (!structural && keyContext !== "credential" && isLowercaseSlug(value)) {
+          continue;
+        }
         if (!structural && !literal && looksLikeCodeIdentifier(value)) {
           continue;
         }

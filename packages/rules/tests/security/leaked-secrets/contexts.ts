@@ -60,7 +60,8 @@ const escapeAttr = (s: string) =>
  */
 const escapeJsBody = (s: string) => {
   let i = 0;
-  return s.replace(/[A-Za-z0-9]/g, (c) => {
+  // A character after a backslash is an escape's own letter (`\n`), not a body character.
+  return s.replace(/(?<!\\)[A-Za-z0-9]/g, (c) => {
     const code = c.charCodeAt(0);
     return i++ % 2 === 0 ? `\\u${code.toString(16).padStart(4, "0")}` : `\\x${code.toString(16).padStart(2, "0")}`;
   });
