@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Rules now see controls inside declarative shadow roots.** A page built with web components can put a button, link, image or heading inside `<template shadowrootmode="open">` (or `"closed"`). A browser renders it, but the parser kept it inside the template's inert content, so no rule saw it and `a11y/button-name` missed an unnamed button there. The content is now placed where the template was before the rules run; a plain `<template>` stays inert. See [Rules](https://docs.squirrelscan.com/rules). (#922)
+
 ## v0.0.143 (2026-10-30)
 
 Two new performance rules, `perf/content-in-js-bundle` and `perf/framework-data-payload`, find page content shipped inside JavaScript. Page weight now measures the srcset candidate a browser downloads and leaves lazy images out, `squirrel auth login` opens a branded page, parallel audits no longer fail with a locked database, and `store_scripts` no longer changes what an audit finds. A start URL the audit cannot run on is refused before any request, `security/tls-certificate` shows as not checked when it cannot run, and the about, contact and privacy rules take a `paths` option.

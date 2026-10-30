@@ -120,6 +120,10 @@ The rules that describe what a browser loads or renders skip elements inside `<n
 
 Same-domain scripts, stylesheets and images that appear only inside `<noscript>` are not fetched for the file-size and compression rules either. Links inside `<noscript>` are still collected for crawling, and the remaining rules read the page as before.
 
+## Content inside shadow roots
+
+A web component can render its controls inside a declarative shadow root, written as `<template shadowrootmode="open">` (or `"closed"`) inside its host element. A browser attaches that content to the host and renders it. squirrel reads it the same way: before the rules run, the content of such a template is placed where the template was, so every DOM rule (button names, links, images, headings, form fields) sees the buttons and links inside the root as it sees any other. As in a browser, only the first shadow template of a host counts, an element that cannot host a shadow root (a `table`, for instance) keeps its template inert, and a plain `<template>` with no `shadowrootmode` is never checked: its content is not rendered. A shadow root created by JavaScript after load, with `attachShadow`, exists only in a [browser-rendered](/guides/browser-rendering) audit and is read from the rendered page.
+
 ## Pages kept out of search
 
 A page marked `noindex` will not show up in search results, so findings about how it would look there are noise. Twelve rules leave these pages alone:
