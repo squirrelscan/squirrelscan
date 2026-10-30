@@ -125,11 +125,13 @@ export const cookieFlagsRule: Rule = {
     const platformOwned = noHttpOnly.filter((c) => platformCookie(c.name));
     const missingHttpOnly = noHttpOnly.filter((c) => !platformCookie(c.name));
     if (platformOwned.length > 0) {
-      const platforms = [...new Set(platformOwned.map((c) => platformCookie(c.name)!))];
+      const entries = platformOwned.map((c) => platformCookie(c.name)!);
+      const platforms = [...new Set(entries.map((e) => e.platform))];
+      const undocumented = entries.every((e) => !e.documented);
       checks.push({
         name: "cookie-httponly-platform",
         status: "info",
-        message: `${platformOwned.length} cookie(s) without HttpOnly that ${platforms.map((p) => p.platform).join(" and ")}-hosted sites commonly carry (${[...new Set(platformOwned.map((c) => c.name))].join(", ")}); the platform does not document it, so it is reported as info, not a warning`,
+        message: `${platformOwned.length} cookie(s) without HttpOnly that ${platforms.join(" and ")}-hosted sites commonly carry (${[...new Set(platformOwned.map((c) => c.name))].join(", ")}); ${undocumented ? "the platform does not document it, so " : ""}it is reported as info, not a warning`,
         items: platformOwned.map((c) => ({ id: c.name })),
       });
     }

@@ -10,6 +10,8 @@ export interface PlatformCookie {
   platform: string;
   /** The platform's docs (home). It need not document this cookie: see `evidence`. */
   docs: string;
+  /** Whether the platform documents the cookie. The report says so only when it does not. */
+  documented: boolean;
   /** Why the cookie is listed. */
   evidence: string;
 }
@@ -19,8 +21,9 @@ export const PLATFORM_COOKIES: readonly PlatformCookie[] = [
     name: "__dpl",
     platform: "Lovable",
     docs: "https://docs.lovable.dev/",
+    documented: false,
     evidence:
-      "on 1,013 of 1,066 Lovable-hosted sites in a 35k-audit batch (v0.0.141), the only cookie they set; not documented by Lovable (#1378)",
+      "on 1,013 of 1,066 Lovable-hosted sites in a 35k-audit batch (v0.0.141), the only cookie missing HttpOnly; not documented by Lovable (#1378)",
   },
 ];
 

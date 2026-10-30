@@ -27,7 +27,7 @@ A few cookies appear on every site a hosting platform serves: you didn't set the
 
 | Cookie | Platform | Why it is listed |
 |---|---|---|
-| `__dpl` | Lovable | Present on 1,013 of 1,066 Lovable-hosted sites in a 35,000-audit batch, the only cookie they set. Lovable does not document it. |
+| `__dpl` | Lovable | Present on 1,013 of 1,066 Lovable-hosted sites in a 35,000-audit batch, the only cookie missing `HttpOnly`. Lovable does not document it. |
 
 Exemption is by exact cookie name only, on any site: a site that names its own session cookie `__dpl` would also be exempt. Every other cookie, whatever its name or value, still gets the `cookie-httponly` warning. `Secure` and `SameSite` are checked on these cookies as on any other.
 
