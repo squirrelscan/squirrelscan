@@ -18,7 +18,7 @@ import { resolutionCheckKey, resolutionUrlHash } from "@squirrelscan/core-contra
 import { normalizeUrl } from "@squirrelscan/utils/url";
 
 import { buildResolutionSignal } from "../src/resolution";
-import { PAGE_TYPE_TRUST_CONFIDENCE, trustedPageType } from "../src/shared/page-type";
+import { PAGE_TYPE_TRUST_CONFIDENCE, bodyCorroboratesPageType, trustedPageType } from "../src/shared/page-type";
 import type { PageData, ParsedPage } from "../src/types";
 
 const RULES = ["content/word-count", "core/meta-title", "core/meta-description", "content/keyword-stuffing", "core/h1"];
@@ -268,5 +268,13 @@ describe("the body must corroborate a contact or legal label", () => {
 
   test("a year range or a price is not a phone number", async () => {
     expect((await run1(`${words(70)} Open 2019-2024 at price 1999.99`, "contact")).status).toBe("warn");
+  });
+
+  test("hostile text costs a fixed amount: many @ signs or long separator runs", () => {
+    const text = `${"a@".repeat(50_000)} ${"1 ".repeat(50_000)}`;
+    const parsed = { content: { textContent: text, wordCount: 100_000 }, contactLinks: [] } as unknown as ParsedPage;
+    const started = performance.now();
+    expect(bodyCorroboratesPageType(parsed, "contact")).toBe(false);
+    expect(performance.now() - started).toBeLessThan(1000);
   });
 });
