@@ -413,6 +413,14 @@ export function probeSiteForCloaking(
   opts: CloakingProbeOptions,
   fetchImpl?: ProbeFetch,
 ): Promise<CloakingProbeData[]> {
+  return runCloakingProbe(selectCloakingPaths(input, opts), opts, fetchImpl);
+}
+
+/** The paths a probe would fetch for this site, before any request: candidates, then the suspicious ones (capped at `maxPages`). */
+export function selectCloakingPaths(
+  input: CloakingProbeSiteInput,
+  opts: Pick<CloakingProbeOptions, "maxPages" | "recentDays" | "now">,
+): SelectedProbe[] {
   const sitemapSet = new Set<string>();
   const lastmodMap = new Map<string, string>();
   for (const u of input.sitemapUrls) {
@@ -461,7 +469,7 @@ export function probeSiteForCloaking(
     now: opts.now ?? Date.now(),
   });
 
-  return runCloakingProbe(selected, opts, fetchImpl);
+  return selected.slice(0, Math.max(0, opts.maxPages));
 }
 
 /** The opt-in `[integrity.cloaking_probe]` config block (snake_case, from TOML). */

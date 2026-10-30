@@ -134,7 +134,7 @@ import {
 } from "./rule-cache";
 import { collectDroppedBatch } from "./batch-gc";
 import { detachFromPage, detachParsedPage } from "./detach";
-import { resolveCloakingProbes } from "./cloaking-probe";
+import { resolveCloakingProbes, selectCloakingPaths } from "./cloaking-probe";
 import { createSiteQuery } from "./site-query";
 import { confirmSoft404Candidates, hasSoft404FetchWork, markUnresolvedSoft404 } from "./soft404-confirm";
 import { headerScopeBase } from "@squirrelscan/utils/headers";
@@ -2881,17 +2881,17 @@ function streamParsedUniverse(
 export async function withinDeadline<T>(
   work: (cancel: AbortSignal) => Promise<T>,
   deadlineAt: number | undefined,
-): Promise<{ timedOut: false; value: T } | { timedOut: true }> {
+): Promise<{ timedOut: false; value: T } | { timedOut: true; started: boolean }> {
   if (deadlineAt === undefined) return { timedOut: false, value: await work(new AbortController().signal) };
   const remaining = deadlineAt - Date.now();
-  if (remaining <= 0) return { timedOut: true };
+  if (remaining <= 0) return { timedOut: true, started: false };
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const expired = new Promise<{ timedOut: true }>((resolve) => {
+  const expired = new Promise<{ timedOut: true; started: boolean }>((resolve) => {
     timer = setTimeout(() => {
       // The work is told to stop: nothing further is dispatched and a request in flight is aborted.
       controller.abort();
-      resolve({ timedOut: true });
+      resolve({ timedOut: true, started: true });
     }, remaining);
   });
   try {
@@ -3076,21 +3076,22 @@ function buildStreamingSiteData(
       webAppManifestsDropped,
     } = assets;
 
+    const cloakingSite = {
+      baseUrl: crawl?.baseUrl ?? "",
+      entryUrls: crawlEntryUrls(crawl),
+      pages: parsedPages.map((p) => ({
+        url: p.url,
+        statusCode: p.statusCode,
+        parsed: { links: p.parsed.links },
+      })),
+      sitemapUrls: sitemapDiscovery.discovered.flatMap((s) =>
+        s.urls.map((u) => ({ loc: u.loc, lastmod: u.lastmod })),
+      ),
+    };
     const cloaking = yield* Effect.promise(() =>
       withinDeadline((cancel) => resolveCloakingProbes(
         config.integrity?.cloaking_probe,
-        {
-          baseUrl: crawl?.baseUrl ?? "",
-          entryUrls: crawlEntryUrls(crawl),
-          pages: parsedPages.map((p) => ({
-            url: p.url,
-            statusCode: p.statusCode,
-            parsed: { links: p.parsed.links },
-          })),
-          sitemapUrls: sitemapDiscovery.discovered.flatMap((s) =>
-            s.urls.map((u) => ({ loc: u.loc, lastmod: u.lastmod })),
-          ),
-        },
+        cloakingSite,
         {
           defaultUserAgent: config.crawler?.user_agent || CHROME_USER_AGENT,
           customHeaders: config.crawler?.headers,
@@ -3107,7 +3108,14 @@ function buildStreamingSiteData(
       ), probes?.deadlineAt),
     );
     // A cloaking probe cut at its deadline leaves the rule with no data (it no-ops), same as the probe being off.
-    if (cloaking.timedOut && config.integrity?.cloaking_probe?.enabled) probes?.onSkipped?.("cloaking-probe");
+    // Skipped only when it had a path to fetch: one cut while running did; one that never started is checked.
+    if (
+      cloaking.timedOut &&
+      config.integrity?.cloaking_probe?.enabled &&
+      (cloaking.started || selectCloakingPaths(cloakingSite, config.integrity.cloaking_probe && { maxPages: config.integrity.cloaking_probe.max_pages, recentDays: config.integrity.cloaking_probe.recent_days }).length > 0)
+    ) {
+      probes?.onSkipped?.("cloaking-probe");
+    }
     const cloakingProbes = cloaking.timedOut ? undefined : cloaking.value;
 
     // Soft-404 confirmation (#1177) — mutates each candidate's

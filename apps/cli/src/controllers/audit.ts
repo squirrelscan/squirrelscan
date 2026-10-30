@@ -1912,6 +1912,19 @@ export async function runAudit(
         mergedConfig.cloud.enabled &&
         options.cloudAvailable !== false &&
         cloudChecks &&
+        mergedConfig.cloud.technologies &&
+        durationBudget &&
+        Date.now() >= durationBudget.checksDoneAt
+      ) {
+        // #1271: nothing is left of the budget for a paid round trip (same gate as the prefetch).
+        logger.warn(
+          "cloud technology detection skipped",
+          "the --max-duration time limit was reached before it could start"
+        );
+      } else if (
+        mergedConfig.cloud.enabled &&
+        options.cloudAvailable !== false &&
+        cloudChecks &&
         mergedConfig.cloud.technologies
       ) {
         phaseTimer.enter("tech_detect");
