@@ -116,7 +116,14 @@ async function audit(name: string, flags: string[], toml?: string) {
     ],
     {
       cwd,
-      env: { ...process.env, HOME: home, NO_COLOR: "1", NO_TELEMETRY: "1" },
+      env: {
+        ...process.env,
+        HOME: home,
+        NO_COLOR: "1",
+        NO_TELEMETRY: "1",
+        // Another test file may have set it; the CLI must use this run's HOME.
+        SQUIRREL_CONTENT_STORE_PATH: undefined,
+      },
       stdout: "pipe",
       stderr: "pipe",
     }
