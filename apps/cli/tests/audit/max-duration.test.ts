@@ -139,6 +139,41 @@ describe("the reason sentence", () => {
   });
 });
 
+describe("resource checks cut short (#1271)", () => {
+  test("the reason names them", () => {
+    expect(
+      maxDurationReason({
+        seconds: 4,
+        unfetchedPages: 0,
+        pagesNotEvaluated: 0,
+        siteChecksCut: false,
+        resourceChecksCut: true,
+      })
+    ).toBe(
+      "Stopped at the 4 s time limit (--max-duration): resource checks were cut short"
+    );
+  });
+  test("alone, they are a cut", () => {
+    expect(
+      wasCut({
+        crawlStopped: false,
+        unfetched: 0,
+        pagesNotEvaluated: 0,
+        rulesCut: false,
+        resourceChecksCut: true,
+      })
+    ).toBe(true);
+    expect(
+      wasCut({
+        crawlStopped: false,
+        unfetched: 0,
+        pagesNotEvaluated: 0,
+        rulesCut: false,
+      })
+    ).toBe(false);
+  });
+});
+
 describe("a saved JSON report keeps the cut", () => {
   const slim = (extra: Record<string, unknown>) => ({
     meta: {
@@ -182,6 +217,20 @@ describe("a saved JSON report keeps the cut", () => {
     if (!loaded.ok) return;
     expect(loaded.data.status).toBe("partial");
     expect(loaded.data.statusReasonCode).toBe("max_duration");
+    expect(loaded.data.maxDuration).toEqual(cut);
+  });
+
+  test("resourceChecksCut survives a round trip", async () => {
+    const cut = {
+      seconds: 5,
+      unfetchedPages: 0,
+      pagesNotEvaluated: 0,
+      siteChecksCut: false,
+      resourceChecksCut: true,
+    };
+    const loaded = await reload(slim({ maxDuration: cut }));
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
     expect(loaded.data.maxDuration).toEqual(cut);
   });
 

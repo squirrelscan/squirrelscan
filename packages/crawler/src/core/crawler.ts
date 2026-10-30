@@ -501,6 +501,13 @@ export function createCrawler(
     // hits an orphaned Deferred whose stopGuard already resolved or lost its
     // race, so Deferred.succeed has no awaiter and is an inert no-op.
     let stopSignal: Deferred.Deferred<void, never> | null = null;
+    /**
+     * `stop()` was called since the run began, possibly before the crawl loop existed (during the
+     * preamble: seed redirect resolution, robots.txt, sitemaps). Such a stop used to be lost when
+     * the run then set `isRunning = true`, so a `--max-duration` budget spent in the preamble let
+     * the crawl start and run to the per-URL watchdog (#1271). Cleared when a run begins.
+     */
+    let stopRequestedEarly = false;
     let robots: RobotsEvaluator | null = null;
     let baseUrl: string = "";
     // The custom headers go only to the audited origin (scheme, host and port,
@@ -2784,6 +2791,7 @@ export function createCrawler(
       originalUrl?: string,
     ): Effect.Effect<string, CrawlerError | StorageError, never> =>
       Effect.gen(function* () {
+        stopRequestedEarly = false;
         // One wall-clock budget for the whole preamble, armed before the first
         // request of the crawl. See PREAMBLE_TOTAL_BUDGET_MS.
         //
@@ -2902,7 +2910,7 @@ export function createCrawler(
         });
 
         currentCrawlId = crawlId;
-        isRunning = true;
+        isRunning = !stopRequestedEarly;
         isPaused = false;
 
         yield* emit({
@@ -3175,6 +3183,7 @@ export function createCrawler(
     const stop = (): Effect.Effect<void, CrawlerError, never> =>
       Effect.gen(function* () {
         isRunning = false;
+        stopRequestedEarly = true;
         // Arm the crawl loop's grace-then-interrupt hard cap (#923). Idempotent:
         // succeed on an already-completed Deferred is a no-op.
         if (stopSignal) {
@@ -3191,6 +3200,7 @@ export function createCrawler(
       crawlId: string,
     ): Effect.Effect<void, CrawlerError | StorageError, never> =>
       Effect.gen(function* () {
+        stopRequestedEarly = false;
         const crawl = yield* storage.getCrawl(crawlId);
         if (!crawl) {
           return yield* Effect.fail(new CrawlerError("UNKNOWN", `Crawl not found: ${crawlId}`));
@@ -3200,7 +3210,7 @@ export function createCrawler(
         headerSeed = crawl.originalUrl ?? crawl.seedUrl ?? "";
         crawlEgress = egressFor(baseUrl);
         currentCrawlId = crawlId;
-        isRunning = true;
+        isRunning = !stopRequestedEarly;
         isPaused = false;
 
         // Restore config from crawl
@@ -3316,6 +3326,7 @@ export function createCrawler(
       newConfig: Partial<CrawlerConfig>,
     ): Effect.Effect<string, CrawlerError | StorageError, never> =>
       Effect.gen(function* () {
+        stopRequestedEarly = false;
         const crawl = yield* storage.getCrawl(crawlId);
         if (!crawl) {
           return yield* Effect.fail(new CrawlerError("UNKNOWN", `Crawl not found: ${crawlId}`));
@@ -3325,7 +3336,7 @@ export function createCrawler(
         headerSeed = crawl.originalUrl ?? crawl.seedUrl ?? "";
         crawlEgress = egressFor(baseUrl);
         currentCrawlId = crawlId;
-        isRunning = true;
+        isRunning = !stopRequestedEarly;
         isPaused = false;
         // A restart re-crawls from an empty frontier, so it is a fresh run for
         // reporting purposes and must be able to say this again (#1899).

@@ -1254,7 +1254,15 @@ export async function runAudit(
 
       // Detect redirects first so we can look up by final URL
       // (before subscribing to events to avoid counting redirect requests)
-      const finalUrl = await Effect.runPromise(crawler.detectRedirects(url));
+      const finalUrl = await Effect.runPromise(
+        // #1271: the seed redirect probe is inside the budget too.
+        crawler.detectRedirects(
+          url,
+          durationBudget
+            ? { deadlineAt: durationBudget.crawlStopAt }
+            : undefined
+        )
+      );
 
       // Subscribe to crawler events to emit progress updates
       let pagesProcessed = 0;
@@ -1780,6 +1788,14 @@ export async function runAudit(
       // The walk is over whatever the batch counts added up to.
       onProgress({ phase: "walk", current: pageCount, total: pageCount });
       const assets = preRules.assets;
+      // #1271: the resource checks ran out of the budget's time (not a tarpit host).
+      if (
+        durationBudget &&
+        assets.degradation?.degraded &&
+        assets.degradation.reason === "budget"
+      ) {
+        durationCut.resourceChecksCut = true;
+      }
       // #1255: opt-in, for corpus and research runs. Never fails the audit.
       if (mergedConfig.storage.store_scripts) {
         await storeFetchedScripts({
@@ -2291,6 +2307,9 @@ export async function runAudit(
               unfetchedPages: durationCut.unfetched,
               pagesNotEvaluated: durationCut.pagesNotEvaluated,
               siteChecksCut: durationCut.rulesCut,
+              ...(durationCut.resourceChecksCut
+                ? { resourceChecksCut: true }
+                : {}),
             };
             // Persisted with the scope below, so `squirrel report` rebuilds it.
             scanScope.stopReason = "time";

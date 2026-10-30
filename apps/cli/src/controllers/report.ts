@@ -978,6 +978,7 @@ function slimMaxDuration(
     unfetchedPages,
     pagesNotEvaluated,
     siteChecksCut: v.siteChecksCut,
+    ...(v.resourceChecksCut === true ? { resourceChecksCut: true } : {}),
   };
 }
 

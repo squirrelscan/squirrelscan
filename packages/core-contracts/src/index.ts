@@ -1103,6 +1103,8 @@ export interface MaxDurationCut {
   pagesNotEvaluated: number;
   /** The rules phase was cut: site-wide checks are missing from the report. */
   siteChecksCut: boolean;
+  /** The resource (CSS, image, script) checks ran out of time: some size and script findings may be incomplete. Absent when not cut. */
+  resourceChecksCut?: boolean;
 }
 
 /** Where an audit executed + how much of the site it crawled (#1180). */

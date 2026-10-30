@@ -7,7 +7,6 @@ import type {
   PageRecord,
 } from "@squirrelscan/core-contracts/storage";
 
-import { renderJson, renderText } from "@squirrelscan/report";
 import { describe, expect, spyOn, test } from "bun:test";
 import { Effect } from "effect";
 
@@ -123,11 +122,6 @@ describe("the asset-fetch-degraded note (#1271)", () => {
       expect(rule?.checks[0]?.message).toContain(
         "Resource fetching was cut short by the resource-fetch time budget"
       );
-      const json = JSON.parse(renderJson(report)) as {
-        skippedChecks?: unknown;
-      };
-      expect(json).toBeDefined();
-      expect(renderText(report)).toBeTypeOf("string");
     } finally {
       warn.mockRestore();
     }

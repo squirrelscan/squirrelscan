@@ -102,7 +102,36 @@ const blackhole = Bun.listen({
   socket: { data() {}, open() {}, close() {} },
 });
 
+// Pages are fast and the home page links 60 stylesheets that each take 3 s: the resource checks
+// cannot finish inside the budget's margin.
+const slowAssetsSite = Bun.serve({
+  port: 0,
+  hostname: "127.0.0.1",
+  idleTimeout: 0,
+  async fetch(req) {
+    const { pathname } = new URL(req.url);
+    if (pathname === "/") {
+      const links = Array.from(
+        { length: 60 },
+        (_, i) => `<link rel="stylesheet" href="/slow/${i}.css">`
+      ).join("");
+      return new Response(
+        `<!doctype html><html lang="en"><head><title>Assets</title>${links}</head><body><h1>Assets</h1><p>hello</p></body></html>`,
+        { headers: { "content-type": "text/html" } }
+      );
+    }
+    if (pathname.startsWith("/slow/")) {
+      await Bun.sleep(3000);
+      return new Response("body{}", {
+        headers: { "content-type": "text/css" },
+      });
+    }
+    return new Response("not found", { status: 404 });
+  },
+});
+
 afterAll(() => {
+  void slowAssetsSite.stop(true);
   void slowDiscoverySite.stop(true);
   blackhole.stop(true);
   for (const release of hung) release();
@@ -169,6 +198,7 @@ interface JsonReport {
   statusReason?: string;
   statusReasonCode?: string;
   maxDuration?: {
+    resourceChecksCut?: boolean;
     seconds: number;
     unfetchedPages: number;
     pagesNotEvaluated: number;
@@ -222,7 +252,7 @@ describe("squirrel audit --max-duration", () => {
     expect(report.meta.totalPages ?? 0).toBeGreaterThan(1);
   }, 90_000);
 
-  test("a seed that never answers fails at the limit with an unreachable report, exit 5", async () => {
+  test("a seed that never answers fails at the limit with an unreachable report, exit 5, class timeout", async () => {
     const r = await auditUrl(
       `http://127.0.0.1:${blackhole.port}/`,
       "--max-duration",
@@ -233,15 +263,51 @@ describe("squirrel audit --max-duration", () => {
     const outcome = JSON.parse(r.out) as {
       status: string;
       statusReason: string;
+      statusReasonCode: string;
       message: string;
     };
     expect(outcome.status).toBe("unreachable");
-    // The reason says what happened once; the message adds "Cannot reach" itself.
-    expect(outcome.statusReason).toBe(
-      "the 6s time limit (--max-duration) was reached before the site answered"
+    expect(outcome.statusReasonCode).toBe("timeout");
+    expect(outcome.statusReason).toContain(
+      "6s --max-duration time limit was reached"
     );
+    // The reason says what happened once; the message adds "Cannot reach" itself.
     expect(outcome.message.match(/Cannot reach/g)).toHaveLength(1);
   }, 60_000);
+
+  test("the unreachable outputs never carry userinfo, query or fragment (budget and not)", async () => {
+    const secret = (port: number | undefined) =>
+      `http://admin:hunter2@127.0.0.1:${port}/p?token=SECRET#frag`;
+    for (const [url, args] of [
+      [secret(blackhole.port), ["--max-duration", "5"]],
+      [secret(1), []],
+    ] as const) {
+      const r = await auditUrl(url, ...args);
+      expect(r.code).toBe(5);
+      for (const text of [r.out, r.err]) {
+        expect(text).not.toContain("hunter2");
+        expect(text).not.toContain("SECRET");
+        expect(text).not.toContain("#frag");
+        expect(text).not.toContain("admin:");
+      }
+    }
+  }, 90_000);
+
+  test("resource checks that run out of the budget's time are named in the report", async () => {
+    const r = await auditUrl(
+      `http://127.0.0.1:${slowAssetsSite.port}/`,
+      "--max-duration",
+      "4"
+    );
+    expect(r.elapsedMs).toBeLessThan((4 + 15) * 1000 + 8_000);
+    expect(r.code).toBe(0);
+    const report = JSON.parse(r.out) as JsonReport & {
+      maxDuration?: { resourceChecksCut?: boolean };
+    };
+    expect(report.status).toBe("partial");
+    expect(report.maxDuration?.resourceChecksCut).toBe(true);
+    expect(report.statusReason).toContain("resource checks were cut short");
+  }, 90_000);
 
   test("a squirrel.toml max_duration past 7 days is refused with the config error", async () => {
     const dir = mkdtempSync(join(tmpdir(), "squirrel-max-duration-cfg-"));
