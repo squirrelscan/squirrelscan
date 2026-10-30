@@ -183,6 +183,7 @@ describe("security/cookie-flags: platform cookies (#1378)", () => {
       expect(c.platform.length).toBeGreaterThan(0);
       expect(c.docs).toMatch(/^https:\/\//);
       expect(c.evidence.length).toBeGreaterThan(0);
+      expect(typeof c.documented).toBe("boolean");
     }
   });
 
