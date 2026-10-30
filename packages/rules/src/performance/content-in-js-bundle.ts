@@ -5,9 +5,10 @@ import { z } from "zod";
 
 import {
   MAX_CHUNK_CHARS,
-  countSentencesIn,
+  buildNeedleIndex,
   estimateProseShare,
   extractContentSentences,
+  findNeedles,
   gzipSize,
   normalizeScriptText,
   sentenceNeedle,
@@ -35,8 +36,9 @@ export const optionsSchema = z.object({
     .describe("Other pages whose content is in the same chunk before the finding becomes a failure"),
   max_pages_checked: z
     .number()
-    .default(300)
-    .describe("Pages searched for per chunk, so a very large site stays bounded"),
+    .max(20000)
+    .default(5000)
+    .describe("Pages searched for per chunk (5 sentences each), so a very large site stays bounded"),
   max_chunks: z
     .number()
     .default(10)
@@ -140,25 +142,28 @@ export const contentInJsBundleRule: Rule = {
         skippedLarge.push(script.url);
         continue;
       }
-      // The pages that load the chunk first, then an even sample of the rest.
+      if (performance.now() > deadline) {
+        outOfTime = true;
+        break;
+      }
+      // The pages that load the chunk first, then an even sample of the rest,
+      // up to the page cap; one pass over the chunk finds every page's sentences.
       const loaders = new Set(script.sourcePages);
       const loading = checkedPages.filter((url) => loaders.has(url));
       const others = checkedPages.filter((url) => !loaders.has(url));
       const room = Math.max(0, opts.max_pages_checked - loading.length);
       const step = others.length > room && room > 0 ? others.length / room : 1;
-      const sampled: string[] = [...loading];
+      const sampled: string[] = loading.slice(0, opts.max_pages_checked);
       for (let i = 0; i < others.length && sampled.length < opts.max_pages_checked; i += step) {
         sampled.push(others[Math.floor(i)]!);
       }
 
-      const pagesWithContent: string[] = [];
-      for (const url of sampled) {
-        if (performance.now() > deadline) {
-          outOfTime = true;
-          break;
-        }
-        if (countSentencesIn(decoded, needlesByPage.get(url)!) >= opts.min_sentences) pagesWithContent.push(url);
-      }
+      const index = buildNeedleIndex(sampled.flatMap((url) => needlesByPage.get(url)!));
+      const search = findNeedles(decoded, index, deadline);
+      if (search.truncated) outOfTime = true;
+      const pagesWithContent = sampled.filter(
+        (url) => needlesByPage.get(url)!.filter((n) => search.found.has(n)).length >= opts.min_sentences,
+      );
       const loadingPages = pagesWithContent.filter((url) => loaders.has(url));
       if (loadingPages.length === 0) continue;
 
