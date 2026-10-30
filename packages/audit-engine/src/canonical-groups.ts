@@ -51,16 +51,27 @@ export function canonicalVariantMap(
     // A canonical that is itself a variant of another page folds into that page's target.
     variants.set(page.url, canonical);
   }
-  // Resolve chains (a -> b -> c) and drop loops.
+  // Resolve chains (a -> b -> c) and drop loops. Memoised: each page is walked once, so a long chain is linear.
   const resolved = new Map<string, string>();
-  for (const [variant, first] of variants) {
-    let target = first;
-    const seen = new Set([variant]);
-    while (variants.has(target) && !seen.has(target)) {
-      seen.add(target);
-      target = variants.get(target)!;
+  const done = new Set<string>();
+  for (const start of variants.keys()) {
+    if (done.has(start)) continue;
+    const path: string[] = [];
+    const onPath = new Set<string>();
+    let at = start;
+    let target: string | undefined;
+    while (variants.has(at) && !done.has(at) && !onPath.has(at)) {
+      path.push(at);
+      onPath.add(at);
+      at = variants.get(at)!;
     }
-    if (!seen.has(target) && target !== variant) resolved.set(variant, target);
+    if (done.has(at)) target = resolved.get(at) ?? (variants.has(at) ? undefined : at);
+    else if (onPath.has(at)) target = undefined; // a loop: none of it folds
+    else target = at; // reached a page that is not itself a variant
+    for (const url of path) {
+      if (target !== undefined && target !== url) resolved.set(url, target);
+      done.add(url);
+    }
   }
   return resolved;
 }
@@ -93,11 +104,33 @@ export function foldChecksToCanonical(checks: Iterable<CheckResult>, map: Readon
       check.pages = mapPages(check.pages, map);
       touched = true;
     }
-    for (const item of check.items ?? []) {
+    const items = check.items;
+    const itemsBefore = items?.length ?? 0;
+    for (const item of items ?? []) {
       const before = item.sourcePages?.some((p) => map.has(p)) || (!item.sourcePages && map.has(item.id));
       if (before) {
         foldItem(item, map);
         touched = true;
+      }
+    }
+    // Two items that were two pages (/c and /c?a=1) are one item now: list it once, and the
+    // counts a renderer reads from `details` follow the list.
+    if (items && touched) {
+      const seen = new Set<string>();
+      const kept = items.filter((item) => {
+        if (item.sourcePages !== undefined) return true;
+        if (seen.has(item.id)) return false;
+        seen.add(item.id);
+        return true;
+      });
+      if (kept.length !== items.length) {
+        check.items = kept;
+        const details = check.details as Record<string, unknown> | undefined;
+        if (details) {
+          for (const key of ["count", "occurrences"]) {
+            if (details[key] === itemsBefore) details[key] = kept.length;
+          }
+        }
       }
     }
     if (touched) changed += 1;
