@@ -921,6 +921,8 @@ export async function runAudit(
     crawlStopped: false,
     unfetched: 0,
     pagesNotEvaluated: 0,
+    pagesTooLarge: 0,
+    tooLargePages: [],
     rulesCut: false,
     probesSkipped: [],
   };
@@ -1693,6 +1695,9 @@ export async function runAudit(
       const preRules = await Effect.runPromise(
         runStreamingPreRules(sqliteStorage, crawlId, mergedConfig, {
           batchSize: streamBatchSize,
+          ...(durationBudget
+            ? { maxParseBytes: MAX_DURATION_MAX_PAGE_BYTES }
+            : {}),
           resourceOverrides: {
             resourceCheckMaxItems: options.resourceCheckMaxItems,
             resourceCheckTimeoutMs: options.resourceCheckTimeoutMs,
@@ -2169,6 +2174,8 @@ export async function runAudit(
         if (bounded._tag === "Some") {
           ruleResults = bounded.value;
           durationCut.pagesNotEvaluated = ruleResults.pagesNotEvaluated;
+          durationCut.pagesTooLarge = ruleResults.pagesTooLarge;
+          durationCut.tooLargePages = ruleResults.tooLargePages;
         } else {
           durationCut.rulesCut = true;
           logger.warn(
@@ -2181,6 +2188,8 @@ export async function runAudit(
             ...emptyRuleExecutionResult(),
             tallies: new Map(),
             pagesNotEvaluated: 0,
+            pagesTooLarge: 0,
+            tooLargePages: [],
             ruleCache: emptyRuleCacheStats(),
           };
         }
@@ -2362,6 +2371,12 @@ export async function runAudit(
               seconds: Math.round(durationBudget.budgetMs / 1000),
               unfetchedPages: durationCut.unfetched,
               pagesNotEvaluated: durationCut.pagesNotEvaluated,
+              ...(durationCut.pagesTooLarge > 0
+                ? {
+                    pagesTooLarge: durationCut.pagesTooLarge,
+                    tooLargePages: durationCut.tooLargePages,
+                  }
+                : {}),
               siteChecksCut: durationCut.rulesCut,
               ...(durationCut.resourceChecksCut
                 ? { resourceChecksCut: true }

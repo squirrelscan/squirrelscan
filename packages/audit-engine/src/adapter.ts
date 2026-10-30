@@ -283,11 +283,18 @@ export function renderedPageUrlsFrom(
 export function buildSiteContext(
   pages: PageRecord[],
   parsedCache?: ParsedPageCache,
+  limits?: { maxParseBytes?: number },
 ): Effect.Effect<SiteContextPage[], never, never> {
   return Effect.sync(() => {
     const contextPages: SiteContextPage[] = [];
+    const maxParseBytes = limits?.maxParseBytes;
 
     for (const page of pages) {
+      // `--max-duration` (#1332): a page over the cap is stored but never parsed, here or anywhere else.
+      if (maxParseBytes !== undefined && (page.sizeBytes ?? Buffer.byteLength(page.html ?? "")) > maxParseBytes) {
+        contextPages.push({ page, parsed: null });
+        continue;
+      }
       // Skip non-HTML pages by content type
       if (!isHtmlContentType(page.contentType)) {
         contextPages.push({ page, parsed: null });
@@ -2831,6 +2838,7 @@ function streamParsedUniverse(
   storage: SQLiteStorage,
   crawlId: string,
   batchSize: number,
+  maxParseBytes?: number,
 ): Effect.Effect<ParsedUniverse & { totalPageCount: number }, never, never> {
   return Effect.gen(function* () {
     const universe = createParsedUniverseAccumulator();
@@ -2844,7 +2852,7 @@ function streamParsedUniverse(
       if (batch.length === 0) break;
       totalPageCount += batch.length;
 
-      const ctx = yield* buildSiteContext(batch);
+      const ctx = yield* buildSiteContext(batch, undefined, { maxParseBytes });
       // Absorb THEN drop, and never retain `ctx` past the iteration: the
       // accumulator keeps only parsed scalars, so this batch's PageRecords (each
       // holding the page's full html) become garbage at the end of the loop body.
@@ -3435,6 +3443,9 @@ export interface StreamingRuleExecutionResult extends RuleExecutionResult {
   peakLiveDocsPageStream: number;
   /** Pages whose rules never ran because `deadlineAt` passed first (#1271); 0 without a deadline. */
   pagesNotEvaluated: number;
+  /** Pages over `maxPageBytes`, never parsed or evaluated (#1332), and the first 20 by URL. */
+  pagesTooLarge: number;
+  tooLargePages: string[];
   /**
    * What the per-page rule-result cache did this run (#1990). Zeros with no
    * `disabledReason` mean no cache was supplied (the cloud); zeros WITH one mean a
@@ -3467,7 +3478,7 @@ export function runStreamingRules(
     signal?: AbortSignal;
     /** Epoch ms after which no further page starts its rules; see {@link streamPageRules} (#1271). */
     deadlineAt?: number;
-    /** HTML larger than this is neither parsed nor evaluated and is counted in `pagesNotEvaluated` (#1332). */
+    /** HTML larger than this is neither parsed nor evaluated and is counted in `pagesTooLarge` (#1332). */
     maxPageBytes?: number;
     /**
      * Epoch ms the probes before the page rules (soft-404 re-fetch, cloaking) must
@@ -3586,7 +3597,7 @@ export function runStreamingRules(
       wafBlockedPages,
       rateLimitedPages,
       fetchedTargets,
-    } = yield* phase("universe", () => streamParsedUniverse(storage, crawlId, batchSize));
+    } = yield* phase("universe", () => streamParsedUniverse(storage, crawlId, batchSize, opts?.maxPageBytes));
 
     // Steps 2+3: site-fetch phase + soft-404 verdict map.
     const { siteDataForPageRules, soft404Map } = yield* phase("site-fetch", () =>
@@ -3789,6 +3800,8 @@ export function runStreamingRules(
       tallies,
       peakLiveDocsPageStream: streamed.peakLiveDocs,
       pagesNotEvaluated: streamed.pagesNotEvaluated,
+      pagesTooLarge: streamed.pagesTooLarge,
+      tooLargePages: streamed.tooLargePages,
       ruleCache: ruleCacheDisabled
         ? { ...streamed.ruleCache, disabledReason: ruleCacheDisabled }
         : streamed.ruleCache,

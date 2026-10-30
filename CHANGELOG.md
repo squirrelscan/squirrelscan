@@ -19,7 +19,7 @@ How it works:
 
 ### Fixed
 
-- **`--max-duration`: one very large page no longer blocks the run past its budget.** Parsing a multi-megabyte HTML file cannot be interrupted, so a 30 MB page held the process for 109 s against a 15 s budget. A budgeted run now stores a page over 5 MiB without parsing it, so it adds no links and its rules do not run, and counts it in `maxDuration.pagesNotEvaluated`. A run without the flag is unchanged. (#1332)
+- **`--max-duration`: one very large page no longer blocks the run past its budget.** Parsing a multi-megabyte HTML file cannot be interrupted, so a 30 MB page held the process for 109 s against a 15 s budget. A budgeted run now stores a page over 5 MiB without parsing it, so it adds no links and its rules do not run, and counts it in `maxDuration.pagesTooLarge` and lists it in `tooLargePages`, with its own reason in the report. A run without the flag is unchanged. (#1332)
 - **`--max-duration`: a request hanging before the page checks no longer costs the page checks.** The soft-404 re-fetch of suspect pages and the cloaking probe run before the page rules; one that never answered held the rules phase until the hard stop, which cut the whole phase, so the report had no page findings even though every page was fetched. These probes now stop at their own deadline inside the margin and are skipped, `maxDuration.probesSkipped` names them, the page checks run on the fetched pages, and `siteChecksCut` is `true` only when the site-wide checks really did not finish. See [Time limit](https://docs.squirrelscan.com/cli/audit#time-limit). (#1327)
 
 ### Changed

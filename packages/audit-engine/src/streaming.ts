@@ -138,6 +138,9 @@ function yieldToEventLoop(): Promise<void> {
   return new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
+/** How many over-cap page URLs a result lists (#1332). */
+export const TOO_LARGE_PAGES_LISTED = 20;
+
 export interface StreamPageRulesResult {
   /**
    * pageUrl -> flat check list (RuleExecutionResult.pageResults).
@@ -172,6 +175,10 @@ export interface StreamPageRulesResult {
    * 0 when no deadline was set or it was not reached.
    */
   pagesNotEvaluated: number;
+  /** Pages of the universe over `maxPageBytes`, never parsed or evaluated (#1332); a separate count from `pagesNotEvaluated`. */
+  pagesTooLarge: number;
+  /** The first {@link TOO_LARGE_PAGES_LISTED} of them, by URL. */
+  tooLargePages: string[];
   /**
    * What the template fan-out actually did (#1951). All zeros when it is off, and
    * `fannedRuleRuns` is the number of page-rule invocations it removed — the only
@@ -354,6 +361,7 @@ export function streamPageRules(
     let deadlineHit = false;
     const maxPageBytes = opts?.maxPageBytes;
     let oversizeSkipped = 0;
+    const tooLargePages: string[] = [];
 
     // The pages this crawl holds, so a page that redirected to another page of it
     // can leave the duplicate-content rows to its target (#1355). One light pass
@@ -423,7 +431,7 @@ export function streamPageRules(
       const tooLarge = (p: (typeof batch)[number]): boolean =>
         maxPageBytes !== undefined && (p.sizeBytes ?? p.html?.length ?? 0) > maxPageBytes;
       const toParse = batch.filter((p) => !replayByUrl.has(p.normalizedUrl) && !tooLarge(p));
-      const parsedBatch = yield* buildSiteContext(toParse);
+      const parsedBatch = yield* buildSiteContext(toParse, undefined, { maxParseBytes: maxPageBytes });
       peakLiveDocs = Math.max(peakLiveDocs, parsedBatch.filter((p) => p.parsed?.document).length);
       const parsedByUrl = new Map(parsedBatch.map((e) => [e.page.normalizedUrl, e.parsed]));
 
@@ -465,9 +473,12 @@ export function streamPageRules(
         }
 
         if (tooLarge(page)) {
-          // Never parsed (#1332). Counted only when it would have run: the universe, not
-          // non-HTML or WAF pages, which no engine evaluates.
-          if (universe ? universe.has(page.normalizedUrl) : isAuditablePage(page)) oversizeSkipped++;
+          // Never parsed (#1332), so it is not in the universe: counted when it is a page the engines
+          // evaluate (HTML, not empty, not a WAF challenge).
+          if (isAuditablePage(page)) {
+            oversizeSkipped++;
+            if (tooLargePages.length < TOO_LARGE_PAGES_LISTED) tooLargePages.push(page.normalizedUrl);
+          }
           continue;
         }
         const parsed = parsedByUrl.get(page.normalizedUrl);
@@ -737,8 +748,9 @@ export function streamPageRules(
       pageUrls,
       peakLiveDocs,
       extractedCount,
-      pagesNotEvaluated:
-        (deadlineHit ? Math.max(0, (opts?.totalPages ?? pagesDone) - pagesDone - oversizeSkipped) : 0) + oversizeSkipped,
+      pagesNotEvaluated: deadlineHit ? Math.max(0, (opts?.totalPages ?? pagesDone) - pagesDone - oversizeSkipped) : 0,
+      pagesTooLarge: oversizeSkipped,
+      tooLargePages,
       templateFanout: fanout?.stats() ?? {
         clusters: 0,
         fannedPages: 0,

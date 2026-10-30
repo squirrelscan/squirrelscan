@@ -1968,7 +1968,7 @@ export function createCrawler(
             (isHtmlContentType(result.contentType) ||
               (!result.contentType && looksLikeHtml(result.body))) &&
             // #1332: a budgeted run does not parse a page it could not stop parsing.
-            !(config.maxParseBytes !== undefined && result.body.length > config.maxParseBytes)
+            !(config.maxParseBytes !== undefined && (result.sizeBytes ?? result.body.length) > config.maxParseBytes)
           ) {
             // Parse page data once (includes parseDocument internally)
             const parsed = parsePage(result.body, result.finalUrl, { classify: options.classify });

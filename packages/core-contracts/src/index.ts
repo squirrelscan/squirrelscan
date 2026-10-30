@@ -1112,6 +1112,10 @@ export interface MaxDurationCut {
   unfetchedPages: number;
   /** Pages fetched whose rules never ran. */
   pagesNotEvaluated: number;
+  /** Pages over the size a budgeted run parses (5 MiB), stored but not evaluated (#1332). Absent when none. */
+  pagesTooLarge?: number;
+  /** The first 20 of them, by URL. */
+  tooLargePages?: string[];
   /** The rules phase was cut: site-wide checks are missing from the report. */
   siteChecksCut: boolean;
   /** The resource (CSS, image, script) checks ran out of time: some size and script findings may be incomplete. Absent when not cut. */

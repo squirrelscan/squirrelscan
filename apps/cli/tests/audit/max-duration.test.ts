@@ -82,6 +82,8 @@ describe("wasCut", () => {
     pagesNotEvaluated: 0,
     rulesCut: false,
     probesSkipped: [] as string[],
+    pagesTooLarge: 0,
+    tooLargePages: [] as string[],
   };
   test("a crawl the budget stopped with nothing left queued is not a cut", () => {
     expect(wasCut(none)).toBe(false);
@@ -178,6 +180,8 @@ describe("resource checks cut short (#1271)", () => {
         pagesNotEvaluated: 0,
         rulesCut: false,
         probesSkipped: [],
+        pagesTooLarge: 0,
+        tooLargePages: [],
         resourceChecksCut: true,
       })
     ).toBe(true);
@@ -188,6 +192,8 @@ describe("resource checks cut short (#1271)", () => {
         pagesNotEvaluated: 0,
         rulesCut: false,
         probesSkipped: [],
+        pagesTooLarge: 0,
+        tooLargePages: [],
       })
     ).toBe(false);
   });
@@ -346,5 +352,58 @@ describe("slimMaxDuration keeps probesSkipped from stored JSON (#1327)", () => {
       slimMaxDuration({ ...base, probesSkipped: "cloaking-probe" })
         ?.probesSkipped
     ).toBeUndefined();
+  });
+});
+
+describe("maxDurationReason for pages too large to parse (#1332)", () => {
+  const base = {
+    seconds: 20,
+    unfetchedPages: 0,
+    pagesNotEvaluated: 0,
+    siteChecksCut: false,
+  };
+  test("alone it does not claim the time ran out", () => {
+    const reason = maxDurationReason({ ...base, pagesTooLarge: 1 });
+    expect(reason).toBe(
+      "Run under the 20 s time limit (--max-duration): 1 page was too large to parse within the time limit and not evaluated"
+    );
+  });
+  test("with a real cut it is one more part of the sentence", () => {
+    const reason = maxDurationReason({
+      ...base,
+      unfetchedPages: 4,
+      pagesTooLarge: 2,
+    });
+    expect(reason).toBe(
+      "Stopped at the 20 s time limit (--max-duration): 4 discovered pages were not fetched, 2 pages were too large to parse within the time limit and not evaluated"
+    );
+  });
+  test("wasCut counts them", () => {
+    expect(
+      wasCut({
+        crawlStopped: false,
+        unfetched: 0,
+        pagesNotEvaluated: 0,
+        pagesTooLarge: 1,
+        tooLargePages: ["https://x.test/a"],
+        rulesCut: false,
+        probesSkipped: [],
+      })
+    ).toBe(true);
+  });
+  test("slimMaxDuration keeps the count and a bounded list", () => {
+    const slim = slimMaxDuration({
+      seconds: 20,
+      unfetchedPages: 0,
+      pagesNotEvaluated: 0,
+      siteChecksCut: false,
+      pagesTooLarge: 3,
+      tooLargePages: ["https://x.test/a", 7, "https://x.test/b"],
+    });
+    expect(slim?.pagesTooLarge).toBe(3);
+    expect(slim?.tooLargePages).toEqual([
+      "https://x.test/a",
+      "https://x.test/b",
+    ]);
   });
 });
