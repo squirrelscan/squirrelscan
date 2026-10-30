@@ -27,6 +27,21 @@ describe("scheme without //", () => {
   });
 });
 
+describe("port 0 and bare credentials", () => {
+  test.each(["a.com:0", "https://a.com:0/", "localhost:0/x"])("%p is refused", (input) => {
+    expect(parseUserUrl(input).ok).toBe(false);
+  });
+
+  test("user:pw@host without a scheme says why", () => {
+    const r = parseUserUrl(`${["user", "pw"].join(":")}@example.com`);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error).toContain("--header");
+      expect(r.error).not.toContain("pw");
+    }
+  });
+});
+
 describe("credentials and fragment", () => {
   const withCreds = `https://${["user", "pw"].join(":")}@example.com/p?t=1#frag`;
 
