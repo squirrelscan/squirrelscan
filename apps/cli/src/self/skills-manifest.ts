@@ -49,6 +49,82 @@ export interface SkillsManifest {
 export interface FetchDeps {
   fetch?: typeof fetch;
   signal?: AbortSignal;
+  /** Where the test-hook variable is read from; defaults to `process.env`. */
+  env?: Record<string, string | undefined>;
+  /** Where the ignored-override warning goes; defaults to stderr. */
+  warn?: (message: string) => void;
+}
+
+/**
+ * Test hook, not a mirror setting: `SQUIRREL_SKILLS_TEST_SOURCE=http://127.0.0.1:<port>`
+ * serves `manifest.json` and `skills/<skill>/<file>` from a local fixture server so the
+ * install tests can run offline. Threat model: the value is read from the process
+ * environment only (never project config, a URL or a manifest), and it is honoured only
+ * when the host is a literal loopback address (127.0.0.0/8 or ::1, no name to resolve, no
+ * credentials), so it can never send a fetch to another machine; redirects are refused so a
+ * loopback server cannot bounce one out either. Anything else is ignored with a warning and
+ * the pinned GitHub hosts are used. Files stay verified against the manifest's sha256.
+ */
+export const SKILLS_TEST_SOURCE_ENV = "SQUIRREL_SKILLS_TEST_SOURCE";
+
+/** The loopback base URL (no trailing slash) the value names, or null if it isn't one. */
+export function parseLoopbackSource(value: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  if (url.username || url.password || url.search || url.hash) return null;
+  const host = url.hostname;
+  const v4 = host.match(/^127\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  const loopback =
+    host === "[::1]" ||
+    (v4 !== null && v4.slice(1).every((octet) => Number(octet) <= 255));
+  if (!loopback) return null;
+  return `${url.origin}${url.pathname.replace(/\/+$/, "")}`;
+}
+
+interface SkillsSource {
+  refsUrl: string | null;
+  manifestUrl: (ref: string) => string;
+  fileUrl: (ref: string, path: string) => string;
+  /** True for the loopback override: refuse redirects. */
+  local: boolean;
+}
+
+// One warning per ignored value, however many requests an install makes.
+const warnedValues = new Set<string>();
+
+function skillsSource(deps: FetchDeps): SkillsSource {
+  const raw = (deps.env ?? process.env)[SKILLS_TEST_SOURCE_ENV];
+  if (raw) {
+    const base = parseLoopbackSource(raw);
+    if (base) {
+      return {
+        refsUrl: null,
+        manifestUrl: () => `${base}/manifest.json`,
+        fileUrl: (_ref, path) => `${base}/${path}`,
+        local: true,
+      };
+    }
+    if (warnedValues.has(raw)) return githubSource();
+    warnedValues.add(raw);
+    (deps.warn ?? ((m) => console.error(m)))(
+      `warning: ${SKILLS_TEST_SOURCE_ENV} ignored: it must be an http(s) URL on a loopback address (127.x.x.x or [::1]) with no credentials; using ${SKILLS_REPOSITORY} on GitHub`
+    );
+  }
+  return githubSource();
+}
+
+function githubSource(): SkillsSource {
+  return {
+    refsUrl: REFS_URL,
+    manifestUrl: (ref) => `${RAW_BASE}/${ref}/manifest.json`,
+    fileUrl: (ref, path) => `${RAW_BASE}/${ref}/${path}`,
+    local: false,
+  };
 }
 
 export class SkillsFetchError extends Error {}
@@ -188,12 +264,17 @@ async function readCapped(
   return out;
 }
 
-async function request(url: string, deps: FetchDeps): Promise<Response> {
+async function request(
+  url: string,
+  deps: FetchDeps,
+  local = false
+): Promise<Response> {
   const signals = [AbortSignal.timeout(REQUEST_TIMEOUT_MS)];
   if (deps.signal) signals.push(deps.signal);
   return (deps.fetch ?? fetch)(url, {
     headers: { "User-Agent": `squirrel/${cliVersion}` },
     signal: AbortSignal.any(signals),
+    ...(local ? { redirect: "error" as const } : {}),
   });
 }
 
@@ -203,8 +284,11 @@ async function request(url: string, deps: FetchDeps): Promise<Response> {
  * the worst an unpinned read can do is fail and leave the install as it was.
  */
 export async function resolveSkillsRef(deps: FetchDeps = {}): Promise<string> {
+  const { refsUrl } = skillsSource(deps);
+  // The local source has no refs; its manifest and files are one snapshot.
+  if (!refsUrl) return "local";
   try {
-    const response = await request(REFS_URL, deps);
+    const response = await request(refsUrl, deps);
     if (response.ok) {
       // pkt-lines: "<len><sha> <ref>", the first one followed by NUL + caps.
       const text = new TextDecoder().decode(
@@ -225,8 +309,9 @@ export async function resolveSkillsRef(deps: FetchDeps = {}): Promise<string> {
 export async function fetchSkillsManifest(
   deps: FetchDeps = {}
 ): Promise<SkillsManifest> {
+  const source = skillsSource(deps);
   const ref = await resolveSkillsRef(deps);
-  const response = await request(`${RAW_BASE}/${ref}/manifest.json`, deps);
+  const response = await request(source.manifestUrl(ref), deps, source.local);
   if (!response.ok) {
     throw new SkillsFetchError(
       `could not fetch the skills manifest (HTTP ${response.status})`
@@ -256,7 +341,12 @@ export async function downloadSkillFile(
   const path = ["skills", skill, ...file.path.split("/")]
     .map(encodeURIComponent)
     .join("/");
-  const response = await request(`${RAW_BASE}/${manifest.ref}/${path}`, deps);
+  const source = skillsSource(deps);
+  const response = await request(
+    source.fileUrl(manifest.ref, path),
+    deps,
+    source.local
+  );
   if (!response.ok) {
     throw new SkillsFetchError(
       `could not download ${skill}/${file.path} (HTTP ${response.status})`
