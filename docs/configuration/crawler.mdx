@@ -800,19 +800,32 @@ does the status check of a sitemap URL on another host. Use this to authorize
 the crawler with schemes that require signed headers, such as
 [Web Bot Auth](/guides/web-bot-auth) (used by Shopify and Cloudflare).
 
-**Accept-Language.** The crawler sends no `Accept-Language` by default, the way a
-search-engine bot fetches. A site that redirects visitors by language (Shopify
-Markets and others) therefore serves each locale path (`/de-ch`, `/fr-ch`) its
-own page, instead of sending them all to the default language. To crawl as a
-visitor with a language, set one: `headers = { "Accept-Language" = "de-CH" }`.
-Cloud browser renders use the browser's own language and are not affected by
-this default.
+**Accept-Language.** The crawler sends no `Accept-Language` by default. A site
+that redirects visitors by language (Shopify Markets and others) therefore serves
+each locale path (`/de-ch`, `/fr-ch`) its own page, instead of sending them all to
+the default language it assumes from an English header. To crawl as a visitor
+with a language, set one: `headers = { "Accept-Language" = "de-CH" }`.
 
-A page that redirects to another URL is counted once, at the URL it ends up on:
-[`content/duplicate-title`](/rules/content/duplicate-title),
+Two things to know. The crawl still presents a browser User-Agent and browser
+`sec-ch-ua` and `sec-fetch-*` headers, so a request with no language is an
+unusual combination that a strict bot filter may notice; if a site starts
+refusing, set an `Accept-Language` to look like an ordinary browser. And a cloud
+browser render uses the browser's own language, while the plain HTTP fetch the
+audit makes beside it sends none, so the two can see different locale pages on a
+site that redirects by language.
+
+Pages cached by an earlier run are only refetched when the site varied on
+`Accept-Language` (a `Vary: Accept-Language` response). A site that redirected by
+language without saying so keeps its cached redirect until you run with
+`--refresh`.
+
+A page that redirects to another page of the crawl is counted once, at the page it
+ends up on: [`content/duplicate-title`](/rules/content/duplicate-title),
 [`content/duplicate-description`](/rules/content/duplicate-description) and
 [`core/title-unique`](/rules/core/title-unique) do not count the requested URL as a
-second page carrying the target's title or description.
+second page carrying the target's title or description. When the target was
+never crawled (nothing links to it), the requested URL is the only page with that
+text and is evaluated as usual.
 
 <Note>
   A custom header configured for a website's **cloud** audits does more than

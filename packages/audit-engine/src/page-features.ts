@@ -102,17 +102,18 @@ function metaRobotsNoindex(robots: string | null): boolean {
 export function extractPageFeatures(
   page: PageRecord,
   parsed: ParsedPage,
-  opts?: { fingerprint?: PageFingerprint | null }
+  opts?: { fingerprint?: PageFingerprint | null; crawledUrls?: ReadonlySet<string> }
 ): PageFeatureRow {
   const headers = buildHeadersMap(page);
   // meta+header indexability only; the robots.txt reason is site-level and is
   // appended by the rules from ctx.site.robotsTxt at run time.
   const indexability = isPageIndexable(parsed, headers);
 
-  // A page that redirected to another URL carries that URL's title and description
-  // (#1355). The rows that group pages by them (duplicate title and description)
-  // count the content once, where it is served from, so this URL has none.
-  const redirected = redirectedAway(page.normalizedUrl, page.finalUrl);
+  // A page that redirected to another CRAWLED page carries that page's title and
+  // description (#1355). The rows that group pages by them (duplicate title and
+  // description) count the content once, at the target. A target the crawl never
+  // reached leaves this row as the only one with that content, so it keeps it.
+  const redirected = redirectedAway(page.normalizedUrl, page.finalUrl, opts?.crawledUrls);
   const title = redirected ? null : parsed.meta.title;
   const description = redirected ? null : parsed.meta.description;
   // Same extractor local/nap-consistency's legacy path calls on the live parsed

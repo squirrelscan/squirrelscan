@@ -4,7 +4,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { parsePage } from "@squirrelscan/parser";
-import { redirectedAway } from "@squirrelscan/utils/url";
+import { crawledPageKeys, redirectedAway } from "@squirrelscan/utils/url";
 
 import { titleUniqueRule } from "../src/core/title-unique";
 import { duplicateDescriptionRule } from "../src/content/duplicate-description";
@@ -44,14 +44,28 @@ function statuses(rule: Rule, data: SiteData): string[] {
 const SAME = { title: "Saddle shop", description: "English description of the saddle shop" };
 
 describe("redirectedAway", () => {
-  test("a different final page is a redirect; the same page, a trailing slash or no final url is not", () => {
-    expect(redirectedAway(`${BASE}/de-ch`, `${BASE}/en`)).toBe(true);
-    expect(redirectedAway(`${BASE}/en`, `${BASE}/en`)).toBe(false);
-    expect(redirectedAway(`${BASE}/en/`, `${BASE}/en`)).toBe(false);
-    expect(redirectedAway(`${BASE}/en`, undefined)).toBe(false);
-    expect(redirectedAway(`${BASE}/en`, "")).toBe(false);
-    // A query is part of the page.
-    expect(redirectedAway(`${BASE}/p?a=1`, `${BASE}/p?a=2`)).toBe(true);
+  const crawled = crawledPageKeys([`${BASE}/en`, `${BASE}/de-ch`]);
+
+  test("a different CRAWLED final page is a redirect; the same page, a trailing slash or no final url is not", () => {
+    expect(redirectedAway(`${BASE}/de-ch`, `${BASE}/en`, crawled)).toBe(true);
+    expect(redirectedAway(`${BASE}/en`, `${BASE}/en`, crawled)).toBe(false);
+    expect(redirectedAway(`${BASE}/en/`, `${BASE}/en`, crawled)).toBe(false);
+    expect(redirectedAway(`${BASE}/en`, undefined, crawled)).toBe(false);
+    expect(redirectedAway(`${BASE}/en`, "", crawled)).toBe(false);
+  });
+
+  test("a target the crawl never reached is not a redirect away: the requested row is the only copy", () => {
+    expect(redirectedAway(`${BASE}/a`, `${BASE}/b`, crawled)).toBe(false);
+    // A query-only redirect, with the target never crawled.
+    expect(redirectedAway(`${BASE}/q`, `${BASE}/q?lang=en`, crawled)).toBe(false);
+    // No crawl set at all: evaluate the row.
+    expect(redirectedAway(`${BASE}/de-ch`, `${BASE}/en`)).toBe(false);
+  });
+
+  test("both sides use one canonicalisation: case, default port, fragment and trailing slash", () => {
+    const keys = crawledPageKeys(["HTTPS://Shop.Example:443/en/"]);
+    expect(redirectedAway(`${BASE}/de-ch`, "https://shop.example/en#top", keys)).toBe(true);
+    expect(redirectedAway(`${BASE}/de-ch`, "https://shop.example/en?x=1", keys)).toBe(false);
   });
 });
 
@@ -60,6 +74,16 @@ describe("duplicate title and description ignore a requested url that redirected
     { url: `${BASE}/en`, ...SAME },
     { url: `${BASE}/de-ch`, finalUrl: `${BASE}/en`, ...SAME },
     { url: `${BASE}/fr-ch`, finalUrl: `${BASE}/en`, ...SAME },
+  ]);
+  // The requested urls' target is never crawled (nothing links to /b): the
+  // requested row is the only one carrying its text, so a real duplicate shows.
+  const uncrawledTarget = site([
+    { url: `${BASE}/a`, finalUrl: `${BASE}/b`, ...SAME },
+    { url: `${BASE}/c`, ...SAME },
+  ]);
+  const queryOnly = site([
+    { url: `${BASE}/q`, finalUrl: `${BASE}/q?lang=en`, ...SAME },
+    { url: `${BASE}/c`, ...SAME },
   ]);
   const real = site([
     { url: `${BASE}/en`, ...SAME },
@@ -76,6 +100,10 @@ describe("duplicate title and description ignore a requested url that redirected
     });
     test(`${name}: two real pages with the same text still are`, () => {
       expect(statuses(rule, real)).toContain("warn");
+    });
+    test(`${name}: a redirect whose target was never crawled does not hide a duplicate`, () => {
+      expect(statuses(rule, uncrawledTarget)).toContain("warn");
+      expect(statuses(rule, queryOnly)).toContain("warn");
     });
   }
 });

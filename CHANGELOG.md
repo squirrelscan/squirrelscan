@@ -19,11 +19,11 @@ How it works:
 
 ### Changed
 
-- **The crawler no longer sends a default `Accept-Language`.** It sent `en-US,en;q=0.9` on every request, so a site that redirects by language (Shopify Markets, for one) sent `/de-ch` and `/fr-ch` to `/en`, and the duplicate-description rule reported all three as one page. It now sends none, as a search-engine bot does, and `[crawler] headers = { "Accept-Language" = "..." }` still sets one. Pages cached by an earlier run are fetched again once. (#1355)
+- **The crawler no longer sends a default `Accept-Language`.** It sent `en-US,en;q=0.9` on every request, so a site that redirects by language (Shopify Markets, for one) sent `/de-ch` and `/fr-ch` to `/en`, and the duplicate-description rule reported all three as one page. It now sends none, and `[crawler] headers = { "Accept-Language" = "..." }` still sets one. Pages cached by an earlier run are refetched only when the site varied on `Accept-Language`; use `--refresh` to refetch a cached language redirect. The crawl's browser User-Agent now arrives with no language, which a strict bot filter may notice. (#1355)
 
 ### Fixed
 
-- **A page that redirected to another URL is no longer counted as a second page with the target's title and description.** `content/duplicate-title`, `content/duplicate-description` and `core/title-unique` counted the requested URL beside the URL it ended up on. They now count the content once, where it is served from. (#1355)
+- **A page that redirected to another crawled page is no longer counted as a second page with that page's title and description.** `content/duplicate-title`, `content/duplicate-description` and `core/title-unique` counted the requested URL beside the URL it ended up on. They now count the content once, at the target; when the target was never crawled, the requested URL is still evaluated. (#1355)
 
 ### Added
 

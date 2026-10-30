@@ -409,17 +409,38 @@ export function normalizePageUrl(url: string): string {
 }
 
 /**
- * True when a page's `finalUrl` is a different page from the `url` that was
- * requested (#1355). The crawler stores the requested url with the target's
- * content, so a rule that groups pages by what they say (duplicate title or
- * description) must not count the requested url as a second page carrying it:
- * `/de-ch` and `/fr-ch` redirecting to `/en` are not three pages with one
- * description. The content is counted once, where it is served from. An absent
- * `finalUrl` is not a redirect.
+ * The set of page keys a crawl holds, for {@link redirectedAway}. Every url is
+ * passed through {@link normalizePageUrl}, the same canonicalisation the
+ * comparison applies to a `finalUrl`, so the two sides cannot disagree on case,
+ * default ports, a trailing slash or a fragment.
  */
-export function redirectedAway(url: string, finalUrl: string | null | undefined): boolean {
-  if (!finalUrl) return false;
-  return normalizePageUrl(finalUrl) !== normalizePageUrl(url);
+export function crawledPageKeys(urls: Iterable<string>): Set<string> {
+  const keys = new Set<string>();
+  for (const url of urls) keys.add(normalizePageUrl(url));
+  return keys;
+}
+
+/**
+ * True when a page's `finalUrl` is a different page from the `url` that was
+ * requested AND that other page is itself in the crawl (#1355). The crawler stores
+ * the requested url with the target's content, so a rule that groups pages by what
+ * they say (duplicate title or description) would count the content twice:
+ * `/de-ch` and `/fr-ch` redirecting to `/en` are not three pages with one
+ * description. The content is counted once, where the target is crawled.
+ *
+ * When the target was never crawled (nothing links to it) the requested url is the
+ * only row carrying that content, so it is NOT skipped: hiding it would hide a
+ * real duplicate. An absent `finalUrl`, or no `crawled` set, is not a redirect
+ * (the safe direction: evaluate the row).
+ */
+export function redirectedAway(
+  url: string,
+  finalUrl: string | null | undefined,
+  crawled?: ReadonlySet<string>,
+): boolean {
+  if (!finalUrl || !crawled) return false;
+  const target = normalizePageUrl(finalUrl);
+  return target !== normalizePageUrl(url) && crawled.has(target);
 }
 
 /**
