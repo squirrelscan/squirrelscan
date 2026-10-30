@@ -80,7 +80,7 @@ import type {
 import type { SiteMetadata } from "./site-metadata";
 import type { CompactResolutionSignal, ResolutionSignal } from "./resolution";
 import { RULE_TIMED_OUT_SKIP_REASON } from "./resolution";
-import type { AuditFailureReasonCode } from "./failure-reason";
+import type { AuditStatusReasonCode } from "./failure-reason";
 import type { RefusedFetch } from "./refused-fetch";
 import type { WafBlockedSummary } from "./waf-block";
 import type { EntityMap } from "./entity-map";
@@ -671,13 +671,19 @@ export interface AuditReport {
     unfetched?: number;
   };
   /**
+   * What the `--max-duration` time limit cut (#1271). Present only when the run hit the
+   * limit and something was left undone; with it `status` is `partial` and
+   * `statusReasonCode` is `max_duration` (unless the run was already failed or blocked).
+   */
+  maxDuration?: MaxDurationCut;
+  /**
    * Machine-readable class of the failure behind `statusReason` (#1822), so the
    * email template, the dashboard, the MCP tools and Sentry can branch on the
    * cause instead of substring-matching prose. Set alongside `statusReason`;
    * absent on reports stored before #1822, where
    * `classifyAuditFailureReasonText` recovers the class from the text.
    */
-  statusReasonCode?: AuditFailureReasonCode;
+  statusReasonCode?: AuditStatusReasonCode;
   /**
    * Root fetches (robots.txt, sitemaps, llms.txt, the Markdown probe) the site
    * refused with a 401/403/429 or a bot-challenge 503. A refusal is a coverage
@@ -1087,6 +1093,18 @@ export interface PublishedReportDetail {
   classesDropped?: number;
 }
 
+/** What a `--max-duration` time limit cut from a run (#1271). */
+export interface MaxDurationCut {
+  /** The budget, in seconds. */
+  seconds: number;
+  /** Pages discovered and queued but never fetched. */
+  unfetchedPages: number;
+  /** Pages fetched whose rules never ran. */
+  pagesNotEvaluated: number;
+  /** The rules phase was cut: site-wide checks are missing from the report. */
+  siteChecksCut: boolean;
+}
+
 /** Where an audit executed + how much of the site it crawled (#1180). */
 export interface ScanScope {
   /** "cli" = local machine, "ci" = CI runner, "cloud" = squirrelscan cloud container. */
@@ -1132,6 +1150,11 @@ export interface ScanScope {
    * `originalUrl` and `redirectChain` are read from it.
    */
   startRedirect?: SeedRedirectRecord;
+  /**
+   * What the `--max-duration` time limit cut (#1271), kept here so a report rebuilt
+   * from the crawl later is still `partial` with reason code `max_duration`.
+   */
+  maxDuration?: MaxDurationCut;
 }
 
 /** Locked-rules audience for a report — anonymous/local vs signed-in tier (#368). */

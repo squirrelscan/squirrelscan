@@ -1,8 +1,9 @@
 // JSON report output
 
 import type {
-  AuditFailureReasonCode,
+  AuditStatusReasonCode,
   EditorSummaryPriority,
+  MaxDurationCut,
   RefusedFetch,
   WafBlockedSummary,
 } from "@squirrelscan/core-contracts";
@@ -220,8 +221,13 @@ interface SlimJsonReport {
    * site?" without parsing `statusReason` prose.
    */
   rateLimited?: { pages: number; hosts: string[]; unfetched?: number };
-  /** Machine-readable class behind `statusReason` (#1822); absent pre-#1822. */
-  statusReasonCode?: AuditFailureReasonCode;
+  /**
+   * Machine-readable class behind `statusReason` (#1822); absent pre-#1822. On a
+   * `partial` report it is `max_duration` when `--max-duration` cut the run (#1271).
+   */
+  statusReasonCode?: AuditStatusReasonCode;
+  /** What the `--max-duration` time limit cut (#1271). Present only when it cut something. */
+  maxDuration?: MaxDurationCut;
   /**
    * Root fetches (robots.txt, sitemaps, llms.txt, Markdown) the site refused
    *. Their absence is unknown, not confirmed. Present only when
@@ -543,7 +549,10 @@ function buildSlimReport(
     // it does not have to special-case older reports.
     ...(report.status === "failed" || report.status === "blocked"
       ? { statusReasonCode: reportFailureReasonCode(report) }
-      : {}),
+      : report.status === "partial" && report.statusReasonCode === "max_duration"
+        ? { statusReasonCode: report.statusReasonCode }
+        : {}),
+    ...(report.maxDuration ? { maxDuration: report.maxDuration } : {}),
     ...(report.rateLimited && report.rateLimited.pages > 0
       ? { rateLimited: report.rateLimited }
       : {}),

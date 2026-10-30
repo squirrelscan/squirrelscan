@@ -41,6 +41,18 @@ export function isAuditFailureReasonCode(value: unknown): value is AuditFailureR
 }
 
 /**
+ * Why a `partial` report is partial, when the cause is not a failure to fetch (#1271).
+ * `max_duration`: the run hit `squirrel audit --max-duration` and stopped launching
+ * new work; the report covers what was fetched and evaluated by then.
+ */
+export const AUDIT_PARTIAL_REASON_CODES = ["max_duration"] as const;
+
+export type AuditPartialReasonCode = (typeof AUDIT_PARTIAL_REASON_CODES)[number];
+
+/** Every value `AuditReport.statusReasonCode` can carry. */
+export type AuditStatusReasonCode = AuditFailureReasonCode | AuditPartialReasonCode;
+
+/**
  * Which URL the failure came from. `entry` is the audited URL itself and always
  * outranks `sitemap` when both are known: the seed is what the user asked for.
  *
@@ -531,4 +543,26 @@ function statusIn(reason: string, min: number, max: number): boolean {
   if (!match) return false;
   const status = Number.parseInt(match[1]!, 10);
   return status >= min && status <= max;
+}
+
+/** The one-sentence `statusReason` of a report cut short by `--max-duration` (#1271). */
+export function maxDurationReason(cut: {
+  seconds: number;
+  unfetchedPages: number;
+  pagesNotEvaluated: number;
+  siteChecksCut: boolean;
+}): string {
+  const parts: string[] = [];
+  if (cut.unfetchedPages > 0) {
+    parts.push(
+      `${cut.unfetchedPages} discovered page${cut.unfetchedPages === 1 ? " was" : "s were"} not fetched`
+    );
+  }
+  if (cut.pagesNotEvaluated > 0) {
+    parts.push(
+      `${cut.pagesNotEvaluated} fetched page${cut.pagesNotEvaluated === 1 ? " was" : "s were"} not evaluated`
+    );
+  }
+  if (cut.siteChecksCut) parts.push("site-wide checks did not finish");
+  return `Stopped at the ${cut.seconds} s time limit (--max-duration)${parts.length > 0 ? `: ${parts.join(", ")}` : ""}`;
 }

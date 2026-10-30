@@ -9,6 +9,7 @@ import {
   foldChecksToCanonical,
 } from "@squirrelscan/audit-engine";
 import { buildCacheStats } from "@squirrelscan/core-contracts";
+import { maxDurationReason } from "@squirrelscan/core-contracts/failure-reason";
 import { createStructureBuilder } from "@squirrelscan/report/structure";
 import { loadAllRules, type RuleRunResult } from "@squirrelscan/rules";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
@@ -906,7 +907,7 @@ export function reconstructReport(
     // pages mean "we could not check these THIS run", which is exactly what the
     // reader needs to see. Letting the smart-audit override swallow it would
     // hide the coverage loss on every re-audit.
-    const auditStatus =
+    const baseAuditStatus =
       smartMerge &&
       smartMerge.coverage.knownPages > smartMerge.coverage.auditedPages &&
       rateLimitedCount === 0 &&
@@ -919,6 +920,17 @@ export function reconstructReport(
             reasonCode: undefined,
           }
         : runStatus;
+
+    // #1271: the audit's own `--max-duration` cut, restored from the stored scope.
+    const durationCut = crawl.scanScope?.maxDuration;
+    const auditStatus =
+      durationCut && baseAuditStatus.status === "completed"
+        ? {
+            status: "partial" as const,
+            reason: maxDurationReason(durationCut),
+            reasonCode: "max_duration" as const,
+          }
+        : baseAuditStatus;
 
     // No real audit ⇒ null score (N/A), not 0. Parity with the cloud/live
     // builder (generateReportFromStorage) + the API's failed-report persist (#586).
@@ -985,6 +997,7 @@ export function reconstructReport(
       // the crawl (#1050). A later database report restores that exact scope;
       // old crawl rows have no stamp and deliberately gain no inferred one.
       ...(crawl.scanScope ? { scanScope: crawl.scanScope } : {}),
+      ...(durationCut ? { maxDuration: durationCut } : {}),
       // The start URL's followed redirect (#1281), persisted with the scan scope.
       ...(crawl.scanScope?.startRedirect
         ? {

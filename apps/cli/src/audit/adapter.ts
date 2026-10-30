@@ -506,10 +506,14 @@ export function runStreamingRules(
     retainPageResults?: boolean;
     /** Vet and pin the site's own hosts in the end-of-crawl probes (repo#3430). */
     pinOwnHosts?: boolean;
+    /** Epoch ms after which no further page starts its rules (#1271). */
+    deadlineAt?: number;
   }
 ): Effect.Effect<
   RuleExecutionResult & {
     ruleCache: RuleCacheStats;
+    /** Pages whose rules never ran because `deadlineAt` passed first (#1271). */
+    pagesNotEvaluated: number;
     /** Folded per-rule tallies — bounded by the RULE count, not the page count. */
     tallies: Map<string, RuleTally>;
   },

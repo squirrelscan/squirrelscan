@@ -23,6 +23,8 @@ import type { ParsedPageCache } from "@squirrelscan/parser";
 import {
   createCloudDocumentFetcher,
   createNotEvaluatedCollector,
+  emptyRuleCacheStats,
+  emptyRuleExecutionResult,
   flattenChecks,
   type FlatFinding,
   type PageResultSink,
@@ -31,6 +33,7 @@ import {
 import { createEntityMapCollector } from "@squirrelscan/audit-engine/entity-map/collect";
 import { offlineAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
 import { computeCost } from "@squirrelscan/core-contracts/credits";
+import { maxDurationReason } from "@squirrelscan/core-contracts/failure-reason";
 import { PLANS } from "@squirrelscan/core-contracts/plans";
 import {
   redactUrl,
@@ -75,6 +78,12 @@ import {
 } from "@/audit/crawl-lease";
 import { entityMapSite, storeEntityMap } from "@/audit/entity-map";
 import { guardCollector } from "@/audit/guard-collector";
+import {
+  createDurationBudget,
+  msUntil,
+  wasCut,
+  type DurationCut,
+} from "@/audit/max-duration";
 import {
   RetentionReclaimError,
   auditMayRetire,
@@ -231,6 +240,13 @@ export interface RunAuditOptions extends AuditOptions {
   rulesPhaseTimeoutMs?: number;
   /** Fill each page's rule count in the report (`--include-pages`, #1260). */
   includePages?: boolean;
+  /**
+   * Wall-clock budget for the whole audit, in seconds (#1271). At the budget the
+   * crawl stops launching work, the rules run on what was fetched and the report is
+   * `partial` with reason code `max_duration`. Overrides `[crawler] max_duration`;
+   * unset means no budget.
+   */
+  maxDurationSeconds?: number;
   /** Max resources to check per category (CSS, images, scripts) in the rules phase */
   resourceCheckMaxItems?: number;
   /** Timeout per individual resource check in ms (overrides default 10s) */
@@ -892,6 +908,17 @@ export async function runAudit(
   const config = await loadConfig(options.configPath, { silent: true });
   const mergedConfig = mergeOptionsToConfig(config, options);
 
+  // #1271: the audit's wall-clock budget, counted from here (after any prompt).
+  const durationBudget = createDurationBudget(
+    options.maxDurationSeconds ?? mergedConfig.crawler.max_duration
+  );
+  const durationCut: DurationCut = {
+    crawlStopped: false,
+    unfetched: 0,
+    pagesNotEvaluated: 0,
+    rulesCut: false,
+  };
+
   const onProgress = options.onProgress ?? (() => {});
 
   // Per-phase wall-clock breakdown (#857/#871) — see PhaseTimer above. A phase
@@ -1351,6 +1378,24 @@ export async function runAudit(
         }, crawlPhaseTimeoutMs);
       }
 
+      // #1271: stop launching crawl work at the budget. stop() lets in-flight pages
+      // finish (its own short grace window), so the crawl ends well inside the margin.
+      let durationTimer: ReturnType<typeof setTimeout> | undefined;
+      if (durationBudget) {
+        durationTimer = setTimeout(() => {
+          durationCut.crawlStopped = true;
+          logger.warn(
+            "time limit reached",
+            `stopping the crawl after ${Math.round(durationBudget.budgetMs / 1000)}s (--max-duration) and auditing the pages collected`
+          );
+          try {
+            void Effect.runPromise(crawler.stop()).catch(() => {});
+          } catch {
+            // already stopping / shutting down
+          }
+        }, msUntil(durationBudget.crawlStopAt));
+      }
+
       let crawlId: string;
       try {
         if (shouldResume) {
@@ -1406,6 +1451,7 @@ export async function runAudit(
         }
       } finally {
         if (crawlPhaseTimer) clearTimeout(crawlPhaseTimer);
+        if (durationTimer) clearTimeout(durationTimer);
       }
 
       // Show redirect if it occurred (user chose to show all redirects). A seed
@@ -1461,6 +1507,11 @@ export async function runAudit(
       // If the crawl phase was force-stopped by the wall-clock backstop and
       // produced nothing, fail with a clear reason instead of analyzing an
       // empty site (which would surface as confusing all-pass/zero results).
+      if (durationCut.crawlStopped && pageCount === 0) {
+        throw new Error(
+          `The ${Math.round((durationBudget?.budgetMs ?? 0) / 1000)}s time limit (--max-duration) was reached with no pages collected`
+        );
+      }
       if (crawlPhaseStopped && pageCount === 0) {
         throw new Error(
           `Crawl phase timed out after ${Math.round((crawlPhaseTimeoutMs ?? 0) / 1000)}s with no pages collected`
@@ -1612,6 +1663,10 @@ export async function runAudit(
           resourceOverrides: {
             resourceCheckMaxItems: options.resourceCheckMaxItems,
             resourceCheckTimeoutMs: options.resourceCheckTimeoutMs,
+            // #1271: the asset checks end inside the margin past the budget.
+            ...(durationBudget
+              ? { resourceCheckBudgetMs: msUntil(durationBudget.checksDoneAt) }
+              : {}),
             // Sub-resource cache reuse (#107): mirrors the crawler's incremental flag.
             incremental: incrementalEnabled,
             // --offline: nothing goes to a host outside the audited site, the
@@ -1625,6 +1680,14 @@ export async function runAudit(
             ? {
                 externalLinks: {
                   config: mergedConfig.external_links,
+                  // #1271: links not reached by then are reported as not checked.
+                  ...(durationBudget
+                    ? {
+                        limits: {
+                          budgetMs: msUntil(durationBudget.checksDoneAt),
+                        },
+                      }
+                    : {}),
                   // The CLI's own persistent dead-link cache. The resident
                   // path took it as a given inside checkExternalLinksOnStorage;
                   // the engine's collected-links entry point takes it as an
@@ -1726,7 +1789,17 @@ export async function runAudit(
       // `prefetchCollector` is non-null on exactly the condition this block used
       // to spell out (see `cloudPrefetchEnabled`); testing it here is the same
       // gate and narrows the collector for the dispatch below.
-      if (prefetchCollector) {
+      if (
+        prefetchCollector &&
+        durationBudget &&
+        Date.now() >= durationBudget.checksDoneAt
+      ) {
+        // #1271: nothing is left of the budget for a paid round trip.
+        logger.warn(
+          "cloud prefetch skipped",
+          "the --max-duration time limit was reached before it could start"
+        );
+      } else if (prefetchCollector) {
         phaseTimer.enter("cloud_prefetch");
         logger.debug("step 2.4: cloud prefetch", crawlId);
         onProgress({ phase: "cloud" });
@@ -1964,6 +2037,10 @@ export async function runAudit(
         {
           batchSize: streamBatchSize,
           onPhase: streamPhaseMemoryLogger(),
+          // #1271: no page starts its rules after this.
+          ...(durationBudget
+            ? { deadlineAt: durationBudget.pageRulesStopAt }
+            : {}),
           pageSink,
           retainPageResults: false,
           // repo#3430: the end-of-crawl probes vet and pin the site's own hosts.
@@ -1982,18 +2059,47 @@ export async function runAudit(
         }
       );
       const rulesPhaseTimeoutMs = options.rulesPhaseTimeoutMs;
+      const limitedRulesEffect = rulesPhaseTimeoutMs
+        ? Effect.timeoutFail(rulesEffect, {
+            duration: Duration.millis(rulesPhaseTimeoutMs),
+            onTimeout: () =>
+              new Error(
+                `Rules phase timed out after ${Math.round(rulesPhaseTimeoutMs / 1000)}s`
+              ),
+          })
+        : rulesEffect;
       let ruleResults: Effect.Effect.Success<typeof rulesEffect>;
-      ruleResults = rulesPhaseTimeoutMs
-        ? await Effect.runPromise(
-            Effect.timeoutFail(rulesEffect, {
-              duration: Duration.millis(rulesPhaseTimeoutMs),
-              onTimeout: () =>
-                new Error(
-                  `Rules phase timed out after ${Math.round(rulesPhaseTimeoutMs / 1000)}s`
-                ),
-            })
+      if (durationBudget) {
+        // #1271: the rules phase is cut at the hard stop. Page results already went
+        // to the store batch by batch, so what is lost is the site-wide pass; the
+        // report is written from the store with status `partial`.
+        const bounded = await Effect.runPromise(
+          Effect.timeoutOption(
+            limitedRulesEffect,
+            Duration.millis(msUntil(durationBudget.hardStopAt))
           )
-        : await Effect.runPromise(rulesEffect);
+        );
+        if (bounded._tag === "Some") {
+          ruleResults = bounded.value;
+          durationCut.pagesNotEvaluated = ruleResults.pagesNotEvaluated;
+        } else {
+          durationCut.rulesCut = true;
+          logger.warn(
+            "time limit reached",
+            "the rules phase was cut; site-wide checks are missing from the report"
+          );
+          // Hand over the page results the interrupted pass had buffered.
+          await pageSink.flush?.();
+          ruleResults = {
+            ...emptyRuleExecutionResult(),
+            tallies: new Map(),
+            pagesNotEvaluated: 0,
+            ruleCache: emptyRuleCacheStats(),
+          };
+        }
+      } else {
+        ruleResults = await Effect.runPromise(limitedRulesEffect);
+      }
 
       // Page results already went to `rule_results` batch by batch through the
       // sink above (#2343); only the site pass is left, and it is bounded by the
@@ -2060,7 +2166,8 @@ export async function runAudit(
       let smartMerge:
         | import("@/reports/reconstruct").SmartMergeOverride
         | undefined;
-      if (mergedConfig.smart_audits) {
+      // A rules phase cut at the time limit has no tallies for the merge to score over.
+      if (mergedConfig.smart_audits && !durationCut.rulesCut) {
         phaseTimer.enter("smart_merge");
         logger.debug("step 2.7: smart audits merge", crawlId);
         try {
@@ -2159,6 +2266,28 @@ export async function runAudit(
             : {}),
         };
         report.scanScope = scanScope;
+        // #1271: say what the time limit cut. Status `partial` only when it cut
+        // something and the run was not already failed, blocked or partial.
+        if (durationBudget) {
+          durationCut.unfetched = durationCut.crawlStopped ? unfetched : 0;
+          if (wasCut(durationCut)) {
+            const cut = {
+              seconds: Math.round(durationBudget.budgetMs / 1000),
+              unfetchedPages: durationCut.unfetched,
+              pagesNotEvaluated: durationCut.pagesNotEvaluated,
+              siteChecksCut: durationCut.rulesCut,
+            };
+            // Persisted with the scope below, so `squirrel report` rebuilds it.
+            scanScope.stopReason = "time";
+            scanScope.maxDuration = cut;
+            report.maxDuration = cut;
+            if (report.status === undefined || report.status === "completed") {
+              report.status = "partial";
+              report.statusReason = maxDurationReason(cut);
+              report.statusReasonCode = "max_duration";
+            }
+          }
+        }
         // #1281: the URL the user gave and the chain to the audited one.
         if (options.startRedirect) {
           report.originalUrl = options.startRedirect.originalUrl;

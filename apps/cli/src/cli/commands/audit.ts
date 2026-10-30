@@ -1006,6 +1006,28 @@ export function parsePositiveIntFlag(
   return parsed;
 }
 
+/**
+ * Parse `--max-duration <seconds>` (#1271): a positive number of seconds. Returns
+ * `undefined` when the flag was not passed (no budget), `null` after printing the
+ * error for an invalid value (zero, negative, not a number), else the seconds.
+ * Exported for tests.
+ */
+export function parseMaxDurationFlag(
+  raw: string | undefined
+): number | undefined | null {
+  if (raw === undefined) return undefined;
+  const text = raw.trim();
+  // Number("") is 0 and Number("1e3") is 1000: accept plain decimal seconds only.
+  const parsed = /^\d+(?:\.\d+)?$/.test(text) ? Number(text) : Number.NaN;
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    console.error(
+      `${fmt.red("Error:")} --max-duration must be a positive number of seconds (got '${raw}').`
+    );
+    return null;
+  }
+  return parsed;
+}
+
 export const audit = defineCommand({
   meta: {
     name: "audit",
@@ -1026,6 +1048,11 @@ export const audit = defineCommand({
       type: "string",
       description:
         "Maximum crawl depth from the seed (seed = 0; default: unlimited)",
+    },
+    "max-duration": {
+      type: "string",
+      description:
+        "Wall-clock budget for the whole audit, in seconds. At the limit the audit stops launching new work, finishes in-flight pages, runs rules on what it has and writes a report with status partial and reason code max_duration. Exits within max(10% of the budget, 15 s) of the limit. Overrides [crawler] max_duration; unset means no limit",
     },
     concurrency: {
       type: "string",
@@ -1874,7 +1901,12 @@ export const audit = defineCommand({
         args["per-host"],
         "--per-host"
       );
-      if (concurrency === null || perHostConcurrency === null) {
+      const maxDurationSeconds = parseMaxDurationFlag(args["max-duration"]);
+      if (
+        concurrency === null ||
+        perHostConcurrency === null ||
+        maxDurationSeconds === null
+      ) {
         process.exitCode = 1;
         return;
       }
@@ -2002,6 +2034,7 @@ export const audit = defineCommand({
         ...(args.includePages && args.format === "json"
           ? { includePages: true }
           : {}),
+        ...(maxDurationSeconds !== undefined ? { maxDurationSeconds } : {}),
         ...(Object.keys(customHeaders).length > 0
           ? { headers: customHeaders }
           : {}),

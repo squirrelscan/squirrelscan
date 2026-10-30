@@ -126,6 +126,10 @@ export const CrawlerConfigSchema = z.object({
   // status `redirected`. Same-site redirects (http to https, apex to www) are
   // always followed. Optional like disable_discovery_probes.
   follow_redirect: z.boolean().optional(),
+  // Wall-clock budget for the whole audit, in seconds (#1271). At the budget the
+  // crawl stops launching work and the report is `partial` with reason code
+  // `max_duration`. `--max-duration` overrides it; unset means no budget.
+  max_duration: z.number().positive().finite().optional(),
   // Incremental re-scan: send conditional GETs (ETag/Last-Modified) so unchanged pages return 304; --refresh forces a full fetch. (#125)
   incremental: z.boolean().default(true),
   breadth_first: z.boolean().default(true),

@@ -10,9 +10,9 @@ import type {
   PublishedReportRecord,
 } from "@/crawler/storage/types";
 import type {
-  AuditFailureReasonCode,
   AuditReport,
   AuditStatus,
+  AuditStatusReasonCode,
   CheckResult,
   ComponentOccurrence,
   ReportRuleResult,
@@ -158,7 +158,9 @@ interface SlimJsonReport {
   status?: AuditStatus;
   statusReason?: string;
   /** Machine-readable class behind `statusReason` (#1822); absent pre-#1822. */
-  statusReasonCode?: AuditFailureReasonCode;
+  statusReasonCode?: AuditStatusReasonCode;
+  /** What the `--max-duration` time limit cut (#1271). */
+  maxDuration?: unknown;
   score: {
     overall: number | null; // null ⇒ N/A (failed/0-page audit, #586)
     grade: string;
@@ -443,6 +445,9 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
     ...(report.statusReason ? { statusReason: report.statusReason } : {}),
     ...(report.statusReasonCode
       ? { statusReasonCode: report.statusReasonCode }
+      : {}),
+    ...(slimMaxDuration(report.maxDuration)
+      ? { maxDuration: slimMaxDuration(report.maxDuration)! }
       : {}),
     siteChecks: [],
     pages: [],
@@ -947,6 +952,33 @@ export function validateFormat(format: string): Result<OutputFormat> {
   }
 
   return ok(format as OutputFormat);
+}
+
+/** `maxDuration` from untrusted slim JSON (#1271): whole non-negative counts and a flag, else dropped. */
+function slimMaxDuration(
+  value: unknown
+): AuditReport["maxDuration"] | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const v = value as Record<string, unknown>;
+  const count = (n: unknown): number | undefined =>
+    typeof n === "number" && Number.isInteger(n) && n >= 0 ? n : undefined;
+  const seconds = count(v.seconds);
+  const unfetchedPages = count(v.unfetchedPages);
+  const pagesNotEvaluated = count(v.pagesNotEvaluated);
+  if (
+    seconds === undefined ||
+    unfetchedPages === undefined ||
+    pagesNotEvaluated === undefined ||
+    typeof v.siteChecksCut !== "boolean"
+  ) {
+    return undefined;
+  }
+  return {
+    seconds,
+    unfetchedPages,
+    pagesNotEvaluated,
+    siteChecksCut: v.siteChecksCut,
+  };
 }
 
 /** The chain from untrusted slim JSON: at most ten {url, status} entries, anything else dropped. */

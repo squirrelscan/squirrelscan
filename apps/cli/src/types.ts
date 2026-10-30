@@ -193,6 +193,8 @@ export interface ResponseHeaders {
 import type {
   AuditFailureReasonCode as _AFRC,
   AuditStatus as _AS,
+  AuditStatusReasonCode as _ASRC,
+  MaxDurationCut as _MDC,
   CacheStats as _CST,
   CategoryScore as _CS,
   CheckItemSource,
@@ -213,6 +215,8 @@ import type {
 } from "@squirrelscan/core-contracts";
 export type AuditStatus = _AS;
 export type AuditFailureReasonCode = _AFRC;
+export type AuditStatusReasonCode = _ASRC;
+export type MaxDurationCut = _MDC;
 export type CategoryScore = _CS;
 export type GroupScore = _GS;
 export type HealthScore = _HS;
@@ -485,8 +489,10 @@ export interface AuditReport {
     /** Host(s) that throttled the crawl. */
     hosts: string[];
   };
-  /** Machine-readable class behind `statusReason` (#1822). */
-  statusReasonCode?: AuditFailureReasonCode;
+  /** Machine-readable class behind `statusReason` (#1822); `max_duration` on a partial report cut by `--max-duration` (#1271). */
+  statusReasonCode?: AuditStatusReasonCode;
+  /** What the `--max-duration` time limit cut (#1271). Mirrors core-contracts `AuditReport`. */
+  maxDuration?: MaxDurationCut;
   /**
    * Root fetches the site refused (401/403/429, a bot wall). Mirrors the field
    * on the engine's AuditReport; the two types are structurally different, so
@@ -641,6 +647,8 @@ export interface AuditReport {
     unfetched?: number;
     /** The start URL's followed redirect (#1281), so a rebuilt report still carries it. */
     startRedirect?: SeedRedirectRecord;
+    /** What the `--max-duration` time limit cut (#1271), so a rebuilt report is still partial. */
+    maxDuration?: MaxDurationCut;
   };
   /**
    * Rule-result cache disclosure (#1990): how many pages replayed a previous

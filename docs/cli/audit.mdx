@@ -24,6 +24,7 @@ squirrel audit <url> [options]
 |--------|-------|-------------|---------|
 | `--max-pages` | `-m` | Maximum pages to crawl | the [level's](/guides/audit-levels) page budget |
 | `--max-depth` | | Maximum crawl depth from the seed (start page = 0) | unlimited |
+| `--max-duration` | | Wall-clock budget for the whole audit, in seconds. At the limit the audit stops launching new work and writes a `partial` report (see [Time limit](#time-limit)) | no limit |
 | `--concurrency` | | Global crawl worker pool size (overrides `[crawler] concurrency`) | `5` |
 | `--per-host` | | Max concurrent requests per host (overrides `[crawler] per_host_concurrency`) | `5` |
 | `--level` | | [Audit level](/guides/audit-levels): `quick`, `surface`, `full` | auth-aware (see below) |
@@ -225,6 +226,12 @@ squirrel audit https://example.com --level full
 
 ```bash
 squirrel audit https://example.com -m 200
+```
+
+### Cap the run time
+
+```bash
+squirrel audit https://example.com --max-duration 240
 ```
 
 ### Export to JSON
@@ -485,6 +492,31 @@ The gate summary is written to stderr, so machine formats like `--format json`
 keep a clean stdout for piping. A malformed expression fails fast (exit `1`)
 before any crawl runs.
 
+### Time limit
+
+`--max-duration <seconds>` (or `[crawler] max_duration`) puts a wall-clock budget on the whole audit. A slow or throttling site can otherwise keep a run going for minutes, and a batch or CI job that kills the process at its own timeout gets no report at all. With the limit set, the audit stops launching new work when the budget is reached and writes the report from what it has.
+
+What happens at the limit:
+
+1. The crawl stops launching requests. Pages already in flight get a few seconds to finish.
+2. Rules run on the pages that were fetched, and the report is written as usual.
+3. The report has `status: "partial"` and `statusReasonCode: "max_duration"`, and a `maxDuration` object counting what was left: `unfetchedPages` (discovered, never fetched), `pagesNotEvaluated` (fetched, rules never ran) and `siteChecksCut` (the site-wide checks did not finish). The score covers the audited pages only.
+
+```json
+{
+  "status": "partial",
+  "statusReason": "Stopped at the 240 s time limit (--max-duration): 38 discovered pages were not fetched",
+  "statusReasonCode": "max_duration",
+  "maxDuration": { "seconds": 240, "unfetchedPages": 38, "pagesNotEvaluated": 0, "siteChecksCut": false }
+}
+```
+
+**Exit margin.** The process stops its own work within `max(10% of the budget, 15 seconds)` after the limit: a 60 s budget ends by 75 s, a 600 s budget by 660 s, counted from when the audit starts crawling (after any prompt). Slow link and resource checks are cut inside that margin, and the rules phase is cut at its end. A rules phase that has to be cut loses the site-wide checks, and if a request made before the page checks was still hanging, the page checks as well; `siteChecksCut` says so. Writing the report takes a moment more, and publishing to the dashboard is not counted.
+
+**Exit code.** A partial report exits `0` like any finished audit, so a `--fail-on` gate still decides pass or fail. Read `status` and `statusReasonCode` to tell a cut-short run from a complete one. An audit that reaches the limit with no page fetched fails (exit `1`), because there is nothing to report on.
+
+A run that finishes before the limit, or that the limit did not cut, is a normal `completed` report and has no `maxDuration`. Unset means no limit. `squirrel report` shows a stored partial audit the same way.
+
 ### Filtering rules
 
 Use `--rule-include` / `--rule-exclude` to run only some rule categories, for
@@ -724,8 +756,8 @@ Change the window, or turn it off, with
 
 | Code | Meaning |
 |------|---------|
-| `0` | Success |
-| `1` | Error (invalid URL, crawl failed, a site that answered with an error, etc.). A start URL that is not `http://` or `https://` with a host (`ftp://`, `file://`, `mailto:`, `javascript:`) is refused first, before any request: no run is registered and nothing is charged |
+| `0` | Success, including a `partial` report cut short by [`--max-duration`](#time-limit) (check `status`) |
+| `1` | Error (invalid URL, crawl failed, a site that answered with an error, no page fetched before the [`--max-duration`](#time-limit) limit although the site answered, etc.). A start URL that is not `http://` or `https://` with a host (`ftp://`, `file://`, `mailto:`, `javascript:`) is refused first, before any request: no run is registered and nothing is charged |
 | `2` | A [`--fail-on`](#gate-ci-on-audit-results) threshold tripped (CI gate) |
 | `3` | The audited page was blocked, so nothing was audited: a WAF or bot manager challenge or block page, or a bare 403 or 429 from the server (see [blocked by a WAF or bot manager](/guides/failed-audits#blocked-by-waf)). Every report with `status: "blocked"` exits `3` |
 | `4` | The start URL redirected to another site and the run was not told to follow it (or the chain looped, passed 5 hops, or reached a refused hop), so nothing was audited. See [Start URLs that redirect](#start-urls-that-redirect) |

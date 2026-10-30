@@ -10,6 +10,7 @@ import {
   wafBlockHeadline,
   type AuditFailureReasonCode,
   type AuditStatus,
+  type AuditStatusReasonCode,
   type RefusedFetch,
   type WafBlockedPage,
 } from "@squirrelscan/core-contracts";
@@ -18,6 +19,7 @@ import {
   AUDIT_FAILURE_CAUSE,
   AUDIT_FAILURE_NEXT_STEP,
   classifyAuditFailureReasonText,
+  isAuditFailureReasonCode,
 } from "@squirrelscan/core-contracts/failure-reason";
 
 export interface AuditFailureNotice {
@@ -155,9 +157,12 @@ export function getAuditFailureNotice(
  */
 export function reportFailureReasonCode(report: {
   statusReason?: string;
-  statusReasonCode?: AuditFailureReasonCode;
+  statusReasonCode?: AuditStatusReasonCode;
 }): AuditFailureReasonCode {
-  return report.statusReasonCode ?? classifyAuditFailureReasonText(report.statusReason);
+  // `max_duration` marks a partial report, never a failure, so it is not a failure class.
+  return isAuditFailureReasonCode(report.statusReasonCode)
+    ? report.statusReasonCode
+    : classifyAuditFailureReasonText(report.statusReason);
 }
 
 /**
