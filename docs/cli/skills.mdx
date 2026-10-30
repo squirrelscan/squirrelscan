@@ -195,6 +195,16 @@ The agent will handle running the audit and interpreting results for you.
 
 The `squirrelscan` skill teaches your agent the CLI itself: installation, authentication, publishing reports, cloud credits, API keys, MCP setup, and configuration. Agents load it whenever a task touches squirrelscan beyond a basic audit, for example "publish this report" or "connect squirrelscan over MCP".
 
+## Test hook: a local skills source
+
+`SQUIRREL_SKILLS_TEST_SOURCE` exists so the install tests can run `squirrel skills install` against a local fixture server without the network. It is a test hook, not a mirror setting, and it is not a way to install skills from anywhere else.
+
+```bash
+SQUIRREL_SKILLS_TEST_SOURCE=http://127.0.0.1:8123 squirrel skills install
+```
+
+The server serves `manifest.json` and `skills/<skill>/<file>` under that URL. The value is read from the process environment only, never from `squirrel.toml`, a URL or a manifest, and it is honoured only for a literal loopback address (`127.x.x.x` or `[::1]`, no credentials, no host name to resolve). Any other value is ignored with a warning and the skills come from `squirrelscan/skills` on GitHub as usual. Redirects from the local server are refused, and every file is still checked against its sha256 in the manifest.
+
 ---
 
 ## Related

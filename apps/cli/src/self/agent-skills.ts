@@ -815,6 +815,8 @@ function pick(p: TargetPlan) {
  */
 export async function syncSkills(options: SyncOptions): Promise<SyncResult> {
   const e = options.e ?? defaultSkillsEnv();
+  // The test-hook source variable is read from the same env the rest of the sync uses.
+  const fetchDeps: FetchDeps = { ...options, env: options.env ?? e.env };
   const run = async (): Promise<SyncResult> => {
     if (options.onLocked && !options.onLocked()) throw new AbandonedError();
     const state = readState(e);
@@ -863,7 +865,7 @@ export async function syncSkills(options: SyncOptions): Promise<SyncResult> {
       if (!names.length) return result;
     }
 
-    const manifest = options.manifest ?? (await fetchSkillsManifest(options));
+    const manifest = options.manifest ?? (await fetchSkillsManifest(fetchDeps));
     result.ref = manifest.ref;
     const published = new Map(manifest.skills.map((s) => [s.name, s]));
     if (options.mode === "install") {
@@ -1013,7 +1015,7 @@ export async function syncSkills(options: SyncOptions): Promise<SyncResult> {
         have.set(
           path,
           localCopy(file, dirs) ??
-            (await downloadSkillFile(manifest, skill.name, file, options))
+            (await downloadSkillFile(manifest, skill.name, file, fetchDeps))
         );
       }
     }
