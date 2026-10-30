@@ -308,6 +308,22 @@ describe("isAuditablePage — page-universe predicate (E-E gates extraction on t
     expect(isAuditablePage({ ...base(), html: "", sizeBytes: 0 })).toBe(true);
   });
 
+  test("captured zero-byte error response (404) → false", () => {
+    expect(isAuditablePage({ ...base(), status: 404, html: "", sizeBytes: 0 })).toBe(false);
+  });
+
+  test("captured zero-byte error response (410) → false", () => {
+    expect(isAuditablePage({ ...base(), status: 410, html: "", sizeBytes: 0 })).toBe(false);
+  });
+
+  test("204 response → false", () => {
+    expect(isAuditablePage({ ...base(), status: 204, html: "", sizeBytes: 0 })).toBe(false);
+  });
+
+  test("captured zero-byte body without an HTML content type → false", () => {
+    expect(isAuditablePage({ ...base(), contentType: null, html: "", sizeBytes: 0 })).toBe(false);
+  });
+
   test("WAF-challenge interstitial → false", () => {
     const waf: PageRecord = {
       ...base(),

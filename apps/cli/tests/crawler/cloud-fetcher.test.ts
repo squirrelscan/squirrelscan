@@ -800,6 +800,29 @@ describe("render-block fallback (#490)", () => {
     expect(blocked).toEqual([REQ.url]);
   });
 
+  test("a bodyless rendered 200 falls back instead of becoming an empty page", async () => {
+    const { fetcher: fallback, calls } = fallbackFetcher();
+    const fetcher = createCloudDocumentFetcher(
+      renderClient({
+        renderResult: async (jobId) => ({
+          jobId,
+          status: "done" as const,
+          results: [{ url: REQ.url, status: 200 }],
+        }),
+      }),
+      {
+        fallback,
+        pollIntervalMs: 1,
+        timeoutMs: 500,
+      }
+    );
+
+    const res = await fetcher.fetch(REQ);
+    expect(res.body).toBe("fallback");
+    expect(res.fetcherMethod).toBe("fetch");
+    expect(calls).toEqual([REQ.url]);
+  });
+
   test("a normal rendered 200 is NOT routed to the fallback", async () => {
     const { fetcher: fallback, calls } = fallbackFetcher();
     const blocked: string[] = [];

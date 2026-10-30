@@ -21,7 +21,7 @@ import type {
   SitemapDiscovery,
 } from "@/types";
 
-import { parsePageRecord } from "@/audit/adapter";
+import { hasAuditableHtmlBody, parsePageRecord } from "@/audit/adapter";
 import {
   calculateHealthScore,
   deriveAuditStatusFromPages,
@@ -499,7 +499,10 @@ export function reconstructReport(
         const withBody = scalars
           ? null
           : yield* storage.getPage(crawlId, page.normalizedUrl);
-        const parsed = withBody?.html ? parsePageRecord(withBody) : null;
+        const parsed =
+          withBody !== null && hasAuditableHtmlBody(withBody)
+            ? parsePageRecord(withBody)
+            : null;
         const summarySignal = scalars
           ? {
               title: features?.title ?? null,

@@ -294,6 +294,14 @@ export function buildSiteContext(
         continue;
       }
 
+      // An empty body is a document only when the response status permits one.
+      // Error pages still join site.pages through EMPTY_PARSED_PAGE below, while
+      // 204/205 responses have no representation to parse by definition.
+      if (page.html === "" && !isAuditableEmptyBodyStatus(page.status)) {
+        contextPages.push({ page, parsed: null });
+        continue;
+      }
+
       let parsed: ParsedPage | null = null;
 
       // Reuse stored parsed data if available
@@ -482,7 +490,7 @@ export function getParsedPages(
     const result: Array<{ url: string; parsed: ParsedPage }> = [];
 
     for (const page of pages) {
-      if (page.html === null || !isHtmlContentType(page.contentType)) continue;
+      if (!hasAuditableHtmlBody(page) || !isHtmlContentType(page.contentType)) continue;
 
       const parsed = parsePageRecord(page);
       if (parsed) {
@@ -4546,4 +4554,16 @@ export function isHtmlContentType(contentType: string | null): boolean {
   if (!contentType) return false;
   const lower = contentType.toLowerCase();
   return lower.includes("text/html") || lower.includes("application/xhtml+xml");
+}
+
+/** Whether an empty successful response is allowed to carry a document body. */
+export function isAuditableEmptyBodyStatus(status: number): boolean {
+  return status >= 200 && status < 300 && status !== 204 && status !== 205;
+}
+
+/** A captured body, including an empty one when its status permits content. */
+export function hasAuditableHtmlBody(
+  page: Pick<PageRecord, "html" | "status">,
+): page is Pick<PageRecord, "status"> & { html: string } {
+  return page.html !== null && (page.html.length > 0 || isAuditableEmptyBodyStatus(page.status));
 }

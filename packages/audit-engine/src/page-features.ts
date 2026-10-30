@@ -25,7 +25,7 @@ import { extractSiteChromeSignal, fingerprintPage } from "@squirrelscan/rules";
 import type { PageRecord, PageFeatureRow } from "@squirrelscan/core-contracts";
 import type { PageFingerprint, ParsedPage } from "@squirrelscan/rules";
 
-import { buildHeadersMap, isHtmlContentType } from "./adapter";
+import { buildHeadersMap, hasAuditableHtmlBody, isHtmlContentType } from "./adapter";
 import { templateFingerprintKey } from "./template-key";
 
 /**
@@ -38,7 +38,7 @@ import { templateFingerprintKey } from "./template-key";
  */
 export function isAuditablePage(page: PageRecord): boolean {
   if (!isHtmlContentType(page.contentType)) return false;
-  if (page.html === null) return false;
+  if (!hasAuditableHtmlBody(page)) return false;
   const waf = detectWafChallengePage({
     status: page.status,
     headers: {

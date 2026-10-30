@@ -205,7 +205,7 @@ export function sampleAveragePageBytes(
       for (const page of batch) {
         // Pages with no html (redirects, non-HTML) are not what the batch holds,
         // so they must not drag the average down and inflate the batch.
-        if (!page.html) continue;
+        if (page.html === null) continue;
         bytes += page.html.length;
         counted++;
       }
@@ -219,7 +219,7 @@ function averageHtmlBytes(pages: ReadonlyArray<{ html: string | null }>): number
   let bytes = 0;
   let counted = 0;
   for (const page of pages) {
-    if (!page.html) continue;
+    if (page.html === null) continue;
     bytes += page.html.length;
     counted++;
   }

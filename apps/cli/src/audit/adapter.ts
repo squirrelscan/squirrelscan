@@ -124,6 +124,14 @@ export function buildSiteContext(
         continue;
       }
 
+      // An empty body is a document only when the response status permits one.
+      // Error pages still join site.pages through the status-only path, while
+      // 204/205 responses have no representation to parse by definition.
+      if (page.html === "" && !isAuditableEmptyBodyStatus(page.status)) {
+        contextPages.push({ page, parsed: null });
+        continue;
+      }
+
       let parsed: ParsedPage | null = null;
 
       // Reuse stored parsed data if available
@@ -288,7 +296,8 @@ export function getParsedPages(
     const result: Array<{ url: string; parsed: ParsedPage }> = [];
 
     for (const page of pages) {
-      if (page.html === null || !isHtmlContentType(page.contentType)) continue;
+      if (!hasAuditableHtmlBody(page) || !isHtmlContentType(page.contentType))
+        continue;
 
       const parsed = parsePageRecord(page);
       if (parsed) {
@@ -313,7 +322,8 @@ export function pageRecordToPage(
   images: PageImageRef[],
   ruleResults: CheckResult[]
 ): Page {
-  const raw: PageRaw | null = record.html
+  const hasBody = hasAuditableHtmlBody(record);
+  const raw: PageRaw | null = hasBody
     ? {
         html: record.html,
         headers: record.headers,
@@ -328,7 +338,7 @@ export function pageRecordToPage(
     : null;
 
   let parsed: ParsedPageData | null = null;
-  if (record.html) {
+  if (hasBody) {
     const p = parsePageRecord(record);
     if (p) {
       parsed = {
@@ -353,6 +363,21 @@ export function pageRecordToPage(
     depth: record.depth,
     parentUrl: record.parentUrl,
   };
+}
+
+/** Whether an empty successful response is allowed to carry a document body. */
+export function isAuditableEmptyBodyStatus(status: number): boolean {
+  return status >= 200 && status < 300 && status !== 204 && status !== 205;
+}
+
+/** A captured body, including an empty one when its status permits content. */
+export function hasAuditableHtmlBody(
+  page: Pick<PageRecord, "html" | "status">
+): page is Pick<PageRecord, "status"> & { html: string } {
+  return (
+    page.html !== null &&
+    (page.html.length > 0 || isAuditableEmptyBodyStatus(page.status))
+  );
 }
 
 /**
