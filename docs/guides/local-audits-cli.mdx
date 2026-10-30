@@ -9,7 +9,7 @@ Signed-out local audits cost nothing and need no login, up to the CLI's 10,000-p
 <Info>
 Local audits run the deterministic rules and a free technology scan. The cloud-backed rules (AI analysis, browser rendering) need an account and credits: see [Cloud audits](/guides/cloud-audits). Everything below works logged out.
 
-The technology scan matches the same signatures the cloud uses against the pages the crawl already fetched, their response headers and the first-party JavaScript bundles it already downloaded, with no extra requests. The report gets a Technologies section without the change history that the cloud adds. See [Technology detection](/cloud/technologies) and its [script bundles](/cloud/technologies#script-bundles) settings.
+The technology scan matches the same signatures the cloud uses against the pages the crawl already fetched, their response headers and the first-party JavaScript bundles it already downloaded, with no extra requests. The report gets a Technologies section marked as a local scan, without the change history that the cloud adds (added and removed since the last scan of the domain). It covers CMS and shop systems, tag managers, consent tools, CDNs, analytics, frameworks and more, from the home page and up to 11 more crawled pages. See [Technology detection](/cloud/technologies#local-and-cloud-scans) for what each scan reads, why a run can show little more than headers, and the [script bundles](/cloud/technologies#script-bundles) settings.
 </Info>
 
 ## Install the CLI

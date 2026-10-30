@@ -199,12 +199,33 @@ export function extractScriptSrcs(html: string): string[] {
 }
 
 /**
+ * Extract the URLs of `<link>` stylesheets, preloads and module preloads from raw
+ * HTML. A script-url detector with a script list never reads the HTML, so a
+ * signal that lives in a stylesheet path (`/wp-content/plugins/woocommerce/...css`,
+ * a vendor's CSS host) is invisible to it unless the URL is listed beside the
+ * scripts (#1263). Bounded by the attribute scan, not by the page.
+ */
+export function extractLinkAssetHrefs(html: string): string[] {
+  const out: string[] = [];
+  const re = /<link\b([^>]{0,600})>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    const attrs = m[1] ?? "";
+    if (!/\brel\s*=\s*["'](?:[^"']*\s)?(?:stylesheet|preload|modulepreload)(?:\s[^"']*)?["']/i.test(attrs)) continue;
+    const href = /\bhref\s*=\s*["']([^"']{1,2000})["']/i.exec(attrs)?.[1];
+    if (href) out.push(href);
+  }
+  return out;
+}
+
+/**
  * Tech-detect input for each page, with the first-party script bodies the crawl
  * already fetched attached as `scripts[].content` (#1254). One shared builder for
  * the local scan and the cloud payload, so both see the same bytes and agree.
  *
  * - The home page (index 0) lists every fetched script plus its own `<script src>`
- *   values, so script-url detectors see every origin; another page lists its own
+ *   and stylesheet or preload `<link href>` values (#1263), so script-url detectors
+ *   see every origin and every asset path; another page lists its own
  *   `<script src>` values and carries a `scripts` array only when a body is
  *   attached to it (otherwise script-url detectors keep scanning its HTML).
  * - A bundle's body is attached to ONE page per audit, the first that references
@@ -293,7 +314,7 @@ export function buildTechInputs(
       });
     }
 
-    const srcs = extractScriptSrcs(page.html);
+    const srcs = [...extractScriptSrcs(page.html), ...extractLinkAssetHrefs(page.html)];
     const base: LocalTechInput = {
       url: page.url,
       headers: page.headers,

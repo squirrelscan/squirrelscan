@@ -134,6 +134,9 @@ export function groupTechnologies(items: ReportTechnology[]): TechGroup[] {
 
 /** A short one-line change summary, e.g. "2 added · 1 removed since last scan". */
 export function techChangeSummary(tech: ReportTechnologies): string | null {
+  // A local scan keeps no history, so "no changes" or "first scan" would claim a diff
+  // nobody computed (#1263): it says where the list came from instead.
+  if (tech.source === "local") return "Detected locally from the crawled pages (no scan history)";
   if (tech.firstScan) return "First recorded scan of this domain";
   const parts: string[] = [];
   if (tech.added.length > 0) parts.push(`${tech.added.length} added`);
