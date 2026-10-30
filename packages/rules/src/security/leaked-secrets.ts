@@ -85,6 +85,14 @@ type FastPattern = {
    * rather than under the provider's name. See continuedTokenEnd.
    */
   sharedPrefix?: string;
+  /**
+   * A check the match has to pass in its surroundings before it counts: the
+   * shapes that are only a credential when something specific follows or
+   * does not surround them (a PEM header needs its key material, a Twitter
+   * bearer is not the interior of a base64 payload). Gets the matched value,
+   * the scanned text and the match's index in it.
+   */
+  accept?: (value: string, content: string, index: number) => boolean;
 };
 
 // Type for context patterns (generic patterns, only run if keyword present)
@@ -181,6 +189,37 @@ export const FAST_PATTERNS: FastPattern[] = [
     keywords: ["pplx-"],
     confidence: "high",
   },
+  {
+    // `sk-or-v1-` + 64 hex. The OpenAI patterns stop at the first hyphen after
+    // `sk-or`, so none of them matches it (#1309).
+    name: "OpenRouter API Key",
+    pattern: /sk-or-v1-[a-f0-9]{64}/g,
+    keywords: ["sk-or-v1-"],
+    confidence: "high",
+  },
+  {
+    // `csk-` + 48 lowercase alphanumerics. The legacy OpenAI `sk-` pattern
+    // never saw it: its prefix sits inside the word `csk-` (#1309).
+    name: "Cerebras API Key",
+    pattern: /csk-[a-z0-9]{40,}/g,
+    keywords: ["csk-"],
+    confidence: "high",
+  },
+  {
+    name: "NVIDIA API Key",
+    pattern: /nvapi-[A-Za-z0-9_-]{60,}/g,
+    keywords: ["nvapi-"],
+    confidence: "high",
+  },
+  {
+    // `fw_` is a short prefix and also the start of identifiers
+    // (`fw_config_name`), so the tail has to look drawn at random: upper and
+    // lower case and a digit, no separator.
+    name: "Fireworks AI API Key",
+    pattern: /(?<![A-Za-z0-9_-])fw_(?=[A-Za-z0-9]{0,47}[A-Z])(?=[A-Za-z0-9]{0,47}[a-z])(?=[A-Za-z0-9]{0,47}[0-9])[A-Za-z0-9]{24,48}/g,
+    keywords: ["fw_"],
+    confidence: "medium",
+  },
 
   // Database/Backend Services
   {
@@ -200,7 +239,7 @@ export const FAST_PATTERNS: FastPattern[] = [
     confidence: "medium",
   },
   {
-    name: "Supabase Service Role Key",
+    name: "Supabase Personal Access Token",
     pattern: /sbp_[a-f0-9]{40}/g,
     keywords: ["sbp_"],
     confidence: "high",
@@ -282,6 +321,23 @@ export const FAST_PATTERNS: FastPattern[] = [
     publicByDesign: true,
   },
   {
+    // A restricted key carries the permissions its owner gave it; live ones
+    // act on a real account (#1309).
+    name: "Stripe Restricted Key",
+    pattern: /rk_live_[0-9a-zA-Z]{24,}/g,
+    keywords: ["rk_live_"],
+    confidence: "high",
+  },
+  {
+    // Admin API access token (`shpat_`), shared-secret and private-app
+    // passwords (`shpss_`, `shppa_`) and custom-app tokens (`shpca_`): 32 hex
+    // after the prefix, all of them server-side credentials (#1309).
+    name: "Shopify Admin API Token",
+    pattern: /shp(?:at|ss|ca|pa)_[a-fA-F0-9]{32}/g,
+    keywords: ["shpat_", "shpss_", "shpca_", "shppa_"],
+    confidence: "high",
+  },
+  {
     name: "Square Access Token",
     pattern: /sq0atp-[0-9A-Za-z_-]{22}/g,
     keywords: ["sq0atp-"],
@@ -295,6 +351,14 @@ export const FAST_PATTERNS: FastPattern[] = [
   },
 
   // Cloud Providers
+  {
+    // `GOCSPX-` + 28 characters: the secret half of a Google OAuth client,
+    // which the client ID beside it (public) never is (#1309).
+    name: "Google OAuth Client Secret",
+    pattern: /GOCSPX-[A-Za-z0-9_-]{28}/g,
+    keywords: ["gocspx-"],
+    confidence: "high",
+  },
   {
     name: "AWS Access Key ID",
     pattern: /(A3T[A-Z0-9]|AKIA|AGPA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}/g,
@@ -531,6 +595,7 @@ export const FAST_PATTERNS: FastPattern[] = [
     keywords: ["do"],
     confidence: "medium",
     valuePosition: true,
+    accept: (value) => !isIbanShaped(value),
   },
 
   // Auth Services
@@ -564,30 +629,35 @@ export const FAST_PATTERNS: FastPattern[] = [
     pattern: /-----BEGIN RSA PRIVATE KEY-----/g,
     keywords: ["-----begin rsa private key-----"],
     confidence: "high",
+    accept: hasPemBody,
   },
   {
     name: "Private Key (DSA)",
     pattern: /-----BEGIN DSA PRIVATE KEY-----/g,
     keywords: ["-----begin dsa private key-----"],
     confidence: "high",
+    accept: hasPemBody,
   },
   {
     name: "Private Key (EC)",
     pattern: /-----BEGIN EC PRIVATE KEY-----/g,
     keywords: ["-----begin ec private key-----"],
     confidence: "high",
+    accept: hasPemBody,
   },
   {
     name: "Private Key (OpenSSH)",
     pattern: /-----BEGIN OPENSSH PRIVATE KEY-----/g,
     keywords: ["-----begin openssh private key-----"],
     confidence: "high",
+    accept: hasPemBody,
   },
   {
     name: "Private Key (PGP)",
     pattern: /-----BEGIN PGP PRIVATE KEY BLOCK-----/g,
     keywords: ["-----begin pgp private key block-----"],
     confidence: "high",
+    accept: hasPemBody,
   },
 
   // Social/OAuth
@@ -608,6 +678,7 @@ export const FAST_PATTERNS: FastPattern[] = [
     keywords: ["aaaaaaaaaaaaaaaaaaa"],
     confidence: "high",
     valuePosition: true,
+    accept: plausibleTwitterBearer,
   },
 
   // Public client keys with their own prefix or key, ahead of the generic
@@ -903,6 +974,10 @@ const FALSE_POSITIVE_PATTERNS = [
   /example\.com/i,
   new RegExp(`^[^A-Za-z0-9]{0,2}[A-Za-z0-9]{0,12}[_.-]?(?:${PLACEHOLDER_WORDS})`, "i"),
   new RegExp(`(?:${PLACEHOLDER_WORDS})[_.-]?[A-Za-z0-9]{0,4}$`, "i"),
+  // `example-password`, `example_secret`: the whole value is the word, a
+  // credential noun and at most a short number. Anchored at both ends, so a
+  // real password that merely starts with "Example" is not a placeholder.
+  /^[^A-Za-z0-9]{0,2}example[_.-]?(?:api[_-]?key|password|passwd|secret|token|value|pass|pwd)[_.-]?[0-9]{0,4}$/i,
 ];
 
 /**
@@ -1176,7 +1251,7 @@ const DIGEST_PREFIX_RE = /(?:sha-?(?:1|256|384|512)|md5)\s*[-:]\s*[\w+/=-]*$/i;
 const INTEGRITY_ATTR_RE = /\bintegrity\s*=\s*["'][^"']*$/i;
 
 // Header-style credentials: `Authorization: Bearer <value>`, `Basic <value>`
-const AUTH_SCHEME_RE = /\b(?:bearer|basic)\s+$/i;
+const AUTH_SCHEME_RE = /\b(?:bearer|basic)(?:\s|\+|%20)+$/i;
 
 // Attributes that name the value carried by a sibling attribute of the same
 // tag, in either order: `<meta name="algolia-api-key" content="…">` and
@@ -1471,10 +1546,14 @@ const SERVER_ONLY_TYPES: ReadonlySet<string> = new Set([
   "PostgreSQL Connection String",
   "MySQL Connection String",
   "Redis Connection String",
-  "Supabase Service Role Key",
+  "Supabase Personal Access Token",
+  "Shopify Admin API Token",
+  "Stripe Restricted Key",
+  "Google OAuth Client Secret",
   "Supabase Secret Key",
   "Supabase Service Role JWT",
   "Stripe Live Key",
+  "Paystack Live Secret Key",
   "Clerk Secret Key",
   "AWS Secret Access Key",
   "Azure Storage Key",
@@ -1752,6 +1831,228 @@ function isVendorScriptDataAttribute(
   if (!/^<script\b/i.test(open)) return false;
   const src = SCRIPT_SRC_ATTR_RE.exec(open)?.[1];
   return src !== undefined && isCrossOriginScript(src, pageUrl);
+}
+
+// ── Shapes that need their surroundings (#1283, #1227) ──────────────────────
+
+/**
+ * A PEM header is a private key only when key material follows it. UI help
+ * text ("it starts with -----BEGIN OPENSSH PRIVATE KEY-----"), a regex in a
+ * validator and a docs snippet whose body is elided (`MIIE...`) name the
+ * header and carry no key. The key is the first run of 32 or more base64
+ * characters after the header, and what lies between the two has to be line
+ * breaks in whatever form the page writes them and nothing else: `\n`,
+ * `\u000a`, `%0A`, `&#10;`, a `<br>` or `<p>` tag, a quote, comma, `+`,
+ * bracket or `.concat(` between string literals, spaces, and armor headers
+ * (`Proc-Type:`, `Version:`). Prose, code or another `-----` marker between
+ * them means the header was prose. A run is 32 or more because a body line
+ * is 64 characters in PEM and PGP armor and 70 in OpenSSH, and the run may
+ * be a whole key on one line (#1227).
+ */
+// The body has to start within the gap limit of the header, so that is as far as
+// the search reads: a bound per header, not per page (a page of ten thousand
+// headers costs ten thousand small windows).
+const PEM_REACH = 600;
+const PEM_MAX_GAP = 400;
+const PEM_BODY_RUN_RE = /[A-Za-z0-9+/]{32,}/;
+// Line breaks in the encodings a page uses for them, kept as `\n` so armor
+// header lines stay lines; and joins between string literals, which are not.
+const PEM_BREAK_RES = [
+  /\\u000[aAdD]/g,
+  /\\x0[aAdD]/g,
+  /\\[nrt]/g,
+  /%0[aAdD]/g,
+  /&#(?:x0*[aAdD]|0*1[03]);/gi,
+  /&NewLine;/gi,
+  /<\/?[A-Za-z][A-Za-z0-9-]{0,15}\b[^>]{0,200}>/gi,
+];
+const PEM_JOIN_RE = /\.(?:concat|join)\(/g;
+// The armor header lines that sit between a header and its body.
+const PEM_ARMOR_LINE_RE = /^[ \t"'`,;+[\]()\\]*(?:Proc-Type|DEK-Info|Version|Comment|Hash|Charset|MessageID):[^\n]{0,120}$/gim;
+const PEM_FILLER_RE = /[%\s"'`,;+[\]()\\\u200b-\u200d\u2060\ufeff]/g;
+
+/** Characters of header-following text examined, for the counter-based perf test. */
+export const pemWork = { examined: 0 };
+
+function hasPemBody(value: string, content: string, index: number): boolean {
+  const start = index + value.length;
+  let tail = content.slice(start, start + PEM_REACH);
+  // Another header or the footer ends the search: nothing past it is this key's.
+  const marker = tail.indexOf("-----");
+  if (marker !== -1) tail = tail.slice(0, marker);
+  pemWork.examined += tail.length;
+  const run = PEM_BODY_RUN_RE.exec(tail);
+  if (!run) return false;
+  let gap = tail.slice(0, run.index);
+  if (gap.length > PEM_MAX_GAP) return false;
+  for (const separator of PEM_BREAK_RES) gap = gap.replace(separator, "\n");
+  gap = gap.replace(PEM_JOIN_RE, " ").replace(PEM_ARMOR_LINE_RE, "");
+  return gap.replace(PEM_FILLER_RE, "") === "";
+}
+
+/**
+ * Twitter's app-only bearer tokens open with 21 `A` and then run through
+ * URL-encoded segments (`%2B`, `%3D`) for about 110 characters in all. Runs of
+ * `A` are also what zero bytes look like in base64, so a payload's interior
+ * (a PNG, a WOFF font, a WASM module, a Dart table) opens the same way. The
+ * token is not the interior of a base64 run (`/` or `+` either side, a
+ * `base64,` lead-in), has real characters after the run of `A` and is not
+ * mostly `A` itself (#1283).
+ */
+const TWITTER_BEARER_MAX_LENGTH = 200;
+const TWITTER_BEARER_MIN_TAIL = 30;
+
+// What a token is handed over with: `Authorization: Bearer AAAA`, `Bearer+AAAA`
+// (a URL-encoded space), `token=AAAA`. After one of these the character in
+// front of the run is the delimiter, not the edge of a base64 payload.
+const BEARER_LEAD_RE = /(?:bearer|authorization|token|key)\W{0,3}$/i;
+
+function plausibleTwitterBearer(value: string, content: string, index: number): boolean {
+  if (value.length > TWITTER_BEARER_MAX_LENGTH) return false;
+  if (content.slice(Math.max(0, index - 7), index).toLowerCase().endsWith("base64,")) return false;
+  const lead = content.slice(Math.max(0, index - 16), index);
+  if (!BEARER_LEAD_RE.test(lead)) {
+    const before = content[index - 1];
+    const after = content[index + value.length];
+    if (before === "/" || before === "+" || after === "/" || after === "+") return false;
+  }
+  let run = 0;
+  while (value[run] === "A") run++;
+  if (value.length - run < TWITTER_BEARER_MIN_TAIL) return false;
+  let as = 0;
+  for (let i = 0; i < value.length; i++) if (value[i] === "A") as++;
+  return as * 2 <= value.length;
+}
+
+/**
+ * An IBAN is `DO` for the Dominican Republic plus a two-digit check, a four
+ * character bank code and twenty digits, 28 characters in all, and its check
+ * digits satisfy mod 97. `DO` plus twenty uppercase characters is also the
+ * shape of a DigitalOcean Spaces key id; a string that passes the IBAN check
+ * is a bank account number printed as a form example (#1283).
+ */
+const IBAN_DO_RE = /^DO\d{2}[A-Z0-9]{4}\d{20}$/;
+
+function isIbanShaped(value: string): boolean {
+  if (!IBAN_DO_RE.test(value)) return false;
+  const rearranged = value.slice(4) + value.slice(0, 4);
+  let remainder = 0;
+  for (const ch of rearranged) {
+    const code = ch.charCodeAt(0);
+    const digits = code >= 65 ? String(code - 55) : ch;
+    for (const d of digits) remainder = (remainder * 10 + (d.charCodeAt(0) - 48)) % 97;
+  }
+  return remainder === 1;
+}
+
+/**
+ * A prefixed token inside a file name: `neon_<hash>.png`, `sk-<hash>.svg`,
+ * `key-<hash>.webp`. The prefix is a hashed asset's own naming, and the token
+ * is followed by the file's extension, which no credential is (#1283).
+ */
+const ASSET_EXTENSION_RE = /^\.(?:png|jpe?g|gif|webp|avif|svg|ico|bmp|woff2?|ttf|otf|eot|mp[34]|webm)(?![A-Za-z0-9])/i;
+
+const ASSET_NAMED_PATTERNS: ReadonlySet<string> = new Set([
+  "Neon Database Token",
+  "OpenAI API Key (legacy)",
+  "Mailgun API Key",
+  "Resend API Key",
+]);
+
+// A file name starts after a path separator, a quote, `(` (CSS `url(`), `=` or a
+// comma (a `srcset`); a token that is merely followed by `.png` in running text
+// is not one.
+const FILE_NAME_LEAD_RE = /[/"'(=,]$/;
+
+function endsInAssetExtension(content: string, end: number, start: number): boolean {
+  return FILE_NAME_LEAD_RE.test(content.slice(Math.max(0, start - 1), start)) && ASSET_EXTENSION_RE.test(content.slice(end, end + 8));
+}
+
+/**
+ * A lowercase slug (`step-1-create-your-bucket-name-here`): two or more
+ * all-letter words of four or more characters joined by `-` or `_`, with no
+ * capital letter. An element id or a CSS class, not a token: every random
+ * key a vendor issues mixes case or runs through hex, and a UUID's segments
+ * are hex runs that are not words (#1283).
+ */
+function isLowercaseSlug(value: string): boolean {
+  if (/[A-Z]/.test(value)) return false;
+  let words = 0;
+  for (const segment of value.split(/[-_]/)) {
+    if (/^[a-z]{4,}$/.test(segment)) words++;
+  }
+  return words >= 2;
+}
+
+/**
+ * Paystack's secret keys use Stripe's prefix: `sk_live_` or `sk_test_` plus
+ * exactly 40 lowercase hex characters. Stripe's own tail is 24 random
+ * alphanumerics in the old format and about a hundred in the current one, so a
+ * tail that is nothing but hex and 32 or more characters long is not Stripe's.
+ * Other widget vendors write the same prefix in front of 48 hex (#1283).
+ */
+const PAYSTACK_TAIL_RE = /^[0-9a-f]{40}$/;
+const HEX_TAIL_RE = /^[0-9a-f]{32,}$/;
+const DATA_KEY_ATTR_RE = /\b(data-[a-z0-9-]*(?:key|token))\s*=\s*["']?$/i;
+const PRIVILEGED_ATTR_RE = /secret|private|server|admin|master/i;
+
+function isWidgetKeyAttribute(before: string): boolean {
+  const name = DATA_KEY_ATTR_RE.exec(before)?.[1];
+  return name !== undefined && !PRIVILEGED_ATTR_RE.test(name);
+}
+
+
+// ── Search-only and platform-owned keys (#1287, #1229) ──────────────────────
+
+/**
+ * A key whose own name says it is the search key: `search_api_key`,
+ * `search-only-api-key`. Hosted-search products issue a search-only key for the
+ * browser by design, but a name is only a name: an admin key stored under
+ * `ALGOLIA_SEARCH_API_KEY` reads the same, and nothing offline says which it
+ * is. So the name earns a hint on the finding, never a downgrade (#1229).
+ */
+const PRIVILEGED_KEY_WORDS = ["admin", "secret", "private", "write", "master", "management", "manage", "backend", "server", "root"];
+
+function isSearchKeyName(key: string): boolean {
+  const words = keyWords(key);
+  // `searchAdminApiKey` is the admin key of a search product, not its
+  // browser key: the name has to say search and nothing privileged.
+  return words.includes("search") && !words.some((w) => PRIVILEGED_KEY_WORDS.includes(w));
+}
+
+/**
+ * Shopify's platform bundles (`/shopifycloud/` on cdn.shopify.com,
+ * `/cdn/shopifycloud/` on a shop's own domain) are byte-identical on every
+ * store: an `apiKey` in one is the platform's, not the merchant's. Only that
+ * one assignment is skipped, never a secret, token or provider key, and only
+ * on a Shopify host (cdn.shopify.com, or `*.myshopify.com`): a path alone is
+ * something any site can serve (#1287).
+ * The Shopify App Store listing pages carry the listed app's public `api-key`.
+ */
+const SHOPIFY_CDN_BUNDLE_PATH = "/shopifycloud/";
+const SHOPIFY_STORE_BUNDLE_PATH = "/cdn/shopifycloud/";
+const SHOPIFY_APP_STORE_HOST = "apps.shopify.com";
+const APP_STORE_KEY_RE = /^(?:data-)?api[_-]?key$/i;
+
+function platformSourceOf(
+  location: ReportedLocation,
+  sourceUrl: string | undefined
+): "bundle" | "app-store" | undefined {
+  if (sourceUrl === undefined) return undefined;
+  try {
+    const url = new URL(sourceUrl);
+    if (location.startsWith("external-script")) {
+      // A Shopify host, by parsed hostname: nothing else is evidence that the
+      // bytes are Shopify's. A custom-domain shop's copy is not recognised and
+      // reports like any other script.
+      if (url.hostname === "cdn.shopify.com" && url.pathname.startsWith(SHOPIFY_CDN_BUNDLE_PATH)) return "bundle";
+      if (url.hostname.endsWith(".myshopify.com") && url.pathname.startsWith(SHOPIFY_STORE_BUNDLE_PATH)) return "bundle";
+    }
+    if (url.hostname === SHOPIFY_APP_STORE_HOST) return "app-store";
+  } catch {
+    // not a URL: nothing is claimed
+  }
+  return undefined;
 }
 
 function maskSecret(value: string): string {
@@ -2605,6 +2906,8 @@ export function scanContent(
     return { row: rows[0]!, named: false };
   };
 
+  const platformSource = platformSourceOf(location, sourceUrl);
+
   let shopifyPage: boolean | null = null;
   const isShopifyPage = () => (shopifyPage ??= pageLoadsFrom(content, SHOPIFY_CDN_HOST));
 
@@ -2622,6 +2925,7 @@ export function scanContent(
       valuePosition,
       minTailEntropy,
       sharedPrefix,
+      accept,
       literals,
     } = entry;
     if (!mayMatch(gramIndex, literals)) continue;
@@ -2646,6 +2950,10 @@ export function scanContent(
         continue;
       }
 
+      // A shape that is only a credential next to something specific: a PEM
+      // header with its key, a bearer that is not a payload's interior.
+      if (accept && !accept(value, content, match.index)) continue;
+
       // …and a provider's format ends where the token does. A match that
       // stops short of the end of its token is not reported as that
       // provider's token, but it may still be a credential: fixed-length
@@ -2666,6 +2974,15 @@ export function scanContent(
           value = content.slice(match.index, tokenEnd);
           pattern.lastIndex = tokenEnd;
         }
+      }
+
+      // A prefixed token that is followed by an image or font extension is
+      // a hashed asset's file name, not a credential.
+      // Only for the low-specificity prefixes that hashed asset names collide
+      // with: a distinctive provider token (`sk-ant-`, `AIza`, `SG.`, a GitHub
+      // token) followed by `.css` is a token followed by text.
+      if (ASSET_NAMED_PATTERNS.has(name) && endsInAssetExtension(content, match.index + value.length, match.index)) {
+        continue;
       }
 
       // A generic assignment can start part-way through a longer key, so the
@@ -2699,6 +3016,16 @@ export function scanContent(
 
       // A shape that is also a word counts only where a value goes.
       if (valuePosition && !isInValuePosition(content, value, match.index)) {
+        continue;
+      }
+
+      // Assignments in Shopify's platform bundles, and the App Store's own
+      // `api-key` attribute, are Shopify's public code and public keys.
+      if (
+        generic &&
+        ((platformSource === "bundle" && name === "Generic API Key Assignment") ||
+          (platformSource === "app-store" && APP_STORE_KEY_RE.test(completeKeyOf(content, match.index, value))))
+      ) {
         continue;
       }
 
@@ -2796,6 +3123,39 @@ export function scanContent(
           reportType = "Third-party Widget Key";
           reportPublic = true;
         }
+      }
+
+      // `sk_live_` is Stripe's prefix and Paystack's and every widget vendor
+      // that copied it. The tail's format tells them apart (#1283).
+      if (sharedPrefix !== undefined && unattributed === undefined && value.startsWith(sharedPrefix)) {
+        const tail = value.slice(sharedPrefix.length);
+        const mode = sharedPrefix === "sk_live_" ? "live" : "test";
+        if (PAYSTACK_TAIL_RE.test(tail)) {
+          reportType = `Paystack ${mode === "live" ? "Live" : "Test"} Secret Key`;
+          known = { provider: "Paystack", kind: "secret", mode };
+        } else if (HEX_TAIL_RE.test(tail)) {
+          const widget = isWidgetKeyAttribute(content.slice(Math.max(0, match.index - 64), match.index));
+          reportType = unattributedKeyType(sharedPrefix);
+          // Only a `data-*-key` attribute is a widget's client key; the same
+          // shape anywhere else is a secret of some vendor, so it stays high.
+          reportConfidence = widget ? "medium" : "high";
+          known = {
+            prefix: sharedPrefix,
+            provider: "unknown",
+            resembles: name,
+            ...(widget ? { hint: "embeddable widget key (data-*-key attribute)" } : {}),
+          };
+        }
+      }
+
+      // A key whose name says "search" may well be a search-only key, and an
+      // admin key stored under that name reads the same: reported as before,
+      // with the evidence the name gives.
+      if (generic && name === "Generic API Key Assignment" && !reportPublic && isSearchKeyName(completeKeyOf(content, match.index, value))) {
+        known = {
+          ...known,
+          hint: "the key name says search; a search-only key is meant for browsers but an admin key under this name reads the same, so check which key this is",
+        };
       }
 
       // A token that only opens like the provider's: reviewable, at medium,
@@ -2918,6 +3278,9 @@ export function scanContent(
         // quoted, under a credential key, and made of words.
         const literal =
           QUOTE_CHAR_RE.test(content[at - 1] ?? "") && keyContext === "credential" && /[0-9]/.test(value);
+        if (!structural && keyContext !== "credential" && isLowercaseSlug(value)) {
+          continue;
+        }
         if (!structural && !literal && looksLikeCodeIdentifier(value)) {
           continue;
         }
