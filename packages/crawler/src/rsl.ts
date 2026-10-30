@@ -107,6 +107,17 @@ async function fetchLicenseDoc(
 // (skipped by the budget, refused, timed out): no licensing signal was seen
 // either way, so the rule reports "not checked" rather than "none declared"
 // (#409).
+/**
+ * A robots.txt read the crawl already made (#422), so the RSL probe does not ask
+ * for it again. `answered` false is a read that got no answer (budget, refusal,
+ * timeout): the probe then reports nothing, as it does when its own read fails.
+ */
+export interface RobotsRead {
+  answered: boolean;
+  content: string;
+  linkHeader: string | null;
+}
+
 export function fetchRslLicensing(
   baseUrl: string,
   userAgent: string,
@@ -114,15 +125,17 @@ export function fetchRslLicensing(
   budget?: PhaseBudget,
   gate: ProbeGate = ungated,
   headerScope?: HeaderScope,
+  robotsRead?: RobotsRead,
 ): Effect.Effect<RslData | null, never, never> {
   const robotsUrl = new URL("/robots.txt", baseUrl).toString();
   // Which URLs get the caller's custom headers; without a scope, the audited origin only.
   const scope = headerScope ?? createHeaderScope(baseUrl);
   return Effect.promise(async () => {
-    let robotsBody = "";
-    let linkHeader: string | null = null;
-    let robotsUnanswered = false;
-    await gate(robotsUrl, async () => {
+    let robotsBody = robotsRead?.content ?? "";
+    let linkHeader: string | null = robotsRead?.linkHeader ?? null;
+    let robotsUnanswered = robotsRead ? !robotsRead.answered : false;
+    // The crawl's own read stands in for a second request when it made one.
+    if (!robotsRead) await gate(robotsUrl, async () => {
       const robotsTimeoutMs = budgetedTimeoutMs(budget, PROBE_TIMEOUT_MS);
       if (robotsTimeoutMs === null) robotsUnanswered = true;
       try {

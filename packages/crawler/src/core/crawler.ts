@@ -64,6 +64,7 @@ import {
   computeSitemapUrlCap,
   discoverSitemaps,
   selectSitemapUrls,
+  SITEMAP_WALK_TOTAL_MS,
   sitemapWalkWindowMs,
 } from "../sitemaps";
 
@@ -2829,6 +2830,14 @@ export function createCrawler(
             preamble,
             gate,
             getHeaderScope(),
+            // The robots.txt the crawl already read (#422), when it read one.
+            robots
+              ? {
+                  answered: robots.data.exists || robots.data.errors.length === 0,
+                  content: robots.data.content ?? "",
+                  linkHeader: robots.linkHeader ?? null,
+                }
+              : undefined,
           );
           if (rsl) yield* storage.setRsl(crawlId, { ...rsl, fetchedAt: Date.now() });
         }
@@ -3041,6 +3050,9 @@ export function createCrawler(
         const sitemapUrlCap = computeSitemapUrlCap(config.maxPages);
         logger.debug("discovering sitemaps", `url cap ${sitemapUrlCap}`);
         const robotsData = robots?.data ?? null;
+        // Aborted when the crawl is stopped, so requests queued behind the per-host
+        // gate drain at once instead of waiting their turn (#422).
+        const sitemapAbort = new AbortController();
         const sitemapResult = yield* discoverSitemaps(
           baseUrl,
           robotsData
@@ -3063,10 +3075,15 @@ export function createCrawler(
             ...(config.discoveryDeadlineAt !== undefined
               ? { walkTotalMs: Math.max(1, config.discoveryDeadlineAt - Date.now()) }
               : {}),
+            // Per-host slots and delay, as the pages and the discovery probes (#422).
+            gate: probeGate(
+              createPhaseBudget(SITEMAP_WALK_TOTAL_MS, Date.now(), undefined, crawlEgress),
+              sitemapAbort.signal,
+            ),
             refusals,
             ...(crawlEgress ? { egress: crawlEgress } : {}),
           },
-        );
+        ).pipe(Effect.onInterrupt(() => Effect.sync(() => sitemapAbort.abort())));
 
         // Every root probe has run (robots, llms, markdown, sitemaps). A site
         // that refused any of them has not told us the file is missing.

@@ -22,7 +22,7 @@ import {
   SITEMAP_OFF_SITE_SKIPPED_ERROR,
 } from "@squirrelscan/core-contracts/storage";
 
-import { safeFetchWithDeadline } from "./deadline";
+import { safeFetchWithDeadline, ungated, type ProbeGate } from "./deadline";
 import { noteRefusal, type RefusalLog } from "./refusals";
 
 /**
@@ -869,6 +869,9 @@ export function fetchSitemapsRecursive(
   walkWindow: WalkWindow = newWalkWindow(),
   refusals?: RefusalLog,
   egress?: EgressPolicy,
+  // #422: each request waits for its host's slot and delay, like the crawl's own
+  // and the discovery probes (per_host_concurrency, per_host_delay_ms).
+  gate: ProbeGate = ungated,
 ): Effect.Effect<SitemapFetchResult[], never, never> {
   if (urls.length === 0) return Effect.succeed([]);
   // Candidates exist but the walk will not visit them: that is a gap in
@@ -919,14 +922,20 @@ export function fetchSitemapsRecursive(
       const chunkTimeoutMs = Math.min(SITEMAP_FETCH_TIMEOUT_MS, remainingMs);
       const chunkResults = yield* Effect.all(
         chunk.map((url) =>
-          fetchSitemap(
-            url,
-            userAgent,
-            customHeaders,
-            headerScope,
-            chunkTimeoutMs,
-            refusals,
-            egress,
+          Effect.promise(() =>
+            gate(url, () =>
+              Effect.runPromise(
+                fetchSitemap(
+                  url,
+                  userAgent,
+                  customHeaders,
+                  headerScope,
+                  chunkTimeoutMs,
+                  refusals,
+                  egress,
+                ),
+              ),
+            ),
           ),
         ),
         { concurrency: SITEMAP_FETCH_CONCURRENCY },
@@ -986,6 +995,7 @@ export function fetchSitemapsRecursive(
       walkWindow,
       refusals,
       egress,
+      gate,
     );
 
     return [...fetchResults, ...childResults];
@@ -1016,6 +1026,8 @@ export interface SitemapDiscoveryResult {
 }
 
 export interface DiscoverSitemapsOptions {
+  /** Per-host throttle for every sitemap request (#422). Default: none. */
+  gate?: ProbeGate;
   /** Stop fetching further sitemaps once this many URLs have been parsed */
   maxUrls?: number;
   /** Custom HTTP headers attached to every sitemap fetch (e.g. Web Bot Auth signatures). */
@@ -1111,6 +1123,7 @@ export function discoverSitemaps(
       walkWindow,
       options.refusals,
       options.egress,
+      options.gate,
     );
 
     // #670: a server that answers 200 with a page for every path makes each

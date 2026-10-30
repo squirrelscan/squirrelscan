@@ -30,6 +30,7 @@ squirrel crawl <url> [options]
 | `--refresh` | `-r` | Ignore cache, fetch all pages fresh | `false` |
 | `--fresh-ua` | | Re-roll the project's pinned random user-agent (the new one is pinned for later runs) | `false` |
 | `--resume` | | Resume interrupted crawl | `false` |
+| `--disable-discovery-probes` | | Skip the pre-crawl [discovery probes](/configuration/crawler#discovery-probes) for this run. Overrides `[crawler] disable_discovery_probes`; `--disable-discovery-probes=false` sends them even when the config turns them off. A space before the value (`--disable-discovery-probes false`) is refused | `false` |
 
 `--concurrency` and `--per-host` also suppress the localhost fast path (see
 [Crawler Configuration](/configuration/crawler)): against your own dev server, `crawl`

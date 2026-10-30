@@ -17,6 +17,16 @@ How it works:
 
 ## [Unreleased]
 
+### Added
+
+- **`squirrel crawl --disable-discovery-probes`** sends no discovery probe and overrides `[crawler] disable_discovery_probes`, like `squirrel audit`. (#422)
+
+### Fixed
+
+- **An audit asks for `robots.txt` once.** The RSL licensing probe fetched it a second time; it now reuses the crawl's own read, including its `Link: rel=license` header. (#422)
+- **Sitemap requests obey `per_host_concurrency` and `per_host_delay_ms`.** The guessed sitemap locations used to go out five at a time whatever the setting said; they now queue behind the same per-host limits as the pages and the discovery probes. (#422)
+- **`--disable-discovery-probes false` is refused.** With a space, `false` was read as a stray argument and the probes were turned off, the opposite of what was typed. It now exits with an error that names the `=false` form. (#422)
+
 ### Changed
 
 - **The crawler no longer sends a default `Accept-Language`.** It sent `en-US,en;q=0.9` on every request, so a site that redirects by language (Shopify Markets, for one) sent `/de-ch` and `/fr-ch` to `/en`, and the duplicate-description rule reported all three as one page. It now sends none, and `[crawler] headers = { "Accept-Language" = "..." }` still sets one. Pages cached by an earlier run are refetched only when the site varied on `Accept-Language`; use `--refresh` to refetch a cached language redirect. The crawl's browser User-Agent now arrives with no language, which a strict bot filter may notice. (#1355)

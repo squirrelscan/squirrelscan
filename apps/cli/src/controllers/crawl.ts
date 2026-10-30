@@ -105,6 +105,8 @@ export interface CrawlOptions {
   maxPages?: number;
   coverageMode?: CoverageMode;
   refresh?: boolean;
+  /** --disable-discovery-probes[=false] (#422); undefined: the config decides. */
+  disableDiscoveryProbes?: boolean;
   freshUa?: boolean; // re-roll the project's sticky random user-agent (#875)
   resume?: boolean;
   onProgress?: CrawlProgressCallback;
@@ -302,7 +304,8 @@ export async function runCrawl(
             // A crawl does not know which rules will read it later, so every
             // probe goes out unless [crawler] disable_discovery_probes = true
             // (#409).
-            ...(config.crawler.disable_discovery_probes === true
+            ...((options.disableDiscoveryProbes ??
+              config.crawler.disable_discovery_probes === true) === true
               ? { discoveryProbes: [] }
               : {}),
             incremental: !options.refresh, // default true unless --refresh

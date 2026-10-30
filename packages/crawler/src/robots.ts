@@ -19,6 +19,12 @@ const ROBOTS_FETCH_TIMEOUT_MS = 30_000;
 
 export interface RobotsEvaluator {
   data: RobotsTxtData;
+  /**
+   * The `Link` response header of the robots.txt read, when it was read. The RSL
+   * probe takes `rel=license` links from it, so it can reuse this read instead
+   * of asking for robots.txt a second time (#422).
+   */
+  linkHeader?: string | null;
   isAllowed: (url: string) => boolean;
   crawlDelayMs: number | null;
 }
@@ -129,7 +135,10 @@ export function fetchRobotsEvaluator(
           // host, so an unbounded read here is reachable on the very first request
           // of an audit.
           const content = await readBodyCapped(response, ROBOTS_MAX_BYTES);
-          return createRobotsEvaluator(robotsUrl, content, agent);
+          return {
+            ...createRobotsEvaluator(robotsUrl, content, agent),
+            linkHeader: response.headers.get("link"),
+          };
         },
         budget?.egress,
       ),

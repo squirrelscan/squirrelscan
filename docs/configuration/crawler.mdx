@@ -1063,10 +1063,13 @@ whether AI crawlers get the same homepage a browser does.
 | API and OAuth discovery | `/.well-known/api-catalog`, `/openapi.json`, `/swagger.json`, `/api/openapi.json`, `/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource` | `ax/api-discovery` |
 | AGENTS.md | `/AGENTS.md`, `/agents.md`, `/.well-known/agents.md`, `/docs/AGENTS.md` | `ax/agents-md` |
 | llms.txt elsewhere | `/.well-known/llms.txt`, `/docs/llms.txt` | `ax/llms-txt` |
-| RSL licensing | `/robots.txt` again, for its `License:` lines, plus each license document it names | `ax/rsl-license` |
+| RSL licensing | The `License:` lines and `Link` header of the `/robots.txt` the crawl already read (no second request), plus each license document it names | `ax/rsl-license` |
 
-That is 28 requests on most sites. `robots.txt`, sitemap discovery and the page
+That is 27 requests on most sites. `robots.txt`, sitemap discovery and the page
 you asked to audit are not probes: the crawl needs them, so they always run.
+An audit asks for `robots.txt` once, and the sitemap requests, like the probes
+and the pages, wait for [`per_host_concurrency`](#per_host_concurrency) and
+[`per_host_delay_ms`](#per_host_delay_ms).
 
 ### `tls_proxy_resolves_names`
 

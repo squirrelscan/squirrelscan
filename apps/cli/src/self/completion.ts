@@ -234,7 +234,7 @@ _squirrel_completions() {
           return 0
           ;;
       esac
-      COMPREPLY=( $(compgen -W "--max-pages -m --concurrency --per-host --level --coverage -C --refresh -r --fresh-ua --resume --help" -- "\${cur}") )
+      COMPREPLY=( $(compgen -W "--max-pages -m --concurrency --per-host --level --coverage -C --refresh -r --fresh-ua --resume --disable-discovery-probes --help" -- "\${cur}") )
       return 0
       ;;
     credits)
@@ -594,7 +594,8 @@ _squirrel() {
             '(-C --coverage --level)'{-C,--coverage}'[Audit level (old name for --level)]:level:(${levelValues})' \\
             '(-r --refresh)'{-r,--refresh}'[Ignore cache, fetch all pages fresh]' \\
             '--fresh-ua[Re-roll the pinned random user-agent]' \\
-            '--resume[Resume interrupted crawl]'
+            '--resume[Resume interrupted crawl]' \\
+            '--disable-discovery-probes[Skip the pre-crawl discovery probes for this run]'
           ;;
         credits)
           _arguments \\
@@ -864,6 +865,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from crawl" -s C -l coverage -a 
 complete -c squirrel -n "__fish_seen_subcommand_from crawl" -s r -l refresh -d "Ignore cache, fetch all pages fresh"
 complete -c squirrel -n "__fish_seen_subcommand_from crawl" -l fresh-ua -d "Re-roll the pinned random user-agent"
 complete -c squirrel -n "__fish_seen_subcommand_from crawl" -l resume -d "Resume interrupted crawl"
+complete -c squirrel -n "__fish_seen_subcommand_from crawl" -l disable-discovery-probes -d "Skip the pre-crawl discovery probes for this run"
 
 # Analyze options
 complete -c squirrel -n "__fish_seen_subcommand_from analyze" -l id -d "Crawl ID to analyze"

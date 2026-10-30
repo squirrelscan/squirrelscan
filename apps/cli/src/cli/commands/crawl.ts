@@ -49,7 +49,11 @@ import { printDatabaseLockWarningIfNeeded } from "../db-lock-warning";
 import { fmt, pageLimitHint } from "../format";
 import { createProgress } from "../progress";
 import { promptForProjectName } from "../prompt";
-import { parsePositiveIntFlag } from "./audit";
+import {
+  lastFlagValue,
+  parsePositiveIntFlag,
+  spacedBooleanValueError,
+} from "./audit";
 
 /** What `squirrel crawl` crawls: its level and page budget, or why it refused. */
 export type CrawlBudget =
@@ -157,9 +161,26 @@ export const crawl = defineCommand({
       type: "boolean",
       description: "Resume interrupted crawl for this domain",
     },
+    "disable-discovery-probes": {
+      type: "boolean",
+      description:
+        "Skip the pre-crawl discovery probes (llms.txt, /.well-known/*, /swagger.json, ...) for this run; overrides [crawler] disable_discovery_probes (--disable-discovery-probes=false sends them even when the config turns them off)",
+    },
   },
-  async run({ args }) {
+  async run({ args, rawArgs }) {
     // Credentials never reach a log line, the banner or the crawler (as audit does).
+    const spacedValue = spacedBooleanValueError(
+      rawArgs,
+      "--disable-discovery-probes"
+    );
+    if (spacedValue) {
+      console.error(spacedValue);
+      process.exitCode = 1;
+      return;
+    }
+    const disableDiscoveryProbes = lastFlagValue(
+      args["disable-discovery-probes"] as boolean | boolean[] | undefined
+    );
     const startCheck = parseUserUrl(String(args.url ?? ""));
     if (startCheck.ok && startCheck.strippedCredentials) {
       args.url = startCheck.url;
@@ -281,6 +302,9 @@ export const crawl = defineCommand({
           coverageMode,
           refresh: args.refresh,
           freshUa: args["fresh-ua"],
+          ...(disableDiscoveryProbes !== undefined
+            ? { disableDiscoveryProbes }
+            : {}),
           projectName,
           ...(concurrency !== undefined ? { concurrency } : {}),
           ...(perHostConcurrency !== undefined ? { perHostConcurrency } : {}),
