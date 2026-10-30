@@ -23,7 +23,7 @@ How it works:
 
 ### Fixed
 
-- **A start URL the audit cannot run on no longer registers a cloud run.** `squirrel audit` and the MCP `audit_website` tool now check the start URL first: only `http://` and `https://` URLs with a host are accepted. Anything else (another scheme, no host, junk) is refused before any cloud request, with nothing registered or charged, and the MCP tool answers `invalid_url` without echoing the URL. Credentials in a start URL are no longer sent in the run registration.
+- **A start URL the audit cannot run on is refused before any request.** `squirrel audit` and the MCP `audit_website` tool accept only `http://` and `https://` URLs with a host. Anything else (another scheme such as `ftp://` or `file://`, a scheme without slashes such as `mailto:a@b.com` or `javascript:x@y.com`, no host, junk) is refused first: `squirrel audit` exits 1 before any cloud request, no run is registered or charged, and the MCP tool answers `invalid_url` without echoing the URL. A bare `host:port` such as `localhost:3000` still works. Credentials (`user:password@`) and the fragment in a start URL are dropped before anything is crawled, logged, registered or sent to the cloud, with a note on stderr; use `--header` for an authenticated crawl. A URL over 2048 characters is audited but not registered as a dashboard run.
 
 ## v0.0.141 (2026-10-29)
 

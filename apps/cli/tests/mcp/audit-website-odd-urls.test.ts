@@ -222,6 +222,10 @@ const REFUSED = [
   "https://",
   "://example.com",
   "x://",
+  "mailto:a@b.com",
+  "javascript:alert(1)@x.com",
+  "tel:+1@x.com",
+  "data:,x@y.com",
   "gopher://secret-internal.local/x",
   "",
   "   ",
@@ -256,7 +260,7 @@ describe("an auditable but odd start URL is registered normalised", () => {
     expect(reg?.body.url).toBe("http://example.com/");
   });
 
-  test("credentials in the URL are not sent to register", async () => {
+  test("credentials in the URL reach no cloud request or body", async () => {
     await call("audit_website", {
       url: `https://${["user", SECRET].join(":")}@example.com/`,
       maxPages: 1,
@@ -264,6 +268,10 @@ describe("an auditable but odd start URL is registered normalised", () => {
     });
     const reg = bodies.find((b) => b.key === "POST /v1/agent-runs/register");
     expect(reg?.body.url).toBe("https://example.com/");
-    expect(JSON.stringify(reg)).not.toContain(SECRET);
+    // Every body the run sent (register, render, metadata, technologies,
+    // editor summary, ...) and every cloud URL, not only the register call.
+    expect(bodies.length).toBeGreaterThan(1);
+    expect(JSON.stringify(bodies)).not.toContain(SECRET);
+    expect(cloudRequests().join("\n")).not.toContain(SECRET);
   });
 });

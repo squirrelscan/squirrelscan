@@ -41,12 +41,29 @@ const BAD = [
   "",
   " ",
   `ftp://example.com/${"a".repeat(5000)}`,
+  "mailto:a@b.com",
+  "javascript:alert(1)@x.com",
+  "tel:+1@x.com",
+  "data:,x@y.com",
 ];
 
 describe("registerRun", () => {
   test.each(BAD)("refuses %p with no network call", async (url) => {
     expect(await registerRun({ url })).toBeNull();
     expect(calls).toEqual([]);
+  });
+
+  test("a URL past the register endpoint's 2048 limit is not registered", async () => {
+    expect(
+      await registerRun({ url: `https://example.com/${"a".repeat(2100)}` })
+    ).toBeNull();
+    expect(calls).toEqual([]);
+  });
+
+  test("the fragment is dropped, the query kept", async () => {
+    expect(registerableUrl("https://example.com/p?t=1#frag")).toBe(
+      "https://example.com/p?t=1"
+    );
   });
 
   test("registers a normalised URL", async () => {
@@ -66,6 +83,10 @@ describe("registerableUrl", () => {
       "https://example.com/x"
     );
     expect(registerableUrl("ftp://example.com")).toBeNull();
+    expect(registerableUrl("localhost:3000")).toBe("http://localhost:3000/");
+    expect(registerableUrl("example.com:8080/x")).toBe(
+      "https://example.com:8080/x"
+    );
   });
 });
 
@@ -77,9 +98,32 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-describe("every registerRun caller validates the URL first", () => {
-  test("callers are known and import registerableUrl", () => {
-    const src = join(import.meta.dir, "../../src");
+describe("registerRun is the one door to /register", () => {
+  const src = join(import.meta.dir, "../../src");
+  const read = (f: string) => readFileSync(join(src, f), "utf8");
+
+  test("only run-tracker posts to the register endpoint", () => {
+    const posters = sourceFiles(src).filter((f) =>
+      /\/register[`"']/.test(readFileSync(f, "utf8"))
+    );
+    expect(posters.map((f) => f.slice(src.length + 1))).toEqual([
+      "lib/run-tracker.ts",
+    ]);
+  });
+
+  test("registerRun validates the URL before its first request", () => {
+    const body = read("lib/run-tracker.ts");
+    const start = body.indexOf("export async function registerRun(");
+    const check = body.indexOf("registerableUrl(input.url)", start);
+    const request = body.indexOf("cliApi.request", start);
+    expect(start).toBeGreaterThan(-1);
+    expect(check).toBeGreaterThan(start);
+    expect(request).toBeGreaterThan(check);
+    // The register body carries the validated URL, never `input.url`.
+    expect(body.slice(check, request)).not.toMatch(/url:\s*input\.url/);
+  });
+
+  test("callers are known", () => {
     const callers = sourceFiles(src).filter(
       (f) =>
         !f.endsWith("lib/run-tracker.ts") &&
@@ -89,8 +133,5 @@ describe("every registerRun caller validates the URL first", () => {
       "cli/commands/audit.ts",
       "mcp/billed-audit.ts",
     ]);
-    for (const f of callers) {
-      expect(readFileSync(f, "utf8")).toContain("registerableUrl");
-    }
   });
 });

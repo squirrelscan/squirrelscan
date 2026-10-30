@@ -64,6 +64,10 @@ The agent shows you the estimate and calls again with `confirm: true`. The repor
 - An audit that does not complete (the site is down or blocks the crawl) closes as failed: no page charge, and the audit base is refunded. Stopping the server mid-audit closes the run as cancelled.
 - `offline: true` runs the audit on your machine with no cloud call: not billed, and without the cloud checks or cloud rendering. A `localhost` or private-network URL always runs locally and is never billed.
 
+## Start URL rules
+
+`audit_website` accepts only `http://` and `https://` URLs with a host (a bare domain gets `https://`). Anything else, such as `ftp://`, `file://`, `mailto:` or `javascript:`, returns an error before any request is made: `invalid_url: only http:// and https:// URLs can be audited. Nothing was registered or charged.` The URL is not echoed back. Credentials and the fragment in a URL are dropped; the query string is kept.
+
 ## Start URLs that redirect
 
 `audit_website` resolves the URL's redirect chain before it plans or charges anything. A redirect within one site (`http` to `https`, apex to `www`) is followed silently. A redirect to another site, such as a link shortener, is not audited until the call says so:

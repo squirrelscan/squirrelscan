@@ -36,7 +36,7 @@ import { resolveAuditStart } from "@/cli/start-redirect";
 import { findConfigFile, getGlobalConfigPath, loadConfig } from "@/config";
 import { runAudit, type RunAuditOptions } from "@/controllers/audit";
 import { pinOwnHosts } from "@/crawl/pin-own-hosts";
-import { registerableUrl } from "@/lib/run-tracker";
+import { auditableUrl } from "@/lib/run-tracker";
 
 import { version } from "../../../package.json";
 import {
@@ -176,7 +176,7 @@ async function runWebsiteAudit(input: {
 }): Promise<CallToolResult> {
   // The one entry check: http(s) only. An unsupported scheme or junk is refused
   // before any request, and the URL is not echoed back.
-  if (!registerableUrl(input.url)) {
+  if (!auditableUrl(input.url)) {
     return errorResult(
       "invalid_url: only http:// and https:// URLs can be audited. Nothing was registered or charged."
     );
