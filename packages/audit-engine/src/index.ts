@@ -136,6 +136,7 @@ export {
   createCloudDocumentFetcher,
 } from "./cloud-fetcher";
 export type { CloudFetcherOptions } from "./cloud-fetcher";
+export * from "./canonical-groups";
 export * from "./composition";
 export * from "./runner";
 

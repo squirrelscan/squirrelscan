@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Query-string variants of a page are counted with their canonical page.** `/contact` and `/contact?subject=Billing` used to be two affected pages for the same template finding, and two pages in the page total. A crawled page whose `rel=canonical` is another crawled page of the same path is now counted with it: a finding on both lists one page, the page total, the scan line and the structure counts agree, and the report says how many variants were folded (`meta.canonicalVariants`, a note on the scan line, `canonical-variants` in the LLM output). Variants with their own canonical (pagination, search, filters) stay separate, every variant is still fetched and checked so scores do not change, and a site with no variants reports exactly as before. See [Query-string variants](https://docs.squirrelscan.com/cli/audit#query-string-variants). (#858)
+
 ## v0.0.143 (2026-10-30)
 
 Two new performance rules, `perf/content-in-js-bundle` and `perf/framework-data-payload`, find page content shipped inside JavaScript. Page weight now measures the srcset candidate a browser downloads and leaves lazy images out, `squirrel auth login` opens a branded page, parallel audits no longer fail with a locked database, and `store_scripts` no longer changes what an audit finds. A start URL the audit cannot run on is refused before any request, `security/tls-certificate` shows as not checked when it cannot run, and the about, contact and privacy rules take a `paths` option.

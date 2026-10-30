@@ -2142,7 +2142,13 @@ export async function runAudit(
             ? { requestedMaxPages: scopeLimit.requested }
             : {}),
           pagesCrawled: report.pages.length,
-          capped: report.pages.length >= scopeMaxPages,
+          // The page cap counted every crawled page, variants included (#858).
+          capped:
+            report.pages.length + (report.canonicalVariants ?? 0) >=
+            scopeMaxPages,
+          ...(report.canonicalVariants
+            ? { canonicalVariants: report.canonicalVariants }
+            : {}),
           ...(unfetched > 0 ? { unfetched } : {}),
           ...(options.startRedirect
             ? { startRedirect: options.startRedirect }
