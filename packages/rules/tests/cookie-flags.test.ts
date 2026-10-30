@@ -130,3 +130,62 @@ describe("security/cookie-flags", () => {
     expect(checksByName(checks, "cookie-samesite")?.status).toBe("info");
   });
 });
+
+// #1378: a hosting platform's own routing cookie is not an XSS cookie-theft risk.
+describe("security/cookie-flags: platform cookies (#1378)", () => {
+  test("a page whose only cookie is __dpl: info naming the platform, no HttpOnly warning", () => {
+    const { checks } = cookieFlagsRule.run(ctx("__dpl=dpl_abc123; Path=/; Secure; SameSite=Lax"));
+    expect(checksByName(checks, "cookie-httponly")).toBeUndefined();
+    const info = checksByName(checks, "cookie-httponly-platform");
+    expect(info?.status).toBe("info");
+    expect(info?.message).toContain("Lovable");
+    expect(info?.message).toContain("https://docs.lovable.dev/");
+    expect(info?.items?.[0]?.id).toBe("__dpl");
+    expect(checks.some((c) => c.status === "warn" || c.status === "fail")).toBe(false);
+  });
+
+  test("a session cookie beside __dpl still warns, naming only the session cookie", () => {
+    const { checks } = cookieFlagsRule.run(
+      ctx("__dpl=dpl_abc123; Path=/; Secure; SameSite=Lax, session=" + "a1b2c3d4".repeat(4) + "; Path=/; Secure; SameSite=Lax"),
+    );
+    const warn = checksByName(checks, "cookie-httponly");
+    expect(warn?.status).toBe("warn");
+    expect(warn?.items?.map((i) => i.id)).toEqual(["session"]);
+    expect(checksByName(checks, "cookie-httponly-platform")?.items?.map((i) => i.id)).toEqual(["__dpl"]);
+  });
+
+  test("a session cookie alone without HttpOnly warns as before", () => {
+    const { checks } = cookieFlagsRule.run(ctx("session=" + "a1b2c3d4".repeat(4) + "; Path=/; Secure; SameSite=Lax"));
+    expect(checksByName(checks, "cookie-httponly")?.status).toBe("warn");
+    expect(checksByName(checks, "cookie-httponly-platform")).toBeUndefined();
+  });
+
+  test("Secure and SameSite results for __dpl are unchanged", () => {
+    const bare = cookieFlagsRule.run(ctx("__dpl=dpl_abc123; Path=/")).checks;
+    expect(checksByName(bare, "cookie-secure")?.items?.[0]?.id).toBe("__dpl");
+    expect(checksByName(bare, "cookie-samesite")?.items?.[0]?.id).toBe("__dpl");
+    const none = cookieFlagsRule.run(ctx("__dpl=dpl_abc123; Path=/; SameSite=None")).checks;
+    expect(checksByName(none, "cookie-samesite-none-insecure")?.status).toBe("fail");
+  });
+
+  test("a platform cookie with HttpOnly set adds no platform info", () => {
+    const { checks } = cookieFlagsRule.run(ctx("__dpl=dpl_abc123; Path=/; Secure; HttpOnly; SameSite=Lax"));
+    expect(checks).toHaveLength(1);
+    expect(checks[0]?.status).toBe("pass");
+  });
+
+  test("the exempt names live in one list, each with a platform and docs link", async () => {
+    const { PLATFORM_COOKIES } = await import("../src/security/platform-cookies");
+    expect(PLATFORM_COOKIES.length).toBeGreaterThan(0);
+    for (const c of PLATFORM_COOKIES) {
+      expect(c.name.length).toBeGreaterThan(0);
+      expect(c.platform.length).toBeGreaterThan(0);
+      expect(c.docs).toMatch(/^https:\/\//);
+    }
+  });
+
+  test("names match exactly: __dpl2 and a case variant are ordinary cookies", () => {
+    const { checks } = cookieFlagsRule.run(ctx("__dpl2=x; Path=/; Secure; SameSite=Lax, __DPL=y; Path=/; Secure; SameSite=Lax"));
+    expect(checksByName(checks, "cookie-httponly")?.items).toHaveLength(2);
+  });
+});

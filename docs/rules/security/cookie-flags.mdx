@@ -17,8 +17,19 @@ The rule reads the `set-cookie` response header of each crawled page, splits it 
 - `cookie-samesite-none-insecure` fails when a cookie declares `SameSite=None` without `Secure`. Message: `1 cookie(s) set SameSite=None without Secure — modern browsers reject this combination`, with the cookie names listed.
 - `cookie-secure` warns when a cookie on an HTTPS page has no `Secure` attribute. Message: `2 cookie(s) missing the Secure flag`. The check is skipped on HTTP pages, where there is no secure connection to pin the cookie to.
 - `cookie-httponly` warns when a cookie has no `HttpOnly` attribute. Message: `2 cookie(s) missing the HttpOnly flag`.
+- `cookie-httponly-platform` reports info for a cookie without `HttpOnly` that the hosting platform sets for routing or deployment, naming the platform and linking its docs. Message: `1 platform cookie(s) without HttpOnly, set by the hosting platform for routing, not by your code (Lovable: https://docs.lovable.dev/)`.
 - `cookie-samesite` reports info when a cookie declares no `SameSite`, or declares it with an empty value such as `SameSite=`. Message: `2 cookie(s) don't explicitly declare SameSite (browsers default to Lax)`.
 - `cookie-flags` passes when cookies were set and none of the above fired. Message: `3 cookie(s) set with Secure, HttpOnly, and SameSite configured correctly`.
+
+### Cookies exempt from the HttpOnly check
+
+A hosting platform sets a few cookies of its own on every site it serves, for routing or deployment pinning. You didn't set them, you can't change their flags, and they hold no session, so a missing `HttpOnly` on one is not a cookie-theft risk and does not warn. The exempt names are matched exactly:
+
+| Cookie | Platform |
+|---|---|
+| `__dpl` | Lovable |
+
+Every other cookie, whatever its name or value, still gets the `cookie-httponly` warning. `Secure` and `SameSite` are checked on these cookies as on any other.
 
 Multiple cookies in one header value are split on newlines and on commas that are followed by a `name=` pair, so an `Expires` date containing a comma does not split a cookie in two. Only cookies your server sets in a response header are seen; cookies written by JavaScript are not.
 

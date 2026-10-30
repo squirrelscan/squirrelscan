@@ -1,6 +1,7 @@
 // security/cookie-flags - Secure/HttpOnly/SameSite on Set-Cookie response headers
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+import { platformCookie } from "./platform-cookies";
 
 interface ParsedCookie {
   name: string;
@@ -116,7 +117,22 @@ export const cookieFlagsRule: Rule = {
       }
     }
 
-    const missingHttpOnly = cookies.filter((c) => !c.httpOnly);
+    // A cookie the hosting platform sets for routing or deployment (a fixed
+    // list of exact names) is info naming the platform, not a warning: the site
+    // owner can't change it and it holds no session. Any other cookie, however
+    // it is named, still warns.
+    const noHttpOnly = cookies.filter((c) => !c.httpOnly);
+    const platformOwned = noHttpOnly.filter((c) => platformCookie(c.name));
+    const missingHttpOnly = noHttpOnly.filter((c) => !platformCookie(c.name));
+    if (platformOwned.length > 0) {
+      const platforms = [...new Set(platformOwned.map((c) => platformCookie(c.name)!))];
+      checks.push({
+        name: "cookie-httponly-platform",
+        status: "info",
+        message: `${platformOwned.length} platform cookie(s) without HttpOnly, set by the hosting platform for routing, not by your code (${platforms.map((p) => `${p.platform}: ${p.docs}`).join(", ")})`,
+        items: platformOwned.map((c) => ({ id: c.name })),
+      });
+    }
     if (missingHttpOnly.length > 0) {
       checks.push({
         name: "cookie-httponly",
