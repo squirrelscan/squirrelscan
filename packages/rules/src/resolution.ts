@@ -170,6 +170,13 @@ function collectResolutionEvidence(
   // (pub#935) Base key -> pages a `<check>-unconfirmed` row evaluated, merged into
   // `evaluated` for that base key once every key is known.
   const unconfirmedOf = new Map<string, Set<string>>();
+  // (#1031) Pages each rule gave a verdict on this run (pass, warn, fail or info on a page), and
+  // the pages a check was explicitly skipped on. A re-crawled page whose rule ran but emitted no
+  // result for one of its checks (the fresh result is `info: No form inputs found`, or a
+  // different check of the rule) is clean for that check, so its old findings resolve; an
+  // explicit skip of the check still carries.
+  const ruleEvaluated = new Map<string, Set<string>>();
+  const explicitSkips = new Map<string, Set<string>>();
   // (#2063) Keyed on the QUERY-PRESERVING page identity, the same key the merge
   // stores findings under. A consumer on an older release hashed these
   // query-blind; it recognizes both spellings (see merge-core's resolutionHashes),
@@ -261,10 +268,20 @@ function collectResolutionEvidence(
         check.status === "skipped" &&
         check.skipReason === CHECK_NOT_APPLICABLE_SKIP_REASON &&
         (!!check.pageUrl || check.details?.foldKey === CHECK_NOT_APPLICABLE_SKIP_REASON);
+      if (check.status === "skipped" && !checkNotApplicable && (check.pageUrl || check.details?.aggregated === true)) {
+        const urls = check.pageUrl ? [check.pageUrl] : (check.pages ?? []);
+        const skipKey = resolutionCheckKey(ruleId, check.name);
+        let skipped = explicitSkips.get(skipKey);
+        if (!skipped) explicitSkips.set(skipKey, (skipped = new Set<string>()));
+        for (const url of urls) skipped.add(normalized(url));
+      }
+      // (#1031) `info` is a verdict too ("No form inputs found"): the check ran on the page and
+      // found nothing to fail, so it registers the key and the page like a pass.
       if (
         check.status !== "pass" &&
         check.status !== "warn" &&
         check.status !== "fail" &&
+        check.status !== "info" &&
         !checkNotApplicable
       ) {
         continue;
@@ -300,6 +317,11 @@ function collectResolutionEvidence(
       // must never resolve.
       const ev = evaluated.get(key)!;
       for (const url of pageUrls) ev.add(normalized(url));
+      if (check.status !== "skipped") {
+        let rulePages = ruleEvaluated.get(ruleId);
+        if (!rulePages) ruleEvaluated.set(ruleId, (rulePages = new Set<string>()));
+        for (const url of pageUrls) rulePages.add(normalized(url));
+      }
       if (check.name.endsWith(UNCONFIRMED_CHECK_SUFFIX)) {
         const base = resolutionCheckKey(ruleId, check.name.slice(0, -UNCONFIRMED_CHECK_SUFFIX.length));
         let pages = unconfirmedOf.get(base);
@@ -353,6 +375,12 @@ function collectResolutionEvidence(
   for (const [key, ev] of evaluated) {
     const skipped = notApplicable.get(keyRule.get(key)!);
     if (skipped) for (const url of skipped) ev.add(url);
+    const ruleId = keyRule.get(key)!;
+    const verdicts = ruleEvaluated.get(ruleId);
+    if (verdicts) {
+      const skips = explicitSkips.get(key);
+      for (const url of verdicts) if (!skips?.has(url)) ev.add(url);
+    }
     const unconfirmed = unconfirmedOf.get(key);
     if (unconfirmed) for (const url of unconfirmed) ev.add(url);
     const base = baseEvaluated.get(key);

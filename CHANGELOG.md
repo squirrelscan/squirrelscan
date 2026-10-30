@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Smart audits resolve old findings when a re-crawled page's rule now answers `info`.** A rule that used to fail a page (50 unlabeled form fields) and now reports `No form inputs found`, or reports only a different check of the same rule, left the old rows open as carried findings run after run, with the coverage line showing nothing carried. An `info` result now counts as the rule's verdict for the page, and a re-crawled page the rule evaluated is clean for the rule's other checks too, so their earlier findings resolve. A check explicitly skipped on the page still carries. Coverage gains `pagesWithStaleCarry` (re-crawled pages that still carry earlier findings), shown on the coverage line when above zero. See [Output](https://docs.squirrelscan.com/configuration/output). (#1031)
+
 ## v0.0.143 (2026-10-30)
 
 Two new performance rules, `perf/content-in-js-bundle` and `perf/framework-data-payload`, find page content shipped inside JavaScript. Page weight now measures the srcset candidate a browser downloads and leaves lazy images out, `squirrel auth login` opens a branded page, parallel audits no longer fail with a locked database, and `store_scripts` no longer changes what an audit finds. A start URL the audit cannot run on is refused before any request, `security/tls-certificate` shows as not checked when it cannot run, and the about, contact and privacy rules take a `paths` option.
