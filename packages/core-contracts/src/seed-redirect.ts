@@ -177,34 +177,44 @@ export function redactUrl(value: string): string {
 }
 
 /** Characters that end a URL inside error text: whitespace, quotes and closing brackets. */
-const URL_TEXT_END = new Set([
-  " ", "\t", "\r", "\n", '"', "'", "`", "<", ">", ")", "]", "}",
-]);
+const TOKEN_LEAD = new Set(["(", '"', "'", "`", "<", "[", "{"]);
+const TOKEN_TRAIL = new Set([".", ",", ";", ":", "!", "?", ")", '"', "'", "`", ">", "]", "}"]);
+const URL_PLACEHOLDER = "(redacted URL)";
+
+function redactTokenCore(core: string): string {
+  const urlish =
+    core.includes(":/") ||
+    core.includes(":\\") ||
+    core.startsWith("//") ||
+    core.startsWith("\\\\") ||
+    core.includes("@") ||
+    (/[?#]./.test(core) && /[/.]/.test(core));
+  if (!urlish) return core;
+  if (/^https?:/i.test(core)) {
+    const redacted = redactUrl(core);
+    if (redacted !== "(unprintable URL)") return redacted;
+  }
+  return URL_PLACEHOLDER;
+}
 
 /**
- * `text` with every `http://` or `https://` URL in it passed through {@link redactUrl}, so error
- * text that echoes a start URL (a DNS, TLS or fetch failure) never carries userinfo, a query
- * token or a fragment into a report, a log or an agent's context. A linear scan with no
- * backtracking: it finds each scheme, takes the run up to the next separator, drops trailing
- * sentence punctuation, and redacts that run.
+ * `text` with every URL-like whitespace-delimited token redacted, so error text that echoes a start
+ * URL (a DNS, TLS or fetch failure) never carries userinfo, a query token or a fragment into a
+ * report, a log or an agent's context. Fails closed: a token that is an http(s) URL the WHATWG
+ * parser accepts goes through {@link redactUrl} (its own view of userinfo, so no differential);
+ * any other token that looks like a URL (other scheme, `//` or `\\` prefix, `@`, a `?`/`#` tail
+ * on a path) or that does not parse is replaced whole. Linear: one split, no backtracking.
  */
 export function redactUrlsInText(text: string): string {
-  const lower = text.toLowerCase();
-  let out = "";
-  let at = 0;
-  while (at < text.length) {
-    const http = lower.indexOf("http://", at);
-    const https = lower.indexOf("https://", at);
-    const start =
-      http === -1 ? https : https === -1 ? http : Math.min(http, https);
-    if (start === -1) break;
-    let end = start;
-    while (end < text.length && !URL_TEXT_END.has(text[end]!)) end++;
-    let trimmed = end;
-    while (trimmed > start && ".,;:!?".includes(text[trimmed - 1]!)) trimmed--;
-    out += text.slice(at, start) + redactUrl(text.slice(start, trimmed));
-    out += text.slice(trimmed, end);
-    at = end;
-  }
-  return out + text.slice(at);
+  return text
+    .split(/(\s+)/)
+    .map((token, index) => {
+      if (index % 2 === 1 || token === "") return token;
+      let start = 0;
+      let end = token.length;
+      while (start < end && TOKEN_LEAD.has(token[start]!)) start++;
+      while (end > start && TOKEN_TRAIL.has(token[end - 1]!)) end--;
+      return token.slice(0, start) + redactTokenCore(token.slice(start, end)) + token.slice(end);
+    })
+    .join("");
 }
