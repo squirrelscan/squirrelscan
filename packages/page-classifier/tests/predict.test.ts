@@ -1123,7 +1123,7 @@ describe("page-type selection through classifyPage, with a head that always says
   });
 });
 
-// pub#902: the root document. Measured on 628 live sites: `/index.html` is the same page as `/` on 94.6%
+// pub#902: the root document. Measured on 590 live sites: `/index.html` is the same page as `/` on 94.6%
 // (lower 95% bound 92.4%), so it is the home page. Every other index, default and home document stayed
 // below 0.90 and reads as unknown.
 describe("the root document is a home page (#902)", () => {

@@ -221,10 +221,10 @@ export function rulePageType(document: SchemaDocument, url: string): PageTypeLab
 }
 
 /**
- * The one root document name that is the site's home page (pub#902). Measured on 628 live sites
- * (`/` against `/index.html`, hosts that answer any path with the home page excluded, soft-404
- * answers set aside): the page served at a single-segment `/index.html` was the same page as `/`
- * on 94.6% of them (lower 95% bound 92.4%). `index.htm`, `index.php`, `default.*` and `home.*`
+ * The one root document name that is the site's home page (pub#902). Measured on 590 live sites
+ * that serve a document there (`/` against `/index.html`, hosts that answer any path with the home
+ * page excluded, soft-404 answers set aside): the page served at a single-segment `/index.html`
+ * was the same page as `/` on 558 of them, 94.6% (lower 95% bound 92.4%). `index.htm`, `index.php`, `default.*` and `home.*`
  * did not clear 0.90 (index.php 0.79, index.htm 0.52, the rest 0.0 to 0.5), so they stay
  * `unknown`. The match is exact and case-sensitive, like the sample.
  */
