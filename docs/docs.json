@@ -536,6 +536,7 @@
               "rules/perf/framework-data-payload",
               "rules/perf/css-file-size",
               "rules/perf/js-file-size",
+              "rules/perf/content-in-js-bundle",
               "rules/perf/ttfb",
               "rules/perf/js-redirects",
               "rules/perf/js-libraries",
