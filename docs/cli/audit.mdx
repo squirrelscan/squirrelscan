@@ -619,6 +619,12 @@ It goes to stderr, so `--format json` and piped stdout stay clean, and it stops 
 
 The audit command manages crawl sessions intelligently:
 
+A successful HTML response counts as an audited page even when its body is zero
+bytes. squirrel treats it as an empty document, so checks such as missing title
+and missing H1 apply, and the page is included in the report's page count,
+coverage and score. A response whose body was not captured is not treated as an
+empty document.
+
 | Scenario | Behavior |
 |----------|----------|
 | First run | Creates new crawl |

@@ -2526,7 +2526,9 @@ export class SQLiteStorage implements CrawlStorage {
     // asked for no body (getPagesWithoutBodies) gets null, not a store read.
     let html = (row.html as string | null | undefined) ?? null;
     const contentHash = row.content_hash as string;
-    if (opts?.body !== false && !html && contentHash && this.contentStore) {
+    // An empty inline string is a captured zero-byte response, not a missing
+    // body. Only a null column means the body may live in the content store.
+    if (opts?.body !== false && html === null && contentHash && this.contentStore) {
       html = this.contentStore.getString(contentHash);
     }
 

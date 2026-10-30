@@ -302,7 +302,7 @@ export function buildSiteContext(
           const stored = JSON.parse(page.parsedData);
 
           // Handle corrupted state: parsedData exists but html is null
-          if (page.html == null) {
+          if (page.html === null) {
             logger.error(
               `Cannot recreate document for ${page.url}: HTML is null but parsedData exists (corrupted state)`,
             );
@@ -331,7 +331,7 @@ export function buildSiteContext(
       // Fallback: parse from HTML if no stored data (old crawls)
       if (!parsed) {
         // Skip pages without HTML and no stored data
-        if (page.html == null) {
+        if (page.html === null) {
           contextPages.push({ page, parsed: null });
           continue;
         }
@@ -371,7 +371,7 @@ export function releaseSiteContextDocuments(siteContext: SiteContextPage[]): voi
  */
 export function ensureSiteContextDocuments(siteContext: SiteContextPage[]): void {
   for (const entry of siteContext) {
-    if (entry.parsed && !entry.parsed.document && entry.page.html) {
+    if (entry.parsed && !entry.parsed.document && entry.page.html !== null) {
       entry.parsed.document = parseDocument(entry.page.html);
     }
   }
@@ -460,7 +460,7 @@ export function parseHtmlForRules(
  * Parse a page record to extract structured data for rules
  */
 export function parsePageRecord(page: PageRecord, options?: ParsePageOptions): ParsedPage | null {
-  if (!page.html) return null;
+  if (page.html === null) return null;
 
   return logger.withTrace(
     "parsePageRecord",
@@ -482,7 +482,7 @@ export function getParsedPages(
     const result: Array<{ url: string; parsed: ParsedPage }> = [];
 
     for (const page of pages) {
-      if (!page.html || !isHtmlContentType(page.contentType)) continue;
+      if (page.html === null || !isHtmlContentType(page.contentType)) continue;
 
       const parsed = parsePageRecord(page);
       if (parsed) {

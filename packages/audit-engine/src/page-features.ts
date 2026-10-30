@@ -30,14 +30,15 @@ import { templateFingerprintKey } from "./template-key";
 
 /**
  * Whether a crawled page enters the audit the way v1 `runRulesOnStorage` decides:
- * HTML content-type, body present, and NOT a WAF-challenge interstitial. E-E must
+ * HTML content-type, body captured (including a zero-byte body), and NOT a
+ * WAF-challenge interstitial. E-E must
  * gate `extractPageFeatures` on this so `page_features`' universe matches v1's
  * `site.pages` (minus the separate 4xx/5xx EMPTY_PARSED_PAGE append). Exported so
  * the one predicate lives in one place.
  */
 export function isAuditablePage(page: PageRecord): boolean {
   if (!isHtmlContentType(page.contentType)) return false;
-  if (!page.html) return false;
+  if (page.html === null) return false;
   const waf = detectWafChallengePage({
     status: page.status,
     headers: {
