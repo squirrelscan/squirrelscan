@@ -62,9 +62,57 @@ export function parseHTML(
   ...args: Parameters<typeof linkedomParseHTML>
 ): ReturnType<typeof linkedomParseHTML> {
   const parsed = linkedomParseHTML(...args);
-  if (parsed.document.documentElement) return parsed;
+  if (parsed.document.documentElement) {
+    if (typeof args[0] === "string" && SHADOW_ROOT_HINT.test(args[0])) flattenDeclarativeShadowRoots(parsed.document);
+    return parsed;
+  }
   const [html, ...rest] = args;
   return linkedomParseHTML(`<html><head></head><body>${String(html)}</body></html>`, ...rest);
+}
+
+const SHADOW_ROOT_HINT = /shadowroot/i;
+/** Elements a browser lets host a shadow root, besides any custom element (a name with a hyphen). */
+const SHADOW_HOSTS = new Set(["article", "aside", "blockquote", "body", "div", "footer", "h1", "h2", "h3", "h4", "h5", "h6", "header", "main", "nav", "p", "section", "span"]);
+const MAX_SHADOW_TEMPLATES = 5000;
+
+interface TemplateLike {
+  parentNode: { insertBefore(node: unknown, ref: unknown): unknown; removeChild(node: unknown): unknown; localName?: string } | null;
+  getAttribute(name: string): string | null;
+  content?: { childNodes: ArrayLike<unknown> };
+}
+
+/**
+ * Declarative shadow DOM (#922): a browser attaches `<template shadowrootmode>`'s
+ * content as the host's shadow root and renders it, but linkedom keeps it inside
+ * the template's inert `content` fragment, so no `querySelectorAll` reaches the
+ * controls, links, images and headings in it. Inline the content into the host in
+ * place of the template: the rules then see what a visitor sees. Light DOM children
+ * stay where they are (slotted content is not duplicated). Like a browser, only the
+ * first such template of a host counts, a host that cannot have a shadow root keeps
+ * it inert, and a plain `<template>` is never touched.
+ */
+function flattenDeclarativeShadowRoots(document: { querySelectorAll(selector: string): ArrayLike<unknown> }): void {
+  const hosted = new WeakSet<object>();
+  let budget = MAX_SHADOW_TEMPLATES;
+  // Nested templates appear as the outer ones are inlined: repeat until none is left (bounded).
+  for (let round = 0; round < 16 && budget > 0; round++) {
+    const templates = Array.from(document.querySelectorAll("template[shadowrootmode]")) as TemplateLike[];
+    let changed = false;
+    for (const template of templates) {
+      if (budget-- <= 0) return;
+      const host = template.parentNode;
+      const mode = template.getAttribute("shadowrootmode")?.toLowerCase();
+      if (!host || !template.content || (mode !== "open" && mode !== "closed")) continue;
+      const name = host.localName ?? "";
+      if (!SHADOW_HOSTS.has(name) && !name.includes("-")) continue;
+      if (hosted.has(host)) continue;
+      hosted.add(host);
+      for (const child of Array.from(template.content.childNodes)) host.insertBefore(child, template);
+      host.removeChild(template);
+      changed = true;
+    }
+    if (!changed) return;
+  }
 }
 
 const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
