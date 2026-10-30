@@ -8,6 +8,7 @@ import {
   reportFailureReasonCode,
   wafBlockedPagesLines,
   wafBlockedSeedCopy,
+  wafSuspectLines,
 } from "@squirrelscan/report";
 import {
   affectedPages,
@@ -203,6 +204,16 @@ export function generateConsoleReport(
     const [summary, ...listed] = blockedPageLines;
     log("");
     log(fmt.yellow(summary!));
+    for (const line of listed) log(`  ${fmt.dim(line)}`);
+  }
+
+  // #1258: pages that look like a provider's refusal. They were audited, so say their
+  // findings may describe the provider's page.
+  const suspectLines = wafSuspectLines(report);
+  if (suspectLines.length > 0) {
+    const [summary, ...listed] = suspectLines;
+    log("");
+    log(fmt.yellow(`Warning: ${summary!}`));
     for (const line of listed) log(`  ${fmt.dim(line)}`);
   }
 

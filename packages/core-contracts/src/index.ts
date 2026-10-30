@@ -82,7 +82,7 @@ import type { CompactResolutionSignal, ResolutionSignal } from "./resolution";
 import { RULE_TIMED_OUT_SKIP_REASON } from "./resolution";
 import type { AuditStatusReasonCode } from "./failure-reason";
 import type { RefusedFetch } from "./refused-fetch";
-import type { WafBlockedSummary } from "./waf-block";
+import type { WafBlockedSummary, WafSuspectSummary } from "./waf-block";
 import type { EntityMap } from "./entity-map";
 import type { AuditLevel, ResolvedAuditSettings } from "./audit-levels";
 import type { ReportCapTier } from "./limits";
@@ -698,6 +698,12 @@ export interface AuditReport {
    * evaluation and never scored. Absent when no page was blocked.
    */
   wafBlocked?: WafBlockedSummary;
+  /**
+   * Pages that look like a provider's refusal but carry none of its block markers
+   * (#1258). They were audited like any other page, so the findings on them may
+   * describe the provider's page, not the site's. Absent when none was seen.
+   */
+  wafSuspect?: WafSuspectSummary;
   healthScore?: HealthScore;
   ruleResults: Record<string, ReportRuleResult>;
   /**

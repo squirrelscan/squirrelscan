@@ -12,7 +12,14 @@ import type {
   SitemapData,
   WafBlockedSummary,
 } from "@squirrelscan/core-contracts";
-import { addWafBlockedPage, isCacheHitReason, wafBlockedPage } from "@squirrelscan/core-contracts";
+import {
+  addWafBlockedPage,
+  addWafSuspectPage,
+  isCacheHitReason,
+  wafBlockedPage,
+  type WafSuspectSummary,
+} from "@squirrelscan/core-contracts";
+import { classifyWafResponse } from "@squirrelscan/utils/waf";
 import { WELL_KNOWN_PATHS, isPermanentStorageError } from "@squirrelscan/core-contracts/storage";
 import { auditFailureDetail } from "@squirrelscan/core-contracts/failure-reason";
 import { COVERAGE_PAGE_LIMITS, REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
@@ -614,6 +621,8 @@ export function createCrawler(
      * would drop a blocked page another worker had just recorded.
      */
     let wafBlocked: WafBlockedSummary | undefined;
+    /** Stored pages that look like a provider's refusal without its block marker (#1258). */
+    let wafSuspect: WafSuspectSummary | undefined;
     /**
      * The seed's normalized URL. A sitemap that lists the homepage enqueues it
      * first, so the frontier entry for the seed keeps `source: "sitemap"` and
@@ -1562,8 +1571,24 @@ export function createCrawler(
                   status: error.status ?? 403,
                   ...error.wafBlock,
                 }),
-                entry.source === "seed" || entry.normalizedUrl === seedNormalizedUrl,
+                entry.source === "seed" ||
+                  entry.normalizedUrl === seedNormalizedUrl ||
+                  // A page that redirected to the seed's own challenge (a sitemap or link
+                  // still listing the URL the user typed) is the seed's blocked page, not
+                  // another one (#1258).
+                  (error.wafBlock.finalUrl !== undefined &&
+                    normalizeAndCheckScope(error.wafBlock.finalUrl).normalized ===
+                      seedNormalizedUrl),
               );
+            }
+            // A bare 403 that reads like a provider's refusal (#1258): still the blocked
+            // fetch it was, and the report warns that it may be the provider's page.
+            if (blockedFetch && !error.wafBlock && error.wafSuspect) {
+              wafSuspect = addWafSuspectPage(wafSuspect, {
+                url: entry.normalizedUrl,
+                status: error.status ?? 403,
+                ...error.wafSuspect,
+              });
             }
             // A body the runtime could not decode is a page the audit never
             // saw. Counted (subset of pagesFailed) so the report can say its
@@ -1735,6 +1760,27 @@ export function createCrawler(
             };
             yield* storage.upsertPage(crawlId, errorPageRecord);
             pagesCommitted++;
+            // A refusal-shaped 4xx from a known provider with no block marker (#1258):
+            // stored as the error page it is, and the report warns it may be the provider's.
+            const suspect = classifyWafResponse({
+              status: result.status,
+              headers: {
+                server: result.headers.server,
+                cfCacheStatus: result.headers.cfCacheStatus,
+                xCache: result.headers.xCache,
+                raw: result.headers.techHeaders ?? null,
+              },
+              html: result.body,
+            });
+            if (suspect.verdict === "suspect") {
+              wafSuspect = addWafSuspectPage(wafSuspect, {
+                url: entry.normalizedUrl,
+                status: result.status,
+                provider: suspect.provider,
+                providerId: suspect.providerId,
+                signal: suspect.signal ?? "refusal page",
+              });
+            }
 
             yield* storage.updateFrontierStatus(
               crawlId,
@@ -2022,6 +2068,7 @@ export function createCrawler(
 
           yield* storage.upsertPage(crawlId, pageRecord);
           pagesCommitted++;
+
           yield* storage.updateFrontierStatus(crawlId, entry.normalizedUrl, "done");
 
           yield* emit({
@@ -2101,6 +2148,7 @@ export function createCrawler(
           // resume, and `updates` can only displace a weaker source.
           rootFailure,
           ...(wafBlocked ? { wafBlocked } : {}),
+          ...(wafSuspect ? { wafSuspect } : {}),
         };
 
         // Update average load time
@@ -2156,6 +2204,7 @@ export function createCrawler(
         // persisted stats keeps whatever root failure the earlier pass recorded.
         rootFailure = priorStats?.rootFailure;
         wafBlocked = priorStats?.wafBlocked;
+        wafSuspect = priorStats?.wafSuspect;
         processFailure = undefined;
         // Throttle verdicts do not survive a run. Exhaustion is terminal WITHIN
         // a run (an exhausted host is skipped before any request, so it can never

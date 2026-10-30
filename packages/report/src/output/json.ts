@@ -6,6 +6,7 @@ import type {
   MaxDurationCut,
   RefusedFetch,
   WafBlockedSummary,
+  WafSuspectSummary,
 } from "@squirrelscan/core-contracts";
 import type { ResolvedAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
 import type {
@@ -38,7 +39,7 @@ import { fixUnits, ruleFixCoverage } from "../component-presentation";
 import { siteResourceFixGroups } from "../site-resource-fix-groups";
 import { isRenderableSiteResourceGroup } from "../site-resource-presentation";
 import { reportFailureReasonCode } from "../failure-notice";
-import { safeWafBlocked } from "../waf-blocked";
+import { safeWafBlocked, safeWafSuspect } from "../waf-blocked";
 import { getScoreGrade } from "../scoring";
 import { getGroupName } from "../categories";
 import { groupIssuesByCategory, flattenIssuesBySeverity, reportPassedRules } from "../grouping";
@@ -241,6 +242,12 @@ interface SlimJsonReport {
    * is the machine-readable reason. Present only when a page was blocked.
    */
   wafBlocked?: WafBlockedSummary;
+  /**
+   * Pages that look like a provider's refusal but carry none of its block markers
+   * (#1258). They were audited like any page, so their findings may describe the
+   * provider's page. Present only when one was seen.
+   */
+  wafSuspect?: WafSuspectSummary;
   score: {
     overall: number | null; // null ⇒ N/A (failed/0-page audit, #586)
     grade: string;
@@ -558,6 +565,7 @@ function buildSlimReport(
       : {}),
     ...(report.refusedFetches?.length ? { refusedFetches: report.refusedFetches } : {}),
     ...(safeWafBlocked(report) ? { wafBlocked: safeWafBlocked(report)! } : {}),
+    ...(safeWafSuspect(report) ? { wafSuspect: safeWafSuspect(report)! } : {}),
     score: {
       // null ⇒ N/A (failed/0-page audit); preserved through save/reload (#586).
       overall: report.healthScore?.overall ?? null,

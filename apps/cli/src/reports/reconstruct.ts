@@ -989,6 +989,10 @@ export function reconstructReport(
       ...(crawl.stats?.wafBlocked && crawl.stats.wafBlocked.total > 0
         ? { wafBlocked: crawl.stats.wafBlocked }
         : {}),
+      // Refusal-shaped pages with no provider marker (#1258): audited, but flagged.
+      ...(crawl.stats?.wafSuspect && crawl.stats.wafSuspect.total > 0
+        ? { wafSuspect: crawl.stats.wafSuspect }
+        : {}),
       // Root fetches the site refused, surfaced so a blocked report says
       // "refused" instead of leaving the reader to infer it.
       ...(crawl.stats?.refusedFetches?.length
