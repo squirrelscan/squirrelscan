@@ -21,7 +21,13 @@ const HOME = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>
 <script async src="https://www.googletagmanager.com/gtm.js?id=GTM-ABC123"></script>
 </head><body><main><h1>Fixture shop</h1><p>${"Welcome to the shop. ".repeat(20)}</p></main></body></html>`;
 
+// No technology marker in the markup: only the response headers name the stack.
+const PLAIN_HOME = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Header only</title>
+<meta name="description" content="A page whose stack is named only by response headers."></head><body><main><h1>Header only</h1><p>${"Plain words. ".repeat(30)}</p></main></body></html>`;
+
 let server: ReturnType<typeof Bun.serve>;
+let headerServer: ReturnType<typeof Bun.serve>;
+let headerBase: string;
 let base: string;
 let home: string;
 let out: string;
@@ -51,16 +57,35 @@ beforeAll(() => {
     },
   });
   base = `http://127.0.0.1:${server.port}`;
+  headerServer = Bun.serve({
+    port: 0,
+    fetch(request) {
+      const { pathname } = new URL(request.url);
+      if (pathname === "/") {
+        return new Response(PLAIN_HOME, {
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+            "liferay-portal": "Liferay Community Edition Portal 7.4.3.1",
+            "x-azure-ref": "20261030T000000Z-r1abcdef",
+            "x-powered-by": "pimcore",
+          },
+        });
+      }
+      return new Response("Not found", { status: 404 });
+    },
+  });
+  headerBase = `http://127.0.0.1:${headerServer.port}`;
   home = mkdtempSync(join(tmpdir(), "sq-1263-home-"));
   out = mkdtempSync(join(tmpdir(), "sq-1263-out-"));
 });
 
 afterAll(() => {
   server?.stop(true);
+  headerServer?.stop(true);
   for (const dir of [home, out]) rmSync(dir, { recursive: true, force: true });
 });
 
-async function audit(name: string, extra: string[] = []) {
+async function audit(name: string, extra: string[] = [], target?: string) {
   const cwd = join(out, name);
   mkdirSync(cwd, { recursive: true });
   const file = join(out, `${name}.json`);
@@ -70,7 +95,7 @@ async function audit(name: string, extra: string[] = []) {
       "run",
       CLI,
       "audit",
-      base,
+      target ?? base,
       "-m",
       "30",
       "--http",
@@ -121,5 +146,15 @@ describe("#1263 logged-out --http audit detects the stack from the crawled pages
     );
     // Free and offline: the audit asked only for the site's own pages.
     expect(hits.every((path) => !path.startsWith("http"))).toBe(true);
+  }, 120_000);
+
+  // The crawler stores only allow-listed response headers (TECH_DETECT_HEADER_NAMES), so a
+  // fingerprint that reads a header missing from that list never fires in a real audit.
+  test("fingerprints that read response headers fire from a real crawl", async () => {
+    const report = await audit("headers", ["--offline"], headerBase);
+    const ids = (report.technologies?.items ?? []).map((item) => item.id);
+    expect(ids).toEqual(
+      expect.arrayContaining(["liferay", "azure-front-door", "pimcore"])
+    );
   }, 120_000);
 });
