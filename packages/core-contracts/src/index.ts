@@ -2046,6 +2046,13 @@ export interface ClassifiedPageType {
  */
 export interface PageClassification {
   pageType: ClassifiedPageType;
+  /**
+   * Which classifier produced this answer: the model artifact's hash, the featurizer version and the
+   * rules version (see `CLASSIFIER_RULES_VERSION`). A crawl that reuses an unchanged page from its
+   * cache re-fetches it when this differs from the running classifier, so a model or rules change
+   * relabels the page (pub#841). Absent on a page classified before it existed.
+   */
+  model?: string;
   /** Why any part of the page fell back to the rules path, or "" when nothing did. */
   degraded: string;
 }

@@ -2,11 +2,22 @@
 
 import type { PageClassifierHook } from "@squirrelscan/parser";
 
-import { classifyDocument, elementPlacer } from "@squirrelscan/page-classifier";
+import {
+  CLASSIFIER_RULES_VERSION,
+  FEATURIZER_VERSION,
+  classifyDocument,
+  elementPlacer,
+} from "@squirrelscan/page-classifier";
 
 import { logger } from "@/utils/logger";
 
+import { BUNDLED_ARTIFACT_MANIFEST } from "./artifact";
 import { loadBundledClassifier } from "./index";
+
+/** What identifies the bundled classifier: model hash, featurizer and rules version. Needs no model load. */
+export function bundledClassifierVersion(): string {
+  return `${BUNDLED_ARTIFACT_MANIFEST.sha256.slice(0, 12)}:${FEATURIZER_VERSION}:r${CLASSIFIER_RULES_VERSION}`;
+}
 
 export interface ClassifierHookOptions {
   /** Per-page wall-clock budget in ms; the classifier's own default (500) when omitted. */
@@ -23,7 +34,12 @@ export interface ClassifierHookOptions {
 export function createPageClassifierHook(
   options: ClassifierHookOptions = {}
 ): PageClassifierHook {
-  return ({ document, url, html }) => {
+  const version = bundledClassifierVersion();
+  const classify = ({
+    document,
+    url,
+    html,
+  }: Parameters<PageClassifierHook>[0]): ReturnType<PageClassifierHook> => {
     const { model } = loadBundledClassifier();
     if (!model) return null;
     const elements: unknown[] = [];
@@ -44,8 +60,10 @@ export function createPageClassifierHook(
           source: result.pageType.source,
         },
         degraded: result.degraded,
+        model: version,
       },
       placeLink: (element) => place(element),
     };
   };
+  return Object.assign(classify, { version });
 }

@@ -310,6 +310,26 @@ export function discoveryBudgetMs(timeoutMs: number, discoveryDeadlineAt?: numbe
   return discoveryDeadlineAt === undefined ? base : Math.max(1, Math.min(base, discoveryDeadlineAt - now));
 }
 
+/**
+ * Whether a cached page's stored classification was made by a different classifier than the one
+ * running now (pub#841 review). The classification is stored inside the page's parsed data, so a page
+ * reused from the cache keeps the label of the model that first read it; a new model or a change to
+ * the labelling rules would never reach an unchanged page. A page with no parsed data (a non-HTML
+ * or error page) has nothing to relabel. `want` is the running classifier's version, or undefined
+ * with the classifier off: a stored label then goes stale too, so a `--no-classifier` run does not
+ * hand rules a label it did not ask for.
+ */
+export function cachedClassificationIsStale(
+  parsedData: string | null | undefined,
+  want: string | undefined,
+): boolean {
+  if (!parsedData) return false;
+  const at = parsedData.indexOf('"classification":');
+  if (at < 0) return want !== undefined;
+  const have = /"model":"([^"]*)"/.exec(parsedData.slice(at, at + 600))?.[1];
+  return have !== want;
+}
+
 /** The preamble's wall-clock allowance for a given per-request timeout. */
 export function preambleBudgetMs(timeoutMs: number): number {
   return Math.min(PREAMBLE_TOTAL_BUDGET_MS, Math.max(1, timeoutMs) * PREAMBLE_BUDGET_REQUESTS);
@@ -1402,7 +1422,14 @@ export function createCrawler(
               { maxStalenessSeconds: config.maxStalenessSeconds },
             );
 
-            if (cacheLookup.entry) {
+            if (
+              cacheLookup.entry &&
+              cachedClassificationIsStale(cacheLookup.entry.parsedData, options.classify?.version)
+            ) {
+              // Classified by another model (or none): fetch and parse the page again so it is
+              // relabelled, instead of reusing a label this run would not produce (pub#841).
+              logger.debug("cached page re-fetched: classifier changed", entry.normalizedUrl);
+            } else if (cacheLookup.entry) {
               // Narrowing on the lookup union guarantees freshness is present.
               cachedPage = cacheLookup.entry;
               // Browser-like freshness: if the origin says the entry is still

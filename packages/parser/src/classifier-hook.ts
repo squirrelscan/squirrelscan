@@ -21,11 +21,17 @@ export interface PageClassifierOutput {
  * Classify one parsed page. Return null to skip it (classifier off, or nothing to classify).
  * A throw is caught by the parser and reads as null: classification never fails a parse.
  */
-export type PageClassifierHook = (input: {
+export type PageClassifierHook = ((input: {
   document: Document;
   url: string;
   html: string;
-}) => PageClassifierOutput | null;
+}) => PageClassifierOutput | null) & {
+  /**
+   * Identifies the classifier that answers (the `model` stamped on each classification). A caller
+   * that reuses stored parses compares it with the stored one and re-parses a page that differs.
+   */
+  readonly version?: string;
+};
 
 /** Options for `parsePage`. */
 export interface ParsePageOptions {

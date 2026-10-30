@@ -92,7 +92,7 @@ import { detachFromPage } from "./detach";
 import { fnv1a64 } from "./fingerprint";
 
 import type { CheckResult } from "@squirrelscan/core-contracts";
-import type { RuleRunResult, RuleRunner } from "@squirrelscan/rules";
+import type { Rule, RuleRunResult, RuleRunner } from "@squirrelscan/rules";
 import { mayFanOutAcrossTemplate } from "@squirrelscan/rules";
 
 /**
@@ -287,6 +287,21 @@ export interface TemplateFanout {
 }
 
 /**
+ * The enabled rules whose verdict may be fanned across a template cluster: template-scoped rules
+ * that declare none of the per-page gates (`skipOnSoft404`, `skipOnNoindex`, `skipOnPageType`).
+ * Exported so the disqualification is testable without a crawl.
+ */
+export function fannableRules<R extends { meta: Rule["meta"] }>(rules: readonly R[]): R[] {
+  return rules.filter(
+    (r) =>
+      mayFanOutAcrossTemplate(r.meta) &&
+      !r.meta.skipOnSoft404 &&
+      !r.meta.skipOnNoindex &&
+      !r.meta.skipOnPageType?.length,
+  );
+}
+
+/**
  * Build a fan-out cache for one streamed rules pass.
  *
  * The set of fannable rule ids is resolved ONCE from the runner's enabled rules,
@@ -308,18 +323,7 @@ export function createTemplateFanout(
   opts?: { maxClusters?: number },
 ): TemplateFanout {
   const maxClusters = Math.max(0, opts?.maxClusters ?? DEFAULT_MAX_CLUSTERS);
-  const fannable = new Set(
-    runner
-      .getEnabledRules()
-      .filter(
-        (r) =>
-          mayFanOutAcrossTemplate(r.meta) &&
-          !r.meta.skipOnSoft404 &&
-          !r.meta.skipOnNoindex &&
-          !r.meta.skipOnPageType?.length,
-      )
-      .map((r) => r.meta.id),
-  );
+  const fannable = new Set(fannableRules(runner.getEnabledRules()).map((r) => r.meta.id));
 
   /**
    * Copy a checks array free of its page, or `null` when the copy did not happen.

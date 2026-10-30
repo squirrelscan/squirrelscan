@@ -3,7 +3,7 @@
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-import { isTrustedPageTypeIn, pageTypeSkip, trustedPageType } from "../shared/page-type";
+import { pageTypeSkip, skippablePageType } from "../shared/page-type";
 
 /** Page types whose short title or description is normal (pub#841). */
 const SHORT_OK_PAGE_TYPES = ["contact", "legal"] as const;
@@ -47,9 +47,9 @@ export const metaDescriptionRule: Rule = {
 
     const len = description.length;
 
-    if (len < opts.min_length && isTrustedPageTypeIn(ctx.parsed, SHORT_OK_PAGE_TYPES)) {
+    if (len < opts.min_length && skippablePageType(ctx.parsed, SHORT_OK_PAGE_TYPES) !== null) {
       // A contact or legal page is not a search target worth a long snippet (pub#841). Too long still applies.
-      checks.push(pageTypeSkip("meta-description", trustedPageType(ctx.parsed)!, "The description length floor"));
+      checks.push(pageTypeSkip("meta-description", skippablePageType(ctx.parsed, SHORT_OK_PAGE_TYPES)!, "The description length floor"));
     } else if (len < opts.min_length) {
       checks.push({
         name: "meta-description",

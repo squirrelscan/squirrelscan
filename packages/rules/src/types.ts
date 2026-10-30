@@ -249,8 +249,9 @@ export interface RuleMeta {
   /**
    * Page-scope rules that judge a page the way a searcher meets it (a thin-content floor, a
    * keyword-density verdict) list the page types they do not apply to, and the runner emits a
-   * visible `skipped` check (reason "not-applicable", counted in `details.skippedByType`) instead of
-   * running them. Only a MODEL label at or above `PAGE_TYPE_TRUST_CONFIDENCE` counts; a rules
+   * visible `skipped` check (reason "page-type", counted in `details.skippedByType`, a rule-wide
+   * "does not apply" verdict like the noindex gate) instead of running them. The page body must also
+   * corroborate the label (`bodyCorroboratesPageType`). Only a MODEL label at or above `PAGE_TYPE_TRUST_CONFIDENCE` counts; a rules
    * label never relaxes a verdict (pub#841). Keep the list to types where the finding is wrong
    * by nature, such as a contact or legal page being short.
    */

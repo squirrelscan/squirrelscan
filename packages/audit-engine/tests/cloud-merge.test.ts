@@ -794,16 +794,16 @@ describe("runCloudSmartAudits — a noindex skip resolves the page's priors (pub
     message: "ok",
     pageUrl: url,
   });
-  const skip = (url: string, reason: "noindex" | "soft-404") => ({
+  const skip = (url: string, reason: "noindex" | "page-type" | "soft-404") => ({
     name: "core/h1",
     status: "skipped" as const,
     message: `Skipped (${reason})`,
     skipReason: reason,
     pageUrl: url,
-    ...(reason === "noindex" ? { details: { foldKey: "noindex" } } : {}),
+    ...(reason === "noindex" || reason === "page-type" ? { details: { foldKey: reason } } : {}),
   });
 
-  async function rerunWith(reason: "noindex" | "soft-404") {
+  async function rerunWith(reason: "noindex" | "page-type" | "soft-404") {
     const store = new MemStore();
     // Run 1: P2 and P3 both lack an H1.
     await runCloudSmartAudits({
@@ -836,6 +836,12 @@ describe("runCloudSmartAudits — a noindex skip resolves the page's priors (pub
 
   test("noindex skip: the skipped page's finding resolves, the other page's stays open", async () => {
     const { open, resolved } = await rerunWith("noindex");
+    expect(open).toEqual([normalizeUrl(P3)]);
+    expect(resolved).toEqual([normalizeUrl(P2)]);
+  });
+
+  test("page-type skip (pub#841): resolves exactly like noindex, through the publish merge", async () => {
+    const { open, resolved } = await rerunWith("page-type");
     expect(open).toEqual([normalizeUrl(P3)]);
     expect(resolved).toEqual([normalizeUrl(P2)]);
   });

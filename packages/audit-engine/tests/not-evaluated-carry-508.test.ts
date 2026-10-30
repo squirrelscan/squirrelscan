@@ -19,7 +19,7 @@ import type {
   ResolutionSignal,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
-import { NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+import { NOT_APPLICABLE_SKIP_REASON, PAGE_TYPE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 import { buildResolutionSignal } from "@squirrelscan/rules/resolution";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
 
@@ -153,6 +153,11 @@ describe("sampled publish merge, signal: key dropped (#508)", () => {
 
   test("the noindex verdict still reads as clean", async () => {
     const row = await priorAfterRerun([skip(A, NOT_APPLICABLE_SKIP_REASON), pass(B)], keyDropped);
+    expect(row.state).toBe("resolved");
+  });
+
+  test("the page-type verdict (pub#841) reads as clean in the local merge too", async () => {
+    const row = await priorAfterRerun([skip(A, PAGE_TYPE_SKIP_REASON), pass(B)], keyDropped);
     expect(row.state).toBe("resolved");
   });
 

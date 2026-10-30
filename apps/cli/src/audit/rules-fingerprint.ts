@@ -32,6 +32,7 @@ export const RULES_FINGERPRINT_SOURCES = [
   // cache too. The manifest carries the model artifact's sha256 (hashing the 8.8 MB artifact
   // itself would cost every dev start).
   "packages/page-classifier/src",
+  "apps/cli/src/classifier",
   "packages/page-classifier/assets/classifier-v2.manifest.json",
   "bun.lock",
 ] as const;
