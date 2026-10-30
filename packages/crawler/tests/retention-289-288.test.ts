@@ -406,4 +406,36 @@ describe("#288: an interrupted report build is recovered, a live one never", () 
       db.close();
     }
   });
+
+  test("the repair's per-audit cost: a done project probes one marker row, a chunk walks rowids and looks up by url (#289)", async () => {
+    const s = await open();
+    await crawl(s, 1_000, ["https://e.test/a"]);
+    s.close?.();
+    const sqls = SQLiteStorage.SUPERSEDED_REPAIR_SQL;
+    const db = new Database(dbPath, { readonly: true });
+    const plan = (sql: string): string =>
+      (db.query(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map((r) => r.detail).join("\n");
+    try {
+      // The marker probe every audit pays once the repair is done: a keyed lookup, never a scan.
+      const probe = plan(sqls.probe);
+      expect(probe).toMatch(/SEARCH maintenance_marks USING (COVERING )?INDEX|SEARCH maintenance_marks USING PRIMARY KEY/);
+      expect(probe).not.toMatch(/SCAN maintenance_marks/);
+      expect(plan(sqls.cursor)).not.toMatch(/SCAN maintenance_marks/);
+
+      // One chunk (run only until the repair is done, in budgeted cursor chunks): the retired crawls come from
+      // their own index, and each one's rows past the cursor from the per-crawl index. No table scan.
+      for (const sql of [sqls.chunkUpper, sqls.chunkDelete]) {
+        const p = plan(sql);
+        expect(p).toMatch(/SEARCH p USING (COVERING )?INDEX idx_pages_crawl \(crawl_id=\? AND rowid>/);
+        expect(p).toMatch(/SEARCH crawls USING INDEX idx_crawls_retired/);
+        expect(p).not.toMatch(/SCAN (p|pages|crawls)\b/);
+      }
+      // The newer copy of a row is looked up by its url, so a chunk costs its rows, not the project's history.
+      const del = plan(sqls.chunkDelete);
+      expect(del).toMatch(/SEARCH newer USING (COVERING )?INDEX idx_pages_url_recency \(normalized_url=\?/);
+      expect(del).not.toMatch(/SCAN newer\b/);
+    } finally {
+      db.close();
+    }
+  });
 });
