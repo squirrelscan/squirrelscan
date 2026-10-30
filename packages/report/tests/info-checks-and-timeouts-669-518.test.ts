@@ -147,3 +147,54 @@ describe("a rule that timed out is a skipped check (#518)", () => {
     expect(parsed.issues).toEqual([]);
   });
 });
+
+describe("a rule that threw is not a timeout, and its summary is not an info check (#1291)", () => {
+  const thrown = rule("content/hidden-text", "Hidden text", [
+    {
+      name: "content/hidden-text-error",
+      status: "skipped",
+      message: "Rule not evaluated: internal error",
+      pageUrl: "https://example.com/a",
+      skipReason: "rule-timed-out",
+      details: { errored: true, pages: 2 },
+    },
+    {
+      name: "content/hidden-text-errors",
+      status: "info",
+      message: "2 pages hit an internal error",
+      details: { pages: 2 },
+    },
+    {
+      name: "content/hidden-text-timeouts",
+      status: "info",
+      message: "timed out",
+    },
+  ]);
+  const parsed = JSON.parse(renderJson(baseReport({ "content/hidden-text": thrown }))) as {
+    skippedChecks?: Array<Record<string, unknown>>;
+    infoChecks?: unknown;
+  };
+
+  test("listed as rule-errored, apart from rule-timed-out", () => {
+    expect(parsed.skippedChecks).toHaveLength(1);
+    expect(parsed.skippedChecks![0]).toMatchObject({ reason: "rule-errored", pagesCount: 2 });
+  });
+
+  test("the -errors and -timeouts summaries stay out of infoChecks", () => {
+    expect(parsed.infoChecks).toBeUndefined();
+  });
+});
+
+describe("info check messages are clipped (#669)", () => {
+  test("a 1 MB message is cut at 500 characters", () => {
+    const parsed = JSON.parse(
+      renderJson(
+        baseReport({
+          "x/r": rule("x/r", "R", [{ name: "note", status: "info", message: "m".repeat(1_000_000), pages: ["https://example.com/a"] }]),
+        }),
+      ),
+    ) as { infoChecks: Array<{ message: string }> };
+    expect(parsed.infoChecks[0]!.message).toHaveLength(503);
+    expect(parsed.infoChecks[0]!.message.endsWith("...")).toBe(true);
+  });
+});

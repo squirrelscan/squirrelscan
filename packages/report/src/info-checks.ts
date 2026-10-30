@@ -11,6 +11,15 @@ import type { ReportRuleResult } from "./types";
 /** Pages listed per info check; `pagesCount` is the true number. */
 export const INFO_CHECK_PAGES_LIMIT = 10;
 
+/** Longest message kept; a rule's message can embed page content. */
+export const INFO_CHECK_MESSAGE_LIMIT = 500;
+
+function clip(message: string): string {
+  return message.length > INFO_CHECK_MESSAGE_LIMIT
+    ? `${message.slice(0, INFO_CHECK_MESSAGE_LIMIT)}...`
+    : message;
+}
+
 export interface InfoCheck {
   ruleId: string;
   /** Rule display name. */
@@ -40,6 +49,10 @@ export function collectInfoChecks(ruleResults: Record<string, ReportRuleResult>)
     const groups = new Map<string, { message: string; pages: Set<string>; total: number }>();
     for (const check of result.checks) {
       if (check.status !== "info") continue;
+      // The run-level summaries of a rule that timed out or threw (`<rule>-timeouts`,
+      // `<rule>-errors`) are not notes about the site: the skipped rows already
+      // report them, in `skippedChecks` and `notChecked`.
+      if (check.name === `${ruleId}-errors` || check.name === `${ruleId}-timeouts`) continue;
       let group = groups.get(check.name);
       if (!group) {
         group = { message: check.message, pages: new Set(), total: 0 };
@@ -61,7 +74,7 @@ export function collectInfoChecks(ruleResults: Record<string, ReportRuleResult>)
         ruleId,
         name: result.meta.name,
         check,
-        message: g.message,
+        message: clip(g.message),
         pages,
         pagesCount: total,
         pagesHasMore: total > pages.length,

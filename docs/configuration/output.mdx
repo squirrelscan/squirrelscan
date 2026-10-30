@@ -678,7 +678,7 @@ Top-level keys. Keys marked optional are omitted when they do not apply.
 | `ruleId` | Rule that skipped, e.g. `content/hidden-text` |
 | `name` | Rule display name |
 | `check` | Check name within the rule |
-| `reason` | Why it was skipped: `scan-truncated` (the page hit the rule's scan limit and was only partly scanned: `content/hidden-text`, `content/dev-leakage`) or `rule-timed-out` (the rule ran past its time budget and was not evaluated; the audit records it once, and `pagesCount` is how many pages hit the budget, so `pages` may be shorter or empty). More reasons may be added, so treat unknown values as a skip |
+| `reason` | Why it was skipped: `scan-truncated` (the page hit the rule's scan limit and was only partly scanned: `content/hidden-text`, `content/dev-leakage`) `rule-timed-out` (the rule ran past its time budget and was not evaluated; the audit records it once, and `pagesCount` is how many pages hit the budget, so `pages` may be shorter or empty) or `rule-errored` (the rule hit an internal squirrelscan error and was not evaluated: a defect in squirrel, not in your pages). More reasons may be added, so treat unknown values as a skip |
 | `pages` | Skipped page URLs. A sample when `pagesHasMore` is true |
 | `pagesCount` | True number of skipped pages |
 | `pagesHasMore` | `pagesCount` is larger than `pages.length` |
@@ -692,7 +692,7 @@ A consumer that closes a finding when a rule stops reporting it should leave the
 | Field | Meaning |
 |-------|---------|
 | `ruleId`, `name`, `check` | The rule and the check, as in `skippedChecks` |
-| `message` | The check's message (the first, when the check repeats) |
+| `message` | The check's message (the first, when the check repeats), cut at 500 characters |
 | `pages` | Up to 10 page URLs, sorted |
 | `pagesCount` | True number of pages |
 | `pagesHasMore` | `pagesCount` is larger than `pages.length` |

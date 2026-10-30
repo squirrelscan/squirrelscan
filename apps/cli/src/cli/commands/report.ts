@@ -570,7 +570,14 @@ export const report = defineCommand({
       );
     }
     const includePassed = (args.includePassed ?? false) && !args.input;
-    const includeInfo = args.includeInfo ?? false;
+    // Same for --include-info: the slim JSON a report is read from does not carry
+    // the checks `infoChecks` was built from, so there is nothing to list.
+    if (args.includeInfo && args.input) {
+      console.error(
+        "--include-info lists no checks for a report read with --input: info checks are not read back from a JSON file"
+      );
+    }
+    const includeInfo = (args.includeInfo ?? false) && !args.input;
     if (formatResult.data === "console") {
       generateConsoleReport(reportData, {
         summaryOnly: args.summary,
