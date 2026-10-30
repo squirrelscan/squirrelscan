@@ -250,6 +250,11 @@ export interface ReconstructOptions {
    * post-crawl pipeline's residency.
    */
   batchSize?: number;
+  /**
+   * Fill each page's `ruleCount` (#1260). Off by default: the per-page count is a
+   * `GROUP BY` over every stored check, and only `--include-pages` reads it.
+   */
+  includePageRuleCounts?: boolean;
 }
 
 /**
@@ -381,9 +386,13 @@ export function reconstructReport(
 
     // Rules that reported on each page, for `--include-pages` (#1260). A failed read
     // leaves the counts at 0 rather than failing the report.
-    const ruleCountsByPage = yield* storage
-      .getRuleCountsByPage(crawlId)
-      .pipe(Effect.catchAll(() => Effect.succeed(new Map<string, number>())));
+    const ruleCountsByPage = options?.includePageRuleCounts
+      ? yield* storage
+          .getRuleCountsByPage(crawlId)
+          .pipe(
+            Effect.catchAll(() => Effect.succeed(new Map<string, number>()))
+          )
+      : new Map<string, number>();
 
     // 7. Load rule registry to get metadata
     // Stored results can include explicitly enabled opt-in rules. Reconstruction
@@ -626,7 +635,9 @@ export function reconstructReport(
             siteName: null,
           },
           checks: pageChecks,
-          ruleCount: ruleCountsByPage.get(page.normalizedUrl) ?? 0,
+          ...(options?.includePageRuleCounts
+            ? { ruleCount: ruleCountsByPage.get(page.normalizedUrl) ?? 0 }
+            : {}),
           redirectChain: page.redirectChain,
           fetcherId: page.fetcherId,
           fallbackReason: page.fallbackReason,

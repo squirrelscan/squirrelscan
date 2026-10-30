@@ -37,7 +37,10 @@ import {
 import { getGlobalContentStore } from "@/crawler/storage/content-store";
 import { warnEvictedPages } from "@/crawler/storage/eviction-notice";
 import { SQLiteStorage } from "@/crawler/storage/sqlite";
-import { reconstructReport } from "@/reports/reconstruct";
+import {
+  reconstructReport,
+  type ReconstructOptions,
+} from "@/reports/reconstruct";
 import { retiredAuditReason } from "@/reports/retired";
 import {
   CATEGORIES,
@@ -564,7 +567,8 @@ export interface AuditSource {
 export async function getStoredAudit(
   auditId: string,
   storagePath?: string,
-  source?: AuditSource
+  source?: AuditSource,
+  reconstruct?: ReconstructOptions
 ): Promise<Result<AuditReport>> {
   const dbPaths = storagePath ? [storagePath] : getProjectStoragePaths();
 
@@ -605,7 +609,12 @@ export async function getStoredAudit(
 
       const report = await Effect.runPromise(
         Effect.gen(function* () {
-          return yield* reconstructReport(storage, auditId);
+          return yield* reconstructReport(
+            storage,
+            auditId,
+            undefined,
+            reconstruct
+          );
         })
       );
       await warnEvictedPages(storage, auditId, "report");
@@ -637,7 +646,8 @@ export async function getStoredAudit(
 export async function getStoredAuditByPrefix(
   prefix: string,
   storagePath?: string,
-  source?: AuditSource
+  source?: AuditSource,
+  reconstruct?: ReconstructOptions
 ): Promise<Result<AuditReport>> {
   const dbPaths = storagePath ? [storagePath] : getProjectStoragePaths();
 
@@ -712,7 +722,12 @@ export async function getStoredAuditByPrefix(
     const report = await Effect.runPromise(
       Effect.gen(function* () {
         yield* storage.init();
-        return yield* reconstructReport(storage, match.crawl.id);
+        return yield* reconstructReport(
+          storage,
+          match.crawl.id,
+          undefined,
+          reconstruct
+        );
       })
     );
     await warnEvictedPages(storage, match.crawl.id, "report");
@@ -740,7 +755,8 @@ export async function getStoredAuditByPrefix(
 export async function getLatestAudit(
   baseUrl?: string,
   storagePath?: string,
-  source?: AuditSource
+  source?: AuditSource,
+  reconstruct?: ReconstructOptions
 ): Promise<Result<AuditReport>> {
   const dbPaths = storagePath ? [storagePath] : getProjectStoragePaths();
 
@@ -858,7 +874,9 @@ export async function getLatestAudit(
           yield* storage.init();
           const reconstructed = yield* reconstructReport(
             storage,
-            latest.crawl.id
+            latest.crawl.id,
+            undefined,
+            reconstruct
           );
           return reconstructed;
         })

@@ -1994,6 +1994,9 @@ export const audit = defineCommand({
         offline: args.offline,
         ...(concurrency !== undefined ? { concurrency } : {}),
         ...(perHostConcurrency !== undefined ? { perHostConcurrency } : {}),
+        ...(args.includePages && args.format === "json"
+          ? { includePages: true }
+          : {}),
         ...(Object.keys(customHeaders).length > 0
           ? { headers: customHeaders }
           : {}),
