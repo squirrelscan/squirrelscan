@@ -520,7 +520,7 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
             // pub#837: each page once, with its links and where they sit; a long list says how
             // many pages it leaves out. pub#846: an item scoped to a region names it, lists only
             // the pages it is on outside it, and its label drops the section phrase.
-            const view = itemSourceView(item, report.structure);
+            const view = itemSourceView(item, report.structure, check);
             const label = itemLabel(item, view.scope) ?? item.id;
             // One line, no page list: the list IS the noise for an item that is
             // the same resource on effectively every page.

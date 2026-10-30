@@ -35,6 +35,15 @@ export interface PageTypeScopeCheck {
   provenance?: string;
 }
 
+/**
+ * True when any of a check's pages were carried from an earlier audit (smart audits, #110).
+ * Such a finding sits partly on pages this audit did not look at, so a share of this audit's
+ * region or page-type counts would compare two populations (pub#857, pub#860).
+ */
+export function hasCarriedPages(check: PageTypeScopeCheck): boolean {
+  return (check.carriedPages?.length ?? 0) > 0 || (check.carriedCount ?? 0) > 0 || check.provenance === "carried";
+}
+
 export interface PageTypeScope {
   /** The page classifier's label, e.g. `docs`. */
   pageType: string;
@@ -74,13 +83,7 @@ export function checkPageTypeScope(
 ): PageTypeScope | undefined {
   // Findings carried from earlier audits sit on pages this audit did not look at, so they are
   // not in `structure.pageTypes` and the share would compare two populations: never scoped.
-  if (
-    (check.carriedPages?.length ?? 0) > 0 ||
-    (check.carriedCount ?? 0) > 0 ||
-    check.provenance === "carried"
-  ) {
-    return undefined;
-  }
+  if (hasCarriedPages(check)) return undefined;
   const details = check.details;
   if (!details || details.pageTypeSource !== PAGE_TYPE_SCOPE_SOURCE) return undefined;
   const pageType = details.pageType;

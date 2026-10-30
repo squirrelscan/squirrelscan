@@ -712,7 +712,7 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
           );
           lines.push("");
           for (const item of visibleItems) {
-            const view = itemSourceView(item, report.structure);
+            const view = itemSourceView(item, report.structure, check);
             // pub#846: a scoped item's label drops the section phrase its region line says.
             const label = itemLabel(item, view.scope) ?? item.id;
             const isUrl =

@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A finding that carries pages from an earlier audit is no longer shown as a share of a page region.** A smart audit keeps findings for pages it did not fetch again, and a region line such as "In the site footer, on 49 of 53 pages" could count those pages against this audit's own region totals. Like the page-type line (#857), the region line now steps aside when any of a finding's pages are carried, in every output format, and the finding keeps its page rows. Findings on fresh pages read as before and no score changes. (#860)
+
 ## v0.0.143 (2026-10-30)
 
 Two new performance rules, `perf/content-in-js-bundle` and `perf/framework-data-payload`, find page content shipped inside JavaScript. Page weight now measures the srcset candidate a browser downloads and leaves lazy images out, `squirrel auth login` opens a branded page, parallel audits no longer fail with a locked database, and `store_scripts` no longer changes what an audit finds. A start URL the audit cannot run on is refused before any request, `security/tls-certificate` shows as not checked when it cannot run, and the about, contact and privacy rules take a `paths` option.

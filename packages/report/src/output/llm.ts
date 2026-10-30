@@ -23,6 +23,7 @@ import {
   itemLabel,
   regionScopeLine,
 } from "../region-scope";
+import { hasCarriedPages } from "../page-type-scope";
 
 /** "in the site footer, ..." from "In the site footer, ...", to sit inside a sentence. */
 const lowerFirst = (text: string): string => text.charAt(0).toLowerCase() + text.slice(1);
@@ -651,7 +652,11 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
       // the rest as additional" remainder (rules/src/shared/sample-items.ts and
       // the a11y rules' slice(0, 10)). So listed + additional is the total.
       let itemsLeftOut = 0;
+      // The items of every check of the rule are listed together, so one that carries pages from
+      // an earlier audit keeps all of them on their page rows (pub#860).
+      let ruleCarriesPages = false;
       for (const check of rule.checks) {
+        if (hasCarriedPages(check)) ruleCarriesPages = true;
         // Narrowed to what the printed groups did NOT account for, so a
         // partially covered rule does not report the same pages twice.
         allItems.push(...uncoveredItems(check.items, coverage));
@@ -707,7 +712,7 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
           let itemLine = `${indent(3)}- ${escapeXml(itemId)}`;
           // pub#837/#846: the item's pages, and the region it is shown in; a scoped item's label
           // drops the section phrase the region says.
-          const view = itemSourceView(item, report.structure);
+          const view = itemSourceView(item, report.structure, ruleCarriesPages ? { provenance: "carried" } : undefined);
           const label = itemLabel(item, view.scope);
           if (label && label !== item.id) itemLine += ` (${escapeXml(label)})`;
           if (item.snippet) itemLine += ` | ${escapeXml(item.snippet)}`;
