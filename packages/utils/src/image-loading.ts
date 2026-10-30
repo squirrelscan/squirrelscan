@@ -83,12 +83,95 @@ function splitSizes(value: string): string[] {
   return parts;
 }
 
-/** A `px` or `vw` length as reference-viewport pixels; null for `calc()`, `em` and anything else. */
-function lengthPx(value: string): number | null {
-  const match = /^(\d{1,6}(?:\.\d{1,4})?)(px|vw)$/i.exec(value.trim());
-  if (!match?.[1] || !match[2]) return null;
-  const n = Number(match[1]);
-  return match[2].toLowerCase() === "vw" ? (n * REFERENCE_VIEWPORT_WIDTH) / 100 : n;
+/** A value in reference-viewport pixels, or a bare number (a scale factor in a `calc()`). */
+interface CalcValue {
+  v: number;
+  unit: "px" | "num";
+}
+
+/** `em` and `rem` resolve against the default 16 px font size: there is no stylesheet to read. */
+const DEFAULT_FONT_PX = 16;
+
+function unitValue(n: number, unit: string): CalcValue | null {
+  switch (unit.toLowerCase()) {
+    case "":
+      return { v: n, unit: "num" };
+    case "px":
+      return { v: n, unit: "px" };
+    case "vw":
+      return { v: (n * REFERENCE_VIEWPORT_WIDTH) / 100, unit: "px" };
+    case "em":
+    case "rem":
+      return { v: n * DEFAULT_FONT_PX, unit: "px" };
+    default:
+      return null;
+  }
+}
+
+/**
+ * A `<length>` or a simple `calc()` as reference-viewport pixels: `px`, `vw`, `em`
+ * and `rem`, with `+`, `-`, `*`, `/` and parentheses. Null for anything else
+ * (`min()`, `max()`, `clamp()`, `%`, a unit this model has no value for), and for
+ * input past a small size bound. Operators need surrounding spaces, as CSS requires
+ * for `+` and `-`, which keeps a negative number apart from a subtraction.
+ */
+function evaluateLength(source: string): number | null {
+  const text = source.trim();
+  if (text.length === 0 || text.length > 200) return null;
+  const inner = /^calc\((.*)\)$/is.exec(text)?.[1] ?? text;
+  const tokens = inner.match(
+    /\(|\)|[*/]|\s[+-]\s|-?\d{1,6}(?:\.\d{1,4})?[a-z%]{0,4}|[a-z-]{1,20}\(/gi,
+  );
+  if (!tokens || tokens.join("").replace(/\s/g, "") !== inner.replace(/\s/g, "")) return null;
+  let pos = 0;
+  let steps = 0;
+  const peek = (): string | undefined => tokens[pos]?.trim();
+  const factor = (): CalcValue | null => {
+    if (++steps > 200) return null;
+    const token = tokens[pos++]?.trim();
+    if (token === undefined) return null;
+    if (token === "(" || token.toLowerCase() === "calc(") {
+      const value = expression();
+      if (peek() !== ")") return null;
+      pos++;
+      return value;
+    }
+    const match = /^(-?\d{1,6}(?:\.\d{1,4})?)([a-z]{0,4})$/i.exec(token);
+    return match?.[1] !== undefined ? unitValue(Number(match[1]), match[2] ?? "") : null;
+  };
+  const term = (): CalcValue | null => {
+    let left = factor();
+    while (left && (peek() === "*" || peek() === "/")) {
+      const op = tokens[pos++]?.trim();
+      const right = factor();
+      if (!right) return null;
+      if (op === "*") {
+        if (left.unit === "px" && right.unit === "px") return null;
+        left = {
+          v: left.v * right.v,
+          unit: left.unit === "px" || right.unit === "px" ? "px" : "num",
+        };
+      } else {
+        if (right.unit !== "num" || right.v === 0) return null;
+        left = { v: left.v / right.v, unit: left.unit };
+      }
+    }
+    return left;
+  };
+  const expression = (): CalcValue | null => {
+    let left = term();
+    while (left && (peek() === "+" || peek() === "-")) {
+      const op = tokens[pos++]?.trim();
+      const right = term();
+      if (!right || right.unit !== left.unit) return null;
+      left = { v: op === "+" ? left.v + right.v : left.v - right.v, unit: left.unit };
+    }
+    return left;
+  };
+  const result = expression();
+  if (!result || pos !== tokens.length || result.unit !== "px" || !Number.isFinite(result.v))
+    return null;
+  return result.v;
 }
 
 /** Whether every term of a media condition holds at the reference viewport; unknown terms do not. */
@@ -96,9 +179,12 @@ function mediaMatches(condition: string): boolean {
   const terms = condition.split(/\band\b/i);
   if (terms.length > 8) return false;
   for (const raw of terms) {
-    const term = /^\s*\(\s*(min|max)-width\s*:\s*(\d{1,6}(?:\.\d{1,4})?)px\s*\)\s*$/i.exec(raw);
-    if (!term?.[1] || !term[2]) return false;
-    const limit = Number(term[2]);
+    const term = /^\s*\(\s*(min|max)-width\s*:\s*(\d{1,6}(?:\.\d{1,4})?)(px|em|rem)\s*\)\s*$/i.exec(
+      raw,
+    );
+    if (!term?.[1] || !term[2] || !term[3]) return false;
+    const limit =
+      term[3].toLowerCase() === "px" ? Number(term[2]) : Number(term[2]) * DEFAULT_FONT_PX;
     const min = term[1].toLowerCase() === "min";
     if (min ? REFERENCE_VIEWPORT_WIDTH < limit : REFERENCE_VIEWPORT_WIDTH > limit) return false;
   }
@@ -106,25 +192,57 @@ function mediaMatches(condition: string): boolean {
 }
 
 /**
+ * Split one `sizes` entry into its media condition and its source size, reading the
+ * parentheses as balanced groups: the source size is the trailing length or function
+ * (`370px`, `calc((100vw - 130px) / 2)`), the condition is whatever precedes it.
+ */
+function splitSizeEntry(entry: string): { media: string | null; value: string } | null {
+  const text = entry.trim();
+  if (text.length === 0 || text.length > 400) return null;
+  let start = text.length;
+  if (text.endsWith(")")) {
+    let depth = 0;
+    for (let i = text.length - 1; i >= 0; i--) {
+      if (text[i] === ")") depth++;
+      else if (text[i] === "(") {
+        depth--;
+        if (depth === 0) {
+          start = i;
+          break;
+        }
+      }
+    }
+    if (depth !== 0) return null;
+    // A function name belongs to its value (`calc(`, `min(`).
+    while (start > 0 && /[a-z-]/i.test(text[start - 1] ?? "")) start--;
+  } else {
+    const space = text.search(/\S+$/);
+    start = space < 0 ? text.length : space;
+  }
+  const value = text.slice(start).trim();
+  const media = text.slice(0, start).trim();
+  if (value === "") return null;
+  return { media: media === "" ? null : media, value };
+}
+
+/**
  * The CSS width a `sizes` attribute resolves to at the reference viewport, as a
- * browser reads it (first entry whose media condition holds). No `sizes` means
- * `100vw`. Null when the matching entry is a length this model cannot read
- * (`calc()`, `em`): the caller then has no width to select against.
+ * browser reads it: the first entry whose media condition holds. No `sizes` means
+ * `100vw`. An entry whose media condition this model cannot read is skipped, and so
+ * is a matching one whose value it cannot read (`min()`, `clamp()`): the next entry
+ * is tried, so a later default still answers. Null when no entry gives a width, and
+ * the caller then has nothing to select against.
  */
 export function sourceSizePx(sizes: string | null | undefined): number | null {
   if (!sizes || !sizes.trim()) return REFERENCE_VIEWPORT_WIDTH;
-  for (const entry of splitSizes(sizes)) {
-    const text = entry.trim();
-    if (!text) continue;
-    const withMedia = /^(\(.{0,200}\))\s+(\S{1,40})$/s.exec(text);
-    if (withMedia?.[1] && withMedia[2]) {
-      if (mediaMatches(withMedia[1])) return lengthPx(withMedia[2]);
-      continue;
-    }
-    // No media condition: the default entry, used when no earlier one matched.
-    return lengthPx(text);
+  for (const raw of splitSizes(sizes)) {
+    const entry = splitSizeEntry(raw);
+    if (!entry) continue;
+    if (entry.media !== null && !mediaMatches(entry.media)) continue;
+    const px = evaluateLength(entry.value);
+    if (px !== null && px >= 0) return px;
   }
-  return REFERENCE_VIEWPORT_WIDTH;
+  return null;
 }
 
 /**

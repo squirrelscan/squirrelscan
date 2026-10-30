@@ -39,7 +39,22 @@ describe("sourceSizePx", () => {
     ["(min-width: 750px) 370px, 100vw", 370],
     ["(min-width: 1600px) 800px, (min-width: 750px) 370px, 100vw", 370],
     ["(max-width: 600px) 300px, 100vw", 1280],
-    ["(min-width: 750px) calc(100vw - 40px), 100vw", null],
+    ["(min-width: 750px) calc(100vw - 40px), 100vw", 1240],
+    ["(min-width: 750px) calc((100vw - 130px) / 2), 100vw", 575],
+    ["(max-width: 600px) calc(100vw - 20px), 400px", 400],
+    ["(min-width: 40em) 300px, 100vw", 300],
+    ["(min-width: 100em) 300px, 100vw", 1280],
+    ["calc(100vw - 2em)", 1248],
+    ["calc(50vw + 10px)", 650],
+    ["calc(100vw * 0.5)", 640],
+    ["calc(100vw / 0)", null],
+    ["calc(100vw * 2vw)", null],
+    ["calc(100vw - 20)", null],
+    ["(min-width: 2000px) 300px, min(100vw, 500px)", null],
+    // A matching entry whose value cannot be read falls through to the next one.
+    ["(min-width: 750px) clamp(100px, 50vw, 600px), 200px", 200],
+    ["(min-width: 750px) and (max-width: 1000px) 300px, 250px", 250],
+    ["(min-width: 750px) and (max-width: 1400px) 300px, 250px", 300],
     ["(prefers-reduced-motion) 100px, 200px", 200],
   ])("%s", (sizes, expected) => {
     expect(sourceSizePx(sizes)).toBe(expected);
@@ -74,12 +89,42 @@ describe("selectImageCandidate", () => {
     expect(selectImageCandidate({ src: "a.jpg", srcset: "a.jpg 1x" })).toBe("a.jpg");
   });
 
+  test("Shopify Dawn's calc() sizes select the candidate that covers the computed width (#1251)", () => {
+    const sizes =
+      "(min-width: 990px) calc((100vw - 130px) / 4), (min-width: 750px) calc((100vw - 120px) / 3), calc((100vw - 35px) / 2)";
+    // 1280 px: (1280 - 130) / 4 = 287.5 CSS px, so 575w at 2x: the smallest candidate that covers it.
+    expect(
+      selectImageCandidate({
+        src: "i-940.jpg",
+        srcset: "i-165.jpg 165w, i-360.jpg 360w, i-535.jpg 535w, i-720.jpg 720w, i-940.jpg 940w",
+        sizes,
+      }),
+    ).toBe("i-720.jpg");
+  });
+
+  test("a card with a calc() default after a non-matching media entry is not sent to the largest file", () => {
+    expect(
+      selectImageCandidate({
+        src: "big.jpg",
+        srcset: "small.jpg 400w, mid.jpg 800w, big.jpg 1600w",
+        sizes: "(max-width: 600px) calc(100vw - 20px), 400px",
+      }),
+    ).toBe("mid.jpg");
+    expect(
+      selectImageCandidate({
+        src: "big.jpg",
+        srcset: "small.jpg 400w, mid.jpg 800w, big.jpg 1600w",
+        sizes: "(min-width: 40em) 300px, 100vw",
+      }),
+    ).toBe("mid.jpg");
+  });
+
   test("an unreadable sizes length falls to the largest candidate", () => {
     expect(
       selectImageCandidate({
         src: "a.jpg",
         srcset: "s.jpg 400w, l.jpg 900w",
-        sizes: "calc(100vw - 2em)",
+        sizes: "min(100vw, 40em)",
       }),
     ).toBe("l.jpg");
   });

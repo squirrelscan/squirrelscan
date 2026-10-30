@@ -1025,8 +1025,17 @@ function capResourceSizes(resources: unknown, mode: SectionMode): unknown {
   for (const [category, rows] of Object.entries(resources)) {
     out[category] = Array.isArray(rows)
       ? rows.slice(0, rowsMax).map((row: unknown) =>
-          isRecord(row) && Array.isArray(row.sourcePages)
-            ? { ...row, sourcePages: row.sourcePages.slice(0, sourcesMax) }
+          isRecord(row) && (Array.isArray(row.sourcePages) || Array.isArray(row.deferredPages))
+            ? {
+                ...row,
+                ...(Array.isArray(row.sourcePages)
+                  ? { sourcePages: row.sourcePages.slice(0, sourcesMax) }
+                  : {}),
+                // Same bound as sourcePages (#1252): a lazy image's deferred pages are a subset of them.
+                ...(Array.isArray(row.deferredPages)
+                  ? { deferredPages: row.deferredPages.slice(0, sourcesMax) }
+                  : {}),
+              }
             : row,
         )
       : rows;

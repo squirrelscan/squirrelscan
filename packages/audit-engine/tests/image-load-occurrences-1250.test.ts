@@ -50,6 +50,15 @@ describe("srcset candidate selection (#1251)", () => {
     expect(flags(both, "/x.jpg")).toEqual({ fallbackOnly: true });
   });
 
+  test("a srcset whose selected candidate is on another origin keeps the own-host src measured and counted", () => {
+    const cdn = collect(
+      `<img src="local.jpg" srcset="https://cdn.other.example/a-400.jpg 400w, https://cdn.other.example/a-900.jpg 900w" sizes="180px" alt="A">`,
+    );
+    expect(flags(cdn, "/local.jpg")).toEqual({});
+    expect([...cdn.images.keys()]).toEqual([`${BASE}/local.jpg`]);
+    expect([...(cdn.imagesSelected?.keys() ?? [])]).toEqual([`${BASE}/local.jpg`]);
+  });
+
   test("a picture's img keeps its src as the loaded file", () => {
     const pic = collect(
       `<picture><source srcset="a.webp" type="image/webp"><img src="a.jpg" srcset="b.jpg 400w, a.jpg 960w" sizes="180px" alt="A"></picture>`,

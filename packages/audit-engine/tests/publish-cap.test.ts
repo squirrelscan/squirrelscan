@@ -282,7 +282,18 @@ function report(pages: number, shape: Shape = {}): Report {
         sizeBytes: 40_000 + i,
         sourcePages: Array.from({ length: 20 }, (_, s) => url(s)),
       })),
-      images: [],
+      // A lazy image's deferred pages are bounded like its source pages (#1252).
+      images: [
+        {
+          url: `${SITE}/assets/lazy.jpg`,
+          status: 200,
+          error: null,
+          contentType: "image/jpeg",
+          sizeBytes: 90_000,
+          sourcePages: Array.from({ length: 20 }, (_, s) => url(s)),
+          deferredPages: Array.from({ length: 20 }, (_, s) => url(s)),
+        },
+      ],
     },
     sitemapUrlStatuses: Array.from({ length: 150 }, (_, i) => ({ url: url(i), status: 200, error: null })),
     entityMap: entityMap(2_000),
@@ -762,6 +773,7 @@ describe("capReportForPublish: the sample and its counts", () => {
     expect(loose.robotsTxt.content.length).toBeLessThanOrEqual(5000);
     expect(loose.resourceSizes.css).toHaveLength(REPORT_CAPS.resourceRowsPerCategory);
     expect(loose.resourceSizes.css[0].sourcePages).toHaveLength(REPORT_CAPS.resourceSourcePages);
+    expect(loose.resourceSizes.images[0].deferredPages).toHaveLength(REPORT_CAPS.resourceSourcePages);
     expect(loose.sitemapUrlStatuses).toHaveLength(100);
     expect(bytesOf(loose.entityMap)).toBeLessThanOrEqual(REPORT_CAPS.entityMapMaxBytes);
     expect(loose.pageStatuses.every((p: { status: number }) => p.status === 404)).toBe(true);
