@@ -44,6 +44,7 @@ build-all: ci
 			windows-x64) target="windows-x64-baseline";; \
 		esac; \
 		(cd $(APP_DIR) && bun build src/cli.ts --compile --splitting --minify \
+			--no-compile-autoload-dotenv --no-compile-autoload-bunfig \
 			--target=bun-$$target \
 			--outfile=build/squirrel-$(VERSION)-$$platform$$ext); \
 	done

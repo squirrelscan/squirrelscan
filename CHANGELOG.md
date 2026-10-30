@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- **The `squirrel` binary no longer autoloads a `bunfig.toml` or `.env` from the directory it runs in.** Set `SQUIRRELSCAN_API_KEY` and any other variable in your shell or your CI secrets, as the docs describe; a `.env` file in the project directory is not read. (Settings and `squirrel.toml` are unaffected.)
+
 ### Fixed
 
 - **Space held by audits killed while building their report comes back.** A crawl left marked `building` after Ctrl-C or a crash counted toward no `keep_audits` window and was never retired, so its rows stayed until a manual `squirrel self disk --prune`. A later audit of the project now retires it once its report has been building for more than six hours, no live process owns it, and at least `keep_audits` newer audits exist (when in doubt it is left alone). A crawl a later `squirrel analyze` rebuilt inside the window is never retired, and `self disk --prune` plans around a crawl that is still building. (#288)

@@ -32,6 +32,8 @@ login` is required at run time: the token is read straight from the environment.
 SQUIRRELSCAN_API_KEY=sq_xxxxxxxxxxxx squirrel audit https://example.com
 ```
 
+The variable has to be in the real environment (your shell, or your CI's secrets). `squirrel` does not read a `.env` file or a `bunfig.toml` from the directory you run it in.
+
 <Note>
 The older `SQUIRREL_API_TOKEN` name still works as a back-compat alias, no
 deprecation warning, it just works. `SQUIRRELSCAN_API_KEY` is the documented
