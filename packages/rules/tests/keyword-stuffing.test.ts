@@ -434,6 +434,23 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
     expect(flagged(html)).toEqual([]);
   });
 
+  test("the issue's shape: 20 plain-div links repeating one category word, under 100 words of copy (#1315)", () => {
+    // Link text built like a mega menu: 20 links, each a different second word, one shared category word.
+    const sub = ["damen", "herren", "kinder", "neu", "sale", "top", "alle", "marken", "pflege", "sets", "mehr", "info", "hilfe", "tipps", "wahl", "form", "stil", "farbe", "preis", "test"];
+    const links = sub.map((w, i) => `<a href="/c/${i}">bademode ${w}</a>`).join(" ");
+    const copy = `<div class="copy"><p>Kontakt ${filler(60)}</p></div>`;
+    // No signal at all (no nav, header, role or aria state): the accepted cost. The words count toward density,
+    // because a keyword spammer writes the same plain links (docs: "Link menus built without landmarks").
+    expect(flagged(page("de", `<body><div>${links}</div>${copy}</body>`))).toContain("bademode");
+    // Class and id names are not signals either.
+    expect(flagged(page("de", `<body><div class="mega-menu" id="menu">${links}</div>${copy}</body>`))).toContain("bademode");
+    // The same links with a real menu signal and a varied set of category words are left out, as the docs say.
+    const varied = Array.from({ length: 20 }, (_, i) => `<a href="/c/${i}">${["bademode", "curvy", "wäsche", "kleider", "röcke", "hosen"][i % 6]} ${sub[i]}</a>`).join(" ");
+    expect(flagged(page("de", `<body><div role="menubar">${varied}</div>${copy}</body>`))).toEqual([]);
+    // A shared word is a keyword cloud even with the signal, so the issue's literal shape is counted by design.
+    expect(flagged(page("de", `<body><div role="menubar">${links}</div>${copy}</body>`))).toContain("bademode");
+  });
+
   test("true positive: one anchor repeated 20 times is not a menu, it still flags", () => {
     const links = Array.from({ length: 20 }, () => `<a href="/p">emergency plumber</a>`).join(" ");
     const html = page("en", `<body><div>${links}</div><p>${filler(60)}</p></body>`);
