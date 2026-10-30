@@ -1,4 +1,4 @@
-import { chmodSync, closeSync, existsSync, openSync } from "node:fs";
+import { chmodSync, closeSync, openSync } from "node:fs";
 
 /**
  * Make a SQLite database file, and the `-wal` and `-shm` files beside it, owner
@@ -14,7 +14,9 @@ import { chmodSync, closeSync, existsSync, openSync } from "node:fs";
  */
 export function restrictToOwner(path: string): void {
   try {
-    if (!existsSync(path)) closeSync(openSync(path, "a", 0o600));
+    // Append mode creates a missing file with this mode and leaves an existing one
+    // alone, with no check-then-create window.
+    closeSync(openSync(path, "a", 0o600));
   } catch {
     // Unwritable location: the database open reports it.
   }
