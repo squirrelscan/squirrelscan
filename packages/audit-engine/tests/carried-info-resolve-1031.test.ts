@@ -11,6 +11,7 @@ import type { FindingState, PageFindingRecord, SitePageRecord } from "@squirrels
 import { buildResolutionSignal } from "@squirrelscan/rules/resolution";
 
 import { findingKey } from "../src/merge-core";
+import { describeSitePagesContract } from "./helpers/site-pages-contract";
 import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
 
 class MemStore implements SmartAuditStore {
@@ -169,3 +170,28 @@ describe("a fresh info result on a re-crawled page resolves the old fail rows (#
     expect(signal.notEvaluated?.[`${RULE}|form-labels`]).toHaveLength(1);
   });
 });
+
+describe("every crawled page inconclusive for a check still carries (#1031)", () => {
+  const P2 = "https://x.test/second";
+  for (const signal of [false, true]) {
+    test(`two pages failing, both inconclusive on the next run${signal ? " (signal)" : ""}`, async () => {
+      const store = new MemStore();
+      const crawled = [P, P2].map((url) => ({ url, status: 200 }));
+      const first = run([
+        { name: "form-labels", status: "fail", message: "bad", pageUrl: P, items: items(3) },
+        { name: "form-labels", status: "fail", message: "bad", pageUrl: P2, items: items(3) },
+      ]);
+      await runCloudSmartAudits({ store, siteKey: "web_1", crawlId: "audit_1", ruleResults: first, pageStatuses: crawled, ...(signal ? { resolutionSignal: buildResolutionSignal(first, [P, P2]) } : {}) });
+      const second = run([
+        { name: "form-labels", status: "info", message: "unclassified", pageUrl: P, details: { inconclusive: true } },
+        { name: "form-labels", status: "info", message: "unclassified", pageUrl: P2, details: { inconclusive: true } },
+      ]);
+      const r = await runCloudSmartAudits({ store, siteKey: "web_1", crawlId: "audit_2", ruleResults: second, pageStatuses: crawled, ...(signal ? { resolutionSignal: buildResolutionSignal(second, [P, P2]) } : {}) });
+      const open = (await store.getFindings("web_1", ["open"])).filter((f) => f.checkName === "form-labels");
+      expect(open.length).toBe(6);
+      expect(r.coverage.carriedFindings).toBe(6);
+    });
+  }
+});
+
+describeSitePagesContract("carried-info-resolve-1031.test.ts MemStore", () => new MemStore());
