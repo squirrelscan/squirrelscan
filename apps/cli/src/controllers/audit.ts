@@ -229,6 +229,8 @@ export interface RunAuditOptions extends AuditOptions {
   crawlPhaseTimeoutMs?: number;
   /** Max time for the rules phase in ms (default: unlimited) */
   rulesPhaseTimeoutMs?: number;
+  /** Fill each page's rule count in the report (`--include-pages`, #1260). */
+  includePages?: boolean;
   /** Max resources to check per category (CSS, images, scripts) in the rules phase */
   resourceCheckMaxItems?: number;
   /** Timeout per individual resource check in ms (overrides default 10s) */
@@ -2107,6 +2109,8 @@ export async function runAudit(
           // Same batch the streamed rules phases used, so one setting describes
           // the whole post-crawl pipeline's residency.
           batchSize: streamBatchSize,
+          // #1260: only the JSON pages list reads the per-page rule counts.
+          includePageRuleCounts: options.includePages === true,
         })
       );
 

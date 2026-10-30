@@ -310,19 +310,31 @@ export const report = defineCommand({
       return;
     }
 
+    // #1260: the per-page rule count is only worth computing for the JSON pages list.
+    const reconstruct = {
+      includePageRuleCounts: Boolean(
+        args.includePages && (args.format ?? "console") === "json"
+      ),
+    };
+
     const resolveAuditRef = async (ref: string, source?: AuditSource) => {
       if (isUUID(ref)) {
-        return await getStoredAudit(ref, undefined, source);
+        return await getStoredAudit(ref, undefined, source, reconstruct);
       }
       if (isShortId(ref)) {
-        return await getStoredAuditByPrefix(ref, undefined, source);
+        return await getStoredAuditByPrefix(
+          ref,
+          undefined,
+          source,
+          reconstruct
+        );
       }
 
       let domain = ref;
       if (!domain.startsWith("http://") && !domain.startsWith("https://")) {
         domain = `https://${domain}`;
       }
-      return await getLatestAudit(domain, undefined, source);
+      return await getLatestAudit(domain, undefined, source, reconstruct);
     };
 
     const isDiffMode = Boolean(args.diff || args.regressionSince);
@@ -345,7 +357,12 @@ export const report = defineCommand({
       }
     } else {
       // Load latest audit globally (async)
-      loadResult = await getLatestAudit(undefined, undefined, source);
+      loadResult = await getLatestAudit(
+        undefined,
+        undefined,
+        source,
+        reconstruct
+      );
 
       if (!loadResult.ok) {
         console.error("No audits found. Run 'squirrel audit <url>' first");
