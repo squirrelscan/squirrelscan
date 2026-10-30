@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`content/keyword-stuffing` stops flagging German function words, menu chrome on short pages and product-card microcopy.** The German list now has the formal and informal address and common prepositions (`sie`, `für`, `du`, `dir`, `zu`, `im` and more), `out` is an English function word, blocks of mostly link text with several different labels (a mega menu made of plain `div`s) are left out when a page has no main copy of its own, and a short text repeated once per card in a grid (rating and instalment notes, digits ignored) no longer counts toward density. One anchor repeated many times and the same sentence repeated in one container still flag. See [Keyword stuffing](https://docs.squirrelscan.com/rules/content/keyword-stuffing). (#1315)
+
 ## v0.0.144 (2026-10-30)
 
 `squirrel audit --max-duration` stops at a wall-clock budget and writes a partial report instead of running on, `--include-pages` adds every crawled page with its status and rule count to the JSON report, and info checks now appear in the JSON and LLM reports (`--include-info`). The local technology scan reads stylesheet URLs and knows 24 more stacks, query-string copies of a page are counted with their canonical page, rules see controls inside declarative shadow roots, and a successful but empty page is audited and scored. A rule that throws is reported once as not evaluated, a rule that runs past its time budget is listed as skipped, and the docs now keep `--offline` and `--passive` apart. Thanks to William for the empty-page fix (#1314, #1330).
