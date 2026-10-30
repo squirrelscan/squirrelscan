@@ -248,6 +248,8 @@ export const NEGATIVES: Case[] = [
     // A deliberate choice: `changeme` clears the length-scaled floor (2.75 of
     // a possible 2.5 at eight characters). It is as often a real default
     // credential as a placeholder, and silencing it would hide the former.
+    // #1292 asked for plain words to be skipped; the maintainer chose to keep
+    // reporting them under a credential-named key.
     () => page("", `<script>const seed={password:"changeme"};</script>`), // pragma: allowlist secret
     { expect: [{ pattern: "Generic Secret Assignment", check: "medium", location: "inline-script" }] },
   ),

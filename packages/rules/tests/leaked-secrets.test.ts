@@ -38,6 +38,12 @@ import type { RuleContext } from "../src/types";
 // A GitHub token body (30 characters); the checksum it needs (#361) is
 // appended at runtime, so no line here is a whole token.
 const GH_BODY = "016b3f2c9d4e7a815c0b2d6f39ea47"; // pragma: allowlist secret
+// A PEM header counts only with key material after it (#1227): one 68-character body line.
+const PEM_RSA = [
+  "-----BEGIN RSA PRIVATE KEY-----", // pragma: allowlist secret
+  "MIIEowIBAAKCAQEA1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8S9t0U1v2W3x4Y5z6A", // pragma: allowlist secret
+  "-----END RSA PRIVATE KEY-----",
+].join("\n");
 
 // A real SHA-256 of a release artifact: 64 hex characters, which is also the
 // exact shape of a Together AI key.
@@ -258,7 +264,7 @@ describe("security/leaked-secrets: real credentials still report", () => {
       ["Stripe Live Key", `${PREFIX.stripe}51HxQ2mKz9pLvA3nR7dTfJw8Y`], // pragma: allowlist secret
       ["AWS Access Key ID", `${PREFIX.aws}2XJQ7LP4RNVD3KEB`], // pragma: allowlist secret
       ["Slack Token", `${PREFIX.slack}2094857361-3948572610-Kj8dPqR2mTvX5nB7wLcH1sZa`], // pragma: allowlist secret
-      ["Private Key (RSA)", "-----BEGIN RSA PRIVATE KEY-----"], // pragma: allowlist secret
+      ["Private Key (RSA)", PEM_RSA], // pragma: allowlist secret
     ];
 
     for (const [type, value] of fixtures) {
@@ -428,7 +434,7 @@ describe("security/leaked-secrets: the content prefilter never loses a finding",
     `const v = ${q}${PREFIX.stripe}51HxQ2mKz9pLvA3nR7dTfJw8Y${q};`, // pragma: allowlist secret
     `const v = ${q}${PREFIX.aws}2XJQ7LP4RNVD3KEB${q};`, // pragma: allowlist secret
     `const v = ${q}${PREFIX.slack}2094857361-3948572610-Kj8dPqR2mTvX5nB7wLcH1sZa${q};`, // pragma: allowlist secret
-    `const v = ${q}-----BEGIN RSA PRIVATE KEY-----${q};`, // pragma: allowlist secret
+    `const v = ${q}${PEM_RSA}${q};`, // pragma: allowlist secret
     `/* together.ai client */var t={};t.token=${q}${TOGETHER_KEY}${q};`, // pragma: allowlist secret
     `cfg[${q}apiKey${q}] = ${q}${TOGETHER_KEY}${q}; // together`, // pragma: allowlist secret
   ];
@@ -1130,7 +1136,7 @@ describe("security/leaked-secrets: overlap suppression", () => {
 // against a real finding rather than against a value nothing would flag.
 const SPACES_SHAPE = "DO" + "ABCDEFGHJKLMNPQRST12"; // pragma: allowlist secret
 const AWS_SHAPE = "AKIA" + "IOSFODNN7EXAMPLE"; // pragma: allowlist secret
-const REAL_SECRET = "sk_live_" + "4eC39HqLyjWDarjtT1zdp7dc"; // pragma: allowlist secret
+const REAL_SECRET = "sk_live_" + "Zq7mR2xKd9LpV4nB8cT5wY3j"; // pragma: allowlist secret
 
 function reported(pageHtml: string) {
   const result = leakedSecretsRule.run(ctx(pageHtml));

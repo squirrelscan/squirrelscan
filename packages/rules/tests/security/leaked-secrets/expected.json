@@ -557,6 +557,254 @@
     {"type":"Perplexity API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"pplx-J********************8I82"},
     {"type":"Perplexity API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"pplx-J********************8I82"}
   ],
+  "openrouter-api-key@inline-config-object": [
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sk-or-********************bbfe"},
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sk-or-********************bbfe"}
+  ],
+  "openrouter-api-key@window-env": [
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sk-or-********************7742"},
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sk-or-********************7742"}
+  ],
+  "openrouter-api-key@next-data": [
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sk-or-********************2301"},
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sk-or-********************2301"}
+  ],
+  "openrouter-api-key@nuxt-payload": [
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sk-or-********************3b75"},
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sk-or-********************3b75"}
+  ],
+  "openrouter-api-key@html-comment": [
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sk-or-********************009e"}
+  ],
+  "openrouter-api-key@meta-content": [
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sk-or-********************5ffc"}
+  ],
+  "openrouter-api-key@data-attribute": [
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sk-or-********************66e3"}
+  ],
+  "openrouter-api-key@json-ld": [
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sk-or-********************d810"},
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sk-or-********************d810"}
+  ],
+  "openrouter-api-key@external-bundle": [
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sk-or-********************6579"}
+  ],
+  "openrouter-api-key@fetch-bearer-header": [
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sk-or-********************2353"}
+  ],
+  "openrouter-api-key@pre-env-dump": [
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sk-or-********************494e"}
+  ],
+  "openrouter-api-key@sourcemap-comment": [
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sk-or-********************eec2"}
+  ],
+  "openrouter-api-key@entity-encoded-attribute": [
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sk-or-********************2a07"}
+  ],
+  "openrouter-api-key@unicode-escaped-script-string": [
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sk-or-********************3d83"},
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sk-or-********************3d83"}
+  ],
+  "openrouter-api-key@base64-data-attribute": [
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"sk-or-********************b622"}
+  ],
+  "openrouter-api-key@base64-global": [
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"sk-or-********************6b98"},
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"inline-script (base64)","masked":"sk-or-********************6b98"}
+  ],
+  "openrouter-api-key@url-encoded-data-attribute": [
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sk-or-********************0e04"}
+  ],
+  "openrouter-api-key@url-encoded-inline-settings": [
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sk-or-********************1816"},
+    {"type":"OpenRouter API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sk-or-********************1816"}
+  ],
+  "cerebras-api-key@inline-config-object": [
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"csk-4a********************1eny"},
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"csk-4a********************1eny"}
+  ],
+  "cerebras-api-key@window-env": [
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"csk-6g********************od1f"},
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"csk-6g********************od1f"}
+  ],
+  "cerebras-api-key@next-data": [
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"csk-qj********************tmck"},
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"csk-qj********************tmck"}
+  ],
+  "cerebras-api-key@nuxt-payload": [
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"csk-ub********************67w0"},
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"csk-ub********************67w0"}
+  ],
+  "cerebras-api-key@html-comment": [
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"csk-tt********************6sju"}
+  ],
+  "cerebras-api-key@meta-content": [
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"csk-fr********************roh9"}
+  ],
+  "cerebras-api-key@data-attribute": [
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"csk-u8********************76iq"}
+  ],
+  "cerebras-api-key@json-ld": [
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"csk-my********************8zx2"},
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"csk-my********************8zx2"}
+  ],
+  "cerebras-api-key@external-bundle": [
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"csk-7b********************i5lr"}
+  ],
+  "cerebras-api-key@fetch-bearer-header": [
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"csk-kr********************9zw5"}
+  ],
+  "cerebras-api-key@pre-env-dump": [
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"csk-iq********************je0v"}
+  ],
+  "cerebras-api-key@sourcemap-comment": [
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"csk-m6********************y71r"}
+  ],
+  "cerebras-api-key@entity-encoded-attribute": [
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"csk-w4********************swqr"}
+  ],
+  "cerebras-api-key@unicode-escaped-script-string": [
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"csk-dg********************b8wb"},
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"csk-dg********************b8wb"}
+  ],
+  "cerebras-api-key@base64-data-attribute": [
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"csk-3y********************hfsw"}
+  ],
+  "cerebras-api-key@base64-global": [
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"csk-lo********************2vhx"},
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"inline-script (base64)","masked":"csk-lo********************2vhx"}
+  ],
+  "cerebras-api-key@url-encoded-data-attribute": [
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"csk-72********************4w29"}
+  ],
+  "cerebras-api-key@url-encoded-inline-settings": [
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"csk-cr********************hofp"},
+    {"type":"Cerebras API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"csk-cr********************hofp"}
+  ],
+  "nvidia-api-key@inline-config-object": [
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"nvapi-********************JSwi"},
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"nvapi-********************JSwi"}
+  ],
+  "nvidia-api-key@window-env": [
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"nvapi-********************57Vh"},
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"nvapi-********************57Vh"}
+  ],
+  "nvidia-api-key@next-data": [
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"nvapi-********************R8D7"},
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"nvapi-********************R8D7"}
+  ],
+  "nvidia-api-key@nuxt-payload": [
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"nvapi-********************NaaN"},
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"nvapi-********************NaaN"}
+  ],
+  "nvidia-api-key@html-comment": [
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"nvapi-********************kSIs"}
+  ],
+  "nvidia-api-key@meta-content": [
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"nvapi-********************M1s5"}
+  ],
+  "nvidia-api-key@data-attribute": [
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"nvapi-********************1RBX"}
+  ],
+  "nvidia-api-key@json-ld": [
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"nvapi-********************Nugp"},
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"nvapi-********************Nugp"}
+  ],
+  "nvidia-api-key@external-bundle": [
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"nvapi-********************YvAN"}
+  ],
+  "nvidia-api-key@fetch-bearer-header": [
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"nvapi-********************f2IC"}
+  ],
+  "nvidia-api-key@pre-env-dump": [
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"nvapi-********************kF5w"}
+  ],
+  "nvidia-api-key@sourcemap-comment": [
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"nvapi-********************UqkC"}
+  ],
+  "nvidia-api-key@entity-encoded-attribute": [
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"nvapi-********************I9Ok"}
+  ],
+  "nvidia-api-key@unicode-escaped-script-string": [
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"nvapi-********************5Cou"},
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"nvapi-********************5Cou"}
+  ],
+  "nvidia-api-key@base64-data-attribute": [
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"nvapi-********************AxGo"}
+  ],
+  "nvidia-api-key@base64-global": [
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"nvapi-********************vSZ3"},
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"inline-script (base64)","masked":"nvapi-********************vSZ3"}
+  ],
+  "nvidia-api-key@url-encoded-data-attribute": [
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"nvapi-********************fvnY"}
+  ],
+  "nvidia-api-key@url-encoded-inline-settings": [
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"nvapi-********************R33L"},
+    {"type":"NVIDIA API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"nvapi-********************R33L"}
+  ],
+  "fireworks-ai-api-key@inline-config-object": [
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"fw_Aa1********************krno"},
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"fw_Aa1********************krno"}
+  ],
+  "fireworks-ai-api-key@window-env": [
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"fw_Aa1********************I3WG"},
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"fw_Aa1********************I3WG"}
+  ],
+  "fireworks-ai-api-key@next-data": [
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"fw_Aa1********************4izn"},
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"fw_Aa1********************4izn"}
+  ],
+  "fireworks-ai-api-key@nuxt-payload": [
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"fw_Aa1********************EFQz"},
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"fw_Aa1********************EFQz"}
+  ],
+  "fireworks-ai-api-key@html-comment": [
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"fw_Aa1********************Lnb5"}
+  ],
+  "fireworks-ai-api-key@meta-content": [
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"fw_Aa1********************KRdY"}
+  ],
+  "fireworks-ai-api-key@data-attribute": [
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"fw_Aa1********************0z5L"}
+  ],
+  "fireworks-ai-api-key@json-ld": [
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"fw_Aa1********************JUOT"},
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"fw_Aa1********************JUOT"}
+  ],
+  "fireworks-ai-api-key@external-bundle": [
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"fw_Aa1********************cWRi"}
+  ],
+  "fireworks-ai-api-key@fetch-bearer-header": [
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"fw_Aa1********************Ytvy"}
+  ],
+  "fireworks-ai-api-key@pre-env-dump": [
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"fw_Aa1********************yTFL"}
+  ],
+  "fireworks-ai-api-key@sourcemap-comment": [
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"fw_Aa1********************PPK8"}
+  ],
+  "fireworks-ai-api-key@entity-encoded-attribute": [
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"fw_Aa1********************OvRO"}
+  ],
+  "fireworks-ai-api-key@unicode-escaped-script-string": [
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"fw_Aa1********************rOoY"},
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"fw_Aa1********************rOoY"}
+  ],
+  "fireworks-ai-api-key@base64-data-attribute": [
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"html (base64)","masked":"fw_Aa1********************hhen"}
+  ],
+  "fireworks-ai-api-key@base64-global": [
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"html (base64)","masked":"fw_Aa1********************ej64"},
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"inline-script (base64)","masked":"fw_Aa1********************ej64"}
+  ],
+  "fireworks-ai-api-key@url-encoded-data-attribute": [
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"fw_Aa1********************Y1X4"}
+  ],
+  "fireworks-ai-api-key@url-encoded-inline-settings": [
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"fw_Aa1********************AX19"},
+    {"type":"Fireworks AI API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"fw_Aa1********************AX19"}
+  ],
   "json-web-token@inline-config-object": [
     {"type":"Supabase Anon Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"eyJhbG********************iF4c","extra":{"issuer":"supabase","role":"anon","projectRef":"fqurdpreftrvqzihtliw","expiresAt":"2033-05-18T03:33:20.000Z","expired":false}},
     {"type":"Supabase Anon Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"eyJhbG********************iF4c","extra":{"issuer":"supabase","role":"anon","projectRef":"fqurdpreftrvqzihtliw","expiresAt":"2033-05-18T03:33:20.000Z","expired":false}}
@@ -619,67 +867,67 @@
     {"type":"Supabase Anon Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"eyJhbG********************EbzY","extra":{"issuer":"supabase","role":"anon","projectRef":"pjfjlznrilctgwkvbyqy","expiresAt":"2033-05-18T03:33:20.000Z","expired":false}},
     {"type":"Supabase Anon Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"eyJhbG********************EbzY","extra":{"issuer":"supabase","role":"anon","projectRef":"pjfjlznrilctgwkvbyqy","expiresAt":"2033-05-18T03:33:20.000Z","expired":false}}
   ],
-  "supabase-service-role-key@inline-config-object": [
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_76********************ce33"},
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sbp_76********************ce33"}
+  "supabase-personal-access-token@inline-config-object": [
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_b8********************0e7d"},
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sbp_b8********************0e7d"}
   ],
-  "supabase-service-role-key@window-env": [
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_12********************bfc8"},
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sbp_12********************bfc8"}
+  "supabase-personal-access-token@window-env": [
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_e6********************f68e"},
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sbp_e6********************f68e"}
   ],
-  "supabase-service-role-key@next-data": [
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_31********************320e"},
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sbp_31********************320e"}
+  "supabase-personal-access-token@next-data": [
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_9d********************f942"},
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sbp_9d********************f942"}
   ],
-  "supabase-service-role-key@nuxt-payload": [
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_12********************f796"},
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sbp_12********************f796"}
+  "supabase-personal-access-token@nuxt-payload": [
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_ea********************f2d0"},
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sbp_ea********************f2d0"}
   ],
-  "supabase-service-role-key@html-comment": [
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_1a********************8446"}
+  "supabase-personal-access-token@html-comment": [
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_f9********************8142"}
   ],
-  "supabase-service-role-key@meta-content": [
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_1d********************7b80"}
+  "supabase-personal-access-token@meta-content": [
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_2b********************b564"}
   ],
-  "supabase-service-role-key@data-attribute": [
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_49********************48a5"}
+  "supabase-personal-access-token@data-attribute": [
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_b9********************8f0c"}
   ],
-  "supabase-service-role-key@json-ld": [
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_56********************e084"},
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sbp_56********************e084"}
+  "supabase-personal-access-token@json-ld": [
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_91********************4fac"},
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sbp_91********************4fac"}
   ],
-  "supabase-service-role-key@external-bundle": [
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sbp_bc********************8211"}
+  "supabase-personal-access-token@external-bundle": [
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sbp_57********************38f7"}
   ],
-  "supabase-service-role-key@fetch-bearer-header": [
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sbp_20********************f1d6"}
+  "supabase-personal-access-token@fetch-bearer-header": [
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sbp_ba********************4151"}
   ],
-  "supabase-service-role-key@pre-env-dump": [
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_d5********************b785"}
+  "supabase-personal-access-token@pre-env-dump": [
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_c8********************3b62"}
   ],
-  "supabase-service-role-key@sourcemap-comment": [
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sbp_04********************af42"}
+  "supabase-personal-access-token@sourcemap-comment": [
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sbp_12********************6d69"}
   ],
-  "supabase-service-role-key@entity-encoded-attribute": [
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_9b********************b1e0"}
+  "supabase-personal-access-token@entity-encoded-attribute": [
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_7a********************2ae5"}
   ],
-  "supabase-service-role-key@unicode-escaped-script-string": [
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_7c********************9ede"},
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sbp_7c********************9ede"}
+  "supabase-personal-access-token@unicode-escaped-script-string": [
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_1b********************f482"},
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sbp_1b********************f482"}
   ],
-  "supabase-service-role-key@base64-data-attribute": [
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"sbp_1c********************a6b3"}
+  "supabase-personal-access-token@base64-data-attribute": [
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"sbp_22********************c1d0"}
   ],
-  "supabase-service-role-key@base64-global": [
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"sbp_03********************8d83"},
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"inline-script (base64)","masked":"sbp_03********************8d83"}
+  "supabase-personal-access-token@base64-global": [
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"sbp_0e********************9ed4"},
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script (base64)","masked":"sbp_0e********************9ed4"}
   ],
-  "supabase-service-role-key@url-encoded-data-attribute": [
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_82********************41c0"}
+  "supabase-personal-access-token@url-encoded-data-attribute": [
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_e2********************36ae"}
   ],
-  "supabase-service-role-key@url-encoded-inline-settings": [
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_7d********************c0e6"},
-    {"type":"Supabase Service Role Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sbp_7d********************c0e6"}
+  "supabase-personal-access-token@url-encoded-inline-settings": [
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sbp_f5********************b90d"},
+    {"type":"Supabase Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sbp_f5********************b90d"}
   ],
   "supabase-publishable-key@inline-config-object": [
     {"type":"Supabase Publishable Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sb_pub********************Pgds"},
@@ -1395,6 +1643,130 @@
     {"type":"PayPal Client ID","confidence":"medium","publicByDesign":true,"location":"html","masked":"AZ_g08********************h6mm"},
     {"type":"PayPal Client ID","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"AZ_g08********************h6mm"}
   ],
+  "stripe-restricted-key@inline-config-object": [
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"html","masked":"rk_liv********************4OG5","extra":{"kind":"restricted","mode":"live"}},
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"rk_liv********************4OG5","extra":{"kind":"restricted","mode":"live"}}
+  ],
+  "stripe-restricted-key@window-env": [
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"html","masked":"rk_liv********************Id7a","extra":{"kind":"restricted","mode":"live"}},
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"rk_liv********************Id7a","extra":{"kind":"restricted","mode":"live"}}
+  ],
+  "stripe-restricted-key@next-data": [
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"html","masked":"rk_liv********************RjMF","extra":{"kind":"restricted","mode":"live"}},
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"rk_liv********************RjMF","extra":{"kind":"restricted","mode":"live"}}
+  ],
+  "stripe-restricted-key@nuxt-payload": [
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"html","masked":"rk_liv********************Kh0b","extra":{"kind":"restricted","mode":"live"}},
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"rk_liv********************Kh0b","extra":{"kind":"restricted","mode":"live"}}
+  ],
+  "stripe-restricted-key@html-comment": [
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"html","masked":"rk_liv********************OAnh","extra":{"kind":"restricted","mode":"live"}}
+  ],
+  "stripe-restricted-key@meta-content": [
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"html","masked":"rk_liv********************qurg","extra":{"kind":"restricted","mode":"live"}}
+  ],
+  "stripe-restricted-key@data-attribute": [
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"html","masked":"rk_liv********************xTIT","extra":{"kind":"restricted","mode":"live"}}
+  ],
+  "stripe-restricted-key@json-ld": [
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"html","masked":"rk_liv********************3gX1","extra":{"kind":"restricted","mode":"live"}},
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"rk_liv********************3gX1","extra":{"kind":"restricted","mode":"live"}}
+  ],
+  "stripe-restricted-key@external-bundle": [
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"rk_liv********************rcHp","extra":{"kind":"restricted","mode":"live"}}
+  ],
+  "stripe-restricted-key@fetch-bearer-header": [
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"rk_liv********************3QCv","extra":{"kind":"restricted","mode":"live"}}
+  ],
+  "stripe-restricted-key@pre-env-dump": [
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"html","masked":"rk_liv********************vIYI","extra":{"kind":"restricted","mode":"live"}}
+  ],
+  "stripe-restricted-key@sourcemap-comment": [
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"rk_liv********************eBzW","extra":{"kind":"restricted","mode":"live"}}
+  ],
+  "stripe-restricted-key@entity-encoded-attribute": [
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"html","masked":"rk_liv********************zeD1","extra":{"kind":"restricted","mode":"live"}}
+  ],
+  "stripe-restricted-key@unicode-escaped-script-string": [
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"html","masked":"rk_liv********************w8LW","extra":{"kind":"restricted","mode":"live"}},
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"rk_liv********************w8LW","extra":{"kind":"restricted","mode":"live"}}
+  ],
+  "stripe-restricted-key@base64-data-attribute": [
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"rk_liv********************vQto","extra":{"kind":"restricted","mode":"live"}}
+  ],
+  "stripe-restricted-key@base64-global": [
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"rk_liv********************afH1","extra":{"kind":"restricted","mode":"live"}},
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"inline-script (base64)","masked":"rk_liv********************afH1","extra":{"kind":"restricted","mode":"live"}}
+  ],
+  "stripe-restricted-key@url-encoded-data-attribute": [
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"html","masked":"rk_liv********************Y1fU","extra":{"kind":"restricted","mode":"live"}}
+  ],
+  "stripe-restricted-key@url-encoded-inline-settings": [
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"html","masked":"rk_liv********************UIua","extra":{"kind":"restricted","mode":"live"}},
+    {"type":"Stripe Restricted Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"rk_liv********************UIua","extra":{"kind":"restricted","mode":"live"}}
+  ],
+  "shopify-admin-api-token@inline-config-object": [
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"html","masked":"shpat_********************12e6"},
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"shpat_********************12e6"}
+  ],
+  "shopify-admin-api-token@window-env": [
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"html","masked":"shpat_********************adfa"},
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"shpat_********************adfa"}
+  ],
+  "shopify-admin-api-token@next-data": [
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"html","masked":"shpat_********************a8ec"},
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"shpat_********************a8ec"}
+  ],
+  "shopify-admin-api-token@nuxt-payload": [
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"html","masked":"shpat_********************ec14"},
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"shpat_********************ec14"}
+  ],
+  "shopify-admin-api-token@html-comment": [
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"html","masked":"shpat_********************9a4b"}
+  ],
+  "shopify-admin-api-token@meta-content": [
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"html","masked":"shpat_********************ebf0"}
+  ],
+  "shopify-admin-api-token@data-attribute": [
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"html","masked":"shpat_********************4eae"}
+  ],
+  "shopify-admin-api-token@json-ld": [
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"html","masked":"shpat_********************9bc3"},
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"shpat_********************9bc3"}
+  ],
+  "shopify-admin-api-token@external-bundle": [
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"shpat_********************165e"}
+  ],
+  "shopify-admin-api-token@fetch-bearer-header": [
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"shpat_********************759e"}
+  ],
+  "shopify-admin-api-token@pre-env-dump": [
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"html","masked":"shpat_********************1973"}
+  ],
+  "shopify-admin-api-token@sourcemap-comment": [
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"shpat_********************b797"}
+  ],
+  "shopify-admin-api-token@entity-encoded-attribute": [
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"html","masked":"shpat_********************a4fa"}
+  ],
+  "shopify-admin-api-token@unicode-escaped-script-string": [
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"html","masked":"shpat_********************2367"},
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"shpat_********************2367"}
+  ],
+  "shopify-admin-api-token@base64-data-attribute": [
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"shpat_********************2bf4"}
+  ],
+  "shopify-admin-api-token@base64-global": [
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"shpat_********************aef5"},
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"inline-script (base64)","masked":"shpat_********************aef5"}
+  ],
+  "shopify-admin-api-token@url-encoded-data-attribute": [
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"html","masked":"shpat_********************c2b2"}
+  ],
+  "shopify-admin-api-token@url-encoded-inline-settings": [
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"html","masked":"shpat_********************e16d"},
+    {"type":"Shopify Admin API Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"shpat_********************e16d"}
+  ],
   "square-access-token@inline-config-object": [
     {"type":"Square Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sq0atp*******************ex4F"},
     {"type":"Square Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sq0atp*******************ex4F"}
@@ -1518,6 +1890,68 @@
   "square-oauth-secret@url-encoded-inline-settings": [
     {"type":"Square OAuth Secret","confidence":"high","publicByDesign":false,"location":"html","masked":"sq0csp********************MoDG"},
     {"type":"Square OAuth Secret","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sq0csp********************MoDG"}
+  ],
+  "google-oauth-client-secret@inline-config-object": [
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"html","masked":"GOCSPX********************7Sk4"},
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"GOCSPX********************7Sk4"}
+  ],
+  "google-oauth-client-secret@window-env": [
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"html","masked":"GOCSPX********************GlmO"},
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"GOCSPX********************GlmO"}
+  ],
+  "google-oauth-client-secret@next-data": [
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"html","masked":"GOCSPX********************4PC8"},
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"GOCSPX********************4PC8"}
+  ],
+  "google-oauth-client-secret@nuxt-payload": [
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"html","masked":"GOCSPX********************tHC4"},
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"GOCSPX********************tHC4"}
+  ],
+  "google-oauth-client-secret@html-comment": [
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"html","masked":"GOCSPX********************rNvK"}
+  ],
+  "google-oauth-client-secret@meta-content": [
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"html","masked":"GOCSPX********************zkP2"}
+  ],
+  "google-oauth-client-secret@data-attribute": [
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"html","masked":"GOCSPX********************zUyR"}
+  ],
+  "google-oauth-client-secret@json-ld": [
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"html","masked":"GOCSPX********************DtlI"},
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"GOCSPX********************DtlI"}
+  ],
+  "google-oauth-client-secret@external-bundle": [
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"external-script","masked":"GOCSPX********************qioQ"}
+  ],
+  "google-oauth-client-secret@fetch-bearer-header": [
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"external-script","masked":"GOCSPX********************wBgU"}
+  ],
+  "google-oauth-client-secret@pre-env-dump": [
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"html","masked":"GOCSPX********************55mq"}
+  ],
+  "google-oauth-client-secret@sourcemap-comment": [
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"external-script","masked":"GOCSPX********************0iRn"}
+  ],
+  "google-oauth-client-secret@entity-encoded-attribute": [
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"html","masked":"GOCSPX********************B3ya"}
+  ],
+  "google-oauth-client-secret@unicode-escaped-script-string": [
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"html","masked":"GOCSPX********************XhR5"},
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"GOCSPX********************XhR5"}
+  ],
+  "google-oauth-client-secret@base64-data-attribute": [
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"GOCSPX********************Rild"}
+  ],
+  "google-oauth-client-secret@base64-global": [
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"GOCSPX********************4z3O"},
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"inline-script (base64)","masked":"GOCSPX********************4z3O"}
+  ],
+  "google-oauth-client-secret@url-encoded-data-attribute": [
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"html","masked":"GOCSPX********************qlHJ"}
+  ],
+  "google-oauth-client-secret@url-encoded-inline-settings": [
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"html","masked":"GOCSPX********************uzEd"},
+    {"type":"Google OAuth Client Secret","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"GOCSPX********************uzEd"}
   ],
   "aws-access-key-id@inline-config-object": [
     {"type":"AWS Access Key ID","confidence":"high","publicByDesign":false,"location":"html","masked":"AKIAHU**********36NP","extra":{"accountId":"525022352728","prefix":"AKIA"}},
