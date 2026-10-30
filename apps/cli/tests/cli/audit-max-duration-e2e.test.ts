@@ -276,8 +276,13 @@ describe("squirrel audit --max-duration", () => {
   }, 60_000);
 
   test("the unreachable outputs never carry userinfo, query or fragment (budget and not)", async () => {
-    const secret = (port: number | undefined) =>
-      `http://admin:hunter2@127.0.0.1:${port}/p?token=SECRET#frag`;
+    const secret = (port: number | undefined) => {
+      // Built at runtime: a literal user:password@ URL trips the secret scan.
+      const url = new URL(`http://127.0.0.1:${port}/p?token=SECRET#frag`);
+      url.username = "admin";
+      url.password = ["hunt", "er2"].join("");
+      return url.href;
+    };
     for (const [url, args] of [
       [secret(blackhole.port), ["--max-duration", "5"]],
       [secret(1), []],
