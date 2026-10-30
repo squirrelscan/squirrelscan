@@ -10,7 +10,10 @@ import { buildCollectedPageSignal } from "../src/collected-signals";
 import { contentInJsBundleRule } from "../src/performance/content-in-js-bundle";
 import {
   MAX_CHUNK_CHARS,
+  MAX_VERIFICATIONS,
+  buildNeedleIndex,
   estimateProseShare,
+  findNeedles,
   extractContentSentences,
   normalizeScriptText,
 } from "../src/shared/content-in-script";
