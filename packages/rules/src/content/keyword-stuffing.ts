@@ -221,37 +221,59 @@ const LINK_LIST_TEXT_SHARE = 0.85;
 const LINK_LIST_MAX_ANCHORS = 3000;
 const LINK_LIST_MAX_DEPTH = 8;
 
-const MENU_NAME = /(?:^|[-_\s])(?:menu|nav|navigation|dropdown|mega|flyout|submenu|megamenu)(?:$|[-_\s])/i;
+/** A word shared by at least this share of a block's link labels makes it a keyword cloud, not a menu. */
+const LINK_CLOUD_SHARE = 0.6;
+/** Labels looked at per block to tell a keyword cloud from a menu. */
+const LINK_CLOUD_SAMPLE = 60;
 
 /**
- * A block of links is a menu when it is a list of links (`ul`/`ol` with `li` items, or inside one) or
- * when it, or a wrapper up to three levels above it, is named or roled as one. A bare `div` of anchors
- * with no such signal is a link cloud and keeps counting (a keyword spammer's favourite shape).
+ * A block of links is a menu only on a real interaction or landmark signal: it, or a wrapper up to
+ * three levels above it, has `role` menu, menubar or navigation, or carries the attributes a JS
+ * dropdown sets (`aria-haspopup`, `aria-expanded`). Class and id names (`nav`, `menu`) and a plain
+ * `ul > li` are NOT signals: anyone can write them, and a keyword spammer would.
  */
-function hasMenuSignal(element: Element, body: Element): boolean {
-  if (element.querySelector("ul > li, ol > li")) return true;
+function hasMenuSignal(element: Element, body: Element, cache: WeakMap<Element, boolean>): boolean {
+  const known = cache.get(element);
+  if (known !== undefined) return known;
+  let answer = false;
   let current: Element | null = element;
   for (let depth = 0; current && current !== body && depth < 4; depth++, current = current.parentElement) {
-    const tag = current.tagName?.toLowerCase();
-    if (tag === "ul" || tag === "ol" || tag === "li") return true;
     const role = current.getAttribute?.("role")?.toLowerCase();
-    if (role && /^(?:menu|menubar|navigation|tablist)$/.test(role)) return true;
-    const name = `${current.getAttribute?.("class") ?? ""} ${current.getAttribute?.("id") ?? ""}`;
-    if (MENU_NAME.test(name)) return true;
+    if (role === "menu" || role === "menubar" || role === "navigation") {
+      answer = true;
+      break;
+    }
+    if (current.hasAttribute?.("aria-haspopup") || current.hasAttribute?.("aria-expanded")) {
+      answer = true;
+      break;
+    }
   }
-  return false;
+  cache.set(element, answer);
+  return answer;
+}
+
+/** True when one word is in most of the labels: "emergency plumber london", "emergency plumber leeds", ... */
+function isKeywordCloud(labels: readonly string[]): boolean {
+  if (labels.length === 0) return false;
+  const counts = new Map<string, number>();
+  for (const label of labels) {
+    for (const word of new Set(keywordTokens(label))) counts.set(word, (counts.get(word) ?? 0) + 1);
+  }
+  let top = 0;
+  for (const n of counts.values()) if (n > top) top = n;
+  return top >= labels.length * LINK_CLOUD_SHARE;
 }
 
 /**
  * Blocks that are mostly link text: a mega menu or footer columns built from plain
  * `div`s, which the landmark test cannot see (#1315). Their link labels are site
  * navigation repeated on every page, not copy. Only used when the page has no main
- * copy of its own to measure. Requires several DIFFERENT labels and a menu signal (a list
- * of links, or menu/nav naming, see {@link hasMenuSignal}), so a block that repeats one
- * anchor ("emergency plumber" x20), or a bare cloud of keyword links, still counts.
+ * copy of its own to measure. Requires several DIFFERENT labels, a real menu signal (see
+ * {@link hasMenuSignal}) and no keyword-cloud pattern (see {@link isKeywordCloud}), so a block that
+ * repeats one anchor ("emergency plumber" x20), or a cloud of keyword links, still counts.
  */
 function createLinkListTest(body: Element): (element: Element) => boolean {
-  type Stats = { links: number; chars: number; labels: Set<string> };
+  type Stats = { links: number; chars: number; labels: Set<string>; sample: string[] };
   const stats = new Map<Element, Stats>();
   let seen = 0;
   for (const a of body.querySelectorAll("a")) {
@@ -262,19 +284,24 @@ function createLinkListTest(body: Element): (element: Element) => boolean {
     for (let depth = 0; current && current !== body && depth < LINK_LIST_MAX_DEPTH; depth++, current = current.parentElement) {
       let entry = stats.get(current);
       if (!entry) {
-        entry = { links: 0, chars: 0, labels: new Set() };
+        entry = { links: 0, chars: 0, labels: new Set(), sample: [] };
         stats.set(current, entry);
       }
       entry.links += 1;
       entry.chars += label.replace(/\s/g, "").length;
       if (entry.labels.size < LINK_LIST_MIN_LABELS) entry.labels.add(label);
+      if (entry.sample.length < LINK_CLOUD_SAMPLE) entry.sample.push(label);
     }
   }
   const lists = new WeakSet<Element>();
+  const signals = new WeakMap<Element, boolean>();
   for (const [element, entry] of stats) {
+    // Cheapest tests first: counts, then the signal (attributes only, cached), then the keyword cloud, and
+    // only then the text of the element (a giant ancestor's text is not read for every candidate).
     if (entry.links < LINK_LIST_MIN_LINKS || entry.labels.size < LINK_LIST_MIN_LABELS) continue;
+    if (!hasMenuSignal(element, body, signals) || isKeywordCloud(entry.sample)) continue;
     const textChars = (element.textContent || "").replace(/\s/g, "").length;
-    if (textChars > 0 && entry.chars >= textChars * LINK_LIST_TEXT_SHARE && hasMenuSignal(element, body)) lists.add(element);
+    if (textChars > 0 && entry.chars >= textChars * LINK_LIST_TEXT_SHARE) lists.add(element);
   }
   const known = new WeakMap<Element, boolean>();
   return (element) => {
@@ -395,43 +422,47 @@ export function brandTerms(
 const CARD_TEXT_SELECTOR = "p, span, div, li, dd, dt, small";
 const CARD_TEXT_MAX_CHARS = 160;
 const CARD_MIN_PARENTS = 3;
-/** Candidate card texts kept per page, and the elements looked at to find them. */
+/** Candidate leaf texts looked at per page, and the elements scanned to find them. Both are bounds. */
 const CARD_MAX_ELEMENTS = 4000;
 const CARD_MAX_SCANNED = 40_000;
+const DIGITS = /\d+(?:[.,]\d+)*/g;
 
 /**
- * Short texts repeated once per card (#1315): `text -> occurrences` for every text
- * (digits replaced) that is the whole text of a block with no element children in at
- * least {@link CARD_MIN_PARENTS} different parent elements.
+ * Numeric microcopy repeated once per card (#1315): "Average rating 4.5 of 5 stars", "from 12,90 EUR in
+ * instalments". `text -> occurrences` for every text that, with its digits replaced, is the whole text of
+ * a leaf element in at least {@link CARD_MIN_PARENTS} different parent wrappers AND whose digits differ
+ * between occurrences (a rating or a price varies from card to card). Text with no digits, or the same
+ * digits every time, is never deducted: a stuffed phrase repeats identically ("cheap emergency plumber
+ * london" x25) and must keep counting, whatever wraps it. The trade-off: non-numeric card microcopy
+ * ("In stock") and a price identical on every card still count toward density.
+ *
+ * Linear in the page: each leaf is read once, with no parent text read at all.
  */
 function repeatedCardText(root: Element, excluded: ((element: Element) => boolean) | null): Map<string, number> {
-  const byText = new Map<string, { count: number; parents: Set<Element> }>();
+  const byText = new Map<string, { count: number; parents: Set<Element>; raws: Set<string> }>();
   let scanned = 0;
   let candidates = 0;
   for (const el of root.querySelectorAll(CARD_TEXT_SELECTOR)) {
-    // Two bounds: the elements looked at, and the candidate cards kept (a card is ~9 elements deep).
+    // Every leaf looked at counts toward the bounds, kept or not.
     if (++scanned > CARD_MAX_SCANNED || candidates >= CARD_MAX_ELEMENTS) break;
     if (el.children.length > 0) continue;
-    if (excluded?.(el)) continue;
-    const text = (el.textContent || "").replace(/\s+/g, " ").trim();
-    if (text.length < 8 || text.length > CARD_TEXT_MAX_CHARS) continue;
-    // A card has other things in it (title, price, rating): a text that is the WHOLE text of its
-    // wrapper is a block of copy on its own, however often it repeats.
-    const parent = el.parentElement;
-    if (!parent || (parent.textContent || "").replace(/\s+/g, " ").trim() === text) continue;
     candidates += 1;
-    const key = text.toLowerCase().replace(/\d+([.,]\d+)*/g, "#");
+    if (excluded?.(el)) continue;
+    const raw = (el.textContent || "").replace(/\s+/g, " ").trim();
+    if (raw.length < 8 || raw.length > CARD_TEXT_MAX_CHARS || !/\d/.test(raw)) continue;
+    const key = raw.toLowerCase().replace(DIGITS, "#");
     let entry = byText.get(key);
     if (!entry) {
-      entry = { count: 0, parents: new Set() };
+      entry = { count: 0, parents: new Set(), raws: new Set() };
       byText.set(key, entry);
     }
     entry.count += 1;
     if (el.parentElement) entry.parents.add(el.parentElement);
+    if (entry.raws.size < 2) entry.raws.add(raw.toLowerCase());
   }
   const out = new Map<string, number>();
   for (const [text, entry] of byText) {
-    if (entry.parents.size >= CARD_MIN_PARENTS) out.set(text, entry.count);
+    if (entry.parents.size >= CARD_MIN_PARENTS && entry.raws.size >= 2) out.set(text, entry.count);
   }
   return out;
 }
