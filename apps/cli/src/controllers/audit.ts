@@ -81,6 +81,7 @@ import { guardCollector } from "@/audit/guard-collector";
 import {
   createDurationBudget,
   msUntil,
+  raceUntil,
   wasCut,
   type DurationCut,
 } from "@/audit/max-duration";
@@ -1847,37 +1848,50 @@ export async function runAudit(
         const prefetchPayloads = prefetchCollector.build();
         if (prefetchPayloads) {
           try {
-            cloudResult = await runCloudPrefetchFromPayloads(
-              {
-                client: createCloudClientFromSettings(),
-                cloudConfig: mergedConfig.cloud,
-                config: mergedConfig,
-                baseUrl: url,
-                auditId: crawlId,
-                // #2290: the registered run, so the raw-vs-rendered renders bill
-                // as this audit's pages rather than as standalone renders.
-                runId: (await options.getRunId?.()) ?? undefined,
-                // Stage-1 gating policy (CLI-owned): Stage-0 metadata gates which
-                // downstream cloud features run before the per-audit cap.
-                gate: gateStage1,
-                // Consented users skip THIS confirm (capped + disclosed up front);
-                // dead-links/tech/editor keep their gate below.
-                confirm: options.cloudConsented
-                  ? undefined
-                  : options.confirmCloudSpend,
-                onProgress: (detail) => onProgress({ phase: "cloud", detail }),
-                // Skip the raw-vs-rendered `render` service only when the crawl rendered EVERY page — i.e. the
-                // resolved fetcher is the full-render one ("cloud-render"), NOT the "auto" hybrid ("hybrid-http-
-                // first", most pages raw) or plain HTTP (undefined). #673.
-                crawlRendered: documentFetcher?.id === "cloud-render",
-              },
-              prefetchPayloads
+            const prefetched = await raceUntil(
+              runCloudPrefetchFromPayloads(
+                {
+                  client: createCloudClientFromSettings(),
+                  cloudConfig: mergedConfig.cloud,
+                  config: mergedConfig,
+                  baseUrl: url,
+                  auditId: crawlId,
+                  // #2290: the registered run, so the raw-vs-rendered renders bill
+                  // as this audit's pages rather than as standalone renders.
+                  runId: (await options.getRunId?.()) ?? undefined,
+                  // Stage-1 gating policy (CLI-owned): Stage-0 metadata gates which
+                  // downstream cloud features run before the per-audit cap.
+                  gate: gateStage1,
+                  // Consented users skip THIS confirm (capped + disclosed up front);
+                  // dead-links/tech/editor keep their gate below.
+                  confirm: options.cloudConsented
+                    ? undefined
+                    : options.confirmCloudSpend,
+                  onProgress: (detail) =>
+                    onProgress({ phase: "cloud", detail }),
+                  // Skip the raw-vs-rendered `render` service only when the crawl rendered EVERY page — i.e. the
+                  // resolved fetcher is the full-render one ("cloud-render"), NOT the "auto" hybrid ("hybrid-http-
+                  // first", most pages raw) or plain HTTP (undefined). #673.
+                  crawlRendered: documentFetcher?.id === "cloud-render",
+                },
+                prefetchPayloads
+              ),
+              durationBudget?.checksDoneAt
             );
-            logger.debug(
-              "cloud prefetch done",
-              `spent=${cloudResult.totalSpent}`,
-              `services=${cloudResult.spend.length}`
-            );
+            if (prefetched.timedOut) {
+              // #1327: a hung round trip must not use up the time the probes and page rules need.
+              logger.warn(
+                "cloud prefetch abandoned",
+                "the --max-duration time limit was reached while it was running"
+              );
+            } else {
+              cloudResult = prefetched.value;
+              logger.debug(
+                "cloud prefetch done",
+                `spent=${cloudResult.totalSpent}`,
+                `services=${cloudResult.spend.length}`
+              );
+            }
           } catch (error) {
             // Defends the never-fail-the-audit invariant against anything the
             // prefetch path (incl. caller-supplied confirm/onProgress callbacks)
@@ -1903,25 +1917,36 @@ export async function runAudit(
         phaseTimer.enter("tech_detect");
         logger.debug("step 2.6: cloud tech-detect", crawlId);
         const techClient = createCloudClientFromSettings();
-        techResult = await runCloudTechDetect({
-          client: techClient,
-          config: mergedConfig,
-          auditId: crawlId,
-          baseUrl: url,
-          // The bounded sample collected during the pre-rules walk. It yields
-          // the same ordered page list the whole-crawl context did (#1913).
-          siteContext: techSample,
-          scripts: assets.scripts,
-          getBalance: techClient
-            ? async () =>
-                preflightBalanceOf((await techClient.getBalance()).balance)
-            : undefined,
-          confirm: options.confirmCloudSpend,
-          onProgress: (detail) => onProgress({ phase: "cloud", detail }),
-          onSpend: (credits) => {
-            techDetectCredits += credits;
-          },
-        });
+        const tech = await raceUntil(
+          runCloudTechDetect({
+            client: techClient,
+            config: mergedConfig,
+            auditId: crawlId,
+            baseUrl: url,
+            // The bounded sample collected during the pre-rules walk. It yields
+            // the same ordered page list the whole-crawl context did (#1913).
+            siteContext: techSample,
+            scripts: assets.scripts,
+            getBalance: techClient
+              ? async () =>
+                  preflightBalanceOf((await techClient.getBalance()).balance)
+              : undefined,
+            confirm: options.confirmCloudSpend,
+            onProgress: (detail) => onProgress({ phase: "cloud", detail }),
+            onSpend: (credits) => {
+              techDetectCredits += credits;
+            },
+          }),
+          durationBudget?.checksDoneAt
+        );
+        if (tech.timedOut) {
+          logger.warn(
+            "cloud technology detection abandoned",
+            "the --max-duration time limit was reached while it was running"
+          );
+        } else {
+          techResult = tech.value;
+        }
         phaseTimer.mark("tech_detect");
       }
 

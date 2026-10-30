@@ -955,7 +955,7 @@ export function validateFormat(format: string): Result<OutputFormat> {
 }
 
 /** `maxDuration` from untrusted slim JSON (#1271): whole non-negative counts and a flag, else dropped. */
-function slimMaxDuration(
+export function slimMaxDuration(
   value: unknown
 ): AuditReport["maxDuration"] | undefined {
   if (!value || typeof value !== "object") return undefined;

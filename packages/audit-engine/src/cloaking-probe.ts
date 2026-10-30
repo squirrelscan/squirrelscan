@@ -59,6 +59,8 @@ interface CloakingProbeBaseOptions {
   egress?: EgressPolicy;
   /** Per-fetch timeout. Default 15s. */
   timeoutMs?: number;
+  /** Cancels the probe (a `--max-duration` deadline, #1327): nothing further is dispatched and a request in flight is aborted. */
+  signal?: AbortSignal;
   /** Concurrent probe paths. Default 3. */
   concurrency?: number;
   /** Injectable clock (ms epoch) for deterministic recency selection. */
@@ -228,10 +230,13 @@ function withoutUserAgent(
   return Object.fromEntries(Object.entries(headers).filter(([name]) => name.toLowerCase() !== "user-agent"));
 }
 
-function defaultProbeFetch(timeoutMs: number, egress?: EgressPolicy): ProbeFetch {
+function defaultProbeFetch(timeoutMs: number, egress?: EgressPolicy, cancel?: AbortSignal): ProbeFetch {
   return async (url, userAgent, headers) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const onCancel = () => controller.abort();
+    if (cancel?.aborted) controller.abort();
+    else cancel?.addEventListener("abort", onCancel, { once: true });
     try {
       // Redirects by hand: custom headers never reach another origin (#2831).
       const res = await probeFetch(
@@ -259,11 +264,19 @@ function defaultProbeFetch(timeoutMs: number, egress?: EgressPolicy): ProbeFetch
       return { status: 0, body: "", error: e instanceof Error ? e.message : String(e) };
     } finally {
       clearTimeout(timer);
+      cancel?.removeEventListener("abort", onCancel);
       // Closes the connection (#766): a capped read stops reading, but Bun
       // keeps downloading the body until the signal aborts.
       controller.abort();
     }
   };
+}
+
+/** Thrown between a path's fetches when the probe was cancelled; the path then has no entry. */
+class ProbeCancelled extends Error {}
+
+function throwIfCancelled(opts: CloakingProbeOptions): void {
+  if (opts.signal?.aborted) throw new ProbeCancelled();
 }
 
 async function probeOne(
@@ -285,6 +298,7 @@ async function probeOne(
   // The Googlebot fetch IS its agent: a custom User-Agent among the audit's
   // headers (any casing) must not replace it, or both fetches send the same
   // agent and agent-based cloaking can never show (repo#3346).
+  throwIfCancelled(opts);
   const gb = await fetchImpl(
     sel.url,
     opts.googlebotUserAgent,
@@ -301,6 +315,7 @@ async function probeOne(
   let tokenGated = false;
 
   if (opts.queryVariation) {
+    throwIfCancelled(opts);
     queryUrl = appendProbeToken(sel.url);
     const q = await fetchImpl(
       queryUrl,
@@ -351,10 +366,21 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise
 export function runCloakingProbe(
   selected: SelectedProbe[],
   opts: CloakingProbeOptions,
-  fetchImpl: ProbeFetch = defaultProbeFetch(opts.timeoutMs ?? 15_000, opts.egress),
+  fetchImpl: ProbeFetch = defaultProbeFetch(opts.timeoutMs ?? 15_000, opts.egress, opts.signal),
 ): Promise<CloakingProbeData[]> {
   const limited = selected.slice(0, Math.max(0, opts.maxPages));
-  return mapPool(limited, opts.concurrency ?? 3, (sel) => probeOne(sel, opts, fetchImpl));
+  // A cancelled probe (a deadline) dispatches nothing more: the pages not reached have no entry.
+  return mapPool(limited, opts.concurrency ?? 3, async (sel) => {
+    if (opts.signal?.aborted) return null;
+    try {
+      return await probeOne(sel, opts, fetchImpl);
+    } catch (error) {
+      if (error instanceof ProbeCancelled) return null;
+      throw error;
+    }
+  }).then(
+    (results) => results.filter((r): r is CloakingProbeData => r !== null),
+  );
 }
 
 // ── adapter entry point ─────────────────────────────────────────────
@@ -459,6 +485,8 @@ export async function resolveCloakingProbes(
   runtime: {
     defaultUserAgent: string;
     egress?: EgressPolicy;
+    /** Cancels the probe at a `--max-duration` deadline (#1327). */
+    signal?: AbortSignal;
   } & ScopedHeaderOptions,
   fetchImpl?: ProbeFetch,
 ): Promise<CloakingProbeData[] | undefined> {
@@ -476,6 +504,7 @@ export async function resolveCloakingProbes(
           ? { customHeaders: runtime.customHeaders, headerScope: runtime.headerScope }
           : { headerScope: runtime.headerScope }),
         egress: runtime.egress,
+        signal: runtime.signal,
       },
       fetchImpl,
     );

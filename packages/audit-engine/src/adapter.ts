@@ -136,7 +136,7 @@ import { collectDroppedBatch } from "./batch-gc";
 import { detachFromPage, detachParsedPage } from "./detach";
 import { resolveCloakingProbes } from "./cloaking-probe";
 import { createSiteQuery } from "./site-query";
-import { confirmSoft404Candidates, markUnresolvedSoft404 } from "./soft404-confirm";
+import { confirmSoft404Candidates, hasSoft404FetchWork, markUnresolvedSoft404 } from "./soft404-confirm";
 import { headerScopeBase } from "@squirrelscan/utils/headers";
 
 import { createHeaderScope, headersWithheldFrom } from "./lib/header-scope";
@@ -2875,22 +2875,27 @@ function streamParsedUniverse(
  * Run `work` unless `deadlineAt` has passed, and stop waiting for it at
  * `deadlineAt` (#1327). `timedOut` means the caller got nothing (or only what the
  * work had already written in place): the probe is skipped, recorded by the
- * caller. A hanging request cannot be cancelled from here, so it is abandoned, not
- * awaited; its own timeouts end it later. No deadline: runs as before.
+ * caller. At the deadline the work's `cancel` signal fires: the probes dispatch no
+ * further request and abort the one in flight. No deadline: runs as before.
  */
-async function withinDeadline<T>(
-  work: () => Promise<T>,
+export async function withinDeadline<T>(
+  work: (cancel: AbortSignal) => Promise<T>,
   deadlineAt: number | undefined,
 ): Promise<{ timedOut: false; value: T } | { timedOut: true }> {
-  if (deadlineAt === undefined) return { timedOut: false, value: await work() };
+  if (deadlineAt === undefined) return { timedOut: false, value: await work(new AbortController().signal) };
   const remaining = deadlineAt - Date.now();
   if (remaining <= 0) return { timedOut: true };
+  const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const expired = new Promise<{ timedOut: true }>((resolve) => {
-    timer = setTimeout(() => resolve({ timedOut: true }), remaining);
+    timer = setTimeout(() => {
+      // The work is told to stop: nothing further is dispatched and a request in flight is aborted.
+      controller.abort();
+      resolve({ timedOut: true });
+    }, remaining);
   });
   try {
-    const pending = work();
+    const pending = work(controller.signal);
     // The abandoned work may still reject later: that must not become unhandled.
     pending.catch(() => undefined);
     return await Promise.race([pending.then((value) => ({ timedOut: false as const, value })), expired]);
@@ -3072,7 +3077,7 @@ function buildStreamingSiteData(
     } = assets;
 
     const cloaking = yield* Effect.promise(() =>
-      withinDeadline(() => resolveCloakingProbes(
+      withinDeadline((cancel) => resolveCloakingProbes(
         config.integrity?.cloaking_probe,
         {
           baseUrl: crawl?.baseUrl ?? "",
@@ -3097,11 +3102,12 @@ function buildStreamingSiteData(
             pinOwnHosts,
             ownSiteOnly,
           ),
+          signal: cancel,
         },
       ), probes?.deadlineAt),
     );
     // A cloaking probe cut at its deadline leaves the rule with no data (it no-ops), same as the probe being off.
-    if (cloaking.timedOut) probes?.onSkipped?.("cloaking-probe");
+    if (cloaking.timedOut && config.integrity?.cloaking_probe?.enabled) probes?.onSkipped?.("cloaking-probe");
     const cloakingProbes = cloaking.timedOut ? undefined : cloaking.value;
 
     // Soft-404 confirmation (#1177) — mutates each candidate's
@@ -3114,7 +3120,7 @@ function buildStreamingSiteData(
       rendered: isRenderedFetch(page.fetcherId),
     }));
     const soft404 = yield* Effect.promise(() =>
-      withinDeadline(() =>
+      withinDeadline((cancel) =>
       confirmSoft404Candidates(
         soft404Pages,
         {
@@ -3132,11 +3138,15 @@ function buildStreamingSiteData(
             ownSiteOnly,
           ),
           perHostDelayMs: config.crawler?.per_host_delay_ms,
+          signal: cancel,
         },
       ).catch((): undefined => undefined), probes?.deadlineAt),
     );
     if (soft404.timedOut) {
-      probes?.onSkipped?.("soft-404-confirmation");
+      // Skipped only when it had a re-fetch to do: no candidate, or the pass off, is not a skip.
+      if (hasSoft404FetchWork(soft404Pages, config.integrity?.soft404_confirm?.enabled)) {
+        probes?.onSkipped?.("soft-404-confirmation");
+      }
       markUnresolvedSoft404(soft404Pages);
     }
 
