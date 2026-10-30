@@ -74,7 +74,7 @@ describe("framework payload analyzer on hostile pages", () => {
 
   test("the rule on a page with all of it at once stays bounded", () => {
     const scripts = Array.from({ length: 5000 }, () => `<script>self.__next_f.push([1,"${"a".repeat(500)}"])</script>`).join("");
-    const html = `<html><body><p>${"word ".repeat(50)}</p>${scripts}</body></html>`;
+    const html = `<html><body><p>${"word ".repeat(400)}</p>${scripts}</body></html>`;
     const ctx = {
       page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
       parsed: { document: doc(html) } as unknown as ParsedPage,
