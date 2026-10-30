@@ -303,6 +303,9 @@ export const cookieConsentRule: Rule = {
           ? "No cookie consent mechanism detected — required for your EU/UK (GDPR) audience"
           : "No cookie consent mechanism detected",
         value: "Required for GDPR compliance if using cookies",
+        // Without a site profile the audience is unknown: the downgrade from a warning to info is not a
+        // verdict that consent stopped being required (#1031), so an earlier warning is not resolved by it.
+        ...(!gdpr && !ctx.siteMetadata ? { details: { inconclusive: true } } : {}),
       });
     }
 

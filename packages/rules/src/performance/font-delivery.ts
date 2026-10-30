@@ -90,6 +90,7 @@ export const fontDeliveryRule: Rule = {
         name: "font-delivery",
         status: "info",
         message: "No <head> element found",
+        details: { inconclusive: true },
       });
       return { checks };
     }

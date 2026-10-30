@@ -246,6 +246,8 @@ export const expectedTypeSchemaRule: Rule = {
             status: "info",
             message: "No structured data expected for this page type",
             value: pageType.label,
+            // The page type comes from a classifier label that can flap between audits (#1031).
+            details: { inconclusive: true },
           },
         ],
       };

@@ -41,6 +41,7 @@ export const ogUrlMatchRule: Rule = {
         name: "og-url-match",
         status: "info",
         message: "No canonical to compare og:url against",
+        details: { inconclusive: true },
       });
       return { checks };
     }

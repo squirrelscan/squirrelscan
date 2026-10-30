@@ -33,6 +33,7 @@ export const criticalRequestChainsRule: Rule = {
         name: "critical-request-chains",
         status: "info",
         message: "No <head> element found",
+        details: { inconclusive: true },
       });
       return { checks };
     }

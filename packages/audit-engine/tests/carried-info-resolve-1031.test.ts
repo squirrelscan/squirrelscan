@@ -156,5 +156,16 @@ describe("a fresh info result on a re-crawled page resolves the old fail rows (#
       true,
     );
     expect(r.open.length).toBe(50);
+    // And the signal itself says so (pins the signal fix, not the local merge's skipped-row collector):
+    // the page is in the truncated check's notEvaluated set although the rule passed another check there.
+    const signal = buildResolutionSignal(
+      run([
+        { name: "form-labels", status: "skipped", message: "scan stopped", skipReason: "scan-truncated", pageUrl: P },
+        { name: "form-labels-other", status: "pass", message: "ok", pageUrl: P },
+        { name: "form-labels", status: "pass", message: "ok", pageUrl: Q },
+      ]),
+      [P, Q],
+    )!;
+    expect(signal.notEvaluated?.[`${RULE}|form-labels`]).toHaveLength(1);
   });
 });
