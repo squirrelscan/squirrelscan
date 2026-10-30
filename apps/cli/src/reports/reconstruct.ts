@@ -976,7 +976,14 @@ export function reconstructReport(
           }
         : {}),
       ...(structure ? { structure } : {}),
-      ...(variantPages > 0 ? { canonicalVariants: variantPages } : {}),
+      ...(variantPages > 0
+        ? {
+            canonicalVariants: variantPages,
+            canonicalVariantPages: [...variantOf]
+              .slice(0, 100)
+              .map(([page, canonical]) => ({ page, canonical })),
+          }
+        : {}),
       ...(cacheStats ? { cacheStats } : {}),
       ...(renderBlockRecovered > 0
         ? { fetchFallbacks: { recovered: renderBlockRecovered } }

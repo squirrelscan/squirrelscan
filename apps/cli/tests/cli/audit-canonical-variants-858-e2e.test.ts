@@ -125,6 +125,12 @@ describe("query-string variants counted with their canonical (#858)", () => {
     expect(issues).not.toContain("subject=Billing");
     expect(issues).toContain("page=2");
     expect(issues).toContain('"affectedPagesCount":5');
+    // No variant URL is lost: the report lists each folded variant with the page it is counted with.
+    expect(
+      JSON.stringify(
+        (json.meta as { canonicalVariantPages?: unknown }).canonicalVariantPages
+      )
+    ).toContain("subject=Billing");
   }, 120_000);
 
   test("every text-like format says it once and the scan line agrees with the total", async () => {

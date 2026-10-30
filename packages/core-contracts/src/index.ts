@@ -717,6 +717,8 @@ export interface AuditReport {
    * Absent when there were none.
    */
   canonicalVariants?: number;
+  /** The folded variants and the page each is counted with (first 100), so no variant URL is lost (#858). */
+  canonicalVariantPages?: Array<{ page: string; canonical: string }>;
   /**
    * Resolved site-metadata "profile" (site type, business category, country,
    * audience, identity, contacts, socials, domain age). Like `technologies`,

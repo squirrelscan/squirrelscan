@@ -537,6 +537,8 @@ export interface AuditReport {
   structure?: ReportStructure;
   /** Query-string variants counted with their canonical page (#858). */
   canonicalVariants?: number;
+  /** The folded variants and the page each is counted with (first 100) (#858). */
+  canonicalVariantPages?: Array<{ page: string; canonical: string }>;
   /**
    * Resolved Stage-0 site profile — REPORT-ONLY / non-scoring. Present only when
    * the credited cloud `site-metadata` service resolved it (logged-in + cloud +

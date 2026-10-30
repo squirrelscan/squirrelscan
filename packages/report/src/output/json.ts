@@ -171,6 +171,7 @@ interface SlimJsonReport {
      */
     unfetched?: number;
     canonicalVariants?: number;
+    canonicalVariantPages?: Array<{ page: string; canonical: string }>;
     /** The audit level and the settings it resolved to. Absent before audit levels. */
     auditLevel?: ResolvedAuditSettings;
     /** Smart audits (#110): present only when `smart_audits` ran. */
@@ -477,6 +478,9 @@ function buildSlimReport(
       ...(unfetched > 0 ? { unfetched } : {}),
       // Query-string variants counted with their canonical page; `totalPages` excludes them (#858).
       ...(canonicalVariantCount(report) > 0 ? { canonicalVariants: canonicalVariantCount(report) } : {}),
+      ...(canonicalVariantCount(report) > 0 && report.canonicalVariantPages?.length
+        ? { canonicalVariantPages: report.canonicalVariantPages.slice(0, 100).map((v) => ({ page: String(v.page), canonical: String(v.canonical) })) }
+        : {}),
       ...(report.coverage ? { coverage: report.coverage } : {}),
       // The audit level and the settings it resolved to: `level` (a level's
       // name, or `custom`), `basedOn`, `changes` and `settings`. Absent on
