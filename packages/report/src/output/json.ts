@@ -438,8 +438,11 @@ interface SlimJsonReport {
   // page types the classifier gave them. Absent when no audited page carries either, which is
   // every crawl stored before the page classifier existed.
   structure?: ReportStructure;
-  // Report-only — never part of the score. Present when cloud tech-detect ran.
+  // Report-only — never part of the score. Present when a technology scan ran: the cloud one, or
+  // the free local scan of the crawled pages (`source` says which, #1263).
   technologies?: {
+    /** `local` (free signature scan of the crawled pages) or `cloud` (credited scan with history). */
+    source?: "local" | "cloud";
     firstScan: boolean;
     added: string[];
     removed: string[];
@@ -796,6 +799,7 @@ function buildSlimReport(
     ...(report.technologies && report.technologies.items.length > 0
       ? {
           technologies: {
+            ...(report.technologies.source ? { source: report.technologies.source } : {}),
             firstScan: report.technologies.firstScan,
             added: report.technologies.added,
             removed: report.technologies.removed,

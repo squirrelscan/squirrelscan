@@ -4,13 +4,36 @@ description: "Identify the tech stack behind any site - CMS, frameworks, CDN, an
 icon: "layers"
 ---
 
-Every audit, local or cloud, fingerprints the technologies a site is built with - **415 signatures** across CMS and AI app builders, WordPress plugins and managed WordPress hosts, frameworks, CDN & hosting, analytics, tag managers, payment processors, chat widgets, fonts, security/consent tools, and backend and auth services - and surfaces them as a dedicated **Technologies** section in the report.
+Every audit, local or cloud, fingerprints the technologies a site is built with - **439 signatures** across CMS and AI app builders, WordPress plugins and managed WordPress hosts, frameworks, CDN & hosting, analytics, tag managers, payment processors, chat widgets, fonts, security/consent tools, and backend and auth services - and surfaces them as a dedicated **Technologies** section in the report.
 
 It's informational: technology detection **never affects your health score**. It's there to give you - and your agent - context about what you're auditing.
 
 ## What it detects
 
 Detection runs against response headers, HTML, inline and external scripts, cookies, and meta tags, and reports versions where they can be determined. The crawler keeps every response header a signature reads, such as `X-CDN`, `X-Sucuri-ID` or `Via` (each value cut to 512 characters), so a header-only signature matches in a local audit too. A header a signature only checks for presence, such as a request id or a bot protection token, is kept as a marker, not its value. In an audit the CLI runs, a cookie is matched by its name: only the names of the cookies a page sets are passed to detection, never their values. A page squirrel stored before it kept these headers, and that the crawl cache reuses, is read without them until it is fetched again.
+
+## Local and cloud scans
+
+There is one detector, with one set of fingerprints, and two ways it runs. A report says which one produced its Technologies section (`technologies.source` in JSON: `local` or `cloud`).
+
+| | Local scan | Cloud scan |
+|---|---|---|
+| Account and credits | None: free, works logged out | Signed in; included in the audit base |
+| Reads | The pages the crawl already fetched, their response headers and the first-party bundles it already downloaded | The same bytes, sent to the cloud service |
+| Extra requests | None | None |
+| Change history | None: no "added" or "removed" since the last scan | Compared with the previous scan of the domain, with the first scan marked |
+| Runs when | Every audit where the cloud scan did not run (logged out, offline, Quick) | Signed-in cloud audits |
+
+A local scan keeps no history, so its section never says "No changes since last scan" and shows where the list came from instead. The cloud scan is the one that stores results per domain and reports the difference between scans.
+
+### Why a result can show little more than headers
+
+A local scan can only match what the crawl fetched. When a run lists the server and CDN and little else, check these in order:
+
+- **Page sample.** Detection reads the home page first and up to 11 more crawled HTML pages. A Quick audit crawls the seed URL and the sitemap only, and `-m` caps the pages crawled, so a stack that only appears on pages that were not crawled is not seen.
+- **Script bodies.** A signature that matches script content needs the body of a script, and the only bodies read are first-party JavaScript the crawl already downloaded (see [Script bundles](#script-bundles)). A third-party script is detected by its URL, never by its body, and an app whose stack lives only in its bundle was invisible before v0.0.140. `bundle_bytes = 0` switches bodies off.
+- **Script URLs.** A signature that matches a script URL reads every `<script src>` on the page and, since the local scan was aligned with the cloud one, every stylesheet and preload `<link href>`. A URL that only appears in a CSS `@import`, in script-built markup or after a client-side render is not in the fetched HTML, and `--http` does no browser rendering.
+- **Signatures.** A technology with no fingerprint is not reported. The fingerprints are written from first-party research, never imported from a third-party catalog.
 
 ## Script bundles
 
@@ -36,17 +59,17 @@ Results are grouped by category:
 
 | Category | Examples |
 |----------|----------|
-| CMS & Ecommerce | WordPress, Shopify, Webflow, Ghost, AI app builders (Lovable, Base44, Bolt, v0) |
+| CMS & Ecommerce | WordPress, Shopify, Webflow, Ghost, Contao, SilverStripe, Plone, Odoo, Lightspeed eCom, AI app builders (Lovable, Base44, Bolt, v0) |
 | Frameworks & Libraries | Next.js, Astro, React, Vue, Svelte |
 | Web Servers | nginx, Apache, Caddy |
 | Hosting | Vercel, Netlify, AWS, GitHub Pages, Replit, managed WordPress hosts (WP Engine, Kinsta, Pressable, WordPress VIP, SiteGround, Cloudways) |
-| CDN & Edge | Cloudflare, Fastly, Akamai |
+| CDN & Edge | Cloudflare, Fastly, Akamai, Azure Front Door, Google Cloud CDN |
 | Analytics | Google Analytics, Plausible, Cloudflare Web Analytics |
-| Tag Managers | Google Tag Manager |
+| Tag Managers | Google Tag Manager, Cloudflare Zaraz, Matomo Tag Manager, Piwik PRO, Commanders Act |
 | Advertising | Google AdSense, ad networks |
 | Payments | Stripe, PayPal, Shopify Payments |
 | Support & Chat | Intercom, Crisp, Zendesk |
-| Security & Consent | OneTrust, reCAPTCHA, hCaptcha |
+| Security & Consent | OneTrust, Cookiebot, Borlabs Cookie, Complianz, Usercentrics, consentmanager, reCAPTCHA, hCaptcha |
 | Fonts, Video & Media, Widgets & UI | Google Fonts, YouTube, OneTrust |
 | Caching & Performance | WordPress caching and optimization plugins (WP Rocket, LiteSpeed Cache, W3 Total Cache, WP Super Cache, WP Fastest Cache, Autoptimize, Perfmatters) |
 | SEO Plugins | Yoast SEO, Rank Math, All in One SEO, SEOPress |

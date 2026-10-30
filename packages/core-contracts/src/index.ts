@@ -1369,6 +1369,13 @@ export interface ReportTechnologies {
   advisories?: SoftwareAdvisory[];
   /** ISO timestamp of the scan that produced this snapshot. */
   scannedAt?: string;
+  /**
+   * Which detection produced it (#1263). `local`: the free signature scan over the
+   * pages the crawl already fetched (no extra request, no account, no history, so
+   * `added`, `removed` and `firstScan` say nothing). `cloud`: the credited cloud scan,
+   * which adds the cross-scan diff. Absent on reports written before this field.
+   */
+  source?: "local" | "cloud";
 }
 
 /** One link section's footprint across the audited pages. */
