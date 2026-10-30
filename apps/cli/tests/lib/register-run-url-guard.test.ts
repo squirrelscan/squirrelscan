@@ -103,8 +103,13 @@ describe("registerRun is the one door to /register", () => {
   const read = (f: string) => readFileSync(join(src, f), "utf8");
 
   test("only run-tracker posts to the register endpoint", () => {
+    const code = (f: string) =>
+      readFileSync(f, "utf8")
+        .split("\n")
+        .filter((line) => !/^\s*(\*|\/\/|\/\*)/.test(line))
+        .join("\n");
     const posters = sourceFiles(src).filter((f) =>
-      /\/register[`"']/.test(readFileSync(f, "utf8"))
+      /\/register[`"']/.test(code(f))
     );
     expect(posters.map((f) => f.slice(src.length + 1))).toEqual([
       "lib/run-tracker.ts",
