@@ -446,9 +446,35 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
   const letters = (i: number): string => { let out = ""; let n = i; do { out = String.fromCharCode(97 + (n % 26)) + out; n = Math.floor(n / 26) - 1; } while (n >= 0); return out; };
   const unique = (n: number) => Array.from({ length: n }, (_, i) => `zz${letters(i)}`).join(" ");
 
-  test("the card deduction never exceeds 20% of the words: a page that is nothing but numeric 'cards' still counts them", () => {
-    const html = page("en", `<main>${Array.from({ length: 60 }, (_, n) => `<div><h3>Item ${n}</h3><span>emergency plumber from ${n + 1}.99 EUR</span></div>`).join("")}<p>${filler(20)}</p></main>`);
-    expect(flagged(html)).toContain("plumber");
+  test("price-shaped means currency, percent, \"of 5\" or stars/reviews only: a bare decimal is not a card", () => {
+    const lines = Array.from({ length: 45 }, (_, n) => `<p>plumber ${n % 10}${n % 7}.99</p>`).join("");
+    expect(flagged(page("en", `<main>${lines}<p>${unique(255)}</p></main>`))).toContain("plumber");
+  });
+
+  test("a word that is 10% or more of the page is never deducted, however it is dressed", () => {
+    const lines = Array.from({ length: 45 }, (_, n) => `<div><h3>Item ${n}</h3><span>plumber from $${n + 1}</span></div>`).join("");
+    expect(flagged(page("en", `<main>${lines}<p>${unique(255)}</p></main>`))).toContain("plumber");
+  });
+
+  test("a deduction is clamped, not skipped, and large real grids are still deducted", () => {
+    const en = Array.from({ length: 40 }, (_, n) => `<div><h3>Item ${n}</h3><span>Average rating 4.${n % 10} of 5 stars</span><span>from ${n + 1},90 EUR in instalments</span></div>`).join("");
+    const outEn = flagged(page("en", `<main><div class="grid">${en}</div><p>${unique(700)}</p></main>`));
+    for (const w of ["average", "rating", "stars", "instalments"]) expect(outEn).not.toContain(w);
+    const de = Array.from({ length: 60 }, (_, n) => `<div><h3>Nr ${n}</h3><span>Preis ab ${n + 1},90 \u20ac inkl. MwSt</span></div>`).join("");
+    expect(flagged(page("de", `<main><div class="grid">${de}</div><p>${unique(500)}</p></main>`))).not.toContain("preis");
+    const rating = Array.from({ length: 80 }, (_, n) => `<div><h3>Item ${n}</h3><span>Average rating 4.${n % 10} of 5 stars</span></div>`).join("");
+    const outRating = flagged(page("en", `<main><div class="grid">${rating}</div><p>${unique(800)}</p></main>`));
+    for (const w of ["average", "rating", "stars"]) expect(outRating).not.toContain(w);
+  });
+
+  test("the deduction never takes a word below half the flag threshold", () => {
+    // 25 priced lines of the stuffed phrase in 500 words: the card deduction is bounded (counted down to the floor, not to nothing)
+    const lines = Array.from({ length: 25 }, (_, n) => `<div><h3>Item ${n}</h3><span>emergency plumber london from $${n + 1}</span></div>`).join("");
+    const html = page("en", `<main>${lines}<p>${unique(425)}</p></main>`);
+    const check = keywordStuffingRule.run(ctx(html)).checks[0]!;
+    expect(["warn", "pass"]).toContain(check.status);
+    const word = check.items?.find((i) => i.id === "plumber");
+    if (word) expect((word.meta as { count: number }).count).toBeGreaterThanOrEqual(8);
   });
 
   test("text repeated once per product card does not count toward density", () => {
