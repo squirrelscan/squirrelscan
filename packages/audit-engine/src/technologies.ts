@@ -203,20 +203,34 @@ export function extractScriptSrcs(html: string): string[] {
  * HTML. A script-url detector with a script list never reads the HTML, so a
  * signal that lives in a stylesheet path (`/wp-content/plugins/woocommerce/...css`,
  * a vendor's CSS host) is invisible to it unless the URL is listed beside the
- * scripts (#1263). Bounded by the attribute scan, not by the page.
+ * scripts (#1263). Each tag is read once, at most 600 characters of attributes, and
+ * `rel` is split into words and looked up, so quoting style does not matter and
+ * nothing backtracks.
  */
+const LINK_REL_WORDS = new Set(["stylesheet", "preload", "modulepreload"]);
+
+/** The value of attribute `name` in a tag's attribute text: quoted either way, or bare. */
+function attributeValue(attrs: string, name: string): string | undefined {
+  const match = new RegExp(`(?:^|\\s)${name}\\s*=\\s*(?:"([^"]{0,2000})"|'([^']{0,2000})'|([^\\s"'>]{1,2000}))`, "i").exec(attrs);
+  return match?.[1] ?? match?.[2] ?? match?.[3];
+}
+
 export function extractLinkAssetHrefs(html: string): string[] {
   const out: string[] = [];
   const re = /<link\b([^>]{0,600})>/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(html)) !== null) {
     const attrs = m[1] ?? "";
-    if (!/\brel\s*=\s*["'](?:[^"']*\s)?(?:stylesheet|preload|modulepreload)(?:\s[^"']*)?["']/i.test(attrs)) continue;
-    const href = /\bhref\s*=\s*["']([^"']{1,2000})["']/i.exec(attrs)?.[1];
+    const rel = attributeValue(attrs, "rel");
+    if (!rel || !rel.toLowerCase().split(/\s+/).some((word) => LINK_REL_WORDS.has(word))) continue;
+    const href = attributeValue(attrs, "href");
     if (href) out.push(href);
   }
   return out;
 }
+
+/** Most stylesheet and preload URLs listed per page, after the scripts, so they never push a script out. */
+const MAX_LINK_HREFS_PER_PAGE = 20;
 
 /**
  * Tech-detect input for each page, with the first-party script bodies the crawl
@@ -314,7 +328,8 @@ export function buildTechInputs(
       });
     }
 
-    const srcs = [...extractScriptSrcs(page.html), ...extractLinkAssetHrefs(page.html)];
+    const srcs = extractScriptSrcs(page.html);
+    const linkHrefs = extractLinkAssetHrefs(page.html);
     const base: LocalTechInput = {
       url: page.url,
       headers: page.headers,
@@ -327,11 +342,21 @@ export function buildTechInputs(
     for (const src of srcs) urls.add(src);
     if (index === 0) for (const script of scripts) urls.add(script.url);
     const bodies = new Map(withBody.map((script) => [script.url, script.content]));
+    // Stylesheet and preload URLs come last under a cap of their own (#1263): a page with
+    // dozens of them cannot push a real script out of the per-page script limit.
+    const listed = [...urls].slice(0, SERVICE_LIMITS.techDetectMaxScriptsPerPage);
+    const seen = new Set(listed);
+    let linksAdded = 0;
+    for (const href of linkHrefs) {
+      if (linksAdded >= MAX_LINK_HREFS_PER_PAGE) break;
+      if (seen.has(href)) continue;
+      seen.add(href);
+      listed.push(href);
+      linksAdded++;
+    }
     return {
       ...base,
-      scripts: [...urls]
-        .slice(0, SERVICE_LIMITS.techDetectMaxScriptsPerPage)
-        .map((url) => ({ url, content: bodies.get(url) })),
+      scripts: listed.map((url) => ({ url, content: bodies.get(url) })),
     };
   });
 }

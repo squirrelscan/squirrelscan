@@ -149,3 +149,15 @@ export function techChangeSummary(tech: ReportTechnologies): string | null {
 export function techNameMap(items: ReportTechnology[]): Map<string, string> {
   return new Map(items.map((t) => [t.id, t.name]));
 }
+
+/**
+ * The opening tag of the technologies element in the llm and xml reports (#1263).
+ * A local scan keeps no history, so it states its `source` and omits `first-scan`,
+ * `added` and `removed`, which would claim a diff nobody computed; any other section
+ * keeps them, with `source` when it has one.
+ */
+export function techOpenTag(name: string, tech: ReportTechnologies, indent: string): string {
+  const source = tech.source ? ` source="${tech.source}"` : "";
+  if (tech.source === "local") return `${indent}<${name}${source}>`;
+  return `${indent}<${name}${source} first-scan="${tech.firstScan}" added="${tech.added.length}" removed="${tech.removed.length}">`;
+}

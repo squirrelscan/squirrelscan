@@ -7,6 +7,25 @@ import { inScript, resourceAttr, scriptSrc } from "./helpers";
 // documentation or page output names. No third-party catalog or signature file was
 // read or copied.
 //
+// Evidence, per signal (checked 2026-10-30; "live" = read off the product's own site):
+//  - meta generator, live: Contao ("Contao Open Source CMS", contao.org), Plone
+//    ("Plone 6 - https://plone.org", plone.org), Grav ("GravCMS", getgrav.org), Odoo
+//    ("Odoo", odoo.com). SilverStripe's "SilverStripe - http://silverstripe.org" comes from
+//    its documentation and was not read off a live page.
+//  - headers, from the product's documentation, not read live (the vendors' own sites hide
+//    them behind a proxy): `Liferay-Portal` (Liferay response header), `X-Powered-By: pimcore`
+//    (Pimcore's default), `X-Azure-Ref` (documented Azure Front Door response header).
+//  - vendor hosts, live (the host answers): cdn.consentmanager.net, delivery.consentmanager.net,
+//    static.axept.io/sdk.js, consent.cookiefirst.com, policy.app.cookieinformation.com/uc.js,
+//    cdn.cookie-script.com, cdn.tagcommander.com, cdn.webshopapp.com, cdn.matomo.cloud.
+//    `*.containers.piwik.pro/<uuid>.js` and `/cdn-cgi/zaraz/` are from Piwik PRO's and
+//    Cloudflare's documentation.
+//  - WordPress plugin slugs (borlabs-cookie, complianz-gdpr, real-cookie-banner,
+//    cookie-notice) are the plugins' wordpress.org directory slugs; `borlabsCookieConfig`,
+//    `klaroConfig`, `axeptioSettings`, `zarazData` and `_mtm` are the global names each
+//    product's own embed documentation tells you to define.
+//  Signals not read off a live page are the weakest; none is a name in prose.
+//
 // Each needs real markup context (a script tag, a resource attribute, an inline
 // script, a `<meta>` value or a response header), so a page that only talks about
 // the product, or shows its snippet in a code sample, does not match.
@@ -124,10 +143,7 @@ export const STACK_FINGERPRINTS: TechFingerprint[] = [
     category: "security",
     website: "https://cookieinformation.com",
     icon: "cookie-information",
-    detectors: [
-      ...scriptSrc(String.raw`(?:https:)?\/\/policy\.app\.cookieinformation\.com\/`),
-      ...scriptSrc(String.raw`(?:https:)?\/\/cdn\.cookieinformation\.com\/`),
-    ],
+    detectors: [...scriptSrc(String.raw`(?:https:)?\/\/policy\.app\.cookieinformation\.com\/`)],
     confidence: "high",
   },
   {
@@ -274,7 +290,9 @@ export const STACK_FINGERPRINTS: TechFingerprint[] = [
     confidence: "high",
   },
 
-  // CDNs.
+  // CDNs. (Google Cloud CDN has no fingerprint: its `Via: 1.1 google` header is sent by
+  // Google Front End for any Cloud Load Balancer, Cloud Run or App Engine response, so it
+  // cannot say a CDN is in use.)
   {
     id: "azure-front-door",
     name: "Azure Front Door",
@@ -283,14 +301,5 @@ export const STACK_FINGERPRINTS: TechFingerprint[] = [
     icon: "azure-front-door",
     detectors: [{ type: "header", name: "x-azure-ref", pattern: /.+/ }],
     confidence: "high",
-  },
-  {
-    id: "google-cloud-cdn",
-    name: "Google Cloud CDN",
-    category: "cdn",
-    website: "https://cloud.google.com/cdn",
-    icon: "google-cloud-cdn",
-    detectors: [{ type: "header", name: "via", pattern: /^1\.1 google$/i }],
-    confidence: "medium",
   },
 ];

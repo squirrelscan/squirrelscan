@@ -32,6 +32,7 @@ import { domainAgeYears } from "../site-metadata";
 import { lockedRulesMessage } from "../locked-rules";
 import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
 import { notCheckedLine, notCheckedRules } from "../not-checked";
+import { techOpenTag } from "../technologies";
 import { editorSummaryView } from "../editor-summary";
 import { collectInfoChecks } from "../info-checks";
 import {
@@ -517,7 +518,7 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   if (report.technologies && report.technologies.items.length > 0) {
     const tech = report.technologies;
     lines.push(
-      `<technologies first-scan="${tech.firstScan}" added="${tech.added.length}" removed="${tech.removed.length}">`,
+      techOpenTag("technologies", tech, ""),
     );
     for (const t of tech.items) {
       const ver = t.version ? ` version="${escapeXml(t.version)}"` : "";

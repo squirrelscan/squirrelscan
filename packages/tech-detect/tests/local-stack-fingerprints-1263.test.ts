@@ -125,10 +125,16 @@ describe("stack fingerprints (#1263)", () => {
       ["liferay", { "liferay-portal": "Liferay Community Edition Portal 7.4" }],
       ["pimcore", { "x-powered-by": "pimcore" }],
       ["azure-front-door", { "x-azure-ref": "20241030T000000Z-abc" }],
-      ["google-cloud-cdn", { via: "1.1 google" }],
     ])("%s from a response header", (id, headers) => {
       const found = detectTechnologies(input({ headers, html: PLAIN })).find((t) => t.id === id);
       expect(found?.detectedBy).toBe(`header:${Object.keys(headers)[0]}`);
+    });
+
+    test("a Google Front End response (Cloud Run, a load balancer) is not reported as a CDN", () => {
+      const html = page("", "<p>Hello</p>");
+      expect(
+        ids(input({ headers: { via: "1.1 google", server: "Google Frontend" }, html })),
+      ).not.toContain("google-cloud-cdn");
     });
 
     test("look-alikes do not match: hosts, header values and links to the vendor", () => {
@@ -143,9 +149,6 @@ describe("stack fingerprints (#1263)", () => {
       ).not.toContain("piwik-pro-tag-manager");
       expect(ids(input({ headers: { "x-powered-by": "NotPimcore" }, html: PLAIN }))).not.toContain(
         "pimcore",
-      );
-      expect(ids(input({ headers: { via: "1.1 google-evil" }, html: PLAIN }))).not.toContain(
-        "google-cloud-cdn",
       );
       expect(
         ids(
