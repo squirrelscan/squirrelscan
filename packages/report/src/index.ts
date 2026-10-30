@@ -38,6 +38,8 @@ export {
 export type { CategoryInfo, GroupInfo, RuleGroup } from "./categories";
 
 // Occurrence counting for folded aggregate checks (#910)
+export { collectSkippedChecks, parseSkippedChecks, restoreSkippedChecks } from "./skipped";
+export type { SkippedCheck } from "./skipped";
 export { checkOccurrences } from "./occurrences";
 
 // Grouping

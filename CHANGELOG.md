@@ -19,6 +19,8 @@ How it works:
 
 ### Fixed
 
+- **`squirrel report --input` keeps a saved report's skipped checks.** A JSON report lists the checks a rule could not finish in `skippedChecks`, with `summary.skipped`, but loading the file dropped them, so re-rendering or re-exporting it read as a clean audit on those pages. They are now read back, validated (the file is untrusted), and kept out of `issues`. (#518)
+
 - **`security/cookie-flags` no longer warns about CSRF token cookies.** `XSRF-TOKEN` (Angular, Laravel, Spring Security) and `csrftoken` (Django) are cookies a frontend such as Angular or Axios reads from script to send back in a header. `HttpOnly` is needed only when your frontend does not read the cookie, so a missing one is not a finding. They are now an info check, `cookie-httponly-csrf`, with the reason and docs links. The match is by exact name, a session cookie beside them still warns, and Secure and SameSite are still checked. (#1378)
 
 - **A deep start URL is now explicit and guaranteed to be audited.** `squirrel audit https://example.com/blog/post` says that it will audit the whole origin, records the page as `meta.requestedUrl` beside `meta.baseUrl`, and seeds its resolved destination before sitemap URLs so a small page limit cannot omit it. Origin-only audits are unchanged. (#1369)

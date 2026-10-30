@@ -692,6 +692,8 @@ Top-level keys. Keys marked optional are omitted when they do not apply.
 
 `summary.skipped` is the sum of `pagesCount` across `skippedChecks`, and is 0 when none were skipped.
 
+`squirrel report --input <file>` reads `skippedChecks` back from a saved JSON report, so re-rendering or re-exporting it keeps the list and `summary.skipped`. The file is treated as untrusted: an entry with a reason outside the ones above, a non-string rule id, check or page, or an unusable count is dropped, and a skip never becomes an issue. A report with no skips stays free of the key.
+
 A consumer that closes a finding when a rule stops reporting it should leave the pages in `skippedChecks` for that rule open, because the rule did not finish looking at them.
 
 **Info checks:** `infoChecks` lists the notes rules recorded with status `info`, for example `crawl/robots-meta-conflict`'s `redundant-noindex` ("2 page(s) blocked in robots.txt also have noindex") or "No dialog elements found". An info check is neither a finding nor a skip: it is never part of `issues`, and it never changes `passed`, `warnings`, `failed` or the score. It appears only when at least one was recorded.

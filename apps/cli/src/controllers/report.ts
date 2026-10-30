@@ -27,7 +27,11 @@ export interface CrawlMetadataWithPublished extends CrawlMetadata {
 import { parseResolvedAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
 import { unpackComponentOccurrences } from "@squirrelscan/core-contracts/component-evidence";
 import { unpackSiteResourceOccurrences } from "@squirrelscan/core-contracts/site-resource-evidence";
-import { WITHHELD_SEED_REDIRECT_TARGET } from "@squirrelscan/report";
+import {
+  parseSkippedChecks,
+  restoreSkippedChecks,
+  WITHHELD_SEED_REDIRECT_TARGET,
+} from "@squirrelscan/report";
 
 import {
   OUTPUT_FORMATS,
@@ -174,8 +178,9 @@ interface SlimJsonReport {
     skipped?: number;
   };
   /**
-   * Evaluation gaps (#518). Not read back: skipped checks are not findings, so
-   * they are never rebuilt into `ruleResults`.
+   * Evaluation gaps (#518). Read back as skip rows, never as findings: they are
+   * validated on the way in (the file is user-supplied) and rebuilt so a re-render
+   * and a re-export keep `skippedChecks` and `summary.skipped`.
    */
   skippedChecks?: unknown[];
   /** Info checks (#669). Not read back: they are notes, not findings. */
@@ -374,6 +379,24 @@ function convertSlimReport(report: SlimJsonReport): AuditReport {
       checks,
     };
   }
+
+  // Evaluation gaps (#518): rebuilt as skip rows so the report shows them again.
+  restoreSkippedChecks(
+    ruleResults,
+    parseSkippedChecks(report.skippedChecks),
+    (ruleId, name) => {
+      const candidate = normalizeCategoryCode(ruleId.split("/")[0] ?? "other");
+      return {
+        id: ruleId,
+        name,
+        description: "",
+        category: isValidCategory(candidate) ? candidate : "other",
+        scope: "page",
+        severity: "warning",
+        weight: 1,
+      };
+    }
+  );
 
   // The audit level the run used. The file is user-supplied, so the snapshot
   // is re-read through the shared parser: only valid levels and settings come

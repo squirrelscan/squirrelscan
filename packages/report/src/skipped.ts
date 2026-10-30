@@ -15,6 +15,7 @@ import {
   RULE_TIMED_OUT_SKIP_REASON,
   SCAN_TRUNCATED_SKIP_REASON,
 } from "@squirrelscan/core-contracts/resolution";
+import type { CheckResult } from "@squirrelscan/core-contracts";
 import type { ReportRuleResult } from "./types";
 
 /** Skip reasons listed in the report. Extend here to widen coverage. */
@@ -113,4 +114,84 @@ export function collectSkippedChecks(
     }
   }
   return out;
+}
+
+/** Most entries, and pages per entry, read back from a saved report (the file is user-supplied). */
+const MAX_RESTORED_SKIPPED = 1_000;
+const MAX_RESTORED_PAGES = 5_000;
+
+/**
+ * The skipped checks of a saved JSON report, validated (#518). The file is untrusted:
+ * an entry needs a string rule id and check name and a listed reason, pages must be
+ * strings, counts whole numbers. Anything else is dropped, never rendered.
+ */
+export function parseSkippedChecks(value: unknown): SkippedCheck[] {
+  if (!Array.isArray(value)) return [];
+  const out: SkippedCheck[] = [];
+  for (const raw of value.slice(0, MAX_RESTORED_SKIPPED)) {
+    if (typeof raw !== "object" || raw === null) continue;
+    const e = raw as Record<string, unknown>;
+    if (
+      typeof e.ruleId !== "string" ||
+      typeof e.check !== "string" ||
+      typeof e.reason !== "string" ||
+      !LISTED_SKIP_REASONS.has(e.reason) ||
+      e.ruleId.length === 0 ||
+      e.ruleId.length > 200 ||
+      e.check.length > 200
+    ) {
+      continue;
+    }
+    const pages = (Array.isArray(e.pages) ? e.pages : [])
+      .filter((p): p is string => typeof p === "string" && p.length <= 2_048)
+      .slice(0, MAX_RESTORED_PAGES);
+    const count = e.pagesCount;
+    const pagesCount =
+      typeof count === "number" && Number.isSafeInteger(count) && count >= pages.length
+        ? count
+        : pages.length;
+    out.push({
+      ruleId: e.ruleId,
+      name: typeof e.name === "string" && e.name.length <= 200 ? e.name : e.ruleId,
+      check: e.check,
+      reason: e.reason,
+      pages,
+      pagesCount,
+      pagesHasMore: pagesCount > pages.length,
+    });
+  }
+  return out;
+}
+
+/**
+ * The skip rows {@link collectSkippedChecks} reads, rebuilt from its output, so
+ * `squirrel report --input` shows the same not-checked lines as the audit that wrote
+ * the file and re-exporting it keeps `skippedChecks` and `summary.skipped`. One row per
+ * entry carrying every listed page; the true page total rides in `details`, which is
+ * where {@link collectSkippedChecks} reads it back from. `metaFor` builds the rule
+ * entry for a rule that had no issue in the file (a skipped-only rule).
+ */
+export function restoreSkippedChecks(
+  ruleResults: Record<string, ReportRuleResult>,
+  skipped: readonly SkippedCheck[],
+  metaFor: (ruleId: string, name: string) => ReportRuleResult["meta"],
+): void {
+  for (const entry of skipped) {
+    const errored = entry.reason === RULE_ERRORED_REASON;
+    const row: CheckResult = {
+      name: entry.check,
+      status: "skipped",
+      message: "",
+      skipReason: errored ? RULE_TIMED_OUT_SKIP_REASON : entry.reason,
+      pages: entry.pages,
+      details: {
+        ...(errored ? { errored: true } : {}),
+        ...(entry.pagesHasMore ? { pagesTruncated: entry.pagesCount } : {}),
+        ...(entry.reason === RULE_TIMED_OUT_SKIP_REASON || errored ? { pages: entry.pagesCount } : {}),
+      },
+    };
+    const existing = ruleResults[entry.ruleId];
+    if (existing) existing.checks.push(row);
+    else ruleResults[entry.ruleId] = { meta: metaFor(entry.ruleId, entry.name), checks: [row] };
+  }
 }
