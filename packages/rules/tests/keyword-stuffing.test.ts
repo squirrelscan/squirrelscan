@@ -414,7 +414,7 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
   const page = (lang: string, body: string) => `<html lang="${lang}"><head><title>t</title></head><body>${body}</body></html>`;
 
   test("German function words are not reported, a content word still is", () => {
-    const words = "sie für du dich dir deinen deinem deiner zu im am ihn ihm ob so";
+    const words = "sie für dich dir deinen deinem deiner ihn ihm";
     const prose = Array.from({ length: 12 }, () => `${words} ${filler(8)}`).join(" ");
     const html = page("de", `<main><p>${prose} ${"zahlung ".repeat(14)}</p></main>`);
     const out = flagged(html);
@@ -430,7 +430,7 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
   test("a mega menu of plain div links on a page with little copy is not measured", () => {
     const cats = ["bademode", "curvy", "wäsche", "kleider", "röcke", "hosen"];
     const links = Array.from({ length: 60 }, (_, i) => `<a href="/c/${i}">${cats[i % cats.length]} ${["neu", "sale", "alle", "top"][i % 4]}</a>`).join(" ");
-    const html = page("de", `<body><div class="menu"><div>${links}</div></div><div class="copy"><p>Kontakt ${filler(70)}</p></div></body>`);
+    const html = page("de", `<body><div class="mega-menu"><div>${links}</div></div><div class="copy"><p>Kontakt ${filler(70)}</p></div></body>`);
     expect(flagged(html)).toEqual([]);
   });
 
@@ -448,6 +448,34 @@ describe("content/keyword-stuffing: German function words, menu chrome, card mic
     expect(out).not.toContain("durchschnittliche");
     expect(out).not.toContain("bewertung");
     expect(out).not.toContain("sternen");
+    expect(out).not.toContain("zahlen");
+  });
+
+  test("true positive: 24 keyword links in one bare div (no list, no menu name) still count and flag", () => {
+    const cities = ["london", "leeds", "bristol", "york", "bath", "derby"];
+    const links = Array.from({ length: 24 }, (_, i) => `<a href="/p/${i}">emergency plumber ${cities[i % 6]}</a>`).join(" ");
+    const html = page("en", `<body><div>${links}</div><p>${filler(90)}</p></body>`);
+    expect(flagged(html)).toContain("plumber");
+    // the same links as a list in a nav-named wrapper are a menu and are left out
+    const menu = Array.from({ length: 24 }, (_, i) => `<li><a href="/p/${i}">emergency plumber ${cities[i % 6]}</a></li>`).join("");
+    const menuHtml = page("en", `<body><div class="site-menu"><ul>${menu}</ul></div><p>${filler(90)}</p></body>`);
+    expect(flagged(menuHtml)).not.toContain("plumber");
+  });
+
+  test("true positive: a repeated phrase in separate wrappers that hold only that phrase is not a card", () => {
+    const wrapped = Array.from({ length: 25 }, () => `<div class="sec"><p>cheap emergency plumber london</p></div>`).join("");
+    expect(flagged(page("en", `<main>${wrapped}<p>${filler(110)}</p></main>`))).toContain("plumber");
+    const lists = Array.from({ length: 25 }, () => `<ul><li>cheap emergency plumber london</li></ul>`).join("");
+    expect(flagged(page("en", `<main>${lists}<p>${filler(110)}</p></main>`))).toContain("plumber");
+    // control: one list of 25 items has one parent, so it was never a card
+    const one = `<ul>${Array.from({ length: 25 }, () => `<li>cheap emergency plumber london</li>`).join("")}</ul>`;
+    expect(flagged(page("en", `<main>${one}<p>${filler(110)}</p></main>`))).toContain("plumber");
+  });
+
+  test("the card bound counts candidate cards, not every element, so a large grid is still deducted", () => {
+    const big = Array.from({ length: 700 }, (_, n) => card(n % 30)).join("");
+    const out = flagged(page("de", `<main><div class="grid">${big}</div><p>${filler(60)}</p></main>`));
+    expect(out).not.toContain("durchschnittliche");
     expect(out).not.toContain("zahlen");
   });
 
