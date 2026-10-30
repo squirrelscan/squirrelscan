@@ -96,6 +96,8 @@ function linkTargetsHint(details: Record<string, unknown> | undefined): string {
 }
 
 function hintFor(check: { skipReason?: string; details?: Record<string, unknown> }): string {
+  if (check.skipReason === RULE_TIMED_OUT_SKIP_REASON && check.details?.errored === true)
+    return "This is a defect in squirrelscan, not a problem with your pages, and no finding there is not a clean result. Update squirrel and run the audit again, or report it at https://github.com/squirrelscan/squirrelscan/issues.";
   if (check.skipReason === LINK_TARGETS_NOT_FETCHED_SKIP_REASON)
     return linkTargetsHint(check.details);
   return (check.skipReason && HINTS[check.skipReason]) || DEFAULT_HINT;
@@ -108,7 +110,7 @@ function hintFor(check: { skipReason?: string; details?: Record<string, unknown>
  * restates links/broken-external-links), so listing them would say the same
  * thing twice. Empty for reports written before repo#2729.
  */
-/** A rule abandoned for its time budget on at least one page (pub#970). */
+/** A rule abandoned for its time budget, or that threw (#1291), on at least one page (pub#970). */
 export interface TimedOutRule {
   ruleId: string;
   name: string;
@@ -116,6 +118,10 @@ export interface TimedOutRule {
   /** Pages it did not check. */
   pages: number;
   budgetMs?: number;
+  /** The rule threw rather than ran out of time (#1291): squirrel's defect, not the page's. */
+  errored?: boolean;
+  /** The first error message, for an errored rule. */
+  error?: string;
 }
 
 /**
@@ -135,7 +141,8 @@ export function timedOutRules(report: NotCheckedReportShape): TimedOutRule[] {
     if (skipped.length === 0) continue;
     const num = (value: unknown): number | undefined =>
       typeof value === "number" && Number.isFinite(value) ? value : undefined;
-    const summary = result.checks.find((c) => c.name === `${ruleId}-timeouts`);
+    const errored = skipped.some((c) => c.details?.errored === true);
+    const summary = result.checks.find((c) => c.name === `${ruleId}-${errored ? "errors" : "timeouts"}`);
     // The summary's count is final. Without it (a published report may have cut the
     // row) the most any skipped row says: a fold keeps the pages it covered in
     // `occurrences` / `pagesTruncated`, a live row its running `pages`, else the
@@ -159,6 +166,12 @@ export function timedOutRules(report: NotCheckedReportShape): TimedOutRule[] {
       category: result.meta.category,
       pages,
       budgetMs: num(skipped[0]!.details?.budgetMs),
+      ...(errored
+        ? {
+            errored: true,
+            ...(typeof skipped[0]!.details?.error === "string" ? { error: skipped[0]!.details.error } : {}),
+          }
+        : {}),
     });
   }
   return out;
@@ -166,6 +179,10 @@ export function timedOutRules(report: NotCheckedReportShape): TimedOutRule[] {
 
 /** "Leaked Secrets timed out on 2 pages (exceeded its 1000 ms time budget)". */
 export function timedOutMessage(rule: TimedOutRule): string {
+  if (rule.errored) {
+    const first = rule.error ? ` (first error: ${rule.error})` : "";
+    return `${rule.name} hit an internal squirrelscan error on ${rule.pages} page${rule.pages === 1 ? "" : "s"} and was not evaluated${first}`;
+  }
   const budget = rule.budgetMs !== undefined ? ` (exceeded its ${rule.budgetMs} ms time budget)` : "";
   return `${rule.name} timed out on ${rule.pages} page${rule.pages === 1 ? "" : "s"}${budget}`;
 }

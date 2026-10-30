@@ -293,6 +293,15 @@ export class RuleRunner {
       maxElapsedMs?: number;
     }
   >();
+  // Page rules that THREW in this run (#1291), the same shape as a timeout: every
+  // page gets a skipped `<rule>-error` (not evaluated, never a finding: the defect
+  // is squirrel's, and one rule throwing on every page must not read as N failures
+  // or lower the score), the count lives on the first one and in one `<rule>-errors`
+  // info row. Per-AUDIT state like `timedOutPageRules`, cleared with it.
+  private readonly erroredPageRules = new Map<
+    string,
+    { details: { pages: number }; meta: Rule["meta"]; name: string; category: string; error: string }
+  >();
   // Per-run state — captured once at construction, immutable for the
   // lifetime of this runner instance. Each audit gets its own RuleRunner, so
   // concurrent audits never share these.
@@ -404,7 +413,7 @@ export class RuleRunner {
    * `budgetMs` bounds the synchronous part of `run()` (see rule-budget.ts). A rule
    * that runs past it is abandoned and recorded as a `<id>-error` SKIPPED check
    * (`rule-timed-out`: not evaluated, never a finding), so the rest of the audit
-   * carries on. A thrown error is still a `<id>-error` fail check.
+   * carries on. A thrown error is the same skipped `<id>-error` (`details.errored`, #1291).
    */
   private runOneRule(
     rule: Rule,
@@ -590,11 +599,43 @@ export class RuleRunner {
           },
         ];
       }
+      // A thrown rule is not evaluated either (#1291): a skipped `<rule>-error`
+      // with the timeout's skip reason (every consumer already treats it as a gap
+      // that carries, never resolves) and `details.errored`, so no consumer reads it
+      // as a page failure. The message is clipped: it can quote page content.
+      const error = e instanceof Error ? e.message : String(e);
+      const clipped = error.length > MAX_RULE_ERROR_CHARS ? `${error.slice(0, MAX_RULE_ERROR_CHARS)}...` : error;
+      const name = `${rule.meta.id}-error`;
+      const earlier = scopeForLog ? undefined : this.erroredPageRules.get(rule.meta.id);
+      if (earlier) {
+        earlier.details.pages++;
+        return [
+          {
+            name,
+            status: "skipped",
+            message: "Rule error: same error as the first page (already reported for this audit; rule not evaluated here)",
+            skipReason: RULE_TIMED_OUT_SKIP_REASON,
+            details: { errored: true, ruleId: rule.meta.id, pages: earlier.details.pages },
+          },
+        ];
+      }
+      const details = { errored: true, ruleId: rule.meta.id, error: clipped, pages: 1 };
+      if (!scopeForLog) {
+        this.erroredPageRules.set(rule.meta.id, {
+          details,
+          meta: rule.meta,
+          name: rule.meta.name,
+          category: rule.meta.category,
+          error: clipped,
+        });
+      }
       return [
         {
-          name: `${rule.meta.id}-error`,
-          status: "fail",
-          message: `Rule error: ${(e as Error).message}`,
+          name,
+          status: "skipped",
+          message: `Rule error: ${clipped} (rule not evaluated on this page)`,
+          skipReason: RULE_TIMED_OUT_SKIP_REASON,
+          details,
         },
       ];
     };
@@ -846,6 +887,15 @@ export class RuleRunner {
             existing ? { ...existing, checks: [...existing.checks, summary] } : { meta: t.meta, checks: [summary] }
           );
         }
+        for (const [ruleId, t] of this.erroredPageRules) {
+          const summary = errorSummaryCheck(ruleId, t.name, t.details.pages, t.error);
+          allChecks.push(summary);
+          const existing = ruleResults.get(ruleId);
+          ruleResults.set(
+            ruleId,
+            existing ? { ...existing, checks: [...existing.checks, summary] } : { meta: t.meta, checks: [summary] }
+          );
+        }
         this.resetAudit();
 
         return { checks: allChecks, ruleResults };
@@ -861,7 +911,24 @@ export class RuleRunner {
    */
   resetAudit(): void {
     this.timedOutPageRules.clear();
+    this.erroredPageRules.clear();
   }
+}
+
+/** A thrown rule's message is clipped to this in a check: it can quote page content. */
+const MAX_RULE_ERROR_CHARS = 200;
+
+/**
+ * The `<rule>-errors` info check (#1291): how many pages a rule that threw did
+ * not evaluate, and its first error. The one row the report shows for the rule.
+ */
+function errorSummaryCheck(ruleId: string, name: string, pages: number, error: string): CheckResult {
+  return {
+    name: `${ruleId}-errors`,
+    status: "info" as const,
+    message: `${name}: threw an error on ${pages} page${pages === 1 ? "" : "s"} and was not evaluated there (first error: ${error}). This is a defect in squirrelscan, not a problem with your pages`,
+    details: { errored: true, ruleId, pagesNotChecked: pages, error },
+  };
 }
 
 /**

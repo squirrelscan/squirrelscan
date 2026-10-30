@@ -391,7 +391,7 @@ describe("per-rule time budget", () => {
     expect((await firstCheck(["https://example.com/4"])).pages).toBe(1);
   }, 30_000);
 
-  test("thrown errors and fast rules are unchanged", async () => {
+  test("a thrown error is a not-evaluated skip (#1291) and fast rules are unchanged", async () => {
     const runner = makeRunner([
       rule("test/throws", "page", () => {
         throw new TypeError("boom");
@@ -400,7 +400,13 @@ describe("per-rule time budget", () => {
     ]);
     const { checks } = await runner.runPageRules(redosPage());
     expect(checks).toEqual([
-      { name: "test/throws-error", status: "fail", message: "Rule error: boom" },
+      {
+        name: "test/throws-error",
+        status: "skipped",
+        message: "Rule error: boom (rule not evaluated on this page)",
+        skipReason: "rule-timed-out",
+        details: { errored: true, ruleId: "test/throws", error: "boom", pages: 1 },
+      },
       { name: "test/fast", status: "pass", message: "ok" },
     ]);
   });

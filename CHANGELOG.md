@@ -19,6 +19,7 @@ How it works:
 
 ### Fixed
 
+- **A rule that throws is reported once as not evaluated, not as a failure on every page.** A rule that threw on every page of a 30-page site showed 30 failed checks and lowered the score for one defect in squirrel. It is now a skipped `<rule>-error` check (not evaluated, like a rule that ran out of time) on each page, plus one `<rule>-errors` summary with the first error and the page count, the score is unchanged, and the report prints a `Not checked:` line saying it is a squirrelscan defect. See [Rules](https://docs.squirrelscan.com/rules). (#1291)
 - **The docs and `--offline` help now keep offline and passive apart.** `--offline` is the network scope (no cloud, no other site) and `--passive` turns the probe rules off; they are independent, so `-C surface --offline` still sends the GraphQL and form-action probe requests to the audited site. A new "Offline and passive are separate" section in the audit docs has the four combinations and says exactly what a passive offline run still sends (the 28 discovery probes unless `--disable-discovery-probes`, internal link checks, sitemap path guesses). The passive banner now reads `passive · no probe rules`. Behaviour is unchanged. (#1225)
 
 ## v0.0.143 (2026-10-30)

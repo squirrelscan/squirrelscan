@@ -157,6 +157,13 @@ The report records it as a skipped check named after the rule with `-error` on t
 
 A timed-out rule did not check those pages. For a security rule, such as `security/leaked-secrets`, that means no finding on those pages is not a clean result: the pages were not scanned, so treat them as unchecked and look at them yourself. So a security rule that times out is counted by [`--fail-on`](/cli/audit#gate-ci-on-audit-results) as one warning-severity finding (`warnings>0` and `severity>=warning` trip on it, `errors` and `score` do not, so a gate that only uses those two passes: add a warning gate or raise `time_budget_ms`), while the score stays as if the page had been left unchecked. The count appears only in the gate summary, never as a finding in the report. The report and the gate summary name the rule and the number of pages it did not check, so a page built to make a security rule time out cannot leave a quiet pass. Rules in other categories are not counted by the gate.
 
+## A rule that throws
+
+A rule can also throw an error on a page, for example on markup it did not expect. That is a defect in squirrelscan, not a problem with your page, so it is handled the same way as a timeout: the rule is **not evaluated** on that page, never counted as a failure, and the health score is the same as if the page had been left unchecked for that rule. One rule throwing on every page of a 30 page site is one defect, not 30 failures.
+
+The report records a skipped check named after the rule with `-error` on the end (`content/hidden-text-error`) on every page where it happened. Its `skipReason` is `rule-timed-out` (the same not-evaluated reason as a timeout) and its `details` carry `errored: true`, the `ruleId`, `error` (the first error message, clipped to 200 characters because it can quote page content) and `pages` (how many pages it hit so far). The audit also gets one info check named `<rule>-errors` (`content/hidden-text-errors`) whose details carry `pagesNotChecked`, the final count, and the first `error`. The console, text, markdown, HTML, XML and LLM reports print a `Not checked:` line for the rule saying it hit an internal squirrelscan error on N pages, and `--fail-on` counts a security rule that threw as one warning, the same as a timeout. Update squirrel and run the audit again, or report it at the issue tracker.
+
+
 Ordinary pages never come close on an idle machine: the slowest rule takes a few milliseconds per page. If you see this on a page that looks normal and the machine was not busy, [open an issue](https://github.com/squirrelscan/squirrelscan/issues) with the page URL.
 
 ### Changing the budget
