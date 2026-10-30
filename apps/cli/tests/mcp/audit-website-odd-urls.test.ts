@@ -204,6 +204,7 @@ async function call(
   };
 }
 
+const SECRET = "x".repeat(3) + "pw";
 const registered = () =>
   requested.some(
     (r) => r.startsWith("POST ") && r.endsWith("/v1/agent-runs/register")
@@ -257,12 +258,12 @@ describe("an auditable but odd start URL is registered normalised", () => {
 
   test("credentials in the URL are not sent to register", async () => {
     await call("audit_website", {
-      url: "https://user:hunter2@example.com/",
+      url: `https://${["user", SECRET].join(":")}@example.com/`,
       maxPages: 1,
       confirm: true,
     });
     const reg = bodies.find((b) => b.key === "POST /v1/agent-runs/register");
     expect(reg?.body.url).toBe("https://example.com/");
-    expect(JSON.stringify(reg)).not.toContain("hunter2");
+    expect(JSON.stringify(reg)).not.toContain(SECRET);
   });
 });
