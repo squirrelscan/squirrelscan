@@ -68,11 +68,13 @@ const EMPTY_ASSETS: PreFetchedAssets = {
 
 // The (ruleId, checkName, status, pageUrl, message, value, expected) finding multiset, order-independent
 // (sorted), duplicate-preserving. The handoff's finding-set identity.
-function findingTuples(map: Map<string, RuleRunResult>, textExempt: ReadonlySet<string> = new Set()): string[] {
+// `digitsExempt` rules compare their message/value/expected with digit runs masked (a known count difference, #1359).
+function findingTuples(map: Map<string, RuleRunResult>, digitsExempt: ReadonlySet<string> = new Set()): string[] {
+  const mask = (text: string | number | null | undefined): string => String(text ?? "").replace(/\d+/g, "#");
   const out: string[] = [];
   for (const [ruleId, rr] of map) {
     for (const check of rr.checks) {
-      out.push(`${ruleId}|${check.name}|${check.status}|${check.pageUrl ?? ""}${textExempt.has(ruleId) ? "" : `|${check.message}|${check.value ?? ""}|${check.expected ?? ""}`}`);
+      out.push(`${ruleId}|${check.name}|${check.status}|${check.pageUrl ?? ""}${digitsExempt.has(ruleId) ? `|${mask(check.message)}|${mask(check.value)}|${mask(check.expected)}` : `|${check.message}|${check.value ?? ""}|${check.expected ?? ""}`}`);
     }
   }
   return out.sort();
@@ -114,15 +116,15 @@ async function runV2(
 async function assertParity(
   storage: SQLiteStorage,
   crawlId: string,
-  textExempt: ReadonlySet<string> = new Set(),
+  digitsExempt: ReadonlySet<string> = new Set(),
 ) {
   const v1 = await runV1(storage, crawlId);
   const v2 = await runV2(storage, crawlId);
 
   const v1Score = scoreOf(v1.ruleResultsMap);
   expect(scoreOf(v2.ruleResultsMap)).toEqual(v1Score);
-  expect(findingTuples(v2.ruleResultsMap, textExempt)).toEqual(
-    findingTuples(v1.ruleResultsMap, textExempt),
+  expect(findingTuples(v2.ruleResultsMap, digitsExempt)).toEqual(
+    findingTuples(v1.ruleResultsMap, digitsExempt),
   );
   expect(talliesScore(v2.tallies, v2.ruleResultsMap)).toEqual(v1Score);
   return { v1, v2, v1Score };
@@ -245,7 +247,7 @@ describe("runStreamingRules — GOLDEN INVARIANT vs runRulesOnStorage", () => {
       ),
     );
 
-    // #1359: v1 counts the bodyless 404 as a page in these two messages, streaming does not.
+    // #1359: v1 counts the bodyless 404 as a page in these two messages, streaming does not; only their digits are masked.
     const { v1 } = await assertParity(
       storage,
       crawlId,

@@ -9,7 +9,7 @@
 // second time.
 //
 // Named `*golden*` deliberately: that glob is what the "Audit engine golden tests"
-// CI job runs. `fingerprint-parity.test.ts` holds the other pinned hash in this
+// CI job runs. `fingerprint-parity-golden.test.ts` holds the other pinned hash in this
 // package and is NOT matched by it, so it has never run in CI (public #229) — a
 // mistake worth not repeating for a key that #1951 will fan rule verdicts across.
 //

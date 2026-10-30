@@ -20,7 +20,7 @@ const MASK64 = (1n << 64n) - 1n;
  *
  * Exported so the template cluster key (#1949) hashes with the SAME reviewed,
  * parity-pinned primitive rather than a second hand-rolled one. Changing it
- * changes both, which the pinned golden in `fingerprint-parity.test.ts` catches.
+ * changes both, which the pinned golden in `fingerprint-parity-golden.test.ts` catches.
  */
 export function fnv1a64(bytes: Uint8Array, seed: bigint): string {
   let h = (FNV_OFFSET ^ seed) & MASK64;
