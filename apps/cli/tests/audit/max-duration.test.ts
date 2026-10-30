@@ -49,7 +49,8 @@ describe("createDurationBudget", () => {
     const b = createDurationBudget(100, 1_000_000)!;
     expect(b.crawlStopAt).toBe(1_000_000 + 100_000);
     expect(b.crawlStopAt).toBeLessThan(b.checksDoneAt);
-    expect(b.checksDoneAt).toBeLessThan(b.pageRulesStopAt);
+    expect(b.checksDoneAt).toBeLessThan(b.probesDoneAt);
+    expect(b.probesDoneAt).toBeLessThan(b.pageRulesStopAt);
     expect(b.pageRulesStopAt).toBeLessThan(b.hardStopAt);
     // The hard stop leaves part of the margin for writing the report.
     expect(b.hardStopAt).toBeLessThan(b.crawlStopAt + b.marginMs);
@@ -79,6 +80,7 @@ describe("wasCut", () => {
     unfetched: 0,
     pagesNotEvaluated: 0,
     rulesCut: false,
+    probesSkipped: [] as string[],
   };
   test("a crawl the budget stopped with nothing left queued is not a cut", () => {
     expect(wasCut(none)).toBe(false);
@@ -87,6 +89,9 @@ describe("wasCut", () => {
     expect(wasCut({ ...none, unfetched: 3 })).toBe(true);
     expect(wasCut({ ...none, pagesNotEvaluated: 2 })).toBe(true);
     expect(wasCut({ ...none, rulesCut: true })).toBe(true);
+    expect(wasCut({ ...none, probesSkipped: ["soft-404-confirmation"] })).toBe(
+      true
+    );
   });
 });
 
@@ -129,6 +134,17 @@ describe("the reason sentence", () => {
     expect(
       maxDurationReason({
         seconds: 5,
+        unfetchedPages: 0,
+        pagesNotEvaluated: 0,
+        siteChecksCut: false,
+        probesSkipped: ["soft-404-confirmation"],
+      })
+    ).toBe(
+      "Stopped at the 5 s time limit (--max-duration): soft-404-confirmation did not finish and was skipped"
+    );
+    expect(
+      maxDurationReason({
+        seconds: 5,
         unfetchedPages: 1,
         pagesNotEvaluated: 0,
         siteChecksCut: false,
@@ -160,6 +176,7 @@ describe("resource checks cut short (#1271)", () => {
         unfetched: 0,
         pagesNotEvaluated: 0,
         rulesCut: false,
+        probesSkipped: [],
         resourceChecksCut: true,
       })
     ).toBe(true);
@@ -169,6 +186,7 @@ describe("resource checks cut short (#1271)", () => {
         unfetched: 0,
         pagesNotEvaluated: 0,
         rulesCut: false,
+        probesSkipped: [],
       })
     ).toBe(false);
   });

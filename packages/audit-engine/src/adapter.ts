@@ -136,7 +136,7 @@ import { collectDroppedBatch } from "./batch-gc";
 import { detachFromPage, detachParsedPage } from "./detach";
 import { resolveCloakingProbes } from "./cloaking-probe";
 import { createSiteQuery } from "./site-query";
-import { confirmSoft404Candidates } from "./soft404-confirm";
+import { confirmSoft404Candidates, markUnresolvedSoft404 } from "./soft404-confirm";
 import { headerScopeBase } from "@squirrelscan/utils/headers";
 
 import { createHeaderScope, headersWithheldFrom } from "./lib/header-scope";
@@ -2871,6 +2871,34 @@ function streamParsedUniverse(
  * re-parsing page stream (Pass 2 re-parses, so the confirm-pass mutation must be
  * carried by value, not object identity).
  */
+/**
+ * Run `work` unless `deadlineAt` has passed, and stop waiting for it at
+ * `deadlineAt` (#1327). `timedOut` means the caller got nothing (or only what the
+ * work had already written in place): the probe is skipped, recorded by the
+ * caller. A hanging request cannot be cancelled from here, so it is abandoned, not
+ * awaited; its own timeouts end it later. No deadline: runs as before.
+ */
+async function withinDeadline<T>(
+  work: () => Promise<T>,
+  deadlineAt: number | undefined,
+): Promise<{ timedOut: false; value: T } | { timedOut: true }> {
+  if (deadlineAt === undefined) return { timedOut: false, value: await work() };
+  const remaining = deadlineAt - Date.now();
+  if (remaining <= 0) return { timedOut: true };
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<{ timedOut: true }>((resolve) => {
+    timer = setTimeout(() => resolve({ timedOut: true }), remaining);
+  });
+  try {
+    const pending = work();
+    // The abandoned work may still reject later: that must not become unhandled.
+    pending.catch(() => undefined);
+    return await Promise.race([pending.then((value) => ({ timedOut: false as const, value })), expired]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function buildStreamingSiteData(
   storage: SQLiteStorage,
   crawlId: string,
@@ -2883,6 +2911,7 @@ function buildStreamingSiteData(
   egressPinnedByTransport?: boolean,
   pinOwnHosts?: boolean,
   ownSiteOnly?: boolean,
+  probes?: { deadlineAt?: number; onSkipped?: (probe: string) => void },
 ): Effect.Effect<
   {
     siteDataForPageRules: SiteData;
@@ -3042,8 +3071,8 @@ function buildStreamingSiteData(
       webAppManifestsDropped,
     } = assets;
 
-    const cloakingProbes = yield* Effect.promise(() =>
-      resolveCloakingProbes(
+    const cloaking = yield* Effect.promise(() =>
+      withinDeadline(() => resolveCloakingProbes(
         config.integrity?.cloaking_probe,
         {
           baseUrl: crawl?.baseUrl ?? "",
@@ -3069,20 +3098,25 @@ function buildStreamingSiteData(
             ownSiteOnly,
           ),
         },
-      ),
+      ), probes?.deadlineAt),
     );
+    // A cloaking probe cut at its deadline leaves the rule with no data (it no-ops), same as the probe being off.
+    if (cloaking.timedOut) probes?.onSkipped?.("cloaking-probe");
+    const cloakingProbes = cloaking.timedOut ? undefined : cloaking.value;
 
     // Soft-404 confirmation (#1177) — mutates each candidate's
     // `parsed.soft404Confirmation` in place (soft404-confirm.ts). Bounded to
     // flagged candidates; a failed/absent re-fetch degrades to `unconfirmed`.
-    yield* Effect.promise(() =>
+    const soft404Pages = Array.from(pageDataMap.values(), (page) => ({
+      url: page.normalizedUrl,
+      statusCode: page.status,
+      parsed: page.parsed,
+      rendered: isRenderedFetch(page.fetcherId),
+    }));
+    const soft404 = yield* Effect.promise(() =>
+      withinDeadline(() =>
       confirmSoft404Candidates(
-        Array.from(pageDataMap.values(), (page) => ({
-          url: page.normalizedUrl,
-          statusCode: page.status,
-          parsed: page.parsed,
-          rendered: isRenderedFetch(page.fetcherId),
-        })),
+        soft404Pages,
         {
           enabled: config.integrity?.soft404_confirm?.enabled ?? true,
           maxConfirmations: config.integrity?.soft404_confirm?.max_confirmations,
@@ -3099,8 +3133,12 @@ function buildStreamingSiteData(
           ),
           perHostDelayMs: config.crawler?.per_host_delay_ms,
         },
-      ).catch((): undefined => undefined),
+      ).catch((): undefined => undefined), probes?.deadlineAt),
     );
+    if (soft404.timedOut) {
+      probes?.onSkipped?.("soft-404-confirmation");
+      markUnresolvedSoft404(soft404Pages);
+    }
 
     const unfetchedPages = yield* countUnfetchedFrontier(storage, crawlId);
 
@@ -3412,6 +3450,15 @@ export function runStreamingRules(
     /** Epoch ms after which no further page starts its rules; see {@link streamPageRules} (#1271). */
     deadlineAt?: number;
     /**
+     * Epoch ms the probes before the page rules (soft-404 re-fetch, cloaking) must
+     * be done by (#1327). One still going is abandoned and reported through
+     * `onProbeSkipped`, so a hanging request cannot take the page rules' time. Unset:
+     * no deadline.
+     */
+    probesDeadlineAt?: number;
+    /** Called with the name of each probe skipped at `probesDeadlineAt`. */
+    onProbeSkipped?: (probe: string) => void;
+    /**
      * #1252 page-loop hooks, forwarded to {@link streamPageRules}. The cloud
      * passes them so the sync page-rule CPU yields to the event loop and emits a
      * progress marker every N pages; omitted → byte-identical local behavior.
@@ -3535,6 +3582,7 @@ export function runStreamingRules(
         opts?.egressPinnedByTransport,
         opts?.pinOwnHosts,
         opts?.ownSiteOnly,
+        { deadlineAt: opts?.probesDeadlineAt, onSkipped: opts?.onProbeSkipped },
       ),
     );
 

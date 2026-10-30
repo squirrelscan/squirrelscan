@@ -973,12 +973,22 @@ function slimMaxDuration(
   ) {
     return undefined;
   }
+  // Short names only (they are probe ids from this binary); anything else is dropped.
+  const probesSkipped = Array.isArray(v.probesSkipped)
+    ? v.probesSkipped
+        .filter(
+          (n): n is string =>
+            typeof n === "string" && /^[a-z0-9-]{1,40}$/.test(n)
+        )
+        .slice(0, 10)
+    : [];
   return {
     seconds,
     unfetchedPages,
     pagesNotEvaluated,
     siteChecksCut: v.siteChecksCut,
     ...(v.resourceChecksCut === true ? { resourceChecksCut: true } : {}),
+    ...(probesSkipped.length > 0 ? { probesSkipped } : {}),
   };
 }
 

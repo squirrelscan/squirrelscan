@@ -920,6 +920,7 @@ export async function runAudit(
     unfetched: 0,
     pagesNotEvaluated: 0,
     rulesCut: false,
+    probesSkipped: [],
   };
 
   const onProgress = options.onProgress ?? (() => {});
@@ -2070,7 +2071,13 @@ export async function runAudit(
           onPhase: streamPhaseMemoryLogger(),
           // #1271: no page starts its rules after this.
           ...(durationBudget
-            ? { deadlineAt: durationBudget.pageRulesStopAt }
+            ? {
+                deadlineAt: durationBudget.pageRulesStopAt,
+                probesDeadlineAt: durationBudget.probesDoneAt,
+                onProbeSkipped: (probe: string) => {
+                  durationCut.probesSkipped.push(probe);
+                },
+              }
             : {}),
           pageSink,
           retainPageResults: false,
@@ -2309,6 +2316,9 @@ export async function runAudit(
               siteChecksCut: durationCut.rulesCut,
               ...(durationCut.resourceChecksCut
                 ? { resourceChecksCut: true }
+                : {}),
+              ...(durationCut.probesSkipped.length > 0
+                ? { probesSkipped: durationCut.probesSkipped }
                 : {}),
             };
             // Persisted with the scope below, so `squirrel report` rebuilds it.

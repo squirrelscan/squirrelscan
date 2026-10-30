@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **`--max-duration`: a request hanging before the page checks no longer costs the page checks.** The soft-404 re-fetch of suspect pages and the cloaking probe run before the page rules; one that never answered held the rules phase until the hard stop, which cut the whole phase, so the report had no page findings even though every page was fetched. These probes now stop at their own deadline inside the margin and are skipped, `maxDuration.probesSkipped` names them, the page checks run on the fetched pages, and `siteChecksCut` is `true` only when the site-wide checks really did not finish. See [Time limit](https://docs.squirrelscan.com/cli/audit#time-limit). (#1327)
+
 ## v0.0.144 (2026-10-30)
 
 `squirrel audit --max-duration` stops at a wall-clock budget and writes a partial report instead of running on, `--include-pages` adds every crawled page with its status and rule count to the JSON report, and info checks now appear in the JSON and LLM reports (`--include-info`). The local technology scan reads stylesheet URLs and knows 24 more stacks, query-string copies of a page are counted with their canonical page, rules see controls inside declarative shadow roots, and a successful but empty page is audited and scored. A rule that throws is reported once as not evaluated, a rule that runs past its time budget is listed as skipped, and the docs now keep `--offline` and `--passive` apart. Thanks to William for the empty-page fix (#1314, #1330).
