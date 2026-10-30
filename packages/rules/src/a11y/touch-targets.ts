@@ -67,6 +67,7 @@ export const touchTargetsRule: Rule = {
         name: "touch-targets",
         status: "info",
         message: "Touch target sizes require CSS analysis",
+        details: { inconclusive: true },
         value: "Verify buttons/links are at least 44x44px",
       });
     }

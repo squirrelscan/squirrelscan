@@ -131,6 +131,7 @@ export const colorContrastRule: Rule = {
         name: "color-contrast",
         status: "info",
         message: "Limited contrast analysis available",
+        details: { inconclusive: true },
         value: "Use browser DevTools or WebAIM Contrast Checker for full audit",
       });
     }

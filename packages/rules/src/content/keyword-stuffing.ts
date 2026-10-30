@@ -356,6 +356,7 @@ export const keywordStuffingRule: Rule = {
         name: "keyword-stuffing",
         status: "info",
         message: "Content too short for keyword density analysis",
+        details: { inconclusive: true },
       });
       return { checks };
     }

@@ -988,6 +988,17 @@ export async function runCloudSmartAudits(
     ? (f: CarriedFinding): boolean => evaluatedThisRun(f, crawledUrls, tallySignal)
     : undefined;
 
+  // (#1031) Pages this run crawled that still carry a finding no run re-observed: the page was
+  // re-evaluated, so the carry means the rule gave no verdict there. A carry the signal reconfirmed
+  // (still failing, clipped from the publish sample) is stamped with this run's time and is not stale.
+  const staleCarryPages = new Set<string>();
+  const noteStaleCarry = (finding: { normalizedUrl: string; lastSeenAt?: number }): void => {
+    if ((finding.lastSeenAt ?? 0) >= now) return;
+    if (crawledUrls.has(finding.normalizedUrl) || (resolution?.crawledUrls.has(finding.normalizedUrl) ?? false)) {
+      staleCarryPages.add(finding.normalizedUrl);
+    }
+  };
+
   if (streamedComplete) {
     const fold = createCompleteStoreTallyFold({
       ruleResults: shellResults ?? input.ruleResults,
@@ -1008,6 +1019,7 @@ export async function runCloudSmartAudits(
     onActive = (finding) => {
       if (finding.provenance !== "carried" || countedByTallies?.(finding)) return;
       carriedCount += 1;
+      noteStaleCarry(finding);
       if (finding.neverRendered) unrenderedCount += 1;
       // No copy: `MergedFinding` already carries every field `CarriedFinding`
       // reads, `lastSeenAt` included — which is what stamps the replayed check
@@ -1155,6 +1167,9 @@ export async function runCloudSmartAudits(
     : checkTallies
       ? notCrawledThisRun(carriedPageUrls, resolution)
       : withoutUnscorablePages(carriedPageUrls, resolution, carriedFindings);
+  // The sampled path's carried list is the union's (after the capped report's tallies took theirs);
+  // the streamed path noted its carries as they went by.
+  for (const f of unionCarried) noteStaleCarry(f);
   const unionRuleResults = buildScoringResultsFromMerged({
     freshResults: freshForUnion,
     carriedFindings: unionCarried,
@@ -1163,14 +1178,6 @@ export async function runCloudSmartAudits(
     ...(carriedSource ? { carriedSource } : {}),
   });
 
-  // (#1031) Carried findings on pages this run crawled: those pages were re-evaluated.
-  const staleCarryPages = new Set<string>();
-  for (const f of unionCarried) {
-    if (crawledUrls.has(f.normalizedUrl) || (resolution?.crawledUrls.has(f.normalizedUrl) ?? false)) {
-      staleCarryPages.add(f.normalizedUrl);
-    }
-  }
-  const pagesWithStaleCarry = staleCarryPages.size;
 
   let reportTotals: CloudSmartAuditsResult["reportTotals"];
   let shownLastSeen = carriedLastSeen;
@@ -1211,7 +1218,7 @@ export async function runCloudSmartAudits(
       knownPages: knownPageCount(session.activePageCount, auditedPages, input.unfetchedPages),
       carriedFindings: carriedCount - unrenderedCount,
       ...(unrenderedCount > 0 ? { unrenderedFindings: unrenderedCount } : {}),
-      ...(pagesWithStaleCarry > 0 ? { pagesWithStaleCarry } : {}),
+      ...(staleCarryPages.size > 0 ? { pagesWithStaleCarry: staleCarryPages.size } : {}),
     },
     carriedLastSeen: shownLastSeen,
     persistedFindings,

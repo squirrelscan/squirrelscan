@@ -230,6 +230,7 @@ export const expectedTypeSchemaRule: Rule = {
             name: "expected-type",
             status: "info",
             message: "Page type not classified with enough confidence to expect structured data",
+            details: { inconclusive: true },
           },
         ],
       };
@@ -295,7 +296,7 @@ export const expectedTypeSchemaRule: Rule = {
         name: "expected-type",
         status: "info",
         message: UNREADABLE_MESSAGE,
-        details,
+        details: { ...details, inconclusive: true },
       });
       return { checks };
     }

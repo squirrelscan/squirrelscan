@@ -1819,7 +1819,9 @@ function ReportPage({
   const level = auditLevelLine(report);
   const cov =
     report.coverage &&
-    (report.coverage.carriedFindings > 0 || (report.coverage.unrenderedFindings ?? 0) > 0)
+    (report.coverage.carriedFindings > 0 ||
+      (report.coverage.unrenderedFindings ?? 0) > 0 ||
+      (report.coverage.pagesWithStaleCarry ?? 0) > 0)
       ? coverageLine(report)
       : null;
   // The coverage notice replaces the generic partial-scan hint.

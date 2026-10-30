@@ -109,6 +109,7 @@ export const http2Rule: Rule = {
         message: "HTTP/2 support cannot be determined from headers",
         details: {
           note: "HTTP/2 is recommended for all HTTPS sites",
+          inconclusive: true,
         },
       });
     }
