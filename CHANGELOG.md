@@ -27,6 +27,10 @@ How it works:
 
 - `SQUIRREL_SKILLS_TEST_SOURCE`, a loopback-only test hook that lets `squirrel skills install` read from a local fixture server. Any non-loopback value is ignored with a warning (#590)
 
+### Changed
+
+- **`perf/bad-caching` names Cloudflare JavaScript Detections when it finds it.** When at least half of the pages missing an ETag or Last-Modified validator are behind Cloudflare and carry the JavaScript Detections script (inline or from `/cdn-cgi/challenge-platform/`), the note says it was found and that Cloudflare removes the ETag where it injects it, instead of listing every feature that might. Pages behind Cloudflare without the marker keep the headers-only note. The marker is a new per-page signal, so the rule-result cache format changes: the first audit of each site after the upgrade runs every rule fresh, once. See [Weak caching](https://docs.squirrelscan.com/rules/perf/bad-caching). (#605)
+
 ## v0.0.144 (2026-10-30)
 
 `squirrel audit --max-duration` stops at a wall-clock budget and writes a partial report instead of running on, `--include-pages` adds every crawled page with its status and rule count to the JSON report, and info checks now appear in the JSON and LLM reports (`--include-info`). The local technology scan reads stylesheet URLs and knows 24 more stacks, query-string copies of a page are counted with their canonical page, rules see controls inside declarative shadow roots, and a successful but empty page is audited and scored. A rule that throws is reported once as not evaluated, a rule that runs past its time budget is listed as skipped, and the docs now keep `--offline` and `--passive` apart. Thanks to William for the empty-page fix (#1314, #1330).

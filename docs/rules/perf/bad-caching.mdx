@@ -63,6 +63,8 @@ When `bad-caching-validators` warns and at least half of the pages missing a val
 
 `K of them came through Cloudflare, which may drop the ETag from HTML it rewrites with Email Address Obfuscation, Automatic HTTPS Rewrites, Replace insecure JavaScript libraries or JavaScript Detections (Bot Fight Mode). Add no-transform to the HTML Cache-Control, turn those features off, or also send Last-Modified`
 
+**When JavaScript Detections is found.** One of those features leaves a marker in the page: an inline script that sets `window.__CF$cv$params` or references `/cdn-cgi/challenge-platform/` (or an external script from that path). When at least half of the pages missing a validator are behind Cloudflare and carry it, the message instead says `Cloudflare JavaScript Detections (turned on by Bot Fight Mode) was found on K of them, and Cloudflare removes the ETag from HTML where it injects the script`, and points at turning it off in the Cloudflare dashboard (Security, Bots), `no-transform`, or `Last-Modified`; `details.javascriptDetectionsPages` is K. Pages behind Cloudflare without the marker keep the note above. Only a `<script>` counts: the path in visible text or a code sample does not, and only the first 2,048 characters of each of the first 60 scripts of a page are read, so a very large page costs the same as a small one. The marker is read from the page's own DOM on both engines (`squirrel audit` and `squirrel analyze`).
+
 The note says "may" because squirrel only sees what Cloudflare sent, not what your origin sent: an origin that never set a validator looks the same from outside. It never changes the check's status, and the JSON report carries the count as `details.cloudflarePages`.
 
 | | |

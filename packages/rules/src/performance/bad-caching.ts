@@ -18,7 +18,7 @@ import {
   cacheControlLifetimeSeconds,
   parseCacheControl,
 } from "@squirrelscan/utils/cache-control";
-import { detectCdnFromHeaders } from "@squirrelscan/utils/cdn";
+import { detectCdnFromHeaders, hasJavaScriptDetections } from "@squirrelscan/utils/cdn";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
@@ -33,6 +33,17 @@ function cloudflareNote(cloudflarePages: number): string {
     " with Email Address Obfuscation, Automatic HTTPS Rewrites, Replace insecure JavaScript libraries" +
     " or JavaScript Detections (Bot Fight Mode). Add no-transform to the HTML Cache-Control," +
     " turn those features off, or also send Last-Modified"
+  );
+}
+
+// Cloudflare JavaScript Detections is the one of those features that leaves a marker in the page: an
+// inline script. When most of the Cloudflare pages missing a validator carry it, the note names it
+// instead of listing every possibility (#605).
+function jsDetectionsNote(pages: number): string {
+  return (
+    `. Cloudflare JavaScript Detections (turned on by Bot Fight Mode) was found on ${pages} of them, and Cloudflare` +
+    " removes the ETag from HTML where it injects the script. Turn it off in the Cloudflare dashboard (Security," +
+    " Bots), add no-transform to the HTML Cache-Control, or also send Last-Modified"
   );
 }
 
@@ -113,6 +124,10 @@ export const badCachingRule: Rule = {
     let withCachePolicy = 0;
     let withValidator = 0; // has ETag or Last-Modified
     let noValidatorViaCloudflare = 0;
+    let noValidatorWithJsd = 0;
+    // The marker per page: the streaming engine records it with the page's other signals, the
+    // resident engine reads it off the live document (#605).
+    const markersByUrl = new Map((ctx.collectedSignals?.pages ?? []).map((rec) => [rec.url, rec.edgeMarkers ?? []]));
     let compressibleTotal = 0;
     let compressibleCompressed = 0;
     const noCacheExamples: string[] = [];
@@ -146,7 +161,14 @@ export const badCachingRule: Rule = {
       if (hasValidator) withValidator++;
       else {
         if (noValidatorExamples.length < 5) noValidatorExamples.push(page.url);
-        if (detectCdnFromHeaders(h) === "cloudflare") noValidatorViaCloudflare++;
+        if (detectCdnFromHeaders(h) === "cloudflare") {
+          noValidatorViaCloudflare++;
+          const doc = page.parsed?.document;
+          const jsd = ctx.collectedSignals
+            ? (markersByUrl.get(page.url) ?? []).includes("cf-jsd")
+            : doc !== undefined && doc !== null && hasJavaScriptDetections(doc);
+          if (jsd) noValidatorWithJsd++;
+        }
       }
 
       // `max-age=0, must-revalidate` (or `no-cache`) WITH an ETag or a
@@ -217,12 +239,17 @@ export const badCachingRule: Rule = {
       const missing = total - withValidator;
       const viaCloudflare =
         noValidatorViaCloudflare > 0 && noValidatorViaCloudflare * 2 >= missing;
+      const viaJsd = noValidatorWithJsd > 0 && noValidatorWithJsd * 2 >= missing;
       checks.push({
         name: "bad-caching-validators",
         status: "warn",
         message:
           `${missing}/${total} pages lack an ETag or Last-Modified validator` +
-          (viaCloudflare ? cloudflareNote(noValidatorViaCloudflare) : ""),
+          (viaJsd
+            ? jsDetectionsNote(noValidatorWithJsd)
+            : viaCloudflare
+              ? cloudflareNote(noValidatorViaCloudflare)
+              : ""),
         value: `${Math.round(validatorRatio * 100)}%`,
         expected: `≥ ${Math.round(opts.min_validator_ratio * 100)}% with ETag or Last-Modified`,
         pages: noValidatorExamples,
@@ -230,6 +257,7 @@ export const badCachingRule: Rule = {
           pagesWithValidator: withValidator,
           totalPages: total,
           ...(viaCloudflare ? { cloudflarePages: noValidatorViaCloudflare } : {}),
+          ...(viaJsd ? { javascriptDetectionsPages: noValidatorWithJsd } : {}),
         },
       });
     } else {
