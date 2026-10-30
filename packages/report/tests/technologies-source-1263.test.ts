@@ -5,8 +5,10 @@ import { describe, expect, test } from "bun:test";
 
 import { techChangeSummary } from "../src/technologies";
 import { renderJson } from "../src/output/json";
+import { renderLlm } from "../src/output/llm";
 import { renderMarkdown } from "../src/output/markdown";
 import { renderText } from "../src/output/text";
+import { renderXml } from "../src/output/xml";
 import type { AuditReport } from "../src/types";
 
 const item = {
@@ -77,5 +79,31 @@ describe("technologies source (#1263)", () => {
       technologies?: { source?: string };
     };
     expect(legacy.technologies?.source).toBeUndefined();
+  });
+
+  test("the llm and xml reports name the source and make no diff claim for a local section", () => {
+    for (const out of [
+      String(renderLlm(report(section({ source: "local" })) as never)),
+      String(renderXml(report(section({ source: "local" })) as never)),
+    ]) {
+      expect(out).toContain('<technologies source="local">');
+      expect(out).not.toContain("first-scan");
+      expect(out).not.toContain('added="');
+    }
+  });
+
+  test("the llm and xml reports keep the diff attributes for a cloud section, and for one with no source", () => {
+    for (const make of [() => section({ source: "cloud" }), () => section({})]) {
+      for (const out of [
+        String(renderLlm(report(make()) as never)),
+        String(renderXml(report(make()) as never)),
+      ]) {
+        expect(out).toContain('first-scan="false" added="0" removed="0"');
+      }
+    }
+    expect(String(renderLlm(report(section({ source: "cloud" })) as never))).toContain(
+      'source="cloud"',
+    );
+    expect(String(renderXml(report(section({})) as never))).not.toContain("source=");
   });
 });

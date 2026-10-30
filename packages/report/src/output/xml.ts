@@ -1,6 +1,7 @@
 // XML report output
 
 import type { ReportBranding } from "@squirrelscan/core-contracts";
+import { techOpenTag } from "../technologies";
 import type { AuditReport } from "../types";
 import { getScoreGrade } from "../scoring";
 import { getGroupName } from "../categories";
@@ -209,7 +210,7 @@ export function renderXml(report: AuditReport, options?: XmlRenderOptions): stri
   if (report.technologies && report.technologies.items.length > 0) {
     const tech = report.technologies;
     lines.push(
-      `${indent(1)}<technologies first-scan="${tech.firstScan}" added="${tech.added.length}" removed="${tech.removed.length}">`,
+      techOpenTag("technologies", tech, indent(1)),
     );
     for (const t of tech.items) {
       const ver = t.version ? ` version="${escapeXml(t.version)}"` : "";
