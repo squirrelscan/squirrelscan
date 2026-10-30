@@ -257,15 +257,12 @@ function handshake(args: {
 
     let open: TLSSocket;
     try {
-      open = connect({
+      open = connectForFacts({
         // The vetted address, never the name: the guard's answer is the one used.
         host: address,
         port,
-        // SNI and verification both use the name; an IP literal has no SNI name.
-        ...(isIP(hostname) === 0 ? { servername: hostname } : {}),
-        // Verification is done on the facts, so every served certificate can be read.
-        rejectUnauthorized: false,
-        ...(ca !== undefined ? { ca } : {}),
+        hostname,
+        ca,
         timeout: timeoutMs,
       });
     } catch (error) {
@@ -274,6 +271,31 @@ function handshake(args: {
     }
     socket = open;
     readServedCertificate(open, hostname, finish);
+  });
+}
+
+/**
+ * The one place a TLS socket is opened. Verification is not enforced here, by
+ * design: the audit reads the certificate the server presents, trusted or not,
+ * and judges it on the facts (`authorized`, `authorizationError`, the names and
+ * dates), so an expired, self-signed or mismatched certificate is REPORTED
+ * instead of aborting the handshake. No request, header or credential is sent
+ * over this connection. `hostname` is the SNI name (an IP literal has none).
+ */
+function connectForFacts(options: {
+  hostname: string;
+  ca?: string;
+  host?: string;
+  port?: number;
+  socket?: Socket;
+  timeout?: number;
+}): TLSSocket {
+  const { hostname, ca, ...target } = options;
+  return connect({
+    ...target,
+    ...(isIP(hostname) === 0 ? { servername: hostname } : {}),
+    rejectUnauthorized: false,
+    ...(ca !== undefined ? { ca } : {}),
   });
 }
 
@@ -509,13 +531,7 @@ function tunnelHandshake(args: {
       }
       let opened: TLSSocket;
       try {
-        opened = connect({
-          socket,
-          // SNI and verification both use the name; an IP literal has no SNI name.
-          ...(isIP(hostname) === 0 ? { servername: hostname } : {}),
-          rejectUnauthorized: false,
-          ...(ca !== undefined ? { ca } : {}),
-        });
+        opened = connectForFacts({ socket, hostname, ca });
       } catch (error) {
         fail("PROXY_TLS_ERROR", errorText(error));
         return;
