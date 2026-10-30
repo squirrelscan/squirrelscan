@@ -133,6 +133,7 @@ Conventions and traps:
    - Bump the category's "(N rules)" in `docs/rules/index.mdx` and in its score group page (`docs/rules/{seo,performance,security,agents}/index.mdx`).
    - Rounded totals ("300+", `PUBLIC_RULE_COUNT_FLOOR`) are rounded down to a multiple of 50 on purpose and change only when the live count crosses the next one. Do update the "currently N enabled rules" comment beside the floor in `packages/utils/src/constants.ts`.
 6. **Move the golden pins.** Run `bun test ./packages/audit-engine/tests/streaming-rules-canonical-golden.test.ts`.
+   - The finding messages are pinned too: after a change to a rule's message or fix text, run `UPDATE_GOLDEN=1 bun test packages/audit-engine/tests/golden-finding-messages-229.test.ts` and review the diff of the snapshot.
    - `perRuleTally.length` goes up by one per new rule id.
    - `findings.length` goes up by one per fixture page (500) for a page rule that always emits a check, by one for a site rule, and not at all for a rule whose precondition the synthetic site never meets.
    - Extend the running comment above each number with your rule.
