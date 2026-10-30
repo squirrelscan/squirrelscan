@@ -17,6 +17,14 @@ How it works:
 
 ## [Unreleased]
 
+### Changed
+
+- **The crawler no longer sends a default `Accept-Language`.** It sent `en-US,en;q=0.9` on every request, so a site that redirects by language (Shopify Markets, for one) sent `/de-ch` and `/fr-ch` to `/en`, and the duplicate-description rule reported all three as one page. It now sends none, as a search-engine bot does, and `[crawler] headers = { "Accept-Language" = "..." }` still sets one. Pages cached by an earlier run are fetched again once. (#1355)
+
+### Fixed
+
+- **A page that redirected to another URL is no longer counted as a second page with the target's title and description.** `content/duplicate-title`, `content/duplicate-description` and `core/title-unique` counted the requested URL beside the URL it ended up on. They now count the content once, where it is served from. (#1355)
+
 ## v0.0.144 (2026-10-30)
 
 `squirrel audit --max-duration` stops at a wall-clock budget and writes a partial report instead of running on, `--include-pages` adds every crawled page with its status and rule count to the JSON report, and info checks now appear in the JSON and LLM reports (`--include-info`). The local technology scan reads stylesheet URLs and knows 24 more stacks, query-string copies of a page are counted with their canonical page, rules see controls inside declarative shadow roots, and a successful but empty page is audited and scored. A rule that throws is reported once as not evaluated, a rule that runs past its time budget is listed as skipped, and the docs now keep `--offline` and `--passive` apart. Thanks to William for the empty-page fix (#1314, #1330).

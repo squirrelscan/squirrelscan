@@ -27,6 +27,7 @@ import type { PageFingerprint, ParsedPage } from "@squirrelscan/rules";
 
 import { buildHeadersMap, hasAuditableHtmlBody, isHtmlContentType } from "./adapter";
 import { templateFingerprintKey } from "./template-key";
+import { redirectedAway } from "@squirrelscan/utils/url";
 
 /**
  * Whether a crawled page enters the audit the way v1 `runRulesOnStorage` decides:
@@ -108,8 +109,12 @@ export function extractPageFeatures(
   // appended by the rules from ctx.site.robotsTxt at run time.
   const indexability = isPageIndexable(parsed, headers);
 
-  const title = parsed.meta.title;
-  const description = parsed.meta.description;
+  // A page that redirected to another URL carries that URL's title and description
+  // (#1355). The rows that group pages by them (duplicate title and description)
+  // count the content once, where it is served from, so this URL has none.
+  const redirected = redirectedAway(page.normalizedUrl, page.finalUrl);
+  const title = redirected ? null : parsed.meta.title;
+  const description = redirected ? null : parsed.meta.description;
   // Same extractor local/nap-consistency's legacy path calls on the live parsed
   // page, so the stored signal and the re-derived one are identical by construction.
   const nap = extractNapSignal(parsed);

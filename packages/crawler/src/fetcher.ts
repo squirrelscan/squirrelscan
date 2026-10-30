@@ -442,9 +442,9 @@ export function applyBrowserHeaders(headers: Headers, userAgent: string): void {
   if (!headers.has("Accept")) {
     headers.set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
   }
-  if (!headers.has("Accept-Language")) {
-    headers.set("Accept-Language", "en-US,en;q=0.9");
-  }
+  // No default Accept-Language (#1355): a search-engine bot sends none, and sites
+  // that redirect by it would send every locale path to one language. A value set
+  // in `[crawler] headers` is passed through as given.
   if (!headers.has("Upgrade-Insecure-Requests")) {
     headers.set("Upgrade-Insecure-Requests", "1");
   }
@@ -1135,7 +1135,6 @@ function fetchPageStandardOnce(
         {
           "User-Agent": options.userAgent,
           Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.9",
           "Upgrade-Insecure-Requests": "1",
         },
         options.headers,
@@ -1444,7 +1443,6 @@ export function fetchPage(
     {
       "User-Agent": options.userAgent,
       Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "Accept-Language": "en-US,en;q=0.9",
       "Upgrade-Insecure-Requests": "1",
     },
     options.headers,

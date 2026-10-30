@@ -119,9 +119,6 @@ function applyBrowserHeaders(headers: Headers, userAgent: string): void {
       "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8"
     );
   }
-  if (!headers.has("Accept-Language")) {
-    headers.set("Accept-Language", "en-US,en;q=0.9");
-  }
   if (!headers.has("Accept-Encoding")) {
     headers.set("Accept-Encoding", "gzip, deflate, br");
   }
