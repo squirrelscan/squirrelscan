@@ -103,11 +103,13 @@ describe("security/cookie-flags", () => {
       "optout=1; Path=/; Expires=Wed, 09 Jun 2027 10:18:14 GMT",
     ].join("\n");
     const { checks } = cookieFlagsRule.run(ctx(value));
-    // "csrftoken" is missing HttpOnly, "optout" is missing both Secure and
-    // HttpOnly — if any cookie were silently dropped (the pre-#973 "last
-    // cookie wins" bug) these counts would undercount.
+    // "csrftoken" is missing HttpOnly (a CSRF cookie: info since #1378, still
+    // evaluated), "optout" is missing both Secure and HttpOnly — if any cookie
+    // were silently dropped (the pre-#973 "last cookie wins" bug) these would
+    // undercount.
     const httpOnlyCheck = checksByName(checks, "cookie-httponly");
-    expect(httpOnlyCheck?.items?.map((i) => i.id)).toEqual(["csrftoken", "optout"]);
+    expect(httpOnlyCheck?.items?.map((i) => i.id)).toEqual(["optout"]);
+    expect(checksByName(checks, "cookie-httponly-csrf")?.items?.map((i) => i.id)).toEqual(["csrftoken"]);
     const secureCheck = checksByName(checks, "cookie-secure");
     expect(secureCheck?.items?.map((i) => i.id)).toEqual(["optout"]);
   });
@@ -181,7 +183,9 @@ describe("security/cookie-flags: platform cookies (#1378)", () => {
     for (const c of PLATFORM_COOKIES) {
       expect(c.name.length).toBeGreaterThan(0);
       expect(c.platform.length).toBeGreaterThan(0);
-      expect(c.docs).toMatch(/^https:\/\//);
+      for (const d of c.docs) expect(d).toMatch(/^https:\/\//);
+      expect(c.docs.length).toBeGreaterThan(0);
+      expect(["platform", "csrf"]).toContain(c.kind);
       expect(c.evidence.length).toBeGreaterThan(0);
       expect(typeof c.documented).toBe("boolean");
     }
@@ -190,5 +194,54 @@ describe("security/cookie-flags: platform cookies (#1378)", () => {
   test("names match exactly: __dpl2 and a case variant are ordinary cookies", () => {
     const { checks } = cookieFlagsRule.run(ctx("__dpl2=x; Path=/; Secure; SameSite=Lax, __DPL=y; Path=/; Secure; SameSite=Lax"));
     expect(checksByName(checks, "cookie-httponly")?.items).toHaveLength(2);
+  });
+});
+
+// #1378 follow-up: CSRF double-submit cookies are meant to be read by script.
+describe("security/cookie-flags: CSRF token cookies (#1378)", () => {
+  const SESSION = "a1b2c3d4".repeat(4);
+
+  test("XSRF-TOKEN and csrftoken without HttpOnly: info with the reason and docs, no warning", () => {
+    const { checks } = cookieFlagsRule.run(
+      ctx("XSRF-TOKEN=abc; Path=/; Secure; SameSite=Lax, csrftoken=def; Path=/; Secure; SameSite=Lax"),
+    );
+    expect(checksByName(checks, "cookie-httponly")).toBeUndefined();
+    const info = checksByName(checks, "cookie-httponly-csrf");
+    expect(info?.status).toBe("info");
+    expect(info?.items?.map((i) => i.id)).toEqual(["XSRF-TOKEN", "csrftoken"]);
+    expect(info?.message).toContain("Angular");
+    expect(info?.message).toContain("Django");
+    expect(info?.message).toContain("https://docs.djangoproject.com/");
+    expect(checks.some((c) => c.status === "warn" || c.status === "fail")).toBe(false);
+  });
+
+  test("a session cookie beside a CSRF cookie still warns, naming only the session cookie", () => {
+    const { checks } = cookieFlagsRule.run(
+      ctx(`XSRF-TOKEN=abc; Path=/; Secure; SameSite=Lax, session=${SESSION}; Path=/; Secure; SameSite=Lax, sid=${SESSION}; Path=/; Secure; SameSite=Lax`),
+    );
+    expect(checksByName(checks, "cookie-httponly")?.items?.map((i) => i.id)).toEqual(["session", "sid"]);
+    expect(checksByName(checks, "cookie-httponly-csrf")?.items?.map((i) => i.id)).toEqual(["XSRF-TOKEN"]);
+  });
+
+  test("names match exactly: a csrf-looking name outside the list warns", () => {
+    const { checks } = cookieFlagsRule.run(
+      ctx("csrf_session=x; Path=/; Secure; SameSite=Lax, XSRF-TOKEN2=y; Path=/; Secure; SameSite=Lax, CSRFTOKEN=z; Path=/; Secure; SameSite=Lax, xsrf-token=w; Path=/; Secure; SameSite=Lax"),
+    );
+    expect(checksByName(checks, "cookie-httponly")?.items).toHaveLength(4);
+    expect(checksByName(checks, "cookie-httponly-csrf")).toBeUndefined();
+  });
+
+  test("Secure and SameSite are still checked on a CSRF cookie", () => {
+    const bare = cookieFlagsRule.run(ctx("XSRF-TOKEN=abc; Path=/")).checks;
+    expect(checksByName(bare, "cookie-secure")?.items?.[0]?.id).toBe("XSRF-TOKEN");
+    expect(checksByName(bare, "cookie-samesite")?.items?.[0]?.id).toBe("XSRF-TOKEN");
+    const none = cookieFlagsRule.run(ctx("csrftoken=abc; Path=/; SameSite=None")).checks;
+    expect(checksByName(none, "cookie-samesite-none-insecure")?.status).toBe("fail");
+  });
+
+  test("a CSRF cookie that already has HttpOnly adds no CSRF info", () => {
+    const { checks } = cookieFlagsRule.run(ctx("csrftoken=abc; Path=/; Secure; HttpOnly; SameSite=Lax"));
+    expect(checks).toHaveLength(1);
+    expect(checks[0]?.status).toBe("pass");
   });
 });
