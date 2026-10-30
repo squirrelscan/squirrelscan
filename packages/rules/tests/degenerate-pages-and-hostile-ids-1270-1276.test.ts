@@ -166,8 +166,9 @@ describe("#1276 guard", () => {
     for (const match of source.matchAll(SELECTOR_CALL)) {
       let arg = firstArgument(source, match.index! + match[0].length).trim();
       if (/^[A-Za-z_$][\w$]*$/.test(arg)) {
-        const assigned = new RegExp("\\b" + arg.replace(/\$/g, "\\$") + "\\s*=\\s*(`[^`]*`)", "g");
-        for (const a of source.matchAll(assigned)) found.push(a[1]!);
+        for (const a of source.matchAll(/\b([A-Za-z_$][\w$]*)\s*=\s*(`[^`]*`)/g)) {
+          if (a[1] === arg) found.push(a[2]!);
+        }
         arg = "";
       }
       found.push(arg);
