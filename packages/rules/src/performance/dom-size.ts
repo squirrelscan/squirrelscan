@@ -85,14 +85,14 @@ Fixes for large DOMs:
     // that costs no layout (#483, pub#548). Like Lighthouse's
     // `totalBodyElements`, the count is the body's descendants and the body
     // itself is depth 1.
-    // linkedom's `body` getter throws on a document with no root (empty,
-    // text-only or comment-only HTML), so the root is checked first.
-    const body = document.documentElement ? document.body : null;
+    // A page with no markup parses to an empty `<html><head></head><body>`
+    // (#1270), so a root is always there; only a body-less structure skips.
+    const body = document.body;
     if (!body) {
       checks.push({
         name: "dom-total-nodes",
         status: "skipped",
-        message: document.documentElement ? "No body element found" : "No document root found",
+        message: "No body element found",
         skipReason: "Invalid document structure",
       });
       return { checks };
