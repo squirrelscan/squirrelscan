@@ -32,12 +32,16 @@ const tmpDir = mkdtempSync(join(tmpdir(), "squirrelscan-golden-messages-"));
 afterAll(() => rmSync(tmpDir, { recursive: true, force: true }));
 
 export interface PinnedRule {
-  /** sha1 of the exact distinct lines, sorted: moves when a count or value in a message changes. */
+  /** Decimal digest (48 bits of sha1) of the exact distinct lines, sorted: moves when a count or value in a message changes. */
   digest: string;
   /** The same lines with digit runs replaced by `#`, distinct and sorted: what a reviewer reads. */
   lines: string[];
 }
 export type PinnedMessages = Record<string, PinnedRule>;
+
+// Decimal, not hex: a 40-char hex string in a committed file trips the secret scan's entropy rule.
+const digestOf = (lines: string[]): string =>
+  String(createHash("sha1").update(lines.join("\n")).digest().readUIntBE(0, 6));
 
 /** Per rule: the distinct finding lines of a snapshot. */
 export function pinMessages(snapshot: EngineBaselineSnapshot): PinnedMessages {
@@ -51,7 +55,7 @@ export function pinMessages(snapshot: EngineBaselineSnapshot): PinnedMessages {
   for (const ruleId of [...exact.keys()].sort()) {
     const lines = [...exact.get(ruleId)!].sort();
     out[ruleId] = {
-      digest: createHash("sha1").update(lines.join("\n")).digest("hex"),
+      digest: digestOf(lines),
       lines: [...new Set(lines.map((l) => l.replace(/\d+/g, "#")))].sort(),
     };
   }
