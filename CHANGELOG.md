@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A rule that throws is reported once as not evaluated, not as a failure on every page.** A rule that threw on every page of a 30-page site showed 30 failed checks and lowered the score for one defect in squirrel. It is now a skipped `<rule>-error` check (not evaluated, like a rule that ran out of time) on each page, plus one `<rule>-errors` summary with the first error and the page count, the score is unchanged, and the report prints a `Not checked:` line saying it is a squirrelscan defect. See [Rules](https://docs.squirrelscan.com/rules). (#1291)
+
 ## v0.0.143 (2026-10-30)
 
 Two new performance rules, `perf/content-in-js-bundle` and `perf/framework-data-payload`, find page content shipped inside JavaScript. Page weight now measures the srcset candidate a browser downloads and leaves lazy images out, `squirrel auth login` opens a branded page, parallel audits no longer fail with a locked database, and `store_scripts` no longer changes what an audit finds. A start URL the audit cannot run on is refused before any request, `security/tls-certificate` shows as not checked when it cannot run, and the about, contact and privacy rules take a `paths` option.

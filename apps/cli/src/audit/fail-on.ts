@@ -307,7 +307,7 @@ export function evaluateFailOn(
   ) {
     for (const rule of timedOutSecurity) {
       notes.push(
-        `${rule.ruleId} timed out on ${rule.pages} page${rule.pages === 1 ? "" : "s"} and did not check them: counted as 1 warning for gating, not in the score`
+        `${rule.ruleId} ${rule.errored ? "failed with an internal error" : "timed out"} on ${rule.pages} page${rule.pages === 1 ? "" : "s"} and did not check them: counted as 1 warning for gating, not in the score`
       );
     }
   }
