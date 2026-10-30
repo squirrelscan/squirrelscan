@@ -90,6 +90,23 @@ describe("foldChecksToCanonical", () => {
     expect(d.details).toMatchObject({ count: 9 });
   });
 
+  test("distinct items that share an id are all kept: only an item the fold rewrote can be a duplicate", () => {
+    const c = check({
+      pageUrl: `${S}/contact?subject=Billing`,
+      items: [{ id: "img", snippet: "<img src=a>" }, { id: "img", snippet: "<img src=b>" }, { id: "a.js" }],
+      details: { count: 3 },
+    });
+    foldChecksToCanonical([c], map);
+    expect(c.pageUrl).toBe(`${S}/contact`);
+    expect(c.items!.map((i) => i.snippet ?? i.id)).toEqual(["<img src=a>", "<img src=b>", "a.js"]);
+    expect(c.details).toMatchObject({ count: 3 });
+    // a rewritten item that duplicates an existing one (same id AND content) still collapses
+    const d = check({ items: [{ id: `${S}/contact`, label: "x" }, { id: `${S}/contact?subject=Billing`, label: "x" }, { id: `${S}/contact?subject=Billing`, label: "y" }], details: { count: 3 } });
+    foldChecksToCanonical([d], map);
+    expect(d.items!.map((i) => `${i.id}|${i.label}`)).toEqual([`${S}/contact|x`, `${S}/contact|y`]);
+    expect(d.details).toMatchObject({ count: 2 });
+  });
+
   test("nothing changes without variants", () => {
     const c = check({ pageUrl: `${S}/a` });
     expect(foldChecksToCanonical([c], new Map())).toBe(0);
