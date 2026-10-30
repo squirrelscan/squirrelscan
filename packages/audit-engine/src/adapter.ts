@@ -4380,7 +4380,10 @@ export function absorbResourceOccurrences(
         image.srcset && !image.inPicture
           ? selectImageCandidate({ src: image.src, srcset: image.srcset, sizes: image.sizes })
           : image.src;
-      const selected = chosen ? resolveOwn(chosen) : null;
+      // A selected candidate on another origin is not measured (only the site's own
+      // files are), so the image falls back to its own-host src, which stays measured
+      // and counted as it was before srcset selection.
+      const selected = (chosen ? resolveOwn(chosen) : null) ?? src;
       if (!selected) return;
       note(images, selected);
       note(imagesSelected, selected);
