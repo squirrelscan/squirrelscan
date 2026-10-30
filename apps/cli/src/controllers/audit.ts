@@ -904,7 +904,7 @@ export async function runAudit(
 
   try {
     configureLogger({ debug: options.debug ?? false });
-    logger.debug("starting audit", url);
+    logger.debug("starting audit", redactUrl(url));
 
     // #403: a store this process cannot write opens read-only without saying
     // so, then fails at the first write or drops every page. Say which file
@@ -935,7 +935,7 @@ export async function runAudit(
     });
 
     // Check reachability
-    logger.debug("checking reachability", url);
+    logger.debug("checking reachability", redactUrl(url));
     // --offline: the start URL's redirects stay on the audited site (#819).
     const reachability = await checkReachability(
       url,
@@ -1205,7 +1205,7 @@ export async function runAudit(
       // #946: record that this process drives the crawl, for the whole command.
       crawlLease = startLeaseForStorage(storage, () => crawler.currentCrawlId);
 
-      logger.debug("step 1: crawling", url);
+      logger.debug("step 1: crawling", redactUrl(url));
       onProgress({ phase: "crawling" });
 
       // Detect redirects first so we can look up by final URL

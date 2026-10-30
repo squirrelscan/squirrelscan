@@ -2,6 +2,7 @@
 // Uses request tool with browser-like headers
 // Detects WAF/bot protection on target site
 
+import { redactUrl, redactUrlsInText } from "@squirrelscan/core-contracts";
 import { ownSiteHostMatcher } from "@squirrelscan/utils/own-site";
 import {
   EGRESS_OFF_SITE_REFUSAL,
@@ -233,9 +234,9 @@ export async function checkReachability(
     if (Date.now() + delay >= deadline) break;
     logger.debug(
       "reachability retry",
-      url,
+      redactUrl(url),
       `attempt ${attempt}`,
-      result.error ?? ""
+      redactUrlsInText(result.error ?? "")
     );
     await sleep(delay);
     result = await attemptReachability(url, scope, requestScoped);
@@ -312,7 +313,7 @@ async function attemptReachability(
 
   try {
     // Use the request utility with browser-like headers
-    logger.debug("reachability check", url);
+    logger.debug("reachability check", redactUrl(url));
 
     // The deadline stays armed through the body sample, so a server that
     // sends headers and then stalls cannot park the probe (#192).

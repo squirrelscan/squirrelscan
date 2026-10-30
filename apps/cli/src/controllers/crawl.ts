@@ -185,7 +185,7 @@ export async function runCrawl(
 
   try {
     configureLogger({ debug: false });
-    logger.debug("starting crawl-only", url);
+    logger.debug("starting crawl-only", redactUrl(url));
 
     // Only concurrency knobs go through the merge helper — max_pages stays a
     // plain `options.maxPages ?? config.crawler.max_pages` read below because
@@ -219,7 +219,7 @@ export async function runCrawl(
     });
 
     // Check reachability
-    logger.debug("checking reachability", url);
+    logger.debug("checking reachability", redactUrl(url));
     const reachability = await checkReachability(url);
     if (!reachability.reachable) {
       return err(
@@ -316,7 +316,7 @@ export async function runCrawl(
         })
       );
 
-      logger.debug("starting crawler", url);
+      logger.debug("starting crawler", redactUrl(url));
       onProgress({ phase: "crawling" });
       // #946: record that this process drives the crawl.
       crawlLease = startLeaseForStorage(storage, () => crawler.currentCrawlId);
