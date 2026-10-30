@@ -17,6 +17,10 @@ How it works:
 
 ## [Unreleased]
 
+### Fixed
+
+- **A site's `/index.html` is read as its home page.** The page classifier gave `homepage` only to the path `/`, so a site that serves its home page at `/index.html` had it read as `unknown` once the model could no longer call a non-root page a home page. On 628 live sites, the page at a single-segment `/index.html` was the same page as `/` on 94.6% of them (lower 95% bound 92.4%), so it now gets `homepage` from the URL rule at confidence 1, query string and fragment ignored. Nested documents (`/blog/index.html`) and every other document name stay as they were: `index.php`, `index.htm`, `default.*` and `home.*` did not clear the 0.90 bar (index.php 0.79, index.htm 0.52, the rest 0.0 to 0.5, mostly soft-404 pages that answer 200), and a bare locale root such as `/en/` was not measured. The model still never labels a non-root page `homepage` (#900, already in the shipped classifier). (#902)
+
 ## v0.0.144 (2026-10-30)
 
 `squirrel audit --max-duration` stops at a wall-clock budget and writes a partial report instead of running on, `--include-pages` adds every crawled page with its status and rule count to the JSON report, and info checks now appear in the JSON and LLM reports (`--include-info`). The local technology scan reads stylesheet URLs and knows 24 more stacks, query-string copies of a page are counted with their canonical page, rules see controls inside declarative shadow roots, and a successful but empty page is audited and scored. A rule that throws is reported once as not evaluated, a rule that runs past its time budget is listed as skipped, and the docs now keep `--offline` and `--passive` apart. Thanks to William for the empty-page fix (#1314, #1330).

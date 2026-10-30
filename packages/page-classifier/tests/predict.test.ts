@@ -96,6 +96,7 @@ describe("the rules path, with no model at all", () => {
     expect(isRootPath("https://example.com/?a=1")).toBe(true);
     expect(isRootPath("https://example.com/#top")).toBe(true);
     expect(isRootPath("https://example.com/a")).toBe(false);
+    expect(isRootPath("https://example.com/index.html")).toBe(true);
     expect(isRootPath("https://example.com\\about")).toBe(false);
     expect(isRootPath("https://user@example.com/a")).toBe(false);
     expect(isRootPath("not a URL")).toBe(false);
@@ -851,7 +852,7 @@ describe("a non-root page is never labelled homepage, with or without a model", 
     <p>We make widgets for people.</p></main></body></html>`;
 
   test("the rules never answer homepage for another path, whatever the structured data says", () => {
-    for (const path of ["/welcome", "/en/", "/index.html", "/a/b", "/a?x=1"]) {
+    for (const path of ["/welcome", "/en/", "/blog/index.html", "/a/b", "/a?x=1", "/index.php", "/default.html"]) {
       const out = classifyPage(HOME, `https://example.com${path}`);
       expect(out.pageType.label).not.toBe("homepage");
     }
@@ -940,7 +941,7 @@ describe.if(HAS_ARTIFACT)(
       expect(closed.fires).toBe(false);
       expect(out.pageType.confidence).toBeCloseTo(closed.probability, 6);
       expect(out.pageType.confidence).toBeLessThan(0.5);
-      for (const path of ["/welcome", "/home", "/index.html", "/lp/spring", "/a/b/c"]) {
+      for (const path of ["/welcome", "/home", "/index.php", "/blog/index.html", "/lp/spring", "/a/b/c"]) {
         expect(
           classifyPage(LANDING, `https://example.com${path}`, { model }).pageType.label,
         ).not.toBe("homepage");
@@ -953,6 +954,7 @@ describe.if(HAS_ARTIFACT)(
         "https://example.com/",
         "https://example.com",
         "https://example.com/?a=1",
+        "https://example.com/index.html",
       ]) {
         expect(classifyPage(LANDING, url, { model }).pageType).toEqual({
           label: "homepage",
@@ -1118,5 +1120,58 @@ describe("page-type selection through classifyPage, with a head that always says
     expect(classifyPage(PLAIN, NON_ROOT, { model: flipped, platform: "wix" }).pageType.source).toBe(
       "rules",
     );
+  });
+});
+
+// pub#902: the root document. Measured on 628 live sites: `/index.html` is the same page as `/` on 94.6%
+// (lower 95% bound 92.4%), so it is the home page. Every other index, default and home document stayed
+// below 0.90 and reads as unknown.
+describe("the root document is a home page (#902)", () => {
+  const ORIGIN = "https://example.com";
+  const PLAIN = `<!doctype html><html><head><title>Example</title></head><body><main><h1>Example</h1>
+    <p>We make widgets for people.</p></main></body></html>`;
+
+  test("/index.html is the root, with a query string or a fragment too", () => {
+    for (const path of ["/index.html", "/index.html?utm_source=x", "/index.html#top", "/index.html?a=1#b"]) {
+      expect(isRootPath(`${ORIGIN}${path}`)).toBe(true);
+    }
+  });
+
+  test("the page at /index.html is a homepage from the rules at confidence 1", () => {
+    expect(classifyPage(PLAIN, `${ORIGIN}/index.html`).pageType).toEqual({
+      label: "homepage",
+      confidence: 1,
+      source: "rules",
+    });
+  });
+
+  test("a nested index document is not the root", () => {
+    for (const path of ["/blog/index.html", "/en/index.html", "/a/b/index.html", "/index.html/", "/x/../blog/index.html"]) {
+      expect(isRootPath(`${ORIGIN}${path}`)).toBe(false);
+    }
+    expect(classifyPage(PLAIN, `${ORIGIN}/blog/index.html`).pageType.label).not.toBe("homepage");
+  });
+
+  test("every other index, default and home document stays out: they did not clear 0.90", () => {
+    const names = ["index", "default", "home"];
+    const extensions = ["html", "htm", "php", "asp", "aspx", "jsp"];
+    for (const name of names) {
+      for (const ext of extensions) {
+        const path = `/${name}.${ext}`;
+        const expected = path === "/index.html";
+        expect(isRootPath(`${ORIGIN}${path}`)).toBe(expected);
+      }
+    }
+  });
+
+  test("the match is exact: another case, a trailing dot or extra text is not the root", () => {
+    for (const path of ["/Index.html", "/INDEX.HTML", "/index.html.", "/index.html5", "/xindex.html", "/index.htm"]) {
+      expect(isRootPath(`${ORIGIN}${path}`)).toBe(false);
+    }
+  });
+
+  test("a bare locale root stays as it is", () => {
+    expect(isRootPath(`${ORIGIN}/en/`)).toBe(false);
+    expect(classifyPage(PLAIN, `${ORIGIN}/en/`).pageType.label).not.toBe("homepage");
   });
 });
