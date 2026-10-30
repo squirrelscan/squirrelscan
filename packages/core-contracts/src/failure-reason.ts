@@ -550,6 +550,7 @@ export function maxDurationReason(cut: {
   seconds: number;
   unfetchedPages: number;
   pagesNotEvaluated: number;
+  pagesTooLarge?: number;
   siteChecksCut: boolean;
   resourceChecksCut?: boolean;
   probesSkipped?: string[];
@@ -570,5 +571,12 @@ export function maxDurationReason(cut: {
   if (cut.probesSkipped && cut.probesSkipped.length > 0) {
     parts.push(`${cut.probesSkipped.join(", ")} did not finish and ${cut.probesSkipped.length === 1 ? "was" : "were"} skipped`);
   }
-  return `Stopped at the ${cut.seconds} s time limit (--max-duration)${parts.length > 0 ? `: ${parts.join(", ")}` : ""}`;
+  // Pages too large to parse are a size limit of a budgeted run, not the clock running out.
+  const stopped = parts.length > 0;
+  if (cut.pagesTooLarge && cut.pagesTooLarge > 0) {
+    parts.push(
+      `${cut.pagesTooLarge} page${cut.pagesTooLarge === 1 ? " was" : "s were"} too large to parse within the time limit and not evaluated`
+    );
+  }
+  return `${stopped ? "Stopped at" : "Run under"} the ${cut.seconds} s time limit (--max-duration)${parts.length > 0 ? `: ${parts.join(", ")}` : ""}`;
 }

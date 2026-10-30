@@ -982,10 +982,18 @@ export function slimMaxDuration(
         )
         .slice(0, 10)
     : [];
+  const pagesTooLarge = count(v.pagesTooLarge);
+  const tooLargePages = Array.isArray(v.tooLargePages)
+    ? v.tooLargePages
+        .filter((u): u is string => typeof u === "string" && u.length <= 2048)
+        .slice(0, 20)
+    : [];
   return {
     seconds,
     unfetchedPages,
     pagesNotEvaluated,
+    ...(pagesTooLarge ? { pagesTooLarge } : {}),
+    ...(pagesTooLarge && tooLargePages.length > 0 ? { tooLargePages } : {}),
     siteChecksCut: v.siteChecksCut,
     ...(v.resourceChecksCut === true ? { resourceChecksCut: true } : {}),
     ...(probesSkipped.length > 0 ? { probesSkipped } : {}),

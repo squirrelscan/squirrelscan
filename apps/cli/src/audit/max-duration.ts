@@ -100,6 +100,9 @@ export interface DurationCut {
   unfetched: number;
   /** Pages fetched whose rules never ran. */
   pagesNotEvaluated: number;
+  /** Pages over the parse cap, stored but never parsed or evaluated (#1332), and the first 20 by URL. */
+  pagesTooLarge: number;
+  tooLargePages: string[];
   /** The rules phase hit the hard stop; site rules did not finish. */
   rulesCut: boolean;
   /** The resource checks ran out of their time budget. */
@@ -112,6 +115,7 @@ export function wasCut(cut: DurationCut): boolean {
   return (
     cut.unfetched > 0 ||
     cut.pagesNotEvaluated > 0 ||
+    cut.pagesTooLarge > 0 ||
     cut.rulesCut ||
     cut.resourceChecksCut === true ||
     cut.probesSkipped.length > 0

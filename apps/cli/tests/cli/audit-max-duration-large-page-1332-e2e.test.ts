@@ -11,7 +11,7 @@ const entry = join(import.meta.dir, "../../src/cli.ts");
 const scratch = mkdtempSync(join(tmpdir(), "squirrel-max-duration-big-"));
 
 const BIG_BYTES = 6 * 1024 * 1024;
-const bigBody = `<!doctype html><html lang="en"><head><title>Big</title></head><body><h1>Big</h1>${"<p>filler text for a very large page</p>".repeat(Math.ceil(BIG_BYTES / 40))}</body></html>`;
+const bigBody = `<!doctype html><html lang="en"><head><title>Big</title></head><body><h1>Big</h1>${"<b></b>".repeat(Math.ceil(BIG_BYTES / 7))}</body></html>`;
 
 const site = Bun.serve({
   port: 0,
@@ -89,21 +89,32 @@ async function audit(...args: string[]) {
 interface Report {
   status: string;
   statusReasonCode?: string;
-  maxDuration?: { pagesNotEvaluated: number; siteChecksCut: boolean };
+  statusReason?: string;
+  maxDuration?: {
+    pagesNotEvaluated: number;
+    pagesTooLarge?: number;
+    tooLargePages?: string[];
+    siteChecksCut: boolean;
+  };
 }
 
 describe("a very large page under --max-duration (#1332)", () => {
   test("is not evaluated, is counted, and the run stays inside the budget plus margin", async () => {
-    const budget = 30;
+    const budget = 20;
     const { out, elapsedMs } = await audit("--max-duration", String(budget));
     const report = JSON.parse(out) as Report;
     expect(report.status).toBe("partial");
     expect(report.statusReasonCode).toBe("max_duration");
-    expect(report.maxDuration?.pagesNotEvaluated).toBeGreaterThanOrEqual(1);
+    // Its own reason and list, not a count under a clock that did not run out.
+    expect(report.maxDuration?.pagesTooLarge).toBe(1);
+    expect(report.maxDuration?.tooLargePages?.[0]).toContain("/big");
+    expect(report.maxDuration?.pagesNotEvaluated).toBe(0);
     expect(report.maxDuration?.siteChecksCut).toBe(false);
-    expect(elapsedMs).toBeLessThan(
-      (budget + Math.max(budget * 0.1, 15)) * 1000
-    );
+    expect(report.statusReason).toContain("too large to parse");
+    expect(report.statusReason).not.toContain("Stopped at");
+    // One parse of this page takes over 10 s, and an uncapped run parses it several times: the whole
+    // run stays inside the budget, with no margin.
+    expect(elapsedMs).toBeLessThan(budget * 1000);
   }, 90_000);
 
   test("without the flag the page is audited and nothing is cut", async () => {

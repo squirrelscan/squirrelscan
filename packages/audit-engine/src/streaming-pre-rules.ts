@@ -124,6 +124,8 @@ export interface StreamPreRulesOptions {
    * (#240), so detach what you keep.
    */
   onBatchContext?: (siteContext: SiteContextPage[]) => void;
+  /** HTML over this many bytes is not parsed (`--max-duration`, #1332): it contributes no links, assets or payloads. */
+  maxParseBytes?: number;
 }
 
 export interface StreamPreRulesResult {
@@ -213,7 +215,7 @@ export function runStreamingPreRules(
         }
       }
 
-      const ctx = yield* buildSiteContext(batch);
+      const ctx = yield* buildSiteContext(batch, undefined, { maxParseBytes: options?.maxParseBytes });
       // Every absorb below runs with this batch's DOMs live; the batch is dropped
       // immediately after, which is the whole residency bound.
       assetCollector.absorb(ctx);
