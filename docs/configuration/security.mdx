@@ -30,7 +30,7 @@ custom.
 
 | Level | What it sends |
 |-------|---------------|
-| `passive` | No request beyond the crawl. The audit runs today's rules and passive rules only. |
+| `passive` | No probe rules. The audit runs today's rules and passive rules only, plus the [discovery probes](/configuration/crawler#discovery-probes) unless they are disabled. |
 | `active` | Passive, plus quiet probes: a handful of requests that look like normal traffic. |
 | `aggressive` | Active, plus loud probes: many requests and many 404s. It can trip a WAF. |
 
@@ -101,8 +101,7 @@ probes go only to the audited origin; see below for the form check. `--offline` 
 | [`security/graphql-introspection`](/rules/security/graphql-introspection) | One `GET /graphql?query={__schema{types{name}}}` per GraphQL endpoint, at most five | `active` |
 | | One `POST` of the same read-only query, only when the `GET` answer is GraphQL without a schema | `aggressive` |
 | [`security/graphql-get-mutations`](/rules/security/graphql-get-mutations) | One `GET /graphql?query=mutation{__typename}` per GraphQL endpoint, at most five. The no-op mutation names no schema field and cannot write | `active` |
-
-| [`reliability/broken-forms`](/rules/reliability/broken-forms) | One `HEAD` per distinct form action URL the crawl did not fetch, then one `GET` when the `HEAD` is refused or fails. Never a `POST` | `active` |
+| [`reliability/broken-forms`](/rules/reliability/broken-forms) | One `HEAD` per distinct form action URL the crawl did not fetch, then one `GET` when the `HEAD` is refused or fails. Never a `POST`. A form action on another site is probed only online with external link checks on; an offline run stays on the audited site | `active` |
 
 The GraphQL endpoints are the ones the audit found in your pages and scripts,
 plus `/graphql` and `/api/graphql`. A path that names a state-changing action,
